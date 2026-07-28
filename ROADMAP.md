@@ -25,6 +25,14 @@ CURRENT STAGE
 
 API and inherited-reference audit
 
+Working cycle:
+
+[ ] Record the stage plan
+[ ] Perform the stage
+[ ] Record discoveries and approved concepts
+[ ] Record completed work and verification
+[ ] Record remaining work and the next stage
+
 ==================================================
 STAGE 1 — VERSION 0.1.0 FOUNDATION
 ==================================================
@@ -44,6 +52,8 @@ STAGE 1 — VERSION 0.1.0 FOUNDATION
 STAGE 2 — API AND INHERITED-REFERENCE AUDIT
 ==================================================
 
+[x] Record audit objective and scope
+[x] Record Engineering Memory work cycle
 [ ] Inventory GUI JavaScript API calls
 [ ] Inventory MVC API URLs
 [ ] Inventory controller actions

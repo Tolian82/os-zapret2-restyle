@@ -39,16 +39,16 @@ Development tree:
 /root/os-zapret2-restyle
 
 Current phase:
-Project memory foundation
+API and inherited-reference audit planning
 
 Current priority:
-Complete the engineering memory documents, then begin the API and inherited-reference audit.
+Record the audit plan, then execute the API and inherited-reference audit.
 
 Last completed:
-Independent repository, package identity, attribution, build, CI, and release infrastructure.
+Engineering Memory System foundation and documentation structure.
 
-Current documentation step:
-Add INDEX.md and establish single-responsibility document roles.
+Current work cycle:
+Plan → record plan → implement → record discoveries → complete stage → record results.
 
 Known blockers:
 None.

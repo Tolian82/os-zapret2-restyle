@@ -100,6 +100,28 @@ Completed:
 - Restyled README.md, ARCHITECTURE.md, DEVLOG.md, and ROADMAP.md without losing
   their previous useful content.
 
+
+==================================================
+2026-07-28 — API AUDIT PLAN RECORDED
+==================================================
+
+Planned:
+
+- Audit GUI JavaScript API calls.
+- Audit MVC endpoints, controllers, models, and configuration paths.
+- Audit configd actions and shell command targets.
+- Audit backend functions, rc scripts, syshooks, and plugin hooks.
+- Audit package lifecycle, setup, build, CI, release, and external URLs.
+- Classify every interface and inherited reference.
+- Run focused live tests.
+- Record discoveries during the audit.
+- Record completed work and the next stage when the audit finishes.
+
+Working rule confirmed:
+
+Every stage begins by recording the plan and ends by recording results,
+discoveries, remaining work, and the next stage.
+
 ==================================================
 CURRENT WORK
 ==================================================

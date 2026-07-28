@@ -130,3 +130,34 @@ Code and affected documentation belong in the same logical commit.
 
 Approved concepts must be recorded in DECISIONS.md and reflected in the
 appropriate specialist document.
+
+==================================================
+ENGINEERING MEMORY WORKFLOW
+==================================================
+
+Every development stage begins with documentation and ends with documentation.
+
+Before starting work:
+
+- Record the objective.
+- Record the implementation plan.
+- Record the expected verification.
+
+During work:
+
+- Record approved concepts immediately.
+- Record new permanent rules immediately.
+- Record architecture changes immediately.
+- Record important discoveries that affect later work.
+
+After finishing work:
+
+- Record what was completed.
+- Record what was verified.
+- Record what failed or remains unresolved.
+- Update current project state.
+- Update roadmap completion.
+- Record the next planned stage.
+
+Engineering Memory is maintained continuously during development rather than
+written only after the work is finished.

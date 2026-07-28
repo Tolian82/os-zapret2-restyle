@@ -512,6 +512,42 @@ DEVELOPMENT_GUIDE.md
 Status:
 Active
 
+
+==================================================
+2026-07-28 — ENGINEERING MEMORY IS A LIVING SYSTEM
+==================================================
+
+Decision:
+The Engineering Memory System is an active part of development, not static
+documentation.
+
+Reason:
+The repository must preserve plans, current work, completed work, approved
+concepts, discoveries, and next actions so development can resume without
+depending on chat history or memory.
+
+Consequences:
+Every development stage follows this lifecycle:
+
+1. Define the objective.
+2. Record the plan before implementation.
+3. Perform the work.
+4. Record new concepts, rules, architecture changes, and discoveries as they
+   appear.
+5. Complete the stage.
+6. Record completed work, confirmed results, remaining work, and the next stage.
+
+Affected documents:
+PROJECT_STATE.md
+DECISIONS.md
+WORKING_CONVENTIONS.md
+DEVLOG.md
+ROADMAP.md
+DEVELOPMENT_GUIDE.md
+
+Status:
+Active
+
 ==================================================
 MAINTENANCE RULE
 ==================================================
