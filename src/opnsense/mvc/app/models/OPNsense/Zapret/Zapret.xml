@@ -1,0 +1,59 @@
+<model>
+    <mount>//OPNsense/Zapret</mount>
+    <description>Zapret2 DPI Bypass Configuration</description>
+    <version>2.0.0</version>
+    <items>
+        <general>
+            <enabled type="BooleanField">
+                <Default>0</Default>
+                <Required>Y</Required>
+            </enabled>
+            <waninterface type="InterfaceField">
+                <Required>N</Required>
+                <AllowDynamic>Y</AllowDynamic>
+                <AddParentDevices>Y</AddParentDevices>
+            </waninterface>
+            <divertport type="PortField">
+                <Default>989</Default>
+                <Required>Y</Required>
+                <ValidationMessage>Please enter a valid port number.</ValidationMessage>
+            </divertport>
+            <ports type="TextField">
+                <Default>80,443</Default>
+                <Required>Y</Required>
+                <Mask>/^[0-9,]+$/</Mask>
+                <ValidationMessage>Please enter comma-separated port numbers.</ValidationMessage>
+            </ports>
+        </general>
+        <strategy>
+            <httpargs type="TextField">
+                <Required>N</Required>
+            </httpargs>
+            <httpsargs type="TextField">
+                <Required>N</Required>
+            </httpsargs>
+            <extraargs type="TextField">
+                <Required>N</Required>
+            </extraargs>
+        </strategy>
+        <hostlist>
+            <mode type="OptionField">
+                <Default>all</Default>
+                <OptionValues>
+                    <all>All traffic on configured ports</all>
+                    <list>Only listed domains</list>
+                    <auto>Auto-detect blocked domains</auto>
+                </OptionValues>
+                <Required>Y</Required>
+            </mode>
+            <domains type="TextField">
+                <Required>N</Required>
+                <Mask>/^[a-zA-Z0-9\.\-\n\r\s]*$/</Mask>
+            </domains>
+            <excludedomains type="TextField">
+                <Required>N</Required>
+                <Mask>/^[a-zA-Z0-9\.\-\n\r\s]*$/</Mask>
+            </excludedomains>
+        </hostlist>
+    </items>
+</model>

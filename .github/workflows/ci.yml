@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  validate:
+    name: Validate Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate XML files
+        run: |
+          echo "Validating XML files..."
+          find src -name "*.xml" -exec xmllint --noout {} \;
+          echo "All XML files are valid."
+
+      - name: Lint PHP files (docker)
+        run: |
+          echo "Checking PHP syntax via docker..."
+          docker run --rm -v "${PWD}":/app -w /app php:8.2-cli sh -c '
+            set -e
+            find src -name "*.php" -exec php -l {} \;
+            find src -name "*.inc" -exec php -l {} \;
+          '
+          echo "All PHP files are valid."
+
+      - name: Validate shell scripts
+        run: |
+          echo "Checking shell scripts..."
+          find src -name "*.sh" -exec sh -n {} \;
+          find pkg -type f -exec sh -n {} \;
+          find scripts -name "*.sh" -exec sh -n {} \;
+          sh -n src/etc/rc.syshook.d/start/20-zapret
+          sh -n src/etc/rc.syshook.d/stop/20-zapret
+          echo "All shell scripts are valid."
+
+      - name: Check file structure
+        run: |
+          echo "Checking required files..."
+          test -f Makefile || { echo "Missing Makefile"; exit 1; }
+          test -f pkg-descr || { echo "Missing pkg-descr"; exit 1; }
+          test -f LICENSE || { echo "Missing LICENSE"; exit 1; }
+          test -d src/opnsense/mvc/app/models/OPNsense/Zapret || { echo "Missing model directory"; exit 1; }
+          test -d src/opnsense/mvc/app/controllers/OPNsense/Zapret || { echo "Missing controller directory"; exit 1; }
+          test -d src/opnsense/mvc/app/views/OPNsense/Zapret || { echo "Missing views directory"; exit 1; }
+          test -d src/opnsense/service/conf/actions.d || { echo "Missing actions directory"; exit 1; }
+          test -d src/opnsense/scripts/OPNsense/Zapret || { echo "Missing scripts directory"; exit 1; }
+          test -f src/etc/rc.syshook.d/start/20-zapret || { echo "Missing boot start hook"; exit 1; }
+          test -f src/etc/rc.syshook.d/stop/20-zapret || { echo "Missing shutdown stop hook"; exit 1; }
+          test -f src/etc/inc/plugins.inc.d/zapret.inc || { echo "Missing plugins.inc.d service registration"; exit 1; }
+          test -f pkg/+POST_INSTALL || { echo "Missing +POST_INSTALL"; exit 1; }
+          test -f pkg/+PRE_DEINSTALL || { echo "Missing +PRE_DEINSTALL"; exit 1; }
+          test -f pkg/+POST_DEINSTALL || { echo "Missing +POST_DEINSTALL"; exit 1; }
+          test -x scripts/build-pkg.sh || { echo "Missing or non-executable scripts/build-pkg.sh"; exit 1; }
+          echo "File structure OK."
+
+  package:
+    name: Build FreeBSD pkg
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep 'PLUGIN_VERSION=' Makefile | head -1 | sed 's/.*=\s*//')
+          REVISION=$(grep 'PLUGIN_REVISION=' Makefile | head -1 | sed 's/.*=\s*//')
+          if [ -n "$REVISION" ] && [ "$REVISION" != "0" ]; then
+            FULL_VERSION="${VERSION}_${REVISION}"
+          else
+            FULL_VERSION="${VERSION}"
+          fi
+          echo "version=${FULL_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Package version: ${FULL_VERSION}"
+
+      - name: Build .pkg inside FreeBSD VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "14.2"
+          usesh: true
+          prepare: |
+            pkg install -y jq
+          run: |
+            sh scripts/build-pkg.sh
+
+      - name: Inspect built package
+        run: |
+          ls -lh dist/
+          echo "--- tar contents (first 30) ---"
+          tar -tJf dist/*.pkg | head -30
+          echo "--- +MANIFEST preview ---"
+          tar -xJf dist/*.pkg -O +MANIFEST | head -60
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: os-zapret2-${{ steps.version.outputs.version }}
+          path: dist/*.pkg

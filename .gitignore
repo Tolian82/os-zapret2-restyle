@@ -1,0 +1,9 @@
+.playwright-cli/
+*.png
+*.yaml
+!src/**/*.yaml
+
+# build-pkg.sh output
+work/
+dist/
+*.pkg
