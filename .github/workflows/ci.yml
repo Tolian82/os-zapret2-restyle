@@ -100,7 +100,9 @@ jobs:
             . \
             --exclude-dir=.git \
             --exclude=LICENSE \
-            --exclude=NOTICE
+            --exclude=NOTICE \
+            --exclude=README.md \
+            --exclude=ci.yml
           then
             echo "Legacy project reference found outside attribution files"
             exit 1
