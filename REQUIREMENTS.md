@@ -1,57 +1,52 @@
-# OPNsense Zapret2 Restyle — Requirements
+# os-zapret2-restyle — Requirements
 
-## Status
+Project: **os-zapret2-restyle**  
+Version line: **0.1.x**
 
-This document records the approved product requirements for the `os-zapret2-restyle` project.
+## Project identity
 
-The project is a public OPNsense plugin built on top of `ugorur/os-zapret2` and upstream `bol-van/zapret2`.
+`os-zapret2-restyle` is an independent OPNsense plugin project.
+
+An earlier project was used as an initial code base and its copyright is
+preserved in `LICENSE`. New development, package identity, versioning,
+architecture, documentation, installation, releases, and maintenance belong
+to this repository.
+
+The finished plugin must install and operate on a supported OPNsense system
+without depending on another OPNsense zapret plugin or its repository.
+
+The zapret2 engine remains an external runtime component managed by this
+plugin.
 
 ## Core principles
 
-- Prefer the correct engineering solution over a quick workaround.
+- Correct engineering solution over a quick workaround.
 - No hidden behavior or silent data loss.
-- Minimize service-specific special cases.
-- Keep the plugin compatible with upstream zapret2 syntax.
-- Do not modify approved requirements without a strong reason.
-- The GitHub `main` branch is the source of truth.
-- Runtime changes must be validated before the active working service is disturbed.
+- Minimal special cases.
+- Generic target architecture.
+- Native zapret2 strategy compatibility where practical.
+- Approved requirements change only when necessary.
+- GitHub `main` is the source of truth.
+- Candidate configuration is validated before an active service is disturbed.
 
-## Configuration model
+## Traffic Strategy
 
-### Traffic Strategy
+One multiline field replaces separate HTTP and HTTPS fields.
 
-The GUI exposes one multiline field:
-
-```text
-Traffic Strategy
-```
-
-It replaces the former separate HTTP and HTTPS strategy fields.
-
-The field supports native zapret2/dvtws2 arguments and any number of profiles separated by:
+Profiles are separated by standalone:
 
 ```text
 --new
 ```
 
-The backend must preserve all user strategy lines except recognized plugin placeholders and declarations that must be resolved.
-
-### Target placeholders
-
-Supported generic placeholder syntax:
-
-```text
-<TYPE:name>
-```
-
-Currently supported target types:
+Supported generic placeholders:
 
 ```text
 <HOSTLIST:name>
 <IPSET:name>
 ```
 
-Approved built-in targets:
+Current built-in targets:
 
 ```text
 <HOSTLIST:youtube>
@@ -59,15 +54,12 @@ Approved built-in targets:
 <IPSET:telegram>
 ```
 
-Placeholders may be combined freely in a profile.
+Placeholders may be combined. The parser must not contain service-specific
+strategy behavior.
 
-The parser is generic and must not contain hard-coded YouTube or Telegram strategy logic.
+## Targets
 
-### Targets
-
-The GUI section is named `Targets`.
-
-Current fields:
+Current GUI fields:
 
 - Target Mode
 - YouTube Domains
@@ -75,32 +67,26 @@ Current fields:
 - User Domains
 - Exclude Domains
 
-#### HOSTLIST format
+### HOSTLIST
 
-One entry per line:
+One domain per line:
 
 ```text
 example.com
 *.example.com
 ```
 
-Accepted input may be normalized.
-
-Canonical stored form removes the wildcard prefix because a zapret hostlist entry covers the base domain and its subdomains:
-
-```text
-*.example.com
-```
-
-becomes:
+Both normalize to:
 
 ```text
 example.com
 ```
 
-HOSTLIST fields must reject IP addresses, IP networks, malformed domains, and unrelated text.
+The canonical entry applies to the base domain and subdomains.
 
-#### IPSET format
+HOSTLIST fields reject IPs, networks, malformed domains, and unrelated text.
+
+### IPSET
 
 One IPv4 address or IPv4 CIDR network per line:
 
@@ -109,116 +95,82 @@ One IPv4 address or IPv4 CIDR network per line:
 149.154.160.0/20
 ```
 
-IPSET fields must reject domains, malformed IP addresses, invalid prefixes, and unrelated text.
+IPSET fields reject domains, malformed addresses, invalid prefixes, and
+unrelated text.
 
-IPv6 is not currently part of the approved target-list requirements.
+IPv6 target lists are outside version 0.1.0 requirements.
 
-#### Normalization
+### Normalization
 
-On successful Apply:
+Successful Apply:
 
-- trim surrounding whitespace;
-- remove empty lines;
-- normalize domain names to lowercase;
-- remove supported URL prefixes and irrelevant trailing path/punctuation where explicitly supported;
-- convert wildcard domains to canonical base domains;
-- canonicalize valid IP/CIDR entries;
-- remove duplicates while preserving useful order;
-- write normalized values back to persistent OPNsense configuration;
-- reload the GUI with the normalized values;
-- report that normalization occurred.
+- trims whitespace;
+- removes empty lines;
+- lowercases domains;
+- normalizes wildcard domains;
+- canonicalizes IPv4/CIDR values;
+- removes duplicates;
+- stores normalized values;
+- reloads normalized values into the GUI;
+- reports normalization.
 
-Invalid entries must never be silently discarded.
+Invalid values are never silently discarded.
 
-### Exclude Domains
+## Exclude Domains
 
-`Exclude Domains` is a global HOSTLIST exclusion mechanism, not a strategy placeholder.
+Exclude Domains is a global HOSTLIST exclusion mechanism, not a strategy
+placeholder. It does not apply to IPSET values.
 
-It applies to all generated hostlists and is emitted as a global dvtws2 hostlist-exclude argument.
+## Target Mode
 
-It does not apply to IPSET values.
+Target Mode applies only to profiles without explicit target placeholders.
 
-### Target Mode
-
-Target Mode is used only for profiles that contain no explicit target placeholder.
-
-Approved modes:
-
-- All traffic
-- Only listed targets/domains
-- Auto-detect blocked domains
-
-Explicit placeholders override Target Mode for that profile.
+Explicit placeholders override Target Mode for their profile.
 
 ## Transactional Apply
 
-The Apply operation is one transaction:
+Apply must:
 
-1. Read submitted GUI values.
-2. Perform OPNsense model/alphabet validation.
-3. Normalize and strictly validate target values.
-4. Build and validate a candidate release.
-5. On failure:
-   - do not save invalid values to persistent configuration;
-   - do not stop the active dvtws2 process;
-   - do not change active runtime files;
-   - do not change ipfw rules;
-   - show the field, line number, invalid value, and reason in the GUI.
-6. On success:
-   - save normalized configuration;
-   - activate the validated release;
-   - safely reconfigure the service;
-   - reload normalized values into the GUI.
+1. validate submitted model values;
+2. normalize and strictly validate targets;
+3. build and validate a candidate release;
+4. on failure, preserve persistent configuration, active PID, runtime, and
+   ipfw rules and show a field/line error;
+5. on success, save normalized values and safely activate the candidate.
 
-The user's invalid input should remain visible after a validation failure so it can be corrected.
+Invalid user input remains visible for correction.
 
-## Service controls
+## Service lifecycle
 
-### Start
-
-Start must validate the saved configuration before launching the service.
-
-### Restart / Reconfigure
-
-Restart and reconfigure must build and validate a candidate while the old runtime remains operational.
-
-Invalid candidate configuration must leave the existing service, PID, runtime, and firewall rules unchanged.
-
-### Stop
-
-Stop may stop the service directly and does not validate or modify configuration.
-
-## Runtime safety
-
-A release must be built in a temporary workspace and validated before activation.
-
-Runtime activation must be atomic where possible.
-
-If startup, firewall installation, or supervisor startup fails after activation, the previous release must be restored.
-
-Execution progress and failures are recorded in:
-
-```text
-/var/run/zapret2-execution.status
-```
-
-Errors must end in `failed`, not remain indefinitely in `running`.
+- Start validates saved configuration before launch.
+- Restart/Reconfigure validates a candidate while the old runtime works.
+- Stop stops the service without modifying configuration.
+- Failed candidates must not stop a working service.
+- Post-activation failure must restore the previous runtime.
 
 ## GUI
 
-- Use native OPNsense styling.
-- Keep a visible explicit `Apply` button.
-- Show validation messages next to the affected field.
-- Do not rely on hidden JavaScript to supply essential button text.
-- Syntax highlighting is not required.
-- Font changes are not required.
-- Line numbering is approved in principle but is not implemented yet.
-- Wider editor fields were discussed but intentionally left unchanged after an unsuccessful experiment.
-- Traffic Strategy should eventually be taller than target-list editors.
+- Native OPNsense appearance.
+- Explicit visible Apply button.
+- Field-specific validation messages.
+- No essential button text supplied only by hidden JavaScript.
+- No syntax highlighting requirement.
+- No font change requirement.
+- Line numbering may be added later.
+- Field width remains unchanged until verified rendered markup is deliberately inspected.
 
-## Compatibility and publication
+## Packaging
 
-- Preserve upstream plugin directory structure where practical.
-- Keep OPNsense-specific logic outside the zapret2 engine.
-- Do not commit runtime files, private configuration, nested engine repositories, binaries copied from a live installation, or secrets.
-- The project will remain public on GitHub.
+The package identity is:
+
+```text
+PLUGIN_NAME=zapret2-restyle
+PLUGIN_VERSION=0.1.0
+```
+
+The final package must include all project-owned MVC, service, backend,
+template, hook, package-script, and setup files required for a fresh OPNsense
+installation.
+
+Runtime files, live configuration, logs, PID files, downloaded engine trees,
+and secrets must not be packaged from a development firewall.

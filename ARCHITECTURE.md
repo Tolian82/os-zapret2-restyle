@@ -1,26 +1,22 @@
-# OPNsense Zapret2 Restyle — Architecture
+# os-zapret2-restyle — Architecture
 
-## Purpose
+Project: **os-zapret2-restyle**
 
-This document is a compact maintainer and AI context snapshot. It describes how the current Backend v2 is intended to work.
-
-## Repository model
-
-- Primary repository: `https://github.com/Tolian82/os-zapret2-restyle`
-- Working branch: `main`
-- Baseline tag: `restyle-start`
-- Upstream plugin remote: `https://github.com/ugorur/os-zapret2`
-- The GitHub repository is the source of truth.
-- Development and live testing are performed on OPNsense, with the repository located at:
+## Repository
 
 ```text
-/root/os-zapret2-restyle
+https://github.com/Tolian82/os-zapret2-restyle
+branch: main
+baseline tag: restyle-start
+development checkout: /root/os-zapret2-restyle
 ```
 
-## High-level pipeline
+This repository is the source of truth and is an independent project.
+
+## Pipeline
 
 ```text
-Generated OPNsense configuration
+OPNsense configuration
         ↓
 Config loader
         ↓
@@ -51,74 +47,47 @@ Firewall
 Supervisor
 ```
 
-The orchestrator coordinates public module APIs. It should not duplicate parsing, normalization, launch, or firewall implementation.
-
-## Main entry points
-
-### Service entry point
+## Entry points
 
 ```text
 src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
-```
-
-Responsibilities:
-
-- source backend modules;
-- define runtime paths and constants;
-- expose start, stop, status, restart, and reconfigure commands;
-- delegate lifecycle work to the orchestrator.
-
-### Orchestrator
-
-```text
 src/opnsense/scripts/OPNsense/Zapret/backend/orchestrator.sh
 ```
 
-Responsibilities:
-
-- build staged releases;
-- report stage progress;
-- coordinate validation;
-- activate and restore runtime trees;
-- coordinate launcher, firewall, and supervisor;
-- implement safe reconfigure behavior.
+`zapret_service.sh` exposes service actions and sources backend modules.
+`orchestrator.sh` coordinates candidate build, validation, activation,
+rollback, launcher, firewall, and supervisor.
 
 ## Backend modules
 
-Current module directory:
-
-```text
-src/opnsense/scripts/OPNsense/Zapret/backend/
-```
-
-- `common.sh` — shared filesystem, logging, workspace, and error helpers.
-- `config.sh` — generated configuration loading and OPNsense interface resolution.
-- `parser.sh` — ordered Traffic Strategy profile parsing using standalone `--new`.
-- `registry.sh` — target type/name registry.
-- `target_mode.sh` — default target injection for profiles without explicit placeholders.
-- `targets.sh` — HOSTLIST/IPSET normalization, validation, managed files, and placeholder resolution.
-- `exclude.sh` — global excluded-domain hostlist.
-- `storage.sh` — logical-to-staged/active target storage mapping.
+- `common.sh` — shared helpers.
+- `config.sh` — generated configuration and interface resolution.
+- `parser.sh` — Traffic Strategy profiles and generic placeholders.
+- `registry.sh` — supported target type/name registry.
+- `target_mode.sh` — implicit targets for placeholder-free profiles.
+- `targets.sh` — HOSTLIST/IPSET normalization, validation, files, resolution.
+- `exclude.sh` — global domain exclusions.
+- `storage.sh` — logical, staged, and active file mapping.
 - `blobs.sh` — blob resource resolution.
-- `ports.sh` — TCP/UDP port extraction from strategy filters.
-- `generator.sh` — final `dvtws.args` generation.
-- `validator.sh` — staged release validation.
-- `atomic.sh` — runtime activation and restoration.
-- `launcher.sh` — one dvtws2 instance and startup stability check.
-- `firewall.sh` — ipfw preparation and divert rule lifecycle.
-- `supervisor.sh` — supervisor process lifecycle.
-- `stage.sh` — machine-readable stage reporting.
+- `ports.sh` — TCP/UDP extraction from strategy filters.
+- `generator.sh` — final dvtws2 argument generation.
+- `validator.sh` — candidate release validation.
+- `atomic.sh` — active runtime switch and restore.
+- `launcher.sh` — one dvtws2 process and startup stability check.
+- `firewall.sh` — ipfw lifecycle.
+- `supervisor.sh` — monitor lifecycle.
+- `stage.sh` — execution status reporting.
 - `orchestrator.sh` — lifecycle coordination.
 
-## Runtime layout
+## Runtime
 
-Installed engine root:
+Engine root:
 
 ```text
 /usr/local/etc/zapret2
 ```
 
-Active generated runtime:
+Generated active runtime:
 
 ```text
 /usr/local/etc/zapret2/runtime-v2
@@ -127,91 +96,71 @@ Active generated runtime:
 Important generated files:
 
 ```text
-runtime-v2/traffic.conf
-runtime-v2/extra.conf
-runtime-v2/dvtws.args
-runtime-v2/tcp-ports.txt
-runtime-v2/udp-ports.txt
-runtime-v2/managed/*
+traffic.conf
+extra.conf
+dvtws.args
+tcp-ports.txt
+udp-ports.txt
+managed/*
 ```
 
-Runtime files are generated artifacts and must not be committed.
+Generated runtime is never committed.
 
-## Process and firewall model
-
-Typical runtime components:
-
-- one dvtws2 child process;
-- one supervisor daemon/monitor pair;
-- ipfw divert rules in the plugin's reserved rule range;
-- dvtws2 `--sockarg=0x200` loop guard;
-- privilege drop to `nobody`.
-
-Important PID files:
-
-```text
-/var/run/dvtws2.pid
-/var/run/zapret2-supervisor-daemon.pid
-/var/run/zapret2-supervisor-monitor.pid
-```
-
-## Safe reconfigure design
+## Safe reconfigure
 
 ```text
 build candidate while old runtime works
         ↓
-fully validate candidate
+validate candidate
         ↓
-failure → keep old PID/runtime/ipfw unchanged
+failure → old PID/runtime/ipfw remain unchanged
         ↓
-success → short controlled switch
+success → controlled switch
         ↓
-restore previous release if post-activation startup fails
+post-switch failure → restore previous runtime
 ```
 
-Confirmed regression input:
+Regression input:
 
 ```text
 999.999.999.999
 ```
 
-Expected result:
+Expected result is `targets|failed` while the existing service remains active.
 
-- execution stage reports `targets|failed`;
-- active dvtws2 PID remains unchanged;
-- active `dvtws.args` remains unchanged;
-- ipfw rules remain unchanged.
-
-## GUI and API flow
+## Transactional Apply
 
 Important files:
 
 ```text
-src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php
-src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php
-src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt
-src/opnsense/mvc/app/models/OPNsense/Zapret/Zapret.xml
+SettingsController.php
+ServiceController.php
+general.volt
+Zapret.xml
+targets.sh
+orchestrator.sh
 ```
 
-The GUI uses a custom transactional Apply endpoint instead of the standard save-then-reconfigure sequence.
+The custom Apply flow validates and normalizes before persistent save. It
+returns field-specific errors or normalized values, then invokes safe
+reconfigure.
 
-The endpoint must:
+## Packaging independence
 
-- validate submitted model data;
-- invoke backend target normalization/validation;
-- avoid persisting invalid values;
-- save normalized values on success;
-- call safe reconfigure;
-- return field-specific errors and normalization information.
+No runtime dependency on another OPNsense zapret plugin is allowed.
 
-The Apply button is explicit HTML with visible text because the standard OPNsense partial creates an empty button whose label is normally inserted by standard JavaScript.
+The repository must contain every project-owned file required to build and
+install `zapret2-restyle` on a clean supported OPNsense system.
+
+External zapret2 engine acquisition/build is handled by this project's own
+setup and maintenance logic.
 
 ## Engineering rules
 
-- Correct solution over quick patch.
-- Commands given to the project owner must be strictly sequential and executable in the stated order.
-- Verify current `main` before proposing code.
-- Do not assume OPNsense HTML structure, shell behavior, command options, or framework APIs.
-- FreeBSD `/bin/sh` compatibility is required.
-- Do not use Bash-only syntax.
-- Keep documentation minimal and operational.
+- Correctness over speed.
+- Commands to the project owner are strictly sequential.
+- Read current `main` before proposing code.
+- Verify OPNsense framework and rendered behavior; do not guess.
+- FreeBSD `/bin/sh` compatibility.
+- No Bash-only syntax.
+- Minimal operational documentation.

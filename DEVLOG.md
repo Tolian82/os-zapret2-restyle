@@ -1,4 +1,4 @@
-# OPNsense Zapret2 Restyle — Development State
+# os-zapret2-restyle — Development State
 
 Last context update: 2026-07-28
 
@@ -7,137 +7,99 @@ Last context update: 2026-07-28
 ```text
 https://github.com/Tolian82/os-zapret2-restyle
 branch: main
-tag: restyle-start
+baseline tag: restyle-start
+current project version: 0.1.0
 ```
 
-Read current `main` before proposing any code.
+Read current `main` before proposing code.
 
-## Project state
+## Identity decision
 
-Most of Backend v2 has been implemented and tested on a live OPNsense installation.
+The project is fully independent from the code base originally used to start
+development.
 
-### Completed
+The earlier copyright remains in `LICENSE`, but future package identity,
+architecture, installation, release process, documentation, and maintenance
+belong to `os-zapret2-restyle`.
 
-- Imported upstream `ugorur/os-zapret2`.
-- Imported recovered Restyle development state.
-- Published the annotated tag `restyle-start`.
-- Unified HTTP/HTTPS configuration into one multiline Traffic Strategy.
-- Removed the separate legacy Ports field from Backend v2.
-- Added profile parsing with standalone `--new`.
-- Added generic `<TYPE:name>` placeholder parsing.
-- Added target registry and Target Mode.
-- Added:
-  - `<HOSTLIST:youtube>`
-  - `<HOSTLIST:user>`
-  - `<IPSET:telegram>`
-- Added strict separate domain and IPv4/CIDR normalization and validation.
-- Added wildcard normalization: `*.googlevideo.com` → `googlevideo.com`.
-- Added global Exclude Domains.
-- Added Blob Resolver.
-- Added TCP/UDP port extraction from strategy.
-- Added staged release generation and validation.
-- Added atomic activation and restore support.
-- Split launcher and supervisor responsibilities.
-- Added ipfw rules generated from extracted ports.
-- Added machine-readable execution stages.
-- Added safe reconfigure.
-- Added transactional Apply with field-level errors and normalized GUI reload.
-- Replaced the empty standard Apply-button partial with an explicit visible button.
-- Added wildcard support to GUI domain-field masks.
-- Published the tested safe reconfigure and transactional Apply changes to `main`.
+Goal: build and install the plugin on a clean supported OPNsense system without
+references to or dependencies on another OPNsense zapret plugin repository.
 
-### Confirmed live tests
+## Completed
 
-Normal target resolution generated:
+- Backend v2 modular architecture.
+- Unified Traffic Strategy.
+- Generic `<TYPE:name>` placeholders.
+- HOSTLIST/IPSET target registry.
+- Target Mode.
+- Domain and IPv4/CIDR normalization and strict validation.
+- Wildcard domain canonicalization.
+- Exclude Domains.
+- Blob resolution.
+- Port extraction.
+- Generated dvtws2 arguments.
+- Candidate validation.
+- Atomic activation and restoration.
+- Launcher/supervisor separation.
+- ipfw lifecycle.
+- Execution stages.
+- Safe reconfigure.
+- Transactional Apply.
+- Field-level GUI errors.
+- Normalized GUI reload.
+- Explicit visible Apply button.
+- Public requirements, architecture, and state documentation.
+- Independent package name and version approved:
+  - `zapret2-restyle`
+  - `0.1.0`
 
-```text
-hostlist-youtube.txt:
-youtube.com
-googlevideo.com
-```
+## Confirmed live tests
 
-Confirmed mappings:
-
-```text
-<HOSTLIST:youtube> → --hostlist=.../hostlist-youtube.txt
-<HOSTLIST:user>    → --hostlist=.../hostlist-user.txt
-<IPSET:telegram>   → --ipset=.../ipset-telegram.txt
-```
-
-Invalid candidate:
-
-```text
-999.999.999.999
-```
-
-Confirmed:
-
-- `targets|failed`;
-- exact field, line, value, and reason;
-- active dvtws2 PID unchanged;
-- ipfw rules unchanged;
-- active runtime unchanged.
-
-Normal final runtime status:
+- Target placeholders resolve to separate managed files.
+- `*.googlevideo.com` becomes `googlevideo.com`.
+- Invalid `999.999.999.999` reports `targets|failed`.
+- Invalid candidate leaves PID, active runtime, and ipfw unchanged.
+- Normal runtime reaches:
 
 ```text
 13|13|ready|ok
 ```
 
-### GUI layout decision
-
-An attempt to widen fields using guessed CSS selectors was reverted.
-
-Current decision:
-
-- keep current field width;
-- do not change layout without inspecting verified rendered markup;
-- width enhancement is not a priority.
-
 ## Current priority
 
-### Next major task: Traffic Strategy validator
+### Traffic Strategy validator
 
-Add stronger plugin-owned semantic validation before dvtws2 launch.
+Add plugin-owned structural validation without blocking future valid zapret2
+arguments.
 
 Candidate checks:
 
 - empty profiles;
-- leading, trailing, or consecutive `--new`;
+- invalid `--new` placement;
 - profile without a filter;
-- malformed `--filter-tcp=` / `--filter-udp=` port values;
+- malformed TCP/UDP port filters;
 - unknown placeholder type;
 - unknown target name;
 - unresolved placeholders;
-- useful profile and line numbers in errors.
+- profile and line numbers in errors.
 
-Do not over-validate native upstream zapret2 syntax. dvtws2 remains the authority for upstream argument semantics.
+## Packaging priority
 
-## Secondary tasks
+After repository metadata is committed:
 
-- Add shell test fixtures for parser, targets, ports, validator, and safe reconfigure.
-- Extend inherited GitHub Actions for Backend v2.
-- Review package fresh install, upgrade, and module file inclusion.
-- Review migration from legacy HTTP/HTTPS/Ports settings.
-- Add minimal README installation and development instructions.
-- Revisit editor height and optional line numbering later.
+- verify every required Backend v2 file is included in package build;
+- verify package name and generated package filename;
+- test build;
+- test fresh installation on clean OPNsense;
+- remove inherited repository assumptions from setup, CI, release workflow,
+  package scripts, comments, URLs, and diagnostics;
+- verify uninstall and upgrade behavior.
 
 ## Known cautions
 
-- Do not commit `/usr/local/etc/zapret2`; it contains engine/runtime material.
-- Do not commit `.orig`, `.rej`, backups, runtime-v2, PID files, logs, or secrets.
-- FreeBSD behavior differs from GNU/Linux; verify command options and use `/bin/sh`.
-- Commands for the user must be given strictly in execution order.
-- Browser-console errors from `cs_similar_goods.js` and related scripts were browser-extension errors, not plugin errors.
-
-## Recovery instructions for a future assistant
-
-1. Open the public repository and read current `main`.
-2. Read:
-   - `REQUIREMENTS.md`
-   - `ARCHITECTURE.md`
-   - `DEVLOG.md`
-3. Inspect commits after `restyle-start`.
-4. Read `zapret_service.sh` and `backend/orchestrator.sh`.
-5. Confirm the working tree state before giving patches.
-6. Prefer repository state over chat memory.
+- Do not commit `/usr/local/etc/zapret2`.
+- Do not commit runtime, binaries, logs, PID files, backups, or secrets.
+- Use FreeBSD-compatible commands.
+- Give commands strictly in execution order.
+- Do not guess OPNsense HTML/CSS structure.
+- The field-width experiment was reverted and remains out of scope.
