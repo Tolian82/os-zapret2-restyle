@@ -45,6 +45,16 @@ The project starts its own version history at `0.1.0`.
   - `PLUGIN_NAME=zapret2-restyle`
   - `PLUGIN_VERSION=0.1.0`
 
+### Infrastructure
+
+- Established `VERSION` as the single project-version source.
+- Standardized project and package identity as `os-zapret2-restyle`.
+- Retained `zapret` as the stable internal OPNsense service name.
+- Reworked package build metadata for the independent repository.
+- Reworked CI and release automation for the `main` branch and independent
+  GitHub releases.
+- Updated package lifecycle messages and package description.
+
 ### Fixed
 
 - Invalid target data no longer stops a working dvtws2 service.

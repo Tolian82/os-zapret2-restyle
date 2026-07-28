@@ -1,21 +1,16 @@
 #!/bin/sh
 
-# Post-install hook for os-zapret2.
-# Runs after pkg has laid down the files. Restarts configd so it picks up
-# the new actions_zapret.conf, and clears the GUI ACL/menu cache so the
-# new Services > Zapret menu entry shows up without a manual webgui reload.
+# Post-install hook for os-zapret2-restyle.
+# Reloads OPNsense services and renders the initial plugin configuration.
 
-# Reload configd to pick up new action definitions and plugins.inc.d hooks
 if [ -x /usr/local/etc/rc.d/configd ]; then
     /usr/local/etc/rc.d/configd restart >/dev/null 2>&1 || true
 fi
 
-# Regenerate menu / ACL caches so the new plugin pages are visible
 if [ -x /usr/local/sbin/pluginctl ]; then
     /usr/local/sbin/pluginctl -c webgui.lighttpd_reload >/dev/null 2>&1 || true
 fi
 
-# Render the initial config template (no-op if settings haven't been saved yet)
 if [ -x /usr/local/sbin/configctl ]; then
     /usr/local/sbin/configctl template reload OPNsense/Zapret >/dev/null 2>&1 || true
 fi
@@ -23,25 +18,21 @@ fi
 cat <<'NEXT_STEPS'
 
 ================================================================
-os-zapret2 installed. Next steps before first use:
+os-zapret2-restyle installed.
 
-  1. Bootstrap dependencies and compile dvtws2 (one-time, ~1 min):
+Next steps:
+
+  1. Install the zapret2 runtime components:
 
        /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh
 
-     This installs luajit, jq, git-lite or git, pkgconf from FreeBSD's pkg
-     repo and clones+compiles bol-van/zapret2.
+  2. Open Services > Zapret DPI Bypass in the OPNsense GUI.
 
-  2. In the GUI: Services > Zapret DPI Bypass > Settings
-       - Enable the service
-       - Pick your WAN interface
-       - Paste your DPI strategies (or use Diagnostics > Blockcheck
-         to find ones that work for your ISP)
-       - Save & Apply
+  3. Enable the service, select the WAN interface, configure
+     Traffic Strategy and Targets, then click Apply.
 
-The service auto-starts on every reboot once Enable is checked.
+The internal OPNsense service name remains: zapret
 ================================================================
-
 NEXT_STEPS
 
 exit 0

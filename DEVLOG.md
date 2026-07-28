@@ -107,3 +107,18 @@ After repository metadata is committed:
 - Give commands strictly in execution order.
 - Do not guess OPNsense HTML/CSS structure.
 - The field-width experiment was reverted and remains out of scope.
+
+## Build and release identity decision
+
+Approved stable identities:
+
+```text
+Project:  os-zapret2-restyle
+Package:  os-zapret2-restyle
+Service:  zapret
+Version:  VERSION file
+```
+
+The service name remains `zapret` to avoid an unnecessary internal API and
+migration change. Build, CI, package metadata, release assets, installation
+commands, and repository URLs use `os-zapret2-restyle`.

@@ -170,3 +170,20 @@ setup and maintenance logic.
 - FreeBSD `/bin/sh` compatibility.
 - No Bash-only syntax.
 - Minimal operational documentation.
+
+## Stable identities and version source
+
+The project uses these stable identities:
+
+```text
+Project and repository: os-zapret2-restyle
+Installed package:      os-zapret2-restyle
+Internal service:       zapret
+```
+
+The internal service name is intentionally retained for runtime and OPNsense
+integration stability.
+
+`VERSION` is the single source of the project version. `Makefile`,
+`build-pkg.sh`, CI, and release automation must read or validate that file
+rather than maintain independent version values.

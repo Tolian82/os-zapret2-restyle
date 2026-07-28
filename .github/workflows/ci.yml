@@ -2,103 +2,153 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 jobs:
   validate:
-    name: Validate Plugin
+    name: Validate Project
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate XML files
-        run: |
-          echo "Validating XML files..."
-          find src -name "*.xml" -exec xmllint --noout {} \;
-          echo "All XML files are valid."
+      - name: Install validation tools
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
 
-      - name: Lint PHP files (docker)
+      - name: Validate project identity and version
+        shell: bash
         run: |
-          echo "Checking PHP syntax via docker..."
+          set -euo pipefail
+
+          VERSION_VALUE=$(tr -d '[:space:]' < VERSION)
+          [[ "${VERSION_VALUE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Invalid VERSION: ${VERSION_VALUE}"
+            exit 1
+          }
+
+          grep -Eq '^PLUGIN_NAME=[[:space:]]+zapret2-restyle$' Makefile
+          grep -Eq '^PLUGIN_VERSION!=[[:space:]]+/bin/cat \$\{\.CURDIR\}/VERSION$' Makefile
+          grep -Eq '^PLUGIN_MAINTAINER=[[:space:]]+tolian82IPB@gmail\.com$' Makefile
+
+          echo "Project: os-zapret2-restyle"
+          echo "Package: os-zapret2-restyle"
+          echo "Internal service: zapret"
+          echo "Version: ${VERSION_VALUE}"
+
+      - name: Validate XML files
+        run: find src -type f -name "*.xml" -exec xmllint --noout {} \;
+
+      - name: Lint PHP files
+        run: |
           docker run --rm -v "${PWD}":/app -w /app php:8.2-cli sh -c '
             set -e
-            find src -name "*.php" -exec php -l {} \;
-            find src -name "*.inc" -exec php -l {} \;
+            find src -type f -name "*.php" -exec php -l {} \;
+            find src -type f -name "*.inc" -exec php -l {} \;
           '
-          echo "All PHP files are valid."
 
       - name: Validate shell scripts
         run: |
-          echo "Checking shell scripts..."
-          find src -name "*.sh" -exec sh -n {} \;
+          find src -type f -name "*.sh" -exec sh -n {} \;
           find pkg -type f -exec sh -n {} \;
-          find scripts -name "*.sh" -exec sh -n {} \;
+          find scripts -type f -name "*.sh" -exec sh -n {} \;
           sh -n src/etc/rc.syshook.d/start/20-zapret
           sh -n src/etc/rc.syshook.d/stop/20-zapret
-          echo "All shell scripts are valid."
 
-      - name: Check file structure
+      - name: Check required project files
         run: |
-          echo "Checking required files..."
-          test -f Makefile || { echo "Missing Makefile"; exit 1; }
-          test -f pkg-descr || { echo "Missing pkg-descr"; exit 1; }
-          test -f LICENSE || { echo "Missing LICENSE"; exit 1; }
-          test -d src/opnsense/mvc/app/models/OPNsense/Zapret || { echo "Missing model directory"; exit 1; }
-          test -d src/opnsense/mvc/app/controllers/OPNsense/Zapret || { echo "Missing controller directory"; exit 1; }
-          test -d src/opnsense/mvc/app/views/OPNsense/Zapret || { echo "Missing views directory"; exit 1; }
-          test -d src/opnsense/service/conf/actions.d || { echo "Missing actions directory"; exit 1; }
-          test -d src/opnsense/scripts/OPNsense/Zapret || { echo "Missing scripts directory"; exit 1; }
-          test -f src/etc/rc.syshook.d/start/20-zapret || { echo "Missing boot start hook"; exit 1; }
-          test -f src/etc/rc.syshook.d/stop/20-zapret || { echo "Missing shutdown stop hook"; exit 1; }
-          test -f src/etc/inc/plugins.inc.d/zapret.inc || { echo "Missing plugins.inc.d service registration"; exit 1; }
-          test -f pkg/+POST_INSTALL || { echo "Missing +POST_INSTALL"; exit 1; }
-          test -f pkg/+PRE_DEINSTALL || { echo "Missing +PRE_DEINSTALL"; exit 1; }
-          test -f pkg/+POST_DEINSTALL || { echo "Missing +POST_DEINSTALL"; exit 1; }
-          test -x scripts/build-pkg.sh || { echo "Missing or non-executable scripts/build-pkg.sh"; exit 1; }
-          echo "File structure OK."
+          set -eu
+
+          for file in \
+            VERSION \
+            Makefile \
+            pkg-descr \
+            LICENSE \
+            NOTICE \
+            README.md \
+            CHANGELOG.md \
+            REQUIREMENTS.md \
+            ARCHITECTURE.md \
+            DEVLOG.md \
+            src/etc/rc.syshook.d/start/20-zapret \
+            src/etc/rc.syshook.d/stop/20-zapret \
+            src/etc/inc/plugins.inc.d/zapret.inc \
+            src/opnsense/service/conf/actions.d/actions_zapret.conf \
+            pkg/+POST_INSTALL \
+            pkg/+PRE_DEINSTALL \
+            pkg/+POST_DEINSTALL \
+            scripts/build-pkg.sh
+          do
+            test -f "${file}" || {
+              echo "Missing required file: ${file}"
+              exit 1
+            }
+          done
+
+          test -x scripts/build-pkg.sh || {
+            echo "scripts/build-pkg.sh is not executable"
+            exit 1
+          }
+
+      - name: Check repository independence
+        run: |
+          set -eu
+
+          if grep -RniE \
+            'github\.com/ugorur/os-zapret2|mail@ugorur|os-zapret2-[0-9]|pkg delete os-zapret2([^_-]|$)' \
+            . \
+            --exclude-dir=.git \
+            --exclude=LICENSE \
+            --exclude=NOTICE
+          then
+            echo "Legacy project reference found outside attribution files"
+            exit 1
+          fi
 
   package:
-    name: Build FreeBSD pkg
+    name: Build FreeBSD package
     runs-on: ubuntu-latest
     needs: validate
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract version
+      - name: Read package version
         id: version
+        shell: bash
         run: |
-          VERSION=$(grep 'PLUGIN_VERSION=' Makefile | head -1 | sed 's/.*=\s*//')
-          REVISION=$(grep 'PLUGIN_REVISION=' Makefile | head -1 | sed 's/.*=\s*//')
-          if [ -n "$REVISION" ] && [ "$REVISION" != "0" ]; then
-            FULL_VERSION="${VERSION}_${REVISION}"
-          else
-            FULL_VERSION="${VERSION}"
-          fi
-          echo "version=${FULL_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Package version: ${FULL_VERSION}"
+          set -euo pipefail
 
-      - name: Build .pkg inside FreeBSD VM
+          VERSION_VALUE=$(tr -d '[:space:]' < VERSION)
+          REVISION=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | head -1)
+
+          if [[ -n "${REVISION}" && "${REVISION}" != "0" ]]; then
+            FULL_VERSION="${VERSION_VALUE}_${REVISION}"
+          else
+            FULL_VERSION="${VERSION_VALUE}"
+          fi
+
+          echo "version=${FULL_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build package inside FreeBSD VM
         uses: vmactions/freebsd-vm@v1
         with:
           release: "14.2"
           usesh: true
-          prepare: |
-            pkg install -y jq
-          run: |
-            sh scripts/build-pkg.sh
+          prepare: pkg install -y jq
+          run: sh scripts/build-pkg.sh
 
       - name: Inspect built package
         run: |
+          set -eu
           ls -lh dist/
-          echo "--- tar contents (first 30) ---"
-          tar -tJf dist/*.pkg | head -30
-          echo "--- +MANIFEST preview ---"
-          tar -xJf dist/*.pkg -O +MANIFEST | head -60
+          tar -tf dist/*.pkg | head -30
+          tar -xOf dist/*.pkg +MANIFEST | head -80
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: os-zapret2-${{ steps.version.outputs.version }}
-          path: dist/*.pkg
+          name: os-zapret2-restyle-${{ steps.version.outputs.version }}
+          path: dist/os-zapret2-restyle-*.pkg
+          if-no-files-found: error

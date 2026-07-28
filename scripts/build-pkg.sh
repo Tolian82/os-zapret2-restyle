@@ -1,32 +1,72 @@
 #!/bin/sh
-# build-pkg.sh — build a proper FreeBSD .pkg for os-zapret2.
+# Build a FreeBSD package for os-zapret2-restyle.
 #
-# Runs on FreeBSD (where pkg-static is available). In CI this is invoked
-# inside a FreeBSD VM (vmactions/freebsd-vm). Local FreeBSD devs can run
-# it directly; local non-FreeBSD devs can invoke via the same action.
-#
-# Output: os-zapret2-<version>.pkg in the repo root.
+# VERSION is the single source of the project version.
+# Output: dist/os-zapret2-restyle-<version>[_revision].pkg
 
 set -eu
 
 REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "${REPO_ROOT}"
 
-# --- 1. Parse Makefile metadata ----------------------------------------------
-
-get_var() {
-    sed -n "s/^${1}=[[:space:]]*\(.*\)$/\1/p" Makefile | head -1 | sed 's/[[:space:]]*$//'
+fail()
+{
+    echo "ERROR: $*" >&2
+    exit 1
 }
 
-PLUGIN_NAME=$(get_var PLUGIN_NAME)
-PLUGIN_VERSION=$(get_var PLUGIN_VERSION)
-PLUGIN_REVISION=$(get_var PLUGIN_REVISION)
-PLUGIN_COMMENT=$(get_var PLUGIN_COMMENT)
-PLUGIN_MAINTAINER=$(get_var PLUGIN_MAINTAINER)
-PLUGIN_DEPENDS=$(get_var PLUGIN_DEPENDS)
-PLUGIN_LICENSE=$(get_var PLUGIN_LICENSE)
+get_make_var()
+{
+    sed -n "s/^${1}=[[:space:]]*\(.*\)$/\1/p" Makefile |
+        head -1 |
+        sed 's/[[:space:]]*$//'
+}
+
+read_version()
+{
+    [ -f VERSION ] || fail "VERSION file is missing"
+
+    version=$(tr -d '[:space:]' < VERSION)
+    case "${version}" in
+        ''|*[!0-9.]*|.*|*..*|*.)
+            fail "invalid VERSION value '${version}'"
+            ;;
+    esac
+
+    old_ifs=${IFS}
+    IFS=.
+    set -- ${version}
+    IFS=${old_ifs}
+    [ "$#" -eq 3 ] || fail "VERSION must use MAJOR.MINOR.PATCH"
+    for component in "$@"; do
+        case "${component}" in
+            ''|*[!0-9]*)
+                fail "VERSION must use numeric MAJOR.MINOR.PATCH"
+                ;;
+        esac
+    done
+
+    printf '%s\n' "${version}"
+}
+
+command -v jq >/dev/null 2>&1 || fail "jq is required"
+command -v pkg-static >/dev/null 2>&1 || fail "pkg-static is required"
+
+PLUGIN_NAME=$(get_make_var PLUGIN_NAME)
+PLUGIN_REVISION=$(get_make_var PLUGIN_REVISION)
+PLUGIN_COMMENT=$(get_make_var PLUGIN_COMMENT)
+PLUGIN_MAINTAINER=$(get_make_var PLUGIN_MAINTAINER)
+PLUGIN_DEPENDS=$(get_make_var PLUGIN_DEPENDS)
+PLUGIN_LICENSE=$(get_make_var PLUGIN_LICENSE)
+PLUGIN_VERSION=$(read_version)
+
+[ "${PLUGIN_NAME}" = "zapret2-restyle" ] ||
+    fail "PLUGIN_NAME must be zapret2-restyle"
 
 PKG_NAME="os-${PLUGIN_NAME}"
+[ "${PKG_NAME}" = "os-zapret2-restyle" ] ||
+    fail "unexpected package name '${PKG_NAME}'"
+
 if [ -n "${PLUGIN_REVISION}" ] && [ "${PLUGIN_REVISION}" != "0" ]; then
     FULL_VERSION="${PLUGIN_VERSION}_${PLUGIN_REVISION}"
 else
@@ -34,8 +74,6 @@ else
 fi
 
 echo "==> Building ${PKG_NAME}-${FULL_VERSION}"
-
-# --- 2. Stage files -----------------------------------------------------------
 
 STAGE="${REPO_ROOT}/work/stage"
 rm -rf "${REPO_ROOT}/work"
@@ -46,50 +84,39 @@ if [ -d src/etc ]; then
     cp -R src/etc "${STAGE}/usr/local/etc"
 fi
 
-# Enforce executable bits (tar on macOS/Linux may not preserve them perfectly)
-find "${STAGE}" -name "*.sh" -type f -exec chmod 755 {} +
-find "${STAGE}" -name "zapret" -path "*/rc.d/*" -type f -exec chmod 755 {} +
+find "${STAGE}" -type f -name "*.sh" -exec chmod 755 {} +
+find "${STAGE}" -type f -name "zapret" -path "*/rc.d/*" -exec chmod 755 {} +
 if [ -d "${STAGE}/usr/local/etc/rc.syshook.d" ]; then
     find "${STAGE}/usr/local/etc/rc.syshook.d" -type f -exec chmod 755 {} +
 fi
 
-# --- 3. Generate plist (one file per line, absolute paths) --------------------
-
 PLIST="${REPO_ROOT}/work/pkg-plist"
-(cd "${STAGE}" && find usr -type f -o -type l) | sed 's|^|/|' | sort > "${PLIST}"
+(
+    cd "${STAGE}"
+    find usr \( -type f -o -type l \)
+) | sed 's|^|/|' | sort > "${PLIST}"
 
-if [ ! -s "${PLIST}" ]; then
-    echo "ERROR: empty plist — nothing was staged" >&2
-    exit 1
-fi
-
+[ -s "${PLIST}" ] || fail "empty plist; nothing was staged"
 echo "==> plist: $(wc -l < "${PLIST}" | tr -d ' ') entries"
 
-# --- 4. Generate +MANIFEST with inline lifecycle scripts ----------------------
-
-# Read pkg-descr and escape for JSON. `jq -Rs .` reads raw input and emits
-# it as a quoted JSON string with escapes.
 DESC_JSON=$(jq -Rs . < pkg-descr)
-
 POST_INSTALL_JSON=$(jq -Rs . < pkg/+POST_INSTALL)
 PRE_DEINSTALL_JSON=$(jq -Rs . < pkg/+PRE_DEINSTALL)
 POST_DEINSTALL_JSON=$(jq -Rs . < pkg/+POST_DEINSTALL)
 
-# Dependency list — PLUGIN_DEPENDS is space-separated. Each entry is
-# mapped to its FreeBSD ports origin and emitted as a JSON object that
-# pkg-static can resolve at install time.
-dep_origin() {
+dep_origin()
+{
     case "$1" in
         luajit) echo "lang/luajit" ;;
         jq)     echo "textproc/jq" ;;
         git)    echo "devel/git" ;;
-        *)      echo "$1" ;;  # best-effort; pkg will fail loudly if wrong
+        *)      echo "$1" ;;
     esac
 }
 
 DEPS_ENTRIES=""
 for dep in ${PLUGIN_DEPENDS}; do
-    [ -z "${dep}" ] && continue
+    [ -n "${dep}" ] || continue
     origin=$(dep_origin "${dep}")
     if [ -n "${DEPS_ENTRIES}" ]; then
         DEPS_ENTRIES="${DEPS_ENTRIES},"
@@ -106,7 +133,7 @@ jq -n \
     --arg origin "opnsense/${PKG_NAME}" \
     --arg comment "${PLUGIN_COMMENT}" \
     --arg maintainer "${PLUGIN_MAINTAINER}" \
-    --arg www "https://github.com/ugorur/os-zapret2" \
+    --arg www "https://github.com/Tolian82/os-zapret2-restyle" \
     --arg license "${PLUGIN_LICENSE}" \
     --argjson desc "${DESC_JSON}" \
     --argjson deps "${DEPS}" \
@@ -135,19 +162,19 @@ jq -n \
 
 echo "==> +MANIFEST written to ${MANIFEST}"
 
-# --- 5. Hand off to pkg-static create -----------------------------------------
-
 OUT="${REPO_ROOT}/dist"
 rm -rf "${OUT}"
 mkdir -p "${OUT}"
 
-# pkg-static fills in files{} (with hashes), flatsize, abi, arch itself,
-# merging our partial +MANIFEST.
 pkg-static create \
     -M "${MANIFEST}" \
     -p "${PLIST}" \
     -r "${STAGE}" \
     -o "${OUT}"
 
+EXPECTED="${OUT}/${PKG_NAME}-${FULL_VERSION}.pkg"
+[ -f "${EXPECTED}" ] ||
+    fail "expected package was not created: ${EXPECTED}"
+
 echo "==> built:"
-ls -lh "${OUT}"/*.pkg
+ls -lh "${EXPECTED}"
