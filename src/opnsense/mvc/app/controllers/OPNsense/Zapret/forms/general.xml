@@ -16,12 +16,6 @@
         <help>Select the WAN interface where DPI bypass should be applied.</help>
     </field>
     <field>
-        <id>zapret.general.ports</id>
-        <label>Ports</label>
-        <type>text</type>
-        <help>Comma-separated list of ports to intercept (default: 80,443).</help>
-    </field>
-    <field>
         <id>zapret.general.divertport</id>
         <label>Divert Port</label>
         <type>text</type>
@@ -41,20 +35,12 @@
             HTTP strategies go in the HTTP field, HTTPS/TLS strategies go in the HTTPS field.]]></text>
     </field>
     <field>
-        <id>zapret.strategy.httpargs</id>
-        <label>HTTP Strategy</label>
-        <type>text</type>
-        <help><![CDATA[dvtws2 arguments for HTTP (port 80) bypass from blockcheck2 results.<br/>
-            Paste the part after <code>dvtws2</code> from a <code>curl_test_http</code> line in the SUMMARY.<br/>
-            Example: <code>--payload=http_req --lua-desync=http_hostcase:spell=hoSt</code>]]></help>
-    </field>
-    <field>
-        <id>zapret.strategy.httpsargs</id>
-        <label>HTTPS Strategy</label>
-        <type>text</type>
-        <help><![CDATA[dvtws2 arguments for HTTPS/TLS (port 443) bypass from blockcheck2 results.<br/>
-            Paste the part after <code>dvtws2</code> from a <code>curl_test_https_tls12</code> line in the SUMMARY.<br/>
-            Example: <code>--payload=tls_client_hello --lua-desync=fake:blob=fake_default_tls:ip_autottl=-4,3-20:repeats=1</code>]]></help>
+        <id>zapret.strategy.trafficargs</id>
+        <label>Traffic Strategy</label>
+        <type>textbox</type>
+        <help><![CDATA[Complete dvtws2 strategy. Multiple profiles separated by <code>--new</code> are supported.<br/>
+            Domain lists: <code>&lt;HOSTLIST:youtube&gt;</code>, <code>&lt;HOSTLIST:user&gt;</code>.<br/>
+            IP lists: <code>&lt;IPSET:telegram&gt;</code>.]]></help>
     </field>
     <field>
         <id>zapret.strategy.extraargs</id>
@@ -65,21 +51,47 @@
     </field>
     <field>
         <type>header</type>
-        <label>Host List</label>
+        <label>Targets</label>
     </field>
     <field>
         <id>zapret.hostlist.mode</id>
-        <label>Host List Mode</label>
+        <label>Target Mode</label>
         <type>dropdown</type>
-        <help><![CDATA[<b>All traffic</b> — apply DPI bypass to all traffic on configured ports.<br/>
-            <b>Only listed domains</b> — apply only to domains listed below.<br/>
-            <b>Auto-detect</b> — automatically detect and add blocked domains.]]></help>
+        <help><![CDATA[
+            Used only for strategy profiles that do not contain an explicit
+            <code>&lt;HOSTLIST:name&gt;</code> or <code>&lt;IPSET:name&gt;</code> placeholder.<br/>
+            <b>All traffic</b> — do not limit the profile by target lists.<br/>
+            <b>Only listed targets</b> — use YouTube Domains, Telegram IPs and User Domains.<br/>
+            <b>Auto-detect</b> — use all listed targets and the automatically detected blocked-domain list.<br/>
+            Exclude Domains are always excluded globally.
+        ]]></help>
     </field>
     <field>
-        <id>zapret.hostlist.domains</id>
-        <label>Domains</label>
+        <id>zapret.hostlist.youtubedomains</id>
+        <label>YouTube Domains</label>
         <type>textbox</type>
-        <help>One domain per line. Only used when Host List Mode is set to "Only listed domains".</help>
+        <help><![CDATA[
+            Domain source for <code>&lt;HOSTLIST:youtube&gt;</code>.
+            One full domain or wildcard domain per line.
+        ]]></help>
+    </field>
+    <field>
+        <id>zapret.hostlist.telegramips</id>
+        <label>Telegram IPs</label>
+        <type>textbox</type>
+        <help><![CDATA[
+            IPv4 source for <code>&lt;IPSET:telegram&gt;</code>.
+            One IPv4 address or CIDR network per line.
+        ]]></help>
+    </field>
+    <field>
+        <id>zapret.hostlist.userdomains</id>
+        <label>User Domains</label>
+        <type>textbox</type>
+        <help><![CDATA[
+            Domain source for <code>&lt;HOSTLIST:user&gt;</code>.
+            One full domain or wildcard domain per line.
+        ]]></help>
     </field>
     <field>
         <id>zapret.hostlist.excludedomains</id>

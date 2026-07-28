@@ -59,7 +59,7 @@ if [ -f "${FREEBSD_REPO_OVERRIDE}" ] && grep -q 'enabled: no' "${FREEBSD_REPO_OV
     # Enable ONLY the base FreeBSD repo. Do NOT enable FreeBSD-kmods — no kernel
     # module is needed here, and pulling kmods risks clobbering OPNsense's own.
     cat > "${FREEBSD_REPO_OVERRIDE}" <<'EOF'
-FreeBSD: { enabled: yes }
+FreeBSD-ports: { enabled: yes }
 EOF
 fi
 
