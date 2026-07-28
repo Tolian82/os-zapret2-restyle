@@ -247,6 +247,10 @@ are updated in the same logical commit.
 Every approved concept must be recorded in DECISIONS.md and in the applicable
 specialist document.
 
+Each audit block is complete only after all affected Engineering Memory documents
+are updated, reviewed, and committed. AUDIT.md must contain detailed verification
+and remediation plans for every non-OK finding before code changes begin.
+
 ==================================================
 CURRENT DOCUMENT STATUS
 ==================================================

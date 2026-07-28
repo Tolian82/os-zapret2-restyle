@@ -84,8 +84,13 @@ The word "zapret" alone is not evidence of obsolete inheritance.
 AUDIT.md is the authoritative register for audit scope, verified chains, broken
 chains, classifications, live-test requirements, and remediation status.
 
-A completed audit step must be documented before work proceeds to the next audit
-step or to code changes.
+Each audit block is considered complete only after all affected Engineering
+Memory documents have been updated, reviewed, and committed. Until then, work
+must not proceed to the next audit block or to code changes.
+
+Every non-OK finding must have a stable ID, exact affected locations, chain,
+evidence, impact, verification plan, remediation plan, acceptance criteria,
+required documentation updates, and remediation status in AUDIT.md.
 
 A broken chain must be recorded before it is fixed. After verification, its audit
 status must be updated rather than silently removed.

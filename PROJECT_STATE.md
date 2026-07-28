@@ -42,7 +42,9 @@ Current phase:
 API and inherited-reference audit execution
 
 Current priority:
-Document the completed MVC, GUI API, ACL, Menu, and configd audit block, then audit service lifecycle and runtime hooks.
+Commit detailed remediation records for the completed MVC, GUI API, ACL, Menu,
+and configd audit block together with the audit synchronization rule and the
+initial lifecycle evidence.
 
 Last completed:
 Static audit block for MVC, GUI API, ACL, Menu, and configd interfaces.
@@ -134,15 +136,27 @@ Documented findings:
 - The service reconfigure API endpoint is not called by the current GUI and
   requires classification by live or external-interface testing.
 
-The authoritative detailed audit record is AUDIT.md.
+The authoritative detailed audit record is AUDIT.md. Each non-OK finding now
+requires exact affected locations, a verification plan, a remediation plan,
+acceptance criteria, required documentation updates, and a stable finding ID.
+
+Initial lifecycle evidence recorded:
+
+- Boot uses start/20-zapret → configctl zapret start → configd →
+  zapret_service.sh.
+- Shutdown uses stop/20-zapret → configctl zapret stop → configd →
+  zapret_service.sh.
+- A separate rc.d/zapret entry point converges on the same service script; whether
+  it participates in automatic boot remains a live-test question (LIFE-001).
 
 ==================================================
 NEXT ACTIONS
 ==================================================
 
-1. Commit AUDIT.md and all synchronized Engineering Memory updates.
-2. Audit service lifecycle, rc.d scripts, syshooks, plugin hooks, supervisor, and
-   watchdog behavior.
+1. Commit the detailed finding records, remediation plans, audit synchronization
+   rule, and initial lifecycle evidence.
+2. Continue the incomplete service lifecycle block: rc.d registration, plugin
+   hooks, supervisor, watchdog, launcher, firewall, failure paths, and cleanup.
 3. Record every verified chain, overlap, broken path, and required live test in
    AUDIT.md before changing code.
 4. Continue with backend, runtime paths, packaging, setup, build, CI, release,

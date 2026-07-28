@@ -29,6 +29,8 @@ Working cycle:
 
 [x] Record the stage plan
 [ ] Perform the stage
+[x] Define actionable finding IDs and remediation-record requirements
+[x] Record detailed remediation plans for the completed MVC/API block
 [x] Record discoveries and approved concepts for the completed MVC/API block
 [x] Record completed MVC/API work and verification
 [x] Record remaining work and the next audit block
@@ -60,13 +62,15 @@ STAGE 2 — API AND INHERITED-REFERENCE AUDIT
 [ ] Inventory model operations and configuration paths
 [x] Inventory configd actions
 [ ] Inventory shell entry points and backend functions
-[ ] Inventory rc scripts, syshooks, and plugin hooks
+[~] Inventory rc scripts, syshooks, and plugin hooks (syshook chains recorded;
+    rc.d overlap and remaining hooks still under audit)
 [ ] Inventory filesystem and generated-template paths
 [ ] Inventory package lifecycle scripts
 [ ] Inventory setup, build, CI, and release logic
 [ ] Inventory external repositories, URLs, and downloads
 [ ] Classify every inherited reference
 [x] Create AUDIT.md and record verified and broken interface chains
+[x] Add verification plans, remediation plans, acceptance criteria, and stable IDs
 [ ] Remove only confirmed obsolete dependencies
 [ ] Run live API and lifecycle tests
 

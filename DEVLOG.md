@@ -189,3 +189,33 @@ Next:
 
 - Audit service lifecycle, rc.d, syshooks, plugin hooks, supervisor, watchdog,
   and possible lifecycle overlap.
+
+
+==================================================
+2026-07-28 — ACTIONABLE AUDIT FINDINGS AND INITIAL LIFECYCLE TRACE
+==================================================
+
+Completed:
+
+- Required every audit block to end with updated, reviewed, and committed
+  Engineering Memory before the next block or code remediation starts.
+- Introduced stable finding IDs and a mandatory actionable finding structure.
+- Expanded MVC-001, GUI-001, GUI-002, DIAG-001, and API-001 with exact affected
+  files and symbols, affected chains, evidence, risks, verification plans,
+  remediation plans, acceptance criteria, documentation impact, and status.
+- Recorded the confirmed boot and shutdown syshook chains.
+- Recorded LIFE-001 for possible overlap between automatic syshook lifecycle and
+  the rc.d service entry point.
+- Recorded LIFE-002 and LIFE-003 for focused boot, shutdown, and reboot tests.
+
+Current result:
+
+The MVC/GUI/API/configd block remains completed and now has actionable repair
+plans. The lifecycle block is in progress; no lifecycle code remediation is
+approved until its remaining static trace and required live tests are complete.
+
+Next:
+
+Continue lifecycle tracing through rc.d registration, plugin hooks, supervisor,
+watchdog, launcher, firewall, failure paths, and cleanup, then synchronize and
+commit the completed lifecycle block before moving on.

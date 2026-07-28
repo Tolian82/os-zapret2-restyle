@@ -648,3 +648,67 @@ INDEX.md
 
 Status:
 Active
+
+
+==================================================
+2026-07-28 — AUDIT BLOCKS REQUIRE A DOCUMENTATION COMMIT BEFORE CONTINUATION
+==================================================
+
+Decision:
+An audit block is considered complete only after all affected Engineering Memory
+documents have been updated, reviewed, and committed. Work must not proceed to
+the next audit block or to code remediation before that synchronization point.
+
+Reason:
+Audit knowledge must remain recoverable from the repository at every stage and
+must not exist only in chat history or an uncommitted working tree.
+
+Consequences:
+Every audit block ends with a documentation-only synchronization commit when no
+code change is yet approved. PROJECT_STATE.md, AUDIT.md, DEVLOG.md, ROADMAP.md,
+and DECISIONS.md are updated as applicable before work continues.
+
+Affected documents:
+INDEX.md
+AUDIT.md
+DECISIONS.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+PROJECT_STATE.md
+DEVLOG.md
+ROADMAP.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — AUDIT FINDINGS REQUIRE ACTIONABLE REMEDIATION RECORDS
+==================================================
+
+Decision:
+Every non-OK audit finding must have a stable ID and record exact affected
+locations, the damaged or uncertain chain, evidence, impact, verification plan,
+remediation plan, acceptance criteria, required documentation updates, and
+current remediation status.
+
+Reason:
+A list of problem titles is insufficient for controlled remediation. The project
+must preserve what is wrong, where it is wrong, how to prove it, how to repair it,
+and how to know the repair is complete.
+
+Consequences:
+AUDIT.md becomes the authoritative technical-debt and remediation register.
+Finding IDs may be referenced from DEVLOG.md, CHANGELOG.md, commits, tests, and
+pull requests. Fixed findings remain in the register with updated status and
+verification evidence.
+
+Affected documents:
+AUDIT.md
+DECISIONS.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+INDEX.md
+DEVLOG.md
+
+Status:
+Active

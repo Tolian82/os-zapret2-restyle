@@ -49,11 +49,18 @@ git log -1 --oneline
 
 4. Perform the required audit or investigation and record results in AUDIT.md.
 
-5. Create a backup when changing live files.
+5. For every non-OK finding, record its stable ID, exact affected locations,
+   chain, evidence, impact, verification plan, remediation plan, acceptance
+   criteria, required documentation updates, and current status.
 
-6. Apply a minimal change.
+6. Before starting the next audit block or changing code, update, review, and
+   commit all affected Engineering Memory documents.
 
-7. Validate.
+7. Create a backup when changing live files.
+
+8. Apply a minimal change.
+
+9. Validate.
 
 Examples:
 
@@ -63,19 +70,19 @@ git diff --check
 
 php -l file.php
 
-8. Review the complete diff.
+10. Review the complete diff.
 
-9. Run focused live tests.
+11. Run focused live tests.
 
-10. Update every affected document, including audit and current-state records.
+12. Update every affected document, including audit and current-state records.
 
-11. Stage explicit files only.
+13. Stage explicit files only.
 
-12. Review staged diff.
+14. Review staged diff.
 
-13. Commit one logical change.
+15. Commit one logical change.
 
-14. Push and verify origin/main.
+16. Push and verify origin/main.
 
 ==================================================
 REPOSITORY LAYERS
@@ -130,16 +137,20 @@ live tests in AUDIT.md.
 Only after the relevant audit result has been documented may inherited code be
 removed or a broken chain be changed.
 
-A completed audit step follows this sequence:
+A completed audit block follows this sequence:
 
 investigate
 ↓
 verify evidence
 ↓
-record in AUDIT.md
+record detailed findings and plans in AUDIT.md
 ↓
 update PROJECT_STATE.md, DEVLOG.md, ROADMAP.md, and DECISIONS.md when applicable
 ↓
-commit the documentation state
+review and commit the complete documentation state
 ↓
-start remediation or the next audit step
+only then start remediation or the next audit block
+
+An audit block is not complete before the documentation commit. A finding is not
+ready for remediation until its verification plan, remediation plan, acceptance
+criteria, and documentation impact are recorded.
