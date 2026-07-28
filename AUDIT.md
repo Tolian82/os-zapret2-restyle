@@ -1037,16 +1037,29 @@ LIFE-007 — PID checks do not verify process identity
 --------------------------------------------------
 
 Classification:
-risk / requires live and design review
+risk / remediated in code / live verification required
 
 Locations:
-launcher_is_running()
-supervisor_is_running()
-related stop functions
+src/opnsense/scripts/OPNsense/Zapret/backend/common.sh
+src/opnsense/scripts/OPNsense/Zapret/backend/launcher.sh
+src/opnsense/scripts/OPNsense/Zapret/backend/supervisor.sh
 
-Evidence:
-The current checks rely on kill -0 against a PID read from a PID file. They do not
-verify that the PID still belongs to dvtws2 or the expected supervisor loop.
+Evidence before remediation:
+The checks relied on kill -0 against a PID read from a PID file. They did not verify
+that the PID still belonged to dvtws2 or the expected supervisor loop.
+
+Implemented remediation:
+
+- Added common_process_matches(), which validates liveness and checks the full
+  process command through FreeBSD /bin/ps.
+- Launcher health and stop paths now require the command to contain the configured
+  absolute DVTWS_BIN path.
+- Supervisor health and stop paths now require the command to contain the configured
+  absolute SUPERVISOR_LOOP path.
+- A missing, malformed, stale, or identity-mismatched PID file is removed by stop
+  paths without signalling the referenced process.
+- TERM/KILL escalation is performed only while the PID still identifies the expected
+  plugin-owned process.
 
 Impact:
 
@@ -1057,23 +1070,25 @@ Impact:
 
 Verification plan:
 
-1. Determine reliable FreeBSD process-identity checks available on supported
-   OPNsense versions.
-2. Reproduce stale PID and PID-reuse scenarios safely.
-3. Confirm current behavior without signalling unrelated processes.
-4. Resolve ARCH-003 before assigning final ownership of health checks.
+1. Confirm /bin/ps -p PID -o command= output for daemon-managed dvtws2, the
+   supervisor daemon, and the supervisor monitor on the supported OPNsense release.
+2. Verify normal start, status, stop, restart, and reconfigure behavior.
+3. Replace each plugin PID file with a live unrelated PID and confirm status rejects
+   it and stop removes only the stale PID file.
+4. Verify dead and malformed PID files are cleaned without errors.
+5. Resolve ARCH-003 separately before changing responsibility boundaries or adding
+   new restart policy.
 
 Remediation plan:
-Add executable or command-line identity validation before reporting running or
-sending signals. Remove stale PID files when identity fails. Share one helper
-between launcher and supervisor where practical.
+Code remediation is complete. Keep the shared command-identity helper and adjust only
+if live FreeBSD process-command output requires a narrower matching method.
 
 Acceptance criteria:
 A stale or reused PID cannot be treated as the expected process and cannot receive
 TERM or KILL from the plugin.
 
 Remediation status:
-Open; design and live test required.
+Code implemented; focused live verification required.
 
 --------------------------------------------------
 LIFE-008 — supervisor stop escalates without checking process exit
@@ -1085,9 +1100,14 @@ risk / cleanup improvement
 Location:
 supervisor_stop_one()
 
-Evidence:
-The function sends TERM, sleeps one second, then sends KILL without first checking
-whether the process exited.
+Evidence before remediation:
+The function sent TERM, slept one second, then sent KILL without checking whether the
+process exited or still matched the expected supervisor loop.
+
+Implemented remediation:
+After TERM and the bounded one-second grace period, KILL is sent only if the PID is
+still live and still identifies the configured supervisor loop. Identity mismatch
+removes the stale PID file without signalling the referenced process.
 
 Impact:
 The unconditional escalation is harder to reason about, is inconsistent with the
@@ -1098,14 +1118,15 @@ Measure normal supervisor exit time and test already-exited, slow-exit, and stal
 cases after process identity protection is defined.
 
 Remediation plan:
-Resolve LIFE-007 first, then use bounded polling and send KILL only while the verified
-expected process remains alive.
+Code remediation is complete using a bounded one-second grace period and conditional,
+identity-safe escalation. Extend the grace period only if live measurements show that
+normal supervisor shutdown requires more time.
 
 Acceptance criteria:
 Normal exits do not receive KILL; escalation is conditional, bounded, and identity-safe.
 
 Remediation status:
-Blocked by LIFE-007.
+Code implemented together with LIFE-007; focused live verification required.
 
 --------------------------------------------------
 LIFE-009 — lifecycle operations were not serialized

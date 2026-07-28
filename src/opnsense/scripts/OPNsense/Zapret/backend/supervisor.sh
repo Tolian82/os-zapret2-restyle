@@ -7,6 +7,8 @@
 #   supervisor_stop SUPERVISOR_PIDFILE MONITOR_PIDFILE
 #   supervisor_is_running MONITOR_PIDFILE
 #
+# SUPERVISOR_LOOP must contain the expected absolute supervisor loop path.
+#
 # Supervisor starts only after Launcher and Firewall have succeeded. It does
 # not launch or restart dvtws2. If the ready process disappears, it asks the
 # service entry point to perform the common runtime-failure cleanup.
@@ -28,7 +30,7 @@ supervisor_pidfile_read()
 supervisor_is_running()
 {
     _supervisor_running_pid=$(supervisor_pidfile_read "$1") || return 1
-    kill -0 "${_supervisor_running_pid}" 2>/dev/null
+    common_process_matches "${_supervisor_running_pid}" "${SUPERVISOR_LOOP:-}"
 }
 
 supervisor_stop_one()
@@ -39,9 +41,16 @@ supervisor_stop_one()
         return 0
     }
 
+    if ! common_process_matches "${_supervisor_stop_pid}" "${SUPERVISOR_LOOP:-}"; then
+        rm -f "${_supervisor_stop_file}"
+        return 0
+    fi
+
     kill "${_supervisor_stop_pid}" 2>/dev/null || true
     sleep 1
-    kill -KILL "${_supervisor_stop_pid}" 2>/dev/null || true
+    if common_process_matches "${_supervisor_stop_pid}" "${SUPERVISOR_LOOP:-}"; then
+        kill -KILL "${_supervisor_stop_pid}" 2>/dev/null || true
+    fi
     rm -f "${_supervisor_stop_file}"
 }
 

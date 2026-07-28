@@ -5,6 +5,8 @@
 #   launcher_start_once BIN ARGS_FILE PIDFILE LOG_FILE STABILITY_SECONDS
 #   launcher_stop PIDFILE [TIMEOUT]
 #   launcher_is_running PIDFILE
+#
+# DVTWS_BIN must contain the expected absolute dvtws2 path.
 #   launcher_status PIDFILE
 #
 # Launcher starts exactly one dvtws2 instance. It never uses daemon -r and
@@ -28,7 +30,7 @@ launcher_pidfile_read()
 launcher_is_running()
 {
     _launcher_running_pid=$(launcher_pidfile_read "$1") || return 1
-    kill -0 "${_launcher_running_pid}" 2>/dev/null
+    common_process_matches "${_launcher_running_pid}" "${DVTWS_BIN:-}"
 }
 
 launcher_prepare_argv()
@@ -71,16 +73,21 @@ launcher_stop()
         return 0
     }
 
+    if ! common_process_matches "${_launcher_stop_pid}" "${DVTWS_BIN:-}"; then
+        rm -f "${_launcher_stop_pidfile}"
+        return 0
+    fi
+
     kill "${_launcher_stop_pid}" 2>/dev/null || true
 
     _launcher_stop_wait=0
-    while kill -0 "${_launcher_stop_pid}" 2>/dev/null &&
+    while common_process_matches "${_launcher_stop_pid}" "${DVTWS_BIN:-}" &&
           [ "${_launcher_stop_wait}" -lt "${_launcher_stop_timeout}" ]; do
         sleep 1
         _launcher_stop_wait=$((_launcher_stop_wait + 1))
     done
 
-    if kill -0 "${_launcher_stop_pid}" 2>/dev/null; then
+    if common_process_matches "${_launcher_stop_pid}" "${DVTWS_BIN:-}"; then
         kill -KILL "${_launcher_stop_pid}" 2>/dev/null || true
     fi
 

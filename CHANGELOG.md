@@ -57,6 +57,8 @@ The project starts its own version history at `0.1.0`.
 
 ### Fixed
 
+- Hardened launcher and supervisor PID handling so stale or reused PIDs are not treated as plugin-owned processes and cannot receive TERM or KILL.
+- Made supervisor SIGKILL escalation conditional on the expected supervisor process still being present after the grace period.
 - Removed the duplicate `firewall_rules_present()` declaration so firewall runtime-state checks have one canonical implementation.
 - Serialized mutating lifecycle operations with a FreeBSD lockf-backed mutex and prevented stale supervisor callbacks from tearing down replacement runtime state.
 - Invalid target data no longer stops a working dvtws2 service.

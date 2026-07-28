@@ -303,3 +303,26 @@ Still required:
 Next:
 
 Continue the remaining Lifecycle/Runtime audit and live verification queue.
+==================================================
+2026-07-28 — PROCESS IDENTITY HARDENING (LIFE-007 / LIFE-008)
+==================================================
+
+Completed:
+
+- Added one shared process-command identity check based on FreeBSD /bin/ps.
+- Required launcher PID files to identify the configured absolute dvtws2 binary.
+- Required supervisor PID files to identify the configured supervisor loop.
+- Prevented stale or reused PIDs from receiving TERM or KILL.
+- Made supervisor KILL escalation conditional after the grace period.
+- Kept existing launcher, supervisor, and responsibility boundaries unchanged.
+- Completed POSIX shell syntax and whitespace validation.
+
+Still required:
+
+- Live verification of /bin/ps command output on OPNsense.
+- Normal lifecycle regression tests.
+- Stale, malformed, dead, and unrelated live PID-file tests.
+
+Next:
+
+Run the focused live tests, then continue the remaining lifecycle and package-lifecycle audit.

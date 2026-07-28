@@ -11,6 +11,33 @@ common_cleanup_dir()
     [ -n "${_common_dir}" ] && [ -d "${_common_dir}" ] && rm -rf "${_common_dir}"
 }
 
+
+common_process_matches()
+{
+    _common_process_pid="$1"
+    _common_process_expected="$2"
+    _common_process_ps="${COMMON_PS_BIN:-/bin/ps}"
+
+    case "${_common_process_pid}" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    [ "${_common_process_pid}" -gt 1 ] 2>/dev/null || return 1
+    [ -n "${_common_process_expected}" ] || return 1
+    [ -x "${_common_process_ps}" ] || return 1
+    kill -0 "${_common_process_pid}" 2>/dev/null || return 1
+
+    _common_process_command=$(
+        "${_common_process_ps}" -p "${_common_process_pid}" -o command= 2>/dev/null
+    ) || return 1
+    [ -n "${_common_process_command}" ] || return 1
+
+    case " ${_common_process_command} " in
+        *" ${_common_process_expected} "*) return 0 ;;
+    esac
+
+    return 1
+}
+
 common_require_file()
 {
     _common_path="$1"

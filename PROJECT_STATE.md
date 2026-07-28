@@ -42,12 +42,13 @@ Current phase:
 API and inherited-reference audit execution
 
 Current priority:
-Live-verify the lifecycle mutex and the consolidated firewall state check, then
-continue the remaining lifecycle and package-lifecycle audit.
+Live-verify lifecycle locking, firewall state detection, and process-identity
+hardening, then continue the remaining lifecycle and package-lifecycle audit.
 
 Last completed:
-Removed the duplicate firewall_rules_present() declaration and retained one
-canonical firewall runtime-state check (LIFE-004); live verification remains pending.
+Hardened launcher and supervisor PID handling so stale or reused PIDs cannot be
+treated as plugin-owned processes or receive lifecycle signals (LIFE-007 and
+LIFE-008); live verification remains pending.
 
 Current work cycle:
 Investigate → verify → record audit evidence → update Engineering Memory → commit → continue or remediate.
