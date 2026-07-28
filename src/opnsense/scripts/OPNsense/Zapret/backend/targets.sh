@@ -77,6 +77,10 @@ targets_normalize_hostlist()
         gsub(/\.+$/, "", value)
         value = tolower(trim(value))
 
+        if (value ~ /^[0-9.]+$/ || value ~ /\//) {
+            fail("IP addresses and networks are not allowed in a domain list: \047" $0 "\047")
+            next
+        }
         if (!valid_domain(value)) {
             fail("invalid domain entry \047" $0 "\047 after normalization to \047" value "\047")
             next

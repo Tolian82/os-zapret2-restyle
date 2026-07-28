@@ -29,6 +29,7 @@
 namespace OPNsense\Zapret\Api;
 
 use OPNsense\Base\ApiMutableServiceControllerBase;
+use OPNsense\Core\Backend;
 
 class ServiceController extends ApiMutableServiceControllerBase
 {
@@ -36,4 +37,39 @@ class ServiceController extends ApiMutableServiceControllerBase
     protected static $internalServiceTemplate = 'OPNsense/Zapret';
     protected static $internalServiceEnabled = 'general.enabled';
     protected static $internalServiceName = 'zapret';
+    /**
+     * Build and validate a candidate release before replacing the live runtime.
+     * Backend failures are translated to a user-visible OPNsense exception.
+     */
+    public function reconfigureAction()
+    {
+        if (!$this->request->isPost()) {
+            return ['status' => 'failed'];
+        }
+
+        $backend = new Backend();
+        try {
+            $response = trim((string)$backend->configdRun('zapret reconfigure', false, 180));
+            if ($response === '') {
+                throw new \RuntimeException('empty backend response');
+            }
+        } catch (\Throwable $exception) {
+            $message = gettext('The new configuration could not be applied. The previous runtime was kept or restored.');
+            $stageFile = '/var/run/zapret2-execution.status';
+            if (is_readable($stageFile)) {
+                $record = trim((string)file_get_contents($stageFile));
+                $parts = explode('|', $record, 6);
+                if (count($parts) === 6 && $parts[3] === 'failed' && trim($parts[5]) !== '') {
+                    $message = trim($parts[5]);
+                }
+            }
+            throw new \OPNsense\Base\UserException(
+                $message,
+                gettext('Zapret configuration error')
+            );
+        }
+
+        return ['status' => 'ok', 'response' => $response];
+    }
+
 }

@@ -148,3 +148,47 @@ firewall_rules_present()
 
     return 1
 }
+
+
+# Save and restore the plugin-owned rule range during transactional reconfigure.
+firewall_snapshot_rules()
+{
+    _firewall_snapshot_base="$1"
+    _firewall_snapshot_max="$2"
+    _firewall_snapshot_file="$3"
+    _firewall_snapshot_tmp="${_firewall_snapshot_file}.tmp.$$"
+
+    : > "${_firewall_snapshot_tmp}" || return 1
+    /sbin/ipfw -q list 2>/dev/null |
+        awk -v first="${_firewall_snapshot_base}" -v last="${_firewall_snapshot_max}" \
+            '$1 >= first && $1 <= last { print }' \
+            > "${_firewall_snapshot_tmp}" || {
+                rm -f "${_firewall_snapshot_tmp}"
+                return 1
+            }
+    mv -f "${_firewall_snapshot_tmp}" "${_firewall_snapshot_file}"
+}
+
+firewall_restore_rules()
+{
+    _firewall_restore_snapshot="$1"
+    _firewall_restore_base="$2"
+    _firewall_restore_max="$3"
+
+    common_require_file \
+        "${_firewall_restore_snapshot}" "firewall rule snapshot" || return 1
+    firewall_remove_rules \
+        "${_firewall_restore_base}" "${_firewall_restore_max}"
+
+    (
+        set -f
+        while IFS= read -r _firewall_restore_line ||
+              [ -n "${_firewall_restore_line}" ]; do
+            [ -n "${_firewall_restore_line}" ] || continue
+            set -- ${_firewall_restore_line}
+            _firewall_restore_number="$1"
+            shift
+            /sbin/ipfw -q add "${_firewall_restore_number}" "$@" || exit 1
+        done < "${_firewall_restore_snapshot}"
+    )
+}

@@ -26,20 +26,49 @@
 
 <script>
     $( document ).ready(function() {
-        var data_get_map = {'frm_GeneralSettings':"/api/zapret/settings/get"};
-        mapDataToFormUI(data_get_map).done(function(data) {
-            formatTokenizersUI();
-            $('.selectpicker').selectpicker('refresh');
-        });
+        const data_get_map = {'frm_GeneralSettings': "/api/zapret/settings/get"};
 
-        $("#reconfigureAct").SimpleActionButton({
-            onPreAction: function () {
-                const dfObj = new $.Deferred();
-                saveFormToEndpoint("/api/zapret/settings/set", 'frm_GeneralSettings',
-                    function () { dfObj.resolve(); }, true,
-                    function () { dfObj.reject(); });
-                return dfObj;
-            }
+        function reloadSettings() {
+            return mapDataToFormUI(data_get_map).done(function() {
+                formatTokenizersUI();
+                $('.selectpicker').selectpicker('refresh');
+            });
+        }
+
+        reloadSettings();
+
+        $("#reconfigureAct").off('click').on('click', function(event) {
+            event.preventDefault();
+            const button = $(this);
+            button.prop('disabled', true);
+
+            saveFormToEndpoint(
+                "/api/zapret/settings/apply",
+                'frm_GeneralSettings',
+                function(data) {
+                    reloadSettings().always(function() {
+                        updateServiceControlUI('zapret');
+                        button.prop('disabled', false);
+                    });
+
+                    if (data && data.normalized && Array.isArray(data.normalization)) {
+                        BootstrapDialog.show({
+                            type: BootstrapDialog.TYPE_INFO,
+                            title: '{{ lang._("Settings normalized") }}',
+                            message: $('<div/>').text(data.normalization.join('\n')).css('white-space', 'pre-line'),
+                            buttons: [{
+                                label: '{{ lang._("Close") }}',
+                                action: function(dialog) { dialog.close(); }
+                            }]
+                        });
+                    }
+                },
+                true,
+                function() {
+                    button.prop('disabled', false);
+                    updateServiceControlUI('zapret');
+                }
+            );
         });
 
         updateServiceControlUI('zapret');
@@ -49,4 +78,13 @@
 <div class="content-box __mb">
     {{ partial("layout_partials/base_form",['fields':generalForm,'id':'frm_GeneralSettings']) }}
 </div>
-{{ partial('layout_partials/base_apply_button', {'data_endpoint': '/api/zapret/service/reconfigure', 'data_service_widget': 'zapret'}) }}
+<section class="grid-bottom-reserve __mt">
+    <div class="alert content-box" style="display: flex; align-items: center; margin-bottom: 0;">
+        <button
+            class="btn btn-primary __mr"
+            id="reconfigureAct"
+            type="button">
+            {{ lang._("Apply") }}
+        </button>
+    </div>
+</section>

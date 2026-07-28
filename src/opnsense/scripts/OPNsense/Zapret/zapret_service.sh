@@ -48,6 +48,23 @@ stop_service()
         "${RULE_BASE}" "${RULE_MAX}" "${STAGE_FILE}"
 }
 
+reconfigure_service()
+{
+    if ! config_reload_template OPNsense/Zapret; then
+        orchestrator_fail_stage \
+            "${STAGE_FILE}" 1 13 config \
+            "template generation failed"
+        return 1
+    fi
+    orchestrator_native_reconfigure \
+        "${CONFIG}" "${ZAPRET_DIR}" "${ACTIVE_DIR}" "${BACKUP_ROOT}" \
+        "${DVTWS_BIN}" "${CHILD_PIDFILE}" \
+        "${SUPERVISOR_DAEMON_PIDFILE}" "${SUPERVISOR_MONITOR_PIDFILE}" \
+        "${SUPERVISOR_LOOP}" "$0" \
+        "${RULE_BASE}" "${RULE_MAX}" "${STAGE_FILE}" \
+        "${DVTWS_LOG}" "${SUPERVISOR_LOG}"
+}
+
 case "${1:-}" in
     start)
         start_service
@@ -56,9 +73,7 @@ case "${1:-}" in
         stop_service
         ;;
     restart)
-        stop_service >/dev/null 2>&1 || true
-        sleep 1
-        start_service
+        reconfigure_service
         ;;
     status)
         orchestrator_native_status \
@@ -66,10 +81,7 @@ case "${1:-}" in
             "${RULE_BASE}" "${RULE_MAX}"
         ;;
     reconfigure)
-        config_reload_template OPNsense/Zapret || exit 1
-        stop_service >/dev/null 2>&1 || true
-        sleep 1
-        start_service
+        reconfigure_service
         ;;
     runtime-failure)
         orchestrator_runtime_failure \

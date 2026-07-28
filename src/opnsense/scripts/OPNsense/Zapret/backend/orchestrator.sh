@@ -28,6 +28,44 @@ orchestrator_fail_stage()
     stage_fail "$1" "$2" "$3" "$4" "$5"
 }
 
+orchestrator_last_error()
+{
+    _orchestrator_error_file="$1"
+    _orchestrator_error_fallback="$2"
+    _orchestrator_error_message=""
+
+    if [ -s "${_orchestrator_error_file}" ]; then
+        _orchestrator_error_message=$(awk 'NF { line=$0 } END { print line }' \
+            "${_orchestrator_error_file}" | \
+            sed 's/^ERROR:[[:space:]]*//')
+    fi
+    [ -n "${_orchestrator_error_message}" ] ||
+        _orchestrator_error_message="${_orchestrator_error_fallback}"
+    printf '%s\n' "${_orchestrator_error_message}"
+}
+
+orchestrator_fail_from_log()
+{
+    _orchestrator_fail_log_stage_file="$1"
+    _orchestrator_fail_log_index="$2"
+    _orchestrator_fail_log_total="$3"
+    _orchestrator_fail_log_name="$4"
+    _orchestrator_fail_log_file="$5"
+    _orchestrator_fail_log_fallback="$6"
+
+    [ ! -s "${_orchestrator_fail_log_file}" ] ||
+        cat "${_orchestrator_fail_log_file}" >&2
+    _orchestrator_fail_log_message=$(orchestrator_last_error \
+        "${_orchestrator_fail_log_file}" \
+        "${_orchestrator_fail_log_fallback}")
+    orchestrator_fail_stage \
+        "${_orchestrator_fail_log_stage_file}" \
+        "${_orchestrator_fail_log_index}" \
+        "${_orchestrator_fail_log_total}" \
+        "${_orchestrator_fail_log_name}" \
+        "${_orchestrator_fail_log_message}"
+}
+
 orchestrator_build_release()
 {
     _orchestrator_build_config="$1"
@@ -37,15 +75,17 @@ orchestrator_build_release()
     _orchestrator_build_release="$5"
     _orchestrator_build_stage_file="$6"
     _orchestrator_build_total=8
+    _orchestrator_build_error="${_orchestrator_build_workspace}/stage-error.log"
 
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 1 "${_orchestrator_build_total}" \
         config running "loading generated configuration" || return 1
-
-    config_load "${_orchestrator_build_config}" || {
-        orchestrator_fail_stage \
+    : > "${_orchestrator_build_error}"
+    config_load "${_orchestrator_build_config}" 2>"${_orchestrator_build_error}" || {
+        orchestrator_fail_from_log \
             "${_orchestrator_build_stage_file}" 1 \
             "${_orchestrator_build_total}" config \
+            "${_orchestrator_build_error}" \
             "configuration loading failed"
         return 1
     }
@@ -57,69 +97,121 @@ orchestrator_build_release()
             "service is disabled"
         return 2
     }
-
     [ -n "${TRAFFIC_ARGS}" ] || {
+        common_error "Traffic Strategy is empty"
         orchestrator_fail_stage \
             "${_orchestrator_build_stage_file}" 1 \
             "${_orchestrator_build_total}" config \
             "Traffic Strategy is empty"
-        common_error "Traffic Strategy is empty"
         return 1
     }
-
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 1 "${_orchestrator_build_total}" \
         config ok "configuration loaded" || return 1
+
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 2 "${_orchestrator_build_total}" \
         parser running "parsing Traffic Strategy" || return 1
-
+    : > "${_orchestrator_build_error}"
     _orchestrator_build_profile_count=$(parser_parse \
-        "${TRAFFIC_ARGS}" "${_orchestrator_build_workspace}") || {
-            orchestrator_fail_stage \
+        "${TRAFFIC_ARGS}" "${_orchestrator_build_workspace}" \
+        2>"${_orchestrator_build_error}") || {
+            orchestrator_fail_from_log \
                 "${_orchestrator_build_stage_file}" 2 \
                 "${_orchestrator_build_total}" parser \
+                "${_orchestrator_build_error}" \
                 "strategy parsing failed"
             return 1
         }
-
     _orchestrator_build_registry="${_orchestrator_build_workspace}/target-registry.tsv"
-    registry_build "${_orchestrator_build_registry}" || return 1
+    : > "${_orchestrator_build_error}"
+    registry_build "${_orchestrator_build_registry}" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 2 \
+                "${_orchestrator_build_total}" parser \
+                "${_orchestrator_build_error}" \
+                "Target registry generation failed"
+            return 1
+        }
+    : > "${_orchestrator_build_error}"
     target_mode_apply_all \
         "${_orchestrator_build_workspace}" \
         "${_orchestrator_build_profile_count}" \
         "${HOSTLIST_MODE}" \
-        "${_orchestrator_build_registry}" || return 1
+        "${_orchestrator_build_registry}" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 2 \
+                "${_orchestrator_build_total}" parser \
+                "${_orchestrator_build_error}" \
+                "Target Mode processing failed"
+            return 1
+        }
+    : > "${_orchestrator_build_error}"
     targets_index_all \
         "${_orchestrator_build_workspace}" \
-        "${_orchestrator_build_profile_count}" || return 1
-
+        "${_orchestrator_build_profile_count}" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 2 \
+                "${_orchestrator_build_total}" parser \
+                "${_orchestrator_build_error}" \
+                "placeholder indexing failed"
+            return 1
+        }
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 2 "${_orchestrator_build_total}" \
         parser ok "strategy parsed" || return 1
+
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 3 "${_orchestrator_build_total}" \
         targets running "preparing and resolving Targets" || return 1
-
     common_prepare_dir "${_orchestrator_build_release}" || return 1
     _orchestrator_build_managed_source="${_orchestrator_build_release}/managed"
     _orchestrator_build_managed_reference="${_orchestrator_build_active_dir}/managed"
 
+    : > "${_orchestrator_build_error}"
     targets_prepare_managed \
         "${_orchestrator_build_managed_source}" \
         "${YOUTUBE_DOMAINS}" \
         "${TELEGRAM_IPS}" \
-        "${USER_DOMAINS}" || return 1
-
+        "${USER_DOMAINS}" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 3 \
+                "${_orchestrator_build_total}" targets \
+                "${_orchestrator_build_error}" \
+                "managed Target validation failed"
+            return 1
+        }
+    : > "${_orchestrator_build_error}"
     _orchestrator_build_exclude_source=$(exclude_prepare \
         "${_orchestrator_build_managed_source}" \
-        "${EXCLUDE_DOMAINS}") || return 1
+        "${EXCLUDE_DOMAINS}" \
+        2>"${_orchestrator_build_error}") || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 3 \
+                "${_orchestrator_build_total}" targets \
+                "${_orchestrator_build_error}" \
+                "Exclude Domains validation failed"
+            return 1
+        }
     _orchestrator_build_exclude_reference="${_orchestrator_build_managed_reference}/hostlist-exclude.txt"
 
     _orchestrator_build_catalog="${_orchestrator_build_workspace}/storage-catalog.tsv"
-    storage_catalog_build "${_orchestrator_build_catalog}" || return 1
-
+    : > "${_orchestrator_build_error}"
+    storage_catalog_build "${_orchestrator_build_catalog}" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 3 \
+                "${_orchestrator_build_total}" targets \
+                "${_orchestrator_build_error}" \
+                "Target storage catalog generation failed"
+            return 1
+        }
     _orchestrator_build_targets="${_orchestrator_build_workspace}/traffic.targets.conf"
+    : > "${_orchestrator_build_error}"
     targets_resolve_all_mapped \
         "${_orchestrator_build_workspace}" \
         "${_orchestrator_build_profile_count}" \
@@ -128,59 +220,90 @@ orchestrator_build_release()
         "${_orchestrator_build_managed_source}" \
         "${_orchestrator_build_managed_reference}" \
         "${_orchestrator_build_zapret_dir}" \
-        "${_orchestrator_build_targets}" || return 1
-
+        "${_orchestrator_build_targets}" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 3 \
+                "${_orchestrator_build_total}" targets \
+                "${_orchestrator_build_error}" \
+                "Target resolution failed"
+            return 1
+        }
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 3 "${_orchestrator_build_total}" \
         targets ok "Targets resolved" || return 1
+
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 4 "${_orchestrator_build_total}" \
         blobs running "resolving blob declarations" || return 1
-
     _orchestrator_build_blob_args="${_orchestrator_build_workspace}/blob-args.conf"
     _orchestrator_build_loaded_blobs="${_orchestrator_build_workspace}/loaded-blobs.txt"
     _orchestrator_build_traffic="${_orchestrator_build_release}/traffic.conf"
-
+    : > "${_orchestrator_build_error}"
     blobs_resolve_file \
         "${_orchestrator_build_targets}" \
         "${_orchestrator_build_traffic}" \
         "${_orchestrator_build_blob_args}" \
         "${_orchestrator_build_loaded_blobs}" \
-        "${_orchestrator_build_zapret_dir}/files/fake" || return 1
-
+        "${_orchestrator_build_zapret_dir}/files/fake" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 4 \
+                "${_orchestrator_build_total}" blobs \
+                "${_orchestrator_build_error}" \
+                "blob declaration resolution failed"
+            return 1
+        }
     _orchestrator_build_extra_input="${_orchestrator_build_workspace}/extra.input.conf"
     _orchestrator_build_extra="${_orchestrator_build_release}/extra.conf"
     common_write_text_file \
         "${_orchestrator_build_extra_input}" "${EXTRA_ARGS}" || return 1
+    : > "${_orchestrator_build_error}"
     blobs_resolve_file_append \
         "${_orchestrator_build_extra_input}" \
         "${_orchestrator_build_extra}" \
         "${_orchestrator_build_blob_args}" \
         "${_orchestrator_build_loaded_blobs}" \
-        "${_orchestrator_build_zapret_dir}/files/fake" || return 1
-
+        "${_orchestrator_build_zapret_dir}/files/fake" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 4 \
+                "${_orchestrator_build_total}" blobs \
+                "${_orchestrator_build_error}" \
+                "Extra Arguments blob resolution failed"
+            return 1
+        }
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 4 "${_orchestrator_build_total}" \
         blobs ok "blob declarations resolved" || return 1
+
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 5 "${_orchestrator_build_total}" \
         ports running "extracting TCP and UDP ports" || return 1
-
     _orchestrator_build_tcp="${_orchestrator_build_release}/tcp-ports.txt"
     _orchestrator_build_udp="${_orchestrator_build_release}/udp-ports.txt"
+    : > "${_orchestrator_build_error}"
     ports_extract_file \
         "${_orchestrator_build_traffic}" \
         "${_orchestrator_build_tcp}" \
-        "${_orchestrator_build_udp}" || return 1
-
+        "${_orchestrator_build_udp}" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 5 \
+                "${_orchestrator_build_total}" ports \
+                "${_orchestrator_build_error}" \
+                "port extraction failed"
+            return 1
+        }
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 5 "${_orchestrator_build_total}" \
         ports ok "ports extracted" || return 1
+
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 6 "${_orchestrator_build_total}" \
         generator running "generating dvtws2 arguments" || return 1
-
     _orchestrator_build_args="${_orchestrator_build_release}/dvtws.args"
+    : > "${_orchestrator_build_error}"
     generator_build_args_mapped \
         "${_orchestrator_build_args}" \
         "${DIVERT_PORT}" \
@@ -191,15 +314,23 @@ orchestrator_build_release()
         "${_orchestrator_build_exclude_reference}" \
         "${_orchestrator_build_zapret_dir}/lua/zapret-lib.lua" \
         "${_orchestrator_build_zapret_dir}/lua/zapret-antidpi.lua" \
-        "${_orchestrator_build_zapret_dir}/lua/zapret-auto.lua" || return 1
-
+        "${_orchestrator_build_zapret_dir}/lua/zapret-auto.lua" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 6 \
+                "${_orchestrator_build_total}" generator \
+                "${_orchestrator_build_error}" \
+                "argument generation failed"
+            return 1
+        }
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 6 "${_orchestrator_build_total}" \
         generator ok "arguments generated" || return 1
+
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 7 "${_orchestrator_build_total}" \
         validator running "validating staged release" || return 1
-
+    : > "${_orchestrator_build_error}"
     validator_validate_build_mapped \
         "${_orchestrator_build_args}" \
         "${_orchestrator_build_traffic}" \
@@ -207,14 +338,15 @@ orchestrator_build_release()
         "${_orchestrator_build_udp}" \
         "${_orchestrator_build_zapret_dir}" \
         "${_orchestrator_build_active_dir}" \
-        "${_orchestrator_build_release}" || {
-            orchestrator_fail_stage \
+        "${_orchestrator_build_release}" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
                 "${_orchestrator_build_stage_file}" 7 \
                 "${_orchestrator_build_total}" validator \
+                "${_orchestrator_build_error}" \
                 "staged release validation failed"
             return 1
         }
-
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 7 "${_orchestrator_build_total}" \
         validator ok "staged release validated" || return 1
@@ -222,7 +354,6 @@ orchestrator_build_release()
         "${_orchestrator_build_stage_file}" 8 "${_orchestrator_build_total}" \
         ready ok "release build is ready" || return 1
 }
-
 
 orchestrator_cleanup_runtime()
 {
@@ -463,6 +594,346 @@ orchestrator_native_start()
         ready ok "zapret is ready" || return 1
 
     launcher_status "${_orchestrator_start_child_pid}"
+}
+
+orchestrator_restore_previous_runtime()
+{
+    _orchestrator_restore_active_dir="$1"
+    _orchestrator_restore_backup="$2"
+    _orchestrator_restore_old_complete="$3"
+    _orchestrator_restore_dvtws_bin="$4"
+    _orchestrator_restore_child_pid="$5"
+    _orchestrator_restore_supervisor_daemon="$6"
+    _orchestrator_restore_supervisor_monitor="$7"
+    _orchestrator_restore_supervisor_loop="$8"
+    _orchestrator_restore_service_script="$9"
+    shift 9
+    _orchestrator_restore_firewall_snapshot="$1"
+    _orchestrator_restore_rule_base="$2"
+    _orchestrator_restore_rule_max="$3"
+    _orchestrator_restore_log="$4"
+    _orchestrator_restore_supervisor_log="$5"
+
+    supervisor_stop \
+        "${_orchestrator_restore_supervisor_daemon}" \
+        "${_orchestrator_restore_supervisor_monitor}"
+    launcher_stop "${_orchestrator_restore_child_pid}" 2
+
+    atomic_restore_tree \
+        "${_orchestrator_restore_active_dir}" \
+        "${_orchestrator_restore_backup}" || return 1
+
+    if [ "${_orchestrator_restore_old_complete}" = "1" ]; then
+        launcher_start_once \
+            "${_orchestrator_restore_dvtws_bin}" \
+            "${_orchestrator_restore_active_dir}/dvtws.args" \
+            "${_orchestrator_restore_child_pid}" \
+            "${_orchestrator_restore_log}" 5 || return 1
+        firewall_restore_rules \
+            "${_orchestrator_restore_firewall_snapshot}" \
+            "${_orchestrator_restore_rule_base}" \
+            "${_orchestrator_restore_rule_max}" || return 1
+        supervisor_start \
+            "${_orchestrator_restore_supervisor_loop}" \
+            "${_orchestrator_restore_supervisor_daemon}" \
+            "${_orchestrator_restore_supervisor_monitor}" \
+            "${_orchestrator_restore_child_pid}" \
+            "${_orchestrator_restore_service_script}" \
+            "${_orchestrator_restore_supervisor_log}" || return 1
+    else
+        firewall_remove_rules \
+            "${_orchestrator_restore_rule_base}" \
+            "${_orchestrator_restore_rule_max}"
+    fi
+}
+
+orchestrator_reconfigure_failure()
+{
+    _orchestrator_failure_stage_file="$1"
+    _orchestrator_failure_index="$2"
+    _orchestrator_failure_total="$3"
+    _orchestrator_failure_name="$4"
+    _orchestrator_failure_message="$5"
+    shift 5
+
+    if orchestrator_restore_previous_runtime "$@"; then
+        orchestrator_fail_stage \
+            "${_orchestrator_failure_stage_file}" \
+            "${_orchestrator_failure_index}" \
+            "${_orchestrator_failure_total}" \
+            "${_orchestrator_failure_name}" \
+            "${_orchestrator_failure_message}; previous runtime restored"
+    else
+        orchestrator_fail_stage \
+            "${_orchestrator_failure_stage_file}" \
+            "${_orchestrator_failure_index}" \
+            "${_orchestrator_failure_total}" \
+            rollback \
+            "${_orchestrator_failure_message}; rollback failed"
+        common_error "${_orchestrator_failure_message}; rollback failed"
+    fi
+    return 1
+}
+
+orchestrator_native_reconfigure()
+{
+    _orchestrator_reconfigure_config="$1"
+    _orchestrator_reconfigure_zapret_dir="$2"
+    _orchestrator_reconfigure_active_dir="$3"
+    _orchestrator_reconfigure_backup_root="$4"
+    _orchestrator_reconfigure_dvtws_bin="$5"
+    _orchestrator_reconfigure_child_pid="$6"
+    _orchestrator_reconfigure_supervisor_daemon="$7"
+    _orchestrator_reconfigure_supervisor_monitor="$8"
+    _orchestrator_reconfigure_supervisor_loop="$9"
+    shift 9
+    _orchestrator_reconfigure_service_script="$1"
+    _orchestrator_reconfigure_rule_base="$2"
+    _orchestrator_reconfigure_rule_max="$3"
+    _orchestrator_reconfigure_stage_file="$4"
+    _orchestrator_reconfigure_log="$5"
+    _orchestrator_reconfigure_supervisor_log="$6"
+    _orchestrator_reconfigure_total=13
+
+    _orchestrator_reconfigure_workspace=$(common_create_workspace \
+        zapret-reconfigure) || return 1
+    _orchestrator_reconfigure_release="${_orchestrator_reconfigure_workspace}/release"
+    _orchestrator_reconfigure_firewall_snapshot="${_orchestrator_reconfigure_workspace}/ipfw.rules"
+
+    # Build and validate the complete candidate while the old process,
+    # supervisor, firewall rules, and active tree remain untouched.
+    orchestrator_build_release \
+        "${_orchestrator_reconfigure_config}" \
+        "${_orchestrator_reconfigure_zapret_dir}" \
+        "${_orchestrator_reconfigure_active_dir}" \
+        "${_orchestrator_reconfigure_workspace}" \
+        "${_orchestrator_reconfigure_release}" \
+        "${_orchestrator_reconfigure_stage_file}"
+    _orchestrator_reconfigure_build_status=$?
+
+    if [ "${_orchestrator_reconfigure_build_status}" -eq 2 ]; then
+        common_cleanup_dir "${_orchestrator_reconfigure_workspace}"
+        orchestrator_native_stop \
+            "${_orchestrator_reconfigure_child_pid}" \
+            "${_orchestrator_reconfigure_supervisor_daemon}" \
+            "${_orchestrator_reconfigure_supervisor_monitor}" \
+            "${_orchestrator_reconfigure_rule_base}" \
+            "${_orchestrator_reconfigure_rule_max}" \
+            "${_orchestrator_reconfigure_stage_file}"
+        return $?
+    fi
+    [ "${_orchestrator_reconfigure_build_status}" -eq 0 ] || {
+        common_cleanup_dir "${_orchestrator_reconfigure_workspace}"
+        return 1
+    }
+
+    common_set_directory_mode \
+        "${_orchestrator_reconfigure_release}" 0755 || {
+            common_cleanup_dir "${_orchestrator_reconfigure_workspace}"
+            orchestrator_fail_stage \
+                "${_orchestrator_reconfigure_stage_file}" 7 \
+                "${_orchestrator_reconfigure_total}" validator \
+                "cannot set candidate runtime directory mode"
+            return 1
+        }
+    validator_validate_runtime_modes \
+        "${_orchestrator_reconfigure_release}" || {
+            common_cleanup_dir "${_orchestrator_reconfigure_workspace}"
+            orchestrator_fail_stage \
+                "${_orchestrator_reconfigure_stage_file}" 7 \
+                "${_orchestrator_reconfigure_total}" validator \
+                "candidate runtime permissions are invalid"
+            return 1
+        }
+
+    # Perform every preflight that can be completed without touching the
+    # currently active runtime.
+    firewall_prepare || {
+        common_cleanup_dir "${_orchestrator_reconfigure_workspace}"
+        orchestrator_fail_stage \
+            "${_orchestrator_reconfigure_stage_file}" 11 \
+            "${_orchestrator_reconfigure_total}" firewall \
+            "firewall preflight failed"
+        return 1
+    }
+    _orchestrator_reconfigure_wan=$(config_resolve_interface "${WAN_IF}") || {
+        common_cleanup_dir "${_orchestrator_reconfigure_workspace}"
+        orchestrator_fail_stage \
+            "${_orchestrator_reconfigure_stage_file}" 11 \
+            "${_orchestrator_reconfigure_total}" firewall \
+            "WAN interface resolution failed for '${WAN_IF}'"
+        return 1
+    }
+    firewall_snapshot_rules \
+        "${_orchestrator_reconfigure_rule_base}" \
+        "${_orchestrator_reconfigure_rule_max}" \
+        "${_orchestrator_reconfigure_firewall_snapshot}" || {
+            common_cleanup_dir "${_orchestrator_reconfigure_workspace}"
+            orchestrator_fail_stage \
+                "${_orchestrator_reconfigure_stage_file}" 11 \
+                "${_orchestrator_reconfigure_total}" firewall \
+                "cannot snapshot current firewall rules"
+            return 1
+        }
+
+    _orchestrator_reconfigure_old_complete=0
+    if orchestrator_runtime_is_complete \
+        "${_orchestrator_reconfigure_child_pid}" \
+        "${_orchestrator_reconfigure_supervisor_monitor}" \
+        "${_orchestrator_reconfigure_rule_base}" \
+        "${_orchestrator_reconfigure_rule_max}"; then
+        _orchestrator_reconfigure_old_complete=1
+    fi
+
+    orchestrator_stage \
+        "${_orchestrator_reconfigure_stage_file}" 9 \
+        "${_orchestrator_reconfigure_total}" atomic running \
+        "activating validated candidate" || {
+            common_cleanup_dir "${_orchestrator_reconfigure_workspace}"
+            return 1
+        }
+    _orchestrator_reconfigure_backup=$(atomic_install_tree \
+        "${_orchestrator_reconfigure_release}" \
+        "${_orchestrator_reconfigure_active_dir}" \
+        "${_orchestrator_reconfigure_backup_root}") || {
+            common_cleanup_dir "${_orchestrator_reconfigure_workspace}"
+            orchestrator_fail_stage \
+                "${_orchestrator_reconfigure_stage_file}" 9 \
+                "${_orchestrator_reconfigure_total}" atomic \
+                "atomic activation failed; previous runtime kept"
+            return 1
+        }
+    orchestrator_stage \
+        "${_orchestrator_reconfigure_stage_file}" 9 \
+        "${_orchestrator_reconfigure_total}" atomic ok \
+        "validated candidate activated" || true
+
+    # Stop only the supervisor and process. Existing divert rules remain in
+    # place until the replacement process has passed its stability window.
+    supervisor_stop \
+        "${_orchestrator_reconfigure_supervisor_daemon}" \
+        "${_orchestrator_reconfigure_supervisor_monitor}"
+    launcher_stop "${_orchestrator_reconfigure_child_pid}" 5
+
+    orchestrator_stage \
+        "${_orchestrator_reconfigure_stage_file}" 10 \
+        "${_orchestrator_reconfigure_total}" launcher running \
+        "starting replacement dvtws2 instance" || true
+    if ! launcher_start_once \
+        "${_orchestrator_reconfigure_dvtws_bin}" \
+        "${_orchestrator_reconfigure_active_dir}/dvtws.args" \
+        "${_orchestrator_reconfigure_child_pid}" \
+        "${_orchestrator_reconfigure_log}" 5; then
+        orchestrator_reconfigure_failure \
+            "${_orchestrator_reconfigure_stage_file}" 10 \
+            "${_orchestrator_reconfigure_total}" launcher \
+            "replacement dvtws2 failed the startup stability check" \
+            "${_orchestrator_reconfigure_active_dir}" \
+            "${_orchestrator_reconfigure_backup}" \
+            "${_orchestrator_reconfigure_old_complete}" \
+            "${_orchestrator_reconfigure_dvtws_bin}" \
+            "${_orchestrator_reconfigure_child_pid}" \
+            "${_orchestrator_reconfigure_supervisor_daemon}" \
+            "${_orchestrator_reconfigure_supervisor_monitor}" \
+            "${_orchestrator_reconfigure_supervisor_loop}" \
+            "${_orchestrator_reconfigure_service_script}" \
+            "${_orchestrator_reconfigure_firewall_snapshot}" \
+            "${_orchestrator_reconfigure_rule_base}" \
+            "${_orchestrator_reconfigure_rule_max}" \
+            "${_orchestrator_reconfigure_log}" \
+            "${_orchestrator_reconfigure_supervisor_log}"
+        _orchestrator_reconfigure_status=$?
+        common_cleanup_dir "${_orchestrator_reconfigure_workspace}"
+        return "${_orchestrator_reconfigure_status}"
+    fi
+    orchestrator_stage \
+        "${_orchestrator_reconfigure_stage_file}" 10 \
+        "${_orchestrator_reconfigure_total}" launcher ok \
+        "replacement dvtws2 passed the stability window" || true
+
+    orchestrator_stage \
+        "${_orchestrator_reconfigure_stage_file}" 11 \
+        "${_orchestrator_reconfigure_total}" firewall running \
+        "replacing divert rules" || true
+    if ! firewall_install_port_rules \
+        "${_orchestrator_reconfigure_active_dir}/tcp-ports.txt" \
+        "${_orchestrator_reconfigure_active_dir}/udp-ports.txt" \
+        "${_orchestrator_reconfigure_wan}" \
+        "${DIVERT_PORT}" \
+        "${_orchestrator_reconfigure_rule_base}" \
+        "${_orchestrator_reconfigure_rule_max}"; then
+        orchestrator_reconfigure_failure \
+            "${_orchestrator_reconfigure_stage_file}" 11 \
+            "${_orchestrator_reconfigure_total}" firewall \
+            "replacement divert rule installation failed" \
+            "${_orchestrator_reconfigure_active_dir}" \
+            "${_orchestrator_reconfigure_backup}" \
+            "${_orchestrator_reconfigure_old_complete}" \
+            "${_orchestrator_reconfigure_dvtws_bin}" \
+            "${_orchestrator_reconfigure_child_pid}" \
+            "${_orchestrator_reconfigure_supervisor_daemon}" \
+            "${_orchestrator_reconfigure_supervisor_monitor}" \
+            "${_orchestrator_reconfigure_supervisor_loop}" \
+            "${_orchestrator_reconfigure_service_script}" \
+            "${_orchestrator_reconfigure_firewall_snapshot}" \
+            "${_orchestrator_reconfigure_rule_base}" \
+            "${_orchestrator_reconfigure_rule_max}" \
+            "${_orchestrator_reconfigure_log}" \
+            "${_orchestrator_reconfigure_supervisor_log}"
+        _orchestrator_reconfigure_status=$?
+        common_cleanup_dir "${_orchestrator_reconfigure_workspace}"
+        return "${_orchestrator_reconfigure_status}"
+    fi
+    orchestrator_stage \
+        "${_orchestrator_reconfigure_stage_file}" 11 \
+        "${_orchestrator_reconfigure_total}" firewall ok \
+        "divert rules replaced" || true
+
+    orchestrator_stage \
+        "${_orchestrator_reconfigure_stage_file}" 12 \
+        "${_orchestrator_reconfigure_total}" supervisor running \
+        "starting replacement runtime supervisor" || true
+    if ! supervisor_start \
+        "${_orchestrator_reconfigure_supervisor_loop}" \
+        "${_orchestrator_reconfigure_supervisor_daemon}" \
+        "${_orchestrator_reconfigure_supervisor_monitor}" \
+        "${_orchestrator_reconfigure_child_pid}" \
+        "${_orchestrator_reconfigure_service_script}" \
+        "${_orchestrator_reconfigure_supervisor_log}"; then
+        orchestrator_reconfigure_failure \
+            "${_orchestrator_reconfigure_stage_file}" 12 \
+            "${_orchestrator_reconfigure_total}" supervisor \
+            "replacement runtime supervisor failed to start" \
+            "${_orchestrator_reconfigure_active_dir}" \
+            "${_orchestrator_reconfigure_backup}" \
+            "${_orchestrator_reconfigure_old_complete}" \
+            "${_orchestrator_reconfigure_dvtws_bin}" \
+            "${_orchestrator_reconfigure_child_pid}" \
+            "${_orchestrator_reconfigure_supervisor_daemon}" \
+            "${_orchestrator_reconfigure_supervisor_monitor}" \
+            "${_orchestrator_reconfigure_supervisor_loop}" \
+            "${_orchestrator_reconfigure_service_script}" \
+            "${_orchestrator_reconfigure_firewall_snapshot}" \
+            "${_orchestrator_reconfigure_rule_base}" \
+            "${_orchestrator_reconfigure_rule_max}" \
+            "${_orchestrator_reconfigure_log}" \
+            "${_orchestrator_reconfigure_supervisor_log}"
+        _orchestrator_reconfigure_status=$?
+        common_cleanup_dir "${_orchestrator_reconfigure_workspace}"
+        return "${_orchestrator_reconfigure_status}"
+    fi
+
+    orchestrator_stage \
+        "${_orchestrator_reconfigure_stage_file}" 12 \
+        "${_orchestrator_reconfigure_total}" supervisor ok \
+        "replacement runtime supervisor active" || true
+    orchestrator_stage \
+        "${_orchestrator_reconfigure_stage_file}" 13 \
+        "${_orchestrator_reconfigure_total}" ready ok \
+        "zapret reconfigured successfully" || true
+
+    common_cleanup_dir "${_orchestrator_reconfigure_workspace}"
+    launcher_status "${_orchestrator_reconfigure_child_pid}"
 }
 
 orchestrator_native_stop()
