@@ -1,27 +1,55 @@
-# os-zapret2-restyle — Architecture
+# os-zapret2-restyle
 
-Project: **os-zapret2-restyle**
+==================================================
+DOCUMENT ROLE
+==================================================
 
-## Repository
+Question answered:
+How is the system built?
 
-```text
+Purpose:
+Describe the technical architecture, runtime model, interfaces, and component
+responsibilities.
+
+Updated when:
+The system architecture or component responsibilities change.
+
+Read after:
+DEVELOPMENT_GUIDE.md
+
+Do not store here:
+Current task status, decision rationale, roadmap, or development history.
+
+==================================================
+REPOSITORY
+==================================================
+
+Repository:
 https://github.com/Tolian82/os-zapret2-restyle
-branch: main
-baseline tag: restyle-start
-development checkout: /root/os-zapret2-restyle
-```
+
+Branch:
+main
+
+Baseline tag:
+restyle-start
+
+Development checkout:
+/root/os-zapret2-restyle
 
 This repository is the source of truth and is an independent project.
 
-The project originated from the zapret project by bol-van and an earlier
-OPNsense plugin code base by Umur Gorur. Their copyright notices and licenses
-are preserved in `LICENSE` and `NOTICE`. Current architecture, package
-identity, repository, releases, documentation, maintenance, and ongoing
-development belong to `os-zapret2-restyle`.
+The project originated from zapret by bol-van and an earlier OPNsense plugin
+code base by Umur Gorur.
 
-## Pipeline
+Copyright notices and licenses are preserved in LICENSE and NOTICE.
 
-```text
+Current architecture, package identity, repository, releases, documentation,
+maintenance, and ongoing development belong to os-zapret2-restyle.
+
+==================================================
+HIGH-LEVEL PIPELINE
+==================================================
+
 OPNsense configuration
         ↓
 Config loader
@@ -51,139 +79,201 @@ Launcher
 Firewall
         ↓
 Supervisor
-```
 
-## Entry points
+==================================================
+ENTRY POINTS
+==================================================
 
-```text
+Service entry point:
+
 src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+
+Backend v2 coordinator:
+
 src/opnsense/scripts/OPNsense/Zapret/backend/orchestrator.sh
-```
 
-`zapret_service.sh` exposes service actions and sources backend modules.
-`orchestrator.sh` coordinates candidate build, validation, activation,
-rollback, launcher, firewall, and supervisor.
+zapret_service.sh exposes service actions and loads backend modules.
 
-## Backend modules
+orchestrator.sh coordinates:
 
-- `common.sh` — shared helpers.
-- `config.sh` — generated configuration and interface resolution.
-- `parser.sh` — Traffic Strategy profiles and generic placeholders.
-- `registry.sh` — supported target type/name registry.
-- `target_mode.sh` — implicit targets for placeholder-free profiles.
-- `targets.sh` — HOSTLIST/IPSET normalization, validation, files, resolution.
-- `exclude.sh` — global domain exclusions.
-- `storage.sh` — logical, staged, and active file mapping.
-- `blobs.sh` — blob resource resolution.
-- `ports.sh` — TCP/UDP extraction from strategy filters.
-- `generator.sh` — final dvtws2 argument generation.
-- `validator.sh` — candidate release validation.
-- `atomic.sh` — active runtime switch and restore.
-- `launcher.sh` — one dvtws2 process and startup stability check.
-- `firewall.sh` — ipfw lifecycle.
-- `supervisor.sh` — monitor lifecycle.
-- `stage.sh` — execution status reporting.
-- `orchestrator.sh` — lifecycle coordination.
+- Candidate build.
+- Validation.
+- Activation.
+- Rollback.
+- Launcher lifecycle.
+- Firewall lifecycle.
+- Supervisor lifecycle.
 
-## Runtime
+==================================================
+BACKEND MODULES
+==================================================
+
+common.sh
+Shared helpers.
+
+config.sh
+Generated configuration and interface resolution.
+
+parser.sh
+Traffic Strategy profiles and generic placeholders.
+
+registry.sh
+Supported target type and target name registry.
+
+target_mode.sh
+Implicit targets for placeholder-free profiles.
+
+targets.sh
+HOSTLIST/IPSET normalization, validation, managed files, and resolution.
+
+exclude.sh
+Global domain exclusions.
+
+storage.sh
+Logical, staged, and active file mapping.
+
+blobs.sh
+Blob resource resolution.
+
+ports.sh
+TCP and UDP extraction from strategy filters.
+
+generator.sh
+Final dvtws2 argument generation.
+
+validator.sh
+Candidate release validation.
+
+atomic.sh
+Active runtime switch and restore.
+
+launcher.sh
+Single dvtws2 process and startup stability check.
+
+firewall.sh
+ipfw lifecycle.
+
+supervisor.sh
+Monitor lifecycle.
+
+stage.sh
+Execution status reporting.
+
+orchestrator.sh
+Lifecycle coordination.
+
+==================================================
+RUNTIME
+==================================================
 
 Engine root:
 
-```text
 /usr/local/etc/zapret2
-```
 
 Generated active runtime:
 
-```text
 /usr/local/etc/zapret2/runtime-v2
-```
 
 Important generated files:
 
-```text
 traffic.conf
 extra.conf
 dvtws.args
 tcp-ports.txt
 udp-ports.txt
 managed/*
-```
 
 Generated runtime is never committed.
 
-## Safe reconfigure
+==================================================
+SAFE RECONFIGURE
+==================================================
 
-```text
 build candidate while old runtime works
         ↓
 validate candidate
         ↓
-failure → old PID/runtime/ipfw remain unchanged
+failure → old PID, runtime, and ipfw remain unchanged
         ↓
 success → controlled switch
         ↓
 post-switch failure → restore previous runtime
-```
 
 Regression input:
 
-```text
 999.999.999.999
-```
 
-Expected result is `targets|failed` while the existing service remains active.
+Expected result:
 
-## Transactional Apply
+targets|failed
+
+The existing service remains active.
+
+==================================================
+TRANSACTIONAL APPLY
+==================================================
 
 Important files:
 
-```text
 SettingsController.php
 ServiceController.php
 general.volt
 Zapret.xml
 targets.sh
 orchestrator.sh
-```
 
-The custom Apply flow validates and normalizes before persistent save. It
-returns field-specific errors or normalized values, then invokes safe
-reconfigure.
+The custom Apply flow validates and normalizes before persistent save.
 
-## Packaging independence
+It returns field-specific errors or normalized values.
+
+It then invokes safe reconfigure.
+
+==================================================
+PACKAGING INDEPENDENCE
+==================================================
 
 No runtime dependency on another OPNsense zapret plugin is allowed.
 
 The repository must contain every project-owned file required to build and
-install `zapret2-restyle` on a clean supported OPNsense system.
+install os-zapret2-restyle on a clean supported OPNsense system.
 
-External zapret2 engine acquisition/build is handled by this project's own
+External zapret2 engine acquisition and build are handled by this project's own
 setup and maintenance logic.
 
-## Engineering rules
+==================================================
+STABLE TECHNICAL IDENTITIES
+==================================================
 
-- Correctness over speed.
-- Commands to the project owner are strictly sequential.
-- Read current `main` before proposing code.
-- Verify OPNsense framework and rendered behavior; do not guess.
-- FreeBSD `/bin/sh` compatibility.
+Project and repository:
+os-zapret2-restyle
+
+Installed package:
+os-zapret2-restyle
+
+Internal service:
+zapret
+
+Configd namespace:
+zapret
+
+Version source:
+VERSION
+
+The internal service name is intentionally retained for OPNsense integration
+stability.
+
+VERSION is the single source of project version information.
+
+Makefile, build-pkg.sh, CI, and release automation must read or validate VERSION
+instead of maintaining independent version values.
+
+==================================================
+TECHNICAL CONSTRAINTS
+==================================================
+
+- FreeBSD /bin/sh compatibility.
 - No Bash-only syntax.
-- Minimal operational documentation.
-
-## Stable identities and version source
-
-The project uses these stable identities:
-
-```text
-Project and repository: os-zapret2-restyle
-Installed package:      os-zapret2-restyle
-Internal service:       zapret
-```
-
-The internal service name is intentionally retained for runtime and OPNsense
-integration stability.
-
-`VERSION` is the single source of the project version. `Makefile`,
-`build-pkg.sh`, CI, and release automation must read or validate that file
-rather than maintain independent version values.
+- Repository source is authoritative.
+- Generated runtime is not source.
+- Candidate validation occurs before activation.
+- Invalid configuration must not disturb active service state.

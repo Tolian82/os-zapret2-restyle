@@ -1,42 +1,58 @@
-# os-zapret2-restyle — Development State
+# os-zapret2-restyle
 
-Last context update: 2026-07-28
+==================================================
+DOCUMENT ROLE
+==================================================
 
-## Source of truth
+Question answered:
+What was done?
 
-```text
-https://github.com/Tolian82/os-zapret2-restyle
-branch: main
-baseline tag: restyle-start
-current project version: 0.1.0
-```
+Purpose:
+Record completed work, confirmed tests, failed attempts, and chronological
+development progress.
 
-Read current `main` before proposing code.
+Updated when:
+A meaningful work unit is completed or tested.
 
-## Identity decision
+Read after:
+ARCHITECTURE.md
 
-The project is fully independent from the code base originally used to start
-development.
+Do not store here:
+Permanent rules, decision rationale, or future product requirements.
 
-The project originated from zapret by bol-van and an earlier OPNsense plugin
-code base by Umur Gorur. Their copyright notices and licenses remain preserved
-in `LICENSE` and `NOTICE`.
+==================================================
+2026-07-28 — INDEPENDENT PROJECT FOUNDATION
+==================================================
 
-Future package identity, architecture, installation, release process,
-documentation, maintenance, and ongoing development belong to
-`os-zapret2-restyle`.
+Completed:
 
-Goal: build and install the plugin on a clean supported OPNsense system without
-references to or dependencies on another OPNsense zapret plugin repository.
+- Established os-zapret2-restyle as an independent project.
+- Preserved attribution to bol-van and Umur Gorur in LICENSE and NOTICE.
+- Approved independent package identity.
+- Approved VERSION as the version source.
+- Established independent build, CI, and release infrastructure.
+- Removed inherited repository assumptions from build-package identity.
+- Excluded attribution files from legacy-reference checks.
 
-## Completed
+Goal:
+
+Build and install the plugin on a clean supported OPNsense system without
+runtime, build, or installation dependencies on another OPNsense zapret plugin
+repository.
+
+==================================================
+2026-07-28 — BACKEND V2
+==================================================
+
+Completed:
 
 - Backend v2 modular architecture.
 - Unified Traffic Strategy.
-- Generic `<TYPE:name>` placeholders.
+- Generic <TYPE:name> placeholders.
 - HOSTLIST/IPSET target registry.
 - Target Mode.
-- Domain and IPv4/CIDR normalization and strict validation.
+- Domain and IPv4/CIDR normalization.
+- Strict target validation.
 - Wildcard domain canonicalization.
 - Exclude Domains.
 - Blob resolution.
@@ -44,7 +60,7 @@ references to or dependencies on another OPNsense zapret plugin repository.
 - Generated dvtws2 arguments.
 - Candidate validation.
 - Atomic activation and restoration.
-- Launcher/supervisor separation.
+- Launcher and supervisor separation.
 - ipfw lifecycle.
 - Execution stages.
 - Safe reconfigure.
@@ -52,73 +68,72 @@ references to or dependencies on another OPNsense zapret plugin repository.
 - Field-level GUI errors.
 - Normalized GUI reload.
 - Explicit visible Apply button.
-- Public requirements, architecture, and state documentation.
-- Independent package name and version approved:
-  - `zapret2-restyle`
-  - `0.1.0`
 
-## Confirmed live tests
+==================================================
+2026-07-28 — CONFIRMED LIVE TESTS
+==================================================
 
 - Target placeholders resolve to separate managed files.
-- `*.googlevideo.com` becomes `googlevideo.com`.
-- Invalid `999.999.999.999` reports `targets|failed`.
-- Invalid candidate leaves PID, active runtime, and ipfw unchanged.
-- Normal runtime reaches:
+- *.googlevideo.com becomes googlevideo.com.
+- Invalid 999.999.999.999 reports targets|failed.
+- Invalid candidate leaves PID unchanged.
+- Invalid candidate leaves active runtime unchanged.
+- Invalid candidate leaves ipfw unchanged.
+- Normal runtime reaches 13|13|ready|ok.
 
-```text
-13|13|ready|ok
-```
+==================================================
+2026-07-28 — ENGINEERING MEMORY SYSTEM
+==================================================
 
-## Current priority
+Completed:
 
-### Traffic Strategy validator
+- Added INDEX.md.
+- Added PROJECT_STATE.md.
+- Added DECISIONS.md.
+- Added WORKING_CONVENTIONS.md.
+- Added DEVELOPMENT_GUIDE.md.
+- Defined mandatory reading order.
+- Defined one-document-one-question responsibility.
+- Defined DOCUMENT ROLE blocks.
+- Defined documentation synchronization with code.
+- Defined that approved concepts must be recorded in DECISIONS.md.
+- Restyled README.md, ARCHITECTURE.md, DEVLOG.md, and ROADMAP.md without losing
+  their previous useful content.
 
-Add plugin-owned structural validation without blocking future valid zapret2
-arguments.
+==================================================
+CURRENT WORK
+==================================================
 
-Candidate checks:
+Current priority:
 
-- empty profiles;
-- invalid `--new` placement;
-- profile without a filter;
-- malformed TCP/UDP port filters;
-- unknown placeholder type;
-- unknown target name;
-- unresolved placeholders;
-- profile and line numbers in errors.
+Complete the API and inherited-reference audit.
 
-## Packaging priority
+Audit scope:
 
-After repository metadata is committed:
+- GUI JavaScript API calls.
+- MVC API URLs.
+- Controller actions.
+- Model operations.
+- Configd actions.
+- Shell entry points.
+- Backend functions.
+- rc scripts.
+- syshooks.
+- Plugin hooks.
+- Filesystem paths.
+- Package lifecycle scripts.
+- Setup logic.
+- Build and release logic.
+- External URLs.
+- Diagnostic commands.
 
-- verify every required Backend v2 file is included in package build;
-- verify package name and generated package filename;
-- test build;
-- test fresh installation on clean OPNsense;
-- remove inherited repository assumptions from setup, CI, release workflow,
-  package scripts, comments, URLs, and diagnostics;
-- verify uninstall and upgrade behavior.
+==================================================
+KNOWN CAUTIONS
+==================================================
 
-## Known cautions
-
-- Do not commit `/usr/local/etc/zapret2`.
+- Do not commit /usr/local/etc/zapret2.
 - Do not commit runtime, binaries, logs, PID files, backups, or secrets.
 - Use FreeBSD-compatible commands.
 - Give commands strictly in execution order.
-- Do not guess OPNsense HTML/CSS structure.
+- Do not guess OPNsense HTML or CSS structure.
 - The field-width experiment was reverted and remains out of scope.
-
-## Build and release identity decision
-
-Approved stable identities:
-
-```text
-Project:  os-zapret2-restyle
-Package:  os-zapret2-restyle
-Service:  zapret
-Version:  VERSION file
-```
-
-The service name remains `zapret` to avoid an unnecessary internal API and
-migration change. Build, CI, package metadata, release assets, installation
-commands, and repository URLs use `os-zapret2-restyle`.

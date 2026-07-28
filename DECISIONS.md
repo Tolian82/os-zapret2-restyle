@@ -1,0 +1,525 @@
+# os-zapret2-restyle
+
+==================================================
+DOCUMENT ROLE
+==================================================
+
+Question answered:
+Why was this approved?
+
+Purpose:
+Record every approved engineering concept and decision with its reason,
+consequences, and affected documents.
+
+Updated when:
+A new concept is approved, an active decision changes, or an earlier decision is superseded.
+
+Read after:
+PROJECT_STATE.md
+
+Do not store here:
+Current task status, implementation history, detailed procedures, or full architecture descriptions.
+
+==================================================
+DECISION FORMAT
+==================================================
+
+Date:
+YYYY-MM-DD
+
+Decision:
+What was approved.
+
+Reason:
+Why it was approved.
+
+Consequences:
+What this changes or constrains.
+
+Affected documents:
+Which project documents must remain synchronized.
+
+Status:
+Active, superseded, rejected, or historical.
+
+==================================================
+2026-07-28 — INDEPENDENT PROJECT IDENTITY
+==================================================
+
+Decision:
+The project is an independent project named os-zapret2-restyle.
+
+Installed package:
+os-zapret2-restyle
+
+Makefile PLUGIN_NAME:
+zapret2-restyle
+
+Reason:
+The project must not depend on the identity or repository structure of the old
+plugin. OPNsense adds the os- package prefix automatically.
+
+Consequences:
+All package, build, CI, and release logic must use the independent project
+identity.
+
+Affected documents:
+PROJECT_STATE.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+ARCHITECTURE.md
+README.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — INTERNAL SERVICE NAME REMAINS ZAPRET
+==================================================
+
+Decision:
+The internal service name and configd namespace remain zapret.
+
+Reason:
+They are stable integration identifiers. Renaming them would create migration
+and integration risk without practical benefit.
+
+Consequences:
+The presence of the word zapret in service or configd integration is not by
+itself evidence of obsolete inheritance.
+
+Affected documents:
+WORKING_CONVENTIONS.md
+ARCHITECTURE.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — VERSION IS THE SINGLE VERSION SOURCE
+==================================================
+
+Decision:
+VERSION is the only source of project version information.
+
+Reason:
+Multiple independent version values eventually diverge and create incorrect
+packages or releases.
+
+Consequences:
+Makefile, build scripts, CI, package metadata, and release automation must read
+or validate VERSION instead of maintaining separate versions.
+
+Affected documents:
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+ARCHITECTURE.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — DOCUMENTATION IS PART OF ARCHITECTURE
+==================================================
+
+Decision:
+Project documentation is part of the project architecture.
+
+Reason:
+The project is expected to evolve over a long period. Critical knowledge must
+live in the repository and not depend on chat history or memory.
+
+Consequences:
+A code change or approved concept is incomplete until all affected documentation
+is updated in the same logical commit.
+
+Affected documents:
+INDEX.md
+PROJECT_STATE.md
+DECISIONS.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+ARCHITECTURE.md
+DEVLOG.md
+ROADMAP.md
+REQUIREMENTS.md
+README.md
+CHANGELOG.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — EVERY APPROVED CONCEPT MUST BE RECORDED
+==================================================
+
+Decision:
+Every approved concept must be recorded in DECISIONS.md and, when applicable,
+in the corresponding specialist document.
+
+Reason:
+Important decisions must not remain only in discussion history.
+
+Consequences:
+Whenever a concept is approved, the same logical commit must update DECISIONS.md
+and every affected document.
+
+Affected documents:
+DECISIONS.md
+All specialist documents as applicable
+
+Status:
+Active
+
+==================================================
+2026-07-28 — ONE DOCUMENT, ONE QUESTION
+==================================================
+
+Decision:
+Each engineering memory document must answer one primary question.
+
+Question mapping:
+
+INDEX.md
+Where should I look?
+
+PROJECT_STATE.md
+Where is the project now?
+
+DECISIONS.md
+Why was this approved?
+
+WORKING_CONVENTIONS.md
+Which rules are already settled?
+
+DEVELOPMENT_GUIDE.md
+How do we work?
+
+ARCHITECTURE.md
+How is the system built?
+
+DEVLOG.md
+What was done?
+
+ROADMAP.md
+What should be done next?
+
+REQUIREMENTS.md
+What must the product do?
+
+Reason:
+Single-responsibility documents reduce duplication, ambiguity, and context
+recovery time.
+
+Consequences:
+Information that answers a different question must be moved to the correct
+document rather than duplicated without need.
+
+Affected documents:
+INDEX.md
+All engineering memory documents
+
+Status:
+Active
+
+==================================================
+2026-07-28 — INDEX IS THE ENTRY POINT
+==================================================
+
+Decision:
+INDEX.md is the entry point to the engineering memory system.
+
+Reason:
+A reader must be able to determine immediately where each type of information
+belongs and which document to read next.
+
+Consequences:
+INDEX.md contains the document map, mandatory reading order, and responsibility
+boundaries. It must not duplicate full project content.
+
+Affected documents:
+INDEX.md
+PROJECT_STATE.md
+README.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — DOCUMENT ROLE BLOCK IS REQUIRED
+==================================================
+
+Decision:
+Every internal engineering memory document begins with a DOCUMENT ROLE block.
+
+The block states:
+
+- Question answered.
+- Purpose.
+- Updated when.
+- Read after.
+- What must not be stored there.
+
+Reason:
+A document opened in isolation must explain its responsibility immediately.
+
+Consequences:
+New internal documents must include this block. Existing internal documents
+must be migrated gradually.
+
+Affected documents:
+INDEX.md
+PROJECT_STATE.md
+DECISIONS.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+ARCHITECTURE.md
+DEVLOG.md
+ROADMAP.md
+REQUIREMENTS.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — MANDATORY CONTEXT RESTORATION ORDER
+==================================================
+
+Decision:
+The mandatory reading order is:
+
+1. INDEX.md
+2. PROJECT_STATE.md
+3. DECISIONS.md
+4. WORKING_CONVENTIONS.md
+5. DEVELOPMENT_GUIDE.md
+6. ARCHITECTURE.md
+7. DEVLOG.md
+8. ROADMAP.md
+9. REQUIREMENTS.md
+
+Reason:
+This order moves from navigation, to current state, to reasons, to settled
+rules, to workflow, to architecture, to history, to future work, and finally
+to product requirements.
+
+Consequences:
+README.md and all context-restoration instructions must use this order.
+
+Affected documents:
+INDEX.md
+PROJECT_STATE.md
+README.md
+DEVELOPMENT_GUIDE.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — QUICK CONTEXT BEFORE FULL DETAILS
+==================================================
+
+Decision:
+Documents should expose a concise quick-context section before full details
+where useful.
+
+Reason:
+Most context restoration should take seconds, not require rereading hundreds of
+lines.
+
+Consequences:
+PROJECT_STATE.md must expose version, branch, phase, priority, last completed
+work, next action, and blockers near the top.
+
+Affected documents:
+PROJECT_STATE.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+ARCHITECTURE.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — ENGINEERING DOCUMENT STYLE
+==================================================
+
+Decision:
+Internal engineering memory documents use clear section separators such as:
+
+==================================================
+SECTION NAME
+==================================================
+
+They use minimal decorative Markdown and avoid unnecessary fenced code blocks.
+
+Reason:
+The documents are operational memory for engineers, not primarily presentation
+documents for GitHub.
+
+Consequences:
+Internal documents should favor fast scanning, plain paths, plain commands,
+short labels, and clearly separated sections.
+
+Affected documents:
+All engineering memory documents
+
+Status:
+Active
+
+==================================================
+2026-07-28 — SMALL VERIFIED CHANGES
+==================================================
+
+Decision:
+Large work must be split into small independent logical changes.
+
+Reason:
+Large automatically generated patches and monolithic temporary scripts are
+difficult to validate and have already caused avoidable failures.
+
+Consequences:
+Each logical change must be reviewed, validated, staged explicitly, committed,
+pushed, and verified before proceeding.
+
+Affected documents:
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — ONE LOGICAL COMMIT INCLUDES DOCUMENTATION
+==================================================
+
+Decision:
+Code and all documentation affected by that code belong in the same logical
+commit.
+
+Reason:
+Separate documentation commits allow project state and implementation to drift
+apart.
+
+Consequences:
+Before every commit, review whether project state, decisions, conventions,
+workflow, architecture, roadmap, requirements, user documentation, or release
+history changed.
+
+Affected documents:
+All project documents as applicable
+
+Status:
+Active
+
+==================================================
+2026-07-28 — AUDIT BEFORE REFACTORING
+==================================================
+
+Decision:
+Perform the API and inherited-reference audit before further broad refactoring
+or feature expansion.
+
+Reason:
+The project must understand every active interface and inherited dependency
+before removing or restructuring code.
+
+Consequences:
+The next engineering stage is static inventory followed by live OPNsense tests.
+
+Affected documents:
+PROJECT_STATE.md
+DEVLOG.md
+ROADMAP.md
+ARCHITECTURE.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — DO NOT REMOVE REFERENCES MECHANICALLY
+==================================================
+
+Decision:
+Every inherited-looking reference must be classified before removal.
+
+Reason:
+Some retained names and paths are intentional integration identifiers,
+licensing records, or required engine references.
+
+Consequences:
+Each match must be traced through caller, handler, effect, and replacement.
+
+Allowed classifications:
+
+OK
+broken
+unused
+duplicate
+inherited
+requires live test
+
+Affected documents:
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — TRANSACTIONAL APPLY IS REQUIRED
+==================================================
+
+Decision:
+Apply must remain transactional.
+
+Reason:
+Invalid configuration must never destroy a working service state.
+
+Consequences:
+Candidate runtime is built and validated before activation. Failure must
+preserve persistent configuration, active runtime, PID, and ipfw state. A
+post-activation failure must restore the previous runtime.
+
+Affected documents:
+WORKING_CONVENTIONS.md
+ARCHITECTURE.md
+REQUIREMENTS.md
+DEVLOG.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — REPOSITORY SOURCE IS AUTHORITATIVE
+==================================================
+
+Decision:
+The repository src tree is authoritative.
+
+Reason:
+Changes made only to installed files are temporary and are lost during rebuild
+or reinstall.
+
+Consequences:
+Every live-system fix must be represented under /root/os-zapret2-restyle/src
+before the work is considered complete.
+
+Affected documents:
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+
+Status:
+Active
+
+==================================================
+MAINTENANCE RULE
+==================================================
+
+For every newly approved concept:
+
+1. Add a dated decision entry here.
+2. Record the decision, reason, consequences, and affected documents.
+3. Update every affected specialist document.
+4. Include all related changes in the same logical commit.
+5. Mark older decisions as superseded instead of silently deleting history.

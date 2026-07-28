@@ -2,25 +2,40 @@
 
 Native OPNsense plugin for managing the zapret2 DPI bypass engine.
 
-Current version: **0.1.0**  
-Project status: **active development**
+Current version:
+0.1.0
 
-The plugin provides a unified Traffic Strategy editor, separate domain and IP
-targets, strict validation, transactional Apply, safe service reconfiguration,
-and automatic generation of the dvtws2 runtime configuration.
+Project status:
+Active development
 
-## Traffic Strategy
+==================================================
+PROJECT OVERVIEW
+==================================================
 
-A strategy contains one or more independent profiles. Profiles are separated
-by a standalone:
+The plugin provides:
 
-```text
+- Unified Traffic Strategy editing.
+- Separate domain and IP targets.
+- Strict validation.
+- Transactional Apply.
+- Safe service reconfiguration.
+- Automatic dvtws2 runtime generation.
+- Runtime validation and rollback.
+- ipfw lifecycle management.
+- Supervisor lifecycle management.
+
+==================================================
+TRAFFIC STRATEGY
+==================================================
+
+A strategy contains one or more independent profiles.
+
+Profiles are separated by a standalone:
+
 --new
-```
 
 Example:
 
-```text
 --filter-tcp=80
 <HOSTLIST:user>
 --filter-l7=http
@@ -45,94 +60,126 @@ Example:
 --filter-l7=mtproto,unknown
 --payload=mtproto_initial,unknown
 --lua-desync=fake:blob=stun:repeats=6
-```
 
 Supported target placeholders currently include:
 
-```text
 <HOSTLIST:user>
 <HOSTLIST:youtube>
 <IPSET:telegram>
-```
 
-Placeholders may be combined in the same profile. Profiles without explicit
-placeholders are processed according to **Target Mode**.
+Placeholders may be combined in the same profile.
 
-## Domain targets
+Profiles without explicit placeholders are processed according to Target Mode.
 
-Enter one domain per line:
+==================================================
+DOMAIN TARGETS
+==================================================
 
-```text
+Enter one domain per line.
+
+Examples:
+
 youtube.com
 *.youtube.com
-```
 
-Both forms are equivalent for this plugin. During Apply:
+Both forms are equivalent for this plugin.
 
-```text
+During Apply:
+
 *.youtube.com
-```
 
 is normalized to:
 
-```text
 youtube.com
-```
 
-The canonical `youtube.com` entry applies to the base domain and its
-subdomains. Duplicate entries are removed and domain names are stored in
-lowercase.
+The canonical youtube.com entry applies to the base domain and its subdomains.
 
-Domain target fields reject IP addresses, CIDR networks, malformed domains,
-and unrelated text.
+Duplicate entries are removed.
 
-## IP targets
+Domain names are stored in lowercase.
 
-Enter one IPv4 address or one IPv4 CIDR network per line:
+Domain target fields reject:
 
-```text
+- IP addresses.
+- CIDR networks.
+- Malformed domains.
+- Unrelated text.
+
+==================================================
+IP TARGETS
+==================================================
+
+Enter one IPv4 address or one IPv4 CIDR network per line.
+
+Examples:
+
 149.154.160.1
 149.154.160.0/20
-```
 
-Domain names are not accepted in IP target fields. IPv6 target lists are not
-supported in version 0.1.0.
+Domain names are not accepted in IP target fields.
 
-## Applying settings
+IPv6 target lists are not supported in version 0.1.0.
 
-Apply is transactional:
+==================================================
+APPLYING SETTINGS
+==================================================
 
-- invalid values are not written to the persistent OPNsense configuration;
-- the currently working service remains active;
-- active runtime files and ipfw rules remain unchanged;
-- the GUI identifies the affected field and line;
-- valid values are normalized, saved, activated, and reloaded into the form.
+Apply is transactional.
 
-## Installation
+Invalid values are not written to persistent OPNsense configuration.
 
-Version 0.1.0 is under active development and is not yet published as a stable
-OPNsense Package Manager release.
+The currently working service remains active.
+
+Active runtime files and ipfw rules remain unchanged.
+
+The GUI identifies the affected field and line.
+
+Valid values are normalized, saved, activated, and reloaded into the form.
+
+==================================================
+INSTALLATION
+==================================================
+
+Version 0.1.0 is under active development.
+
+It is not yet published as a stable OPNsense Package Manager release.
 
 Package build and installation instructions will be added before the first
 public test release.
 
-## Documentation
+==================================================
+ENGINEERING MEMORY
+==================================================
 
-Developer and project-state documents:
+Internal development starts from INDEX.md.
 
-- [REQUIREMENTS.md](REQUIREMENTS.md)
-- [ARCHITECTURE.md](ARCHITECTURE.md)
-- [DEVLOG.md](DEVLOG.md)
-- [ROADMAP.md](ROADMAP.md)
-- [CHANGELOG.md](CHANGELOG.md)
+Mandatory reading order:
 
-## Acknowledgements
+1. INDEX.md
+2. PROJECT_STATE.md
+3. DECISIONS.md
+4. WORKING_CONVENTIONS.md
+5. DEVELOPMENT_GUIDE.md
+6. ARCHITECTURE.md
+7. DEVLOG.md
+8. ROADMAP.md
+9. REQUIREMENTS.md
 
-This independent project originated from earlier open-source work by
-[bol-van](https://github.com/bol-van/zapret) and
-[Umur Gorur](https://github.com/ugorur/os-zapret2). Their copyright notices
-and licenses are preserved. See [NOTICE](NOTICE).
+==================================================
+ACKNOWLEDGEMENTS
+==================================================
 
-## License
+This independent project originated from earlier open-source work by bol-van
+and Umur Gorur.
 
-MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Their copyright notices and licenses are preserved.
+
+See NOTICE.
+
+==================================================
+LICENSE
+==================================================
+
+MIT.
+
+See LICENSE and NOTICE.
