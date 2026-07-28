@@ -53,11 +53,11 @@
             <!-- Legacy field retained for compatibility with existing config.xml. -->
             <domains type="TextField">
                 <Required>N</Required>
-                <Mask>/^[a-zA-Z0-9\.\-\n\r\s]*$/</Mask>
+                <Mask>/^[a-zA-Z0-9\.\*\-\n\r\s]*$/</Mask>
             </domains>
             <youtubedomains type="TextField">
                 <Required>N</Required>
-                <Mask>/^[a-zA-Z0-9\.\-\n\r\s]*$/</Mask>
+                <Mask>/^[a-zA-Z0-9\.\*\-\n\r\s]*$/</Mask>
             </youtubedomains>
             <telegramips type="TextField">
                 <Required>N</Required>
@@ -66,11 +66,11 @@
             </telegramips>
             <userdomains type="TextField">
                 <Required>N</Required>
-                <Mask>/^[a-zA-Z0-9\.\-\n\r\s]*$/</Mask>
+                <Mask>/^[a-zA-Z0-9\.\*\-\n\r\s]*$/</Mask>
             </userdomains>
             <excludedomains type="TextField">
                 <Required>N</Required>
-                <Mask>/^[a-zA-Z0-9\.\-\n\r\s]*$/</Mask>
+                <Mask>/^[a-zA-Z0-9\.\*\-\n\r\s]*$/</Mask>
             </excludedomains>
         </hostlist>
     </items>
