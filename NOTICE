@@ -1,0 +1,48 @@
+# Attribution Notice
+
+`os-zapret2-restyle` is an independent OPNsense plugin project.
+
+The project originated from earlier open-source work. The original authors,
+copyright notices, and licenses are preserved.
+
+## zapret
+
+Project:
+
+https://github.com/bol-van/zapret
+
+License:
+
+https://github.com/bol-van/zapret/blob/master/docs/LICENSE.txt
+
+Copyright (c) 2016-2024 bol-van
+
+## Earlier OPNsense plugin code base
+
+Project:
+
+https://github.com/ugorur/os-zapret2
+
+Copyright (c) 2026 Umur Gorur
+
+## os-zapret2-restyle
+
+Project:
+
+https://github.com/Tolian82/os-zapret2-restyle
+
+Project redesign and continued development include:
+
+- Backend v2 architecture
+- GUI redesign
+- Transactional Apply
+- Safe Reconfigure
+- Generic Target Registry
+- Traffic Strategy
+- Packaging
+- Documentation
+- Build system
+- CI/CD
+- Repository maintenance
+
+Copyright (c) 2026 Tolian82

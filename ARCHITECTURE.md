@@ -13,6 +13,12 @@ development checkout: /root/os-zapret2-restyle
 
 This repository is the source of truth and is an independent project.
 
+The project originated from the zapret project by bol-van and an earlier
+OPNsense plugin code base by Umur Gorur. Their copyright notices and licenses
+are preserved in `LICENSE` and `NOTICE`. Current architecture, package
+identity, repository, releases, documentation, maintenance, and ongoing
+development belong to `os-zapret2-restyle`.
+
 ## Pipeline
 
 ```text

@@ -18,9 +18,13 @@ Read current `main` before proposing code.
 The project is fully independent from the code base originally used to start
 development.
 
-The earlier copyright remains in `LICENSE`, but future package identity,
-architecture, installation, release process, documentation, and maintenance
-belong to `os-zapret2-restyle`.
+The project originated from zapret by bol-van and an earlier OPNsense plugin
+code base by Umur Gorur. Their copyright notices and licenses remain preserved
+in `LICENSE` and `NOTICE`.
+
+Future package identity, architecture, installation, release process,
+documentation, maintenance, and ongoing development belong to
+`os-zapret2-restyle`.
 
 Goal: build and install the plugin on a clean supported OPNsense system without
 references to or dependencies on another OPNsense zapret plugin repository.

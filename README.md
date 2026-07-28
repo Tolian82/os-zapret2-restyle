@@ -126,6 +126,13 @@ Developer and project-state documents:
 - [ROADMAP.md](ROADMAP.md)
 - [CHANGELOG.md](CHANGELOG.md)
 
+## Acknowledgements
+
+This independent project originated from earlier open-source work by
+[bol-van](https://github.com/bol-van/zapret) and
+[Umur Gorur](https://github.com/ugorur/os-zapret2). Their copyright notices
+and licenses are preserved. See [NOTICE](NOTICE).
+
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
