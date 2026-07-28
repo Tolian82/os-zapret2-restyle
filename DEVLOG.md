@@ -219,3 +219,30 @@ Next:
 Continue lifecycle tracing through rc.d registration, plugin hooks, supervisor,
 watchdog, launcher, firewall, failure paths, and cleanup, then synchronize and
 commit the completed lifecycle block before moving on.
+
+==================================================
+2026-07-28 — LIFECYCLE AUDIT EVIDENCE AND ARCHITECTURE-DEBT MODEL
+==================================================
+
+Completed:
+
+- Separated confirmed Findings from unresolved Architecture Debt.
+- Defined the Architecture Debt lifecycle and prohibition on direct closure.
+- Required a DECISIONS.md entry before dependent implementation.
+- Required blocked Findings to remain unmodified until controlling architecture is
+  decided.
+- Recorded verified boot, shutdown, runtime start, runtime stop, and failure-cleanup
+  chains.
+- Recorded LIFE-004 through LIFE-008 with exact evidence, plans, and acceptance
+  criteria.
+- Opened ARCH-001 watchdog architecture, ARCH-002 package lifecycle policy, and
+  ARCH-003 launcher/supervisor/watchdog responsibility boundaries.
+
+No lifecycle code was changed.
+
+Next:
+
+- Complete reconfigure, rollback, firewall snapshot, atomic backup, package lifecycle,
+  and concurrency audit.
+- Perform required live tests.
+- Commit the completed lifecycle audit documentation before remediation.

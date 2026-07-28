@@ -81,8 +81,9 @@ Question answered:
 What has been checked, what is broken, and what still requires verification?
 
 Contains:
-Audit scope, verified interface chains, classifications, broken chains, live-test
-requirements, remediation status, and remaining audit work.
+Audit scope, verified interface chains, Findings with actionable remediation plans,
+Architecture Debt with decision lifecycles, broken chains, live-test requirements,
+remediation status, and remaining audit work.
 
 Does not contain:
 Decision rationale, permanent rules, detailed development procedures, or general

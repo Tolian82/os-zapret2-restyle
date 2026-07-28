@@ -182,3 +182,40 @@ After finishing work:
 
 Engineering Memory is maintained continuously during development rather than
 written only after the work is finished.
+
+==================================================
+FINDINGS AND ARCHITECTURE DEBT
+==================================================
+
+Findings and Architecture Debt are separate engineering records.
+
+A Finding records a confirmed implementation defect, inconsistency, obsolete or
+unused interface, duplicate, or concrete operational risk. It must include evidence,
+a verification plan, a remediation plan, acceptance criteria, and affected documents.
+Resolved Findings remain in AUDIT.md as history.
+
+Architecture Debt records an unresolved design question. It is not an implementation
+defect and must not be "fixed" in code before the intended behavior is approved in
+DECISIONS.md.
+
+Architecture Debt follows this lifecycle:
+
+Open
+↓
+Discussion
+↓
+Decision
+↓
+Implementation
+↓
+Verification
+↓
+Documentation
+↓
+Closed
+
+Architecture Debt cannot be closed directly. It closes only after a recorded decision,
+required implementation, verification, and synchronized documentation.
+
+A Finding must not be remediated while an open Architecture Debt item determines its
+intended behavior.

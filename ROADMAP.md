@@ -120,3 +120,16 @@ STAGE 6 — VERSION 1.0.0
 [ ] Upgrade and rollback tests
 [ ] Production-ready documentation
 [ ] Public stable release
+
+==================================================
+PERMANENT AUDIT AND ARCHITECTURE-DEBT TRACK
+==================================================
+
+[x] Establish AUDIT.md and actionable Finding format.
+[x] Separate Findings from Architecture Debt.
+[x] Require documentation commit before the next audit block or remediation.
+[ ] Complete lifecycle and runtime audit.
+[ ] Complete package lifecycle audit.
+[ ] Resolve Architecture Debt through DECISIONS.md before dependent implementation.
+[ ] Remediate verified Findings in small logical commits.
+[ ] Verify and close Findings without deleting audit history.

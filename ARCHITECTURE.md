@@ -329,3 +329,69 @@ TECHNICAL CONSTRAINTS
 - Generated runtime is not source.
 - Candidate validation occurs before activation.
 - Invalid configuration must not disturb active service state.
+
+==================================================
+LIFECYCLE ARCHITECTURE
+==================================================
+
+Automatic startup owner:
+
+OPNsense start syshook
+        ↓
+configctl zapret start
+        ↓
+configd action
+        ↓
+zapret_service.sh
+        ↓
+Backend v2 orchestrator
+
+Runtime activation:
+
+candidate generation
+        ↓
+validation
+        ↓
+atomic activation
+        ↓
+launcher
+        ↓
+firewall
+        ↓
+supervisor
+        ↓
+ready
+
+Shutdown:
+
+supervisor stop
+        ↓
+firewall removal
+        ↓
+launcher stop
+
+The rc.d entry point, watchdog files, package lifecycle policy, and exact responsibility
+boundaries are under active audit and must not be treated as approved architecture until
+the related Findings and Architecture Debt are resolved.
+
+==================================================
+PROJECT GOVERNANCE FLOW
+==================================================
+
+AUDIT.md
+Findings and Architecture Debt
+        ↓
+DECISIONS.md
+approved behavior for architectural questions
+        ↓
+implementation and verification
+        ↓
+AUDIT.md status update
+        ↓
+PROJECT_STATE.md and DEVLOG.md
+current state and completed work
+        ↓
+CHANGELOG.md when user-visible or release-relevant
+
+Documentation-system changes are architectural changes and follow the same decision,
+implementation, verification, and synchronized-commit discipline as code architecture.

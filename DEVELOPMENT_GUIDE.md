@@ -154,3 +154,52 @@ only then start remediation or the next audit block
 An audit block is not complete before the documentation commit. A finding is not
 ready for remediation until its verification plan, remediation plan, acceptance
 criteria, and documentation impact are recorded.
+
+commit the documentation state
+↓
+start remediation or the next audit step
+
+==================================================
+FINDING AND ARCHITECTURE-DEBT WORKFLOW
+==================================================
+
+When an audit result is discovered:
+
+investigate
+↓
+classify as Finding or Architecture Debt
+↓
+record full evidence and plans in AUDIT.md
+
+For a Finding with no blocking Architecture Debt:
+
+verify scope
+↓
+implement minimal remediation
+↓
+run acceptance tests
+↓
+update audit status and affected documents
+↓
+commit
+
+For Architecture Debt or a blocked Finding:
+
+Open
+↓
+Discussion
+↓
+record approved behavior in DECISIONS.md
+↓
+update architecture and specialist documents
+↓
+Implementation
+↓
+Verification
+↓
+Documentation
+↓
+Closed
+
+Do not implement a dependent Finding before the controlling Architecture Debt reaches
+Decision status.

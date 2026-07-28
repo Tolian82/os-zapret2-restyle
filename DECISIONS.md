@@ -712,3 +712,48 @@ DEVLOG.md
 
 Status:
 Active
+
+==================================================
+2026-07-28 — FINDINGS AND ARCHITECTURE DEBT ARE SEPARATE RECORD TYPES
+==================================================
+
+Decision:
+Separate audit results into Findings and Architecture Debt.
+
+A Finding describes a confirmed implementation defect, inconsistency, obsolete or
+unused interface, duplicate, or concrete operational risk.
+
+Architecture Debt describes an unresolved design question whose intended behavior must
+be approved before dependent code changes.
+
+Reason:
+Implementation defects and design questions require different workflows. Treating both
+as generic TODO items encourages code changes before architecture is decided and makes
+completion criteria ambiguous.
+
+Consequences:
+
+- AUDIT.md contains distinct Finding and Architecture Debt sections.
+- Every Finding includes evidence, verification and remediation plans, acceptance
+  criteria, affected documents, and remediation status.
+- Architecture Debt follows Open, Discussion, Decision, Implementation, Verification,
+  Documentation, and Closed.
+- Architecture Debt cannot be closed directly.
+- A DECISIONS.md entry is mandatory before implementation of Architecture Debt.
+- A Finding cannot be remediated while open Architecture Debt determines its intended
+  behavior.
+- Resolved Findings and closed Architecture Debt remain in audit history.
+
+Affected documents:
+AUDIT.md
+INDEX.md
+PROJECT_STATE.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+ARCHITECTURE.md
+DEVLOG.md
+ROADMAP.md
+DECISIONS.md
+
+Status:
+Active

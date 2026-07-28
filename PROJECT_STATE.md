@@ -42,12 +42,10 @@ Current phase:
 API and inherited-reference audit execution
 
 Current priority:
-Commit detailed remediation records for the completed MVC, GUI API, ACL, Menu,
-and configd audit block together with the audit synchronization rule and the
-initial lifecycle evidence.
+Complete the service lifecycle and runtime audit, including required live tests and package-lifecycle inventory, before any lifecycle remediation.
 
 Last completed:
-Static audit block for MVC, GUI API, ACL, Menu, and configd interfaces.
+Documentation synchronization for the MVC/API audit block and actionable audit-record methodology.
 
 Current work cycle:
 Investigate → verify → record audit evidence → update Engineering Memory → commit → continue or remediate.
@@ -230,3 +228,37 @@ Typical triggers:
 - Immediate next actions changed.
 
 Do not use this document as a history archive.
+
+==================================================
+CURRENT LIFECYCLE AUDIT STATE
+==================================================
+
+Statically verified:
+
+- Boot syshook → configctl → configd start → service wrapper → Backend v2.
+- Shutdown syshook → configctl → configd stop → service wrapper.
+- Candidate build, validation, activation, launcher, firewall, supervisor start order.
+- Supervisor, firewall, launcher stop order.
+- Runtime-failure cleanup removes divert rules and stops the child process.
+
+Open lifecycle Findings:
+
+- LIFE-004 duplicate firewall_rules_present() declaration.
+- LIFE-005 disconnected inherited watchdog files.
+- LIFE-006 rc.d entry point lacks a project-owned zapret_enable source.
+- LIFE-007 PID checks do not verify process identity.
+- LIFE-008 supervisor stop escalates without checking exit.
+
+Open Architecture Debt:
+
+- ARCH-001 watchdog architecture.
+- ARCH-002 package lifecycle policy.
+- ARCH-003 launcher/supervisor/watchdog responsibility boundaries.
+
+Immediate next actions:
+
+1. Complete transactional reconfigure, rollback, firewall snapshot, atomic backup,
+   package lifecycle, and concurrent-entry audit.
+2. Run the LIFE-006 service/rcvar live tests.
+3. Record all remaining lifecycle evidence in AUDIT.md.
+4. Commit the completed lifecycle audit documentation before remediation.

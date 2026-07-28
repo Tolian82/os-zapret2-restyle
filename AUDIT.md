@@ -48,6 +48,17 @@ duplicate
 inherited
 requires live test
 
+Audit records are separated into two classes:
+
+Finding
+A confirmed implementation defect, inconsistency, obsolete reference, duplicate,
+unused interface, or risk that can be verified against the current implementation.
+
+Architecture Debt
+An unresolved design question that must be decided before dependent code is changed.
+Architecture Debt is not treated as an implementation defect until a decision defines
+the intended behavior.
+
 Rules:
 
 - Record evidence before remediation.
@@ -57,8 +68,14 @@ Rules:
 - Record required live tests explicitly.
 - After remediation, update the existing entry with verification evidence.
 - Complete and document one audit block before starting the next block.
-- An audit block is not complete until all affected Engineering Memory documents
-  are updated and committed.
+- Every completed audit block must be committed with all affected documentation before
+  the next block or remediation begins.
+- Every Finding must include exact locations, evidence, impact, verification steps, a
+  remediation plan, acceptance criteria, and affected documents.
+- Architecture Debt must be discussed and resolved through DECISIONS.md before any
+  dependent Finding is implemented.
+- Architecture Debt cannot be closed directly. It moves through Open, Discussion,
+  Decision, Implementation, Verification, Documentation, and Closed.
 
 ==================================================
 FINDING RECORD FORMAT
@@ -778,3 +795,411 @@ No code remediation has been performed for the findings above.
 The next logical commit records the audit and documentation-system decisions
 only. Code fixes must follow as separate minimal commits after the relevant audit
 evidence and live-test requirements are complete.
+
+==================================================
+AUDIT RECORD FORMAT
+==================================================
+
+Finding record:
+
+- Stable ID.
+- Title and classification.
+- Exact files, methods, routes, actions, or runtime paths.
+- Broken or questionable chain.
+- Evidence.
+- Cause or likely origin.
+- Impact and risk.
+- Verification plan.
+- Remediation plan.
+- Acceptance criteria.
+- Affected documentation.
+- Current remediation status.
+
+Architecture Debt record:
+
+- Stable ARCH-XXX ID.
+- Title and status.
+- Design question.
+- Why the question is architectural rather than an implementation defect.
+- Options considered.
+- Dependencies and related Findings.
+- Required DECISIONS.md entry.
+- Closure criteria.
+
+A Finding that depends on open Architecture Debt must not be remediated until the
+Architecture Debt reaches Decision status and the intended behavior is recorded.
+
+==================================================
+IN-PROGRESS BLOCK — SERVICE LIFECYCLE AND RUNTIME
+==================================================
+
+Status:
+In progress. Static evidence is recorded below. No lifecycle remediation is
+permitted until this block is completed, documented, committed, and required live
+tests are performed.
+
+Verified startup chain — OK:
+
+OPNsense boot
+        ↓
+rc.syshook.d/start/20-zapret
+        ↓
+configctl zapret start
+        ↓
+actions_zapret.conf [start]
+        ↓
+zapret_service.sh start
+        ↓
+Backend v2 orchestrator
+
+Verified shutdown chain — OK:
+
+OPNsense shutdown or reboot
+        ↓
+rc.syshook.d/stop/20-zapret
+        ↓
+configctl zapret stop
+        ↓
+actions_zapret.conf [stop]
+        ↓
+zapret_service.sh stop
+
+Verified runtime start order — OK:
+
+build candidate
+        ↓
+validate candidate
+        ↓
+atomic activation
+        ↓
+start dvtws2 launcher
+        ↓
+install firewall rules
+        ↓
+start supervisor
+        ↓
+ready
+
+Verified runtime stop order — OK:
+
+stop supervisor
+        ↓
+remove firewall rules
+        ↓
+stop dvtws2 launcher
+
+Verified failure cleanup — OK by static inspection:
+
+A launcher, firewall, or supervisor start failure invokes runtime cleanup and
+restores the previous runtime tree. The runtime-failure path removes divert rules
+and stops the child process so traffic is not diverted to a missing handler.
+
+--------------------------------------------------
+LIFE-004 — duplicate firewall_rules_present() definition
+--------------------------------------------------
+
+Classification:
+duplicate / confirmed
+
+Location:
+src/opnsense/scripts/OPNsense/Zapret/backend/firewall.sh
+
+Evidence:
+firewall_rules_present() is declared twice in the same sourced shell module. The
+second declaration replaces the first at load time.
+
+Impact:
+
+- One implementation is dead code.
+- A future edit to only the first declaration has no runtime effect.
+- The two copies can silently diverge.
+- Static review and maintenance are made unreliable.
+
+Verification plan:
+
+1. Locate every call to firewall_rules_present().
+2. Compare both declarations byte-for-byte and semantically.
+3. Run /bin/sh syntax validation after consolidation.
+4. Live-test status, repeated start, incomplete-runtime detection, and firewall
+   presence detection.
+
+Remediation plan:
+
+1. Select one canonical implementation.
+2. Merge any useful comments into that implementation.
+3. Remove the duplicate declaration only.
+4. Do not alter firewall behavior in the same commit.
+5. Update AUDIT.md, DEVLOG.md, PROJECT_STATE.md, and CHANGELOG.md when resolved.
+
+Acceptance criteria:
+
+- Exactly one declaration remains.
+- All callers resolve to it.
+- Shell syntax validation passes.
+- Focused live tests preserve current behavior.
+
+Remediation status:
+Open. No code change performed.
+
+--------------------------------------------------
+LIFE-005 — watchdog files are disconnected from lifecycle
+--------------------------------------------------
+
+Classification:
+unused / inherited / architecture-dependent
+
+Locations:
+watchdog.sh
+watchdog_loop.sh
+
+Evidence:
+
+- No cron registration was found.
+- No orchestrator, supervisor, syshook, package hook, configd action, model, or GUI
+  path starts either watchdog file.
+- watchdog.sh claims it runs from cron every minute.
+- watchdog_loop.sh claims zapret_service.sh starts it under daemon(8).
+- Neither claimed integration exists in the audited repository.
+- watchdog.sh logs obsolete HTTP_ARGS and HTTPS_ARGS variables although Backend v2
+  uses TRAFFIC_ARGS.
+
+Impact:
+
+- The files imply health-monitoring behavior that does not exist.
+- Operators and maintainers can incorrectly assume automatic recovery is active.
+- Enabling the files without a design decision could duplicate supervisor duties.
+
+Verification plan:
+
+1. Confirm no installed-system cron or generated configuration references exist.
+2. Confirm no package lifecycle hook installs an external reference.
+3. Decide ARCH-001 and ARCH-003 before modifying or removing the files.
+
+Remediation plan:
+Blocked by Architecture Debt. After decisions are recorded, either integrate one
+approved health-monitoring mechanism with tests and current TRAFFIC_ARGS semantics,
+or remove the inherited watchdog files and all references.
+
+Acceptance criteria:
+The repository and installed system expose exactly one documented health-monitoring
+model, or explicitly document that no watchdog exists.
+
+Remediation status:
+Blocked by ARCH-001 and ARCH-003.
+
+--------------------------------------------------
+LIFE-006 — rc.d entry point lacks a project-owned zapret_enable source
+--------------------------------------------------
+
+Classification:
+inherited / likely nonfunctional manual entry point / requires live test
+
+Location:
+src/opnsense/scripts/OPNsense/Zapret/rc.d/zapret
+
+Evidence:
+The script declares rcvar=zapret_enable and calls load_rc_config, but repository
+search found no project code that writes zapret_enable=YES to rc.conf,
+rc.conf.local, or an OPNsense rc configuration source. Normal boot uses syshooks
+and configctl instead.
+
+Risk:
+
+- service zapret start may refuse to run because the rcvar is unset.
+- service zapret onestart may work while the normal command does not.
+- The rc.d path may be mistaken for a second supported automatic lifecycle.
+
+Required live test:
+
+service zapret status
+service zapret start
+service zapret onestart
+sysrc zapret_enable
+
+Remediation plan:
+After live evidence and ARCH-002 review, choose one supported model: remove the
+redundant rc.d entry point, integrate it correctly with OPNsense, or retain it only
+as a clearly documented manual compatibility path. Do not create a second automatic
+startup path.
+
+Acceptance criteria:
+There is one unambiguous automatic startup owner, and every retained manual service
+command behaves as documented.
+
+Remediation status:
+Open; live test required.
+
+--------------------------------------------------
+LIFE-007 — PID checks do not verify process identity
+--------------------------------------------------
+
+Classification:
+risk / requires live and design review
+
+Locations:
+launcher_is_running()
+supervisor_is_running()
+related stop functions
+
+Evidence:
+The current checks rely on kill -0 against a PID read from a PID file. They do not
+verify that the PID still belongs to dvtws2 or the expected supervisor loop.
+
+Impact:
+
+- A stale PID file can report a false running state after PID reuse.
+- Stop logic can signal an unrelated process.
+- Runtime completeness checks can accept an invalid state.
+- Restart can be skipped when the expected process is absent.
+
+Verification plan:
+
+1. Determine reliable FreeBSD process-identity checks available on supported
+   OPNsense versions.
+2. Reproduce stale PID and PID-reuse scenarios safely.
+3. Confirm current behavior without signalling unrelated processes.
+4. Resolve ARCH-003 before assigning final ownership of health checks.
+
+Remediation plan:
+Add executable or command-line identity validation before reporting running or
+sending signals. Remove stale PID files when identity fails. Share one helper
+between launcher and supervisor where practical.
+
+Acceptance criteria:
+A stale or reused PID cannot be treated as the expected process and cannot receive
+TERM or KILL from the plugin.
+
+Remediation status:
+Open; design and live test required.
+
+--------------------------------------------------
+LIFE-008 — supervisor stop escalates without checking process exit
+--------------------------------------------------
+
+Classification:
+risk / cleanup improvement
+
+Location:
+supervisor_stop_one()
+
+Evidence:
+The function sends TERM, sleeps one second, then sends KILL without first checking
+whether the process exited.
+
+Impact:
+The unconditional escalation is harder to reason about, is inconsistent with the
+launcher stop path, and compounds LIFE-007 if a PID file is stale or reused.
+
+Verification plan:
+Measure normal supervisor exit time and test already-exited, slow-exit, and stale-PID
+cases after process identity protection is defined.
+
+Remediation plan:
+Resolve LIFE-007 first, then use bounded polling and send KILL only while the verified
+expected process remains alive.
+
+Acceptance criteria:
+Normal exits do not receive KILL; escalation is conditional, bounded, and identity-safe.
+
+Remediation status:
+Blocked by LIFE-007.
+
+==================================================
+ARCHITECTURE DEBT
+==================================================
+
+Lifecycle:
+Open → Discussion → Decision → Implementation → Verification → Documentation → Closed
+
+Architecture Debt cannot be closed directly. A DECISIONS.md entry is mandatory before
+implementation. Dependent Findings remain blocked until the intended behavior is
+approved.
+
+--------------------------------------------------
+ARCH-001 — watchdog architecture is not defined
+--------------------------------------------------
+
+Status:
+Open
+
+Design question:
+Does the project require a watchdog beyond the existing supervisor, and if so, which
+single mechanism owns it: supervisor loop, cron, daemon(8), or another OPNsense-native
+facility?
+
+Why architectural:
+The answer changes lifecycle ownership, restart policy, logging, configuration,
+packaging, and GUI behavior. It cannot be solved by merely wiring in existing files.
+
+Options:
+
+1. Supervisor is the only runtime health monitor; remove watchdog leftovers.
+2. Add a distinct watchdog with narrowly defined responsibilities.
+3. Replace the current supervisor/watchdog split with one OPNsense-native service
+   supervision model.
+
+Dependencies:
+LIFE-005 and ARCH-003.
+
+Required decision:
+Define whether watchdog functionality exists, its owner, its trigger, restart policy,
+logging, failure reporting, and configuration surface.
+
+Closure criteria:
+Decision recorded; required implementation completed; live failure tests pass; obsolete
+files and documentation are removed or updated.
+
+--------------------------------------------------
+ARCH-002 — package lifecycle policy is incomplete
+--------------------------------------------------
+
+Status:
+Open
+
+Design question:
+Define supported install, upgrade, reinstall, downgrade, rollback, deinstall, and
+cleanup behavior for configuration, runtime trees, PID files, logs, downloaded engine
+artifacts, blobs, and generated state.
+
+Why architectural:
+Automatic deletion or preservation choices affect user data, rollback safety, package
+manager behavior, and recovery. Current behavior must not be inferred solely from pkg
+defaults.
+
+Required investigation:
+Inventory pkg scripts, plist actions, setup scripts, OPNsense plugin hooks, and live
+install/upgrade/deinstall behavior on a test system.
+
+Dependencies:
+LIFE-006 and remaining package-lifecycle audit.
+
+Closure criteria:
+A complete lifecycle policy is approved in DECISIONS.md, implemented where necessary,
+and verified by fresh-install, upgrade, reinstall, downgrade/rollback where supported,
+and uninstall tests.
+
+--------------------------------------------------
+ARCH-003 — launcher, supervisor, and watchdog responsibilities overlap
+--------------------------------------------------
+
+Status:
+Open
+
+Design question:
+Assign one owner for process start/stop, health detection, restart decisions, stale PID
+cleanup, logging, runtime-failure cleanup, and user-visible status.
+
+Why architectural:
+Without explicit boundaries, adding watchdog behavior or hardening PID handling can
+create duplicate restarts, competing cleanup, or inconsistent status reporting.
+
+Dependencies:
+LIFE-005, LIFE-007, LIFE-008, and ARCH-001.
+
+Required decision:
+Document a responsibility matrix for launcher, supervisor, optional watchdog, service
+wrapper, and orchestrator.
+
+Closure criteria:
+Decision recorded; architecture diagram updated; implementation and failure-path tests
+confirm only one component owns each responsibility.
