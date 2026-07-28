@@ -113,26 +113,7 @@ firewall_install_rules()
 }
 
 
-# Public consistency check used by Orchestrator.
-firewall_rules_present()
-{
-    _firewall_present_rule_base="$1"
-    _firewall_present_rule_max="$2"
-    _firewall_present_rule="${_firewall_present_rule_base}"
-
-    while [ "${_firewall_present_rule}" -le "${_firewall_present_rule_max}" ]; do
-        if /sbin/ipfw list "${_firewall_present_rule}" 2>/dev/null |
-            grep -q ' divert '; then
-            return 0
-        fi
-        _firewall_present_rule=$((_firewall_present_rule + 1))
-    done
-
-    return 1
-}
-
-# Runtime state API for Orchestrator and GUI status.
-
+# Runtime state API used by Orchestrator and GUI status.
 firewall_rules_present()
 {
     _firewall_present_rule="$1"

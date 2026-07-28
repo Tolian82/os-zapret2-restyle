@@ -57,6 +57,7 @@ The project starts its own version history at `0.1.0`.
 
 ### Fixed
 
+- Removed the duplicate `firewall_rules_present()` declaration so firewall runtime-state checks have one canonical implementation.
 - Serialized mutating lifecycle operations with a FreeBSD lockf-backed mutex and prevented stale supervisor callbacks from tearing down replacement runtime state.
 - Invalid target data no longer stops a working dvtws2 service.
 - Failed target preparation now reports `failed` instead of remaining `running`.

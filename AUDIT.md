@@ -939,7 +939,10 @@ Acceptance criteria:
 - Focused live tests preserve current behavior.
 
 Remediation status:
-Open. No code change performed.
+Code remediated. The duplicate declaration was removed and one canonical
+implementation remains. Static shell validation passed. Focused live verification
+of status, repeated start, incomplete-runtime detection, and firewall-presence
+detection is still required before the Finding can be marked Resolved.
 
 --------------------------------------------------
 LIFE-005 — watchdog files are disconnected from lifecycle

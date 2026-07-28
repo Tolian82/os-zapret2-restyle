@@ -42,12 +42,12 @@ Current phase:
 API and inherited-reference audit execution
 
 Current priority:
-Live-verify the new lifecycle mutex, then continue the remaining lifecycle and
-package-lifecycle audit before broader remediation.
+Live-verify the lifecycle mutex and the consolidated firewall state check, then
+continue the remaining lifecycle and package-lifecycle audit.
 
 Last completed:
-Implemented the common lockf-backed lifecycle serialization boundary for
-start, stop, restart, reconfigure, and runtime-failure (LIFE-009).
+Removed the duplicate firewall_rules_present() declaration and retained one
+canonical firewall runtime-state check (LIFE-004); live verification remains pending.
 
 Current work cycle:
 Investigate → verify → record audit evidence → update Engineering Memory → commit → continue or remediate.

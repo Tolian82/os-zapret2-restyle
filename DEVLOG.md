@@ -282,3 +282,24 @@ Next:
 
 Live-verify LIFE-009, then continue the remaining lifecycle and package-lifecycle
 analysis.
+
+==================================================
+2026-07-28 — FIREWALL STATE CHECK CONSOLIDATED (LIFE-004)
+==================================================
+
+Completed:
+
+- Removed the duplicate firewall_rules_present() declaration from backend/firewall.sh.
+- Preserved the existing firewall-presence behavior and retained one canonical implementation.
+- Verified that all callers continue to resolve to the remaining function.
+- Completed POSIX shell syntax validation for the project shell scripts.
+- Updated the audit and changelog records.
+
+Still required:
+
+- Focused live verification of status, repeated start, incomplete-runtime detection,
+  and firewall-presence detection before LIFE-004 is marked Resolved.
+
+Next:
+
+Continue the remaining Lifecycle/Runtime audit and live verification queue.
