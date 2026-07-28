@@ -1,12 +1,12 @@
-PLUGIN_NAME=        zapret2
-PLUGIN_VERSION=     1.7.2
-PLUGIN_REVISION=    0
-PLUGIN_COMMENT=     DPI bypass using zapret2 (anti-censorship)
-PLUGIN_MAINTAINER=  mail@ugorur.com
-# luajit, jq, git (git-lite or git), pkgconf are installed by setup.sh from FreeBSD's
-# main pkg repo (not OPNsense's). They're not declared here because pkg-add
-# would refuse to install our plugin on a fresh OPNsense where those ports
-# aren't yet present and the FreeBSD repo isn't enabled by default.
+PLUGIN_NAME=        zapret2-restyle
+PLUGIN_VERSION=     0.1.0
+PLUGIN_REVISION=    1
+PLUGIN_COMMENT=     Native zapret2 DPI bypass plugin for OPNsense
+PLUGIN_MAINTAINER=  tolian82IPB@gmail.com
+
+# External build dependencies are installed by setup.sh when required.
+# They are not declared here because they may not exist in the default
+# OPNsense package repository on a fresh installation.
 PLUGIN_DEPENDS=
 PLUGIN_LICENSE=     MIT
 
