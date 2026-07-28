@@ -42,10 +42,12 @@ Current phase:
 API and inherited-reference audit execution
 
 Current priority:
-Complete the service lifecycle and runtime audit, including required live tests and package-lifecycle inventory, before any lifecycle remediation.
+Live-verify the new lifecycle mutex, then continue the remaining lifecycle and
+package-lifecycle audit before broader remediation.
 
 Last completed:
-Documentation synchronization for the MVC/API audit block and actionable audit-record methodology.
+Implemented the common lockf-backed lifecycle serialization boundary for
+start, stop, restart, reconfigure, and runtime-failure (LIFE-009).
 
 Current work cycle:
 Investigate → verify → record audit evidence → update Engineering Memory → commit → continue or remediate.
@@ -248,6 +250,7 @@ Open lifecycle Findings:
 - LIFE-006 rc.d entry point lacks a project-owned zapret_enable source.
 - LIFE-007 PID checks do not verify process identity.
 - LIFE-008 supervisor stop escalates without checking exit.
+- LIFE-009 lifecycle serialization implemented; live verification pending.
 
 Open Architecture Debt:
 
@@ -257,8 +260,9 @@ Open Architecture Debt:
 
 Immediate next actions:
 
-1. Complete transactional reconfigure, rollback, firewall snapshot, atomic backup,
-   package lifecycle, and concurrent-entry audit.
-2. Run the LIFE-006 service/rcvar live tests.
-3. Record all remaining lifecycle evidence in AUDIT.md.
-4. Commit the completed lifecycle audit documentation before remediation.
+1. Run the focused LIFE-009 concurrency, stale-callback, forced-termination, and
+   non-blocking status live tests.
+2. Complete transactional reconfigure, rollback, firewall snapshot, atomic backup,
+   and package-lifecycle audit.
+3. Run the LIFE-006 service/rcvar live tests.
+4. Record all remaining lifecycle evidence before further remediation.

@@ -28,6 +28,9 @@ DVTWS_LOG="/var/log/zapret2/dvtws2.log"
 SUPERVISOR_LOG="/var/log/zapret2/supervisor.log"
 RULE_BASE=19000
 RULE_MAX=$((RULE_BASE + 10))
+LIFECYCLE_LOCK_FILE="/var/run/zapret2-lifecycle.lock"
+LIFECYCLE_LOCK_TIMEOUT=30
+LOCKF_BIN="/usr/bin/lockf"
 
 start_service()
 {
@@ -65,33 +68,80 @@ reconfigure_service()
         "${DVTWS_LOG}" "${SUPERVISOR_LOG}"
 }
 
+service_dispatch()
+{
+    case "${1:-}" in
+        start)
+            start_service
+            ;;
+        stop)
+            stop_service
+            ;;
+        restart)
+            reconfigure_service
+            ;;
+        status)
+            orchestrator_native_status \
+                "${CHILD_PIDFILE}" "${SUPERVISOR_MONITOR_PIDFILE}" \
+                "${RULE_BASE}" "${RULE_MAX}"
+            ;;
+        reconfigure)
+            reconfigure_service
+            ;;
+        runtime-failure)
+            orchestrator_runtime_failure \
+                "${CHILD_PIDFILE}" \
+                "${SUPERVISOR_DAEMON_PIDFILE}" "${SUPERVISOR_MONITOR_PIDFILE}" \
+                "${RULE_BASE}" "${RULE_MAX}" "${STAGE_FILE}" \
+                "${2:-dvtws2 runtime failure}"
+            ;;
+        *)
+            echo "usage: zapret_service.sh {start|stop|restart|status|reconfigure}" >&2
+            return 64
+            ;;
+    esac
+}
+
+service_with_lifecycle_lock()
+{
+    _service_lock_timeout="$1"
+    shift
+
+    [ -x "${LOCKF_BIN}" ] || {
+        echo "ERROR: required lock utility is missing: ${LOCKF_BIN}" >&2
+        return 1
+    }
+
+    (
+        if ! "${LOCKF_BIN}" -s -t "${_service_lock_timeout}" 9; then
+            return 75
+        fi
+        service_dispatch "$@"
+    ) 9>"${LIFECYCLE_LOCK_FILE}"
+}
+
 case "${1:-}" in
-    start)
-        start_service
-        ;;
-    stop)
-        stop_service
-        ;;
-    restart)
-        reconfigure_service
-        ;;
     status)
-        orchestrator_native_status \
-            "${CHILD_PIDFILE}" "${SUPERVISOR_MONITOR_PIDFILE}" \
-            "${RULE_BASE}" "${RULE_MAX}"
-        ;;
-    reconfigure)
-        reconfigure_service
+        service_dispatch "$@"
         ;;
     runtime-failure)
-        orchestrator_runtime_failure \
-            "${CHILD_PIDFILE}" \
-            "${SUPERVISOR_DAEMON_PIDFILE}" "${SUPERVISOR_MONITOR_PIDFILE}" \
-            "${RULE_BASE}" "${RULE_MAX}" "${STAGE_FILE}" \
-            "${2:-dvtws2 runtime failure}"
+        # A callback from the previous supervisor can arrive while stop or
+        # reconfigure already owns the runtime. Do not queue stale cleanup
+        # behind that operation and risk tearing down the replacement runtime.
+        service_with_lifecycle_lock 0 "$@"
+        _service_status=$?
+        [ "${_service_status}" -ne 75 ] || exit 0
+        exit "${_service_status}"
+        ;;
+    start|stop|restart|reconfigure)
+        service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
+        _service_status=$?
+        if [ "${_service_status}" -eq 75 ]; then
+            echo "ERROR: another zapret lifecycle operation is already running" >&2
+        fi
+        exit "${_service_status}"
         ;;
     *)
-        echo "usage: zapret_service.sh {start|stop|restart|status|reconfigure}" >&2
-        exit 1
+        service_dispatch "$@"
         ;;
 esac

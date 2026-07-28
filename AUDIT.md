@@ -1104,6 +1104,98 @@ Normal exits do not receive KILL; escalation is conditional, bounded, and identi
 Remediation status:
 Blocked by LIFE-007.
 
+--------------------------------------------------
+LIFE-009 — lifecycle operations were not serialized
+--------------------------------------------------
+
+Classification:
+broken / remediated in code / live verification required
+
+Location:
+src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+
+Affected entry points:
+
+- start
+- stop
+- restart
+- reconfigure
+- runtime-failure
+
+Unaffected read-only entry point:
+
+- status
+
+Damaged chain before remediation:
+
+GUI Apply, configd, syshook, rc.d, or supervisor callback
+        ↓
+independent zapret_service.sh processes
+        ↓
+concurrent mutation of runtime-v2, runtime backups, PID files,
+execution-stage state, supervisor state, and ipfw rules
+
+Evidence:
+The MVC Config::lock() protects only XML configuration mutation and is released
+before template reload and configctl reconfigure. No shell-level lock existed in
+the service wrapper or Backend v2. Unique candidate workspaces did not serialize
+atomic activation, process control, firewall changes, or supervisor cleanup.
+
+Impact:
+Concurrent lifecycle commands could stop a replacement process, remove newly
+installed firewall rules, overwrite execution-stage state, or race atomic
+activation and rollback. A queued runtime-failure callback from an old supervisor
+could also tear down a successfully replaced runtime.
+
+Approved remediation:
+
+1. Use one FreeBSD lockf-backed lifecycle mutex at
+   /var/run/zapret2-lifecycle.lock.
+2. Acquire it in zapret_service.sh, the common public lifecycle entry point.
+3. Serialize start, stop, restart, and reconfigure with a bounded 30-second wait.
+4. Keep status read-only and non-blocking.
+5. Make runtime-failure use an immediate try-lock. If another lifecycle operation
+   owns the lock, treat the callback as stale and do not queue cleanup behind the
+   active operation.
+6. Return EX_TEMPFAIL-compatible status 75 and a clear error when an interactive
+   lifecycle command cannot acquire the lock.
+
+Implementation:
+The service wrapper now opens the lock file on file descriptor 9 and uses
+/usr/bin/lockf against that descriptor. The kernel releases the lock when the
+owning shell exits; the lock-file pathname may remain without representing a
+stale lock.
+
+Verification plan:
+
+1. Run two reconfigure commands concurrently and confirm only one mutates runtime.
+2. Run stop while reconfigure holds the lock and confirm bounded waiting or the
+   documented busy error without partial cleanup.
+3. Trigger a runtime-failure callback while reconfigure or stop owns the lock and
+   confirm it exits without touching the replacement runtime.
+4. Kill the lock-owning process and confirm a later command acquires the lock.
+5. Confirm status remains responsive while another lifecycle command holds the lock.
+6. Confirm normal start, stop, restart, reconfigure, Apply, and supervisor-failure
+   behavior remains unchanged when there is no contention.
+
+Acceptance criteria:
+
+- At most one mutating lifecycle operation changes shared runtime state at a time.
+- A stale supervisor callback cannot tear down a replacement runtime.
+- Lock ownership is released automatically after normal exit, error, signal, or
+  forced termination.
+- status remains non-blocking.
+- Busy commands fail clearly and do not alter runtime, PID files, firewall rules,
+  backups, or stage state.
+
+Required documentation updates:
+AUDIT.md, ARCHITECTURE.md, DECISIONS.md, PROJECT_STATE.md, DEVLOG.md, and
+CHANGELOG.md.
+
+Remediation status:
+Implemented; focused live verification pending before the Finding is marked
+Resolved.
+
 ==================================================
 ARCHITECTURE DEBT
 ==================================================

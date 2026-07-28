@@ -395,3 +395,35 @@ CHANGELOG.md when user-visible or release-relevant
 
 Documentation-system changes are architectural changes and follow the same decision,
 implementation, verification, and synchronized-commit discipline as code architecture.
+
+==================================================
+LIFECYCLE SERIALIZATION
+==================================================
+
+All public mutating lifecycle operations converge on
+zapret_service.sh and share one FreeBSD lockf-backed mutex:
+
+/var/run/zapret2-lifecycle.lock
+
+Serialized operations:
+
+- start
+- stop
+- restart
+- reconfigure
+
+These commands wait up to 30 seconds for the current lifecycle owner and fail
+without changing runtime state when the lock remains busy.
+
+status is read-only and intentionally does not acquire the exclusive lock.
+
+runtime-failure is an internal supervisor callback and uses an immediate
+try-lock. When another lifecycle operation already owns the runtime, the callback
+is considered stale and exits without queued cleanup. This prevents an old
+supervisor callback from removing firewall rules or stopping a replacement
+process after reconfigure.
+
+The lock protects the combined mutation boundary, including active and backup
+runtime trees, process and supervisor PID files, execution-stage state, and
+plugin-owned ipfw rules. Candidate workspaces remain unique but are not treated
+as a substitute for lifecycle serialization.

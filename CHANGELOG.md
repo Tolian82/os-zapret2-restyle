@@ -57,6 +57,7 @@ The project starts its own version history at `0.1.0`.
 
 ### Fixed
 
+- Serialized mutating lifecycle operations with a FreeBSD lockf-backed mutex and prevented stale supervisor callbacks from tearing down replacement runtime state.
 - Invalid target data no longer stops a working dvtws2 service.
 - Failed target preparation now reports `failed` instead of remaining `running`.
 - Invalid values are no longer persisted before backend validation.

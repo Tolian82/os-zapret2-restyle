@@ -757,3 +757,45 @@ DECISIONS.md
 
 Status:
 Active
+
+
+==================================================
+2026-07-28 — MUTATING LIFECYCLE OPERATIONS USE ONE GLOBAL LOCK
+==================================================
+
+Decision:
+Serialize start, stop, restart, reconfigure, and runtime-failure through one
+FreeBSD lockf-backed mutex in zapret_service.sh. Keep status read-only and
+unlocked. Interactive lifecycle commands wait for a bounded interval;
+runtime-failure uses an immediate try-lock and ignores a callback that is stale
+because another lifecycle operation already owns the runtime.
+
+Reason:
+MVC configuration locking ends before backend execution, while all lifecycle
+entry points mutate shared runtime trees, backups, PID files, supervisor state,
+stage state, and ipfw rules. File-system atomic activation and unique candidate
+workspaces do not protect that combined state. Queuing an old supervisor callback
+behind reconfigure could tear down the replacement runtime.
+
+Consequences:
+
+- zapret_service.sh is the lifecycle serialization boundary.
+- At most one mutating lifecycle operation may own shared runtime state.
+- status remains responsive during long operations.
+- A busy interactive command returns a clear temporary-failure result without
+  modifying runtime state.
+- A runtime-failure callback that cannot acquire the lock immediately exits
+  without cleanup.
+- Focused concurrency and forced-termination live tests are required before
+  LIFE-009 is closed.
+
+Affected documents:
+ARCHITECTURE.md
+AUDIT.md
+DECISIONS.md
+PROJECT_STATE.md
+DEVLOG.md
+CHANGELOG.md
+
+Status:
+Active

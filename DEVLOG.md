@@ -246,3 +246,39 @@ Next:
   and concurrency audit.
 - Perform required live tests.
 - Commit the completed lifecycle audit documentation before remediation.
+
+
+==================================================
+2026-07-28 — LIFECYCLE MUTEX IMPLEMENTED (LIFE-009)
+==================================================
+
+Completed:
+
+- Confirmed that MVC Config::lock() does not cover template reload or backend
+  lifecycle execution.
+- Confirmed that start, stop, restart, reconfigure, and runtime-failure previously
+  had no common shell-level serialization boundary.
+- Added one /usr/bin/lockf-backed mutex in zapret_service.sh.
+- Serialized interactive mutating lifecycle commands with a bounded wait.
+- Kept status read-only and non-blocking.
+- Made runtime-failure use an immediate try-lock so an old supervisor callback
+  cannot queue behind reconfigure and tear down the replacement runtime.
+- Added a clear temporary-failure error for lock contention.
+- Updated architecture, audit, decision, state, and changelog records.
+
+Validation completed:
+
+- POSIX shell syntax check for zapret_service.sh.
+- Static verification that every public mutating service action passes through
+  the common lock boundary.
+
+Still required:
+
+- Focused live concurrency and forced-termination tests on OPNsense.
+- Normal start, stop, restart, reconfigure, Apply, status, and runtime-failure
+  regression tests.
+
+Next:
+
+Live-verify LIFE-009, then continue the remaining lifecycle and package-lifecycle
+analysis.
