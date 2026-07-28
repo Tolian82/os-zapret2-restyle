@@ -39,16 +39,16 @@ Development tree:
 /root/os-zapret2-restyle
 
 Current phase:
-API and inherited-reference audit planning
+API and inherited-reference audit execution
 
 Current priority:
-Record the audit plan, then execute the API and inherited-reference audit.
+Document the completed MVC, GUI API, ACL, Menu, and configd audit block, then audit service lifecycle and runtime hooks.
 
 Last completed:
-Engineering Memory System foundation and documentation structure.
+Static audit block for MVC, GUI API, ACL, Menu, and configd interfaces.
 
 Current work cycle:
-Plan → record plan → implement → record discoveries → complete stage → record results.
+Investigate → verify → record audit evidence → update Engineering Memory → commit → continue or remediate.
 
 Known blockers:
 None.
@@ -112,37 +112,45 @@ Confirmed live behavior:
 CURRENT PRIORITY
 ==================================================
 
-Finish the engineering memory foundation.
+Complete and preserve the API and inherited-reference audit before remediation.
 
-Required documents:
+Completed static audit block:
 
-1. INDEX.md
-2. PROJECT_STATE.md
-3. DECISIONS.md
-4. WORKING_CONVENTIONS.md
-5. DEVELOPMENT_GUIDE.md
-6. ARCHITECTURE.md
-7. DEVLOG.md
-8. ROADMAP.md
-9. REQUIREMENTS.md
+- GUI settings and diagnostics entry points.
+- Menu and ACL scope.
+- MVC page routes.
+- GUI API calls.
+- API controller to configd action mapping.
+- Configd action existence for start, stop, restart, reconfigure, status,
+  blockcheck, and testdomain.
 
-After that, perform the complete API and inherited-reference audit.
+Documented findings:
+
+- Duplicate diagnostics page controller route requires live verification.
+- Settings help text still refers to removed HTTP and HTTPS strategy fields.
+- Diagnostics text still refers to the removed HTTPS Strategy field.
+- Blockcheck timeout chain is inconsistent: browser and configd use 600 seconds,
+  PHP waits 650 seconds, and blockcheck.sh allows 1500 seconds.
+- The service reconfigure API endpoint is not called by the current GUI and
+  requires classification by live or external-interface testing.
+
+The authoritative detailed audit record is AUDIT.md.
 
 ==================================================
 NEXT ACTIONS
 ==================================================
 
-1. Commit INDEX.md, PROJECT_STATE.md, and DECISIONS.md as one documentation-system change.
-2. Add WORKING_CONVENTIONS.md.
-3. Add DEVELOPMENT_GUIDE.md.
-4. Update ARCHITECTURE.md to contain architecture only.
-5. Update DEVLOG.md with the documentation-system decisions.
-6. Convert ROADMAP.md into ordered implementation stages.
-7. Update README.md with the engineering memory entry point.
-8. Begin the static API and inherited-reference inventory.
-9. Test active interfaces on the installed OPNsense system.
-10. Fix confirmed issues as separate logical commits.
-11. Resume the Traffic Strategy structural validator after the audit.
+1. Commit AUDIT.md and all synchronized Engineering Memory updates.
+2. Audit service lifecycle, rc.d scripts, syshooks, plugin hooks, supervisor, and
+   watchdog behavior.
+3. Record every verified chain, overlap, broken path, and required live test in
+   AUDIT.md before changing code.
+4. Continue with backend, runtime paths, packaging, setup, build, CI, release,
+   external URL, and diagnostics audits.
+5. Run focused live tests for items marked requires live test.
+6. Fix only confirmed issues as separate logical commits.
+7. Update AUDIT.md after each remediation and verification.
+8. Resume the Traffic Strategy structural validator after the complete audit.
 
 ==================================================
 CURRENT AUDIT SCOPE

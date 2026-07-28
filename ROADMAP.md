@@ -27,11 +27,11 @@ API and inherited-reference audit
 
 Working cycle:
 
-[ ] Record the stage plan
+[x] Record the stage plan
 [ ] Perform the stage
-[ ] Record discoveries and approved concepts
-[ ] Record completed work and verification
-[ ] Record remaining work and the next stage
+[x] Record discoveries and approved concepts for the completed MVC/API block
+[x] Record completed MVC/API work and verification
+[x] Record remaining work and the next audit block
 
 ==================================================
 STAGE 1 — VERSION 0.1.0 FOUNDATION
@@ -54,11 +54,11 @@ STAGE 2 — API AND INHERITED-REFERENCE AUDIT
 
 [x] Record audit objective and scope
 [x] Record Engineering Memory work cycle
-[ ] Inventory GUI JavaScript API calls
-[ ] Inventory MVC API URLs
-[ ] Inventory controller actions
+[x] Inventory GUI JavaScript API calls
+[x] Inventory MVC API URLs
+[x] Inventory controller actions
 [ ] Inventory model operations and configuration paths
-[ ] Inventory configd actions
+[x] Inventory configd actions
 [ ] Inventory shell entry points and backend functions
 [ ] Inventory rc scripts, syshooks, and plugin hooks
 [ ] Inventory filesystem and generated-template paths
@@ -66,6 +66,7 @@ STAGE 2 — API AND INHERITED-REFERENCE AUDIT
 [ ] Inventory setup, build, CI, and release logic
 [ ] Inventory external repositories, URLs, and downloads
 [ ] Classify every inherited reference
+[x] Create AUDIT.md and record verified and broken interface chains
 [ ] Remove only confirmed obsolete dependencies
 [ ] Run live API and lifecycle tests
 

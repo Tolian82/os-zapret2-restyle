@@ -81,6 +81,58 @@ Firewall
 Supervisor
 
 ==================================================
+CONFIRMED GUI-TO-RUNTIME INTERFACES
+==================================================
+
+Settings Apply:
+
+/ui/zapret
+        ↓
+IndexController::indexAction()
+        ↓
+general.volt
+        ↓
+/api/zapret/settings/get and /api/zapret/settings/apply
+        ↓
+OPNsense/Zapret template reload
+        ↓
+configctl zapret reconfigure
+        ↓
+zapret_service.sh
+        ↓
+Backend v2 candidate build, validation, activation, and lifecycle
+
+Diagnostics — domain test:
+
+/ui/zapret/diagnostics
+        ↓
+IndexController::diagnosticsAction()
+        ↓
+diagnostics.volt
+        ↓
+/api/zapret/diagnostics/testdomain
+        ↓
+configctl zapret testdomain
+        ↓
+test_domain.sh
+
+Diagnostics — blockcheck:
+
+/ui/zapret/diagnostics
+        ↓
+IndexController::diagnosticsAction()
+        ↓
+diagnostics.volt
+        ↓
+/api/zapret/diagnostics/blockcheck
+        ↓
+configctl zapret blockcheck
+        ↓
+blockcheck.sh
+
+Audit classifications and broken-chain details are maintained in AUDIT.md.
+
+==================================================
 ENTRY POINTS
 ==================================================
 

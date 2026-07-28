@@ -159,3 +159,33 @@ KNOWN CAUTIONS
 - Give commands strictly in execution order.
 - Do not guess OPNsense HTML or CSS structure.
 - The field-width experiment was reverted and remains out of scope.
+
+
+==================================================
+2026-07-28 — AUDIT SYSTEM AND MVC/API AUDIT BLOCK
+==================================================
+
+Completed:
+
+- Added AUDIT.md as the authoritative technical audit register.
+- Made documentation-system changes explicit architectural changes.
+- Required every approved rule to be recorded in project documentation.
+- Required broken chains to be documented before remediation.
+- Required each completed audit step to be documented before continuing.
+- Mapped the settings and diagnostics GUI-to-configd chains.
+- Verified Menu and ACL namespace alignment.
+- Verified that GUI-referenced configd actions exist.
+
+Findings recorded in AUDIT.md:
+
+- Duplicate diagnostics page controller route.
+- Obsolete HTTP/HTTPS Strategy field references in settings help text.
+- Obsolete HTTPS Strategy references in diagnostics output and guidance.
+- Inconsistent blockcheck timeout chain.
+- Service reconfigure API endpoint not called by the current GUI and requiring
+  further interface testing.
+
+Next:
+
+- Audit service lifecycle, rc.d, syshooks, plugin hooks, supervisor, watchdog,
+  and possible lifecycle overlap.

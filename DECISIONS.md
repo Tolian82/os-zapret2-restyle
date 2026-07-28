@@ -559,3 +559,92 @@ For every newly approved concept:
 3. Update every affected specialist document.
 4. Include all related changes in the same logical commit.
 5. Mark older decisions as superseded instead of silently deleting history.
+
+
+==================================================
+2026-07-28 — AUDIT.MD IS AN OFFICIAL ENGINEERING MEMORY DOCUMENT
+==================================================
+
+Decision:
+Add AUDIT.md as the authoritative register of technical audit state.
+
+Reason:
+Audit evidence, verified chains, broken chains, classifications, live-test
+requirements, and remediation status must not exist only in chat history or be
+spread across current-state and history documents.
+
+Consequences:
+Every completed audit step is recorded in AUDIT.md. Broken chains are recorded
+before remediation. After a fix and verification, the existing entry is updated
+with the new status and evidence rather than silently removed.
+
+Affected documents:
+INDEX.md
+PROJECT_STATE.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+ARCHITECTURE.md
+DEVLOG.md
+ROADMAP.md
+AUDIT.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — DOCUMENTATION-SYSTEM CHANGES ARE ARCHITECTURAL CHANGES
+==================================================
+
+Decision:
+Changes to document structure, responsibilities, reading order, audit method,
+development workflow, decision recording, and documentation-maintenance rules
+are architectural changes.
+
+Reason:
+The Engineering Memory System controls how project state, decisions, evidence,
+and future work are reconstructed. Changing that system changes the engineering
+architecture of the project itself.
+
+Consequences:
+Such changes require a DECISIONS.md entry, synchronized updates to every affected
+specialist document, review in the same logical commit, and explicit reflection
+in current state and development history when applicable.
+
+Affected documents:
+INDEX.md
+PROJECT_STATE.md
+DECISIONS.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+DEVLOG.md
+ROADMAP.md
+AUDIT.md
+
+Status:
+Active
+
+==================================================
+2026-07-28 — EVERY APPROVED RULE MUST BE DOCUMENTED
+==================================================
+
+Decision:
+Every approved project rule must be recorded in DECISIONS.md and in the
+applicable specialist documents.
+
+Reason:
+A rule that exists only in discussion cannot be reliably recovered, audited, or
+enforced in later work.
+
+Consequences:
+No approved rule is considered active project memory until the related
+documentation is updated. Rule changes are committed together with all affected
+documents.
+
+Affected documents:
+DECISIONS.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+INDEX.md
+
+Status:
+Active

@@ -61,6 +61,8 @@ ENGINEERING PRINCIPLES
 - Do not remove inherited references mechanically.
 - Audit before refactoring.
 - Documentation is part of the project architecture.
+- Changes to the documentation system are architectural changes.
+- Every approved rule must be recorded in the applicable project documents.
 
 ==================================================
 AUDIT RULES
@@ -78,6 +80,15 @@ inherited
 requires live test
 
 The word "zapret" alone is not evidence of obsolete inheritance.
+
+AUDIT.md is the authoritative register for audit scope, verified chains, broken
+chains, classifications, live-test requirements, and remediation status.
+
+A completed audit step must be documented before work proceeds to the next audit
+step or to code changes.
+
+A broken chain must be recorded before it is fixed. After verification, its audit
+status must be updated rather than silently removed.
 
 ==================================================
 PATCH RULES
@@ -128,8 +139,13 @@ DOCUMENT SYNCHRONIZATION
 
 Code and affected documentation belong in the same logical commit.
 
-Approved concepts must be recorded in DECISIONS.md and reflected in the
-appropriate specialist document.
+Approved concepts and rules must be recorded in DECISIONS.md and reflected in
+the appropriate specialist documents.
+
+Changes to document structure, document responsibilities, reading order, audit
+method, development workflow, or documentation-maintenance rules are
+architectural changes. They require a decision entry and synchronized updates to
+all affected documents in the same logical commit.
 
 ==================================================
 ENGINEERING MEMORY WORKFLOW

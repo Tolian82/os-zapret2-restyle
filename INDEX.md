@@ -34,13 +34,14 @@ Read the documents in this exact order:
 
 1. INDEX.md
 2. PROJECT_STATE.md
-3. DECISIONS.md
-4. WORKING_CONVENTIONS.md
-5. DEVELOPMENT_GUIDE.md
-6. ARCHITECTURE.md
-7. DEVLOG.md
-8. ROADMAP.md
-9. REQUIREMENTS.md
+3. AUDIT.md
+4. DECISIONS.md
+5. WORKING_CONVENTIONS.md
+6. DEVELOPMENT_GUIDE.md
+7. ARCHITECTURE.md
+8. DEVLOG.md
+9. ROADMAP.md
+10. REQUIREMENTS.md
 
 ==================================================
 DOCUMENT MAP
@@ -70,6 +71,22 @@ immediate next actions.
 
 Does not contain:
 Decision history, permanent rules, detailed workflow, or full architecture.
+
+--------------------------------------------------
+
+
+AUDIT.md
+
+Question answered:
+What has been checked, what is broken, and what still requires verification?
+
+Contains:
+Audit scope, verified interface chains, classifications, broken chains, live-test
+requirements, remediation status, and remaining audit work.
+
+Does not contain:
+Decision rationale, permanent rules, detailed development procedures, or general
+history.
 
 --------------------------------------------------
 
@@ -238,7 +255,10 @@ Present:
 
 INDEX.md
 PROJECT_STATE.md
+AUDIT.md
 DECISIONS.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
 ARCHITECTURE.md
 DEVLOG.md
 ROADMAP.md
@@ -249,15 +269,4 @@ CONTRIBUTING.md
 SECURITY.md
 NOTICE
 
-Planned next:
-
-WORKING_CONVENTIONS.md
-DEVELOPMENT_GUIDE.md
-
-Existing documents still requiring role cleanup:
-
-ARCHITECTURE.md
-DEVLOG.md
-ROADMAP.md
-REQUIREMENTS.md
-README.md
+All required Engineering Memory documents are present.
