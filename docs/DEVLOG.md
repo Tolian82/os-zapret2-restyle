@@ -605,3 +605,17 @@ make repository signing mandatory before stable-release promotion.
 Next:
 Review the release diff, run validation, commit the release preparation, push
 main, verify CI, and create the immutable v0.2.0 tag.
+
+==================================================
+2026-07-29 — PKG REPOSITORY URL CORRECTION
+==================================================
+
+Live verification of v0.2.0 found that `pkg+https://` caused pkg
+to interpret the GitHub Pages repository as an SRV mirror.
+
+Changing the URL to ordinary `https://` allowed OPNsense to update the
+Zapret2Restyle catalogue successfully and expose
+`os-zapret2-restyle 0.2.0_1`.
+
+The source configuration was corrected and VERSION advanced to 0.2.1.
+The immutable v0.2.0 tag remains unchanged.

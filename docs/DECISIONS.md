@@ -1323,3 +1323,24 @@ docs/DEVLOG.md
 docs/PROJECT_STATE.md
 docs/REQUIREMENTS.md
 docs/ROADMAP.md
+
+==================================================
+2026-07-29 — STATIC PKG REPOSITORY USES ORDINARY HTTPS
+==================================================
+
+Status:
+Approved
+
+Decision:
+The GitHub Pages pkg repository configuration must use ordinary
+`https://`.
+
+Reason:
+`pkg+https://` enables SRV mirror handling and fails for this static
+GitHub Pages repository.
+
+Consequences:
+- `repository/zapret2-restyle.conf` uses ordinary HTTPS.
+- `signature_type: "none"` remains unchanged.
+- The correction is published as v0.2.1.
+- The immutable v0.2.0 release is not modified.

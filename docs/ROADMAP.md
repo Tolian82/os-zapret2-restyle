@@ -314,3 +314,19 @@ Acceptance criteria:
 - repository configuration explicitly uses `signature_type: "none"`;
 - the plugin is installable or upgradeable through the OPNsense Firmware GUI;
 - the installed GUI and runtime pipeline pass live verification.
+
+==================================================
+Corrective release v0.2.1
+==================================================
+
+Scope:
+- Publish the corrected ordinary-HTTPS repository configuration.
+- Preserve immutable release v0.2.0.
+- Keep `PLUGIN_REVISION=1`.
+- Verify clean repository registration on OPNsense.
+
+Completion criteria:
+- CI and Release workflows succeed.
+- Published configuration contains ordinary `https://`.
+- OPNsense updates the catalogue without manual correction.
+- Package `0.2.1_1` is visible through Zapret2Restyle.

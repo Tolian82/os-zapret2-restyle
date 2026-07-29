@@ -27,7 +27,7 @@ Project:
 os-zapret2-restyle
 
 Current version:
-0.2.0
+0.2.1
 
 Current branch:
 main
@@ -450,3 +450,27 @@ Immediate next actions:
 7. Register the repository on the target OPNsense system.
 8. Install or upgrade os-zapret2-restyle through Firmware > Plugins.
 9. Record live installation and runtime verification results.
+
+==================================================
+RELEASE 0.2.1 CORRECTION — 2026-07-29
+==================================================
+
+Current release:
+0.2.1
+
+Package revision:
+1
+
+Expected package version:
+0.2.1_1
+
+Completed:
+- Published and verified immutable release v0.2.0.
+- Confirmed successful CI and Release workflows.
+- Reproduced the repository update failure on OPNsense.
+- Identified `pkg+https://` as incorrect SRV mirror syntax.
+- Verified successful catalogue update with ordinary `https://`.
+- Corrected the repository configuration source.
+
+Next:
+- Validate and publish corrective release v0.2.1.

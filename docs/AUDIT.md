@@ -1710,3 +1710,22 @@ Verification criteria:
 3. pkg update succeeds after repository registration;
 4. the package is visible from repository `Zapret2Restyle`;
 5. no configuration claims that pubkey or fingerprints validation is active.
+
+==================================================
+PKG-004 — GitHub Pages repository URL scheme
+==================================================
+
+Classification:
+Fixed and live verified.
+
+Finding:
+The v0.2.0 client configuration used `pkg+https://`, causing repository
+metadata downloads to fail because pkg selected SRV mirror mode.
+
+Verification:
+After changing the URL to ordinary `https://`, OPNsense processed one
+repository package and returned `os-zapret2-restyle 0.2.0_1` from
+Zapret2Restyle.
+
+Remediation:
+Publish the corrected configuration in v0.2.1.

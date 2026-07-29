@@ -6,6 +6,16 @@ All notable changes to this project are documented in this file.
 
 The project starts its own version history at `0.1.0`.
 
+## [0.2.1] - 2026-07-29
+
+### Fixed
+
+- Corrected the pkg repository URL from `pkg+https://` to ordinary
+  `https://`.
+- Fixed repository catalogue updates on OPNsense.
+- Preserved `signature_type: "none"` and the `FreeBSD:15:amd64`
+  repository target.
+
 ## [0.2.0] - 2026-07-29
 
 ### Added
