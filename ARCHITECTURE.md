@@ -460,3 +460,11 @@ runs setup.sh under the existing lifecycle lock, verifies the binary, and only t
 continues service startup. Subsequent starts do not repeat setup while the binary
 exists. Start, restart, and reconfigure configd actions allow enough time for the
 one-time dependency installation and compilation.
+
+## Release transport separation
+
+The pkg repository uses the native `pages/${ABI}` layout. GitHub Pages receives the
+complete `pages/` tree through the official Pages artifact action, which first
+archives it. GitHub Release receives only the flat `release-assets/` directory with
+the package and SHA256SUMS. Generic artifact filesystem restrictions therefore do
+not alter the public pkg URL contract.

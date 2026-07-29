@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -58,7 +58,7 @@ jobs:
     needs: validate
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -100,13 +100,20 @@ jobs:
           test -f "pages/FreeBSD:15:amd64/SHA256SUMS"
           test -f "pages/zapret2-restyle.conf"
 
+      - name: Stage release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf release-assets
+          mkdir -p release-assets
+          cp "dist/${{ steps.release.outputs.asset }}" release-assets/
+          cp "pages/FreeBSD:15:amd64/SHA256SUMS" release-assets/
+
       - name: Upload release build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-build
-          path: |
-            dist/${{ steps.release.outputs.asset }}
-            pages/FreeBSD:15:amd64/SHA256SUMS
+          path: release-assets
           if-no-files-found: error
 
       - name: Upload GitHub Pages artifact
@@ -120,7 +127,7 @@ jobs:
     needs: build
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-build
           path: release-build
@@ -129,8 +136,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-build/dist/*.pkg
-            release-build/pages/FreeBSD:15:amd64/SHA256SUMS
+            release-build/*.pkg
+            release-build/SHA256SUMS
           draft: false
           prerelease: true
           generate_release_notes: true

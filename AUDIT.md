@@ -1536,3 +1536,38 @@ Closure criteria:
 A later release workflow signs repository metadata, the client configuration verifies
 the approved public key or fingerprint, and live update testing succeeds with
 signature verification enabled.
+
+==================================================
+PKG-006 — GENERIC ACTIONS ARTIFACT REJECTED THE NATIVE FREEBSD ABI PATH
+==================================================
+
+Status:
+Remediated in source; live workflow verification pending.
+
+Finding:
+The first v0.1.0 workflow built the package and repository successfully, but the
+`actions/upload-artifact` transfer failed because the release artifact included
+`pages/FreeBSD:15:amd64/SHA256SUMS`. Generic Actions artifacts reject colon
+characters in uploaded path names for cross-platform filesystem compatibility.
+The native FreeBSD ABI path itself is valid and conventional for pkg.
+
+External-practice review:
+Established third-party OPNsense repositories retain `${ABI}` in client URLs and
+publish paths such as `FreeBSD:15:amd64`. GitHub Pages is also a common host. The
+official Pages upload action archives the site into one tar file before generic
+artifact upload, so ABI-qualified names remain inside the archive.
+
+Decision:
+Keep `pages/FreeBSD:15:amd64` unchanged for pkg and GitHub Pages. Copy only the
+package and SHA256SUMS into a flat `release-assets` staging directory for the
+generic release artifact.
+
+Implementation:
+- Added explicit release-assets staging.
+- Removed ABI-qualified paths from the generic artifact transfer.
+- Retained the native ABI directory in the Pages repository.
+- Updated checkout/upload/download actions to Node.js 24-capable major versions.
+
+Closure criteria:
+A repeated v0.1.0 workflow must upload both artifacts, create the prerelease, deploy
+Pages, and expose a pkg-consumable `FreeBSD:15:amd64` repository path.

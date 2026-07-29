@@ -88,3 +88,8 @@ Release infrastructure preflight:
 - updated GitHub Pages artifact upload action;
 - documented repository registration and GUI installation;
 - explicitly marked the v0.1.0 prerelease repository as unsigned.
+
+- Fixed the first-release CI failure caused by passing `FreeBSD:15:amd64` through
+  the generic GitHub Actions artifact uploader.
+- Preserved the native pkg ABI path while staging GitHub Release assets separately.
+- Updated checkout and generic artifact actions to Node.js 24-capable versions.

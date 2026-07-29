@@ -345,3 +345,10 @@ normal Firmware GUI installation path.
 Immediate next action:
 Commit this focused pre-tag correction, push main, confirm a clean repository, and
 then create tag v0.1.0 for live workflow verification.
+
+## First v0.1.0 workflow audit result
+
+Validation and FreeBSD build succeeded. Publication stopped when the generic artifact
+uploader rejected the colon in `FreeBSD:15:amd64`. The prepared fix preserves the
+native pkg path, adds flat release-assets staging, and updates affected actions to
+Node.js 24-capable versions. Next: commit, retag v0.1.0, and repeat the release audit.

@@ -457,3 +457,10 @@ format. Corrected validation to require `meta.conf`, `data.pkg`, and
 `packagesite.pkg`; updated the Pages artifact action; made the unsigned prerelease
 configuration explicit; and added the one-time repository registration procedure to
 README. No tag was created during this audit.
+
+## 2026-07-29 — First release-run audit: artifact path portability
+
+The v0.1.0 workflow completed validation and the FreeBSD build, then stopped because
+the generic artifact uploader rejected the colon in `FreeBSD:15:amd64`. Reviewed
+established OPNsense repository layouts and the official Pages artifact action.
+Preserved native `${ABI}` paths and added a flat release-assets staging boundary.

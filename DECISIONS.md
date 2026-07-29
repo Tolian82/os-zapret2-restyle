@@ -1015,3 +1015,22 @@ Consequences:
 Affected documents:
 .github/workflows/release.yml, repository/zapret2-restyle.conf, README.md, AUDIT.md,
 PROJECT_STATE.md, ROADMAP.md, DEVLOG.md, CHANGELOG.md.
+
+## 2026-07-29 — Separate native pkg paths from generic CI artifact paths
+
+Decision:
+The published pkg repository keeps the conventional `${ABI}` directory name,
+including colons. Generic GitHub Actions artifacts use a separate flat staging
+directory. GitHub Pages continues through the official Pages artifact action, which
+archives the complete site before uploading it.
+
+Reason:
+FreeBSD pkg clients and established OPNsense community repositories use native ABI
+paths, while the generic artifact service rejects colons for cross-platform
+filesystem compatibility.
+
+Consequences:
+- no nonstandard ABI renaming is introduced;
+- GitHub Release receives files from `release-assets`;
+- GitHub Pages receives the complete native pkg repository tree;
+- official workflow actions track supported Node.js runtimes.

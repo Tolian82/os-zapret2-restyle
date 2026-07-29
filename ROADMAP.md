@@ -193,3 +193,12 @@ Milestone 6 final pre-tag audit:
 [x] Make the unsigned prerelease repository state explicit.
 [ ] Live-verify repository generation and Pages publication from tag v0.1.0.
 [ ] Add repository signing before stable-release promotion.
+
+### Milestone 6 live release audit — current step
+
+- [x] Trigger first v0.1.0 workflow.
+- [x] Capture artifact failure on native ABI path.
+- [x] Review established OPNsense layouts and official Pages packaging.
+- [x] Design transport separation without renaming `${ABI}`.
+- [ ] Commit remediation and retag v0.1.0.
+- [ ] Verify Release, Pages, pkg update, and GUI installation.
