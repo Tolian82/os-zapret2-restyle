@@ -269,3 +269,31 @@ Immediate next actions:
    in a separate focused commit.
 4. Continue transactional reconfigure, rollback, firewall snapshot, atomic backup,
    rc.d, and package-lifecycle audit.
+
+
+==================================================
+CURRENT PACKAGE AND RELEASE DIRECTION — 2026-07-29
+==================================================
+
+Approved:
+
+- Project-owned pkg repository on GitHub Pages.
+- GitHub Release assets and checksums.
+- Initial ABI target FreeBSD:15:amd64 / supported OPNsense 26.7.
+- Standard OPNsense Firmware GUI installation and updates.
+- No manual SSH setup step for normal users.
+- Automatic one-time runtime bootstrap on first GUI Apply or Start.
+- Separate command blocks for checks and installation.
+
+Implemented in the current package-lifecycle change:
+
+- missing dvtws2 triggers setup.sh before lifecycle startup;
+- setup remains outside pkg post-install to avoid nested pkg operations;
+- lifecycle action timeouts allow the initial compilation;
+- package message no longer instructs manual setup.
+
+Next priority:
+
+1. Live-verify PKG-001 with a package reinstall and first GUI Apply.
+2. Implement GitHub Pages pkg-repository publication and the first v0.1.0 test release.
+3. Verify GUI repository installation and removal of unknown-repository status.

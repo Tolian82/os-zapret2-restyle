@@ -140,12 +140,19 @@ Valid values are normalized, saved, activated, and reloaded into the form.
 INSTALLATION
 ==================================================
 
-Version 0.1.0 is under active development.
+Version 0.1.0 is being prepared as the first public test release.
 
-It is not yet published as a stable OPNsense Package Manager release.
+The supported distribution model is a project-owned FreeBSD pkg repository
+published through GitHub Pages for FreeBSD:15:amd64 / supported OPNsense 26.7
+systems. Package assets and checksums are also published in GitHub Releases.
 
-Package build and installation instructions will be added before the first
-public test release.
+Normal installation and updates are performed through the OPNsense Firmware GUI.
+No manual setup.sh command is required: after the plugin is configured, the first
+Apply or Start automatically installs the required runtime dependencies, downloads
+zapret2, compiles dvtws2, verifies it, and starts the service. Internet access is
+required for this one-time bootstrap.
+
+Repository connection instructions will be published with the v0.1.0 test release.
 
 ==================================================
 ENGINEERING MEMORY

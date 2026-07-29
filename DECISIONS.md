@@ -881,3 +881,73 @@ CHANGELOG.md
 
 Status:
 Active
+
+
+==================================================
+2026-07-29 — OWN PKG REPOSITORY AND GUI-FIRST INSTALLATION
+==================================================
+
+Decision:
+Publish os-zapret2-restyle through a project-owned FreeBSD pkg repository on GitHub
+Pages, with GitHub Releases carrying package assets and checksums. The first public
+test release targets FreeBSD:15:amd64 / supported OPNsense 26.7 systems. Installation
+and later updates must be available through the standard OPNsense Firmware GUI.
+
+The package must not require the user to run setup.sh over SSH. Runtime bootstrap is
+performed automatically on the first configd Start or Apply when dvtws2 is absent.
+Do not invoke setup.sh from the pkg post-install hook because setup.sh performs pkg
+operations and a maintainer script runs while the package transaction owns the pkg
+database lock.
+
+Reason:
+A locally added standalone package appears as unknown-repository/misconfigured and
+cannot participate cleanly in normal GUI updates. A GUI-installed plugin also must
+not leave a manual shell-only completion step. Deferring bootstrap to the first
+normal lifecycle action avoids a nested package-manager transaction while preserving
+a complete GUI workflow.
+
+Consequences:
+
+- GitHub Pages repository metadata is generated with pkg repo.
+- GitHub Release and repository publication are part of the release pipeline.
+- The first repository ABI is FreeBSD:15:amd64.
+- start/restart/reconfigure receive a 600-second configd timeout.
+- missing runtime triggers setup once under the lifecycle mutex.
+- package post-install instructions no longer require a manual setup command.
+- runtime updates after initial installation remain a separate Maintenance design.
+
+Affected documents:
+ARCHITECTURE.md
+AUDIT.md
+DECISIONS.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+PROJECT_STATE.md
+DEVLOG.md
+ROADMAP.md
+README.md
+CHANGELOG.md
+
+Status:
+Active
+
+
+==================================================
+2026-07-29 — OPERATIONAL COMMANDS USE SEPARATE BLOCKS
+==================================================
+
+Decision:
+User-facing development instructions separate read-only checks from state-changing
+installation actions. Package publication and installation may be grouped together,
+but not with validation. Commands remain in real execution order and account for the
+default OPNsense csh root shell.
+
+Reason:
+This reduces copy/paste interruptions, prevents accidental mutation during validation,
+and saves repeated test time.
+
+Consequences:
+WORKING_CONVENTIONS.md and DEVELOPMENT_GUIDE.md define the permanent format.
+
+Status:
+Active

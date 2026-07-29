@@ -219,3 +219,23 @@ required implementation, verification, and synchronized documentation.
 
 A Finding must not be remediated while an open Architecture Debt item determines its
 intended behavior.
+
+
+==================================================
+COMMAND BLOCK SEPARATION
+==================================================
+
+Operational instructions must separate read-only validation from state-changing
+actions. Do not combine them in one shell block.
+
+Use these headings and responsibilities:
+
+- Checks and other: status inspection, dry runs, git apply --check, syntax checks,
+  diff review, staging, and staged-diff validation.
+- Installation: git apply, commit, push, package build or installation, service
+  restart, and other commands that change repository or system state.
+
+Keep package publication and installation commands together where possible, but
+never mix them with the preceding validation block. Commands must remain in actual
+execution order and must be valid for the OPNsense root shell or explicitly invoke
+/bin/sh when POSIX shell syntax is required.

@@ -1389,3 +1389,71 @@ supervisor restart, reconfigure, configuration-generation, or repair ownership.
 Closure criteria:
 Architecture diagram updated; watchdog removal and later focused health checks pass
 failure-path tests; only one component owns each responsibility.
+
+
+==================================================
+PKG-001 — MANUAL RUNTIME SETUP BREAKS GUI-ONLY INSTALLATION
+==================================================
+
+Classification:
+Finding
+
+Evidence:
+The installed package post-install message required the user to execute
+/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh manually. Without that command,
+dvtws2 was absent and the service could not start. The package was otherwise visible
+in the OPNsense GUI.
+
+Impact:
+Installation from Firmware > Plugins is incomplete without SSH access and cannot be
+considered a normal OPNsense plugin installation.
+
+Remediation:
+When dvtws2 is missing, start and reconfigure automatically run setup.sh under the
+existing lifecycle lock, verify the resulting binary, and continue. Increase configd
+timeouts for lifecycle actions that may perform the one-time bootstrap. Do not run
+setup.sh inside the pkg post-install transaction.
+
+Acceptance criteria:
+
+1. Install the package without running setup.sh manually.
+2. Configure and Apply through the GUI.
+3. Confirm setup runs automatically and dvtws2 is created.
+4. Confirm the service starts and supervisor monitors it.
+5. Confirm a later restart does not repeat setup while dvtws2 exists.
+6. Confirm setup failure is reported and service startup does not continue.
+
+Affected documents:
+ARCHITECTURE.md, AUDIT.md, DECISIONS.md, PROJECT_STATE.md, DEVLOG.md, ROADMAP.md,
+README.md, CHANGELOG.md
+
+Remediation status:
+Implemented; live verification required.
+
+
+==================================================
+PKG-002 — STANDALONE PACKAGE HAS NO MANAGED REPOSITORY
+==================================================
+
+Classification:
+Finding
+
+Evidence:
+Firmware > Plugins displayed os-zapret2-restyle as misconfigured with repository
+unknown-repository after local pkg add installation.
+
+Impact:
+The package cannot be installed or updated normally through the OPNsense GUI and its
+origin cannot be reconciled with enabled repository metadata.
+
+Remediation plan:
+Publish a FreeBSD:15:amd64 pkg repository through GitHub Pages, generate metadata with
+pkg repo, publish package assets and checksums through GitHub Releases, and provide a
+repository configuration file.
+
+Acceptance criteria:
+The repository can be added once, pkg update succeeds, the plugin is listed from the
+project repository in the GUI, and install/update completes through Firmware.
+
+Remediation status:
+Decision approved; implementation pending in the release-infrastructure commit.

@@ -22,14 +22,13 @@ os-zapret2-restyle installed.
 
 Next steps:
 
-  1. Install the zapret2 runtime components:
+  1. Open Services > Zapret DPI Bypass in the OPNsense GUI.
 
-       /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh
-
-  2. Open Services > Zapret DPI Bypass in the OPNsense GUI.
-
-  3. Enable the service, select the WAN interface, configure
+  2. Enable the service, select the WAN interface, configure
      Traffic Strategy and Targets, then click Apply.
+
+The first GUI start automatically installs and compiles the zapret2 runtime
+when it is not already present. No SSH setup command is required.
 
 The internal OPNsense service name remains: zapret
 ================================================================

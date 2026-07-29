@@ -26,14 +26,37 @@ SUPERVISOR_LOOP="${SCRIPT_DIR}/supervisor_loop.sh"
 STAGE_FILE="/var/run/zapret2-execution.status"
 DVTWS_LOG="/var/log/zapret2/dvtws2.log"
 SUPERVISOR_LOG="/var/log/zapret2/supervisor.log"
+SETUP_SCRIPT="${SCRIPT_DIR}/setup.sh"
 RULE_BASE=19000
 RULE_MAX=$((RULE_BASE + 10))
 LIFECYCLE_LOCK_FILE="/var/run/zapret2-lifecycle.lock"
 LIFECYCLE_LOCK_TIMEOUT=30
 LOCKF_BIN="/usr/bin/lockf"
 
+ensure_runtime_components()
+{
+    [ -x "${DVTWS_BIN}" ] && return 0
+
+    [ -x "${SETUP_SCRIPT}" ] || {
+        echo "ERROR: runtime setup script is missing: ${SETUP_SCRIPT}" >&2
+        return 1
+    }
+
+    echo "zapret2 runtime is not installed; starting automatic setup"
+    "${SETUP_SCRIPT}" || {
+        echo "ERROR: automatic zapret2 runtime setup failed" >&2
+        return 1
+    }
+
+    [ -x "${DVTWS_BIN}" ] || {
+        echo "ERROR: automatic setup completed without dvtws2: ${DVTWS_BIN}" >&2
+        return 1
+    }
+}
+
 start_service()
 {
+    ensure_runtime_components || return 1
     orchestrator_native_start \
         "${CONFIG}" "${ZAPRET_DIR}" "${ACTIVE_DIR}" "${BACKUP_ROOT}" \
         "${DVTWS_BIN}" "${CHILD_PIDFILE}" \
@@ -53,6 +76,7 @@ stop_service()
 
 reconfigure_service()
 {
+    ensure_runtime_components || return 1
     if ! config_reload_template OPNsense/Zapret; then
         orchestrator_fail_stage \
             "${STAGE_FILE}" 1 13 config \

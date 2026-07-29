@@ -203,3 +203,19 @@ Closed
 
 Do not implement a dependent Finding before the controlling Architecture Debt reaches
 Decision status.
+
+
+==================================================
+DELIVERING COMMANDS TO THE TEST SYSTEM
+==================================================
+
+Present commands in separate sequential blocks:
+
+1. Checks and other.
+2. Installation.
+3. Minimal live verification only when required by the changed behavior.
+
+A validation block must not perform installation, commit, push, restart, or other
+mutation. An installation block may group related package build, publication, and
+installation commands. Avoid shell variables in commands intended for the default
+OPNsense csh root shell unless the whole block is executed explicitly by /bin/sh.

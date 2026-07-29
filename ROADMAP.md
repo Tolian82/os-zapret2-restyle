@@ -65,8 +65,8 @@ STAGE 2 — API AND INHERITED-REFERENCE AUDIT
 [~] Inventory rc scripts, syshooks, and plugin hooks (syshook chains recorded;
     rc.d overlap and remaining hooks still under audit)
 [ ] Inventory filesystem and generated-template paths
-[ ] Inventory package lifecycle scripts
-[ ] Inventory setup, build, CI, and release logic
+[~] Inventory package lifecycle scripts (GUI-first bootstrap implemented; remaining upgrade/deinstall audit open)
+[~] Inventory setup, build, CI, and release logic (repository/release model approved; publication pending)
 [ ] Inventory external repositories, URLs, and downloads
 [ ] Classify every inherited reference
 [x] Create AUDIT.md and record verified and broken interface chains
@@ -92,7 +92,7 @@ STAGE 3 — VERSION 0.2.0
 [ ] Package file inclusion verification
 [ ] Package name and filename verification
 [ ] Package build test
-[ ] Fresh installation test on clean OPNsense
+[ ] Fresh GUI installation test on clean OPNsense
 [ ] Upgrade behavior test
 [ ] Uninstall behavior test
 [ ] Legacy configuration migration review
@@ -119,7 +119,7 @@ STAGE 6 — VERSION 1.0.0
 [ ] Stable package installation on supported OPNsense systems
 [ ] Upgrade and rollback tests
 [ ] Production-ready documentation
-[ ] Public stable release
+[ ] Public stable release through project pkg repository
 
 ==================================================
 PERMANENT AUDIT AND ARCHITECTURE-DEBT TRACK
@@ -133,3 +133,19 @@ PERMANENT AUDIT AND ARCHITECTURE-DEBT TRACK
 [ ] Resolve Architecture Debt through DECISIONS.md before dependent implementation.
 [ ] Remediate verified Findings in small logical commits.
 [ ] Verify and close Findings without deleting audit history.
+
+
+==================================================
+FIRST PUBLIC TEST RELEASE — VERSION 0.1.0
+==================================================
+
+[x] Approve project-owned pkg repository model
+[x] Approve GitHub Pages publication and GitHub Release assets
+[x] Approve FreeBSD:15:amd64 initial ABI target
+[x] Remove manual SSH runtime-setup requirement from normal installation flow
+[ ] Live-verify automatic first-start runtime bootstrap
+[ ] Generate pkg repository metadata with pkg repo
+[ ] Publish repository configuration file
+[ ] Publish package and SHA-256 checksums
+[ ] Verify install and update through OPNsense Firmware GUI
+[ ] Tag and publish v0.1.0 public test release

@@ -393,3 +393,35 @@ Still required:
 Next:
 
 After live verification, evaluate the next supervisor health check independently.
+
+
+==================================================
+2026-07-29 — GUI-FIRST RUNTIME BOOTSTRAP AND RELEASE MODEL
+==================================================
+
+Approved:
+
+- Own pkg repository through GitHub Pages.
+- GitHub Release assets and checksums.
+- First repository target FreeBSD:15:amd64 / OPNsense 26.7.
+- Complete normal installation and updates through the OPNsense GUI.
+- Separate command blocks for checks and installation.
+
+Implemented:
+
+- Added automatic setup.sh execution when a lifecycle start finds no dvtws2 binary.
+- Kept bootstrap under the existing lifecycle lock.
+- Added explicit post-setup binary verification.
+- Added 600-second configd timeouts for start, restart, and reconfigure.
+- Removed the manual setup command from the package post-install instructions.
+- Bumped package revision to 0.1.0_2.
+
+Verification required:
+
+- Build and reinstall package.
+- Remove or temporarily move dvtws2.
+- Use GUI Apply or configctl start without running setup.sh manually.
+- Confirm one-time bootstrap, service start, and no repeated bootstrap on restart.
+
+Next:
+Implement pkg repository and release publication in a separate focused commit.

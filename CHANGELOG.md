@@ -47,6 +47,10 @@ The project starts its own version history at `0.1.0`.
 
 ### Infrastructure
 
+- Approved a project-owned FreeBSD pkg repository on GitHub Pages for GUI installation and updates.
+- Defined GitHub Release assets and checksums for the first FreeBSD:15:amd64 test release.
+- Standardized user-facing command instructions into separate validation and installation blocks.
+
 - Established `VERSION` as the single project-version source.
 - Standardized project and package identity as `os-zapret2-restyle`.
 - Retained `zapret` as the stable internal OPNsense service name.
@@ -56,6 +60,9 @@ The project starts its own version history at `0.1.0`.
 - Updated package lifecycle messages and package description.
 
 ### Fixed
+
+- Removed the manual SSH runtime-setup requirement: the first Start or Apply now bootstraps zapret2 automatically when dvtws2 is missing.
+- Added lifecycle action timeouts sufficient for the one-time dependency installation and compilation.
 
 - Supervisor monitoring now verifies that the live PID still identifies the configured dvtws2 binary before treating the runtime as healthy.
 - Removed disconnected inherited watchdog scripts so supervisor_loop.sh is the only runtime failure detector.
