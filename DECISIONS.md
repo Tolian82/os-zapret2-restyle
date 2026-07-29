@@ -845,3 +845,39 @@ CHANGELOG.md
 
 Status:
 Active
+
+
+==================================================
+2026-07-29 — SUPERVISOR CHILD IDENTITY IS VERIFIED CONTINUOUSLY
+==================================================
+
+Decision:
+As the first post-watchdog supervisor hardening step, verify on every monitoring
+interval that the PID from dvtws2.pid still identifies the configured absolute
+dvtws2 binary. Treat disappearance or identity mismatch as the same detected runtime
+failure and use the existing runtime-failure callback.
+
+Reason:
+A one-time PID read followed only by kill -0 can follow a recycled PID and leave a
+failed zapret runtime falsely classified as healthy. Process identity is the minimum
+check directly required by the supervisor's existing responsibility.
+
+Consequences:
+
+- supervisor_start passes DVTWS_BIN explicitly to supervisor_loop.sh;
+- the loop checks liveness and command identity through FreeBSD /bin/ps;
+- the supervisor remains detection-only;
+- no runtime-directory, firewall, restart, reconfigure, generation, or repair logic
+  is added in this commit;
+- broader health checks require separate evidence and separate commits.
+
+Affected documents:
+ARCHITECTURE.md
+AUDIT.md
+DECISIONS.md
+PROJECT_STATE.md
+DEVLOG.md
+CHANGELOG.md
+
+Status:
+Active

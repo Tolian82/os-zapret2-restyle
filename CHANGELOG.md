@@ -57,6 +57,7 @@ The project starts its own version history at `0.1.0`.
 
 ### Fixed
 
+- Supervisor monitoring now verifies that the live PID still identifies the configured dvtws2 binary before treating the runtime as healthy.
 - Removed disconnected inherited watchdog scripts so supervisor_loop.sh is the only runtime failure detector.
 - Hardened launcher and supervisor PID handling so stale or reused PIDs are not treated as plugin-owned processes and cannot receive TERM or KILL.
 - Made supervisor SIGKILL escalation conditional on the expected supervisor process still being present after the grace period.

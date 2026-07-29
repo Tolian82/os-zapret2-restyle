@@ -569,6 +569,7 @@ orchestrator_native_start()
         "${_orchestrator_start_supervisor_monitor}" \
         "${_orchestrator_start_child_pid}" \
         "${_orchestrator_start_service_script}" \
+        "${_orchestrator_start_dvtws_bin}" \
         "${_orchestrator_start_supervisor_log}"; then
         orchestrator_cleanup_runtime \
             "${_orchestrator_start_child_pid}" \
@@ -639,6 +640,7 @@ orchestrator_restore_previous_runtime()
             "${_orchestrator_restore_supervisor_monitor}" \
             "${_orchestrator_restore_child_pid}" \
             "${_orchestrator_restore_service_script}" \
+            "${_orchestrator_restore_dvtws_bin}" \
             "${_orchestrator_restore_supervisor_log}" || return 1
     else
         firewall_remove_rules \
@@ -899,6 +901,7 @@ orchestrator_native_reconfigure()
         "${_orchestrator_reconfigure_supervisor_monitor}" \
         "${_orchestrator_reconfigure_child_pid}" \
         "${_orchestrator_reconfigure_service_script}" \
+        "${_orchestrator_reconfigure_dvtws_bin}" \
         "${_orchestrator_reconfigure_supervisor_log}"; then
         orchestrator_reconfigure_failure \
             "${_orchestrator_reconfigure_stage_file}" 12 \

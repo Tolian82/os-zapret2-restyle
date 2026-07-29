@@ -376,6 +376,8 @@ Runtime monitoring responsibility:
 
 - launcher owns dvtws2 start, stop, and child PID handling;
 - supervisor_loop.sh is the only runtime failure detector;
+- supervisor verifies on every monitoring interval that the PID still identifies
+  the configured absolute dvtws2 binary before treating the child as healthy;
 - supervisor reports failure through runtime-failure and performs no independent
   restart, reconfigure, configuration generation, or repair;
 - zapret_service.sh owns lifecycle serialization and cleanup dispatch;

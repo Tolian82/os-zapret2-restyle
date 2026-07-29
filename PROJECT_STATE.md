@@ -42,12 +42,13 @@ Current phase:
 API and inherited-reference audit execution
 
 Current priority:
-Remove disconnected watchdog inheritance, live-verify that removal, then add only
-proven supervisor health checks in separate focused commits.
+Live-verify the first focused supervisor health check: continuous dvtws2 process
+identity validation.
 
 Last completed:
-Approved the supervisor-only runtime failure-detection model and removed watchdog.sh
-and watchdog_loop.sh from the project; focused live regression verification is pending.
+Live-verified watchdog removal and implemented identity-aware supervisor monitoring
+without adding restart, reconfigure, runtime generation, firewall repair, or other
+health checks.
 
 Current work cycle:
 Investigate → verify → record audit evidence → update Engineering Memory → commit → continue or remediate.
@@ -100,6 +101,7 @@ CURRENTLY CONFIRMED
 - Safe service reconfigure exists.
 - Atomic runtime activation and rollback exist.
 - Launcher, ipfw, and supervisor lifecycle exist.
+- Supervisor continuously verifies that the monitored PID still identifies the configured dvtws2 binary.
 - GUI field-level Apply errors exist.
 
 Confirmed live behavior:

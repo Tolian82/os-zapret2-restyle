@@ -1009,7 +1009,10 @@ Acceptance criteria:
 - Any future supervisor health check is introduced by a separate focused commit.
 
 Remediation status:
-Implementation complete; focused live regression verification pending.
+Resolved. Live regression confirmed normal status, stop, start, and restart; one
+dvtws2 and one supervisor monitor remained active; expected supervisor PID files
+were present; the divert rule remained installed; and no watchdog process, PID file,
+or active non-documentation reference remained.
 
 --------------------------------------------------
 LIFE-006 — rc.d entry point lacks a project-owned zapret_enable source
@@ -1077,6 +1080,9 @@ Implemented remediation:
   absolute DVTWS_BIN path.
 - Supervisor health and stop paths now require the command to contain the configured
   absolute SUPERVISOR_LOOP path.
+- The running supervisor loop now requires the monitored PID command to contain the
+  configured absolute DVTWS_BIN path on every interval; PID reuse or identity change
+  is reported through the existing runtime-failure callback.
 - A missing, malformed, stale, or identity-mismatched PID file is removed by stop
   paths without signalling the referenced process.
 - TERM/KILL escalation is performed only while the PID still identifies the expected
@@ -1251,6 +1257,50 @@ Open → Discussion → Decision → Implementation → Verification → Documen
 Architecture Debt cannot be closed directly. A DECISIONS.md entry is mandatory before
 implementation. Dependent Findings remain blocked until the intended behavior is
 approved.
+
+--------------------------------------------------
+LIFE-010 — supervisor loop monitored only PID liveness
+--------------------------------------------------
+
+Classification:
+risk / remediated in code / live verification required
+
+Location:
+src/opnsense/scripts/OPNsense/Zapret/supervisor_loop.sh
+
+Evidence before remediation:
+After reading dvtws2.pid, the loop used only kill -0 against the original numeric PID.
+If dvtws2 exited and the PID was reused before the next interval, the supervisor could
+continue monitoring an unrelated process and fail to report runtime failure.
+
+Implemented remediation:
+
+- supervisor_start now passes the configured absolute DVTWS_BIN path to the loop;
+- supervisor_loop.sh validates both liveness and the full FreeBSD ps command on every
+  interval;
+- an identity mismatch follows the existing single runtime-failure callback;
+- no runtime-directory, firewall, restart, reconfigure, generation, or repair check
+  was added in this commit.
+
+Impact:
+A recycled PID can no longer keep a failed runtime falsely classified as healthy.
+
+Verification plan:
+
+1. Deploy the package or updated scripts.
+2. Confirm start or restart reaches running state.
+3. Confirm exactly one dvtws2 and one supervisor monitor are present.
+4. Confirm status remains running.
+
+Acceptance criteria:
+
+- Normal runtime remains stable under identity-aware monitoring.
+- The loop receives the configured absolute dvtws2 path.
+- Supervisor remains detection-only and invokes runtime-failure at most once per loop.
+- No unrelated health check is introduced.
+
+Remediation status:
+Code implemented; static validation complete; focused live verification pending.
 
 --------------------------------------------------
 ARCH-001 — watchdog architecture is not defined

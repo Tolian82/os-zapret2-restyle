@@ -2,6 +2,7 @@
 
 CHILD_PIDFILE="$1"
 SERVICE_SCRIPT="$2"
+EXPECTED_CHILD="$3"
 
 read_pid()
 {
@@ -15,7 +16,22 @@ read_pid()
 
 child_pid=$(read_pid) || exit 2
 
-while kill -0 "${child_pid}" 2>/dev/null; do
+process_matches()
+{
+    [ -n "${EXPECTED_CHILD}" ] || return 1
+    kill -0 "${child_pid}" 2>/dev/null || return 1
+    child_command=$(/bin/ps -p "${child_pid}" -o command= 2>/dev/null) ||
+        return 1
+    [ -n "${child_command}" ] || return 1
+
+    case " ${child_command} " in
+        *" ${EXPECTED_CHILD} "*) return 0 ;;
+    esac
+
+    return 1
+}
+
+while process_matches; do
     sleep 2
 done
 

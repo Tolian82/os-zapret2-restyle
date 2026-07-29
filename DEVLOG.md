@@ -361,3 +361,35 @@ Next:
 
 After successful regression verification, add only proven supervisor health checks
 in separate focused commits.
+
+
+==================================================
+2026-07-29 — SUPERVISOR CHILD IDENTITY CHECK (LIFE-010)
+==================================================
+
+Implemented the first focused supervisor hardening commit after watchdog removal.
+
+Code changes:
+
+- Passed the configured absolute DVTWS_BIN path from orchestrator through
+  supervisor_start to supervisor_loop.sh.
+- Replaced kill -0-only monitoring with liveness plus FreeBSD ps command identity
+  verification on every interval.
+- Kept the existing single runtime-failure callback and detection-only boundary.
+- Added no runtime-directory, firewall, restart, reconfigure, generation, or repair
+  behavior.
+
+Validation completed:
+
+- POSIX shell syntax validation passed.
+- Diff whitespace validation passed.
+- All supervisor_start call sites were updated consistently.
+
+Still required:
+
+- Deploy through the package or copy the updated scripts.
+- Run the minimal live check: status plus one process listing.
+
+Next:
+
+After live verification, evaluate the next supervisor health check independently.

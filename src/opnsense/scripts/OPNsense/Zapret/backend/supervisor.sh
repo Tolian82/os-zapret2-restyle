@@ -3,7 +3,7 @@
 # Supervisor public API
 #
 #   supervisor_start LOOP SUPERVISOR_PIDFILE MONITOR_PIDFILE CHILD_PIDFILE
-#                    SERVICE_SCRIPT LOG_FILE
+#                    SERVICE_SCRIPT EXPECTED_CHILD LOG_FILE
 #   supervisor_stop SUPERVISOR_PIDFILE MONITOR_PIDFILE
 #   supervisor_is_running MONITOR_PIDFILE
 #
@@ -67,7 +67,8 @@ supervisor_start()
     _supervisor_monitor_pidfile="$3"
     _supervisor_child_pidfile="$4"
     _supervisor_service_script="$5"
-    _supervisor_log="$6"
+    _supervisor_expected_child="$6"
+    _supervisor_log="$7"
     _supervisor_daemon="${SUPERVISOR_DAEMON_BIN:-/usr/sbin/daemon}"
 
     [ -x "${_supervisor_loop}" ] || {
@@ -76,6 +77,10 @@ supervisor_start()
     }
     [ -x "${_supervisor_service_script}" ] || {
         common_error "service entry point is not executable"
+        return 1
+    }
+    [ -x "${_supervisor_expected_child}" ] || {
+        common_error "expected supervised child is not executable"
         return 1
     }
     [ -x "${_supervisor_daemon}" ] || {
@@ -95,7 +100,8 @@ supervisor_start()
         -o "${_supervisor_log}" \
         -f "${_supervisor_loop}" \
         "${_supervisor_child_pidfile}" \
-        "${_supervisor_service_script}" || {
+        "${_supervisor_service_script}" \
+        "${_supervisor_expected_child}" || {
             common_error "failed to start runtime supervisor"
             return 1
         }
