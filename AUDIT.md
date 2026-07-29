@@ -1487,3 +1487,52 @@ Implementation:
 Closure criteria:
 The first tag workflow must show successful package-metadata verification before the
 GitHub Release and GitHub Pages jobs publish their outputs.
+
+
+==================================================
+PKG-004 — RELEASE WORKFLOW EXPECTED A NON-EXISTENT PKG CATALOGUE FILE
+==================================================
+
+Status:
+Remediated in source; live workflow verification pending.
+
+Finding:
+The release workflow required `meta.pkg` after `pkg repo`, but the current pkg
+repository format writes the plain-text `meta.conf` catalogue descriptor and the
+primary `data.pkg` archive. The pre-publication output check would therefore fail
+even when repository generation succeeded.
+
+Decision:
+Validate the files produced by the current repository format: `meta.conf`,
+`data.pkg`, and the backward-compatible `packagesite.pkg`, together with the package,
+SHA256SUMS, and client repository configuration.
+
+Implementation:
+- Replaced the invalid `meta.pkg` assertion with `meta.conf` and `data.pkg`.
+- Retained the `packagesite.pkg` assertion for compatibility visibility.
+- Updated the Pages artifact action to the current major version.
+
+Closure criteria:
+The v0.1.0 tag workflow must pass the release-output check and publish a repository
+that `pkg update` can consume on the target OPNsense system.
+
+==================================================
+PKG-005 — INITIAL PRERELEASE REPOSITORY IS UNSIGNED
+==================================================
+
+Status:
+Accepted temporary limitation for v0.1.0 prerelease; stable-release blocker.
+
+Finding:
+The first project repository is generated without a repository signing key. HTTPS
+protects transport, but pkg cannot independently authenticate repository metadata.
+
+Decision:
+Make the current state explicit with `signature_type: "none"`, document it in the
+installation instructions, and require repository signing before promotion from
+prerelease to a stable public release.
+
+Closure criteria:
+A later release workflow signs repository metadata, the client configuration verifies
+the approved public key or fingerprint, and live update testing succeeds with
+signature verification enabled.

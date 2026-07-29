@@ -988,3 +988,30 @@ CHANGELOG.md
 
 Status:
 Active
+
+
+==================================================
+DECISION — PRERELEASE REPOSITORY VALIDATION AND SIGNING BOUNDARY
+==================================================
+
+Date: 2026-07-29
+Status: Approved
+
+Decision:
+The release workflow must validate the real current-format outputs of `pkg repo`: at
+minimum `meta.conf`, `data.pkg`, and `packagesite.pkg`. A successful package build is
+not sufficient for publication.
+
+The v0.1.0 test repository may be published unsigned only as an explicitly documented
+prerelease using `signature_type: "none"`. Repository signing is mandatory before any
+release is promoted as stable.
+
+Consequences:
+- an obsolete expected filename cannot block a valid first release;
+- users are not misled about repository authenticity guarantees;
+- stable release acceptance now includes signed repository metadata and live
+  verification on OPNsense.
+
+Affected documents:
+.github/workflows/release.yml, repository/zapret2-restyle.conf, README.md, AUDIT.md,
+PROJECT_STATE.md, ROADMAP.md, DEVLOG.md, CHANGELOG.md.

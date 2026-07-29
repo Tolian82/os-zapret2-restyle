@@ -152,7 +152,19 @@ Apply or Start automatically installs the required runtime dependencies, downloa
 zapret2, compiles dvtws2, verifies it, and starts the service. Internet access is
 required for this one-time bootstrap.
 
-Repository connection instructions will be published with the v0.1.0 test release.
+The repository is registered once on the firewall by placing the published
+configuration file in `/usr/local/etc/pkg/repos/` and refreshing pkg metadata:
+
+```sh
+fetch -o /usr/local/etc/pkg/repos/zapret2-restyle.conf \
+  https://tolian82.github.io/os-zapret2-restyle/zapret2-restyle.conf
+pkg update -f
+```
+
+After that, install and update `os-zapret2-restyle` through
+**System > Firmware > Plugins**. The initial prerelease repository is transported
+over HTTPS but is intentionally unsigned (`signature_type: "none"`). Repository
+signing is required before promotion to a stable public release.
 
 ==================================================
 ENGINEERING MEMORY

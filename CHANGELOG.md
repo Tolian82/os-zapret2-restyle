@@ -81,3 +81,10 @@ The project starts its own version history at `0.1.0`.
 
 - Added archive-level preflight validation of the generated package name, version,
   and project URL before GitHub Release and pkg-repository publication.
+
+
+Release infrastructure preflight:
+- corrected pkg catalogue output validation for current `pkg repo`;
+- updated GitHub Pages artifact upload action;
+- documented repository registration and GUI installation;
+- explicitly marked the v0.1.0 prerelease repository as unsigned.

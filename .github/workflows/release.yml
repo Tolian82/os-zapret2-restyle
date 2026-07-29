@@ -94,8 +94,9 @@ jobs:
           set -euo pipefail
           test -f "dist/${{ steps.release.outputs.asset }}"
           test -f "pages/FreeBSD:15:amd64/${{ steps.release.outputs.asset }}"
+          test -f "pages/FreeBSD:15:amd64/meta.conf"
+          test -f "pages/FreeBSD:15:amd64/data.pkg"
           test -f "pages/FreeBSD:15:amd64/packagesite.pkg"
-          test -f "pages/FreeBSD:15:amd64/meta.pkg"
           test -f "pages/FreeBSD:15:amd64/SHA256SUMS"
           test -f "pages/zapret2-restyle.conf"
 
@@ -109,7 +110,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload GitHub Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: pages
 

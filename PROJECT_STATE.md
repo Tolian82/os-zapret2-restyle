@@ -327,3 +327,21 @@ project repository URL before pkg-repository generation and publication.
 Immediate next step:
 Commit this focused preflight change, then configure GitHub Pages for GitHub Actions
 and create the v0.1.0 tag only after the repository is clean.
+
+
+==================================================
+FINAL RELEASE WORKFLOW AUDIT — 2026-07-29
+==================================================
+
+The pre-tag audit found and corrected a release-blocking catalogue assertion:
+modern `pkg repo` output uses `meta.conf` and `data.pkg`, not `meta.pkg`. The workflow
+now validates the actual repository format before either Release or Pages publication.
+
+The first v0.1.0 repository remains explicitly unsigned and is acceptable only for
+prerelease testing. Repository signing is recorded as mandatory before a stable
+release. README now contains the one-time repository registration procedure and the
+normal Firmware GUI installation path.
+
+Immediate next action:
+Commit this focused pre-tag correction, push main, confirm a clean repository, and
+then create tag v0.1.0 for live workflow verification.

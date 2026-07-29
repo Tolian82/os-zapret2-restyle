@@ -445,3 +445,15 @@ Validation still required:
 - Run the v0.1.0 tag workflow.
 - Confirm the FreeBSD build log reports verified package metadata.
 - Confirm publication jobs run only after that check succeeds.
+
+
+==================================================
+2026-07-29 — FINAL RELEASE WORKFLOW PREFLIGHT
+==================================================
+
+Audited the complete tag-to-release pipeline before creating v0.1.0. Found that the
+workflow checked for `meta.pkg`, which is not part of the current pkg repository
+format. Corrected validation to require `meta.conf`, `data.pkg`, and
+`packagesite.pkg`; updated the Pages artifact action; made the unsigned prerelease
+configuration explicit; and added the one-time repository registration procedure to
+README. No tag was created during this audit.

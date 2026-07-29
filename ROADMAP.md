@@ -144,8 +144,8 @@ FIRST PUBLIC TEST RELEASE — VERSION 0.1.0
 [x] Approve FreeBSD:15:amd64 initial ABI target
 [x] Remove manual SSH runtime-setup requirement from normal installation flow
 [ ] Live-verify automatic first-start runtime bootstrap
-[ ] Generate pkg repository metadata with pkg repo
-[ ] Publish repository configuration file
+[x] Generate pkg repository metadata with pkg repo
+[x] Publish repository configuration file
 [ ] Publish package and SHA-256 checksums
 [ ] Verify install and update through OPNsense Firmware GUI
 [ ] Tag and publish v0.1.0 public test release
@@ -184,3 +184,12 @@ Milestone 6 release preflight update:
 [x] Use the independent project URL in package metadata.
 [x] Add archive-level verification of package name, version, and www before publication.
 [ ] Live-verify the preflight in the first v0.1.0 tag workflow.
+
+
+Milestone 6 final pre-tag audit:
+
+[x] Validate current pkg repository catalogue names (`meta.conf`, `data.pkg`, `packagesite.pkg`).
+[x] Document one-time repository registration and Firmware GUI installation.
+[x] Make the unsigned prerelease repository state explicit.
+[ ] Live-verify repository generation and Pages publication from tag v0.1.0.
+[ ] Add repository signing before stable-release promotion.
