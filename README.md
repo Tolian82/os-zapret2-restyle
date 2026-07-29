@@ -211,3 +211,11 @@ LICENSE
 MIT.
 
 See LICENSE and NOTICE.
+
+
+## Count-carrying profile pipeline
+
+Backend profile preparation is an ordered pipeline: parse, target registry, Target
+Mode, runtime-profile normalization, and placeholder indexing. Every step carries and
+validates the current runtime profile count, so later resolution cannot accidentally
+use a stale count after automatic profile expansion.

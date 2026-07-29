@@ -560,3 +560,24 @@ Local verification completed:
 
 Live OPNsense verification remains required before the runtime behavior is
 classified as fully verified.
+
+==================================================
+2026-07-29 — PROFILE PIPELINE API IMPLEMENTED
+==================================================
+
+Implemented a count-carrying adapter layer for parsed-profile preparation.
+
+Code changes:
+
+- Added `backend/profile_pipeline.sh`.
+- Standardized parse, registry, Target Mode, normalization, and placeholder-index
+  steps on `WORKDIR + PROFILE_COUNT -> PROFILE_COUNT`.
+- Made every pipeline transition validate its resulting positive count.
+- Replaced direct profile-stage calls in `orchestrator_build_release()` with the
+  ordered pipeline adapters.
+- Kept specialist module APIs unchanged and avoided forcing non-profile stages into
+  an unsuitable count contract.
+- Added focused pipeline tests and CI execution.
+
+Runtime target resolution, generated arguments, activation, and lifecycle behavior
+remain unchanged.

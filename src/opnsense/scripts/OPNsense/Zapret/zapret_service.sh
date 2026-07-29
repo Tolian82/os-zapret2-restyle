@@ -4,7 +4,7 @@ SCRIPT_DIR="/usr/local/opnsense/scripts/OPNsense/Zapret"
 BACKEND_DIR="${SCRIPT_DIR}/backend"
 
 for module in common config parser registry storage targets target_mode \
-    profile_normalizer exclude blobs ports firewall generator validator atomic \
+    profile_normalizer profile_pipeline exclude blobs ports firewall generator validator atomic \
     stage launcher supervisor orchestrator
 do
     module_path="${BACKEND_DIR}/${module}.sh"

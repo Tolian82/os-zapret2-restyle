@@ -183,6 +183,12 @@ one runtime profile per selector. User-authored `--new` boundaries remain valid,
 non-selector strategy lines are copied unchanged, selector order is preserved, and
 normalization is staged before parser output is replaced.
 
+profile_pipeline.sh
+Provides the count-carrying adapter contract for parsed-profile preparation. Each
+step accepts WORKDIR and PROFILE_COUNT and prints the resulting positive count. The
+ordered steps are parse, registry, Target Mode, normalization, and placeholder index.
+Specialist modules retain their own focused APIs behind these adapters.
+
 targets.sh
 HOSTLIST/IPSET normalization, validation, managed files, and resolution.
 
@@ -221,6 +227,25 @@ Execution status reporting.
 
 orchestrator.sh
 Lifecycle coordination.
+
+==================================================
+COUNT-CARRYING PROFILE PIPELINE
+==================================================
+
+The profile collection is prepared through one explicit state transition contract:
+
+```text
+profile_pipeline_<step> WORKDIR PROFILE_COUNT [STEP ARGUMENTS...]
+    -> resulting PROFILE_COUNT on stdout
+```
+
+The parser begins with count `0`; all later steps require a positive count. Steps that
+do not change the collection return the incoming count. The normalizer may return a
+larger count. Every transition validates the result before the orchestrator continues.
+
+This contract applies only to modules that operate on the parsed profile collection.
+Release artifacts, validation, atomic activation, launcher, firewall, and supervisor
+retain typed APIs appropriate to their different responsibilities.
 
 ==================================================
 RUNTIME PROFILE NORMALIZATION

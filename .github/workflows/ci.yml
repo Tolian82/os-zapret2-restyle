@@ -59,6 +59,9 @@ jobs:
       - name: Test runtime profile normalization
         run: sh scripts/test-profile-normalizer.sh
 
+      - name: Test count-carrying profile pipeline
+        run: sh scripts/test-profile-pipeline.sh
+
       - name: Check required project files
         run: |
           set -eu

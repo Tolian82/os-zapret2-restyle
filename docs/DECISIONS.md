@@ -1235,3 +1235,42 @@ Affected documents:
 - docs/PROJECT_STATE.md
 - docs/ROADMAP.md
 - README.md
+
+==================================================
+2026-07-29 — COUNT-CARRYING PROFILE PIPELINE CONTRACT
+==================================================
+
+Decision:
+The parsed-profile preparation chain uses a dedicated count-carrying pipeline API.
+Each pipeline step accepts WORKDIR and PROFILE_COUNT, performs one transformation or
+validation step, and prints the resulting positive PROFILE_COUNT on success.
+
+The approved profile pipeline is:
+
+- parse;
+- build target registry;
+- apply Target Mode;
+- normalize runtime profiles;
+- index placeholders.
+
+Reason:
+These operations form one ordered transformation chain and share the same profile
+collection state. A common contract makes count propagation explicit, removes
+stage-specific count handling from the orchestrator, and prevents later steps from
+silently using a stale profile count.
+
+Consequences:
+`profile_pipeline.sh` owns the adapters and validates every count transition.
+Underlying specialist modules retain their focused public APIs. Artifact-building,
+activation, launcher, firewall, and supervisor modules are not forced into the profile
+count contract because they do not transform a profile collection.
+
+Affected documents:
+ARCHITECTURE.md
+PROJECT_STATE.md
+DEVLOG.md
+ROADMAP.md
+README.md
+
+Status:
+Active

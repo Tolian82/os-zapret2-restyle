@@ -261,3 +261,13 @@ Next priorities:
 [ ] Verify real strategy application for named HOSTLIST targets.
 [ ] Verify real strategy application for named IPSET targets.
 [ ] Close gaps between REQUIREMENTS.md and verified plugin behavior.
+
+==================================================
+MILESTONE 7 — PROFILE PIPELINE REFACTOR
+==================================================
+
+[x] Add a dedicated count-carrying profile pipeline adapter module.
+[x] Standardize parse, registry, Target Mode, normalizer, and index transitions.
+[x] Validate profile count at every pipeline boundary.
+[x] Add focused pipeline tests and CI coverage.
+[ ] Live-verify the complete profile pipeline on OPNsense.

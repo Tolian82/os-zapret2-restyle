@@ -111,11 +111,15 @@ orchestrator_build_release()
 
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 2 "${_orchestrator_build_total}" \
-        parser running "parsing Traffic Strategy" || return 1
+        parser running "parsing and normalizing Traffic Strategy" || return 1
+    _orchestrator_build_registry="${_orchestrator_build_workspace}/target-registry.tsv"
+    _orchestrator_build_profile_count=0
+
     : > "${_orchestrator_build_error}"
-    _orchestrator_build_profile_count=$(parser_parse \
-        "${TRAFFIC_ARGS}" "${_orchestrator_build_workspace}" \
-        2>"${_orchestrator_build_error}") || {
+    _orchestrator_build_profile_count=$(profile_pipeline_parse \
+        "${_orchestrator_build_workspace}" \
+        "${_orchestrator_build_profile_count}" \
+        "${TRAFFIC_ARGS}" 2>"${_orchestrator_build_error}") || {
             orchestrator_fail_from_log \
                 "${_orchestrator_build_stage_file}" 2 \
                 "${_orchestrator_build_total}" parser \
@@ -123,10 +127,12 @@ orchestrator_build_release()
                 "strategy parsing failed"
             return 1
         }
-    _orchestrator_build_registry="${_orchestrator_build_workspace}/target-registry.tsv"
+
     : > "${_orchestrator_build_error}"
-    registry_build "${_orchestrator_build_registry}" \
-        2>"${_orchestrator_build_error}" || {
+    _orchestrator_build_profile_count=$(profile_pipeline_registry \
+        "${_orchestrator_build_workspace}" \
+        "${_orchestrator_build_profile_count}" \
+        "${_orchestrator_build_registry}" 2>"${_orchestrator_build_error}") || {
             orchestrator_fail_from_log \
                 "${_orchestrator_build_stage_file}" 2 \
                 "${_orchestrator_build_total}" parser \
@@ -134,13 +140,13 @@ orchestrator_build_release()
                 "Target registry generation failed"
             return 1
         }
+
     : > "${_orchestrator_build_error}"
-    target_mode_apply_all \
+    _orchestrator_build_profile_count=$(profile_pipeline_target_mode \
         "${_orchestrator_build_workspace}" \
         "${_orchestrator_build_profile_count}" \
         "${HOSTLIST_MODE}" \
-        "${_orchestrator_build_registry}" \
-        2>"${_orchestrator_build_error}" || {
+        "${_orchestrator_build_registry}" 2>"${_orchestrator_build_error}") || {
             orchestrator_fail_from_log \
                 "${_orchestrator_build_stage_file}" 2 \
                 "${_orchestrator_build_total}" parser \
@@ -148,8 +154,9 @@ orchestrator_build_release()
                 "Target Mode processing failed"
             return 1
         }
+
     : > "${_orchestrator_build_error}"
-    _orchestrator_build_profile_count=$(profile_normalizer_normalize_all \
+    _orchestrator_build_profile_count=$(profile_pipeline_normalize \
         "${_orchestrator_build_workspace}" \
         "${_orchestrator_build_profile_count}" \
         2>"${_orchestrator_build_error}") || {
@@ -160,20 +167,12 @@ orchestrator_build_release()
                 "runtime profile normalization failed"
             return 1
         }
-    case "${_orchestrator_build_profile_count}" in
-        ''|*[!0-9]*|0)
-            orchestrator_fail_stage \
-                "${_orchestrator_build_stage_file}" 2 \
-                "${_orchestrator_build_total}" parser \
-                "profile normalizer returned an invalid profile count"
-            return 1
-            ;;
-    esac
+
     : > "${_orchestrator_build_error}"
-    targets_index_all \
+    _orchestrator_build_profile_count=$(profile_pipeline_index \
         "${_orchestrator_build_workspace}" \
         "${_orchestrator_build_profile_count}" \
-        2>"${_orchestrator_build_error}" || {
+        2>"${_orchestrator_build_error}") || {
             orchestrator_fail_from_log \
                 "${_orchestrator_build_stage_file}" 2 \
                 "${_orchestrator_build_total}" parser \
@@ -181,9 +180,10 @@ orchestrator_build_release()
                 "placeholder indexing failed"
             return 1
         }
+
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 2 "${_orchestrator_build_total}" \
-        parser ok "strategy parsed" || return 1
+        parser ok "strategy parsed and normalized" || return 1
 
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 3 "${_orchestrator_build_total}" \

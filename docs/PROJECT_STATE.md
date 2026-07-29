@@ -392,3 +392,25 @@ Explicitly out of current scope:
 UX is not a separate project objective. Interface work is considered when required to
 support expanded functionality or when the current interface demonstrably prevents use
 of an implemented capability. Otherwise the interface remains stable.
+
+==================================================
+PROFILE PIPELINE REFACTOR — 2026-07-29
+==================================================
+
+The parsed-profile preparation path now has a uniform count-carrying API implemented
+by `profile_pipeline.sh`.
+
+Current ordered chain:
+
+1. parse strategy;
+2. build target registry;
+3. apply Target Mode;
+4. normalize profiles;
+5. index placeholders.
+
+Every step accepts the current work directory and profile count and returns a validated
+resulting count. The orchestrator no longer contains special profile-count validation
+for only one module.
+
+Immediate next priority remains live OPNsense verification of named HOSTLIST/IPSET
+strategy application and automatic profile expansion.
