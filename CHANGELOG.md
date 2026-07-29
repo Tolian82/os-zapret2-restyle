@@ -57,6 +57,7 @@ The project starts its own version history at `0.1.0`.
 
 ### Fixed
 
+- Removed disconnected inherited watchdog scripts so supervisor_loop.sh is the only runtime failure detector.
 - Hardened launcher and supervisor PID handling so stale or reused PIDs are not treated as plugin-owned processes and cannot receive TERM or KILL.
 - Made supervisor SIGKILL escalation conditional on the expected supervisor process still being present after the grace period.
 - Removed the duplicate `firewall_rules_present()` declaration so firewall runtime-state checks have one canonical implementation.

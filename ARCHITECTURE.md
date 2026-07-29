@@ -370,9 +370,20 @@ firewall removal
         ↓
 launcher stop
 
-The rc.d entry point, watchdog files, package lifecycle policy, and exact responsibility
-boundaries are under active audit and must not be treated as approved architecture until
-the related Findings and Architecture Debt are resolved.
+The rc.d entry point and package lifecycle policy remain under active audit.
+
+Runtime monitoring responsibility:
+
+- launcher owns dvtws2 start, stop, and child PID handling;
+- supervisor_loop.sh is the only runtime failure detector;
+- supervisor reports failure through runtime-failure and performs no independent
+  restart, reconfigure, configuration generation, or repair;
+- zapret_service.sh owns lifecycle serialization and cleanup dispatch;
+- no separate watchdog process, cron job, or watchdog script is supported.
+
+Supervisor health checks are added only when proven necessary and in separate focused
+commits. Removing inherited watchdog code must not be combined with expanding
+supervisor behavior.
 
 ==================================================
 PROJECT GOVERNANCE FLOW

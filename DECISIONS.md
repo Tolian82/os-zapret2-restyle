@@ -799,3 +799,49 @@ CHANGELOG.md
 
 Status:
 Active
+
+==================================================
+2026-07-29 — SUPERVISOR IS THE ONLY RUNTIME FAILURE DETECTOR
+==================================================
+
+Decision:
+Remove watchdog.sh and watchdog_loop.sh as disconnected inherited code. Keep
+supervisor_loop.sh as the only runtime failure detector. Do not add broader health
+checks in the same removal commit. Add only explicitly required and inexpensive
+checks to the supervisor later, one focused commit at a time.
+
+Responsibility boundaries:
+
+- launcher starts and stops dvtws2 and owns its PID handling;
+- supervisor detects runtime failure and invokes runtime-failure;
+- zapret_service.sh serializes mutating lifecycle operations;
+- runtime-failure performs centralized cleanup;
+- supervisor does not rebuild, reconfigure, or independently restart the service;
+- no separate cron or daemon watchdog is supported.
+
+Reason:
+The watchdog files were not connected to cron, configd, syshooks, package hooks,
+GUI, service lifecycle, or supervisor. They contained obsolete HTTP_ARGS and
+HTTPS_ARGS behavior and would create a second competing failure-recovery mechanism.
+Keeping the removal separate from supervisor enhancement makes the change small,
+reversible, and easy to verify.
+
+Consequences:
+
+- watchdog.sh and watchdog_loop.sh are removed from the project;
+- existing supervisor behavior remains unchanged in the removal commit;
+- regression testing is required before supervisor enhancement;
+- future health checks must be detection-only and introduced separately;
+- ARCH-001 is decided and LIFE-005 moves to verification;
+- ARCH-003 responsibility boundaries are partially resolved.
+
+Affected documents:
+ARCHITECTURE.md
+AUDIT.md
+DECISIONS.md
+PROJECT_STATE.md
+DEVLOG.md
+CHANGELOG.md
+
+Status:
+Active

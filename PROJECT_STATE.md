@@ -42,13 +42,12 @@ Current phase:
 API and inherited-reference audit execution
 
 Current priority:
-Live-verify lifecycle locking, firewall state detection, and process-identity
-hardening, then continue the remaining lifecycle and package-lifecycle audit.
+Remove disconnected watchdog inheritance, live-verify that removal, then add only
+proven supervisor health checks in separate focused commits.
 
 Last completed:
-Hardened launcher and supervisor PID handling so stale or reused PIDs cannot be
-treated as plugin-owned processes or receive lifecycle signals (LIFE-007 and
-LIFE-008); live verification remains pending.
+Approved the supervisor-only runtime failure-detection model and removed watchdog.sh
+and watchdog_loop.sh from the project; focused live regression verification is pending.
 
 Current work cycle:
 Investigate → verify → record audit evidence → update Engineering Memory → commit → continue or remediate.
@@ -247,7 +246,7 @@ Statically verified:
 Open lifecycle Findings:
 
 - LIFE-004 duplicate firewall_rules_present() declaration.
-- LIFE-005 disconnected inherited watchdog files.
+- LIFE-005 watchdog removal implemented; live regression verification pending.
 - LIFE-006 rc.d entry point lacks a project-owned zapret_enable source.
 - LIFE-007 PID checks do not verify process identity.
 - LIFE-008 supervisor stop escalates without checking exit.
@@ -255,15 +254,16 @@ Open lifecycle Findings:
 
 Open Architecture Debt:
 
-- ARCH-001 watchdog architecture.
+- ARCH-001 supervisor-only runtime failure-detection decision implemented; verification pending.
 - ARCH-002 package lifecycle policy.
-- ARCH-003 launcher/supervisor/watchdog responsibility boundaries.
+- ARCH-003 launcher/supervisor/lifecycle responsibility boundaries decided; later focused supervisor checks remain.
 
 Immediate next actions:
 
-1. Run the focused LIFE-009 concurrency, stale-callback, forced-termination, and
-   non-blocking status live tests.
-2. Complete transactional reconfigure, rollback, firewall snapshot, atomic backup,
-   and package-lifecycle audit.
-3. Run the LIFE-006 service/rcvar live tests.
-4. Record all remaining lifecycle evidence before further remediation.
+1. Install the watchdog-removal commit on the test OPNsense system and run normal
+   start, status, restart, reconfigure, Apply, stop, PID, and firewall regression tests.
+2. Confirm no watchdog files or active references remain in the installed system.
+3. After successful verification, add only the first proven supervisor health check
+   in a separate focused commit.
+4. Continue transactional reconfigure, rollback, firewall snapshot, atomic backup,
+   rc.d, and package-lifecycle audit.

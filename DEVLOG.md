@@ -326,3 +326,38 @@ Still required:
 Next:
 
 Run the focused live tests, then continue the remaining lifecycle and package-lifecycle audit.
+
+==================================================
+2026-07-29 — DISCONNECTED WATCHDOG REMOVED (LIFE-005 / ARCH-001)
+==================================================
+
+Decision implemented:
+
+- Selected supervisor_loop.sh as the only runtime failure detector.
+- Rejected a separate cron or daemon watchdog model.
+- Required future supervisor health checks to be added separately and remain
+  detection-only.
+
+Code changes:
+
+- Removed watchdog.sh.
+- Removed watchdog_loop.sh.
+- Removed the obsolete HTTP_ARGS / HTTPS_ARGS watchdog behavior with those files.
+- Left existing supervisor behavior unchanged.
+
+Validation completed:
+
+- Repository search confirmed no active lifecycle, configd, syshook, package-hook,
+  GUI, or cron integration depended on the removed files.
+- POSIX shell syntax validation passed for all remaining shell scripts.
+
+Still required:
+
+- Install the updated files on OPNsense.
+- Run normal lifecycle, Apply, PID, supervisor, and firewall regression tests.
+- Confirm no watchdog files or active references remain on the installed system.
+
+Next:
+
+After successful regression verification, add only proven supervisor health checks
+in separate focused commits.

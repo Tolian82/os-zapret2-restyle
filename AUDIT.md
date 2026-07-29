@@ -978,17 +978,38 @@ Verification plan:
 2. Confirm no package lifecycle hook installs an external reference.
 3. Decide ARCH-001 and ARCH-003 before modifying or removing the files.
 
-Remediation plan:
-Blocked by Architecture Debt. After decisions are recorded, either integrate one
-approved health-monitoring mechanism with tests and current TRAFFIC_ARGS semantics,
-or remove the inherited watchdog files and all references.
+Approved remediation:
+Remove watchdog.sh and watchdog_loop.sh as disconnected inherited code. Keep the
+existing supervisor as the only runtime failure detector. Do not add broader health
+checks in this removal commit. After regression verification, add only explicitly
+required, inexpensive supervisor checks in separate commits.
+
+Implementation:
+
+- Removed watchdog.sh.
+- Removed watchdog_loop.sh.
+- Removed the obsolete HTTP_ARGS / HTTPS_ARGS watchdog path with those files.
+- No cron, configd, syshook, package-hook, GUI, or service integration was added.
+- Existing supervisor behavior was intentionally left unchanged.
+
+Verification plan:
+
+1. Reinstall or copy the updated plugin files to the test OPNsense system.
+2. Confirm neither watchdog file exists in the installed script directory.
+3. Run start, status, restart, reconfigure, Apply, and stop regression tests.
+4. Confirm dvtws2 and supervisor PID handling remains correct.
+5. Confirm firewall rules appear on start and disappear on stop.
+6. Confirm repository and installed-system searches contain no active watchdog path.
 
 Acceptance criteria:
-The repository and installed system expose exactly one documented health-monitoring
-model, or explicitly document that no watchdog exists.
+
+- No watchdog script is shipped or referenced as an active runtime component.
+- Existing supervisor and lifecycle behavior pass regression tests unchanged.
+- Only one runtime failure detector exists: supervisor_loop.sh.
+- Any future supervisor health check is introduced by a separate focused commit.
 
 Remediation status:
-Blocked by ARCH-001 and ARCH-003.
+Implementation complete; focused live regression verification pending.
 
 --------------------------------------------------
 LIFE-006 — rc.d entry point lacks a project-owned zapret_enable source
@@ -1236,34 +1257,32 @@ ARCH-001 — watchdog architecture is not defined
 --------------------------------------------------
 
 Status:
-Open
+Decision recorded; implementation complete; verification pending
 
-Design question:
-Does the project require a watchdog beyond the existing supervisor, and if so, which
-single mechanism owns it: supervisor loop, cron, daemon(8), or another OPNsense-native
-facility?
+Decision:
+The supervisor is the only runtime failure detector. The disconnected watchdog files
+are removed. Broader health checks, if justified, are added incrementally to the
+supervisor in separate commits and must remain detection-only.
 
 Why architectural:
 The answer changes lifecycle ownership, restart policy, logging, configuration,
 packaging, and GUI behavior. It cannot be solved by merely wiring in existing files.
 
-Options:
+Approved model:
 
-1. Supervisor is the only runtime health monitor; remove watchdog leftovers.
-2. Add a distinct watchdog with narrowly defined responsibilities.
-3. Replace the current supervisor/watchdog split with one OPNsense-native service
-   supervision model.
+1. supervisor_loop.sh is the only runtime failure detector.
+2. No separate cron or daemon watchdog is shipped.
+3. Supervisor detects failures and delegates cleanup to runtime-failure; it does not
+   rebuild configuration, reconfigure, or independently restart the service.
+4. New health checks are added only when required, one focused commit at a time.
 
 Dependencies:
 LIFE-005 and ARCH-003.
 
-Required decision:
-Define whether watchdog functionality exists, its owner, its trigger, restart policy,
-logging, failure reporting, and configuration surface.
-
 Closure criteria:
-Decision recorded; required implementation completed; live failure tests pass; obsolete
-files and documentation are removed or updated.
+Watchdog files removed; regression tests pass; responsibility boundaries are reflected
+in architecture and live behavior; the first required supervisor health checks are
+considered separately rather than bundled into watchdog removal.
 
 --------------------------------------------------
 ARCH-002 — package lifecycle policy is incomplete
@@ -1299,11 +1318,12 @@ ARCH-003 — launcher, supervisor, and watchdog responsibilities overlap
 --------------------------------------------------
 
 Status:
-Open
+Decision recorded; implementation in progress
 
-Design question:
-Assign one owner for process start/stop, health detection, restart decisions, stale PID
-cleanup, logging, runtime-failure cleanup, and user-visible status.
+Decision:
+Launcher owns dvtws2 start/stop and child PID handling. Supervisor owns runtime failure
+detection and calls runtime-failure. The lifecycle wrapper owns serialization and
+cleanup dispatch. No independent watchdog exists.
 
 Why architectural:
 Without explicit boundaries, adding watchdog behavior or hardening PID handling can
@@ -1312,10 +1332,10 @@ create duplicate restarts, competing cleanup, or inconsistent status reporting.
 Dependencies:
 LIFE-005, LIFE-007, LIFE-008, and ARCH-001.
 
-Required decision:
-Document a responsibility matrix for launcher, supervisor, optional watchdog, service
-wrapper, and orchestrator.
+Remaining work:
+Add only the supervisor health checks that are proven necessary, without giving the
+supervisor restart, reconfigure, configuration-generation, or repair ownership.
 
 Closure criteria:
-Decision recorded; architecture diagram updated; implementation and failure-path tests
-confirm only one component owns each responsibility.
+Architecture diagram updated; watchdog removal and later focused health checks pass
+failure-path tests; only one component owns each responsibility.
