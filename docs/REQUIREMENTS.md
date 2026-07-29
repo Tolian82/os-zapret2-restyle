@@ -54,8 +54,25 @@ Current built-in targets:
 <IPSET:telegram>
 ```
 
-Placeholders may be combined. The parser must not contain service-specific
-strategy behavior.
+Multiple placeholders may be written in one user profile. The user must not be
+required to duplicate the profile or add extra `--new` separators merely because
+more than one target selector is present.
+
+After parsing and Target Mode processing, the backend must normalize a profile
+with multiple unique selectors into one runtime profile per selector. Each
+runtime profile must retain all non-selector strategy lines and exactly one
+unique selector. Selector order must follow first appearance, duplicate selector
+occurrences must not create duplicate profiles, and profiles with zero or one
+unique selector must remain unchanged.
+
+Only `HOSTLIST:*` and `IPSET:*` selector families are supported. `GROUP`,
+`TARGETSET`, and other generic selector families are explicitly outside the
+approved architecture.
+
+User-authored standalone `--new` separators remain part of the Traffic Strategy
+syntax. The backend may generate additional runtime `--new` boundaries during
+normalization. The parser must not contain target-name-specific strategy
+behavior.
 
 ## Targets
 

@@ -149,6 +149,27 @@ orchestrator_build_release()
             return 1
         }
     : > "${_orchestrator_build_error}"
+    _orchestrator_build_profile_count=$(profile_normalizer_normalize_all \
+        "${_orchestrator_build_workspace}" \
+        "${_orchestrator_build_profile_count}" \
+        2>"${_orchestrator_build_error}") || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 2 \
+                "${_orchestrator_build_total}" parser \
+                "${_orchestrator_build_error}" \
+                "runtime profile normalization failed"
+            return 1
+        }
+    case "${_orchestrator_build_profile_count}" in
+        ''|*[!0-9]*|0)
+            orchestrator_fail_stage \
+                "${_orchestrator_build_stage_file}" 2 \
+                "${_orchestrator_build_total}" parser \
+                "profile normalizer returned an invalid profile count"
+            return 1
+            ;;
+    esac
+    : > "${_orchestrator_build_error}"
     targets_index_all \
         "${_orchestrator_build_workspace}" \
         "${_orchestrator_build_profile_count}" \

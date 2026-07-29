@@ -42,13 +42,14 @@ Current phase:
 Milestone 7 — completion of approved plugin functionality
 
 Current priority:
-Verify real strategy-to-list behavior and complete the functionality already approved
-in REQUIREMENTS.md.
+Live-verify automatic runtime profile normalization and real strategy-to-list
+behavior on OPNsense.
 
 Last completed:
-The first Milestone 7 priority was completed: engineering documentation was moved into
-the `docs/` directory, repository navigation and CI paths were synchronized, and the
-root README now points to the engineering memory entry point.
+Implemented the approved Runtime Profile Normalizer between Target Mode and target
+resolution. Profiles containing multiple unique HOSTLIST/IPSET selectors now expand
+into one runtime profile per selector without requiring additional user-authored
+`--new` separators. Focused automated tests pass and CI runs them.
 
 Current work cycle:
 Investigate → verify → record audit evidence → update Engineering Memory → commit → continue or remediate.
@@ -93,6 +94,7 @@ CURRENTLY CONFIRMED
 - Unified Traffic Strategy exists.
 - Generic HOSTLIST and IPSET target handling exists.
 - Target Mode exists.
+- Automatic one-selector-per-runtime-profile normalization exists.
 - Global domain exclusions exist.
 - Wildcard domain input is accepted and canonicalized.
 - Strict domain and IP target validation exists.
@@ -155,18 +157,16 @@ Initial lifecycle evidence recorded:
 NEXT ACTIONS
 ==================================================
 
-1. Commit the detailed finding records, remediation plans, audit synchronization
-   rule, and initial lifecycle evidence.
-2. Continue the incomplete service lifecycle block: rc.d registration, plugin
-   hooks, supervisor, watchdog, launcher, firewall, failure paths, and cleanup.
-3. Record every verified chain, overlap, broken path, and required live test in
-   AUDIT.md before changing code.
-4. Continue with backend, runtime paths, packaging, setup, build, CI, release,
-   external URL, and diagnostics audits.
-5. Run focused live tests for items marked requires live test.
-6. Fix only confirmed issues as separate logical commits.
-7. Update AUDIT.md after each remediation and verification.
-8. Resume the Traffic Strategy structural validator after the complete audit.
+1. Build and install the package containing the Runtime Profile Normalizer.
+2. Apply a real strategy containing `<IPSET:telegram>` and `<HOSTLIST:user>` in
+   one user profile.
+3. Verify that generated runtime arguments contain two independent profiles,
+   each with exactly one resolved selector and copied strategy parameters.
+4. Verify service start/reconfigure, PID stability, ipfw state, and rollback on
+   an invalid candidate.
+5. Record live evidence in AUDIT.md and DEVLOG.md.
+6. Commit the code, tests, and synchronized documentation as one logical change.
+7. Resume completion of remaining approved REQUIREMENTS.md functionality.
 
 ==================================================
 CURRENT AUDIT SCOPE

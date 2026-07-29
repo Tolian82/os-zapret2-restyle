@@ -1625,3 +1625,49 @@ and an observable real traffic result where practical.
 After this focused audit, compare each approved requirement with implementation and
 live evidence. Record only concrete defects or uncertain functional chains. Navigation
 and general interface review are out of scope.
+
+==================================================
+STRATEGY TARGET NORMALIZATION — 2026-07-29
+==================================================
+
+STRATEGY-001 — Multiple selectors in one user profile
+
+Classification:
+requires live test
+
+Static evidence:
+
+- `parser_parse()` preserves user-authored standalone `--new` boundaries.
+- `target_mode_apply_all()` may append several registered selectors to one
+  placeholder-free profile.
+- `profile_normalizer_normalize_all()` now runs after Target Mode and before
+  placeholder indexing.
+- The normalizer creates one profile per unique `HOSTLIST:*` or `IPSET:*`
+  selector, copies non-selector strategy text, preserves first-use order, and
+  updates `profile-count`.
+- `targets_resolve_all_mapped()` emits `--new` between every normalized runtime
+  profile.
+- Focused tests cover explicit and Target Mode generated selectors, duplicate
+  selectors, user boundaries, three selectors, and idempotence.
+
+Required live verification:
+
+1. Install a package built from this change on OPNsense.
+2. Apply one user profile containing `<IPSET:telegram>` and `<HOSTLIST:user>`.
+3. Inspect the active generated dvtws2 argument file.
+4. Confirm there are two runtime profiles separated by `--new`.
+5. Confirm each runtime profile contains exactly one resolved target option and
+   all shared strategy arguments.
+6. Confirm successful reconfigure keeps the service healthy and an invalid
+   candidate still preserves the active runtime.
+
+Acceptance criteria:
+
+- No additional user-authored `--new` is required for selector isolation.
+- Runtime profiles are emitted in first-selector order.
+- No runtime profile contains more than one resolved HOSTLIST/IPSET selector
+  originating from the same user profile.
+- Service and rollback behavior remain unchanged.
+
+Remediation status:
+Implemented statically; live verification pending.

@@ -42,6 +42,7 @@ STAGE 1 — VERSION 0.1.0 FOUNDATION
 [x] Backend v2 foundation
 [x] Unified Traffic Strategy
 [x] Generic HOSTLIST/IPSET targets
+[x] Automatic one-selector-per-runtime-profile normalization
 [x] Transactional Apply
 [x] Safe Reconfigure
 [x] Runtime validation and rollback
@@ -224,6 +225,8 @@ MILESTONE 7 — COMPLETE APPROVED FUNCTIONALITY
 Current priority order:
 
 [ ] Move internal documentation into `docs/` and repair all references.
+[x] Implement generic automatic profile expansion for multiple HOSTLIST/IPSET selectors.
+[ ] Live-verify automatic profile expansion on OPNsense.
 [ ] Audit strategy application to named HOSTLIST and IPSET targets.
 [ ] Verify `<HOSTLIST:youtube>` behavior on a real runtime.
 [ ] Verify `<IPSET:telegram>` behavior on a real runtime.

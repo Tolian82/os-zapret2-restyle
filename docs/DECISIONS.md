@@ -1176,3 +1176,62 @@ docs/DEVLOG.md
 docs/CHANGELOG.md
 docs/DECISIONS.md
 .github/workflows/ci.yml
+
+==================================================
+2026-07-29 — AUTOMATIC RUNTIME PROFILE NORMALIZATION
+==================================================
+
+Status:
+Approved and implemented.
+
+Decision:
+
+The Traffic Strategy keeps user-authored standalone `--new` separators, but a
+user is never required to add extra separators or duplicate strategy parameters
+only because one profile contains several target placeholders.
+
+A separate backend module, `profile_normalizer.sh`, runs after
+`target_mode_apply_all` and before placeholder indexing and target resolution.
+For every parsed profile:
+
+- zero supported placeholders leave the profile unchanged;
+- one unique supported placeholder leaves the profile unchanged;
+- multiple unique supported placeholders produce one runtime profile per
+  placeholder;
+- each generated profile contains exactly one unique selector and all original
+  non-selector strategy text;
+- generated profile order follows the selectors' first appearance;
+- repeated occurrences of the same selector do not produce duplicate profiles.
+
+The only supported selector families are permanently `HOSTLIST:*` and
+`IPSET:*`. `GROUP`, `TARGETSET`, and generic future placeholder families are not
+part of the design.
+
+The normalizer must be idempotent and must stage the complete result before
+replacing parser output. Downstream target resolution remains responsible for
+emitting `--new` between runtime profiles.
+
+Reason:
+
+Target isolation is a backend execution requirement, not a configuration burden
+that should force users to copy long dvtws2 strategy blocks. A dedicated,
+target-name-independent transformation keeps parser, resolver, and generator
+responsibilities narrow while producing correct one-target runtime profiles.
+
+Consequences:
+
+- User configuration remains compact and readable.
+- Target Mode generated selectors and explicit selectors follow the same path.
+- Resolver behavior remains generic for any registered HOSTLIST or IPSET name.
+- Runtime profile count may exceed the number of user-authored profiles.
+- Tests must cover zero, one, mixed, repeated, and three-or-more selectors,
+  user `--new` boundaries, order preservation, and idempotence.
+
+Affected documents:
+
+- docs/ARCHITECTURE.md
+- docs/REQUIREMENTS.md
+- docs/DEVLOG.md
+- docs/PROJECT_STATE.md
+- docs/ROADMAP.md
+- README.md

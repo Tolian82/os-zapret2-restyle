@@ -56,9 +56,11 @@ Config loader
         ↓
 Strategy parser
         ↓
-Generic placeholder index
-        ↓
 Target Mode resolver
+        ↓
+Runtime Profile Normalizer
+        ↓
+Generic placeholder index
         ↓
 Target registry and resolver
         ↓
@@ -175,6 +177,12 @@ Supported target type and target name registry.
 target_mode.sh
 Implicit targets for placeholder-free profiles.
 
+profile_normalizer.sh
+Expands a parsed profile containing multiple unique HOSTLIST/IPSET selectors into
+one runtime profile per selector. User-authored `--new` boundaries remain valid,
+non-selector strategy lines are copied unchanged, selector order is preserved, and
+normalization is staged before parser output is replaced.
+
 targets.sh
 HOSTLIST/IPSET normalization, validation, managed files, and resolution.
 
@@ -213,6 +221,33 @@ Execution status reporting.
 
 orchestrator.sh
 Lifecycle coordination.
+
+==================================================
+RUNTIME PROFILE NORMALIZATION
+==================================================
+
+The user-facing Traffic Strategy may place multiple target selectors in one
+profile. The backend does not require users to duplicate strategy text or insert
+extra `--new` separators solely for target isolation.
+
+After parsing and Target Mode processing, `profile_normalizer.sh` applies these
+rules:
+
+- zero supported selectors: keep the profile unchanged;
+- one unique supported selector: keep the profile unchanged;
+- multiple unique supported selectors: clone the profile once per selector;
+- each clone contains exactly one unique `HOSTLIST:*` or `IPSET:*` selector;
+- every non-selector line, blank line, and line order is preserved;
+- selector clones follow first-use order;
+- duplicate occurrences of the same selector do not create duplicate profiles.
+
+Only `HOSTLIST:*` and `IPSET:*` are supported selector families. There is no
+`GROUP`, `TARGETSET`, or generic future selector family in this architecture.
+
+The normalizer builds a complete staged profile set before replacing parser
+output and restores the original set if replacement fails. A second run over an
+already normalized set does not change it. The Target Resolver later emits
+runtime `--new` separators between all resulting profiles.
 
 ==================================================
 RUNTIME

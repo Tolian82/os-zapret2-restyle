@@ -56,6 +56,9 @@ jobs:
           sh -n src/etc/rc.syshook.d/start/20-zapret
           sh -n src/etc/rc.syshook.d/stop/20-zapret
 
+      - name: Test runtime profile normalization
+        run: sh scripts/test-profile-normalizer.sh
+
       - name: Check required project files
         run: |
           set -eu

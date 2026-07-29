@@ -67,7 +67,13 @@ Supported target placeholders currently include:
 <HOSTLIST:youtube>
 <IPSET:telegram>
 
-Placeholders may be combined in the same profile.
+A user profile may contain several `HOSTLIST:*` and/or `IPSET:*` placeholders.
+The backend automatically expands it into one runtime profile per unique target
+while copying the remaining strategy parameters to every generated profile.
+Extra user-authored `--new` separators are therefore not required merely to
+separate target lists. Existing user `--new` boundaries are preserved.
+
+Only `HOSTLIST:*` and `IPSET:*` placeholder families are supported.
 
 Profiles without explicit placeholders are processed according to Target Mode.
 

@@ -522,3 +522,41 @@ changed.
 Next:
 
 Audit and verify real strategy application for named HOSTLIST and IPSET targets.
+
+==================================================
+2026-07-29 — RUNTIME PROFILE NORMALIZER IMPLEMENTED
+==================================================
+
+Implemented the approved automatic target-profile expansion.
+
+Code changes:
+
+- Added backend module `profile_normalizer.sh`.
+- Loaded the module from `zapret_service.sh`.
+- Inserted normalization after Target Mode and before placeholder indexing in
+  `orchestrator_build_release()`.
+- Made the orchestrator consume the normalized runtime profile count.
+- Preserved user-authored profile ordering and generated downstream `--new`
+  boundaries through the existing Target Resolver.
+- Added staged replacement with restoration on replacement failure.
+- Added focused shell tests and a CI execution step.
+
+Verified test scenarios:
+
+- no selector;
+- one HOSTLIST selector;
+- one IPSET selector;
+- mixed HOSTLIST and IPSET selectors;
+- two HOSTLIST selectors plus one IPSET selector;
+- user-authored `--new` boundaries;
+- repeated selector deduplication;
+- second-pass idempotence.
+
+Local verification completed:
+
+- shell syntax validation passed;
+- focused profile normalizer tests passed;
+- repository diff whitespace validation passed.
+
+Live OPNsense verification remains required before the runtime behavior is
+classified as fully verified.
