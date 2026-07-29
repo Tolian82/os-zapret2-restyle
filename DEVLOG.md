@@ -464,3 +464,36 @@ The v0.1.0 workflow completed validation and the FreeBSD build, then stopped bec
 the generic artifact uploader rejected the colon in `FreeBSD:15:amd64`. Reviewed
 established OPNsense repository layouts and the official Pages artifact action.
 Preserved native `${ABI}` paths and added a flat release-assets staging boundary.
+
+==================================================
+2026-07-29 — MILESTONE 6 CLOSED AND MILESTONE 7 PRIORITIES APPROVED
+==================================================
+
+Completed:
+
+- The first official v0.1.0 release was published successfully.
+- The first release run exposed the generic artifact restriction on colon-containing
+  native ABI paths.
+- The release architecture now permanently separates the native Pages repository tree
+  from flat GitHub Release asset staging.
+- GitHub Pages environment protection was corrected to permit `v*` tags through a tag
+  rule rather than an ineffective branch rule.
+- Backend, lifecycle, supervisor, packaging, and release infrastructure work required
+  for Milestone 6 was closed.
+
+Approved next direction:
+
+1. Move internal documentation into `docs/`.
+2. Verify real strategy application for named HOSTLIST and IPSET targets.
+3. Finish all functionality already approved in REQUIREMENTS.md before design work or
+   scope expansion.
+
+The previously discussed UX audit was rejected as unnecessary for the current small,
+focused plugin. Navigation and the existing first-run, Service, Diagnostics,
+Maintenance, Status, and Strategy interfaces remain unchanged for now. UX work may be
+introduced later when expanded functionality needs it or when an existing interface
+actually blocks use.
+
+Working emphasis was clarified as an approximate planning guide rather than a quota:
+about 60% coding, 15% documentation, 15% discussion of current work, 8% discussion of
+future work, and 2% broader process or philosophical discussion.

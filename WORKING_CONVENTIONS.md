@@ -239,3 +239,37 @@ Keep package publication and installation commands together where possible, but
 never mix them with the preceding validation block. Commands must remain in actual
 execution order and must be valid for the OPNsense root shell or explicitly invoke
 /bin/sh when POSIX shell syntax is required.
+
+==================================================
+FOCUS, SUFFICIENCY, AND INTERFACE STABILITY
+==================================================
+
+The project is a small applied addon with a defined scope. Prefer reasonable
+sufficiency over speculative completeness or unnecessary abstraction.
+
+Current priorities:
+
+1. Make the already approved functionality work correctly.
+2. Verify it on a real supported OPNsense system.
+3. Keep documentation synchronized at a level that supports development and recovery.
+4. Discuss future expansion only without displacing current implementation work.
+
+UX is supporting work rather than a standalone objective. Consider interface changes
+when expanded functionality needs them or when the existing interface demonstrably
+blocks an implemented capability. Otherwise keep the interface stable.
+
+Do not begin general audits or redesigns of Navigation, First Run, Service,
+Diagnostics, Maintenance, Status, or Strategy while the current approved functionality
+remains incomplete.
+
+Project guidance should normally be treated as recommendations and priorities. Use
+hard requirements only where correctness, compatibility, release safety, or repository
+consistency genuinely depends on them.
+
+Approximate effort preference, not a quota:
+
+- 60% coding;
+- 15% documentation;
+- 15% discussion of current work;
+- 8% discussion of future work;
+- 2% broader process or philosophical discussion.

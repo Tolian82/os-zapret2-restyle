@@ -93,3 +93,15 @@ Release infrastructure preflight:
   the generic GitHub Actions artifact uploader.
 - Preserved the native pkg ABI path while staging GitHub Release assets separately.
 - Updated checkout and generic artifact actions to Node.js 24-capable versions.
+
+### Project direction
+
+- Closed Milestone 6 after the successful first official v0.1.0 release.
+- Recorded the permanent split between native GitHub Pages pkg paths and flat GitHub
+  Release asset staging.
+- Opened Milestone 7 with priority on completing and verifying already approved
+  functionality.
+- Deferred general UX and design audits; interface work remains tied to actual
+  functionality or demonstrated usability blockers.
+- Planned migration of internal documentation into `docs/` and focused verification of
+  strategy application to named HOSTLIST and IPSET targets.

@@ -39,14 +39,17 @@ Development tree:
 /root/os-zapret2-restyle
 
 Current phase:
-Distribution and release infrastructure implementation
+Milestone 7 — completion of approved plugin functionality
 
 Current priority:
-Implement and verify the project-owned pkg repository and first v0.1.0 prerelease pipeline.
+Finish the current documentation synchronization, then move project documentation
+into docs/, verify strategy-to-list behavior, and complete the functionality already
+approved in REQUIREMENTS.md.
 
 Last completed:
-Implemented and live-verified GUI lifecycle runtime bootstrap and the first focused
-supervisor process-identity health check.
+Milestone 6 infrastructure and release audit, including the first successful official
+v0.1.0 release and permanent separation of native Pages repository paths from flat
+GitHub Release artifact staging.
 
 Current work cycle:
 Investigate → verify → record audit evidence → update Engineering Memory → commit → continue or remediate.
@@ -352,3 +355,41 @@ Validation and FreeBSD build succeeded. Publication stopped when the generic art
 uploader rejected the colon in `FreeBSD:15:amd64`. The prepared fix preserves the
 native pkg path, adds flat release-assets staging, and updates affected actions to
 Node.js 24-capable versions. Next: commit, retag v0.1.0, and repeat the release audit.
+
+==================================================
+MILESTONE 6 CLOSED / MILESTONE 7 OPENED — 2026-07-29
+==================================================
+
+Milestone 6 is complete.
+
+Completed and verified:
+- Backend, lifecycle, supervisor, packaging, and release audit work required for the
+  first official release.
+- Project-owned GitHub Pages pkg repository and GitHub Release pipeline.
+- Native `FreeBSD:15:amd64` Pages layout retained for pkg consumers.
+- Separate flat `release-assets/` staging for generic GitHub Actions artifacts.
+- GitHub Pages environment configured to permit release tags through a tag rule.
+- First official v0.1.0 release published successfully.
+
+Current Milestone 7 focus:
+Complete the functionality already approved in REQUIREMENTS.md before considering
+interface redesign or new product scope.
+
+Ordered next work:
+1. Move internal project documentation into the conventional `docs/` directory and
+   update all links and reading-order references.
+2. Verify that strategies are actually applied to their intended list targets,
+   including `<HOSTLIST:youtube>`, `<IPSET:telegram>`, and `<HOSTLIST:user>`.
+3. Audit and complete every already-declared requirement until the existing product
+   scope works predictably on a real OPNsense system.
+
+Explicitly out of current scope:
+- navigation redesign;
+- general OPNsense UX research;
+- first-run redesign;
+- Service, Diagnostics, Maintenance, Status, or Strategy UX audits;
+- design work not required by the existing approved functionality.
+
+UX is not a separate project objective. Interface work is considered when required to
+support expanded functionality or when the current interface demonstrably prevents use
+of an implemented capability. Otherwise the interface remains stable.

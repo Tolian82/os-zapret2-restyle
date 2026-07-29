@@ -1571,3 +1571,57 @@ Implementation:
 Closure criteria:
 A repeated v0.1.0 workflow must upload both artifacts, create the prerelease, deploy
 Pages, and expose a pkg-consumable `FreeBSD:15:amd64` repository path.
+
+==================================================
+MILESTONE 6 RELEASE AUDIT — CLOSED
+==================================================
+
+Status:
+Completed.
+
+Final evidence:
+
+- The first official v0.1.0 release was published successfully.
+- Package and archive metadata verification completed before publication.
+- GitHub Pages serves the canonical pkg repository using the native
+  `FreeBSD:15:amd64` path.
+- Generic GitHub Release artifact transfer uses separate flat `release-assets/`
+  staging and no longer receives colon-containing paths.
+- GitHub Pages environment protection permits `v*` release tags through a tag rule.
+- The first-run workflow findings were remediated and re-run successfully.
+
+Permanent release architecture:
+
+GitHub tag
+        ↓
+GitHub Actions validation and FreeBSD package build
+        ↓
+archive and repository metadata verification
+        ↓
+`pages/FreeBSD:15:amd64` for the canonical pkg repository
+        +
+`release-assets/` for flat GitHub Release uploads
+
+No open Milestone 6 release Finding remains.
+
+==================================================
+MILESTONE 7 FUNCTIONAL AUDIT SCOPE
+==================================================
+
+The next product audit is not a UX audit. It verifies that the currently declared
+functionality works as specified.
+
+First focused target:
+Strategy application to concrete list placeholders, including:
+
+- `<HOSTLIST:youtube>`;
+- `<IPSET:telegram>`;
+- `<HOSTLIST:user>`.
+
+Required evidence must cover configuration parsing, target resolution, generated
+runtime arguments and files, active dvtws2 invocation, relevant firewall behavior,
+and an observable real traffic result where practical.
+
+After this focused audit, compare each approved requirement with implementation and
+live evidence. Record only concrete defects or uncertain functional chains. Navigation
+and general interface review are out of scope.

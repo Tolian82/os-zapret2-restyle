@@ -202,3 +202,43 @@ Milestone 6 final pre-tag audit:
 - [x] Design transport separation without renaming `${ABI}`.
 - [ ] Commit remediation and retag v0.1.0.
 - [ ] Verify Release, Pages, pkg update, and GUI installation.
+
+==================================================
+MILESTONE 6 — INFRASTRUCTURE AND FIRST RELEASE — COMPLETED
+==================================================
+
+[x] Complete Backend and Lifecycle audit work required for release.
+[x] Complete supervisor responsibility and process-identity hardening.
+[x] Complete package and release metadata verification.
+[x] Publish the canonical pkg repository through GitHub Pages.
+[x] Keep the native `FreeBSD:15:amd64` repository layout.
+[x] Separate flat GitHub Release assets from the Pages repository tree.
+[x] Configure the GitHub Pages environment with a release-tag rule.
+[x] Publish the first official v0.1.0 release.
+[x] Close the release audit findings from the first workflow runs.
+
+==================================================
+MILESTONE 7 — COMPLETE APPROVED FUNCTIONALITY
+==================================================
+
+Current priority order:
+
+[ ] Move internal documentation into `docs/` and repair all references.
+[ ] Audit strategy application to named HOSTLIST and IPSET targets.
+[ ] Verify `<HOSTLIST:youtube>` behavior on a real runtime.
+[ ] Verify `<IPSET:telegram>` behavior on a real runtime.
+[ ] Verify `<HOSTLIST:user>` behavior on a real runtime.
+[ ] Compare implemented behavior with every approved requirement.
+[ ] Implement or repair missing approved behavior in focused commits.
+[ ] Complete live verification of the existing declared functionality.
+
+Deferred until the approved functionality is complete:
+
+- navigation changes;
+- general UX or OPNsense interface research;
+- first-run, Service, Diagnostics, Maintenance, Status, and Strategy UX review;
+- unrelated design work;
+- expansion of product scope.
+
+Possible later UX work is expected to accompany expanded functionality, not exist as a
+standalone audit programme.

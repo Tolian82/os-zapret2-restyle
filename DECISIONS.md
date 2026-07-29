@@ -1034,3 +1034,99 @@ Consequences:
 - GitHub Release receives files from `release-assets`;
 - GitHub Pages receives the complete native pkg repository tree;
 - official workflow actions track supported Node.js runtimes.
+
+==================================================
+2026-07-29 — COMPLETE APPROVED FUNCTIONALITY BEFORE DESIGN EXPANSION
+==================================================
+
+Decision:
+Milestone 7 prioritizes completion and verification of the functionality already
+approved in REQUIREMENTS.md. General UX audits, design redesigns, and unrelated new
+functionality are deferred.
+
+Reason:
+The project is a small applied OPNsense plugin. Its immediate value depends on the
+existing declared functions working correctly, not on broad product or interface
+research.
+
+Consequences:
+The next work is ordered as follows:
+1. move internal documentation into `docs/`;
+2. verify strategy application to concrete HOSTLIST and IPSET targets;
+3. close gaps between REQUIREMENTS.md and actual verified behavior.
+
+Navigation, first-run flow, Service, Diagnostics, Maintenance, Status, and Strategy UX
+remain unchanged unless an implementation need within the approved scope requires a
+focused adjustment.
+
+Affected documents:
+PROJECT_STATE.md
+ROADMAP.md
+DEVLOG.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+AUDIT.md
+
+Status:
+Active
+
+==================================================
+2026-07-29 — UX IS SUPPORTING WORK, NOT A STANDALONE PROJECT GOAL
+==================================================
+
+Decision:
+UX work is considered when it is needed to support expanded functionality or when the
+existing interface objectively prevents use of an implemented capability. Otherwise
+the interface remains stable.
+
+Reason:
+A standalone UX programme would divert effort from completing the plugin's small,
+defined functional scope.
+
+Consequences:
+No general Navigation & Workflow audit is planned. Later interface work should be
+proportional to actual functionality and operational need.
+
+Affected documents:
+PROJECT_STATE.md
+ROADMAP.md
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+
+Status:
+Active
+
+==================================================
+2026-07-29 — PROJECT GUIDANCE USES PRIORITIES AND RECOMMENDATIONS
+==================================================
+
+Decision:
+Except where correctness, compatibility, release safety, or repository consistency
+requires a firm rule, project process guidance should be expressed as priorities and
+recommendations rather than an expanding set of rigid doctrines.
+
+The project follows reasonable sufficiency: use the least complexity needed for a
+reliable implementation of the approved scope.
+
+Reason:
+Excessive process rules constrain practical engineering and can turn project
+organization into work that competes with the addon itself.
+
+Consequences:
+The approximate effort balance is a planning preference, not a quota:
+- 60% coding;
+- 15% documentation;
+- 15% current-work discussion;
+- 8% future-work discussion;
+- 2% broader process or philosophical discussion.
+
+Documentation should preserve useful decisions without attempting to predict and
+regulate every possible future nuance.
+
+Affected documents:
+WORKING_CONVENTIONS.md
+DEVELOPMENT_GUIDE.md
+PROJECT_STATE.md
+
+Status:
+Active

@@ -219,3 +219,23 @@ A validation block must not perform installation, commit, push, restart, or othe
 mutation. An installation block may group related package build, publication, and
 installation commands. Avoid shell variables in commands intended for the default
 OPNsense csh root shell unless the whole block is executed explicitly by /bin/sh.
+
+==================================================
+CURRENT IMPLEMENTATION PRIORITY
+==================================================
+
+For Milestone 7, choose work in this order:
+
+1. Finish the current documentation synchronization.
+2. Move internal documentation into `docs/` and update references.
+3. Verify strategy application to named HOSTLIST and IPSET targets.
+4. Compare actual behavior with REQUIREMENTS.md.
+5. Implement and live-test missing or defective approved behavior in focused commits.
+
+Do not start a general UX audit or redesign programme during this work. A focused
+interface change is appropriate only when required by the functionality being
+implemented or when the current interface prevents use of that functionality.
+
+Keep process discussion proportional to the project. Existing guidance is sufficient;
+prefer coding and verification over adding more methodological text unless practice
+exposes a concrete gap.
