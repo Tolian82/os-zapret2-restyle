@@ -39,16 +39,14 @@ Development tree:
 /root/os-zapret2-restyle
 
 Current phase:
-API and inherited-reference audit execution
+Distribution and release infrastructure implementation
 
 Current priority:
-Live-verify the first focused supervisor health check: continuous dvtws2 process
-identity validation.
+Implement and verify the project-owned pkg repository and first v0.1.0 prerelease pipeline.
 
 Last completed:
-Live-verified watchdog removal and implemented identity-aware supervisor monitoring
-without adding restart, reconfigure, runtime generation, firewall repair, or other
-health checks.
+Implemented and live-verified GUI lifecycle runtime bootstrap and the first focused
+supervisor process-identity health check.
 
 Current work cycle:
 Investigate → verify → record audit evidence → update Engineering Memory → commit → continue or remediate.
@@ -297,3 +295,22 @@ Next priority:
 1. Live-verify PKG-001 with a package reinstall and first GUI Apply.
 2. Implement GitHub Pages pkg-repository publication and the first v0.1.0 test release.
 3. Verify GUI repository installation and removal of unknown-repository status.
+
+==================================================
+RELEASE INFRASTRUCTURE IMPLEMENTATION — 2026-07-29
+==================================================
+
+Release infrastructure implementation started:
+- tag and VERSION validation remains mandatory;
+- release package is built in FreeBSD 15;
+- pkg repo generates the FreeBSD:15:amd64 catalogue;
+- GitHub Release receives the package and SHA256SUMS;
+- GitHub Pages receives the repository catalogue and zapret2-restyle.conf;
+- the first v0.1.0 publication remains a prerelease pending live GUI verification.
+
+Immediate next actions:
+1. Commit and push the release infrastructure change.
+2. Configure GitHub Pages source as GitHub Actions.
+3. Create and push tag v0.1.0.
+4. Verify the workflow, Release assets, Pages repository, pkg update, and GUI package state.
+5. Record live results and close or update PKG-002.
