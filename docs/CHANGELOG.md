@@ -105,3 +105,10 @@ Release infrastructure preflight:
   functionality or demonstrated usability blockers.
 - Planned migration of internal documentation into `docs/` and focused verification of
   strategy application to named HOSTLIST and IPSET targets.
+
+## Documentation layout — 2026-07-29
+
+- Moved engineering documentation into the `docs/` directory.
+- Updated the root README documentation entry point and reading order.
+- Updated CI required-file checks for the new documentation paths.
+- No runtime or user-visible plugin behavior changed.

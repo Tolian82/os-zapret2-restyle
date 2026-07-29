@@ -42,14 +42,13 @@ Current phase:
 Milestone 7 — completion of approved plugin functionality
 
 Current priority:
-Finish the current documentation synchronization, then move project documentation
-into docs/, verify strategy-to-list behavior, and complete the functionality already
-approved in REQUIREMENTS.md.
+Verify real strategy-to-list behavior and complete the functionality already approved
+in REQUIREMENTS.md.
 
 Last completed:
-Milestone 6 infrastructure and release audit, including the first successful official
-v0.1.0 release and permanent separation of native Pages repository paths from flat
-GitHub Release artifact staging.
+The first Milestone 7 priority was completed: engineering documentation was moved into
+the `docs/` directory, repository navigation and CI paths were synchronized, and the
+root README now points to the engineering memory entry point.
 
 Current work cycle:
 Investigate → verify → record audit evidence → update Engineering Memory → commit → continue or remediate.

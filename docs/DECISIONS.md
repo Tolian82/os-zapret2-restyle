@@ -1130,3 +1130,49 @@ PROJECT_STATE.md
 
 Status:
 Active
+
+==================================================
+2026-07-29 — ENGINEERING DOCUMENTATION MOVED TO DOCS/
+==================================================
+
+Decision:
+
+Store the complete engineering documentation system in the repository `docs/`
+directory.
+
+The following files remain in the repository root because they are project entry
+points, licensing or attribution files, build metadata, or package metadata:
+
+- README.md
+- LICENSE
+- NOTICE
+- VERSION
+- Makefile
+- pkg-descr
+
+The GitHub issue and pull-request templates remain under `.github/`.
+
+Reason:
+
+This provides a conventional open-source repository layout while preserving a clear
+root README and keeping the engineering memory system together in one directory.
+
+Consequences:
+
+- Internal development starts from `docs/INDEX.md`.
+- Repository-root references must use the `docs/` prefix.
+- References between documents inside `docs/` may use short relative names.
+- CI checks must validate the new documentation paths.
+- Future engineering documents belong under `docs/` unless their platform role
+  requires another standard location.
+
+Affected documents:
+
+README.md
+docs/INDEX.md
+docs/PROJECT_STATE.md
+docs/ROADMAP.md
+docs/DEVLOG.md
+docs/CHANGELOG.md
+docs/DECISIONS.md
+.github/workflows/ci.yml

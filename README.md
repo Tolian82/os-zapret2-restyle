@@ -170,19 +170,22 @@ signing is required before promotion to a stable public release.
 ENGINEERING MEMORY
 ==================================================
 
-Internal development starts from INDEX.md.
+Internal development starts from `docs/INDEX.md`.
+
+All engineering documentation is stored in the `docs/` directory.
 
 Mandatory reading order:
 
-1. INDEX.md
-2. PROJECT_STATE.md
-3. DECISIONS.md
-4. WORKING_CONVENTIONS.md
-5. DEVELOPMENT_GUIDE.md
-6. ARCHITECTURE.md
-7. DEVLOG.md
-8. ROADMAP.md
-9. REQUIREMENTS.md
+1. `docs/INDEX.md`
+2. `docs/PROJECT_STATE.md`
+3. `docs/AUDIT.md`
+4. `docs/DECISIONS.md`
+5. `docs/WORKING_CONVENTIONS.md`
+6. `docs/DEVELOPMENT_GUIDE.md`
+7. `docs/ARCHITECTURE.md`
+8. `docs/DEVLOG.md`
+9. `docs/ROADMAP.md`
+10. `docs/REQUIREMENTS.md`
 
 ==================================================
 ACKNOWLEDGEMENTS

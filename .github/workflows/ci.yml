@@ -67,10 +67,10 @@ jobs:
             LICENSE \
             NOTICE \
             README.md \
-            CHANGELOG.md \
-            REQUIREMENTS.md \
-            ARCHITECTURE.md \
-            DEVLOG.md \
+            docs/CHANGELOG.md \
+            docs/REQUIREMENTS.md \
+            docs/ARCHITECTURE.md \
+            docs/DEVLOG.md \
             src/etc/rc.syshook.d/start/20-zapret \
             src/etc/rc.syshook.d/stop/20-zapret \
             src/etc/inc/plugins.inc.d/zapret.inc \

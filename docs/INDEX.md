@@ -28,6 +28,10 @@ START HERE
 
 This repository uses an engineering memory system.
 
+All engineering documentation is stored in the `docs/` directory. Document names
+in this index omit the `docs/` prefix for readability unless a repository-relative
+path is required.
+
 Do not begin development from chat history or memory alone.
 
 Read the documents in this exact order:

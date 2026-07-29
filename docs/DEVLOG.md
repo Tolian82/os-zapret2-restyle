@@ -497,3 +497,28 @@ actually blocks use.
 Working emphasis was clarified as an approximate planning guide rather than a quota:
 about 60% coding, 15% documentation, 15% discussion of current work, 8% discussion of
 future work, and 2% broader process or philosophical discussion.
+
+==================================================
+2026-07-29 — ENGINEERING DOCUMENTATION MOVED TO DOCS/
+==================================================
+
+Completed the first priority of Milestone 7.
+
+Implemented:
+
+- Created the repository `docs/` directory.
+- Moved the complete engineering documentation system with `git mv`.
+- Preserved README.md, LICENSE, NOTICE, VERSION, Makefile, and pkg-descr in the
+  repository root.
+- Updated the root README engineering-memory entry point and reading order.
+- Updated GitHub Actions required-file checks for the new paths.
+- Added documentation-location guidance to docs/INDEX.md.
+- Recorded the layout decision in docs/DECISIONS.md.
+- Updated current project state and roadmap.
+
+No plugin runtime behavior, package content, service lifecycle, or GUI behavior was
+changed.
+
+Next:
+
+Audit and verify real strategy application for named HOSTLIST and IPSET targets.

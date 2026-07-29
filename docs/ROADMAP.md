@@ -242,3 +242,19 @@ Deferred until the approved functionality is complete:
 
 Possible later UX work is expected to accompany expanded functionality, not exist as a
 standalone audit programme.
+
+==================================================
+MILESTONE 7 — DOCUMENTATION LAYOUT COMPLETED
+==================================================
+
+[x] Move the complete engineering documentation system into `docs/`.
+[x] Preserve repository history by using `git mv`.
+[x] Update the root README engineering-memory entry point.
+[x] Update CI required-file paths.
+[x] Record the new repository layout in project documentation.
+
+Next priorities:
+
+[ ] Verify real strategy application for named HOSTLIST targets.
+[ ] Verify real strategy application for named IPSET targets.
+[ ] Close gaps between REQUIREMENTS.md and verified plugin behavior.
