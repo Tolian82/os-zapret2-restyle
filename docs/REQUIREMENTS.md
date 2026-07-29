@@ -115,7 +115,7 @@ One IPv4 address or IPv4 CIDR network per line:
 IPSET fields reject domains, malformed addresses, invalid prefixes, and
 unrelated text.
 
-IPv6 target lists are outside version 0.1.0 requirements.
+IPv6 target lists are outside version 0.2.0 requirements.
 
 ### Normalization
 
@@ -182,7 +182,7 @@ The package identity is:
 
 ```text
 PLUGIN_NAME=zapret2-restyle
-PLUGIN_VERSION=0.1.0
+PLUGIN_VERSION=0.2.0
 ```
 
 The final package must include all project-owned MVC, service, backend,

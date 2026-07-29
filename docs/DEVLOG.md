@@ -581,3 +581,27 @@ Code changes:
 
 Runtime target resolution, generated arguments, activation, and lifecycle behavior
 remain unchanged.
+
+
+==================================================
+2026-07-29 — RELEASE 0.2.0 PREPARATION
+==================================================
+
+Approved the next project release as version 0.2.0.
+
+Implemented release metadata changes:
+- VERSION changed from 0.1.0 to 0.2.0.
+- PLUGIN_REVISION reset from 2 to 1.
+- Expected package version is 0.2.0_1.
+- Expected release tag is v0.2.0.
+
+Synchronized the current release documentation without rewriting the historical
+v0.1.0 records.
+
+Confirmed that the project repository remains explicitly unsigned using
+`signature_type: "none"`. This decision supersedes the earlier requirement to
+make repository signing mandatory before stable-release promotion.
+
+Next:
+Review the release diff, run validation, commit the release preparation, push
+main, verify CI, and create the immutable v0.2.0 tag.

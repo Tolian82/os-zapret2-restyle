@@ -3,7 +3,7 @@
 Native OPNsense plugin for managing the zapret2 DPI bypass engine.
 
 Current version:
-0.1.0
+0.2.0
 
 Project status:
 Active development
@@ -124,7 +124,7 @@ Examples:
 
 Domain names are not accepted in IP target fields.
 
-IPv6 target lists are not supported in version 0.1.0.
+IPv6 target lists are not supported in version 0.2.0.
 
 ==================================================
 APPLYING SETTINGS
@@ -146,7 +146,7 @@ Valid values are normalized, saved, activated, and reloaded into the form.
 INSTALLATION
 ==================================================
 
-Version 0.1.0 is being prepared as the first public test release.
+Version 0.2.0 is being prepared as the current public development release.
 
 The supported distribution model is a project-owned FreeBSD pkg repository
 published through GitHub Pages for FreeBSD:15:amd64 / supported OPNsense 26.7

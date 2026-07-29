@@ -6,6 +6,35 @@ All notable changes to this project are documented in this file.
 
 The project starts its own version history at `0.1.0`.
 
+## [0.2.0] - 2026-07-29
+
+### Added
+
+- Added normalized expansion of strategy profiles containing multiple
+  `<HOSTLIST:name>` and/or `<IPSET:name>` placeholders.
+- Added one generated runtime profile per unique target while preserving the
+  remaining parameters of the user-authored profile.
+- Added release preparation for installation and updates through the
+  project-owned OPNsense pkg repository.
+
+### Changed
+
+- Unified the strategy normalization and runtime profile generation pipeline.
+- Preserved user-authored standalone `--new` profile boundaries while removing
+  the need to add extra boundaries solely for multiple target placeholders.
+- Updated the project version to `0.2.0` and reset the package revision to `1`.
+- Retained the explicitly unsigned repository configuration with
+  `signature_type: "none"` as the approved project distribution model.
+
+### Distribution
+
+- The release tag is `v0.2.0`.
+- The expected package version is `0.2.0_1`.
+- The expected package filename is
+  `os-zapret2-restyle-0.2.0_1.pkg`.
+- The repository target remains `FreeBSD:15:amd64`.
+- GitHub Release and GitHub Pages must be generated from the same validated tag.
+
 ## [0.1.0] - 2026-07-28
 
 ### Added

@@ -193,7 +193,9 @@ Milestone 6 final pre-tag audit:
 [x] Document one-time repository registration and Firmware GUI installation.
 [x] Make the unsigned prerelease repository state explicit.
 [ ] Live-verify repository generation and Pages publication from tag v0.1.0.
-[ ] Add repository signing before stable-release promotion.
+[x] Resolve repository authentication policy before stable-release promotion.
+    Superseded on 2026-07-29 by the approved explicit unsigned mode:
+    `signature_type: "none"`.
 
 ### Milestone 6 live release audit — current step
 
@@ -271,3 +273,44 @@ MILESTONE 7 — PROFILE PIPELINE REFACTOR
 [x] Validate profile count at every pipeline boundary.
 [x] Add focused pipeline tests and CI coverage.
 [ ] Live-verify the complete profile pipeline on OPNsense.
+
+
+==================================================
+MILESTONE 7 — VERSION 0.2.0 RELEASE
+==================================================
+
+Status:
+In progress.
+
+Scope:
+- publish the unified runtime profile pipeline;
+- publish multiple HOSTLIST/IPSET placeholder expansion;
+- retain the approved FreeBSD:15:amd64 package repository;
+- retain `signature_type: "none"`;
+- install and update through the standard OPNsense Firmware GUI.
+
+Ordered work:
+1. [x] Approve version 0.2.0.
+2. [x] Set VERSION to 0.2.0.
+3. [x] Reset PLUGIN_REVISION to 1.
+4. [x] Synchronize current release documentation.
+5. [ ] Review and validate the complete release diff.
+6. [ ] Commit and push release preparation.
+7. [ ] Confirm main branch CI.
+8. [ ] Create and push tag v0.2.0.
+9. [ ] Verify GitHub Release assets.
+10. [ ] Verify GitHub Pages pkg repository publication.
+11. [ ] Register the repository on OPNsense.
+12. [ ] Install or upgrade through Firmware > Plugins.
+13. [ ] Live-verify GUI, configd, service and runtime behavior.
+14. [ ] Record the release verification results.
+
+Acceptance criteria:
+- tag v0.2.0 resolves to the reviewed release commit;
+- VERSION is 0.2.0;
+- package version is 0.2.0_1;
+- package origin and project URL are correct;
+- repository metadata is consumable by pkg;
+- repository configuration explicitly uses `signature_type: "none"`;
+- the plugin is installable or upgradeable through the OPNsense Firmware GUI;
+- the installed GUI and runtime pipeline pass live verification.

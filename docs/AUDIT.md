@@ -1521,7 +1521,9 @@ PKG-005 — INITIAL PRERELEASE REPOSITORY IS UNSIGNED
 ==================================================
 
 Status:
-Accepted temporary limitation for v0.1.0 prerelease; stable-release blocker.
+Accepted temporary limitation for the v0.1.0 prerelease. The original
+stable-release blocker classification was superseded on 2026-07-29 by
+the approved explicit unsigned repository decision.
 
 Finding:
 The first project repository is generated without a repository signing key. HTTPS
@@ -1671,3 +1673,40 @@ Acceptance criteria:
 
 Remediation status:
 Implemented statically; live verification pending.
+
+
+==================================================
+PKG-006 — UNSIGNED REPOSITORY MODE APPROVED
+==================================================
+
+Date:
+2026-07-29
+
+Status:
+Accepted architecture decision.
+
+Finding:
+The project pkg repository does not sign repository metadata with a private key.
+The client configuration explicitly uses `signature_type: "none"`.
+
+Assessment:
+HTTPS protects the transport from GitHub Pages to the pkg client, but pkg does
+not independently verify the authenticity of repository metadata. This
+limitation is understood and accepted for the current project distribution
+model.
+
+Decision:
+Retain `signature_type: "none"` for version 0.2.0 and subsequent releases until
+a separate architecture decision introduces repository signing.
+
+Superseded requirement:
+The previous statement that signing was mandatory before stable-release
+promotion is no longer active.
+
+Verification criteria:
+1. repository/zapret2-restyle.conf explicitly contains
+   `signature_type: "none"`;
+2. generated Pages output contains the same client configuration;
+3. pkg update succeeds after repository registration;
+4. the package is visible from repository `Zapret2Restyle`;
+5. no configuration claims that pubkey or fingerprints validation is active.

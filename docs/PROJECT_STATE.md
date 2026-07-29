@@ -27,7 +27,7 @@ Project:
 os-zapret2-restyle
 
 Current version:
-0.1.0
+0.2.0
 
 Current branch:
 main
@@ -414,3 +414,39 @@ for only one module.
 
 Immediate next priority remains live OPNsense verification of named HOSTLIST/IPSET
 strategy application and automatic profile expansion.
+
+
+==================================================
+RELEASE 0.2.0 PREPARATION — 2026-07-29
+==================================================
+
+Current release:
+0.2.0
+
+Package revision:
+1
+
+Expected package version:
+0.2.0_1
+
+Release status:
+Preparation in progress.
+
+Completed:
+- Unified the runtime profile normalization and expansion pipeline.
+- Approved v0.2.0 as the next project release.
+- Updated VERSION from 0.1.0 to 0.2.0.
+- Reset PLUGIN_REVISION from 2 to 1.
+- Retained the project-owned FreeBSD:15:amd64 pkg repository.
+- Confirmed `signature_type: "none"` as the approved repository mode.
+
+Immediate next actions:
+1. Review the complete release diff.
+2. Run repository validation and CI checks.
+3. Commit and push the v0.2.0 release preparation.
+4. Confirm the main branch CI result.
+5. Create and push the immutable tag v0.2.0.
+6. Verify GitHub Release and GitHub Pages publication.
+7. Register the repository on the target OPNsense system.
+8. Install or upgrade os-zapret2-restyle through Firmware > Plugins.
+9. Record live installation and runtime verification results.

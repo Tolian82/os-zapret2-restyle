@@ -1003,7 +1003,8 @@ minimum `meta.conf`, `data.pkg`, and `packagesite.pkg`. A successful package bui
 not sufficient for publication.
 
 The v0.1.0 test repository may be published unsigned only as an explicitly documented
-prerelease using `signature_type: "none"`. Repository signing is mandatory before any
+prerelease using `signature_type: "none"`. At the time of this decision, repository
+signing was considered mandatory before any
 release is promoted as stable.
 
 Consequences:
@@ -1274,3 +1275,51 @@ README.md
 
 Status:
 Active
+
+
+==================================================
+2026-07-29 — REPOSITORY REMAINS EXPLICITLY UNSIGNED
+==================================================
+
+Status:
+Approved
+
+Decision:
+The project-owned FreeBSD pkg repository continues to use:
+
+`signature_type: "none"`
+
+This is the approved repository mode for version 0.2.0 and subsequent releases
+until a separate future decision explicitly changes it.
+
+This decision supersedes the earlier requirement that repository signing must be
+implemented before a release can be promoted from prerelease to stable.
+
+Reason:
+The repository is distributed through GitHub Pages over HTTPS, built and
+published by the project release workflow, and follows the same practical model
+used by established third-party OPNsense repositories. The project currently
+chooses operational simplicity over maintaining an additional private signing
+key and key-distribution lifecycle.
+
+Consequences:
+- the repository configuration must explicitly contain
+  `signature_type: "none"`;
+- no `pubkey` or `fingerprints` path is required;
+- pkg does not independently authenticate repository metadata;
+- HTTPS protects transport but does not provide an independent pkg signing
+  boundary;
+- a future move to `pubkey` or `fingerprints` requires a new recorded
+  architecture decision and migration plan;
+- absence of repository signing is no longer a stable-release blocker.
+
+Affected documents:
+repository/zapret2-restyle.conf
+README.md
+docs/AUDIT.md
+docs/CHANGELOG.md
+docs/DECISIONS.md
+docs/DEVLOG.md
+docs/PROJECT_STATE.md
+docs/REQUIREMENTS.md
+docs/ROADMAP.md
