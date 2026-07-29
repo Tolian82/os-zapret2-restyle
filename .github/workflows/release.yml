@@ -85,6 +85,7 @@ jobs:
           prepare: pkg install -y jq
           run: |
             sh scripts/build-pkg.sh
+            sh scripts/verify-release-package.sh
             sh scripts/build-pkg-repository.sh
 
       - name: Verify release outputs

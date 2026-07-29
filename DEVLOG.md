@@ -425,3 +425,23 @@ Verification required:
 
 Next:
 Implement pkg repository and release publication in a separate focused commit.
+
+==================================================
+2026-07-29 — RELEASE PACKAGE ARCHIVE PREFLIGHT
+==================================================
+
+Finding PKG-003 was remediated before creating the first public tag.
+
+Implemented:
+
+- Added a reusable release-package verifier.
+- Read +MANIFEST directly from the generated .pkg archive.
+- Compared embedded package name, version, and project URL with repository sources.
+- Inserted verification before pkg repo generation and publication.
+
+Validation still required:
+
+- Push the focused commit.
+- Run the v0.1.0 tag workflow.
+- Confirm the FreeBSD build log reports verified package metadata.
+- Confirm publication jobs run only after that check succeeds.

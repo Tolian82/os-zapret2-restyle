@@ -314,3 +314,16 @@ Immediate next actions:
 3. Create and push tag v0.1.0.
 4. Verify the workflow, Release assets, Pages repository, pkg update, and GUI package state.
 5. Record live results and close or update PKG-002.
+
+==================================================
+RELEASE PREFLIGHT UPDATE — 2026-07-29
+==================================================
+
+The current Milestone 6 implementation now validates the generated package archive,
+not only its expected filename. scripts/verify-release-package.sh extracts
++MANIFEST and verifies the approved package name, VERSION plus PLUGIN_REVISION, and
+project repository URL before pkg-repository generation and publication.
+
+Immediate next step:
+Commit this focused preflight change, then configure GitHub Pages for GitHub Actions
+and create the v0.1.0 tag only after the repository is clean.

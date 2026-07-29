@@ -76,3 +76,8 @@ The project starts its own version history at `0.1.0`.
 - GUI domain fields accept wildcard input.
 - Normalized target values are written back to the GUI.
 - Apply button text no longer depends on standard hidden JavaScript initialization.
+
+### Release validation
+
+- Added archive-level preflight validation of the generated package name, version,
+  and project URL before GitHub Release and pkg-repository publication.

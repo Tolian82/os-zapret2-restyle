@@ -177,3 +177,10 @@ Acceptance criteria:
 - OPNsense no longer reports the package as unknown-repository after repository refresh;
 - installation and updates are available through the standard Firmware GUI;
 - normal users do not run setup.sh manually.
+
+Milestone 6 release preflight update:
+
+[x] Read package version from VERSION during package construction.
+[x] Use the independent project URL in package metadata.
+[x] Add archive-level verification of package name, version, and www before publication.
+[ ] Live-verify the preflight in the first v0.1.0 tag workflow.

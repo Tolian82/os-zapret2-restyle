@@ -1457,3 +1457,33 @@ project repository in the GUI, and install/update completes through Firmware.
 
 Remediation status:
 Decision approved; implementation pending in the release-infrastructure commit.
+
+==================================================
+PKG-003 — RELEASE PACKAGE METADATA NEEDS ARCHIVE-LEVEL PREFLIGHT
+==================================================
+
+Status:
+Remediated in source; live workflow verification pending.
+
+Finding:
+The release workflow checked expected output filenames but did not independently
+verify the metadata embedded in the generated package archive before publishing it.
+A stale or incorrect package name, version, or project URL could therefore reach the
+GitHub Release and pkg repository while still satisfying filename-only checks.
+
+Decision:
+Treat the generated package archive as the validation boundary. Extract +MANIFEST
+from the built .pkg and compare its name, version, and www fields with the approved
+project identity and VERSION/PLUGIN_REVISION values before repository generation or
+publication.
+
+Implementation:
+- Added scripts/verify-release-package.sh.
+- Added the verifier to the FreeBSD release build between package creation and
+  pkg-repository generation.
+- The verifier fails closed on missing archives, unreadable manifests, invalid JSON,
+  or metadata mismatch.
+
+Closure criteria:
+The first tag workflow must show successful package-metadata verification before the
+GitHub Release and GitHub Pages jobs publish their outputs.
