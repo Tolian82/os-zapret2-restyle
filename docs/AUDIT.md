@@ -1962,3 +1962,27 @@ Acceptance criteria for closing package lifecycle verification:
 5. reboot produces one service instance and one supervisor instance;
 6. all results are recorded in AUDIT.md, DEVLOG.md, PROJECT_STATE.md, ROADMAP.md,
    and CHANGELOG.md in the same logical commit.
+
+==================================================
+RELEASE BASELINE AUDIT — v0.2.2 — 2026-07-30
+==================================================
+
+Scope:
+Record the published clean release baseline without reclassifying the still-open
+lifecycle and GUI/API findings.
+
+Verified baseline:
+
+- release commit: fc6b208;
+- annotated release tag: v0.2.2;
+- package: os-zapret2-restyle-0.2.2_1;
+- release package verification: passed;
+- package installation and runtime operation on OPNsense: confirmed;
+- GitHub Pages pkg repository rebuilt and updated for 0.2.2_1;
+- inherited upstream tags v1.6.1 through v1.7.2 removed from origin;
+- source tree unchanged after publication and verification.
+
+Classification:
+Release baseline verified. This does not close the remaining upgrade, remove, preserved
+runtime, reinstall, reboot, controlled-failure, timeout-chain, or GUI/API live tests.
+Those remain the ordered Milestone 7 audit work.

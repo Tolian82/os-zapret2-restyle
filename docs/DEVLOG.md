@@ -863,3 +863,31 @@ Remaining verification for this logical change:
   replaced after the resulting patch is committed;
 - required successful `git apply --check` against an unchanged archive copy
   before a patch is delivered.
+
+==================================================
+2026-07-30 — RELEASE v0.2.2 BASELINE COMPLETED
+==================================================
+
+Completed the clean-baseline release cycle from commit fc6b208.
+
+Confirmed:
+
+- VERSION 0.2.2 with PLUGIN_REVISION 1;
+- annotated tag v0.2.2 and origin/main both resolve to fc6b208;
+- package os-zapret2-restyle-0.2.2_1 was built and passed the release-package verifier;
+- package installation and runtime operation were confirmed on OPNsense;
+- the GitHub Pages pkg repository was rebuilt and updated for 0.2.2_1;
+- inherited upstream tags v1.6.1 through v1.7.2 were removed from origin;
+- no source changes were introduced after release publication and package verification.
+
+Release v0.2.2 includes the executable release verifier, the Git-first unified patch
+workflow, docs/GITHUB_WORKFLOW.md, INDEX.md as the documentation recovery entry point,
+and the owner-supplied short-SHA archive as the authoritative baseline for multi-file
+patch preparation.
+
+This documentation synchronization is a documentation-only follow-up. It does not alter
+the package, runtime, GUI, Backend v2, service lifecycle, or repository metadata.
+
+Next ordered work remains the open Milestone 7 live-test matrix: unified strategy
+guidance, upgrade, removal, preserved-runtime reinstall, reboot, controlled dvtws2
+termination, and GUI/API behavior.

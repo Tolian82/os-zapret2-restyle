@@ -1,61 +1,45 @@
 # Changelog
 
-## [Unreleased]
-
-### Fixed
-
-- Replaced obsolete Settings and Diagnostics guidance that referenced removed HTTP/HTTPS Strategy fields.
-- Directed blockcheck results to the unified Traffic Strategy field and warned against blindly replacing existing multi-profile strategies.
-
-### Changed
-
-- Increased package revision to `9` for the GUI guidance correction.
-
-
-- Separated plugin package installation from zapret2 runtime preparation.
-- Package post-install now prints `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install` instead of starting a detached bootstrap.
-- Package removal now stops the service only and preserves runtime/dependencies.
-- Removed configd restart from post-deinstall.
-- Pinned runtime setup to bol-van/zapret2 v1.0.3.
-
-
 Project: **os-zapret2-restyle**
 
 All notable changes to this project are documented in this file.
 
 The project starts its own version history at `0.1.0`.
 
+## [Unreleased]
+
+No unreleased changes recorded.
+
+## [0.2.2] - 2026-07-30
+
 ### Fixed
 
-- Marked `setup_launcher.sh` executable so the `configd` setup action can launch the automatic runtime bootstrap.
+- Replaced obsolete Settings and Diagnostics guidance that referenced removed HTTP/HTTPS Strategy fields.
+- Directed blockcheck results to the unified Traffic Strategy field and warned against blindly replacing existing multi-profile strategies.
+- Marked `scripts/verify-release-package.sh` executable so release verification can be invoked directly.
 
 ### Changed
 
-- Package revision increased to `3` for the executable launcher correction.
-- Package revision increased to `2` for the package-managed lifecycle change.
-- Runtime bootstrap now starts automatically from package post-install instead of the
-  first Start or Apply.
-- `setup.sh` is now an internal install/remove lifecycle backend.
-- Real package removal automatically cleans the downloaded engine, compiled runtime,
-  generated state, logs, locks, PID files, and safely removable managed dependencies.
-- Upgrade/reinstallation preserves the runtime until the new package post-install runs.
+- Reset the package revision to `1` for project version `0.2.2`.
+- Established unified Git `.patch` files, `git apply --check`, full diff review, and Git-based application as the default remote change-delivery workflow.
+- Prohibited direct console editing of tracked project files during normal remote development.
+- Added `docs/GITHUB_WORKFLOW.md` for commit, push, release asset, pkg repository, and publication procedures.
+- Made `docs/INDEX.md` the mandatory documentation recovery entry point.
+- Established owner-supplied `os-zapret2-restyle-<short_commit_sha>.tar.gz` archives as the authoritative baseline for multi-file patch preparation.
 
-### Verified
+### Release validation
 
-- Live-installed package `os-zapret2-restyle-0.2.1_8` on OPNsense.
-- Verified explicit runtime setup from pinned `bol-van/zapret2` release `v1.0.3`.
-- Verified executable `dvtws2`, supervisor, ipfw divert state, required kernel modules,
-  HOSTLIST/IPSET loading, four generated runtime profiles, and `13|13|ready|ok`.
-- Confirmed that the final startup issue was a preset reference to a missing `tls7.bin`,
-  not a package installation failure.
+- Published `main` and annotated tag `v0.2.2` at commit `fc6b208`.
+- Built and verified `os-zapret2-restyle-0.2.2_1.pkg`.
+- Confirmed package installation and working runtime on OPNsense.
+- Rebuilt and updated the GitHub Pages pkg repository for `0.2.2_1`.
+- Removed inherited upstream tags `v1.6.1` through `v1.7.2` from `origin`.
+- Confirmed that no source changes were made after publication and verification of the release baseline.
 
 ### Documentation
 
-- Rebuilt current project state and roadmap from repository, Git, chat decisions, and
-  live runtime evidence.
-- Corrected duplicate audit Finding IDs and synchronized lifecycle verification status.
-- Recorded the direct blob shorthand contract and the remaining lifecycle/API test matrix.
-- Left the public README strategy example unchanged by explicit project-owner instruction.
+- Synchronized project state, roadmap, audit trail, devlog, and changelog with the released `v0.2.2` baseline.
+- Kept the public README strategy example unchanged by explicit project-owner instruction.
 
 ## [0.2.1] - 2026-07-29
 

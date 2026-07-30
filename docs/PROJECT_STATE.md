@@ -39,22 +39,49 @@ Version source:
 VERSION
 
 Current version:
-0.2.1
+0.2.2
 
 Current package revision:
-9
+1
 
 Verified package:
-os-zapret2-restyle-0.2.1_9
+os-zapret2-restyle-0.2.2_1
 
 Current phase:
 Milestone 7 — completion and live verification of approved functionality
 
 Current priority:
-Rebuild and live-verify the clean committed baseline, complete the remaining package lifecycle and GUI/API live tests, and remediate only findings already proven by the audit.
+Complete the remaining package lifecycle, reboot, supervisor-failure, and GUI/API live tests from the published v0.2.2 baseline; remediate only findings already proven by the audit.
 
 Known blockers:
 None.
+
+==================================================
+RELEASE BASELINE — v0.2.2 — 2026-07-30
+==================================================
+
+Release v0.2.2 is the current clean project baseline.
+
+Confirmed release state:
+
+- main and annotated tag v0.2.2 resolve to commit fc6b208;
+- VERSION is 0.2.2 and PLUGIN_REVISION is 1;
+- verified package is os-zapret2-restyle-0.2.2_1;
+- the release package passed scripts/verify-release-package.sh;
+- package installation and runtime operation were confirmed on OPNsense;
+- the GitHub Pages pkg repository was rebuilt and updated for 0.2.2_1;
+- inherited upstream tags v1.6.1 through v1.7.2 were removed from origin;
+- no source changes were made after repository publication and package verification.
+
+Release v0.2.2 also fixes the documentation-delivery baseline:
+
+- scripts/verify-release-package.sh is executable and may be invoked directly;
+- unified Git patch delivery is the default remote change workflow;
+- docs/GITHUB_WORKFLOW.md is the specialist release/publication procedure;
+- INDEX.md is the mandatory documentation recovery entry point;
+- owner-supplied os-zapret2-restyle-<short_commit_sha>.tar.gz archives are the authoritative baseline for multi-file patch preparation.
+
+The public README strategy example remains intentionally unchanged by explicit project-owner instruction.
 
 ==================================================
 AUTHORITATIVE CURRENT RESULT — 2026-07-30

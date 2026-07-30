@@ -26,7 +26,7 @@ CURRENT STAGE
 Milestone 7 — completion and live verification of approved functionality
 
 Current work package:
-Clean-baseline reproduction and audited GUI/API remediation
+Remaining lifecycle, reboot, controlled-failure, and GUI/API live verification from the published v0.2.2 baseline
 
 [x] Reconstruct current state from repository, Git history, chat decisions, and runtime audit snapshot
 [x] Confirm package installation and runtime start on OPNsense
@@ -36,7 +36,11 @@ Clean-baseline reproduction and audited GUI/API remediation
 [x] Correct duplicate audit Finding identifiers
 [x] Record live verification in audit, decisions, devlog, architecture, and changelog
 [x] Commit the verified source and documentation as one logical change
-[ ] Rebuild from the clean commit and compare behavior with the tested package
+[x] Rebuild from the clean commit and compare behavior with the tested package
+[x] Publish and verify release baseline v0.2.2 / package 0.2.2_1
+[x] Rebuild and update the GitHub Pages pkg repository
+[x] Remove inherited upstream tags v1.6.1 through v1.7.2 from origin
+[x] Establish the Git-first patch and authoritative archive workflow
 
 ==================================================
 COMPLETED MILESTONES
@@ -95,7 +99,7 @@ Status: COMPLETE AND LIVE VERIFIED
 Milestone 6 — Project-owned release and pkg repository
 Status: COMPLETE
 
-- official v0.1.0, v0.2.0, and corrective v0.2.1 release work;
+- official v0.1.0, v0.2.0, corrective v0.2.1, and clean-baseline v0.2.2 release work;
 - GitHub Release publication;
 - GitHub Pages pkg repository;
 - native FreeBSD:15:amd64 layout;
@@ -122,17 +126,20 @@ Completed in this milestone:
 [x] Correct package lifecycle so pkg does not perform nested runtime package work
 [x] Preserve runtime and dependencies on plugin removal by policy
 [x] Record the tested package baseline as 0.2.1_8
+[x] Rebuild and verify package os-zapret2-restyle-0.2.2_1 from clean commit fc6b208
+[x] Publish main and annotated tag v0.2.2 at commit fc6b208
+[x] Update the GitHub Pages pkg repository for 0.2.2_1
+[x] Synchronize the release workflow and authoritative archive patch process
 
 Remaining ordered work:
 
-1. Build revision 9 from the clean committed baseline and reproduce the verified runtime behavior.
-2. Live-verify the corrected unified Traffic Strategy guidance.
-3. Live-test package upgrade from an earlier revision.
-4. Live-test removal while running.
-5. Verify runtime/dependency preservation after removal.
-6. Live-test reinstall over preserved runtime.
-7. Reboot OPNsense and verify automatic service startup behavior.
-8. Complete the GUI/API live matrix:
+1. Live-verify the corrected unified Traffic Strategy guidance from package 0.2.2_1.
+2. Live-test package upgrade from an earlier revision.
+3. Live-test removal while running.
+4. Verify runtime/dependency preservation after removal.
+5. Live-test reinstall over preserved runtime.
+6. Reboot OPNsense and verify automatic service startup behavior.
+7. Complete the GUI/API live matrix:
    - Save/Apply;
    - Start;
    - Stop;
@@ -142,9 +149,9 @@ Remaining ordered work:
    - blockcheck;
    - test domain;
    - reconfigure classification.
-9. Resolve the timeout-chain finding after approving one end-to-end timeout policy.
-10. Verify supervisor response to controlled dvtws2 termination.
-11. Review REQUIREMENTS.md line by line and implement only remaining approved scope.
+8. Resolve the timeout-chain finding after approving one end-to-end timeout policy.
+9. Verify supervisor response to controlled dvtws2 termination.
+10. Review REQUIREMENTS.md line by line and implement only remaining approved scope.
 
 Acceptance criteria for Milestone 7 completion:
 
@@ -178,8 +185,8 @@ NEXT RELEASE GATE
 
 Do not declare another stable baseline until:
 
-1. the verified tree is committed;
-2. a package is rebuilt from the clean commit;
-3. upgrade/remove/reinstall/reboot tests are recorded;
+1. upgrade/remove/reinstall/reboot tests are recorded;
+2. controlled runtime-failure behavior is verified;
+3. the GUI/API matrix is completed or explicitly classified;
 4. current AUDIT.md findings are reconciled;
 5. CHANGELOG.md and PROJECT_STATE.md describe the same package state.
