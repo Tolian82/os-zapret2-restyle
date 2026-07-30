@@ -1390,3 +1390,121 @@ Affected documents:
 - ROADMAP.md
 - README.md
 - CHANGELOG.md
+
+
+==================================================
+DECISION — SEPARATE PLUGIN PKG LIFECYCLE FROM RUNTIME SETUP
+==================================================
+
+Date:
+2026-07-30
+
+Status:
+Approved.
+
+Decision:
+
+- Package installation registers the OPNsense plugin and renders its templates only.
+- `+POST_INSTALL` must not download sources, install FreeBSD packages, or compile zapret2.
+- After package installation, the user is shown this explicit one-time command:
+
+  `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install`
+
+- A future GUI maintenance action may call the same setup backend.
+- `+PRE_DEINSTALL` synchronously stops the service before package files disappear.
+- Removing the plugin package preserves the downloaded runtime, plugin configuration,
+  and system-wide dependencies. Destructive runtime cleanup is a separate explicit
+  maintenance operation, not a package deinstall side effect.
+- `+POST_DEINSTALL` must not restart configd.
+- Runtime installation uses a fixed upstream release instead of the moving default
+  branch. The initial pinned release is bol-van/zapret2 `v1.0.3`.
+
+Reason:
+
+The package transaction must remain short and deterministic. Network access, dependency
+installation, source download, and compilation are independent runtime preparation work.
+Detached cleanup and configd restart during package removal introduced races and made a
+successful pkg transaction an unreliable indicator of runtime state.
+
+Reference review:
+
+The close reference `ugorur/os-zapret2` confirms the useful split between quick pkg
+installation and a separate `setup.sh` bootstrap, and the safe practice of stopping the
+service in `+PRE_DEINSTALL`. Its `configd restart` in `+POST_DEINSTALL` and moving-branch
+runtime update are intentionally not copied.
+
+Consequences:
+
+- Plugin-installed and runtime-ready are distinct states.
+- Start and Apply fail clearly until dvtws2 exists.
+- Package removal does not delete `/usr/local/etc/zapret2` or shared dependencies.
+- Reinstallation may reuse the preserved runtime.
+- Runtime version changes require an explicit project change and documentation update.
+
+Affected documents:
+
+- AUDIT.md
+- ARCHITECTURE.md
+- PROJECT_STATE.md
+- DEVLOG.md
+- ROADMAP.md
+- REQUIREMENTS.md
+- README.md
+- CHANGELOG.md
+
+==================================================
+DEC-2026-07-30 — LIVE-VERIFIED PACKAGE BASELINE AND BLOB NAME CONTRACT
+==================================================
+
+Status:
+Approved and live verified.
+
+Context:
+Package 0.2.1_8 installed successfully, explicit runtime setup built dvtws2 from the
+pinned zapret2 release, and the complete runtime reached ready/ok. A startup failure was
+then traced to a preset requesting --blob=tls7 while no files/fake/tls7.bin existed.
+
+Decision:
+
+1. The package installation architecture is accepted as working.
+2. The active package lifecycle remains:
+   - quick pkg installation;
+   - explicit setup.sh install;
+   - synchronous service stop in +PRE_DEINSTALL;
+   - no configd restart in +POST_DEINSTALL;
+   - preserved runtime and dependencies on plugin removal.
+3. Shorthand --blob=<name> means exactly files/fake/<name>.bin.
+4. No implicit historical blob alias table is introduced.
+5. Presets must use names corresponding to actual available .bin files.
+6. The public README strategy example is intentionally left unchanged until a later
+   dedicated rewrite, by explicit project-owner instruction.
+7. The tested working tree must be committed with synchronized Engineering Memory so
+   the verified package becomes reproducible from Git history.
+
+Reason:
+
+- direct filename mapping is deterministic, inspectable, and easy to validate;
+- hidden aliases would add compatibility behavior not approved by the architecture;
+- the live evidence proves the package, setup, backend, launcher, firewall, dvtws2,
+  and supervisor chain works when the preset references a real blob;
+- preserving runtime on plugin removal avoids destructive behavior and matches the
+  approved separation between plugin package and runtime installation.
+
+Consequences:
+
+- missing shorthand blob files remain hard validation/startup errors;
+- preset maintenance owns the choice of valid blob filenames;
+- documentation and comments must not imply that tls7 is a built-in alias;
+- remaining work is lifecycle/API live verification, not installation redesign.
+
+Affected documents:
+
+- PROJECT_STATE.md
+- AUDIT.md
+- WORKING_CONVENTIONS.md
+- DEVELOPMENT_GUIDE.md
+- ARCHITECTURE.md
+- DEVLOG.md
+- ROADMAP.md
+- REQUIREMENTS.md
+- CHANGELOG.md

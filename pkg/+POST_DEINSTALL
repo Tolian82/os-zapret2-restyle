@@ -1,19 +1,6 @@
 #!/bin/sh
 
-# Refresh OPNsense plugin registration after package files are removed.
-# Runtime and managed-dependency cleanup continues in the detached lifecycle
-# worker started by +PRE_DEINSTALL.
-
-if [ -n "${PKG_UPGRADE:-}" ]; then
-    exit 0
-fi
-
-if [ -x /usr/local/etc/rc.configure_plugins ]; then
-    /usr/local/etc/rc.configure_plugins zapret2 >/dev/null 2>&1 || true
-fi
-
-if [ -x /usr/local/etc/rc.d/configd ]; then
-    /usr/local/etc/rc.d/configd restart >/dev/null 2>&1 || true
-fi
+# No post-deinstall service actions. In particular, do not restart configd
+# from inside the pkg removal lifecycle.
 
 exit 0

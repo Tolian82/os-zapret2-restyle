@@ -1,12 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+- Separated plugin package installation from zapret2 runtime preparation.
+- Package post-install now prints `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install` instead of starting a detached bootstrap.
+- Package removal now stops the service only and preserves runtime/dependencies.
+- Removed configd restart from post-deinstall.
+- Pinned runtime setup to bol-van/zapret2 v1.0.3.
+
+
 Project: **os-zapret2-restyle**
 
 All notable changes to this project are documented in this file.
 
 The project starts its own version history at `0.1.0`.
-
-## [Unreleased]
 
 ### Fixed
 
@@ -22,6 +29,23 @@ The project starts its own version history at `0.1.0`.
 - Real package removal automatically cleans the downloaded engine, compiled runtime,
   generated state, logs, locks, PID files, and safely removable managed dependencies.
 - Upgrade/reinstallation preserves the runtime until the new package post-install runs.
+
+### Verified
+
+- Live-installed package `os-zapret2-restyle-0.2.1_8` on OPNsense.
+- Verified explicit runtime setup from pinned `bol-van/zapret2` release `v1.0.3`.
+- Verified executable `dvtws2`, supervisor, ipfw divert state, required kernel modules,
+  HOSTLIST/IPSET loading, four generated runtime profiles, and `13|13|ready|ok`.
+- Confirmed that the final startup issue was a preset reference to a missing `tls7.bin`,
+  not a package installation failure.
+
+### Documentation
+
+- Rebuilt current project state and roadmap from repository, Git, chat decisions, and
+  live runtime evidence.
+- Corrected duplicate audit Finding IDs and synchronized lifecycle verification status.
+- Recorded the direct blob shorthand contract and the remaining lifecycle/API test matrix.
+- Left the public README strategy example unchanged by explicit project-owner instruction.
 
 ## [0.2.1] - 2026-07-29
 

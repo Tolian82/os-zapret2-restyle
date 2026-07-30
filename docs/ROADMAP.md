@@ -23,325 +23,162 @@ Detailed history, architecture explanations, or decision rationale.
 CURRENT STAGE
 ==================================================
 
-API and inherited-reference audit
+Milestone 7 — completion and live verification of approved functionality
 
-Working cycle:
+Current work package:
+Documentation recovery and reproducible live-verified package baseline
 
-[x] Record the stage plan
-[ ] Perform the stage
-[x] Define actionable finding IDs and remediation-record requirements
-[x] Record detailed remediation plans for the completed MVC/API block
-[x] Record discoveries and approved concepts for the completed MVC/API block
-[x] Record completed MVC/API work and verification
-[x] Record remaining work and the next audit block
-
-==================================================
-STAGE 1 — VERSION 0.1.0 FOUNDATION
-==================================================
-
-[x] Backend v2 foundation
-[x] Unified Traffic Strategy
-[x] Generic HOSTLIST/IPSET targets
-[x] Automatic one-selector-per-runtime-profile normalization
-[x] Transactional Apply
-[x] Safe Reconfigure
-[x] Runtime validation and rollback
-[x] Initial public project documentation
-[x] Independent package identity
-[x] Independent build and release infrastructure
-[x] Engineering Memory System
+[x] Reconstruct current state from repository, Git history, chat decisions, and runtime audit snapshot
+[x] Confirm package installation and runtime start on OPNsense
+[x] Confirm dvtws2, supervisor, ipfw, HOSTLIST, IPSET, and blob-backed strategy operation
+[x] Replace stale current-state and roadmap text with authoritative current information
+[x] Reconcile package lifecycle documentation with DEC-2026-07-30
+[x] Correct duplicate audit Finding identifiers
+[x] Record live verification in audit, decisions, devlog, architecture, and changelog
+[ ] Commit the verified source and documentation as one logical change
+[ ] Rebuild from the clean commit and compare behavior with the tested package
 
 ==================================================
-STAGE 2 — API AND INHERITED-REFERENCE AUDIT
+COMPLETED MILESTONES
 ==================================================
 
-[x] Record audit objective and scope
-[x] Record Engineering Memory work cycle
-[x] Inventory GUI JavaScript API calls
-[x] Inventory MVC API URLs
-[x] Inventory controller actions
-[ ] Inventory model operations and configuration paths
-[x] Inventory configd actions
-[ ] Inventory shell entry points and backend functions
-[~] Inventory rc scripts, syshooks, and plugin hooks (syshook chains recorded;
-    rc.d overlap and remaining hooks still under audit)
-[ ] Inventory filesystem and generated-template paths
-[x] Implement package lifecycle scripts (automatic install, upgrade-safe deinstall, and complete uninstall cleanup; live verification remains)
-[~] Inventory setup, build, CI, and release logic (repository/release model approved; publication pending)
-[ ] Inventory external repositories, URLs, and downloads
-[ ] Classify every inherited reference
-[x] Create AUDIT.md and record verified and broken interface chains
-[x] Add verification plans, remediation plans, acceptance criteria, and stable IDs
-[ ] Remove only confirmed obsolete dependencies
-[ ] Run live API and lifecycle tests
+Milestone 1 — Independent project foundation
+Status: COMPLETE
+
+- independent repository;
+- attribution, LICENSE, NOTICE, provenance;
+- stable project, package, and service identities;
+- VERSION as the single version source;
+- build and release skeleton.
+
+Milestone 2 — Backend v2 and transactional runtime
+Status: COMPLETE
+
+- modular parser, target registry, Target Mode, profile normalization, target resolver,
+  blob resolver, validation, generation, activation, rollback, lifecycle, and diagnostics;
+- transactional Apply and active-runtime preservation;
+- field-level validation errors.
+
+Milestone 3 — Service lifecycle hardening
+Status: COMPLETE, with focused live regression tests still scheduled
+
+- separate launcher and supervisor;
+- supervisor-only runtime failure detection;
+- process identity checks;
+- serialized mutating lifecycle operations;
+- firewall lifecycle consolidation;
+- stale PID protection;
+- conditional kill escalation;
+- runtime cleanup on failure.
+
+Milestone 4 — OPNsense integration
+Status: COMPLETE for implemented scope
+
+- MVC model/controllers/views/forms;
+- configd actions;
+- templates;
+- syshooks;
+- rc.d entry point;
+- package hooks;
+- status and diagnostics paths.
+
+Milestone 5 — Profile pipeline normalization
+Status: COMPLETE AND LIVE VERIFIED
+
+- count-carrying profile pipeline;
+- one selector per runtime profile;
+- HOSTLIST and IPSET support;
+- mixed selectors expanded automatically;
+- explicit user --new boundaries preserved;
+- focused static tests and live strategy evidence.
+
+Milestone 6 — Project-owned release and pkg repository
+Status: COMPLETE
+
+- official v0.1.0, v0.2.0, and corrective v0.2.1 release work;
+- GitHub Release publication;
+- GitHub Pages pkg repository;
+- native FreeBSD:15:amd64 layout;
+- separate flat release-assets staging;
+- package archive metadata verification;
+- ordinary https:// repository URL;
+- signature_type: none accepted by decision.
 
 ==================================================
-STAGE 3 — VERSION 0.2.0
+MILESTONE 7 — APPROVED FUNCTIONALITY COMPLETION
 ==================================================
 
-[ ] Traffic Strategy structural validator
-[ ] Empty-profile validation
-[ ] Invalid --new placement validation
-[ ] Missing-filter validation
-[ ] Malformed TCP/UDP filter validation
-[ ] Unknown placeholder type validation
-[ ] Unknown target name validation
-[ ] Unresolved placeholder validation
-[ ] Profile and line numbers in errors
-[ ] Focused backend test fixtures
-[ ] CI checks for Backend v2
-[ ] Package file inclusion verification
-[ ] Package name and filename verification
-[ ] Package build test
-[ ] Fresh GUI installation test on clean OPNsense
-[ ] Upgrade behavior test
-[ ] Uninstall behavior test
-[ ] Legacy configuration migration review
+Status: IN PROGRESS
+
+Completed in this milestone:
+
+[x] Move Engineering Memory into docs/
+[x] Implement and test runtime profile normalization
+[x] Implement the count-carrying profile pipeline
+[x] Verify named HOSTLIST and IPSET target application on OPNsense
+[x] Verify complete package install → manual runtime setup → service start chain
+[x] Verify bol-van/zapret2 v1.0.3 builds dvtws2
+[x] Verify launcher, supervisor, firewall, and runtime status
+[x] Correct package lifecycle so pkg does not perform nested runtime package work
+[x] Preserve runtime and dependencies on plugin removal by policy
+[x] Record the tested package baseline as 0.2.1_8
+
+Remaining ordered work:
+
+1. Commit and reproduce the verified baseline.
+2. Live-test package upgrade from an earlier revision.
+3. Live-test removal while running.
+4. Verify runtime/dependency preservation after removal.
+5. Live-test reinstall over preserved runtime.
+6. Reboot OPNsense and verify automatic service startup behavior.
+7. Complete the GUI/API live matrix:
+   - Save/Apply;
+   - Start;
+   - Stop;
+   - Restart;
+   - Status;
+   - Diagnostics;
+   - blockcheck;
+   - test domain;
+   - reconfigure classification.
+8. Resolve stale GUI help text and timeout-chain findings.
+9. Verify supervisor response to controlled dvtws2 termination.
+10. Review REQUIREMENTS.md line by line and implement only remaining approved scope.
+
+Acceptance criteria for Milestone 7 completion:
+
+- every approved requirement is implemented or explicitly deferred by decision;
+- package install, setup, upgrade, remove, reinstall, and reboot paths are live verified;
+- GUI/API actions have a complete traced chain or an explicit classification;
+- no open broken Finding lacks a remediation plan;
+- project state is reproducible from a clean Git commit;
+- Engineering Memory and public release records agree with the code.
 
 ==================================================
-STAGE 4 — VERSION 0.3.0
+DEFERRED WORK
 ==================================================
 
-[ ] Strategy presets
-[ ] Expanded diagnostics
+The following are not current objectives unless a demonstrated functional blocker requires them:
+
+- general navigation redesign;
+- broad UX research;
+- first-run wizard redesign;
+- visual redesign of Service, Strategy, Status, Maintenance, or Diagnostics pages;
+- expansion beyond approved HOSTLIST and IPSET placeholders;
+- GROUP, TARGETSET, or other placeholder families;
+- repository signing, unless approved by a later architecture decision;
+- automatic removal of runtime or shared dependencies with plugin deletion.
+
+The public README strategy example remains intentionally unchanged until a later dedicated rewrite.
 
 ==================================================
-STAGE 5 — VERSION 0.4.0
+NEXT RELEASE GATE
 ==================================================
 
-[ ] Maintenance page
-[ ] Plugin update management
-[ ] zapret2 update management
+Do not declare another stable baseline until:
 
-==================================================
-STAGE 6 — VERSION 1.0.0
-==================================================
-
-[ ] Stable package installation on supported OPNsense systems
-[ ] Upgrade and rollback tests
-[ ] Production-ready documentation
-[ ] Public stable release through project pkg repository
-
-==================================================
-PERMANENT AUDIT AND ARCHITECTURE-DEBT TRACK
-==================================================
-
-[x] Establish AUDIT.md and actionable Finding format.
-[x] Separate Findings from Architecture Debt.
-[x] Require documentation commit before the next audit block or remediation.
-[ ] Complete lifecycle and runtime audit.
-[ ] Complete package lifecycle audit.
-[ ] Resolve Architecture Debt through DECISIONS.md before dependent implementation.
-[ ] Remediate verified Findings in small logical commits.
-[ ] Verify and close Findings without deleting audit history.
-
-
-==================================================
-FIRST PUBLIC TEST RELEASE — VERSION 0.1.0
-==================================================
-
-[x] Approve project-owned pkg repository model
-[x] Approve GitHub Pages publication and GitHub Release assets
-[x] Approve FreeBSD:15:amd64 initial ABI target
-[x] Remove manual SSH runtime-setup requirement from normal installation flow
-[ ] Live-verify automatic package post-install runtime bootstrap
-[x] Generate pkg repository metadata with pkg repo
-[x] Publish repository configuration file
-[ ] Publish package and SHA-256 checksums
-[ ] Verify install and update through OPNsense Firmware GUI
-[ ] Tag and publish v0.1.0 public test release
-
-==================================================
-MILESTONE 6 — DISTRIBUTION AND RELEASE
-==================================================
-
-Status:
-In progress.
-
-Ordered work:
-1. Add deterministic pkg-repository generation for FreeBSD:15:amd64.
-2. Update the tag release workflow to build on FreeBSD 15.
-3. Publish package and SHA256SUMS through GitHub Releases.
-4. Publish pkg repository metadata and client configuration through GitHub Pages.
-5. Publish v0.1.0 as a prerelease.
-6. Connect the repository on the OPNsense test system.
-7. Verify pkg update and Firmware GUI package detection.
-8. Verify clean installation, upgrade, reinstallation, and removal paths.
-9. Update AUDIT.md, PROJECT_STATE.md, DEVLOG.md, README.md, and CHANGELOG.md with live results.
-10. Promote a later release from prerelease only after distribution acceptance criteria pass.
-
-Acceptance criteria:
-- tag equals VERSION;
-- package is built for the approved ABI;
-- pkg repo metadata is generated by pkg repo, not handwritten;
-- GitHub Release and GitHub Pages are produced from the same tag workflow;
-- OPNsense no longer reports the package as unknown-repository after repository refresh;
-- installation and updates are available through the standard Firmware GUI;
-- normal users do not run setup.sh manually.
-
-Milestone 6 release preflight update:
-
-[x] Read package version from VERSION during package construction.
-[x] Use the independent project URL in package metadata.
-[x] Add archive-level verification of package name, version, and www before publication.
-[ ] Live-verify the preflight in the first v0.1.0 tag workflow.
-
-
-Milestone 6 final pre-tag audit:
-
-[x] Validate current pkg repository catalogue names (`meta.conf`, `data.pkg`, `packagesite.pkg`).
-[x] Document one-time repository registration and Firmware GUI installation.
-[x] Make the unsigned prerelease repository state explicit.
-[ ] Live-verify repository generation and Pages publication from tag v0.1.0.
-[x] Resolve repository authentication policy before stable-release promotion.
-    Superseded on 2026-07-29 by the approved explicit unsigned mode:
-    `signature_type: "none"`.
-
-### Milestone 6 live release audit — current step
-
-- [x] Trigger first v0.1.0 workflow.
-- [x] Capture artifact failure on native ABI path.
-- [x] Review established OPNsense layouts and official Pages packaging.
-- [x] Design transport separation without renaming `${ABI}`.
-- [ ] Commit remediation and retag v0.1.0.
-- [ ] Verify Release, Pages, pkg update, and GUI installation.
-
-==================================================
-MILESTONE 6 — INFRASTRUCTURE AND FIRST RELEASE — COMPLETED
-==================================================
-
-[x] Complete Backend and Lifecycle audit work required for release.
-[x] Complete supervisor responsibility and process-identity hardening.
-[x] Complete package and release metadata verification.
-[x] Publish the canonical pkg repository through GitHub Pages.
-[x] Keep the native `FreeBSD:15:amd64` repository layout.
-[x] Separate flat GitHub Release assets from the Pages repository tree.
-[x] Configure the GitHub Pages environment with a release-tag rule.
-[x] Publish the first official v0.1.0 release.
-[x] Close the release audit findings from the first workflow runs.
-
-==================================================
-MILESTONE 7 — COMPLETE APPROVED FUNCTIONALITY
-==================================================
-
-Current priority order:
-
-[ ] Move internal documentation into `docs/` and repair all references.
-[x] Implement generic automatic profile expansion for multiple HOSTLIST/IPSET selectors.
-[ ] Live-verify automatic profile expansion on OPNsense.
-[ ] Audit strategy application to named HOSTLIST and IPSET targets.
-[ ] Verify `<HOSTLIST:youtube>` behavior on a real runtime.
-[ ] Verify `<IPSET:telegram>` behavior on a real runtime.
-[ ] Verify `<HOSTLIST:user>` behavior on a real runtime.
-[ ] Compare implemented behavior with every approved requirement.
-[ ] Implement or repair missing approved behavior in focused commits.
-[ ] Complete live verification of the existing declared functionality.
-
-Deferred until the approved functionality is complete:
-
-- navigation changes;
-- general UX or OPNsense interface research;
-- first-run, Service, Diagnostics, Maintenance, Status, and Strategy UX review;
-- unrelated design work;
-- expansion of product scope.
-
-Possible later UX work is expected to accompany expanded functionality, not exist as a
-standalone audit programme.
-
-==================================================
-MILESTONE 7 — DOCUMENTATION LAYOUT COMPLETED
-==================================================
-
-[x] Move the complete engineering documentation system into `docs/`.
-[x] Preserve repository history by using `git mv`.
-[x] Update the root README engineering-memory entry point.
-[x] Update CI required-file paths.
-[x] Record the new repository layout in project documentation.
-
-Next priorities:
-
-[ ] Verify real strategy application for named HOSTLIST targets.
-[ ] Verify real strategy application for named IPSET targets.
-[ ] Close gaps between REQUIREMENTS.md and verified plugin behavior.
-
-==================================================
-MILESTONE 7 — PROFILE PIPELINE REFACTOR
-==================================================
-
-[x] Add a dedicated count-carrying profile pipeline adapter module.
-[x] Standardize parse, registry, Target Mode, normalizer, and index transitions.
-[x] Validate profile count at every pipeline boundary.
-[x] Add focused pipeline tests and CI coverage.
-[ ] Live-verify the complete profile pipeline on OPNsense.
-
-
-==================================================
-MILESTONE 7 — VERSION 0.2.0 RELEASE
-==================================================
-
-Status:
-In progress.
-
-Scope:
-- publish the unified runtime profile pipeline;
-- publish multiple HOSTLIST/IPSET placeholder expansion;
-- retain the approved FreeBSD:15:amd64 package repository;
-- retain `signature_type: "none"`;
-- install and update through the standard OPNsense Firmware GUI.
-
-Ordered work:
-1. [x] Approve version 0.2.0.
-2. [x] Set VERSION to 0.2.0.
-3. [x] Reset PLUGIN_REVISION to 1.
-4. [x] Synchronize current release documentation.
-5. [ ] Review and validate the complete release diff.
-6. [ ] Commit and push release preparation.
-7. [ ] Confirm main branch CI.
-8. [ ] Create and push tag v0.2.0.
-9. [ ] Verify GitHub Release assets.
-10. [ ] Verify GitHub Pages pkg repository publication.
-11. [ ] Register the repository on OPNsense.
-12. [ ] Install or upgrade through Firmware > Plugins.
-13. [ ] Live-verify GUI, configd, service and runtime behavior.
-14. [ ] Record the release verification results.
-
-Acceptance criteria:
-- tag v0.2.0 resolves to the reviewed release commit;
-- VERSION is 0.2.0;
-- package version is 0.2.0_1;
-- package origin and project URL are correct;
-- repository metadata is consumable by pkg;
-- repository configuration explicitly uses `signature_type: "none"`;
-- the plugin is installable or upgradeable through the OPNsense Firmware GUI;
-- the installed GUI and runtime pipeline pass live verification.
-
-==================================================
-Corrective release v0.2.1
-==================================================
-
-Scope:
-- Publish the corrected ordinary-HTTPS repository configuration.
-- Preserve immutable release v0.2.0.
-- Keep `PLUGIN_REVISION=1`.
-- Verify clean repository registration on OPNsense.
-
-Completion criteria:
-- CI and Release workflows succeed.
-- Published configuration contains ordinary `https://`.
-- OPNsense updates the catalogue without manual correction.
-- Package `0.2.1_2` is the current package-lifecycle test build.
-
-
-==================================================
-DEFERRED PLANS — AFTER ALL PREVIOUSLY ORDERED WORK
-==================================================
-
-These items are plans only. They are intentionally placed after all earlier roadmap
-work and are not part of the current package-lifecycle implementation:
-
-[ ] Add controlled upstream engine version discovery and selection.
-[ ] Add controlled update/reinstall/rollback operations through the GUI.
-[ ] Add Lua component inventory and version/state control.
-[ ] Add BLOB inventory and version/state control.
-[ ] Display upstream, Lua and BLOB installation state and versions in the GUI.
-[ ] Reuse the package lifecycle setup backend for all future GUI maintenance actions.
+1. the verified tree is committed;
+2. a package is rebuilt from the clean commit;
+3. upgrade/remove/reinstall/reboot tests are recorded;
+4. current AUDIT.md findings are reconciled;
+5. CHANGELOG.md and PROJECT_STATE.md describe the same package state.

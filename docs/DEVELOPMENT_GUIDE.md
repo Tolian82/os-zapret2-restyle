@@ -257,3 +257,54 @@ OPNsense test system:
 8. Confirm menu, ACL, configd actions and templates no longer remain active.
 9. Record commands, observed output and remaining limitations in DEVLOG/AUDIT before
    declaring the lifecycle verified.
+
+==================================================
+LIVE PACKAGE BASELINE VERIFICATION MATRIX
+==================================================
+
+For each candidate release baseline, verify and record these stages separately:
+
+1. Static source verification
+   - sh -n for all shell files;
+   - focused profile normalizer and pipeline tests;
+   - package hook inspection;
+   - git diff --check.
+
+2. Package archive verification
+   - package name/version/origin/URL;
+   - package file inventory;
+   - executable modes;
+   - +POST_INSTALL, +PRE_DEINSTALL, and +POST_DEINSTALL content;
+   - no unintended runtime tree in the plugin package.
+
+3. Clean install verification
+   - pkg installation finishes;
+   - configd and Web GUI remain healthy;
+   - exact manual setup command is printed;
+   - no runtime dependency installation or compilation occurs inside pkg installation.
+
+4. Runtime setup verification
+   - setup.sh install obtains pinned bol-van/zapret2 v1.0.3;
+   - dependencies are available;
+   - dvtws2 is built and executable;
+   - setup state/logs reach ready;
+   - repeated setup is deterministic.
+
+5. Service verification
+   - Start, Status, Restart, Reconfigure, Apply, and Stop;
+   - PID identity and stale PID handling;
+   - ipfw and kernel module state;
+   - supervisor identity;
+   - active runtime preservation on invalid candidate.
+
+6. Lifecycle verification
+   - upgrade;
+   - removal while running;
+   - no post-deinstall configd restart;
+   - preserved runtime/dependencies;
+   - reinstall;
+   - reboot;
+   - controlled dvtws2 failure.
+
+Every test result must update AUDIT.md and DEVLOG.md. PROJECT_STATE.md and ROADMAP.md
+must be updated whenever the current baseline or immediate next action changes.

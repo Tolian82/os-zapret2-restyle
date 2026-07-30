@@ -1676,7 +1676,7 @@ Implemented statically; live verification pending.
 
 
 ==================================================
-PKG-006 — UNSIGNED REPOSITORY MODE APPROVED
+PKG-008 — UNSIGNED REPOSITORY MODE APPROVED
 ==================================================
 
 Date:
@@ -1712,7 +1712,7 @@ Verification criteria:
 5. no configuration claims that pubkey or fingerprints validation is active.
 
 ==================================================
-PKG-004 — GitHub Pages repository URL scheme
+PKG-007 — GitHub Pages repository URL scheme
 ==================================================
 
 Classification:
@@ -1739,7 +1739,7 @@ managed dependency ownership, and registration refresh. Static and live verifica
 remain mandatory before the finding can be closed.
 
 ==================================================
-LIFE-004 — SETUP LAUNCHER NOT EXECUTABLE
+LIFE-013 — SETUP LAUNCHER NOT EXECUTABLE
 ==================================================
 
 Date:
@@ -1776,10 +1776,10 @@ Acceptance criteria:
 5. configd and Web GUI remain healthy.
 
 Remediation status:
-Implemented; package and live verification pending.
+Implemented and live verified in package 0.2.1_8. The launcher is executable, the setup action starts successfully, and setup/state evidence is produced.
 
 ==================================================
-LIFE-005 — WRONG UPSTREAM RUNTIME REPOSITORY
+LIFE-012 — WRONG UPSTREAM RUNTIME REPOSITORY
 ==================================================
 
 Date:
@@ -1810,4 +1810,122 @@ Acceptance criteria:
 4. configd and Web GUI remain healthy.
 
 Remediation status:
-Implemented; live verification pending.
+Implemented and live verified in package 0.2.1_8. Setup cloned bol-van/zapret2, built executable binaries/my/dvtws2, and reached ready state.
+
+
+==================================================
+LIFE-011 — PKG LIFECYCLE PERFORMS RUNTIME PACKAGE MANAGEMENT
+==================================================
+
+Date:
+2026-07-30
+
+Classification:
+broken
+
+Evidence:
+
+- `+POST_INSTALL` starts `setup_launcher.sh install`.
+- The detached backend executes `pkg update`, installs dependencies, clones upstream,
+  and compiles dvtws2 after the plugin package transaction.
+- `+PRE_DEINSTALL` starts a detached destructive uninstall worker.
+- `+POST_DEINSTALL` restarts configd.
+
+Reference comparison:
+
+`ugorur/os-zapret2` keeps package installation quick and prints a separate setup command.
+It also stops the service synchronously in `+PRE_DEINSTALL`. Those two patterns are
+applicable. Its post-deinstall configd restart is not accepted because this project has
+already observed configd health risk during removal.
+
+Remediation:
+
+1. Make `+POST_INSTALL` perform registration/template work and print
+   `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install`.
+2. Make `+PRE_DEINSTALL` stop the service only.
+3. Make `+POST_DEINSTALL` a no-op.
+4. Remove package-triggered uninstall and dependency removal from `setup.sh`.
+5. Pin runtime source to bol-van/zapret2 `v1.0.3`.
+6. Keep one setup backend suitable for a later GUI action.
+
+Acceptance criteria:
+
+1. `pkg add` performs no nested or detached runtime package operations.
+2. Installation output contains the exact setup command.
+3. `pkg delete` stops the service before scripts disappear.
+4. `pkg delete` does not restart configd and does not delete runtime/dependencies.
+5. Re-running setup checks out and builds the pinned upstream release.
+6. All shell scripts pass syntax checks and the built package contains the intended hooks.
+
+Remediation status:
+Implemented in source, packaged as 0.2.1_8, and live verified for install, explicit setup, and successful service start. Upgrade, removal, reinstall, and reboot verification remain open and are tracked as lifecycle test work rather than as a defect in the approved design.
+
+==================================================
+LIVE PACKAGE BASELINE AUDIT — 2026-07-30
+==================================================
+
+Scope:
+Compare the repository, package archive, installed package inventory, configd actions,
+MVC/template inventory, runtime files, process state, PID files, kernel modules, ipfw
+rules, and service logs.
+
+Audited package:
+os-zapret2-restyle-0.2.1_8
+
+Overall classification:
+Install/setup/start chain live verified. Remaining lifecycle operations require separate
+live tests.
+
+Verified chain:
+
+1. pkg installs the plugin package successfully.
+2. package metadata identifies os-zapret2-restyle version 0.2.1_8.
+3. +POST_INSTALL performs registration/template work and prints the explicit setup command.
+4. pkg installation itself does not run dependency installation, cloning, or compilation.
+5. setup.sh install obtains pinned bol-van/zapret2 v1.0.3.
+6. setup builds executable /usr/local/etc/zapret2/binaries/my/dvtws2.
+7. configd exposes zapret start, stop, restart, reconfigure, status, blockcheck,
+   testdomain, and setup actions.
+8. generated templates and backend modules are installed at the expected OPNsense paths.
+9. Backend v2 completes its build and activation stages.
+10. ipfw and ipdivert are loaded and the divert rule is present.
+11. dvtws2 and supervisor processes run under the expected command identities.
+12. execution status reaches 13|13|ready|ok.
+13. runtime logs confirm loaded HOSTLIST and IPSET artifacts and four generated profiles.
+
+Blob incident classification:
+
+The tested preset used --blob=tls7. The resolver's documented contract maps shorthand
+--blob=<name> directly to files/fake/<name>.bin, so it correctly required tls7.bin.
+That file did not exist. The project owner updated the preset to use an available real
+blob filename and the service started. This is not a package-installation failure and
+does not justify an implicit alias table.
+
+Explicit documentation exception:
+
+The public README strategy example remains unchanged by project-owner instruction and
+must not be treated as part of this documentation recovery change.
+
+Remaining live-test matrix:
+
+- upgrade from an earlier package revision;
+- delete while service is running;
+- confirm synchronous stop before package files disappear;
+- confirm no configd restart during removal;
+- confirm runtime and dependencies remain after removal;
+- reinstall over preserved runtime;
+- full OPNsense reboot and automatic start path;
+- controlled dvtws2 termination and supervisor cleanup;
+- duplicate diagnostics route behavior;
+- browser/PHP/configd/script blockcheck timeout behavior;
+- reconfigure endpoint classification.
+
+Acceptance criteria for closing package lifecycle verification:
+
+1. every operation has command, GUI, process, filesystem, configd, and firewall evidence;
+2. no operation leaves stale plugin-owned PID or divert state;
+3. package removal does not delete preserved runtime/dependencies;
+4. reinstall restores plugin integration without requiring runtime destruction;
+5. reboot produces one service instance and one supervisor instance;
+6. all results are recorded in AUDIT.md, DEVLOG.md, PROJECT_STATE.md, ROADMAP.md,
+   and CHANGELOG.md in the same logical commit.

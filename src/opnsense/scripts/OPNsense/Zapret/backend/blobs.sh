@@ -4,10 +4,10 @@
 #   blobs_resolve_file INPUT OUTPUT ARGS_FILE LOADED_FILE FAKE_DIR
 #
 # Shorthand declarations:
-#   --blob=tls7
+#   --blob=fake_tls_7
 #
 # are removed from the strategy and registered once as:
-#   --blob=tls7:@/path/to/files/fake/tls7.bin
+#   --blob=fake_tls_7:@/path/to/files/fake/fake_tls_7.bin
 #
 # Native upstream declarations containing ":" remain in place:
 #   --blob=name:@/path/file.bin

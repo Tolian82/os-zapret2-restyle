@@ -1,6 +1,7 @@
 #!/bin/sh
 
-# Register the plugin and start the package-managed runtime bootstrap.
+# Register the plugin and render its initial template. Runtime preparation is
+# intentionally separate from the pkg transaction.
 
 if [ -x /usr/local/etc/rc.configure_plugins ]; then
     /usr/local/etc/rc.configure_plugins zapret2 >/dev/null 2>&1 || true
@@ -8,21 +9,15 @@ fi
 
 if [ -x /usr/local/sbin/configctl ]; then
     /usr/local/sbin/configctl template reload OPNsense/Zapret >/dev/null 2>&1 || true
-    /usr/local/opnsense/scripts/OPNsense/Zapret/setup_launcher.sh install >/dev/null 2>&1 || {
-        echo "ERROR: could not start automatic zapret2 runtime installation" >&2
-        exit 1
-    }
-else
-    echo "ERROR: configctl is unavailable; runtime installation was not started" >&2
-    exit 1
 fi
 
 cat <<'MESSAGE'
 
 os-zapret2-restyle was installed.
-The zapret2 runtime is now being downloaded and compiled automatically.
-No manual setup.sh command is required or supported.
-Installation log: /var/log/zapret2/setup.log
+
+To install the zapret2 runtime, run:
+
+/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install
 
 MESSAGE
 

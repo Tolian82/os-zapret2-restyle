@@ -532,34 +532,90 @@ not alter the public pkg URL contract.
 PACKAGE LIFECYCLE ARCHITECTURE
 ==================================================
 
-`setup.sh` is the single internal backend for package-managed engine installation and
-removal. It is not a documented user command.
+The previous detached package-managed install/remove worker design is superseded.
+The active architecture is defined in the following boundary section. Historical
+records remain in DECISIONS.md, AUDIT.md, and DEVLOG.md.
+
+==================================================
+PLUGIN PACKAGE AND RUNTIME SETUP BOUNDARY
+==================================================
+
+The FreeBSD pkg lifecycle owns only plugin files and immediate OPNsense integration.
 
 Install path:
 
-1. pkg installs all project-owned files.
-2. `+POST_INSTALL` runs `rc.configure_plugins`, reloads configd/templates, and asks
-   configd to launch `setup_launcher.sh install`.
-3. The launcher detaches the setup worker from the pkg script process tree.
-4. The worker waits for the outer pkg transaction to finish, temporarily enables only
-   the required FreeBSD package repository, installs and records missing dependencies,
-   restores repository configuration, downloads bol-van/zapret, compiles dvtws2, and
-   writes `ready` or `failed` lifecycle state.
-5. Service Start/Apply only verify that dvtws2 exists; they never bootstrap it.
+```text
+pkg add
+  -> +POST_INSTALL
+  -> rc.configure_plugins
+  -> template reload
+  -> print setup command
+```
+
+Runtime preparation is separate:
+
+```text
+setup.sh install
+  -> temporarily enable required FreeBSD repository
+  -> install missing build/runtime tools
+  -> restore repository configuration
+  -> checkout pinned bol-van/zapret2 release
+  -> compile and verify dvtws2
+```
+
+A future GUI maintenance action must invoke the same setup backend rather than duplicate
+its logic.
 
 Removal path:
 
-1. `+PRE_DEINSTALL` synchronously stops the service while service scripts still exist.
-2. For a real uninstall, configd starts a detached copied setup worker.
-3. The worker waits until pkg has removed the plugin and released its database, then
-   removes `/usr/local/etc/zapret2`, runtime state, logs, locks and PID files.
-4. The worker attempts to delete only dependencies recorded as installed by this
-   plugin. pkg dependency protection is respected; required packages are retained.
-5. `+POST_DEINSTALL` and the worker refresh plugin registration/configd after removal.
+```text
+pkg delete
+  -> +PRE_DEINSTALL stops service and removes active packet interception
+  -> package files are removed
+  -> +POST_DEINSTALL performs no service restart
+```
 
-Upgrade path:
+Package removal preserves runtime content, configuration, logs, and dependencies.
+Destructive cleanup requires a separate explicit maintenance operation.
 
-- `PKG_UPGRADE` causes old deinstall hooks to stop the service but skip destructive
-  cleanup. The new post-install reruns the idempotent install backend.
-- The uninstall worker also rechecks package presence after the outer pkg transaction;
-  if the package is present, destructive cleanup is abandoned.
+==================================================
+LIVE-VERIFIED INSTALLATION AND RUNTIME BASELINE — 2026-07-30
+==================================================
+
+The following architecture path is now verified on OPNsense with package 0.2.1_8:
+
+pkg package
+→ package registration and template reload
+→ explicit setup.sh install
+→ pinned bol-van/zapret2 v1.0.3 checkout/build
+→ binaries/my/dvtws2
+→ MVC/template configuration
+→ configd action
+→ zapret_service.sh
+→ Backend v2 orchestrator
+→ parser/profile pipeline/target resolver/blob resolver/generator
+→ candidate validation and activation
+→ ipfw divert rule
+→ launcher
+→ dvtws2
+→ supervisor
+→ ready/ok status
+
+Package/runtime ownership boundary:
+
+- pkg owns plugin integration files;
+- setup owns runtime preparation under /usr/local/etc/zapret2;
+- deleting the plugin package stops the service but does not own destruction of the
+  runtime tree or shared dependencies;
+- +POST_DEINSTALL performs no configd restart.
+
+Blob shorthand boundary:
+
+- --blob=name resolves to <fake-dir>/name.bin;
+- a shorthand token does not carry an alias or compatibility mapping;
+- native declarations containing ':' remain in the strategy unchanged;
+- preset authors must reference actual installed blob filenames without the .bin suffix.
+
+Live evidence confirms the architecture can load both HOSTLIST and IPSET selectors,
+expand mixed selector profiles, generate four runtime profiles, install firewall state,
+and keep a supervised dvtws2 process running.

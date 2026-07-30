@@ -700,3 +700,87 @@ Implemented as one logical change:
 - changed the runtime source to `https://github.com/bol-van/zapret2.git`;
 - increased `PLUGIN_REVISION` from `3` to `4`;
 - recorded the live failure and acceptance criteria.
+
+
+==================================================
+2026-07-30 — LIFECYCLE REFERENCE REVIEW AND APPROVED CORRECTION
+==================================================
+
+Re-read the Engineering Memory in its mandatory order and reviewed the current
+`ugorur/os-zapret2` installation/removal implementation.
+
+Useful reference patterns selected:
+
+- quick package installation followed by a separate setup command;
+- synchronous service stop in `+PRE_DEINSTALL` before service scripts disappear;
+- preserving saved OPNsense configuration across package removal.
+
+Patterns rejected:
+
+- restarting configd from `+POST_DEINSTALL`;
+- tracking the moving upstream default branch as the installed runtime version.
+
+Recorded the approved correction in AUDIT.md and DECISIONS.md before changing code.
+The implementation separates pkg lifecycle from runtime setup, prints the exact manual
+setup command, preserves runtime/dependencies on package removal, and pins zapret2 v1.0.3.
+
+
+Static implementation verification:
+
+- all package hooks and shell scripts pass `sh -n`;
+- `+POST_INSTALL` contains the exact approved setup command;
+- package hooks no longer call `setup_launcher.sh install`, setup uninstall, or configd restart;
+- setup no longer contains managed dependency deletion or moving-branch `git pull`;
+- setup pins `ZAPRET_REF=v1.0.3`;
+- package revision increased from 7 to 8.
+
+Package build and live OPNsense verification remain pending.
+
+==================================================
+2026-07-30 — PACKAGE 0.2.1_8 LIVE INSTALLATION AND RUNTIME VERIFIED
+==================================================
+
+Prepared a complete repository archive and an installed-runtime audit snapshot, then
+compared source, package metadata, installed files, configd actions, templates,
+processes, PID files, kernel modules, ipfw state, and logs.
+
+Live result:
+
+- installed package: os-zapret2-restyle-0.2.1_8;
+- pkg installation completed without nested runtime package work;
+- explicit setup.sh install completed;
+- setup used bol-van/zapret2 pinned to v1.0.3;
+- executable binaries/my/dvtws2 was produced;
+- configd remained operational;
+- service start completed;
+- dvtws2 and supervisor processes were present;
+- ipfw divert state and required kernel modules were present;
+- execution status reached 13|13|ready|ok;
+- HOSTLIST:youtube, HOSTLIST:user, IPSET:telegram, and exclusion data were loaded;
+- four runtime profiles were generated.
+
+The final startup error encountered before success was isolated to the preset. It used
+--blob=tls7, which requires files/fake/tls7.bin under the direct shorthand contract.
+The file did not exist. After the project owner updated the preset to use an available
+real blob filename, the service started successfully.
+
+Documentation recovery performed:
+
+- replaced stale PROJECT_STATE.md with an authoritative current state;
+- rebuilt ROADMAP.md around completed milestones and remaining live tests;
+- corrected duplicate Finding IDs in AUDIT.md;
+- updated LIFE-010, LIFE-011, and LIFE-012 verification status;
+- recorded the live package baseline and remaining lifecycle matrix;
+- recorded the blob-name contract decision;
+- synchronized architecture, requirements traceability, workflow, and changelog;
+- intentionally left the public README strategy example unchanged by explicit instruction.
+
+Remaining tests:
+
+- upgrade;
+- remove;
+- preserved-runtime verification;
+- reinstall;
+- reboot;
+- controlled runtime failure;
+- full GUI/API matrix.

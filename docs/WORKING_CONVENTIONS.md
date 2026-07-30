@@ -279,5 +279,29 @@ Approximate effort preference, not a quota:
 
 Package lifecycle and runtime bootstrap changes are one architectural unit. Code hooks,
 setup backend, service boundaries, configd integration, verification instructions, and
-all affected documentation must be committed together. `setup.sh` is never presented as
-an end-user command.
+all affected documentation must be committed together. Runtime setup uses the single
+`setup.sh install` backend, initially exposed as the exact post-install command and later
+through a GUI maintenance action.
+
+==================================================
+AUDIT IDENTIFIER AND LIVE-EVIDENCE RULES
+==================================================
+
+- Every AUDIT.md Finding ID is globally unique within the document.
+- Existing IDs are never reused for a later unrelated finding.
+- Cross-references must be updated when a duplicate historical ID is corrected.
+- A finding may be marked live verified only when the exact package/runtime evidence is recorded.
+- Static verification, package archive verification, and live OPNsense verification are distinct states.
+- A working package built from an uncommitted tree is not a reproducible project baseline until the
+  source and synchronized documentation are committed.
+
+==================================================
+BLOB SHORTHAND RULE
+==================================================
+
+- Supported shorthand is --blob=<name>.
+- It resolves directly to files/fake/<name>.bin.
+- The .bin suffix is omitted in the strategy.
+- There is no implicit alias table.
+- Native upstream --blob=name:value declarations containing ':' remain untouched.
+- Missing files are hard errors and must not be silently substituted.

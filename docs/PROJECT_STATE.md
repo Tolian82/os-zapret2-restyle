@@ -11,7 +11,7 @@ Purpose:
 Provide the current operational state needed to resume work quickly.
 
 Updated when:
-Current version, branch, priority, last completed work, blockers, or next actions change.
+Current version, branch, phase, priority, last completed work, blockers, or next actions change.
 
 Read after:
 INDEX.md
@@ -26,41 +26,6 @@ QUICK CONTEXT
 Project:
 os-zapret2-restyle
 
-Current version:
-0.2.1
-
-Current branch:
-main
-
-Baseline tag:
-restyle-start
-
-Development tree:
-/root/os-zapret2-restyle
-
-Current phase:
-Milestone 7 — completion of approved plugin functionality
-
-Current priority:
-Build and live-verify the package-managed installation, upgrade/reinstallation, and
-complete uninstall lifecycle on OPNsense.
-
-Last completed:
-Implemented one coherent package-lifecycle change: automatic post-install runtime
-bootstrap, removal of first-Start installation, upgrade-safe deinstall behavior,
-complete deferred runtime cleanup, managed dependency ownership, and synchronized
-engineering/user documentation.
-
-Current work cycle:
-Investigate → verify → record audit evidence → update Engineering Memory → commit → continue or remediate.
-
-Known blockers:
-None.
-
-==================================================
-SOURCE OF TRUTH
-==================================================
-
 Repository:
 https://github.com/Tolian82/os-zapret2-restyle
 
@@ -73,449 +38,192 @@ Development tree:
 Version source:
 VERSION
 
-Before proposing or applying code:
+Current version:
+0.2.1
 
-1. Read INDEX.md.
-2. Follow the mandatory reading order.
-3. Inspect the actual current repository files.
-4. Check the current branch and commit.
-5. Check the working tree.
-6. Do not rely only on chat history, installed files, or memory.
+Current package revision:
+8
+
+Verified package:
+os-zapret2-restyle-0.2.1_8
+
+Current phase:
+Milestone 7 — completion and live verification of approved functionality
+
+Current priority:
+Synchronize Engineering Memory with the live-verified package, commit the verified tree, then complete the remaining package lifecycle and API live tests.
+
+Known blockers:
+None.
+
+==================================================
+AUTHORITATIVE CURRENT RESULT — 2026-07-30
+==================================================
+
+A complete package installation and runtime start has been verified on OPNsense.
+
+Confirmed package chain:
+
+1. the package installs through pkg;
+2. +POST_INSTALL registers plugin files, reloads templates, and prints the explicit runtime setup command;
+3. runtime preparation is started manually with:
+   /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install
+4. setup installs required dependencies without making pkg installation perform nested package work;
+5. setup obtains the pinned bol-van/zapret2 release v1.0.3;
+6. setup builds executable binaries/my/dvtws2;
+7. configd actions are registered and callable through configctl;
+8. templates generate the runtime configuration;
+9. Backend v2 parses, normalizes, resolves, validates, and generates runtime arguments;
+10. lifecycle code installs the ipfw divert rule;
+11. dvtws2 starts;
+12. supervisor starts and monitors the configured process identity;
+13. service status reaches ready/ok.
+
+Live evidence from the installed system:
+
+- package: os-zapret2-restyle-0.2.1_8;
+- execution status: 13|13|ready|ok;
+- dvtws2 process present;
+- supervisor process present;
+- expected PID files present;
+- ipfw divert rule present;
+- ipfw.ko and ipdivert.ko loaded;
+- HOSTLIST and IPSET target files loaded by dvtws2;
+- four runtime profiles generated from the tested strategy.
+
+The final startup failure found during the test was not an installation defect. The preset requested shorthand blob name tls7, so the resolver correctly looked for files/fake/tls7.bin. After the preset was updated to use an available real blob filename, the service started successfully.
+
+The public README strategy example is intentionally left unchanged for now by explicit project-owner instruction. It will be rewritten in a later dedicated documentation pass.
 
 ==================================================
 CURRENTLY CONFIRMED
 ==================================================
 
-- Independent project repository exists.
-- Independent package identity is established.
-- Independent build, CI, and release infrastructure exists.
-- Required attribution and provenance are preserved.
-- Backend v2 modular architecture exists.
-- Unified Traffic Strategy exists.
-- Generic HOSTLIST and IPSET target handling exists.
-- Target Mode exists.
-- Automatic one-selector-per-runtime-profile normalization exists.
-- Global domain exclusions exist.
-- Wildcard domain input is accepted and canonicalized.
-- Strict domain and IP target validation exists.
-- Candidate runtime generation and validation exist.
-- Transactional Apply exists.
-- Safe service reconfigure exists.
-- Atomic runtime activation and rollback exist.
-- Launcher, ipfw, and supervisor lifecycle exist.
-- Supervisor continuously verifies that the monitored PID still identifies the configured dvtws2 binary.
-- GUI field-level Apply errors exist.
+Project and distribution:
 
-Confirmed live behavior:
+- independent repository and package identity;
+- package/plugin name os-zapret2-restyle;
+- internal OPNsense service and configd namespace zapret;
+- VERSION as the single version source;
+- Makefile PLUGIN_NAME remains zapret2 as required by the OPNsense framework;
+- GitHub Release assets and GitHub Pages pkg repository;
+- FreeBSD:15:amd64 repository layout for supported OPNsense 26.7;
+- repository configuration uses ordinary https:// and signature_type: none;
+- generated package metadata and archive preflight validation.
 
-- Invalid candidate configuration preserves active runtime.
-- Invalid candidate configuration preserves service PID.
-- Invalid candidate configuration preserves active ipfw rules.
-- Invalid IP input such as 999.999.999.999 fails at target validation.
-- A valid configuration reached 13|13|ready|ok.
+Runtime and backend:
 
-==================================================
-CURRENT PRIORITY
-==================================================
+- modular Backend v2;
+- unified Traffic Strategy;
+- placeholders limited to <HOSTLIST:name> and <IPSET:name>;
+- automatic one-selector-per-runtime-profile normalization;
+- user-authored --new boundaries retained;
+- Target Mode;
+- global domain exclusions;
+- strict domain and IP validation;
+- candidate build and validation;
+- transactional Apply;
+- atomic runtime activation and rollback;
+- launcher, firewall, dvtws2, and supervisor lifecycle;
+- process identity validation for dvtws2 and supervisor;
+- lockf-backed lifecycle serialization;
+- supervisor-only runtime failure detection;
+- runtime cleanup on launch or monitored-process failure;
+- blob shorthand resolves directly to files/fake/<name>.bin;
+- native upstream blob declarations containing ':' remain unchanged.
 
-Complete and preserve the API and inherited-reference audit before remediation.
+Package lifecycle:
 
-Completed static audit block:
+- pkg installation does not download, compile, or install runtime dependencies;
+- +POST_INSTALL prints the exact setup command;
+- +PRE_DEINSTALL stops the service synchronously;
+- +POST_DEINSTALL is a no-op and does not restart configd;
+- package removal preserves runtime and shared dependencies;
+- setup uses bol-van/zapret2 pinned to v1.0.3;
+- setup backend remains reusable by a future GUI Maintenance action.
 
-- GUI settings and diagnostics entry points.
-- Menu and ACL scope.
-- MVC page routes.
-- GUI API calls.
-- API controller to configd action mapping.
-- Configd action existence for start, stop, restart, reconfigure, status,
-  blockcheck, and testdomain.
+Live behavior:
 
-Documented findings:
-
-- Duplicate diagnostics page controller route requires live verification.
-- Settings help text still refers to removed HTTP and HTTPS strategy fields.
-- Diagnostics text still refers to the removed HTTPS Strategy field.
-- Blockcheck timeout chain is inconsistent: browser and configd use 600 seconds,
-  PHP waits 650 seconds, and blockcheck.sh allows 1500 seconds.
-- The service reconfigure API endpoint is not called by the current GUI and
-  requires classification by live or external-interface testing.
-
-The authoritative detailed audit record is AUDIT.md. Each non-OK finding now
-requires exact affected locations, a verification plan, a remediation plan,
-acceptance criteria, required documentation updates, and a stable finding ID.
-
-Initial lifecycle evidence recorded:
-
-- Boot uses start/20-zapret → configctl zapret start → configd →
-  zapret_service.sh.
-- Shutdown uses stop/20-zapret → configctl zapret stop → configd →
-  zapret_service.sh.
-- A separate rc.d/zapret entry point converges on the same service script; whether
-  it participates in automatic boot remains a live-test question (LIFE-001).
+- valid configuration reached 13|13|ready|ok;
+- HOSTLIST:youtube, HOSTLIST:user, IPSET:telegram, and hostlist exclusion data were loaded;
+- invalid candidate data preserves the active runtime, service PID, and ipfw rules;
+- invalid IP input fails during target validation;
+- corrected preset using an existing blob starts successfully.
 
 ==================================================
-NEXT ACTIONS
+OPEN VERIFICATION WORK
 ==================================================
 
-1. Build and install the package containing the Runtime Profile Normalizer.
-2. Apply a real strategy containing `<IPSET:telegram>` and `<HOSTLIST:user>` in
-   one user profile.
-3. Verify that generated runtime arguments contain two independent profiles,
-   each with exactly one resolved selector and copied strategy parameters.
-4. Verify service start/reconfigure, PID stability, ipfw state, and rollback on
-   an invalid candidate.
-5. Record live evidence in AUDIT.md and DEVLOG.md.
-6. Commit the code, tests, and synchronized documentation as one logical change.
+The following are not yet classified as fully live verified:
+
+1. package upgrade from an earlier revision to 0.2.1_8;
+2. package removal while the service is running;
+3. preservation of runtime and dependencies after package removal;
+4. package reinstall over preserved runtime;
+5. full OPNsense reboot and automatic service-start behavior;
+6. controlled dvtws2 crash and supervisor cleanup/recovery behavior;
+7. direct diagnostics route behavior;
+8. complete GUI → MVC → configd → backend API live matrix;
+9. blockcheck behavior across the complete browser/PHP/configd/script timeout chain;
+10. classification of the currently unused reconfigure API endpoint.
+
+These are remaining tests, not evidence that the implemented architecture is broken.
+
+==================================================
+CURRENT AUDIT FINDINGS
+==================================================
+
+Authoritative detailed records are in AUDIT.md.
+
+Still open or requiring live verification:
+
+- API diagnostics route duplication and direct-route behavior;
+- stale GUI help text referring to removed HTTP/HTTPS strategy fields;
+- blockcheck timeout inconsistency;
+- unused reconfigure endpoint classification;
+- rc.d enable-source behavior;
+- remaining package upgrade/remove/reinstall/reboot tests;
+- focused supervisor failure-path verification.
+
+Closed or implementation-complete findings include:
+
+- duplicate firewall_rules_present() declaration;
+- disconnected inherited watchdog removal;
+- PID identity hardening;
+- conditional supervisor kill escalation;
+- lifecycle serialization;
+- setup launcher executable mode;
+- wrong upstream zapret repository;
+- nested package-managed runtime lifecycle;
+- GitHub Pages repository URL scheme;
+- release workflow catalogue filename;
+- native ABI artifact staging.
+
+==================================================
+IMMEDIATE NEXT ACTIONS
+==================================================
+
+1. Commit the live-verified source and synchronized Engineering Memory as one logical change.
+2. Build the package from that clean commit and verify it matches the tested 0.2.1_8 behavior.
+3. Execute upgrade → remove → reinstall live tests and record exact evidence.
+4. Reboot the OPNsense test system and verify service startup, PID ownership, supervisor, and ipfw state.
+5. Complete the GUI/API live-test matrix.
+6. Resolve only findings proven by the audit; do not redesign working architecture without evidence.
 7. Resume completion of remaining approved REQUIREMENTS.md functionality.
 
 ==================================================
-CURRENT AUDIT SCOPE
+WORKING RULES FOR RESUMPTION
 ==================================================
 
-The next engineering phase must inventory:
-
-- GUI JavaScript API calls.
-- MVC API URLs.
-- Controller classes and actions.
-- Model reads and writes.
-- Persistent configuration paths.
-- Configd actions.
-- Shell command targets and arguments.
-- Backend functions.
-- rc scripts.
-- syshooks.
-- OPNsense plugin hooks.
-- Generated templates.
-- Filesystem paths.
-- Package lifecycle scripts.
-- Setup scripts.
-- Build scripts.
-- GitHub Actions workflows.
-- Release scripts.
-- External repository URLs.
-- External downloads.
-- Diagnostic commands.
-
-Each item must be classified as:
-
-OK
-broken
-unused
-duplicate
-inherited
-requires live test
-
-==================================================
-KNOWN RISKS
-==================================================
-
-- Old project references may still exist in API, paths, setup, lifecycle, or build logic.
-- Some retained zapret names are intentional and must not be removed mechanically.
-- Watchdog, supervisor, rc, and syshook lifecycle paths may overlap and require tracing.
-- Installed files may differ from repository source during live testing.
-- Documentation can drift unless updated in the same logical commit as affected code.
-
-==================================================
-STATE UPDATE RULE
-==================================================
-
-Update this document only when the current operational state changes.
-
-Typical triggers:
-
-- Version changed.
-- Branch or baseline changed.
-- Current phase changed.
-- Current priority changed.
-- A major step was completed.
-- A blocker appeared or was removed.
-- Immediate next actions changed.
-
-Do not use this document as a history archive.
-
-==================================================
-CURRENT LIFECYCLE AUDIT STATE
-==================================================
-
-Statically verified:
-
-- Boot syshook → configctl → configd start → service wrapper → Backend v2.
-- Shutdown syshook → configctl → configd stop → service wrapper.
-- Candidate build, validation, activation, launcher, firewall, supervisor start order.
-- Supervisor, firewall, launcher stop order.
-- Runtime-failure cleanup removes divert rules and stops the child process.
-
-Open lifecycle Findings:
-
-- LIFE-004 duplicate firewall_rules_present() declaration.
-- LIFE-005 watchdog removal implemented; live regression verification pending.
-- LIFE-006 rc.d entry point lacks a project-owned zapret_enable source.
-- LIFE-007 PID checks do not verify process identity.
-- LIFE-008 supervisor stop escalates without checking exit.
-- LIFE-009 lifecycle serialization implemented; live verification pending.
-
-Open Architecture Debt:
-
-- ARCH-001 supervisor-only runtime failure-detection decision implemented; verification pending.
-- ARCH-002 package lifecycle policy.
-- ARCH-003 launcher/supervisor/lifecycle responsibility boundaries decided; later focused supervisor checks remain.
-
-Immediate next actions:
-
-1. Install the watchdog-removal commit on the test OPNsense system and run normal
-   start, status, restart, reconfigure, Apply, stop, PID, and firewall regression tests.
-2. Confirm no watchdog files or active references remain in the installed system.
-3. After successful verification, add only the first proven supervisor health check
-   in a separate focused commit.
-4. Continue transactional reconfigure, rollback, firewall snapshot, atomic backup,
-   rc.d, and package-lifecycle audit.
-
-
-==================================================
-CURRENT PACKAGE AND RELEASE DIRECTION — 2026-07-29
-==================================================
-
-Approved:
-
-- Project-owned pkg repository on GitHub Pages.
-- GitHub Release assets and checksums.
-- Initial ABI target FreeBSD:15:amd64 / supported OPNsense 26.7.
-- Standard OPNsense Firmware GUI installation and updates.
-- No manual SSH setup step for normal users.
-- Package-owned automatic runtime bootstrap from `+POST_INSTALL`.
-- Separate command blocks for checks and installation.
-
-The earlier first-Start/Apply bootstrap design in this section has been superseded by
-DEC-2026-07-30. The current implementation is described in CURRENT PACKAGE-LIFECYCLE
-CHANGE below.
-
-==================================================
-RELEASE INFRASTRUCTURE IMPLEMENTATION — 2026-07-29
-==================================================
-
-Release infrastructure implementation started:
-- tag and VERSION validation remains mandatory;
-- release package is built in FreeBSD 15;
-- pkg repo generates the FreeBSD:15:amd64 catalogue;
-- GitHub Release receives the package and SHA256SUMS;
-- GitHub Pages receives the repository catalogue and zapret2-restyle.conf;
-- the first v0.1.0 publication remains a prerelease pending live GUI verification.
-
-Immediate next actions:
-1. Commit and push the release infrastructure change.
-2. Configure GitHub Pages source as GitHub Actions.
-3. Create and push tag v0.1.0.
-4. Verify the workflow, Release assets, Pages repository, pkg update, and GUI package state.
-5. Record live results and close or update PKG-002.
-
-==================================================
-RELEASE PREFLIGHT UPDATE — 2026-07-29
-==================================================
-
-The current Milestone 6 implementation now validates the generated package archive,
-not only its expected filename. scripts/verify-release-package.sh extracts
-+MANIFEST and verifies the approved package name, VERSION plus PLUGIN_REVISION, and
-project repository URL before pkg-repository generation and publication.
-
-Immediate next step:
-Commit this focused preflight change, then configure GitHub Pages for GitHub Actions
-and create the v0.1.0 tag only after the repository is clean.
-
-
-==================================================
-FINAL RELEASE WORKFLOW AUDIT — 2026-07-29
-==================================================
-
-The pre-tag audit found and corrected a release-blocking catalogue assertion:
-modern `pkg repo` output uses `meta.conf` and `data.pkg`, not `meta.pkg`. The workflow
-now validates the actual repository format before either Release or Pages publication.
-
-The first v0.1.0 repository remains explicitly unsigned and is acceptable only for
-prerelease testing. Repository signing is recorded as mandatory before a stable
-release. README now contains the one-time repository registration procedure and the
-normal Firmware GUI installation path.
-
-Immediate next action:
-Commit this focused pre-tag correction, push main, confirm a clean repository, and
-then create tag v0.1.0 for live workflow verification.
-
-## First v0.1.0 workflow audit result
-
-Validation and FreeBSD build succeeded. Publication stopped when the generic artifact
-uploader rejected the colon in `FreeBSD:15:amd64`. The prepared fix preserves the
-native pkg path, adds flat release-assets staging, and updates affected actions to
-Node.js 24-capable versions. Next: commit, retag v0.1.0, and repeat the release audit.
-
-==================================================
-MILESTONE 6 CLOSED / MILESTONE 7 OPENED — 2026-07-29
-==================================================
-
-Milestone 6 is complete.
-
-Completed and verified:
-- Backend, lifecycle, supervisor, packaging, and release audit work required for the
-  first official release.
-- Project-owned GitHub Pages pkg repository and GitHub Release pipeline.
-- Native `FreeBSD:15:amd64` Pages layout retained for pkg consumers.
-- Separate flat `release-assets/` staging for generic GitHub Actions artifacts.
-- GitHub Pages environment configured to permit release tags through a tag rule.
-- First official v0.1.0 release published successfully.
-
-Current Milestone 7 focus:
-Complete the functionality already approved in REQUIREMENTS.md before considering
-interface redesign or new product scope.
-
-Ordered next work:
-1. Move internal project documentation into the conventional `docs/` directory and
-   update all links and reading-order references.
-2. Verify that strategies are actually applied to their intended list targets,
-   including `<HOSTLIST:youtube>`, `<IPSET:telegram>`, and `<HOSTLIST:user>`.
-3. Audit and complete every already-declared requirement until the existing product
-   scope works predictably on a real OPNsense system.
-
-Explicitly out of current scope:
-- navigation redesign;
-- general OPNsense UX research;
-- first-run redesign;
-- Service, Diagnostics, Maintenance, Status, or Strategy UX audits;
-- design work not required by the existing approved functionality.
-
-UX is not a separate project objective. Interface work is considered when required to
-support expanded functionality or when the current interface demonstrably prevents use
-of an implemented capability. Otherwise the interface remains stable.
-
-==================================================
-PROFILE PIPELINE REFACTOR — 2026-07-29
-==================================================
-
-The parsed-profile preparation path now has a uniform count-carrying API implemented
-by `profile_pipeline.sh`.
-
-Current ordered chain:
-
-1. parse strategy;
-2. build target registry;
-3. apply Target Mode;
-4. normalize profiles;
-5. index placeholders.
-
-Every step accepts the current work directory and profile count and returns a validated
-resulting count. The orchestrator no longer contains special profile-count validation
-for only one module.
-
-Immediate next priority remains live OPNsense verification of named HOSTLIST/IPSET
-strategy application and automatic profile expansion.
-
-
-==================================================
-RELEASE 0.2.0 PREPARATION — 2026-07-29
-==================================================
-
-Current release:
-0.2.0
-
-Package revision:
-1
-
-Expected package version:
-0.2.0_1
-
-Release status:
-Preparation in progress.
-
-Completed:
-- Unified the runtime profile normalization and expansion pipeline.
-- Approved v0.2.0 as the next project release.
-- Updated VERSION from 0.1.0 to 0.2.0.
-- Reset PLUGIN_REVISION from 2 to 1.
-- Retained the project-owned FreeBSD:15:amd64 pkg repository.
-- Confirmed `signature_type: "none"` as the approved repository mode.
-
-Immediate next actions:
-1. Review the complete release diff.
-2. Run repository validation and CI checks.
-3. Commit and push the v0.2.0 release preparation.
-4. Confirm the main branch CI result.
-5. Create and push the immutable tag v0.2.0.
-6. Verify GitHub Release and GitHub Pages publication.
-7. Register the repository on the target OPNsense system.
-8. Install or upgrade os-zapret2-restyle through Firmware > Plugins.
-9. Record live installation and runtime verification results.
-
-==================================================
-RELEASE 0.2.1 CORRECTION — 2026-07-29
-==================================================
-
-Current release:
-0.2.1
-
-Package revision:
-1
-
-Expected package version:
-0.2.1_2
-
-Completed:
-- Published and verified immutable release v0.2.0.
-- Confirmed successful CI and Release workflows.
-- Reproduced the repository update failure on OPNsense.
-- Identified `pkg+https://` as incorrect SRV mirror syntax.
-- Verified successful catalogue update with ordinary `https://`.
-- Corrected the repository configuration source.
-
-Next:
-- Validate and publish corrective release v0.2.1.
-
-
-==================================================
-CURRENT PACKAGE-LIFECYCLE CHANGE — 2026-07-30
-==================================================
-
-Implemented in the current working tree as one logical change:
-
-- package post-install now automatically launches the internal runtime bootstrap;
-- first Start/Apply bootstrap was removed from service lifecycle;
-- real uninstall stops the service and starts complete deferred runtime cleanup;
-- upgrade deinstall preserves runtime state;
-- dependencies installed by setup are tracked for safe removal;
-- OPNsense plugin registration is refreshed on install and removal;
-- all related architecture, requirements, roadmap, user and development documentation
-  was updated in the same change.
-
-Current next action:
-
-Build the package and live-test install, bootstrap, upgrade/reinstall and uninstall on
-the supported OPNsense test system. Do not begin GUI version-control work before this
-lifecycle passes live verification.
-
-==================================================
-SETUP LAUNCHER EXECUTION FIX — 2026-07-30
-==================================================
-
-Live installation of `0.2.1_2` showed that automatic bootstrap did not start.
-The configd action invokes `setup_launcher.sh` directly, but the repository file
-was not executable. The current logical change marks only that launcher executable
-and increments the package revision to `0.2.1_3`.
-
-Verification required:
-
-1. Build `os-zapret2-restyle-0.2.1_3.pkg`.
-2. Confirm the packaged launcher mode is executable.
-3. Install the plugin on the clean OPNsense test system.
-4. Confirm `configctl zapret setup install` no longer returns exit 127.
-5. Confirm automatic bootstrap starts and creates its state/log output.
-6. Confirm configd and Web GUI remain healthy after installation and removal.
-
-No other lifecycle behavior is changed in this cycle.
-
-==================================================
-ZAPRET2 UPSTREAM FIX — 2026-07-30
-==================================================
-
-Live installation of `0.2.1_3` proved that the detached setup launcher works and that
-configd can remain healthy. Bootstrap failed because `setup.sh` cloned bol-van/zapret,
-whose build produced `dvtws`, while the plugin requires `dvtws2`.
-
-The current atomic change switches the runtime source to bol-van/zapret2 and increments
-the plugin revision to `0.2.1_4`. Next action: build, reinstall, and verify that setup
-reaches `ready` with executable `binaries/my/dvtws2`.
+Before changing code:
+
+1. read docs/INDEX.md;
+2. follow the mandatory reading order;
+3. inspect the actual repository tree;
+4. check branch, HEAD, tags, and working tree;
+5. use AUDIT.md Finding IDs for remediation work;
+6. record approved concepts in DECISIONS.md;
+7. update every affected document in the same logical commit;
+8. never infer current state from chat history alone.
+
+The currently tested package was built from a working tree containing uncommitted changes. The next commit must make the verified package reproducible from Git history.

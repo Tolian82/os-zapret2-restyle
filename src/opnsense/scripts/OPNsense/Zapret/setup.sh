@@ -1,16 +1,15 @@
 #!/bin/sh
 
-# Package-managed zapret2 runtime bootstrap for OPNsense/FreeBSD.
-# This is an internal lifecycle backend. Users must not run it manually.
+# zapret2 runtime setup backend for OPNsense/FreeBSD.
+# Run explicitly after plugin installation or through the future GUI action.
 
 ZAPRET_DIR="/usr/local/etc/zapret2"
 ZAPRET_REPO="https://github.com/bol-van/zapret2.git"
+ZAPRET_REF="v1.0.3"
 STATE_DIR="/var/db/zapret2-restyle"
-MANAGED_PACKAGES="${STATE_DIR}/managed-packages"
 SETUP_STATUS="${STATE_DIR}/setup.status"
 RUN_DIR="/var/run/zapret2-restyle"
 LOCK_FILE="${RUN_DIR}/setup.lock"
-PACKAGE_NAME="os-zapret2-restyle"
 FREEBSD_REPO_OVERRIDE="/usr/local/etc/pkg/repos/FreeBSD.conf"
 FREEBSD_REPO_BACKUP="${STATE_DIR}/FreeBSD.conf.backup"
 ENABLED_FREEBSD_REPO=0
@@ -73,14 +72,6 @@ wait_for_outer_pkg()
     sleep 3
 }
 
-record_managed_package()
-{
-    _package="$1"
-    touch "${MANAGED_PACKAGES}"
-    grep -qx "${_package}" "${MANAGED_PACKAGES}" 2>/dev/null ||
-        printf '%s\n' "${_package}" >> "${MANAGED_PACKAGES}"
-}
-
 install_dep()
 {
     for _name in "$@"; do
@@ -92,8 +83,7 @@ install_dep()
 
     for _name in "$@"; do
         if pkg install -y "${_name}"; then
-            record_managed_package "${_name}"
-            echo "Installed managed dependency: ${_name}"
+            echo "Installed dependency: ${_name}"
             return 0
         fi
     done
@@ -142,12 +132,14 @@ install_runtime()
     restore_freebsd_repo
 
     if [ -d "${ZAPRET_DIR}/.git" ]; then
-        echo "Updating existing bol-van/zapret runtime tree..."
-        git -C "${ZAPRET_DIR}" pull --ff-only
+        echo "Checking out bol-van/zapret2 ${ZAPRET_REF}..."
+        git -C "${ZAPRET_DIR}" fetch --depth 1 origin tag "${ZAPRET_REF}"
+        git -C "${ZAPRET_DIR}" checkout --detach FETCH_HEAD
+        git -C "${ZAPRET_DIR}" reset --hard FETCH_HEAD
     else
-        echo "Downloading bol-van/zapret runtime tree..."
+        echo "Downloading bol-van/zapret2 ${ZAPRET_REF}..."
         rm -rf "${ZAPRET_DIR}"
-        git clone --depth 1 "${ZAPRET_REPO}" "${ZAPRET_DIR}"
+        git clone --depth 1 --branch "${ZAPRET_REF}" "${ZAPRET_REPO}" "${ZAPRET_DIR}"
     fi
 
     echo "Compiling zapret2 runtime..."
@@ -164,73 +156,9 @@ install_runtime()
     echo "Runtime installation completed successfully."
 }
 
-remove_managed_packages()
-{
-    [ -s "${MANAGED_PACKAGES}" ] || return 0
-
-    _remaining="${MANAGED_PACKAGES}.remaining"
-    : > "${_remaining}"
-
-    while IFS= read -r _package; do
-        [ -n "${_package}" ] || continue
-        if ! pkg info -q "${_package}"; then
-            continue
-        fi
-        if pkg delete -y "${_package}"; then
-            echo "Removed managed dependency: ${_package}"
-        else
-            echo "Keeping dependency still required by another package: ${_package}"
-            printf '%s\n' "${_package}" >> "${_remaining}"
-        fi
-    done < "${MANAGED_PACKAGES}"
-
-    if [ -s "${_remaining}" ]; then
-        mv "${_remaining}" "${MANAGED_PACKAGES}"
-    else
-        rm -f "${_remaining}" "${MANAGED_PACKAGES}"
-    fi
-}
-
-uninstall_runtime()
-{
-    status_write "removing"
-    echo "=== os-zapret2-restyle runtime removal ==="
-
-    while pkg info -q "${PACKAGE_NAME}" >/dev/null 2>&1; do
-        sleep 1
-    done
-    wait_for_outer_pkg
-
-    if pkg info -q "${PACKAGE_NAME}" >/dev/null 2>&1; then
-        echo "Package is installed again; destructive uninstall cleanup was cancelled."
-        return 0
-    fi
-
-    rm -rf "${ZAPRET_DIR}"
-    rm -rf /var/log/zapret2
-    rm -f /var/run/dvtws2.pid
-    rm -f /var/run/zapret2-supervisor-daemon.pid
-    rm -f /var/run/zapret2-supervisor-monitor.pid
-    rm -f /var/run/zapret2-execution.status
-    rm -f /var/run/zapret2-lifecycle.lock
-
-    remove_managed_packages
-
-    if [ -x /usr/local/etc/rc.configure_plugins ]; then
-        /usr/local/etc/rc.configure_plugins zapret2 >/dev/null 2>&1 || true
-    fi
-    if [ -x /usr/local/etc/rc.d/configd ]; then
-        /usr/local/etc/rc.d/configd restart >/dev/null 2>&1 || true
-    fi
-
-    rm -rf "${RUN_DIR}"
-    rm -rf "${STATE_DIR}"
-    echo "Runtime removal completed successfully."
-}
-
 run_locked()
 {
-    /usr/bin/lockf -s -t 30 "${LOCK_FILE}" "$0" "${MODE}-locked"
+    /usr/bin/lockf -s -t 30 "${LOCK_FILE}" "$0" install-locked
 }
 
 case "${MODE}" in
@@ -240,14 +168,8 @@ case "${MODE}" in
     install-locked)
         install_runtime
         ;;
-    uninstall)
-        run_locked
-        ;;
-    uninstall-locked)
-        uninstall_runtime
-        ;;
     *)
-        echo "usage: setup.sh {install|uninstall}" >&2
+        echo "usage: setup.sh install" >&2
         exit 64
         ;;
 esac

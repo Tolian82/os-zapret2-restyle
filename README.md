@@ -152,17 +152,21 @@ The supported distribution model is a project-owned FreeBSD pkg repository
 published through GitHub Pages for FreeBSD:15:amd64 / supported OPNsense 26.7
 systems. Package assets and checksums are also published in GitHub Releases.
 
-Normal installation and updates are performed through the OPNsense Firmware GUI.
-The package post-install lifecycle automatically starts the internal `setup.sh`
-backend, installs missing runtime/build dependencies, downloads bol-van/zapret,
-compiles and verifies dvtws2, and records the result in
-`/var/log/zapret2/setup.log`. Users do not run `setup.sh` manually. Start and Apply
-only operate a runtime that the package installation has already prepared. Internet
-access is required during this automatic bootstrap.
+Normal plugin installation and updates are performed through the OPNsense Firmware GUI.
+The package installation itself remains quick and does not download or compile the
+zapret2 runtime. After installation, run the one-time setup command shown by pkg:
 
-Removing the plugin stops its service and automatically removes the downloaded
-engine tree, compiled runtime, generated runtime state, logs, PID files, and packages
-that were installed specifically by the bootstrap and are not required elsewhere.
+```sh
+/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install
+```
+
+The setup backend installs missing tools, checks out the project-approved fixed
+bol-van/zapret2 release, compiles and verifies dvtws2, and records its result. Internet
+access is required during setup. A future GUI maintenance action will call the same
+backend.
+
+Removing the plugin stops the service before package files disappear. Saved OPNsense
+configuration, the downloaded runtime, logs, and shared dependencies are preserved.
 
 The repository is registered once on the firewall by placing the published
 configuration file in `/usr/local/etc/pkg/repos/` and refreshing pkg metadata:
