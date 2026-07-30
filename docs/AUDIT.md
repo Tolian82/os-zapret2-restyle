@@ -339,7 +339,7 @@ AUDIT.md, DEVLOG.md, CHANGELOG.md, and README.md if equivalent user guidance is
 present there.
 
 Remediation status:
-Not started.
+Implemented in package revision 9. Source verification confirms that the Settings help now describes the unified Traffic Strategy field, mixed protocol profiles, explicit --new boundaries, and safe merge behavior. Rendered-page verification remains required on OPNsense.
 
 --------------------------------------------------
 GUI-002 — Obsolete diagnostics guidance for HTTPS Strategy
@@ -401,7 +401,40 @@ Required documentation updates:
 AUDIT.md, DEVLOG.md, CHANGELOG.md, README.md if diagnostics usage is documented.
 
 Remediation status:
-Not started.
+Implemented in package revision 9. Both the initial diagnostics guidance and the dynamic successful/partial result path now direct users to Traffic Strategy and explicitly warn against replacing an existing multi-profile strategy without review. Browser rendering and result-path live verification remain required.
+
+==================================================
+COMPLETED REMEDIATION BLOCK — UNIFIED STRATEGY GUIDANCE
+==================================================
+
+Date completed:
+2026-07-30
+
+Scope:
+GUI-001 and GUI-002
+
+Implemented changes:
+
+- Settings help no longer references removed HTTP Strategy or HTTPS Strategy fields.
+- Settings help now describes one unified Traffic Strategy field.
+- The guidance states that HTTP, HTTPS/TLS, TCP, and UDP profiles may coexist and that independent profiles use --new.
+- Diagnostics initial text and dynamic result text now point to Traffic Strategy.
+- Diagnostics warns users to merge a selected profile with existing profiles instead of replacing a complete multi-profile strategy blindly.
+- Package revision increased from 8 to 9.
+
+Static verification:
+
+- repository-wide search finds no remaining user-facing "HTTP Strategy field" or "HTTPS Strategy field" guidance in current MVC source;
+- XML parsing succeeds for general.xml;
+- PHP syntax remains unchanged by this remediation;
+- the two affected Finding records remain open only for rendered-page and result-path live verification.
+
+Live verification required:
+
+1. Open Settings and confirm the information block renders correctly.
+2. Open Diagnostics and confirm the initial guidance renders correctly.
+3. Exercise successful, partial, timeout, and error blockcheck result paths.
+4. Confirm no user-visible path refers to removed split strategy fields.
 
 --------------------------------------------------
 DIAG-001 — Inconsistent blockcheck timeout chain

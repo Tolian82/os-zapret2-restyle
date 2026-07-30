@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Replaced obsolete Settings and Diagnostics guidance that referenced removed HTTP/HTTPS Strategy fields.
+- Directed blockcheck results to the unified Traffic Strategy field and warned against blindly replacing existing multi-profile strategies.
+
+### Changed
+
+- Increased package revision to `9` for the GUI guidance correction.
+
+
 - Separated plugin package installation from zapret2 runtime preparation.
 - Package post-install now prints `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install` instead of starting a detached bootstrap.
 - Package removal now stops the service only and preserves runtime/dependencies.

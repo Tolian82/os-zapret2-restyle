@@ -784,3 +784,30 @@ Remaining tests:
 - reboot;
 - controlled runtime failure;
 - full GUI/API matrix.
+
+==================================================
+2026-07-30 — UNIFIED STRATEGY GUIDANCE REMEDIATION
+==================================================
+
+Completed the source-level remediation for AUDIT findings GUI-001 and GUI-002.
+
+Implemented as one logical change:
+
+- replaced obsolete Settings guidance for separate HTTP and HTTPS Strategy fields;
+- documented the unified Traffic Strategy workflow and explicit --new profile boundaries;
+- replaced both static and dynamic Diagnostics references to the removed HTTPS Strategy field;
+- added a warning to merge a blockcheck result with existing profiles rather than replacing a complete strategy blindly;
+- increased package revision from 8 to 9;
+- synchronized PROJECT_STATE.md, ROADMAP.md, AUDIT.md, DEVLOG.md, and CHANGELOG.md.
+
+Static verification completed:
+
+- general.xml parses successfully;
+- repository search finds no remaining current MVC guidance that directs users to removed split strategy fields;
+- no runtime or backend behavior was changed.
+
+Pending live verification:
+
+- rendered Settings information block;
+- Diagnostics initial guidance;
+- successful, partial, timeout, and error result paths.

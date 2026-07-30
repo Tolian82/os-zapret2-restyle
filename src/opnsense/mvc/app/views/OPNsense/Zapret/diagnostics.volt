@@ -159,7 +159,7 @@
                     }
                     $("#blockcheckSummary").html('Tested <strong>' + domEsc +
                         '</strong>' + timingHtml + partialHtml +
-                        '. Strategies that worked are listed below — copy one into the HTTPS Strategy field on the Settings page.' +
+                        '. Strategies that worked are listed below. Review the result and add the required profile to the Traffic Strategy field on the Settings page; merge it with existing profiles instead of replacing them blindly.' +
                         logFileHtml);
                 }
 
@@ -262,7 +262,7 @@
                         </div>
                         <div class="col-md-12" style="padding-top: 10px;">
                             <div id="blockcheckSummary">
-                                {{ lang._('Enter a domain that your ISP currently blocks and click Run. Blockcheck will spend 1–3 minutes testing many DPI bypass strategies and report which ones successfully reach the site. Copy a working strategy into the HTTPS Strategy field on the Settings page.') }}
+                                {{ lang._('Enter a domain that your ISP currently blocks and click Run. Blockcheck will spend 1–3 minutes testing many DPI bypass strategies and report which ones successfully reach the site. Review a working strategy and add the required profile to the Traffic Strategy field on the Settings page. Merge it with existing profiles instead of replacing the full strategy blindly.') }}
                             </div>
                             <div id="blockcheckWinning" style="padding-top: 10px;"></div>
                             <details style="padding-top: 10px;">

@@ -26,7 +26,7 @@ CURRENT STAGE
 Milestone 7 — completion and live verification of approved functionality
 
 Current work package:
-Documentation recovery and reproducible live-verified package baseline
+Clean-baseline reproduction and audited GUI/API remediation
 
 [x] Reconstruct current state from repository, Git history, chat decisions, and runtime audit snapshot
 [x] Confirm package installation and runtime start on OPNsense
@@ -35,7 +35,7 @@ Documentation recovery and reproducible live-verified package baseline
 [x] Reconcile package lifecycle documentation with DEC-2026-07-30
 [x] Correct duplicate audit Finding identifiers
 [x] Record live verification in audit, decisions, devlog, architecture, and changelog
-[ ] Commit the verified source and documentation as one logical change
+[x] Commit the verified source and documentation as one logical change
 [ ] Rebuild from the clean commit and compare behavior with the tested package
 
 ==================================================
@@ -125,13 +125,14 @@ Completed in this milestone:
 
 Remaining ordered work:
 
-1. Commit and reproduce the verified baseline.
-2. Live-test package upgrade from an earlier revision.
-3. Live-test removal while running.
-4. Verify runtime/dependency preservation after removal.
-5. Live-test reinstall over preserved runtime.
-6. Reboot OPNsense and verify automatic service startup behavior.
-7. Complete the GUI/API live matrix:
+1. Build revision 9 from the clean committed baseline and reproduce the verified runtime behavior.
+2. Live-verify the corrected unified Traffic Strategy guidance.
+3. Live-test package upgrade from an earlier revision.
+4. Live-test removal while running.
+5. Verify runtime/dependency preservation after removal.
+6. Live-test reinstall over preserved runtime.
+7. Reboot OPNsense and verify automatic service startup behavior.
+8. Complete the GUI/API live matrix:
    - Save/Apply;
    - Start;
    - Stop;
@@ -141,9 +142,9 @@ Remaining ordered work:
    - blockcheck;
    - test domain;
    - reconfigure classification.
-8. Resolve stale GUI help text and timeout-chain findings.
-9. Verify supervisor response to controlled dvtws2 termination.
-10. Review REQUIREMENTS.md line by line and implement only remaining approved scope.
+9. Resolve the timeout-chain finding after approving one end-to-end timeout policy.
+10. Verify supervisor response to controlled dvtws2 termination.
+11. Review REQUIREMENTS.md line by line and implement only remaining approved scope.
 
 Acceptance criteria for Milestone 7 completion:
 

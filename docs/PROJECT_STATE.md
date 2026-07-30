@@ -51,7 +51,7 @@ Current phase:
 Milestone 7 — completion and live verification of approved functionality
 
 Current priority:
-Synchronize Engineering Memory with the live-verified package, commit the verified tree, then complete the remaining package lifecycle and API live tests.
+Rebuild and live-verify the clean committed baseline, complete the remaining package lifecycle and GUI/API live tests, and remediate only findings already proven by the audit.
 
 Known blockers:
 None.
@@ -203,11 +203,11 @@ Closed or implementation-complete findings include:
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Commit the live-verified source and synchronized Engineering Memory as one logical change.
-2. Build the package from that clean commit and verify it matches the tested 0.2.1_8 behavior.
+1. Build package revision 9 from the clean committed baseline and verify that its runtime behavior matches the tested 0.2.1_8 baseline.
+2. Live-verify the corrected unified Traffic Strategy guidance on Settings and Diagnostics pages.
 3. Execute upgrade → remove → reinstall live tests and record exact evidence.
 4. Reboot the OPNsense test system and verify service startup, PID ownership, supervisor, and ipfw state.
-5. Complete the GUI/API live-test matrix.
+5. Complete the remaining GUI/API live-test matrix, including the duplicate diagnostics route and service reconfigure classification.
 6. Resolve only findings proven by the audit; do not redesign working architecture without evidence.
 7. Resume completion of remaining approved REQUIREMENTS.md functionality.
 
@@ -226,4 +226,4 @@ Before changing code:
 7. update every affected document in the same logical commit;
 8. never infer current state from chat history alone.
 
-The currently tested package was built from a working tree containing uncommitted changes. The next commit must make the verified package reproducible from Git history.
+The live-verified source and synchronized Engineering Memory were committed and published as efff7b5. Package revision 9 is the first follow-up candidate that must be built from the clean committed baseline and compared with the verified 0.2.1_8 runtime behavior.
