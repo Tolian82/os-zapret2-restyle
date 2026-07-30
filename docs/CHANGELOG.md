@@ -8,7 +8,13 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
-No unreleased changes recorded.
+### Changed
+
+- Closed Milestone 7 by project-owner decision while retaining unperformed lifecycle, reboot, controlled-failure, timeout-chain, and GUI/API checks as a regression backlog.
+- Opened Milestone 8 with GUI management of bol-van/zapret2 stable releases through the existing setup.sh backend as the first priority.
+- Added the later GUI task for an additional BLOB repository without inventing its repository or technical contract.
+- Standardized OPNsense console instructions on csh, with explicit `sh` and `exit` boundaries when POSIX shell is required.
+- Standardized normal Git verification on `git status --short`, `git diff --check`, and `git diff --stat`.
 
 ## [0.2.2] - 2026-07-30
 

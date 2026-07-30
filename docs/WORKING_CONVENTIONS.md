@@ -113,7 +113,9 @@ Run appropriate syntax checks.
 
 Run:
 
+git status --short
 git diff --check
+git diff --stat
 
 Perform focused live tests when behavior changes.
 
@@ -239,6 +241,8 @@ Keep package publication and installation commands together where possible, but
 never mix them with the preceding validation block. Commands must remain in actual
 execution order and must be valid for the OPNsense root shell or explicitly invoke
 /bin/sh when POSIX shell syntax is required.
+
+The default and mandatory presentation target for OPNsense console instructions is the root csh shell. Do not silently assume sh, bash, or another shell. If POSIX sh is required, show an explicit `sh` command before the POSIX block and an explicit `exit` command after it. Commands that follow `exit` must again be valid csh commands.
 
 ==================================================
 FOCUS, SUFFICIENCY, AND INTERFACE STABILITY
@@ -368,3 +372,11 @@ A patch artifact is ready for delivery only after it has passed
 `git apply --check` against an unchanged copy of the supplied archive baseline.
 When a valid baseline is unavailable, request a new archive instead of
 reconstructing the repository.
+
+==================================================
+GUI MAINTENANCE BACKEND RULE
+==================================================
+
+The existing `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh` is the single approved backend for GUI management of bol-van/zapret2 releases. The GUI must not introduce a second independent installer. User-visible requirements are release discovery, installed-version reporting, update notification, release selection, installation, update, and repeat installation. Internal download or Git operations remain backend implementation details and are not the name of the GUI task.
+
+The additional BLOB repository is an approved later GUI work item, but its repository and technical contract remain undefined until supplied by the project owner. Do not invent a URL, manifest, directory layout, version scheme, integrity policy, or update behavior.

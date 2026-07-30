@@ -217,14 +217,15 @@ Present commands in separate sequential blocks:
 
 A validation block must not perform installation, commit, push, restart, or other
 mutation. An installation block may group related package build, publication, and
-installation commands. Avoid shell variables in commands intended for the default
-OPNsense csh root shell unless the whole block is executed explicitly by /bin/sh.
+installation commands. Avoid shell variables in commands intended for the default OPNsense csh root shell unless the whole block is executed explicitly by POSIX sh. All console instructions must target csh by default. When POSIX sh is mandatory, show `sh` as a separate command before the block and `exit` as a separate command after the block; commands after `exit` return to csh syntax.
 
 ==================================================
 CURRENT IMPLEMENTATION PRIORITY
 ==================================================
 
-For Milestone 7, choose work in this order:
+For the active milestone, choose work in the order recorded in ROADMAP.md. For Milestone 8, the first work package is GUI management of bol-van/zapret2 stable releases through the existing setup.sh backend. The additional BLOB repository follows only after the project owner supplies its repository and contract.
+
+Historical Milestone 7 ordering was:
 
 1. Finish the current documentation synchronization.
 2. Move internal documentation into `docs/` and update references.

@@ -1986,3 +1986,23 @@ Classification:
 Release baseline verified. This does not close the remaining upgrade, remove, preserved
 runtime, reinstall, reboot, controlled-failure, timeout-chain, or GUI/API live tests.
 Those remain the ordered Milestone 7 audit work.
+
+==================================================
+MILESTONE 7 CLOSURE CLASSIFICATION — 2026-07-30
+==================================================
+
+Project-owner decision:
+Milestone 7 is closed and Milestone 8 is opened. This administrative milestone transition does not reclassify unperformed tests as successful and does not close findings that still require live evidence.
+
+Focused regression backlog retained:
+
+- package upgrade from an earlier revision;
+- removal while running and preservation of runtime/dependencies;
+- reinstall over preserved runtime;
+- full reboot and automatic service-start behavior;
+- controlled dvtws2 termination and supervisor cleanup/recovery;
+- complete GUI/API live matrix and reconfigure classification;
+- browser/PHP/configd/script blockcheck timeout-chain behavior.
+
+Milestone 8 audit boundary:
+The first implementation target is GUI management of bol-van/zapret2 stable releases through the existing setup.sh backend. Audit must verify one backend path, release-input validation, installed-version reporting, update discovery, operation serialization, failure-state reporting, and separation between runtime presence and runtime/service health. The additional BLOB repository remains outside implementation audit until the project owner supplies its repository and technical contract.

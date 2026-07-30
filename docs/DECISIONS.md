@@ -1599,3 +1599,56 @@ Affected documents:
 - GITHUB_WORKFLOW.md
 - PROJECT_STATE.md
 - DEVLOG.md
+
+==================================================
+DEC-2026-07-30 — CLOSE MILESTONE 7 AND OPEN GUI MAINTENANCE
+==================================================
+
+Status:
+Approved.
+
+Decision:
+Milestone 7 is closed by explicit project-owner decision. Remaining lifecycle, reboot, controlled-failure, timeout-chain, and GUI/API live tests are not marked as passed; they remain a focused regression backlog. Milestone 8 starts with GUI management of published stable bol-van/zapret2 releases through the existing `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh` backend. The required user-visible functions are installed-version reporting, available-release listing, update notification, release selection, installation, update, and repeat installation. Runtime presence and runtime/service health are separate reported states.
+
+The second ordered task is GUI management of an additional BLOB repository. Its URL and technical contract will be supplied later by the project owner and must not be invented.
+
+Reason:
+The verified v0.2.2 baseline is sufficient to move development to the approved maintenance functionality, while preserving unperformed evidence work honestly. Reusing setup.sh preserves one installation backend and avoids divergent lifecycle implementations.
+
+Consequences:
+- ROADMAP.md moves to Milestone 8;
+- remaining Milestone 7 tests stay recorded as regression backlog;
+- setup.sh remains the single backend for engine release operations;
+- no BLOB repository design is approved until the owner supplies it;
+- affected implementation decisions require focused verification and synchronized documentation.
+
+Affected documents:
+- PROJECT_STATE.md
+- ROADMAP.md
+- AUDIT.md
+- DEVLOG.md
+- CHANGELOG.md
+- WORKING_CONVENTIONS.md
+- DEVELOPMENT_GUIDE.md
+
+==================================================
+DEC-2026-07-30 — OPNSENSE CONSOLE INSTRUCTIONS TARGET CSH
+==================================================
+
+Status:
+Approved.
+
+Decision:
+All OPNsense console command instructions target the default root csh shell unless a POSIX shell is explicitly required. A POSIX block must explicitly begin with `sh` and explicitly end with `exit`. Commands after `exit` again target csh. Normal Git verification is `git status --short`, `git diff --check`, and `git diff --stat`; full `git diff` is reserved for targeted debugging or review when specifically needed.
+
+Reason:
+Implicit shell changes cause prompt confusion, syntax errors, and commands that do not match the actual OPNsense root environment.
+
+Consequences:
+All future command blocks and documentation examples must follow this convention.
+
+Affected documents:
+- WORKING_CONVENTIONS.md
+- DEVELOPMENT_GUIDE.md
+- DEVLOG.md
+- PROJECT_STATE.md

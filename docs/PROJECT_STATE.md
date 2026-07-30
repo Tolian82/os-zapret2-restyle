@@ -48,10 +48,10 @@ Verified package:
 os-zapret2-restyle-0.2.2_1
 
 Current phase:
-Milestone 7 — completion and live verification of approved functionality
+Milestone 8 — GUI maintenance and managed upstream components
 
 Current priority:
-Complete the remaining package lifecycle, reboot, supervisor-failure, and GUI/API live tests from the published v0.2.2 baseline; remediate only findings already proven by the audit.
+Implement GUI management of bol-van/zapret2 stable releases through the existing setup.sh backend: installed-version reporting, available-release selection, update notification, installation, update, and repeat installation.
 
 Known blockers:
 None.
@@ -167,7 +167,7 @@ Package lifecycle:
 - +POST_DEINSTALL is a no-op and does not restart configd;
 - package removal preserves runtime and shared dependencies;
 - setup uses bol-van/zapret2 pinned to v1.0.3;
-- setup backend remains reusable by a future GUI Maintenance action.
+- setup backend is the approved single backend for the first Milestone 8 GUI Maintenance feature.
 
 Live behavior:
 
@@ -176,6 +176,22 @@ Live behavior:
 - invalid candidate data preserves the active runtime, service PID, and ipfw rules;
 - invalid IP input fails during target validation;
 - corrected preset using an existing blob starts successfully.
+
+
+==================================================
+MILESTONE TRANSITION — 2026-07-30
+==================================================
+
+Milestone 7 is closed by explicit project-owner decision. The published v0.2.2 baseline remains the verified foundation. Remaining upgrade, removal, reinstall, reboot, controlled-failure, timeout-chain, and GUI/API live tests were not falsely marked as passed; they remain in the focused regression backlog and may be executed when relevant to later changes.
+
+Milestone 8 is now active. Ordered priorities:
+
+1. GUI management of bol-van/zapret2 stable releases through the existing backend:
+   /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh
+   The GUI must report the installed version, obtain the available stable-release list, notify about updates, allow release selection, install a selected release, update to a newer release, and repeat installation of the current release. Runtime presence and runtime/service health must be displayed as separate states.
+2. GUI management of an additional BLOB repository. The repository URL, manifest, file layout, integrity model, and update contract are intentionally deferred until the project owner supplies the repository.
+
+All OPNsense console instructions are written for the default csh root shell. When POSIX sh is mandatory, the instruction must explicitly enter sh and explicitly run exit before returning to csh-oriented commands.
 
 ==================================================
 OPEN VERIFICATION WORK

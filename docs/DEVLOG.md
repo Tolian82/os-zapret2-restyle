@@ -891,3 +891,20 @@ the package, runtime, GUI, Backend v2, service lifecycle, or repository metadata
 Next ordered work remains the open Milestone 7 live-test matrix: unified strategy
 guidance, upgrade, removal, preserved-runtime reinstall, reboot, controlled dvtws2
 termination, and GUI/API behavior.
+
+==================================================
+2026-07-30 — MILESTONE 7 CLOSURE AND MILESTONE 8 PRIORITIES
+==================================================
+
+Completed:
+
+- Closed Milestone 7 by explicit project-owner decision.
+- Preserved the unperformed upgrade, removal, reinstall, reboot, controlled-failure, timeout-chain, and GUI/API checks as a focused regression backlog rather than marking them passed.
+- Opened Milestone 8.
+- Set the first priority to GUI management of stable bol-van/zapret2 releases through the existing setup.sh backend: installed-version reporting, release listing and selection, update notification, installation, update, and repeat installation.
+- Required separate reporting of runtime presence and runtime/service health.
+- Set GUI management of an additional BLOB repository as the second priority, with all repository and contract details deferred until supplied by the project owner.
+- Standardized all OPNsense console instructions on csh, with explicit `sh` entry and `exit` return when POSIX shell is mandatory.
+- Standardized normal Git verification on `git status --short`, `git diff --check`, and `git diff --stat`; full diff output remains a debugging/review tool rather than the default workflow.
+
+No source code, package version, package revision, runtime, or release artifact changed in this documentation-only work unit.

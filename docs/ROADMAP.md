@@ -23,24 +23,20 @@ Detailed history, architecture explanations, or decision rationale.
 CURRENT STAGE
 ==================================================
 
-Milestone 7 — completion and live verification of approved functionality
+Milestone 8 — GUI maintenance and managed upstream components
 
 Current work package:
-Remaining lifecycle, reboot, controlled-failure, and GUI/API live verification from the published v0.2.2 baseline
+GUI management of bol-van/zapret2 stable releases through the existing setup.sh backend
 
-[x] Reconstruct current state from repository, Git history, chat decisions, and runtime audit snapshot
-[x] Confirm package installation and runtime start on OPNsense
-[x] Confirm dvtws2, supervisor, ipfw, HOSTLIST, IPSET, and blob-backed strategy operation
-[x] Replace stale current-state and roadmap text with authoritative current information
-[x] Reconcile package lifecycle documentation with DEC-2026-07-30
-[x] Correct duplicate audit Finding identifiers
-[x] Record live verification in audit, decisions, devlog, architecture, and changelog
-[x] Commit the verified source and documentation as one logical change
-[x] Rebuild from the clean commit and compare behavior with the tested package
-[x] Publish and verify release baseline v0.2.2 / package 0.2.2_1
-[x] Rebuild and update the GitHub Pages pkg repository
-[x] Remove inherited upstream tags v1.6.1 through v1.7.2 from origin
-[x] Establish the Git-first patch and authoritative archive workflow
+Ordered work:
+
+1. Add installed runtime-version detection and reporting.
+2. Obtain and present the available stable-release list for bol-van/zapret2.
+3. Notify when a newer stable release is available.
+4. Allow selection and installation of a published stable release.
+5. Support update to a newer release and repeat installation of the current release.
+6. Display runtime presence separately from runtime/service health.
+7. After the project owner supplies the repository, design and implement GUI management of the additional BLOB repository. Until then, its URL, manifest, layout, integrity model, and update contract remain unspecified.
 
 ==================================================
 COMPLETED MILESTONES
@@ -112,7 +108,7 @@ Status: COMPLETE
 MILESTONE 7 — APPROVED FUNCTIONALITY COMPLETION
 ==================================================
 
-Status: IN PROGRESS
+Status: COMPLETE BY PROJECT-OWNER DECISION
 
 Completed in this milestone:
 
@@ -131,36 +127,20 @@ Completed in this milestone:
 [x] Update the GitHub Pages pkg repository for 0.2.2_1
 [x] Synchronize the release workflow and authoritative archive patch process
 
-Remaining ordered work:
+Closure decision:
 
-1. Live-verify the corrected unified Traffic Strategy guidance from package 0.2.2_1.
-2. Live-test package upgrade from an earlier revision.
-3. Live-test removal while running.
-4. Verify runtime/dependency preservation after removal.
-5. Live-test reinstall over preserved runtime.
-6. Reboot OPNsense and verify automatic service startup behavior.
-7. Complete the GUI/API live matrix:
-   - Save/Apply;
-   - Start;
-   - Stop;
-   - Restart;
-   - Status;
-   - Diagnostics;
-   - blockcheck;
-   - test domain;
-   - reconfigure classification.
-8. Resolve the timeout-chain finding after approving one end-to-end timeout policy.
-9. Verify supervisor response to controlled dvtws2 termination.
-10. Review REQUIREMENTS.md line by line and implement only remaining approved scope.
+Milestone 7 was closed by explicit project-owner decision on 2026-07-30. The following uncompleted checks were not marked as passed and remain a focused regression backlog:
 
-Acceptance criteria for Milestone 7 completion:
+- package upgrade from an earlier revision;
+- removal while running and preserved-runtime verification;
+- reinstall over preserved runtime;
+- full reboot and automatic service-start behavior;
+- complete GUI/API live matrix and reconfigure classification;
+- browser/PHP/configd/script blockcheck timeout-chain behavior;
+- controlled dvtws2 termination and supervisor cleanup/recovery;
+- remaining approved-requirement review.
 
-- every approved requirement is implemented or explicitly deferred by decision;
-- package install, setup, upgrade, remove, reinstall, and reboot paths are live verified;
-- GUI/API actions have a complete traced chain or an explicit classification;
-- no open broken Finding lacks a remediation plan;
-- project state is reproducible from a clean Git commit;
-- Engineering Memory and public release records agree with the code.
+These tests are retained as evidence work and may be executed when required by a later logical change.
 
 ==================================================
 DEFERRED WORK
@@ -183,10 +163,9 @@ The public README strategy example remains intentionally unchanged until a later
 NEXT RELEASE GATE
 ==================================================
 
-Do not declare another stable baseline until:
+Do not declare the next stable baseline until:
 
-1. upgrade/remove/reinstall/reboot tests are recorded;
-2. controlled runtime-failure behavior is verified;
-3. the GUI/API matrix is completed or explicitly classified;
-4. current AUDIT.md findings are reconciled;
-5. CHANGELOG.md and PROJECT_STATE.md describe the same package state.
+1. the selected Milestone 8 work package is implemented and verified;
+2. affected regression-backlog tests are executed where the change touches their chain;
+3. current AUDIT.md findings affected by the change are reconciled;
+4. CHANGELOG.md and PROJECT_STATE.md describe the same package state.
