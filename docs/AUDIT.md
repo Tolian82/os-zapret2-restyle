@@ -1737,3 +1737,77 @@ The previously open package-lifecycle work now has an implementation candidate:
 post-install bootstrap, upgrade-safe pre-deinstall, deferred real-uninstall cleanup,
 managed dependency ownership, and registration refresh. Static and live verification
 remain mandatory before the finding can be closed.
+
+==================================================
+LIFE-004 — SETUP LAUNCHER NOT EXECUTABLE
+==================================================
+
+Date:
+2026-07-30
+
+Classification:
+broken
+
+Affected chain:
+package post-install → `configctl zapret setup install` → configd `setup` action →
+`setup_launcher.sh` → deferred runtime bootstrap
+
+Evidence:
+
+- `actions_zapret.conf` executes the launcher by pathname rather than through `/bin/sh`;
+- repository mode of `setup_launcher.sh` was `0644`;
+- live `configctl zapret setup install` returned exit 127;
+- automatic bootstrap produced no runtime/state directories or launcher process.
+
+Impact:
+Automatic installation bootstrap cannot start. The engine and generated runtime are
+not installed even though plugin file installation completes.
+
+Remediation:
+Mark only `setup_launcher.sh` executable and increment the package revision for a
+new installable artifact.
+
+Acceptance criteria:
+
+1. repository mode is `0755`;
+2. built package records an executable launcher;
+3. `configctl zapret setup install` no longer exits 127 because of launcher execution;
+4. bootstrap begins and emits its expected state/log evidence;
+5. configd and Web GUI remain healthy.
+
+Remediation status:
+Implemented; package and live verification pending.
+
+==================================================
+LIFE-005 — WRONG UPSTREAM RUNTIME REPOSITORY
+==================================================
+
+Date:
+2026-07-30
+
+Classification:
+broken
+
+Evidence:
+
+- live bootstrap cloned `https://github.com/bol-van/zapret.git`;
+- that repository built `binaries/my/dvtws`;
+- the plugin requires and verifies `binaries/my/dvtws2`;
+- bootstrap therefore ended with `ERROR: dvtws2 was not produced by the build`.
+
+Root cause:
+`setup.sh` used the zapret v1 repository instead of the zapret2 repository.
+
+Remediation:
+Change only the upstream runtime URL to `https://github.com/bol-van/zapret2.git` and
+increment the plugin revision.
+
+Acceptance criteria:
+
+1. bootstrap clones bol-van/zapret2;
+2. build produces executable `binaries/my/dvtws2`;
+3. setup status becomes `ready`;
+4. configd and Web GUI remain healthy.
+
+Remediation status:
+Implemented; live verification pending.

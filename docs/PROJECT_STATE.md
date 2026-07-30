@@ -487,3 +487,35 @@ Current next action:
 Build the package and live-test install, bootstrap, upgrade/reinstall and uninstall on
 the supported OPNsense test system. Do not begin GUI version-control work before this
 lifecycle passes live verification.
+
+==================================================
+SETUP LAUNCHER EXECUTION FIX — 2026-07-30
+==================================================
+
+Live installation of `0.2.1_2` showed that automatic bootstrap did not start.
+The configd action invokes `setup_launcher.sh` directly, but the repository file
+was not executable. The current logical change marks only that launcher executable
+and increments the package revision to `0.2.1_3`.
+
+Verification required:
+
+1. Build `os-zapret2-restyle-0.2.1_3.pkg`.
+2. Confirm the packaged launcher mode is executable.
+3. Install the plugin on the clean OPNsense test system.
+4. Confirm `configctl zapret setup install` no longer returns exit 127.
+5. Confirm automatic bootstrap starts and creates its state/log output.
+6. Confirm configd and Web GUI remain healthy after installation and removal.
+
+No other lifecycle behavior is changed in this cycle.
+
+==================================================
+ZAPRET2 UPSTREAM FIX — 2026-07-30
+==================================================
+
+Live installation of `0.2.1_3` proved that the detached setup launcher works and that
+configd can remain healthy. Bootstrap failed because `setup.sh` cloned bol-van/zapret,
+whose build produced `dvtws`, while the plugin requires `dvtws2`.
+
+The current atomic change switches the runtime source to bol-van/zapret2 and increments
+the plugin revision to `0.2.1_4`. Next action: build, reinstall, and verify that setup
+reaches `ready` with executable `binaries/my/dvtws2`.

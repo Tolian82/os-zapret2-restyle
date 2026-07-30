@@ -662,3 +662,41 @@ Live verification still required:
 - Updated current package-version references to 0.2.1_2.
 - Confirmed the intended package identity is `os-zapret2-restyle`; local framework
   development builds using `-devel` are not part of the release identity.
+
+==================================================
+2026-07-30 — SETUP LAUNCHER EXECUTABLE BIT CORRECTION
+==================================================
+
+Live evidence:
+
+- plugin installation completed without starting runtime bootstrap;
+- `configctl zapret setup install` returned exit 127;
+- `actions_zapret.conf` invokes `setup_launcher.sh` directly;
+- the repository launcher mode was `0644`, so it could not be executed directly.
+
+Implemented as one logical change:
+
+- changed `setup_launcher.sh` mode from `0644` to `0755`;
+- increased `PLUGIN_REVISION` from `2` to `3`;
+- synchronized current state, audit record, and changelog.
+
+Pending live verification:
+
+- package archive preserves mode `0755`;
+- configd setup action starts the launcher;
+- bootstrap state/log paths appear;
+- configd and Web GUI remain healthy through install and uninstall.
+
+==================================================
+2026-07-30 — ZAPRET2 UPSTREAM REPOSITORY CORRECTION
+==================================================
+
+Live bootstrap of `0.2.1_3` successfully launched and compiled the downloaded tree,
+but the configured bol-van/zapret repository produced `dvtws`, not the required
+`dvtws2`. The setup backend then failed its runtime verification.
+
+Implemented as one logical change:
+
+- changed the runtime source to `https://github.com/bol-van/zapret2.git`;
+- increased `PLUGIN_REVISION` from `3` to `4`;
+- recorded the live failure and acceptance criteria.

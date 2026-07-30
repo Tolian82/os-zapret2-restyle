@@ -4,7 +4,7 @@
 # This is an internal lifecycle backend. Users must not run it manually.
 
 ZAPRET_DIR="/usr/local/etc/zapret2"
-ZAPRET_REPO="https://github.com/bol-van/zapret.git"
+ZAPRET_REPO="https://github.com/bol-van/zapret2.git"
 STATE_DIR="/var/db/zapret2-restyle"
 MANAGED_PACKAGES="${STATE_DIR}/managed-packages"
 SETUP_STATUS="${STATE_DIR}/setup.status"
@@ -67,6 +67,10 @@ wait_for_outer_pkg()
         sleep 1
         _waited=$((_waited + 1))
     done
+
+    # The pkg process may disappear slightly before its database lock and
+    # repository state are fully released.
+    sleep 3
 }
 
 record_managed_package()

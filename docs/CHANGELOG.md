@@ -8,8 +8,13 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Marked `setup_launcher.sh` executable so the `configd` setup action can launch the automatic runtime bootstrap.
+
 ### Changed
 
+- Package revision increased to `3` for the executable launcher correction.
 - Package revision increased to `2` for the package-managed lifecycle change.
 - Runtime bootstrap now starts automatically from package post-install instead of the
   first Start or Apply.
@@ -164,3 +169,4 @@ Release infrastructure preflight:
 - Updated the root README documentation entry point and reading order.
 - Updated CI required-file checks for the new documentation paths.
 - No runtime or user-visible plugin behavior changed.
+- Corrected automatic runtime bootstrap to clone bol-van/zapret2 instead of the legacy bol-van/zapret repository.
