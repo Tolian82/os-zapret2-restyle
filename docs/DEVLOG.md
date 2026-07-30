@@ -619,3 +619,46 @@ Zapret2Restyle catalogue successfully and expose
 
 The source configuration was corrected and VERSION advanced to 0.2.1.
 The immutable v0.2.0 tag remains unchanged.
+
+
+2026-07-30 — PACKAGE-MANAGED INSTALL/REMOVE LIFECYCLE IMPLEMENTED
+
+Scope:
+
+- Replaced first-Start runtime bootstrap with automatic package post-install bootstrap.
+- Added `setup_launcher.sh` and a configd setup action so setup work is detached from
+  pkg's package-script process and can wait for the outer package transaction.
+- Reworked `setup.sh` into internal `install` and `uninstall` lifecycle modes.
+- Corrected the upstream repository to `https://github.com/bol-van/zapret.git`.
+- Added managed-dependency ownership tracking under `/var/db/zapret2-restyle`.
+- Reworked all three package hooks as one lifecycle: install registration/bootstrap,
+  pre-remove stop/cleanup handoff, and post-remove registration refresh.
+- Protected upgrade/reinstall from destructive uninstall cleanup with `PKG_UPGRADE` and
+  a second installed-package check in the cleanup worker.
+- Updated all affected engineering and user documentation in the same logical change.
+
+Static verification completed:
+
+- Shell files were made executable.
+- Shell syntax and package construction still require local validation after this edit.
+
+Live verification still required:
+
+- clean GUI/pkg installation;
+- automatic dependency installation and dvtws2 build;
+- setup log and state behavior;
+- service Start/Apply behavior after successful and failed bootstrap;
+- upgrade/reinstall preservation;
+- full package deletion and residual-file/process/rule/menu checks.
+
+
+==================================================
+2026-07-30 — Repository consistency before lifecycle live test
+==================================================
+
+- Reconciled current architecture and project-state text with DEC-2026-07-30.
+- Marked the earlier first-Start/Apply bootstrap design as superseded rather than
+  rewriting its historical decision record.
+- Updated current package-version references to 0.2.1_2.
+- Confirmed the intended package identity is `os-zapret2-restyle`; local framework
+  development builds using `-devel` are not part of the release identity.

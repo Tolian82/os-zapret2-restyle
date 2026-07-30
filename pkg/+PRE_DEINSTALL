@@ -1,10 +1,24 @@
 #!/bin/sh
 
-# Pre-deinstall hook for os-zapret2-restyle.
-# Stops dvtws2 and removes managed ipfw rules while service scripts exist.
+# Stop the service before package files disappear. On a real uninstall, also
+# hand cleanup to configd so it can finish after pkg releases its database.
 
 if [ -x /usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh ]; then
     /usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh stop >/dev/null 2>&1 || true
+fi
+
+if [ -n "${PKG_UPGRADE:-}" ]; then
+    exit 0
+fi
+
+if [ -x /usr/local/sbin/configctl ]; then
+    /usr/local/sbin/configctl zapret setup uninstall >/dev/null 2>&1 || {
+        echo "ERROR: could not start automatic zapret2 runtime cleanup" >&2
+        exit 1
+    }
+else
+    echo "ERROR: configctl is unavailable; runtime cleanup was not started" >&2
+    exit 1
 fi
 
 exit 0

@@ -191,3 +191,21 @@ installation.
 
 Runtime files, live configuration, logs, PID files, downloaded engine trees,
 and secrets must not be packaged from a development firewall.
+
+
+## Package-managed installation and removal
+
+- `setup.sh` is an internal lifecycle backend and must not require a manual SSH run.
+- Package post-install must register the plugin and automatically start runtime
+  dependency installation, upstream download, compilation, and binary verification.
+- Start, Restart, Reconfigure, and Apply must not install or update runtime components.
+  They must fail clearly when the package bootstrap has not produced a usable dvtws2.
+- Package removal must stop the service before plugin files disappear.
+- A real uninstall must remove every runtime artifact downloaded, compiled, or created
+  by `setup.sh`, including the engine tree, Lua and BLOB files contained in that tree,
+  generated runtime data, logs, state, locks, and PID files.
+- Dependencies absent before bootstrap must be recorded. Uninstall may remove only
+  recorded packages and must keep a package when another installed package requires it.
+- Package upgrades must stop the old service without deleting the preserved runtime or
+  managed-dependency registry before the new package post-install completes.
+- Installation and removal operations must be logged and safe against concurrent runs.

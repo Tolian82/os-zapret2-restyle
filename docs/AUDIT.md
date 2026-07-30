@@ -1729,3 +1729,11 @@ Zapret2Restyle.
 
 Remediation:
 Publish the corrected configuration in v0.2.1.
+
+
+## Package lifecycle implementation note — 2026-07-30
+
+The previously open package-lifecycle work now has an implementation candidate:
+post-install bootstrap, upgrade-safe pre-deinstall, deferred real-uninstall cleanup,
+managed dependency ownership, and registration refresh. Static and live verification
+remain mandatory before the finding can be closed.

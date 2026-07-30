@@ -887,6 +887,9 @@ Active
 2026-07-29 — OWN PKG REPOSITORY AND GUI-FIRST INSTALLATION
 ==================================================
 
+Status: Partially superseded by DEC-2026-07-30. Distribution and GUI-first installation
+remain approved; the first-Start/Apply bootstrap mechanism below is historical.
+
 Decision:
 Publish os-zapret2-restyle through a project-owned FreeBSD pkg repository on GitHub
 Pages, with GitHub Releases carrying package assets and checksums. The first public
@@ -1344,3 +1347,46 @@ Consequences:
 - `signature_type: "none"` remains unchanged.
 - The correction is published as v0.2.1.
 - The immutable v0.2.0 release is not modified.
+
+
+## DEC-2026-07-30 — Package lifecycle owns runtime installation and removal
+
+Status: Approved and implemented.
+
+Decision:
+
+- `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh` is an internal package
+  lifecycle backend. No supported installation flow asks the user to run it manually.
+- Runtime installation is initiated by `+POST_INSTALL`, not by first Start or Apply.
+- Runtime removal is initiated automatically during package deinstallation and removes
+  all downloaded/compiled runtime content and plugin-owned state.
+- Dependencies installed by the backend are recorded and are removed only when pkg
+  confirms they are not required by another package.
+- Install and uninstall workers run outside the pkg script process tree and wait for the
+  outer pkg transaction before changing the package database.
+- Upgrade deinstall hooks preserve runtime and managed dependency state.
+
+Reason:
+
+A package shown as installed must have a deterministic automatic bootstrap, while a
+removed package must not leave an unmanaged engine installation behind. Service start
+must remain a runtime operation and must not perform package management or compilation.
+
+Consequences:
+
+- `+POST_INSTALL`, `+PRE_DEINSTALL`, `+POST_DEINSTALL`, `setup.sh`,
+  `setup_launcher.sh`, configd actions, and service runtime checks form one lifecycle.
+- Future GUI maintenance functions must reuse this backend rather than create a second
+  engine-management implementation.
+- Upstream/Lua/BLOB version control and GUI reporting remain deferred roadmap work.
+
+Affected documents:
+
+- ARCHITECTURE.md
+- REQUIREMENTS.md
+- DEVELOPMENT_GUIDE.md
+- PROJECT_STATE.md
+- DEVLOG.md
+- ROADMAP.md
+- README.md
+- CHANGELOG.md

@@ -66,7 +66,7 @@ STAGE 2 — API AND INHERITED-REFERENCE AUDIT
 [~] Inventory rc scripts, syshooks, and plugin hooks (syshook chains recorded;
     rc.d overlap and remaining hooks still under audit)
 [ ] Inventory filesystem and generated-template paths
-[~] Inventory package lifecycle scripts (GUI-first bootstrap implemented; remaining upgrade/deinstall audit open)
+[x] Implement package lifecycle scripts (automatic install, upgrade-safe deinstall, and complete uninstall cleanup; live verification remains)
 [~] Inventory setup, build, CI, and release logic (repository/release model approved; publication pending)
 [ ] Inventory external repositories, URLs, and downloads
 [ ] Classify every inherited reference
@@ -144,7 +144,7 @@ FIRST PUBLIC TEST RELEASE — VERSION 0.1.0
 [x] Approve GitHub Pages publication and GitHub Release assets
 [x] Approve FreeBSD:15:amd64 initial ABI target
 [x] Remove manual SSH runtime-setup requirement from normal installation flow
-[ ] Live-verify automatic first-start runtime bootstrap
+[ ] Live-verify automatic package post-install runtime bootstrap
 [x] Generate pkg repository metadata with pkg repo
 [x] Publish repository configuration file
 [ ] Publish package and SHA-256 checksums
@@ -329,4 +329,19 @@ Completion criteria:
 - CI and Release workflows succeed.
 - Published configuration contains ordinary `https://`.
 - OPNsense updates the catalogue without manual correction.
-- Package `0.2.1_1` is visible through Zapret2Restyle.
+- Package `0.2.1_2` is the current package-lifecycle test build.
+
+
+==================================================
+DEFERRED PLANS — AFTER ALL PREVIOUSLY ORDERED WORK
+==================================================
+
+These items are plans only. They are intentionally placed after all earlier roadmap
+work and are not part of the current package-lifecycle implementation:
+
+[ ] Add controlled upstream engine version discovery and selection.
+[ ] Add controlled update/reinstall/rollback operations through the GUI.
+[ ] Add Lua component inventory and version/state control.
+[ ] Add BLOB inventory and version/state control.
+[ ] Display upstream, Lua and BLOB installation state and versions in the GUI.
+[ ] Reuse the package lifecycle setup backend for all future GUI maintenance actions.

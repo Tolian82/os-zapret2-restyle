@@ -273,3 +273,11 @@ Approximate effort preference, not a quota:
 - 15% discussion of current work;
 - 8% discussion of future work;
 - 2% broader process or philosophical discussion.
+
+
+## Runtime lifecycle ownership
+
+Package lifecycle and runtime bootstrap changes are one architectural unit. Code hooks,
+setup backend, service boundaries, configd integration, verification instructions, and
+all affected documentation must be committed together. `setup.sh` is never presented as
+an end-user command.

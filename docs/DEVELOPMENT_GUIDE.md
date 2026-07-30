@@ -239,3 +239,21 @@ implemented or when the current interface prevents use of that functionality.
 Keep process discussion proportional to the project. Existing guidance is sufficient;
 prefer coding and verification over adding more methodological text unless practice
 exposes a concrete gap.
+
+
+## Package lifecycle verification
+
+Every lifecycle change must be verified as one complete sequence on a supported clean
+OPNsense test system:
+
+1. Build the package and inspect its manifest scripts.
+2. Install through pkg/Firmware without running `setup.sh` manually.
+3. Confirm the detached bootstrap reaches `ready` and produces executable dvtws2.
+4. Confirm Start and Apply do not invoke package installation or compilation.
+5. Upgrade/reinstall and confirm old deinstall hooks do not delete the preserved runtime.
+6. Delete the package and confirm service/process/rule cleanup occurs before files vanish.
+7. Confirm the downloaded engine, generated state, logs, locks, PID files and safely
+   removable managed dependencies are gone.
+8. Confirm menu, ACL, configd actions and templates no longer remain active.
+9. Record commands, observed output and remaining limitations in DEVLOG/AUDIT before
+   declaring the lifecycle verified.

@@ -6,6 +6,18 @@ All notable changes to this project are documented in this file.
 
 The project starts its own version history at `0.1.0`.
 
+## [Unreleased]
+
+### Changed
+
+- Package revision increased to `2` for the package-managed lifecycle change.
+- Runtime bootstrap now starts automatically from package post-install instead of the
+  first Start or Apply.
+- `setup.sh` is now an internal install/remove lifecycle backend.
+- Real package removal automatically cleans the downloaded engine, compiled runtime,
+  generated state, logs, locks, PID files, and safely removable managed dependencies.
+- Upgrade/reinstallation preserves the runtime until the new package post-install runs.
+
 ## [0.2.1] - 2026-07-29
 
 ### Fixed
@@ -100,8 +112,9 @@ The project starts its own version history at `0.1.0`.
 
 ### Fixed
 
-- Removed the manual SSH runtime-setup requirement: the first Start or Apply now bootstraps zapret2 automatically when dvtws2 is missing.
-- Added lifecycle action timeouts sufficient for the one-time dependency installation and compilation.
+- Removed the manual SSH runtime-setup requirement. This initial first-Start/Apply
+  implementation was later superseded by automatic package post-install bootstrap.
+- Added lifecycle action timeouts sufficient for the original one-time bootstrap path.
 
 - Supervisor monitoring now verifies that the live PID still identifies the configured dvtws2 binary before treating the runtime as healthy.
 - Removed disconnected inherited watchdog scripts so supervisor_loop.sh is the only runtime failure detector.

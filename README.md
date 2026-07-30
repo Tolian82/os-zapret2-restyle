@@ -146,17 +146,23 @@ Valid values are normalized, saved, activated, and reloaded into the form.
 INSTALLATION
 ==================================================
 
-Version 0.2.0 is being prepared as the current public development release.
+Version 0.2.1 is the current public development release; package revision 2 contains the package-managed install/remove lifecycle.
 
 The supported distribution model is a project-owned FreeBSD pkg repository
 published through GitHub Pages for FreeBSD:15:amd64 / supported OPNsense 26.7
 systems. Package assets and checksums are also published in GitHub Releases.
 
 Normal installation and updates are performed through the OPNsense Firmware GUI.
-No manual setup.sh command is required: after the plugin is configured, the first
-Apply or Start automatically installs the required runtime dependencies, downloads
-zapret2, compiles dvtws2, verifies it, and starts the service. Internet access is
-required for this one-time bootstrap.
+The package post-install lifecycle automatically starts the internal `setup.sh`
+backend, installs missing runtime/build dependencies, downloads bol-van/zapret,
+compiles and verifies dvtws2, and records the result in
+`/var/log/zapret2/setup.log`. Users do not run `setup.sh` manually. Start and Apply
+only operate a runtime that the package installation has already prepared. Internet
+access is required during this automatic bootstrap.
+
+Removing the plugin stops its service and automatically removes the downloaded
+engine tree, compiled runtime, generated runtime state, logs, PID files, and packages
+that were installed specifically by the bootstrap and are not required elsewhere.
 
 The repository is registered once on the firewall by placing the published
 configuration file in `/usr/local/etc/pkg/repos/` and refreshing pkg metadata:

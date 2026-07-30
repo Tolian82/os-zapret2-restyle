@@ -1,37 +1,33 @@
 #!/bin/sh
 
-# Post-install hook for os-zapret2-restyle.
-# Reloads OPNsense services and renders the initial plugin configuration.
+# Register the plugin and start the package-managed runtime bootstrap.
+
+if [ -x /usr/local/etc/rc.configure_plugins ]; then
+    /usr/local/etc/rc.configure_plugins zapret2 >/dev/null 2>&1 || true
+fi
 
 if [ -x /usr/local/etc/rc.d/configd ]; then
     /usr/local/etc/rc.d/configd restart >/dev/null 2>&1 || true
 fi
 
-if [ -x /usr/local/sbin/pluginctl ]; then
-    /usr/local/sbin/pluginctl -c webgui.lighttpd_reload >/dev/null 2>&1 || true
-fi
-
 if [ -x /usr/local/sbin/configctl ]; then
     /usr/local/sbin/configctl template reload OPNsense/Zapret >/dev/null 2>&1 || true
+    /usr/local/sbin/configctl zapret setup install >/dev/null 2>&1 || {
+        echo "ERROR: could not start automatic zapret2 runtime installation" >&2
+        exit 1
+    }
+else
+    echo "ERROR: configctl is unavailable; runtime installation was not started" >&2
+    exit 1
 fi
 
-cat <<'NEXT_STEPS'
+cat <<'MESSAGE'
 
-================================================================
-os-zapret2-restyle installed.
+os-zapret2-restyle was installed.
+The zapret2 runtime is now being downloaded and compiled automatically.
+No manual setup.sh command is required or supported.
+Installation log: /var/log/zapret2/setup.log
 
-Next steps:
-
-  1. Open Services > Zapret DPI Bypass in the OPNsense GUI.
-
-  2. Enable the service, select the WAN interface, configure
-     Traffic Strategy and Targets, then click Apply.
-
-The first GUI start automatically installs and compiles the zapret2 runtime
-when it is not already present. No SSH setup command is required.
-
-The internal OPNsense service name remains: zapret
-================================================================
-NEXT_STEPS
+MESSAGE
 
 exit 0

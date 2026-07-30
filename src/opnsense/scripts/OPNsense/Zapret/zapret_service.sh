@@ -27,7 +27,6 @@ SUPERVISOR_LOOP="${SCRIPT_DIR}/supervisor_loop.sh"
 STAGE_FILE="/var/run/zapret2-execution.status"
 DVTWS_LOG="/var/log/zapret2/dvtws2.log"
 SUPERVISOR_LOG="/var/log/zapret2/supervisor.log"
-SETUP_SCRIPT="${SCRIPT_DIR}/setup.sh"
 RULE_BASE=19000
 RULE_MAX=$((RULE_BASE + 10))
 LIFECYCLE_LOCK_FILE="/var/run/zapret2-lifecycle.lock"
@@ -38,21 +37,9 @@ ensure_runtime_components()
 {
     [ -x "${DVTWS_BIN}" ] && return 0
 
-    [ -x "${SETUP_SCRIPT}" ] || {
-        echo "ERROR: runtime setup script is missing: ${SETUP_SCRIPT}" >&2
-        return 1
-    }
-
-    echo "zapret2 runtime is not installed; starting automatic setup"
-    "${SETUP_SCRIPT}" || {
-        echo "ERROR: automatic zapret2 runtime setup failed" >&2
-        return 1
-    }
-
-    [ -x "${DVTWS_BIN}" ] || {
-        echo "ERROR: automatic setup completed without dvtws2: ${DVTWS_BIN}" >&2
-        return 1
-    }
+    echo "ERROR: zapret2 runtime is not installed or installation is incomplete" >&2
+    echo "ERROR: reinstall the plugin and inspect /var/log/zapret2/setup.log" >&2
+    return 1
 }
 
 start_service()
