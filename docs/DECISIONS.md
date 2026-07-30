@@ -1508,3 +1508,94 @@ Affected documents:
 - ROADMAP.md
 - REQUIREMENTS.md
 - CHANGELOG.md
+
+
+==================================================
+DEC-2026-07-30 — GIT-FIRST UNIFIED PATCH WORKFLOW
+==================================================
+
+Status:
+Approved.
+
+Decision:
+
+1. Changes to files tracked by the project repository are delivered as reviewable
+   unified Git patches.
+2. The standard transfer format between the assistant's prepared change and the project
+   owner's working tree is a patch accepted by `git apply`; when commit metadata is
+   intentionally required, `git format-patch` and `git am` may be used instead.
+3. A normal project patch must contain every required content change and every required
+   Git file-mode change.
+4. The project owner applies the supplied patch through Git, reviews `git diff`, runs the
+   documented validation, and commits one logical change.
+5. Repository files must not be edited directly in the OPNsense console with editors or
+   ad-hoc mutation commands such as `vi`, `ee`, `nano`, `sed -i`, `perl -pi`, Python
+   rewrite scripts, `cat >`, or `echo >>`.
+6. The assistant must prepare the actual patch artifact instead of substituting a prose
+   plan or asking the project owner to reproduce the changes manually.
+7. The rule applies only to repository files. Temporary files, logs, diagnostics, build
+   output, installed-system configuration, and other files outside the repository remain
+   available for normal operational work.
+
+Reason:
+
+Unified Git patches are reproducible, reviewable, reversible, and compatible with the
+project's established remote collaboration workflow. Direct console editing risks
+unrecorded divergence between the repository, generated package, and installed system.
+A patch also permits file-mode corrections, including executable-bit changes, to remain
+part of the same auditable logical change.
+
+Consequences:
+
+- `git apply --check` is the mandatory preflight for supplied unified patches.
+- `git apply` is the normal application command after successful preflight.
+- `git diff --check` and full diff review follow application.
+- Direct repository-file editing instructions are not part of the normal workflow.
+- `git format-patch` is optional rather than required for every change.
+- The executable mode of `scripts/verify-release-package.sh` is corrected to 100755.
+
+Affected documents:
+
+- PROJECT_STATE.md
+- WORKING_CONVENTIONS.md
+- DEVELOPMENT_GUIDE.md
+- DEVLOG.md
+
+==================================================
+DEC-2026-07-30 — PATCHES USE THE SUPPLIED WORKING-TREE ARCHIVE
+==================================================
+
+Status:
+Approved.
+
+Decision:
+Multi-file patches are prepared only against the project owner's actual working
+tree archive. The archive is supplied after the proposed change has been fully
+agreed. Its standard name is
+`os-zapret2-restyle-<short_commit_sha>.tar.gz`.
+
+GitHub, model memory, chat fragments, and standalone diffs may provide context,
+but they must not be used to reconstruct the patch baseline. A patch is ready
+only after `git apply --check` succeeds against an unchanged copy of the supplied
+archive. After the patch is committed, that archive is obsolete and a new
+archive from the resulting commit becomes the next baseline.
+
+Reason:
+Patch context and file modes must match the project owner's real uncommitted or
+committed working tree. Reconstruction creates incomplete patches and application
+failures.
+
+Consequences:
+- request an archive only after changes are agreed and patch preparation begins;
+- do not force an incompatible patch into the tree;
+- do not reconstruct a multi-file baseline from GitHub or memory;
+- use one archive for one subsequent logical patch;
+- verify every delivered patch with `git apply --check` against that archive.
+
+Affected documents:
+- INDEX.md
+- WORKING_CONVENTIONS.md
+- DEVELOPMENT_GUIDE.md
+- GITHUB_WORKFLOW.md
+- PROJECT_STATE.md
+- DEVLOG.md

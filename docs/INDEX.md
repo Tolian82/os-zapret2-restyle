@@ -1,6 +1,49 @@
 # os-zapret2-restyle
 
 ==================================================
+MANDATORY CONTEXT RECOVERY FOR THE MODEL
+==================================================
+
+This section is addressed directly to the model working on this project. It is an
+operational instruction, not background information and not a formality.
+
+After any context restoration event, including a new chat, loss or truncation of
+model context, memory reset, a long interruption in work, or any other situation
+where project knowledge may be incomplete, stop before analysing, proposing, or
+changing anything.
+
+Before continuing work, you must:
+
+1. Read this `INDEX.md` first.
+2. Read the complete project documentation in the exact order defined below.
+3. Finish context recovery before making architectural conclusions, proposing
+   changes, preparing commands, or producing a patch.
+4. Re-read the relevant documentation whenever you are uncertain how the project
+   handles something. Do not reconstruct settled rules from model memory.
+
+Source priority is mandatory:
+
+1. The project owner's current instructions in the active chat.
+2. The project documentation.
+3. Model memory.
+
+Current instructions from the project owner override documentation. When that
+happens, the affected documentation must be synchronized in the same logical
+change.
+
+Documentation overrides model memory. If memory conflicts with documentation,
+the documentation is authoritative.
+
+The working rule is: documentation first, then analysis, then action.
+
+For any multi-file patch, the project owner's supplied working-tree archive is
+the authoritative baseline. Do not reconstruct the repository from GitHub, model
+memory, chat fragments, or standalone diffs. The archive is supplied after the
+change is agreed, normally as
+`os-zapret2-restyle-<short_commit_sha>.tar.gz`. A patch is deliverable only after
+`git apply --check` succeeds against an unchanged copy of that archive.
+
+==================================================
 DOCUMENT ROLE
 ==================================================
 
@@ -17,7 +60,6 @@ responsibility.
 
 Read after:
 Nothing. Read this document first.
-
 Do not store here:
 Detailed project state, decisions, rules, procedures, architecture, history,
 roadmap items, or product requirements.
@@ -31,7 +73,6 @@ This repository uses an engineering memory system.
 All engineering documentation is stored in the `docs/` directory. Document names
 in this index omit the `docs/` prefix for readability unless a repository-relative
 path is required.
-
 Do not begin development from chat history or memory alone.
 
 Read the documents in this exact order:
@@ -46,6 +87,7 @@ Read the documents in this exact order:
 8. DEVLOG.md
 9. ROADMAP.md
 10. REQUIREMENTS.md
+11. GITHUB_WORKFLOW.md
 
 ==================================================
 DOCUMENT MAP
@@ -58,7 +100,6 @@ Where should I look?
 
 Contains:
 Reading order and document responsibilities.
-
 Does not contain:
 Project details.
 
@@ -80,7 +121,6 @@ Decision history, permanent rules, detailed workflow, or full architecture.
 
 
 AUDIT.md
-
 Question answered:
 What has been checked, what is broken, and what still requires verification?
 
@@ -96,7 +136,6 @@ history.
 --------------------------------------------------
 
 DECISIONS.md
-
 Question answered:
 Why was this approved?
 
@@ -116,7 +155,6 @@ Which rules are already settled?
 Contains:
 Stable identities, engineering principles, runtime safety rules, audit rules,
 patch rules, testing rules, Git conventions, and documentation rules.
-
 Does not contain:
 Historical narrative or current task status.
 
@@ -140,7 +178,6 @@ ARCHITECTURE.md
 
 Question answered:
 How is the system built?
-
 Contains:
 System components, interfaces, data flow, runtime model, service lifecycle, and
 technical boundaries.
@@ -164,7 +201,6 @@ Permanent rules or future requirements.
 --------------------------------------------------
 
 ROADMAP.md
-
 Question answered:
 What should be done next?
 
@@ -189,8 +225,23 @@ Implementation details or development history.
 
 --------------------------------------------------
 
-README.md
+GITHUB_WORKFLOW.md
 
+Question answered:
+How is the project published and maintained on GitHub?
+
+Contains:
+Official repository and branch, patch delivery, validation before commit and
+push, commit conventions, release preparation, release assets, and publication
+checks.
+
+Does not contain:
+General development procedures, product requirements, or a separate history log.
+Publication history remains in DEVLOG.md.
+
+--------------------------------------------------
+
+README.md
 Question answered:
 What is this project for a user or visitor?
 
@@ -212,7 +263,6 @@ Release-oriented changes.
 
 Does not contain:
 Full development history or internal decision rationale.
-
 ==================================================
 SINGLE-RESPONSIBILITY RULE
 ==================================================
@@ -225,7 +275,6 @@ When information appears in the wrong document:
 2. Move it to the corresponding document.
 3. Avoid unnecessary duplication.
 4. Keep only a short cross-reference when useful.
-
 ==================================================
 DOCUMENT ROLE REQUIREMENT
 ==================================================
@@ -245,7 +294,6 @@ SYNCHRONIZATION RULE
 ==================================================
 
 Documentation is part of the project architecture.
-
 A code change or approved concept is complete only after all affected documents
 are updated in the same logical commit.
 
@@ -255,7 +303,6 @@ specialist document.
 Each audit block is complete only after all affected Engineering Memory documents
 are updated, reviewed, and committed. AUDIT.md must contain detailed verification
 and remediation plans for every non-OK finding before code changes begin.
-
 ==================================================
 CURRENT DOCUMENT STATUS
 ==================================================
@@ -272,6 +319,7 @@ ARCHITECTURE.md
 DEVLOG.md
 ROADMAP.md
 REQUIREMENTS.md
+GITHUB_WORKFLOW.md
 README.md
 CHANGELOG.md
 CONTRIBUTING.md

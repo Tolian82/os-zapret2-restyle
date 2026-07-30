@@ -305,3 +305,66 @@ BLOB SHORTHAND RULE
 - There is no implicit alias table.
 - Native upstream --blob=name:value declarations containing ':' remain untouched.
 - Missing files are hard errors and must not be silently substituted.
+
+
+==================================================
+GIT-FIRST UNIFIED PATCH RULE
+==================================================
+
+Repository changes are exchanged as unified Git patches. The normal artifact is a
+`.patch` file that can be checked and applied with Git and that includes both content
+changes and required file-mode changes.
+
+Required sequence:
+
+prepare one logical patch
+↓
+git apply --check <patch>
+↓
+git apply <patch>
+↓
+git diff --check
+↓
+review the complete diff
+↓
+run focused validation and live tests
+↓
+commit one logical change
+
+The assistant prepares the actual patch artifact. The project owner must not be asked to
+recreate repository changes manually from prose or console-editing commands.
+
+Do not modify tracked repository files directly from the OPNsense console with `vi`,
+`ee`, `nano`, `sed -i`, `perl -pi`, Python rewrite scripts, `cat >`, `echo >>`, or
+equivalent mutation commands.
+
+This rule does not restrict temporary files, logs, diagnostics, generated build output,
+installed-system configuration, or files outside the repository.
+
+`git format-patch` / `git am` remain valid when preserving existing commit metadata is a
+specific requirement, but they are not prerequisites for preparing an ordinary unified
+Git patch.
+
+==================================================
+AUTHORITATIVE ARCHIVE BASELINE FOR PATCHES
+==================================================
+
+A multi-file patch is prepared only against the project owner's actual working
+tree or an archive made from that tree. GitHub, model memory, chat fragments,
+and separately supplied diffs are not substitutes for the working-tree baseline.
+
+The project owner supplies the archive after the change has been discussed and
+approved and the instruction to prepare the patch has been given.
+
+The standard archive name is:
+
+`os-zapret2-restyle-<short_commit_sha>.tar.gz`
+
+The archive is authoritative only for the next logical patch. After that patch
+is committed, the previous archive is obsolete and a new archive from the new
+commit becomes the baseline for subsequent work.
+
+A patch artifact is ready for delivery only after it has passed
+`git apply --check` against an unchanged copy of the supplied archive baseline.
+When a valid baseline is unavailable, request a new archive instead of
+reconstructing the repository.

@@ -811,3 +811,55 @@ Pending live verification:
 - rendered Settings information block;
 - Diagnostics initial guidance;
 - successful, partial, timeout, and error result paths.
+
+
+==================================================
+2026-07-30 — GIT-FIRST UNIFIED PATCH WORKFLOW AND VERIFY SCRIPT MODE
+==================================================
+
+Approved and documented the project's existing remote change-delivery method as a
+permanent engineering rule.
+
+Completed:
+
+- established unified Git `.patch` files as the default delivery artifact;
+- required `git apply --check` before patch application;
+- required patch application through Git followed by full diff review and validation;
+- prohibited direct console editing of tracked repository files;
+- documented that ordinary unified patches do not require repository history or
+  `git format-patch`;
+- retained `git format-patch` / `git am` as an optional workflow when commit metadata must
+  be preserved;
+- corrected `scripts/verify-release-package.sh` from mode 100644 to executable mode
+  100755.
+
+Verification already completed before this change:
+
+- the script successfully verified package metadata when invoked as
+  `sh ./scripts/verify-release-package.sh dist/os-zapret2-restyle-0.2.1_9.pkg`;
+- package `os-zapret2-restyle-0.2.1_9` installed successfully;
+- configd actions were registered;
+- the service reported running;
+- obsolete split HTTP/HTTPS Strategy guidance was absent from installed MVC files;
+- unified Traffic Strategy guidance was present.
+
+Remaining verification for this logical change:
+
+- apply the supplied patch with Git;
+- invoke `./scripts/verify-release-package.sh` directly and confirm successful execution;
+- review and commit the complete diff.
+
+2026-07-30 — GitHub workflow and authoritative archive patch baseline
+
+- added `docs/GITHUB_WORKFLOW.md` as the specialist procedure for commit, push,
+  release preparation, release assets, and publication checks;
+- made `INDEX.md` the mandatory context-recovery entry point and included the
+  GitHub workflow in the required reading order and document map;
+- established the project owner's actual working-tree archive as the only valid
+  baseline for multi-file patch preparation;
+- standardized archive names as
+  `os-zapret2-restyle-<short_commit_sha>.tar.gz`;
+- established that the archive is supplied after changes are agreed and is
+  replaced after the resulting patch is committed;
+- required successful `git apply --check` against an unchanged archive copy
+  before a patch is delivered.

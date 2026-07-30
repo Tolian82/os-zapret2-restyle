@@ -42,10 +42,10 @@ Current version:
 0.2.1
 
 Current package revision:
-8
+9
 
 Verified package:
-os-zapret2-restyle-0.2.1_8
+os-zapret2-restyle-0.2.1_9
 
 Current phase:
 Milestone 7 — completion and live verification of approved functionality
@@ -227,3 +227,30 @@ Before changing code:
 8. never infer current state from chat history alone.
 
 The live-verified source and synchronized Engineering Memory were committed and published as efff7b5. Package revision 9 is the first follow-up candidate that must be built from the clean committed baseline and compared with the verified 0.2.1_8 runtime behavior.
+
+
+==================================================
+2026-07-30 — GIT-FIRST PATCH WORKFLOW APPROVED
+==================================================
+
+Current development policy:
+
+- repository changes are prepared as reviewable unified Git patches;
+- patches must include file-mode changes when required;
+- the project owner applies supplied patches through Git;
+- repository files are not edited directly in the OPNsense console;
+- every applied change remains inspectable through Git diff and is committed as one
+  logical change after validation;
+- temporary files, logs, diagnostics, installed-system configuration, and other files
+  outside the repository are not restricted by this rule.
+
+The release-package verification script was confirmed functionally correct when invoked
+through sh. Its missing executable mode is corrected from 100644 to 100755 in the same
+logical infrastructure and documentation change.
+
+Current patch-baseline rule:
+The project owner's archive of the actual working tree is the authoritative base
+for multi-file patch preparation. It is supplied after changes are agreed, named
+`os-zapret2-restyle-<short_commit_sha>.tar.gz`, and becomes obsolete after the
+resulting patch is committed. Delivered patches must first pass
+`git apply --check` against an unchanged copy of that archive.

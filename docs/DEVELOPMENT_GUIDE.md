@@ -308,3 +308,55 @@ For each candidate release baseline, verify and record these stages separately:
 
 Every test result must update AUDIT.md and DEVLOG.md. PROJECT_STATE.md and ROADMAP.md
 must be updated whenever the current baseline or immediate next action changes.
+
+
+==================================================
+PATCH DELIVERY WORKFLOW
+==================================================
+
+The default remote-development delivery artifact is a unified Git patch, not a list of
+commands that edits tracked files directly.
+
+Patch preparation requirements:
+
+1. Start from the exact supplied source baseline.
+2. Make one minimal logical change in a separate preparation tree.
+3. Include documentation required by the project's synchronization rules.
+4. Include required Git mode changes, such as 100644 to 100755.
+5. Generate a patch suitable for `git apply`.
+6. Validate that the patch applies to the supplied baseline.
+7. Deliver the `.patch` artifact to the project owner.
+
+Patch application on the project working tree:
+
+cd /root/os-zapret2-restyle && \
+git status --short && \
+git apply --check /path/to/change.patch && \
+git apply /path/to/change.patch && \
+git diff --check && \
+git status --short
+
+After application, review the complete diff, execute the documented syntax and focused
+live tests, stage explicit paths, and commit one logical change.
+
+Do not use console editors or ad-hoc rewrite commands to modify tracked repository files.
+Operational work outside the repository remains permitted.
+
+==================================================
+PREPARING A PATCH FROM THE OWNER'S ARCHIVE
+==================================================
+
+1. Complete discussion and obtain approval for the logical change.
+2. Receive `os-zapret2-restyle-<short_commit_sha>.tar.gz` from the project owner.
+3. Treat the extracted tree, including its current tracked modifications and file
+   modes, as the exact patch baseline.
+4. Make the approved changes in a separate copy of that tree.
+5. Generate one unified Git patch containing all code, mode, and documentation
+   changes required by the logical change.
+6. Extract or copy the original archive again and run `git apply --check` there.
+7. Deliver the `.patch` artifact only after that check succeeds.
+8. After the owner commits the patch, use a new archive from the new commit for
+   the next change.
+
+Do not rebuild the baseline from GitHub, model memory, chat excerpts, or a
+standalone `git diff`.
