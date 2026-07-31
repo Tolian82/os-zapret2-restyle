@@ -33,9 +33,9 @@ https://github.com/Tolian82/os-zapret2-restyle
 Primary branch:
 main
 
-Direct publication to `main` is allowed only after explicit project-owner
-instruction. A working branch, pull request, or patch is used when requested or
-when validation must occur before `main` changes.
+Ordinary requested development uses a working branch and pull request. Direct
+publication to `main` is allowed only after explicit project-owner instruction.
+An explicitly requested patch or narrower stopping point overrides the default.
 
 ==================================================
 AUTHORITATIVE DEVELOPMENT BASELINE
@@ -55,6 +55,59 @@ Before changing repository files:
 No owner-supplied archive is required for state already committed and pushed to
 GitHub. Model memory, chat excerpts, and standalone diffs are context only; they
 are not substitutes for reading the recorded commit.
+
+==================================================
+STANDING AUTHORIZATION AND REQUEST BOUNDARIES
+==================================================
+
+For an ordinary request to fix, add, change, implement, or complete project work,
+the project owner grants standing authority for this complete delivery path:
+
+recorded `main` base
+        ↓
+working branch
+        ↓
+one atomic commit
+        ↓
+Draft PR
+        ↓
+required CI
+        ↓
+Ready for review
+        ↓
+squash merge
+        ↓
+verify `main`
+        ↓
+delete the temporary branch created for the task
+
+Do not request separate confirmation for any step in that ordinary path. Choose
+routine branch, commit, PR, and focused-test details from the current repository,
+Finding or work-package scope, and project documentation.
+
+The owner's explicit current wording sets a narrower boundary when it asks only
+for analysis, diagnosis, review, preparation, a patch, a branch, or a PR. Stop at
+that boundary.
+
+One explicit request to make a release authorizes the full verified release path
+for that requested version, including the release-preparation PR and merge, tag,
+GitHub Release, package assets, GitHub Pages/pkg repository publication, and final
+checks. An ordinary development request does not authorize release publication.
+
+Stop for owner direction only when:
+
+- materially different product or architecture choices are unresolved;
+- relevant owner changes exist only in an unpublished local checkout;
+- required CI, build, or verification fails and cannot be repaired within scope;
+- new credentials, protected-environment approval, or external authority is needed;
+- a destructive operation affects user data or a pre-existing owner branch, tag,
+  release, package, or repository history;
+- force-push, history rewriting, or direct publication to `main` is proposed;
+- mandatory live OPNsense evidence can be supplied only by the owner.
+
+When a boundary requires owner input, ask one consolidated question with the
+relevant evidence and a recommended choice. Do not ask for information available
+from the repository, GitHub, CI, documentation, or read-only diagnostics.
 
 ==================================================
 LOCAL-ONLY STATE EXCEPTION
@@ -99,6 +152,12 @@ Before creating the commit:
 An authenticated GitHub integration/API may create blobs, one tree, and one
 commit atomically. Ordinary Git may also be used. GitHub CLI is not a mandatory
 dependency.
+
+An integration-created commit may have a different commit SHA than an equivalent
+local commit because its author, committer, timestamp, or message metadata differs.
+No owner confirmation is required when the parent is the recorded base and the
+complete Git tree, file modes, and intended changed scope are identical. Verify
+those facts before publishing the branch or merging the PR.
 
 ==================================================
 NORMAL VERIFICATION
@@ -149,6 +208,22 @@ Docs: enforce context recovery workflow
 PUBLICATION MODES
 ==================================================
 
+Default ordinary patch publication:
+
+1. Create a task-specific working branch from the recorded base SHA.
+2. Publish one atomic logical commit.
+3. Open a Draft PR with the expected base and head branches.
+4. Verify changed files, scope, parent/base relationship, and mergeability.
+5. Wait for required CI. If Draft state prevents check registration, mark the PR
+   Ready so the configured workflow can run.
+6. Correct same-scope CI failures safely and re-run the required checks. If the
+   branch is already published, add a correction commit rather than force-pushing;
+   the later squash merge preserves one logical `main` commit.
+7. After required checks pass, squash merge without a separate confirmation.
+8. Verify the resulting `main` commit and expected tree.
+9. Delete only the temporary branch created for this completed task. Never infer
+   authority to delete a pre-existing owner branch.
+
 Direct `main` publication:
 
 1. Require explicit project-owner instruction to publish directly to `main`.
@@ -161,13 +236,14 @@ Direct `main` publication:
 
 Working branch and pull request:
 
-- Use when explicitly requested or when build/live validation must occur before
-  `main` changes.
+- This is the default mode for ordinary requested development work.
 - The branch must start from the recorded base SHA.
 - One logical change remains one commit unless the owner approves another review
   structure.
-- Merging or deleting the branch requires separate authority when not already
-  included in the request.
+- Required CI and any explicitly required pre-merge live validation must pass.
+- Standing authority covers Ready transition, squash merge, and deletion of the
+  temporary branch created for the completed task.
+- A request to stop at the branch or PR boundary suppresses automatic merge.
 
 Unified patch:
 
@@ -177,8 +253,10 @@ Unified patch:
 - Include content and file-mode changes.
 - Require `git apply --check` against the unchanged baseline before delivery.
 
-Creating a tag, release, package publication, force-push, or branch deletion is
-never implied by permission to publish an ordinary commit.
+Creating a tag, release, or package/pkg-repository publication is authorized only
+by an explicit release request. Force-push and history rewriting are never implied.
+Branch cleanup authority applies only to the temporary task branch created by this
+workflow after its verified merge.
 
 Record completed meaningful publication work in `DEVLOG.md`. Do not create a
 separate push log or publication history file.
@@ -205,6 +283,18 @@ RELEASE PREPARATION
 ==================================================
 
 A release is prepared only from a committed and pushed source baseline.
+
+One explicit request to make the release is sufficient authority for all numbered
+steps below. Do not pause for repeated confirmations between a successful
+release-preparation merge, tag creation, GitHub Release publication, package asset
+publication, Pages/pkg repository deployment, and final verification. Stop only on
+one of the standing escalation boundaries above.
+
+Package metadata handling does not require a separate confirmation when determined
+by scope: increment `PLUGIN_REVISION` once for an ordinary packaged change while
+`VERSION` is unchanged; reset it to `1` for an explicitly requested new project
+version; change neither value for governance/documentation-only work outside package
+contents. Standard CI may still build the unchanged package as its verification job.
 
 Before publication:
 

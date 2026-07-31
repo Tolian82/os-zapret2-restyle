@@ -32,6 +32,9 @@ https://github.com/Tolian82/os-zapret2-restyle
 Branch:
 main
 
+Current documentation-change base:
+506b20f3c56e1a174ba3f5aa9c2c769ad0338f55
+
 Development tree:
 /root/os-zapret2-restyle
 
@@ -55,6 +58,42 @@ Live-verify that Settings Apply, generated configuration, active runtime, and re
 
 Known blockers:
 Package build and focused OPNsense Apply/reboot verification are not yet complete.
+
+==================================================
+CURRENT DEVELOPMENT DELIVERY POLICY — 2026-07-31
+==================================================
+
+The default delivery path for an ordinary requested project change is:
+
+working branch
+        ↓
+one atomic commit
+        ↓
+Draft PR
+        ↓
+required CI
+        ↓
+Ready for review
+        ↓
+squash merge
+        ↓
+verify `main`
+
+The project owner has granted standing authority to complete this ordinary patch
+cycle without asking separately for branch creation, commit, branch publication,
+PR creation, Ready transition, squash merge, or cleanup of the temporary branch
+created for that task. An explicit request to stop at analysis, a local commit, a
+branch, a PR, or a patch overrides the default and defines the stopping point.
+
+Release publication remains a separate scope. One explicit request to make a
+release authorizes the complete verified release cycle without repeated approvals,
+but an ordinary development request does not authorize a tag, GitHub Release, pkg
+repository publication, or package publication. The current documentation change
+does not create a release.
+
+The detailed standing-authority and escalation boundaries are maintained in
+DECISIONS.md, WORKING_CONVENTIONS.md, DEVELOPMENT_GUIDE.md, and
+GITHUB_WORKFLOW.md.
 
 ==================================================
 CURRENT CORRECTIVE WORK — CFG-001 — 2026-07-31

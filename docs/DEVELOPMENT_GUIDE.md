@@ -90,14 +90,58 @@ php -l file.php
 16. Re-read remote `main` and confirm that it still points to the recorded base
     SHA.
 
-17. Publish by the explicitly approved mode:
+17. For an ordinary requested development task, publish the working branch and
+    open one Draft PR. No separate publication confirmation is required.
 
-    - fast-forward `main` only after direct project-owner instruction;
-    - otherwise use a requested working branch, pull request, or patch.
+18. Wait for required CI, correct same-scope failures when safe, mark the PR Ready,
+    and squash merge after checks pass and the branch is mergeable. No separate
+    merge confirmation is required unless the current request explicitly stops at
+    the branch or PR boundary.
 
-18. Verify the published commit.
+19. Verify the resulting `main` commit and clean up the temporary branch created for
+    the task. Direct fast-forward publication to `main` remains an exceptional mode
+    requiring explicit project-owner instruction.
 
-19. Build once and run the focused live verification required by the change.
+20. Build once and run the focused live verification required by the change. For a
+    documentation-only governance change outside package contents, leave package
+    metadata unchanged; standard CI, including its package job, is the applicable
+    build/verification stage and no separate release build is required.
+
+==================================================
+REQUEST SCOPE AND STANDING AUTHORIZATION
+==================================================
+
+Interpret the project owner's current instruction as follows:
+
+- analyse, diagnose, explain, review: inspect and report without repository
+  publication;
+- prepare only, patch only, branch only, PR only: perform the requested work and
+  stop at the named boundary;
+- fix, add, change, implement, complete: perform the complete ordinary branch →
+  Draft PR → CI → Ready → squash-merge cycle;
+- make/release version X: perform the complete verified release cycle for that
+  requested version, including its release-preparation PR, merge, tag, GitHub
+  Release, package/pkg-repository publication, and post-publication checks.
+
+Do not ask for routine branch names, commit messages, PR text, test selection, CI
+waiting, Ready transition, squash merge, or cleanup of the temporary branch created
+for the task. Derive those choices from the exact source, affected Finding or work
+package, and current documentation.
+
+Stop only when a material choice is not settled, relevant unpublished owner state
+exists, a required check cannot be repaired within scope, new authority or credentials
+are required, a destructive action affects user data or pre-existing remote objects,
+force/history rewrite/direct-main publication is proposed, or mandatory live OPNsense
+evidence must be supplied by the owner.
+
+If input is required, ask one consolidated question with the evidence and a
+recommended choice. Do not ask for information available through the repository,
+GitHub, CI, project documentation, or read-only diagnostics.
+
+Handle package metadata without a separate confirmation when the rule is
+deterministic: increment `PLUGIN_REVISION` once for an ordinary packaged change with
+unchanged `VERSION`; reset it to `1` for an explicitly requested new project version;
+change neither value for governance/documentation-only work outside package contents.
 
 ==================================================
 REPOSITORY LAYERS
@@ -344,10 +388,12 @@ Change preparation requirements:
 7. Run static validation and review the complete diff.
 8. Create one atomic commit.
 9. Immediately recheck that remote `main` still equals the base SHA.
-10. Publish by fast-forward to `main` only when explicitly instructed, or use the
-   specifically requested branch/PR/patch mode.
-11. Verify the published commit, then perform one build and one focused
-    verification.
+10. Publish an ordinary requested change through a working branch and Draft PR,
+    pass required CI, then squash merge under the standing authorization. Use a
+    narrower branch/PR/patch stopping point only when the current request specifies it.
+11. Verify the published `main` commit, clean up the task-owned temporary branch,
+    then perform one build and one focused verification. Direct publication to
+    `main` remains exceptional and requires explicit instruction.
 
 An authenticated GitHub integration/API may construct the blobs, tree, and
 single commit atomically and then fast-forward the branch reference. GitHub CLI

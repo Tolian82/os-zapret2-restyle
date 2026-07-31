@@ -140,7 +140,10 @@ git add explicit paths when using a local checkout
 review staged diff when using a local checkout
 commit
 recheck remote main against base SHA
-publish by explicitly approved mode
+publish a working branch
+open a Draft PR
+wait for required CI
+mark Ready and squash merge
 verify published commit
 build
 focused live verification
@@ -337,14 +340,22 @@ create one atomic commit
 ↓
 confirm main still equals the recorded base
 ↓
-publish using the explicitly approved mode
+publish a working branch and open a Draft PR
+↓
+pass required CI and squash merge
 ↓
 build and perform focused verification
 
+The working-branch and PR path is the default for ordinary requested development
+work. Standing project-owner authorization covers branch creation, one atomic
+commit, branch publication, Draft PR creation, Ready transition after required CI,
+squash merge, verification of `main`, and cleanup of the temporary branch created
+for that task. No repeated confirmation is required.
+
 Direct publication to `main` requires explicit project-owner instruction and must
-be a fast-forward from the recorded base. Never force-push. A working branch,
-pull request, or unified patch is optional and is used only when requested or
-when verification must happen before `main` changes.
+be a fast-forward from the recorded base. Never force-push. A unified patch is used
+only when explicitly requested or when relevant local-only state is transferred in
+that form.
 
 No particular GitHub client is mandatory. GitHub CLI is not required when an
 authenticated GitHub integration/API or ordinary Git can perform the approved
@@ -360,6 +371,41 @@ installed-system configuration, or files outside the repository.
 When a unified patch is explicitly selected, it must include all content and
 file-mode changes and pass `git apply --check` against its exact base. This is an
 optional transfer mode, not the default prerequisite for repository work.
+
+==================================================
+STANDING DELIVERY AUTHORIZATION
+==================================================
+
+An instruction to fix, add, change, implement, or complete an ordinary project
+task authorizes the complete default PR cycle. The assistant selects routine
+branch, commit, PR, and test details from the current source and documentation.
+
+Explicit stopping points override the default. If the owner asks only for analysis,
+diagnosis, review, a local change, a patch, a branch, or a PR, stop at that point.
+
+Do not request confirmation for deterministic routine choices or for the Ready,
+squash-merge, and temporary-task-branch cleanup steps after required checks pass.
+
+One explicit request to make a release authorizes its complete verified release
+pipeline. An ordinary development request does not authorize a version tag,
+GitHub Release, package publication, or pkg-repository publication.
+
+Stop for owner direction only on material architecture/product ambiguity, relevant
+unpublished local state, an unresolvable required check failure, new credentials or
+protected authority, destructive work affecting user data or pre-existing remote
+objects, force-push/history rewriting/direct-main publication, or mandatory live
+OPNsense evidence available only from the owner.
+
+When owner input is genuinely required, ask one consolidated question with the
+evidence and a recommended choice. Never ask the owner to confirm facts available
+from the repository, GitHub, CI, documentation, or read-only diagnostics.
+
+Package revision handling is routine. Increment `PLUGIN_REVISION` once for an
+ordinary change to packaged files or package behavior while `VERSION` is unchanged.
+Reset it to `1` when an explicitly requested new project version changes `VERSION`.
+A governance/documentation-only change outside package contents changes neither
+value; standard CI, including its package job, supplies the applicable build and
+verification without implying a release.
 
 ==================================================
 LOCAL-ONLY STATE EXCEPTION

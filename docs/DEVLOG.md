@@ -990,3 +990,44 @@ Not yet claimed:
 - valid Apply propagation through config.xml, zapret.conf, dvtws.args, and the
   process command line;
 - reboot startup with the saved strategy.
+
+==================================================
+2026-07-31 — AUTONOMOUS ORDINARY PATCH DELIVERY DOCUMENTED
+==================================================
+
+Completed from GitHub `main` baseline
+`506b20f3c56e1a174ba3f5aa9c2c769ad0338f55`:
+
+- made working branch → one commit → Draft PR → CI → Ready → squash merge the
+  default delivery path for an ordinary requested development task;
+- recorded standing project-owner authorization for branch creation, commit,
+  publication, PR creation, Ready transition, verified merge, and cleanup of the
+  temporary task branch without repeated confirmation;
+- defined explicit request wording as the stopping boundary for analysis-only,
+  patch-only, branch-only, and PR-only work;
+- defined one explicit release request as authority for the complete verified
+  release pipeline without stage-by-stage confirmations;
+- retained stop boundaries for unresolved architecture/product choices, unpublished
+  local state, unresolvable checks, new credentials/authority, destructive work,
+  force/history rewrite/direct-main publication, and mandatory owner-supplied live
+  OPNsense evidence;
+- documented that GitHub App commits may differ in commit metadata while remaining
+  acceptable only after exact tree, mode, parent, and scope verification;
+- defined routine package-revision handling and one consolidated blocking question
+  only when required evidence or authority cannot be obtained independently;
+- kept documentation-only governance changes outside package contents from changing
+  `VERSION` or `PLUGIN_REVISION`; the standard CI package job remains the build-stage
+  verification for this change.
+
+Affected documentation:
+
+- PROJECT_STATE.md;
+- DECISIONS.md;
+- WORKING_CONVENTIONS.md;
+- DEVELOPMENT_GUIDE.md;
+- GITHUB_WORKFLOW.md;
+- DEVLOG.md;
+- CHANGELOG.md.
+
+No plugin source, runtime behavior, package revision, version, release tag, release
+asset, or pkg repository content changed.
