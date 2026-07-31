@@ -1031,3 +1031,34 @@ Affected documentation:
 
 No plugin source, runtime behavior, package revision, version, release tag, release
 asset, or pkg repository content changed.
+
+==================================================
+2026-07-31 — PRERELEASE v0.2.3 PREPARATION
+==================================================
+
+Prepared the CFG-001 correction for installation and focused OPNsense verification
+without modifying the immutable v0.2.2 release.
+
+Release metadata:
+
+- VERSION advanced from 0.2.2 to 0.2.3;
+- PLUGIN_REVISION reset from 2 to 1;
+- expected tag is v0.2.3;
+- expected package is os-zapret2-restyle-0.2.3_1.pkg;
+- GitHub Release remains a prerelease until Apply and reboot verification is recorded.
+
+Documentation synchronized:
+
+- current project state and roadmap now distinguish the verified v0.2.2 baseline
+  from the v0.2.3 CFG-001 prerelease candidate;
+- CFG-001 remains open pending invalid Apply, valid Apply, and reboot evidence;
+- README version and unsigned-repository policy were aligned with active decisions;
+- the security policy now identifies the latest prerelease and `main` as maintained;
+- requirements now derive plugin version from VERSION instead of embedding a stale
+  numeric value.
+
+Next:
+
+Publish the release-preparation PR, create v0.2.3 from the verified merged commit,
+wait for the release workflow, verify the package and Pages repository, then install
+0.2.3_1 on OPNsense for the focused CFG-001 test matrix.

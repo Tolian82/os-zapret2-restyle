@@ -26,15 +26,15 @@ CURRENT STAGE
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current work package:
-CFG-001 correction and live verification of Settings Apply and boot configuration activation
+Prerelease v0.2.3 publication and CFG-001 live verification
 
 Ordered work:
 
-1. Build package revision 2 containing the CFG-001 correction.
+1. Publish prerelease v0.2.3 and package 0.2.3_1 containing the CFG-001 correction.
 2. Verify invalid Apply rollback and exact GUI error reporting on OPNsense.
 3. Verify valid Apply across config.xml, zapret.conf, dvtws.args, and process arguments.
 4. Reboot and verify that startup renders and activates the saved configuration.
-5. Reconcile CFG-001 and resume GUI management of bol-van/zapret2 stable releases.
+5. Reconcile CFG-001, record the verified release baseline, and resume GUI management of bol-van/zapret2 stable releases.
 6. Add installed runtime-version detection and reporting.
 7. Obtain and present the available stable-release list for bol-van/zapret2.
 8. Notify when a newer stable release is available.

@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Requirements
 
 Project: **os-zapret2-restyle**  
-Version line: **0.1.x**
+Version line: **0.2.x**
 
 ## Project identity
 
@@ -182,7 +182,7 @@ The package identity is:
 
 ```text
 PLUGIN_NAME=zapret2-restyle
-PLUGIN_VERSION=0.2.0
+PLUGIN_VERSION!= /bin/cat ${.CURDIR}/VERSION
 ```
 
 The final package must include all project-owned MVC, service, backend,
