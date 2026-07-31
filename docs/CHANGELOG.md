@@ -21,6 +21,22 @@ The project starts its own version history at `0.1.0`.
 
 ### Changed
 
+- Made working branch → one atomic commit → Draft PR → CI → Ready → squash merge
+  the standing default for ordinary requested development changes, without repeated
+  publication or merge confirmations.
+- Defined explicit analysis-only, patch-only, branch-only, and PR-only requests as
+  narrower stopping points that override the default delivery cycle.
+- Made one explicit release request sufficient authority for the complete verified
+  release pipeline while retaining stop boundaries for ambiguity, unpublished local
+  state, failed gates, new authority, destructive work, and history rewriting.
+- Allowed automatic cleanup only of the temporary branch created for the completed
+  task; pre-existing owner branches and other remote objects remain protected.
+- Defined deterministic package-revision handling and one consolidated blocking
+  question only when repository, GitHub, CI, documentation, and diagnostics cannot
+  supply the required answer.
+- Kept package metadata unchanged for governance-only documentation changes outside
+  package contents while using standard CI, including its package job, as the build
+  and verification stage.
 - Made the exact current GitHub commit the authoritative baseline for normal
   development.
 - Removed the mandatory owner-supplied archive for repository state already

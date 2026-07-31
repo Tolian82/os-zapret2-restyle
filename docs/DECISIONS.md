@@ -1663,7 +1663,8 @@ DEC-2026-07-31 — GITHUB COMMIT IS THE DEFAULT DEVELOPMENT BASELINE
 ==================================================
 
 Status:
-Active.
+Active. The default PR/merge authorization is extended by
+DEC-2026-07-31 — STANDING AUTHORIZATION FOR ORDINARY PATCH DELIVERY.
 
 Decision:
 
@@ -1726,3 +1727,96 @@ Affected documents:
 - GITHUB_WORKFLOW.md
 - CHANGELOG.md
 - README.md
+
+==================================================
+DEC-2026-07-31 — STANDING AUTHORIZATION FOR ORDINARY PATCH DELIVERY
+==================================================
+
+Status:
+Active.
+
+Decision:
+
+1. A project-owner request to fix, add, change, implement, or otherwise complete
+   an ordinary development task includes standing authority for its normal
+   repository delivery cycle unless the request defines a narrower stopping point.
+2. The default cycle is a working branch from the recorded `main` SHA, one atomic
+   commit, Draft PR, required CI, Ready transition, squash merge, verification of
+   the resulting `main`, and cleanup of the temporary branch created for that task.
+   No separate confirmation is required for those steps.
+3. The assistant may choose the branch name, commit message, PR title and body,
+   focused tests, and ordinary CI retry or same-scope correction needed to complete
+   the approved task. Any correction remains limited to the same logical scope;
+   unrelated work requires a separate change. Before branch publication, amend the
+   local commit when needed. After publication, add a same-scope correction commit
+   instead of rewriting the branch; squash merge still produces one `main` commit.
+4. A request that explicitly says analyse, diagnose, review, prepare only, create a
+   patch only, publish to a branch only, or open a PR only stops at that boundary.
+   The explicit current instruction always overrides the default cycle.
+5. The assistant must not ask again about settled identities, recorded architecture,
+   required documentation synchronization, package-revision handling, branch naming,
+   commit wording, PR wording, CI waiting, Ready transition, squash merge, or cleanup
+   of its own merged temporary branch when the documentation and current source make
+   the answer deterministic.
+6. Package-revision handling is routine and does not require a separate question:
+   an ordinary change that affects packaged files or package behavior increments
+   `PLUGIN_REVISION` once when `VERSION` is unchanged; an explicitly requested new
+   project version resets `PLUGIN_REVISION` to `1`; a governance/documentation-only
+   change outside package contents changes neither value. The standard CI package
+   job and validation are the build/verification stage for the documentation-only
+   change; no separate release build or publication is implied.
+7. One explicit project-owner request to make a release authorizes the complete
+   release cycle for that requested version: release preparation, release PR and
+   merge, verified tag creation, GitHub Release publication, GitHub Pages/pkg
+   repository publication, asset publication, and post-publication verification.
+   Do not request separate approval at every release stage. A development request
+   that does not explicitly request a release grants none of this release authority.
+8. Stop and request direction only when at least one of these boundaries is reached:
+   - materially different product or architecture choices remain unresolved by the
+     current instruction and project documentation;
+   - relevant uncommitted or unpushed owner state may be overwritten;
+   - required CI, build, or verification fails and cannot be corrected safely inside
+     the same logical scope;
+   - credentials, protected-environment approval, or new external authority is
+     required;
+   - a destructive operation affects user data or a pre-existing owner branch, tag,
+     release, published package, or repository history;
+   - force-push, history rewriting, or direct publication to `main` is proposed;
+   - exact live OPNsense evidence that only the owner can obtain is a mandatory gate.
+9. Direct push to `main`, force-push, and history rewriting are never the default.
+   Ordinary development reaches `main` through the verified PR merge path.
+10. When a stop boundary genuinely requires owner input, ask one consolidated
+    question containing the relevant evidence and a recommended choice. Do not ask
+    the owner to confirm information that can be obtained from the current repository,
+    GitHub, CI, project documentation, or available read-only diagnostics.
+
+Reason:
+
+The CFG-001 cycle showed that repeated questions about publication, PR readiness,
+and merge added latency after the change and its tests were already complete. A
+stable default path preserves review, CI, atomicity, and branch protection while
+removing confirmations whose answers are already determined by the approved task
+and repository rules.
+
+Consequences:
+
+- ordinary requested patches can move from implementation through verified merge
+  without a second authorization round;
+- analysis-only and deliberately limited delivery requests remain non-mutating past
+  their stated boundary;
+- release authority is granted once by an explicit release request rather than by
+  repeated stage confirmations;
+- destructive, ambiguous, permission-expanding, and unpublished-local-state cases
+  still stop for owner direction;
+- the PR is the normal main-protection boundary, so direct pushes are unnecessary;
+- failed verification is never hidden or treated as success.
+
+Affected documents:
+
+- PROJECT_STATE.md
+- DECISIONS.md
+- WORKING_CONVENTIONS.md
+- DEVELOPMENT_GUIDE.md
+- GITHUB_WORKFLOW.md
+- DEVLOG.md
+- CHANGELOG.md
