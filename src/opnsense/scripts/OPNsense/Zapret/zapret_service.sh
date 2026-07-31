@@ -42,9 +42,20 @@ ensure_runtime_components()
     return 1
 }
 
+refresh_generated_configuration()
+{
+    if ! config_reload_template OPNsense/Zapret; then
+        orchestrator_fail_stage \
+            "${STAGE_FILE}" 1 13 config \
+            "template generation failed"
+        return 1
+    fi
+}
+
 start_service()
 {
     ensure_runtime_components || return 1
+    refresh_generated_configuration || return 1
     orchestrator_native_start \
         "${CONFIG}" "${ZAPRET_DIR}" "${ACTIVE_DIR}" "${BACKUP_ROOT}" \
         "${DVTWS_BIN}" "${CHILD_PIDFILE}" \
@@ -65,12 +76,7 @@ stop_service()
 reconfigure_service()
 {
     ensure_runtime_components || return 1
-    if ! config_reload_template OPNsense/Zapret; then
-        orchestrator_fail_stage \
-            "${STAGE_FILE}" 1 13 config \
-            "template generation failed"
-        return 1
-    fi
+    refresh_generated_configuration || return 1
     orchestrator_native_reconfigure \
         "${CONFIG}" "${ZAPRET_DIR}" "${ACTIVE_DIR}" "${BACKUP_ROOT}" \
         "${DVTWS_BIN}" "${CHILD_PIDFILE}" \

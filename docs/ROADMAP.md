@@ -26,17 +26,21 @@ CURRENT STAGE
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current work package:
-GUI management of bol-van/zapret2 stable releases through the existing setup.sh backend
+CFG-001 correction and live verification of Settings Apply and boot configuration activation
 
 Ordered work:
 
-1. Add installed runtime-version detection and reporting.
-2. Obtain and present the available stable-release list for bol-van/zapret2.
-3. Notify when a newer stable release is available.
-4. Allow selection and installation of a published stable release.
-5. Support update to a newer release and repeat installation of the current release.
-6. Display runtime presence separately from runtime/service health.
-7. After the project owner supplies the repository, design and implement GUI management of the additional BLOB repository. Until then, its URL, manifest, layout, integrity model, and update contract remain unspecified.
+1. Build package revision 2 containing the CFG-001 correction.
+2. Verify invalid Apply rollback and exact GUI error reporting on OPNsense.
+3. Verify valid Apply across config.xml, zapret.conf, dvtws.args, and process arguments.
+4. Reboot and verify that startup renders and activates the saved configuration.
+5. Reconcile CFG-001 and resume GUI management of bol-van/zapret2 stable releases.
+6. Add installed runtime-version detection and reporting.
+7. Obtain and present the available stable-release list for bol-van/zapret2.
+8. Notify when a newer stable release is available.
+9. Allow selection, installation, update, and repeat installation of a published stable release.
+10. Display runtime presence separately from runtime/service health.
+11. After the project owner supplies the repository, design and implement GUI management of the additional BLOB repository. Until then, its URL, manifest, layout, integrity model, and update contract remain unspecified.
 
 ==================================================
 COMPLETED MILESTONES
@@ -165,7 +169,8 @@ NEXT RELEASE GATE
 
 Do not declare the next stable baseline until:
 
-1. the selected Milestone 8 work package is implemented and verified;
-2. affected regression-backlog tests are executed where the change touches their chain;
-3. current AUDIT.md findings affected by the change are reconciled;
-4. CHANGELOG.md and PROJECT_STATE.md describe the same package state.
+1. CFG-001 passes focused Apply and reboot verification;
+2. the selected Milestone 8 work package is implemented and verified;
+3. affected regression-backlog tests are executed where the change touches their chain;
+4. current AUDIT.md findings affected by the change are reconciled;
+5. CHANGELOG.md and PROJECT_STATE.md describe the same package state.

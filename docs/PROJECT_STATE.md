@@ -42,19 +42,48 @@ Current version:
 0.2.2
 
 Current package revision:
-1
+2
 
 Verified package:
 os-zapret2-restyle-0.2.2_1
 
 Current phase:
-Milestone 8 — GUI maintenance and managed upstream components
+Corrective CFG-001 work before resuming Milestone 8
 
 Current priority:
-Implement GUI management of bol-van/zapret2 stable releases through the existing setup.sh backend: installed-version reporting, available-release selection, update notification, installation, update, and repeat installation.
+Live-verify that Settings Apply, generated configuration, active runtime, and reboot startup remain synchronized after the CFG-001 source correction.
 
 Known blockers:
-None.
+Package build and focused OPNsense Apply/reboot verification are not yet complete.
+
+==================================================
+CURRENT CORRECTIVE WORK — CFG-001 — 2026-07-31
+==================================================
+
+Development base:
+0f379a0117e64d44d1f8987f3f5a806b67ac6fbd
+
+Confirmed defect:
+
+- configd actions of type `script` encode command failure as non-empty
+  `Error (N)`;
+- both MVC reconfigure paths accepted every non-empty response as success;
+- start did not regenerate zapret.conf from saved OPNsense settings;
+- therefore Apply could report success while the previous runtime remained active,
+  and reboot could reuse the stale generated file.
+
+Source remediation implemented for package revision 2:
+
+- both MVC paths require the exact response `OK`;
+- zapret_service.sh owns template refresh before start and reconfigure;
+- failed Settings Apply restores the previous persistent model and generated
+  template while the orchestrator preserves the previous runtime;
+- a focused configuration-activation regression test covers exact `OK`, encoded
+  `Error (N)`, process failure, and lifecycle refresh ownership.
+
+Both changed PHP files parse successfully with php-parser. Native `php -l` remains
+delegated to the existing containerized CI check because PHP is unavailable in the
+preparation environment. Package build and OPNsense live verification remain open.
 
 ==================================================
 RELEASE BASELINE — v0.2.2 — 2026-07-30
@@ -162,7 +191,8 @@ Runtime and backend:
 - global domain exclusions;
 - strict domain and IP validation;
 - candidate build and validation;
-- transactional Apply;
+- transactional Apply design, with the CFG-001 response/boot correction implemented
+  in source and still awaiting focused live verification;
 - atomic runtime activation and rollback;
 - launcher, firewall, dvtws2, and supervisor lifecycle;
 - process identity validation for dvtws2 and supervisor;
@@ -233,6 +263,7 @@ Authoritative detailed records are in AUDIT.md.
 
 Still open or requiring live verification:
 
+- CFG-001 Settings Apply/configd response and boot template synchronization;
 - API diagnostics route duplication and direct-route behavior;
 - stale GUI help text referring to removed HTTP/HTTPS strategy fields;
 - blockcheck timeout inconsistency;
@@ -259,13 +290,11 @@ Closed or implementation-complete findings include:
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Build package revision 9 from the clean committed baseline and verify that its runtime behavior matches the tested 0.2.1_8 baseline.
-2. Live-verify the corrected unified Traffic Strategy guidance on Settings and Diagnostics pages.
-3. Execute upgrade → remove → reinstall live tests and record exact evidence.
-4. Reboot the OPNsense test system and verify service startup, PID ownership, supervisor, and ipfw state.
-5. Complete the remaining GUI/API live-test matrix, including the duplicate diagnostics route and service reconfigure classification.
-6. Resolve only findings proven by the audit; do not redesign working architecture without evidence.
-7. Resume completion of remaining approved REQUIREMENTS.md functionality.
+1. Build package os-zapret2-restyle-0.2.2_2 and run package verification.
+2. Live-test invalid Apply rollback, valid Apply activation, and exact GUI error reporting.
+3. Reboot OPNsense and confirm that config.xml, zapret.conf, dvtws.args, process arguments, PID ownership, supervisor, and ipfw state agree.
+4. Reconcile CFG-001 evidence, then resume the Milestone 8 stable-release GUI work package.
+5. Execute the remaining upgrade, remove, reinstall, diagnostics, and controlled-failure backlog when its affected chain is changed.
 
 ==================================================
 WORKING RULES FOR RESUMPTION
@@ -283,7 +312,9 @@ Before changing code:
 7. update every affected document in the same logical commit;
 8. never infer current state from chat history alone.
 
-The live-verified source and synchronized Engineering Memory were committed and published as efff7b5. Package revision 9 is the first follow-up candidate that must be built from the clean committed baseline and compared with the verified 0.2.1_8 runtime behavior.
+Release v0.2.2 at fc6b208 and package 0.2.2_1 remain the verified baseline.
+CFG-001 is the next package candidate as 0.2.2_2 and still requires the focused
+Apply and reboot verification recorded above.
 
 
 ==================================================

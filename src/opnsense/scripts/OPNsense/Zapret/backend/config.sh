@@ -60,11 +60,29 @@ config_resolve_interface()
 config_reload_template()
 {
     _config_reload_namespace="$1"
+    _config_reload_bin="${CONFIGCTL_BIN:-/usr/local/sbin/configctl}"
 
     [ -n "${_config_reload_namespace}" ] || {
         common_error "config_reload_template requires a template namespace"
         return 1
     }
 
-    /usr/local/sbin/configctl template reload "${_config_reload_namespace}"
+    [ -x "${_config_reload_bin}" ] || {
+        common_error "configctl is unavailable: ${_config_reload_bin}"
+        return 1
+    }
+
+    if _config_reload_response=$(
+        "${_config_reload_bin}" template reload "${_config_reload_namespace}" 2>&1
+    ); then
+        if [ "${_config_reload_response}" = "OK" ]; then
+            return 0
+        fi
+        common_error "template reload returned an unexpected response for '${_config_reload_namespace}'"
+    else
+        common_error "template reload failed for '${_config_reload_namespace}'"
+    fi
+
+    [ -z "${_config_reload_response}" ] || echo "${_config_reload_response}" >&2
+    return 1
 }
