@@ -50,8 +50,10 @@ class ServiceController extends ApiMutableServiceControllerBase
         $backend = new Backend();
         try {
             $response = trim((string)$backend->configdRun('zapret reconfigure', false, 180));
-            if ($response === '') {
-                throw new \RuntimeException('empty backend response');
+            if ($response !== 'OK') {
+                throw new \RuntimeException(
+                    'backend returned: ' . ($response !== '' ? $response : 'empty response')
+                );
             }
         } catch (\Throwable $exception) {
             $message = gettext('The new configuration could not be applied. The previous runtime was kept or restored.');

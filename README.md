@@ -146,7 +146,7 @@ Valid values are normalized, saved, activated, and reloaded into the form.
 INSTALLATION
 ==================================================
 
-Version 0.2.1 is the current public development release; package revision 2 contains the package-managed install/remove lifecycle.
+Version 0.2.2 is the current release line; this source tree builds package revision 2.
 
 The supported distribution model is a project-owned FreeBSD pkg repository
 published through GitHub Pages for FreeBSD:15:amd64 / supported OPNsense 26.7

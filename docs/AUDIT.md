@@ -118,7 +118,7 @@ lifecycle, packaging, build, release, external URL, and diagnostic interfaces.
 COMPLETED BLOCK — MVC, GUI API, ACL, MENU, CONFIGD
 ==================================================
 
-Settings chain — OK:
+Settings chain — broken in the published baseline; CFG-001 source remediation implemented:
 
 /ui/zapret
         ↓
@@ -128,11 +128,9 @@ general.volt
         ↓
 /api/zapret/settings/get and /api/zapret/settings/apply
         ↓
-OPNsense/Zapret template reload
-        ↓
 configctl zapret reconfigure
         ↓
-zapret_service.sh
+zapret_service.sh template reload
         ↓
 Backend v2
 
@@ -140,8 +138,12 @@ Evidence:
 
 - The settings page route and view exist.
 - The GUI calls the settings API namespace.
-- Apply performs template reload and invokes zapret reconfigure.
+- Apply invokes the service-owned template reload and safe reconfigure chain.
 - The reconfigure configd action exists.
+- The published controller accepted non-empty `Error (N)` responses as success;
+  CFG-001 changes both reconfigure API paths to require exact `OK`.
+- Source-level remediation is complete; focused OPNsense Apply and reboot tests
+  remain required.
 
 Domain-test chain — OK:
 
@@ -193,6 +195,119 @@ JSON delivery, service restoration, pf restoration, and ipfw restoration.
 ==================================================
 RECORDED FINDINGS
 ==================================================
+
+--------------------------------------------------
+CFG-001 — Apply can report success while the runtime remains unchanged
+--------------------------------------------------
+
+Classification:
+broken / requires live test
+
+Affected locations:
+
+- src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php
+  - SettingsController::applyAction()
+- src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php
+  - ServiceController::reconfigureAction()
+- src/opnsense/service/conf/actions.d/actions_zapret.conf
+  - start and reconfigure actions
+- src/opnsense/scripts/OPNsense/Zapret/backend/config.sh
+  - config_reload_template()
+- src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+  - start_service() and reconfigure_service()
+- src/etc/rc.syshook.d/start/20-zapret
+
+Affected chains:
+
+GUI Settings Apply
+        ↓
+SettingsController::applyAction()
+        ↓
+configd action zapret reconfigure (type:script)
+        ↓
+candidate build and runtime activation
+
+OPNsense boot
+        ↓
+configctl zapret start
+        ↓
+zapret_service.sh start
+        ↓
+generated zapret.conf and active runtime
+
+Evidence:
+
+- Live OPNsense evidence showed that GUI Apply and a subsequent reboot left the
+  dvtws2 process running with the previous Traffic Strategy arguments.
+- The ipfw divert rule and dvtws2 process remained healthy, so the observation was
+  not a missing-service or missing-firewall failure.
+- OPNsense configd actions of type `script` return `OK` for exit status zero and
+  `Error (N)` for a non-zero exit status.
+- At base commit 0f379a0117e64d44d1f8987f3f5a806b67ac6fbd,
+  SettingsController::applyAction() and ServiceController::reconfigureAction()
+  classified every non-empty configd response as success. Consequently,
+  `Error (1)` was accepted as a successful reconfigure.
+- At the same base, reconfigure_service() reloaded the OPNsense/Zapret template
+  before building a candidate, but start_service() did not. The boot syshook
+  invoked `zapret start`, so boot could reuse an older generated zapret.conf even
+  when /conf/config.xml contained newer saved settings.
+
+Probable cause:
+The MVC layer assumed that configd reports command failure as an empty response,
+while type `script` actions encode failure as a non-empty `Error (N)` response.
+Template generation ownership was also split between Settings Apply and only part
+of the service lifecycle.
+
+Impact and risk:
+
+- GUI Apply can falsely report success after candidate generation or validation
+  failed.
+- Persistent settings, generated zapret.conf, active runtime arguments, and the
+  GUI result can disagree.
+- A reboot can continue using stale generated arguments instead of rebuilding
+  from the saved OPNsense configuration.
+- Users can test an old strategy while believing that a new strategy is active.
+
+Verification plan:
+
+1. Add focused static tests for the exact configd success contract and template
+   refresh behavior.
+2. Confirm shell syntax, PHP syntax, XML validity, and the existing profile tests.
+3. On OPNsense, apply an intentionally invalid strategy and confirm that the GUI
+   reports failure while previous settings, runtime PID, runtime arguments, and
+   ipfw rules remain unchanged.
+4. Apply a valid changed strategy and confirm that config.xml, zapret.conf,
+   runtime-v2/dvtws.args, and the dvtws2 command line all contain the new value.
+5. Reboot and confirm that the same saved strategy is rendered and started once.
+
+Remediation plan:
+
+1. Treat only the exact configd response `OK` as success in both reconfigure API
+   paths.
+2. Make the service lifecycle the single owner of OPNsense/Zapret template reload
+   before start and reconfigure.
+3. Preserve transactional rollback and report a separate warning if restoring the
+   previous generated template fails.
+4. Add a focused regression test and package-revision bump.
+
+Acceptance criteria:
+
+- `Error (N)` can never produce a successful API response.
+- Failed Apply restores the previous persistent model and keeps or restores the
+  previous live runtime.
+- Successful Apply produces matching persistent, generated, active-runtime, and
+  process arguments.
+- Start renders the current saved OPNsense configuration before runtime startup.
+- Reboot starts one healthy dvtws2 and one supervisor with the saved strategy.
+
+Required documentation updates:
+AUDIT.md, PROJECT_STATE.md, ARCHITECTURE.md, DEVLOG.md, ROADMAP.md, CHANGELOG.md,
+and the README package-revision line.
+
+Remediation status:
+Evidence recorded on 2026-07-31. Source remediation and focused static regression
+test are implemented for package revision 2. Focused OPNsense Apply and reboot
+verification remains required.
 
 --------------------------------------------------
 MVC-001 — Duplicate diagnostics page route

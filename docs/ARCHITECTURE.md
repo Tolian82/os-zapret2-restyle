@@ -96,13 +96,17 @@ general.volt
         ↓
 /api/zapret/settings/get and /api/zapret/settings/apply
         ↓
-OPNsense/Zapret template reload
+validate, normalize, and save the OPNsense model
         ↓
 configctl zapret reconfigure
         ↓
-zapret_service.sh
+zapret_service.sh reloads OPNsense/Zapret
         ↓
 Backend v2 candidate build, validation, activation, and lifecycle
+
+The service lifecycle is the single owner of generated-template refresh for
+start, restart, and reconfigure. MVC actions accept only the exact configd
+`OK` response as success; the non-empty `Error (N)` response is a failure.
 
 Diagnostics — domain test:
 
@@ -338,7 +342,10 @@ The custom Apply flow validates and normalizes before persistent save.
 
 It returns field-specific errors or normalized values.
 
-It then invokes safe reconfigure.
+It then invokes the service-owned template refresh and safe reconfigure chain.
+Only the exact configd response `OK` completes Apply. On failure, the previous
+persistent model is restored, the previous generated template is rendered again,
+and candidate rollback keeps or restores the previous runtime.
 
 ==================================================
 PACKAGING INDEPENDENCE
@@ -403,6 +410,8 @@ configctl zapret start
 configd action
         ↓
 zapret_service.sh
+        ↓
+OPNsense/Zapret template reload from saved configuration
         ↓
 Backend v2 orchestrator
 

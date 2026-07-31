@@ -62,6 +62,9 @@ jobs:
       - name: Test count-carrying profile pipeline
         run: sh scripts/test-profile-pipeline.sh
 
+      - name: Test configuration activation contract
+        run: sh scripts/test-config-activation-contract.sh
+
       - name: Check required project files
         run: |
           set -eu

@@ -239,24 +239,32 @@ class SettingsController extends ApiMutableModelControllerBase
         $this->save(false, true);
         $config->unlock();
 
+        // zapret reconfigure owns template generation. A configd action of type
+        // script returns either the exact string "OK" or "Error (N)".
         $backend = new Backend();
-        $templateResponse = trim((string)$backend->configdRun('template reload OPNsense/Zapret'));
-        $reconfigureResponse = $templateResponse !== ''
-            ? trim((string)$backend->configdRun('zapret reconfigure', false, 180))
-            : '';
+        $reconfigureResponse = trim((string)$backend->configdRun('zapret reconfigure', false, 180));
 
-        if ($templateResponse === '' || $reconfigureResponse === '') {
+        if ($reconfigureResponse !== 'OK') {
             $config->lock();
             $model->setNodes($oldNodes);
             $this->setSaveAuditMessage(gettext('Restored previous Zapret settings after failed apply'));
             $this->save(false, true);
             $config->unlock();
-            $backend->configdRun('template reload OPNsense/Zapret');
+
+            $rollbackTemplateResponse = trim(
+                (string)$backend->configdRun('template reload OPNsense/Zapret')
+            );
+            $message = $this->backendFailureMessage(
+                gettext('The new configuration could not be applied. Previous settings and runtime were restored.')
+            );
+            if ($rollbackTemplateResponse !== 'OK') {
+                $message .= ' ' . gettext(
+                    'The previous settings were saved, but their generated configuration could not be restored. Do not restart Zapret before correcting the template error.'
+                );
+            }
 
             throw new UserException(
-                $this->backendFailureMessage(
-                    gettext('The new configuration could not be applied. Previous settings and runtime were restored.')
-                ),
+                $message,
                 gettext('Zapret configuration error')
             );
         }

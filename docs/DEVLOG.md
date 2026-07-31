@@ -948,3 +948,45 @@ Documentation synchronized:
 
 No plugin source, package version, package revision, runtime behavior, release
 artifact, tag, or pkg repository content changed.
+
+==================================================
+2026-07-31 — CFG-001 CONFIGURATION ACTIVATION CORRECTION IMPLEMENTED
+==================================================
+
+Confirmed:
+
+- live OPNsense evidence showed the previous dvtws2 strategy after Settings Apply
+  and reboot;
+- OPNsense configd actions of type `script` return exact `OK` on success and
+  non-empty `Error (N)` on command failure;
+- SettingsController and ServiceController accepted every non-empty response as
+  success;
+- the start lifecycle did not regenerate zapret.conf, while reconfigure did.
+
+Implemented in source for package revision 2:
+
+- require exact `OK` in both MVC reconfigure paths;
+- move successful template-generation ownership into zapret_service.sh for both
+  start and reconfigure;
+- preserve Settings Apply rollback and report generated-template rollback failure
+  separately;
+- validate the configctl exit status and exact template-action response;
+- add scripts/test-config-activation-contract.sh and run it in CI.
+
+Static verification:
+
+- the focused configuration-activation test passes;
+- changed shell scripts pass `sh -n`;
+- `git diff --check` passes;
+- both changed PHP files parse successfully with php-parser;
+- native `php -l` remains assigned to the existing containerized CI step because
+  PHP is unavailable in the preparation environment.
+
+Not yet claimed:
+
+- package build;
+- installation on OPNsense;
+- invalid Apply rollback live behavior;
+- valid Apply propagation through config.xml, zapret.conf, dvtws.args, and the
+  process command line;
+- reboot startup with the saved strategy.

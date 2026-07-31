@@ -8,6 +8,17 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Required the exact configd `OK` response so `Error (N)` can no longer be
+  reported as a successful Settings Apply or service reconfigure.
+- Made the service lifecycle regenerate zapret.conf from saved OPNsense settings
+  before start as well as reconfigure, preventing stale boot configuration.
+- Kept failed Apply transactional by restoring the previous persistent model and
+  generated template while preserving the previous live runtime.
+- Added a focused configuration-activation regression test and raised the package
+  revision to `2`.
+
 ### Changed
 
 - Made the exact current GitHub commit the authoritative baseline for normal
