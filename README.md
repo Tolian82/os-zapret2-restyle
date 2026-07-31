@@ -3,7 +3,7 @@
 Native OPNsense plugin for managing the zapret2 DPI bypass engine.
 
 Current version:
-0.2.0
+0.2.3
 
 Project status:
 Active development
@@ -146,7 +146,7 @@ Valid values are normalized, saved, activated, and reloaded into the form.
 INSTALLATION
 ==================================================
 
-Version 0.2.2 is the current release line; this source tree builds package revision 2.
+Version 0.2.3 is the current prerelease line; this source tree builds package revision 1.
 
 The supported distribution model is a project-owned FreeBSD pkg repository
 published through GitHub Pages for FreeBSD:15:amd64 / supported OPNsense 26.7
@@ -179,8 +179,8 @@ pkg update -f
 
 After that, install and update `os-zapret2-restyle` through
 **System > Firmware > Plugins**. The initial prerelease repository is transported
-over HTTPS but is intentionally unsigned (`signature_type: "none"`). Repository
-signing is required before promotion to a stable public release.
+over HTTPS but is intentionally unsigned (`signature_type: "none"`). This unsigned
+mode is the currently approved distribution policy.
 
 ==================================================
 ENGINEERING MEMORY

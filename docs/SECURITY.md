@@ -3,7 +3,8 @@
 ## Supported versions
 
 `os-zapret2-restyle` is currently in pre-1.0 active development. Only the
-latest commit on `main` is actively maintained until formal releases begin.
+latest published prerelease and the latest commit on `main` are actively
+maintained. Older prereleases should be upgraded before a defect is investigated.
 
 ## Reporting a vulnerability
 

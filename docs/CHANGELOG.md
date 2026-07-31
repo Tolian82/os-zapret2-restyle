@@ -8,6 +8,8 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-07-31
+
 ### Fixed
 
 - Required the exact configd `OK` response so `Error (N)` can no longer be
@@ -16,8 +18,7 @@ The project starts its own version history at `0.1.0`.
   before start as well as reconfigure, preventing stale boot configuration.
 - Kept failed Apply transactional by restoring the previous persistent model and
   generated template while preserving the previous live runtime.
-- Added a focused configuration-activation regression test and raised the package
-  revision to `2`.
+- Added a focused configuration-activation regression test.
 
 ### Changed
 
@@ -52,6 +53,16 @@ The project starts its own version history at `0.1.0`.
 - Added the later GUI task for an additional BLOB repository without inventing its repository or technical contract.
 - Standardized OPNsense console instructions on csh, with explicit `sh` and `exit` boundaries when POSIX shell is required.
 - Standardized normal Git verification on `git status --short`, `git diff --check`, and `git diff --stat`.
+- Updated release-facing version, repository-signing, package-version-source, and
+  maintained-version documentation for the v0.2.3 prerelease.
+
+### Distribution
+
+- Advanced `VERSION` to `0.2.3` and reset `PLUGIN_REVISION` to `1`.
+- Published package name: `os-zapret2-restyle-0.2.3_1.pkg`.
+- Kept this release as a prerelease until focused invalid Apply, valid Apply, and
+  reboot verification is completed on OPNsense.
+- Preserved immutable release `v0.2.2` and its verified `0.2.2_1` package.
 
 ## [0.2.2] - 2026-07-30
 

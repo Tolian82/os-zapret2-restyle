@@ -1820,3 +1820,51 @@ Affected documents:
 - GITHUB_WORKFLOW.md
 - DEVLOG.md
 - CHANGELOG.md
+
+==================================================
+DEC-2026-07-31 — RELEASE CFG-001 AS PRERELEASE v0.2.3
+==================================================
+
+Status:
+Active.
+
+Decision:
+
+Publish the CFG-001 configuration-activation correction as prerelease v0.2.3 with
+PLUGIN_REVISION reset to 1 and package name os-zapret2-restyle-0.2.3_1.pkg. Keep
+v0.2.2 and its package immutable. Do not classify v0.2.3 as a verified stable
+baseline until invalid Apply, valid Apply, and reboot behavior are confirmed on the
+supported OPNsense system.
+
+Reason:
+
+The existing v0.2.2 tag and Release already identify the verified 0.2.2_1 baseline.
+A new unique SemVer tag is required to publish a new package through the tag-driven
+release workflow. Publishing a prerelease makes the corrected package available for
+the exact live verification that remains open without rewriting an earlier release or
+claiming unperformed evidence.
+
+Consequences:
+
+- VERSION becomes 0.2.3;
+- PLUGIN_REVISION becomes 1;
+- the expected tag is v0.2.3;
+- GitHub Actions builds and publishes package 0.2.3_1 and the matching pkg repository;
+- v0.2.2 / 0.2.2_1 remains the last verified release baseline until focused live
+  evidence is recorded;
+- CFG-001 remains open after publication and closes only after its acceptance matrix
+  passes on OPNsense.
+
+Affected documents:
+
+- VERSION
+- Makefile
+- README.md
+- docs/PROJECT_STATE.md
+- docs/AUDIT.md
+- docs/DECISIONS.md
+- docs/DEVLOG.md
+- docs/ROADMAP.md
+- docs/REQUIREMENTS.md
+- docs/CHANGELOG.md
+- docs/SECURITY.md

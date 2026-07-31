@@ -306,8 +306,8 @@ and the README package-revision line.
 
 Remediation status:
 Evidence recorded on 2026-07-31. Source remediation and focused static regression
-test are implemented for package revision 2. Focused OPNsense Apply and reboot
-verification remains required.
+test are included in prerelease candidate 0.2.3_1. Focused OPNsense Apply and reboot
+verification remains required before CFG-001 is closed.
 
 --------------------------------------------------
 MVC-001 — Duplicate diagnostics page route

@@ -32,8 +32,8 @@ https://github.com/Tolian82/os-zapret2-restyle
 Branch:
 main
 
-Current documentation-change base:
-506b20f3c56e1a174ba3f5aa9c2c769ad0338f55
+Current release-preparation base:
+5e184d5e875665f03fc00bbc29e4eca0a660bac9
 
 Development tree:
 /root/os-zapret2-restyle
@@ -42,22 +42,22 @@ Version source:
 VERSION
 
 Current version:
-0.2.2
+0.2.3
 
 Current package revision:
-2
+1
 
 Verified package:
 os-zapret2-restyle-0.2.2_1
 
 Current phase:
-Corrective CFG-001 work before resuming Milestone 8
+Prerelease v0.2.3 preparation for CFG-001 live verification
 
 Current priority:
-Live-verify that Settings Apply, generated configuration, active runtime, and reboot startup remain synchronized after the CFG-001 source correction.
+Publish package 0.2.3_1, then live-verify that Settings Apply, generated configuration, active runtime, and reboot startup remain synchronized after CFG-001.
 
 Known blockers:
-Package build and focused OPNsense Apply/reboot verification are not yet complete.
+Focused OPNsense Apply/reboot verification remains required before v0.2.3 can be recorded as a verified stable baseline.
 
 ==================================================
 CURRENT DEVELOPMENT DELIVERY POLICY — 2026-07-31
@@ -111,7 +111,7 @@ Confirmed defect:
 - therefore Apply could report success while the previous runtime remained active,
   and reboot could reuse the stale generated file.
 
-Source remediation implemented for package revision 2:
+Source remediation included in prerelease candidate 0.2.3_1:
 
 - both MVC paths require the exact response `OK`;
 - zapret_service.sh owns template refresh before start and reconfigure;
@@ -329,11 +329,12 @@ Closed or implementation-complete findings include:
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Build package os-zapret2-restyle-0.2.2_2 and run package verification.
-2. Live-test invalid Apply rollback, valid Apply activation, and exact GUI error reporting.
+1. Publish prerelease v0.2.3 with package os-zapret2-restyle-0.2.3_1.
+2. Install it on OPNsense and live-test invalid Apply rollback, valid Apply activation, and exact GUI error reporting.
 3. Reboot OPNsense and confirm that config.xml, zapret.conf, dvtws.args, process arguments, PID ownership, supervisor, and ipfw state agree.
-4. Reconcile CFG-001 evidence, then resume the Milestone 8 stable-release GUI work package.
-5. Execute the remaining upgrade, remove, reinstall, diagnostics, and controlled-failure backlog when its affected chain is changed.
+4. Reconcile CFG-001 evidence and classify v0.2.3 as a verified baseline only after those checks pass.
+5. Resume the Milestone 8 stable-release GUI work package.
+6. Execute the remaining upgrade, remove, reinstall, diagnostics, and controlled-failure backlog when its affected chain is changed.
 
 ==================================================
 WORKING RULES FOR RESUMPTION
@@ -352,8 +353,8 @@ Before changing code:
 8. never infer current state from chat history alone.
 
 Release v0.2.2 at fc6b208 and package 0.2.2_1 remain the verified baseline.
-CFG-001 is the next package candidate as 0.2.2_2 and still requires the focused
-Apply and reboot verification recorded above.
+CFG-001 is prepared for publication as prerelease v0.2.3 / package 0.2.3_1 and
+still requires the focused Apply and reboot verification recorded above.
 
 
 ==================================================
