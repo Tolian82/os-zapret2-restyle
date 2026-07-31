@@ -26,11 +26,11 @@ CURRENT STAGE
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current work package:
-Prerelease v0.2.3 publication and CFG-001 live verification
+CFG-001 live verification using published prerelease v0.2.3
 
 Ordered work:
 
-1. Publish prerelease v0.2.3 and package 0.2.3_1 containing the CFG-001 correction.
+1. [x] Publish prerelease v0.2.3 and package 0.2.3_1 containing the CFG-001 correction.
 2. Verify invalid Apply rollback and exact GUI error reporting on OPNsense.
 3. Verify valid Apply across config.xml, zapret.conf, dvtws.args, and process arguments.
 4. Reboot and verify that startup renders and activates the saved configuration.

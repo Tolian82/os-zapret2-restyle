@@ -2103,6 +2103,30 @@ runtime, reinstall, reboot, controlled-failure, timeout-chain, or GUI/API live t
 Those remain the ordered Milestone 7 audit work.
 
 ==================================================
+PRERELEASE PUBLICATION AUDIT — v0.2.3 — 2026-07-31
+==================================================
+
+Scope:
+Verify publication of the CFG-001 candidate without reclassifying its unperformed
+OPNsense Apply and reboot tests.
+
+Publication evidence:
+
+- annotated tag v0.2.3 resolves to da3d8e7ddbb16561bfdc5628daa483b97f3bb9f4;
+- Release workflow run 30662375815 completed successfully;
+- all four jobs passed: Validate release, Build package and repository, Publish
+  GitHub Release, and Publish pkg repository;
+- GitHub Release v0.2.3 is public and marked prerelease;
+- os-zapret2-restyle-0.2.3_1.pkg and SHA256SUMS are uploaded release assets;
+- GitHub Pages returns the repository configuration, package, checksum manifest,
+  meta.conf, data.pkg, and packagesite.pkg successfully.
+
+Classification:
+Release and repository publication verified. CFG-001 remains broken/requires live
+test until invalid Apply, valid Apply, exact GUI error, and reboot evidence is
+recorded from OPNsense. Version 0.2.2 / package 0.2.2_1 remains the verified baseline.
+
+==================================================
 MILESTONE 7 CLOSURE CLASSIFICATION — 2026-07-30
 ==================================================
 

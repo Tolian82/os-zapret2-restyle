@@ -32,8 +32,8 @@ https://github.com/Tolian82/os-zapret2-restyle
 Branch:
 main
 
-Current release-preparation base:
-5e184d5e875665f03fc00bbc29e4eca0a660bac9
+Published prerelease tag commit:
+da3d8e7ddbb16561bfdc5628daa483b97f3bb9f4
 
 Development tree:
 /root/os-zapret2-restyle
@@ -50,11 +50,14 @@ Current package revision:
 Verified package:
 os-zapret2-restyle-0.2.2_1
 
+Published prerelease package:
+os-zapret2-restyle-0.2.3_1
+
 Current phase:
-Prerelease v0.2.3 preparation for CFG-001 live verification
+Published prerelease v0.2.3 awaiting CFG-001 live verification
 
 Current priority:
-Publish package 0.2.3_1, then live-verify that Settings Apply, generated configuration, active runtime, and reboot startup remain synchronized after CFG-001.
+Install package 0.2.3_1 and live-verify that Settings Apply, generated configuration, active runtime, and reboot startup remain synchronized after CFG-001.
 
 Known blockers:
 Focused OPNsense Apply/reboot verification remains required before v0.2.3 can be recorded as a verified stable baseline.
@@ -89,7 +92,7 @@ Release publication remains a separate scope. One explicit request to make a
 release authorizes the complete verified release cycle without repeated approvals,
 but an ordinary development request does not authorize a tag, GitHub Release, pkg
 repository publication, or package publication. The current documentation change
-does not create a release.
+does not create another release or modify an existing release.
 
 The detailed standing-authority and escalation boundaries are maintained in
 DECISIONS.md, WORKING_CONVENTIONS.md, DEVELOPMENT_GUIDE.md, and
@@ -120,9 +123,28 @@ Source remediation included in prerelease candidate 0.2.3_1:
 - a focused configuration-activation regression test covers exact `OK`, encoded
   `Error (N)`, process failure, and lifecycle refresh ownership.
 
-Both changed PHP files parse successfully with php-parser. Native `php -l` remains
-delegated to the existing containerized CI check because PHP is unavailable in the
-preparation environment. Package build and OPNsense live verification remain open.
+Both changed PHP files parse successfully with php-parser. Native `php -l` passed in
+CI. The release workflow built and published package 0.2.3_1 successfully; focused
+OPNsense live verification remains open.
+
+==================================================
+PUBLISHED PRERELEASE — v0.2.3 — 2026-07-31
+==================================================
+
+Confirmed publication state:
+
+- annotated tag v0.2.3 resolves to commit da3d8e7ddbb16561bfdc5628daa483b97f3bb9f4;
+- GitHub Actions Release run 30662375815 completed successfully;
+- Validate release, Build package and repository, Publish GitHub Release, and
+  Publish pkg repository all passed;
+- GitHub Release v0.2.3 is published as a prerelease rather than a stable baseline;
+- release assets include os-zapret2-restyle-0.2.3_1.pkg and SHA256SUMS;
+- GitHub Pages serves meta.conf, data.pkg, packagesite.pkg, SHA256SUMS, the package,
+  and zapret2-restyle.conf successfully;
+- version 0.2.2 / package 0.2.2_1 remains the latest live-verified baseline.
+
+The publication gate is closed. CFG-001 remains open only for focused invalid Apply,
+valid Apply, exact GUI error, and reboot verification on OPNsense.
 
 ==================================================
 RELEASE BASELINE — v0.2.2 — 2026-07-30
@@ -329,8 +351,8 @@ Closed or implementation-complete findings include:
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Publish prerelease v0.2.3 with package os-zapret2-restyle-0.2.3_1.
-2. Install it on OPNsense and live-test invalid Apply rollback, valid Apply activation, and exact GUI error reporting.
+1. Install prerelease package os-zapret2-restyle-0.2.3_1 on OPNsense.
+2. Live-test invalid Apply rollback, valid Apply activation, and exact GUI error reporting.
 3. Reboot OPNsense and confirm that config.xml, zapret.conf, dvtws.args, process arguments, PID ownership, supervisor, and ipfw state agree.
 4. Reconcile CFG-001 evidence and classify v0.2.3 as a verified baseline only after those checks pass.
 5. Resume the Milestone 8 stable-release GUI work package.
@@ -353,8 +375,8 @@ Before changing code:
 8. never infer current state from chat history alone.
 
 Release v0.2.2 at fc6b208 and package 0.2.2_1 remain the verified baseline.
-CFG-001 is prepared for publication as prerelease v0.2.3 / package 0.2.3_1 and
-still requires the focused Apply and reboot verification recorded above.
+CFG-001 is published as prerelease v0.2.3 / package 0.2.3_1 at da3d8e7 and still
+requires the focused Apply and reboot verification recorded above.
 
 
 ==================================================

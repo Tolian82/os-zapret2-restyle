@@ -1062,3 +1062,30 @@ Next:
 Publish the release-preparation PR, create v0.2.3 from the verified merged commit,
 wait for the release workflow, verify the package and Pages repository, then install
 0.2.3_1 on OPNsense for the focused CFG-001 test matrix.
+
+==================================================
+2026-07-31 — PRERELEASE v0.2.3 PUBLISHED
+==================================================
+
+Completed the authorized prerelease publication cycle.
+
+Verified:
+
+- release-preparation PR #3 was squash-merged as commit
+  da3d8e7ddbb16561bfdc5628daa483b97f3bb9f4;
+- annotated tag v0.2.3 resolves to that exact commit;
+- Release workflow run 30662375815 completed successfully;
+- Validate release, Build package and repository, Publish GitHub Release, and
+  Publish pkg repository all passed;
+- GitHub Release v0.2.3 is public and marked as a prerelease;
+- release assets are os-zapret2-restyle-0.2.3_1.pkg and SHA256SUMS;
+- the GitHub Pages repository serves meta.conf, data.pkg, packagesite.pkg,
+  SHA256SUMS, zapret2-restyle.conf, and the published package successfully.
+
+No source, version, package revision, tag, release asset, or pkg-repository content
+was changed during this evidence-recording work unit.
+
+Next:
+
+Install package 0.2.3_1 on OPNsense and execute the focused CFG-001 invalid Apply,
+valid Apply, exact GUI error, and reboot verification matrix.

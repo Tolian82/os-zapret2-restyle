@@ -60,6 +60,11 @@ The project starts its own version history at `0.1.0`.
 
 - Advanced `VERSION` to `0.2.3` and reset `PLUGIN_REVISION` to `1`.
 - Published package name: `os-zapret2-restyle-0.2.3_1.pkg`.
+- Published annotated tag `v0.2.3` at commit `da3d8e7`.
+- Completed the release workflow successfully, including validation, FreeBSD package
+  and repository build, GitHub Release publication, and GitHub Pages deployment.
+- Published `os-zapret2-restyle-0.2.3_1.pkg` and `SHA256SUMS` as GitHub Release assets
+  and updated the FreeBSD:15:amd64 pkg repository with the same package.
 - Kept this release as a prerelease until focused invalid Apply, valid Apply, and
   reboot verification is completed on OPNsense.
 - Preserved immutable release `v0.2.2` and its verified `0.2.2_1` package.
