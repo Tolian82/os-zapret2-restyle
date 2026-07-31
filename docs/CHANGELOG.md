@@ -10,6 +10,16 @@ The project starts its own version history at `0.1.0`.
 
 ### Changed
 
+- Made the exact current GitHub commit the authoritative baseline for normal
+  development.
+- Removed the mandatory owner-supplied archive for repository state already
+  committed and pushed to GitHub.
+- Retained archives and unified patches only for explicitly transferred
+  unpublished local state or when that delivery mode is requested.
+- Defined one atomic multi-file commit per logical change and explicit
+  fast-forward approval for direct publication to `main`.
+- Made working branches and pull requests optional and removed GitHub CLI as a
+  mandatory workflow dependency.
 - Closed Milestone 7 by project-owner decision while retaining unperformed lifecycle, reboot, controlled-failure, timeout-chain, and GUI/API checks as a regression backlog.
 - Opened Milestone 8 with GUI management of bol-van/zapret2 stable releases through the existing setup.sh backend as the first priority.
 - Added the later GUI task for an additional BLOB repository without inventing its repository or technical contract.

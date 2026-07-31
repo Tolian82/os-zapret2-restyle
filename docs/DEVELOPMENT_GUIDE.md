@@ -38,14 +38,19 @@ STANDARD WORKFLOW
 
 1. Restore project context using the reading order in INDEX.md.
 
-2. Check repository state.
+2. Establish the authoritative source baseline.
 
 cd /root/os-zapret2-restyle
 git status --short
 git branch --show-current
 git log -1 --oneline
 
-3. Record the objective, scope, expected verification, and affected documents.
+Read the current `main` from the official GitHub repository and record its full
+SHA. When a local checkout is used, confirm that it corresponds to that commit
+and that no uncommitted or unpushed local state is required by the change.
+
+3. Record the objective, scope, expected verification, affected documents, and
+   base SHA.
 
 4. Perform the required audit or investigation and record results in AUDIT.md.
 
@@ -76,13 +81,23 @@ php -l file.php
 
 12. Update every affected document, including audit and current-state records.
 
-13. Stage explicit files only.
+13. Stage explicit files only when using a local Git checkout.
 
-14. Review staged diff.
+14. Review staged diff when using a local Git checkout.
 
-15. Commit one logical change.
+15. Create one atomic commit containing the complete logical change.
 
-16. Push and verify origin/main.
+16. Re-read remote `main` and confirm that it still points to the recorded base
+    SHA.
+
+17. Publish by the explicitly approved mode:
+
+    - fast-forward `main` only after direct project-owner instruction;
+    - otherwise use a requested working branch, pull request, or patch.
+
+18. Verify the published commit.
+
+19. Build once and run the focused live verification required by the change.
 
 ==================================================
 REPOSITORY LAYERS
@@ -312,52 +327,51 @@ must be updated whenever the current baseline or immediate next action changes.
 
 
 ==================================================
-PATCH DELIVERY WORKFLOW
+REPOSITORY CHANGE DELIVERY
 ==================================================
 
-The default remote-development delivery artifact is a unified Git patch, not a list of
-commands that edits tracked files directly.
+Normal remote development begins from the exact current GitHub commit, not from
+an owner-supplied archive.
 
-Patch preparation requirements:
+Change preparation requirements:
 
-1. Start from the exact supplied source baseline.
-2. Make one minimal logical change in a separate preparation tree.
-3. Include documentation required by the project's synchronization rules.
-4. Include required Git mode changes, such as 100644 to 100755.
-5. Generate a patch suitable for `git apply`.
-6. Validate that the patch applies to the supplied baseline.
-7. Deliver the `.patch` artifact to the project owner.
+1. Read the current `main` and record its full SHA.
+2. Obtain content and Git file modes from that commit.
+3. Confirm that no relevant owner state exists only in a local checkout.
+4. Make one minimal logical change in a separate preparation tree.
+5. Include documentation required by the project's synchronization rules.
+6. Include required Git mode changes, such as 100644 to 100755.
+7. Run static validation and review the complete diff.
+8. Create one atomic commit.
+9. Immediately recheck that remote `main` still equals the base SHA.
+10. Publish by fast-forward to `main` only when explicitly instructed, or use the
+   specifically requested branch/PR/patch mode.
+11. Verify the published commit, then perform one build and one focused
+    verification.
 
-Patch application on the project working tree:
-
-cd /root/os-zapret2-restyle && \
-git status --short && \
-git apply --check /path/to/change.patch && \
-git apply /path/to/change.patch && \
-git diff --check && \
-git status --short
-
-After application, review the complete diff, execute the documented syntax and focused
-live tests, stage explicit paths, and commit one logical change.
+An authenticated GitHub integration/API may construct the blobs, tree, and
+single commit atomically and then fast-forward the branch reference. GitHub CLI
+is not a required dependency. Ordinary Git remains valid when available.
 
 Do not use console editors or ad-hoc rewrite commands to modify tracked repository files.
 Operational work outside the repository remains permitted.
 
 ==================================================
-PREPARING A PATCH FROM THE OWNER'S ARCHIVE
+HANDLING UNPUBLISHED LOCAL STATE
 ==================================================
 
-1. Complete discussion and obtain approval for the logical change.
-2. Receive `os-zapret2-restyle-<short_commit_sha>.tar.gz` from the project owner.
-3. Treat the extracted tree, including its current tracked modifications and file
-   modes, as the exact patch baseline.
-4. Make the approved changes in a separate copy of that tree.
-5. Generate one unified Git patch containing all code, mode, and documentation
-   changes required by the logical change.
-6. Extract or copy the original archive again and run `git apply --check` there.
-7. Deliver the `.patch` artifact only after that check succeeds.
-8. After the owner commits the patch, use a new archive from the new commit for
-   the next change.
+GitHub cannot expose changes that exist only in `/root/os-zapret2-restyle` on the
+project owner's OPNsense system.
 
-Do not rebuild the baseline from GitHub, model memory, chat excerpts, or a
-standalone `git diff`.
+If the owner reports relevant uncommitted or unpushed changes:
+
+1. stop normal GitHub-baseline work;
+2. ask the owner to commit and push the changes, or explicitly supply an archive
+   or patch;
+3. record the resulting exact commit or transferred tree as the baseline;
+4. preserve its current tracked modifications and file modes;
+5. do not reconstruct, discard, or overwrite it from GitHub or memory.
+
+If an optional unified patch is requested, generate it from the exact established
+baseline and require `git apply --check` before delivery. A clean checkout already
+matching the recorded GitHub SHA requires no archive.

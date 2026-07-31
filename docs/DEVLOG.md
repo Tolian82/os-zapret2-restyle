@@ -908,3 +908,43 @@ Completed:
 - Standardized normal Git verification on `git status --short`, `git diff --check`, and `git diff --stat`; full diff output remains a debugging/review tool rather than the default workflow.
 
 No source code, package version, package revision, runtime, or release artifact changed in this documentation-only work unit.
+
+==================================================
+2026-07-31 — GITHUB COMMIT BASELINE REPLACED MANDATORY ARCHIVES
+==================================================
+
+Completed:
+
+- made the exact current commit in the official GitHub repository the default
+  authoritative development baseline;
+- required the full base SHA to be recorded before repository changes;
+- removed the requirement for the project owner to supply a fresh working-tree
+  archive for state already committed and pushed;
+- retained archives and patches only as explicit transfer methods for relevant
+  uncommitted or unpushed local state;
+- required one logical multi-file change, including documentation and file modes,
+  to be published as one atomic commit;
+- allowed direct fast-forward publication to `main` only after explicit
+  project-owner instruction and after rechecking that `main` still equals the
+  recorded base SHA;
+- prohibited force-push;
+- retained working branches, pull requests, and unified patches as optional
+  workflows;
+- removed GitHub CLI as a mandatory dependency when an authenticated GitHub
+  integration/API or ordinary Git is available;
+- preserved live OPNsense backup requirements as a separate operational safety
+  rule.
+
+Documentation synchronized:
+
+- INDEX.md;
+- PROJECT_STATE.md;
+- DECISIONS.md;
+- WORKING_CONVENTIONS.md;
+- DEVELOPMENT_GUIDE.md;
+- GITHUB_WORKFLOW.md;
+- CHANGELOG.md;
+- README.md.
+
+No plugin source, package version, package revision, runtime behavior, release
+artifact, tag, or pkg repository content changed.

@@ -76,10 +76,23 @@ Confirmed release state:
 Release v0.2.2 also fixes the documentation-delivery baseline:
 
 - scripts/verify-release-package.sh is executable and may be invoked directly;
-- unified Git patch delivery is the default remote change workflow;
 - docs/GITHUB_WORKFLOW.md is the specialist release/publication procedure;
 - INDEX.md is the mandatory documentation recovery entry point;
-- owner-supplied os-zapret2-restyle-<short_commit_sha>.tar.gz archives are the authoritative baseline for multi-file patch preparation.
+- historical v0.2.2 development used unified Git patches and owner-supplied
+  archives; that delivery mechanism is now optional rather than mandatory.
+
+Current development baseline:
+
+- the exact current commit in the official GitHub repository is authoritative;
+- the full base SHA is fixed before work begins;
+- no owner-supplied archive is required for committed and pushed repository state;
+- unpublished local changes must be pushed first or transferred explicitly;
+- a logical change is published as one atomic commit;
+- direct fast-forward publication to `main` requires explicit project-owner
+  instruction;
+- a branch, pull request, or patch is optional and used only when requested or
+  when pre-`main` validation is required;
+- no particular GitHub client, including GitHub CLI, is mandatory.
 
 The public README strategy example remains intentionally unchanged by explicit project-owner instruction.
 
@@ -263,7 +276,8 @@ Before changing code:
 1. read docs/INDEX.md;
 2. follow the mandatory reading order;
 3. inspect the actual repository tree;
-4. check branch, HEAD, tags, and working tree;
+4. read the current GitHub `main`, record its full SHA, and verify that any local
+   checkout contains no unpublished state required by the change;
 5. use AUDIT.md Finding IDs for remediation work;
 6. record approved concepts in DECISIONS.md;
 7. update every affected document in the same logical commit;
@@ -273,27 +287,29 @@ The live-verified source and synchronized Engineering Memory were committed and 
 
 
 ==================================================
-2026-07-30 — GIT-FIRST PATCH WORKFLOW APPROVED
+2026-07-31 — GITHUB-COMMIT DEVELOPMENT BASELINE
 ==================================================
 
 Current development policy:
 
-- repository changes are prepared as reviewable unified Git patches;
-- patches must include file-mode changes when required;
-- the project owner applies supplied patches through Git;
+- the exact current GitHub commit, normally `main`, is the source baseline;
+- all changed content, file modes, and synchronized documentation form one atomic
+  logical commit;
 - repository files are not edited directly in the OPNsense console;
-- every applied change remains inspectable through Git diff and is committed as one
-  logical change after validation;
+- before publication, static validation and complete diff review must pass;
+- immediately before publication, confirm that `main` still points to the recorded
+  base SHA;
+- direct publication to `main` is fast-forward only and requires explicit
+  project-owner instruction;
+- force-push is prohibited;
+- branch/PR and unified-patch workflows remain available but are not mandatory;
+- after publication, perform the one build and one focused verification required
+  by the logical change;
 - temporary files, logs, diagnostics, installed-system configuration, and other files
   outside the repository are not restricted by this rule.
 
-The release-package verification script was confirmed functionally correct when invoked
-through sh. Its missing executable mode is corrected from 100644 to 100755 in the same
-logical infrastructure and documentation change.
-
-Current patch-baseline rule:
-The project owner's archive of the actual working tree is the authoritative base
-for multi-file patch preparation. It is supplied after changes are agreed, named
-`os-zapret2-restyle-<short_commit_sha>.tar.gz`, and becomes obsolete after the
-resulting patch is committed. Delivered patches must first pass
-`git apply --check` against an unchanged copy of that archive.
+Local-only exception:
+GitHub does not contain uncommitted or unpushed changes from the project owner's
+OPNsense checkout. If they are relevant, stop and request that they be committed
+and pushed or explicitly transferred as an archive or patch. The old requirement
+for a fresh archive before every multi-file change is superseded.

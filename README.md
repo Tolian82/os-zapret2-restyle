@@ -202,6 +202,7 @@ Mandatory reading order:
 8. `docs/DEVLOG.md`
 9. `docs/ROADMAP.md`
 10. `docs/REQUIREMENTS.md`
+11. `docs/GITHUB_WORKFLOW.md`
 
 ==================================================
 ACKNOWLEDGEMENTS

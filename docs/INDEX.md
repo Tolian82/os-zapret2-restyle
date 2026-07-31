@@ -17,7 +17,7 @@ Before continuing work, you must:
 1. Read this `INDEX.md` first.
 2. Read the complete project documentation in the exact order defined below.
 3. Finish context recovery before making architectural conclusions, proposing
-   changes, preparing commands, or producing a patch.
+   changes, preparing commands, or changing repository files.
 4. Re-read the relevant documentation whenever you are uncertain how the project
    handles something. Do not reconstruct settled rules from model memory.
 
@@ -36,12 +36,17 @@ the documentation is authoritative.
 
 The working rule is: documentation first, then analysis, then action.
 
-For any multi-file patch, the project owner's supplied working-tree archive is
-the authoritative baseline. Do not reconstruct the repository from GitHub, model
-memory, chat fragments, or standalone diffs. The archive is supplied after the
-change is agreed, normally as
-`os-zapret2-restyle-<short_commit_sha>.tar.gz`. A patch is deliverable only after
-`git apply --check` succeeds against an unchanged copy of that archive.
+For repository work, the authoritative baseline is an exact commit in the
+official GitHub repository, normally the current `main` commit. Record its full
+SHA before changing files and derive all content and Git file modes from that
+commit. No owner-supplied archive is required for state already committed and
+pushed to GitHub.
+
+GitHub cannot expose changes that exist only in the project owner's local working
+tree. If such changes must be included, they must first be committed and pushed,
+or transferred explicitly as an archive or patch. Never guess or reconstruct
+unpublished local state. Backups of live OPNsense configuration or runtime files
+remain a separate operational safety requirement.
 
 ==================================================
 DOCUMENT ROLE
@@ -154,7 +159,7 @@ Which rules are already settled?
 
 Contains:
 Stable identities, engineering principles, runtime safety rules, audit rules,
-patch rules, testing rules, Git conventions, and documentation rules.
+source-baseline rules, testing rules, Git conventions, and documentation rules.
 Does not contain:
 Historical narrative or current task status.
 
@@ -166,8 +171,8 @@ Question answered:
 How do we work?
 
 Contains:
-Repository layout, installed paths, build flow, patching process, validation,
-live testing, staging, commit, push, and audit workflow.
+Repository layout, installed paths, build flow, source-baseline acquisition,
+validation, live testing, commit, publication, and audit workflow.
 
 Does not contain:
 Reasons for decisions or current project status.
@@ -231,9 +236,9 @@ Question answered:
 How is the project published and maintained on GitHub?
 
 Contains:
-Official repository and branch, patch delivery, validation before commit and
-push, commit conventions, release preparation, release assets, and publication
-checks.
+Official repository and branch, authoritative GitHub baseline, atomic commit and
+publication rules, optional branch/PR/patch delivery, release preparation,
+release assets, and publication checks.
 
 Does not contain:
 General development procedures, product requirements, or a separate history log.

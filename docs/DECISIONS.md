@@ -1515,7 +1515,9 @@ DEC-2026-07-30 — GIT-FIRST UNIFIED PATCH WORKFLOW
 ==================================================
 
 Status:
-Approved.
+Superseded on 2026-07-31 by
+DEC-2026-07-31 — GITHUB COMMIT IS THE DEFAULT DEVELOPMENT BASELINE.
+Unified patches remain an optional delivery method when explicitly requested.
 
 Decision:
 
@@ -1566,7 +1568,10 @@ DEC-2026-07-30 — PATCHES USE THE SUPPLIED WORKING-TREE ARCHIVE
 ==================================================
 
 Status:
-Approved.
+Superseded on 2026-07-31 by
+DEC-2026-07-31 — GITHUB COMMIT IS THE DEFAULT DEVELOPMENT BASELINE.
+An archive remains an exceptional transfer method for relevant unpublished local
+state, not a prerequisite for normal repository work.
 
 Decision:
 Multi-file patches are prepared only against the project owner's actual working
@@ -1652,3 +1657,72 @@ Affected documents:
 - DEVELOPMENT_GUIDE.md
 - DEVLOG.md
 - PROJECT_STATE.md
+
+==================================================
+DEC-2026-07-31 — GITHUB COMMIT IS THE DEFAULT DEVELOPMENT BASELINE
+==================================================
+
+Status:
+Active.
+
+Decision:
+
+1. The authoritative baseline for normal development is an exact commit in the
+   official GitHub repository, normally the current `main` commit.
+2. Before changing files, read the current `main`, record its full SHA, and derive
+   all content and Git file modes from that commit.
+3. The project owner does not need to supply a working-tree archive for state that
+   is already committed and pushed to GitHub.
+4. GitHub cannot expose uncommitted or unpushed changes in the owner's OPNsense
+   checkout. If such state is relevant, it must first be committed and pushed or
+   transferred explicitly as an archive or patch. It must never be guessed.
+5. One logical change, including all affected documentation and file-mode changes,
+   is represented by one atomic multi-file commit.
+6. Direct publication to `main` is permitted only after explicit project-owner
+   instruction. Immediately before moving `main`, verify that it still points to
+   the recorded base SHA. The update must be fast-forward; force-push is prohibited.
+7. A working branch, pull request, or unified patch is optional. Use one when the
+   project owner requests it or when live validation must occur before `main`
+   changes.
+8. No particular GitHub client is mandatory. GitHub CLI is not a prerequisite;
+   an authenticated GitHub integration/API or ordinary Git may be used according
+   to the available environment.
+9. Backups of live OPNsense configuration and runtime files are a separate
+   operational safeguard and are not replaced by the GitHub source baseline.
+10. The normal engineering cycle remains:
+    one logical change → one atomic commit → one build → one focused verification.
+
+Reason:
+
+The connected GitHub repository now provides the complete committed source tree,
+file modes, history, and exact commit identity. Requiring the owner to create and
+transfer a new archive for every change duplicates the same committed state and
+slows development. An exact GitHub SHA is reproducible and sufficient while the
+owner's checkout is clean and synchronized. The exceptional path remains necessary
+because unpublished local state cannot be observed remotely.
+
+Consequences:
+
+- normal work begins from a recorded GitHub SHA rather than a supplied archive;
+- remote `main` is rechecked before publication to prevent overwriting concurrent
+  work;
+- direct `main` publication is never inferred from a general request to analyse or
+  prepare changes;
+- atomic Git tree/commit operations may publish multi-file changes without a
+  sequence of partial per-file commits;
+- branch/PR and patch workflows remain available without being mandatory;
+- historical patch/archive records remain in DECISIONS.md, DEVLOG.md, and released
+  CHANGELOG sections as history;
+- current workflow documents must no longer require a fresh archive or `gh`.
+
+Affected documents:
+
+- INDEX.md
+- PROJECT_STATE.md
+- DECISIONS.md
+- WORKING_CONVENTIONS.md
+- DEVELOPMENT_GUIDE.md
+- DEVLOG.md
+- GITHUB_WORKFLOW.md
+- CHANGELOG.md
+- README.md

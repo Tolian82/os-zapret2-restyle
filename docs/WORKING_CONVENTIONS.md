@@ -96,14 +96,17 @@ A broken chain must be recorded before it is fixed. After verification, its audi
 status must be updated rather than silently removed.
 
 ==================================================
-PATCH RULES
+CHANGE RULES
 ==================================================
 
 - Make minimal reviewable changes.
-- Verify before staging.
+- Fix the exact GitHub base commit before editing.
+- Keep one logical change in one atomic commit.
+- Include all affected documentation and Git file-mode changes.
+- Verify before commit.
 - Review the complete diff.
 - Stop immediately if validation fails.
-- Do not continue after a failed patch.
+- Do not publish a failed or partially validated change.
 
 ==================================================
 TESTING RULES
@@ -127,18 +130,20 @@ GIT RULES
 
 Preferred sequence:
 
-inspect
-backup
-patch
+read current GitHub main
+record full base SHA
+confirm required state is published
+change one logical unit
 validate
 review diff
-live test
-git add explicit paths
-review staged diff
+git add explicit paths when using a local checkout
+review staged diff when using a local checkout
 commit
-verify
-push
-verify origin
+recheck remote main against base SHA
+publish by explicitly approved mode
+verify published commit
+build
+focused live verification
 
 ==================================================
 DOCUMENT SYNCHRONIZATION
@@ -234,8 +239,9 @@ Use these headings and responsibilities:
 
 - Checks and other: status inspection, dry runs, git apply --check, syntax checks,
   diff review, staging, and staged-diff validation.
-- Installation: git apply, commit, push, package build or installation, service
-  restart, and other commands that change repository or system state.
+- Installation: optional git apply, commit, publication, package build or
+  installation, service restart, and other commands that change repository or
+  system state.
 
 Keep package publication and installation commands together where possible, but
 never mix them with the preceding validation block. Commands must remain in actual
@@ -312,31 +318,37 @@ BLOB SHORTHAND RULE
 
 
 ==================================================
-GIT-FIRST UNIFIED PATCH RULE
+GITHUB-COMMIT DEVELOPMENT RULE
 ==================================================
 
-Repository changes are exchanged as unified Git patches. The normal artifact is a
-`.patch` file that can be checked and applied with Git and that includes both content
-changes and required file-mode changes.
+The default source baseline is an exact commit in the official GitHub repository,
+normally the current `main` commit. Record the full SHA before editing and obtain
+all file content and Git modes from that commit.
 
 Required sequence:
 
-prepare one logical patch
+read and record current main SHA
 ↓
-git apply --check <patch>
+prepare one logical multi-file change
 ↓
-git apply <patch>
+run static validation and review the complete diff
 ↓
-git diff --check
+create one atomic commit
 ↓
-review the complete diff
+confirm main still equals the recorded base
 ↓
-run focused validation and live tests
+publish using the explicitly approved mode
 ↓
-commit one logical change
+build and perform focused verification
 
-The assistant prepares the actual patch artifact. The project owner must not be asked to
-recreate repository changes manually from prose or console-editing commands.
+Direct publication to `main` requires explicit project-owner instruction and must
+be a fast-forward from the recorded base. Never force-push. A working branch,
+pull request, or unified patch is optional and is used only when requested or
+when verification must happen before `main` changes.
+
+No particular GitHub client is mandatory. GitHub CLI is not required when an
+authenticated GitHub integration/API or ordinary Git can perform the approved
+operation safely.
 
 Do not modify tracked repository files directly from the OPNsense console with `vi`,
 `ee`, `nano`, `sed -i`, `perl -pi`, Python rewrite scripts, `cat >`, `echo >>`, or
@@ -345,33 +357,29 @@ equivalent mutation commands.
 This rule does not restrict temporary files, logs, diagnostics, generated build output,
 installed-system configuration, or files outside the repository.
 
-`git format-patch` / `git am` remain valid when preserving existing commit metadata is a
-specific requirement, but they are not prerequisites for preparing an ordinary unified
-Git patch.
+When a unified patch is explicitly selected, it must include all content and
+file-mode changes and pass `git apply --check` against its exact base. This is an
+optional transfer mode, not the default prerequisite for repository work.
 
 ==================================================
-AUTHORITATIVE ARCHIVE BASELINE FOR PATCHES
+LOCAL-ONLY STATE EXCEPTION
 ==================================================
 
-A multi-file patch is prepared only against the project owner's actual working
-tree or an archive made from that tree. GitHub, model memory, chat fragments,
-and separately supplied diffs are not substitutes for the working-tree baseline.
+GitHub is authoritative only for state that has been committed and pushed. It
+cannot expose uncommitted or unpushed changes in the project owner's local
+OPNsense checkout.
 
-The project owner supplies the archive after the change has been discussed and
-approved and the instruction to prepare the patch has been given.
+If local-only changes are relevant to the requested work:
 
-The standard archive name is:
+1. stop before editing;
+2. ask the owner to commit and push them, or explicitly transfer them as an
+   archive or patch;
+3. establish the exact transferred baseline;
+4. never reconstruct or overwrite the unpublished state from memory.
 
-`os-zapret2-restyle-<short_commit_sha>.tar.gz`
-
-The archive is authoritative only for the next logical patch. After that patch
-is committed, the previous archive is obsolete and a new archive from the new
-commit becomes the baseline for subsequent work.
-
-A patch artifact is ready for delivery only after it has passed
-`git apply --check` against an unchanged copy of the supplied archive baseline.
-When a valid baseline is unavailable, request a new archive instead of
-reconstructing the repository.
+A clean checkout synchronized with the recorded GitHub commit requires no
+archive. Backups of live files outside the repository remain governed by the
+separate operational backup rules.
 
 ==================================================
 GUI MAINTENANCE BACKEND RULE
