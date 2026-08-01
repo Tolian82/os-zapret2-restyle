@@ -1493,8 +1493,9 @@ DEVELOPMENT_GUIDE.md, ARCHITECTURE.md, DEVLOG.md, ROADMAP.md, REQUIREMENTS.md,
 CHANGELOG.md, and README.md.
 
 Remediation status:
-Implemented in source for package revision 2 with focused static contract coverage.
-Package build and the running/stopped/failed-stop/setup live matrix remain required.
+Implemented in source with focused static contract coverage and prepared for immutable
+prerelease v0.2.5 / package 0.2.5_1. Release package build/publication and the
+running/stopped/failed-stop/setup live matrix remain required.
 
 ==================================================
 ARCHITECTURE DEBT

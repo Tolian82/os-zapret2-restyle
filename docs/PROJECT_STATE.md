@@ -42,10 +42,10 @@ Version source:
 VERSION
 
 Current version:
-0.2.4
+0.2.5
 
 Current package revision:
-2
+1
 
 Verified package:
 os-zapret2-restyle-0.2.2_1
@@ -54,17 +54,18 @@ Published prerelease package:
 os-zapret2-restyle-0.2.4_1
 
 Current phase:
-LIFE-009 descriptor fix live verified; implementing LIFE-014 package/runtime activation lifecycle
+Preparing prerelease v0.2.5 with the LIFE-014 package/runtime activation lifecycle
 
 Current priority:
-Build package 0.2.4_2, verify upgrade stop/start state preservation and setup-driven
-runtime refresh, then complete the CFG-001 reboot matrix.
+Publish prerelease v0.2.5 and package 0.2.5_1, then verify upgrade stop/start state
+preservation and setup-driven runtime refresh before the CFG-001 reboot matrix.
 
 Known blockers:
 Package 0.2.4_1 replaces plugin files during upgrade without restarting a service
 that was already running. Its old +PRE_DEINSTALL also suppresses stop failure, so an
 upgrade can continue into a mixed state with new files and old processes. Source
-remediation is being prepared as package revision 2; package/live verification remains.
+remediation is complete and is being prepared for publication as v0.2.5 / package
+0.2.5_1; package and live verification remain.
 
 ==================================================
 CURRENT CORRECTIVE WORK — LIFE-014 — 2026-08-01
@@ -75,7 +76,7 @@ old dvtws2 and supervisor processes remained active. The old processes retained 
 pre-0.2.4 descriptor behavior until manually terminated and the service was started
 again. The same test confirmed that +PRE_DEINSTALL hides stop failure with `|| true`.
 
-Approved source remediation for package revision 2:
+Approved source remediation for prerelease v0.2.5 / package 0.2.5_1:
 
 - new +PRE_INSTALL records whether a complete service was running and stops it before
   the old package hook and file replacement;
@@ -87,7 +88,8 @@ Approved source remediation for package revision 2:
   and verified;
 - transactional runtime staging and rollback remain a separate future change.
 
-Static verification and package/live upgrade verification remain required.
+Local static verification and PR CI passed for the implementation commit. Release
+package publication and the live upgrade matrix remain required.
 
 ==================================================
 CURRENT DEVELOPMENT DELIVERY POLICY — 2026-07-31
@@ -422,8 +424,7 @@ Closed or implementation-complete findings include:
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Complete static validation and CI for LIFE-014 package revision 2, including the
-   embedded new +PRE_INSTALL hook.
+1. Publish prerelease v0.2.5 and package 0.2.5_1 from the verified release-preparation merge.
 2. Upgrade a running 0.2.4_1 service and confirm old PIDs stop before replacement and
    new PIDs start after replacement.
 3. Upgrade with the service already stopped and confirm it remains stopped.
