@@ -117,6 +117,11 @@ this gate. It requires complete reading and explicitly names DECISIONS.md,
 WORKING_CONVENTIONS.md, and DEVELOPMENT_GUIDE.md as the methodology and principles
 that must be understood before selecting an implementation or publication path.
 
+Release-trigger automation is implemented in source: a canonical release-preparation
+merge that changes VERSION creates the immutable tag through GitHub Actions and
+dispatches the existing Release workflow. Static contract verification is assigned to
+CI; the next explicitly approved release supplies the first live end-to-end evidence.
+
 ==================================================
 CURRENT CORRECTIVE WORK — LIFE-009 — 2026-08-01
 ==================================================

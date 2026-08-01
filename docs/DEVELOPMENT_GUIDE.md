@@ -131,6 +131,13 @@ Interpret the project owner's current instruction as follows:
   requested version, including its release-preparation PR, merge, tag, GitHub
   Release, package/pkg-repository publication, and post-publication checks.
 
+For a normal release-preparation PR, set the final squash subject to exactly
+`release: prepare vX.Y.Z` with the optional GitHub `(#PR)` suffix. The VERSION change
+on `main` then starts the repository-owned release trigger, which creates the tag and
+dispatches the Release workflow. Do not ask the owner to push that tag manually unless
+the repository automation itself is unavailable or fails at a genuine protected
+authority boundary.
+
 Do not ask for routine branch names, commit messages, PR text, test selection, CI
 waiting, Ready transition, squash merge, or cleanup of the temporary branch created
 for the task. Derive those choices from the exact source, affected Finding or work

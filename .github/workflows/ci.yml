@@ -68,11 +68,15 @@ jobs:
       - name: Test lifecycle lock descriptor isolation
         run: sh scripts/test-lifecycle-lock-fd.sh
 
+      - name: Test automated release trigger contract
+        run: sh scripts/test-release-trigger.sh
+
       - name: Check required project files
         run: |
           set -eu
 
           for file in \
+            AGENTS.md \
             VERSION \
             Makefile \
             pkg-descr \
@@ -90,7 +94,10 @@ jobs:
             pkg/+POST_INSTALL \
             pkg/+PRE_DEINSTALL \
             pkg/+POST_DEINSTALL \
-            scripts/build-pkg.sh
+            scripts/build-pkg.sh \
+            scripts/test-release-trigger.sh \
+            .github/workflows/release.yml \
+            .github/workflows/release-trigger.yml
           do
             test -f "${file}" || {
               echo "Missing required file: ${file}"
@@ -100,6 +107,11 @@ jobs:
 
           test -x scripts/build-pkg.sh || {
             echo "scripts/build-pkg.sh is not executable"
+            exit 1
+          }
+
+          test -x scripts/test-release-trigger.sh || {
+            echo "scripts/test-release-trigger.sh is not executable"
             exit 1
           }
 
