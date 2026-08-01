@@ -31,13 +31,17 @@ jobs:
           git diff --check
           git diff --binary origin/main -- . > prepared-v0.2.5_2.patch
           test -s prepared-v0.2.5_2.patch
+          tar --exclude=.git --exclude=prepared-v0.2.5_2.patch -czf prepared-v0.2.5_2-source.tar.gz .
+          test -s prepared-v0.2.5_2-source.tar.gz
 
-      - name: Upload prepared v0.2.5_2 patch
+      - name: Upload prepared v0.2.5_2 source
         if: github.event_name == 'pull_request' && github.head_ref == 'release/0.2.5_2'
         uses: actions/upload-artifact@v7
         with:
-          name: prepared-v0.2.5_2
-          path: prepared-v0.2.5_2.patch
+          name: prepared-v0.2.5_2-source
+          path: |
+            prepared-v0.2.5_2.patch
+            prepared-v0.2.5_2-source.tar.gz
           if-no-files-found: error
 
       - name: Install validation tools
