@@ -128,6 +128,13 @@ waiting, Ready transition, squash merge, or cleanup of the temporary branch crea
 for the task. Derive those choices from the exact source, affected Finding or work
 package, and current documentation.
 
+Discover and use the publication capabilities already present in the working
+environment. Prefer an authenticated GitHub integration/API, otherwise use an
+authenticated ordinary Git remote, and use GitHub CLI when available. Missing `gh`
+alone never justifies stopping, asking the owner to install it, or reporting the
+change as unpublished. Stop only after every approved transport has been checked
+and a standing escalation boundary remains.
+
 Stop only when a material choice is not settled, relevant unpublished owner state
 exists, a required check cannot be repaired within scope, new authority or credentials
 are required, a destructive action affects user data or pre-existing remote objects,
@@ -397,7 +404,9 @@ Change preparation requirements:
 
 An authenticated GitHub integration/API may construct the blobs, tree, and
 single commit atomically and then fast-forward the branch reference. GitHub CLI
-is not a required dependency. Ordinary Git remains valid when available.
+is not a required dependency. Ordinary Git remains valid when available. Capability
+discovery is mandatory before reporting a publication blocker; transport selection
+is an implementation detail and is not delegated to the project owner.
 
 Do not use console editors or ad-hoc rewrite commands to modify tracked repository files.
 Operational work outside the repository remains permitted.

@@ -42,7 +42,7 @@ Version source:
 VERSION
 
 Current version:
-0.2.3
+0.2.4
 
 Current package revision:
 1
@@ -54,13 +54,16 @@ Published prerelease package:
 os-zapret2-restyle-0.2.3_1
 
 Current phase:
-Published prerelease v0.2.3 awaiting CFG-001 live verification
+Preparing prerelease v0.2.4 with LIFE-009 descriptor-inheritance correction
 
 Current priority:
-Install package 0.2.3_1 and live-verify that Settings Apply, generated configuration, active runtime, and reboot startup remain synchronized after CFG-001.
+Publish package 0.2.4_1, verify lifecycle descriptor 9 is released, then repeat the
+focused CFG-001 Apply and reboot matrix.
 
 Known blockers:
-Focused OPNsense Apply/reboot verification remains required before v0.2.3 can be recorded as a verified stable baseline.
+Package 0.2.3_1 cannot complete Apply because long-lived runtime processes retain
+the lifecycle lock. Source correction is prepared for 0.2.4_1; focused OPNsense
+verification remains required after publication.
 
 ==================================================
 CURRENT DEVELOPMENT DELIVERY POLICY — 2026-07-31
@@ -97,6 +100,25 @@ does not create another release or modify an existing release.
 The detailed standing-authority and escalation boundaries are maintained in
 DECISIONS.md, WORKING_CONVENTIONS.md, DEVELOPMENT_GUIDE.md, and
 GITHUB_WORKFLOW.md.
+
+Publication transport is selected from available capabilities: authenticated
+GitHub integration/API, authenticated ordinary Git, then GitHub CLI. Missing `gh`
+alone is not a blocker and must not stop an authorized patch or release while an
+approved authenticated alternative is available.
+
+==================================================
+CURRENT CORRECTIVE WORK — LIFE-009 — 2026-08-01
+==================================================
+
+Package 0.2.3_1 live evidence confirmed that descriptor 9 for
+`/var/run/zapret2-lifecycle.lock` was inherited by both daemon wrappers, dvtws2,
+the supervisor shell, and supervisor sleep. Therefore every later Apply waited 30
+seconds and failed with status 75 although no competing lifecycle task existed.
+
+The 0.2.4_1 correction closes descriptor 9 on both long-lived daemon launch commands
+and adds a focused CI regression test. v0.2.3 remains immutable. LIFE-009 and CFG-001
+remain open until the new package is installed and valid Apply reaches the active
+runtime.
 
 ==================================================
 CURRENT CORRECTIVE WORK — CFG-001 — 2026-07-31
@@ -351,12 +373,15 @@ Closed or implementation-complete findings include:
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Install prerelease package os-zapret2-restyle-0.2.3_1 on OPNsense.
-2. Live-test invalid Apply rollback, valid Apply activation, and exact GUI error reporting.
-3. Reboot OPNsense and confirm that config.xml, zapret.conf, dvtws.args, process arguments, PID ownership, supervisor, and ipfw state agree.
-4. Reconcile CFG-001 evidence and classify v0.2.3 as a verified baseline only after those checks pass.
-5. Resume the Milestone 8 stable-release GUI work package.
-6. Execute the remaining upgrade, remove, reinstall, diagnostics, and controlled-failure backlog when its affected chain is changed.
+1. Publish prerelease v0.2.4 and package os-zapret2-restyle-0.2.4_1.
+2. Install 0.2.4_1 through the normal package update path without a separate
+   `configctl zapret restart`.
+3. Confirm no long-lived process retains descriptor 9 or the lifecycle lock.
+4. Live-test invalid Apply rollback, valid Apply activation, and exact GUI error reporting.
+5. Reboot OPNsense and confirm that config.xml, zapret.conf, dvtws.args, process arguments, PID ownership, supervisor, and ipfw state agree.
+6. Reconcile LIFE-009 and CFG-001 evidence and classify v0.2.4 as a verified baseline only after those checks pass.
+7. Resume the Milestone 8 stable-release GUI work package.
+8. Execute the remaining upgrade, remove, reinstall, diagnostics, and controlled-failure backlog when its affected chain is changed.
 
 ==================================================
 WORKING RULES FOR RESUMPTION
@@ -375,8 +400,10 @@ Before changing code:
 8. never infer current state from chat history alone.
 
 Release v0.2.2 at fc6b208 and package 0.2.2_1 remain the verified baseline.
-CFG-001 is published as prerelease v0.2.3 / package 0.2.3_1 at da3d8e7 and still
-requires the focused Apply and reboot verification recorded above.
+CFG-001 was published as prerelease v0.2.3 / package 0.2.3_1 at da3d8e7, where live
+testing exposed the LIFE-009 descriptor-inheritance defect. The correction is
+prepared as v0.2.4 / package 0.2.4_1 and still requires the focused lock, Apply, and
+reboot verification recorded above.
 
 
 ==================================================
@@ -395,7 +422,8 @@ Current development policy:
 - direct publication to `main` is fast-forward only and requires explicit
   project-owner instruction;
 - force-push is prohibited;
-- branch/PR and unified-patch workflows remain available but are not mandatory;
+- the working-branch and PR workflow is the default ordinary publication path;
+- a unified patch is an explicit narrower delivery mode, not a publication prerequisite;
 - after publication, perform the one build and one focused verification required
   by the logical change;
 - temporary files, logs, diagnostics, installed-system configuration, and other files

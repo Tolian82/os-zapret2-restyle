@@ -153,6 +153,33 @@ An authenticated GitHub integration/API may create blobs, one tree, and one
 commit atomically. Ordinary Git may also be used. GitHub CLI is not a mandatory
 dependency.
 
+Publication transport is selected from the capabilities available in the current
+environment, in this order:
+
+1. authenticated GitHub integration/API;
+2. ordinary Git using an already configured authenticated remote;
+3. GitHub CLI when it is installed and authenticated.
+
+Before declaring publication blocked, inspect the available GitHub integration
+operations and the configured Git remote. The absence of one client, including
+`gh`, is not a blocker while another approved authenticated transport can complete
+the operation. Do not ask the project owner to choose the transport or install an
+optional client when the current environment already exposes a safe path.
+
+For integration/API publication of a multi-file change:
+
+1. create one blob for every changed file and preserve its Git mode;
+2. create one tree based on the recorded `main` tree;
+3. create one commit whose sole parent is the recorded base SHA;
+4. re-read `main` and confirm that it still equals that base;
+5. create the task branch at the new commit;
+6. open the Draft PR and continue through CI, Ready, squash merge, and verification.
+
+Do not stop after local preparation and describe the branch, commit, PR, CI build,
+or package artifact as "not created" merely because a preferred client is absent.
+Stop only when every approved transport has been checked and a standing escalation
+boundary actually applies.
+
 An integration-created commit may have a different commit SHA than an equivalent
 local commit because its author, committer, timestamp, or message metadata differs.
 No owner confirmation is required when the parent is the recorded base and the
@@ -223,6 +250,12 @@ Default ordinary patch publication:
 8. Verify the resulting `main` commit and expected tree.
 9. Delete only the temporary branch created for this completed task. Never infer
    authority to delete a pre-existing owner branch.
+
+The ordinary publication cycle is incomplete until the merged `main` commit has
+been verified. A successful local patch or local test result is preparation, not
+publication. The CI package artifact is part of the required build verification;
+tag, GitHub Release, and pkg-repository publication additionally require release
+authority.
 
 Direct `main` publication:
 

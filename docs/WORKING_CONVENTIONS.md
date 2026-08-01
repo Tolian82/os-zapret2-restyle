@@ -359,7 +359,16 @@ that form.
 
 No particular GitHub client is mandatory. GitHub CLI is not required when an
 authenticated GitHub integration/API or ordinary Git can perform the approved
-operation safely.
+operation safely. Before treating publication as blocked, discover all available
+GitHub integration/API and authenticated Git transports. Missing `gh` alone is never
+a blocker, never a reason to stop after local preparation, and never a question for
+the project owner when another approved transport is available.
+
+Transport fallback order is authenticated GitHub integration/API, authenticated
+ordinary Git, then GitHub CLI. Publication means branch, atomic commit, Draft PR,
+required CI, Ready, squash merge, and verification of `main`; a local patch is not
+a published result. Release assets and the pkg repository additionally require the
+explicit release authority defined below.
 
 Do not modify tracked repository files directly from the OPNsense console with `vi`,
 `ee`, `nano`, `sed -i`, `perl -pi`, Python rewrite scripts, `cat >`, `echo >>`, or

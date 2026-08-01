@@ -65,6 +65,9 @@ jobs:
       - name: Test configuration activation contract
         run: sh scripts/test-config-activation-contract.sh
 
+      - name: Test lifecycle lock descriptor isolation
+        run: sh scripts/test-lifecycle-lock-fd.sh
+
       - name: Check required project files
         run: |
           set -eu

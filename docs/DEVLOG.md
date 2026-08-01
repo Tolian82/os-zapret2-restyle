@@ -1089,3 +1089,29 @@ Next:
 
 Install package 0.2.3_1 on OPNsense and execute the focused CFG-001 invalid Apply,
 valid Apply, exact GUI error, and reboot verification matrix.
+
+==================================================
+2026-08-01 — LIFE-009 LOCK DESCRIPTOR DEFECT AND v0.2.4 CORRECTION
+==================================================
+
+Live OPNsense evidence from package 0.2.3_1 confirmed:
+
+- GUI Apply reached the backend twice, waited 30 seconds, and returned status 75;
+- no setup.sh, package manager, or other real lifecycle operation was active;
+- `fstat` showed lifecycle descriptor 9 inherited by both daemon wrappers, the
+  supervisor shell, dvtws2, and its supervisor sleep process;
+- an immediate lock probe returned 75;
+- the previous runtime remained active, so the failure did not leave zapret stopped.
+
+Implemented:
+
+- close descriptor 9 on both dvtws2 and supervisor daemon launch commands;
+- add scripts/test-lifecycle-lock-fd.sh and execute it in CI;
+- advance the immutable prerelease line to v0.2.4 / package 0.2.4_1;
+- add mandatory publication-transport discovery and fallback so missing `gh` cannot
+  stop authorized publication while GitHub App/API or authenticated Git is available.
+
+Static verification and CI/package results are recorded by the v0.2.4 publication
+cycle. Focused live verification remains: install 0.2.4_1, confirm no long-lived
+process owns descriptor 9 after package lifecycle completion, Apply the saved
+strategy, and verify config.xml, zapret.conf, dvtws.args, and the process arguments.

@@ -3,7 +3,7 @@
 Native OPNsense plugin for managing the zapret2 DPI bypass engine.
 
 Current version:
-0.2.3
+0.2.4
 
 Project status:
 Active development
@@ -146,7 +146,7 @@ Valid values are normalized, saved, activated, and reloaded into the form.
 INSTALLATION
 ==================================================
 
-Version 0.2.3 is the current prerelease line; this source tree builds package revision 1.
+Version 0.2.4 is the current prerelease line; this source tree builds package revision 1.
 
 The supported distribution model is a project-owned FreeBSD pkg repository
 published through GitHub Pages for FreeBSD:15:amd64 / supported OPNsense 26.7

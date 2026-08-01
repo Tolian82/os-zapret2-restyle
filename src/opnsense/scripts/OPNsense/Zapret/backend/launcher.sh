@@ -157,7 +157,7 @@ launcher_start_once()
     "${_launcher_once_daemon}" \
         -p "${_launcher_once_pidfile}" \
         -o "${_launcher_once_log}" \
-        -f "$@" || {
+        -f "$@" 9>&- || {
             rm -f "${_launcher_once_argv}"
             common_error "failed to launch dvtws2"
             return 1

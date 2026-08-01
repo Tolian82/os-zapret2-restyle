@@ -510,6 +510,12 @@ runtime trees, process and supervisor PID files, execution-stage state, and
 plugin-owned ipfw rules. Candidate workspaces remain unique but are not treated
 as a substitute for lifecycle serialization.
 
+The lock descriptor belongs only to the short-lived lifecycle shell. Every
+long-lived daemon launch closes descriptor 9 before `daemon(8)` starts dvtws2 or
+the supervisor. Otherwise those children retain the open file description and keep
+the lock owned after the lifecycle shell exits, causing every later Apply or service
+mutation to time out with status 75.
+
 
 ==================================================
 PACKAGE DISTRIBUTION AND GUI-FIRST INSTALLATION
