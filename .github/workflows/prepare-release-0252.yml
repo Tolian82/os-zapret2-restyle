@@ -1,0 +1,41 @@
+name: Prepare v0.2.5_2 branch
+
+on:
+  push:
+    branches:
+      - release/0.2.5_2
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Apply approved package and release changes
+        run: python3 scripts/prepare-release-0252.py
+
+      - name: Run focused validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n pkg/+POST_INSTALL
+          sh scripts/test-package-lifecycle-restart.sh
+          sh scripts/test-release-trigger.sh
+          git diff --check
+
+      - name: Commit prepared release branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "release: prepare v0.2.5_2"
+          git push origin HEAD:release/0.2.5_2
