@@ -217,8 +217,10 @@ and secrets must not be packaged from a development firewall.
 - `+POST_DEINSTALL` must not restart configd.
 - Destructive runtime/dependency cleanup must be a separate explicit maintenance action.
 - Runtime setup operations must be logged and safe against concurrent runs.
-- Successful `setup.sh install` must refresh the normal service lifecycle after dvtws2
-  verification and must not report ready when that refresh fails.
+- `setup.sh install` must capture complete service state before runtime mutation.
+  After dvtws2 verification it must refresh and verify a service that was running,
+  preserve and verify a service that was stopped, reject incomplete/unknown initial
+  state, and never report ready when the required final state is not reached.
 
 
 ==================================================

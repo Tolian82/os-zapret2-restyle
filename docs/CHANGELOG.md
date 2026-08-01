@@ -8,6 +8,14 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Made `setup.sh install` preserve the initial complete service state: it now
+  refreshes and verifies only a previously running service, leaves a stopped service
+  stopped, and rejects incomplete or unknown state before changing the runtime.
+- Increased the development package revision to `0.2.5_2` and extended focused
+  lifecycle contract coverage for conditional setup refresh.
+
 ## [0.2.5] - 2026-08-01
 
 ### Fixed

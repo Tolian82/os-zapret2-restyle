@@ -11,6 +11,7 @@ SETUP_STATUS="${STATE_DIR}/setup.status"
 RUN_DIR="/var/run/zapret2-restyle"
 LOCK_FILE="${RUN_DIR}/setup.lock"
 CONFIGCTL="/usr/local/sbin/configctl"
+SERVICE_SCRIPT="/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 FREEBSD_REPO_OVERRIDE="/usr/local/etc/pkg/repos/FreeBSD.conf"
 FREEBSD_REPO_BACKUP="${STATE_DIR}/FreeBSD.conf.backup"
 ENABLED_FREEBSD_REPO=0
@@ -114,6 +115,31 @@ REPO_EOF
 
 install_runtime()
 {
+    [ -x "${SERVICE_SCRIPT}" ] || {
+        status_write "failed"
+        echo "ERROR: zapret service control script is unavailable" >&2
+        return 1
+    }
+
+    if "${SERVICE_SCRIPT}" status >/dev/null 2>&1; then
+        _initial_service_status=0
+    else
+        _initial_service_status=$?
+    fi
+    case "${_initial_service_status}" in
+        0)
+            _service_was_running=1
+            ;;
+        1)
+            _service_was_running=0
+            ;;
+        *)
+            status_write "failed"
+            echo "ERROR: zapret service is in an incomplete or unknown state" >&2
+            return 1
+            ;;
+    esac
+
     status_write "installing"
     echo "=== os-zapret2-restyle runtime installation ==="
 
@@ -159,21 +185,42 @@ install_runtime()
         return 1
     }
 
-    echo "Refreshing zapret service with the installed runtime..."
-    if _service_output=$("${CONFIGCTL}" zapret restart 2>&1); then
-        _service_status=0
+    if [ "${_service_was_running}" -eq 1 ]; then
+        echo "Refreshing the previously running zapret service..."
+        if _service_output=$("${CONFIGCTL}" zapret restart 2>&1); then
+            _service_status=0
+        else
+            _service_status=$?
+        fi
+        if [ "${_service_status}" -ne 0 ] || [ "${_service_output}" != "OK" ]; then
+            status_write "failed"
+            printf '%s\n' "${_service_output}" >&2
+            echo "ERROR: zapret service refresh failed after runtime installation" >&2
+            return 1
+        fi
+
+        if ! "${SERVICE_SCRIPT}" status >/dev/null 2>&1; then
+            status_write "failed"
+            echo "ERROR: zapret service did not return to running state" >&2
+            return 1
+        fi
+        _completion_message="Runtime installation and service refresh completed successfully."
     else
-        _service_status=$?
-    fi
-    if [ "${_service_status}" -ne 0 ] || [ "${_service_output}" != "OK" ]; then
-        status_write "failed"
-        printf '%s\n' "${_service_output}" >&2
-        echo "ERROR: zapret service refresh failed after runtime installation" >&2
-        return 1
+        if "${SERVICE_SCRIPT}" status >/dev/null 2>&1; then
+            _service_status=0
+        else
+            _service_status=$?
+        fi
+        if [ "${_service_status}" -ne 1 ]; then
+            status_write "failed"
+            echo "ERROR: zapret service state changed during runtime installation" >&2
+            return 1
+        fi
+        _completion_message="Runtime installation completed successfully; zapret service remains stopped."
     fi
 
     status_write "ready"
-    echo "Runtime installation and service refresh completed successfully."
+    echo "${_completion_message}"
 }
 
 run_locked()

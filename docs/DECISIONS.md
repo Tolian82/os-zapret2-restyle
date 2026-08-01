@@ -2222,3 +2222,51 @@ Affected documents:
 - docs/DEVLOG.md
 - docs/ROADMAP.md
 - docs/CHANGELOG.md
+
+==================================================
+DEC-2026-08-01 — RUNTIME SETUP PRESERVES COMPLETE SERVICE STATE
+==================================================
+
+Status:
+Active.
+
+Decision:
+
+Before setup.sh install changes the runtime tree, it must classify the service as
+completely running or completely stopped through the canonical service status. After
+building and verifying dvtws2, setup restarts through configd and verifies running
+state only when the service was initially running. An initially stopped service is
+not restarted and must still report the canonical stopped state before setup records
+ready. Incomplete or unknown initial state fails closed before runtime mutation.
+
+Reason:
+
+Live package 0.2.5_1 verification showed that unconditional configctl restart correctly
+activated a rebuilt runtime for a running service but also started a service that was
+explicitly stopped before setup. Runtime installation is not an operator request to
+change service state.
+
+Consequences:
+
+- running setup continues to activate and verify the replacement binary;
+- stopped setup updates runtime files without starting dvtws2 or supervisor;
+- setup never reports ready unless the final state matches the initial complete state;
+- transactional staging and rollback of the upstream runtime remain separate work;
+- VERSION remains 0.2.5 and PLUGIN_REVISION increments from 1 to 2.
+
+Affected documents:
+
+- Makefile
+- src/opnsense/scripts/OPNsense/Zapret/setup.sh
+- scripts/test-package-lifecycle-restart.sh
+- README.md
+- docs/PROJECT_STATE.md
+- docs/AUDIT.md
+- docs/DECISIONS.md
+- docs/WORKING_CONVENTIONS.md
+- docs/DEVELOPMENT_GUIDE.md
+- docs/ARCHITECTURE.md
+- docs/DEVLOG.md
+- docs/ROADMAP.md
+- docs/REQUIREMENTS.md
+- docs/CHANGELOG.md

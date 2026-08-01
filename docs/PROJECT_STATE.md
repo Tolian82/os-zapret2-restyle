@@ -45,7 +45,7 @@ Current version:
 0.2.5
 
 Current package revision:
-1
+2
 
 Verified package:
 os-zapret2-restyle-0.2.2_1
@@ -54,18 +54,18 @@ Published prerelease package:
 os-zapret2-restyle-0.2.5_1
 
 Current phase:
-Prerelease v0.2.5 published; LIFE-014 package/runtime activation live verification
+LIFE-014 stopped-service setup correction implemented for package revision 2
 
 Current priority:
-Upgrade from package 0.2.4_1 to 0.2.5_1 and verify running/stopped/failed-stop/setup
-paths before completing the CFG-001 reboot matrix.
+Publish and build the package-revision-2 correction, then repeat setup.sh install
+with both running and stopped service states before completing the CFG-001 reboot matrix.
 
 Known blockers:
-Package 0.2.4_1 replaces plugin files during upgrade without restarting a service
-that was already running. Its old +PRE_DEINSTALL also suppresses stop failure, so an
-upgrade can continue into a mixed state with new files and old processes. The source
-remediation is published as v0.2.5 / package 0.2.5_1; the live acceptance matrix
-remains required before LIFE-014 is closed.
+Package 0.2.5_1 preserves service state across pkg upgrade, but live verification
+found that setup.sh install unconditionally restarts a service that was stopped before
+runtime installation. Package revision 2 captures the initial complete service state,
+restarts and verifies only a previously running service, and verifies that a stopped
+service remains stopped. CI/package build and focused OPNsense verification remain.
 
 ==================================================
 CURRENT CORRECTIVE WORK — LIFE-014 — 2026-08-01
@@ -85,11 +85,14 @@ Approved source remediation for prerelease v0.2.5 / package 0.2.5_1:
 - new +POST_INSTALL starts and verifies the service only when that marker exists;
 - a service that was stopped before upgrade remains stopped;
 - setup.sh install performs an exact-OK service restart after the new dvtws2 is built
-  and verified;
+  and verified only when the service was running before setup;
+- setup.sh install verifies that a previously stopped service remains stopped;
 - transactional runtime staging and rollback remain a separate future change.
 
-Local static verification, PR CI, release package verification, GitHub Release, and
-Pages/pkg publication passed. The live upgrade matrix remains required.
+Local static verification for the revision-2 correction passed. Package 0.2.5_1
+passed publication and the running/stopped pkg-upgrade paths, but its setup path failed
+the stopped-service criterion. PR CI, package build, and the repeated setup matrix for
+revision 2 remain required.
 
 Publication evidence:
 
@@ -433,11 +436,10 @@ Closed or implementation-complete findings include:
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Upgrade a running 0.2.4_1 service to 0.2.5_1 and confirm old PIDs stop before replacement and
-   new PIDs start after replacement.
-2. Upgrade with the service already stopped and confirm it remains stopped.
-3. Force a stop failure and confirm pkg aborts before replacing files.
-4. Run setup.sh install and confirm the runtime rebuild is followed by lifecycle refresh.
+1. Publish and build package revision 2 from the LIFE-014 stopped-service correction.
+2. Run setup.sh install while the service is running and confirm new PIDs and free lifecycle lock.
+3. Run setup.sh install while the service is stopped and confirm no runtime process starts.
+4. Force a package stop failure and confirm pkg aborts before replacing files.
 5. Reboot OPNsense and confirm that config.xml, zapret.conf, dvtws.args, process arguments, PID ownership, supervisor, and ipfw state agree.
 6. Resume the Milestone 8 stable-release GUI work package.
 
