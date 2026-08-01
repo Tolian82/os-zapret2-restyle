@@ -33,7 +33,7 @@ Branch:
 main
 
 Published prerelease tag commit:
-4ae28965be3661b5b0309d398d924186657662f4
+7befb9e2cb201114602ba2e2fba338751899a693
 
 Development tree:
 /root/os-zapret2-restyle
@@ -51,21 +51,21 @@ Verified package:
 os-zapret2-restyle-0.2.2_1
 
 Published prerelease package:
-os-zapret2-restyle-0.2.4_1
+os-zapret2-restyle-0.2.5_1
 
 Current phase:
-Preparing prerelease v0.2.5 with the LIFE-014 package/runtime activation lifecycle
+Prerelease v0.2.5 published; LIFE-014 package/runtime activation live verification
 
 Current priority:
-Publish prerelease v0.2.5 and package 0.2.5_1, then verify upgrade stop/start state
-preservation and setup-driven runtime refresh before the CFG-001 reboot matrix.
+Upgrade from package 0.2.4_1 to 0.2.5_1 and verify running/stopped/failed-stop/setup
+paths before completing the CFG-001 reboot matrix.
 
 Known blockers:
 Package 0.2.4_1 replaces plugin files during upgrade without restarting a service
 that was already running. Its old +PRE_DEINSTALL also suppresses stop failure, so an
-upgrade can continue into a mixed state with new files and old processes. Source
-remediation is complete and is being prepared for publication as v0.2.5 / package
-0.2.5_1; package and live verification remain.
+upgrade can continue into a mixed state with new files and old processes. The source
+remediation is published as v0.2.5 / package 0.2.5_1; the live acceptance matrix
+remains required before LIFE-014 is closed.
 
 ==================================================
 CURRENT CORRECTIVE WORK — LIFE-014 — 2026-08-01
@@ -88,8 +88,17 @@ Approved source remediation for prerelease v0.2.5 / package 0.2.5_1:
   and verified;
 - transactional runtime staging and rollback remain a separate future change.
 
-Local static verification and PR CI passed for the implementation commit. Release
-package publication and the live upgrade matrix remain required.
+Local static verification, PR CI, release package verification, GitHub Release, and
+Pages/pkg publication passed. The live upgrade matrix remains required.
+
+Publication evidence:
+
+- release-preparation commit: 7befb9e2cb201114602ba2e2fba338751899a693;
+- automated Release trigger run 30697941371 completed successfully;
+- annotated tag v0.2.5 resolves to the release-preparation commit;
+- Release workflow run 30698068243 completed successfully;
+- GitHub prerelease assets are os-zapret2-restyle-0.2.5_1.pkg and SHA256SUMS;
+- GitHub Pages serves the package and current FreeBSD:15:amd64 repository metadata.
 
 ==================================================
 CURRENT DEVELOPMENT DELIVERY POLICY — 2026-07-31
@@ -424,14 +433,13 @@ Closed or implementation-complete findings include:
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Publish prerelease v0.2.5 and package 0.2.5_1 from the verified release-preparation merge.
-2. Upgrade a running 0.2.4_1 service and confirm old PIDs stop before replacement and
+1. Upgrade a running 0.2.4_1 service to 0.2.5_1 and confirm old PIDs stop before replacement and
    new PIDs start after replacement.
-3. Upgrade with the service already stopped and confirm it remains stopped.
-4. Force a stop failure and confirm pkg aborts before replacing files.
-5. Run setup.sh install and confirm the runtime rebuild is followed by lifecycle refresh.
-6. Reboot OPNsense and confirm that config.xml, zapret.conf, dvtws.args, process arguments, PID ownership, supervisor, and ipfw state agree.
-7. Resume the Milestone 8 stable-release GUI work package.
+2. Upgrade with the service already stopped and confirm it remains stopped.
+3. Force a stop failure and confirm pkg aborts before replacing files.
+4. Run setup.sh install and confirm the runtime rebuild is followed by lifecycle refresh.
+5. Reboot OPNsense and confirm that config.xml, zapret.conf, dvtws.args, process arguments, PID ownership, supervisor, and ipfw state agree.
+6. Resume the Milestone 8 stable-release GUI work package.
 
 ==================================================
 WORKING RULES FOR RESUMPTION
@@ -451,9 +459,10 @@ Before changing code:
 
 Release v0.2.2 at fc6b208 and package 0.2.2_1 remain the verified baseline.
 CFG-001 was published as prerelease v0.2.3 / package 0.2.3_1 at da3d8e7, where live
-testing exposed the LIFE-009 descriptor-inheritance defect. The correction is
-published as v0.2.4 / package 0.2.4_1 and still requires the focused lock, Apply, and
-reboot verification recorded above.
+testing exposed the LIFE-009 descriptor-inheritance defect. The descriptor correction
+was published as v0.2.4 / package 0.2.4_1 and its lock and valid-Apply checks passed.
+LIFE-014 is published as v0.2.5 / package 0.2.5_1 and requires the focused
+upgrade/setup matrix and CFG-001 reboot verification above.
 
 
 ==================================================
