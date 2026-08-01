@@ -106,6 +106,12 @@ GitHub integration/API, authenticated ordinary Git, then GitHub CLI. Missing `gh
 alone is not a blocker and must not stop an authorized patch or release while an
 approved authenticated alternative is available.
 
+Project-response preflight is mandatory: complete the INDEX.md reading sequence
+before any substantive diagnosis, command, change, or publication action. Before
+delivering OPNsense commands, reject POSIX-only constructs unless the block explicitly
+enters and exits `sh`. Release authorization already granted for a named version
+survives a transport fallback and must not be requested again.
+
 ==================================================
 CURRENT CORRECTIVE WORK — LIFE-009 — 2026-08-01
 ==================================================

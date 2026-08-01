@@ -8,6 +8,15 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+### Engineering workflow
+
+- Made documentation recovery a blocking response preflight rather than an advisory
+  reminder.
+- Added an explicit csh dialect check for every OPNsense command block.
+- Added an authorized-release runbook that preserves one-time release approval across
+  transport fallback and supplies a canonical csh-safe tag trigger when an external
+  credential boundary genuinely remains.
+
 ## [0.2.4] - 2026-08-01
 
 ### Fixed

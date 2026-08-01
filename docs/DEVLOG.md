@@ -1115,3 +1115,25 @@ Static verification and CI/package results are recorded by the v0.2.4 publicatio
 cycle. Focused live verification remains: install 0.2.4_1, confirm no long-lived
 process owns descriptor 9 after package lifecycle completion, Apply the saved
 strategy, and verify config.xml, zapret.conf, dvtws.args, and the process arguments.
+
+==================================================
+2026-08-01 — DOCUMENTATION AND CSH RESPONSE PREFLIGHT ENFORCED
+==================================================
+
+Confirmed:
+
+- documentation already required complete context recovery before analysis or action;
+- documentation already targeted all OPNsense console commands at root csh;
+- the failed `$(...)` release command therefore resulted from skipping those active
+  rules, not from their absence;
+- the release procedure lacked a concrete tag-creation runbook and did not explicitly
+  preserve a prior release authorization across transport fallback.
+
+Implemented as one governance-only logical change:
+
+- made documentation recovery a named blocking response preflight;
+- added a mandatory OPNsense command-dialect scan with explicit POSIX indicators;
+- added a deterministic authorized-release tag runbook and canonical csh-safe fallback;
+- preserved one-time authorization for the named release across retries and transport
+  changes;
+- left VERSION and PLUGIN_REVISION unchanged.

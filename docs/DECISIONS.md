@@ -1960,3 +1960,52 @@ Affected documents:
 - docs/PROJECT_STATE.md
 - docs/DEVLOG.md
 - docs/CHANGELOG.md
+
+==================================================
+DEC-2026-08-01 — ENFORCE DOCUMENTATION AND CSH RESPONSE PREFLIGHT
+==================================================
+
+Status:
+Active.
+
+Decision:
+
+Treat mandatory documentation recovery as a blocking response preflight. In every
+new or resumed project context, complete the INDEX.md reading sequence before
+project diagnosis, commands, repository mutation, or publication. A platform-required
+progress notice may only announce that recovery is in progress.
+
+Before sending OPNsense commands, perform a second blocking check against the default
+root csh dialect. POSIX-only constructs require an explicit `sh` entry and `exit`
+return. The release procedure must preserve authorization for the named release across
+transport fallback and provide one static csh-safe tag trigger if all available model
+environments lack tag-write credentials.
+
+Reason:
+
+The csh and documentation-first rules were already recorded, but a release command
+was still produced from chat context with POSIX `$(...)` syntax. The release workflow
+also described transport selection without an explicit tag-creation runbook or a rule
+that existing authorization survives a transport retry. Converting both rules into
+named preflight gates and a deterministic runbook removes those execution ambiguities.
+
+Consequences:
+
+- no substantive project response precedes complete documentation recovery;
+- every OPNsense command block is checked for shell dialect before delivery;
+- one approval for a named release is not requested again after a transport failure;
+- ordinary patches remain fully publishable through GitHub App/API without `gh`;
+- a genuine missing tag-write credential is reported once as a capability boundary,
+  with one csh-safe trigger action rather than a repeated approval question;
+- governance-only documentation changes do not alter VERSION or PLUGIN_REVISION.
+
+Affected documents:
+
+- docs/INDEX.md
+- docs/PROJECT_STATE.md
+- docs/DECISIONS.md
+- docs/WORKING_CONVENTIONS.md
+- docs/DEVELOPMENT_GUIDE.md
+- docs/GITHUB_WORKFLOW.md
+- docs/DEVLOG.md
+- docs/CHANGELOG.md

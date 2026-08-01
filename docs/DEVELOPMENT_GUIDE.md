@@ -38,6 +38,11 @@ STANDARD WORKFLOW
 
 1. Restore project context using the reading order in INDEX.md.
 
+   This step is a blocking preflight. Until the full reading order is complete,
+   do not diagnose the project, prepare OPNsense commands, modify repository state,
+   or begin publication. A platform-required progress notice may only announce that
+   documentation recovery is in progress.
+
 2. Establish the authoritative source baseline.
 
 cd /root/os-zapret2-restyle
@@ -284,6 +289,12 @@ Present commands in separate sequential blocks:
 A validation block must not perform installation, commit, push, restart, or other
 mutation. An installation block may group related package build, publication, and
 installation commands. Avoid shell variables in commands intended for the default OPNsense csh root shell unless the whole block is executed explicitly by POSIX sh. All console instructions must target csh by default. When POSIX sh is mandatory, show `sh` as a separate command before the block and `exit` as a separate command after the block; commands after `exit` return to csh syntax.
+
+Before delivery, scan every OPNsense block for `$(...)`, POSIX assignments,
+`export`, `if ...; then`, arithmetic expansion, and shell functions. Their presence
+requires an explicit `sh` / `exit` boundary unless the command is rewritten in csh.
+For fixed release identifiers and commit SHAs, prefer static pipelines such as
+`git rev-parse origin/main | grep -qx '<full-sha>'` instead of command substitution.
 
 ==================================================
 CURRENT IMPLEMENTATION PRIORITY
