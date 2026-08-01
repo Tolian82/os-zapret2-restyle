@@ -236,12 +236,15 @@ MANDATORY RESPONSE PREFLIGHT
 
 For every new or resumed project context:
 
-1. Read INDEX.md first and complete its full mandatory reading order.
+1. Obey the repository-root `AGENTS.md`, then read INDEX.md first and complete its
+   full mandatory reading order.
 2. Do not provide project diagnosis, recommendations, commands, or repository actions
    before the reading sequence is complete.
-3. Re-read the relevant specialist document when any workflow or command detail is
+3. Read DECISIONS.md, WORKING_CONVENTIONS.md, and DEVELOPMENT_GUIDE.md as the
+   approved methodology and principles; do not reduce them to remembered summaries.
+4. Re-read the relevant specialist document when any workflow or command detail is
    uncertain; memory and earlier chat output are not substitutes.
-4. If OPNsense commands will be delivered, identify the target shell as root csh and
+5. If OPNsense commands will be delivered, identify the target shell as root csh and
    perform the command-dialect check below before sending them.
 
 The only permitted pre-reading user message is a brief progress notice required by

@@ -7,6 +7,10 @@ MANDATORY CONTEXT RECOVERY FOR THE MODEL
 This section is addressed directly to the model working on this project. It is an
 operational instruction, not background information and not a formality.
 
+Repository-aware agents first receive the root `AGENTS.md`. That file is the
+machine-discoverable preflight entry point and directs the agent here. It does not
+replace or shorten the complete reading sequence below.
+
 After any context restoration event, including a new chat, loss or truncation of
 model context, memory reset, a long interruption in work, or any other situation
 where project knowledge may be incomplete, stop before analysing, proposing, or
@@ -343,3 +347,6 @@ SECURITY.md
 NOTICE
 
 All required Engineering Memory documents are present.
+
+The repository root also contains `AGENTS.md`, which makes this mandatory recovery
+sequence visible to repository-aware agents before normal project work begins.

@@ -186,7 +186,9 @@ mode is the currently approved distribution policy.
 ENGINEERING MEMORY
 ==================================================
 
-Internal development starts from `docs/INDEX.md`.
+Repository-aware agents start from `AGENTS.md`, which requires the complete
+Engineering Memory preflight. Internal development then starts from
+`docs/INDEX.md`; `AGENTS.md` does not replace or shorten the reading order.
 
 All engineering documentation is stored in the `docs/` directory.
 

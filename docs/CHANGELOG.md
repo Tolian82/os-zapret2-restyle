@@ -10,6 +10,11 @@ The project starts its own version history at `0.1.0`.
 
 ### Engineering workflow
 
+- Added repository-root `AGENTS.md` so repository-aware agents encounter the
+  mandatory documentation preflight before normal project work.
+- Required explicit reading of the approved methodology and principles in
+  DECISIONS.md, WORKING_CONVENTIONS.md, and DEVELOPMENT_GUIDE.md rather than relying
+  on chat context, memory, or summaries.
 - Made documentation recovery a blocking response preflight rather than an advisory
   reminder.
 - Added an explicit csh dialect check for every OPNsense command block.
@@ -41,6 +46,8 @@ The project starts its own version history at `0.1.0`.
 
 - Advanced `VERSION` to `0.2.4` and reset `PLUGIN_REVISION` to `1` for the immutable
   prerelease tag and package `os-zapret2-restyle-0.2.4_1.pkg`.
+- Published tag `v0.2.4`, the verified package and SHA256SUMS release assets, and the
+  matching FreeBSD:15:amd64 Pages/pkg repository.
 
 ## [0.2.3] - 2026-07-31
 
