@@ -822,5 +822,13 @@ rewrites `vX.Y.Z`.
 ''')
 )
 
+import subprocess
+
+ci_content = subprocess.check_output(
+    ["git", "show", "origin/main:.github/workflows/ci.yml"],
+    cwd=ROOT,
+    text=True,
+)
+write(".github/workflows/ci.yml", ci_content)
 (ROOT / ".github/workflows/prepare-release-0252.yml").unlink(missing_ok=True)
 Path(__file__).unlink(missing_ok=True)
