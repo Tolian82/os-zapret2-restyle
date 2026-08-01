@@ -1411,11 +1411,11 @@ forced-termination, and failure-path acceptance matrix; the separate CFG-001 reb
 check also remains open.
 
 --------------------------------------------------
-LIFE-014 — Package and runtime updates do not activate replacement code
+LIFE-014 — Package and runtime updates do not preserve and activate service state
 --------------------------------------------------
 
 Classification:
-broken / source remediation implemented / live verification required
+broken / second source remediation implemented / live verification required
 
 Affected locations:
 
@@ -1453,6 +1453,11 @@ Evidence:
 - +POST_INSTALL has no upgrade-state restoration;
 - setup.sh install records ready immediately after binary verification without a
   lifecycle refresh.
+- package 0.2.5_1 passed running and stopped pkg-upgrade state preservation;
+- setup.sh install with a running service rebuilt the runtime, replaced the dvtws2
+  PID, and left the lifecycle lock free;
+- setup.sh install with a stopped service incorrectly started dvtws2, its daemon,
+  and supervisor because setup unconditionally invoked configctl zapret restart.
 
 Impact:
 
@@ -1472,8 +1477,11 @@ Approved remediation:
    require exact `OK`, verify the complete running state, then remove the marker.
 5. Preserve a stopped pre-upgrade state and clean incomplete state without
    automatically restoring it.
-6. After successful setup.sh runtime build and binary verification, require an exact
-   `OK` from `configctl zapret restart` before recording setup status ready.
+6. Before runtime installation, capture the canonical complete service state. After
+   successful build and binary verification, require exact `OK` from
+   `configctl zapret restart` and verify running state only when setup began running.
+   When setup began stopped, do not invoke restart and verify it remains stopped.
+   Reject incomplete or unknown initial state instead of promoting it.
 7. Embed +PRE_INSTALL in the package manifest, add focused static CI coverage, and
    increment PLUGIN_REVISION once.
 
@@ -1484,6 +1492,8 @@ Acceptance criteria:
 - incomplete state is cleaned but not automatically promoted to running;
 - stop failure returns non-zero and prevents package replacement;
 - successful setup.sh install refreshes the lifecycle before reporting ready;
+- setup.sh install preserves a stopped service and never starts it as a side effect;
+- incomplete or unknown initial service state fails closed before runtime mutation;
 - failed post-upgrade start or setup refresh is reported and never claimed as success;
 - package removal still stops synchronously and preserves runtime/dependencies.
 
@@ -1493,10 +1503,12 @@ DEVELOPMENT_GUIDE.md, ARCHITECTURE.md, DEVLOG.md, ROADMAP.md, REQUIREMENTS.md,
 CHANGELOG.md, and README.md.
 
 Remediation status:
-Implemented in source with focused static contract coverage and published as immutable
-prerelease v0.2.5 / package 0.2.5_1. Release workflow 30698068243 verified the package
-and repository outputs and published the GitHub prerelease and Pages/pkg repository.
-The running/stopped/failed-stop/setup live matrix remains required.
+The first source remediation was published as immutable prerelease v0.2.5 / package
+0.2.5_1. Live pkg upgrade passed with both running and stopped service states, and
+running-service setup refresh passed. Stopped-service setup failed because restart was
+unconditional. Package revision 2 implements initial-state capture, conditional restart,
+postcondition verification, and focused static coverage. CI/package build and repeated
+running/stopped setup verification remain required; forced-stop and reboot checks remain open.
 
 ==================================================
 ARCHITECTURE DEBT

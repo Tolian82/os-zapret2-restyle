@@ -617,18 +617,22 @@ Runtime preparation is separate:
 
 ```text
 setup.sh install
+  -> classify canonical service state as running or stopped
   -> temporarily enable required FreeBSD repository
   -> install missing build/runtime tools
   -> restore repository configuration
   -> checkout pinned bol-van/zapret2 release
   -> compile and verify dvtws2
-  -> configctl zapret restart
-  -> require exact OK before setup status ready
+  -> if initially running: configctl zapret restart and verify running
+  -> if initially stopped: do not restart and verify stopped
+  -> require the matching final state before setup status ready
 ```
 
 The setup lock serializes runtime installation and remains distinct from the lifecycle
-lock acquired by the restart command. The restart activates the verified runtime when
-the service is enabled and respects the saved disabled state. Full transactional
+lock acquired by the conditional restart command. Runtime setup preserves the complete
+service state observed before mutation: it activates and verifies replacement runtime
+only for an initially running service and leaves an initially stopped service stopped.
+Incomplete or unknown initial state fails before runtime mutation. Full transactional
 runtime staging and rollback are a separate architecture improvement.
 
 A future GUI maintenance action must invoke the same setup backend rather than duplicate

@@ -38,16 +38,19 @@ Ordered work:
 6. [x] Implement LIFE-014: fail-closed pre-upgrade stop, state-preserving post-upgrade
    start, and setup-driven runtime refresh.
 7. [x] Publish prerelease v0.2.5 / package 0.2.5_1 through the automated release trigger.
-8. Live-test running, stopped, failed-stop, and setup paths with package 0.2.5_1.
-9. Reboot and verify that startup renders and activates the saved configuration.
-10. Reconcile CFG-001 and record the verified release baseline.
-11. Resume GUI management of bol-van/zapret2 stable releases.
-12. Add installed runtime-version detection and reporting.
-13. Obtain and present the available stable-release list for bol-van/zapret2.
-14. Notify when a newer stable release is available.
-15. Allow selection, installation, update, and repeat installation of a published stable release.
-16. Display runtime presence separately from runtime/service health.
-17. After the project owner supplies the repository, design and implement GUI management of the additional BLOB repository. Until then, its URL, manifest, layout, integrity model, and update contract remain unspecified.
+8. [x] Live-test running/stopped pkg upgrade and running setup with package 0.2.5_1.
+9. [x] Diagnose stopped setup as an unconditional-restart defect and implement the
+   package-revision-2 state-preservation correction.
+10. Build revision 2 and repeat running/stopped setup plus forced-stop verification.
+11. Reboot and verify that startup renders and activates the saved configuration.
+12. Reconcile CFG-001 and record the verified release baseline.
+13. Resume GUI management of bol-van/zapret2 stable releases.
+14. Add installed runtime-version detection and reporting.
+15. Obtain and present the available stable-release list for bol-van/zapret2.
+16. Notify when a newer stable release is available.
+17. Allow selection, installation, update, and repeat installation of a published stable release.
+18. Display runtime presence separately from runtime/service health.
+19. After the project owner supplies the repository, design and implement GUI management of the additional BLOB repository. Until then, its URL, manifest, layout, integrity model, and update contract remain unspecified.
 
 ==================================================
 COMPLETED MILESTONES

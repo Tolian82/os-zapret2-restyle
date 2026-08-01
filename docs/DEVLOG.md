@@ -1262,3 +1262,37 @@ Remaining verification:
 - forced stop failure before file replacement;
 - setup-driven runtime refresh;
 - reboot persistence and final CFG-001 reconciliation.
+
+==================================================
+2026-08-01 — STOPPED-SERVICE SETUP STATE CORRECTION (LIFE-014)
+==================================================
+
+Live package 0.2.5_1 verification confirmed:
+
+- running pkg upgrade stopped old processes and started replacement PIDs;
+- stopped pkg upgrade remained stopped;
+- setup.sh install while running rebuilt dvtws2, changed its PID, and left the
+  lifecycle lock free;
+- setup.sh install while stopped incorrectly started dvtws2 and supervisor because
+  setup invoked configctl zapret restart unconditionally.
+
+Implemented for package revision 2:
+
+- capture canonical running/stopped state before runtime mutation;
+- fail closed on incomplete or unknown initial state;
+- restart through configd and verify running only when setup began running;
+- skip restart and verify stopped when setup began stopped;
+- extend focused lifecycle contract coverage to enforce capture-before-build,
+  conditional restart, exact configd success, and stopped-state reporting.
+
+Local verification completed:
+
+- setup.sh and the focused lifecycle test pass sh -n;
+- scripts/test-package-lifecycle-restart.sh passes;
+- git diff --check passes.
+
+Remaining:
+
+- PR CI and package build;
+- repeat running/stopped setup paths on OPNsense with package revision 2;
+- forced package-stop failure and reboot matrix.

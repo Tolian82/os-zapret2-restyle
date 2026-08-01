@@ -337,8 +337,9 @@ OPNsense test system:
 1. Build the package and inspect its manifest scripts, including replacement
    +PRE_INSTALL, +POST_INSTALL, old-package +PRE_DEINSTALL behavior, and +POST_DEINSTALL.
 2. Install through pkg/Firmware and confirm the explicit setup.sh install command is shown.
-3. Run setup.sh install, confirm executable dvtws2 is produced, and confirm lifecycle
-   refresh completes before setup status becomes ready.
+3. Run setup.sh install once while running and once while stopped. Confirm executable
+   dvtws2 is produced, the running service is refreshed before setup becomes ready,
+   and the stopped service remains stopped without runtime processes.
 4. Confirm Start and Apply do not invoke package installation or compilation.
 5. Upgrade while running: old PIDs stop before replacement, new PIDs start afterward,
    and stop/start errors are not hidden.

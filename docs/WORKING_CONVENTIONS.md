@@ -330,8 +330,10 @@ keeps the same fail-closed contract for removal and subsequent upgrades; new
 +POST_INSTALL starts replacement code. A stopped service stays stopped. Stop failure
 aborts the package operation and is never suppressed. Incomplete
 runtime state is cleaned but is not automatically promoted to running. Successful
-`setup.sh install` refreshes the service lifecycle before reporting ready. Runtime
-build staging and rollback remain a separate logical change.
+`setup.sh install` captures complete service state before runtime mutation. It refreshes
+and verifies a previously running service, while a stopped service remains stopped and
+is verified as such before setup reports ready. Incomplete or unknown initial state
+fails closed. Runtime build staging and rollback remain a separate logical change.
 
 ==================================================
 AUDIT IDENTIFIER AND LIVE-EVIDENCE RULES
