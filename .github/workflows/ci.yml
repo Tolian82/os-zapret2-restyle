@@ -74,6 +74,9 @@ jobs:
       - name: Test automated release trigger contract
         run: sh scripts/test-release-trigger.sh
 
+      - name: Test Node 24 release actions
+        run: sh scripts/test-release-node24-actions.sh
+
       - name: Check required project files
         run: |
           set -eu
@@ -101,6 +104,7 @@ jobs:
             scripts/build-pkg.sh \
             scripts/test-package-lifecycle-restart.sh \
             scripts/test-release-trigger.sh \
+            scripts/test-release-node24-actions.sh \
             .github/workflows/release.yml \
             .github/workflows/release-trigger.yml
           do
