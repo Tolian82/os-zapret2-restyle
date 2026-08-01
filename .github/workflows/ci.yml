@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install validation tools
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
@@ -148,7 +148,7 @@ jobs:
     needs: validate
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Read package version
         id: version
@@ -183,7 +183,7 @@ jobs:
           tar -xOf dist/*.pkg +MANIFEST | head -80
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: os-zapret2-restyle-${{ steps.version.outputs.version }}
           path: dist/os-zapret2-restyle-*.pkg
