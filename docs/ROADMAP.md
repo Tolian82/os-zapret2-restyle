@@ -37,17 +37,17 @@ Ordered work:
 5. [x] Verify valid Apply reaches dvtws.args and active process arguments.
 6. [x] Implement LIFE-014: fail-closed pre-upgrade stop, state-preserving post-upgrade
    start, and setup-driven runtime refresh.
-7. Publish prerelease v0.2.5 / package 0.2.5_1 and live-test running, stopped,
-   failed-stop, and setup paths.
-8. Reboot and verify that startup renders and activates the saved configuration.
-9. Reconcile CFG-001 and record the verified release baseline.
-10. Resume GUI management of bol-van/zapret2 stable releases.
-11. Add installed runtime-version detection and reporting.
-12. Obtain and present the available stable-release list for bol-van/zapret2.
-13. Notify when a newer stable release is available.
-14. Allow selection, installation, update, and repeat installation of a published stable release.
-15. Display runtime presence separately from runtime/service health.
-16. After the project owner supplies the repository, design and implement GUI management of the additional BLOB repository. Until then, its URL, manifest, layout, integrity model, and update contract remain unspecified.
+7. [x] Publish prerelease v0.2.5 / package 0.2.5_1 through the automated release trigger.
+8. Live-test running, stopped, failed-stop, and setup paths with package 0.2.5_1.
+9. Reboot and verify that startup renders and activates the saved configuration.
+10. Reconcile CFG-001 and record the verified release baseline.
+11. Resume GUI management of bol-van/zapret2 stable releases.
+12. Add installed runtime-version detection and reporting.
+13. Obtain and present the available stable-release list for bol-van/zapret2.
+14. Notify when a newer stable release is available.
+15. Allow selection, installation, update, and repeat installation of a published stable release.
+16. Display runtime presence separately from runtime/service health.
+17. After the project owner supplies the repository, design and implement GUI management of the additional BLOB repository. Until then, its URL, manifest, layout, integrity model, and update contract remain unspecified.
 
 ==================================================
 COMPLETED MILESTONES

@@ -1235,3 +1235,30 @@ Next:
 Publish the release-preparation PR with canonical squash subject
 `release: prepare v0.2.5`, verify the automated tag handoff and Release workflow,
 then install package 0.2.5_1 for the LIFE-014 live matrix.
+
+==================================================
+2026-08-01 — PRERELEASE v0.2.5 PUBLISHED
+==================================================
+
+Completed the authorized release and package-publication cycle.
+
+Verified:
+
+- release-preparation PR #10 was squash-merged as commit
+  7befb9e2cb201114602ba2e2fba338751899a693;
+- automated Release trigger run 30697941371 completed successfully;
+- annotated tag v0.2.5 resolves to the release-preparation commit;
+- Release workflow run 30698068243 completed all four jobs successfully;
+- package os-zapret2-restyle-0.2.5_1.pkg passed archive and release-output verification;
+- GitHub prerelease assets are os-zapret2-restyle-0.2.5_1.pkg and SHA256SUMS;
+- GitHub Pages serves zapret2-restyle.conf, meta.conf, data.pkg, packagesite.pkg,
+  SHA256SUMS, and the package from the FreeBSD:15:amd64 repository path;
+- REL-001 is live verified: no owner-side tag command was required.
+
+Remaining verification:
+
+- upgrade while running;
+- upgrade while stopped;
+- forced stop failure before file replacement;
+- setup-driven runtime refresh;
+- reboot persistence and final CFG-001 reconciliation.

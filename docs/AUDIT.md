@@ -1493,9 +1493,10 @@ DEVELOPMENT_GUIDE.md, ARCHITECTURE.md, DEVLOG.md, ROADMAP.md, REQUIREMENTS.md,
 CHANGELOG.md, and README.md.
 
 Remediation status:
-Implemented in source with focused static contract coverage and prepared for immutable
-prerelease v0.2.5 / package 0.2.5_1. Release package build/publication and the
-running/stopped/failed-stop/setup live matrix remain required.
+Implemented in source with focused static contract coverage and published as immutable
+prerelease v0.2.5 / package 0.2.5_1. Release workflow 30698068243 verified the package
+and repository outputs and published the GitHub prerelease and Pages/pkg repository.
+The running/stopped/failed-stop/setup live matrix remains required.
 
 ==================================================
 ARCHITECTURE DEBT
@@ -2253,7 +2254,7 @@ REL-001 — AUTHORIZED RELEASE REQUIRED AN OWNER-SIDE TAG PUSH
 ==================================================
 
 Classification:
-release infrastructure gap / remediated in source / next-release verification required
+release infrastructure gap / resolved / live verified
 
 Affected locations:
 
@@ -2311,6 +2312,9 @@ Acceptance criteria:
 
 Remediation status:
 
-Implemented in source with focused static contract coverage. The next explicitly
-approved release must provide the live tag-creation and workflow-dispatch evidence
-before REL-001 is marked resolved.
+Resolved and live verified by prerelease v0.2.5. Release-preparation PR #10 was
+squash-merged as 7befb9e2cb201114602ba2e2fba338751899a693 with the canonical
+subject. Release trigger run 30697941371 created annotated tag v0.2.5 at that exact
+commit and dispatched Release workflow run 30698068243. The Release workflow built
+and verified package 0.2.5_1, published the GitHub prerelease and assets, and deployed
+the Pages/pkg repository without an owner-side tag command.

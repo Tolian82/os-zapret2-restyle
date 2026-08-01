@@ -23,6 +23,8 @@ The project starts its own version history at `0.1.0`.
 
 - Advanced `VERSION` to `0.2.5` and reset `PLUGIN_REVISION` to `1` for the immutable
   prerelease tag and package `os-zapret2-restyle-0.2.5_1.pkg`.
+- Published annotated tag `v0.2.5`, the verified package and SHA256SUMS assets, and
+  the matching FreeBSD:15:amd64 Pages/pkg repository.
 
 ### Engineering workflow
 
