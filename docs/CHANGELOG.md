@@ -8,6 +8,31 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-08-01
+
+### Fixed
+
+- Closed lifecycle-lock descriptor 9 before launching the long-lived dvtws2 and
+  supervisor daemons, preventing a completed start from permanently blocking later
+  Apply and service operations with status 75.
+- Added a focused regression test for both daemon launch sites and child-process
+  descriptor isolation.
+
+### Changed
+
+- Made publication capability discovery and transport fallback mandatory: GitHub
+  integration/API first, authenticated ordinary Git second, and GitHub CLI when
+  available.
+- Explicitly prohibited treating missing `gh` as a blocker while another approved
+  authenticated publication path is available.
+- Defined local preparation as incomplete until branch, PR, CI, merge, and `main`
+  verification finish; release assets still require explicit release authority.
+
+### Distribution
+
+- Advanced `VERSION` to `0.2.4` and reset `PLUGIN_REVISION` to `1` for the immutable
+  prerelease tag and package `os-zapret2-restyle-0.2.4_1.pkg`.
+
 ## [0.2.3] - 2026-07-31
 
 ### Fixed

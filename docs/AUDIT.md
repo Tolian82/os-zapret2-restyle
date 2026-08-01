@@ -1340,6 +1340,13 @@ before template reload and configctl reconfigure. No shell-level lock existed in
 the service wrapper or Backend v2. Unique candidate workspaces did not serialize
 atomic activation, process control, firewall changes, or supervisor cleanup.
 
+Live evidence from package 0.2.3_1 found a defect in the first remediation:
+descriptor 9 remained open in both `daemon(8)` wrappers, the supervisor shell,
+`dvtws2`, and the supervisor sleep process after start. `fstat` showed all of them
+referencing `/var/run/zapret2-lifecycle.lock`; an immediate `lockf` probe returned
+75, and two GUI Apply operations each timed out after 30 seconds without activating
+the saved configuration. No competing `setup.sh` or pkg process existed.
+
 Impact:
 Concurrent lifecycle commands could stop a replacement process, remove newly
 installed firewall rules, overwrite execution-stage state, or race atomic
@@ -1363,7 +1370,10 @@ Implementation:
 The service wrapper now opens the lock file on file descriptor 9 and uses
 /usr/bin/lockf against that descriptor. The kernel releases the lock when the
 owning shell exits; the lock-file pathname may remain without representing a
-stale lock.
+stale lock. The 0.2.4 correction explicitly closes descriptor 9 on the launcher
+and supervisor `daemon(8)` commands so long-lived children cannot retain ownership.
+A focused regression test checks both production launch sites and verifies closed-FD
+behavior in a child shell.
 
 Verification plan:
 
@@ -1392,7 +1402,9 @@ AUDIT.md, ARCHITECTURE.md, DECISIONS.md, PROJECT_STATE.md, DEVLOG.md, and
 CHANGELOG.md.
 
 Remediation status:
-Implemented; focused live verification pending before the Finding is marked
+The original serialization is implemented. Descriptor-inheritance correction is
+implemented for prerelease 0.2.4_1; package build, installation, valid Apply, and
+focused live lock-release verification remain required before the Finding is marked
 Resolved.
 
 ==================================================

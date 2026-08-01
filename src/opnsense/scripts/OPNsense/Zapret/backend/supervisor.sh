@@ -101,7 +101,7 @@ supervisor_start()
         -f "${_supervisor_loop}" \
         "${_supervisor_child_pidfile}" \
         "${_supervisor_service_script}" \
-        "${_supervisor_expected_child}" || {
+        "${_supervisor_expected_child}" 9>&- || {
             common_error "failed to start runtime supervisor"
             return 1
         }

@@ -1868,3 +1868,95 @@ Affected documents:
 - docs/REQUIREMENTS.md
 - docs/CHANGELOG.md
 - docs/SECURITY.md
+
+==================================================
+DEC-2026-08-01 — CLOSE LIFECYCLE LOCK FD IN LONG-LIVED CHILDREN
+==================================================
+
+Status:
+Active.
+
+Decision:
+
+Keep descriptor 9 as the lifecycle lock descriptor owned by the short-lived
+`zapret_service.sh` operation, but explicitly close it on both long-lived
+`daemon(8)` launch commands before starting dvtws2 or the supervisor. Cover both
+launch sites with a focused regression test. Publish the correction through the
+next immutable prerelease v0.2.4 with package revision 1.
+
+Reason:
+
+Live OPNsense evidence from 0.2.3_1 showed descriptor 9 inherited by both daemon
+wrappers, the supervisor, dvtws2, and supervisor sleep. The owning shell could exit,
+but those children retained the same open file description and therefore the lock.
+Every later GUI Apply waited 30 seconds and returned status 75 although no competing
+lifecycle operation existed. The immutable v0.2.3 tag cannot publish a corrected
+package, so the tag-driven release requires a new SemVer tag.
+
+Consequences:
+
+- the lifecycle shell retains serialization until its operation completes;
+- long-lived runtime processes cannot extend lock ownership past that operation;
+- later Apply, start, stop, restart, and reconfigure may acquire the mutex normally;
+- VERSION becomes 0.2.4 and PLUGIN_REVISION remains/reset to 1;
+- expected package is os-zapret2-restyle-0.2.4_1.pkg;
+- LIFE-009 and CFG-001 remain open until focused OPNsense verification passes.
+
+Affected documents:
+
+- VERSION
+- README.md
+- docs/ARCHITECTURE.md
+- docs/AUDIT.md
+- docs/DECISIONS.md
+- docs/PROJECT_STATE.md
+- docs/DEVLOG.md
+- docs/ROADMAP.md
+- docs/CHANGELOG.md
+
+==================================================
+DEC-2026-08-01 — DISCOVER PUBLICATION TRANSPORTS BEFORE ESCALATION
+==================================================
+
+Status:
+Active.
+
+Decision:
+
+For every authorized repository publication, discover the capabilities available
+in the current environment and select the first safe authenticated path: GitHub
+integration/API, ordinary Git remote, then GitHub CLI. A missing executable or one
+unavailable client is not a blocker while another approved path can perform the
+operation. Do not ask the project owner to select the transport or install an
+optional client. Do not report a completed local patch as the end result of an
+authorized publication cycle.
+
+An ordinary publication is complete only after task branch publication, one atomic
+commit, Draft PR, required CI, Ready transition, squash merge, and verification of
+the resulting `main`. Release tag, assets, package, and pkg repository remain under
+the separate explicit release-authority rule.
+
+Reason:
+
+The documentation already stated that GitHub CLI was optional, but did not contain
+an explicit capability-discovery and fallback procedure. As a result, an available
+authenticated GitHub integration was overlooked and missing `gh` was incorrectly
+reported as a publication blocker after local preparation.
+
+Consequences:
+
+- publication transport is an internal implementation detail;
+- lack of `gh` alone cannot stop authorized work;
+- all available approved transports must be checked before escalation;
+- truthful reporting distinguishes local preparation, CI package artifacts, merged
+  source publication, and an explicitly authorized release publication.
+
+Affected documents:
+
+- docs/DECISIONS.md
+- docs/WORKING_CONVENTIONS.md
+- docs/DEVELOPMENT_GUIDE.md
+- docs/GITHUB_WORKFLOW.md
+- docs/PROJECT_STATE.md
+- docs/DEVLOG.md
+- docs/CHANGELOG.md
