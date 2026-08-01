@@ -230,6 +230,24 @@ required implementation, verification, and synchronized documentation.
 A Finding must not be remediated while an open Architecture Debt item determines its
 intended behavior.
 
+==================================================
+MANDATORY RESPONSE PREFLIGHT
+==================================================
+
+For every new or resumed project context:
+
+1. Read INDEX.md first and complete its full mandatory reading order.
+2. Do not provide project diagnosis, recommendations, commands, or repository actions
+   before the reading sequence is complete.
+3. Re-read the relevant specialist document when any workflow or command detail is
+   uncertain; memory and earlier chat output are not substitutes.
+4. If OPNsense commands will be delivered, identify the target shell as root csh and
+   perform the command-dialect check below before sending them.
+
+The only permitted pre-reading user message is a brief progress notice required by
+the platform that says documentation recovery is in progress. It contains no technical
+conclusion or command.
+
 
 ==================================================
 COMMAND BLOCK SEPARATION
@@ -252,6 +270,13 @@ execution order and must be valid for the OPNsense root shell or explicitly invo
 /bin/sh when POSIX shell syntax is required.
 
 The default and mandatory presentation target for OPNsense console instructions is the root csh shell. Do not silently assume sh, bash, or another shell. If POSIX sh is required, show an explicit `sh` command before the POSIX block and an explicit `exit` command after it. Commands that follow `exit` must again be valid csh commands.
+
+Before sending an OPNsense command block, inspect it for POSIX-only constructs,
+including `$(...)`, `name=value` shell assignments, `export`, `if ...; then`,
+`$((...))`, and shell functions. Replace them with csh-safe commands where practical.
+If any are required, place the complete affected sequence between explicit standalone
+`sh` and `exit` commands. A command copied from a Linux, CI, or local development
+shell is never assumed to be valid on the OPNsense console without this check.
 
 ==================================================
 FOCUS, SUFFICIENCY, AND INTERFACE STABILITY

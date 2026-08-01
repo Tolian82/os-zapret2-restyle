@@ -348,6 +348,47 @@ Normal verification command:
 ./scripts/verify-release-package.sh dist/os-zapret2-restyle-<version>.pkg
 
 ==================================================
+AUTHORIZED RELEASE EXECUTION RUNBOOK
+==================================================
+
+Explicit authorization for one named release remains valid for its complete release
+cycle. A failed client, unavailable tag API, changed transport, interrupted session,
+or retry does not consume that authorization and must not cause it to be requested
+again. Reconfirmation is required only if the version, target commit, assets, or
+publication scope materially changes.
+
+Execute an authorized tag-driven release in this order:
+
+1. Read the current `main`, record its full SHA, and verify VERSION and
+   PLUGIN_REVISION at that commit.
+2. Check whether the intended tag already exists. If it exists at the intended commit,
+   continue with workflow verification; if it exists elsewhere, stop because changing
+   it would be destructive.
+3. Create the tag through the authenticated GitHub integration/API when that operation
+   is available.
+4. Otherwise use an already authenticated ordinary Git remote in the current working
+   environment.
+5. Use GitHub CLI only as the next available authenticated transport; it is not a
+   prerequisite.
+6. If none of those environments has tag-write authority, this is a real credential
+   boundary. Request exactly one tag-trigger action from the owner, not another release
+   approval and not a transport choice.
+7. After the tag exists, monitor the release workflow and verify the GitHub prerelease,
+   package asset, checksum, and GitHub Pages/pkg repository without further questions.
+
+Any owner-side tag-trigger command for OPNsense must target root csh and use no POSIX
+command substitution. The canonical form is:
+
+cd /root/os-zapret2-restyle && \
+git fetch origin main && \
+git rev-parse origin/main | grep -qx '<full-main-sha>' && \
+git push origin <full-main-sha>:refs/tags/v<version>
+
+Do not replace the verification pipeline with `test "$(...)" = ...` on OPNsense.
+If a future trigger genuinely requires POSIX syntax, explicitly enter `sh`, run the
+complete POSIX block, and explicitly run `exit` before returning to csh instructions.
+
+==================================================
 RELEASE ASSETS
 ==================================================
 

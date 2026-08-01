@@ -36,6 +36,17 @@ the documentation is authoritative.
 
 The working rule is: documentation first, then analysis, then action.
 
+This is a hard preflight gate, not a recommendation. In a new or resumed project
+context, no diagnosis, conclusion, OPNsense command, repository mutation, or
+publication attempt may be produced before the complete reading sequence finishes.
+If the platform requires a progress message before documentation tools are called,
+that message may state only that context recovery is in progress; it must not contain
+technical advice or commands.
+
+After context recovery, every OPNsense command block has a second mandatory gate:
+confirm that it targets the default root csh shell. POSIX-only syntax is prohibited
+unless the instructions explicitly enter `sh` and later run `exit`.
+
 For repository work, the authoritative baseline is an exact commit in the
 official GitHub repository, normally the current `main` commit. Record its full
 SHA before changing files and derive all content and Git file modes from that
