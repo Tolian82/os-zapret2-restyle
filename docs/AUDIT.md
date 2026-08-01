@@ -2157,3 +2157,70 @@ Focused regression backlog retained:
 
 Milestone 8 audit boundary:
 The first implementation target is GUI management of bol-van/zapret2 stable releases through the existing setup.sh backend. Audit must verify one backend path, release-input validation, installed-version reporting, update discovery, operation serialization, failure-state reporting, and separation between runtime presence and runtime/service health. The additional BLOB repository remains outside implementation audit until the project owner supplies its repository and technical contract.
+
+==================================================
+REL-001 — AUTHORIZED RELEASE REQUIRED AN OWNER-SIDE TAG PUSH
+==================================================
+
+Classification:
+release infrastructure gap / remediated in source / next-release verification required
+
+Affected locations:
+
+- .github/workflows/release.yml
+- .github/workflows/release-trigger.yml
+- docs/GITHUB_WORKFLOW.md
+
+Affected chain before remediation:
+
+approved release PR and merge
+        ↓
+model publication environment lacks tag-ref write operation
+        ↓
+project owner must push refs/tags/vX.Y.Z manually
+        ↓
+tag-driven Release workflow
+
+Evidence:
+
+- ordinary branch, commit, PR, CI, and merge publication succeeded through the
+  connected GitHub integration;
+- the integration did not expose tag-ref creation;
+- the model's ordinary Git transport had no tag-write credential;
+- prerelease v0.2.4 therefore required the owner to push the tag from OPNsense even
+  after the complete release scope had already been approved.
+
+Impact:
+
+- a routine approved release paused at a transport detail unrelated to product or
+  release scope;
+- the owner had to perform a manual trigger and could receive a shell-incompatible
+  command if the documentation preflight was skipped;
+- release completion depended on an avoidable external credential handoff.
+
+Approved remediation:
+
+1. Treat a merge that changes VERSION and has the canonical subject
+   `release: prepare vX.Y.Z` as the repository-side release trigger.
+2. Validate VERSION, package identity, and the exact merge subject.
+3. Create or verify the immutable annotated tag with the workflow GITHUB_TOKEN.
+4. Dispatch the existing Release workflow explicitly at that tag.
+5. Keep direct tag push as a documented emergency fallback, not the normal path.
+6. Add a focused static contract test to CI.
+
+Acceptance criteria:
+
+- a future approved release-preparation PR passes CI and is squash-merged with the
+  canonical subject;
+- the release-trigger workflow creates the tag at that exact merge commit;
+- the Release workflow starts through workflow_dispatch and publishes the package,
+  checksum, GitHub prerelease, and Pages/pkg repository;
+- rerunning the trigger never moves an existing tag and does not dispatch when the
+  release is already published or its workflow is active;
+- no owner-side Git command is required in the normal release path.
+
+Remediation status:
+
+Implemented in source with focused static contract coverage. The next explicitly
+approved release must provide the live tag-creation and workflow-dispatch evidence
+before REL-001 is marked resolved.

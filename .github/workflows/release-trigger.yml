@@ -1,0 +1,91 @@
+name: Release trigger
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - VERSION
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: release-trigger-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    name: Create verified release tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validate release merge
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION_VALUE=$(tr -d '[:space:]' < VERSION)
+          SUBJECT=$(git log -1 --pretty=%s)
+          ESCAPED_VERSION=${VERSION_VALUE//./\\.}
+
+          [[ "${VERSION_VALUE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "${SUBJECT}" =~ ^release:\ prepare\ v${ESCAPED_VERSION}(\ \(#[0-9]+\))?$ ]]
+          grep -Eq '^PLUGIN_NAME=[[:space:]]+zapret2-restyle$' Makefile
+          grep -Eq '^PLUGIN_VERSION!=[[:space:]]+/bin/cat \$\{\.CURDIR\}/VERSION$' Makefile
+
+          echo "tag=v${VERSION_VALUE}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create immutable tag
+        shell: bash
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          git fetch --force --tags origin
+
+          if git show-ref --verify --quiet "refs/tags/${TAG}"; then
+            TAG_COMMIT=$(git rev-list -n 1 "refs/tags/${TAG}")
+            [ "${TAG_COMMIT}" = "${GITHUB_SHA}" ] || {
+              echo "Tag ${TAG} already points to ${TAG_COMMIT}, expected ${GITHUB_SHA}" >&2
+              exit 1
+            }
+          else
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git tag -a "${TAG}" "${GITHUB_SHA}" -m "os-zapret2-restyle ${TAG}"
+            git push origin "refs/tags/${TAG}"
+          fi
+
+      - name: Dispatch release workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} is already published."
+            exit 0
+          fi
+
+          if gh run list \
+            --workflow release.yml \
+            --branch "${TAG}" \
+            --json status \
+            --limit 20 \
+            --jq 'any(.[]; .status == "queued" or .status == "in_progress")' \
+            | grep -qx true
+          then
+            echo "Release workflow for ${TAG} is already active."
+            exit 0
+          fi
+
+          gh workflow run release.yml --ref "${TAG}"

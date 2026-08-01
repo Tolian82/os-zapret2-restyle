@@ -542,6 +542,31 @@ archives it. GitHub Release receives only the flat `release-assets/` directory w
 the package and SHA256SUMS. Generic artifact filesystem restrictions therefore do
 not alter the public pkg URL contract.
 
+## Automated release trigger
+
+The normal release control plane is:
+
+```text
+approved release-preparation PR
+  -> VERSION change and canonical squash subject
+  -> merge to main
+  -> release-trigger.yml validates the merge
+  -> workflow GITHUB_TOKEN creates the immutable annotated tag
+  -> workflow_dispatch starts release.yml at that tag
+  -> validation and FreeBSD package/repository build
+  -> GitHub prerelease assets and GitHub Pages/pkg repository
+```
+
+The canonical squash subject is `release: prepare vX.Y.Z`, with the optional GitHub
+`(#PR)` suffix. This is a protocol gate rather than descriptive prose: a VERSION
+change with another subject fails closed and cannot create a tag.
+
+Direct `v*` tag push remains a compatible emergency entry point. The release trigger
+never moves an existing tag; it accepts an existing tag only when it already resolves
+to the exact merge commit. Explicit workflow dispatch is required after workflow-token
+tag creation because GitHub does not recursively start ordinary push workflows from
+events created by GITHUB_TOKEN.
+
 
 ==================================================
 PACKAGE LIFECYCLE ARCHITECTURE

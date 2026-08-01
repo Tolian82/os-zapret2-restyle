@@ -357,27 +357,33 @@ or retry does not consume that authorization and must not cause it to be request
 again. Reconfirmation is required only if the version, target commit, assets, or
 publication scope materially changes.
 
-Execute an authorized tag-driven release in this order:
+Execute a normal authorized release in this order:
 
-1. Read the current `main`, record its full SHA, and verify VERSION and
-   PLUGIN_REVISION at that commit.
-2. Check whether the intended tag already exists. If it exists at the intended commit,
-   continue with workflow verification; if it exists elsewhere, stop because changing
-   it would be destructive.
-3. Create the tag through the authenticated GitHub integration/API when that operation
-   is available.
-4. Otherwise use an already authenticated ordinary Git remote in the current working
-   environment.
-5. Use GitHub CLI only as the next available authenticated transport; it is not a
-   prerequisite.
-6. If none of those environments has tag-write authority, this is a real credential
-   boundary. Request exactly one tag-trigger action from the owner, not another release
-   approval and not a transport choice.
-7. After the tag exists, monitor the release workflow and verify the GitHub prerelease,
-   package asset, checksum, and GitHub Pages/pkg repository without further questions.
+1. Read the current `main`, record its full SHA, and prepare the release change with
+   the approved VERSION and PLUGIN_REVISION.
+2. Publish the release-preparation branch and PR, pass required CI, and set its final
+   squash subject to exactly `release: prepare vX.Y.Z` with the optional GitHub
+   `(#PR)` suffix.
+3. Squash merge the verified release PR. The VERSION change on `main` starts
+   `.github/workflows/release-trigger.yml`.
+4. The trigger validates the merge subject, VERSION, and package identity; creates
+   or verifies the immutable annotated tag at the merge commit; and explicitly
+   dispatches `.github/workflows/release.yml` at that tag.
+5. Monitor both workflows and verify the GitHub prerelease, package asset, checksum,
+   and GitHub Pages/pkg repository without further questions.
 
-Any owner-side tag-trigger command for OPNsense must target root csh and use no POSIX
-command substitution. The canonical form is:
+The trigger fails closed when the merge subject does not match VERSION. It never
+moves an existing tag. A retry becomes a no-op when the GitHub Release already exists
+or an active Release workflow already targets the tag.
+
+Repository automation is the normal tag transport. Do not request an owner-side tag
+push merely because the model environment lacks a tag-ref API or Git credential.
+Direct tag push remains only an emergency fallback when the repository workflow is
+unavailable or fails at a protected authority boundary.
+
+If that emergency fallback is genuinely required, the existing release authorization
+remains valid. Any owner-side tag-trigger command for OPNsense must target root csh
+and use no POSIX command substitution. The canonical form is:
 
 cd /root/os-zapret2-restyle && \
 git fetch origin main && \

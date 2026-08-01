@@ -10,6 +10,13 @@ The project starts its own version history at `0.1.0`.
 
 ### Engineering workflow
 
+- Automated the normal release tag handoff after a verified release-preparation merge
+  that changes VERSION and uses the canonical release subject.
+- Added an idempotent GitHub Actions trigger that creates the immutable annotated tag
+  and explicitly dispatches the existing Release workflow without an owner-side Git
+  command.
+- Retained direct tag push only as an emergency fallback and added focused CI contract
+  coverage for the automated path.
 - Added repository-root `AGENTS.md` so repository-aware agents encounter the
   mandatory documentation preflight before normal project work.
 - Required explicit reading of the approved methodology and principles in

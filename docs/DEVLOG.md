@@ -1154,3 +1154,25 @@ Completed as one governance-only logical change:
   30691963458, package os-zapret2-restyle-0.2.4_1.pkg, SHA256SUMS, and the Pages pkg
   repository;
 - left VERSION and PLUGIN_REVISION unchanged.
+
+==================================================
+2026-08-01 — RELEASE TAG HANDOFF AUTOMATED
+==================================================
+
+Implemented as one release-infrastructure logical change:
+
+- added a `main`/VERSION release-trigger workflow;
+- required the canonical release squash subject `release: prepare vX.Y.Z` with an
+  optional GitHub PR-number suffix;
+- made GitHub Actions create or verify the immutable annotated tag at the exact merge
+  commit;
+- added workflow_dispatch to the existing Release workflow and explicitly dispatch it
+  after workflow-token tag creation;
+- made retries fail on tag mismatch and no-op when the release is already published or
+  its Release workflow is active;
+- retained direct tag push only as an emergency fallback;
+- added a focused release-trigger contract test to CI;
+- left VERSION and PLUGIN_REVISION unchanged.
+
+Static and CI verification are required in this PR. The next explicitly approved
+release supplies the first live tag-creation and workflow-dispatch evidence.

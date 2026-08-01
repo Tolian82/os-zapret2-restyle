@@ -2057,3 +2057,57 @@ Affected documents:
 - docs/DEVLOG.md
 - docs/ROADMAP.md
 - docs/CHANGELOG.md
+
+==================================================
+DEC-2026-08-01 — RELEASE MERGE CREATES AND DISPATCHES ITS TAG
+==================================================
+
+Status:
+Active.
+
+Decision:
+
+The normal authorized release path no longer requires an owner-side tag push. A
+release-preparation squash merge to `main` changes VERSION and uses the exact subject
+`release: prepare vX.Y.Z` with the optional GitHub `(#PR)` suffix. A dedicated
+GitHub Actions workflow validates that contract, creates or verifies the immutable
+annotated tag at the merge commit, and explicitly dispatches the existing Release
+workflow at that tag.
+
+The Release workflow continues to accept direct `v*` tag pushes for emergency and
+compatibility use and additionally accepts `workflow_dispatch`. A tag created with
+the workflow GITHUB_TOKEN is followed by explicit dispatch because GitHub suppresses
+ordinary recursive workflow events created by that token.
+
+Reason:
+
+Branch, commit, PR, CI, and merge operations were available through the connected
+GitHub integration, but tag-ref creation was not. The v0.2.4 release therefore paused
+for a manual owner action after release authority had already been granted. Moving the
+trigger into repository-owned Actions makes the approved release deterministic and
+keeps credentials inside the existing protected publication boundary.
+
+Consequences:
+
+- one release approval remains sufficient for the normal full release cycle;
+- the release-preparation PR title/squash subject is a validated protocol field;
+- only merges that change VERSION and match the canonical subject can create a tag;
+- an existing tag is never moved and must already resolve to the merge commit;
+- an existing release or active Release run makes a trigger retry a no-op;
+- manual tag push remains a fallback rather than a normal instruction;
+- VERSION and PLUGIN_REVISION do not change for this release-infrastructure patch.
+
+Affected documents:
+
+- .github/workflows/ci.yml
+- .github/workflows/release.yml
+- .github/workflows/release-trigger.yml
+- scripts/test-release-trigger.sh
+- docs/AUDIT.md
+- docs/ARCHITECTURE.md
+- docs/DECISIONS.md
+- docs/DEVELOPMENT_GUIDE.md
+- docs/DEVLOG.md
+- docs/GITHUB_WORKFLOW.md
+- docs/PROJECT_STATE.md
+- docs/CHANGELOG.md
