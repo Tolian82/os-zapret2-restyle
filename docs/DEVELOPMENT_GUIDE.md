@@ -334,16 +334,21 @@ exposes a concrete gap.
 Every lifecycle change must be verified as one complete sequence on a supported clean
 OPNsense test system:
 
-1. Build the package and inspect its manifest scripts.
-2. Install through pkg/Firmware without running `setup.sh` manually.
-3. Confirm the detached bootstrap reaches `ready` and produces executable dvtws2.
+1. Build the package and inspect its manifest scripts, including replacement
+   +PRE_INSTALL, +POST_INSTALL, old-package +PRE_DEINSTALL behavior, and +POST_DEINSTALL.
+2. Install through pkg/Firmware and confirm the explicit setup.sh install command is shown.
+3. Run setup.sh install, confirm executable dvtws2 is produced, and confirm lifecycle
+   refresh completes before setup status becomes ready.
 4. Confirm Start and Apply do not invoke package installation or compilation.
-5. Upgrade/reinstall and confirm old deinstall hooks do not delete the preserved runtime.
-6. Delete the package and confirm service/process/rule cleanup occurs before files vanish.
-7. Confirm the downloaded engine, generated state, logs, locks, PID files and safely
-   removable managed dependencies are gone.
-8. Confirm menu, ACL, configd actions and templates no longer remain active.
-9. Record commands, observed output and remaining limitations in DEVLOG/AUDIT before
+5. Upgrade while running: old PIDs stop before replacement, new PIDs start afterward,
+   and stop/start errors are not hidden.
+6. Upgrade while stopped and confirm it remains stopped; inject a stop failure and
+   confirm pkg aborts before file replacement.
+7. Reinstall and confirm the preserved runtime is reused without destructive cleanup.
+8. Delete the package and confirm service/process/rule cleanup occurs before files vanish.
+9. Confirm runtime, configuration, logs, and shared dependencies remain preserved.
+10. Confirm menu, ACL, configd actions and templates no longer remain active.
+11. Record commands, observed output and remaining limitations in DEVLOG/AUDIT before
    declaring the lifecycle verified.
 
 ==================================================

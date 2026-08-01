@@ -146,7 +146,7 @@ Valid values are normalized, saved, activated, and reloaded into the form.
 INSTALLATION
 ==================================================
 
-Version 0.2.4 is the current prerelease line; this source tree builds package revision 1.
+Version 0.2.4 is the current prerelease line; this source tree builds package revision 2.
 
 The supported distribution model is a project-owned FreeBSD pkg repository
 published through GitHub Pages for FreeBSD:15:amd64 / supported OPNsense 26.7
@@ -162,8 +162,14 @@ zapret2 runtime. After installation, run the one-time setup command shown by pkg
 
 The setup backend installs missing tools, checks out the project-approved fixed
 bol-van/zapret2 release, compiles and verifies dvtws2, and records its result. Internet
-access is required during setup. A future GUI maintenance action will call the same
-backend.
+access is required during setup. After verification it refreshes the service so the
+installed runtime becomes active; a disabled service remains stopped. A future GUI
+maintenance action will call the same backend.
+
+Package upgrades preserve the prior service state. The replacement package stops a
+running service before the old package hook and plugin-file replacement, then starts it
+again with replacement code. A stopped service remains stopped, and an upgrade is
+aborted if the installed service cannot stop cleanly.
 
 Removing the plugin stops the service before package files disappear. Saved OPNsense
 configuration, the downloaded runtime, logs, and shared dependencies are preserved.

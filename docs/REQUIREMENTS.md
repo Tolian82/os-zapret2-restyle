@@ -208,11 +208,17 @@ and secrets must not be packaged from a development firewall.
 - Start, Restart, Reconfigure, and Apply must not install or update runtime components.
   They must fail clearly when no usable dvtws2 exists.
 - Package removal must synchronously stop the service before plugin files disappear.
+- The replacement package's pre-install phase must remember whether the service was
+  fully running, stop and verify it before the old deinstall hook and file replacement,
+  abort when stop fails, and start replacement code only when the pre-upgrade service
+  was running. A stopped service must remain stopped.
 - Package removal must preserve plugin configuration, downloaded runtime content, logs,
   and shared dependencies.
 - `+POST_DEINSTALL` must not restart configd.
 - Destructive runtime/dependency cleanup must be a separate explicit maintenance action.
 - Runtime setup operations must be logged and safe against concurrent runs.
+- Successful `setup.sh install` must refresh the normal service lifecycle after dvtws2
+  verification and must not report ready when that refresh fails.
 
 
 ==================================================

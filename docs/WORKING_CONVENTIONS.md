@@ -324,6 +324,15 @@ all affected documentation must be committed together. Runtime setup uses the si
 `setup.sh install` backend, initially exposed as the exact post-install command and later
 through a GUI maintenance action.
 
+Package upgrade preserves service state: replacement +PRE_INSTALL synchronously stops
+the installed running service before the old hook and file replacement; +PRE_DEINSTALL
+keeps the same fail-closed contract for removal and subsequent upgrades; new
++POST_INSTALL starts replacement code. A stopped service stays stopped. Stop failure
+aborts the package operation and is never suppressed. Incomplete
+runtime state is cleaned but is not automatically promoted to running. Successful
+`setup.sh install` refreshes the service lifecycle before reporting ready. Runtime
+build staging and rollback remain a separate logical change.
+
 ==================================================
 AUDIT IDENTIFIER AND LIVE-EVIDENCE RULES
 ==================================================
