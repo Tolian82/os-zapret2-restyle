@@ -31,7 +31,8 @@ jobs:
           git diff --check
           git diff --binary origin/main -- . > prepared-v0.2.5_2.patch
           test -s prepared-v0.2.5_2.patch
-          tar --exclude=.git --exclude=prepared-v0.2.5_2.patch -czf prepared-v0.2.5_2-source.tar.gz .
+          tar --exclude=.git --exclude=prepared-v0.2.5_2.patch -czf /tmp/prepared-v0.2.5_2-source.tar.gz .
+          mv /tmp/prepared-v0.2.5_2-source.tar.gz .
           test -s prepared-v0.2.5_2-source.tar.gz
 
       - name: Upload prepared v0.2.5_2 source
