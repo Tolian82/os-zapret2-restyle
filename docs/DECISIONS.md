@@ -2178,3 +2178,47 @@ Affected documents:
 - docs/REQUIREMENTS.md
 - docs/CHANGELOG.md
 - README.md
+
+==================================================
+DEC-2026-08-01 — RELEASE LIFE-014 AS PRERELEASE v0.2.5
+==================================================
+
+Status:
+Active.
+
+Decision:
+
+Publish the LIFE-014 package/runtime activation correction as immutable prerelease
+v0.2.5 with PLUGIN_REVISION reset to 1 and package name
+os-zapret2-restyle-0.2.5_1.pkg. Keep v0.2.4 and package 0.2.4_1 immutable. Do not
+classify v0.2.5 as a verified stable baseline until the running, stopped,
+failed-stop, setup-driven refresh, and reboot checks are recorded on OPNsense.
+
+Reason:
+
+The existing v0.2.4 tag identifies the already published descriptor-fix tree and
+cannot publish the later LIFE-014 source. A new SemVer tag is required to build and
+publish the corrected package through the automated release trigger while retaining
+honest separation between publication evidence and live lifecycle verification.
+
+Consequences:
+
+- VERSION becomes 0.2.5;
+- PLUGIN_REVISION resets from 2 to 1;
+- expected tag is v0.2.5;
+- expected package is os-zapret2-restyle-0.2.5_1.pkg;
+- the release-preparation squash subject is `release: prepare v0.2.5`;
+- v0.2.4 / 0.2.4_1 remains immutable;
+- LIFE-014 remains open until its live acceptance matrix passes.
+
+Affected documents:
+
+- VERSION
+- Makefile
+- README.md
+- docs/PROJECT_STATE.md
+- docs/AUDIT.md
+- docs/DECISIONS.md
+- docs/DEVLOG.md
+- docs/ROADMAP.md
+- docs/CHANGELOG.md

@@ -1212,3 +1212,26 @@ Local static validation completed:
 
 The CI FreeBSD package build and the running/stopped/failed-stop/setup live matrix
 remain required. XML source was unchanged; CI retains the authoritative xmllint step.
+
+==================================================
+2026-08-01 — PRERELEASE v0.2.5 PREPARATION
+==================================================
+
+Prepared the LIFE-014 correction for immutable package publication and focused
+OPNsense verification.
+
+Release metadata:
+
+- VERSION advanced from 0.2.4 to 0.2.5;
+- PLUGIN_REVISION reset from 2 to 1;
+- expected tag is v0.2.5;
+- expected package is os-zapret2-restyle-0.2.5_1.pkg;
+- v0.2.4 and package 0.2.4_1 remain immutable;
+- v0.2.5 remains a prerelease until the running, stopped, failed-stop,
+  setup-refresh, and reboot evidence is recorded.
+
+Next:
+
+Publish the release-preparation PR with canonical squash subject
+`release: prepare v0.2.5`, verify the automated tag handoff and Release workflow,
+then install package 0.2.5_1 for the LIFE-014 live matrix.

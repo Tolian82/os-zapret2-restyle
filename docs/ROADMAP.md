@@ -35,9 +35,10 @@ Ordered work:
 3. [x] Publish prerelease v0.2.4 and package 0.2.4_1 with the LIFE-009 correction.
 4. [x] Verify descriptor 9 is released after startup with 0.2.4_1.
 5. [x] Verify valid Apply reaches dvtws.args and active process arguments.
-6. Implement LIFE-014: fail-closed pre-upgrade stop, state-preserving post-upgrade
+6. [x] Implement LIFE-014: fail-closed pre-upgrade stop, state-preserving post-upgrade
    start, and setup-driven runtime refresh.
-7. Build package revision 2 and live-test running, stopped, failed-stop, and setup paths.
+7. Publish prerelease v0.2.5 / package 0.2.5_1 and live-test running, stopped,
+   failed-stop, and setup paths.
 8. Reboot and verify that startup renders and activates the saved configuration.
 9. Reconcile CFG-001 and record the verified release baseline.
 10. Resume GUI management of bol-van/zapret2 stable releases.

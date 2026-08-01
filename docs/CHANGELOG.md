@@ -8,6 +8,8 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-08-01
+
 ### Fixed
 
 - Added a replacement `+PRE_INSTALL` hook so package upgrade stops and verifies the
@@ -17,9 +19,10 @@ The project starts its own version history at `0.1.0`.
   and before recording setup state as ready.
 - Added focused CI coverage for package-upgrade state transfer and setup activation.
 
-### Changed
+### Distribution
 
-- Incremented package revision to `0.2.4_2` without changing project VERSION.
+- Advanced `VERSION` to `0.2.5` and reset `PLUGIN_REVISION` to `1` for the immutable
+  prerelease tag and package `os-zapret2-restyle-0.2.5_1.pkg`.
 
 ### Engineering workflow
 
