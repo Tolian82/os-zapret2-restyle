@@ -33,7 +33,7 @@ Branch:
 main
 
 Published prerelease tag commit:
-da3d8e7ddbb16561bfdc5628daa483b97f3bb9f4
+4ae28965be3661b5b0309d398d924186657662f4
 
 Development tree:
 /root/os-zapret2-restyle
@@ -51,19 +51,19 @@ Verified package:
 os-zapret2-restyle-0.2.2_1
 
 Published prerelease package:
-os-zapret2-restyle-0.2.3_1
+os-zapret2-restyle-0.2.4_1
 
 Current phase:
-Preparing prerelease v0.2.4 with LIFE-009 descriptor-inheritance correction
+Prerelease v0.2.4 published; preparing focused LIFE-009 and CFG-001 live verification
 
 Current priority:
-Publish package 0.2.4_1, verify lifecycle descriptor 9 is released, then repeat the
+Install package 0.2.4_1, verify lifecycle descriptor 9 is released, then repeat the
 focused CFG-001 Apply and reboot matrix.
 
 Known blockers:
 Package 0.2.3_1 cannot complete Apply because long-lived runtime processes retain
-the lifecycle lock. Source correction is prepared for 0.2.4_1; focused OPNsense
-verification remains required after publication.
+the lifecycle lock. Package 0.2.4_1 is published with the source correction;
+focused OPNsense verification remains required.
 
 ==================================================
 CURRENT DEVELOPMENT DELIVERY POLICY — 2026-07-31
@@ -112,6 +112,11 @@ delivering OPNsense commands, reject POSIX-only constructs unless the block expl
 enters and exits `sh`. Release authorization already granted for a named version
 survives a transport fallback and must not be requested again.
 
+The repository root `AGENTS.md` is the machine-discoverable enforcement layer for
+this gate. It requires complete reading and explicitly names DECISIONS.md,
+WORKING_CONVENTIONS.md, and DEVELOPMENT_GUIDE.md as the methodology and principles
+that must be understood before selecting an implementation or publication path.
+
 ==================================================
 CURRENT CORRECTIVE WORK — LIFE-009 — 2026-08-01
 ==================================================
@@ -125,6 +130,13 @@ The 0.2.4_1 correction closes descriptor 9 on both long-lived daemon launch comm
 and adds a focused CI regression test. v0.2.3 remains immutable. LIFE-009 and CFG-001
 remain open until the new package is installed and valid Apply reaches the active
 runtime.
+
+Publication evidence:
+
+- tag v0.2.4 resolves to 4ae28965be3661b5b0309d398d924186657662f4;
+- Release workflow run 30691963458 completed successfully;
+- GitHub prerelease assets are os-zapret2-restyle-0.2.4_1.pkg and SHA256SUMS;
+- GitHub Pages serves the matching FreeBSD:15:amd64 package and repository metadata.
 
 ==================================================
 CURRENT CORRECTIVE WORK — CFG-001 — 2026-07-31
@@ -379,15 +391,14 @@ Closed or implementation-complete findings include:
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Publish prerelease v0.2.4 and package os-zapret2-restyle-0.2.4_1.
-2. Install 0.2.4_1 through the normal package update path without a separate
+1. Install 0.2.4_1 through the normal package update path without a separate
    `configctl zapret restart`.
-3. Confirm no long-lived process retains descriptor 9 or the lifecycle lock.
-4. Live-test invalid Apply rollback, valid Apply activation, and exact GUI error reporting.
-5. Reboot OPNsense and confirm that config.xml, zapret.conf, dvtws.args, process arguments, PID ownership, supervisor, and ipfw state agree.
-6. Reconcile LIFE-009 and CFG-001 evidence and classify v0.2.4 as a verified baseline only after those checks pass.
-7. Resume the Milestone 8 stable-release GUI work package.
-8. Execute the remaining upgrade, remove, reinstall, diagnostics, and controlled-failure backlog when its affected chain is changed.
+2. Confirm no long-lived process retains descriptor 9 or the lifecycle lock.
+3. Live-test invalid Apply rollback, valid Apply activation, and exact GUI error reporting.
+4. Reboot OPNsense and confirm that config.xml, zapret.conf, dvtws.args, process arguments, PID ownership, supervisor, and ipfw state agree.
+5. Reconcile LIFE-009 and CFG-001 evidence and classify v0.2.4 as a verified baseline only after those checks pass.
+6. Resume the Milestone 8 stable-release GUI work package.
+7. Execute the remaining upgrade, remove, reinstall, diagnostics, and controlled-failure backlog when its affected chain is changed.
 
 ==================================================
 WORKING RULES FOR RESUMPTION
@@ -408,7 +419,7 @@ Before changing code:
 Release v0.2.2 at fc6b208 and package 0.2.2_1 remain the verified baseline.
 CFG-001 was published as prerelease v0.2.3 / package 0.2.3_1 at da3d8e7, where live
 testing exposed the LIFE-009 descriptor-inheritance defect. The correction is
-prepared as v0.2.4 / package 0.2.4_1 and still requires the focused lock, Apply, and
+published as v0.2.4 / package 0.2.4_1 and still requires the focused lock, Apply, and
 reboot verification recorded above.
 
 

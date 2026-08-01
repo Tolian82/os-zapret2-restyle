@@ -33,7 +33,7 @@ Ordered work:
 
 1. [x] Publish prerelease v0.2.3 and package 0.2.3_1 containing the CFG-001 correction.
 2. [x] Diagnose the 0.2.3_1 Apply timeout as inherited lifecycle-lock descriptor 9.
-3. Publish prerelease v0.2.4 and package 0.2.4_1 with the LIFE-009 correction.
+3. [x] Publish prerelease v0.2.4 and package 0.2.4_1 with the LIFE-009 correction.
 4. Verify descriptor 9 is released after package lifecycle completion.
 5. Verify invalid Apply rollback and exact GUI error reporting on OPNsense.
 6. Verify valid Apply across config.xml, zapret.conf, dvtws.args, and process arguments.

@@ -1959,6 +1959,7 @@ Affected documents:
 - docs/GITHUB_WORKFLOW.md
 - docs/PROJECT_STATE.md
 - docs/DEVLOG.md
+- docs/ROADMAP.md
 - docs/CHANGELOG.md
 
 ==================================================
@@ -2008,4 +2009,51 @@ Affected documents:
 - docs/DEVELOPMENT_GUIDE.md
 - docs/GITHUB_WORKFLOW.md
 - docs/DEVLOG.md
+- docs/CHANGELOG.md
+
+==================================================
+DEC-2026-08-01 — ROOT AGENTS PREFLIGHT EXPOSES THE ENGINEERING METHOD
+==================================================
+
+Status:
+Active.
+
+Decision:
+
+Add a repository-root `AGENTS.md` whose first and blocking instruction is to read
+`docs/INDEX.md` and the complete mandatory Engineering Memory sequence before any
+substantive project response or action. Explicitly identify DECISIONS.md,
+WORKING_CONVENTIONS.md, and DEVELOPMENT_GUIDE.md as the approved methodology and
+principles that must be understood before choosing an implementation, command, or
+publication path.
+
+`AGENTS.md` is an enforcement entry point, not a second source of project truth. The
+specialist documents remain authoritative and must contain the full rules.
+
+Reason:
+
+The documentation-first and root-csh rules already existed, but they were bypassed
+when work resumed from chat context. A root agent instruction is discovered earlier
+by repository-aware coding agents and turns the documentation entry point into a
+workspace-level gate without duplicating the complete Engineering Memory.
+
+Consequences:
+
+- repository-aware agents encounter the preflight before normal project work;
+- summaries, memory, and chat context cannot substitute for complete reading;
+- the methodology and settled principles are read before implementation details;
+- INDEX.md remains the first Engineering Memory document and owns the reading order;
+- governance-only enforcement changes do not alter VERSION or PLUGIN_REVISION.
+
+Affected documents:
+
+- AGENTS.md
+- README.md
+- docs/INDEX.md
+- docs/PROJECT_STATE.md
+- docs/DECISIONS.md
+- docs/WORKING_CONVENTIONS.md
+- docs/DEVELOPMENT_GUIDE.md
+- docs/DEVLOG.md
+- docs/ROADMAP.md
 - docs/CHANGELOG.md

@@ -1137,3 +1137,20 @@ Implemented as one governance-only logical change:
 - preserved one-time authorization for the named release across retries and transport
   changes;
 - left VERSION and PLUGIN_REVISION unchanged.
+
+==================================================
+2026-08-01 — ROOT AGENT PREFLIGHT ADDED
+==================================================
+
+Completed as one governance-only logical change:
+
+- added repository-root AGENTS.md as the machine-discoverable project preflight;
+- required complete reading of the INDEX.md sequence before substantive work;
+- explicitly required the model to read DECISIONS.md, WORKING_CONVENTIONS.md, and
+  DEVELOPMENT_GUIDE.md as the approved methodology and principles;
+- kept INDEX.md and the specialist documents authoritative rather than duplicating
+  the complete Engineering Memory in AGENTS.md;
+- recorded successful publication of prerelease v0.2.4, Release workflow run
+  30691963458, package os-zapret2-restyle-0.2.4_1.pkg, SHA256SUMS, and the Pages pkg
+  repository;
+- left VERSION and PLUGIN_REVISION unchanged.

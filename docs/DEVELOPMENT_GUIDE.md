@@ -36,12 +36,15 @@ main
 STANDARD WORKFLOW
 ==================================================
 
-1. Restore project context using the reading order in INDEX.md.
+1. Obey the repository-root AGENTS.md and restore project context using the reading
+   order in INDEX.md.
 
    This step is a blocking preflight. Until the full reading order is complete,
    do not diagnose the project, prepare OPNsense commands, modify repository state,
    or begin publication. A platform-required progress notice may only announce that
-   documentation recovery is in progress.
+   documentation recovery is in progress. DECISIONS.md, WORKING_CONVENTIONS.md, and
+   DEVELOPMENT_GUIDE.md must be read as the approved methodology and principles,
+   not replaced by chat context or a prior summary.
 
 2. Establish the authoritative source baseline.
 
