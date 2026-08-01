@@ -45,6 +45,15 @@ grep -q '"${CONFIGCTL}" zapret start' "${POST_HOOK}" ||
     fail "post-install does not start the replacement service through configd"
 grep -q '"${SERVICE_SCRIPT}" status' "${POST_HOOK}" ||
     fail "post-install does not verify replacement service state"
+grep -q 'register.php' "${POST_HOOK}" ||
+    fail "post-install does not register the plugin with OPNsense firmware state"
+grep -q 'install os-zapret2-restyle' "${POST_HOOK}" ||
+    fail "post-install does not register the correct plugin package name"
+grep -q '"${CONFIGURE_PLUGINS}" POST_INSTALL' "${POST_HOOK}" ||
+    fail "post-install does not invoke rc.configure_plugins with POST_INSTALL"
+if grep -q 'rc.configure_plugins zapret2' "${POST_HOOK}"; then
+    fail "post-install still passes a plugin name as the lifecycle mode"
+fi
 
 state_line=$(grep -n '"${SERVICE_SCRIPT}" status' "${SETUP_SCRIPT}" |
     head -1 |
@@ -85,4 +94,4 @@ grep -q 'PRE_INSTALL_JSON=.*pkg/+PRE_INSTALL' scripts/build-pkg.sh ||
 grep -q '"pre-install":.*pre_install' scripts/build-pkg.sh ||
     fail "package manifest does not expose the replacement pre-install hook"
 
-echo "PASS: package upgrade and runtime setup preserve service state safely"
+echo "PASS: package lifecycle preserves service state and registers the plugin safely"

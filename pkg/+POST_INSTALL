@@ -6,10 +6,16 @@
 
 SERVICE_SCRIPT="/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 CONFIGCTL="/usr/local/sbin/configctl"
+FIRMWARE_REGISTER="/usr/local/opnsense/scripts/firmware/register.php"
+CONFIGURE_PLUGINS="/usr/local/etc/rc.configure_plugins"
 UPGRADE_RESTART_MARKER="/var/run/zapret2-restyle/pkg-upgrade.restart"
 
-if [ -x /usr/local/etc/rc.configure_plugins ]; then
-    /usr/local/etc/rc.configure_plugins zapret2 >/dev/null 2>&1 || true
+if [ -x "${FIRMWARE_REGISTER}" ]; then
+    "${FIRMWARE_REGISTER}" install os-zapret2-restyle >/dev/null 2>&1 || true
+fi
+
+if [ -x "${CONFIGURE_PLUGINS}" ]; then
+    "${CONFIGURE_PLUGINS}" POST_INSTALL >/dev/null 2>&1 || true
 fi
 
 if [ -x /usr/local/sbin/configctl ]; then
