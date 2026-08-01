@@ -2111,3 +2111,70 @@ Affected documents:
 - docs/GITHUB_WORKFLOW.md
 - docs/PROJECT_STATE.md
 - docs/CHANGELOG.md
+
+==================================================
+DEC-2026-08-01 — UPDATES ACTIVATE REPLACEMENT PLUGIN AND RUNTIME CODE
+==================================================
+
+Status:
+Active.
+
+Decision:
+
+During a pkg upgrade, the replacement package's +PRE_INSTALL runs first, records
+whether the installed service is fully running, stops it synchronously, and verifies
+the canonical stopped state. This makes the correction effective even when the old
+package's +PRE_DEINSTALL is defective. +PRE_DEINSTALL retains the same fail-closed
+stop contract for removal and later upgrades. Any stop failure aborts pkg. The new
++POST_INSTALL starts and verifies the service with replacement code only when it was
+fully running before the upgrade. A service that was stopped remains stopped;
+incomplete runtime state is cleaned but is not automatically promoted to running.
+
+After setup.sh install successfully builds and verifies dvtws2, it invokes the normal
+service restart lifecycle and requires the exact configd `OK` response before setup
+status becomes ready. If the saved configuration disables the service, that lifecycle
+refresh leaves it stopped by configuration.
+
+Transactional build/staging and rollback of the complete upstream runtime are not
+part of this change and remain a separate logical improvement.
+
+Reason:
+
+Live upgrade to 0.2.4_1 produced replacement files with old dvtws2 and supervisor
+processes still active because stop failure was suppressed and post-install did not
+restore service state. setup.sh likewise could replace the binary without activating
+it. Successful installation/update must make replacement code effective, while a
+failed stop must prevent a mixed old-process/new-file state.
+
+Consequences:
+
+- new +PRE_INSTALL is embedded in the package manifest and owns the earliest upgrade stop;
+- PKG_UPGRADE and a transient /var/run marker transfer only the prior running state;
+- package stop failure is no longer hidden;
+- post-upgrade start failure is visible and the restart marker is retained for retry;
+- package removal retains its stop-only, runtime-preserving behavior;
+- setup.lock and lifecycle lock remain separate serialization boundaries;
+- PLUGIN_REVISION increments from 1 to 2 while VERSION remains 0.2.4;
+- live running/stopped/failed-stop/setup verification is required.
+
+Affected documents:
+
+- Makefile
+- pkg/+PRE_INSTALL
+- pkg/+PRE_DEINSTALL
+- pkg/+POST_INSTALL
+- scripts/build-pkg.sh
+- scripts/test-package-lifecycle-restart.sh
+- src/opnsense/scripts/OPNsense/Zapret/setup.sh
+- .github/workflows/ci.yml
+- docs/PROJECT_STATE.md
+- docs/AUDIT.md
+- docs/DECISIONS.md
+- docs/WORKING_CONVENTIONS.md
+- docs/DEVELOPMENT_GUIDE.md
+- docs/ARCHITECTURE.md
+- docs/DEVLOG.md
+- docs/ROADMAP.md
+- docs/REQUIREMENTS.md
+- docs/CHANGELOG.md
+- README.md

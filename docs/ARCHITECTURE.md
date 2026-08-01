@@ -592,6 +592,27 @@ pkg add
   -> print setup command
 ```
 
+Upgrade path:
+
+```text
+new +PRE_INSTALL
+  -> inspect complete service state
+  -> record transient restart marker only when running
+  -> stop synchronously and verify stopped
+  -> stop failure aborts pkg
+old +PRE_DEINSTALL
+  -> repeats/preserves the fail-closed stopped-state contract
+  -> pkg replaces plugin files
+new +POST_INSTALL
+  -> refresh plugin registration and template
+  -> when marked, start through configd using replacement code
+  -> verify complete running state and remove marker
+```
+
+A stopped service remains stopped across upgrade. An incomplete runtime is cleaned
+before replacement but is not marked for automatic start. The transient marker lives
+under /var/run/zapret2-restyle and survives only the package transaction/retry window.
+
 Runtime preparation is separate:
 
 ```text
@@ -601,7 +622,14 @@ setup.sh install
   -> restore repository configuration
   -> checkout pinned bol-van/zapret2 release
   -> compile and verify dvtws2
+  -> configctl zapret restart
+  -> require exact OK before setup status ready
 ```
+
+The setup lock serializes runtime installation and remains distinct from the lifecycle
+lock acquired by the restart command. The restart activates the verified runtime when
+the service is enabled and respects the saved disabled state. Full transactional
+runtime staging and rollback are a separate architecture improvement.
 
 A future GUI maintenance action must invoke the same setup backend rather than duplicate
 its logic.

@@ -1176,3 +1176,39 @@ Implemented as one release-infrastructure logical change:
 
 Static and CI verification are required in this PR. The next explicitly approved
 release supplies the first live tag-creation and workflow-dispatch evidence.
+
+==================================================
+2026-08-01 — PACKAGE AND RUNTIME UPDATE ACTIVATION (LIFE-014)
+==================================================
+
+Live evidence recorded:
+
+- upgrade to 0.2.4_1 installed replacement files while old dvtws2 and supervisor
+  processes continued running;
+- the old process tree retained lifecycle descriptor 9 until manual termination;
+- an explicit stop/start launched replacement processes, released descriptor 9, and
+  made changed strategy arguments active;
+- +PRE_DEINSTALL suppressed stop failure and +POST_INSTALL restored no service state;
+- setup.sh install did not refresh the service after rebuilding dvtws2.
+
+Implemented for package revision 2:
+
+- add and package replacement +PRE_INSTALL so the fix runs before the defective old
+  pre-deinstall during the first upgrade to revision 2;
+- transfer only the complete pre-upgrade running state through a transient marker;
+- require synchronous successful stop and canonical stopped status before pkg continues;
+- start through configd and verify complete running state after replacement files land;
+- preserve a stopped state and clean incomplete state without auto-starting it;
+- make setup.sh install require exact-OK lifecycle refresh before recording ready;
+- add a focused static package-lifecycle contract test to CI;
+- keep transactional upstream runtime staging/rollback outside this logical change.
+
+Local static validation completed:
+
+- all project shell files and package hooks pass `sh -n`;
+- profile normalizer, profile pipeline, configuration activation, lifecycle FD,
+  package lifecycle, and release-trigger focused tests pass;
+- new hook/test executable modes and `git diff --check` pass.
+
+The CI FreeBSD package build and the running/stopped/failed-stop/setup live matrix
+remain required. XML source was unchanged; CI retains the authoritative xmllint step.

@@ -10,6 +10,7 @@ STATE_DIR="/var/db/zapret2-restyle"
 SETUP_STATUS="${STATE_DIR}/setup.status"
 RUN_DIR="/var/run/zapret2-restyle"
 LOCK_FILE="${RUN_DIR}/setup.lock"
+CONFIGCTL="/usr/local/sbin/configctl"
 FREEBSD_REPO_OVERRIDE="/usr/local/etc/pkg/repos/FreeBSD.conf"
 FREEBSD_REPO_BACKUP="${STATE_DIR}/FreeBSD.conf.backup"
 ENABLED_FREEBSD_REPO=0
@@ -152,8 +153,27 @@ install_runtime()
         return 1
     }
 
+    [ -x "${CONFIGCTL}" ] || {
+        status_write "failed"
+        echo "ERROR: configctl is unavailable; zapret service was not refreshed" >&2
+        return 1
+    }
+
+    echo "Refreshing zapret service with the installed runtime..."
+    if _service_output=$("${CONFIGCTL}" zapret restart 2>&1); then
+        _service_status=0
+    else
+        _service_status=$?
+    fi
+    if [ "${_service_status}" -ne 0 ] || [ "${_service_output}" != "OK" ]; then
+        status_write "failed"
+        printf '%s\n' "${_service_output}" >&2
+        echo "ERROR: zapret service refresh failed after runtime installation" >&2
+        return 1
+    fi
+
     status_write "ready"
-    echo "Runtime installation completed successfully."
+    echo "Runtime installation and service refresh completed successfully."
 }
 
 run_locked()

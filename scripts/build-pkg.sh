@@ -100,6 +100,7 @@ PLIST="${REPO_ROOT}/work/pkg-plist"
 echo "==> plist: $(wc -l < "${PLIST}" | tr -d ' ') entries"
 
 DESC_JSON=$(jq -Rs . < pkg-descr)
+PRE_INSTALL_JSON=$(jq -Rs . < pkg/+PRE_INSTALL)
 POST_INSTALL_JSON=$(jq -Rs . < pkg/+POST_INSTALL)
 PRE_DEINSTALL_JSON=$(jq -Rs . < pkg/+PRE_DEINSTALL)
 POST_DEINSTALL_JSON=$(jq -Rs . < pkg/+POST_DEINSTALL)
@@ -136,6 +137,7 @@ jq -n \
     --arg www "https://github.com/Tolian82/os-zapret2-restyle" \
     --arg license "${PLUGIN_LICENSE}" \
     --argjson desc "${DESC_JSON}" \
+    --argjson pre_install "${PRE_INSTALL_JSON}" \
     --argjson deps "${DEPS}" \
     --argjson post_install "${POST_INSTALL_JSON}" \
     --argjson pre_deinstall "${PRE_DEINSTALL_JSON}" \
@@ -154,6 +156,7 @@ jq -n \
         licenses: [$license],
         deps: $deps,
         scripts: {
+            "pre-install": $pre_install,
             "post-install": $post_install,
             "pre-deinstall": $pre_deinstall,
             "post-deinstall": $post_deinstall

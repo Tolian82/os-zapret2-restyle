@@ -26,25 +26,27 @@ CURRENT STAGE
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current work package:
-LIFE-009 descriptor-inheritance correction and CFG-001 live verification using
-prerelease v0.2.4
+LIFE-014 package/runtime update activation and remaining CFG-001 reboot verification
 
 Ordered work:
 
 1. [x] Publish prerelease v0.2.3 and package 0.2.3_1 containing the CFG-001 correction.
 2. [x] Diagnose the 0.2.3_1 Apply timeout as inherited lifecycle-lock descriptor 9.
 3. [x] Publish prerelease v0.2.4 and package 0.2.4_1 with the LIFE-009 correction.
-4. Verify descriptor 9 is released after package lifecycle completion.
-5. Verify invalid Apply rollback and exact GUI error reporting on OPNsense.
-6. Verify valid Apply across config.xml, zapret.conf, dvtws.args, and process arguments.
-7. Reboot and verify that startup renders and activates the saved configuration.
-8. Reconcile LIFE-009 and CFG-001, record the verified release baseline, and resume GUI management of bol-van/zapret2 stable releases.
-9. Add installed runtime-version detection and reporting.
-10. Obtain and present the available stable-release list for bol-van/zapret2.
-11. Notify when a newer stable release is available.
-12. Allow selection, installation, update, and repeat installation of a published stable release.
-13. Display runtime presence separately from runtime/service health.
-14. After the project owner supplies the repository, design and implement GUI management of the additional BLOB repository. Until then, its URL, manifest, layout, integrity model, and update contract remain unspecified.
+4. [x] Verify descriptor 9 is released after startup with 0.2.4_1.
+5. [x] Verify valid Apply reaches dvtws.args and active process arguments.
+6. Implement LIFE-014: fail-closed pre-upgrade stop, state-preserving post-upgrade
+   start, and setup-driven runtime refresh.
+7. Build package revision 2 and live-test running, stopped, failed-stop, and setup paths.
+8. Reboot and verify that startup renders and activates the saved configuration.
+9. Reconcile CFG-001 and record the verified release baseline.
+10. Resume GUI management of bol-van/zapret2 stable releases.
+11. Add installed runtime-version detection and reporting.
+12. Obtain and present the available stable-release list for bol-van/zapret2.
+13. Notify when a newer stable release is available.
+14. Allow selection, installation, update, and repeat installation of a published stable release.
+15. Display runtime presence separately from runtime/service health.
+16. After the project owner supplies the repository, design and implement GUI management of the additional BLOB repository. Until then, its URL, manifest, layout, integrity model, and update contract remain unspecified.
 
 ==================================================
 COMPLETED MILESTONES

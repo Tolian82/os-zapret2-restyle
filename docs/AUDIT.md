@@ -1403,9 +1403,98 @@ CHANGELOG.md.
 
 Remediation status:
 The original serialization is implemented. Descriptor-inheritance correction is
-implemented for prerelease 0.2.4_1; package build, installation, valid Apply, and
-focused live lock-release verification remain required before the Finding is marked
-Resolved.
+implemented in prerelease 0.2.4_1. Live OPNsense verification confirmed that new
+dvtws2 and supervisor processes do not inherit descriptor 9, the lifecycle lock is
+free after start, and valid Apply activates the changed strategy. The descriptor defect
+is live verified. LIFE-009 remains open for its broader concurrency, stale-callback,
+forced-termination, and failure-path acceptance matrix; the separate CFG-001 reboot
+check also remains open.
+
+--------------------------------------------------
+LIFE-014 — Package and runtime updates do not activate replacement code
+--------------------------------------------------
+
+Classification:
+broken / source remediation implemented / live verification required
+
+Affected locations:
+
+- pkg/+PRE_DEINSTALL
+- pkg/+PRE_INSTALL
+- pkg/+POST_INSTALL
+- src/opnsense/scripts/OPNsense/Zapret/setup.sh
+
+Affected chains before remediation:
+
+running plugin upgrade
+        ↓
+old +PRE_DEINSTALL hides stop failure
+        ↓
+pkg replaces plugin files
+        ↓
+new +POST_INSTALL does not restore the previously running service
+        ↓
+old processes continue with replacement files installed
+
+runtime installation or rebuild
+        ↓
+setup.sh verifies new dvtws2
+        ↓
+service is not refreshed and may continue executing the old image
+
+Evidence:
+
+- package 0.2.4_1 installed replacement files while dvtws2 and supervisor processes
+  retained start times from the previous package;
+- those old processes retained lifecycle descriptor 9 until manually terminated;
+- after an explicit stop/start, new processes used the replacement code, released
+  descriptor 9, and activated changed strategy arguments;
+- +PRE_DEINSTALL ends its service stop with `|| true`;
+- +POST_INSTALL has no upgrade-state restoration;
+- setup.sh install records ready immediately after binary verification without a
+  lifecycle refresh.
+
+Impact:
+
+- an upgrade can report completion while old code remains active;
+- a failed stop can produce a mixed state of new files and old processes;
+- runtime reinstall/update can leave the running process mapped to the old binary;
+- fixes are not reliably active until a manual restart or reboot.
+
+Approved remediation:
+
+1. Use the new package's +PRE_INSTALL, PKG_UPGRADE, and a /var/run marker so the
+   correction takes effect on the first upgrade from a package with a defective old hook.
+2. Keep +PRE_DEINSTALL fail-closed for removal and subsequent upgrade protection.
+3. Stop synchronously with the installed service script and require both successful stop
+   and the canonical stopped status; otherwise return non-zero and abort pkg.
+4. In the new +POST_INSTALL, start through configd only when the marker exists,
+   require exact `OK`, verify the complete running state, then remove the marker.
+5. Preserve a stopped pre-upgrade state and clean incomplete state without
+   automatically restoring it.
+6. After successful setup.sh runtime build and binary verification, require an exact
+   `OK` from `configctl zapret restart` before recording setup status ready.
+7. Embed +PRE_INSTALL in the package manifest, add focused static CI coverage, and
+   increment PLUGIN_REVISION once.
+
+Acceptance criteria:
+
+- running upgrade stops old dvtws2/supervisor before file replacement and starts new PIDs;
+- stopped upgrade remains stopped;
+- incomplete state is cleaned but not automatically promoted to running;
+- stop failure returns non-zero and prevents package replacement;
+- successful setup.sh install refreshes the lifecycle before reporting ready;
+- failed post-upgrade start or setup refresh is reported and never claimed as success;
+- package removal still stops synchronously and preserves runtime/dependencies.
+
+Required documentation updates:
+PROJECT_STATE.md, AUDIT.md, DECISIONS.md, WORKING_CONVENTIONS.md,
+DEVELOPMENT_GUIDE.md, ARCHITECTURE.md, DEVLOG.md, ROADMAP.md, REQUIREMENTS.md,
+CHANGELOG.md, and README.md.
+
+Remediation status:
+Implemented in source for package revision 2 with focused static contract coverage.
+Package build and the running/stopped/failed-stop/setup live matrix remain required.
 
 ==================================================
 ARCHITECTURE DEBT

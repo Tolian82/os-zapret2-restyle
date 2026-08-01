@@ -8,6 +8,19 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Added a replacement `+PRE_INSTALL` hook so package upgrade stops and verifies the
+  installed service before the old package hook and file replacement, aborts on stop
+  failure, and restarts only a service that was running before the upgrade.
+- Made `setup.sh install` refresh the service through configd after verifying dvtws2
+  and before recording setup state as ready.
+- Added focused CI coverage for package-upgrade state transfer and setup activation.
+
+### Changed
+
+- Incremented package revision to `0.2.4_2` without changing project VERSION.
+
 ### Engineering workflow
 
 - Automated the normal release tag handoff after a verified release-preparation merge

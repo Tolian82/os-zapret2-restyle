@@ -68,6 +68,9 @@ jobs:
       - name: Test lifecycle lock descriptor isolation
         run: sh scripts/test-lifecycle-lock-fd.sh
 
+      - name: Test package lifecycle service refresh
+        run: sh scripts/test-package-lifecycle-restart.sh
+
       - name: Test automated release trigger contract
         run: sh scripts/test-release-trigger.sh
 
@@ -91,10 +94,12 @@ jobs:
             src/etc/rc.syshook.d/stop/20-zapret \
             src/etc/inc/plugins.inc.d/zapret.inc \
             src/opnsense/service/conf/actions.d/actions_zapret.conf \
+            pkg/+PRE_INSTALL \
             pkg/+POST_INSTALL \
             pkg/+PRE_DEINSTALL \
             pkg/+POST_DEINSTALL \
             scripts/build-pkg.sh \
+            scripts/test-package-lifecycle-restart.sh \
             scripts/test-release-trigger.sh \
             .github/workflows/release.yml \
             .github/workflows/release-trigger.yml
@@ -112,6 +117,11 @@ jobs:
 
           test -x scripts/test-release-trigger.sh || {
             echo "scripts/test-release-trigger.sh is not executable"
+            exit 1
+          }
+
+          test -x scripts/test-package-lifecycle-restart.sh || {
+            echo "scripts/test-package-lifecycle-restart.sh is not executable"
             exit 1
           }
 

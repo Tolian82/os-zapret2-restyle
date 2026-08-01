@@ -45,7 +45,7 @@ Current version:
 0.2.4
 
 Current package revision:
-1
+2
 
 Verified package:
 os-zapret2-restyle-0.2.2_1
@@ -54,16 +54,40 @@ Published prerelease package:
 os-zapret2-restyle-0.2.4_1
 
 Current phase:
-Prerelease v0.2.4 published; preparing focused LIFE-009 and CFG-001 live verification
+LIFE-009 descriptor fix live verified; implementing LIFE-014 package/runtime activation lifecycle
 
 Current priority:
-Install package 0.2.4_1, verify lifecycle descriptor 9 is released, then repeat the
-focused CFG-001 Apply and reboot matrix.
+Build package 0.2.4_2, verify upgrade stop/start state preservation and setup-driven
+runtime refresh, then complete the CFG-001 reboot matrix.
 
 Known blockers:
-Package 0.2.3_1 cannot complete Apply because long-lived runtime processes retain
-the lifecycle lock. Package 0.2.4_1 is published with the source correction;
-focused OPNsense verification remains required.
+Package 0.2.4_1 replaces plugin files during upgrade without restarting a service
+that was already running. Its old +PRE_DEINSTALL also suppresses stop failure, so an
+upgrade can continue into a mixed state with new files and old processes. Source
+remediation is being prepared as package revision 2; package/live verification remains.
+
+==================================================
+CURRENT CORRECTIVE WORK — LIFE-014 — 2026-08-01
+==================================================
+
+Live upgrade to package 0.2.4_1 confirmed that pkg replaced plugin files while the
+old dvtws2 and supervisor processes remained active. The old processes retained the
+pre-0.2.4 descriptor behavior until manually terminated and the service was started
+again. The same test confirmed that +PRE_DEINSTALL hides stop failure with `|| true`.
+
+Approved source remediation for package revision 2:
+
+- new +PRE_INSTALL records whether a complete service was running and stops it before
+  the old package hook and file replacement;
+- +PRE_DEINSTALL retains the same fail-closed stop contract for removal and later upgrades;
+- synchronous stop and the stopped-state check are mandatory, and failure aborts pkg;
+- new +POST_INSTALL starts and verifies the service only when that marker exists;
+- a service that was stopped before upgrade remains stopped;
+- setup.sh install performs an exact-OK service restart after the new dvtws2 is built
+  and verified;
+- transactional runtime staging and rollback remain a separate future change.
+
+Static verification and package/live upgrade verification remain required.
 
 ==================================================
 CURRENT DEVELOPMENT DELIVERY POLICY — 2026-07-31
@@ -132,9 +156,11 @@ the supervisor shell, and supervisor sleep. Therefore every later Apply waited 3
 seconds and failed with status 75 although no competing lifecycle task existed.
 
 The 0.2.4_1 correction closes descriptor 9 on both long-lived daemon launch commands
-and adds a focused CI regression test. v0.2.3 remains immutable. LIFE-009 and CFG-001
-remain open until the new package is installed and valid Apply reaches the active
-runtime.
+and adds a focused CI regression test. Live OPNsense verification confirmed that the
+new dvtws2 and supervisor trees no longer retain descriptor 9, the lock is free after
+startup, and a changed strategy reaches dvtws.args and the active process. The
+descriptor correction is live verified; the broader LIFE-009 concurrency/failure
+matrix and the CFG-001 reboot persistence check remain open.
 
 Publication evidence:
 
@@ -396,14 +422,15 @@ Closed or implementation-complete findings include:
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Install 0.2.4_1 through the normal package update path without a separate
-   `configctl zapret restart`.
-2. Confirm no long-lived process retains descriptor 9 or the lifecycle lock.
-3. Live-test invalid Apply rollback, valid Apply activation, and exact GUI error reporting.
-4. Reboot OPNsense and confirm that config.xml, zapret.conf, dvtws.args, process arguments, PID ownership, supervisor, and ipfw state agree.
-5. Reconcile LIFE-009 and CFG-001 evidence and classify v0.2.4 as a verified baseline only after those checks pass.
-6. Resume the Milestone 8 stable-release GUI work package.
-7. Execute the remaining upgrade, remove, reinstall, diagnostics, and controlled-failure backlog when its affected chain is changed.
+1. Complete static validation and CI for LIFE-014 package revision 2, including the
+   embedded new +PRE_INSTALL hook.
+2. Upgrade a running 0.2.4_1 service and confirm old PIDs stop before replacement and
+   new PIDs start after replacement.
+3. Upgrade with the service already stopped and confirm it remains stopped.
+4. Force a stop failure and confirm pkg aborts before replacing files.
+5. Run setup.sh install and confirm the runtime rebuild is followed by lifecycle refresh.
+6. Reboot OPNsense and confirm that config.xml, zapret.conf, dvtws.args, process arguments, PID ownership, supervisor, and ipfw state agree.
+7. Resume the Milestone 8 stable-release GUI work package.
 
 ==================================================
 WORKING RULES FOR RESUMPTION
