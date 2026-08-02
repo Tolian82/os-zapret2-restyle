@@ -89,7 +89,6 @@ rm -f .github/gui-runtime-management.patch.part-*
 rm -f .github/gui-runtime-management.trigger
 rm -f .github/workflows/apply-gui-runtime-management.yml
 
-sh -n src/opnsense/scripts/OPNsense/Zapret/runtime_install.sh
 sh scripts/test-gui-runtime-management.sh
 
 # Restore the canonical build script in the repository state that will become
