@@ -4,7 +4,7 @@
 # intentionally separate from the pkg transaction. During an upgrade, restore
 # a service that the replacement pre-install hook stopped successfully. Refresh
 # the Web GUI last so replacement MVC, menu, ACL, and view files are loaded by
-# new lighttpd and PHP FastCGI workers.
+# fresh lighttpd and PHP FastCGI workers.
 
 SERVICE_SCRIPT="/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 CONFIGCTL="/usr/local/sbin/configctl"
