@@ -25,7 +25,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          base64 --decode .github/gui-runtime-management.patch.gz.b64 | gzip --decompress > /tmp/gui-runtime-management.patch
+          test -f .github/gui-runtime-management.patch.part-00
+          test -f .github/gui-runtime-management.patch.part-01
+          test -f .github/gui-runtime-management.patch.part-02
+          test -f .github/gui-runtime-management.patch.part-03
+          test -f .github/gui-runtime-management.patch.part-04
+          test -f .github/gui-runtime-management.patch.part-05
+          cat .github/gui-runtime-management.patch.part-* | base64 --decode | gzip --decompress > /tmp/gui-runtime-management.patch
           git apply --check /tmp/gui-runtime-management.patch
           git apply /tmp/gui-runtime-management.patch
 
@@ -94,6 +100,7 @@ jobs:
           PY
 
           rm -f .github/gui-runtime-management.patch.gz.b64
+          rm -f .github/gui-runtime-management.patch.part-*
           rm -f .github/workflows/apply-gui-runtime-management.yml
           git add -A
           git diff --cached --check
