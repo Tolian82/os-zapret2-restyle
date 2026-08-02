@@ -39,28 +39,29 @@ Current version:
 0.2.8
 
 Current package revision:
-3
+4
 
 Current package candidate:
-os-zapret2-restyle-0.2.8_3
+os-zapret2-restyle-0.2.8_4
 
-Latest completed implementation commit:
-b1b6ffd79bed24fa3d23f3a318336e5c92da5bfd
+Latest completed implementation:
+Post-install Web GUI refresh lifecycle correction in the current tree.
 
 Current milestone:
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current phase:
-Command-line bol-van/zapret2 release selection is implemented in setup.sh, including
-the FreeBSD fetch compatibility correction in package revision 3.
+Command-line bol-van/zapret2 release selection is implemented. Package revision 4 also
+refreshes the Web GUI after plugin files are installed or replaced.
 
 Current priority:
-Live-verify the release-selection paths on OPNsense, then add installed runtime-version
-detection and reporting before implementing the GUI controls.
+Live-verify that package 0.2.8_4 replaces the Web GUI process and preserves complete
+zapret service state, then complete the release-selection matrix and add installed
+runtime-version reporting.
 
 Known blockers:
-No source blocker is known. Real installation, repeat installation, upgrade, downgrade,
-and service-state preservation still require focused OPNsense evidence.
+No source blocker is known. The Web GUI refresh correction and the release-selection
+paths still require focused OPNsense evidence from the revision-4 package.
 
 ==================================================
 LATEST COMPLETED WORK — 2026-08-02
@@ -136,6 +137,31 @@ Package and validation evidence:
 - no tag, GitHub Release, GitHub Pages repository update, or package publication was
   requested or performed.
 
+
+==================================================
+PACKAGE WEB GUI REFRESH CORRECTION — 2026-08-02
+==================================================
+
+Live diagnosis of local package 0.2.8_3 showed that package registration, configd,
+zapret, lighttpd, and PHP workers all remained present, but the Web GUI displayed
+incomplete dynamic data after the plugin MVC/view files were replaced. The lighttpd
+and php-cgi processes predated the package transaction. Restarting only the Web GUI
+through `/usr/local/etc/rc.restart_webgui` replaced those processes and restored normal
+rendering; every registered OPNsense service then reported running. The independent
+Firmware remote/tier blankness remained attributable to its `proxy-ca` TLS verification
+failure and is not evidence for this lifecycle finding.
+
+The current OPNsense architecture retains `rc.configure_plugins POST_INSTALL` for
+plugin cache/configuration refresh and exposes the canonical `webgui restart` configd
+action, which invokes `/usr/local/etc/rc.restart_webgui`. The historical close-reference
+hook `pluginctl -c webgui.lighttpd_reload` is not present in current OPNsense core.
+
+Package revision 4 therefore keeps all existing `+POST_INSTALL` responsibilities and
+adds one final, fail-visible `configctl webgui restart 2` action after plugin
+registration, template rendering, and any zapret service-state restoration. Focused
+static coverage enforces the action, ordering, exact `OK` response, and rejection of
+the obsolete hook name.
+
 ==================================================
 CURRENTLY CONFIRMED
 ==================================================
@@ -166,7 +192,7 @@ Runtime and backend:
 Package lifecycle:
 
 - pkg installation does not download, compile, or install runtime dependencies;
-- `+POST_INSTALL` prints the explicit setup command;
+- `+POST_INSTALL` prints the explicit setup command and refreshes the Web GUI last;
 - package upgrade preserves prior complete running/stopped state;
 - package removal stops the service and preserves runtime and shared dependencies;
 - destructive runtime cleanup remains a separate explicit maintenance action.
@@ -174,6 +200,14 @@ Package lifecycle:
 ==================================================
 OPEN VERIFICATION WORK
 ==================================================
+
+Web GUI package-lifecycle verification:
+
+1. install or force-update package 0.2.8_4 while recording the current Web GUI PID;
+2. confirm `+POST_INSTALL` completes and the Web GUI PID changes automatically;
+3. confirm `/ui/zapret`, `/ui/zapret/diagnostics`, and ordinary OPNsense pages render;
+4. confirm all registered OPNsense services and the prior zapret running/stopped state;
+5. inject or observe a Web GUI restart failure and confirm pkg reports it visibly.
 
 Release-selection matrix:
 
@@ -205,14 +239,15 @@ architecture is broken.
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Install or update to package candidate 0.2.8_3 only when a focused OPNsense test is
-   intentionally started; this development task did not publish it to the pkg repository.
-2. Execute the release-selection matrix above and record exact evidence.
-3. Add read-only installed runtime-version detection.
-4. Expose installed and available version data through the backend API.
-5. Add update notification and GUI release controls that reuse setup.sh rather than
+1. Build and locally install package candidate 0.2.8_4; this development task does not
+   publish it to the pkg repository.
+2. Execute the Web GUI package-lifecycle verification above and record exact evidence.
+3. Execute the release-selection matrix and record exact evidence.
+4. Add read-only installed runtime-version detection.
+5. Expose installed and available version data through the backend API.
+6. Add update notification and GUI release controls that reuse setup.sh rather than
    duplicate release discovery or installation logic.
-6. Continue reporting runtime presence separately from runtime/service health.
+7. Continue reporting runtime presence separately from runtime/service health.
 
 ==================================================
 WORKING RULES FOR RESUMPTION

@@ -146,7 +146,7 @@ Valid values are normalized, saved, activated, and reloaded into the form.
 INSTALLATION
 ==================================================
 
-Version 0.2.8 is the current prerelease line; this source tree builds package revision 3.
+Version 0.2.8 is the current prerelease line; this source tree builds package revision 4.
 
 The supported distribution model is a project-owned FreeBSD pkg repository
 published through GitHub Pages for FreeBSD:15:amd64 / supported OPNsense 26.7
@@ -182,7 +182,10 @@ remains stopped. A future GUI maintenance action will call the same backend.
 Package upgrades preserve the prior service state. The replacement package stops a
 running service before the old package hook and plugin-file replacement, then starts it
 again with replacement code. A stopped service remains stopped, and an upgrade is
-aborted if the installed service cannot stop cleanly.
+aborted if the installed service cannot stop cleanly. After plugin registration,
+template rendering, and any required service restoration complete, `+POST_INSTALL`
+refreshes the OPNsense Web GUI through the current `configctl webgui restart` action so
+new lighttpd/PHP workers load the installed MVC, menu, ACL, and view files.
 
 Removing the plugin stops the service before package files disappear. Saved OPNsense
 configuration, the downloaded runtime, logs, and shared dependencies are preserved.

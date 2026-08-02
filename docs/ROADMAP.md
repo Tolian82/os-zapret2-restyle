@@ -42,23 +42,29 @@ Ordered work:
 9. [x] Diagnose stopped setup as an unconditional-restart defect and implement the
    package-revision-2 state-preservation correction.
 10. [x] Publish the later corrective package line through v0.2.8.
-11. [ ] Complete any remaining reboot and forced-stop evidence when required by a
+11. [x] Diagnose incomplete GUI rendering after local 0.2.8_3 replacement as stale
+   lighttpd/php-cgi workers rather than an unstarted OPNsense service.
+12. [x] Add a final canonical Web GUI refresh to +POST_INSTALL without removing plugin
+   registration, template rendering, setup instructions, or zapret state restoration.
+13. [ ] Live-verify automatic Web GUI PID replacement and complete rendering with
+   package candidate 0.2.8_4.
+14. [ ] Complete any remaining reboot and forced-stop evidence when required by a
    touched lifecycle path.
-12. [ ] Reconcile CFG-001 and record the next verified stable baseline.
-13. [x] Resume management of bol-van/zapret2 stable releases through setup.sh.
-14. [ ] Add installed runtime-version detection and reporting.
-15. [x] Obtain and present the available stable-release list: `setup.sh show` prints
+15. [ ] Reconcile CFG-001 and record the next verified stable baseline.
+16. [x] Resume management of bol-van/zapret2 stable releases through setup.sh.
+17. [ ] Add installed runtime-version detection and reporting.
+18. [x] Obtain and present the available stable-release list: `setup.sh show` prints
    up to the four latest published stable releases.
-16. [ ] Notify when a newer stable release is available.
-17. [x] Allow command-line selection, installation, update, downgrade, and repeat
+19. [ ] Notify when a newer stable release is available.
+20. [x] Allow command-line selection, installation, update, downgrade, and repeat
    installation of a published stable release through `setup.sh install VERSION`;
    no-argument setup and `install` select the latest stable release.
-18. [ ] Live-verify `show`, default latest installation, explicit reinstall, upgrade,
+21. [ ] Live-verify `show`, default latest installation, explicit reinstall, upgrade,
    downgrade, and running/stopped service-state preservation on OPNsense.
-19. [ ] Add GUI endpoints and controls that invoke this same backend without duplicating
+22. [ ] Add GUI endpoints and controls that invoke this same backend without duplicating
    release-discovery or installation logic.
-20. [ ] Display runtime presence separately from runtime/service health.
-21. [ ] After the project owner supplies the repository, design and implement GUI
+23. [ ] Display runtime presence separately from runtime/service health.
+24. [ ] After the project owner supplies the repository, design and implement GUI
    management of the additional BLOB repository. Until then, its URL, manifest,
    layout, integrity model, and update contract remain unspecified.
 

@@ -2330,3 +2330,92 @@ subject. Release trigger run 30697941371 created annotated tag v0.2.5 at that ex
 commit and dispatched Release workflow run 30698068243. The Release workflow built
 and verified package 0.2.5_1, published the GitHub prerelease and assets, and deployed
 the Pages/pkg repository without an owner-side tag command.
+
+
+==================================================
+LIFE-015 — PACKAGE UPDATE LEAVES WEB GUI WORKERS STALE
+==================================================
+
+Classification:
+broken
+
+Status:
+Remediated in source; focused revision-4 package verification required.
+
+Affected locations:
+
+- pkg/+POST_INSTALL
+- scripts/test-package-lifecycle-restart.sh
+- package installation and upgrade path for MVC, Menu, ACL, and Volt files
+
+Affected chain:
+
+pkg installs or replaces plugin UI files
+→ plugin registration and rc.configure_plugins POST_INSTALL
+→ existing lighttpd/php-cgi workers remain alive
+→ Web GUI pages open but dynamic data may be incomplete or stale
+→ manual Web GUI restart replaces the workers and restores normal rendering
+
+Evidence:
+
+- local package os-zapret2-restyle-0.2.8_3 installed successfully;
+- configd and zapret remained running and all zapret configd actions were registered;
+- lighttpd and php-cgi processes still had start times from before the package update;
+- Web GUI presentation was abnormal immediately after package replacement;
+- the independent Firmware remote/tier failure was traced separately to an untrusted
+  `proxy-ca` certificate and is excluded from this finding;
+- restarting only `/usr/local/etc/rc.restart_webgui` changed the lighttpd PID and
+  restored normal GUI operation;
+- the complete OPNsense service list subsequently reported every registered service,
+  including webgui and zapret, as running;
+- current OPNsense core exposes `configctl webgui restart`, backed by
+  `/usr/local/etc/rc.restart_webgui` and `webgui_configure_do()`;
+- current OPNsense core contains no `webgui.lighttpd_reload` hook, although that
+  historical name remains in the close reference plugin.
+
+Impact:
+
+A successful package update can leave users with a partially functioning GUI until a
+manual Web GUI restart, even though the package, configd, zapret, and network listeners
+appear healthy.
+
+Verification plan:
+
+1. Build package 0.2.8_4 and inspect the embedded +POST_INSTALL.
+2. Record the pre-install Web GUI PID.
+3. Install or force-update the package through pkg/Firmware.
+4. Confirm +POST_INSTALL returns success and the Web GUI PID changes automatically.
+5. Confirm plugin Settings/Diagnostics and ordinary OPNsense pages return complete data.
+6. Confirm zapret running/stopped state remains preserved.
+7. Confirm a forced Web GUI restart failure is reported rather than suppressed.
+
+Remediation plan:
+
+- retain plugin registration, rc.configure_plugins POST_INSTALL, template rendering,
+  setup instructions, and zapret service-state restoration;
+- invoke the current canonical configd Web GUI restart action as the final integration
+  step;
+- require the exact configd `OK` result;
+- reject the obsolete close-reference `webgui.lighttpd_reload` hook;
+- cover action presence and ordering with the focused lifecycle test.
+
+Acceptance criteria:
+
+- no existing +POST_INSTALL responsibility is removed;
+- new lighttpd/php-cgi workers load installed plugin files automatically;
+- the Web GUI refresh runs only after plugin integration and zapret restoration;
+- failure is visible to pkg;
+- package revision advances once with VERSION unchanged;
+- CI package build and focused lifecycle test pass;
+- live OPNsense revision-4 verification is recorded before the finding is closed.
+
+Affected documents:
+
+- docs/PROJECT_STATE.md
+- docs/AUDIT.md
+- docs/ARCHITECTURE.md
+- docs/DEVLOG.md
+- docs/ROADMAP.md
+- docs/REQUIREMENTS.md
+- docs/CHANGELOG.md
+- README.md

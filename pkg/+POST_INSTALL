@@ -2,7 +2,9 @@
 
 # Register the plugin and render its initial template. Runtime preparation is
 # intentionally separate from the pkg transaction. During an upgrade, restore
-# a service that the replacement pre-install hook stopped successfully.
+# a service that the replacement pre-install hook stopped successfully. Refresh
+# the Web GUI last so replacement MVC, menu, ACL, and view files are loaded by
+# fresh lighttpd and PHP FastCGI workers.
 
 SERVICE_SCRIPT="/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 CONFIGCTL="/usr/local/sbin/configctl"
@@ -54,6 +56,19 @@ if [ -n "${PKG_UPGRADE:-}" ] && [ -f "${UPGRADE_RESTART_MARKER}" ]; then
     fi
 
     rm -f "${UPGRADE_RESTART_MARKER}"
+fi
+
+[ -x "${CONFIGCTL}" ] || {
+    echo "ERROR: OPNsense Web GUI control is unavailable after plugin installation" >&2
+    exit 1
+}
+
+webgui_output=$("${CONFIGCTL}" webgui restart 2 2>&1)
+webgui_result=$?
+if [ "${webgui_result}" -ne 0 ] || [ "${webgui_output}" != "OK" ]; then
+    printf '%s\n' "${webgui_output}" >&2
+    echo "ERROR: OPNsense Web GUI could not be refreshed after plugin installation" >&2
+    exit 1
 fi
 
 cat <<'MESSAGE'
