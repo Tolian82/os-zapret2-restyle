@@ -175,6 +175,23 @@ Invalid user input remains visible for correction.
 - No font change requirement.
 - Line numbering may be added later.
 - Field width remains unchanged until verified rendered markup is deliberately inspected.
+- The Settings page must contain a native collapsible `Zapret2 Service` section after
+  the existing configuration sections.
+- On desktop widths, service status, exact installed release tag, Start/Stop, repository
+  release selector, and the runtime Apply button must occupy one horizontal line. Narrow
+  layouts may wrap without changing the control order.
+- Service status is restricted to Started, Stopped, or Error and uses the standard
+  success, neutral, and danger visual states. Runtime version is reported separately
+  from service health and is empty when the installed tree is not at an exact valid tag.
+- The repository selector presents at most the four current stable releases returned by
+  `setup.sh show`. Drafts, prereleases, malformed tags, and arbitrary user values must
+  not be accepted.
+- Runtime Apply starts `setup.sh install VERSION` asynchronously through configd, disables
+  conflicting controls while the operation is active, polls read-only status, and points
+  the user to `/var/log/zapret2/setup.log` after failure.
+- The GUI follows the language selected in OPNsense. English is the default; custom
+  Zapret2 labels and operation messages also provide Russian text. The plugin must not
+  introduce its own language selector.
 
 ## Packaging
 
@@ -208,8 +225,8 @@ and secrets must not be packaged from a development firewall.
   must not be suppressed. The obsolete `webgui.lighttpd_reload` hook and a configd
   restart are not accepted substitutes.
 - `setup.sh` is the single runtime-preparation and bol-van/zapret2 release-management
-  backend. It may initially be run from the shell and later from a GUI maintenance
-  action.
+  backend. Shell commands and the GUI must reuse its `show` and `install [VERSION]`
+  interfaces rather than implementing separate release discovery or installation paths.
 - Running `setup.sh` without arguments or running `setup.sh install` without a version
   must obtain the published stable-release list and install its latest release.
 - `setup.sh show` must print, one tag per line, up to the four latest published stable

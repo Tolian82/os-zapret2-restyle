@@ -26,7 +26,7 @@ CURRENT STAGE
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current work package:
-Backend release selection through the existing setup.sh
+GUI Zapret2 Service and selected-release management through the existing setup.sh
 
 Ordered work:
 
@@ -52,7 +52,7 @@ Ordered work:
    touched lifecycle path.
 15. [ ] Reconcile CFG-001 and record the next verified stable baseline.
 16. [x] Resume management of bol-van/zapret2 stable releases through setup.sh.
-17. [ ] Add installed runtime-version detection and reporting.
+17. [x] Add installed runtime-version detection and reporting.
 18. [x] Obtain and present the available stable-release list: `setup.sh show` prints
    up to the four latest published stable releases.
 19. [ ] Notify when a newer stable release is available.
@@ -61,10 +61,13 @@ Ordered work:
    no-argument setup and `install` select the latest stable release.
 21. [ ] Live-verify `show`, default latest installation, explicit reinstall, upgrade,
    downgrade, and running/stopped service-state preservation on OPNsense.
-22. [ ] Add GUI endpoints and controls that invoke this same backend without duplicating
+22. [x] Add GUI endpoints and controls that invoke this same backend without duplicating
    release-discovery or installation logic.
-23. [ ] Display runtime presence separately from runtime/service health.
-24. [ ] After the project owner supplies the repository, design and implement GUI
+23. [x] Display the installed runtime tag separately from runtime/service health.
+24. [ ] Live-verify the GUI service/release controls, asynchronous polling, and the
+   running/stopped reinstall, upgrade, and downgrade matrix on OPNsense.
+25. [ ] Add an explicit newer-stable-release notification as a separate logical change.
+26. [ ] After the project owner supplies the repository, design and implement GUI
    management of the additional BLOB repository. Until then, its URL, manifest,
    layout, integrity model, and update contract remain unspecified.
 

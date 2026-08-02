@@ -29,6 +29,7 @@
 namespace OPNsense\Zapret\Api;
 
 use OPNsense\Base\ApiMutableServiceControllerBase;
+use OPNsense\Base\UserException;
 use OPNsense\Core\Backend;
 
 class ServiceController extends ApiMutableServiceControllerBase
@@ -37,6 +38,140 @@ class ServiceController extends ApiMutableServiceControllerBase
     protected static $internalServiceTemplate = 'OPNsense/Zapret';
     protected static $internalServiceEnabled = 'general.enabled';
     protected static $internalServiceName = 'zapret';
+
+    private const RELEASE_PATTERN = '/^v[0-9]+(?:\\.[0-9]+)+$/D';
+
+    private function getReleaseList(Backend $backend): array
+    {
+        $response = trim((string)$backend->configdRun('zapret setup_releases', false, 60));
+        $releases = [];
+
+        foreach (preg_split('/\\R/u', $response) as $release) {
+            $release = trim($release);
+            if ($release !== '' && preg_match(self::RELEASE_PATTERN, $release)) {
+                $releases[] = $release;
+            }
+        }
+
+        $releases = array_values(array_unique($releases));
+        if (empty($releases)) {
+            throw new UserException(
+                gettext('No stable bol-van/zapret2 releases could be obtained.'),
+                gettext('Zapret2 release error')
+            );
+        }
+
+        return array_slice($releases, 0, 4);
+    }
+
+    private function getRuntimeState(Backend $backend): array
+    {
+        $response = trim((string)$backend->configdRun('zapret setup_status', false, 30));
+        $state = [
+            'service' => 'error',
+            'version' => '',
+            'setup' => 'unknown',
+            'busy' => false,
+        ];
+
+        foreach (preg_split('/\\R/u', $response) as $line) {
+            if (!preg_match('/^([a-z]+)=(.*)$/D', trim($line), $matches)) {
+                continue;
+            }
+
+            switch ($matches[1]) {
+                case 'service':
+                    if (in_array($matches[2], ['started', 'stopped', 'error'], true)) {
+                        $state['service'] = $matches[2];
+                    }
+                    break;
+                case 'version':
+                    if ($matches[2] === '' || preg_match(self::RELEASE_PATTERN, $matches[2])) {
+                        $state['version'] = $matches[2];
+                    }
+                    break;
+                case 'setup':
+                    if (in_array($matches[2], ['ready', 'installing', 'failed', 'unknown'], true)) {
+                        $state['setup'] = $matches[2];
+                    }
+                    break;
+                case 'busy':
+                    $state['busy'] = $matches[2] === '1';
+                    break;
+            }
+        }
+
+        return $state;
+    }
+
+    public function releasesAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['status' => 'failed'];
+        }
+
+        return [
+            'status' => 'ok',
+            'releases' => $this->getReleaseList(new Backend()),
+        ];
+    }
+
+    public function runtimeAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['status' => 'failed'];
+        }
+
+        return array_merge(['status' => 'ok'], $this->getRuntimeState(new Backend()));
+    }
+
+    public function installAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['status' => 'failed'];
+        }
+
+        $version = trim((string)$this->request->getPost('version'));
+        if (!preg_match(self::RELEASE_PATTERN, $version)) {
+            throw new UserException(
+                gettext('Select a valid published bol-van/zapret2 release.'),
+                gettext('Zapret2 release error')
+            );
+        }
+
+        $backend = new Backend();
+        if (!in_array($version, $this->getReleaseList($backend), true)) {
+            throw new UserException(
+                gettext('The selected bol-van/zapret2 release is no longer available.'),
+                gettext('Zapret2 release error')
+            );
+        }
+
+        if ($this->getRuntimeState($backend)['busy']) {
+            throw new UserException(
+                gettext('A zapret2 runtime operation is already in progress.'),
+                gettext('Zapret2 runtime busy')
+            );
+        }
+
+        $response = trim((string)$backend->configdRun(
+            'zapret setup install ' . $version,
+            false,
+            30
+        ));
+        if ($response !== 'OK') {
+            throw new UserException(
+                gettext('The zapret2 runtime operation could not be started.'),
+                gettext('Zapret2 setup error')
+            );
+        }
+
+        return [
+            'status' => 'ok',
+            'version' => $version,
+        ];
+    }
+
     /**
      * Build and validate a candidate release before replacing the live runtime.
      * Backend failures are translated to a user-visible OPNsense exception.
@@ -65,7 +200,7 @@ class ServiceController extends ApiMutableServiceControllerBase
                     $message = trim($parts[5]);
                 }
             }
-            throw new \OPNsense\Base\UserException(
+            throw new UserException(
                 $message,
                 gettext('Zapret configuration error')
             );
@@ -73,5 +208,4 @@ class ServiceController extends ApiMutableServiceControllerBase
 
         return ['status' => 'ok', 'response' => $response];
     }
-
 }

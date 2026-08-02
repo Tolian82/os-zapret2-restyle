@@ -1350,3 +1350,51 @@ Remaining live verification:
 - confirm complete plugin and core page rendering;
 - confirm prior zapret running/stopped state remains preserved;
 - confirm Web GUI restart failure is surfaced.
+
+==================================================
+2026-08-02 — GUI ZAPRET2 SERVICE AND RELEASE MANAGEMENT
+==================================================
+
+Objective:
+
+Expose the already implemented setup.sh stable-release selection through the Settings
+GUI without changing or duplicating setup.sh behavior.
+
+Implemented:
+
+- added a native collapsible `Zapret2 Service` section below the existing settings
+  groups;
+- placed colored service status, installed tag, Start/Stop, four-release selector, and
+  Apply on one desktop row;
+- retained the existing base service Start/Stop API;
+- added controller endpoints for runtime state, `setup.sh show`, and selected-release
+  installation;
+- required strict numeric tags and current membership in the four-release list before
+  launch;
+- extended setup_launcher.sh to propagate `install VERSION`, reject malformed or extra
+  arguments, reject concurrent live setup PIDs, and expose read-only status;
+- added configd actions for release listing and setup status;
+- launched long-running setup asynchronously and added two-second GUI polling with
+  disabled conflicting controls and visible failure reporting;
+- used OPNsense standard controls/gettext strings and Russian forms for the two
+  plugin-specific labels when the active OPNsense language is Russian;
+- left setup.sh unchanged;
+- advanced PLUGIN_REVISION from 4 to 5 while VERSION remains 0.2.8.
+
+Focused verification:
+
+- PHP syntax for ServiceController.php;
+- /bin/sh syntax for setup_launcher.sh and the focused test;
+- exact VERSION propagation through a mocked daemon launch;
+- malformed and extra-argument rejection;
+- started, stopped, error, installed-tag, setup-state, and busy-PID status output;
+- static controller, view, localization, configd action, and endpoint contracts;
+- full CI validation and FreeBSD package build through the pull request.
+
+Remaining live verification:
+
+- visual one-line layout and collapse behavior in OPNsense;
+- English and Russian labels under the corresponding OPNsense language setting;
+- Start/Stop and version reporting;
+- selected reinstall, upgrade, and downgrade while initially running and stopped;
+- completion polling, failure dialog, and setup log reference.

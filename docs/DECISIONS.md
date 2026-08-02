@@ -2270,3 +2270,69 @@ Affected documents:
 - docs/ROADMAP.md
 - docs/REQUIREMENTS.md
 - docs/CHANGELOG.md
+
+==================================================
+DEC-2026-08-02 — GUI REUSES SETUP.SH FOR UPSTREAM RELEASE MANAGEMENT
+==================================================
+
+Status:
+Active.
+
+Decision:
+
+Add a native collapsible `Zapret2 Service` section to the Settings page. The section
+displays canonical service health, installed upstream release tag, existing Start/Stop
+control, the four stable releases returned by `setup.sh show`, and an Apply action for
+the selected release. All controls remain on one horizontal line at normal desktop
+width and may wrap only for narrow responsive layouts.
+
+Release installation, repeat installation, upgrade, and downgrade must continue through
+`setup.sh install VERSION`. ServiceController may validate and authorize the selected
+tag but must not reproduce GitHub release discovery, checkout, build, dependency, or
+service-state logic. The long-running setup process is launched outside configd and the
+GUI polls a read-only status adapter. setup.sh itself is not changed by this GUI work.
+
+Use OPNsense standard controls and gettext labels. English is the default. The two
+plugin-specific labels that are not guaranteed to exist in the OPNsense language
+catalogue provide a Russian form selected from the active OPNsense document language;
+the plugin does not add its own language selector or alter OPNsense language settings.
+
+Reason:
+
+The command-line backend already implements the approved latest/four-release discovery,
+strict published-tag validation, build path, and complete service-state preservation.
+Reusing it keeps one authoritative runtime-management implementation and makes the
+approved functionality accessible without SSH. Asynchronous launch prevents a long
+build from occupying a normal web request while preserving visible progress and error
+state.
+
+Consequences:
+
+- ServiceController gains read-only release/runtime endpoints and a selected-release
+  install endpoint;
+- setup_launcher.sh accepts `install VERSION` and provides read-only status output;
+- configd registers release-list and setup-status actions;
+- the existing base service Start/Stop endpoints remain authoritative;
+- no release is installed unless it is both syntactically valid and still present in
+  the current four-release setup.sh output;
+- installed version and service health remain separate displayed values;
+- focused CI coverage and one package revision increment are required;
+- live OPNsense rendering and install/reinstall/upgrade/downgrade verification remain
+  required before this package candidate becomes a verified baseline.
+
+Affected documents:
+
+- Makefile
+- src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php
+- src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt
+- src/opnsense/scripts/OPNsense/Zapret/setup_launcher.sh
+- src/opnsense/service/conf/actions.d/actions_zapret.conf
+- scripts/test-gui-runtime-management.sh
+- .github/workflows/ci.yml
+- docs/PROJECT_STATE.md
+- docs/DECISIONS.md
+- docs/ARCHITECTURE.md
+- docs/DEVLOG.md
+- docs/ROADMAP.md
+- docs/REQUIREMENTS.md
+- docs/CHANGELOG.md

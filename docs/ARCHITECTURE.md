@@ -702,3 +702,48 @@ Blob shorthand boundary:
 Live evidence confirms the architecture can load both HOSTLIST and IPSET selectors,
 expand mixed selector profiles, generate four runtime profiles, install firewall state,
 and keep a supervised dvtws2 process running.
+
+==================================================
+GUI UPSTREAM RUNTIME MANAGEMENT
+==================================================
+
+The Settings page adds one native collapsible service-maintenance section without
+changing the configuration form model. Its control path is:
+
+```text
+/ui/zapret
+  -> general.volt Zapret2 Service section
+  -> /api/zapret/service/runtime
+       -> configctl zapret setup_status
+       -> setup_launcher.sh status
+  -> /api/zapret/service/releases
+       -> configctl zapret setup_releases
+       -> setup.sh show
+  -> /api/zapret/service/install (selected vX.Y[.Z...])
+       -> strict syntax and current-list validation
+       -> configctl zapret setup install VERSION
+       -> setup_launcher.sh install VERSION
+       -> daemon(8)
+       -> setup.sh install VERSION
+  -> periodic runtime-status polling until setup completes
+```
+
+The existing `ApiMutableServiceControllerBase` Start and Stop actions remain the only
+GUI service-control path. Runtime management does not add a second service lifecycle.
+
+`setup_launcher.sh status` is read-only and reports four constrained fields:
+
+- `service=started|stopped|error`, using canonical zapret_service.sh status;
+- `version=vX.Y[.Z...]` only when the upstream Git HEAD exactly matches a numeric tag;
+- `setup=ready|installing|failed|unknown`, from setup state;
+- `busy=0|1`, from the live daemon PID.
+
+The MVC controller treats this output as untrusted, applies value whitelists, and does
+not expose arbitrary backend text. A requested release must match the numeric tag
+contract and remain present in the current `setup.sh show` result immediately before
+launch. The launcher repeats syntax validation before handing arguments to setup.sh.
+
+The long-running setup process remains outside configd. The normal web request receives
+only successful launch acknowledgement; the GUI disables conflicting controls and polls
+status. setup.sh retains ownership of the setup lock, GitHub validation, checkout/build,
+and preservation of the initially running or stopped service state.
