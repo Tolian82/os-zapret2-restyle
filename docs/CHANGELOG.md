@@ -10,6 +10,14 @@ The project starts its own version history at `0.1.0`.
 
 ### Added
 
+- Added a native collapsible `Zapret2 Service` section to the Settings page with
+  colored service status, installed upstream tag, Start/Stop, a four-release selector,
+  and selected-release Apply controls on one desktop row.
+- Added API/configd paths for read-only runtime state, `setup.sh show`, and asynchronous
+  `setup.sh install VERSION` launch without duplicating release-management logic.
+- Added English-default and Russian plugin-specific labels selected by the active
+  OPNsense page language.
+- Added focused GUI runtime-management regression coverage.
 - Added `setup.sh show` to print up to the four latest published stable
   bol-van/zapret2 releases.
 - Added `setup.sh install VERSION` for exact-version installation, repeat
@@ -19,6 +27,14 @@ The project starts its own version history at `0.1.0`.
 - Added concise `--help` and `-h` command documentation.
 - Added focused release-selection coverage for stable filtering, exact selection,
   lock propagation, checkout paths, and invalid or unpublished versions.
+
+### Changed
+
+- Extended setup_launcher.sh to validate and propagate a selected stable tag, report
+  service/version/setup/busy state, and reject a concurrent live setup process.
+- Kept setup.sh unchanged as the single release discovery, validation, build, and
+  service-state-preservation backend.
+- Advanced the unpublished development package candidate from `0.2.8_4` to `0.2.8_5`.
 
 ### Fixed
 

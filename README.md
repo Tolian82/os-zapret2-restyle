@@ -146,7 +146,7 @@ Valid values are normalized, saved, activated, and reloaded into the form.
 INSTALLATION
 ==================================================
 
-Version 0.2.8 is the current prerelease line; this source tree builds package revision 4.
+Version 0.2.8 is the current prerelease line; this source tree builds package revision 5.
 
 The supported distribution model is a project-owned FreeBSD pkg repository
 published through GitHub Pages for FreeBSD:15:amd64 / supported OPNsense 26.7
@@ -177,7 +177,11 @@ stable bol-van/zapret2 release. With an exact version it verifies that the relea
 published, checks out that tag, compiles and verifies dvtws2, and records the result.
 Internet access is required during setup. After verification it refreshes and verifies
 the installed runtime only when the service was running before setup; a stopped service
-remains stopped. A future GUI maintenance action will call the same backend.
+remains stopped. The Settings page now exposes the same backend through the collapsible
+**Zapret2 Service** block: service health and installed release, Start/Stop, the four
+latest stable repository releases, and Apply for installation, reinstallation, upgrade,
+or downgrade. Runtime setup remains asynchronous and preserves the initial complete
+running or stopped service state.
 
 Package upgrades preserve the prior service state. The replacement package stops a
 running service before the old package hook and plugin-file replacement, then starts it

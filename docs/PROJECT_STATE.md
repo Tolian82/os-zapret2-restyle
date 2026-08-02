@@ -39,25 +39,26 @@ Current version:
 0.2.8
 
 Current package revision:
-4
+5
 
 Current package candidate:
-os-zapret2-restyle-0.2.8_4
+os-zapret2-restyle-0.2.8_5
 
 Latest completed implementation:
-Post-install Web GUI refresh lifecycle correction in the current tree.
+GUI service control and bol-van/zapret2 release management in the current tree.
 
 Current milestone:
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current phase:
-Command-line bol-van/zapret2 release selection is implemented. Package revision 4 also
-refreshes the Web GUI after plugin files are installed or replaced.
+The Settings page now exposes service status/control, installed runtime version, the
+four stable releases returned by setup.sh show, and asynchronous selected-release
+installation through setup.sh install VERSION.
 
 Current priority:
-Live-verify that package 0.2.8_4 replaces the Web GUI process and preserves complete
-zapret service state, then complete the release-selection matrix and add installed
-runtime-version reporting.
+Build and live-verify package 0.2.8_5 on OPNsense: service Start/Stop, current version,
+four-release selection, install/reinstall/upgrade/downgrade polling, and preservation
+of the prior running or stopped service state.
 
 Known blockers:
 No source blocker is known. The Web GUI refresh correction and the release-selection
@@ -163,6 +164,35 @@ static coverage enforces the action, ordering, exact `OK` response, and rejectio
 the obsolete hook name.
 
 ==================================================
+GUI ZAPRET2 SERVICE MANAGEMENT — 2026-08-02
+==================================================
+
+The Settings page now contains a native collapsible `Zapret2 Service` section below
+the existing settings groups. Its single horizontal control line provides:
+
+- colored Started, Stopped, or Error service status;
+- the exact installed upstream tag when the runtime Git tree is at a published tag;
+- a Start/Stop button using the existing service API;
+- a Repository Releases selector populated by `setup.sh show`;
+- an Apply button that starts `setup.sh install VERSION` outside configd and polls its
+  read-only status until completion.
+
+The GUI does not duplicate release discovery, release validation, checkout, build, or
+service-state preservation. ServiceController validates the strict numeric tag syntax,
+requires the selection to remain in the four releases returned by setup.sh, and invokes
+configd actions only. setup_launcher.sh now accepts the selected version and exposes a
+read-only status mode for service health, installed tag, setup state, and active setup
+PID. Existing setup.sh behavior is unchanged.
+
+The section uses normal OPNsense controls and collapse behavior. Standard labels use the
+OPNsense language catalogue; the two plugin-specific section labels select English by
+default and Russian when the active OPNsense document language is Russian.
+
+Focused verification covers launcher argument validation and propagation, status output,
+controller/configd contracts, GUI endpoints and localization strings, and action
+registration. VERSION remains 0.2.8 and PLUGIN_REVISION advances from 4 to 5.
+
+==================================================
 CURRENTLY CONFIRMED
 ==================================================
 
@@ -239,15 +269,15 @@ architecture is broken.
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Build and locally install package candidate 0.2.8_4; this development task does not
+1. Build and locally install package candidate 0.2.8_5; this development task does not
    publish it to the pkg repository.
-2. Execute the Web GUI package-lifecycle verification above and record exact evidence.
-3. Execute the release-selection matrix and record exact evidence.
-4. Add read-only installed runtime-version detection.
-5. Expose installed and available version data through the backend API.
-6. Add update notification and GUI release controls that reuse setup.sh rather than
-   duplicate release discovery or installation logic.
-7. Continue reporting runtime presence separately from runtime/service health.
+2. Verify the Zapret2 Service section in English and Russian OPNsense locales.
+3. Verify Start/Stop and current-version reporting against the installed runtime.
+4. Verify selection and completion polling for reinstall, upgrade, and downgrade while
+   preserving initially running and stopped service states.
+5. Execute the retained Web GUI package-lifecycle and release-selection matrices and
+   record exact evidence.
+6. Add an explicit newer-release notification only as a separate logical change.
 
 ==================================================
 WORKING RULES FOR RESUMPTION

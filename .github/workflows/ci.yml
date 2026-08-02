@@ -74,6 +74,9 @@ jobs:
       - name: Test setup release selection
         run: sh scripts/test-setup-release-selection.sh
 
+      - name: Test GUI runtime management
+        run: sh scripts/test-gui-runtime-management.sh
+
       - name: Test automated release trigger contract
         run: sh scripts/test-release-trigger.sh
 
@@ -107,6 +110,7 @@ jobs:
             scripts/build-pkg.sh \
             scripts/test-package-lifecycle-restart.sh \
             scripts/test-setup-release-selection.sh \
+            scripts/test-gui-runtime-management.sh \
             scripts/test-release-trigger.sh \
             scripts/test-release-node24-actions.sh \
             .github/workflows/release.yml \

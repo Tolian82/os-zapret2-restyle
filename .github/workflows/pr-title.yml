@@ -1,0 +1,43 @@
+name: Pull request title
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-title:
+    name: Validate package version in title
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Require exact package candidate prefix
+        shell: bash
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+
+          version=$(tr -d '[:space:]' < VERSION)
+          revision=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | head -1)
+
+          expected="v${version}"
+          if [[ -n "${revision}" && "${revision}" != "0" ]]; then
+            expected="${expected}_${revision}"
+          fi
+
+          case "${PR_TITLE}" in
+            "${expected}: "*)
+              echo "Pull-request title matches package candidate ${expected}."
+              ;;
+            *)
+              echo "Invalid pull-request title: ${PR_TITLE}" >&2
+              echo "Required format: ${expected}: <logical change>" >&2
+              exit 1
+              ;;
+          esac
