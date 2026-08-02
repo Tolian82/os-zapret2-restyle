@@ -1,9 +1,9 @@
 name: Apply GUI runtime management patch
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/gui-zapret2-service
+      - main
   workflow_dispatch:
 
 permissions:
