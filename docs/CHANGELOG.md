@@ -8,13 +8,27 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+### Added
+
+- Added `setup.sh show` to print up to the four latest published stable
+  bol-van/zapret2 releases.
+- Added `setup.sh install VERSION` for exact-version installation, repeat
+  installation, upgrade, and downgrade through one backend path.
+- Added latest-stable selection for no-argument setup and `setup.sh install` without
+  a version.
+- Added concise `--help` and `-h` command documentation.
+- Added focused release-selection coverage for stable filtering, exact selection,
+  lock propagation, checkout paths, and invalid or unpublished versions.
+
 ### Fixed
 
-- Made `setup.sh install` preserve the initial complete service state: it now
-  refreshes and verifies only a previously running service, leaves a stopped service
-  stopped, and rejects incomplete or unknown state before changing the runtime.
-- Increased the development package revision to `0.2.5_2` and extended focused
-  lifecycle contract coverage for conditional setup refresh.
+- Corrected GitHub release discovery to use options supported by native FreeBSD
+  `/usr/bin/fetch`; removed curl-style `-H` arguments and supplied the user agent with
+  `--user-agent=os-zapret2-restyle`.
+- Made the fetch mock fail on unknown arguments and explicitly reject curl-style
+  header options so Linux CI cannot silently accept an invalid OPNsense command.
+- Superseded the unpublished CI-only `0.2.8_2` artifact with development package
+  candidate `0.2.8_3`.
 
 ## [0.2.5] - 2026-08-01
 
