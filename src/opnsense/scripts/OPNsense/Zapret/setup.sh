@@ -15,6 +15,7 @@ SERVICE_SCRIPT="/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 FREEBSD_REPO_OVERRIDE="/usr/local/etc/pkg/repos/FreeBSD.conf"
 FREEBSD_REPO_BACKUP="${STATE_DIR}/FreeBSD.conf.backup"
 FETCH_BIN="${FETCH_BIN:-/usr/bin/fetch}"
+PHP_BIN="${PHP_BIN:-/usr/local/bin/php}"
 LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 ENABLED_FREEBSD_REPO=0
 
@@ -108,29 +109,31 @@ fetch_stable_releases()
         return 1
     fi
 
-    awk '
-        /^[[:space:]]*"tag_name":[[:space:]]*/ {
-            tag = $0
-            sub(/^[^:]*:[[:space:]]*"/, "", tag)
-            sub(/".*$/, "", tag)
-            draft = 1
-            prerelease = 1
-            next
+    if [ ! -x "${PHP_BIN}" ]; then
+        rm -f "${_release_json}" "${_release_list}"
+        echo "ERROR: OPNsense PHP CLI is unavailable" >&2
+        return 1
+    fi
+
+    if ! "${PHP_BIN}" -r '
+        $releases = json_decode(file_get_contents($argv[1]), true);
+        if (!is_array($releases)) {
+            exit(2);
         }
-        /^[[:space:]]*"draft":[[:space:]]*/ {
-            draft = ($0 ~ /false/) ? 0 : 1
-            next
-        }
-        /^[[:space:]]*"prerelease":[[:space:]]*/ {
-            prerelease = ($0 ~ /false/) ? 0 : 1
-            if (tag ~ /^v[0-9]+(\.[0-9]+)+$/ && draft == 0 && prerelease == 0) {
-                print tag
+        foreach ($releases as $release) {
+            if (!is_array($release) || !empty($release["draft"]) || !empty($release["prerelease"])) {
+                continue;
             }
-            tag = ""
-            draft = 1
-            prerelease = 1
+            $tag = $release["tag_name"] ?? "";
+            if (is_string($tag) && preg_match("/^v[0-9]+(?:\\.[0-9]+)+$/D", $tag)) {
+                echo $tag, PHP_EOL;
+            }
         }
-    ' "${_release_json}" > "${_release_list}"
+    ' "${_release_json}" > "${_release_list}"; then
+        rm -f "${_release_json}" "${_release_list}"
+        echo "ERROR: GitHub returned invalid release data" >&2
+        return 1
+    fi
 
     rm -f "${_release_json}"
 
