@@ -32,11 +32,16 @@ function zapret_enabled()
     return (string)$model->general->enabled === '1';
 }
 
+function zapret_runtime_installed()
+{
+    return is_executable('/usr/local/etc/zapret2/binaries/my/dvtws2');
+}
+
 function zapret_services()
 {
     $services = [];
 
-    if (zapret_enabled()) {
+    if (zapret_enabled() && zapret_runtime_installed()) {
         $services[] = [
             'description' => gettext('Zapret2 DPI Bypass'),
             'configd' => [

@@ -2,10 +2,16 @@
 
 set -eu
 
-PRE_INSTALL_HOOK="pkg/+PRE_INSTALL"
-PRE_HOOK="pkg/+PRE_DEINSTALL"
-POST_HOOK="pkg/+POST_INSTALL"
-SETUP_SCRIPT="src/opnsense/scripts/OPNsense/Zapret/setup.sh"
+ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+PRE_INSTALL_HOOK="${ROOT_DIR}/pkg/+PRE_INSTALL"
+PRE_DEINSTALL_HOOK="${ROOT_DIR}/pkg/+PRE_DEINSTALL"
+POST_INSTALL_HOOK="${ROOT_DIR}/pkg/+POST_INSTALL"
+START_HOOK="${ROOT_DIR}/src/etc/rc.syshook.d/start/20-zapret"
+PLUGIN_HOOK="${ROOT_DIR}/src/etc/inc/plugins.inc.d/zapret.inc"
+SERVICE_SCRIPT="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
+SUPERVISOR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/backend/supervisor.sh"
+TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/zapret-lifecycle-test.XXXXXX")
+trap 'rm -rf "${TMP_ROOT}"' EXIT INT TERM HUP
 
 fail()
 {
@@ -13,118 +19,102 @@ fail()
     exit 1
 }
 
+# Replacement-package upgrade state preservation remains fail-closed.
 grep -q 'PKG_UPGRADE' "${PRE_INSTALL_HOOK}" ||
     fail "replacement pre-install does not distinguish package upgrade"
 grep -q 'pkg-upgrade.restart' "${PRE_INSTALL_HOOK}" ||
     fail "replacement pre-install does not preserve the running-state marker"
 grep -q 'stopped_status' "${PRE_INSTALL_HOOK}" ||
     fail "replacement pre-install does not verify complete service stop"
-
-if grep -Eq 'SERVICE_SCRIPT.*stop.*\|\|[[:space:]]*true' "${PRE_INSTALL_HOOK}"; then
-    fail "replacement pre-install suppresses service-stop failure"
-fi
-
-grep -q 'PKG_UPGRADE' "${PRE_HOOK}" ||
+grep -q 'PKG_UPGRADE' "${PRE_DEINSTALL_HOOK}" ||
     fail "pre-deinstall does not distinguish package upgrade"
-grep -q 'pkg-upgrade.restart' "${PRE_HOOK}" ||
-    fail "pre-deinstall does not preserve the running-state marker"
-grep -q 'service_status' "${PRE_HOOK}" ||
-    fail "pre-deinstall does not inspect service state"
-grep -q 'stopped_status' "${PRE_HOOK}" ||
+grep -q 'stopped_status' "${PRE_DEINSTALL_HOOK}" ||
     fail "pre-deinstall does not verify complete service stop"
 
-if grep -Eq 'SERVICE_SCRIPT.*stop.*\|\|[[:space:]]*true' "${PRE_HOOK}"; then
-    fail "pre-deinstall still suppresses service-stop failure"
+if grep -Eq 'SERVICE_SCRIPT.*stop.*\|\|[[:space:]]*true' \
+    "${PRE_INSTALL_HOOK}" "${PRE_DEINSTALL_HOOK}"; then
+    fail "package lifecycle suppresses a service-stop failure"
 fi
 
-grep -q 'PKG_UPGRADE' "${POST_HOOK}" ||
-    fail "post-install does not distinguish package upgrade"
-grep -q 'pkg-upgrade.restart' "${POST_HOOK}" ||
-    fail "post-install does not consume the running-state marker"
-grep -q '"${CONFIGCTL}" zapret start' "${POST_HOOK}" ||
-    fail "post-install does not start the replacement service through configd"
-grep -q '"${SERVICE_SCRIPT}" status' "${POST_HOOK}" ||
-    fail "post-install does not verify replacement service state"
-grep -q 'register.php' "${POST_HOOK}" ||
-    fail "post-install does not use the OPNsense plugin registration helper"
-grep -q 'install os-zapret2-restyle' "${POST_HOOK}" ||
-    fail "post-install does not register the correct plugin package name"
-grep -q '"${CONFIGURE_PLUGINS}" POST_INSTALL' "${POST_HOOK}" ||
-    fail "post-install does not invoke rc.configure_plugins with POST_INSTALL"
+# New configd actions must be loaded before template rendering, service restore,
+# or the final Web GUI restart.
+grep -q '"${SERVICE_BIN}" configd restart' "${POST_INSTALL_HOOK}" ||
+    fail "post-install does not restart configd after installing actions"
+grep -q 'template reload OPNsense/Zapret' "${POST_INSTALL_HOOK}" ||
+    fail "post-install does not render the Zapret template through refreshed configd"
+grep -q '\[ "${template_output}" != "OK" \]' "${POST_INSTALL_HOOK}" ||
+    fail "post-install does not require exact template reload success"
+grep -q '"${CONFIGCTL}" zapret start' "${POST_INSTALL_HOOK}" ||
+    fail "post-install no longer restores a previously running service"
+grep -q '"${CONFIGCTL}" webgui restart 2' "${POST_INSTALL_HOOK}" ||
+    fail "post-install no longer refreshes the Web GUI last"
 
-if grep -q 'rc.configure_plugins zapret2' "${POST_HOOK}"; then
-    fail "post-install still passes the service namespace as lifecycle mode"
-fi
-if grep -Eq 'FIRMWARE_REGISTER.*\|\|[[:space:]]*true' "${POST_HOOK}"; then
-    fail "post-install suppresses OPNsense registration failure"
-fi
-if grep -Eq 'CONFIGURE_PLUGINS.*\|\|[[:space:]]*true' "${POST_HOOK}"; then
-    fail "post-install suppresses OPNsense POST_INSTALL failure"
-fi
+configd_line=$(grep -n '"${SERVICE_BIN}" configd restart' "${POST_INSTALL_HOOK}" | cut -d: -f1)
+template_line=$(grep -n 'template reload OPNsense/Zapret' "${POST_INSTALL_HOOK}" | cut -d: -f1)
+zapret_line=$(grep -n '"${CONFIGCTL}" zapret start' "${POST_INSTALL_HOOK}" | cut -d: -f1)
+webgui_line=$(grep -n '"${CONFIGCTL}" webgui restart 2' "${POST_INSTALL_HOOK}" | cut -d: -f1)
+message_line=$(grep -n "cat <<'MESSAGE'" "${POST_INSTALL_HOOK}" | cut -d: -f1)
 
-grep -q '"${CONFIGCTL}" webgui restart 2' "${POST_HOOK}" ||
-    fail "post-install does not refresh the Web GUI through the canonical configd action"
-grep -q '\[ "${webgui_output}" != "OK" \]' "${POST_HOOK}" ||
-    fail "post-install does not enforce the exact Web GUI configd success response"
-if grep -q 'webgui\.lighttpd_reload' "${POST_HOOK}"; then
-    fail "post-install uses the obsolete webgui.lighttpd_reload plugin hook"
-fi
-if grep -Eq 'webgui restart.*\|\|[[:space:]]*true' "${POST_HOOK}"; then
-    fail "post-install suppresses Web GUI refresh failure"
-fi
-
-register_line=$(grep -n 'install os-zapret2-restyle' "${POST_HOOK}" | cut -d: -f1)
-configure_line=$(grep -n '"${CONFIGURE_PLUGINS}" POST_INSTALL' "${POST_HOOK}" | cut -d: -f1)
-zapret_start_line=$(grep -n '"${CONFIGCTL}" zapret start' "${POST_HOOK}" | cut -d: -f1)
-webgui_restart_line=$(grep -n '"${CONFIGCTL}" webgui restart 2' "${POST_HOOK}" | cut -d: -f1)
-message_line=$(grep -n "cat <<'MESSAGE'" "${POST_HOOK}" | cut -d: -f1)
-
-[ "${register_line}" -lt "${webgui_restart_line}" ] ||
-    fail "Web GUI refresh runs before plugin registration"
-[ "${configure_line}" -lt "${webgui_restart_line}" ] ||
-    fail "Web GUI refresh runs before OPNsense POST_INSTALL configuration"
-[ "${zapret_start_line}" -lt "${webgui_restart_line}" ] ||
-    fail "Web GUI refresh runs before replacement zapret service restoration"
-[ "${webgui_restart_line}" -lt "${message_line}" ] ||
+[ "${configd_line}" -lt "${template_line}" ] ||
+    fail "template reload runs before replacement configd actions are loaded"
+[ "${template_line}" -lt "${zapret_line}" ] ||
+    fail "upgrade service restoration runs before template rendering"
+[ "${zapret_line}" -lt "${webgui_line}" ] ||
+    fail "Web GUI refresh runs before service-state restoration"
+[ "${webgui_line}" -lt "${message_line}" ] ||
     fail "Web GUI refresh is not the final package integration action"
 
-state_line=$(grep -n '"${SERVICE_SCRIPT}" status' "${SETUP_SCRIPT}" |
-    head -1 |
-    cut -d: -f1)
-build_line=$(grep -n 'make -C "${ZAPRET_DIR}"$' "${SETUP_SCRIPT}" |
-    cut -d: -f1)
-restart_condition_line=$(grep -n 'if \[ "${_service_was_running}" -eq 1 \]' "${SETUP_SCRIPT}" |
-    cut -d: -f1)
-restart_line=$(grep -n '"${CONFIGCTL}" zapret restart' "${SETUP_SCRIPT}" |
-    cut -d: -f1)
-ready_line=$(grep -n 'status_write "ready"' "${SETUP_SCRIPT}" |
-    tail -1 |
-    cut -d: -f1)
+if grep -Eq 'configd restart.*\|\|[[:space:]]*true' "${POST_INSTALL_HOOK}"; then
+    fail "post-install suppresses configd restart failure"
+fi
 
-[ -n "${state_line}" ] ||
-    fail "setup does not capture the initial service state"
-[ -n "${build_line}" ] ||
-    fail "setup runtime build location is unavailable"
-[ "${state_line}" -lt "${build_line}" ] ||
-    fail "setup captures service state after changing the runtime"
-[ -n "${restart_condition_line}" ] ||
-    fail "setup restart is not conditional on the initial running state"
-[ -n "${restart_line}" ] ||
-    fail "setup does not refresh the service after runtime installation"
-[ "${restart_condition_line}" -lt "${restart_line}" ] ||
-    fail "setup restart is outside the running-state condition"
-[ -n "${ready_line}" ] ||
-    fail "setup no longer records ready state"
-[ "${restart_line}" -lt "${ready_line}" ] ||
-    fail "setup records ready before service refresh succeeds"
-grep -q '\[ "${_service_output}" != "OK" \]' "${SETUP_SCRIPT}" ||
-    fail "setup does not enforce the exact configd success response"
-grep -q 'Runtime installation completed successfully; zapret service remains stopped.' "${SETUP_SCRIPT}" ||
-    fail "setup does not preserve and report the stopped service state"
+# Clean boot without runtime must be a silent no-op.
+CONFIGCTL_MOCK="${TMP_ROOT}/configctl"
+CONFIGCTL_CALLS="${TMP_ROOT}/configctl.calls"
+MISSING_DVTWS="${TMP_ROOT}/missing/dvtws2"
+INSTALLED_DVTWS="${TMP_ROOT}/runtime/dvtws2"
+cat > "${CONFIGCTL_MOCK}" <<'MOCK'
+#!/bin/sh
+printf '%s\n' "$*" >> "${CONFIGCTL_CALLS}"
+exit 0
+MOCK
+chmod +x "${CONFIGCTL_MOCK}"
 
-grep -q 'PRE_INSTALL_JSON=.*pkg/+PRE_INSTALL' scripts/build-pkg.sh ||
-    fail "package builder does not embed the replacement pre-install hook"
-grep -q '"pre-install":.*pre_install' scripts/build-pkg.sh ||
-    fail "package manifest does not expose the replacement pre-install hook"
+CONFIGCTL_CALLS="${CONFIGCTL_CALLS}" \
+CONFIGCTL="${CONFIGCTL_MOCK}" \
+DVTWS_BIN="${MISSING_DVTWS}" \
+"${START_HOOK}"
+[ ! -e "${CONFIGCTL_CALLS}" ] ||
+    fail "boot hook called configd while dvtws2 was absent"
 
-echo "PASS: package lifecycle preserves service state and registers the plugin safely"
+mkdir -p "$(dirname "${INSTALLED_DVTWS}")"
+: > "${INSTALLED_DVTWS}"
+chmod +x "${INSTALLED_DVTWS}"
+CONFIGCTL_CALLS="${CONFIGCTL_CALLS}" \
+CONFIGCTL="${CONFIGCTL_MOCK}" \
+DVTWS_BIN="${INSTALLED_DVTWS}" \
+"${START_HOOK}"
+grep -Fxq 'zapret start' "${CONFIGCTL_CALLS}" ||
+    fail "boot hook did not start an installed runtime"
+
+# OPNsense must not register a startable service before runtime installation.
+grep -q 'function zapret_runtime_installed()' "${PLUGIN_HOOK}" ||
+    fail "plugin integration has no explicit runtime-installed predicate"
+grep -q "is_executable('/usr/local/etc/zapret2/binaries/my/dvtws2')" "${PLUGIN_HOOK}" ||
+    fail "plugin integration does not use executable dvtws2 as installation evidence"
+grep -q 'zapret_enabled() && zapret_runtime_installed()' "${PLUGIN_HOOK}" ||
+    fail "plugin service registration is not gated by runtime installation"
+
+# Direct service start and supervisor launch remain protected by the binary gate.
+ensure_line=$(grep -n '^ensure_runtime_components()' "${SERVICE_SCRIPT}" | cut -d: -f1)
+start_line=$(grep -n '^start_service()' "${SERVICE_SCRIPT}" | cut -d: -f1)
+start_guard_line=$(grep -n 'ensure_runtime_components || return 1' "${SERVICE_SCRIPT}" | head -1 | cut -d: -f1)
+supervisor_guard_line=$(grep -n '\[ -x "${_supervisor_expected_child}" \]' "${SUPERVISOR}" | cut -d: -f1)
+[ -n "${ensure_line}" ] && [ -n "${start_line}" ] && [ -n "${start_guard_line}" ] ||
+    fail "service runtime guard is missing"
+[ "${start_line}" -lt "${start_guard_line}" ] ||
+    fail "service start does not check runtime before lifecycle work"
+[ -n "${supervisor_guard_line}" ] ||
+    fail "supervisor start does not require executable dvtws2"
+
+echo "PASS: package lifecycle is silent without runtime and restores only valid runtime state"

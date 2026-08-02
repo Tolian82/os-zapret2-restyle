@@ -1,7 +1,11 @@
 #!/bin/sh
 
-# Auto-start zapret2 at boot if enabled in config.xml.
-# The [start] action in actions_zapret.conf invokes zapret_service.sh,
-# which respects the ZAPRET_ENABLED flag and exits cleanly when disabled.
+# A clean plugin installation intentionally has no bol-van/zapret2 runtime yet.
+# Boot must therefore stay silent until setup.sh has produced executable dvtws2.
 
-/usr/local/sbin/configctl zapret start
+CONFIGCTL="${CONFIGCTL:-/usr/local/sbin/configctl}"
+DVTWS_BIN="${DVTWS_BIN:-/usr/local/etc/zapret2/binaries/my/dvtws2}"
+
+[ -x "${DVTWS_BIN}" ] || exit 0
+
+exec "${CONFIGCTL}" zapret start
