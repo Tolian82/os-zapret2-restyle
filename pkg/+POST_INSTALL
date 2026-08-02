@@ -1,13 +1,13 @@
 #!/bin/sh
 
-# Register the plugin and render its initial template. Runtime preparation is
-# intentionally separate from the pkg transaction. During an upgrade, restore
-# a service that the replacement pre-install hook stopped successfully. Refresh
-# the Web GUI last so replacement MVC, menu, ACL, and view files are loaded by
-# fresh lighttpd and PHP FastCGI workers.
+# Register the plugin, load replacement configd actions, render the initial
+# template, restore a previously running service during upgrade, and refresh
+# the Web GUI last. Runtime preparation remains separate from the pkg
+# transaction and is never started merely because the plugin was installed.
 
 SERVICE_SCRIPT="/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 CONFIGCTL="/usr/local/sbin/configctl"
+SERVICE_BIN="/usr/sbin/service"
 FIRMWARE_REGISTER="/usr/local/opnsense/scripts/firmware/register.php"
 CONFIGURE_PLUGINS="/usr/local/etc/rc.configure_plugins"
 UPGRADE_RESTART_MARKER="/var/run/zapret2-restyle/pkg-upgrade.restart"
@@ -32,12 +32,31 @@ if ! "${CONFIGURE_PLUGINS}" POST_INSTALL; then
     exit 1
 fi
 
-if [ -x "${CONFIGCTL}" ]; then
-    "${CONFIGCTL}" template reload OPNsense/Zapret >/dev/null 2>&1 || true
+[ -x "${SERVICE_BIN}" ] || {
+    echo "ERROR: OPNsense service control is unavailable after plugin installation" >&2
+    exit 1
+}
+
+if ! "${SERVICE_BIN}" configd restart >/dev/null 2>&1; then
+    echo "ERROR: configd could not be restarted after plugin action installation" >&2
+    exit 1
+fi
+
+[ -x "${CONFIGCTL}" ] || {
+    echo "ERROR: OPNsense configd control is unavailable after plugin installation" >&2
+    exit 1
+}
+
+template_output=$("${CONFIGCTL}" template reload OPNsense/Zapret 2>&1)
+template_result=$?
+if [ "${template_result}" -ne 0 ] || [ "${template_output}" != "OK" ]; then
+    printf '%s\n' "${template_output}" >&2
+    echo "ERROR: OPNsense Zapret template could not be rendered after plugin installation" >&2
+    exit 1
 fi
 
 if [ -n "${PKG_UPGRADE:-}" ] && [ -f "${UPGRADE_RESTART_MARKER}" ]; then
-    [ -x "${CONFIGCTL}" ] && [ -x "${SERVICE_SCRIPT}" ] || {
+    [ -x "${SERVICE_SCRIPT}" ] || {
         echo "ERROR: zapret service control is unavailable after package upgrade" >&2
         exit 1
     }
@@ -57,11 +76,6 @@ if [ -n "${PKG_UPGRADE:-}" ] && [ -f "${UPGRADE_RESTART_MARKER}" ]; then
 
     rm -f "${UPGRADE_RESTART_MARKER}"
 fi
-
-[ -x "${CONFIGCTL}" ] || {
-    echo "ERROR: OPNsense Web GUI control is unavailable after plugin installation" >&2
-    exit 1
-}
 
 webgui_output=$("${CONFIGCTL}" webgui restart 2 2>&1)
 webgui_result=$?
