@@ -44,15 +44,15 @@ Current package revision:
 Current package candidate:
 os-zapret2-restyle-0.2.8_3
 
-Release-selection implementation commit:
-e3a9ffcf10ffe1e39917141c0ed1989592a4a7eb
+Latest completed implementation commit:
+b1b6ffd79bed24fa3d23f3a318336e5c92da5bfd
 
 Current milestone:
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current phase:
 Command-line bol-van/zapret2 release selection is implemented in setup.sh, including
-a same-scope FreeBSD fetch compatibility correction for package revision 3.
+the FreeBSD fetch compatibility correction in package revision 3.
 
 Current priority:
 Live-verify the release-selection paths on OPNsense, then add installed runtime-version
@@ -120,18 +120,19 @@ Package and validation evidence:
 
 - VERSION remains 0.2.8;
 - PLUGIN_REVISION advanced from 1 to 2 for release selection and from 2 to 3 for the
-  same-scope FreeBSD fetch correction;
+  FreeBSD fetch correction;
 - focused release-selection tests cover stable filtering, four-release output, help,
   latest default selection, exact-version propagation through lockf, malformed values,
   unpublished values, strict fetch arguments, and both Git checkout paths;
-- the original implementation passed GitHub Actions CI run 30737096920, including the
-  FreeBSD package build;
-- PR #24 was squash-merged into main as commit
+- GitHub Actions CI run 30737689977 passed the complete Validate Project job;
+- the same run passed the FreeBSD package build and produced artifact
+  `os-zapret2-restyle-0.2.8_3`;
+- PR #24 introduced release selection and was squash-merged as commit
   e3a9ffcf10ffe1e39917141c0ed1989592a4a7eb;
-- the stale current-state documentation was corrected by PR #25 and squash commit
+- PR #25 synchronized the current-state document and was squash-merged as commit
   b79e2668c8f9b80a0483b3b50ce5b138418a2b7e;
-- package revision 3 must pass its own complete CI and FreeBSD package build before
-  this correction is merged;
+- PR #26 corrected FreeBSD fetch usage and was squash-merged as commit
+  b1b6ffd79bed24fa3d23f3a318336e5c92da5bfd;
 - no tag, GitHub Release, GitHub Pages repository update, or package publication was
   requested or performed.
 
@@ -204,15 +205,14 @@ architecture is broken.
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Complete CI and the FreeBSD package build for candidate 0.2.8_3.
-2. Install or update to candidate 0.2.8_3 only when a focused OPNsense test is
-   intentionally started; this development task does not publish it to the pkg repository.
-3. Execute the release-selection matrix above and record exact evidence.
-4. Add read-only installed runtime-version detection.
-5. Expose installed and available version data through the backend API.
-6. Add update notification and GUI release controls that reuse setup.sh rather than
+1. Install or update to package candidate 0.2.8_3 only when a focused OPNsense test is
+   intentionally started; this development task did not publish it to the pkg repository.
+2. Execute the release-selection matrix above and record exact evidence.
+3. Add read-only installed runtime-version detection.
+4. Expose installed and available version data through the backend API.
+5. Add update notification and GUI release controls that reuse setup.sh rather than
    duplicate release discovery or installation logic.
-7. Continue reporting runtime presence separately from runtime/service health.
+6. Continue reporting runtime presence separately from runtime/service health.
 
 ==================================================
 WORKING RULES FOR RESUMPTION
