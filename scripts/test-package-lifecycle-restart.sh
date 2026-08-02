@@ -30,20 +30,27 @@ if grep -Eq 'SERVICE_SCRIPT.*stop.*\|\|[[:space:]]*true' "${PRE_INSTALL}" "${PRE
 fi
 
 # Static guards supplement the behavioral execution below.
-grep -Fq 'CONFIGD_RC="${CONFIGD_RC:-/usr/local/etc/rc.d/configd}"' "${POST_INSTALL}" ||
-    fail "canonical configd rc path is missing"
-grep -Fq '"${CONFIGD_RC}" restart' "${POST_INSTALL}" || fail "configd action reload is missing"
-grep -Fq '"${CONFIGCTL}" system status' "${POST_INSTALL}" || fail "configd readiness probe is missing"
-grep -Fq 'template reload OPNsense/Zapret' "${POST_INSTALL}" || fail "Zapret template reload is missing"
-grep -Fq '"${CONFIGCTL}" zapret start' "${POST_INSTALL}" || fail "running-state restoration is missing"
-if grep -Eq 'webgui[[:space:]]+restart|rc\.restart_webgui' "${POST_INSTALL}"; then
-    fail "package lifecycle must not restart the global OPNsense Web GUI"
+grep -Fq 'CONFIGD_PID_FILE="${CONFIGD_PID_FILE:-/var/run/configd.pid}"' "${POST_INSTALL}" ||
+    fail "configd watcher pid file is missing"
+grep -Fq '"${KILL_BIN}" -TERM "${configd_old_worker}"' "${POST_INSTALL}" ||
+    fail "configd worker reload is missing"
+grep -Fq '"${CONFIGCTL}" system status' "${POST_INSTALL}" ||
+    fail "replacement configd worker readiness probe is missing"
+grep -Fq 'template reload OPNsense/Zapret' "${POST_INSTALL}" ||
+    fail "Zapret template reload is missing"
+grep -Fq '"${CONFIGCTL}" zapret start' "${POST_INSTALL}" ||
+    fail "running-state restoration is missing"
+if grep -Eq '(^|[[:space:]])(service[[:space:]]+configd|[^[:space:]]*/rc\.d/configd[[:space:]]+restart)|webgui[[:space:]]+restart|rc\.restart_webgui' "${POST_INSTALL}"; then
+    fail "package lifecycle must not restart configd watcher or global Web GUI"
 fi
 
-# Execute +POST_INSTALL with mocks. The first real-request probe fails and the second succeeds.
+# Execute +POST_INSTALL with a pre-existing watcher and behavioral process mocks.
+# TERM is sent only to the old worker; the same watcher exposes a replacement worker.
 TRACE="${TMP_ROOT}/trace"
-READY="${TMP_ROOT}/ready"
+RELOADED="${TMP_ROOT}/worker.reloaded"
+PID_FILE="${TMP_ROOT}/configd.pid"
 MARKER="${TMP_ROOT}/restart.marker"
+printf '%s\n' 4242 > "${PID_FILE}"
 
 write_mock()
 {
@@ -53,13 +60,20 @@ write_mock()
     chmod +x "${path}"
 }
 
-write_mock "${TMP_ROOT}/configd" \
-    'printf "%s\n" "configd:$*" >> "${TRACE}"' \
-    '[ "$*" = restart ]'
+write_mock "${TMP_ROOT}/pgrep" \
+    'printf "%s\n" "pgrep:$*" >> "${TRACE}"' \
+    'if [ -e "${RELOADED}" ]; then printf "%s\n" 4444; else printf "%s\n" 4343; fi'
+write_mock "${TMP_ROOT}/kill" \
+    'printf "%s\n" "kill:$*" >> "${TRACE}"' \
+    'case "$*" in' \
+    '  "-0 4242") exit 0 ;;' \
+    '  "-TERM 4343") : > "${RELOADED}"; exit 0 ;;' \
+    '  *) exit 64 ;;' \
+    'esac'
 write_mock "${TMP_ROOT}/configctl" \
     'printf "%s\n" "configctl:$*" >> "${TRACE}"' \
     'case "$*" in' \
-    '  "system status") n=0; [ ! -r "${READY}" ] || n=$(cat "${READY}"); n=$((n + 1)); printf "%s\n" "${n}" > "${READY}"; [ "${n}" -ge 2 ] ;;' \
+    '  "system status") [ -e "${RELOADED}" ] ;;' \
     '  "template reload OPNsense/Zapret"|"zapret start") printf "%s\n" OK ;;' \
     '  webgui*) exit 99 ;;' \
     '  *) exit 64 ;;' \
@@ -77,17 +91,23 @@ write_mock "${TMP_ROOT}/sleep" \
     'printf "%s\n" "sleep:$*" >> "${TRACE}"'
 : > "${MARKER}"
 
-TRACE="${TRACE}" READY="${READY}" \
-CONFIGD_RC="${TMP_ROOT}/configd" CONFIGCTL="${TMP_ROOT}/configctl" \
-FIRMWARE_REGISTER="${TMP_ROOT}/register" CONFIGURE_PLUGINS="${TMP_ROOT}/configure" \
-SERVICE_SCRIPT="${TMP_ROOT}/service" SLEEP_BIN="${TMP_ROOT}/sleep" \
-UPGRADE_RESTART_MARKER="${MARKER}" PKG_UPGRADE=1 \
+TRACE="${TRACE}" RELOADED="${RELOADED}" \
+CONFIGD_PID_FILE="${PID_FILE}" CONFIGD_WORKER_PATTERN='configd.py console' \
+PGREP_BIN="${TMP_ROOT}/pgrep" KILL_BIN="${TMP_ROOT}/kill" \
+CONFIGCTL="${TMP_ROOT}/configctl" FIRMWARE_REGISTER="${TMP_ROOT}/register" \
+CONFIGURE_PLUGINS="${TMP_ROOT}/configure" SERVICE_SCRIPT="${TMP_ROOT}/service" \
+SLEEP_BIN="${TMP_ROOT}/sleep" UPGRADE_RESTART_MARKER="${MARKER}" PKG_UPGRADE=1 \
 "${POST_INSTALL}" >/dev/null
 
-[ "$(cat "${READY}")" -eq 2 ] || fail "configd readiness was not retried"
+[ -e "${RELOADED}" ] || fail "configd worker was not reloaded"
 [ ! -e "${MARKER}" ] || fail "upgrade restart marker was not consumed"
-if grep -Eq 'configctl:webgui|rc\.restart_webgui' "${TRACE}"; then
-    fail "executed lifecycle attempted a Web GUI restart"
+if grep -Eq 'configctl:webgui|rc\.restart_webgui|configd:restart' "${TRACE}"; then
+    fail "executed lifecycle restarted a global OPNsense service"
+fi
+[ "$(grep -Fc 'kill:-TERM 4343' "${TRACE}")" -eq 1 ] ||
+    fail "old configd worker was not signalled exactly once"
+if grep -Fq 'kill:-TERM 4242' "${TRACE}"; then
+    fail "configd watcher was signalled"
 fi
 
 line_of()
@@ -95,13 +115,17 @@ line_of()
     grep -n -F "$1" "${TRACE}" | head -1 | cut -d: -f1
 }
 
-configd_line=$(line_of 'configd:restart')
+old_worker_line=$(line_of 'pgrep:-P 4242 -f configd.py console')
+parent_probe_line=$(line_of 'kill:-0 4242')
+worker_term_line=$(line_of 'kill:-TERM 4343')
 ready_line=$(line_of 'configctl:system status')
 configure_line=$(line_of 'configure:POST_INSTALL')
 template_line=$(line_of 'configctl:template reload OPNsense/Zapret')
 start_line=$(line_of 'configctl:zapret start')
 status_line=$(line_of 'service:status')
-[ "${configd_line}" -lt "${ready_line}" ] || fail "readiness preceded configd restart"
+[ "${parent_probe_line}" -lt "${old_worker_line}" ] || fail "worker discovery preceded watcher validation"
+[ "${old_worker_line}" -lt "${worker_term_line}" ] || fail "worker was signalled before worker discovery"
+[ "${worker_term_line}" -lt "${ready_line}" ] || fail "readiness preceded worker reload"
 [ "${ready_line}" -lt "${configure_line}" ] || fail "plugin refresh preceded readiness"
 [ "${configure_line}" -lt "${template_line}" ] || fail "template preceded plugin refresh"
 [ "${template_line}" -lt "${start_line}" ] || fail "service restore preceded template"
@@ -130,4 +154,4 @@ grep -q 'ensure_runtime_components || return 1' "${SERVICE_SCRIPT}" ||
 grep -q '\[ -x "${_supervisor_expected_child}" \]' "${SUPERVISOR}" ||
     fail "supervisor has no executable-child guard"
 
-echo "PASS: package lifecycle reloads actions safely without restarting the Web GUI"
+echo "PASS: package lifecycle reloads configd actions through the existing watcher"

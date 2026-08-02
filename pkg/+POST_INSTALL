@@ -1,18 +1,85 @@
 #!/bin/sh
 
-# Register the plugin, load replacement configd actions through the canonical
-# OPNsense plugin lifecycle, wait until configd accepts requests, flush plugin
-# caches, render the initial template, and restore a previously running runtime.
-# Runtime preparation remains separate from the pkg transaction. The package
-# hook never restarts the global Web GUI.
+# Register the plugin, reload replacement configd actions through the existing
+# OPNsense configd watcher, wait until the replacement worker accepts requests,
+# flush plugin caches, render the initial template, and restore a previously
+# running runtime. Runtime preparation remains separate from the pkg transaction.
+# The package hook never starts a new configd watcher or restarts the global Web GUI.
 
 SERVICE_SCRIPT="${SERVICE_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh}"
 CONFIGCTL="${CONFIGCTL:-/usr/local/sbin/configctl}"
-CONFIGD_RC="${CONFIGD_RC:-/usr/local/etc/rc.d/configd}"
+CONFIGD_PID_FILE="${CONFIGD_PID_FILE:-/var/run/configd.pid}"
+CONFIGD_WORKER_PATTERN="${CONFIGD_WORKER_PATTERN:-/usr/local/opnsense/service/configd.py console}"
+PGREP_BIN="${PGREP_BIN:-/usr/bin/pgrep}"
+KILL_BIN="${KILL_BIN:-/bin/kill}"
 FIRMWARE_REGISTER="${FIRMWARE_REGISTER:-/usr/local/opnsense/scripts/firmware/register.php}"
 CONFIGURE_PLUGINS="${CONFIGURE_PLUGINS:-/usr/local/etc/rc.configure_plugins}"
 SLEEP_BIN="${SLEEP_BIN:-/bin/sleep}"
 UPGRADE_RESTART_MARKER="${UPGRADE_RESTART_MARKER:-/var/run/zapret2-restyle/pkg-upgrade.restart}"
+
+reload_configd_actions()
+{
+    [ -r "${CONFIGD_PID_FILE}" ] || {
+        echo "ERROR: running OPNsense configd watcher pid file is unavailable" >&2
+        return 1
+    }
+
+    configd_parent=
+    IFS= read -r configd_parent < "${CONFIGD_PID_FILE}" || true
+    case "${configd_parent}" in
+        ''|*[!0-9]*)
+            echo "ERROR: OPNsense configd watcher pid is invalid" >&2
+            return 1
+            ;;
+    esac
+
+    if ! "${KILL_BIN}" -0 "${configd_parent}" 2>/dev/null; then
+        echo "ERROR: OPNsense configd watcher is not running" >&2
+        return 1
+    fi
+
+    configd_old_worker=$("${PGREP_BIN}" -P "${configd_parent}" -f "${CONFIGD_WORKER_PATTERN}" 2>/dev/null || true)
+    case "${configd_old_worker}" in
+        ''|*[!0-9]*)
+            echo "ERROR: OPNsense configd worker could not be identified" >&2
+            return 1
+            ;;
+    esac
+
+    if ! "${KILL_BIN}" -TERM "${configd_old_worker}"; then
+        echo "ERROR: OPNsense configd worker could not be reloaded" >&2
+        return 1
+    fi
+
+    configd_ready=0
+    for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        if ! "${KILL_BIN}" -0 "${configd_parent}" 2>/dev/null; then
+            echo "ERROR: OPNsense configd watcher stopped during action reload" >&2
+            return 1
+        fi
+
+        configd_new_worker=$("${PGREP_BIN}" -P "${configd_parent}" -f "${CONFIGD_WORKER_PATTERN}" 2>/dev/null || true)
+        case "${configd_new_worker}" in
+            ''|*[!0-9]*)
+                ;;
+            *)
+                if [ "${configd_new_worker}" != "${configd_old_worker}" ] &&
+                    "${CONFIGCTL}" system status >/dev/null 2>&1; then
+                    configd_ready=1
+                    break
+                fi
+                ;;
+        esac
+        "${SLEEP_BIN}" 1
+    done
+
+    if [ "${configd_ready}" -ne 1 ]; then
+        echo "ERROR: replacement configd worker did not become ready" >&2
+        return 1
+    fi
+
+    return 0
+}
 
 [ -x "${FIRMWARE_REGISTER}" ] || {
     echo "ERROR: OPNsense plugin registration helper is unavailable" >&2
@@ -24,34 +91,22 @@ if ! "${FIRMWARE_REGISTER}" install os-zapret2-restyle; then
     exit 1
 fi
 
-[ -x "${CONFIGD_RC}" ] || {
-    echo "ERROR: canonical OPNsense configd lifecycle script is unavailable" >&2
-    exit 1
-}
-
-# This is the same action reload used by the upstream OPNsense plugin framework
-# when a package installs files under service/conf/actions.d.
-if ! "${CONFIGD_RC}" restart; then
-    echo "ERROR: configd could not be restarted after plugin action installation" >&2
-    exit 1
-fi
-
 [ -x "${CONFIGCTL}" ] || {
     echo "ERROR: OPNsense configd control is unavailable after plugin installation" >&2
     exit 1
 }
 
-configd_ready=0
-for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-    if "${CONFIGCTL}" system status >/dev/null 2>&1; then
-        configd_ready=1
-        break
-    fi
-    "${SLEEP_BIN}" 1
-done
+[ -x "${PGREP_BIN}" ] || {
+    echo "ERROR: OPNsense process lookup utility is unavailable" >&2
+    exit 1
+}
 
-if [ "${configd_ready}" -ne 1 ]; then
-    echo "ERROR: configd did not become ready after plugin action installation" >&2
+[ -x "${KILL_BIN}" ] || {
+    echo "ERROR: OPNsense process signalling utility is unavailable" >&2
+    exit 1
+}
+
+if ! reload_configd_actions; then
     exit 1
 fi
 
