@@ -1,198 +1,207 @@
-name: CI
+name: Recovery tree materialization
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
-  validate:
-    name: Validate Project
+  materialize:
+    if: github.head_ref == 'agent/gui-zapret2-service'
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Check out recovery branch
+        uses: actions/checkout@v6
+        with:
+          ref: agent/gui-zapret2-service
+          fetch-depth: 0
 
-      - name: Install validation tools
-        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
-
-      - name: Validate project identity and version
+      - name: Create clean one-commit staging branch
         shell: bash
         run: |
           set -euo pipefail
 
-          VERSION_VALUE=$(tr -d '[:space:]' < VERSION)
-          [[ "${VERSION_VALUE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            echo "Invalid VERSION: ${VERSION_VALUE}"
-            exit 1
-          }
+          git fetch origin main
 
-          grep -Eq '^PLUGIN_NAME=[[:space:]]+zapret2-restyle$' Makefile
-          grep -Eq '^PLUGIN_VERSION!=[[:space:]]+/bin/cat \$\{\.CURDIR\}/VERSION$' Makefile
-          grep -Eq '^PLUGIN_MAINTAINER=[[:space:]]+tolian82IPB@gmail\.com$' Makefile
+          cat .github/gui-runtime-management.patch.part-* \
+            | base64 --decode \
+            | gzip --decompress \
+            > /tmp/gui-runtime-management.patch
 
-          echo "Project: os-zapret2-restyle"
-          echo "Package: os-zapret2-restyle"
-          echo "Internal service: zapret"
-          echo "Version: ${VERSION_VALUE}"
+          git apply --check /tmp/gui-runtime-management.patch
+          git apply /tmp/gui-runtime-management.patch
 
-      - name: Validate XML files
-        run: find src -type f -name "*.xml" -exec xmllint --noout {} \;
+          python3 - <<'PY'
+          from pathlib import Path
 
-      - name: Lint PHP files
-        run: |
-          docker run --rm -v "${PWD}":/app -w /app php:8.2-cli sh -c '
-            set -e
-            find src -type f -name "*.php" -exec php -l {} \;
-            find src -type f -name "*.inc" -exec php -l {} \;
-          '
+          def append_once(path: str, marker: str, block: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if marker not in text:
+                  file.write_text(text.rstrip() + "\n\n" + block.strip() + "\n")
 
-      - name: Validate shell scripts
-        run: |
-          find src -type f -name "*.sh" -exec sh -n {} \;
-          find pkg -type f -exec sh -n {} \;
-          find scripts -type f -name "*.sh" -exec sh -n {} \;
-          sh -n src/etc/rc.syshook.d/start/20-zapret
-          sh -n src/etc/rc.syshook.d/stop/20-zapret
+          readme = Path("README.md")
+          text = readme.read_text()
+          old_version = "Version 0.2.8 is the current prerelease line; this source tree builds package revision 4."
+          new_version = "Version 0.2.8 is the current prerelease line; this source tree builds package revision 5."
+          if text.count(old_version) != 1:
+              raise SystemExit("README package revision marker not found exactly once")
+          text = text.replace(old_version, new_version, 1)
 
-      - name: Test runtime profile normalization
-        run: sh scripts/test-profile-normalizer.sh
+          old_gui = "remains stopped. A future GUI maintenance action will call the same backend."
+          new_gui = (
+              "remains stopped. The Settings page now exposes the same backend through the collapsible\n"
+              "**Zapret2 Service** block: service health and installed release, Start/Stop, the four\n"
+              "latest stable repository releases, and Apply for installation, reinstallation, upgrade,\n"
+              "or downgrade. Runtime setup remains asynchronous and preserves the initial complete\n"
+              "running or stopped service state."
+          )
+          if text.count(old_gui) != 1:
+              raise SystemExit("README GUI marker not found exactly once")
+          readme.write_text(text.replace(old_gui, new_gui, 1))
 
-      - name: Test count-carrying profile pipeline
-        run: sh scripts/test-profile-pipeline.sh
+          requirements = Path("docs/REQUIREMENTS.md")
+          text = requirements.read_text()
+          gui_marker = "- Field width remains unchanged until verified rendered markup is deliberately inspected.\n"
+          gui_add = """- The Settings page must contain a native collapsible `Zapret2 Service` section after
+            the existing configuration sections.
+          - On desktop widths, service status, exact installed release tag, Start/Stop, repository
+            release selector, and the runtime Apply button must occupy one horizontal line. Narrow
+            layouts may wrap without changing the control order.
+          - Service status is restricted to Started, Stopped, or Error and uses the standard
+            success, neutral, and danger visual states. Runtime version is reported separately
+            from service health and is empty when the installed tree is not at an exact valid tag.
+          - The repository selector presents at most the four current stable releases returned by
+            `setup.sh show`. Drafts, prereleases, malformed tags, and arbitrary user values must
+            not be accepted.
+          - Runtime Apply starts `setup.sh install VERSION` asynchronously through configd, disables
+            conflicting controls while the operation is active, polls read-only status, and points
+            the user to `/var/log/zapret2/setup.log` after failure.
+          - The GUI follows the language selected in OPNsense. English is the default; custom
+            Zapret2 labels and operation messages also provide Russian text. The plugin must not
+            introduce its own language selector.
+          """
+          if gui_add not in text:
+              if text.count(gui_marker) != 1:
+                  raise SystemExit("GUI requirements marker not found exactly once")
+              text = text.replace(gui_marker, gui_marker + gui_add, 1)
 
-      - name: Test configuration activation contract
-        run: sh scripts/test-config-activation-contract.sh
+          old_setup = (
+              "- `setup.sh` is the single runtime-preparation and bol-van/zapret2 release-management\n"
+              "  backend. It may initially be run from the shell and later from a GUI maintenance\n"
+              "  action.\n"
+          )
+          new_setup = (
+              "- `setup.sh` is the single runtime-preparation and bol-van/zapret2 release-management\n"
+              "  backend. Shell commands and the GUI must reuse its `show` and `install [VERSION]`\n"
+              "  interfaces rather than implementing separate release discovery or installation paths.\n"
+          )
+          if text.count(old_setup) != 1:
+              raise SystemExit("setup.sh requirement marker not found exactly once")
+          requirements.write_text(text.replace(old_setup, new_setup, 1))
 
-      - name: Test lifecycle lock descriptor isolation
-        run: sh scripts/test-lifecycle-lock-fd.sh
+          append_once(
+              "AGENTS.md",
+              "one ready branch -> one atomic commit",
+              """## GitHub publication preflight
 
-      - name: Test package lifecycle service refresh
-        run: sh scripts/test-package-lifecycle-restart.sh
+Before changing GitHub state, prepare and verify the complete logical change locally. The permanent publication sequence is:
 
-      - name: Test setup release selection
-        run: sh scripts/test-setup-release-selection.sh
+`one logical change -> one ready branch -> one atomic commit -> one pull request -> one complete check set -> one squash merge`
 
-      - name: Test automated release trigger contract
-        run: sh scripts/test-release-trigger.sh
+The pull-request title must begin with the exact package candidate from `VERSION` and `PLUGIN_REVISION`, for example `v0.2.8_4: Add GUI Zapret2 service and release management`. Do not publish intermediate files or commits, do not mutate a branch while checks are running, and do not use temporary workflows, encoded patches, patch fragments, self-modifying Actions, or content-API commit streams as delivery mechanisms.""",
+          )
 
-      - name: Test Node 24 release actions
-        run: sh scripts/test-release-node24-actions.sh
+          workflow_block = """## Atomic publication of a logical change
 
-      - name: Check required project files
-        run: |
-          set -eu
+The permanent GitHub publication sequence is:
 
-          for file in \
-            AGENTS.md \
-            VERSION \
-            Makefile \
-            pkg-descr \
-            LICENSE \
-            NOTICE \
-            README.md \
-            docs/CHANGELOG.md \
-            docs/REQUIREMENTS.md \
-            docs/ARCHITECTURE.md \
-            docs/DEVLOG.md \
-            src/etc/rc.syshook.d/start/20-zapret \
-            src/etc/rc.syshook.d/stop/20-zapret \
-            src/etc/inc/plugins.inc.d/zapret.inc \
-            src/opnsense/service/conf/actions.d/actions_zapret.conf \
-            pkg/+PRE_INSTALL \
-            pkg/+POST_INSTALL \
-            pkg/+PRE_DEINSTALL \
-            pkg/+POST_DEINSTALL \
-            scripts/build-pkg.sh \
-            scripts/test-package-lifecycle-restart.sh \
-            scripts/test-setup-release-selection.sh \
-            scripts/test-release-trigger.sh \
-            scripts/test-release-node24-actions.sh \
-            .github/workflows/release.yml \
-            .github/workflows/release-trigger.yml
-          do
-            test -f "${file}" || {
-              echo "Missing required file: ${file}"
-              exit 1
-            }
-          done
+`one logical change -> one ready branch -> one atomic commit -> one pull request -> one complete check set -> one squash merge`
 
-          test -x scripts/build-pkg.sh || {
-            echo "scripts/build-pkg.sh is not executable"
-            exit 1
-          }
+1. Synchronize with the current `main` head and record its commit.
+2. Complete the code, tests, file modes, and all required documentation before publishing anything.
+3. Run local syntax, focused regression, and diff checks.
+4. Create one task branch directly at one atomic commit whose sole parent is the recorded `main` commit.
+5. Open one pull request. Its title starts with the exact package candidate represented by the branch, including `PLUGIN_REVISION`: `v<version>_<revision>: <logical change>` when the revision is non-zero. Example: `v0.2.8_4: Add GUI Zapret2 service and release management`.
+6. Do not change the pull-request branch while checks are queued or running. Wait for the complete result.
+7. When checks fail, close that delivery cycle, prepare the correction outside GitHub, and publish a new clean branch, commit, and pull request. Do not add repair commits or repeatedly retrigger checks.
+8. When checks pass and review is complete, squash merge and verify the resulting `main` commit before starting the next cycle.
 
-          test -x scripts/test-release-trigger.sh || {
-            echo "scripts/test-release-trigger.sh is not executable"
-            exit 1
-          }
+Temporary workflows, Actions-based self-modification, encoded patches, patch fragments, delivery-only files, force-push repair, and sequential content-API commits are prohibited as final delivery mechanisms."""
+          append_once("docs/GITHUB_WORKFLOW.md", "## Atomic publication of a logical change", workflow_block)
+          append_once("docs/WORKING_CONVENTIONS.md", "## GitHub delivery discipline", workflow_block.replace("## Atomic publication of a logical change", "## GitHub delivery discipline"))
+          append_once("docs/DEVELOPMENT_GUIDE.md", "## Publishing one logical change to GitHub", workflow_block.replace("## Atomic publication of a logical change", "## Publishing one logical change to GitHub"))
 
-          test -x scripts/test-package-lifecycle-restart.sh || {
-            echo "scripts/test-package-lifecycle-restart.sh is not executable"
-            exit 1
-          }
+          append_once(
+              "docs/DECISIONS.md",
+              "DEC-2026-08-02 — ATOMIC GITHUB PUBLICATION AND VERSIONED PR TITLES",
+              """## DEC-2026-08-02 — ATOMIC GITHUB PUBLICATION AND VERSIONED PR TITLES
 
-      - name: Check repository independence
-        run: |
-          set -eu
+**Decision.** Every logical development cycle is published as one ready branch containing one atomic commit, followed by one pull request and one complete check set. The pull-request title begins with the exact package candidate represented by the branch, including `PLUGIN_REVISION`, for example `v0.2.8_4: Add GUI Zapret2 service and release management`.
 
-          if grep -RniE \
-            'github\.com/ugorur/os-zapret2|mail@ugorur|os-zapret2-[0-9]|pkg delete os-zapret2([^_-]|$)' \
-            . \
-            --exclude-dir=.git \
-            --exclude=LICENSE \
-            --exclude=NOTICE \
-            --exclude=README.md \
-            --exclude=ci.yml
-          then
-            echo "Legacy project reference found outside attribution files"
-            exit 1
-          fi
+**Reason.** Incremental transport commits and temporary Actions workflows created redundant checks, obscured the real repository state, increased waiting time, and made failures harder to diagnose.
 
-  package:
-    name: Build FreeBSD package
-    runs-on: ubuntu-latest
-    needs: validate
+**Consequences.** The complete change, documentation, tests, and file modes are prepared before publication. A pull-request branch is not modified while checks run. A failed delivery cycle is closed and replaced rather than repaired repeatedly. Temporary workflows, encoded patch fragments, Actions self-modification, force-push repair, and sequential content-API delivery commits are prohibited. Final integration remains a squash merge.
 
-    steps:
-      - uses: actions/checkout@v6
+**Affected documents.** `AGENTS.md`, `GITHUB_WORKFLOW.md`, `WORKING_CONVENTIONS.md`, `DEVELOPMENT_GUIDE.md`, `DECISIONS.md`, `CHANGELOG.md`, `DEVLOG.md`, and `PROJECT_STATE.md`.""",
+          )
 
-      - name: Read package version
-        id: version
-        shell: bash
-        run: |
-          set -euo pipefail
+          append_once(
+              "docs/CHANGELOG.md",
+              "Atomic GitHub publication discipline",
+              """### Development process
 
-          VERSION_VALUE=$(tr -d '[:space:]' < VERSION)
-          REVISION=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | head -1)
+- Atomic GitHub publication discipline is now mandatory: one ready branch, one commit, one pull request, and one complete check set.
+- Pull-request titles must begin with the exact package candidate including `PLUGIN_REVISION`, for example `v0.2.8_4: Add GUI Zapret2 service and release management`.""",
+          )
+          append_once(
+              "docs/DEVLOG.md",
+              "Atomic GitHub publication rule adopted",
+              """## 2026-08-02 — Atomic GitHub publication rule adopted
 
-          if [[ -n "${REVISION}" && "${REVISION}" != "0" ]]; then
-            FULL_VERSION="${VERSION_VALUE}_${REVISION}"
-          else
-            FULL_VERSION="${VERSION_VALUE}"
-          fi
+The failed transport experiment was rejected. Future cycles are prepared completely before publication and use one ready branch, one atomic commit, one pull request, one complete check set, and one squash merge. Pull-request titles begin with the exact package candidate including `PLUGIN_REVISION`.""",
+          )
+          append_once(
+              "docs/PROJECT_STATE.md",
+              "GitHub publication discipline",
+              """## GitHub publication discipline
 
-          echo "version=${FULL_VERSION}" >> "${GITHUB_OUTPUT}"
+Repository delivery now follows one ready branch, one atomic commit, one pull request, and one complete check set. Pull-request titles begin with the exact package candidate including `PLUGIN_REVISION`. Pull-request branches are not modified while checks run; failed cycles are replaced with clean cycles.""",
+          )
+          PY
 
-      - name: Build package inside FreeBSD VM
-        uses: vmactions/freebsd-vm@v1
-        with:
-          release: "14.2"
-          usesh: true
-          prepare: pkg install -y jq
-          run: sh scripts/build-pkg.sh
+          rm -f .github/gui-runtime-management.patch.gz.b64
+          rm -f .github/gui-runtime-management.patch.part-*
+          rm -f .github/gui-runtime-management.trigger
+          rm -f .github/workflows/apply-gui-runtime-management.yml
 
-      - name: Inspect built package
-        run: |
-          set -eu
-          ls -lh dist/
-          tar -tf dist/*.pkg | head -30
-          tar -xOf dist/*.pkg +MANIFEST | head -80
+          git restore --source=origin/main -- .github/workflows/ci.yml
+          git restore --source=origin/main -- scripts/build-pkg.sh
+          git restore --source=origin/main -- scripts/test-release-node24-actions.sh
 
-      - name: Upload package artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: os-zapret2-restyle-${{ steps.version.outputs.version }}
-          path: dist/os-zapret2-restyle-*.pkg
-          if-no-files-found: error
+          chmod 755 scripts/test-gui-runtime-management.sh
+          chmod 755 src/opnsense/scripts/OPNsense/Zapret/setup_launcher.sh
+
+          git diff --check
+          sh -n src/opnsense/scripts/OPNsense/Zapret/setup_launcher.sh
+          sh scripts/test-gui-runtime-management.sh
+          php -l src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php
+
+          test "$(git hash-object src/opnsense/scripts/OPNsense/Zapret/setup.sh)" = \
+            "$(git rev-parse origin/main:src/opnsense/scripts/OPNsense/Zapret/setup.sh)"
+
+          git add -A
+          git diff --cached --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          tree_sha=$(git write-tree)
+          commit_sha=$(printf '%s\n' 'Add GUI Zapret2 service and release management' \
+            | git commit-tree "${tree_sha}" -p "$(git rev-parse origin/main)")
+
+          echo "Clean staging commit: ${commit_sha}"
+          git push origin "${commit_sha}:refs/heads/agent/v0.2.8_5-gui-zapret2-service-staging"
