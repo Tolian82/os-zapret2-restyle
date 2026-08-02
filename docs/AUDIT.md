@@ -2361,8 +2361,9 @@ Evidence:
 - local package os-zapret2-restyle-0.2.8_3 installed successfully;
 - configd and zapret remained running and all zapret configd actions were registered;
 - lighttpd and php-cgi processes still had start times from before the package update;
-- Web GUI pages rendered but Firmware and plugin-related dynamic presentation was
-  incomplete;
+- Web GUI presentation was abnormal immediately after package replacement;
+- the independent Firmware remote/tier failure was traced separately to an untrusted
+  `proxy-ca` certificate and is excluded from this finding;
 - restarting only `/usr/local/etc/rc.restart_webgui` changed the lighttpd PID and
   restored normal GUI operation;
 - the complete OPNsense service list subsequently reported every registered service,

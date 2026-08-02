@@ -147,7 +147,9 @@ zapret, lighttpd, and PHP workers all remained present, but the Web GUI displaye
 incomplete dynamic data after the plugin MVC/view files were replaced. The lighttpd
 and php-cgi processes predated the package transaction. Restarting only the Web GUI
 through `/usr/local/etc/rc.restart_webgui` replaced those processes and restored normal
-rendering; every registered OPNsense service then reported running.
+rendering; every registered OPNsense service then reported running. The independent
+Firmware remote/tier blankness remained attributable to its `proxy-ca` TLS verification
+failure and is not evidence for this lifecycle finding.
 
 The current OPNsense architecture retains `rc.configure_plugins POST_INSTALL` for
 plugin cache/configuration refresh and exposes the canonical `webgui restart` configd

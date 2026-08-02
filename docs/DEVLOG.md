@@ -1308,6 +1308,8 @@ Live diagnosis:
 - configd, zapret, lighttpd, php-cgi, and all registered OPNsense services were present;
 - the existing lighttpd/php-cgi processes predated package file replacement;
 - the GUI opened but did not display all dynamic information correctly;
+- the separate Firmware remote/tier blankness was confirmed as a `proxy-ca` certificate
+  verification failure and excluded from the package lifecycle finding;
 - restarting only `/usr/local/etc/rc.restart_webgui` replaced the Web GUI process tree
   and restored normal operation.
 
