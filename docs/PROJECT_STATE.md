@@ -39,19 +39,20 @@ Current version:
 0.2.8
 
 Current package revision:
-2
+3
 
 Current package candidate:
-os-zapret2-restyle-0.2.8_2
+os-zapret2-restyle-0.2.8_3
 
-Latest completed implementation commit:
+Release-selection implementation commit:
 e3a9ffcf10ffe1e39917141c0ed1989592a4a7eb
 
 Current milestone:
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current phase:
-Command-line bol-van/zapret2 release selection is implemented in setup.sh.
+Command-line bol-van/zapret2 release selection is implemented in setup.sh, including
+a same-scope FreeBSD fetch compatibility correction for package revision 3.
 
 Current priority:
 Live-verify the release-selection paths on OPNsense, then add installed runtime-version
@@ -86,7 +87,9 @@ Release discovery behavior:
 - malformed and unpublished requested versions fail before the setup lock and runtime
   replacement path;
 - numeric tags such as `v1.0.3` and `v0.9.5.2` are supported;
-- failure to reach GitHub or obtain usable stable releases is reported explicitly.
+- failure to reach GitHub or obtain usable stable releases is reported explicitly;
+- release JSON is downloaded with the native FreeBSD `/usr/bin/fetch` command using
+  its supported `--user-agent` option.
 
 Installation behavior:
 
@@ -100,18 +103,35 @@ Installation behavior:
 - a previously running service is refreshed and verified;
 - a previously stopped service remains stopped and is verified as stopped.
 
+FreeBSD fetch correction:
+
+- the initial revision-2 implementation used curl-style `-H` arguments with
+  `/usr/bin/fetch`;
+- FreeBSD fetch does not implement that option, so the real OPNsense request would
+  fail before release discovery;
+- the unsupported headers were removed and replaced with the supported
+  `--user-agent=os-zapret2-restyle` option;
+- the focused fetch mock now rejects every unknown option instead of silently accepting
+  it, and the test explicitly prohibits curl-style `-H` in setup.sh;
+- the CI-only `0.2.8_2` artifact was never published and is superseded by candidate
+  `0.2.8_3`.
+
 Package and validation evidence:
 
 - VERSION remains 0.2.8;
-- PLUGIN_REVISION advanced from 1 to 2 because packaged behavior changed;
+- PLUGIN_REVISION advanced from 1 to 2 for release selection and from 2 to 3 for the
+  same-scope FreeBSD fetch correction;
 - focused release-selection tests cover stable filtering, four-release output, help,
   latest default selection, exact-version propagation through lockf, malformed values,
-  unpublished values, and both Git checkout paths;
-- full project validation passed in GitHub Actions CI run 30737096920;
-- the FreeBSD package job passed;
-- CI produced artifact `os-zapret2-restyle-0.2.8_2`;
+  unpublished values, strict fetch arguments, and both Git checkout paths;
+- the original implementation passed GitHub Actions CI run 30737096920, including the
+  FreeBSD package build;
 - PR #24 was squash-merged into main as commit
   e3a9ffcf10ffe1e39917141c0ed1989592a4a7eb;
+- the stale current-state documentation was corrected by PR #25 and squash commit
+  b79e2668c8f9b80a0483b3b50ce5b138418a2b7e;
+- package revision 3 must pass its own complete CI and FreeBSD package build before
+  this correction is merged;
 - no tag, GitHub Release, GitHub Pages repository update, or package publication was
   requested or performed.
 
@@ -184,14 +204,15 @@ architecture is broken.
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Install or update to package candidate 0.2.8_2 only when a focused OPNsense test is
-   intentionally started; this development task did not publish it to the pkg repository.
-2. Execute the release-selection matrix above and record exact evidence.
-3. Add read-only installed runtime-version detection.
-4. Expose installed and available version data through the backend API.
-5. Add update notification and GUI release controls that reuse setup.sh rather than
+1. Complete CI and the FreeBSD package build for candidate 0.2.8_3.
+2. Install or update to candidate 0.2.8_3 only when a focused OPNsense test is
+   intentionally started; this development task does not publish it to the pkg repository.
+3. Execute the release-selection matrix above and record exact evidence.
+4. Add read-only installed runtime-version detection.
+5. Expose installed and available version data through the backend API.
+6. Add update notification and GUI release controls that reuse setup.sh rather than
    duplicate release discovery or installation logic.
-6. Continue reporting runtime presence separately from runtime/service health.
+7. Continue reporting runtime presence separately from runtime/service health.
 
 ==================================================
 WORKING RULES FOR RESUMPTION

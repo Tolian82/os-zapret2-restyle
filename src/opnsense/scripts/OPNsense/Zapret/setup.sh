@@ -101,8 +101,7 @@ fetch_stable_releases()
     }
 
     if ! "${FETCH_BIN}" -q -T 30 -o "${_release_json}" \
-        -H 'Accept: application/vnd.github+json' \
-        -H 'X-GitHub-Api-Version: 2022-11-28' \
+        --user-agent=os-zapret2-restyle \
         "${ZAPRET_RELEASES_API}"; then
         rm -f "${_release_json}" "${_release_list}"
         echo "ERROR: could not obtain bol-van/zapret2 releases from GitHub" >&2

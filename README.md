@@ -146,7 +146,7 @@ Valid values are normalized, saved, activated, and reloaded into the form.
 INSTALLATION
 ==================================================
 
-Version 0.2.8 is the current prerelease line; this source tree builds package revision 2.
+Version 0.2.8 is the current prerelease line; this source tree builds package revision 3.
 
 The supported distribution model is a project-owned FreeBSD pkg repository
 published through GitHub Pages for FreeBSD:15:amd64 / supported OPNsense 26.7
@@ -171,13 +171,13 @@ zapret2 runtime. After installation, the setup backend can be used as follows:
 /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh --help
 ```
 
-The setup backend obtains the published stable-release list from GitHub. Without an
-explicit version it selects the latest stable bol-van/zapret2 release. With an exact
-version it verifies that the release is published, checks out that tag, compiles and
-verifies dvtws2, and records the result. Internet access is required during setup.
-After verification it refreshes and verifies the installed runtime only when the
-service was running before setup; a stopped service remains stopped. A future GUI
-maintenance action will call the same backend.
+The setup backend obtains the published stable-release list from GitHub through the
+native FreeBSD `fetch` command. Without an explicit version it selects the latest
+stable bol-van/zapret2 release. With an exact version it verifies that the release is
+published, checks out that tag, compiles and verifies dvtws2, and records the result.
+Internet access is required during setup. After verification it refreshes and verifies
+the installed runtime only when the service was running before setup; a stopped service
+remains stopped. A future GUI maintenance action will call the same backend.
 
 Package upgrades preserve the prior service state. The replacement package stops a
 running service before the old package hook and plugin-file replacement, then starts it
