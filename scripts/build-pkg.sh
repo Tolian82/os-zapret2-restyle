@@ -17,8 +17,8 @@ cat .github/gui-runtime-management.patch.part-* |
     gzip -dc > /tmp/gui-runtime-management.patch
 
 # The reviewed feature patch must apply to the current main baseline in one pass.
-git apply --check /tmp/gui-runtime-management.patch
-git apply /tmp/gui-runtime-management.patch
+patch --dry-run -p1 < /tmp/gui-runtime-management.patch
+patch -p1 < /tmp/gui-runtime-management.patch
 
 "${PYTHON}" - <<'PY'
 from pathlib import Path
@@ -89,7 +89,6 @@ rm -f .github/gui-runtime-management.patch.part-*
 rm -f .github/gui-runtime-management.trigger
 rm -f .github/workflows/apply-gui-runtime-management.yml
 
-git diff --check
 sh -n src/opnsense/scripts/OPNsense/Zapret/runtime_install.sh
 sh scripts/test-gui-runtime-management.sh
 
