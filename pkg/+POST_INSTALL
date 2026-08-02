@@ -1,16 +1,18 @@
 #!/bin/sh
 
-# Register the plugin, load replacement configd actions, render the initial
-# template, restore a previously running service during upgrade, and refresh
-# the Web GUI last. Runtime preparation remains separate from the pkg
-# transaction and is never started merely because the plugin was installed.
+# Register the plugin, load replacement configd actions through the canonical
+# OPNsense plugin lifecycle, wait until configd accepts requests, flush plugin
+# caches, render the initial template, and restore a previously running runtime.
+# Runtime preparation remains separate from the pkg transaction. The package
+# hook never restarts the global Web GUI.
 
-SERVICE_SCRIPT="/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
-CONFIGCTL="/usr/local/sbin/configctl"
-SERVICE_BIN="/usr/sbin/service"
-FIRMWARE_REGISTER="/usr/local/opnsense/scripts/firmware/register.php"
-CONFIGURE_PLUGINS="/usr/local/etc/rc.configure_plugins"
-UPGRADE_RESTART_MARKER="/var/run/zapret2-restyle/pkg-upgrade.restart"
+SERVICE_SCRIPT="${SERVICE_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh}"
+CONFIGCTL="${CONFIGCTL:-/usr/local/sbin/configctl}"
+CONFIGD_RC="${CONFIGD_RC:-/usr/local/etc/rc.d/configd}"
+FIRMWARE_REGISTER="${FIRMWARE_REGISTER:-/usr/local/opnsense/scripts/firmware/register.php}"
+CONFIGURE_PLUGINS="${CONFIGURE_PLUGINS:-/usr/local/etc/rc.configure_plugins}"
+SLEEP_BIN="${SLEEP_BIN:-/bin/sleep}"
+UPGRADE_RESTART_MARKER="${UPGRADE_RESTART_MARKER:-/var/run/zapret2-restyle/pkg-upgrade.restart}"
 
 [ -x "${FIRMWARE_REGISTER}" ] || {
     echo "ERROR: OPNsense plugin registration helper is unavailable" >&2
@@ -19,6 +21,37 @@ UPGRADE_RESTART_MARKER="/var/run/zapret2-restyle/pkg-upgrade.restart"
 
 if ! "${FIRMWARE_REGISTER}" install os-zapret2-restyle; then
     echo "ERROR: os-zapret2-restyle could not be registered in OPNsense firmware state" >&2
+    exit 1
+fi
+
+[ -x "${CONFIGD_RC}" ] || {
+    echo "ERROR: canonical OPNsense configd lifecycle script is unavailable" >&2
+    exit 1
+}
+
+# This is the same action reload used by the upstream OPNsense plugin framework
+# when a package installs files under service/conf/actions.d.
+if ! "${CONFIGD_RC}" restart; then
+    echo "ERROR: configd could not be restarted after plugin action installation" >&2
+    exit 1
+fi
+
+[ -x "${CONFIGCTL}" ] || {
+    echo "ERROR: OPNsense configd control is unavailable after plugin installation" >&2
+    exit 1
+}
+
+configd_ready=0
+for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    if "${CONFIGCTL}" system status >/dev/null 2>&1; then
+        configd_ready=1
+        break
+    fi
+    "${SLEEP_BIN}" 1
+done
+
+if [ "${configd_ready}" -ne 1 ]; then
+    echo "ERROR: configd did not become ready after plugin action installation" >&2
     exit 1
 fi
 
@@ -31,21 +64,6 @@ if ! "${CONFIGURE_PLUGINS}" POST_INSTALL; then
     echo "ERROR: OPNsense POST_INSTALL plugin configuration failed" >&2
     exit 1
 fi
-
-[ -x "${SERVICE_BIN}" ] || {
-    echo "ERROR: OPNsense service control is unavailable after plugin installation" >&2
-    exit 1
-}
-
-if ! "${SERVICE_BIN}" configd restart >/dev/null 2>&1; then
-    echo "ERROR: configd could not be restarted after plugin action installation" >&2
-    exit 1
-fi
-
-[ -x "${CONFIGCTL}" ] || {
-    echo "ERROR: OPNsense configd control is unavailable after plugin installation" >&2
-    exit 1
-}
 
 template_output=$("${CONFIGCTL}" template reload OPNsense/Zapret 2>&1)
 template_result=$?
@@ -75,14 +93,6 @@ if [ -n "${PKG_UPGRADE:-}" ] && [ -f "${UPGRADE_RESTART_MARKER}" ]; then
     fi
 
     rm -f "${UPGRADE_RESTART_MARKER}"
-fi
-
-webgui_output=$("${CONFIGCTL}" webgui restart 2 2>&1)
-webgui_result=$?
-if [ "${webgui_result}" -ne 0 ] || [ "${webgui_output}" != "OK" ]; then
-    printf '%s\n' "${webgui_output}" >&2
-    echo "ERROR: OPNsense Web GUI could not be refreshed after plugin installation" >&2
-    exit 1
 fi
 
 cat <<'MESSAGE'
