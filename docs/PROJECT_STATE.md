@@ -32,283 +32,88 @@ https://github.com/Tolian82/os-zapret2-restyle
 Branch:
 main
 
-Published prerelease tag commit:
-7befb9e2cb201114602ba2e2fba338751899a693
-
-Development tree:
-/root/os-zapret2-restyle
-
 Version source:
 VERSION
 
 Current version:
-0.2.5
+0.2.8
 
 Current package revision:
 2
 
-Verified package:
-os-zapret2-restyle-0.2.2_1
+Current package candidate:
+os-zapret2-restyle-0.2.8_2
 
-Published prerelease package:
-os-zapret2-restyle-0.2.5_1
+Latest completed implementation commit:
+e3a9ffcf10ffe1e39917141c0ed1989592a4a7eb
+
+Current milestone:
+Milestone 8 — GUI maintenance and managed upstream components
 
 Current phase:
-LIFE-014 stopped-service setup correction implemented for package revision 2
+Command-line bol-van/zapret2 release selection is implemented in setup.sh.
 
 Current priority:
-Publish and build the package-revision-2 correction, then repeat setup.sh install
-with both running and stopped service states before completing the CFG-001 reboot matrix.
+Live-verify the release-selection paths on OPNsense, then add installed runtime-version
+detection and reporting before implementing the GUI controls.
 
 Known blockers:
-Package 0.2.5_1 preserves service state across pkg upgrade, but live verification
-found that setup.sh install unconditionally restarts a service that was stopped before
-runtime installation. Package revision 2 captures the initial complete service state,
-restarts and verifies only a previously running service, and verifies that a stopped
-service remains stopped. CI/package build and focused OPNsense verification remain.
+No source blocker is known. Real installation, repeat installation, upgrade, downgrade,
+and service-state preservation still require focused OPNsense evidence.
 
 ==================================================
-CURRENT CORRECTIVE WORK — LIFE-014 — 2026-08-01
+LATEST COMPLETED WORK — 2026-08-02
 ==================================================
 
-Live upgrade to package 0.2.4_1 confirmed that pkg replaced plugin files while the
-old dvtws2 and supervisor processes remained active. The old processes retained the
-pre-0.2.4 descriptor behavior until manually terminated and the service was started
-again. The same test confirmed that +PRE_DEINSTALL hides stop failure with `|| true`.
+The existing runtime setup backend now manages published stable bol-van/zapret2
+releases instead of using one source-pinned constant.
 
-Approved source remediation for prerelease v0.2.5 / package 0.2.5_1:
+Implemented command interface:
 
-- new +PRE_INSTALL records whether a complete service was running and stops it before
-  the old package hook and file replacement;
-- +PRE_DEINSTALL retains the same fail-closed stop contract for removal and later upgrades;
-- synchronous stop and the stopped-state check are mandatory, and failure aborts pkg;
-- new +POST_INSTALL starts and verifies the service only when that marker exists;
-- a service that was stopped before upgrade remains stopped;
-- setup.sh install performs an exact-OK service restart after the new dvtws2 is built
-  and verified only when the service was running before setup;
-- setup.sh install verifies that a previously stopped service remains stopped;
-- transactional runtime staging and rollback remain a separate future change.
+- `setup.sh` installs the latest published stable release;
+- `setup.sh install` installs the latest published stable release;
+- `setup.sh show` prints up to the four latest published stable release tags;
+- `setup.sh install VERSION` installs an exact published stable release;
+- the same `install VERSION` path performs first installation, repeat installation,
+  upgrade, and downgrade;
+- `setup.sh --help` and `setup.sh -h` describe the command interface.
 
-Local static verification for the revision-2 correction passed. Package 0.2.5_1
-passed publication and the running/stopped pkg-upgrade paths, but its setup path failed
-the stopped-service criterion. PR CI, package build, and the repeated setup matrix for
-revision 2 remain required.
+Release discovery behavior:
 
-Publication evidence:
+- GitHub Releases is queried before runtime mutation;
+- draft and prerelease entries are excluded;
+- accepted tags use `v` followed by two or more dot-separated numeric components;
+- malformed and unpublished requested versions fail before the setup lock and runtime
+  replacement path;
+- numeric tags such as `v1.0.3` and `v0.9.5.2` are supported;
+- failure to reach GitHub or obtain usable stable releases is reported explicitly.
 
-- release-preparation commit: 7befb9e2cb201114602ba2e2fba338751899a693;
-- automated Release trigger run 30697941371 completed successfully;
-- annotated tag v0.2.5 resolves to the release-preparation commit;
-- Release workflow run 30698068243 completed successfully;
-- GitHub prerelease assets are os-zapret2-restyle-0.2.5_1.pkg and SHA256SUMS;
-- GitHub Pages serves the package and current FreeBSD:15:amd64 repository metadata.
+Installation behavior:
 
-==================================================
-CURRENT DEVELOPMENT DELIVERY POLICY — 2026-07-31
-==================================================
+- the selected release is passed through the existing setup lock to the internal
+  installation operation;
+- an existing runtime Git tree fetches and resets to the selected tag;
+- a missing runtime tree clones the selected tag;
+- tracked runtime source files are replaced by the selected release;
+- existing dependency, compile, dvtws2 verification, and service-state preservation
+  behavior remains in the same backend;
+- a previously running service is refreshed and verified;
+- a previously stopped service remains stopped and is verified as stopped.
 
-The default delivery path for an ordinary requested project change is:
+Package and validation evidence:
 
-working branch
-        ↓
-one atomic commit
-        ↓
-Draft PR
-        ↓
-required CI
-        ↓
-Ready for review
-        ↓
-squash merge
-        ↓
-verify `main`
-
-The project owner has granted standing authority to complete this ordinary patch
-cycle without asking separately for branch creation, commit, branch publication,
-PR creation, Ready transition, squash merge, or cleanup of the temporary branch
-created for that task. An explicit request to stop at analysis, a local commit, a
-branch, a PR, or a patch overrides the default and defines the stopping point.
-
-Release publication remains a separate scope. One explicit request to make a
-release authorizes the complete verified release cycle without repeated approvals,
-but an ordinary development request does not authorize a tag, GitHub Release, pkg
-repository publication, or package publication. The current documentation change
-does not create another release or modify an existing release.
-
-The detailed standing-authority and escalation boundaries are maintained in
-DECISIONS.md, WORKING_CONVENTIONS.md, DEVELOPMENT_GUIDE.md, and
-GITHUB_WORKFLOW.md.
-
-Publication transport is selected from available capabilities: authenticated
-GitHub integration/API, authenticated ordinary Git, then GitHub CLI. Missing `gh`
-alone is not a blocker and must not stop an authorized patch or release while an
-approved authenticated alternative is available.
-
-Project-response preflight is mandatory: complete the INDEX.md reading sequence
-before any substantive diagnosis, command, change, or publication action. Before
-delivering OPNsense commands, reject POSIX-only constructs unless the block explicitly
-enters and exits `sh`. Release authorization already granted for a named version
-survives a transport fallback and must not be requested again.
-
-The repository root `AGENTS.md` is the machine-discoverable enforcement layer for
-this gate. It requires complete reading and explicitly names DECISIONS.md,
-WORKING_CONVENTIONS.md, and DEVELOPMENT_GUIDE.md as the methodology and principles
-that must be understood before selecting an implementation or publication path.
-
-Release-trigger automation is implemented in source: a canonical release-preparation
-merge that changes VERSION creates the immutable tag through GitHub Actions and
-dispatches the existing Release workflow. Static contract verification is assigned to
-CI; the next explicitly approved release supplies the first live end-to-end evidence.
-
-==================================================
-CURRENT CORRECTIVE WORK — LIFE-009 — 2026-08-01
-==================================================
-
-Package 0.2.3_1 live evidence confirmed that descriptor 9 for
-`/var/run/zapret2-lifecycle.lock` was inherited by both daemon wrappers, dvtws2,
-the supervisor shell, and supervisor sleep. Therefore every later Apply waited 30
-seconds and failed with status 75 although no competing lifecycle task existed.
-
-The 0.2.4_1 correction closes descriptor 9 on both long-lived daemon launch commands
-and adds a focused CI regression test. Live OPNsense verification confirmed that the
-new dvtws2 and supervisor trees no longer retain descriptor 9, the lock is free after
-startup, and a changed strategy reaches dvtws.args and the active process. The
-descriptor correction is live verified; the broader LIFE-009 concurrency/failure
-matrix and the CFG-001 reboot persistence check remain open.
-
-Publication evidence:
-
-- tag v0.2.4 resolves to 4ae28965be3661b5b0309d398d924186657662f4;
-- Release workflow run 30691963458 completed successfully;
-- GitHub prerelease assets are os-zapret2-restyle-0.2.4_1.pkg and SHA256SUMS;
-- GitHub Pages serves the matching FreeBSD:15:amd64 package and repository metadata.
-
-==================================================
-CURRENT CORRECTIVE WORK — CFG-001 — 2026-07-31
-==================================================
-
-Development base:
-0f379a0117e64d44d1f8987f3f5a806b67ac6fbd
-
-Confirmed defect:
-
-- configd actions of type `script` encode command failure as non-empty
-  `Error (N)`;
-- both MVC reconfigure paths accepted every non-empty response as success;
-- start did not regenerate zapret.conf from saved OPNsense settings;
-- therefore Apply could report success while the previous runtime remained active,
-  and reboot could reuse the stale generated file.
-
-Source remediation included in prerelease candidate 0.2.3_1:
-
-- both MVC paths require the exact response `OK`;
-- zapret_service.sh owns template refresh before start and reconfigure;
-- failed Settings Apply restores the previous persistent model and generated
-  template while the orchestrator preserves the previous runtime;
-- a focused configuration-activation regression test covers exact `OK`, encoded
-  `Error (N)`, process failure, and lifecycle refresh ownership.
-
-Both changed PHP files parse successfully with php-parser. Native `php -l` passed in
-CI. The release workflow built and published package 0.2.3_1 successfully; focused
-OPNsense live verification remains open.
-
-==================================================
-PUBLISHED PRERELEASE — v0.2.3 — 2026-07-31
-==================================================
-
-Confirmed publication state:
-
-- annotated tag v0.2.3 resolves to commit da3d8e7ddbb16561bfdc5628daa483b97f3bb9f4;
-- GitHub Actions Release run 30662375815 completed successfully;
-- Validate release, Build package and repository, Publish GitHub Release, and
-  Publish pkg repository all passed;
-- GitHub Release v0.2.3 is published as a prerelease rather than a stable baseline;
-- release assets include os-zapret2-restyle-0.2.3_1.pkg and SHA256SUMS;
-- GitHub Pages serves meta.conf, data.pkg, packagesite.pkg, SHA256SUMS, the package,
-  and zapret2-restyle.conf successfully;
-- version 0.2.2 / package 0.2.2_1 remains the latest live-verified baseline.
-
-The publication gate is closed. CFG-001 remains open only for focused invalid Apply,
-valid Apply, exact GUI error, and reboot verification on OPNsense.
-
-==================================================
-RELEASE BASELINE — v0.2.2 — 2026-07-30
-==================================================
-
-Release v0.2.2 is the current clean project baseline.
-
-Confirmed release state:
-
-- main and annotated tag v0.2.2 resolve to commit fc6b208;
-- VERSION is 0.2.2 and PLUGIN_REVISION is 1;
-- verified package is os-zapret2-restyle-0.2.2_1;
-- the release package passed scripts/verify-release-package.sh;
-- package installation and runtime operation were confirmed on OPNsense;
-- the GitHub Pages pkg repository was rebuilt and updated for 0.2.2_1;
-- inherited upstream tags v1.6.1 through v1.7.2 were removed from origin;
-- no source changes were made after repository publication and package verification.
-
-Release v0.2.2 also fixes the documentation-delivery baseline:
-
-- scripts/verify-release-package.sh is executable and may be invoked directly;
-- docs/GITHUB_WORKFLOW.md is the specialist release/publication procedure;
-- INDEX.md is the mandatory documentation recovery entry point;
-- historical v0.2.2 development used unified Git patches and owner-supplied
-  archives; that delivery mechanism is now optional rather than mandatory.
-
-Current development baseline:
-
-- the exact current commit in the official GitHub repository is authoritative;
-- the full base SHA is fixed before work begins;
-- no owner-supplied archive is required for committed and pushed repository state;
-- unpublished local changes must be pushed first or transferred explicitly;
-- a logical change is published as one atomic commit;
-- direct fast-forward publication to `main` requires explicit project-owner
-  instruction;
-- a branch, pull request, or patch is optional and used only when requested or
-  when pre-`main` validation is required;
-- no particular GitHub client, including GitHub CLI, is mandatory.
-
-The public README strategy example remains intentionally unchanged by explicit project-owner instruction.
-
-==================================================
-AUTHORITATIVE CURRENT RESULT — 2026-07-30
-==================================================
-
-A complete package installation and runtime start has been verified on OPNsense.
-
-Confirmed package chain:
-
-1. the package installs through pkg;
-2. +POST_INSTALL registers plugin files, reloads templates, and prints the explicit runtime setup command;
-3. runtime preparation is started manually with:
-   /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install
-4. setup installs required dependencies without making pkg installation perform nested package work;
-5. setup obtains the pinned bol-van/zapret2 release v1.0.3;
-6. setup builds executable binaries/my/dvtws2;
-7. configd actions are registered and callable through configctl;
-8. templates generate the runtime configuration;
-9. Backend v2 parses, normalizes, resolves, validates, and generates runtime arguments;
-10. lifecycle code installs the ipfw divert rule;
-11. dvtws2 starts;
-12. supervisor starts and monitors the configured process identity;
-13. service status reaches ready/ok.
-
-Live evidence from the installed system:
-
-- package: os-zapret2-restyle-0.2.1_8;
-- execution status: 13|13|ready|ok;
-- dvtws2 process present;
-- supervisor process present;
-- expected PID files present;
-- ipfw divert rule present;
-- ipfw.ko and ipdivert.ko loaded;
-- HOSTLIST and IPSET target files loaded by dvtws2;
-- four runtime profiles generated from the tested strategy.
-
-The final startup failure found during the test was not an installation defect. The preset requested shorthand blob name tls7, so the resolver correctly looked for files/fake/tls7.bin. After the preset was updated to use an available real blob filename, the service started successfully.
-
-The public README strategy example is intentionally left unchanged for now by explicit project-owner instruction. It will be rewritten in a later dedicated documentation pass.
+- VERSION remains 0.2.8;
+- PLUGIN_REVISION advanced from 1 to 2 because packaged behavior changed;
+- focused release-selection tests cover stable filtering, four-release output, help,
+  latest default selection, exact-version propagation through lockf, malformed values,
+  unpublished values, and both Git checkout paths;
+- full project validation passed in GitHub Actions CI run 30737096920;
+- the FreeBSD package job passed;
+- CI produced artifact `os-zapret2-restyle-0.2.8_2`;
+- PR #24 was squash-merged into main as commit
+  e3a9ffcf10ffe1e39917141c0ed1989592a4a7eb;
+- no tag, GitHub Release, GitHub Pages repository update, or package publication was
+  requested or performed.
 
 ==================================================
 CURRENTLY CONFIRMED
@@ -317,131 +122,76 @@ CURRENTLY CONFIRMED
 Project and distribution:
 
 - independent repository and package identity;
-- package/plugin name os-zapret2-restyle;
-- internal OPNsense service and configd namespace zapret;
-- VERSION as the single version source;
-- Makefile PLUGIN_NAME remains zapret2 as required by the OPNsense framework;
-- GitHub Release assets and GitHub Pages pkg repository;
-- FreeBSD:15:amd64 repository layout for supported OPNsense 26.7;
-- repository configuration uses ordinary https:// and signature_type: none;
-- generated package metadata and archive preflight validation.
+- package/plugin name `os-zapret2-restyle`;
+- internal OPNsense service and configd namespace `zapret`;
+- VERSION is the single version source;
+- GitHub Release assets and GitHub Pages pkg repository are the approved distribution
+  architecture;
+- repository mode remains `signature_type: "none"` by active decision.
 
 Runtime and backend:
 
 - modular Backend v2;
 - unified Traffic Strategy;
-- placeholders limited to <HOSTLIST:name> and <IPSET:name>;
+- placeholders limited to `<HOSTLIST:name>` and `<IPSET:name>`;
 - automatic one-selector-per-runtime-profile normalization;
-- user-authored --new boundaries retained;
-- Target Mode;
-- global domain exclusions;
-- strict domain and IP validation;
-- candidate build and validation;
-- transactional Apply design, with the CFG-001 response/boot correction implemented
-  in source and still awaiting focused live verification;
-- atomic runtime activation and rollback;
-- launcher, firewall, dvtws2, and supervisor lifecycle;
-- process identity validation for dvtws2 and supervisor;
-- lockf-backed lifecycle serialization;
-- supervisor-only runtime failure detection;
-- runtime cleanup on launch or monitored-process failure;
-- blob shorthand resolves directly to files/fake/<name>.bin;
-- native upstream blob declarations containing ':' remain unchanged.
+- user-authored `--new` boundaries are retained;
+- candidate build, validation, activation, and rollback paths exist;
+- launcher, firewall, dvtws2, and supervisor lifecycle exists;
+- lifecycle mutation is serialized with lockf;
+- setup is the single runtime preparation and upstream release-management backend;
+- release selection is implemented without adding a second installer path.
 
 Package lifecycle:
 
 - pkg installation does not download, compile, or install runtime dependencies;
-- +POST_INSTALL prints the exact setup command;
-- +PRE_DEINSTALL stops the service synchronously;
-- +POST_DEINSTALL is a no-op and does not restart configd;
-- package removal preserves runtime and shared dependencies;
-- setup uses bol-van/zapret2 pinned to v1.0.3;
-- setup backend is the approved single backend for the first Milestone 8 GUI Maintenance feature.
-
-Live behavior:
-
-- valid configuration reached 13|13|ready|ok;
-- HOSTLIST:youtube, HOSTLIST:user, IPSET:telegram, and hostlist exclusion data were loaded;
-- invalid candidate data preserves the active runtime, service PID, and ipfw rules;
-- invalid IP input fails during target validation;
-- corrected preset using an existing blob starts successfully.
-
-
-==================================================
-MILESTONE TRANSITION — 2026-07-30
-==================================================
-
-Milestone 7 is closed by explicit project-owner decision. The published v0.2.2 baseline remains the verified foundation. Remaining upgrade, removal, reinstall, reboot, controlled-failure, timeout-chain, and GUI/API live tests were not falsely marked as passed; they remain in the focused regression backlog and may be executed when relevant to later changes.
-
-Milestone 8 is now active. Ordered priorities:
-
-1. GUI management of bol-van/zapret2 stable releases through the existing backend:
-   /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh
-   The GUI must report the installed version, obtain the available stable-release list, notify about updates, allow release selection, install a selected release, update to a newer release, and repeat installation of the current release. Runtime presence and runtime/service health must be displayed as separate states.
-2. GUI management of an additional BLOB repository. The repository URL, manifest, file layout, integrity model, and update contract are intentionally deferred until the project owner supplies the repository.
-
-All OPNsense console instructions are written for the default csh root shell. When POSIX sh is mandatory, the instruction must explicitly enter sh and explicitly run exit before returning to csh-oriented commands.
+- `+POST_INSTALL` prints the explicit setup command;
+- package upgrade preserves prior complete running/stopped state;
+- package removal stops the service and preserves runtime and shared dependencies;
+- destructive runtime cleanup remains a separate explicit maintenance action.
 
 ==================================================
 OPEN VERIFICATION WORK
 ==================================================
 
-The following are not yet classified as fully live verified:
+Release-selection matrix:
 
-1. package upgrade from an earlier revision to 0.2.1_8;
-2. package removal while the service is running;
-3. preservation of runtime and dependencies after package removal;
-4. package reinstall over preserved runtime;
-5. full OPNsense reboot and automatic service-start behavior;
-6. controlled dvtws2 crash and supervisor cleanup/recovery behavior;
-7. direct diagnostics route behavior;
-8. complete GUI → MVC → configd → backend API live matrix;
-9. blockcheck behavior across the complete browser/PHP/configd/script timeout chain;
-10. classification of the currently unused reconfigure API endpoint.
+1. run `setup.sh show` against the real GitHub API on OPNsense;
+2. run no-argument setup and confirm the latest stable release is selected;
+3. repeat installation of the same release;
+4. install a newer published release;
+5. install an older published release;
+6. verify each applicable path while the service is running;
+7. verify each applicable path while the service is stopped;
+8. verify that malformed and unpublished versions leave runtime and service state
+   unchanged.
 
-These are remaining tests, not evidence that the implemented architecture is broken.
+Retained focused regression backlog:
 
-==================================================
-CURRENT AUDIT FINDINGS
-==================================================
+- full OPNsense reboot and automatic service-start behavior;
+- remaining CFG-001 persistence evidence;
+- forced package-stop failure behavior;
+- controlled dvtws2 crash and supervisor cleanup/recovery;
+- complete GUI/API live matrix;
+- blockcheck timeout-chain behavior;
+- direct diagnostics route behavior;
+- currently unused reconfigure endpoint classification.
 
-Authoritative detailed records are in AUDIT.md.
-
-Still open or requiring live verification:
-
-- CFG-001 Settings Apply/configd response and boot template synchronization;
-- API diagnostics route duplication and direct-route behavior;
-- stale GUI help text referring to removed HTTP/HTTPS strategy fields;
-- blockcheck timeout inconsistency;
-- unused reconfigure endpoint classification;
-- rc.d enable-source behavior;
-- remaining package upgrade/remove/reinstall/reboot tests;
-- focused supervisor failure-path verification.
-
-Closed or implementation-complete findings include:
-
-- duplicate firewall_rules_present() declaration;
-- disconnected inherited watchdog removal;
-- PID identity hardening;
-- conditional supervisor kill escalation;
-- lifecycle serialization;
-- setup launcher executable mode;
-- wrong upstream zapret repository;
-- nested package-managed runtime lifecycle;
-- GitHub Pages repository URL scheme;
-- release workflow catalogue filename;
-- native ABI artifact staging.
+These are unperformed or incomplete evidence tasks, not proof that the implemented
+architecture is broken.
 
 ==================================================
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Publish and build package revision 2 from the LIFE-014 stopped-service correction.
-2. Run setup.sh install while the service is running and confirm new PIDs and free lifecycle lock.
-3. Run setup.sh install while the service is stopped and confirm no runtime process starts.
-4. Force a package stop failure and confirm pkg aborts before replacing files.
-5. Reboot OPNsense and confirm that config.xml, zapret.conf, dvtws.args, process arguments, PID ownership, supervisor, and ipfw state agree.
-6. Resume the Milestone 8 stable-release GUI work package.
+1. Install or update to package candidate 0.2.8_2 only when a focused OPNsense test is
+   intentionally started; this development task did not publish it to the pkg repository.
+2. Execute the release-selection matrix above and record exact evidence.
+3. Add read-only installed runtime-version detection.
+4. Expose installed and available version data through the backend API.
+5. Add update notification and GUI release controls that reuse setup.sh rather than
+   duplicate release discovery or installation logic.
+6. Continue reporting runtime presence separately from runtime/service health.
 
 ==================================================
 WORKING RULES FOR RESUMPTION
@@ -450,48 +200,12 @@ WORKING RULES FOR RESUMPTION
 Before changing code:
 
 1. read docs/INDEX.md;
-2. follow the mandatory reading order;
-3. inspect the actual repository tree;
-4. read the current GitHub `main`, record its full SHA, and verify that any local
-   checkout contains no unpublished state required by the change;
-5. use AUDIT.md Finding IDs for remediation work;
-6. record approved concepts in DECISIONS.md;
-7. update every affected document in the same logical commit;
-8. never infer current state from chat history alone.
+2. follow the complete mandatory reading order;
+3. inspect the current repository tree and exact GitHub main SHA;
+4. identify whether relevant unpublished owner state exists;
+5. use one logical change, one squash result, one build, and one focused verification;
+6. update all affected documentation with the logical change;
+7. do not infer current state only from chat history.
 
-Release v0.2.2 at fc6b208 and package 0.2.2_1 remain the verified baseline.
-CFG-001 was published as prerelease v0.2.3 / package 0.2.3_1 at da3d8e7, where live
-testing exposed the LIFE-009 descriptor-inheritance defect. The descriptor correction
-was published as v0.2.4 / package 0.2.4_1 and its lock and valid-Apply checks passed.
-LIFE-014 is published as v0.2.5 / package 0.2.5_1 and requires the focused
-upgrade/setup matrix and CFG-001 reboot verification above.
-
-
-==================================================
-2026-07-31 — GITHUB-COMMIT DEVELOPMENT BASELINE
-==================================================
-
-Current development policy:
-
-- the exact current GitHub commit, normally `main`, is the source baseline;
-- all changed content, file modes, and synchronized documentation form one atomic
-  logical commit;
-- repository files are not edited directly in the OPNsense console;
-- before publication, static validation and complete diff review must pass;
-- immediately before publication, confirm that `main` still points to the recorded
-  base SHA;
-- direct publication to `main` is fast-forward only and requires explicit
-  project-owner instruction;
-- force-push is prohibited;
-- the working-branch and PR workflow is the default ordinary publication path;
-- a unified patch is an explicit narrower delivery mode, not a publication prerequisite;
-- after publication, perform the one build and one focused verification required
-  by the logical change;
-- temporary files, logs, diagnostics, installed-system configuration, and other files
-  outside the repository are not restricted by this rule.
-
-Local-only exception:
-GitHub does not contain uncommitted or unpushed changes from the project owner's
-OPNsense checkout. If they are relevant, stop and request that they be committed
-and pushed or explicitly transferred as an archive or patch. The old requirement
-for a fresh archive before every multi-file change is superseded.
+All OPNsense console commands target the default root csh shell unless a block explicitly
+enters POSIX `sh` and explicitly returns with `exit`.
