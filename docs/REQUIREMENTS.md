@@ -201,6 +201,12 @@ and secrets must not be packaged from a development firewall.
 
   `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install`
 
+- After packaged MVC, menu, ACL, controller, and view files are installed or replaced,
+  `+POST_INSTALL` must preserve all registration/template/service-state responsibilities
+  and refresh the Web GUI through the current OPNsense `webgui restart` configd action
+  as its final integration step. The exact `OK` response is required; refresh failure
+  must not be suppressed. The obsolete `webgui.lighttpd_reload` hook and a configd
+  restart are not accepted substitutes.
 - `setup.sh` is the single runtime-preparation and bol-van/zapret2 release-management
   backend. It may initially be run from the shell and later from a GUI maintenance
   action.

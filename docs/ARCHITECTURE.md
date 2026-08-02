@@ -587,8 +587,9 @@ Install path:
 ```text
 pkg add
   -> +POST_INSTALL
-  -> rc.configure_plugins
+  -> register plugin and run rc.configure_plugins POST_INSTALL
   -> template reload
+  -> configctl webgui restart 2
   -> print setup command
 ```
 
@@ -607,11 +608,21 @@ new +POST_INSTALL
   -> refresh plugin registration and template
   -> when marked, start through configd using replacement code
   -> verify complete running state and remove marker
+  -> restart the Web GUI through configd as the final integration action
 ```
 
 A stopped service remains stopped across upgrade. An incomplete runtime is cleaned
 before replacement but is not marked for automatic start. The transient marker lives
 under /var/run/zapret2-restyle and survives only the package transaction/retry window.
+
+`rc.configure_plugins POST_INSTALL` remains the standard OPNsense plugin cache and
+configuration refresh and is not removed. Because replacement MVC, menu, ACL, controller,
+and view files may still be held by existing PHP FastCGI workers, the package then uses
+the current core `webgui restart` configd action as its final integration step. That
+action invokes `/usr/local/etc/rc.restart_webgui`, regenerates WebGui templates, and
+replaces lighttpd/php-cgi workers. The historical
+`pluginctl -c webgui.lighttpd_reload` name from the close reference is not part of the
+current OPNsense core contract and is not used.
 
 Runtime preparation is separate:
 

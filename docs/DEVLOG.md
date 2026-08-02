@@ -1296,3 +1296,55 @@ Remaining:
 - PR CI and package build;
 - repeat running/stopped setup paths on OPNsense with package revision 2;
 - forced package-stop failure and reboot matrix.
+
+
+==================================================
+2026-08-02 — POST-INSTALL WEB GUI REFRESH CORRECTION
+==================================================
+
+Live diagnosis:
+
+- package 0.2.8_3 installed and registered successfully;
+- configd, zapret, lighttpd, php-cgi, and all registered OPNsense services were present;
+- the existing lighttpd/php-cgi processes predated package file replacement;
+- the GUI opened but did not display all dynamic information correctly;
+- restarting only `/usr/local/etc/rc.restart_webgui` replaced the Web GUI process tree
+  and restored normal operation.
+
+Architecture review:
+
+- retained the complete existing +POST_INSTALL registration, template, setup-message,
+  and zapret state-restoration behavior;
+- confirmed current OPNsense `rc.configure_plugins POST_INSTALL` flushes plugin-facing
+  caches but does not restart the Web GUI workers;
+- confirmed current OPNsense exposes `configctl webgui restart`, which invokes
+  `/usr/local/etc/rc.restart_webgui` and `webgui_configure_do()`;
+- rejected the close-reference `pluginctl -c webgui.lighttpd_reload` call because that
+  hook name is absent from current OPNsense core.
+
+Implemented:
+
+- added the canonical delayed Web GUI restart as the final +POST_INSTALL integration
+  action;
+- required exact configd `OK` and made failure visible;
+- extended the focused package-lifecycle test to enforce action presence, ordering,
+  exact result handling, and absence of the obsolete hook;
+- advanced PLUGIN_REVISION from 3 to 4 while VERSION remains 0.2.8;
+- synchronized lifecycle architecture, audit, requirements, state, roadmap, README,
+  and changelog.
+
+Verification in this change:
+
+- shell syntax validation for package hooks and project scripts;
+- focused package lifecycle, setup release-selection, configuration activation,
+  lifecycle lock, profile normalizer, and profile pipeline tests;
+- diff whitespace validation;
+- GitHub CI FreeBSD package build.
+
+Remaining live verification:
+
+- install/force-update package 0.2.8_4;
+- confirm the Web GUI PID changes without a manual command;
+- confirm complete plugin and core page rendering;
+- confirm prior zapret running/stopped state remains preserved;
+- confirm Web GUI restart failure is surfaced.

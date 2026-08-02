@@ -62,6 +62,32 @@ if grep -Eq 'CONFIGURE_PLUGINS.*\|\|[[:space:]]*true' "${POST_HOOK}"; then
     fail "post-install suppresses OPNsense POST_INSTALL failure"
 fi
 
+grep -q '"${CONFIGCTL}" webgui restart 2' "${POST_HOOK}" ||
+    fail "post-install does not refresh the Web GUI through the canonical configd action"
+grep -q '\[ "${webgui_output}" != "OK" \]' "${POST_HOOK}" ||
+    fail "post-install does not enforce the exact Web GUI configd success response"
+if grep -q 'webgui\.lighttpd_reload' "${POST_HOOK}"; then
+    fail "post-install uses the obsolete webgui.lighttpd_reload plugin hook"
+fi
+if grep -Eq 'webgui restart.*\|\|[[:space:]]*true' "${POST_HOOK}"; then
+    fail "post-install suppresses Web GUI refresh failure"
+fi
+
+register_line=$(grep -n 'install os-zapret2-restyle' "${POST_HOOK}" | cut -d: -f1)
+configure_line=$(grep -n '"${CONFIGURE_PLUGINS}" POST_INSTALL' "${POST_HOOK}" | cut -d: -f1)
+zapret_start_line=$(grep -n '"${CONFIGCTL}" zapret start' "${POST_HOOK}" | cut -d: -f1)
+webgui_restart_line=$(grep -n '"${CONFIGCTL}" webgui restart 2' "${POST_HOOK}" | cut -d: -f1)
+message_line=$(grep -n "cat <<'MESSAGE'" "${POST_HOOK}" | cut -d: -f1)
+
+[ "${register_line}" -lt "${webgui_restart_line}" ] ||
+    fail "Web GUI refresh runs before plugin registration"
+[ "${configure_line}" -lt "${webgui_restart_line}" ] ||
+    fail "Web GUI refresh runs before OPNsense POST_INSTALL configuration"
+[ "${zapret_start_line}" -lt "${webgui_restart_line}" ] ||
+    fail "Web GUI refresh runs before replacement zapret service restoration"
+[ "${webgui_restart_line}" -lt "${message_line}" ] ||
+    fail "Web GUI refresh is not the final package integration action"
+
 state_line=$(grep -n '"${SERVICE_SCRIPT}" status' "${SETUP_SCRIPT}" |
     head -1 |
     cut -d: -f1)

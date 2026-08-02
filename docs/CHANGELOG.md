@@ -22,6 +22,15 @@ The project starts its own version history at `0.1.0`.
 
 ### Fixed
 
+- Refreshed the OPNsense Web GUI as the final `+POST_INSTALL` integration step so
+  replacement MVC, menu, ACL, controller, and view files are loaded by new
+  lighttpd/php-cgi workers.
+- Retained plugin registration, `rc.configure_plugins POST_INSTALL`, template rendering,
+  setup instructions, and zapret running/stopped state restoration unchanged.
+- Required the exact `configctl webgui restart` success response and rejected the
+  obsolete close-reference `webgui.lighttpd_reload` hook.
+- Advanced the unpublished development package candidate from `0.2.8_3` to `0.2.8_4`.
+
 - Corrected GitHub release discovery to use options supported by native FreeBSD
   `/usr/bin/fetch`; removed curl-style `-H` arguments and supplied the user agent with
   `--user-agent=os-zapret2-restyle`.
