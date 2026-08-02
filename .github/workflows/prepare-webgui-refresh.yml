@@ -1,0 +1,637 @@
+name: Prepare WebGUI lifecycle correction
+
+on:
+  push:
+    branches:
+      - agent/fix-postinstall-webgui-refresh
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.event.head_commit.message == 'chore: prepare WebGUI lifecycle correction'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/fix-postinstall-webgui-refresh
+
+      - name: Apply focused lifecycle correction
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old[:100]!r}")
+              file.write_text(text.replace(old, new, 1))
+
+          def append_once(path: str, marker: str, addition: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if marker in text:
+                  raise SystemExit(f"{path}: marker already exists: {marker}")
+              if not text.endswith("\n"):
+                  text += "\n"
+              file.write_text(text + addition)
+
+          replace_once(
+              "Makefile",
+              "PLUGIN_REVISION=    3\n",
+              "PLUGIN_REVISION=    4\n",
+          )
+
+          Path("pkg/+POST_INSTALL").write_text(r'''#!/bin/sh
+
+# Register the plugin and render its initial template. Runtime preparation is
+# intentionally separate from the pkg transaction. During an upgrade, restore
+# a service that the replacement pre-install hook stopped successfully. Refresh
+# the Web GUI last so replacement MVC, menu, ACL, and view files are loaded by
+# new lighttpd/PHP workers.
+
+SERVICE_SCRIPT="/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
+CONFIGCTL="/usr/local/sbin/configctl"
+FIRMWARE_REGISTER="/usr/local/opnsense/scripts/firmware/register.php"
+CONFIGURE_PLUGINS="/usr/local/etc/rc.configure_plugins"
+UPGRADE_RESTART_MARKER="/var/run/zapret2-restyle/pkg-upgrade.restart"
+
+[ -x "${FIRMWARE_REGISTER}" ] || {
+    echo "ERROR: OPNsense plugin registration helper is unavailable" >&2
+    exit 1
+}
+
+if ! "${FIRMWARE_REGISTER}" install os-zapret2-restyle; then
+    echo "ERROR: os-zapret2-restyle could not be registered in OPNsense firmware state" >&2
+    exit 1
+fi
+
+[ -x "${CONFIGURE_PLUGINS}" ] || {
+    echo "ERROR: OPNsense plugin configuration helper is unavailable" >&2
+    exit 1
+}
+
+if ! "${CONFIGURE_PLUGINS}" POST_INSTALL; then
+    echo "ERROR: OPNsense POST_INSTALL plugin configuration failed" >&2
+    exit 1
+fi
+
+if [ -x "${CONFIGCTL}" ]; then
+    "${CONFIGCTL}" template reload OPNsense/Zapret >/dev/null 2>&1 || true
+fi
+
+if [ -n "${PKG_UPGRADE:-}" ] && [ -f "${UPGRADE_RESTART_MARKER}" ]; then
+    [ -x "${CONFIGCTL}" ] && [ -x "${SERVICE_SCRIPT}" ] || {
+        echo "ERROR: zapret service control is unavailable after package upgrade" >&2
+        exit 1
+    }
+
+    service_output=$("${CONFIGCTL}" zapret start 2>&1)
+    service_result=$?
+    if [ "${service_result}" -ne 0 ] || [ "${service_output}" != "OK" ]; then
+        printf '%s\n' "${service_output}" >&2
+        echo "ERROR: zapret service could not be started after package upgrade" >&2
+        exit 1
+    fi
+
+    if ! "${SERVICE_SCRIPT}" status >/dev/null 2>&1; then
+        echo "ERROR: zapret service did not reach running state after package upgrade" >&2
+        exit 1
+    fi
+
+    rm -f "${UPGRADE_RESTART_MARKER}"
+fi
+
+[ -x "${CONFIGCTL}" ] || {
+    echo "ERROR: OPNsense Web GUI control is unavailable after plugin installation" >&2
+    exit 1
+}
+
+webgui_output=$("${CONFIGCTL}" webgui restart 2 2>&1)
+webgui_result=$?
+if [ "${webgui_result}" -ne 0 ] || [ "${webgui_output}" != "OK" ]; then
+    printf '%s\n' "${webgui_output}" >&2
+    echo "ERROR: OPNsense Web GUI could not be refreshed after plugin installation" >&2
+    exit 1
+fi
+
+cat <<'MESSAGE'
+
+os-zapret2-restyle was installed.
+
+To install the zapret2 runtime, run:
+
+/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install
+
+MESSAGE
+
+exit 0
+''')
+
+          test_anchor = '''if grep -Eq 'CONFIGURE_PLUGINS.*\\|\\|[[:space:]]*true' "${POST_HOOK}"; then
+              fail "post-install suppresses OPNsense POST_INSTALL failure"
+          fi
+
+          state_line='''
+          test_insert = '''if grep -Eq 'CONFIGURE_PLUGINS.*\\|\\|[[:space:]]*true' "${POST_HOOK}"; then
+              fail "post-install suppresses OPNsense POST_INSTALL failure"
+          fi
+
+          grep -q '\"${CONFIGCTL}\" webgui restart 2' "${POST_HOOK}" ||
+              fail "post-install does not refresh the Web GUI through the canonical configd action"
+          grep -q '\[ \"${webgui_output}\" != \"OK\" \]' "${POST_HOOK}" ||
+              fail "post-install does not enforce the exact Web GUI configd success response"
+          if grep -q 'webgui\\.lighttpd_reload' "${POST_HOOK}"; then
+              fail "post-install uses the obsolete webgui.lighttpd_reload plugin hook"
+          fi
+          if grep -Eq 'webgui restart.*\\|\\|[[:space:]]*true' "${POST_HOOK}"; then
+              fail "post-install suppresses Web GUI refresh failure"
+          fi
+
+          register_line=$(grep -n 'install os-zapret2-restyle' "${POST_HOOK}" | cut -d: -f1)
+          configure_line=$(grep -n '\"${CONFIGURE_PLUGINS}\" POST_INSTALL' "${POST_HOOK}" | cut -d: -f1)
+          zapret_start_line=$(grep -n '\"${CONFIGCTL}\" zapret start' "${POST_HOOK}" | cut -d: -f1)
+          webgui_restart_line=$(grep -n '\"${CONFIGCTL}\" webgui restart 2' "${POST_HOOK}" | cut -d: -f1)
+          message_line=$(grep -n "cat <<'MESSAGE'" "${POST_HOOK}" | cut -d: -f1)
+
+          [ "${register_line}" -lt "${webgui_restart_line}" ] ||
+              fail "Web GUI refresh runs before plugin registration"
+          [ "${configure_line}" -lt "${webgui_restart_line}" ] ||
+              fail "Web GUI refresh runs before OPNsense POST_INSTALL configuration"
+          [ "${zapret_start_line}" -lt "${webgui_restart_line}" ] ||
+              fail "Web GUI refresh runs before replacement zapret service restoration"
+          [ "${webgui_restart_line}" -lt "${message_line}" ] ||
+              fail "Web GUI refresh is not the final package integration action"
+
+          state_line='''
+          replace_once(
+              "scripts/test-package-lifecycle-restart.sh",
+              test_anchor,
+              test_insert,
+          )
+
+          replace_once(
+              "README.md",
+              "Version 0.2.8 is the current prerelease line; this source tree builds package revision 3.",
+              "Version 0.2.8 is the current prerelease line; this source tree builds package revision 4.",
+          )
+          replace_once(
+              "README.md",
+              """Package upgrades preserve the prior service state. The replacement package stops a
+running service before the old package hook and plugin-file replacement, then starts it
+again with replacement code. A stopped service remains stopped, and an upgrade is
+aborted if the installed service cannot stop cleanly.
+""",
+              """Package upgrades preserve the prior service state. The replacement package stops a
+running service before the old package hook and plugin-file replacement, then starts it
+again with replacement code. A stopped service remains stopped, and an upgrade is
+aborted if the installed service cannot stop cleanly. After plugin registration,
+template rendering, and any required service restoration complete, `+POST_INSTALL`
+refreshes the OPNsense Web GUI through the current `configctl webgui restart` action so
+new lighttpd/PHP workers load the installed MVC, menu, ACL, and view files.
+""",
+          )
+
+          replace_once("docs/PROJECT_STATE.md", "Current package revision:\n3\n", "Current package revision:\n4\n")
+          replace_once(
+              "docs/PROJECT_STATE.md",
+              "Current package candidate:\nos-zapret2-restyle-0.2.8_3\n",
+              "Current package candidate:\nos-zapret2-restyle-0.2.8_4\n",
+          )
+          replace_once(
+              "docs/PROJECT_STATE.md",
+              "Latest completed implementation commit:\nb1b6ffd79bed24fa3d23f3a318336e5c92da5bfd\n",
+              "Latest completed implementation:\nPost-install Web GUI refresh lifecycle correction in the current tree.\n",
+          )
+          replace_once(
+              "docs/PROJECT_STATE.md",
+              """Current phase:
+Command-line bol-van/zapret2 release selection is implemented in setup.sh, including
+the FreeBSD fetch compatibility correction in package revision 3.
+
+Current priority:
+Live-verify the release-selection paths on OPNsense, then add installed runtime-version
+detection and reporting before implementing the GUI controls.
+
+Known blockers:
+No source blocker is known. Real installation, repeat installation, upgrade, downgrade,
+and service-state preservation still require focused OPNsense evidence.
+""",
+              """Current phase:
+Command-line bol-van/zapret2 release selection is implemented. Package revision 4 also
+refreshes the Web GUI after plugin files are installed or replaced.
+
+Current priority:
+Live-verify that package 0.2.8_4 replaces the Web GUI process and preserves complete
+zapret service state, then complete the release-selection matrix and add installed
+runtime-version reporting.
+
+Known blockers:
+No source blocker is known. The Web GUI refresh correction and the release-selection
+paths still require focused OPNsense evidence from the revision-4 package.
+""",
+          )
+          project_section = """
+==================================================
+PACKAGE WEB GUI REFRESH CORRECTION — 2026-08-02
+==================================================
+
+Live diagnosis of local package 0.2.8_3 showed that package registration, configd,
+zapret, lighttpd, and PHP workers all remained present, but the Web GUI displayed
+incomplete dynamic data after the plugin MVC/view files were replaced. The lighttpd
+and php-cgi processes predated the package transaction. Restarting only the Web GUI
+through `/usr/local/etc/rc.restart_webgui` replaced those processes and restored normal
+rendering; every registered OPNsense service then reported running.
+
+The current OPNsense architecture retains `rc.configure_plugins POST_INSTALL` for
+plugin cache/configuration refresh and exposes the canonical `webgui restart` configd
+action, which invokes `/usr/local/etc/rc.restart_webgui`. The historical close-reference
+hook `pluginctl -c webgui.lighttpd_reload` is not present in current OPNsense core.
+
+Package revision 4 therefore keeps all existing `+POST_INSTALL` responsibilities and
+adds one final, fail-visible `configctl webgui restart 2` action after plugin
+registration, template rendering, and any zapret service-state restoration. Focused
+static coverage enforces the action, ordering, exact `OK` response, and rejection of
+the obsolete hook name.
+
+"""
+          replace_once(
+              "docs/PROJECT_STATE.md",
+              "==================================================\nCURRENTLY CONFIRMED\n==================================================\n",
+              project_section + "==================================================\nCURRENTLY CONFIRMED\n==================================================\n",
+          )
+          replace_once(
+              "docs/PROJECT_STATE.md",
+              "- `+POST_INSTALL` prints the explicit setup command;\n",
+              "- `+POST_INSTALL` prints the explicit setup command and refreshes the Web GUI last;\n",
+          )
+          replace_once(
+              "docs/PROJECT_STATE.md",
+              "Release-selection matrix:\n",
+              "Web GUI package-lifecycle verification:\n\n1. install or force-update package 0.2.8_4 while recording the current Web GUI PID;\n2. confirm `+POST_INSTALL` completes and the Web GUI PID changes automatically;\n3. confirm `/ui/zapret`, `/ui/zapret/diagnostics`, and ordinary OPNsense pages render;\n4. confirm all registered OPNsense services and the prior zapret running/stopped state;\n5. inject or observe a Web GUI restart failure and confirm pkg reports it visibly.\n\nRelease-selection matrix:\n",
+          )
+          replace_once(
+              "docs/PROJECT_STATE.md",
+              """1. Install or update to package candidate 0.2.8_3 only when a focused OPNsense test is
+   intentionally started; this development task did not publish it to the pkg repository.
+2. Execute the release-selection matrix above and record exact evidence.
+3. Add read-only installed runtime-version detection.
+4. Expose installed and available version data through the backend API.
+5. Add update notification and GUI release controls that reuse setup.sh rather than
+   duplicate release discovery or installation logic.
+6. Continue reporting runtime presence separately from runtime/service health.
+""",
+              """1. Build and locally install package candidate 0.2.8_4; this development task does not
+   publish it to the pkg repository.
+2. Execute the Web GUI package-lifecycle verification above and record exact evidence.
+3. Execute the release-selection matrix and record exact evidence.
+4. Add read-only installed runtime-version detection.
+5. Expose installed and available version data through the backend API.
+6. Add update notification and GUI release controls that reuse setup.sh rather than
+   duplicate release discovery or installation logic.
+7. Continue reporting runtime presence separately from runtime/service health.
+""",
+          )
+
+          append_once(
+              "docs/AUDIT.md",
+              "LIFE-015 — PACKAGE UPDATE LEAVES WEB GUI WORKERS STALE",
+              """
+
+==================================================
+LIFE-015 — PACKAGE UPDATE LEAVES WEB GUI WORKERS STALE
+==================================================
+
+Classification:
+broken
+
+Status:
+Remediated in source; focused revision-4 package verification required.
+
+Affected locations:
+
+- pkg/+POST_INSTALL
+- scripts/test-package-lifecycle-restart.sh
+- package installation and upgrade path for MVC, Menu, ACL, and Volt files
+
+Affected chain:
+
+pkg installs or replaces plugin UI files
+→ plugin registration and rc.configure_plugins POST_INSTALL
+→ existing lighttpd/php-cgi workers remain alive
+→ Web GUI pages open but dynamic data may be incomplete or stale
+→ manual Web GUI restart replaces the workers and restores normal rendering
+
+Evidence:
+
+- local package os-zapret2-restyle-0.2.8_3 installed successfully;
+- configd and zapret remained running and all zapret configd actions were registered;
+- lighttpd and php-cgi processes still had start times from before the package update;
+- Web GUI pages rendered but Firmware and plugin-related dynamic presentation was
+  incomplete;
+- restarting only `/usr/local/etc/rc.restart_webgui` changed the lighttpd PID and
+  restored normal GUI operation;
+- the complete OPNsense service list subsequently reported every registered service,
+  including webgui and zapret, as running;
+- current OPNsense core exposes `configctl webgui restart`, backed by
+  `/usr/local/etc/rc.restart_webgui` and `webgui_configure_do()`;
+- current OPNsense core contains no `webgui.lighttpd_reload` hook, although that
+  historical name remains in the close reference plugin.
+
+Impact:
+
+A successful package update can leave users with a partially functioning GUI until a
+manual Web GUI restart, even though the package, configd, zapret, and network listeners
+appear healthy.
+
+Verification plan:
+
+1. Build package 0.2.8_4 and inspect the embedded +POST_INSTALL.
+2. Record the pre-install Web GUI PID.
+3. Install or force-update the package through pkg/Firmware.
+4. Confirm +POST_INSTALL returns success and the Web GUI PID changes automatically.
+5. Confirm plugin Settings/Diagnostics and ordinary OPNsense pages return complete data.
+6. Confirm zapret running/stopped state remains preserved.
+7. Confirm a forced Web GUI restart failure is reported rather than suppressed.
+
+Remediation plan:
+
+- retain plugin registration, rc.configure_plugins POST_INSTALL, template rendering,
+  setup instructions, and zapret service-state restoration;
+- invoke the current canonical configd Web GUI restart action as the final integration
+  step;
+- require the exact configd `OK` result;
+- reject the obsolete close-reference `webgui.lighttpd_reload` hook;
+- cover action presence and ordering with the focused lifecycle test.
+
+Acceptance criteria:
+
+- no existing +POST_INSTALL responsibility is removed;
+- new lighttpd/php-cgi workers load installed plugin files automatically;
+- the Web GUI refresh runs only after plugin integration and zapret restoration;
+- failure is visible to pkg;
+- package revision advances once with VERSION unchanged;
+- CI package build and focused lifecycle test pass;
+- live OPNsense revision-4 verification is recorded before the finding is closed.
+
+Affected documents:
+
+- docs/PROJECT_STATE.md
+- docs/AUDIT.md
+- docs/ARCHITECTURE.md
+- docs/DEVLOG.md
+- docs/ROADMAP.md
+- docs/REQUIREMENTS.md
+- docs/CHANGELOG.md
+- README.md
+""",
+          )
+
+          replace_once(
+              "docs/ARCHITECTURE.md",
+              """pkg add
+  -> +POST_INSTALL
+  -> rc.configure_plugins
+  -> template reload
+  -> print setup command
+""",
+              """pkg add
+  -> +POST_INSTALL
+  -> register plugin and run rc.configure_plugins POST_INSTALL
+  -> template reload
+  -> configctl webgui restart 2
+  -> print setup command
+""",
+          )
+          replace_once(
+              "docs/ARCHITECTURE.md",
+              """new +POST_INSTALL
+  -> refresh plugin registration and template
+  -> when marked, start through configd using replacement code
+  -> verify complete running state and remove marker
+""",
+              """new +POST_INSTALL
+  -> refresh plugin registration and template
+  -> when marked, start through configd using replacement code
+  -> verify complete running state and remove marker
+  -> restart the Web GUI through configd as the final integration action
+""",
+          )
+          replace_once(
+              "docs/ARCHITECTURE.md",
+              """A stopped service remains stopped across upgrade. An incomplete runtime is cleaned
+before replacement but is not marked for automatic start. The transient marker lives
+under /var/run/zapret2-restyle and survives only the package transaction/retry window.
+""",
+              """A stopped service remains stopped across upgrade. An incomplete runtime is cleaned
+before replacement but is not marked for automatic start. The transient marker lives
+under /var/run/zapret2-restyle and survives only the package transaction/retry window.
+
+`rc.configure_plugins POST_INSTALL` remains the standard OPNsense plugin cache and
+configuration refresh and is not removed. Because replacement MVC, menu, ACL, controller,
+and view files may still be held by existing PHP FastCGI workers, the package then uses
+the current core `webgui restart` configd action as its final integration step. That
+action invokes `/usr/local/etc/rc.restart_webgui`, regenerates WebGui templates, and
+replaces lighttpd/php-cgi workers. The historical
+`pluginctl -c webgui.lighttpd_reload` name from the close reference is not part of the
+current OPNsense core contract and is not used.
+""",
+          )
+
+          append_once(
+              "docs/DEVLOG.md",
+              "2026-08-02 — POST-INSTALL WEB GUI REFRESH CORRECTION",
+              """
+
+==================================================
+2026-08-02 — POST-INSTALL WEB GUI REFRESH CORRECTION
+==================================================
+
+Live diagnosis:
+
+- package 0.2.8_3 installed and registered successfully;
+- configd, zapret, lighttpd, php-cgi, and all registered OPNsense services were present;
+- the existing lighttpd/php-cgi processes predated package file replacement;
+- the GUI opened but did not display all dynamic information correctly;
+- restarting only `/usr/local/etc/rc.restart_webgui` replaced the Web GUI process tree
+  and restored normal operation.
+
+Architecture review:
+
+- retained the complete existing +POST_INSTALL registration, template, setup-message,
+  and zapret state-restoration behavior;
+- confirmed current OPNsense `rc.configure_plugins POST_INSTALL` flushes plugin-facing
+  caches but does not restart the Web GUI workers;
+- confirmed current OPNsense exposes `configctl webgui restart`, which invokes
+  `/usr/local/etc/rc.restart_webgui` and `webgui_configure_do()`;
+- rejected the close-reference `pluginctl -c webgui.lighttpd_reload` call because that
+  hook name is absent from current OPNsense core.
+
+Implemented:
+
+- added the canonical delayed Web GUI restart as the final +POST_INSTALL integration
+  action;
+- required exact configd `OK` and made failure visible;
+- extended the focused package-lifecycle test to enforce action presence, ordering,
+  exact result handling, and absence of the obsolete hook;
+- advanced PLUGIN_REVISION from 3 to 4 while VERSION remains 0.2.8;
+- synchronized lifecycle architecture, audit, requirements, state, roadmap, README,
+  and changelog.
+
+Verification in this change:
+
+- shell syntax validation for package hooks and project scripts;
+- focused package lifecycle, setup release-selection, configuration activation,
+  lifecycle lock, profile normalizer, and profile pipeline tests;
+- diff whitespace validation;
+- GitHub CI FreeBSD package build.
+
+Remaining live verification:
+
+- install/force-update package 0.2.8_4;
+- confirm the Web GUI PID changes without a manual command;
+- confirm complete plugin and core page rendering;
+- confirm prior zapret running/stopped state remains preserved;
+- confirm Web GUI restart failure is surfaced.
+""",
+          )
+
+          replace_once(
+              "docs/ROADMAP.md",
+              """10. [x] Publish the later corrective package line through v0.2.8.
+11. [ ] Complete any remaining reboot and forced-stop evidence when required by a
+   touched lifecycle path.
+12. [ ] Reconcile CFG-001 and record the next verified stable baseline.
+13. [x] Resume management of bol-van/zapret2 stable releases through setup.sh.
+14. [ ] Add installed runtime-version detection and reporting.
+15. [x] Obtain and present the available stable-release list: `setup.sh show` prints
+   up to the four latest published stable releases.
+16. [ ] Notify when a newer stable release is available.
+17. [x] Allow command-line selection, installation, update, downgrade, and repeat
+   installation of a published stable release through `setup.sh install VERSION`;
+   no-argument setup and `install` select the latest stable release.
+18. [ ] Live-verify `show`, default latest installation, explicit reinstall, upgrade,
+   downgrade, and running/stopped service-state preservation on OPNsense.
+19. [ ] Add GUI endpoints and controls that invoke this same backend without duplicating
+   release-discovery or installation logic.
+20. [ ] Display runtime presence separately from runtime/service health.
+21. [ ] After the project owner supplies the repository, design and implement GUI
+   management of the additional BLOB repository. Until then, its URL, manifest,
+   layout, integrity model, and update contract remain unspecified.
+""",
+              """10. [x] Publish the later corrective package line through v0.2.8.
+11. [x] Diagnose incomplete GUI rendering after local 0.2.8_3 replacement as stale
+   lighttpd/php-cgi workers rather than an unstarted OPNsense service.
+12. [x] Add a final canonical Web GUI refresh to +POST_INSTALL without removing plugin
+   registration, template rendering, setup instructions, or zapret state restoration.
+13. [ ] Live-verify automatic Web GUI PID replacement and complete rendering with
+   package candidate 0.2.8_4.
+14. [ ] Complete any remaining reboot and forced-stop evidence when required by a
+   touched lifecycle path.
+15. [ ] Reconcile CFG-001 and record the next verified stable baseline.
+16. [x] Resume management of bol-van/zapret2 stable releases through setup.sh.
+17. [ ] Add installed runtime-version detection and reporting.
+18. [x] Obtain and present the available stable-release list: `setup.sh show` prints
+   up to the four latest published stable releases.
+19. [ ] Notify when a newer stable release is available.
+20. [x] Allow command-line selection, installation, update, downgrade, and repeat
+   installation of a published stable release through `setup.sh install VERSION`;
+   no-argument setup and `install` select the latest stable release.
+21. [ ] Live-verify `show`, default latest installation, explicit reinstall, upgrade,
+   downgrade, and running/stopped service-state preservation on OPNsense.
+22. [ ] Add GUI endpoints and controls that invoke this same backend without duplicating
+   release-discovery or installation logic.
+23. [ ] Display runtime presence separately from runtime/service health.
+24. [ ] After the project owner supplies the repository, design and implement GUI
+   management of the additional BLOB repository. Until then, its URL, manifest,
+   layout, integrity model, and update contract remain unspecified.
+""",
+          )
+
+          replace_once(
+              "docs/REQUIREMENTS.md",
+              """- Package post-install must register the plugin, render required templates, and print:
+
+  `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install`
+
+- `setup.sh` is the single runtime-preparation and bol-van/zapret2 release-management
+""",
+              """- Package post-install must register the plugin, render required templates, and print:
+
+  `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install`
+
+- After packaged MVC, menu, ACL, controller, and view files are installed or replaced,
+  `+POST_INSTALL` must preserve all registration/template/service-state responsibilities
+  and refresh the Web GUI through the current OPNsense `webgui restart` configd action
+  as its final integration step. The exact `OK` response is required; refresh failure
+  must not be suppressed. The obsolete `webgui.lighttpd_reload` hook and a configd
+  restart are not accepted substitutes.
+- `setup.sh` is the single runtime-preparation and bol-van/zapret2 release-management
+""",
+          )
+
+          replace_once(
+              "docs/CHANGELOG.md",
+              "### Fixed\n\n",
+              """### Fixed
+
+- Refreshed the OPNsense Web GUI as the final `+POST_INSTALL` integration step so
+  replacement MVC, menu, ACL, controller, and view files are loaded by new
+  lighttpd/php-cgi workers.
+- Retained plugin registration, `rc.configure_plugins POST_INSTALL`, template rendering,
+  setup instructions, and zapret running/stopped state restoration unchanged.
+- Required the exact `configctl webgui restart` success response and rejected the
+  obsolete close-reference `webgui.lighttpd_reload` hook.
+- Advanced the unpublished development package candidate from `0.2.8_3` to `0.2.8_4`.
+
+""",
+          )
+
+          PY
+
+          rm -f .github/workflows/prepare-webgui-refresh.yml
+
+      - name: Validate focused change
+        shell: bash
+        run: |
+          set -euo pipefail
+          find src -type f -name "*.sh" -exec sh -n {} \;
+          find pkg -type f -exec sh -n {} \;
+          find scripts -type f -name "*.sh" -exec sh -n {} \;
+          sh -n src/etc/rc.syshook.d/start/20-zapret
+          sh -n src/etc/rc.syshook.d/stop/20-zapret
+          sh scripts/test-profile-normalizer.sh
+          sh scripts/test-profile-pipeline.sh
+          sh scripts/test-config-activation-contract.sh
+          sh scripts/test-lifecycle-lock-fd.sh
+          sh scripts/test-package-lifecycle-restart.sh
+          sh scripts/test-setup-release-selection.sh
+          git diff --check
+          git diff --stat
+
+      - name: Commit prepared logical change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            Makefile \
+            pkg/+POST_INSTALL \
+            scripts/test-package-lifecycle-restart.sh \
+            README.md \
+            docs/PROJECT_STATE.md \
+            docs/AUDIT.md \
+            docs/ARCHITECTURE.md \
+            docs/DEVLOG.md \
+            docs/ROADMAP.md \
+            docs/REQUIREMENTS.md \
+            docs/CHANGELOG.md \
+            .github/workflows/prepare-webgui-refresh.yml
+          git diff --cached --check
+          git commit -m "Refresh WebGUI after plugin package updates"
+          git push origin HEAD:agent/fix-postinstall-webgui-refresh
