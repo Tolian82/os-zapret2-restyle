@@ -39,259 +39,27 @@ Current version:
 0.2.8
 
 Current package revision:
-5
+10
 
 Current package candidate:
-os-zapret2-restyle-0.2.8_5
-
-Latest completed implementation:
-GUI service control and bol-van/zapret2 release management in the current tree.
+os-zapret2-restyle-0.2.8_10
 
 Current milestone:
 Milestone 8 β€” GUI maintenance and managed upstream components
 
-Current phase:
-The Settings page now exposes service status/control, installed runtime version, the
-four stable releases returned by setup.sh show, and asynchronous selected-release
-installation through setup.sh install VERSION.
+Latest live-verified package behavior:
+Package 0.2.8_9 upgrades an installed and running runtime without killing configd or
+the Web GUI. The pre-existing configd watcher is preserved, only its worker is
+reloaded, configd actions remain available after the pkg transaction, lighttpd keeps
+listening on ports 80/443, and the previously running Zapret service returns to
+Started with upstream version v1.0.4.
+
+Current implementation candidate:
+Package 0.2.8_10 corrects selected-release launch and adds a resilient stable-release
+cache. The GUI uses one dedicated one-parameter configd action, waits for a real `OK`
+from the launcher, reuses the existing busy-state polling, serves repeated release-list
+refreshes from a local cache, and contains passive discovery failure without an exception dialog.
 
 Current priority:
-Build and live-verify package 0.2.8_5 on OPNsense: service Start/Stop, current version,
-four-release selection, install/reinstall/upgrade/downgrade polling, and preservation
-of the prior running or stopped service state.
-
-Known blockers:
-No source blocker is known. The Web GUI refresh correction and the release-selection
-paths still require focused OPNsense evidence from the revision-4 package.
-
-==================================================
-LATEST COMPLETED WORK β€” 2026-08-02
-==================================================
-
-The existing runtime setup backend now manages published stable bol-van/zapret2
-releases instead of using one source-pinned constant.
-
-Implemented command interface:
-
-- `setup.sh` installs the latest published stable release;
-- `setup.sh install` installs the latest published stable release;
-- `setup.sh show` prints up to the four latest published stable release tags;
-- `setup.sh install VERSION` installs an exact published stable release;
-- the same `install VERSION` path performs first installation, repeat installation,
-  upgrade, and downgrade;
-- `setup.sh --help` and `setup.sh -h` describe the command interface.
-
-Release discovery behavior:
-
-- GitHub Releases is queried before runtime mutation;
-- draft and prerelease entries are excluded;
-- accepted tags use `v` followed by two or more dot-separated numeric components;
-- malformed and unpublished requested versions fail before the setup lock and runtime
-  replacement path;
-- numeric tags such as `v1.0.3` and `v0.9.5.2` are supported;
-- failure to reach GitHub or obtain usable stable releases is reported explicitly;
-- release JSON is downloaded with the native FreeBSD `/usr/bin/fetch` command using
-  its supported `--user-agent` option.
-
-Installation behavior:
-
-- the selected release is passed through the existing setup lock to the internal
-  installation operation;
-- an existing runtime Git tree fetches and resets to the selected tag;
-- a missing runtime tree clones the selected tag;
-- tracked runtime source files are replaced by the selected release;
-- existing dependency, compile, dvtws2 verification, and service-state preservation
-  behavior remains in the same backend;
-- a previously running service is refreshed and verified;
-- a previously stopped service remains stopped and is verified as stopped.
-
-FreeBSD fetch correction:
-
-- the initial revision-2 implementation used curl-style `-H` arguments with
-  `/usr/bin/fetch`;
-- FreeBSD fetch does not implement that option, so the real OPNsense request would
-  fail before release discovery;
-- the unsupported headers were removed and replaced with the supported
-  `--user-agent=os-zapret2-restyle` option;
-- the focused fetch mock now rejects every unknown option instead of silently accepting
-  it, and the test explicitly prohibits curl-style `-H` in setup.sh;
-- the CI-only `0.2.8_2` artifact was never published and is superseded by candidate
-  `0.2.8_3`.
-
-Package and validation evidence:
-
-- VERSION remains 0.2.8;
-- PLUGIN_REVISION advanced from 1 to 2 for release selection and from 2 to 3 for the
-  FreeBSD fetch correction;
-- focused release-selection tests cover stable filtering, four-release output, help,
-  latest default selection, exact-version propagation through lockf, malformed values,
-  unpublished values, strict fetch arguments, and both Git checkout paths;
-- GitHub Actions CI run 30737689977 passed the complete Validate Project job;
-- the same run passed the FreeBSD package build and produced artifact
-  `os-zapret2-restyle-0.2.8_3`;
-- PR #24 introduced release selection and was squash-merged as commit
-  e3a9ffcf10ffe1e39917141c0ed1989592a4a7eb;
-- PR #25 synchronized the current-state document and was squash-merged as commit
-  b79e2668c8f9b80a0483b3b50ce5b138418a2b7e;
-- PR #26 corrected FreeBSD fetch usage and was squash-merged as commit
-  b1b6ffd79bed24fa3d23f3a318336e5c92da5bfd;
-- no tag, GitHub Release, GitHub Pages repository update, or package publication was
-  requested or performed.
-
-
-==================================================
-PACKAGE WEB GUI REFRESH CORRECTION β€” 2026-08-02
-==================================================
-
-Live diagnosis of local package 0.2.8_3 showed that package registration, configd,
-zapret, lighttpd, and PHP workers all remained present, but the Web GUI displayed
-incomplete dynamic data after the plugin MVC/view files were replaced. The lighttpd
-and php-cgi processes predated the package transaction. Restarting only the Web GUI
-through `/usr/local/etc/rc.restart_webgui` replaced those processes and restored normal
-rendering; every registered OPNsense service then reported running. The independent
-Firmware remote/tier blankness remained attributable to its `proxy-ca` TLS verification
-failure and is not evidence for this lifecycle finding.
-
-The current OPNsense architecture retains `rc.configure_plugins POST_INSTALL` for
-plugin cache/configuration refresh and exposes the canonical `webgui restart` configd
-action, which invokes `/usr/local/etc/rc.restart_webgui`. The historical close-reference
-hook `pluginctl -c webgui.lighttpd_reload` is not present in current OPNsense core.
-
-Package revision 4 therefore keeps all existing `+POST_INSTALL` responsibilities and
-adds one final, fail-visible `configctl webgui restart 2` action after plugin
-registration, template rendering, and any zapret service-state restoration. Focused
-static coverage enforces the action, ordering, exact `OK` response, and rejection of
-the obsolete hook name.
-
-==================================================
-GUI ZAPRET2 SERVICE MANAGEMENT β€” 2026-08-02
-==================================================
-
-The Settings page now contains a native collapsible `Zapret2 Service` section below
-the existing settings groups. Its single horizontal control line provides:
-
-- colored Started, Stopped, or Error service status;
-- the exact installed upstream tag when the runtime Git tree is at a published tag;
-- a Start/Stop button using the existing service API;
-- a Repository Releases selector populated by `setup.sh show`;
-- an Apply button that starts `setup.sh install VERSION` outside configd and polls its
-  read-only status until completion.
-
-The GUI does not duplicate release discovery, release validation, checkout, build, or
-service-state preservation. ServiceController validates the strict numeric tag syntax,
-requires the selection to remain in the four releases returned by setup.sh, and invokes
-configd actions only. setup_launcher.sh now accepts the selected version and exposes a
-read-only status mode for service health, installed tag, setup state, and active setup
-PID. Existing setup.sh behavior is unchanged.
-
-The section uses normal OPNsense controls and collapse behavior. Standard labels use the
-OPNsense language catalogue; the two plugin-specific section labels select English by
-default and Russian when the active OPNsense document language is Russian.
-
-Focused verification covers launcher argument validation and propagation, status output,
-controller/configd contracts, GUI endpoints and localization strings, and action
-registration. VERSION remains 0.2.8 and PLUGIN_REVISION advances from 4 to 5.
-
-==================================================
-CURRENTLY CONFIRMED
-==================================================
-
-Project and distribution:
-
-- independent repository and package identity;
-- package/plugin name `os-zapret2-restyle`;
-- internal OPNsense service and configd namespace `zapret`;
-- VERSION is the single version source;
-- GitHub Release assets and GitHub Pages pkg repository are the approved distribution
-  architecture;
-- repository mode remains `signature_type: "none"` by active decision.
-
-Runtime and backend:
-
-- modular Backend v2;
-- unified Traffic Strategy;
-- placeholders limited to `<HOSTLIST:name>` and `<IPSET:name>`;
-- automatic one-selector-per-runtime-profile normalization;
-- user-authored `--new` boundaries are retained;
-- candidate build, validation, activation, and rollback paths exist;
-- launcher, firewall, dvtws2, and supervisor lifecycle exists;
-- lifecycle mutation is serialized with lockf;
-- setup is the single runtime preparation and upstream release-management backend;
-- release selection is implemented without adding a second installer path.
-
-Package lifecycle:
-
-- pkg installation does not download, compile, or install runtime dependencies;
-- `+POST_INSTALL` prints the explicit setup command and refreshes the Web GUI last;
-- package upgrade preserves prior complete running/stopped state;
-- package removal stops the service and preserves runtime and shared dependencies;
-- destructive runtime cleanup remains a separate explicit maintenance action.
-
-==================================================
-OPEN VERIFICATION WORK
-==================================================
-
-Web GUI package-lifecycle verification:
-
-1. install or force-update package 0.2.8_4 while recording the current Web GUI PID;
-2. confirm `+POST_INSTALL` completes and the Web GUI PID changes automatically;
-3. confirm `/ui/zapret`, `/ui/zapret/diagnostics`, and ordinary OPNsense pages render;
-4. confirm all registered OPNsense services and the prior zapret running/stopped state;
-5. inject or observe a Web GUI restart failure and confirm pkg reports it visibly.
-
-Release-selection matrix:
-
-1. run `setup.sh show` against the real GitHub API on OPNsense;
-2. run no-argument setup and confirm the latest stable release is selected;
-3. repeat installation of the same release;
-4. install a newer published release;
-5. install an older published release;
-6. verify each applicable path while the service is running;
-7. verify each applicable path while the service is stopped;
-8. verify that malformed and unpublished versions leave runtime and service state
-   unchanged.
-
-Retained focused regression backlog:
-
-- full OPNsense reboot and automatic service-start behavior;
-- remaining CFG-001 persistence evidence;
-- forced package-stop failure behavior;
-- controlled dvtws2 crash and supervisor cleanup/recovery;
-- complete GUI/API live matrix;
-- blockcheck timeout-chain behavior;
-- direct diagnostics route behavior;
-- currently unused reconfigure endpoint classification.
-
-These are unperformed or incomplete evidence tasks, not proof that the implemented
-architecture is broken.
-
-==================================================
-IMMEDIATE NEXT ACTIONS
-==================================================
-
-1. Build and locally install package candidate 0.2.8_5; this development task does not
-   publish it to the pkg repository.
-2. Verify the Zapret2 Service section in English and Russian OPNsense locales.
-3. Verify Start/Stop and current-version reporting against the installed runtime.
-4. Verify selection and completion polling for reinstall, upgrade, and downgrade while
-   preserving initially running and stopped service states.
-5. Execute the retained Web GUI package-lifecycle and release-selection matrices and
-   record exact evidence.
-6. Add an explicit newer-release notification only as a separate logical change.
-
-==================================================
-WORKING RULES FOR RESUMPTION
-==================================================
-
-Before changing code:
-
-1. read docs/INDEX.md;
-2. follow the complete mandatory reading order;
-3. inspect the current repository tree and exact GitHub main SHA;
-4. identify whether relevant unpublished owner state exists;
-5. use one logical change, one squash result, one build, and one focused verification;
-6. update all affected documentation with the logical change;
-7. do not infer current state only from chat history.
-
-All OPNsense console commands target the default root csh shell unless a block explicitly
-enters POSIX `sh` and explicitly returns with `exit`.
+Build and live-verify 0.2.8_10 by selecting v1.0.3 in the GUI and confirming that the
+runtime reaches Started v1.0.3 while the release selector remainqΜΥΝ…‰±”‘ΥΙ¥Ή„)Ν¥µΥ±…Ρ•½ΘΉ…ΡΥΙ…°Ρ•µΑ½Ι…Ιδ¥Ρ!ΥA$™…¥±ΥΙ”Έ()-Ή½έΈ‰±½­•ΙΜθ)9ΌΝ½ΥΙ”‰±½­•Θ¥Μ­Ή½έΈΈQ΅”€ΐΈΘΈα|ΔΐU$¥ΉΝΡ…±°½…΅”‰•΅…Ω¥½ΘΝΡ¥±°Ι•ΕΥ¥Ι•ΜΡ΅”)™½ΥΝ•=A9Ν•ΉΝ”Ρ•ΝΠ‘•ΝΙ¥‰•‰•±½άΈ((ττττττττττττττττττττττττττττττττττττττττττττττττττ)1QMP=5A1Q]=I,ƒP€ΘΐΘΨ΄ΐΰ΄ΐΘ(ττττττττττττττττττττττττττττττττττττττττττττττττττ()½Ή™¥Α…­…”±¥™•ε±”θ((΄Α…­…”€ΐΈΘΈα|δΉΌ±½Ή•ΘΝΡ…ΙΡΜ„Ι•Α±…•µ•ΉΠ½Ή™¥έ…Ρ΅•Θ¥ΉΝ¥‘”Α­…‘‘€μ(΄€­A=MQ}%9MQ11€ΑΙ•Ν•ΙΩ•ΜΡ΅”•α¥ΝΡ¥Ήέ…Ρ΅•Θ…ΉΝ•Ή‘ΜM%QI4½Ή±δΡΌ¥ΡΜΥΙΙ•ΉΠ(€½Ή™¥ΉΑδ½ΉΝ½±•€έ½Ι­•Θμ(΄Ρ΅”Ν…µ”έ…Ρ΅•ΘΙ•…Ρ•Μ„Ι•Α±…•µ•ΉΠέ½Ι­•Θμ(΄½ΉΡ¥ΉΥ…Ρ¥½ΈΙ•ΕΥ¥Ι•Μ„‘¥™™•Ι•ΉΠέ½Ι­•ΘA%…Ή„ΝΥ•ΝΝ™Υ°½Ή™¥Ρ°ΝεΝΡ•΄ΝΡ…ΡΥΝ€μ(΄Α…­…”¥ΉΝΡ…±±…Ρ¥½Έ‘½•ΜΉ½ΠΙ•ΝΡ…ΙΠΡ΅”±½‰…°]•U$μ(΄±¥Ω”•Ω¥‘•Ή”ΑΙ•Ν•ΙΩ•έ…Ρ΅•ΘA%€ΠΨΜΜΜ°Ι•Α±…•Ρ΅”έ½Ι­•Θέ¥Ρ A%€ΨΔΨΜΘ°­•ΑΠ(€½Ή™¥Ι•ΝΑ½ΉΝ¥Ω”…™Ρ•ΘΡ΅”Α…­…”ΑΙ½•ΝΜ•Ή‘•°Ι•Ρ…¥Ή•±¥΅ΡΡΑA%€ΨΤΜΠΨ°…Ή(€Ι•ΝΡ½Ι•Ρ΅”ΙΥΉΉ¥Ήi…ΑΙ•ΠΝ•ΙΩ¥”Έ()U$Ν•±•Ρ•µΙ•±•…Ν”‘¥…Ή½Ν¥Μθ((΄Ν•±•Ρ¥ΉΨΔΈΐΈΜΑΙ•Ω¥½ΥΝ±δΑΙ½‘Υ•½Ή™¥A…Ι…µ•Ρ•Θµ¥Νµ…Ρ΅€μ(΄Ρ΅”½ΉΡΙ½±±•ΘΑ…ΝΝ•ΡέΌ…ΙΥµ•ΉΡΜ€΅¥ΉΝΡ…±±€°ΨΔΈΐΈΝ€¤ΡΌ…Έ…Ρ¥½Έέ¥Ρ ½Ή”€•Ν€μ(΄‘•Ρ…΅•½Ή™¥•α•ΥΡ¥½ΈΙ•ΡΥΙΉ•„UU%‰•™½Ι”Ρ΅”…Ρ¥½Έ™…¥±ΥΙ”°ΝΌΡ΅”U$(€¥Ή½ΙΙ•Ρ±δΡΙ•…Ρ•Ρ΅”½Α•Ι…Ρ¥½Έ…ΜΝΡ…ΙΡ•μ(΄Ν•ΡΥΐΉΝ °Ν•ΡΥΑ}±…ΥΉ΅•ΘΉΝ °Ρ΅”Ν•ΡΥΐ±½°Ν•ΡΥΐΝΡ…ΡΥΜ°…ΉΙΥΉΡ¥µ”ΡΙ•”έ•Ι”Ή½Π(€΅…Ή•μMΡ…ΙΠ½MΡ½ΐΡ΅•Ι•™½Ι”½ΉΡ¥ΉΥ•ΡΌΥΝ”ΨΔΈΐΈΠμ(΄ΡέΌ±…Ρ•ΘΝ•ΡΥΐΉΝ Ν΅½έ€™…¥±ΥΙ•Μέ•Ι”Ρ•µΑ½Ι…Ιδ¥Ρ!ΥA$™…¥±ΥΙ•Μμ„ΝΥ‰Ν•ΕΥ•ΉΠ(€½µµ…ΉΙ•ΡΥΙΉ•ΨΔΈΐΈΠ°ΨΔΈΐΈΜ°ΨΔΈΐΈΘ°…ΉΨΔΈΐΈΔΉ½Ιµ…±±δΈ()A…­…”€ΐΈΘΈα|Δΐ¥µΑ±•µ•ΉΡ…Ρ¥½Έθ((΄½Ή™¥…Ρ¥½ΈΝ•ΡΥΑ}¥ΉΝΡ…±±€‰¥Ή‘Μ±…ΥΉ΅•Θµ½‘”¥ΉΝΡ…±±€…Ή•αΑ½Ν•Μ•α…Ρ±δ½Ή”(€€•Ν€Α±…•΅½±‘•Θ™½ΘΡ΅”Ν•±•Ρ•Ω•ΙΝ¥½Έμ(΄M•ΙΩ¥•½ΉΡΙ½±±•ΘΑ…ΝΝ•Μ½Ή±δΡ΅”Ω•ΙΝ¥½Έ…ΉΙ•ΕΥ¥Ι•ΜΝεΉ΅Ι½Ή½ΥΜ½Ή™¥=-€μ(΄Ν•ΡΥΑ}±…ΥΉ΅•ΘΉΝ Ι•µ…¥ΉΜΡ΅”Ν΅½ΙΠµ±¥Ω•±…ΥΉ΅•Θ…Ή‘•Ρ…΅•ΜΡ΅”±½ΉΝ•ΡΥΐέ½Ι­•Θ(€Ρ΅Ι½Υ Ι••	M‘…•µ½Έ ΰ¤μ(΄Ρ΅”±…ΥΉ΅•ΘΙ•ΡΥΙΉΜ½Ή±δ…™Ρ•Θ‘…•µ½Έ ΰ¤΅…Μ…•ΑΡ•Ρ΅”‘•Ρ…΅•Ν•ΡΥΐέ½Ι­•Θ°ΝΌ(€Ρ΅”•α¥ΝΡ¥ΉU$Ι•™Ι•Ν ½Α½±±¥Ή…Έ½‰Ν•ΙΩ”Ν•ΡΥΐΉΑ¥…ΉΝ•ΡΥΐυ¥ΉΝΡ…±±¥Ή€μ(΄Ι•Α•…Ρ•Ι•±•…Ν”µ±¥ΝΠΙ•™Ι•Ν΅•Μ°¥Ή±Υ‘¥ΉΡ΅”Ι•™Ι•Ν …™Ρ•ΘΑΑ±δ°…Ι”Ν•ΙΩ•™Ι½΄(€Ρ΅”…΅”…Ή‘ΌΉ½ΠΙ•Α•…ΠΡ΅”¥Ρ!ΥA$Ι•ΕΥ•ΝΠμ(΄Α…ΝΝ¥Ω”Ι•±•…Ν”µ±¥ΝΠ™…¥±ΥΙ”Ι•ΡΥΙΉΜΝΡ…ΡΥΜυΥΉ…Ω…¥±…‰±•€…Ή‘¥ΝΑ±…εΜƒBwBΧBΣBϋFFFBÿBχBω€(€έ¥Ρ΅½ΥΠ„Ι•UΝ•Ια•ΑΡ¥½Έ‘¥…±½μ(΄ΝΡ…‰±”Ι•±•…Ν•Μ…Ι”…΅•¥Έ€½Ω…Θ½‘½ι…ΑΙ•ΠΘµΙ•ΝΡε±”½Ι•±•…Ν•ΜΉ…΅•€™½Θ€Ψΐµ¥ΉΥΡ•Μμ(΄Ι•™Ι•Ν΅•Μ…Ι”Ν•Ι¥…±¥ι•‰δ€½Ω…Θ½ΙΥΈ½ι…ΑΙ•ΠΘµΙ•ΝΡε±”½Ι•±•…Ν•ΜΉ±½­€μ(΄…΅”Ι•Α±…•µ•ΉΠ¥Μ…Ρ½µ¥…Ή½ΥΙΜ½Ή±δ…™Ρ•ΘΝΥ•ΝΝ™Υ°‘½έΉ±½…°)M=8Α…ΙΝ¥Ή°(€ΝΡ…‰±”µΡ…™¥±Ρ•Ι¥Ή°Ω…±¥‘…Ρ¥½Έ°…ΉΉ½Έµ•µΑΡδ½ΥΡΑΥΠμ(΄„Ω…±¥‘…Ρ•ΝΡ…±”…΅”¥ΜΙ•ΡΥΙΉ•έ΅•Έ¥Ρ!Υ¥ΜΡ•µΑ½Ι…Ι¥±δΥΉ…Ω…¥±…‰±”μ(΄•α…ΠΝ•±•Ρ•µΩ•ΙΝ¥½Έ¥ΉΝΡ…±±…Ρ¥½ΈΥΝ•ΜΡ΅”Ω…±¥‘…Ρ•…΅”…Ή‘½•ΜΉ½Π¥ΝΝΥ”„(€Ν•½Ή¥Ρ!ΥI•±•…Ν•ΜA$Ι•ΕΥ•ΝΠΈ()½ΥΝ•Ω…±¥‘…Ρ¥½Έθ((΄A=M%`Ν΅•±°ΝεΉΡ…ΰΑ…ΝΝ•Μ™½ΘΝ•ΡΥΐΉΝ …Ή™½ΥΝ•Ρ•ΝΡΜμ(΄A!@ΝεΉΡ…ΰΑ…ΝΝ•Μ™½ΘM•ΙΩ¥•½ΉΡΙ½±±•ΘΉΑ΅ΐμ(΄Ι•±•…Ν”µΝ•±•Ρ¥½ΈΡ•ΝΡΜ½Ω•Θ™¥ΙΝΠ™•Ρ °™Ι•Ν µ…΅”Ι•ΥΝ”°•α…Πµ¥ΉΝΡ…±°Ι•ΥΝ”°(€ΝΡ…±”µ…΅”™…±±‰…¬°™…¥±•µΙ•™Ι•Ν ΑΙ•Ν•ΙΩ…Ρ¥½Έ°ΉΌµ…΅”™…¥±ΥΙ”°ΝΡ…‰±”™¥±Ρ•Ι¥Ή°(€‘•‘ΥΑ±¥…Ρ¥½Έ°±…Ρ•ΝΠΝ•±•Ρ¥½Έ°µ…±™½Ιµ•½ΥΉΑΥ‰±¥Ν΅•Ι•©•Ρ¥½Έ°ΝΡΙ¥Π™•Ρ (€…ΙΥµ•ΉΡΜ°±½­¥Ή°…Ρ½µ¥Ι•Α±…•µ•ΉΠ°…Ή‰½Ρ ¥Π΅•­½ΥΠΑ…Ρ΅Μμ(΄U$Ρ•ΝΡΜ•Ή™½Ι”Ρ΅”½Ή”µΑ…Ι…µ•Ρ•Θ…Ρ¥½Έ½½ΉΡΙ½±±•Θ½ΉΡΙ…Π°ΝεΉ΅Ι½Ή½ΥΜ=-€°(€Ή½Έµµ½‘…°ΥΉ…Ω…¥±…‰±”Ι•ΝΑ½ΉΝ”°…ΉΙ•Ρ…¥Ή•ΙΥΉΡ¥µ”½±…ε½ΥΠ‰•΅…Ω¥½ΘΈ((ττττττττττττττττττττττττττττττττττττττττττττττττττ)=A8YI%%Q%=8]=I,(ττττττττττττττττττττττττττττττττττττττττττττττττττ()A…­…”€ΐΈΘΈα|Δΐ™½ΥΝ•±¥Ω”Ρ•ΝΠθ((ΔΈ¥ΉΝΡ…±°€ΐΈΘΈα|Δΐ½Ω•ΘΡ΅”ΙΥΉΉ¥ΉΨΔΈΐΈΠΙΥΉΡ¥µ”μ(ΘΈ½Ή™¥Ι΄½Ή™¥έ…Ρ΅•Θ¥‘•ΉΡ¥ΡδΙ•µ…¥ΉΜΥΉ΅…Ή•…Ή…±°U$½½Ή™¥Ν•ΙΩ¥•Μέ½Ι¬μ(ΜΈΝ•±•ΠΨΔΈΐΈΜ…ΉΑΙ•ΝΜΑΑ±δμ(ΠΈ½Ή™¥Ι΄½ΉΡΙ½±Μ•ΉΡ•ΘΑΑ±ε¥Ή…ΉMΡ…ΙΠ½MΡ½ΐΙ•µ…¥ΉΜ‘¥Ν…‰±•‘ΥΙ¥ΉΝ•ΡΥΐμ(ΤΈ½Ή™¥Ι΄Ν•ΡΥΐΉ±½Ι•½Ι‘ΜΝ•±•Ρ•ΨΔΈΐΈΜ°΅•­½ΥΠ½‰Υ¥±°…ΉΝ•ΙΩ¥”Ι•™Ι•Ν μ(ΨΈ½Ή™¥Ι΄™¥Ή…°U$ΝΡ…Ρ”¥ΜMΡ…ΙΡ•ΨΔΈΐΈΜμ(άΈ½Ή™¥Ι΄½Ή™¥Ρ°ι…ΑΙ•ΠΝ•ΡΥΑ}ΝΡ…ΡΥΝ€Ι•Α½ΙΡΜ¥ΉΝΡ…±±•τΔ°Ν•ΙΩ¥”υΝΡ…ΙΡ•°(€€Ω•ΙΝ¥½ΈυΨΔΈΐΈΜ°Ν•ΡΥΐυΙ•…‘δ°‰ΥΝδτΐμ(ΰΈ½Ή™¥Ι΄½Ή±δΡ΅”™¥ΙΝΠΝΡ…±”½µ¥ΝΝ¥Ήµ…΅”…•ΝΜΙ•…΅•Μ¥Ρ!ΥI•±•…Ν•ΜA$μ(δΈΝ¥µΥ±…Ρ”½Θ½‰Ν•ΙΩ”„Ρ•µΑ½Ι…ΙδA$™…¥±ΥΙ”…Ή½Ή™¥Ι΄Ρ΅”Ω…±¥‘…Ρ•…΅”­••ΑΜΡ΅”(€€Ν•±•Ρ½ΘΑ½ΑΥ±…Ρ•έ¥Ρ΅½ΥΠ„Ι•Ι•±•…Ν”µ•ΙΙ½Θ‘¥…±½μ(ΔΐΈΙ•µ½Ω”Ρ΅”…΅”…ΉΙ•Α•…Π…ΈA$™…¥±ΥΙ”ΡΌ½Ή™¥Ι΄Ρ΅”Ν•±•Ρ½ΘΝ΅½έΜƒBwBΧBΣBϋFFFBÿBχBψ(€€€έ¥Ρ΅½ΥΠ„Ι•Ι•±•…Ν”µ•ΙΙ½Θ‘¥…±½½Θ…ΉδΙΥΉΡ¥µ”…±Ρ•Ι…Ρ¥½ΈΈ()I•Ρ…¥Ή•Ι•Ι•ΝΝ¥½Έ‰…­±½θ((΄Ν•±•Ρ•µΙ•±•…Ν”¥ΉΝΡ…±°έ΅¥±”Ρ΅”Ν•ΙΩ¥”¥Μ¥Ή¥Ρ¥…±±δΝΡ½ΑΑ•μ(΄Ι•Α•…Π¥ΉΝΡ…±±…Ρ¥½Έ½Ρ΅”ΥΙΙ•ΉΡ±δ¥ΉΝΡ…±±•ΥΑΝΡΙ•…΄Ι•±•…Ν”μ(΄™¥ΙΝΠΙΥΉΡ¥µ”¥ΉΝΡ…±±…Ρ¥½Έέ΅•Έ‘ΩΡέΜΘ¥Μ…‰Ν•ΉΠμ(΄™Υ±°Ι•‰½½Π…Ή…ΥΡ½µ…Ρ¥Ν•ΙΩ¥”ΝΡ…ΙΠμ(΄½ΉΡΙ½±±•‘ΩΡέΜΘΙ…Ν …ΉΝΥΑ•ΙΩ¥Ν½ΘΙ•½Ω•Ιδ½±•…ΉΥΐμ(΄µ…±™½Ιµ•½ΥΉΑΥ‰±¥Ν΅•Ι•±•…Ν”…ΡΡ•µΑΡΜ½ΈΡ΅”±¥Ω”ΝεΝΡ•΄μ(΄Ι•µ…¥Ή¥Ή΄ΐΐΔ°±¥™•ε±”°…Ή‘¥…Ή½ΝΡ¥Μ•Ω¥‘•Ή”Ι•½Ι‘••±Ν•έ΅•Ι”Έ((ττττττττττττττττττττττττττττττττττττττττττττττττττ)%55%Q9aPQ%=9L(ττττττττττττττττττττττττττττττττττττττττττττττττττ((ΔΈ	Υ¥±…Ή¥ΉΝΡ…±°Α…­…”…Ή‘¥‘…Ρ”€ΐΈΘΈα|Δΐ½Έ=A9Ν•ΉΝ”Έ(ΘΈα•ΥΡ”Ρ΅”™½ΥΝ•ΨΔΈΐΈΠΡΌΨΔΈΐΈΜU$‘½έΉΙ…‘”Ρ•ΝΠΈ(ΜΈY•Ι¥™δ…΅”Ι•ΥΝ”…ΉΝΡ…±”µ…΅”™…±±‰…¬™Ι½΄Ρ΅”±¥Ω”…ΑΑ±¥…Ή”Έ(ΠΈI•½Ι•α…Π•Ω¥‘•Ή”…Ή½Ή±δΡ΅•Έ±…ΝΝ¥™δΡ΅”U$Ι•±•…Ν”µµ…Ή…•µ•ΉΠΑ…Ρ …Μ„(€€Ω•Ι¥™¥•‰…Ν•±¥Ή”Έ((ττττττττττττττττττττττττττττττττττττττττττττττττττ)]=I-%9IU1L=HIMU5AQ%=8(ττττττττττττττττττττττττττττττττττττττττττττττττττ()	•™½Ι”΅…Ή¥Ή½‘”θ((ΔΈΙ•…‘½Μ½%9`Ήµμ(ΘΈ™½±±½άΡ΅”½µΑ±•Ρ”µ…Ή‘…Ρ½ΙδΙ•…‘¥Ή½Ι‘•Θμ(ΜΈ¥ΉΝΑ•ΠΡ΅”ΥΙΙ•ΉΠΙ•Α½Ν¥Ρ½ΙδΡΙ•”…Ή•α…Π¥Ρ!Υµ…¥ΈM!μ(ΠΈ¥‘•ΉΡ¥™δέ΅•Ρ΅•ΘΙ•±•Ω…ΉΠΥΉΑΥ‰±¥Ν΅•½έΉ•ΘΝΡ…Ρ”•α¥ΝΡΜμ(ΤΈΥΝ”½Ή”±½¥…°΅…Ή”°½Ή”ΝΕΥ…Ν Ι•ΝΥ±Π°½Ή”‰Υ¥±°…Ή½Ή”™½ΥΝ•Ω•Ι¥™¥…Ρ¥½Έμ(ΨΈΥΑ‘…Ρ”…±°…™™•Ρ•‘½Υµ•ΉΡ…Ρ¥½Έέ¥Ρ Ρ΅”±½¥…°΅…Ή”μ(άΈ‘ΌΉ½Π¥Ή™•ΘΥΙΙ•ΉΠΝΡ…Ρ”½Ή±δ™Ι½΄΅…Π΅¥ΝΡ½ΙδΈ()±°=A9Ν•ΉΝ”½ΉΝ½±”½µµ…Ή‘ΜΡ…Ι•ΠΡ΅”‘•™…Υ±ΠΙ½½ΠΝ Ν΅•±°ΥΉ±•ΝΜ„‰±½¬•αΑ±¥¥Ρ±δ)•ΉΡ•ΙΜA=M%`Ν …Ή•αΑ±¥¥Ρ±δΙ•ΡΥΙΉΜέ¥Ρ •α¥ΠΈ(

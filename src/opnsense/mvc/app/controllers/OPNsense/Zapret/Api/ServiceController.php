@@ -43,7 +43,7 @@ class ServiceController extends ApiMutableServiceControllerBase
 
     private function getReleaseList(Backend $backend): array
     {
-        $response = trim((string)$backend->configdRun('zapret setup_releases', false, 60));
+        $response = trim((string)$backend->configdRun('zapret setup_releases', false, 90));
         $releases = [];
 
         foreach (preg_split('/\\R/u', $response) as $release) {
@@ -55,10 +55,7 @@ class ServiceController extends ApiMutableServiceControllerBase
 
         $releases = array_values(array_unique($releases));
         if (empty($releases)) {
-            throw new UserException(
-                gettext('No stable bol-van/zapret2 releases could be obtained.'),
-                gettext('Zapret2 release error')
-            );
+            throw new \RuntimeException('no stable bol-van/zapret2 releases were returned');
         }
 
         return array_slice($releases, 0, 4);
@@ -119,10 +116,17 @@ class ServiceController extends ApiMutableServiceControllerBase
             return ['status' => 'failed'];
         }
 
-        return [
-            'status' => 'ok',
-            'releases' => $this->getReleaseList(new Backend()),
-        ];
+        try {
+            return [
+                'status' => 'ok',
+                'releases' => $this->getReleaseList(new Backend()),
+            ];
+        } catch (\Throwable $exception) {
+            return [
+                'status' => 'unavailable',
+                'releases' => [],
+            ];
+        }
     }
 
     public function runtimeAction(): array
@@ -149,7 +153,16 @@ class ServiceController extends ApiMutableServiceControllerBase
         }
 
         $backend = new Backend();
-        if (!in_array($version, $this->getReleaseList($backend), true)) {
+        try {
+            $releases = $this->getReleaseList($backend);
+        } catch (\Throwable $exception) {
+            throw new UserException(
+                gettext('No stable bol-van/zapret2 releases could be obtained.'),
+                gettext('Zapret2 release error')
+            );
+        }
+
+        if (!in_array($version, $releases, true)) {
             throw new UserException(
                 gettext('The selected bol-van/zapret2 release is no longer available.'),
                 gettext('Zapret2 release error')
@@ -164,15 +177,12 @@ class ServiceController extends ApiMutableServiceControllerBase
         }
 
         $response = trim((string)$backend->configdpRun(
-            'zapret setup',
-            ['install', $version],
-            true,
+            'zapret setup_install',
+            [$version],
+            false,
             30
         ));
-        if (!preg_match(
-            '/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/Di',
-            $response
-        )) {
+        if ($response !== 'OK') {
             throw new UserException(
                 gettext('The zapret2 runtime operation could not be started.'),
                 gettext('Zapret2 setup error')
@@ -182,7 +192,6 @@ class ServiceController extends ApiMutableServiceControllerBase
         return [
             'status' => 'ok',
             'version' => $version,
-            'operation' => $response,
         ];
     }
 
@@ -215,7 +224,7 @@ class ServiceController extends ApiMutableServiceControllerBase
                 }
             }
             throw new UserException(
-                $message,
+                $messae,
                 gettext('Zapret configuration error')
             );
         }
