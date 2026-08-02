@@ -3,9 +3,9 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-PRE_INSTALL_HOOK="${ROOT_DIR}/pkg/+PRE_INSTALL"
-PRE_DEINSTALL_HOOK="${ROOT_DIR}/pkg/+PRE_DEINSTALL"
-POST_INSTALL_HOOK="${ROOT_DIR}/pkg/+POST_INSTALL"
+PRE_INSTALL="${ROOT_DIR}/pkg/+PRE_INSTALL"
+PRE_DEINSTALL="${ROOT_DIR}/pkg/+PRE_DEINSTALL"
+POST_INSTALL="${ROOT_DIR}/pkg/+POST_INSTALL"
 START_HOOK="${ROOT_DIR}/src/etc/rc.syshook.d/start/20-zapret"
 PLUGIN_HOOK="${ROOT_DIR}/src/etc/inc/plugins.inc.d/zapret.inc"
 SERVICE_SCRIPT="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
@@ -19,102 +19,115 @@ fail()
     exit 1
 }
 
-# Replacement-package upgrade state preservation remains fail-closed.
-grep -q 'PKG_UPGRADE' "${PRE_INSTALL_HOOK}" ||
-    fail "replacement pre-install does not distinguish package upgrade"
-grep -q 'pkg-upgrade.restart' "${PRE_INSTALL_HOOK}" ||
-    fail "replacement pre-install does not preserve the running-state marker"
-grep -q 'stopped_status' "${PRE_INSTALL_HOOK}" ||
-    fail "replacement pre-install does not verify complete service stop"
-grep -q 'PKG_UPGRADE' "${PRE_DEINSTALL_HOOK}" ||
-    fail "pre-deinstall does not distinguish package upgrade"
-grep -q 'stopped_status' "${PRE_DEINSTALL_HOOK}" ||
-    fail "pre-deinstall does not verify complete service stop"
-
-if grep -Eq 'SERVICE_SCRIPT.*stop.*\|\|[[:space:]]*true' \
-    "${PRE_INSTALL_HOOK}" "${PRE_DEINSTALL_HOOK}"; then
+# Upgrade state transfer remains fail-closed.
+for file in "${PRE_INSTALL}" "${PRE_DEINSTALL}"; do
+    grep -q 'PKG_UPGRADE' "${file}" || fail "${file} does not distinguish upgrade"
+    grep -q 'stopped_status' "${file}" || fail "${file} does not verify complete stop"
+done
+grep -q 'pkg-upgrade.restart' "${PRE_INSTALL}" || fail "upgrade restart marker is missing"
+if grep -Eq 'SERVICE_SCRIPT.*stop.*\|\|[[:space:]]*true' "${PRE_INSTALL}" "${PRE_DEINSTALL}"; then
     fail "package lifecycle suppresses a service-stop failure"
 fi
 
-# New configd actions must be loaded before template rendering, service restore,
-# or the final Web GUI restart.
-grep -q '"${SERVICE_BIN}" configd restart' "${POST_INSTALL_HOOK}" ||
-    fail "post-install does not restart configd after installing actions"
-grep -q 'template reload OPNsense/Zapret' "${POST_INSTALL_HOOK}" ||
-    fail "post-install does not render the Zapret template through refreshed configd"
-grep -q '\[ "${template_output}" != "OK" \]' "${POST_INSTALL_HOOK}" ||
-    fail "post-install does not require exact template reload success"
-grep -q '"${CONFIGCTL}" zapret start' "${POST_INSTALL_HOOK}" ||
-    fail "post-install no longer restores a previously running service"
-grep -q '"${CONFIGCTL}" webgui restart 2' "${POST_INSTALL_HOOK}" ||
-    fail "post-install no longer refreshes the Web GUI last"
-
-configd_line=$(grep -n '"${SERVICE_BIN}" configd restart' "${POST_INSTALL_HOOK}" | cut -d: -f1)
-template_line=$(grep -n 'template reload OPNsense/Zapret' "${POST_INSTALL_HOOK}" | cut -d: -f1)
-zapret_line=$(grep -n '"${CONFIGCTL}" zapret start' "${POST_INSTALL_HOOK}" | cut -d: -f1)
-webgui_line=$(grep -n '"${CONFIGCTL}" webgui restart 2' "${POST_INSTALL_HOOK}" | cut -d: -f1)
-message_line=$(grep -n "cat <<'MESSAGE'" "${POST_INSTALL_HOOK}" | cut -d: -f1)
-
-[ "${configd_line}" -lt "${template_line}" ] ||
-    fail "template reload runs before replacement configd actions are loaded"
-[ "${template_line}" -lt "${zapret_line}" ] ||
-    fail "upgrade service restoration runs before template rendering"
-[ "${zapret_line}" -lt "${webgui_line}" ] ||
-    fail "Web GUI refresh runs before service-state restoration"
-[ "${webgui_line}" -lt "${message_line}" ] ||
-    fail "Web GUI refresh is not the final package integration action"
-
-if grep -Eq 'configd restart.*\|\|[[:space:]]*true' "${POST_INSTALL_HOOK}"; then
-    fail "post-install suppresses configd restart failure"
+# Static guards supplement the behavioral execution below.
+grep -Fq 'CONFIGD_RC="${CONFIGD_RC:-/usr/local/etc/rc.d/configd}"' "${POST_INSTALL}" ||
+    fail "canonical configd rc path is missing"
+grep -Fq '"${CONFIGD_RC}" restart' "${POST_INSTALL}" || fail "configd action reload is missing"
+grep -Fq '"${CONFIGCTL}" system status' "${POST_INSTALL}" || fail "configd readiness probe is missing"
+grep -Fq 'template reload OPNsense/Zapret' "${POST_INSTALL}" || fail "Zapret template reload is missing"
+grep -Fq '"${CONFIGCTL}" zapret start' "${POST_INSTALL}" || fail "running-state restoration is missing"
+if grep -Eq 'webgui[[:space:]]+restart|rc\.restart_webgui' "${POST_INSTALL}"; then
+    fail "package lifecycle must not restart the global OPNsense Web GUI"
 fi
 
-# Clean boot without runtime must be a silent no-op.
-CONFIGCTL_MOCK="${TMP_ROOT}/configctl"
-CONFIGCTL_CALLS="${TMP_ROOT}/configctl.calls"
-MISSING_DVTWS="${TMP_ROOT}/missing/dvtws2"
-INSTALLED_DVTWS="${TMP_ROOT}/runtime/dvtws2"
-cat > "${CONFIGCTL_MOCK}" <<'MOCK'
-#!/bin/sh
-printf '%s\n' "$*" >> "${CONFIGCTL_CALLS}"
-exit 0
-MOCK
-chmod +x "${CONFIGCTL_MOCK}"
+# Execute +POST_INSTALL with mocks. The first real-request probe fails and the second succeeds.
+TRACE="${TMP_ROOT}/trace"
+READY="${TMP_ROOT}/ready"
+MARKER="${TMP_ROOT}/restart.marker"
 
-CONFIGCTL_CALLS="${CONFIGCTL_CALLS}" \
-CONFIGCTL="${CONFIGCTL_MOCK}" \
-DVTWS_BIN="${MISSING_DVTWS}" \
-"${START_HOOK}"
-[ ! -e "${CONFIGCTL_CALLS}" ] ||
-    fail "boot hook called configd while dvtws2 was absent"
+write_mock()
+{
+    path=$1
+    shift
+    printf '%s\n' '#!/bin/sh' "$@" > "${path}"
+    chmod +x "${path}"
+}
 
-mkdir -p "$(dirname "${INSTALLED_DVTWS}")"
-: > "${INSTALLED_DVTWS}"
-chmod +x "${INSTALLED_DVTWS}"
-CONFIGCTL_CALLS="${CONFIGCTL_CALLS}" \
-CONFIGCTL="${CONFIGCTL_MOCK}" \
-DVTWS_BIN="${INSTALLED_DVTWS}" \
-"${START_HOOK}"
-grep -Fxq 'zapret start' "${CONFIGCTL_CALLS}" ||
-    fail "boot hook did not start an installed runtime"
+write_mock "${TMP_ROOT}/configd" \
+    'printf "%s\n" "configd:$*" >> "${TRACE}"' \
+    '[ "$*" = restart ]'
+write_mock "${TMP_ROOT}/configctl" \
+    'printf "%s\n" "configctl:$*" >> "${TRACE}"' \
+    'case "$*" in' \
+    '  "system status") n=0; [ ! -r "${READY}" ] || n=$(cat "${READY}"); n=$((n + 1)); printf "%s\n" "${n}" > "${READY}"; [ "${n}" -ge 2 ] ;;' \
+    '  "template reload OPNsense/Zapret"|"zapret start") printf "%s\n" OK ;;' \
+    '  webgui*) exit 99 ;;' \
+    '  *) exit 64 ;;' \
+    'esac'
+write_mock "${TMP_ROOT}/register" \
+    'printf "%s\n" "firmware:$*" >> "${TRACE}"' \
+    '[ "$*" = "install os-zapret2-restyle" ]'
+write_mock "${TMP_ROOT}/configure" \
+    'printf "%s\n" "configure:$*" >> "${TRACE}"' \
+    '[ "$*" = POST_INSTALL ]'
+write_mock "${TMP_ROOT}/service" \
+    'printf "%s\n" "service:$*" >> "${TRACE}"' \
+    '[ "$*" = status ]'
+write_mock "${TMP_ROOT}/sleep" \
+    'printf "%s\n" "sleep:$*" >> "${TRACE}"'
+: > "${MARKER}"
 
-# OPNsense must not register a startable service before runtime installation.
-grep -q 'function zapret_runtime_installed()' "${PLUGIN_HOOK}" ||
-    fail "plugin integration has no explicit runtime-installed predicate"
-grep -q "is_executable('/usr/local/etc/zapret2/binaries/my/dvtws2')" "${PLUGIN_HOOK}" ||
-    fail "plugin integration does not use executable dvtws2 as installation evidence"
+TRACE="${TRACE}" READY="${READY}" \
+CONFIGD_RC="${TMP_ROOT}/configd" CONFIGCTL="${TMP_ROOT}/configctl" \
+FIRMWARE_REGISTER="${TMP_ROOT}/register" CONFIGURE_PLUGINS="${TMP_ROOT}/configure" \
+SERVICE_SCRIPT="${TMP_ROOT}/service" SLEEP_BIN="${TMP_ROOT}/sleep" \
+UPGRADE_RESTART_MARKER="${MARKER}" PKG_UPGRADE=1 \
+"${POST_INSTALL}" >/dev/null
+
+[ "$(cat "${READY}")" -eq 2 ] || fail "configd readiness was not retried"
+[ ! -e "${MARKER}" ] || fail "upgrade restart marker was not consumed"
+if grep -Eq 'configctl:webgui|rc\.restart_webgui' "${TRACE}"; then
+    fail "executed lifecycle attempted a Web GUI restart"
+fi
+
+line_of()
+{
+    grep -n -F "$1" "${TRACE}" | head -1 | cut -d: -f1
+}
+
+configd_line=$(line_of 'configd:restart')
+ready_line=$(line_of 'configctl:system status')
+configure_line=$(line_of 'configure:POST_INSTALL')
+template_line=$(line_of 'configctl:template reload OPNsense/Zapret')
+start_line=$(line_of 'configctl:zapret start')
+status_line=$(line_of 'service:status')
+[ "${configd_line}" -lt "${ready_line}" ] || fail "readiness preceded configd restart"
+[ "${ready_line}" -lt "${configure_line}" ] || fail "plugin refresh preceded readiness"
+[ "${configure_line}" -lt "${template_line}" ] || fail "template preceded plugin refresh"
+[ "${template_line}" -lt "${start_line}" ] || fail "service restore preceded template"
+[ "${start_line}" -lt "${status_line}" ] || fail "status verification preceded start"
+
+# Clean boot without runtime is a silent no-op; installed runtime uses configctl zapret start.
+BOOT_CTL="${TMP_ROOT}/boot-configctl"
+BOOT_CALLS="${TMP_ROOT}/boot.calls"
+write_mock "${BOOT_CTL}" 'printf "%s\n" "$*" >> "${CONFIGCTL_CALLS}"'
+CONFIGCTL_CALLS="${BOOT_CALLS}" CONFIGCTL="${BOOT_CTL}" DVTWS_BIN="${TMP_ROOT}/missing" "${START_HOOK}"
+[ ! -e "${BOOT_CALLS}" ] || fail "boot queried configd without dvtws2"
+DVTWS="${TMP_ROOT}/runtime/dvtws2"
+mkdir -p "$(dirname "${DVTWS}")"
+: > "${DVTWS}"
+chmod +x "${DVTWS}"
+CONFIGCTL_CALLS="${BOOT_CALLS}" CONFIGCTL="${BOOT_CTL}" DVTWS_BIN="${DVTWS}" "${START_HOOK}"
+grep -Fxq 'zapret start' "${BOOT_CALLS}" || fail "boot did not start installed runtime"
+
+# Service registration, direct start, and supervisor launch retain the dvtws2 executable gate.
 grep -q 'zapret_enabled() && zapret_runtime_installed()' "${PLUGIN_HOOK}" ||
-    fail "plugin service registration is not gated by runtime installation"
+    fail "service registration is not runtime-gated"
+grep -q "is_executable('/usr/local/etc/zapret2/binaries/my/dvtws2')" "${PLUGIN_HOOK}" ||
+    fail "runtime installation evidence is not executable dvtws2"
+grep -q 'ensure_runtime_components || return 1' "${SERVICE_SCRIPT}" ||
+    fail "direct service start has no runtime guard"
+grep -q '\[ -x "${_supervisor_expected_child}" \]' "${SUPERVISOR}" ||
+    fail "supervisor has no executable-child guard"
 
-# Direct service start and supervisor launch remain protected by the binary gate.
-ensure_line=$(grep -n '^ensure_runtime_components()' "${SERVICE_SCRIPT}" | cut -d: -f1)
-start_line=$(grep -n '^start_service()' "${SERVICE_SCRIPT}" | cut -d: -f1)
-start_guard_line=$(grep -n 'ensure_runtime_components || return 1' "${SERVICE_SCRIPT}" | head -1 | cut -d: -f1)
-supervisor_guard_line=$(grep -n '\[ -x "${_supervisor_expected_child}" \]' "${SUPERVISOR}" | cut -d: -f1)
-[ -n "${ensure_line}" ] && [ -n "${start_line}" ] && [ -n "${start_guard_line}" ] ||
-    fail "service runtime guard is missing"
-[ "${start_line}" -lt "${start_guard_line}" ] ||
-    fail "service start does not check runtime before lifecycle work"
-[ -n "${supervisor_guard_line}" ] ||
-    fail "supervisor start does not require executable dvtws2"
-
-echo "PASS: package lifecycle is silent without runtime and restores only valid runtime state"
+echo "PASS: package lifecycle reloads actions safely without restarting the Web GUI"

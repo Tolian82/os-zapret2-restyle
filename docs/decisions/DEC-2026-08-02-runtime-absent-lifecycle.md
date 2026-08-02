@@ -1,6 +1,7 @@
 # DEC-2026-08-02 — Plugin lifecycle is valid without an installed zapret2 runtime
 
-Status: Approved and implemented
+Status: Approved and implemented; post-install integration paragraph superseded by
+`DEC-2026-08-02-safe-post-install-action-reload.md`
 Date: 2026-08-02
 
 ## Decision
@@ -21,9 +22,10 @@ Package upgrade continues to preserve only a complete prior runtime state. A run
 runtime is restored, a stopped runtime remains stopped, and an absent runtime remains
 absent.
 
-After replacement action files are installed, `+POST_INSTALL` restarts configd before
-using the new actions. It then renders the Zapret template, restores a marked running
-runtime during upgrade, and refreshes the Web GUI last.
+The earlier implementation also required an unconditional final Web GUI restart from
+`+POST_INSTALL`. Live package `0.2.8_7` evidence proved that requirement unsafe and it
+is superseded. The canonical configd action reload and the prohibition on package-owned
+Web GUI restart are now defined by the separate safe post-install decision.
 
 ## Reason
 
@@ -39,15 +41,14 @@ would make plugin installation noisy and could affect unrelated OPNsense service
 - Manual or GUI runtime installation remains owned exclusively by `setup.sh install`.
 - Direct Start still fails clearly when no executable runtime exists, but automatic
   boot and service registration do not offer that invalid operation.
-- Focused tests cover configd action loading, clean boot without dvtws2, service
-  registration, service runtime guards, supervisor guards, and upgrade ordering.
-- Package candidate advances to `0.2.8_6`.
+- Focused tests cover clean boot without dvtws2, service registration, service runtime
+  guards, supervisor guards, and upgrade state preservation.
+- Post-install action loading follows the superseding safe lifecycle decision.
 
 ## Affected files and documentation
 
-- `Makefile`
-- `pkg/+POST_INSTALL`
 - `src/etc/rc.syshook.d/start/20-zapret`
 - `src/etc/inc/plugins.inc.d/zapret.inc`
 - `scripts/test-package-lifecycle-restart.sh`
 - this decision record
+- `docs/decisions/DEC-2026-08-02-safe-post-install-action-reload.md`
