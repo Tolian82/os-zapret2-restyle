@@ -71,6 +71,9 @@ jobs:
       - name: Test package lifecycle service refresh
         run: sh scripts/test-package-lifecycle-restart.sh
 
+      - name: Test setup release selection
+        run: sh scripts/test-setup-release-selection.sh
+
       - name: Test automated release trigger contract
         run: sh scripts/test-release-trigger.sh
 
@@ -103,6 +106,7 @@ jobs:
             pkg/+POST_DEINSTALL \
             scripts/build-pkg.sh \
             scripts/test-package-lifecycle-restart.sh \
+            scripts/test-setup-release-selection.sh \
             scripts/test-release-trigger.sh \
             scripts/test-release-node24-actions.sh \
             .github/workflows/release.yml \

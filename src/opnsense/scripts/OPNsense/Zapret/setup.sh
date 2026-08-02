@@ -5,21 +5,47 @@
 
 ZAPRET_DIR="/usr/local/etc/zapret2"
 ZAPRET_REPO="https://github.com/bol-van/zapret2.git"
-ZAPRET_REF="v1.0.3"
-STATE_DIR="/var/db/zapret2-restyle"
+ZAPRET_RELEASES_API="https://api.github.com/repos/bol-van/zapret2/releases?per_page=100"
+STATE_DIR="${STATE_DIR:-/var/db/zapret2-restyle}"
 SETUP_STATUS="${STATE_DIR}/setup.status"
-RUN_DIR="/var/run/zapret2-restyle"
+RUN_DIR="${RUN_DIR:-/var/run/zapret2-restyle}"
 LOCK_FILE="${RUN_DIR}/setup.lock"
 CONFIGCTL="/usr/local/sbin/configctl"
 SERVICE_SCRIPT="/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 FREEBSD_REPO_OVERRIDE="/usr/local/etc/pkg/repos/FreeBSD.conf"
 FREEBSD_REPO_BACKUP="${STATE_DIR}/FreeBSD.conf.backup"
+FETCH_BIN="${FETCH_BIN:-/usr/bin/fetch}"
+PHP_BIN="${PHP_BIN:-/usr/local/bin/php}"
+LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 ENABLED_FREEBSD_REPO=0
-MODE="${1:-install}"
 
 set -eu
 
-mkdir -p "${STATE_DIR}" "${RUN_DIR}"
+usage()
+{
+    cat <<'USAGE_EOF'
+Usage:
+  setup.sh
+  setup.sh install [VERSION]
+  setup.sh show
+  setup.sh --help
+
+Commands:
+  (no arguments)     Install the latest stable bol-van/zapret2 release.
+  install [VERSION]  Install the latest stable release or an exact published
+                     version, for example v1.0.3. The same command performs
+                     installation, reinstallation, upgrade, or downgrade.
+  show               Show the four latest stable releases.
+  --help, -h         Show this help.
+USAGE_EOF
+}
+
+usage_error()
+{
+    echo "ERROR: $1" >&2
+    usage >&2
+    return 64
+}
 
 status_write()
 {
@@ -55,6 +81,104 @@ finish()
     fi
 
     exit "${_status}"
+}
+
+release_tag_valid()
+{
+    printf '%s\n' "$1" | grep -Eq '^v[0-9]+(\.[0-9]+)+$'
+}
+
+fetch_stable_releases()
+{
+    _release_json=$(mktemp "${TMPDIR:-/tmp}/zapret2-releases.XXXXXX") || {
+        echo "ERROR: could not create a temporary release file" >&2
+        return 1
+    }
+    _release_list=$(mktemp "${TMPDIR:-/tmp}/zapret2-release-list.XXXXXX") || {
+        rm -f "${_release_json}"
+        echo "ERROR: could not create a temporary release list" >&2
+        return 1
+    }
+
+    if ! "${FETCH_BIN}" -q -T 30 -o "${_release_json}" \
+        -H 'Accept: application/vnd.github+json' \
+        -H 'X-GitHub-Api-Version: 2022-11-28' \
+        "${ZAPRET_RELEASES_API}"; then
+        rm -f "${_release_json}" "${_release_list}"
+        echo "ERROR: could not obtain bol-van/zapret2 releases from GitHub" >&2
+        return 1
+    fi
+
+    if [ ! -x "${PHP_BIN}" ]; then
+        rm -f "${_release_json}" "${_release_list}"
+        echo "ERROR: OPNsense PHP CLI is unavailable" >&2
+        return 1
+    fi
+
+    if ! "${PHP_BIN}" -r '
+        $releases = json_decode(file_get_contents($argv[1]), true);
+        if (!is_array($releases)) {
+            exit(2);
+        }
+        foreach ($releases as $release) {
+            if (!is_array($release) || !empty($release["draft"]) || !empty($release["prerelease"])) {
+                continue;
+            }
+            $tag = $release["tag_name"] ?? "";
+            if (is_string($tag) && preg_match("/^v[0-9]+(?:\\.[0-9]+)+$/D", $tag)) {
+                echo $tag, PHP_EOL;
+            }
+        }
+    ' "${_release_json}" > "${_release_list}"; then
+        rm -f "${_release_json}" "${_release_list}"
+        echo "ERROR: GitHub returned invalid release data" >&2
+        return 1
+    fi
+
+    rm -f "${_release_json}"
+
+    if [ ! -s "${_release_list}" ]; then
+        rm -f "${_release_list}"
+        echo "ERROR: GitHub returned no stable bol-van/zapret2 releases" >&2
+        return 1
+    fi
+
+    cat "${_release_list}"
+    rm -f "${_release_list}"
+}
+
+resolve_release()
+{
+    _requested_ref="${1:-}"
+
+    if ! _stable_releases=$(fetch_stable_releases); then
+        return 69
+    fi
+
+    if [ -z "${_requested_ref}" ]; then
+        _requested_ref=$(printf '%s\n' "${_stable_releases}" | sed -n '1p')
+    else
+        if ! release_tag_valid "${_requested_ref}"; then
+            echo "ERROR: invalid release version: ${_requested_ref}" >&2
+            return 64
+        fi
+
+        if ! printf '%s\n' "${_stable_releases}" | grep -Fqx "${_requested_ref}"; then
+            echo "ERROR: stable bol-van/zapret2 release not found: ${_requested_ref}" >&2
+            return 65
+        fi
+    fi
+
+    printf '%s\n' "${_requested_ref}"
+}
+
+show_releases()
+{
+    if ! _stable_releases=$(fetch_stable_releases); then
+        return 69
+    fi
+
+    printf '%s\n' "${_stable_releases}" | sed -n '1,4p'
 }
 
 wait_for_outer_pkg()
@@ -115,6 +239,8 @@ REPO_EOF
 
 install_runtime()
 {
+    _zapret_ref="$1"
+
     [ -x "${SERVICE_SCRIPT}" ] || {
         status_write "failed"
         echo "ERROR: zapret service control script is unavailable" >&2
@@ -142,6 +268,7 @@ install_runtime()
 
     status_write "installing"
     echo "=== os-zapret2-restyle runtime installation ==="
+    echo "Selected bol-van/zapret2 release: ${_zapret_ref}"
 
     wait_for_outer_pkg
     enable_freebsd_repo_temporarily
@@ -159,14 +286,14 @@ install_runtime()
     restore_freebsd_repo
 
     if [ -d "${ZAPRET_DIR}/.git" ]; then
-        echo "Checking out bol-van/zapret2 ${ZAPRET_REF}..."
-        git -C "${ZAPRET_DIR}" fetch --depth 1 origin tag "${ZAPRET_REF}"
+        echo "Checking out bol-van/zapret2 ${_zapret_ref}..."
+        git -C "${ZAPRET_DIR}" fetch --depth 1 origin tag "${_zapret_ref}"
         git -C "${ZAPRET_DIR}" checkout --detach FETCH_HEAD
         git -C "${ZAPRET_DIR}" reset --hard FETCH_HEAD
     else
-        echo "Downloading bol-van/zapret2 ${ZAPRET_REF}..."
+        echo "Downloading bol-van/zapret2 ${_zapret_ref}..."
         rm -rf "${ZAPRET_DIR}"
-        git clone --depth 1 --branch "${ZAPRET_REF}" "${ZAPRET_REPO}" "${ZAPRET_DIR}"
+        git clone --depth 1 --branch "${_zapret_ref}" "${ZAPRET_REPO}" "${ZAPRET_DIR}"
     fi
 
     echo "Compiling zapret2 runtime..."
@@ -225,18 +352,60 @@ install_runtime()
 
 run_locked()
 {
-    /usr/bin/lockf -s -t 30 "${LOCK_FILE}" "$0" install-locked
+    _zapret_ref="$1"
+    mkdir -p "${STATE_DIR}" "${RUN_DIR}"
+    "${LOCKF_BIN}" -s -t 30 "${LOCK_FILE}" "$0" install-locked "${_zapret_ref}"
 }
 
-case "${MODE}" in
-    install)
-        run_locked
-        ;;
-    install-locked)
-        install_runtime
-        ;;
-    *)
-        echo "usage: setup.sh install" >&2
-        exit 64
-        ;;
-esac
+main()
+{
+    _mode="${1:-}"
+
+    case "${_mode}" in
+        "")
+            [ "$#" -eq 0 ] || return 64
+            _zapret_ref=$(resolve_release "") || return $?
+            run_locked "${_zapret_ref}"
+            ;;
+        install)
+            [ "$#" -le 2 ] || {
+                usage_error "install accepts at most one VERSION argument"
+                return $?
+            }
+            _zapret_ref=$(resolve_release "${2:-}") || return $?
+            run_locked "${_zapret_ref}"
+            ;;
+        show)
+            [ "$#" -eq 1 ] || {
+                usage_error "show accepts no arguments"
+                return $?
+            }
+            show_releases
+            ;;
+        --help|-h)
+            [ "$#" -eq 1 ] || {
+                usage_error "help accepts no arguments"
+                return $?
+            }
+            usage
+            ;;
+        install-locked)
+            [ "$#" -eq 2 ] || {
+                usage_error "internal install mode requires one VERSION"
+                return $?
+            }
+            release_tag_valid "$2" || {
+                echo "ERROR: invalid release version: $2" >&2
+                return 64
+            }
+            mkdir -p "${STATE_DIR}" "${RUN_DIR}"
+            install_runtime "$2"
+            ;;
+        *)
+            usage_error "unknown command: ${_mode}"
+            return $?
+            ;;
+    esac
+}
+
+main "$@"

@@ -201,10 +201,25 @@ and secrets must not be packaged from a development firewall.
 
   `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install`
 
-- `setup.sh install` is the single runtime-preparation backend. It may initially be run
-  from the shell and later from a GUI maintenance action.
+- `setup.sh` is the single runtime-preparation and bol-van/zapret2 release-management
+  backend. It may initially be run from the shell and later from a GUI maintenance
+  action.
+- Running `setup.sh` without arguments or running `setup.sh install` without a version
+  must obtain the published stable-release list and install its latest release.
+- `setup.sh show` must print, one tag per line, up to the four latest published stable
+  releases.
+- `setup.sh install VERSION` must accept an exact published stable release tag such as
+  `v1.0.3`, reject malformed or unpublished values before runtime mutation, and use the
+  same path for first installation, repeat installation, upgrade, and downgrade.
+- Numeric release tags may contain more than three dot-separated components, for
+  example `v0.9.5.2`.
+- `setup.sh --help` and `setup.sh -h` must provide concise command usage.
+- Drafts, prereleases, and non-numeric release tags must not be presented or selected
+  as stable releases.
+- Release discovery must remain read-only and must fail clearly when GitHub cannot be
+  reached or returns no usable stable releases.
 - Runtime setup must install only missing dependencies, restore temporary pkg repository
-  changes, checkout a project-approved fixed upstream release, compile, and verify dvtws2.
+  changes, checkout the selected published release, compile, and verify dvtws2.
 - Start, Restart, Reconfigure, and Apply must not install or update runtime components.
   They must fail clearly when no usable dvtws2 exists.
 - Package removal must synchronously stop the service before plugin files disappear.
@@ -224,16 +239,14 @@ and secrets must not be packaged from a development firewall.
 
 
 ==================================================
-IMPLEMENTATION TRACEABILITY SNAPSHOT — 2026-07-30
+IMPLEMENTATION TRACEABILITY SNAPSHOT — 2026-08-02
 ==================================================
 
-This section records verification state without changing the approved product requirements.
-
-Live verified:
+Live verified before this work package:
 
 - independent OPNsense package installation;
 - explicit one-time runtime setup after plugin installation;
-- pinned bol-van/zapret2 v1.0.3 runtime source;
+- previous pinned bol-van/zapret2 v1.0.3 runtime source;
 - dvtws2 build and execution;
 - configd service control;
 - unified strategy processing;
@@ -245,14 +258,25 @@ Live verified:
 - supervised runtime process;
 - status reaching ready/ok.
 
-Implemented but awaiting complete lifecycle live verification:
+Implemented and statically verified in the current work package:
 
-- package upgrade behavior;
-- stop-only pre-deinstall behavior;
-- runtime/dependency preservation after package removal;
-- reinstall over preserved runtime;
-- reboot startup behavior;
-- controlled runtime-failure handling.
+- GitHub stable-release discovery;
+- latest-release default selection;
+- four-release `show` output;
+- exact published-release selection;
+- shared install/reinstall/upgrade/downgrade path;
+- concise `--help` and `-h` output;
+- selected-version propagation through the setup lock;
+- rejection of malformed, unpublished, draft, and prerelease versions;
+- focused release-selection regression coverage.
+
+Awaiting focused OPNsense verification:
+
+- real `show` output against GitHub;
+- default latest-release installation;
+- explicit repeat installation;
+- upgrade and downgrade between two published releases;
+- running/stopped service-state preservation for each selected-release path.
 
 Blob requirement interpretation:
 

@@ -26,7 +26,7 @@ CURRENT STAGE
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current work package:
-LIFE-014 package/runtime update activation and remaining CFG-001 reboot verification
+Backend release selection through the existing setup.sh
 
 Ordered work:
 
@@ -41,16 +41,26 @@ Ordered work:
 8. [x] Live-test running/stopped pkg upgrade and running setup with package 0.2.5_1.
 9. [x] Diagnose stopped setup as an unconditional-restart defect and implement the
    package-revision-2 state-preservation correction.
-10. Build revision 2 and repeat running/stopped setup plus forced-stop verification.
-11. Reboot and verify that startup renders and activates the saved configuration.
-12. Reconcile CFG-001 and record the verified release baseline.
-13. Resume GUI management of bol-van/zapret2 stable releases.
-14. Add installed runtime-version detection and reporting.
-15. Obtain and present the available stable-release list for bol-van/zapret2.
-16. Notify when a newer stable release is available.
-17. Allow selection, installation, update, and repeat installation of a published stable release.
-18. Display runtime presence separately from runtime/service health.
-19. After the project owner supplies the repository, design and implement GUI management of the additional BLOB repository. Until then, its URL, manifest, layout, integrity model, and update contract remain unspecified.
+10. [x] Publish the later corrective package line through v0.2.8.
+11. [ ] Complete any remaining reboot and forced-stop evidence when required by a
+   touched lifecycle path.
+12. [ ] Reconcile CFG-001 and record the next verified stable baseline.
+13. [x] Resume management of bol-van/zapret2 stable releases through setup.sh.
+14. [ ] Add installed runtime-version detection and reporting.
+15. [x] Obtain and present the available stable-release list: `setup.sh show` prints
+   up to the four latest published stable releases.
+16. [ ] Notify when a newer stable release is available.
+17. [x] Allow command-line selection, installation, update, downgrade, and repeat
+   installation of a published stable release through `setup.sh install VERSION`;
+   no-argument setup and `install` select the latest stable release.
+18. [ ] Live-verify `show`, default latest installation, explicit reinstall, upgrade,
+   downgrade, and running/stopped service-state preservation on OPNsense.
+19. [ ] Add GUI endpoints and controls that invoke this same backend without duplicating
+   release-discovery or installation logic.
+20. [ ] Display runtime presence separately from runtime/service health.
+21. [ ] After the project owner supplies the repository, design and implement GUI
+   management of the additional BLOB repository. Until then, its URL, manifest,
+   layout, integrity model, and update contract remain unspecified.
 
 ==================================================
 COMPLETED MILESTONES
@@ -109,7 +119,7 @@ Status: COMPLETE AND LIVE VERIFIED
 Milestone 6 — Project-owned release and pkg repository
 Status: COMPLETE
 
-- official v0.1.0, v0.2.0, corrective v0.2.1, and clean-baseline v0.2.2 release work;
+- official v0.1.0, v0.2.0, corrective v0.2.1, and later 0.2.x release work;
 - GitHub Release publication;
 - GitHub Pages pkg repository;
 - native FreeBSD:15:amd64 layout;
@@ -179,7 +189,7 @@ NEXT RELEASE GATE
 
 Do not declare the next stable baseline until:
 
-1. CFG-001 passes focused Apply and reboot verification;
+1. affected CFG-001 and lifecycle behavior passes focused verification;
 2. the selected Milestone 8 work package is implemented and verified;
 3. affected regression-backlog tests are executed where the change touches their chain;
 4. current AUDIT.md findings affected by the change are reconciled;
