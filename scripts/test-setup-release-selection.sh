@@ -5,6 +5,8 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 SETUP_SH="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/setup.sh"
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/setup-release-test.XXXXXX")
+TEST_STATE_DIR="${TMP_ROOT}/state"
+TEST_RUN_DIR="${TMP_ROOT}/run"
 trap 'rm -rf "${TMP_ROOT}"' EXIT INT TERM HUP
 
 FIXTURE="${TMP_ROOT}/releases.json"
@@ -109,7 +111,7 @@ assert_equals()
     fi
 }
 
-SHOW_OUTPUT=$(SETUP_RELEASE_FIXTURE="${FIXTURE}" FETCH_BIN="${FETCH_MOCK}" PHP_BIN="${PHP_TEST_BIN}" \
+SHOW_OUTPUT=$(SETUP_RELEASE_FIXTURE="${FIXTURE}" FETCH_BIN="${FETCH_MOCK}" PHP_BIN="${PHP_TEST_BIN}" STATE_DIR="${TEST_STATE_DIR}" RUN_DIR="${TEST_RUN_DIR}" \
     TMPDIR="${TMP_ROOT}" "${SETUP_SH}" show)
 assert_equals "v1.0.4
 v1.0.3
@@ -121,28 +123,28 @@ printf '%s\n' "${HELP_OUTPUT}" | grep -Fq 'setup.sh install [VERSION]'
 printf '%s\n' "${HELP_OUTPUT}" | grep -Fq 'show'
 printf '%s\n' "${HELP_OUTPUT}" | grep -Fq 'reinstallation, upgrade, or downgrade'
 
-SETUP_RELEASE_FIXTURE="${FIXTURE}" FETCH_BIN="${FETCH_MOCK}" PHP_BIN="${PHP_TEST_BIN}" \
+SETUP_RELEASE_FIXTURE="${FIXTURE}" FETCH_BIN="${FETCH_MOCK}" PHP_BIN="${PHP_TEST_BIN}" STATE_DIR="${TEST_STATE_DIR}" RUN_DIR="${TEST_RUN_DIR}" \
     LOCKF_BIN="${LOCKF_MOCK}" SETUP_LOCK_ARGS="${LOCK_ARGS}" \
     TMPDIR="${TMP_ROOT}" "${SETUP_SH}" install v1.0.3
 INSTALL_ARGS=$(tail -2 "${LOCK_ARGS}")
 assert_equals "install-locked
 v1.0.3" "${INSTALL_ARGS}" "install must pass the selected version through lockf"
 
-SETUP_RELEASE_FIXTURE="${FIXTURE}" FETCH_BIN="${FETCH_MOCK}" PHP_BIN="${PHP_TEST_BIN}" \
+SETUP_RELEASE_FIXTURE="${FIXTURE}" FETCH_BIN="${FETCH_MOCK}" PHP_BIN="${PHP_TEST_BIN}" STATE_DIR="${TEST_STATE_DIR}" RUN_DIR="${TEST_RUN_DIR}" \
     LOCKF_BIN="${LOCKF_MOCK}" SETUP_LOCK_ARGS="${LOCK_ARGS}" \
     TMPDIR="${TMP_ROOT}" "${SETUP_SH}"
 DEFAULT_ARGS=$(tail -2 "${LOCK_ARGS}")
 assert_equals "install-locked
 v1.0.4" "${DEFAULT_ARGS}" "no-argument setup must select the latest stable release"
 
-if SETUP_RELEASE_FIXTURE="${FIXTURE}" FETCH_BIN="${FETCH_MOCK}" PHP_BIN="${PHP_TEST_BIN}" \
+if SETUP_RELEASE_FIXTURE="${FIXTURE}" FETCH_BIN="${FETCH_MOCK}" PHP_BIN="${PHP_TEST_BIN}" STATE_DIR="${TEST_STATE_DIR}" RUN_DIR="${TEST_RUN_DIR}" \
     LOCKF_BIN="${LOCKF_MOCK}" SETUP_LOCK_ARGS="${LOCK_ARGS}" \
     TMPDIR="${TMP_ROOT}" "${SETUP_SH}" install v9.9.9 >/dev/null 2>&1; then
     echo "FAIL: unpublished release must be rejected" >&2
     exit 1
 fi
 
-if SETUP_RELEASE_FIXTURE="${FIXTURE}" FETCH_BIN="${FETCH_MOCK}" PHP_BIN="${PHP_TEST_BIN}" \
+if SETUP_RELEASE_FIXTURE="${FIXTURE}" FETCH_BIN="${FETCH_MOCK}" PHP_BIN="${PHP_TEST_BIN}" STATE_DIR="${TEST_STATE_DIR}" RUN_DIR="${TEST_RUN_DIR}" \
     LOCKF_BIN="${LOCKF_MOCK}" SETUP_LOCK_ARGS="${LOCK_ARGS}" \
     TMPDIR="${TMP_ROOT}" "${SETUP_SH}" install release-1 >/dev/null 2>&1; then
     echo "FAIL: invalid release syntax must be rejected" >&2
