@@ -1,9 +1,9 @@
 name: Apply GUI runtime management patch
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
+      - agent/gui-zapret2-service
   workflow_dispatch:
 
 permissions:
@@ -14,13 +14,13 @@ jobs:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out branch
+      - name: Check out staging branch
         uses: actions/checkout@v6
         with:
           ref: agent/gui-zapret2-service
           fetch-depth: 0
 
-      - name: Apply reviewed patch
+      - name: Build reviewed repository state
         shell: bash
         run: |
           set -euo pipefail
@@ -97,14 +97,81 @@ jobs:
           if text.count(old_setup) != 1:
               raise SystemExit("setup.sh requirement marker not found exactly once")
           requirements.write_text(text.replace(old_setup, new_setup, 1))
+
+          conventions = Path("docs/WORKING_CONVENTIONS.md")
+          section = """
+
+## GitHub delivery discipline
+
+The permanent publication rule is:
+
+`one ready branch -> one commit -> one pull request -> one complete check run`
+
+- Prepare the entire logical change, documentation, and focused tests before publishing the branch.
+- Publish the ready repository state atomically as one commit based on the current `main` head.
+- Do not use temporary GitHub Actions workflows, patch-part files, delivery commits, or repeated branch updates as a transport mechanism.
+- Do not modify the pull-request branch while its checks are running. Wait for the complete result, diagnose it once, then replace the branch with a newly prepared clean cycle when correction is required.
+- A failed experimental or transport PR must be closed and must never be merged. Its historical checks may remain visible but are not reused.
+- The pull-request title must start with the exact package version produced by the branch, including `PLUGIN_REVISION`, for example `v0.2.8_4: Add GUI Zapret2 service and release management`.
+- The title version must match `VERSION` plus `PLUGIN_REVISION`; a branch that advances the revision must use the advanced version in its title.
+- Final integration remains squash merge, so `main` receives one logical commit.
+"""
+          text = conventions.read_text()
+          if "## GitHub delivery discipline" not in text:
+              conventions.write_text(text.rstrip() + section + "\n")
+
+          guide = Path("docs/DEVELOPMENT_GUIDE.md")
+          section = """
+
+## Publishing a logical change to GitHub
+
+Use this exact order:
+
+1. Synchronize the local base with the current `main` head.
+2. Complete one logical change together with every required documentation update.
+3. Run local syntax, focused regression, and diff checks before any branch is published.
+4. Create one clean branch from the recorded `main` commit.
+5. Publish the complete branch state as one commit; never stream intermediate files or commits to GitHub.
+6. Open one pull request whose title begins with the exact package version, for example `v0.2.8_4: ...`.
+7. Allow one complete CI/check set to finish without modifying the branch.
+8. When checks fail, close or replace the failed delivery cycle after preparing the correction locally; do not repeatedly patch the running PR.
+9. When checks pass and review is complete, squash merge the pull request.
+10. Verify the resulting `main` commit and only then start the next logical cycle.
+
+Temporary workflow files, encoded patches, patch fragments, and Actions-based self-modification are prohibited as repository delivery mechanisms.
+"""
+          text = guide.read_text()
+          if "## Publishing a logical change to GitHub" not in text:
+              guide.write_text(text.rstrip() + section + "\n")
+
+          decisions = Path("docs/DECISIONS.md")
+          entry = """
+
+## 2026-08-02 - Atomic GitHub delivery and versioned PR titles
+
+**Decision.** Every logical development cycle is published as one ready branch containing one commit, followed by one pull request and one complete set of checks. The pull-request title starts with the exact package version represented by that branch, including `PLUGIN_REVISION`.
+
+**Reason.** Incremental delivery commits and temporary Actions workflows created redundant checks, obscured the real repository state, increased waiting time, and made failures harder to diagnose.
+
+**Consequences.** The complete change, documentation, and tests are prepared before publication. Pull-request branches are not changed while checks run. Failed transport experiments are closed rather than repaired repeatedly. Temporary patch fragments and self-applying workflows are not accepted delivery mechanisms. The final integration remains a squash merge.
+
+**Affected documents.** `WORKING_CONVENTIONS.md`, `DEVELOPMENT_GUIDE.md`, `DECISIONS.md`.
+"""
+          text = decisions.read_text()
+          if "## 2026-08-02 - Atomic GitHub delivery and versioned PR titles" not in text:
+              decisions.write_text(text.rstrip() + entry + "\n")
           PY
 
           rm -f .github/gui-runtime-management.patch.gz.b64
           rm -f .github/gui-runtime-management.patch.part-*
-          rm -f .github/workflows/apply-gui-runtime-management.yml
+
+          # The staging workflow must not make workflow-file changes in the bot commit.
+          git restore --source=HEAD -- .github/workflows/ci.yml
+          git restore --source=HEAD -- .github/workflows/apply-gui-runtime-management.yml
+
           git add -A
           git diff --cached --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'Add GUI Zapret2 service management'
+          git commit -m 'Build clean GUI runtime management tree'
           git push origin HEAD:agent/gui-zapret2-service
