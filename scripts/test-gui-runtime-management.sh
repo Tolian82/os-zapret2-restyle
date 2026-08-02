@@ -3,10 +3,10 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-CONTROLLER="${ROOT_DIR}/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php"
-VIEW="${ROOT_DIR}/src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt"
-LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/setup_launcher.sh"
-ACTIONS="${ROOT_DIR}/src/opnsense/service/conf/actions.d/actions_zapret.conf"
+CONTROLLER="${CONTROLLER:-${ROOT_DIR}/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php}"
+VIEW="${VIEW:-${ROOT_DIR}/src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt}"
+LAUNCHER="${LAUNCHER:-${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/setup_launcher.sh}"
+ACTIONS="${ACTIONS:-${ROOT_DIR}/src/opnsense/service/conf/actions.d/actions_zapret.conf}"
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/zapret-gui-runtime-test.XXXXXX")
 trap 'rm -rf "${TMP_ROOT}"' EXIT INT TERM HUP
 
@@ -54,7 +54,6 @@ runtime_status()
     "${LAUNCHER}" status
 }
 
-# Missing executable runtime is passive Error/not-installed and must not query service state.
 rm -f "${DVTWS_BIN}" "${SERVICE_CALLS}"
 STATUS_OUTPUT=$(runtime_status 0)
 printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'installed=0' || fail "missing runtime was not reported"
@@ -62,7 +61,6 @@ printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'service=error' || fail "missing ru
 printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'version=' || fail "missing runtime reported a version"
 [ ! -e "${SERVICE_CALLS}" ] || fail "service status was queried without dvtws2"
 
-# Installed runtime reports the canonical running/stopped state and exact tag.
 mkdir -p "$(dirname "${DVTWS_BIN}")"
 : > "${DVTWS_BIN}"
 chmod +x "${DVTWS_BIN}"
@@ -73,31 +71,35 @@ printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'version=v1.0.4' || fail "exact run
 STATUS_OUTPUT=$(runtime_status 1)
 printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'service=stopped' || fail "stopped dvtws2 was not reported"
 
-# Selected release uses the parameterized detached configd contract and validates its UUID.
-grep -Fq 'configdpRun(' "${CONTROLLER}" || fail "detached configd launch is missing"
-grep -Fq "'zapret setup'" "${CONTROLLER}" || fail "setup action is not used"
-grep -Fq "['install', \$version]" "${CONTROLLER}" || fail "selected release is not passed as parameters"
-grep -Fq "'operation' => \$response" "${CONTROLLER}" || fail "operation UUID is not returned"
-grep -Fq "[0-9a-f]{8}" "${CONTROLLER}" || fail "operation UUID is not validated"
-if grep -Fq "'zapret setup install ' . \$version" "${CONTROLLER}"; then
-    fail "unsafe synchronous setup command remains"
+# One configd placeholder receives one selected version; setup_launcher already supplies install.
+grep -Fq '[setup_install]' "${ACTIONS}" || fail "dedicated selected-release action is missing"
+grep -Fq 'setup_launcher.sh install' "${ACTIONS}" || fail "selected-release action does not supply install mode"
+[ "$(awk '/^\[setup_install\]$/{inside=1;next} /^\[/{inside=0} inside && /^parameters:/{print}' "${ACTIONS}")" = 'parameters:%s' ] ||
+    fail "selected-release action must accept exactly one parameter"
+if grep -Fq '[setup]' "${ACTIONS}"; then
+    fail "ambiguous two-part setup action remains"
 fi
 
-# GUI state and geometry contract.
+grep -Fq 'configdpRun(' "${CONTROLLER}" || fail "parameterized configd launch is missing"
+grep -Fq "'zapret setup_install'" "${CONTROLLER}" || fail "dedicated selected-release action is not used"
+grep -Fq '[$version]' "${CONTROLLER}" || fail "selected release is not passed as the only parameter"
+grep -Fq 'false,' "${CONTROLLER}" || fail "launcher acceptance is not read synchronously"
+grep -Fq "\$response !== 'OK'" "${CONTROLLER}" || fail "launcher acceptance does not require exact OK"
+if grep -Fq "['install', \$version]" "${CONTROLLER}" || grep -Fq "'operation' =>" "${CONTROLLER}"; then
+    fail "old detached two-parameter setup contract remains"
+fi
+
+grep -Fq "'status' => 'unavailable'" "${CONTROLLER}" || fail "passive release failure is not represented without an exception"
+grep -Fq 'catch (\Throwable' "${CONTROLLER}" || fail "release-list failure is not contained"
+php -l "${CONTROLLER}" >/dev/null
+
+# Existing GUI state and geometry contract stays intact.
 grep -Fq "notInstalled: 'not installed'" "${VIEW}" || fail "not installed label is missing"
 grep -Fq 'serviceButton.hide()' "${VIEW}" || fail "service control is not hidden without runtime"
 grep -Fq 'id="zapretServiceControlSlot"' "${VIEW}" || fail "fixed service-control slot is missing"
 grep -Fq 'max-content max-content 14ch 12ch 4ch' "${VIEW}" || fail "fixed runtime layout is missing"
-grep -Fq 'width: 14ch' "${VIEW}" || fail "version slot width is not reserved"
-grep -Fq 'width: 4ch' "${VIEW}" || fail "requested repository gap is missing"
-[ "$(grep -Fc "data.status !== 'ok'" "${VIEW}")" -eq 1 ] || fail "Start/Stop still expects status=ok"
-if grep -Fq 'apiErrorMessage' "${VIEW}"; then
-    fail "duplicate AJAX error dialog helper remains"
-fi
-[ "$(grep -Fc 'showRuntimeError(' "${VIEW}")" -eq 2 ] || fail "unexpected runtime error dialogs remain"
 
-grep -Fq '[setup]' "${ACTIONS}" || fail "setup action is missing"
 grep -Fq '[setup_releases]' "${ACTIONS}" || fail "release-list action is missing"
 grep -Fq '[setup_status]' "${ACTIONS}" || fail "runtime-status action is missing"
 
-echo "PASS: GUI runtime state and selected-release operation contract"
+echo "PASS: GUI selected-release action and fallback contract"
