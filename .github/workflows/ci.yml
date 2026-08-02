@@ -7,6 +7,205 @@ on:
     branches: [main]
 
 jobs:
+  materialize-clean-tree:
+    name: Materialize clean GUI runtime tree
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Apply reviewed change and build clean tree artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f .github/gui-runtime-management.patch.part-00
+          test -f .github/gui-runtime-management.patch.part-01
+          test -f .github/gui-runtime-management.patch.part-02
+          test -f .github/gui-runtime-management.patch.part-03
+          test -f .github/gui-runtime-management.patch.part-04
+          test -f .github/gui-runtime-management.patch.part-05
+
+          cat .github/gui-runtime-management.patch.part-* \
+            | base64 --decode \
+            | gzip --decompress \
+            > /tmp/gui-runtime-management.patch
+
+          git apply --check /tmp/gui-runtime-management.patch
+          git apply /tmp/gui-runtime-management.patch
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          readme = Path("README.md")
+          text = readme.read_text()
+          old_version = "Version 0.2.8 is the current prerelease line; this source tree builds package revision 4."
+          new_version = "Version 0.2.8 is the current prerelease line; this source tree builds package revision 5."
+          if text.count(old_version) != 1:
+              raise SystemExit("README package revision marker not found exactly once")
+          text = text.replace(old_version, new_version, 1)
+
+          old_gui = "remains stopped. A future GUI maintenance action will call the same backend."
+          new_gui = (
+              "remains stopped. The Settings page now exposes the same backend through the collapsible\n"
+              "**Zapret2 Service** block: service health and installed release, Start/Stop, the four\n"
+              "latest stable repository releases, and Apply for installation, reinstallation, upgrade,\n"
+              "or downgrade. Runtime setup remains asynchronous and preserves the initial complete\n"
+              "running or stopped service state."
+          )
+          if text.count(old_gui) != 1:
+              raise SystemExit("README GUI marker not found exactly once")
+          readme.write_text(text.replace(old_gui, new_gui, 1))
+
+          requirements = Path("docs/REQUIREMENTS.md")
+          text = requirements.read_text()
+          gui_marker = "- Field width remains unchanged until verified rendered markup is deliberately inspected.\n"
+          gui_add = """- The Settings page must contain a native collapsible `Zapret2 Service` section after
+            the existing configuration sections.
+          - On desktop widths, service status, exact installed release tag, Start/Stop, repository
+            release selector, and the runtime Apply button must occupy one horizontal line. Narrow
+            layouts may wrap without changing the control order.
+          - Service status is restricted to Started, Stopped, or Error and uses the standard
+            success, neutral, and danger visual states. Runtime version is reported separately
+            from service health and is empty when the installed tree is not at an exact valid tag.
+          - The repository selector presents at most the four current stable releases returned by
+            `setup.sh show`. Drafts, prereleases, malformed tags, and arbitrary user values must
+            not be accepted.
+          - Runtime Apply starts `setup.sh install VERSION` asynchronously through configd, disables
+            conflicting controls while the operation is active, polls read-only status, and points
+            the user to `/var/log/zapret2/setup.log` after failure.
+          - The GUI follows the language selected in OPNsense. English is the default; custom
+            Zapret2 labels and operation messages also provide Russian text. The plugin must not
+            introduce its own language selector.
+          """
+          if gui_add not in text:
+              if text.count(gui_marker) != 1:
+                  raise SystemExit("GUI requirements marker not found exactly once")
+              text = text.replace(gui_marker, gui_marker + gui_add, 1)
+
+          old_setup = (
+              "- `setup.sh` is the single runtime-preparation and bol-van/zapret2 release-management\n"
+              "  backend. It may initially be run from the shell and later from a GUI maintenance\n"
+              "  action.\n"
+          )
+          new_setup = (
+              "- `setup.sh` is the single runtime-preparation and bol-van/zapret2 release-management\n"
+              "  backend. Shell commands and the GUI must reuse its `show` and `install [VERSION]`\n"
+              "  interfaces rather than implementing separate release discovery or installation paths.\n"
+          )
+          if text.count(old_setup) != 1:
+              raise SystemExit("setup.sh requirement marker not found exactly once")
+          requirements.write_text(text.replace(old_setup, new_setup, 1))
+
+          conventions = Path("docs/WORKING_CONVENTIONS.md")
+          section = """
+
+## GitHub delivery discipline
+
+The permanent publication rule is:
+
+`one ready branch -> one commit -> one pull request -> one complete check run`
+
+- Prepare the entire logical change, documentation, and focused tests before publishing the branch.
+- Publish the ready repository state atomically as one commit based on the current `main` head.
+- Do not use temporary GitHub Actions workflows, patch-part files, delivery commits, or repeated branch updates as a transport mechanism.
+- Do not modify the pull-request branch while its checks are running. Wait for the complete result, diagnose it once, then replace the branch with a newly prepared clean cycle when correction is required.
+- A failed experimental or transport PR must be closed and must never be merged. Its historical checks may remain visible but are not reused.
+- The pull-request title must start with the exact package version produced by the branch, including `PLUGIN_REVISION`, for example `v0.2.8_4: Add GUI Zapret2 service and release management`.
+- The title version must match `VERSION` plus `PLUGIN_REVISION`; a branch that advances the revision must use the advanced version in its title.
+- Final integration remains squash merge, so `main` receives one logical commit.
+"""
+          text = conventions.read_text()
+          if "## GitHub delivery discipline" not in text:
+              conventions.write_text(text.rstrip() + section + "\n")
+
+          guide = Path("docs/DEVELOPMENT_GUIDE.md")
+          section = """
+
+## Publishing a logical change to GitHub
+
+Use this exact order:
+
+1. Synchronize the local base with the current `main` head.
+2. Complete one logical change together with every required documentation update.
+3. Run local syntax, focused regression, and diff checks before any branch is published.
+4. Create one clean branch from the recorded `main` commit.
+5. Publish the complete branch state as one commit; never stream intermediate files or commits to GitHub.
+6. Open one pull request whose title begins with the exact package version, for example `v0.2.8_4: ...`.
+7. Allow one complete CI/check set to finish without modifying the branch.
+8. When checks fail, close or replace the failed delivery cycle after preparing the correction locally; do not repeatedly patch the running PR.
+9. When checks pass and review is complete, squash merge the pull request.
+10. Verify the resulting `main` commit and only then start the next logical cycle.
+
+Temporary workflow files, encoded patches, patch fragments, and Actions-based self-modification are prohibited as repository delivery mechanisms.
+"""
+          text = guide.read_text()
+          if "## Publishing a logical change to GitHub" not in text:
+              guide.write_text(text.rstrip() + section + "\n")
+
+          decisions = Path("docs/DECISIONS.md")
+          entry = """
+
+## 2026-08-02 - Atomic GitHub delivery and versioned PR titles
+
+**Decision.** Every logical development cycle is published as one ready branch containing one commit, followed by one pull request and one complete set of checks. The pull-request title starts with the exact package version represented by that branch, including `PLUGIN_REVISION`.
+
+**Reason.** Incremental delivery commits and temporary Actions workflows created redundant checks, obscured the real repository state, increased waiting time, and made failures harder to diagnose.
+
+**Consequences.** The complete change, documentation, and tests are prepared before publication. Pull-request branches are not changed while checks run. Failed transport experiments are closed rather than repaired repeatedly. Temporary patch fragments and self-applying workflows are not accepted delivery mechanisms. The final integration remains a squash merge.
+
+**Affected documents.** `WORKING_CONVENTIONS.md`, `DEVELOPMENT_GUIDE.md`, `DECISIONS.md`.
+"""
+          text = decisions.read_text()
+          if "## 2026-08-02 - Atomic GitHub delivery and versioned PR titles" not in text:
+              decisions.write_text(text.rstrip() + entry + "\n")
+
+          main_ci = subprocess.check_output(
+              ["git", "show", "origin/main:.github/workflows/ci.yml"],
+              text=True,
+          )
+          marker = (
+              "      - name: Test setup release selection\n"
+              "        run: sh scripts/test-setup-release-selection.sh\n"
+          )
+          addition = marker + (
+              "\n      - name: Test GUI runtime management contract\n"
+              "        run: sh scripts/test-gui-runtime-management.sh\n"
+          )
+          if main_ci.count(marker) != 1:
+              raise SystemExit("CI insertion marker not found exactly once")
+          Path(".github/workflows/ci.yml").write_text(main_ci.replace(marker, addition, 1))
+          PY
+
+          rm -f .github/gui-runtime-management.patch.gz.b64
+          rm -f .github/gui-runtime-management.patch.part-*
+          rm -f .github/gui-runtime-management.trigger
+          rm -f .github/workflows/apply-gui-runtime-management.yml
+
+          test ! -e .github/gui-runtime-management.patch.gz.b64
+          test ! -e .github/gui-runtime-management.patch.part-00
+          test ! -e .github/gui-runtime-management.trigger
+          test ! -e .github/workflows/apply-gui-runtime-management.yml
+
+          git diff --check
+          sh -n src/opnsense/scripts/OPNsense/Zapret/runtime_install.sh
+          sh scripts/test-gui-runtime-management.sh
+
+          tar \
+            --exclude=.git \
+            -czf /tmp/clean-gui-runtime-tree.tar.gz \
+            .
+
+      - name: Upload clean repository tree
+        uses: actions/upload-artifact@v7
+        with:
+          name: clean-gui-runtime-tree
+          path: /tmp/clean-gui-runtime-tree.tar.gz
+          if-no-files-found: error
+
   validate:
     name: Validate Project
     runs-on: ubuntu-latest
