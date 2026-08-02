@@ -1,15 +1,18 @@
 #!/bin/sh
 
 # zapret2 runtime setup backend for OPNsense/FreeBSD.
-# Run explicitly after plugin installation or through the future GUI action.
+# Run explicitly after plugin installation or through the GUI maintenance action.
 
 ZAPRET_DIR="/usr/local/etc/zapret2"
 ZAPRET_REPO="https://github.com/bol-van/zapret2.git"
 ZAPRET_RELEASES_API="https://api.github.com/repos/bol-van/zapret2/releases?per_page=100"
 STATE_DIR="${STATE_DIR:-/var/db/zapret2-restyle}"
 SETUP_STATUS="${STATE_DIR}/setup.status"
+RELEASE_CACHE="${RELEASE_CACHE:-${STATE_DIR}/releases.cache}"
+RELEASE_CACHE_TTL_MINUTES="${RELEASE_CACHE_TTL_MINUTES:-60}"
 RUN_DIR="${RUN_DIR:-/var/run/zapret2-restyle}"
 LOCK_FILE="${RUN_DIR}/setup.lock"
+RELEASE_LOCK_FILE="${RELEASE_LOCK_FILE:-${RUN_DIR}/releases.lock}"
 CONFIGCTL="/usr/local/sbin/configctl"
 SERVICE_SCRIPT="/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 FREEBSD_REPO_OVERRIDE="/usr/local/etc/pkg/repos/FreeBSD.conf"
@@ -17,6 +20,7 @@ FREEBSD_REPO_BACKUP="${STATE_DIR}/FreeBSD.conf.backup"
 FETCH_BIN="${FETCH_BIN:-/usr/bin/fetch}"
 PHP_BIN="${PHP_BIN:-/usr/local/bin/php}"
 LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
+FIND_BIN="${FIND_BIN:-/usr/bin/find}"
 ENABLED_FREEBSD_REPO=0
 
 set -eu
@@ -88,15 +92,46 @@ release_tag_valid()
     printf '%s\n' "$1" | grep -Eq '^v[0-9]+(\.[0-9]+)+$'
 }
 
-fetch_stable_releases()
+release_cache_valid()
 {
-    _release_json=$(mktemp "${TMPDIR:-/tmp}/zapret2-releases.XXXXXX") || {
+    [ -s "${RELEASE_CACHE}" ] || return 1
+
+    if grep -Ev '^v[0-9]+(\.[0-9]+)+$' "${RELEASE_CACHE}" | grep -q .; then
+        return 1
+    fi
+
+    return 0
+}
+
+release_cache_fresh()
+{
+    release_cache_valid || return 1
+
+    case "${RELEASE_CACHE_TTL_MINUTES}" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    "${FIND_BIN}" "${RELEASE_CACHE}" -prune -mmin "-${RELEASE_CACHE_TTL_MINUTES}" -print 2>/dev/null | grep -q .
+}
+
+refresh_release_cache_locked()
+{
+    mkdir -p "${STATE_DIR}" "${RUN_DIR}"
+
+    # Another request may have refreshed the cache while this process waited for lockf.
+    if release_cache_fresh; then
+        return 0
+    fi
+
+    _release_json=$(mktemp "${RUN_DIR}/releases.json.XXXXXX") || {
         echo "ERROR: could not create a temporary release file" >&2
         return 1
     }
-    _release_list=$(mktemp "${TMPDIR:-/tmp}/zapret2-release-list.XXXXXX") || {
+    _release_list=$(mktemp "${STATE_DIR}/releases.cache.XXXXXX") || {
         rm -f "${_release_json}"
-        echo "ERROR: could not create a temporary release list" >&2
+        echo "ERROR: could not create a temporary release cache" >&2
         return 1
     }
 
@@ -119,12 +154,14 @@ fetch_stable_releases()
         if (!is_array($releases)) {
             exit(2);
         }
+        $seen = [];
         foreach ($releases as $release) {
             if (!is_array($release) || !empty($release["draft"]) || !empty($release["prerelease"])) {
                 continue;
             }
             $tag = $release["tag_name"] ?? "";
-            if (is_string($tag) && preg_match("/^v[0-9]+(?:\\.[0-9]+)+$/D", $tag)) {
+            if (is_string($tag) && preg_match("/^v[0-9]+(?:\\.[0-9]+)+$/D", $tag) && !isset($seen[$tag])) {
+                $seen[$tag] = true;
                 echo $tag, PHP_EOL;
             }
         }
@@ -142,30 +179,72 @@ fetch_stable_releases()
         return 1
     fi
 
-    cat "${_release_list}"
-    rm -f "${_release_list}"
+    chmod 0644 "${_release_list}"
+    mv -f "${_release_list}" "${RELEASE_CACHE}"
+    return 0
+}
+
+refresh_release_cache()
+{
+    mkdir -p "${STATE_DIR}" "${RUN_DIR}"
+    "${LOCKF_BIN}" -s -t 30 "${RELEASE_LOCK_FILE}" "$0" refresh-releases-locked
+}
+
+load_stable_releases()
+{
+    if release_cache_fresh; then
+        cat "${RELEASE_CACHE}"
+        return 0
+    fi
+
+    if refresh_release_cache; then
+        cat "${RELEASE_CACHE}"
+        return 0
+    fi
+
+    # A validated stale cache is preferable to breaking the GUI on a transient API failure.
+    if release_cache_valid; then
+        cat "${RELEASE_CACHE}"
+        return 0
+    fi
+
+    echo "ERROR: no cached stable bol-van/zapret2 releases are available" >&2
+    return 69
+}
+
+load_cached_releases_for_exact_install()
+{
+    if release_cache_valid; then
+        cat "${RELEASE_CACHE}"
+        return 0
+    fi
+
+    load_stable_releases
 }
 
 resolve_release()
 {
     _requested_ref="${1:-}"
 
-    if ! _stable_releases=$(fetch_stable_releases); then
-        return 69
+    if [ -n "${_requested_ref}" ] && ! release_tag_valid "${_requested_ref}"; then
+        echo "ERROR: invalid release version: ${_requested_ref}" >&2
+        return 64
     fi
 
-    if [ -z "${_requested_ref}" ]; then
-        _requested_ref=$(printf '%s\n' "${_stable_releases}" | sed -n '1p')
-    else
-        if ! release_tag_valid "${_requested_ref}"; then
-            echo "ERROR: invalid release version: ${_requested_ref}" >&2
-            return 64
+    if [ -n "${_requested_ref}" ]; then
+        if ! _stable_releases=$(load_cached_releases_for_exact_install); then
+            return 69
         fi
 
         if ! printf '%s\n' "${_stable_releases}" | grep -Fqx "${_requested_ref}"; then
             echo "ERROR: stable bol-van/zapret2 release not found: ${_requested_ref}" >&2
             return 65
         fi
+    else
+        if ! _stable_releases=$(load_stable_releases); then
+            return 69
+        fi
+        _requested_ref=$(printf '%s\n' "${_stable_releases}" | sed -n '1p')
     fi
 
     printf '%s\n' "${_requested_ref}"
@@ -173,7 +252,7 @@ resolve_release()
 
 show_releases()
 {
-    if ! _stable_releases=$(fetch_stable_releases); then
+    if ! _stable_releases=$(load_stable_releases); then
         return 69
     fi
 
@@ -387,6 +466,10 @@ main()
                 return $?
             }
             usage
+            ;;
+        refresh-releases-locked)
+            [ "$#" -eq 1 ] || return 64
+            refresh_release_cache_locked
             ;;
         install-locked)
             [ "$#" -eq 2 ] || {

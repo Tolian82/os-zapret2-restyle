@@ -11,13 +11,15 @@ Purpose:
 Provide the current operational state needed to resume work quickly.
 
 Updated when:
-Current version, branch, phase, priority, last completed work, blockers, or next actions change.
+Current version, package revision, phase, priority, verified behavior, blockers,
+or next actions change.
 
 Read after:
-INDEX.md
+docs/INDEX.md
 
 Do not store here:
-Decision history, permanent rules, detailed workflow, architecture details, or product requirements.
+Decision history, permanent rules, detailed workflow, architecture details, or
+product requirements.
 
 ==================================================
 QUICK CONTEXT
@@ -39,245 +41,137 @@ Current version:
 0.2.8
 
 Current package revision:
-5
+10
 
 Current package candidate:
-os-zapret2-restyle-0.2.8_5
-
-Latest completed implementation:
-GUI service control and bol-van/zapret2 release management in the current tree.
+os-zapret2-restyle-0.2.8_10
 
 Current milestone:
 Milestone 8 — GUI maintenance and managed upstream components
 
-Current phase:
-The Settings page now exposes service status/control, installed runtime version, the
-four stable releases returned by setup.sh show, and asynchronous selected-release
-installation through setup.sh install VERSION.
+Latest live-verified package behavior:
+Package 0.2.8_9 upgrades an installed and running runtime without killing configd
+or the Web GUI. The pre-existing configd watcher is preserved, only its worker is
+reloaded, configd actions remain available after the pkg transaction, lighttpd
+keeps listening on ports 80/443, and the previously running Zapret service returns
+to Started with upstream version v1.0.4.
+
+Current implementation candidate:
+Package 0.2.8_10 corrects selected-release launch and adds a resilient stable-release
+cache. The GUI uses one dedicated one-parameter configd action, waits for a real OK
+from the short-lived launcher, reuses the existing busy-state polling, serves repeated
+release-list reads from a local cache, and contains passive discovery failure without
+a red exception dialog.
 
 Current priority:
-Build and live-verify package 0.2.8_5 on OPNsense: service Start/Stop, current version,
-four-release selection, install/reinstall/upgrade/downgrade polling, and preservation
-of the prior running or stopped service state.
+Build and live-verify 0.2.8_10 by selecting v1.0.3 in the GUI and confirming that the
+runtime reaches Started v1.0.3 while the release selector remains usable during a
+simulated or naturally occurring temporary GitHub API failure.
 
 Known blockers:
-No source blocker is known. The Web GUI refresh correction and the release-selection
-paths still require focused OPNsense evidence from the revision-4 package.
+No source blocker is known. The package candidate requires focused live OPNsense
+verification.
 
 ==================================================
 LATEST COMPLETED WORK — 2026-08-02
 ==================================================
 
-The existing runtime setup backend now manages published stable bol-van/zapret2
-releases instead of using one source-pinned constant.
+Configd package lifecycle:
 
-Implemented command interface:
+- package 0.2.8_9 no longer starts a replacement configd watcher inside `pkg add`;
+- `+POST_INSTALL` preserves the existing watcher and sends SIGTERM only to its current
+  `configd.py console` worker;
+- the same watcher creates a replacement worker;
+- continuation requires a different worker PID and a successful
+  `configctl system status` request;
+- package installation does not restart the global Web GUI;
+- live evidence preserved watcher PID 46333, replaced the worker with PID 61632,
+  kept configd responsive after the package process ended, retained lighttpd PID
+  65346, and restored the running Zapret service.
 
-- `setup.sh` installs the latest published stable release;
-- `setup.sh install` installs the latest published stable release;
-- `setup.sh show` prints up to the four latest published stable release tags;
-- `setup.sh install VERSION` installs an exact published stable release;
-- the same `install VERSION` path performs first installation, repeat installation,
-  upgrade, and downgrade;
-- `setup.sh --help` and `setup.sh -h` describe the command interface.
+GUI selected-release diagnosis:
 
-Release discovery behavior:
+- selecting v1.0.3 previously produced configd `Parameter mismatch`;
+- ServiceController passed two arguments, `install` and `v1.0.3`, to an action with
+  one `%s` placeholder;
+- detached configd execution returned a UUID before the action failure, so the GUI
+  incorrectly treated the operation as started;
+- setup.sh, setup_launcher.sh, setup log, setup status, PID state, runtime tree, and
+  installed v1.0.4 were unchanged;
+- later `setup.sh show` failures were temporary GitHub API failures; a subsequent CLI
+  request returned v1.0.4, v1.0.3, v1.0.2, and v1.0.1 normally.
 
-- GitHub Releases is queried before runtime mutation;
-- draft and prerelease entries are excluded;
-- accepted tags use `v` followed by two or more dot-separated numeric components;
-- malformed and unpublished requested versions fail before the setup lock and runtime
-  replacement path;
-- numeric tags such as `v1.0.3` and `v0.9.5.2` are supported;
-- failure to reach GitHub or obtain usable stable releases is reported explicitly;
-- release JSON is downloaded with the native FreeBSD `/usr/bin/fetch` command using
-  its supported `--user-agent` option.
+Package 0.2.8_10 implementation:
 
-Installation behavior:
+- configd action `setup_install` binds launcher mode `install` and exposes exactly
+  one `%s` placeholder for the selected version;
+- ServiceController passes only the version and requires synchronous configd `OK`;
+- setup_launcher.sh remains the short-lived launcher and detaches the long setup
+  worker through FreeBSD daemon(8);
+- passive release discovery returns `status=unavailable` instead of raising a
+  UserException dialog when neither GitHub nor a valid cache is available;
+- stable releases are cached in
+  `/var/db/zapret2-restyle/releases.cache` for 60 minutes;
+- refreshes are serialized by
+  `/var/run/zapret2-restyle/releases.lock`;
+- cache replacement is atomic and occurs only after successful download, JSON parsing,
+  draft/prerelease filtering, tag validation, deduplication, and non-empty output;
+- a failed refresh preserves and returns a previously validated stale cache;
+- exact selected-version installation validates against the cache and does not issue
+  another GitHub Releases API request;
+- repeated GUI release-list reads, including the read after Apply, use the cache.
 
-- the selected release is passed through the existing setup lock to the internal
-  installation operation;
-- an existing runtime Git tree fetches and resets to the selected tag;
-- a missing runtime tree clones the selected tag;
-- tracked runtime source files are replaced by the selected release;
-- existing dependency, compile, dvtws2 verification, and service-state preservation
-  behavior remains in the same backend;
-- a previously running service is refreshed and verified;
-- a previously stopped service remains stopped and is verified as stopped.
+Focused validation:
 
-FreeBSD fetch correction:
-
-- the initial revision-2 implementation used curl-style `-H` arguments with
-  `/usr/bin/fetch`;
-- FreeBSD fetch does not implement that option, so the real OPNsense request would
-  fail before release discovery;
-- the unsupported headers were removed and replaced with the supported
-  `--user-agent=os-zapret2-restyle` option;
-- the focused fetch mock now rejects every unknown option instead of silently accepting
-  it, and the test explicitly prohibits curl-style `-H` in setup.sh;
-- the CI-only `0.2.8_2` artifact was never published and is superseded by candidate
-  `0.2.8_3`.
-
-Package and validation evidence:
-
-- VERSION remains 0.2.8;
-- PLUGIN_REVISION advanced from 1 to 2 for release selection and from 2 to 3 for the
-  FreeBSD fetch correction;
-- focused release-selection tests cover stable filtering, four-release output, help,
-  latest default selection, exact-version propagation through lockf, malformed values,
-  unpublished values, strict fetch arguments, and both Git checkout paths;
-- GitHub Actions CI run 30737689977 passed the complete Validate Project job;
-- the same run passed the FreeBSD package build and produced artifact
-  `os-zapret2-restyle-0.2.8_3`;
-- PR #24 introduced release selection and was squash-merged as commit
-  e3a9ffcf10ffe1e39917141c0ed1989592a4a7eb;
-- PR #25 synchronized the current-state document and was squash-merged as commit
-  b79e2668c8f9b80a0483b3b50ce5b138418a2b7e;
-- PR #26 corrected FreeBSD fetch usage and was squash-merged as commit
-  b1b6ffd79bed24fa3d23f3a318336e5c92da5bfd;
-- no tag, GitHub Release, GitHub Pages repository update, or package publication was
-  requested or performed.
-
-
-==================================================
-PACKAGE WEB GUI REFRESH CORRECTION — 2026-08-02
-==================================================
-
-Live diagnosis of local package 0.2.8_3 showed that package registration, configd,
-zapret, lighttpd, and PHP workers all remained present, but the Web GUI displayed
-incomplete dynamic data after the plugin MVC/view files were replaced. The lighttpd
-and php-cgi processes predated the package transaction. Restarting only the Web GUI
-through `/usr/local/etc/rc.restart_webgui` replaced those processes and restored normal
-rendering; every registered OPNsense service then reported running. The independent
-Firmware remote/tier blankness remained attributable to its `proxy-ca` TLS verification
-failure and is not evidence for this lifecycle finding.
-
-The current OPNsense architecture retains `rc.configure_plugins POST_INSTALL` for
-plugin cache/configuration refresh and exposes the canonical `webgui restart` configd
-action, which invokes `/usr/local/etc/rc.restart_webgui`. The historical close-reference
-hook `pluginctl -c webgui.lighttpd_reload` is not present in current OPNsense core.
-
-Package revision 4 therefore keeps all existing `+POST_INSTALL` responsibilities and
-adds one final, fail-visible `configctl webgui restart 2` action after plugin
-registration, template rendering, and any zapret service-state restoration. Focused
-static coverage enforces the action, ordering, exact `OK` response, and rejection of
-the obsolete hook name.
-
-==================================================
-GUI ZAPRET2 SERVICE MANAGEMENT — 2026-08-02
-==================================================
-
-The Settings page now contains a native collapsible `Zapret2 Service` section below
-the existing settings groups. Its single horizontal control line provides:
-
-- colored Started, Stopped, or Error service status;
-- the exact installed upstream tag when the runtime Git tree is at a published tag;
-- a Start/Stop button using the existing service API;
-- a Repository Releases selector populated by `setup.sh show`;
-- an Apply button that starts `setup.sh install VERSION` outside configd and polls its
-  read-only status until completion.
-
-The GUI does not duplicate release discovery, release validation, checkout, build, or
-service-state preservation. ServiceController validates the strict numeric tag syntax,
-requires the selection to remain in the four releases returned by setup.sh, and invokes
-configd actions only. setup_launcher.sh now accepts the selected version and exposes a
-read-only status mode for service health, installed tag, setup state, and active setup
-PID. Existing setup.sh behavior is unchanged.
-
-The section uses normal OPNsense controls and collapse behavior. Standard labels use the
-OPNsense language catalogue; the two plugin-specific section labels select English by
-default and Russian when the active OPNsense document language is Russian.
-
-Focused verification covers launcher argument validation and propagation, status output,
-controller/configd contracts, GUI endpoints and localization strings, and action
-registration. VERSION remains 0.2.8 and PLUGIN_REVISION advances from 4 to 5.
-
-==================================================
-CURRENTLY CONFIRMED
-==================================================
-
-Project and distribution:
-
-- independent repository and package identity;
-- package/plugin name `os-zapret2-restyle`;
-- internal OPNsense service and configd namespace `zapret`;
-- VERSION is the single version source;
-- GitHub Release assets and GitHub Pages pkg repository are the approved distribution
-  architecture;
-- repository mode remains `signature_type: "none"` by active decision.
-
-Runtime and backend:
-
-- modular Backend v2;
-- unified Traffic Strategy;
-- placeholders limited to `<HOSTLIST:name>` and `<IPSET:name>`;
-- automatic one-selector-per-runtime-profile normalization;
-- user-authored `--new` boundaries are retained;
-- candidate build, validation, activation, and rollback paths exist;
-- launcher, firewall, dvtws2, and supervisor lifecycle exists;
-- lifecycle mutation is serialized with lockf;
-- setup is the single runtime preparation and upstream release-management backend;
-- release selection is implemented without adding a second installer path.
-
-Package lifecycle:
-
-- pkg installation does not download, compile, or install runtime dependencies;
-- `+POST_INSTALL` prints the explicit setup command and refreshes the Web GUI last;
-- package upgrade preserves prior complete running/stopped state;
-- package removal stops the service and preserves runtime and shared dependencies;
-- destructive runtime cleanup remains a separate explicit maintenance action.
+- POSIX shell syntax passes for setup.sh and both focused tests;
+- PHP syntax passes for ServiceController.php;
+- release-selection tests cover first fetch, fresh-cache reuse, exact-install reuse,
+  latest selection, stale-cache fallback, failed-refresh preservation, no-cache
+  failure, filtering, deduplication, malformed/unpublished rejection, strict fetch
+  arguments, lock use, atomic replacement, and both Git checkout paths;
+- GUI tests enforce one configd placeholder, one controller parameter, synchronous
+  exact OK, removal of the old UUID/two-argument contract, non-modal unavailable
+  response, and retained runtime/layout behavior.
 
 ==================================================
 OPEN VERIFICATION WORK
 ==================================================
 
-Web GUI package-lifecycle verification:
+Package 0.2.8_10 focused live test:
 
-1. install or force-update package 0.2.8_4 while recording the current Web GUI PID;
-2. confirm `+POST_INSTALL` completes and the Web GUI PID changes automatically;
-3. confirm `/ui/zapret`, `/ui/zapret/diagnostics`, and ordinary OPNsense pages render;
-4. confirm all registered OPNsense services and the prior zapret running/stopped state;
-5. inject or observe a Web GUI restart failure and confirm pkg reports it visibly.
+1. install 0.2.8_10 over the running v1.0.4 runtime;
+2. confirm configd watcher identity remains unchanged and ordinary GUI/configd
+   services remain available;
+3. select v1.0.3 and press Apply;
+4. confirm controls enter Applying and Start/Stop remains disabled during setup;
+5. confirm setup.log records selected v1.0.3, checkout/build, and service refresh;
+6. confirm final GUI state is Started v1.0.3;
+7. confirm `configctl zapret setup_status` reports installed=1, service=started,
+   version=v1.0.3, setup=ready, busy=0;
+8. confirm repeated release-list reads do not refresh GitHub within 60 minutes;
+9. simulate or observe a temporary API failure and confirm a validated stale cache
+   keeps the selector populated without a red release-error dialog;
+10. remove the cache and repeat API failure to confirm the selector shows Недоступно
+    without a red dialog or runtime alteration.
 
-Release-selection matrix:
+Retained regression backlog:
 
-1. run `setup.sh show` against the real GitHub API on OPNsense;
-2. run no-argument setup and confirm the latest stable release is selected;
-3. repeat installation of the same release;
-4. install a newer published release;
-5. install an older published release;
-6. verify each applicable path while the service is running;
-7. verify each applicable path while the service is stopped;
-8. verify that malformed and unpublished versions leave runtime and service state
-   unchanged.
-
-Retained focused regression backlog:
-
-- full OPNsense reboot and automatic service-start behavior;
-- remaining CFG-001 persistence evidence;
-- forced package-stop failure behavior;
+- selected-release installation while the service is initially stopped;
+- repeat installation of the currently installed upstream release;
+- first runtime installation when dvtws2 is absent;
+- full reboot and automatic service start;
 - controlled dvtws2 crash and supervisor cleanup/recovery;
-- complete GUI/API live matrix;
-- blockcheck timeout-chain behavior;
-- direct diagnostics route behavior;
-- currently unused reconfigure endpoint classification.
-
-These are unperformed or incomplete evidence tasks, not proof that the implemented
-architecture is broken.
+- remaining CFG-001, lifecycle, GUI/API, and diagnostics evidence recorded elsewhere.
 
 ==================================================
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Build and locally install package candidate 0.2.8_5; this development task does not
-   publish it to the pkg repository.
-2. Verify the Zapret2 Service section in English and Russian OPNsense locales.
-3. Verify Start/Stop and current-version reporting against the installed runtime.
-4. Verify selection and completion polling for reinstall, upgrade, and downgrade while
-   preserving initially running and stopped service states.
-5. Execute the retained Web GUI package-lifecycle and release-selection matrices and
-   record exact evidence.
-6. Add an explicit newer-release notification only as a separate logical change.
+1. Complete PR validation and FreeBSD package build for 0.2.8_10.
+2. Install the package candidate on OPNsense.
+3. Execute the focused v1.0.4 to v1.0.3 GUI downgrade test.
+4. Verify fresh-cache reuse and stale-cache fallback on the live appliance.
+5. Record exact live evidence before classifying this GUI path as verified.
 
 ==================================================
 WORKING RULES FOR RESUMPTION
@@ -289,9 +183,10 @@ Before changing code:
 2. follow the complete mandatory reading order;
 3. inspect the current repository tree and exact GitHub main SHA;
 4. identify whether relevant unpublished owner state exists;
-5. use one logical change, one squash result, one build, and one focused verification;
+5. use one logical change, one squash result, one build, and one focused verification,
+   except where an explicit owner-approved exception is recorded;
 6. update all affected documentation with the logical change;
 7. do not infer current state only from chat history.
 
-All OPNsense console commands target the default root csh shell unless a block explicitly
-enters POSIX `sh` and explicitly returns with `exit`.
+All OPNsense console commands target the default root csh shell unless a block
+explicitly enters POSIX sh and explicitly returns with exit.
