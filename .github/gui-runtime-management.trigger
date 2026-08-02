@@ -1,1 +1,1 @@
-one-time staging trigger
+materialize clean repository tree
