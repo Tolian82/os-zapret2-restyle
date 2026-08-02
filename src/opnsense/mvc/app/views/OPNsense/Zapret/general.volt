@@ -40,28 +40,22 @@
             applying: isRussian ? 'Применение…' : 'Applying…',
             loading: isRussian ? 'Загрузка…' : 'Loading…',
             unavailable: isRussian ? 'Недоступно' : 'Unavailable',
+            notInstalled: 'not installed',
             operationFailed: isRussian
                 ? 'Установка Zapret2 завершилась с ошибкой. Подробности: /var/log/zapret2/setup.log'
                 : 'Zapret2 installation failed. See /var/log/zapret2/setup.log for details.',
-            requestFailed: isRussian ? 'Операция не выполнена.' : 'The operation could not be completed.',
             setupError: isRussian ? 'Ошибка установки Zapret2' : 'Zapret2 setup error'
         };
         let runtimePoll = null;
         let runtimeWasBusy = false;
         let currentServiceState = 'error';
+        let currentRuntimeInstalled = false;
 
         function reloadSettings() {
             return mapDataToFormUI(data_get_map).done(function() {
                 formatTokenizersUI();
                 $('.selectpicker').selectpicker('refresh');
             });
-        }
-
-        function apiErrorMessage(xhr) {
-            if (xhr && xhr.responseJSON) {
-                return xhr.responseJSON.message || xhr.responseJSON.error || runtimeText.requestFailed;
-            }
-            return runtimeText.requestFailed;
         }
 
         function showRuntimeError(title, message) {
@@ -80,8 +74,10 @@
             const releaseAvailable = $('#zapretReleaseSelect option').filter(function() {
                 return /^v[0-9]+(?:\.[0-9]+)+$/.test(this.value);
             }).length > 0;
+            const serviceControllable = currentRuntimeInstalled &&
+                (currentServiceState === 'started' || currentServiceState === 'stopped');
 
-            $('#zapretServiceControl').prop('disabled', busy || currentServiceState === 'error');
+            $('#zapretServiceControl').prop('disabled', busy || !serviceControllable);
             $('#zapretReleaseSelect').prop('disabled', busy || !releaseAvailable);
             $('#zapretReleaseApply').prop('disabled', busy || !releaseAvailable);
             $('#zapretReleaseApplyText').text(busy ? runtimeText.applying : runtimeText.apply);
@@ -89,6 +85,7 @@
         }
 
         function renderRuntime(data) {
+            const installed = !!(data && data.installed);
             const service = data && ['started', 'stopped', 'error'].indexOf(data.service) !== -1
                 ? data.service
                 : 'error';
@@ -96,20 +93,28 @@
             const badge = $('#zapretServiceStatus');
             const serviceButton = $('#zapretServiceControl');
 
-            currentServiceState = service;
+            currentRuntimeInstalled = installed;
+            currentServiceState = installed ? service : 'error';
             badge.removeClass('label-success label-default label-danger');
-            if (service === 'started') {
+
+            if (!installed) {
+                badge.addClass('label-danger').text(runtimeText.error);
+                $('#zapretRuntimeVersion').text(runtimeText.notInstalled);
+                serviceButton.hide().prop('disabled', true);
+            } else if (service === 'started') {
                 badge.addClass('label-success').text(runtimeText.started);
-                serviceButton.text(runtimeText.stop).prop('disabled', busy);
+                $('#zapretRuntimeVersion').text(data.version || '—');
+                serviceButton.show().text(runtimeText.stop).prop('disabled', busy);
             } else if (service === 'stopped') {
                 badge.addClass('label-default').text(runtimeText.stopped);
-                serviceButton.text(runtimeText.start).prop('disabled', busy);
+                $('#zapretRuntimeVersion').text(data.version || '—');
+                serviceButton.show().text(runtimeText.start).prop('disabled', busy);
             } else {
                 badge.addClass('label-danger').text(runtimeText.error);
-                serviceButton.text(runtimeText.start).prop('disabled', true);
+                $('#zapretRuntimeVersion').text(data.version || '—');
+                serviceButton.hide().prop('disabled', true);
             }
 
-            $('#zapretRuntimeVersion').text(data && data.version ? data.version : '—');
             setRuntimeBusy(busy);
 
             if (runtimeWasBusy && !busy && data && data.setup === 'failed') {
@@ -126,12 +131,14 @@
         }
 
         function renderRuntimeRequestFailure() {
+            currentRuntimeInstalled = false;
             currentServiceState = 'error';
             $('#zapretServiceStatus')
                 .removeClass('label-success label-default label-danger')
                 .addClass('label-danger')
                 .text(runtimeText.error);
-            $('#zapretServiceControl').text(runtimeText.start).prop('disabled', true);
+            $('#zapretRuntimeVersion').text('—');
+            $('#zapretServiceControl').hide().prop('disabled', true);
             setRuntimeBusy(runtimeWasBusy);
         }
 
@@ -170,10 +177,9 @@
                     select.val(selectedVersion);
                 }
                 setRuntimeBusy(runtimeWasBusy);
-            }).fail(function(xhr) {
+            }).fail(function() {
                 select.empty().append($('<option/>').attr('value', '').text(runtimeText.unavailable));
                 setRuntimeBusy(runtimeWasBusy);
-                showRuntimeError(runtimeText.setupError, apiErrorMessage(xhr));
             });
         }
 
@@ -194,14 +200,10 @@
                 url: '/api/zapret/service/' + action,
                 dataType: 'json',
                 timeout: 600000
-            }).done(function(data) {
-                if (!data || data.status !== 'ok') {
-                    showRuntimeError(runtimeText.error, runtimeText.requestFailed);
-                }
+            }).done(function() {
                 refreshRuntime();
                 updateServiceControlUI('zapret');
-            }).fail(function(xhr) {
-                showRuntimeError(runtimeText.error, apiErrorMessage(xhr));
+            }).fail(function() {
                 refreshRuntime();
             });
         });
@@ -224,9 +226,8 @@
                 runtimeWasBusy = true;
                 refreshRuntime();
                 refreshReleases(data && data.version ? data.version : version);
-            }).fail(function(xhr) {
+            }).fail(function() {
                 setRuntimeBusy(false);
-                showRuntimeError(runtimeText.setupError, apiErrorMessage(xhr));
                 refreshRuntime();
             });
         });
@@ -277,33 +278,37 @@
 
 <style>
     #zapretServiceLine {
-        display: flex;
+        display: grid;
+        grid-template-columns: max-content max-content 14ch 12ch 4ch max-content minmax(130px, 150px) max-content;
         align-items: center;
-        flex-wrap: nowrap;
-        gap: 8px;
+        column-gap: 8px;
         min-height: 34px;
+        min-width: max-content;
         white-space: nowrap;
     }
 
+    #zapretRuntimeVersion {
+        display: inline-block;
+        width: 14ch;
+    }
+
+    #zapretServiceControlSlot {
+        display: inline-block;
+        width: 12ch;
+    }
+
+    #zapretServiceControl {
+        min-width: 12ch;
+    }
+
     #zapretServiceLine .zapret-service-spacer {
-        width: 28px;
-        flex: 0 0 28px;
+        display: inline-block;
+        width: 4ch;
     }
 
     #zapretReleaseSelect {
-        width: auto;
+        width: 150px;
         min-width: 130px;
-    }
-
-    @media (max-width: 900px) {
-        #zapretServiceLine {
-            flex-wrap: wrap;
-            white-space: normal;
-        }
-
-        #zapretServiceLine .zapret-service-spacer {
-            display: none;
-        }
     }
 </style>
 
@@ -334,10 +339,12 @@
                         <div id="zapretServiceLine">
                             <b>{{ lang._("Status") }}:</b>
                             <span id="zapretServiceStatus" class="label label-danger">{{ lang._("Error") }}</span>
-                            <strong id="zapretRuntimeVersion">—</strong>
-                            <button class="btn btn-default" id="zapretServiceControl" type="button" disabled>
-                                {{ lang._("Start") }}
-                            </button>
+                            <strong id="zapretRuntimeVersion">not installed</strong>
+                            <span id="zapretServiceControlSlot">
+                                <button class="btn btn-default" id="zapretServiceControl" type="button" disabled style="display: none;">
+                                    {{ lang._("Start") }}
+                                </button>
+                            </span>
                             <span class="zapret-service-spacer" aria-hidden="true"></span>
                             <label id="zapretRepositoryReleasesLabel" for="zapretReleaseSelect" style="margin-bottom: 0;">
                                 Repository Releases

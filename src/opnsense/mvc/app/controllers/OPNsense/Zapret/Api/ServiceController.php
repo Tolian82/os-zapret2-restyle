@@ -68,6 +68,7 @@ class ServiceController extends ApiMutableServiceControllerBase
     {
         $response = trim((string)$backend->configdRun('zapret setup_status', false, 30));
         $state = [
+            'installed' => false,
             'service' => 'error',
             'version' => '',
             'setup' => 'unknown',
@@ -80,6 +81,9 @@ class ServiceController extends ApiMutableServiceControllerBase
             }
 
             switch ($matches[1]) {
+                case 'installed':
+                    $state['installed'] = $matches[2] === '1';
+                    break;
                 case 'service':
                     if (in_array($matches[2], ['started', 'stopped', 'error'], true)) {
                         $state['service'] = $matches[2];
@@ -99,6 +103,11 @@ class ServiceController extends ApiMutableServiceControllerBase
                     $state['busy'] = $matches[2] === '1';
                     break;
             }
+        }
+
+        if (!$state['installed']) {
+            $state['service'] = 'error';
+            $state['version'] = '';
         }
 
         return $state;
@@ -154,12 +163,16 @@ class ServiceController extends ApiMutableServiceControllerBase
             );
         }
 
-        $response = trim((string)$backend->configdRun(
-            'zapret setup install ' . $version,
-            false,
+        $response = trim((string)$backend->configdpRun(
+            'zapret setup',
+            ['install', $version],
+            true,
             30
         ));
-        if ($response !== 'OK') {
+        if (!preg_match(
+            '/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/Di',
+            $response
+        )) {
             throw new UserException(
                 gettext('The zapret2 runtime operation could not be started.'),
                 gettext('Zapret2 setup error')
@@ -169,6 +182,7 @@ class ServiceController extends ApiMutableServiceControllerBase
         return [
             'status' => 'ok',
             'version' => $version,
+            'operation' => $response,
         ];
     }
 
