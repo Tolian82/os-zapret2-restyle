@@ -71,14 +71,18 @@ while [ "$#" -gt 0 ]; do
             _output="$2"
             shift 2
             ;;
-        -H|-T)
+        -T)
             shift 2
             ;;
-        -q)
+        -q|--user-agent=*)
+            shift
+            ;;
+        https://*)
             shift
             ;;
         *)
-            shift
+            echo "unexpected fetch argument: $1" >&2
+            exit 1
             ;;
     esac
 done
@@ -156,7 +160,12 @@ if "${SETUP_SH}" show extra >/dev/null 2>&1; then
     exit 1
 fi
 
-# Static contract: the resolved version must control both checkout paths.
+# Static contracts: use FreeBSD fetch syntax and route the resolved version through both checkout paths.
+if grep -Eq '(^|[[:space:]])-H([[:space:]]|$)' "${SETUP_SH}"; then
+    echo "FAIL: setup must not use curl-style -H with FreeBSD fetch" >&2
+    exit 1
+fi
+grep -Fq -- '--user-agent=os-zapret2-restyle' "${SETUP_SH}"
 grep -Fq 'git -C "${ZAPRET_DIR}" fetch --depth 1 origin tag "${_zapret_ref}"' "${SETUP_SH}"
 grep -Fq 'git clone --depth 1 --branch "${_zapret_ref}"' "${SETUP_SH}"
 
