@@ -34,8 +34,31 @@ jobs:
               else:
                   body.append(line)
           code = '\n'.join(body) + '\n'
+
+          changelog_call = '\nreplace_once(\n    "docs/CHANGELOG.md",\n    "### Fixed\\n\\n",\n'
+          call_start = code.index(changelog_call)
+          call_end = code.index('\n)\n', call_start) + len('\n)\n')
+          code = code[:call_start] + '\n' + code[call_end:]
+
           compile(code, '<embedded-webgui-lifecycle-fix>', 'exec')
           exec(code, {'__name__': '__main__'})
+
+          changelog = Path('docs/CHANGELOG.md')
+          text = changelog.read_text()
+          marker = '### Fixed\n\n'
+          fixed_at = text.index(marker, text.index('## [Unreleased]')) + len(marker)
+          addition = '''- Refreshed the OPNsense Web GUI as the final `+POST_INSTALL` integration step so
+            replacement MVC, menu, ACL, controller, and view files are loaded by new
+            lighttpd/php-cgi workers.
+          - Retained plugin registration, `rc.configure_plugins POST_INSTALL`, template rendering,
+            setup instructions, and zapret running/stopped state restoration unchanged.
+          - Required the exact `configctl webgui restart` success response and rejected the
+            obsolete close-reference `webgui.lighttpd_reload` hook.
+          - Advanced the unpublished development package candidate from `0.2.8_3` to `0.2.8_4`.
+
+          '''
+          addition = '\n'.join(line[10:] if line.startswith('          ') else line for line in addition.splitlines()) + '\n'
+          changelog.write_text(text[:fixed_at] + addition + text[fixed_at:])
           PY
 
           rm -f \
