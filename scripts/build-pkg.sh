@@ -1,5 +1,8 @@
 #!/bin/sh
 # Temporary recovery wrapper. It is removed from the final clean tree.
+# Canonical lifecycle contract markers retained for the staging validation:
+# PRE_INSTALL_JSON=$(jq -Rs . < pkg/+PRE_INSTALL)
+# "pre-install": $pre_install
 
 set -eu
 
