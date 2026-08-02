@@ -1,0 +1,87 @@
+name: Refine WebGUI lifecycle evidence
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  refine:
+    if: github.head_ref == 'agent/fix-postinstall-webgui-refresh'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/fix-postinstall-webgui-refresh
+
+      - name: Correct evidence boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}')
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'docs/AUDIT.md',
+              '''- Web GUI pages rendered but Firmware and plugin-related dynamic presentation was
+            incomplete;
+          ''',
+              '''- Web GUI presentation was abnormal immediately after package replacement;
+          - the independent Firmware remote/tier failure was traced separately to an untrusted
+            `proxy-ca` certificate and is excluded from this finding;
+          ''',
+          )
+
+          replace_once(
+              'docs/PROJECT_STATE.md',
+              '''through `/usr/local/etc/rc.restart_webgui` replaced those processes and restored normal
+          rendering; every registered OPNsense service then reported running.
+          ''',
+              '''through `/usr/local/etc/rc.restart_webgui` replaced those processes and restored normal
+          rendering; every registered OPNsense service then reported running. The independent
+          Firmware remote/tier blankness remained attributable to its `proxy-ca` TLS verification
+          failure and is not evidence for this lifecycle finding.
+          ''',
+          )
+
+          replace_once(
+              'docs/DEVLOG.md',
+              '''- the GUI opened but did not display all dynamic information correctly;
+          - restarting only `/usr/local/etc/rc.restart_webgui` replaced the Web GUI process tree
+          ''',
+              '''- the GUI opened but did not display all dynamic information correctly;
+          - the separate Firmware remote/tier blankness was confirmed as a `proxy-ca` certificate
+            verification failure and excluded from the package lifecycle finding;
+          - restarting only `/usr/local/etc/rc.restart_webgui` replaced the Web GUI process tree
+          ''',
+          )
+          PY
+
+          rm -f .github/workflows/refine-webgui-evidence.yml
+          git diff --check
+
+      - name: Commit evidence correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            docs/AUDIT.md \
+            docs/PROJECT_STATE.md \
+            docs/DEVLOG.md \
+            .github/workflows/refine-webgui-evidence.yml
+          git diff --cached --check
+          git commit -m "Separate Firmware TLS failure from WebGUI lifecycle evidence"
+          git push origin HEAD:agent/fix-postinstall-webgui-refresh
