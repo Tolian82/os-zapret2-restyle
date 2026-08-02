@@ -6,6 +6,7 @@
 SETUP_SCRIPT="${SETUP_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh}"
 SERVICE_SCRIPT="${SERVICE_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh}"
 ZAPRET_DIR="${ZAPRET_DIR:-/usr/local/etc/zapret2}"
+DVTWS_BIN="${DVTWS_BIN:-${ZAPRET_DIR}/binaries/my/dvtws2}"
 DAEMON_BIN="${DAEMON_BIN:-/usr/sbin/daemon}"
 GIT_BIN="${GIT_BIN:-/usr/local/bin/git}"
 STATE_DIR="${STATE_DIR:-/var/db/zapret2-restyle}"
@@ -46,23 +47,29 @@ setup_pid_running()
 
 show_status()
 {
+    _installed=0
     _service="error"
-    if [ -x "${SERVICE_SCRIPT}" ]; then
-        if "${SERVICE_SCRIPT}" status >/dev/null 2>&1; then
-            _service="started"
-        else
-            _service_rc=$?
-            if [ "${_service_rc}" -eq 1 ]; then
-                _service="stopped"
+    _version=""
+
+    if [ -x "${DVTWS_BIN}" ]; then
+        _installed=1
+
+        if [ -x "${SERVICE_SCRIPT}" ]; then
+            if "${SERVICE_SCRIPT}" status >/dev/null 2>&1; then
+                _service="started"
+            else
+                _service_rc=$?
+                if [ "${_service_rc}" -eq 1 ]; then
+                    _service="stopped"
+                fi
             fi
         fi
-    fi
 
-    _version=""
-    if [ -x "${GIT_BIN}" ] && [ -d "${ZAPRET_DIR}/.git" ]; then
-        _candidate=$("${GIT_BIN}" -C "${ZAPRET_DIR}" describe --tags --exact-match HEAD 2>/dev/null || true)
-        if release_tag_valid "${_candidate}"; then
-            _version="${_candidate}"
+        if [ -x "${GIT_BIN}" ] && [ -d "${ZAPRET_DIR}/.git" ]; then
+            _candidate=$("${GIT_BIN}" -C "${ZAPRET_DIR}" describe --tags --exact-match HEAD 2>/dev/null || true)
+            if release_tag_valid "${_candidate}"; then
+                _version="${_candidate}"
+            fi
         fi
     fi
 
@@ -82,6 +89,7 @@ show_status()
         _setup="installing"
     fi
 
+    printf 'installed=%s\n' "${_installed}"
     printf 'service=%s\n' "${_service}"
     printf 'version=%s\n' "${_version}"
     printf 'setup=%s\n' "${_setup}"
