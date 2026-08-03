@@ -8,7 +8,7 @@
 
 SERVICE_SCRIPT="${SERVICE_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh}"
 CONFIGCTL="${CONFIGCTL:-/usr/local/sbin/configctl}"
-CONFIGD_PID_FILE="${CONFIGD_PID_FILE:-/var/run/confid.pid}"
+CONFIGD_PID_FILE="${CONFIGD_PID_FILE:-/var/run/configd.pid}"
 CONFIGD_WORKER_PATTERN="${CONFIGD_WORKER_PATTERN:-/usr/local/opnsense/service/configd.py console}"
 PGREP_BIN="${PGREP_BIN:-/usr/bin/pgrep}"
 KILL_BIN="${KILL_BIN:-/bin/kill}"
@@ -117,7 +117,7 @@ fi
     exit 1
 }
 
-if ! "${CONFIGURE_PLUGINS}" POST_INSTALLL; then
+if ! "${CONFIGURE_PLUGINS}" POST_INSTALL; then
     echo "ERROR: OPNsense POST_INSTALL plugin configuration failed" >&2
     exit 1
 fi
