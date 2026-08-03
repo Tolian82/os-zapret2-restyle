@@ -4,6 +4,7 @@
 # status adapter for the Zapret2 Service GUI block.
 
 SETUP_SCRIPT="${SETUP_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh}"
+TRANSACTION_SCRIPT="${TRANSACTION_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh}"
 SERVICE_SCRIPT="${SERVICE_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh}"
 ZAPRET_DIR="${ZAPRET_DIR:-/usr/local/etc/zapret2}"
 DVTWS_BIN="${DVTWS_BIN:-${ZAPRET_DIR}/binaries/my/dvtws2}"
@@ -11,6 +12,7 @@ DAEMON_BIN="${DAEMON_BIN:-/usr/sbin/daemon}"
 GIT_BIN="${GIT_BIN:-/usr/local/bin/git}"
 STATE_DIR="${STATE_DIR:-/var/db/zapret2-restyle}"
 SETUP_STATUS="${SETUP_STATUS:-${STATE_DIR}/setup.status}"
+ACTIVE_RELEASE_FILE="${ACTIVE_RELEASE_FILE:-${STATE_DIR}/runtime.release}"
 LOG_DIR="${LOG_DIR:-/var/log/zapret2}"
 LOG_FILE="${LOG_FILE:-${LOG_DIR}/setup.log}"
 RUN_DIR="${RUN_DIR:-/var/run/zapret2-restyle}"
@@ -19,6 +21,7 @@ MODE="${1:-install}"
 VERSION="${2:-}"
 
 set -eu
+umask 022
 
 usage_error()
 {
@@ -45,6 +48,29 @@ setup_pid_running()
     kill -0 "${_setup_pid}" 2>/dev/null
 }
 
+read_active_release()
+{
+    _candidate=""
+
+    if [ -r "${ACTIVE_RELEASE_FILE}" ]; then
+        IFS= read -r _candidate < "${ACTIVE_RELEASE_FILE}" || true
+        if release_tag_valid "${_candidate}"; then
+            printf '%s\n' "${_candidate}"
+            return 0
+        fi
+    fi
+
+    if [ -x "${GIT_BIN}" ] && [ -d "${ZAPRET_DIR}/.git" ]; then
+        _candidate=$("${GIT_BIN}" -C "${ZAPRET_DIR}" describe --tags --exact-match HEAD 2>/dev/null || true)
+        if release_tag_valid "${_candidate}"; then
+            printf '%s\n' "${_candidate}"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 show_status()
 {
     _installed=0
@@ -65,12 +91,7 @@ show_status()
             fi
         fi
 
-        if [ -x "${GIT_BIN}" ] && [ -d "${ZAPRET_DIR}/.git" ]; then
-            _candidate=$("${GIT_BIN}" -C "${ZAPRET_DIR}" describe --tags --exact-match HEAD 2>/dev/null || true)
-            if release_tag_valid "${_candidate}"; then
-                _version="${_candidate}"
-            fi
-        fi
+        _version=$(read_active_release 2>/dev/null || true)
     fi
 
     _setup="unknown"
@@ -109,6 +130,11 @@ launch_install()
         exit 1
     }
 
+    [ -x "${TRANSACTION_SCRIPT}" ] || {
+        echo "ERROR: transactional setup wrapper is missing: ${TRANSACTION_SCRIPT}" >&2
+        exit 1
+    }
+
     [ -x "${DAEMON_BIN}" ] || {
         echo "ERROR: daemon launcher is missing: ${DAEMON_BIN}" >&2
         exit 1
@@ -124,11 +150,11 @@ launch_install()
 
     if [ -n "${VERSION}" ]; then
         exec "${DAEMON_BIN}" -f -o "${LOG_FILE}" -p "${PID_FILE}" \
-            "${SETUP_SCRIPT}" install "${VERSION}"
+            "${TRANSACTION_SCRIPT}" install "${VERSION}"
     fi
 
     exec "${DAEMON_BIN}" -f -o "${LOG_FILE}" -p "${PID_FILE}" \
-        "${SETUP_SCRIPT}" install
+        "${TRANSACTION_SCRIPT}" install
 }
 
 case "${MODE}" in
