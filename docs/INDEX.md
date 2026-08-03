@@ -40,9 +40,9 @@ Before diagnosis, commands, repository mutation, or publication, read in this or
 12. `docs/GITHUB_PUBLICATION.md`
 
 `docs/GITHUB_PUBLICATION.md` is the final specialist authority immediately before any
-GitHub mutation. Its current atomic-publication, pull-request, check, and merge rules
-supersede older generic Draft/Ready or repair-commit wording that may remain in
-historical sections of other documents.
+GitHub mutation. Its current atomic-commit, one-remote-branch, automatic-cleanup,
+patch/release, PR, check, and merge rules supersede older generic Draft/Ready or
+repair-commit wording that remains in historical or general documents.
 
 ==================================================
 DOCUMENT MAP
@@ -76,14 +76,14 @@ What is ordered next?
 What must the product do?
 
 `GITHUB_WORKFLOW.md`
-How are repository maintenance and releases controlled?
+How are repository maintenance, package patches, and project releases controlled?
 
 `GITHUB_PUBLICATION.md`
-How is one clean logical change delivered to GitHub with minimal events and no noisy
-repair cycle?
+How is one clean logical change delivered with exactly one remote task branch and
+automatic cleanup?
 
-`CHANGELOG.md` and `docs/releases/`
-What changed in a published version and what should users know?
+`CHANGELOG.md`, `docs/releases/`, and `docs/patches/`
+What changed in a published release or an ordinary package patch?
 
 ==================================================
 PRECEDENCE
@@ -96,4 +96,4 @@ PRECEDENCE
 5. Historical records remain evidence but do not override later active decisions.
 
 Never infer current state only from chat history, a prior summary, or an older release
-record. Re-read the current `main` commit and the applicable specialist document.
+record. Re-read current `main` and the applicable specialist document.

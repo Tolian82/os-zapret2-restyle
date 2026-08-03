@@ -8,7 +8,7 @@ Before any project diagnosis, command, file change, GitHub mutation, or release 
 2. Complete its mandatory Engineering Memory reading order.
 3. Read `docs/GITHUB_PUBLICATION.md` immediately before any GitHub mutation.
 4. Treat the current project-owner instruction as the highest scope boundary.
-5. Do not substitute chat history, memory, or summaries for the repository documents.
+5. Do not substitute chat history, memory, or summaries for repository documents.
 
 ==================================================
 BLOCKING GITHUB RULES
@@ -18,7 +18,11 @@ The default publication sequence is:
 
 one logical change
         ↓
-one atomic commit
+all blobs and one tree
+        ↓
+one atomic commit with no remote branch yet
+        ↓
+exactly one remote task branch created at that final commit
         ↓
 one ready pull request
         ↓
@@ -26,38 +30,43 @@ one complete check set
         ↓
 one squash merge
         ↓
-verify `main`
+automatic branch cleanup and verification
 
-- Do not use Draft → Ready as the normal path. Open the pull request only when the
-  complete final branch is ready for its single check set.
-- Multi-file GitHub/API delivery must create all blobs, one tree, and one commit.
+- Exactly one remote task branch may be created for one logical delivery cycle.
+- Branch creation is the last preparation step. Do not create a remote branch before
+  all final blobs, the tree, the atomic commit, validation, title, and cleanup path are
+  ready.
+- Do not create preparatory or replacement remote branches with suffixes such as
+  `-clean`, `-final`, `-atomic`, `-fixed`, `-retry`, or `-publish`.
+- Before branch creation, verify the exact branch name is absent and that merged-branch
+  cleanup is available through repository automation or the selected authenticated
+  transport.
+- Multi-file GitHub/API delivery must use all blobs, one tree, and one commit.
   Sequential contents-API commits are prohibited.
-- Read every workflow triggered by the planned event before creating the pull request.
+- Open the pull request only when the final branch is ready. Do not use Draft → Ready
+  as the normal path.
 - Compute the exact pull-request title before opening it:
   `v<VERSION>_<PLUGIN_REVISION>: <logical change>` when the revision is non-zero.
-- A release pull-request title and its squash subject are different protocol fields.
-  The release squash subject is exactly `release: prepare v<VERSION>`.
 - Leave the pull-request branch unchanged while checks run.
-- If a delivery cycle fails, wait for the complete result, diagnose once, close the
-  failed pull request, and replace it with a new clean branch and pull request.
-  Do not add repair commits, repeatedly retrigger checks, or force-push.
+- After merge, verify both `main` and absence of the task branch.
+- If a cycle fails after branch publication, close the PR, delete that branch, verify
+  its absence, and only then begin one replacement cycle.
 
 ==================================================
-BLOCKING RELEASE RULES
+PATCH AND RELEASE BOUNDARY
 ==================================================
 
+A package patch and a project release are different operations.
+
+- A request for patch `vX.Y.Z_N` keeps `VERSION=X.Y.Z`, sets
+  `PLUGIN_REVISION=N`, uses the ordinary PR/squash cycle, and creates no tag,
+  GitHub Release, release assets, or pkg-repository publication.
+- A project release changes `VERSION` and requires explicit owner authorization for
+  that exact version.
 - Ambiguous phrases such as “continue”, “do it”, or “let’s do this” do not authorize a
   release by themselves.
-- Release authority requires an explicit project-owner request naming the version or
-  unambiguously referring to an already approved version.
 - Never choose a new project version independently.
-- Published tags, releases, and package versions are immutable. Do not move tags,
-  replace published assets, roll back `VERSION`, or reuse an earlier version.
-  A later release always advances the version line.
-- Do not pass a mandatory live-verification gate unless the evidence is recorded or the
-  project owner explicitly states that the verification was completed successfully.
-- Before giving package installation commands, verify the release workflow, tag,
-  package asset, checksum, Pages deployment, and exact pkg-repository version.
+- Published tags, releases, assets, and versions are immutable and forward-only.
 
 ==================================================
 OPNSENSE COMMAND RULE

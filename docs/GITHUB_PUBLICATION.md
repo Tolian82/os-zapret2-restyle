@@ -5,16 +5,16 @@ DOCUMENT ROLE
 ==================================================
 
 Question answered:
-How must one logical change be delivered to GitHub without unnecessary commits,
-workflow runs, failed protocol checks, or ambiguous repository state?
+How must one logical change be delivered to GitHub without unnecessary branches,
+commits, workflow runs, or manual cleanup?
 
 Purpose:
-Define the mandatory atomic branch, pull-request, check, merge, and release-publication
-procedure.
+Define the mandatory atomic branch, pull-request, check, merge, cleanup, patch, and
+release procedure.
 
 Updated when:
-Delivery events, title protocols, check policy, release gates, or publication
-verification change.
+Delivery events, title protocols, branch lifecycle, patch semantics, release gates, or
+publication verification change.
 
 Read after:
 The complete order in `docs/INDEX.md`, immediately before any GitHub mutation.
@@ -28,67 +28,58 @@ PERMANENT SEQUENCE
 
 one logical change
         ↓
-complete code, tests, documentation, and file modes outside the published branch
+complete code, tests, documentation, and modes without a remote task branch
+        ↓
+all blobs and one tree
         ↓
 one atomic commit based on the recorded current `main`
         ↓
-one ready pull request
+verify commit, title, branch name, cleanup path, and unchanged `main`
         ↓
-one complete check set for the unchanged final commit
+create exactly one remote task branch at that final commit
+        ↓
+open one ready pull request
+        ↓
+one complete check set for the unchanged commit
         ↓
 one squash merge
         ↓
-verify `main`
+automatic branch cleanup
+        ↓
+verify `main` and verify branch absence
 
-The normal path does not use Draft → Ready. A pull request is opened only after the
-final branch is ready. This prevents duplicate `opened`, `edited`, `synchronize`, and
-`ready_for_review` check runs.
-
-==================================================
-DELIVERY STAGES
-==================================================
-
-Allowed current-stage values are:
-
-- `DEVELOPMENT`
-- `CI_PENDING`
-- `LIVE_VERIFICATION_REQUIRED`
-- `OWNER_ACCEPTANCE_REQUIRED`
-- `RELEASE_AUTHORIZED`
-- `RELEASE_IN_PROGRESS`
-- `RELEASE_PUBLISHED`
-
-`PROJECT_STATE.md` records the current stage. Work must not jump to a later stage.
-
-Examples:
-
-- `LIVE_VERIFICATION_REQUIRED` prohibits release preparation until evidence is
-  recorded or the project owner explicitly confirms successful live verification.
-- `OWNER_ACCEPTANCE_REQUIRED` prohibits choosing or publishing a release version.
-- `RELEASE_AUTHORIZED` permits the complete named release path without repeated
-  confirmations.
+The normal path does not use Draft → Ready or multiple remote preparation branches.
 
 ==================================================
-REQUEST AND RELEASE AUTHORIZATION
+REMOTE BRANCH BUDGET
 ==================================================
 
-An ordinary request to fix, add, change, or implement authorizes the normal branch,
-pull-request, CI, squash-merge, and `main` verification cycle.
+One logical delivery cycle has a budget of exactly one remote task branch.
 
-A release requires an explicit project-owner request naming the version or
-unambiguously referring to a version already approved in the current documented scope.
-Phrases such as “continue”, “do it”, “let’s do this”, or “make it work” do not by
-themselves authorize a release.
+Rules:
 
-Never independently choose a new `VERSION` value.
+1. No remote branch is created during preparation.
+2. Create blobs, the final tree, and the final atomic commit first.
+3. Validate the commit and recheck `main`.
+4. Verify the exact planned branch name is absent.
+5. Verify a cleanup path exists:
+   - repository automatic deletion;
+   - `.github/workflows/cleanup-merged-branch.yml`; or
+   - an authenticated transport that can delete the branch.
+6. Create the branch once, directly at the final commit.
+7. Never create sibling preparation branches such as `-clean`, `-final`, `-atomic`,
+   `-fixed`, `-retry`, or `-publish`.
+8. After merge, verify that the task branch no longer exists.
 
-Published history is forward-only and immutable:
+Unreferenced blobs, trees, and commits created before branch publication do not clutter
+the branch list and are the correct preparation mechanism.
 
-- never move or recreate a published tag;
-- never replace release assets under an existing version;
-- never roll back `VERSION` to an earlier published value;
-- never reuse a published version for different source;
-- publish later work only under a higher explicitly approved version.
+If preparation fails before branch creation, discard the unreferenced Git objects and
+restart from current `main`. If failure occurs after branch publication, close the PR,
+delete the branch, verify its absence, and only then start one clean replacement cycle.
+
+Do not knowingly create a branch when the selected transport cannot clean it and
+repository cleanup automation is unavailable.
 
 ==================================================
 ATOMIC GITHUB/API PREPARATION
@@ -96,99 +87,97 @@ ATOMIC GITHUB/API PREPARATION
 
 For a multi-file change through the GitHub API:
 
-1. Record the exact current `main` commit SHA.
-2. Prepare all final file contents and modes before publishing a task branch.
+1. Record the exact current `main` SHA.
+2. Prepare every final file and Git mode.
 3. Run focused validation and whitespace checks.
 4. Create one blob for every changed file.
 5. Create one tree based on the recorded `main` tree.
-6. Create one commit whose sole parent is the recorded `main` commit.
-7. Re-read `main` and confirm it is unchanged.
-8. Create or move the new task branch directly to that atomic commit.
-9. Open one pull request.
+6. Create one commit whose sole parent is the recorded `main`.
+7. Verify changed paths, parent, title protocol, and expected package candidate.
+8. Re-read `main` and confirm it is unchanged.
+9. Create exactly one remote task branch at the final commit.
+10. Open one ready pull request.
 
-Sequential contents-API commits are prohibited. Temporary workflow files, patch-part
-transport, delivery-only trigger files, Actions self-modification, and experimental
-commits are also prohibited.
-
-If preparation fails before the pull request exists, abandon that unpublished branch
-name and create a clean branch from the current `main`. Do not stream repairs into it.
+Sequential contents-API commits, temporary workflow transport, and preparatory remote
+branches are prohibited.
 
 ==================================================
 PULL-REQUEST PREFLIGHT
 ==================================================
 
-Before creating the pull request:
+Before opening the pull request:
 
-1. Read every workflow triggered by `pull_request` and the relevant event types.
-2. Derive the exact package candidate from `VERSION` and `PLUGIN_REVISION`.
-3. Verify changed files, modes, base SHA, parent, and branch head.
-4. Verify the title before the `opened` event is emitted.
-5. Confirm the branch is final and will remain unchanged during checks.
+1. Read every workflow triggered by `pull_request`.
+2. Derive the package candidate from `VERSION` and `PLUGIN_REVISION`.
+3. Verify the branch contains one final atomic commit based on current `main`.
+4. Verify the exact title before the `opened` event.
+5. Confirm the branch will remain unchanged while checks run.
 
-Pull-request title when revision is non-zero:
+Title when revision is non-zero:
 
 `v<VERSION>_<PLUGIN_REVISION>: <logical change>`
 
-Example:
+A release squash subject is a different protocol field:
 
-`v0.3.2_1: Improve GitHub publication discipline`
-
-Release pull-request title and release squash subject are different protocol fields.
-
-For release `v0.3.2`:
-
-- pull-request title: `v0.3.2_1: Improve GitHub publication discipline`;
-- squash subject on `main`: `release: prepare v0.3.2`.
-
-Do not open a release pull request with `release: prepare ...` as its PR title when the
-PR-title workflow requires the package-candidate prefix.
+`release: prepare v<VERSION>`
 
 ==================================================
-CHECK SET
+PATCH VERSUS RELEASE
 ==================================================
 
-Open the pull request as ready for review. Start the configured checks once for the
-unchanged final commit. Wait until the complete set finishes before diagnosing any
-failure.
+A package patch such as `v0.3.2_2` is not a project release.
 
-Do not:
+Patch contract:
 
-- edit the title after opening when it could have been computed beforehand;
-- convert Draft/Ready merely to start another event;
-- push repair commits while checks run;
-- repeatedly rerun individual checks without correcting a proven transient platform
-  failure;
-- treat partial job success as a complete successful check set.
+- keep `VERSION=0.3.2`;
+- set `PLUGIN_REVISION=2`;
+- use the ordinary package-candidate PR title;
+- use an ordinary logical squash subject;
+- do not create or move a tag;
+- do not create a GitHub Release;
+- do not publish release assets or a pkg repository;
+- do not use `release: prepare ...`.
 
-==================================================
-FAILED DELIVERY CYCLE
-==================================================
+Release contract:
 
-A failed pull-request cycle is replaced, not repaired:
+- requires explicit authority for an exact new `VERSION`;
+- changes `VERSION`;
+- resets `PLUGIN_REVISION` to `1`;
+- uses the exact release squash subject;
+- continues through tag, GitHub Release, assets, and Pages/pkg publication.
 
-1. Wait for every job in the check set to finish.
-2. Diagnose the failure once.
-3. Close the failed pull request without merging it.
-4. Prepare the complete correction outside the published branch.
-5. Re-read current `main`.
-6. Create one new clean atomic commit, branch, pull request, and check set.
-
-No repair commit, force-push, repeated title edit, or repeated event transition is used
-to make a noisy pull request green.
+Ambiguous continuation language does not authorize a release.
 
 ==================================================
-MERGE
+CHECK SET AND FAILURE
 ==================================================
 
-After all required checks pass for the exact final commit:
+Open one ready PR and start one check set for the unchanged final commit. Wait for the
+complete result.
 
-1. Verify mergeability and the complete changed-file scope.
+Do not edit the title, convert Draft/Ready, push repair commits, or repeatedly retrigger
+checks merely to create another event.
+
+A failed published cycle is replaced only after its PR is closed and its branch is
+deleted and confirmed absent.
+
+==================================================
+MERGE AND CLEANUP
+==================================================
+
+After all required checks pass:
+
+1. Verify mergeability and changed-file scope.
 2. Squash merge once.
-3. For an ordinary change, retain the package-candidate logical title.
-4. For a release preparation, use exactly `release: prepare v<VERSION>`.
-5. Verify the resulting `main` SHA, message, tree, and expected files.
-6. Delete only the temporary branch created for the completed task when the available
-   transport supports safe branch deletion.
+3. Use an ordinary package-candidate subject for a patch.
+4. Use `release: prepare v<VERSION>` only for an authorized release.
+5. Verify resulting `main`.
+6. Let `.github/workflows/cleanup-merged-branch.yml` delete the associated same-repository
+   head branch.
+7. Query branches and verify absence of the exact task branch.
+
+Cleanup failure is a delivery failure to diagnose. It is not a reason to create another
+branch.
 
 ==================================================
 RELEASE GATE
@@ -196,62 +185,43 @@ RELEASE GATE
 
 Before changing `VERSION`, all answers must be yes:
 
-1. Did the owner explicitly request this exact version?
-2. Is the previous published version immutable and left unchanged?
-3. Are required implementation, CI, and live-verification gates complete?
-4. Is owner acceptance recorded when required?
-5. Does `PROJECT_STATE.md` say `RELEASE_AUTHORIZED`?
+1. Did the owner explicitly request this exact new version?
+2. Are required implementation, CI, and live-verification gates complete?
+3. Is owner acceptance recorded when required?
+4. Does `PROJECT_STATE.md` authorize that release?
+5. Will previous published versions remain unchanged?
 
-If any answer is no, do not change `VERSION`, create a release branch, create a tag,
-or dispatch a release workflow.
-
-An explicit owner statement that a named package was tested and works is valid
-owner-supplied live evidence. Record it honestly as owner verification, without
-inventing commands or output that were not supplied.
-
-==================================================
-AUTHORIZED RELEASE PATH
-==================================================
-
-1. Prepare one atomic release commit from current `main`.
-2. Set the explicitly approved `VERSION` and deterministic `PLUGIN_REVISION`.
-3. Open one ready pull request with the exact package-candidate title.
-4. Pass one complete check set.
-5. Squash merge with `release: prepare v<VERSION>`.
-6. Let `release-trigger.yml` create or verify the immutable tag at that merge.
-7. Let `release.yml` build, verify, and publish the package and pkg repository.
-8. Verify every distribution output before giving installation commands.
+If any answer is no, do not change `VERSION`, create a release branch, create a tag, or
+dispatch a release workflow.
 
 ==================================================
 POST-RELEASE VERIFICATION
 ==================================================
 
-A release is not reported ready for installation until all are verified:
+A release is not ready for installation until all are verified:
 
-- `main` is the expected release merge;
-- tag `v<VERSION>` resolves to that exact commit;
-- Release trigger completed successfully;
-- Release workflow completed successfully;
-- GitHub Release exists;
-- exact `.pkg` asset exists;
-- `SHA256SUMS` exists;
-- GitHub Pages deployment succeeded;
-- `meta.conf`, `data.pkg`, and `packagesite.pkg` are published;
-- the exact package version is present in the public pkg repository.
+- expected `main` merge;
+- tag at that exact commit;
+- Release trigger success;
+- Release workflow success;
+- exact `.pkg` asset;
+- `SHA256SUMS`;
+- Pages deployment;
+- `meta.conf`, `data.pkg`, and `packagesite.pkg`;
+- exact version in the public pkg repository.
 
-Only after these checks may user instructions contain `pkg update`, `pkg install`, or
-`pkg upgrade` for the new release.
+Patch publication to `main` does not imply any of these release outputs.
 
 ==================================================
 CONCURRENCY AND SAFETY
 ==================================================
 
-The recorded `main` SHA is the concurrency guard. If `main` changes before the atomic
-commit is published, discard the prepared commit, reconcile against the new `main`, and
-run validation again. Never force-update `main` or overwrite concurrent work.
+The recorded `main` SHA is the concurrency guard. If `main` changes before branch
+creation, discard the prepared unreferenced commit, reconcile against new `main`, and
+validate again.
 
-Relevant owner changes that exist only in a local checkout remain a blocking exception
-and must be committed, pushed, or transferred explicitly before remote preparation.
+Never force-update `main`, move a published tag, or delete a pre-existing owner branch.
+Only the one task branch created by the current cycle is owned by the cycle.
 
 ==================================================
 SPECIALIST AUTHORITY
@@ -261,6 +231,3 @@ This document is the final authority for GitHub delivery mechanics. The active d
 is recorded in:
 
 `docs/decisions/DEC-2026-08-02-atomic-github-publication.md`
-
-Historical Draft/Ready or incremental-repair wording elsewhere does not override this
-current procedure.

@@ -1,4 +1,4 @@
-# DEC-2026-08-02 — Atomic GitHub publication, release gates, and forward-only versions
+# DEC-2026-08-02 — Atomic GitHub publication, branch ownership, and release gates
 
 Status: Approved and extended
 Original date: 2026-08-02
@@ -6,102 +6,83 @@ Extended: 2026-08-03
 
 ## Decision
 
-Every logical development cycle is published as one ready branch containing one atomic
-commit, followed by one ready pull request, one complete check set, and one squash merge.
+Every logical delivery cycle owns exactly one remote task branch.
 
-The pull-request title begins with the exact package candidate represented by the branch:
+The complete change is prepared before that branch exists:
 
-`v<VERSION>_<PLUGIN_REVISION>: <logical change>`
+1. all final blobs;
+2. one tree;
+3. one atomic commit based on recorded `main`;
+4. validation of parent, scope, package candidate, title, branch name, and cleanup path;
+5. exactly one branch creation at the final commit;
+6. one ready pull request;
+7. one complete check set;
+8. one squash merge;
+9. automatic branch deletion and absence verification.
 
-A release-preparation squash subject is a separate protocol field:
+Preparatory sibling branches such as `-clean`, `-final`, `-atomic`, `-fixed`,
+`-retry`, and `-publish` are prohibited.
 
-`release: prepare v<VERSION>`
+The repository workflow `.github/workflows/cleanup-merged-branch.yml` deletes the
+same-repository PR head branch associated with a new `main` commit. It is idempotent
+when repository settings already deleted the branch.
 
-The PR title is computed before the pull request is opened. The normal path does not use
-Draft → Ready, title edits, or branch changes to trigger additional checks.
+If a published cycle fails, its PR is closed and its branch is deleted before one clean
+replacement cycle begins.
 
-Multi-file GitHub/API publication creates all blobs, one tree, and one commit. It must
-not stream the change through sequential contents-API commits.
+A package patch and a project release are separate operations:
 
-A failed delivery cycle is closed and replaced by one clean cycle. It is not repaired by
-additional commits, repeated check retriggers, title edits, Ready transitions, or
-force-push.
+- patch `vX.Y.Z_N` keeps `VERSION=X.Y.Z`, sets `PLUGIN_REVISION=N`, and stops
+  after ordinary merge, cleanup, and `main` verification;
+- a project release changes `VERSION`, requires explicit authority for that exact
+  version, and may continue to immutable tag, GitHub Release, assets, and pkg repository.
 
-Release authority requires an explicit project-owner request for the exact version.
-Ambiguous continuation wording does not authorize a release and the assistant does not
-choose a project version independently.
-
-Published versions are immutable and development is forward-only. Existing tags,
-releases, and assets are never moved, replaced, reused, or rolled back. A later release
-uses a higher explicitly approved version.
-
-Required live verification is a release gate. It is satisfied by recorded evidence or
-an explicit project-owner statement that the named package was tested successfully.
-Owner evidence is recorded honestly without inventing commands or output.
-
-Before installation instructions are delivered, the release workflow, tag, package,
-checksum, Pages deployment, repository metadata, and exact public pkg version are all
-verified.
+Published versions remain forward-only and immutable.
 
 ## Reason
 
-The v0.3.1 cycle exposed avoidable GitHub noise and protocol failures:
+During v0.3.2 preparation, remote branches were created before the final atomic commit
+was ready. Repeated attempts produced `release/v0.3.2`, `-clean`, `-final`, `-atomic`,
+and `-publish` branches. Even after their refs were aligned with `main`, GitHub displayed
+recent-push “Compare & pull request” banners and the owner had to delete them manually.
 
-- release preparation started from ambiguous continuation wording instead of an
-  explicit version request;
-- the first release pull-request title used the release squash subject rather than the
-  package-candidate title required by `pr-title.yml`;
-- opening, editing, and Ready transitions generated redundant title-check runs;
-- sequential contents-API updates created multiple preparation commits before squash;
-- installation instructions were considered before the complete public distribution
-  channel had been verified.
-
-The release itself was later checked by the project owner and package `0.3.1_1` was
-confirmed correct. The problem was the efficiency and determinism of the GitHub process,
-not the released plugin.
+Git objects do not require branch refs during preparation. Delaying branch creation until
+the final commit exists removes the cause of the clutter. Automatic merged-branch cleanup
+removes the remaining normal task branch without owner action.
 
 ## Consequences
 
-- Code, tests, documentation, and file modes are complete before publication.
-- The final task branch represents one atomic commit based on the recorded current
-  `main`.
-- A pull request is opened ready for review with the correct title on its first event.
-- The branch remains unchanged during its single check set.
-- Pull-request title and release squash subject are never confused.
-- Failed cycles remain historical evidence but are never merged or incrementally
-  repaired.
-- `PROJECT_STATE.md` records a delivery stage and later-stage work cannot bypass it.
-- Release versions only advance; published versions are never rolled back.
-- Package installation commands follow full public-distribution verification.
+- One logical cycle calls branch creation once.
+- Validation failure before branch creation leaves no remote branch.
+- No sibling attempt branches are published.
+- Cleanup capability is checked before branch creation.
+- The merged task branch is deleted automatically and its absence is verified.
+- Pre-existing owner branches are never included in broad cleanup.
+- Patch requests do not accidentally trigger release automation.
+- Patch `v0.3.2_2` keeps `VERSION=0.3.2` and advances only `PLUGIN_REVISION`.
 
 ## Current application
 
-The project owner has:
+Verified absent:
 
-- confirmed successful live verification of release/package `v0.3.1` /
-  `os-zapret2-restyle-0.3.1_1.pkg`;
-- approved the workflow corrections above;
-- explicitly authorized forward release `v0.3.2`.
+- `release/v0.3.2`
+- `release/v0.3.2-clean`
+- `release/v0.3.2-final`
+- `release/v0.3.2-atomic`
+- `release/v0.3.2-publish`
 
-Expected v0.3.2 package:
+No open pull request remained after cleanup.
 
-`os-zapret2-restyle-0.3.2_1.pkg`
-
-## Affected documentation
+## Affected documentation and controls
 
 - `AGENTS.md`
-- `docs/INDEX.md`
 - `docs/PROJECT_STATE.md`
 - `docs/GITHUB_WORKFLOW.md`
 - `docs/GITHUB_PUBLICATION.md`
-- `docs/audit/AUDIT-2026-08-03-DOMAIN-DIAGNOSTICS.md`
-- `docs/devlog/DEVLOG-2026-08-03-RELEASE-v0.3.1.md`
-- `docs/devlog/DEVLOG-2026-08-03-RELEASE-v0.3.2.md`
 - `docs/ROADMAP.md`
-- `docs/CHANGELOG.md`
-- `docs/releases/v0.3.1.md`
-- `docs/releases/v0.3.2.md`
-- `README.md`
-
-The detailed operational procedure is authoritative in
-`docs/GITHUB_PUBLICATION.md`.
+- `docs/devlog/DEVLOG-2026-08-03-PATCH-v0.3.2_2.md`
+- `docs/patches/v0.3.2_2.md`
+- `.github/workflows/cleanup-merged-branch.yml`
+- `.github/workflows/ci.yml`
+- `scripts/test-github-branch-hygiene.sh`
+- `Makefile`
