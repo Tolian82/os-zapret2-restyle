@@ -3,10 +3,10 @@
 Date: 2026-08-03
 
 Base implementation commit:
-fe518e7a4ebbfe827ca41d107fda8f7e4fcb8666
+`fe518e7a4ebbfe827ca41d107fda8f7e4fcb8666`
 
-Release candidate:
-v0.3.1 / os-zapret2-restyle-0.3.1_1
+Verified release:
+`v0.3.1` / `os-zapret2-restyle-0.3.1_1.pkg`
 
 ==================================================
 FINDING DIAG-002
@@ -16,7 +16,7 @@ Title:
 Negative domain-connectivity results disappear from the Diagnostics page
 
 Classification:
-broken / remediated in source / release prepared / live verification required
+RESOLVED / release published / owner live verified
 
 Affected locations:
 
@@ -36,33 +36,20 @@ Diagnostics Test Domain button
   -> curl connectivity result
 ```
 
-Evidence:
+==================================================
+ORIGINAL DEFECT
+==================================================
 
-- Successful HTTPS probes return curl status zero and their complete DNS, HTTPS, and
-  final `SUCCESS` report reaches the result field.
-- `test_domain.sh` already formatted negative results such as TLS handshake failure,
-  connection reset, timeout, DNS failure, connection refused, and a generic curl
-  failure.
-- Before remediation, the script exited with the curl status after printing that
-  report.
-- OPNsense `script_output` treats a non-zero command as execution failure and does not
-  return the command's stdout as the action result.
-- `Backend::configdRun()` converts the resulting `Execute error` response to an empty
-  string.
-- `DiagnosticsController::testdomainAction()` returned `status=ok` even for that empty
-  string, so the browser replaced the visible result with empty text.
+The shell script already formatted negative outcomes such as TLS handshake failure,
+connection reset, timeout, DNS failure, connection refusal, and generic curl failure.
+It then exited with curl's non-zero status.
 
-Probable cause:
+OPNsense `script_output` treated that as command-execution failure and discarded the
+formatted stdout. `Backend::configdRun()` returned an empty string, the API incorrectly
+reported `status=ok`, and the browser replaced the result field with empty text.
 
-A remote connectivity failure was incorrectly used as the execution status of the
-transport wrapper. For this diagnostic, the curl outcome is the data being measured;
-it is not a failure to execute the diagnostic itself.
-
-Impact:
-
-Users receive no explanation when the tested domain is blocked, times out, resets the
-connection, refuses the connection, or fails TLS. The negative path therefore hides the
-most useful diagnostic result while the positive path works normally.
+A remote connectivity failure was therefore incorrectly represented as failure to
+execute the diagnostic itself.
 
 ==================================================
 REMEDIATION
@@ -70,60 +57,54 @@ REMEDIATION
 
 Implemented behavior:
 
-1. `test_domain.sh` keeps non-zero exits for invalid invocation and invalid domain
-   input.
-2. After a valid curl probe completes, every curl result is emitted as the existing
-   full multiline diagnostic report and the wrapper exits zero so configd preserves
-   stdout.
-3. `DiagnosticsController::testdomainAction()` rejects an empty backend response and
-   returns an explicit API error instead of reporting empty output as success.
-4. A focused mocked test verifies timeout, connection reset, generic curl failure,
-   invalid input, and the controller's empty-response guard.
-5. The correction is prepared for immutable release v0.3.1 with package revision 1.
+1. Invalid invocation and invalid domain input remain non-zero execution errors.
+2. Every completed curl probe emits the full existing multiline report.
+3. After emitting a valid probe result, the wrapper exits zero so configd preserves
+   stdout even when the destination is unreachable.
+4. The MVC controller rejects an actually empty configd response and returns an
+   explicit API error.
+5. Focused automated tests cover timeout, connection reset, generic curl failure,
+   invalid input, and the empty-response guard.
 
-Acceptance criteria:
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
 
-- Positive results continue to show DNS, HTTPS timing/status details, and `SUCCESS`.
-- Timeout shows the complete report ending in `=== Result: TIMEOUT ===`.
-- Connection reset shows the complete report ending in
+- Positive probes display DNS, HTTPS details, timings, and `SUCCESS`.
+- Timeout displays the complete report ending in `=== Result: TIMEOUT ===`.
+- Connection reset displays the complete report ending in
   `=== Result: CONNECTION RESET (likely DPI blocking) ===`.
 - TLS, DNS, refusal, and generic curl outcomes follow the same complete-report path.
-- Invalid domain input remains an execution error.
-- An actual empty configd response produces a visible API error rather than a blank
-  result field.
-- PHP and shell syntax checks pass.
-- The focused diagnostic contract test and the complete CI and release package builds
-  pass.
+- Invalid input remains an execution error.
+- An actual empty backend response becomes a visible API error rather than a blank
+  successful result.
 
 ==================================================
-VERIFICATION STATUS
+VERIFICATION EVIDENCE
 ==================================================
 
-Completed before release preparation:
+Automated and release evidence:
 
-- shell syntax validation for `test_domain.sh` and the focused test;
-- focused mocked timeout, reset, generic failure, and invalid-input cases;
-- PHP syntax validation for `DiagnosticsController.php`;
-- pull-request CI, including the FreeBSD package build for the implementation commit.
+- shell syntax validation passed;
+- PHP syntax validation passed;
+- focused diagnostics contract tests passed;
+- pull-request CI and FreeBSD package build passed;
+- annotated tag `v0.3.1` was published;
+- package `os-zapret2-restyle-0.3.1_1.pkg`, checksum, and Pages/pkg repository were
+  published through the release workflow.
 
-Release verification required:
+Owner live evidence:
 
-- release-preparation CI passes;
-- annotated tag v0.3.1 points to the release-preparation merge;
-- package `os-zapret2-restyle-0.3.1_1.pkg` and SHA256SUMS are published;
-- the FreeBSD:15:amd64 Pages/pkg repository exposes the same package.
+On 2026-08-03 the project owner explicitly reported that release/package `0.3.1_1`
+was personally checked and everything in it was implemented correctly.
 
-Required live OPNsense verification:
+This owner statement closes the required live gate for DIAG-002. It confirms the
+working release behavior without inventing additional commands, logs, or outputs that
+were not supplied in the report.
 
-1. Upgrade to package 0.3.1_1.
-2. Run Test Domain Connectivity against one reachable domain and confirm the existing
-   positive report remains unchanged.
-3. Run it against a domain or path that times out or is reset.
-4. Confirm the result field displays the full DNS and HTTPS sections plus the final
-   negative classification instead of becoming empty.
-5. Confirm no global modal or browser transport error replaces the structured result.
+==================================================
+FINAL STATUS
+==================================================
 
-Current status:
-Source remediation and focused static verification are complete. Release publication
-and live OPNsense rendering remain required before DIAG-002 is classified as fully
-resolved.
+DIAG-002 is resolved and live verified. No further correction or version rollback is
+required. Later releases continue forward from v0.3.1.
