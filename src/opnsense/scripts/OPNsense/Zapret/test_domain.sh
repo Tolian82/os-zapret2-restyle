@@ -56,4 +56,7 @@ else
     echo "=== Result: FAILED (curl exit code: ${RESULT}) ==="
 fi
 
-exit ${RESULT}
+# A completed curl probe is diagnostic data even when the destination is
+# unreachable. configd script_output discards stdout from a non-zero command,
+# so return success after emitting the complete connectivity report.
+exit 0
