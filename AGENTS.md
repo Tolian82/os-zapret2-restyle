@@ -1,34 +1,67 @@
-# os-zapret2-restyle agent preflight
+# AGENTS.md
 
-These instructions apply to the complete repository.
+This repository has a mandatory documentation preflight.
 
-Before any substantive project diagnosis, recommendation, command, file change, GitHub action, build, or publication:
+Before any project diagnosis, command, file change, GitHub mutation, or release action:
 
-1. Read `docs/INDEX.md` completely.
-2. Read every document in its mandatory order completely.
-3. Before any GitHub mutation, additionally read `docs/GITHUB_PUBLICATION.md` completely.
-4. Read the relevant source files and record the exact current GitHub `main` commit.
+1. Read `docs/INDEX.md`.
+2. Complete its mandatory Engineering Memory reading order.
+3. Read `docs/GITHUB_PUBLICATION.md` immediately before any GitHub mutation.
+4. Treat the current project-owner instruction as the highest scope boundary.
+5. Do not substitute chat history, memory, or summaries for the repository documents.
 
-This is a blocking preflight. Chat context, memory, summaries, and partial searches do not replace it.
+==================================================
+BLOCKING GITHUB RULES
+==================================================
 
-The permanent development and publication sequence is:
+The default publication sequence is:
 
-`one logical change -> one ready branch -> one atomic commit -> one pull request -> one complete check set -> one squash merge -> one build -> one focused verification`
+one logical change
+        ↓
+one atomic commit
+        ↓
+one ready pull request
+        ↓
+one complete check set
+        ↓
+one squash merge
+        ↓
+verify `main`
 
-GitHub rules:
+- Do not use Draft → Ready as the normal path. Open the pull request only when the
+  complete final branch is ready for its single check set.
+- Multi-file GitHub/API delivery must create all blobs, one tree, and one commit.
+  Sequential contents-API commits are prohibited.
+- Read every workflow triggered by the planned event before creating the pull request.
+- Compute the exact pull-request title before opening it:
+  `v<VERSION>_<PLUGIN_REVISION>: <logical change>` when the revision is non-zero.
+- A release pull-request title and its squash subject are different protocol fields.
+  The release squash subject is exactly `release: prepare v<VERSION>`.
+- Leave the pull-request branch unchanged while checks run.
+- If a delivery cycle fails, wait for the complete result, diagnose once, close the
+  failed pull request, and replace it with a new clean branch and pull request.
+  Do not add repair commits, repeatedly retrigger checks, or force-push.
 
-- Prepare the complete code, tests, documentation, and file modes before publishing the branch.
-- Create the ready branch directly at one atomic commit whose sole parent is the recorded current `main` commit.
-- Never stream intermediate files or commits into a pull-request branch.
-- Never modify the pull-request branch while checks are queued or running.
-- When a delivery cycle fails, close it, prepare the correction outside the pull request, and replace it with a new clean branch, commit, and pull request.
-- Temporary workflows, encoded patches, patch fragments, self-modifying Actions, delivery-only files, repeated check retriggers, repair commits, and force-push repair are prohibited as delivery mechanisms.
-- The pull-request title must begin with the exact package candidate derived from `VERSION` and `PLUGIN_REVISION`. Example: `v0.2.8_4: Add GUI Zapret2 service and release management`.
-- A branch that changes `PLUGIN_REVISION` must use the new revision in its pull-request title.
-- Final integration is a squash merge only after the complete check set passes.
-- Update every affected Engineering Memory document in the same logical commit.
-- Never claim a check, build, publication, or live test that was not actually completed.
+==================================================
+BLOCKING RELEASE RULES
+==================================================
 
-For OPNsense console commands, target the default root `csh`; enter `sh` explicitly before POSIX-only syntax and run `exit` afterward.
+- Ambiguous phrases such as “continue”, “do it”, or “let’s do this” do not authorize a
+  release by themselves.
+- Release authority requires an explicit project-owner request naming the version or
+  unambiguously referring to an already approved version.
+- Never choose a new project version independently.
+- Published tags, releases, and package versions are immutable. Do not move tags,
+  replace published assets, roll back `VERSION`, or reuse an earlier version.
+  A later release always advances the version line.
+- Do not pass a mandatory live-verification gate unless the evidence is recorded or the
+  project owner explicitly states that the verification was completed successfully.
+- Before giving package installation commands, verify the release workflow, tag,
+  package asset, checksum, Pages deployment, and exact pkg-repository version.
 
-Current owner instructions override documentation. Synchronize affected documentation in the same logical change.
+==================================================
+OPNSENSE COMMAND RULE
+==================================================
+
+OPNsense console commands target the default root `csh` shell. POSIX-only syntax must
+be enclosed by an explicit standalone `sh` command and a matching standalone `exit`.
