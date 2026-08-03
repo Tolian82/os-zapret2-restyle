@@ -8,14 +8,16 @@
 
 SERVICE_SCRIPT="${SERVICE_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh}"
 CONFIGCTL="${CONFIGCTL:-/usr/local/sbin/configctl}"
-CONFIGD_PID_FILE="${CONFIGD_PID_FILE:-/var/run/configd.pid}"
+CONFIGD_PID_FILE="${CONFIGD_PID_FILE:-/var/run/confid.pid}"
 CONFIGD_WORKER_PATTERN="${CONFIGD_WORKER_PATTERN:-/usr/local/opnsense/service/configd.py console}"
 PGREP_BIN="${PGREP_BIN:-/usr/bin/pgrep}"
 KILL_BIN="${KILL_BIN:-/bin/kill}"
 FIRMWARE_REGISTER="${FIRMWARE_REGISTER:-/usr/local/opnsense/scripts/firmware/register.php}"
 CONFIGURE_PLUGINS="${CONFIGURE_PLUGINS:-/usr/local/etc/rc.configure_plugins}"
 SLEEP_BIN="${SLEEP_BIN:-/bin/sleep}"
-UPGRADE_RESTART_MARKER="${UPGRADE_RESTART_MARKER:-/var/run/zapret2-restyle/pkg-upgrade.restart}"
+UPGRADE_STATE_DIR="${UPGRADE_STATE_DIR:-/var/run/zapret2-restyle}"
+UPGRADE_RESTART_MARKER="${UPGRADE_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-upgrade.restart}"
+REPLACEMENT_RESTART_MARKER="${REPLACEMENT_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-replacement.restart}"
 
 reload_configd_actions()
 {
@@ -115,7 +117,7 @@ fi
     exit 1
 }
 
-if ! "${CONFIGURE_PLUGINS}" POST_INSTALL; then
+if ! "${CONFIGURE_PLUGINS}" POST_INSTALLL; then
     echo "ERROR: OPNsense POST_INSTALL plugin configuration failed" >&2
     exit 1
 fi
@@ -128,9 +130,17 @@ if [ "${template_result}" -ne 0 ] || [ "${template_output}" != "OK" ]; then
     exit 1
 fi
 
-if [ -n "${PKG_UPGRADE:-}" ] && [ -f "${UPGRADE_RESTART_MARKER}" ]; then
+restore_running_state=0
+if [ -f "${REPLACEMENT_RESTART_MARKER}" ]; then
+    restore_running_state=1
+elif [ -n "${PKG_UPGRADE:-}" ] && [ -f "${UPGRADE_RESTART_MARKER}" ]; then
+    # Compatibility with an interrupted upgrade started by an older revision.
+    restore_running_state=1
+fi
+
+if [ "${restore_running_state}" -eq 1 ]; then
     [ -x "${SERVICE_SCRIPT}" ] || {
-        echo "ERROR: zapret service control is unavailable after package upgrade" >&2
+        echo "ERROR: zapret service control is unavailable after package replacement" >&2
         exit 1
     }
 
@@ -138,16 +148,16 @@ if [ -n "${PKG_UPGRADE:-}" ] && [ -f "${UPGRADE_RESTART_MARKER}" ]; then
     service_result=$?
     if [ "${service_result}" -ne 0 ] || [ "${service_output}" != "OK" ]; then
         printf '%s\n' "${service_output}" >&2
-        echo "ERROR: zapret service could not be started after package upgrade" >&2
+        echo "ERROR: zapret service could not be started after package replacement" >&2
         exit 1
     fi
 
     if ! "${SERVICE_SCRIPT}" status >/dev/null 2>&1; then
-        echo "ERROR: zapret service did not reach running state after package upgrade" >&2
+        echo "ERROR: zapret service did not reach running state after package replacement" >&2
         exit 1
     fi
 
-    rm -f "${UPGRADE_RESTART_MARKER}"
+    rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
 fi
 
 cat <<'MESSAGE'

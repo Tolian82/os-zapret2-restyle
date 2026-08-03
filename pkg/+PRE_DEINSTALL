@@ -1,17 +1,14 @@
 #!/bin/sh
 
-# Stop the service before pkg removes the service scripts. During an upgrade,
-# remember only a complete running state so the new post-install hook can start
-# the service again with the replacement code. Runtime files, configuration,
-# logs, and shared dependencies are intentionally preserved.
+# Stop the service before pkg removes or replaces the service scripts. A marker
+# created by the incoming package's pre-install is preserved even when a forced
+# reinstall does not export PKG_UPGRADE. The legacy upgrade marker remains as a
+# compatibility fallback for ordinary upgrades from older package revisions.
 
-SERVICE_SCRIPT="/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
-UPGRADE_STATE_DIR="/var/run/zapret2-restyle"
-UPGRADE_RESTART_MARKER="${UPGRADE_STATE_DIR}/pkg-upgrade.restart"
-
-if [ -z "${PKG_UPGRADE:-}" ]; then
-    rm -f "${UPGRADE_RESTART_MARKER}"
-fi
+SERVICE_SCRIPT="${SERVICE_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh}"
+UPGRADE_STATE_DIR="${UPGRADE_STATE_DIR:-/var/run/zapret2-restyle}"
+UPGRADE_RESTART_MARKER="${UPGRADE_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-upgrade.restart}"
+REPLACEMENT_RESTART_MARKER="${REPLACEMENT_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-replacement.restart}"
 
 if [ -x "${SERVICE_SCRIPT}" ]; then
     "${SERVICE_SCRIPT}" status >/dev/null 2>&1
@@ -25,13 +22,11 @@ if [ -x "${SERVICE_SCRIPT}" ]; then
             fi
             ;;
         1)
-            # Preserve an existing marker when retrying an interrupted upgrade
-            # whose earlier pre-deinstall already stopped the service.
+            # Preserve either marker from a preceding incoming pre-install or
+            # an interrupted replacement retry.
             ;;
         2)
-            # Incomplete runtime state still requires synchronous cleanup, but
-            # it was not healthy and must not be auto-started after upgrade.
-            rm -f "${UPGRADE_RESTART_MARKER}"
+            rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
             ;;
         *)
             echo "ERROR: cannot determine zapret service state before package removal" >&2
@@ -41,7 +36,7 @@ if [ -x "${SERVICE_SCRIPT}" ]; then
 
     if [ "${service_status}" -ne 1 ]; then
         if ! "${SERVICE_SCRIPT}" stop >/dev/null 2>&1; then
-            rm -f "${UPGRADE_RESTART_MARKER}"
+            rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
             echo "ERROR: zapret service could not be stopped; package operation aborted" >&2
             exit 1
         fi
@@ -49,7 +44,7 @@ if [ -x "${SERVICE_SCRIPT}" ]; then
         "${SERVICE_SCRIPT}" status >/dev/null 2>&1
         stopped_status=$?
         if [ "${stopped_status}" -ne 1 ]; then
-            rm -f "${UPGRADE_RESTART_MARKER}"
+            rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
             echo "ERROR: zapret service still owns runtime state; package operation aborted" >&2
             exit 1
         fi

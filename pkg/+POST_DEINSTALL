@@ -1,6 +1,7 @@
 #!/bin/sh
 
 # No post-deinstall service actions. In particular, do not restart configd
-# from inside the pkg removal lifecycle.
+# from inside the pkg removal lifecycle. Transient replacement markers are
+# consumed after successful replacement or cleared by a later fresh pre-install.
 
 exit 0
