@@ -6,6 +6,7 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 CONTROLLER="${CONTROLLER:-${ROOT_DIR}/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php}"
 VIEW="${VIEW:-${ROOT_DIR}/src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt}"
 LAUNCHER="${LAUNCHER:-${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/setup_launcher.sh}"
+TRANSACTION="${TRANSACTION:-${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh}"
 ACTIONS="${ACTIONS:-${ROOT_DIR}/src/opnsense/service/conf/actions.d/actions_zapret.conf}"
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/zapret-gui-runtime-test.XXXXXX")
 trap 'rm -rf "${TMP_ROOT}"' EXIT INT TERM HUP
@@ -23,6 +24,7 @@ ZAPRET_DIR="${TMP_ROOT}/zapret2"
 DVTWS_BIN="${ZAPRET_DIR}/binaries/my/dvtws2"
 STATE_DIR="${TMP_ROOT}/state"
 RUN_DIR="${TMP_ROOT}/run"
+ACTIVE_RELEASE_FILE="${STATE_DIR}/runtime.release"
 
 mkdir -p "${ZAPRET_DIR}/.git" "${STATE_DIR}" "${RUN_DIR}"
 printf '%s\n' ready > "${STATE_DIR}/setup.status"
@@ -50,11 +52,12 @@ runtime_status()
     ZAPRET_DIR="${ZAPRET_DIR}" \
     DVTWS_BIN="${DVTWS_BIN}" \
     STATE_DIR="${STATE_DIR}" \
+    ACTIVE_RELEASE_FILE="${ACTIVE_RELEASE_FILE}" \
     RUN_DIR="${RUN_DIR}" \
     "${LAUNCHER}" status
 }
 
-rm -f "${DVTWS_BIN}" "${SERVICE_CALLS}"
+rm -f "${DVTWS_BIN}" "${SERVICE_CALLS}" "${ACTIVE_RELEASE_FILE}"
 STATUS_OUTPUT=$(runtime_status 0)
 printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'installed=0' || fail "missing runtime was not reported"
 printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'service=error' || fail "missing runtime did not report Error"
@@ -70,6 +73,13 @@ printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'service=started' || fail "running 
 printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'version=v1.0.4' || fail "exact runtime tag was not reported"
 STATUS_OUTPUT=$(runtime_status 1)
 printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'service=stopped' || fail "stopped dvtws2 was not reported"
+
+# During a transaction the committed active marker must remain authoritative even
+# after setup.sh has already moved the Git checkout to the selected candidate.
+printf '%s\n' v1.0.3 > "${ACTIVE_RELEASE_FILE}"
+STATUS_OUTPUT=$(runtime_status 0)
+printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'version=v1.0.3' ||
+    fail "active release marker did not override transient Git HEAD"
 
 # One configd placeholder receives one selected version; setup_launcher already supplies install.
 grep -Fq '[setup_install]' "${ACTIONS}" || fail "dedicated selected-release action is missing"
@@ -93,6 +103,20 @@ grep -Fq "'status' => 'unavailable'" "${CONTROLLER}" || fail "passive release fa
 grep -Fq 'catch (\Throwable' "${CONTROLLER}" || fail "release-list failure is not contained"
 php -l "${CONTROLLER}" >/dev/null
 
+# GUI installation must be transactional and must not expose a candidate Git HEAD
+# as the installed release before setup succeeds.
+grep -Fq 'setup_transaction.sh' "${LAUNCHER}" || fail "launcher does not use transactional setup"
+grep -Fq 'ACTIVE_RELEASE_FILE=' "${LAUNCHER}" || fail "launcher has no active release marker"
+grep -Fq 'umask 022' "${LAUNCHER}" || fail "launcher does not impose runtime-safe file modes"
+grep -Fq 'ROLLBACK_DIR=' "${TRANSACTION}" || fail "transaction wrapper has no rollback store"
+grep -Fq 'Previous bol-van/zapret2 runtime and service state restored.' "${TRANSACTION}" ||
+    fail "transaction wrapper has no successful rollback contract"
+grep -Fq 'chmod 0644' "${TRANSACTION}" || fail "transaction wrapper does not normalize readable runtime data"
+grep -Fq 'configctl_exact_ok zapret start' "${TRANSACTION}" ||
+    fail "transaction wrapper does not restore a previously running service"
+sh -n "${LAUNCHER}"
+sh -n "${TRANSACTION}"
+
 # Existing GUI state and geometry contract stays intact.
 grep -Fq "notInstalled: 'not installed'" "${VIEW}" || fail "not installed label is missing"
 grep -Fq 'serviceButton.hide()' "${VIEW}" || fail "service control is not hidden without runtime"
@@ -102,4 +126,4 @@ grep -Fq 'max-content max-content 14ch 12ch 4ch' "${VIEW}" || fail "fixed runtim
 grep -Fq '[setup_releases]' "${ACTIONS}" || fail "release-list action is missing"
 grep -Fq '[setup_status]' "${ACTIONS}" || fail "runtime-status action is missing"
 
-echo "PASS: GUI selected-release action and fallback contract"
+echo "PASS: GUI selected-release transaction and fallback contract"
