@@ -30,10 +30,15 @@ firewall_configure_reinject()
 
 firewall_prepare()
 {
+    [ "${_firewall_prepared:-0}" = "1" ] && return 0
+
     kldstat -q -m ipdivert || kldload ipdivert || return 1
     kldstat -q -m ipfw || kldload ipfw || return 1
     firewall_ensure_default_accept || return 1
-    firewall_configure_reinject
+    firewall_configure_reinject || return 1
+
+    _firewall_prepared=1
+    return 0
 }
 
 firewall_install_port_rules()

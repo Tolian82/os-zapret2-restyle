@@ -52,10 +52,19 @@ refresh_generated_configuration()
     fi
 }
 
+prepare_firewall_prerequisites()
+{
+    if ! firewall_prepare; then
+        echo "ERROR: firewall prerequisites could not be prepared before dvtws2 launch" >&2
+        return 1
+    fi
+}
+
 start_service()
 {
     ensure_runtime_components || return 1
     refresh_generated_configuration || return 1
+    prepare_firewall_prerequisites || return 1
     orchestrator_native_start \
         "${CONFIG}" "${ZAPRET_DIR}" "${ACTIVE_DIR}" "${BACKUP_ROOT}" \
         "${DVTWS_BIN}" "${CHILD_PIDFILE}" \
@@ -77,6 +86,7 @@ reconfigure_service()
 {
     ensure_runtime_components || return 1
     refresh_generated_configuration || return 1
+    prepare_firewall_prerequisites || return 1
     orchestrator_native_reconfigure \
         "${CONFIG}" "${ZAPRET_DIR}" "${ACTIVE_DIR}" "${BACKUP_ROOT}" \
         "${DVTWS_BIN}" "${CHILD_PIDFILE}" \

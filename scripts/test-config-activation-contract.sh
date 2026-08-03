@@ -4,6 +4,7 @@ set -eu
 
 REPO_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 BACKEND="${REPO_ROOT}/src/opnsense/scripts/OPNsense/Zapret/backend"
+FIREWALL="${BACKEND}/firewall.sh"
 SETTINGS_CONTROLLER="${REPO_ROOT}/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php"
 SERVICE_CONTROLLER="${REPO_ROOT}/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php"
 SERVICE_SCRIPT="${REPO_ROOT}/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
@@ -88,5 +89,43 @@ grep -Fq "if (\$response !== 'OK')" "${SERVICE_CONTROLLER}" ||
 
 refresh_count=$(grep -c '^[[:space:]]*refresh_generated_configuration || return 1$' "${SERVICE_SCRIPT}")
 assert_equal 2 "${refresh_count}" "start and reconfigure template refresh count"
+
+prepare_count=$(grep -c '^[[:space:]]*prepare_firewall_prerequisites || return 1$' "${SERVICE_SCRIPT}")
+assert_equal 2 "${prepare_count}" "start and reconfigure firewall prerequisite count"
+
+grep -Fq '[ "${_firewall_prepared:-0}" = "1" ] && return 0' "${FIREWALL}" ||
+    fail "firewall preparation is not idempotent within one lifecycle operation"
+grep -Fq '_firewall_prepared=1' "${FIREWALL}" ||
+    fail "successful firewall preparation is not remembered"
+
+start_prepare_line=$(awk '
+    /^start_service\(\)/ { inside=1 }
+    inside && /prepare_firewall_prerequisites \|\| return 1/ { print NR; exit }
+    inside && /^}/ { inside=0 }
+' "${SERVICE_SCRIPT}")
+start_orchestrator_line=$(awk '
+    /^start_service\(\)/ { inside=1 }
+    inside && /orchestrator_native_start/ { print NR; exit }
+    inside && /^}/ { inside=0 }
+' "${SERVICE_SCRIPT}")
+reconfigure_prepare_line=$(awk '
+    /^reconfigure_service\(\)/ { inside=1 }
+    inside && /prepare_firewall_prerequisites \|\| return 1/ { print NR; exit }
+    inside && /^}/ { inside=0 }
+' "${SERVICE_SCRIPT}")
+reconfigure_orchestrator_line=$(awk '
+    /^reconfigure_service\(\)/ { inside=1 }
+    inside && /orchestrator_native_reconfigure/ { print NR; exit }
+    inside && /^}/ { inside=0 }
+' "${SERVICE_SCRIPT}")
+
+[ -n "${start_prepare_line}" ] && [ -n "${start_orchestrator_line}" ] ||
+    fail "start lifecycle ordering could not be determined"
+[ -n "${reconfigure_prepare_line}" ] && [ -n "${reconfigure_orchestrator_line}" ] ||
+    fail "reconfigure lifecycle ordering could not be determined"
+[ "${start_prepare_line}" -lt "${start_orchestrator_line}" ] ||
+    fail "start launches dvtws2 before firewall prerequisites"
+[ "${reconfigure_prepare_line}" -lt "${reconfigure_orchestrator_line}" ] ||
+    fail "reconfigure launches dvtws2 before firewall prerequisites"
 
 echo "Config activation contract tests passed."

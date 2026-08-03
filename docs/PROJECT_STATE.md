@@ -41,125 +41,108 @@ Current version:
 0.2.8
 
 Current package revision:
-10
+11
 
 Current package candidate:
-os-zapret2-restyle-0.2.8_10
+os-zapret2-restyle-0.2.8_11
 
 Current milestone:
 Milestone 8 — GUI maintenance and managed upstream components
 
 Latest live-verified package behavior:
-Package 0.2.8_9 upgrades an installed and running runtime without killing configd
-or the Web GUI. The pre-existing configd watcher is preserved, only its worker is
-reloaded, configd actions remain available after the pkg transaction, lighttpd
-keeps listening on ports 80/443, and the previously running Zapret service returns
-to Started with upstream version v1.0.4.
+
+- package 0.2.8_9 preserves the pre-existing configd watcher across forced package
+  installation, reloads only its worker, keeps configd actions available after the
+  pkg transaction, and does not restart the Web GUI;
+- package 0.2.8_10 creates and reuses the stable-release cache without repeating the
+  GitHub Releases API request inside the 60-minute freshness window;
+- after a reboot with ipdivert absent, dvtws2 fails before the existing later
+  firewall preparation step with `Address family not supported by protocol family`;
+- manually loading ipdivert makes the same unchanged service start succeed, after
+  which the current code loads ipfw, installs rule 19000, starts dvtws2, and starts
+  its supervisor.
 
 Current implementation candidate:
-Package 0.2.8_10 corrects selected-release launch and adds a resilient stable-release
-cache. The GUI uses one dedicated one-parameter configd action, waits for a real OK
-from the short-lived launcher, reuses the existing busy-state polling, serves repeated
-release-list reads from a local cache, and contains passive discovery failure without
-a red exception dialog.
+Package 0.2.8_11 prepares the complete firewall prerequisites before either start or
+reconfigure can enter the orchestrator runtime-launch path. The preparation is
+idempotent within one lifecycle process, so the existing orchestrator firewall stage
+remains safe without repeating PF and sysctl changes.
 
 Current priority:
-Build and live-verify 0.2.8_10 by selecting v1.0.3 in the GUI and confirming that the
-runtime reaches Started v1.0.3 while the release selector remains usable during a
-simulated or naturally occurring temporary GitHub API failure.
+Build and live-verify 0.2.8_11 from a cold boot where ipdivert and ipfw are initially
+absent. Confirm automatic boot start and an explicit Start both reach Started without
+manual kldload.
 
 Known blockers:
-No source blocker is known. The package candidate requires focused live OPNsense
-verification.
+
+- package 0.2.8_11 requires focused live cold-start and reboot verification;
+- the separate forced `pkg add -f` running-state preservation defect remains open and
+  is intentionally not part of this firewall-order patch;
+- selected-release downgrade to v1.0.3 remains pending after the runtime start path is
+  stable again.
 
 ==================================================
-LATEST COMPLETED WORK — 2026-08-02
+LATEST COMPLETED WORK — 2026-08-03
 ==================================================
 
-Configd package lifecycle:
+Cold-start failure diagnosis:
 
-- package 0.2.8_9 no longer starts a replacement configd watcher inside `pkg add`;
-- `+POST_INSTALL` preserves the existing watcher and sends SIGTERM only to its current
-  `configd.py console` worker;
-- the same watcher creates a replacement worker;
-- continuation requires a different worker PID and a successful
-  `configctl system status` request;
-- package installation does not restart the global Web GUI;
-- live evidence preserved watcher PID 46333, replaced the worker with PID 61632,
-  kept configd responsive after the package process ended, retained lighttpd PID
-  65346, and restored the running Zapret service.
+1. OPNsense rebooted with no dvtws2, supervisor, ipfw rules, or ipdivert module.
+2. `configctl zapret start` failed at launcher stability stage.
+3. dvtws2 logged:
+   `socket (DIVERT4): Address family not supported by protocol family`.
+4. `ipfw list` returned:
+   `Protocol not available`.
+5. `kldstat -q -m ipdivert` returned absent.
+6. Manual `kldload ipdivert` succeeded.
+7. The same `configctl zapret start` then returned OK.
+8. The unchanged later firewall stage loaded ipfw and installed:
+   `19000 divert 989 tcp from any to any 80,443,5222 ...`.
+9. Runtime status became Started v1.0.4 and dvtws2 plus supervisor processes were
+   present.
 
-GUI selected-release diagnosis:
+Confirmed defect:
+The lifecycle attempted to start dvtws2 before the firewall module responsible for
+DIVERT4 sockets was prepared. The later `firewall_prepare` call could never be reached
+when dvtws2 exited during its startup stability window.
 
-- selecting v1.0.3 previously produced configd `Parameter mismatch`;
-- ServiceController passed two arguments, `install` and `v1.0.3`, to an action with
-  one `%s` placeholder;
-- detached configd execution returned a UUID before the action failure, so the GUI
-  incorrectly treated the operation as started;
-- setup.sh, setup_launcher.sh, setup log, setup status, PID state, runtime tree, and
-  installed v1.0.4 were unchanged;
-- later `setup.sh show` failures were temporary GitHub API failures; a subsequent CLI
-  request returned v1.0.4, v1.0.3, v1.0.2, and v1.0.1 normally.
+Package 0.2.8_11 implementation:
 
-Package 0.2.8_10 implementation:
-
-- configd action `setup_install` binds launcher mode `install` and exposes exactly
-  one `%s` placeholder for the selected version;
-- ServiceController passes only the version and requires synchronous configd `OK`;
-- setup_launcher.sh remains the short-lived launcher and detaches the long setup
-  worker through FreeBSD daemon(8);
-- passive release discovery returns `status=unavailable` instead of raising a
-  UserException dialog when neither GitHub nor a valid cache is available;
-- stable releases are cached in
-  `/var/db/zapret2-restyle/releases.cache` for 60 minutes;
-- refreshes are serialized by
-  `/var/run/zapret2-restyle/releases.lock`;
-- cache replacement is atomic and occurs only after successful download, JSON parsing,
-  draft/prerelease filtering, tag validation, deduplication, and non-empty output;
-- a failed refresh preserves and returns a previously validated stale cache;
-- exact selected-version installation validates against the cache and does not issue
-  another GitHub Releases API request;
-- repeated GUI release-list reads, including the read after Apply, use the cache.
-
-Focused validation:
-
-- POSIX shell syntax passes for setup.sh and both focused tests;
-- PHP syntax passes for ServiceController.php;
-- release-selection tests cover first fetch, fresh-cache reuse, exact-install reuse,
-  latest selection, stale-cache fallback, failed-refresh preservation, no-cache
-  failure, filtering, deduplication, malformed/unpublished rejection, strict fetch
-  arguments, lock use, atomic replacement, and both Git checkout paths;
-- GUI tests enforce one configd placeholder, one controller parameter, synchronous
-  exact OK, removal of the old UUID/two-argument contract, non-modal unavailable
-  response, and retained runtime/layout behavior.
+- `start_service` prepares firewall prerequisites after configuration generation and
+  before `orchestrator_native_start`;
+- `reconfigure_service` applies the same ordering before
+  `orchestrator_native_reconfigure`;
+- `firewall_prepare` is idempotent within one lifecycle process;
+- the existing later orchestrator call remains as a defensive boundary but becomes a
+  no-op after successful pre-launch preparation;
+- no kernel module is unloaded during rollback or stop;
+- plugin-owned process and rule cleanup behavior remains unchanged;
+- focused regression coverage requires both service launch paths to prepare the
+  firewall first.
 
 ==================================================
 OPEN VERIFICATION WORK
 ==================================================
 
-Package 0.2.8_10 focused live test:
+Package 0.2.8_11 focused live test:
 
-1. install 0.2.8_10 over the running v1.0.4 runtime;
-2. confirm configd watcher identity remains unchanged and ordinary GUI/configd
-   services remain available;
-3. select v1.0.3 and press Apply;
-4. confirm controls enter Applying and Start/Stop remains disabled during setup;
-5. confirm setup.log records selected v1.0.3, checkout/build, and service refresh;
-6. confirm final GUI state is Started v1.0.3;
-7. confirm `configctl zapret setup_status` reports installed=1, service=started,
-   version=v1.0.3, setup=ready, busy=0;
-8. confirm repeated release-list reads do not refresh GitHub within 60 minutes;
-9. simulate or observe a temporary API failure and confirm a validated stale cache
-   keeps the selector populated without a red release-error dialog;
-10. remove the cache and repeat API failure to confirm the selector shows Недоступно
-    without a red dialog or runtime alteration.
+1. install 0.2.8_11;
+2. reboot OPNsense;
+3. confirm ipdivert and ipfw are absent before the plugin boot hook, where observable;
+4. confirm Zapret2 starts automatically without manual kldload;
+5. confirm dvtws2 passes its startup stability window;
+6. confirm ipdivert and ipfw are loaded;
+7. confirm rule 19000 is installed;
+8. confirm supervisor and dvtws2 processes are present;
+9. stop and start from GUI and confirm Started v1.0.4;
+10. continue the v1.0.3 selected-release GUI test only after this path passes.
 
 Retained regression backlog:
 
-- selected-release installation while the service is initially stopped;
-- repeat installation of the currently installed upstream release;
+- forced `pkg add -f` preservation of a previously running service;
+- selected-release installation while initially running and initially stopped;
+- repeat installation of the current upstream release;
 - first runtime installation when dvtws2 is absent;
-- full reboot and automatic service start;
 - controlled dvtws2 crash and supervisor cleanup/recovery;
 - remaining CFG-001, lifecycle, GUI/API, and diagnostics evidence recorded elsewhere.
 
@@ -167,11 +150,12 @@ Retained regression backlog:
 IMMEDIATE NEXT ACTIONS
 ==================================================
 
-1. Complete PR validation and FreeBSD package build for 0.2.8_10.
+1. Complete PR validation and FreeBSD package build for 0.2.8_11.
 2. Install the package candidate on OPNsense.
-3. Execute the focused v1.0.4 to v1.0.3 GUI downgrade test.
-4. Verify fresh-cache reuse and stale-cache fallback on the live appliance.
-5. Record exact live evidence before classifying this GUI path as verified.
+3. Reboot and execute the cold-start acceptance test without manual module loading.
+4. Record exact module, rule, process, service, and stage evidence.
+5. Address forced package running-state preservation as a separate logical change.
+6. Resume selected-release downgrade verification after the service path is stable.
 
 ==================================================
 WORKING RULES FOR RESUMPTION
