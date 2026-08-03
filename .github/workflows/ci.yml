@@ -86,6 +86,9 @@ jobs:
       - name: Test Node 24 release actions
         run: sh scripts/test-release-node24-actions.sh
 
+      - name: Test GitHub branch hygiene contract
+        run: sh scripts/test-github-branch-hygiene.sh
+
       - name: Check required project files
         run: |
           set -eu
@@ -102,6 +105,8 @@ jobs:
             docs/REQUIREMENTS.md \
             docs/ARCHITECTURE.md \
             docs/DEVLOG.md \
+            docs/GITHUB_PUBLICATION.md \
+            docs/patches/v0.3.2_2.md \
             src/etc/rc.syshook.d/start/20-zapret \
             src/etc/rc.syshook.d/stop/20-zapret \
             src/etc/inc/plugins.inc.d/zapret.inc \
@@ -117,6 +122,8 @@ jobs:
             scripts/test-gui-runtime-management.sh \
             scripts/test-release-trigger.sh \
             scripts/test-release-node24-actions.sh \
+            scripts/test-github-branch-hygiene.sh \
+            .github/workflows/cleanup-merged-branch.yml \
             .github/workflows/release.yml \
             .github/workflows/release-trigger.yml
           do
@@ -138,6 +145,11 @@ jobs:
 
           test -x scripts/test-package-lifecycle-restart.sh || {
             echo "scripts/test-package-lifecycle-restart.sh is not executable"
+            exit 1
+          }
+
+          test -x scripts/test-github-branch-hygiene.sh || {
+            echo "scripts/test-github-branch-hygiene.sh is not executable"
             exit 1
           }
 

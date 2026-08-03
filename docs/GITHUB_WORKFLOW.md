@@ -5,23 +5,23 @@ DOCUMENT ROLE
 ==================================================
 
 Question answered:
-How is the official repository maintained and how are releases controlled?
+How is the official repository maintained and how are patches and releases controlled?
 
 Purpose:
-Define repository identity, source baseline, authorization boundaries, release control,
-and publication verification. Exact pull-request event discipline is delegated to
-`GITHUB_PUBLICATION.md`.
+Define repository identity, source baseline, authorization boundaries, patch/release
+separation, release control, and distribution verification. Exact branch and PR event
+discipline is delegated to `GITHUB_PUBLICATION.md`.
 
 Updated when:
-Repository policy, release authorization, automation, or distribution verification
-changes.
+Repository policy, patch semantics, release authorization, automation, or distribution
+verification changes.
 
 Read after:
 `REQUIREMENTS.md`.
 
 Do not store here:
 Runtime architecture, product requirements, current task status, or chronological
-release history.
+history.
 
 ==================================================
 OFFICIAL REPOSITORY
@@ -36,59 +36,64 @@ Primary branch:
 Default source baseline:
 The exact current `main` commit recorded before work starts.
 
-No archive is required for state already committed and pushed. Uncommitted or unpushed
-owner state must be published or transferred explicitly before it can be used.
-
 ==================================================
 AUTHORIZATION BOUNDARIES
 ==================================================
 
-Ordinary development requests authorize:
+Ordinary development or patch requests authorize:
 
-- one task branch;
 - one atomic logical commit;
+- exactly one remote task branch, created only after the commit is final;
 - one ready pull request;
 - one complete check set;
 - one squash merge;
-- verification of `main`.
+- verification of `main`;
+- automatic deletion and absence verification of the task branch.
 
-Requests limited to analysis, review, patch, branch, or pull request stop at that named
-boundary.
+A request for patch `vX.Y.Z_N` keeps `VERSION=X.Y.Z` and sets
+`PLUGIN_REVISION=N`. It does not authorize a tag, GitHub Release, release assets, or
+pkg-repository publication.
 
-A release requires an explicit request for the exact version. Ambiguous continuation
-language is not release authority. The assistant must never select a project version
-independently.
+A project release requires an explicit request for an exact new version. The assistant
+must never infer or choose that version independently.
 
-One explicit request for version X authorizes its complete verified release path:
-release preparation, pull request, merge, immutable tag, GitHub Release, assets,
-GitHub Pages/pkg repository, and final checks.
+==================================================
+CURRENT SOURCE AND PACKAGE STATE
+==================================================
+
+Published project release:
+`v0.3.2`
+
+Published package:
+`os-zapret2-restyle-0.3.2_1.pkg`
+
+Current patch candidate:
+`os-zapret2-restyle-0.3.2_2.pkg`
+
+Patch `v0.3.2_2` changes repository governance and automatic branch cleanup. It is not
+a new project release.
 
 ==================================================
 FORWARD-ONLY VERSION POLICY
 ==================================================
 
-Published versions are immutable.
+Published tags, releases, assets, and versions are immutable. Never move a tag, replace
+assets, roll `VERSION` backward, reuse a version, or rewrite published history.
 
-Never:
-
-- move a published tag;
-- replace assets under a published release;
-- roll `VERSION` back to an earlier release;
-- reuse a version for different source;
-- rewrite published repository history.
-
-A later approved release uses a higher version. The current owner-approved next release
-is `v0.3.2` with package `os-zapret2-restyle-0.3.2_1.pkg`.
+A later project release uses a higher explicitly approved version. A package patch may
+advance only `PLUGIN_REVISION` while `VERSION` stays unchanged.
 
 ==================================================
 CURRENT DELIVERY PROTOCOL
 ==================================================
 
-`docs/GITHUB_PUBLICATION.md` is the specialist authority. Its active protocol is:
+`docs/GITHUB_PUBLICATION.md` is the specialist authority:
 
 one logical change
         ↓
-one atomic commit
+all blobs, one tree, one atomic commit
+        ↓
+exactly one remote branch created at the final commit
         ↓
 one ready pull request
         ↓
@@ -96,31 +101,27 @@ one complete check set
         ↓
 one squash merge
         ↓
-verify `main`
+automatic branch deletion and verification
 
-Do not use Draft → Ready by default. Do not publish multi-file work through sequential
-contents-API commits. Do not modify the final branch while checks run. A failed cycle is
-closed and replaced with one clean cycle.
+The repository workflow `.github/workflows/cleanup-merged-branch.yml` deletes the
+same-repository head branch associated with a new `main` commit. It is idempotent when
+the branch has already been deleted by repository settings.
 
 ==================================================
-PULL-REQUEST PROTOCOL FIELDS
+PULL-REQUEST PROTOCOL
 ==================================================
 
-Before opening a pull request, inspect all workflows triggered by the planned event.
+Before opening a PR, inspect all workflows triggered by the event.
 
-The current PR-title contract is:
+Patch `v0.3.2_2` title:
 
-`v<VERSION>_<PLUGIN_REVISION>: <logical change>`
+`v0.3.2_2: Prevent orphan publication branches`
 
-For `v0.3.2`:
+Its squash subject is an ordinary logical subject, not `release: prepare v0.3.2`.
 
-`v0.3.2_1: Improve GitHub publication discipline`
+The release squash subject is reserved for an explicitly authorized new project version:
 
-A release squash subject is a separate field:
-
-`release: prepare v0.3.2`
-
-The PR must not be opened using the squash subject as its title.
+`release: prepare vX.Y.Z`
 
 ==================================================
 ATOMIC API PUBLICATION
@@ -128,86 +129,36 @@ ATOMIC API PUBLICATION
 
 For GitHub integration/API delivery:
 
-1. Prepare all final content and modes.
+1. Prepare all final content and modes without creating a branch.
 2. Create one blob per changed file.
-3. Create one tree based on the recorded `main` tree.
-4. Create one commit with the recorded `main` as its sole parent.
-5. Recheck `main` for concurrency.
-6. Publish the task branch directly at that commit.
-7. Open one ready pull request.
+3. Create one tree based on current `main`.
+4. Create one commit with current `main` as sole parent.
+5. Validate the commit and recheck `main`.
+6. Verify exact branch-name absence and cleanup availability.
+7. Create exactly one branch at that commit.
+8. Open one ready PR.
 
-A missing optional client such as `gh` is not a blocker while the GitHub integration or
-an authenticated Git remote can complete the work.
-
-==================================================
-RELEASE GATES
-==================================================
-
-The release path may begin only when:
-
-- exact version authority is explicit;
-- required source and CI verification is complete;
-- mandatory live evidence is recorded or explicitly confirmed by the owner;
-- owner acceptance is recorded when required;
-- `PROJECT_STATE.md` records `RELEASE_AUTHORIZED`.
-
-An owner statement that a named package was tested and everything works satisfies the
-owner-supplied live-verification gate for that package. Record the statement as owner
-evidence without inventing unavailable command output.
+Never create preparatory sibling branches or stream a multi-file change through
+sequential contents-API commits.
 
 ==================================================
-AUTOMATED RELEASE RUNBOOK
+RELEASE CONTROL
 ==================================================
 
-1. Change `VERSION` to the explicitly approved new version.
-2. Set `PLUGIN_REVISION=1` for the new version.
-3. Synchronize release-facing and engineering documentation.
-4. Publish one atomic release-preparation pull request with the package-candidate title.
-5. Pass one complete pull-request check set.
-6. Squash merge with exact subject `release: prepare vX.Y.Z`.
-7. `release-trigger.yml` validates the merge and creates or verifies the immutable tag.
-8. `release-trigger.yml` explicitly dispatches `release.yml` at that tag.
-9. `release.yml` validates, builds in FreeBSD 15, verifies the package, publishes the
-   GitHub prerelease and assets, and deploys the Pages/pkg repository.
-10. Verify distribution completely before offering installation commands.
+Only an explicitly authorized new `VERSION` follows the release pipeline:
 
-The release trigger never moves an existing tag. A direct tag push remains an emergency
-fallback only when repository automation is genuinely unavailable.
+1. set the approved `VERSION`;
+2. set `PLUGIN_REVISION=1`;
+3. pass one atomic PR cycle;
+4. squash merge as `release: prepare vX.Y.Z`;
+5. let repository automation create the immutable tag and run release publication;
+6. verify every public output before installation instructions.
 
-==================================================
-POST-RELEASE CHECKLIST
-==================================================
-
-Verify all of the following:
-
-- release merge is current `main`;
-- tag resolves to that merge;
-- Release trigger succeeded;
-- Release workflow succeeded;
-- exact package asset exists;
-- `SHA256SUMS` exists;
-- Pages deployment succeeded;
-- repository configuration is published;
-- `meta.conf`, `data.pkg`, and `packagesite.pkg` exist;
-- the exact package candidate is visible in the public pkg repository.
-
-Only then provide OPNsense package installation or upgrade commands.
-
-==================================================
-LOCAL-ONLY STATE AND CONCURRENCY
-==================================================
-
-GitHub cannot expose local uncommitted owner state. Stop before overwriting or
-reconstructing it.
-
-If `main` changes after the base SHA is recorded, do not publish the prepared branch.
-Reconcile the change against the new `main`, rebuild the atomic commit, and rerun checks.
-Force-push and direct history rewriting are prohibited.
+Patch `v0.3.2_2` stops after ordinary merge, branch cleanup, and `main` verification.
 
 ==================================================
 HISTORY RESPONSIBILITY
 ==================================================
 
-Release results belong in `DEVLOG.md` or a focused file under `docs/devlog/`, audit
-evidence belongs under `AUDIT.md` or `docs/audit/`, and user-visible release content
-belongs in `CHANGELOG.md` and `docs/releases/`.
+Completed work belongs in `DEVLOG.md` or `docs/devlog/`. Decisions belong in
+`DECISIONS.md` or `docs/decisions/`. Patch notes may be stored under `docs/patches/`.

@@ -35,114 +35,72 @@ Primary branch:
 `main`
 
 Current published release:
-`v0.3.1`
-
-Current published package:
-`os-zapret2-restyle-0.3.1_1.pkg`
-
-Published-release verification:
-Project-owner live verification completed successfully on 2026-08-03. The owner
-explicitly confirmed that release/package `0.3.1_1` was checked and everything in it
-works correctly.
-
-DIAG-002:
-Resolved and live verified by the project owner. Positive and negative Test Domain
-Connectivity results render correctly; the negative path no longer produces an empty
-result field.
-
-Current delivery stage:
-`RELEASE_AUTHORIZED`
-
-Explicitly approved next release:
 `v0.3.2`
 
-Expected package:
+Current published package:
 `os-zapret2-restyle-0.3.2_1.pkg`
 
-Current priority:
-Publish v0.3.2 as a forward-only governance and documentation release that makes GitHub
-work deterministic, atomic, and less noisy.
+Current source/package candidate:
+`os-zapret2-restyle-0.3.2_2.pkg`
 
-Known blockers:
-None before pull-request CI. Release publication remains subject to the normal complete
-check set and post-release distribution verification.
+Current delivery stage:
+`DEVELOPMENT`
 
-==================================================
-V0.3.2 SCOPE
-==================================================
-
-v0.3.2 changes engineering and publication control, not plugin runtime behavior.
-
-Approved results:
-
-- add `GITHUB_PUBLICATION.md` to the mandatory reading order;
-- make it the final specialist authority before GitHub mutation;
-- replace Draft → Ready with one ready pull request and one check set;
-- compute the exact package-candidate PR title before opening the PR;
-- distinguish PR title from release squash subject;
-- require one blobs/tree/commit publication for multi-file API work;
-- close and replace failed delivery cycles instead of incrementally repairing them;
-- require explicit named release authority;
-- preserve forward-only immutable release history with no version rollback;
-- require complete release and pkg-repository verification before installation commands;
-- record successful owner verification of v0.3.1 / 0.3.1_1.
+Patch boundary:
+`v0.3.2_2` is an ordinary package patch. `VERSION` remains `0.3.2`; no new tag,
+GitHub Release, assets, or pkg-repository publication is authorized.
 
 ==================================================
-CURRENT RELEASE PROTOCOL
+VERIFIED PRODUCT STATE
 ==================================================
 
-PR title for this release:
+The project owner personally verified release/package `v0.3.1` /
+`os-zapret2-restyle-0.3.1_1.pkg` and confirmed that everything in it works correctly.
 
-`v0.3.2_1: Improve GitHub publication discipline`
+DIAG-002 is resolved and owner live verified. Positive and negative Test Domain
+Connectivity results render correctly.
 
-Required squash subject:
-
-`release: prepare v0.3.2`
-
-Release automation:
-
-1. merge the verified release-preparation PR;
-2. `release-trigger.yml` creates or verifies tag `v0.3.2` at that exact merge;
-3. `release.yml` builds and verifies package `0.3.2_1` and the pkg repository;
-4. GitHub Release and GitHub Pages are published;
-5. all public assets and repository metadata are verified before installation guidance.
+Release `v0.3.2` preserves that runtime baseline and adds GitHub publication governance.
 
 ==================================================
-ACCEPTED PRODUCT BASELINE
+REPOSITORY CLEANUP STATE
 ==================================================
 
-The accepted plugin baseline includes:
+Verified on 2026-08-03:
 
-- unified Traffic Strategy;
-- HOSTLIST/IPSET target normalization and profile expansion;
-- transactional Apply and runtime rollback;
-- launcher, firewall, supervisor, and lifecycle serialization;
-- project-owned pkg repository;
-- Zapret2 Service GUI;
-- upstream stable-release discovery and selection;
-- install, reinstall, upgrade, and downgrade through the existing setup backend;
-- service-state preservation and transactional upstream runtime rollback;
-- complete positive and negative Test Domain Connectivity reports.
+- the accidental branches `release/v0.3.2`, `release/v0.3.2-clean`,
+  `release/v0.3.2-final`, `release/v0.3.2-atomic`, and
+  `release/v0.3.2-publish` are absent;
+- there are no open pull requests;
+- `main` remains the v0.3.2 release commit;
+- historical pre-existing branches remain outside this cleanup scope and must not be
+  deleted without separate owner authority.
 
 ==================================================
-NEXT PRODUCT WORK AFTER v0.3.2
+PATCH v0.3.2_2
+==================================================
+
+Objective:
+Prevent one delivery cycle from creating multiple remote branches and remove the need
+for manual deletion of a normally merged task branch.
+
+Included:
+
+- branch creation only after final blobs/tree/commit preparation;
+- exactly one remote task branch per logical cycle;
+- prohibited preparatory suffix branches;
+- required cleanup-path preflight;
+- explicit patch-versus-release contract;
+- automatic deletion of the merged same-repository head branch on `main` push;
+- focused CI contract test;
+- package revision advanced from 1 to 2 with `VERSION` unchanged.
+
+==================================================
+NEXT PRODUCT WORK
 ==================================================
 
 1. Implement passive notification when a newer stable bol-van/zapret2 release exists.
 2. Design additional BLOB repository management only after the owner supplies and
    approves its repository and technical contract.
-3. Continue retained diagnostics timeout-chain and unrelated audit backlog only as
-   separate focused changes.
-
-==================================================
-RESUMPTION RULE
-==================================================
-
-Before any future project action:
-
-1. obey `AGENTS.md`;
-2. complete the exact reading order in `docs/INDEX.md`;
-3. read `docs/GITHUB_PUBLICATION.md` immediately before GitHub mutation;
-4. read the current `main` and record its exact SHA;
-5. obey the delivery stage recorded here;
-6. do not infer release authority or version from chat phrasing.
+3. Continue retained diagnostics timeout-chain and unrelated audit backlog as separate
+   focused changes.
