@@ -37,17 +37,17 @@ main
 Version source:
 VERSION
 
-Release being published:
+Latest immutable release tag:
 v0.3.0
 
 Current project version:
 0.3.0
 
 Current package revision:
-1
+2
 
-Current package:
-os-zapret2-restyle-0.3.0_1
+Current package candidate:
+os-zapret2-restyle-0.3.0_2
 
 Current milestone:
 Milestone 8 — GUI maintenance and managed upstream components
@@ -57,13 +57,13 @@ Task 1, GUI management of bol-van/zapret2 through the existing setup.sh backend,
 complete and accepted as working by the project owner.
 
 Current priority:
-Publish immutable tag v0.3.0, GitHub Release assets, and the matching
-FreeBSD:15:amd64 GitHub Pages pkg repository through the repository-owned release
-trigger.
+Live-verify the DIAG-002 correction so negative Test Domain Connectivity results show
+the complete DNS, HTTPS, and final classification report instead of an empty result.
 
-Known release blockers:
-None. The release-preparation merge, tag trigger, Release workflow, package asset, and
-Pages publication remain mandatory gates rather than known defects.
+Known blockers:
+No source or CI blocker is known. Focused OPNsense rendering verification of package
+candidate 0.3.0_2 remains required before DIAG-002 is classified as fully resolved.
+Release publication is not part of this ordinary development change.
 
 ==================================================
 ACCEPTED ZAPRET2 SERVICE CONSTRUCTION
@@ -179,47 +179,75 @@ The completed Service work fixed:
 - failed candidate activation leaving the firewall stopped on the candidate checkout.
 
 ==================================================
+DOMAIN DIAGNOSTICS CANDIDATE — DIAG-002
+==================================================
+
+Observed defect:
+
+- the shell diagnostic generated complete timeout, reset, TLS, DNS, refusal, and
+  generic failure reports;
+- it then exited with curl's non-zero connectivity status;
+- configd `script_output` treated that as execution failure and discarded stdout;
+- the backend returned an empty string;
+- the API incorrectly returned `status=ok`, so the browser cleared the result field.
+
+Implemented in package candidate 0.3.0_2:
+
+- a completed curl probe is treated as diagnostic data and exits zero after printing
+  the full report;
+- invalid invocation and invalid domain input remain non-zero execution errors;
+- the API rejects an empty configd response instead of reporting blank success;
+- focused mocked tests cover timeout, connection reset, generic curl failure, invalid
+  input, and the controller guard;
+- detailed evidence and acceptance criteria are recorded in
+  `docs/audit/AUDIT-2026-08-03-DOMAIN-DIAGNOSTICS.md`.
+
+Static verification completed:
+
+- shell syntax checks passed;
+- the focused diagnostics contract test passed;
+- PHP syntax validation passed;
+- CI includes the new focused test and FreeBSD package build.
+
+Live verification required:
+
+- positive result remains unchanged;
+- a timeout or connection reset renders the complete multiline negative report;
+- the result field no longer becomes empty.
+
+==================================================
 RELEASE v0.3.0
 ==================================================
 
 Release decision:
-The project owner accepted the construction as working and authorized publication.
+The project owner accepted the Zapret2 Service construction and authorized v0.3.0.
 
-Expected immutable tag:
+Immutable tag:
 v0.3.0
 
-Expected package asset:
+Release package baseline:
 os-zapret2-restyle-0.3.0_1.pkg
 
-Expected repository target:
+Repository target:
 FreeBSD:15:amd64
 
-Release mechanism:
-
-1. merge the verified release-preparation PR with exact squash subject
-   `release: prepare v0.3.0`;
-2. repository-owned Release trigger creates annotated tag v0.3.0;
-3. Release workflow validates tag and VERSION;
-4. FreeBSD VM builds and verifies package and pkg repository;
-5. GitHub Release publishes package and SHA256SUMS;
-6. GitHub Pages publishes the matching pkg repository.
-
-Release classification:
-The existing workflow publishes GitHub Releases as prereleases. This is the current
-wider project distribution policy and does not reopen the accepted Service scope.
+The DIAG-002 correction is a later package-revision candidate and does not modify the
+immutable v0.3.0 tag or previously published package.
 
 ==================================================
 NEXT PRODUCT WORK
 ==================================================
 
-1. Verify successful v0.3.0 tag, package asset, SHA256SUMS, and Pages deployment.
-2. Record publication evidence after the release workflow completes.
+1. Install package candidate 0.3.0_2 and verify positive and negative Test Domain
+   Connectivity rendering.
+2. Record live DIAG-002 evidence and close the Finding only after the GUI displays the
+   complete negative report.
 3. Implement explicit notification when a newer stable bol-van/zapret2 release is
    available as a separate logical change.
 4. After the project owner supplies and approves its repository and contract, design
    GUI management of the additional BLOB repository.
-5. Continue unrelated retained diagnostics, timeout-chain, controlled-failure, and
-   audit backlog only as separate focused work.
+5. Continue unrelated retained timeout-chain, controlled-failure, and audit backlog
+   only as separate focused work.
 
 ==================================================
 WORKING RULES FOR RESUMPTION
