@@ -8,7 +8,28 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
-No unreleased changes.
+### Fixed
+
+- Fixed Test Domain Connectivity clearing its result field when curl reported a
+  timeout, connection reset, TLS failure, DNS failure, connection refusal, or another
+  non-zero connectivity result.
+- Preserved the existing complete DNS, HTTPS, timing, and final-classification report
+  for both positive and negative probes.
+- Added an explicit API error when configd returns no diagnostic output instead of
+  reporting an empty string as successful data.
+
+### Verification
+
+- Added a focused mocked diagnostic contract test for timeout, connection reset,
+  generic curl failure, invalid input, and the MVC empty-response guard.
+- Added the focused test to CI alongside shell syntax, PHP syntax, and FreeBSD package
+  build validation.
+
+### Distribution
+
+- Kept `VERSION` at `0.3.0` and advanced `PLUGIN_REVISION` from `1` to `2`.
+- Package candidate: `os-zapret2-restyle-0.3.0_2.pkg`.
+- The immutable `v0.3.0` tag and package `0.3.0_1` remain unchanged.
 
 ## [0.3.0] - 2026-08-03
 

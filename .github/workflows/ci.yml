@@ -65,6 +65,9 @@ jobs:
       - name: Test configuration activation contract
         run: sh scripts/test-config-activation-contract.sh
 
+      - name: Test domain diagnostics contract
+        run: sh scripts/test-domain-diagnostics-contract.sh
+
       - name: Test lifecycle lock descriptor isolation
         run: sh scripts/test-lifecycle-lock-fd.sh
 
@@ -108,6 +111,7 @@ jobs:
             pkg/+PRE_DEINSTALL \
             pkg/+POST_DEINSTALL \
             scripts/build-pkg.sh \
+            scripts/test-domain-diagnostics-contract.sh \
             scripts/test-package-lifecycle-restart.sh \
             scripts/test-setup-release-selection.sh \
             scripts/test-gui-runtime-management.sh \

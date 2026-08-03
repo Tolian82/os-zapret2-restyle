@@ -3,7 +3,7 @@
 Native OPNsense plugin for managing the bol-van/zapret2 DPI-bypass runtime.
 
 **Current release:** `v0.3.0`  
-**Package:** `os-zapret2-restyle-0.3.0_1.pkg`  
+**Package:** `os-zapret2-restyle-0.3.0_2.pkg`  
 **Target:** OPNsense 26.7 / FreeBSD 15 amd64  
 **Internal service name:** `zapret`
 

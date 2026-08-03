@@ -43,6 +43,12 @@ class DiagnosticsController extends ApiControllerBase
             if (!empty($domain) && preg_match('/^[a-zA-Z0-9\.\-]+$/', $domain)) {
                 $backend = new \OPNsense\Core\Backend();
                 $response = $backend->configdpRun('zapret testdomain', [$domain]);
+                if (trim($response) === '') {
+                    return [
+                        'status' => 'error',
+                        'message' => 'Domain connectivity test returned no output.'
+                    ];
+                }
                 return ['status' => 'ok', 'result' => $response];
             }
             return ['status' => 'error', 'message' => 'Invalid domain name.'];
