@@ -118,9 +118,7 @@ prepare_rollback()
 
     if _release=$(read_active_release); then
         PREVIOUS_RELEASE="${_release}"
-        if [ ! -r "${ACTIVE_RELEASE_FILE}" ]; then
-            write_active_release "${PREVIOUS_RELEASE}" || return 1
-        fi
+        write_active_release "${PREVIOUS_RELEASE}" || return 1
     fi
 
     if [ -x "${GIT_BIN}" ] && [ -d "${ZAPRET_DIR}/.git" ]; then
@@ -182,9 +180,11 @@ restore_previous_service_state()
         service_state || return 1
     else
         if service_state; then
-            return 1
+            _final_state=0
+        else
+            _final_state=$?
         fi
-        [ "$?" -eq 1 ] || return 1
+        [ "${_final_state}" -eq 1 ] || return 1
     fi
 
     return 0
@@ -248,6 +248,13 @@ install_transaction()
 
     prepare_rollback || {
         echo "ERROR: rollback state could not be prepared" >&2
+        return 1
+    }
+
+    # Repair restrictive modes left by an older checkout before setup attempts a
+    # same-version reinstall, and impose a safe inherited umask for all new files.
+    normalize_runtime_permissions || {
+        echo "ERROR: current runtime permissions could not be normalized" >&2
         return 1
     }
 
