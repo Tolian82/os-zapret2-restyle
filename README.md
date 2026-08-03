@@ -1,41 +1,213 @@
 # os-zapret2-restyle
 
-Native OPNsense plugin for managing the zapret2 DPI bypass engine.
+Native OPNsense plugin for managing the bol-van/zapret2 DPI-bypass runtime.
 
-Current version:
-0.2.8
+**Current release:** `v0.3.0`  
+**Package:** `os-zapret2-restyle-0.3.0_1.pkg`  
+**Target:** OPNsense 26.7 / FreeBSD 15 amd64  
+**Internal service name:** `zapret`
 
-Project status:
-Active development
+## What the plugin provides
 
-==================================================
-PROJECT OVERVIEW
-==================================================
+- A unified multiline **Traffic Strategy** editor.
+- Named domain and IPv4/CIDR targets through `<HOSTLIST:name>` and `<IPSET:name>`.
+- Strict validation and normalization before persistent configuration is changed.
+- Transactional Apply with candidate validation and automatic runtime rollback.
+- Automatic `dvtws2` argument generation and TCP/UDP port extraction.
+- Managed `ipfw` divert rules, launcher, supervisor, PID files, and execution status.
+- A native **Zapret2 Service** section for service control and upstream runtime releases.
+- State-preserving plugin updates and selected-release installation without rebooting OPNsense.
 
-The plugin provides:
+## Installation
 
-- Unified Traffic Strategy editing.
-- Separate domain and IP targets.
-- Strict validation.
-- Transactional Apply.
-- Safe service reconfiguration.
-- Automatic dvtws2 runtime generation.
-- Runtime validation and rollback.
-- ipfw lifecycle management.
-- Supervisor lifecycle management.
+The supported distribution channel is the project-owned FreeBSD pkg repository on
+GitHub Pages. Register it once on the firewall:
 
-==================================================
-TRAFFIC STRATEGY
-==================================================
+```sh
+fetch -o /usr/local/etc/pkg/repos/zapret2-restyle.conf \
+  https://tolian82.github.io/os-zapret2-restyle/zapret2-restyle.conf
+pkg update -f
+```
 
-A strategy contains one or more independent profiles.
+Then install or update **os-zapret2-restyle** from:
 
-Profiles are separated by a standalone:
+**System → Firmware → Plugins**
 
+The repository is transported over HTTPS and currently uses the approved unsigned
+configuration `signature_type: "none"`.
+
+Plugin installation is intentionally quick. The bol-van/zapret2 runtime is selected,
+downloaded, and compiled separately through the Settings page or `setup.sh`.
+
+## Zapret2 Service
+
+The Settings page contains a collapsible **Zapret2 Service** block. In a Russian
+OPNsense interface it is shown as **Служба Zapret2**.
+
+The block displays:
+
+- current service state: **Started**, **Stopped**, or **Error**;
+- the active bol-van/zapret2 release, for example `v1.0.4`;
+- a **Start/Stop** control;
+- the four latest published stable upstream releases;
+- an **Apply** button for installing the selected release.
+
+### Service state
+
+| State | Meaning |
+|---|---|
+| `Started vX.Y.Z` | `dvtws2`, supervisor, and plugin-owned firewall rules are healthy. |
+| `Stopped vX.Y.Z` | The runtime is installed, but the service is intentionally stopped. |
+| `Error vX.Y.Z` | The runtime exists, but the complete service contract is not healthy. |
+| `not installed` | No usable `dvtws2` runtime is present. |
+
+The status endpoint checks the complete plugin-owned runtime state rather than only
+looking for one process.
+
+### Installing, reinstalling, upgrading, or downgrading
+
+1. Open the **Zapret2 Service** block.
+2. Select a stable release from **Repository Releases**.
+3. Click **Apply**.
+4. Wait until the busy indicator disappears.
+
+The same action supports:
+
+- first runtime installation;
+- reinstalling the current release;
+- upgrading to a newer release;
+- downgrading to an older published release.
+
+No OPNsense reboot, configd restart, Web GUI restart, or manual service restart is
+required after a successful operation.
+
+### Service-state preservation
+
+The operation preserves the state that existed before it started:
+
+- a running service is refreshed and returns to **Started**;
+- a stopped service remains **Stopped**;
+- an incomplete or unknown service state is rejected rather than promoted.
+
+This contract also applies to plugin package replacement. `pkg add -f`,
+`pkg install -f`, and ordinary package upgrades restore a previously running service
+with replacement code before the package transaction finishes. A previously stopped
+service remains stopped.
+
+### Transactional release activation
+
+GUI release installation is transactional.
+
+Before changing the upstream runtime, the plugin records:
+
+- the active stable release;
+- the previous Git commit;
+- the compiled `binaries/my` tree;
+- whether the service was running or stopped.
+
+A selected release becomes active only after checkout, compilation, permission
+normalization, service refresh, and health verification succeed.
+
+If activation fails, the plugin automatically restores:
+
+- the previous upstream checkout;
+- the previous compiled binaries;
+- the previous active-release marker;
+- the previous running or stopped service state.
+
+The GUI still reports that the requested operation failed, while showing the restored
+working release and service state.
+
+The active release is recorded in:
+
+```text
+/var/db/zapret2-restyle/runtime.release
+```
+
+This marker prevents a candidate Git checkout from being displayed as installed before
+activation succeeds.
+
+### Runtime file permissions
+
+`dvtws2` drops privileges to UID/GID `65534`. Runtime Lua and blob files therefore must
+remain readable after the privilege drop.
+
+The managed release path imposes `umask 022` and normalizes:
+
+- Lua and blob data files to `0644`;
+- runtime directories to `0755`;
+- compiled runtime executables to `0755`.
+
+This also repairs restrictive permissions left by an earlier installation.
+
+### Release-list cache
+
+Stable upstream releases are cached in:
+
+```text
+/var/db/zapret2-restyle/releases.cache
+```
+
+Behavior:
+
+- a fresh cache is returned without contacting GitHub again;
+- refresh is serialized with `lockf`;
+- cache replacement is atomic;
+- invalid or empty responses never replace a good cache;
+- a validated stale cache is used during a temporary GitHub/API failure;
+- selecting an already listed release does not perform another Releases API request.
+
+The GUI normally shows the four latest stable releases, while the cache may retain a
+larger validated list for exact-version verification.
+
+### Operation logs and state
+
+```text
+/var/log/zapret2/setup.log
+/var/log/zapret2/dvtws2.log
+/var/log/zapret2/supervisor.log
+/var/db/zapret2-restyle/setup.status
+/var/run/zapret2-execution.status
+```
+
+`/var/run/zapret2-execution.status` contains the machine-readable lifecycle stage,
+result, timestamp, and detail message.
+
+## Command-line runtime management
+
+The GUI uses the same authoritative setup backend available from the shell.
+
+```sh
+# Install the latest stable release.
+/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh
+/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install
+
+# Show the four latest stable releases.
+/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh show
+
+# Install, reinstall, upgrade, or downgrade to an exact stable release.
+/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install v1.0.3
+
+# Show help.
+/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh --help
+```
+
+The managed GUI path adds the transactional wrapper
+`setup_transaction.sh` around this backend. Direct `setup.sh` execution remains
+available for maintenance and diagnostics.
+
+## Traffic Strategy
+
+A strategy contains one or more independent profiles. User-authored profile boundaries
+are separated by a standalone:
+
+```text
 --new
+```
 
 Example:
 
+```text
 --filter-tcp=80
 <HOSTLIST:user>
 --filter-l7=http
@@ -60,201 +232,107 @@ Example:
 --filter-l7=mtproto,unknown
 --payload=mtproto_initial,unknown
 --lua-desync=fake:blob=stun:repeats=6
+```
 
-Supported target placeholders currently include:
+Supported placeholder families are intentionally limited to:
 
-<HOSTLIST:user>
-<HOSTLIST:youtube>
-<IPSET:telegram>
+```text
+<HOSTLIST:name>
+<IPSET:name>
+```
 
-A user profile may contain several `HOSTLIST:*` and/or `IPSET:*` placeholders.
-The backend automatically expands it into one runtime profile per unique target
-while copying the remaining strategy parameters to every generated profile.
-Extra user-authored `--new` separators are therefore not required merely to
-separate target lists. Existing user `--new` boundaries are preserved.
+A user profile may contain several HOSTLIST and/or IPSET placeholders. The backend
+expands the profile into one runtime profile per unique target while copying the
+remaining strategy parameters. Existing user-authored `--new` boundaries are
+preserved.
 
-Only `HOSTLIST:*` and `IPSET:*` placeholder families are supported.
+Profiles without an explicit placeholder are processed according to **Target Mode**.
 
-Profiles without explicit placeholders are processed according to Target Mode.
+## Domain targets
 
-==================================================
-DOMAIN TARGETS
-==================================================
+Enter one domain per line:
 
-Enter one domain per line.
-
-Examples:
-
+```text
 youtube.com
 *.youtube.com
+```
 
-Both forms are equivalent for this plugin.
+Both forms are equivalent. During Apply, `*.youtube.com` is normalized to
+`youtube.com`, which covers the base domain and subdomains.
 
-During Apply:
+The backend:
 
-*.youtube.com
+- converts domains to lowercase;
+- removes duplicates;
+- rejects IP addresses, CIDR networks, malformed names, and unrelated text.
 
-is normalized to:
+## IP targets
 
-youtube.com
+Enter one IPv4 address or IPv4 CIDR network per line:
 
-The canonical youtube.com entry applies to the base domain and its subdomains.
-
-Duplicate entries are removed.
-
-Domain names are stored in lowercase.
-
-Domain target fields reject:
-
-- IP addresses.
-- CIDR networks.
-- Malformed domains.
-- Unrelated text.
-
-==================================================
-IP TARGETS
-==================================================
-
-Enter one IPv4 address or one IPv4 CIDR network per line.
-
-Examples:
-
+```text
 149.154.160.1
 149.154.160.0/20
-
-Domain names are not accepted in IP target fields.
-
-IPv6 target lists are not supported in version 0.2.0.
-
-==================================================
-APPLYING SETTINGS
-==================================================
-
-Apply is transactional.
-
-Invalid values are not written to persistent OPNsense configuration.
-
-The currently working service remains active.
-
-Active runtime files and ipfw rules remain unchanged.
-
-The GUI identifies the affected field and line.
-
-Valid values are normalized, saved, activated, and reloaded into the form.
-
-==================================================
-INSTALLATION
-==================================================
-
-Version 0.2.8 is the current prerelease line; this source tree builds package revision 5.
-
-The supported distribution model is a project-owned FreeBSD pkg repository
-published through GitHub Pages for FreeBSD:15:amd64 / supported OPNsense 26.7
-systems. Package assets and checksums are also published in GitHub Releases.
-
-Normal plugin installation and updates are performed through the OPNsense Firmware GUI.
-The package installation itself remains quick and does not download or compile the
-zapret2 runtime. After installation, the setup backend can be used as follows:
-
-```sh
-# Install the latest stable bol-van/zapret2 release.
-/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh
-/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install
-
-# Show the four latest stable releases.
-/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh show
-
-# Install, reinstall, upgrade, or downgrade to an exact published release.
-/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install v1.0.3
-
-# Show command help.
-/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh --help
 ```
 
-The setup backend obtains the published stable-release list from GitHub through the
-native FreeBSD `fetch` command. Without an explicit version it selects the latest
-stable bol-van/zapret2 release. With an exact version it verifies that the release is
-published, checks out that tag, compiles and verifies dvtws2, and records the result.
-Internet access is required during setup. After verification it refreshes and verifies
-the installed runtime only when the service was running before setup; a stopped service
-remains stopped. The Settings page now exposes the same backend through the collapsible
-**Zapret2 Service** block: service health and installed release, Start/Stop, the four
-latest stable repository releases, and Apply for installation, reinstallation, upgrade,
-or downgrade. Runtime setup remains asynchronous and preserves the initial complete
-running or stopped service state.
+Domain names are rejected in IP target fields. IPv6 target lists are not currently
+supported.
 
-Package upgrades preserve the prior service state. The replacement package stops a
-running service before the old package hook and plugin-file replacement, then starts it
-again with replacement code. A stopped service remains stopped, and an upgrade is
-aborted if the installed service cannot stop cleanly. After plugin registration,
-template rendering, and any required service restoration complete, `+POST_INSTALL`
-refreshes the OPNsense Web GUI through the current `configctl webgui restart` action so
-new lighttpd/PHP workers load the installed MVC, menu, ACL, and view files.
+## Applying settings
 
-Removing the plugin stops the service before package files disappear. Saved OPNsense
-configuration, the downloaded runtime, logs, and shared dependencies are preserved.
+Settings Apply is transactional:
 
-The repository is registered once on the firewall by placing the published
-configuration file in `/usr/local/etc/pkg/repos/` and refreshing pkg metadata:
+1. the model input is normalized and validated;
+2. candidate target files and `dvtws2` arguments are generated;
+3. the candidate is validated;
+4. the runtime is switched atomically;
+5. firewall rules and supervisor state are verified.
 
-```sh
-fetch -o /usr/local/etc/pkg/repos/zapret2-restyle.conf \
-  https://tolian82.github.io/os-zapret2-restyle/zapret2-restyle.conf
-pkg update -f
-```
+Invalid values are not persisted. A failed candidate keeps or restores the previously
+working runtime, PID ownership, managed files, and plugin-owned firewall rules. The GUI
+reports the affected field or backend failure.
 
-After that, install and update `os-zapret2-restyle` through
-**System > Firmware > Plugins**. The initial prerelease repository is transported
-over HTTPS but is intentionally unsigned (`signature_type: "none"`). This unsigned
-mode is the currently approved distribution policy.
+## Runtime and firewall lifecycle
 
-==================================================
-ENGINEERING MEMORY
-==================================================
+Before `dvtws2` starts, the plugin prepares required firewall prerequisites, including
+`ipdivert` and `ipfw`. This makes cold boot and automatic start work without manual
+`kldload` commands.
 
-Repository-aware agents start from `AGENTS.md`, which requires the complete
-Engineering Memory preflight. Internal development then starts from
-`docs/INDEX.md`; `AGENTS.md` does not replace or shorten the reading order.
+The launcher verifies startup stability, the supervisor watches the exact expected
+runtime process, and mutating lifecycle operations are serialized with a FreeBSD
+`lockf` mutex. Stale supervisor callbacks cannot tear down a replacement runtime.
 
-All engineering documentation is stored in the `docs/` directory.
+## Removal policy
 
-Mandatory reading order:
+Removing the plugin stops its service before package files disappear. The following are
+preserved by policy:
 
-1. `docs/INDEX.md`
-2. `docs/PROJECT_STATE.md`
-3. `docs/AUDIT.md`
-4. `docs/DECISIONS.md`
-5. `docs/WORKING_CONVENTIONS.md`
-6. `docs/DEVELOPMENT_GUIDE.md`
-7. `docs/ARCHITECTURE.md`
-8. `docs/DEVLOG.md`
-9. `docs/ROADMAP.md`
-10. `docs/REQUIREMENTS.md`
-11. `docs/GITHUB_WORKFLOW.md`
+- saved OPNsense configuration;
+- downloaded bol-van/zapret2 runtime;
+- setup and runtime logs;
+- shared dependencies.
 
-==================================================
-ACKNOWLEDGEMENTS
-==================================================
+This permits later reinstall or investigation without deleting user state.
 
-This independent project originated from earlier open-source work by bol-van
-and Umur Gorur.
+## Documentation
 
-Their copyright notices and licenses are preserved.
+Engineering documentation is stored in `docs/`. Repository-aware development starts
+with `AGENTS.md`, then follows the mandatory order in `docs/INDEX.md`.
 
-See NOTICE.
+Important v0.3.0 documents:
 
-==================================================
-LICENSE
-==================================================
+- `docs/PROJECT_STATE.md`
+- `docs/ROADMAP.md`
+- `docs/CHANGELOG.md`
+- `docs/architecture/ZAPRET2_SERVICE.md`
+- `docs/audit/AUDIT-2026-08-03-ZAPRET2-SERVICE.md`
+- `docs/releases/v0.3.0.md`
 
-MIT.
+## Acknowledgements
 
-See LICENSE and NOTICE.
+This independent project builds on open-source work by bol-van and Umur Gorur. Their
+copyright notices and licenses are preserved in `NOTICE`.
 
+## License
 
-## Count-carrying profile pipeline
-
-Backend profile preparation is an ordered pipeline: parse, target registry, Target
-Mode, runtime-profile normalization, and placeholder indexing. Every step carries and
-validates the current runtime profile count, so later resolution cannot accidentally
-use a stale count after automatic profile expansion.
+MIT. See `LICENSE` and `NOTICE`.
