@@ -37,17 +37,17 @@ main
 Version source:
 VERSION
 
-Latest immutable release tag:
-v0.3.0
+Release being prepared:
+v0.3.1
 
 Current project version:
-0.3.0
+0.3.1
 
 Current package revision:
-2
+1
 
 Current package candidate:
-os-zapret2-restyle-0.3.0_2
+os-zapret2-restyle-0.3.1_1
 
 Current milestone:
 Milestone 8 — GUI maintenance and managed upstream components
@@ -57,13 +57,13 @@ Task 1, GUI management of bol-van/zapret2 through the existing setup.sh backend,
 complete and accepted as working by the project owner.
 
 Current priority:
-Live-verify the DIAG-002 correction so negative Test Domain Connectivity results show
-the complete DNS, HTTPS, and final classification report instead of an empty result.
+Publish v0.3.1, package os-zapret2-restyle-0.3.1_1, and the matching
+FreeBSD:15:amd64 Pages/pkg repository, then live-verify the DIAG-002 correction on
+OPNsense.
 
 Known blockers:
-No source or CI blocker is known. Focused OPNsense rendering verification of package
-candidate 0.3.0_2 remains required before DIAG-002 is classified as fully resolved.
-Release publication is not part of this ordinary development change.
+No source or CI blocker is known. Release workflow completion and focused OPNsense
+rendering verification remain mandatory gates.
 
 ==================================================
 ACCEPTED ZAPRET2 SERVICE CONSTRUCTION
@@ -179,7 +179,7 @@ The completed Service work fixed:
 - failed candidate activation leaving the firewall stopped on the candidate checkout.
 
 ==================================================
-DOMAIN DIAGNOSTICS CANDIDATE — DIAG-002
+DOMAIN DIAGNOSTICS RELEASE — DIAG-002
 ==================================================
 
 Observed defect:
@@ -191,7 +191,7 @@ Observed defect:
 - the backend returned an empty string;
 - the API incorrectly returned `status=ok`, so the browser cleared the result field.
 
-Implemented in package candidate 0.3.0_2:
+Implemented for v0.3.1:
 
 - a completed curl probe is treated as diagnostic data and exits zero after printing
   the full report;
@@ -207,7 +207,7 @@ Static verification completed:
 - shell syntax checks passed;
 - the focused diagnostics contract test passed;
 - PHP syntax validation passed;
-- CI includes the new focused test and FreeBSD package build.
+- CI includes the focused test and FreeBSD package build.
 
 Live verification required:
 
@@ -216,37 +216,45 @@ Live verification required:
 - the result field no longer becomes empty.
 
 ==================================================
-RELEASE v0.3.0
+RELEASE v0.3.1
 ==================================================
 
-Release decision:
-The project owner accepted the Zapret2 Service construction and authorized v0.3.0.
+Release scope:
+Publish the DIAG-002 correction as a new immutable patch release.
 
-Immutable tag:
-v0.3.0
+Expected immutable tag:
+v0.3.1
 
-Release package baseline:
-os-zapret2-restyle-0.3.0_1.pkg
+Expected package:
+os-zapret2-restyle-0.3.1_1.pkg
 
 Repository target:
 FreeBSD:15:amd64
 
-The DIAG-002 correction is a later package-revision candidate and does not modify the
-immutable v0.3.0 tag or previously published package.
+Release mechanism:
+
+1. squash merge the verified release-preparation PR with subject
+   `release: prepare v0.3.1`;
+2. repository-owned Release trigger creates annotated tag v0.3.1;
+3. Release workflow validates tag and VERSION;
+4. FreeBSD 15 VM builds and verifies package and pkg repository;
+5. GitHub Release publishes package and SHA256SUMS;
+6. GitHub Pages publishes the matching pkg repository.
 
 ==================================================
 NEXT PRODUCT WORK
 ==================================================
 
-1. Install package candidate 0.3.0_2 and verify positive and negative Test Domain
+1. Complete the v0.3.1 release workflow and publication checks.
+2. Upgrade OPNsense to 0.3.1_1 and verify positive and negative Test Domain
    Connectivity rendering.
-2. Record live DIAG-002 evidence and close the Finding only after the GUI displays the
+3. Record live DIAG-002 evidence and close the Finding only after the GUI displays the
    complete negative report.
-3. Implement explicit notification when a newer stable bol-van/zapret2 release is
+4. Implement explicit notification when a newer stable bol-van/zapret2 release is
    available as a separate logical change.
-4. After the project owner supplies and approves its repository and contract, design
+5. After the project owner supplies and approves its repository and contract, design
    GUI management of the additional BLOB repository.
-5. Continue unrelated retained timeout-chain, controlled-failure, and audit backlog
+6. Continue unrelated retained timeout-chain, controlled-failure, and audit backlog
    only as separate focused work.
 
 ==================================================
