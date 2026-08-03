@@ -1,15 +1,22 @@
 #!/bin/sh
 
-# On upgrade, this is the first hook that belongs to the replacement package.
-# Stop the installed service before pkg runs the old package's pre-deinstall and
-# replaces its files. A fresh installation has no service state to preserve.
+# Preserve the complete service state for every package replacement path,
+# including forced reinstallations where pkg does not export PKG_UPGRADE.
+# The incoming package's pre-install runs before the installed package's
+# pre-deinstall, so a marker whose name is unknown to older hooks can carry the
+# running state across the first upgrade to this implementation.
 
-SERVICE_SCRIPT="/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
-UPGRADE_STATE_DIR="/var/run/zapret2-restyle"
-UPGRADE_RESTART_MARKER="${UPGRADE_STATE_DIR}/pkg-upgrade.restart"
+SERVICE_SCRIPT="${SERVICE_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh}"
+UPGRADE_STATE_DIR="${UPGRADE_STATE_DIR:-/var/run/zapret2-restyle}"
+UPGRADE_RESTART_MARKER="${UPGRADE_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-upgrade.restart}"
+REPLACEMENT_RESTART_MARKER="${REPLACEMENT_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-replacement.restart}"
 
-[ -n "${PKG_UPGRADE:-}" ] || exit 0
-[ -x "${SERVICE_SCRIPT}" ] || exit 0
+# No installed service script means a fresh installation or a repair of an
+# already incomplete package. Neither case may inherit stale restart intent.
+if [ ! -x "${SERVICE_SCRIPT}" ]; then
+    rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
+    exit 0
+fi
 
 "${SERVICE_SCRIPT}" status >/dev/null 2>&1
 service_status=$?
@@ -17,32 +24,35 @@ service_status=$?
 case "${service_status}" in
     0)
         mkdir -p "${UPGRADE_STATE_DIR}" || exit 1
-        : > "${UPGRADE_RESTART_MARKER}" || exit 1
+        : > "${REPLACEMENT_RESTART_MARKER}" || exit 1
         ;;
     1)
-        # Preserve a marker from an interrupted upgrade retry.
+        # Preserve an existing replacement marker when retrying an interrupted
+        # package transaction whose earlier pre-install already stopped service.
         ;;
     2)
-        rm -f "${UPGRADE_RESTART_MARKER}"
+        # Incomplete state must be cleaned but never promoted to running.
+        rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
         ;;
     *)
-        echo "ERROR: cannot determine zapret service state before package upgrade" >&2
+        rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
+        echo "ERROR: cannot determine zapret service state before package replacement" >&2
         exit 1
         ;;
 esac
 
 if [ "${service_status}" -ne 1 ]; then
     if ! "${SERVICE_SCRIPT}" stop >/dev/null 2>&1; then
-        rm -f "${UPGRADE_RESTART_MARKER}"
-        echo "ERROR: zapret service could not be stopped; package upgrade aborted" >&2
+        rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
+        echo "ERROR: zapret service could not be stopped; package replacement aborted" >&2
         exit 1
     fi
 
     "${SERVICE_SCRIPT}" status >/dev/null 2>&1
     stopped_status=$?
     if [ "${stopped_status}" -ne 1 ]; then
-        rm -f "${UPGRADE_RESTART_MARKER}"
-        echo "ERROR: zapret service still owns runtime state; package upgrade aborted" >&2
+        rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
+        echo "ERROR: zapret service still owns runtime state; package replacement aborted" >&2
         exit 1
     fi
 fi
