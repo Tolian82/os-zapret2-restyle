@@ -126,4 +126,5 @@ grep -Fq 'max-content max-content 14ch 12ch 4ch' "${VIEW}" || fail "fixed runtim
 grep -Fq '[setup_releases]' "${ACTIONS}" || fail "release-list action is missing"
 grep -Fq '[setup_status]' "${ACTIONS}" || fail "runtime-status action is missing"
 
+sh "${ROOT_DIR}/scripts/test-setup-runtime-transaction.sh"
 echo "PASS: GUI selected-release transaction and fallback contract"
