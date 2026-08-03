@@ -31,6 +31,24 @@
     }
 
     $(document).ready(function() {
+        const isRussian = ((document.documentElement.lang || '').toLowerCase().indexOf('ru') === 0);
+        const blockcheckGuidance = isRussian
+            ? [
+                'Введите домен, который в настоящее время блокируется вашим интернет-провайдером, и нажмите «Запустить». В течение 1–3 минут будут произведены множественные проверки стратегий обхода DPI, после чего будет сообщено, какие из них позволяют успешно открыть сайт.',
+                'Изучите результат и добавьте необходимый профиль в используемую стратегию на странице «Настройки».'
+            ]
+            : [
+                'Enter a domain that is currently blocked by your ISP and click “Run.” Multiple DPI bypass strategies will be tested over the next 1–3 minutes, after which the strategies that successfully provide access to the site will be reported.',
+                'Review the results and add the required profile to the strategy currently in use on the “Settings” page.'
+            ];
+        const blockcheckSummary = $("#blockcheckSummary").empty();
+        blockcheckGuidance.forEach(function(paragraph, index) {
+            $('<p/>')
+                .text(paragraph)
+                .css('margin-bottom', index === blockcheckGuidance.length - 1 ? 0 : '10px')
+                .appendTo(blockcheckSummary);
+        });
+
         // ---- Test Domain Connectivity ----
         $("#testDomainBtn").click(function() {
             var domain = $("#testDomainInput").val().trim();
@@ -262,7 +280,8 @@
                         </div>
                         <div class="col-md-12" style="padding-top: 10px;">
                             <div id="blockcheckSummary">
-                                {{ lang._('Enter a domain that your ISP currently blocks and click Run. Blockcheck will spend 1–3 minutes testing many DPI bypass strategies and report which ones successfully reach the site. Review a working strategy and add the required profile to the Traffic Strategy field on the Settings page. Merge it with existing profiles instead of replacing the full strategy blindly.') }}
+                                <p>Enter a domain that is currently blocked by your ISP and click “Run.” Multiple DPI bypass strategies will be tested over the next 1–3 minutes, after which the strategies that successfully provide access to the site will be reported.</p>
+                                <p style="margin-bottom: 0;">Review the results and add the required profile to the strategy currently in use on the “Settings” page.</p>
                             </div>
                             <div id="blockcheckWinning" style="padding-top: 10px;"></div>
                             <details style="padding-top: 10px;">

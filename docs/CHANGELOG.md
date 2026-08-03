@@ -8,7 +8,22 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
-No unreleased changes.
+### Changed
+
+- Replaced the initial Diagnostics Blockcheck guidance with the approved English and
+  Russian versions selected from the active OPNsense document language.
+- Kept English as the default and no-JavaScript fallback and rendered both versions as
+  two text-only paragraphs.
+
+### Verification
+
+- Added a focused localization contract test and included it in CI.
+- Removed the obsolete English-only guidance from the Diagnostics template.
+
+### Distribution
+
+- Kept `VERSION=0.3.2` and advanced `PLUGIN_REVISION` from `2` to `3`.
+- Package candidate: `os-zapret2-restyle-0.3.2_3.pkg`.
 
 ## [0.3.2] - 2026-08-03
 

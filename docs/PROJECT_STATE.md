@@ -41,13 +41,13 @@ Current published package:
 `os-zapret2-restyle-0.3.2_1.pkg`
 
 Current source/package candidate:
-`os-zapret2-restyle-0.3.2_2.pkg`
+`os-zapret2-restyle-0.3.2_3.pkg`
 
 Current delivery stage:
 `DEVELOPMENT`
 
 Patch boundary:
-`v0.3.2_2` is an ordinary package patch. `VERSION` remains `0.3.2`; no new tag,
+`v0.3.2_3` is an ordinary package patch. `VERSION` remains `0.3.2`; no new tag,
 GitHub Release, assets, or pkg-repository publication is authorized.
 
 ==================================================
@@ -72,28 +72,26 @@ Verified on 2026-08-03:
   `release/v0.3.2-final`, `release/v0.3.2-atomic`, and
   `release/v0.3.2-publish` are absent;
 - there are no open pull requests;
-- `main` remains the v0.3.2 release commit;
+- `main` includes the merged v0.3.2_2 publication-governance patch;
 - historical pre-existing branches remain outside this cleanup scope and must not be
   deleted without separate owner authority.
 
 ==================================================
-PATCH v0.3.2_2
+PATCH v0.3.2_3
 ==================================================
 
 Objective:
-Prevent one delivery cycle from creating multiple remote branches and remove the need
-for manual deletion of a normally merged task branch.
+Make the initial Blockcheck guidance on Diagnostics follow the language selected in
+OPNsense while preserving the exact approved English and Russian wording.
 
 Included:
 
-- branch creation only after final blobs/tree/commit preparation;
-- exactly one remote task branch per logical cycle;
-- prohibited preparatory suffix branches;
-- required cleanup-path preflight;
-- explicit patch-versus-release contract;
-- automatic deletion of the merged same-repository head branch on `main` push;
-- focused CI contract test;
-- package revision advanced from 1 to 2 with `VERSION` unchanged.
+- English remains the default and no-JavaScript fallback;
+- Russian is selected when the document language begins with `ru`;
+- both approved texts are rendered as two text-only paragraphs;
+- the obsolete English-only guidance is removed;
+- focused localization contract coverage is added to CI;
+- package revision advances from 2 to 3 with `VERSION` unchanged.
 
 ==================================================
 NEXT PRODUCT WORK
