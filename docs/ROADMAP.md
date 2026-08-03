@@ -25,51 +25,67 @@ CURRENT STAGE
 
 Milestone 8 — GUI maintenance and managed upstream components
 
-Current work package:
-GUI Zapret2 Service and selected-release management through the existing setup.sh
+Current status:
+Task 1, Zapret2 Service and bol-van/zapret2 stable-release management, is COMPLETE and
+live verified. Release v0.3.0 is the publication gate for this completed work package.
 
-Ordered work:
+==================================================
+MILESTONE 8 — ORDERED WORK
+==================================================
 
-1. [x] Publish prerelease v0.2.3 and package 0.2.3_1 containing the CFG-001 correction.
-2. [x] Diagnose the 0.2.3_1 Apply timeout as inherited lifecycle-lock descriptor 9.
-3. [x] Publish prerelease v0.2.4 and package 0.2.4_1 with the LIFE-009 correction.
-4. [x] Verify descriptor 9 is released after startup with 0.2.4_1.
-5. [x] Verify valid Apply reaches dvtws.args and active process arguments.
-6. [x] Implement LIFE-014: fail-closed pre-upgrade stop, state-preserving post-upgrade
-   start, and setup-driven runtime refresh.
-7. [x] Publish prerelease v0.2.5 / package 0.2.5_1 through the automated release trigger.
-8. [x] Live-test running/stopped pkg upgrade and running setup with package 0.2.5_1.
-9. [x] Diagnose stopped setup as an unconditional-restart defect and implement the
-   package-revision-2 state-preservation correction.
-10. [x] Publish the later corrective package line through v0.2.8.
-11. [x] Diagnose incomplete GUI rendering after local 0.2.8_3 replacement as stale
-   lighttpd/php-cgi workers rather than an unstarted OPNsense service.
-12. [x] Add a final canonical Web GUI refresh to +POST_INSTALL without removing plugin
-   registration, template rendering, setup instructions, or zapret state restoration.
-13. [ ] Live-verify automatic Web GUI PID replacement and complete rendering with
-   package candidate 0.2.8_4.
-14. [ ] Complete any remaining reboot and forced-stop evidence when required by a
-   touched lifecycle path.
-15. [ ] Reconcile CFG-001 and record the next verified stable baseline.
-16. [x] Resume management of bol-van/zapret2 stable releases through setup.sh.
-17. [x] Add installed runtime-version detection and reporting.
-18. [x] Obtain and present the available stable-release list: `setup.sh show` prints
-   up to the four latest published stable releases.
-19. [ ] Notify when a newer stable release is available.
-20. [x] Allow command-line selection, installation, update, downgrade, and repeat
-   installation of a published stable release through `setup.sh install VERSION`;
-   no-argument setup and `install` select the latest stable release.
-21. [ ] Live-verify `show`, default latest installation, explicit reinstall, upgrade,
-   downgrade, and running/stopped service-state preservation on OPNsense.
-22. [x] Add GUI endpoints and controls that invoke this same backend without duplicating
-   release-discovery or installation logic.
-23. [x] Display the installed runtime tag separately from runtime/service health.
-24. [ ] Live-verify the GUI service/release controls, asynchronous polling, and the
-   running/stopped reinstall, upgrade, and downgrade matrix on OPNsense.
-25. [ ] Add an explicit newer-stable-release notification as a separate logical change.
-26. [ ] After the project owner supplies the repository, design and implement GUI
-   management of the additional BLOB repository. Until then, its URL, manifest,
-   layout, integrity model, and update contract remain unspecified.
+Task 1 — Zapret2 Service and upstream runtime releases
+
+1. [x] Detect installed runtime presence and exact stable tag.
+2. [x] Expose complete Started/Stopped/Error state to the GUI.
+3. [x] Add Start/Stop controls.
+4. [x] Add `setup.sh show` for the latest stable releases.
+5. [x] Add exact `setup.sh install VERSION` for install, reinstall, upgrade, and
+   downgrade.
+6. [x] Add latest-stable behavior for setup without an explicit version.
+7. [x] Add stable-release caching, locked refresh, atomic replacement, and stale
+   fallback.
+8. [x] Add one-parameter configd selected-release launch.
+9. [x] Add asynchronous GUI setup polling and operation-state controls.
+10. [x] Prevent passive release-list failures from producing a global red modal.
+11. [x] Prepare ipdivert/ipfw before dvtws2 cold-start launch.
+12. [x] Preserve Started and Stopped states through ordinary and forced package
+    replacement.
+13. [x] Preserve the existing configd watcher while replacement actions are loaded.
+14. [x] Normalize runtime Lua/blob permissions for dvtws2 privilege drop.
+15. [x] Keep an atomic active-release marker independent of candidate Git HEAD.
+16. [x] Add automatic rollback of upstream checkout, compiled binaries, active tag,
+    and complete service state after failed candidate activation.
+17. [x] Live-verify release cache reuse.
+18. [x] Live-verify cold reboot without manual kernel-module loading.
+19. [x] Live-verify forced package replacement while Started.
+20. [x] Live-verify forced package replacement while Stopped.
+21. [x] Live-verify Stopped selected-release installation.
+22. [x] Live-verify running GUI downgrade v1.0.4 → v1.0.3.
+23. [x] Accept the Zapret2 Service construction as working.
+24. [ ] Publish immutable v0.3.0, package 0.3.0_1, release assets, and Pages/pkg
+    repository.
+25. [ ] Record completed publication evidence.
+
+Task 2 — Newer stable-release notification
+
+1. [ ] Define the notification state independently from release selection.
+2. [ ] Compare the active stable tag with the validated cached release list.
+3. [ ] Show a passive notification when a newer stable release exists.
+4. [ ] Avoid repeated API calls and avoid converting discovery failure into service
+   Error.
+5. [ ] Add focused tests and live verification.
+
+Task 3 — Additional BLOB repository management
+
+Status: BLOCKED ON OWNER-SUPPLIED CONTRACT
+
+1. [ ] Obtain the approved repository URL.
+2. [ ] Define manifest, version, integrity, compatibility, and rollback contracts.
+3. [ ] Define interaction with built-in and user-provided BLOB files.
+4. [ ] Implement backend state and operations.
+5. [ ] Add GUI controls only after the backend contract is approved.
+
+Do not invent the repository, layout, manifest, integrity model, or update semantics.
 
 ==================================================
 COMPLETED MILESTONES
@@ -78,128 +94,100 @@ COMPLETED MILESTONES
 Milestone 1 — Independent project foundation
 Status: COMPLETE
 
-- independent repository;
-- attribution, LICENSE, NOTICE, provenance;
-- stable project, package, and service identities;
+- independent repository and identity;
+- LICENSE, NOTICE, and attribution;
 - VERSION as the single version source;
-- build and release skeleton.
+- build, CI, and release skeleton.
 
-Milestone 2 — Backend v2 and transactional runtime
+Milestone 2 — Backend v2 and transactional settings runtime
 Status: COMPLETE
 
-- modular parser, target registry, Target Mode, profile normalization, target resolver,
-  blob resolver, validation, generation, activation, rollback, lifecycle, and diagnostics;
-- transactional Apply and active-runtime preservation;
+- parser, target registry, Target Mode, profile normalization, target and blob
+  resolution, validation, generation, activation, rollback, and diagnostics;
+- transactional Settings Apply;
 - field-level validation errors.
 
 Milestone 3 — Service lifecycle hardening
-Status: COMPLETE, with focused live regression tests still scheduled
+Status: COMPLETE FOR IMPLEMENTED SCOPE
 
-- separate launcher and supervisor;
-- supervisor-only runtime failure detection;
-- process identity checks;
-- serialized mutating lifecycle operations;
+- launcher and supervisor separation;
+- process identity and stale-PID checks;
+- serialized mutating operations;
 - firewall lifecycle consolidation;
-- stale PID protection;
-- conditional kill escalation;
-- runtime cleanup on failure.
+- controlled runtime-failure cleanup;
+- cold-start firewall preparation.
 
 Milestone 4 — OPNsense integration
-Status: COMPLETE for implemented scope
+Status: COMPLETE FOR IMPLEMENTED SCOPE
 
-- MVC model/controllers/views/forms;
+- MVC model, controllers, views, and forms;
+- ACL and menu integration;
 - configd actions;
-- templates;
-- syshooks;
-- rc.d entry point;
-- package hooks;
+- templates, syshooks, rc.d, and package hooks;
 - status and diagnostics paths.
 
 Milestone 5 — Profile pipeline normalization
 Status: COMPLETE AND LIVE VERIFIED
 
 - count-carrying profile pipeline;
-- one selector per runtime profile;
-- HOSTLIST and IPSET support;
-- mixed selectors expanded automatically;
-- explicit user --new boundaries preserved;
-- focused static tests and live strategy evidence.
+- HOSTLIST and IPSET placeholders;
+- mixed selector expansion;
+- preserved user-authored `--new` boundaries;
+- static and live strategy evidence.
 
 Milestone 6 — Project-owned release and pkg repository
 Status: COMPLETE
 
-- official v0.1.0, v0.2.0, corrective v0.2.1, and later 0.2.x release work;
 - GitHub Release publication;
-- GitHub Pages pkg repository;
-- native FreeBSD:15:amd64 layout;
-- separate flat release-assets staging;
-- package archive metadata verification;
-- ordinary https:// repository URL;
-- signature_type: none accepted by decision.
+- GitHub Pages FreeBSD:15:amd64 pkg repository;
+- package archive verification;
+- automated immutable release-tag handoff;
+- approved unsigned repository configuration.
 
-==================================================
-MILESTONE 7 — APPROVED FUNCTIONALITY COMPLETION
-==================================================
-
+Milestone 7 — Approved functionality completion
 Status: COMPLETE BY PROJECT-OWNER DECISION
 
-Completed in this milestone:
+The milestone closed the independent baseline and retained unperformed checks as a
+focused regression backlog rather than falsely marking them as passed.
 
-[x] Move Engineering Memory into docs/
-[x] Implement and test runtime profile normalization
-[x] Implement the count-carrying profile pipeline
-[x] Verify named HOSTLIST and IPSET target application on OPNsense
-[x] Verify complete package install → manual runtime setup → service start chain
-[x] Verify bol-van/zapret2 v1.0.3 builds dvtws2
-[x] Verify launcher, supervisor, firewall, and runtime status
-[x] Correct package lifecycle so pkg does not perform nested runtime package work
-[x] Preserve runtime and dependencies on plugin removal by policy
-[x] Record the tested package baseline as 0.2.1_8
-[x] Rebuild and verify package os-zapret2-restyle-0.2.2_1 from clean commit fc6b208
-[x] Publish main and annotated tag v0.2.2 at commit fc6b208
-[x] Update the GitHub Pages pkg repository for 0.2.2_1
-[x] Synchronize the release workflow and authoritative archive patch process
+==================================================
+POST-v0.3.0 REGRESSION BACKLOG
+==================================================
 
-Closure decision:
+These items are not blockers for the accepted Zapret2 Service release unless a later
+change touches their chain:
 
-Milestone 7 was closed by explicit project-owner decision on 2026-07-30. The following uncompleted checks were not marked as passed and remain a focused regression backlog:
-
-- package upgrade from an earlier revision;
-- removal while running and preserved-runtime verification;
-- reinstall over preserved runtime;
-- full reboot and automatic service-start behavior;
-- complete GUI/API live matrix and reconfigure classification;
-- browser/PHP/configd/script blockcheck timeout-chain behavior;
-- controlled dvtws2 termination and supervisor cleanup/recovery;
-- remaining approved-requirement review.
-
-These tests are retained as evidence work and may be executed when required by a later logical change.
+- controlled dvtws2 crash and supervisor recovery;
+- complete diagnostics/blockcheck timeout-chain behavior;
+- duplicate diagnostics route reconciliation;
+- remaining audit findings unrelated to release management;
+- selected settings invalid/valid Apply evidence where later changes touch CFG-001;
+- plugin removal/reinstall scenarios beyond the already tested preservation policy.
 
 ==================================================
 DEFERRED WORK
 ==================================================
 
-The following are not current objectives unless a demonstrated functional blocker requires them:
+Not current objectives unless separately approved:
 
-- general navigation redesign;
-- broad UX research;
-- first-run wizard redesign;
-- visual redesign of Service, Strategy, Status, Maintenance, or Diagnostics pages;
-- expansion beyond approved HOSTLIST and IPSET placeholders;
-- GROUP, TARGETSET, or other placeholder families;
-- repository signing, unless approved by a later architecture decision;
-- automatic removal of runtime or shared dependencies with plugin deletion.
-
-The public README strategy example remains intentionally unchanged until a later dedicated rewrite.
+- general navigation or broad visual redesign;
+- expansion beyond HOSTLIST and IPSET placeholder families;
+- GROUP or TARGETSET placeholders;
+- repository signing;
+- automatic deletion of runtime, user configuration, logs, or shared dependencies on
+  plugin removal;
+- unapproved BLOB repository assumptions.
 
 ==================================================
 NEXT RELEASE GATE
 ==================================================
 
-Do not declare the next stable baseline until:
+v0.3.0 publication is complete only when:
 
-1. affected CFG-001 and lifecycle behavior passes focused verification;
-2. the selected Milestone 8 work package is implemented and verified;
-3. affected regression-backlog tests are executed where the change touches their chain;
-4. current AUDIT.md findings affected by the change are reconciled;
-5. CHANGELOG.md and PROJECT_STATE.md describe the same package state.
+1. the release-preparation PR is merged with exact subject
+   `release: prepare v0.3.0`;
+2. annotated tag v0.3.0 points to that merge;
+3. Release validation and FreeBSD package build pass;
+4. `os-zapret2-restyle-0.3.0_1.pkg` and SHA256SUMS are published;
+5. the matching FreeBSD:15:amd64 Pages/pkg repository is deployed;
+6. publication evidence is recorded without changing the immutable tag.
