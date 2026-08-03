@@ -26,28 +26,24 @@ CURRENT STAGE
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current source candidate:
-`v0.3.2_2`
+`v0.3.2_3`
 
 Current work:
-Complete the ordinary package patch that enforces one remote task branch and automatic
-post-merge cleanup. This patch is not a project release.
+Complete the ordinary package patch that localizes the initial Diagnostics Blockcheck
+guidance according to the OPNsense language. This patch is not a project release.
 
 ==================================================
-PATCH v0.3.2_2 SCOPE
+PATCH v0.3.2_3 SCOPE
 ==================================================
 
-- [x] Verify accidental v0.3.2 preparation branches are absent.
-- [x] Verify there are no open pull requests.
 - [x] Keep `VERSION=0.3.2`.
-- [x] Advance `PLUGIN_REVISION` to `2`.
-- [x] Define exactly one remote task branch per logical cycle.
-- [x] Require blobs/tree/commit completion before branch creation.
-- [x] Prohibit `-clean`, `-final`, `-atomic`, `-fixed`, `-retry`, and `-publish`
-  sibling branches.
-- [x] Distinguish package patch from project release.
-- [x] Add automatic cleanup of the merged same-repository head branch.
-- [x] Add focused CI contract coverage.
-- [x] Synchronize current state, workflow, decision, patch notes, and development log.
+- [x] Advance `PLUGIN_REVISION` to `3`.
+- [x] Preserve English as the default and no-JavaScript fallback.
+- [x] Select the approved Russian text when the OPNsense document language is Russian.
+- [x] Render both versions as two text-only paragraphs.
+- [x] Remove the obsolete English-only guidance.
+- [x] Add focused localization contract coverage to CI.
+- [x] Synchronize current state, workflow, changelog, patch notes, and development log.
 
 Normal PR CI, package build, squash merge, automatic branch deletion, and final `main`
 verification are the delivery checks for this patch.
@@ -61,6 +57,9 @@ Status: COMPLETE AND LIVE VERIFIED
 
 Diagnostics DIAG-002
 Status: RESOLVED AND OWNER LIVE VERIFIED
+
+Publication governance package patch:
+`v0.3.2_2` merged to `main`
 
 Published release:
 `v0.3.2`

@@ -68,6 +68,9 @@ jobs:
       - name: Test domain diagnostics contract
         run: sh scripts/test-domain-diagnostics-contract.sh
 
+      - name: Test diagnostics guidance localization
+        run: sh scripts/test-diagnostics-guidance-localization.sh
+
       - name: Test lifecycle lock descriptor isolation
         run: sh scripts/test-lifecycle-lock-fd.sh
 
@@ -107,6 +110,8 @@ jobs:
             docs/DEVLOG.md \
             docs/GITHUB_PUBLICATION.md \
             docs/patches/v0.3.2_2.md \
+            docs/patches/v0.3.2_3.md \
+            docs/devlog/2026-08-04-blockcheck-guidance-localization.md \
             src/etc/rc.syshook.d/start/20-zapret \
             src/etc/rc.syshook.d/stop/20-zapret \
             src/etc/inc/plugins.inc.d/zapret.inc \
@@ -117,6 +122,7 @@ jobs:
             pkg/+POST_DEINSTALL \
             scripts/build-pkg.sh \
             scripts/test-domain-diagnostics-contract.sh \
+            scripts/test-diagnostics-guidance-localization.sh \
             scripts/test-package-lifecycle-restart.sh \
             scripts/test-setup-release-selection.sh \
             scripts/test-gui-runtime-management.sh \
@@ -145,6 +151,11 @@ jobs:
 
           test -x scripts/test-package-lifecycle-restart.sh || {
             echo "scripts/test-package-lifecycle-restart.sh is not executable"
+            exit 1
+          }
+
+          test -x scripts/test-diagnostics-guidance-localization.sh || {
+            echo "scripts/test-diagnostics-guidance-localization.sh is not executable"
             exit 1
           }
 

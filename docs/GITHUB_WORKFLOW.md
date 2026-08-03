@@ -68,10 +68,10 @@ Published package:
 `os-zapret2-restyle-0.3.2_1.pkg`
 
 Current patch candidate:
-`os-zapret2-restyle-0.3.2_2.pkg`
+`os-zapret2-restyle-0.3.2_3.pkg`
 
-Patch `v0.3.2_2` changes repository governance and automatic branch cleanup. It is not
-a new project release.
+Patch `v0.3.2_3` localizes the initial Diagnostics Blockcheck guidance for English
+and Russian OPNsense interfaces. It is not a new project release.
 
 ==================================================
 FORWARD-ONLY VERSION POLICY
@@ -113,9 +113,9 @@ PULL-REQUEST PROTOCOL
 
 Before opening a PR, inspect all workflows triggered by the event.
 
-Patch `v0.3.2_2` title:
+Patch `v0.3.2_3` title:
 
-`v0.3.2_2: Prevent orphan publication branches`
+`v0.3.2_3: Localize Blockcheck guidance`
 
 Its squash subject is an ordinary logical subject, not `release: prepare v0.3.2`.
 
@@ -154,7 +154,7 @@ Only an explicitly authorized new `VERSION` follows the release pipeline:
 5. let repository automation create the immutable tag and run release publication;
 6. verify every public output before installation instructions.
 
-Patch `v0.3.2_2` stops after ordinary merge, branch cleanup, and `main` verification.
+Patch `v0.3.2_3` stops after ordinary merge, branch cleanup, and `main` verification.
 
 ==================================================
 HISTORY RESPONSIBILITY
