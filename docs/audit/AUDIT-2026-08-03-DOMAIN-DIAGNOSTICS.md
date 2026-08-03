@@ -2,11 +2,11 @@
 
 Date: 2026-08-03
 
-Base commit:
-852d1b2938a4118a71ecea48cafb41132a15d0a4
+Base implementation commit:
+fe518e7a4ebbfe827ca41d107fda8f7e4fcb8666
 
-Package candidate:
-os-zapret2-restyle-0.3.0_2
+Release candidate:
+v0.3.1 / os-zapret2-restyle-0.3.1_1
 
 ==================================================
 FINDING DIAG-002
@@ -16,7 +16,7 @@ Title:
 Negative domain-connectivity results disappear from the Diagnostics page
 
 Classification:
-broken / remediated in source / live verification required
+broken / remediated in source / release prepared / live verification required
 
 Affected locations:
 
@@ -40,7 +40,7 @@ Evidence:
 
 - Successful HTTPS probes return curl status zero and their complete DNS, HTTPS, and
   final `SUCCESS` report reaches the result field.
-- `test_domain.sh` already formats negative results such as TLS handshake failure,
+- `test_domain.sh` already formatted negative results such as TLS handshake failure,
   connection reset, timeout, DNS failure, connection refused, and a generic curl
   failure.
 - Before remediation, the script exited with the curl status after printing that
@@ -79,7 +79,7 @@ Implemented behavior:
    returns an explicit API error instead of reporting empty output as success.
 4. A focused mocked test verifies timeout, connection reset, generic curl failure,
    invalid input, and the controller's empty-response guard.
-5. `PLUGIN_REVISION` advances from 1 to 2 with `VERSION` unchanged at 0.3.0.
+5. The correction is prepared for immutable release v0.3.1 with package revision 1.
 
 Acceptance criteria:
 
@@ -92,29 +92,38 @@ Acceptance criteria:
 - An actual empty configd response produces a visible API error rather than a blank
   result field.
 - PHP and shell syntax checks pass.
-- The focused diagnostic contract test and the complete CI package build pass.
+- The focused diagnostic contract test and the complete CI and release package builds
+  pass.
 
 ==================================================
 VERIFICATION STATUS
 ==================================================
 
-Completed before publication:
+Completed before release preparation:
 
-- `sh -n` for `test_domain.sh` and the focused test;
+- shell syntax validation for `test_domain.sh` and the focused test;
 - focused mocked timeout, reset, generic failure, and invalid-input cases;
-- `php -l` for `DiagnosticsController.php`;
-- repository CI contract wiring.
+- PHP syntax validation for `DiagnosticsController.php`;
+- pull-request CI, including the FreeBSD package build for the implementation commit.
+
+Release verification required:
+
+- release-preparation CI passes;
+- annotated tag v0.3.1 points to the release-preparation merge;
+- package `os-zapret2-restyle-0.3.1_1.pkg` and SHA256SUMS are published;
+- the FreeBSD:15:amd64 Pages/pkg repository exposes the same package.
 
 Required live OPNsense verification:
 
-1. Install package candidate 0.3.0_2.
+1. Upgrade to package 0.3.1_1.
 2. Run Test Domain Connectivity against one reachable domain and confirm the existing
    positive report remains unchanged.
-3. Run it against a domain or address path that times out or is reset.
+3. Run it against a domain or path that times out or is reset.
 4. Confirm the result field displays the full DNS and HTTPS sections plus the final
    negative classification instead of becoming empty.
 5. Confirm no global modal or browser transport error replaces the structured result.
 
 Current status:
-Source remediation and focused static verification complete. Live OPNsense rendering
-remains required before DIAG-002 is classified as fully resolved.
+Source remediation and focused static verification are complete. Release publication
+and live OPNsense rendering remain required before DIAG-002 is classified as fully
+resolved.

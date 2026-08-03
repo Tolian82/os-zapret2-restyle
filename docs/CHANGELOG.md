@@ -8,6 +8,10 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [0.3.1] - 2026-08-03
+
 ### Fixed
 
 - Fixed Test Domain Connectivity clearing its result field when curl reported a
@@ -27,9 +31,12 @@ The project starts its own version history at `0.1.0`.
 
 ### Distribution
 
-- Kept `VERSION` at `0.3.0` and advanced `PLUGIN_REVISION` from `1` to `2`.
-- Package candidate: `os-zapret2-restyle-0.3.0_2.pkg`.
-- The immutable `v0.3.0` tag and package `0.3.0_1` remain unchanged.
+- Advanced `VERSION` from `0.3.0` to `0.3.1`.
+- Reset `PLUGIN_REVISION` from `2` to `1`.
+- Expected immutable tag: `v0.3.1`.
+- Expected package: `os-zapret2-restyle-0.3.1_1.pkg`.
+- GitHub Release and FreeBSD:15:amd64 Pages/pkg repository are generated from the same
+  validated tag.
 
 ## [0.3.0] - 2026-08-03
 
