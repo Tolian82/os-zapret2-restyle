@@ -1,0 +1,7 @@
+01-multisplit	multisplit	1	01-multisplit.args
+02-multidisorder	multidisorder	1	02-multidisorder.args
+03-seqovl	seqovl	1	03-seqovl.args
+04-fake	fake	1	04-fake.args
+05-fake-split	fake+split	1	05-fake-split.args
+06-syndata	syndata	0	06-syndata.args
+07-hostfakesplit	hostfakesplit	1	07-hostfakesplit.args
