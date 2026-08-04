@@ -11,7 +11,7 @@ MODE="${1:-status}"
 set -eu
 umask 022
 
-for module in common state launch query
+for module in common state target launch query
 do
     module_path="${MODULE_DIR}/${module}.sh"
     [ -r "${module_path}" ] || {

@@ -35,9 +35,22 @@ Automated validation:
 
 Not performed:
 
-No owner-asssisted OPNsense commands. Those checks remain deferred until Patch 13
+No owner-assisted OPNsense commands. Those checks remain deferred until Patch 13
 and the complete implementation series have passed GitHub processing.
 
 Next:
 Patch 4 adds target validation, IPv4/IPv6/QUIC capability prechecks, and the clean
 baseline only after Patch 3 completes its full GitHub serial-delivery gate.
+
+==================================================
+DELIVERY RESULT
+==================================================
+
+The first delivery attempt, PR #52, was closed without merge because the existing
+branch-hygiene regression test hard-coded package revision 3. All Strategy Lab lifecycle
+checks had passed. The clean replacement changed that assertion to require a positive
+numeric package revision, retained one atomic implementation commit, and opened PR #53.
+
+PR #53 passed title validation, Validate Project, and the FreeBSD package build. It was
+squash merged as `100f324d09539e672586b12e3cd96c26baf351b2`; the task branch was removed
+and the resulting `main` was verified before Patch 4 preparation.
