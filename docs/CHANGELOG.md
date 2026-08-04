@@ -8,22 +8,31 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+### Added
+
+- Added the asynchronous Strategy Lab start/status/cancel/result job framework.
+- Added detached worker launch, one-active-job state, atomic `status.json`, ordered
+  `events.ndjson`, per-job logs, PID files, and cancellation markers.
+- Added four configd actions and four Diagnostics API actions.
+- Added a dormant Diagnostics progress/Stop shell while preserving the current
+  synchronous Blockcheck user path.
+- Added focused mocked contract coverage for job lifecycle, busy handling, cancellation,
+  bilingual skipped messages, state cleanup, and legacy-path preservation.
+
 ### Changed
 
-- Replaced the initial Diagnostics Blockcheck guidance with the approved English and
-  Russian versions selected from the active OPNsense document language.
-- Kept English as the default and no-JavaScript fallback and rendered both versions as
-  two text-only paragraphs.
-
-### Verification
-
-- Added a focused localization contract test and included it in CI.
-- Removed the obsolete English-only guidance from the Diagnostics template.
+- Advanced Strategy Lab implementation from documentation-only planning to the first
+  package code patch.
+- Preserved exact cancellation output `SKIPPED — отменено` and
+  `SKIPPED — canseled`.
+- Kept network tests, Zapret2 lifecycle mutation, temporary candidate runtime, and
+  firewall changes outside Patch 2.
 
 ### Distribution
 
-- Kept `VERSION=0.3.2` and advanced `PLUGIN_REVISION` from `2` to `3`.
-- Package candidate: `os-zapret2-restyle-0.3.2_3.pkg`.
+- Kept `VERSION=0.3.2` and advanced `PLUGIN_REVISION` from `3` to `4`.
+- Package candidate: `os-zapret2-restyle-0.3.2_4.pkg`.
+- This patch does not create a project release or publish package assets.
 
 ## [0.3.2] - 2026-08-03
 

@@ -1,0 +1,132 @@
+#!/bin/sh
+
+strategy_lab_initialize_state()
+{
+    _strategy_lab_job="$1"
+    _strategy_lab_target="$2"
+    _strategy_lab_mode="$3"
+    _strategy_lab_language="$4"
+    _strategy_lab_jobdir=$(strategy_lab_job_dir "${_strategy_lab_job}")
+    _strategy_lab_status=$(strategy_lab_status_file "${_strategy_lab_job}")
+    _strategy_lab_events=$(strategy_lab_event_file "${_strategy_lab_job}")
+
+    mkdir -p "${_strategy_lab_jobdir}"
+    : > "${_strategy_lab_events}"
+
+    "${STRATEGY_LAB_JQ}" -nc \
+        --arg job_id "${_strategy_lab_job}" \
+        --arg target "${_strategy_lab_target}" \
+        --arg mode "${_strategy_lab_mode}" \
+        --arg language "${_strategy_lab_language}" \
+        '{
+            schema: 1,
+            job_id: $job_id,
+            state: "queued",
+            outcome: "",
+            target: $target,
+            mode: $mode,
+            language: $language,
+            cancel_requested: false,
+            current_stage: "00",
+            message: "",
+            stages: [
+                {number:"00", key:"target_initialization", status:"PENDING", message:""},
+                {number:"10", key:"lifecycle_snapshot", status:"PENDING", message:""},
+                {number:"20", key:"service_stop", status:"PENDING", message:""},
+                {number:"30", key:"network_precheck", status:"PENDING", message:""},
+                {number:"40", key:"clean_baseline", status:"PENDING", message:""},
+                {number:"50", key:"family_screening", status:"PENDING", message:""},
+                {number:"60", key:"family_expansion", status:"PENDING", message:""},
+                {number:"70", key:"stability", status:"PENDING", message:""},
+                {number:"80", key:"extended", status:"PENDING", message:""},
+                {number:"85", key:"shortlist", status:"PENDING", message:""},
+                {number:"90", key:"restore", status:"PENDING", message:""},
+                {number:"99", key:"report", status:"PENDING", message:""}
+            ]
+        }' | strategy_lab_atomic_write "${_strategy_lab_status}"
+}
+
+strategy_lab_update_job()
+{
+    _strategy_lab_job="$1"
+    _strategy_lab_state="$2"
+    _strategy_lab_outcome="$3"
+    _strategy_lab_stage="$4"
+    _strategy_lab_canceled="$5"
+    _strategy_lab_message="$6"
+    _strategy_lab_status=$(strategy_lab_status_file "${_strategy_lab_job}")
+    _strategy_lab_tmp=$(mktemp "$(dirname "${_strategy_lab_status}")/.job.XXXXXX") || return 1
+
+    "${STRATEGY_LAB_JQ}" \
+        --arg state "${_strategy_lab_state}" \
+        --arg outcome "${_strategy_lab_outcome}" \
+        --arg stage "${_strategy_lab_stage}" \
+        --argjson canceled "${_strategy_lab_canceled}" \
+        --arg message "${_strategy_lab_message}" \
+        '.state=$state | .outcome=$outcome | .current_stage=$stage |
+         .cancel_requested=$canceled | .message=$message' \
+        "${_strategy_lab_status}" > "${_strategy_lab_tmp}" || {
+            rm -f "${_strategy_lab_tmp}"
+            return 1
+        }
+    chmod 0644 "${_strategy_lab_tmp}"
+    mv -f "${_strategy_lab_tmp}" "${_strategy_lab_status}"
+}
+
+strategy_lab_update_stage()
+{
+    _strategy_lab_job="$1"
+    _strategy_lab_number="$2"
+    _strategy_lab_stage_status="$3"
+    _strategy_lab_message="$4"
+    _strategy_lab_status=$(strategy_lab_status_file "${_strategy_lab_job}")
+    _strategy_lab_tmp=$(mktemp "$(dirname "${_strategy_lab_status}")/.stage.XXXXXX") || return 1
+
+    "${STRATEGY_LAB_JQ}" \
+        --arg number "${_strategy_lab_number}" \
+        --arg status "${_strategy_lab_stage_status}" \
+        --arg message "${_strategy_lab_message}" \
+        '(.stages[] | select(.number==$number) | .status)=$status |
+         (.stages[] | select(.number==$number) | .message)=$message |
+         .current_stage=$number' \
+        "${_strategy_lab_status}" > "${_strategy_lab_tmp}" || {
+            rm -f "${_strategy_lab_tmp}"
+            return 1
+        }
+    chmod 0644 "${_strategy_lab_tmp}"
+    mv -f "${_strategy_lab_tmp}" "${_strategy_lab_status}"
+}
+
+strategy_lab_skip_unfinished()
+{
+    _strategy_lab_job="$1"
+    _strategy_lab_message="$2"
+    _strategy_lab_status=$(strategy_lab_status_file "${_strategy_lab_job}")
+    _strategy_lab_tmp=$(mktemp "$(dirname "${_strategy_lab_status}")/.skip.XXXXXX") || return 1
+
+    "${STRATEGY_LAB_JQ}" \
+        --arg message "${_strategy_lab_message}" \
+        '(.stages[] | select(.status=="PENDING" or .status=="RUNNING") | .status)="SKIPPED" |
+         (.stages[] | select(.status=="SKIPPED" and .message=="") | .message)=$message' \
+        "${_strategy_lab_status}" > "${_strategy_lab_tmp}" || {
+            rm -f "${_strategy_lab_tmp}"
+            return 1
+        }
+    chmod 0644 "${_strategy_lab_tmp}"
+    mv -f "${_strategy_lab_tmp}" "${_strategy_lab_status}"
+}
+
+strategy_lab_append_event()
+{
+    _strategy_lab_job="$1"
+    _strategy_lab_stage="$2"
+    _strategy_lab_status_value="$3"
+    _strategy_lab_message="$4"
+    _strategy_lab_events=$(strategy_lab_event_file "${_strategy_lab_job}")
+
+    "${STRATEGY_LAB_JQ}" -nc \
+        --arg stage "${_strategy_lab_stage}" \
+        --arg status "${_strategy_lab_status_value}" \
+        --arg message "${_strategy_lab_message}" \
+        '{stage:$stage,status:$status,message:$message}' >> "${_strategy_lab_events}"
+}
