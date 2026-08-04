@@ -41,15 +41,15 @@ Current published package:
 `os-zapret2-restyle-0.3.2_1.pkg`
 
 Current source/package candidate:
-`os-zapret2-restyle-0.3.2_4.pkg`
+`os-zapret2-restyle-0.3.2_5.pkg`
 
 Current delivery stage:
 `DEVELOPMENT`
 
 Patch boundary:
-Strategy Lab Patch 2 is an ordinary package patch. `VERSION=0.3.2` remains unchanged
-and `PLUGIN_REVISION` advances from `3` to `4`. No project release, tag, GitHub Release,
-release asset, or pkg-repository publication is authorized.
+Strategy Lab Patch 3 is an ordinary package patch. `VERSION=0.3.2` remains unchanged
+and `PLUGIN_REVISION` advances from `4` to `5`. No tag, GitHub Release, release asset,
+or pkg-repository publication is authorized.
 
 ==================================================
 VERIFIED BASELINE
@@ -58,18 +58,18 @@ VERIFIED BASELINE
 The project owner verified release/package `v0.3.1` /
 `os-zapret2-restyle-0.3.1_1.pkg` and confirmed that its functionality works correctly.
 
-DIAG-002 is resolved and owner live verified. Positive and negative Test Domain
-Connectivity results render correctly.
+DIAG-002 remains resolved and owner live verified.
 
-Patch `v0.3.2_3` localized initial Blockcheck guidance and is merged to `main`.
+Strategy Lab Patch 1 is complete and merged as
+`76bd0f0818223e1d3b3d3eebaaaf4c12a59e95da`.
 
-Strategy Lab Patch 1 is complete:
+Strategy Lab Patch 2 is complete:
 
-- architecture and 13-patch sequence recorded;
-- PR checks and FreeBSD package build passed;
-- PR #50 squash merged as `76bd0f0818223e1d3b3d3eebaaaf4c12a59e95da`;
-- task branch removed;
-- `main` verified before Patch 2 preparation.
+- PR #51 passed Pull request title, Validate Project, and FreeBSD package build;
+- squash merged as `962f8de7728477ab8d47c375aec24cb147381c0f`;
+- post-merge processing completed;
+- task branch was removed;
+- `main` was verified before Patch 3 preparation.
 
 ==================================================
 CURRENT WORK PACKAGE
@@ -81,56 +81,47 @@ Specialist authority:
 `docs/architecture/STRATEGY_LAB.md`
 
 Current patch:
-Patch 2 — asynchronous job and dormant GUI shell.
+Patch 3 — lifecycle snapshot, service stop, cleanup, and exact restoration.
 
 Implemented in the candidate:
 
-- `strategy_lab_launcher.sh` with start, status, cancel, and result modes;
-- `strategy_lab_worker.sh` detached through `daemon(8)`;
-- shared `common.sh` and `state.sh` modules;
-- one active-job pointer and non-blocking launcher lock;
-- atomically replaced `status.json`;
-- ordered `events.ndjson`;
-- per-job PID, cancel marker, and log paths;
-- generated `job_id` returned immediately;
-- busy result for a second start while one job is active;
-- completed partial result for the framework-only worker;
-- cancellation that preserves the job record and marks unfinished stages `SKIPPED`;
-- exact approved canceled messages:
-  - `SKIPPED — отменено`;
-  - `SKIPPED — canseled`;
-- four Diagnostics API actions and four configd actions;
-- dormant Diagnostics progress/Stop shell with one-second polling helpers;
-- current Blockcheck button and synchronous execution path intentionally unchanged;
-- focused mocked contract test added to CI.
-
-Patch 2 does not:
-
-- perform DNS, TLS, QUIC, IPv6, HTTP, or UDP probes;
-- stop or start normal Zapret2;
-- launch a temporary candidate dvtws2;
-- modify firewall rules;
-- replace the active Blockcheck button path.
+- Strategy Lab execution enters the existing service-owned
+  `/var/run/zapret2-lifecycle.lock` boundary;
+- the lock is held from snapshot through mandatory stage 90 restoration;
+- internal status/stop/start actions require both inherited ownership and open descriptor
+  9 and cannot be invoked as ordinary unlocked service commands;
+- initial state is accepted only as complete `RUNNING` or complete `STOPPED`;
+- incomplete or unknown state fails closed before mutation;
+- a running service is stopped and verified fully stopped before later test stages;
+- a stopped service remains stopped;
+- success, cancellation, signal, timeout/error paths converge on stage 90;
+- exact `RUNNING → RUNNING` and `STOPPED → STOPPED` restoration is verified;
+- restoration failure produces `RESTORE_FAILED`;
+- cancellation keeps completed results, marks unexecuted test stages with the approved
+  selected-language `SKIPPED` message, and still runs stage 90;
+- network probes, temporary candidate runtime, and firewall candidate rules remain
+  outside Patch 3.
 
 ==================================================
 AUTOMATED VERIFICATION
 ==================================================
 
-Completed before publication:
+The focused mocked lifecycle contract passed for:
 
-- POSIX shell syntax for all new Strategy Lab scripts;
-- PHP syntax for DiagnosticsController;
-- mocked asynchronous start and immediate `job_id` response;
-- normal partial framework completion;
-- one-active-job busy behavior;
-- Russian and English cancellation result text;
-- atomic status and active-job cleanup contract;
-- idle status after completion;
-- unsafe target rejection;
-- static configd, API, dormant GUI, and legacy-path preservation checks.
+- `RUNNING → STOPPED → RUNNING`;
+- `STOPPED → STOPPED` without an accidental start;
+- cancellation after normal service stop;
+- exact Russian and English canceled-stage text;
+- one-active-job busy response;
+- explicit `RESTORE_FAILED` after injected start failure;
+- fail-closed incomplete initial state with no mutation;
+- idle cleanup and unsafe target rejection;
+- service-owned lifecycle transaction with inherited descriptor 9;
+- rejection of internal lifecycle actions without lock ownership;
+- POSIX shell syntax and legacy Blockcheck-path preservation.
 
-Owner-assisted OPNsense checks remain deferred until all 13 patches are published and
-fully processed by GitHub.
+Owner-assisted OPNsense checks remain deferred until all 13 Strategy Lab patches are
+published and fully processed by GitHub.
 
 ==================================================
 SERIAL DELIVERY STATE
@@ -140,10 +131,13 @@ Patch 1:
 COMPLETE
 
 Patch 2:
-IN DELIVERY
+COMPLETE
 
 Patch 3:
-BLOCKED until Patch 2 completes PR checks, squash merge, every post-merge workflow,
+IN DELIVERY
+
+Patch 4:
+BLOCKED until Patch 3 completes every PR check, squash merge, post-merge workflow,
 automatic branch cleanup, `main` verification, branch-absence verification, and all
 remaining GitHub processing.
 
@@ -151,5 +145,5 @@ remaining GitHub processing.
 NEXT ACTION
 ==================================================
 
-Publish and completely process Patch 2. Do not prepare Patch 3 before the complete
-serial delivery gate for Patch 2 is satisfied.
+Publish and completely process Patch 3. Do not prepare Patch 4 before the complete
+serial delivery gate for Patch 3 is satisfied.

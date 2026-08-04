@@ -60,10 +60,11 @@ Published package:
 `os-zapret2-restyle-0.3.2_1.pkg`
 
 Current patch candidate:
-`os-zapret2-restyle-0.3.2_4.pkg`
+`os-zapret2-restyle-0.3.2_5.pkg`
 
-Patch `v0.3.2_4` adds the asynchronous Strategy Lab job and dormant GUI shell. It keeps
-the legacy Blockcheck path active and is not a project release.
+Patch `v0.3.2_5` adds the Strategy Lab lifecycle transaction, service stop, mandatory
+cleanup, exact state restoration, and explicit `RESTORE_FAILED`. It keeps the legacy
+Blockcheck path active and is not a project release.
 
 ==================================================
 CURRENT DELIVERY PROTOCOL
@@ -93,9 +94,9 @@ processing.
 PULL-REQUEST PROTOCOL
 ==================================================
 
-Patch `v0.3.2_4` title:
+Patch `v0.3.2_5` title:
 
-`v0.3.2_4: Add Strategy Lab job shell`
+`v0.3.2_5: Add Strategy Lab lifecycle transaction`
 
 Its squash subject is an ordinary logical subject, not a release subject.
 
@@ -119,7 +120,7 @@ RELEASE CONTROL
 ==================================================
 
 Only an explicitly authorized new `VERSION` follows the release pipeline. Patch
-`v0.3.2_4` stops after ordinary merge, complete GitHub processing, branch cleanup, and
+`v0.3.2_5` stops after ordinary merge, complete GitHub processing, branch cleanup, and
 `main` verification.
 
 ==================================================

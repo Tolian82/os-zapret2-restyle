@@ -35,6 +35,10 @@ start_job()
         emit_error_json "Strategy Lab worker is unavailable"
         return 1
     }
+    [ -x "${TRANSACTION_SCRIPT}" ] || {
+        emit_error_json "Strategy Lab lifecycle transaction is unavailable"
+        return 1
+    }
     [ -x "${DAEMON_BIN}" ] || {
         emit_error_json "Strategy Lab daemon launcher is unavailable"
         return 1
@@ -68,11 +72,11 @@ start_job()
     rm -f "${_strategy_lab_pid}"
 
     if ! "${DAEMON_BIN}" -f -o "${_strategy_lab_log}" -p "${_strategy_lab_pid}" \
-        "${WORKER_SCRIPT}" "${_strategy_lab_job}"; then
+        "${TRANSACTION_SCRIPT}" strategy-lab "${_strategy_lab_job}"; then
         strategy_lab_clear_active_job "${_strategy_lab_job}"
         strategy_lab_update_job "${_strategy_lab_job}" error ERROR 00 false \
-            'Strategy Lab worker could not be started' || true
-        emit_error_json "Strategy Lab worker could not be started"
+            'Strategy Lab lifecycle transaction could not be started' || true
+        emit_error_json "Strategy Lab lifecycle transaction could not be started"
         return 1
     fi
 
