@@ -3,6 +3,7 @@
 SCRIPT_DIR="${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}"
 MODULE_DIR="${MODULE_DIR:-${SCRIPT_DIR}/strategy_lab}"
 WORKER_SCRIPT="${WORKER_SCRIPT:-${SCRIPT_DIR}/strategy_lab_worker.sh}"
+TRANSACTION_SCRIPT="${TRANSACTION_SCRIPT:-${SCRIPT_DIR}/zapret_service.sh}"
 DAEMON_BIN="${DAEMON_BIN:-/usr/sbin/daemon}"
 LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 MODE="${1:-status}"

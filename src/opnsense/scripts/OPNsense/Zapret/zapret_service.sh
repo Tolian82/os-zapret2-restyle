@@ -1,7 +1,7 @@
 #!/bin/sh
 
-SCRIPT_DIR="/usr/local/opnsense/scripts/OPNsense/Zapret"
-BACKEND_DIR="${SCRIPT_DIR}/backend"
+SCRIPT_DIR="${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}"
+BACKEND_DIR="${BACKEND_DIR:-${SCRIPT_DIR}/backend}"
 
 for module in common config parser registry storage targets target_mode \
     profile_normalizer profile_pipeline exclude blobs ports firewall generator validator atomic \
@@ -29,9 +29,11 @@ DVTWS_LOG="/var/log/zapret2/dvtws2.log"
 SUPERVISOR_LOG="/var/log/zapret2/supervisor.log"
 RULE_BASE=19000
 RULE_MAX=$((RULE_BASE + 10))
-LIFECYCLE_LOCK_FILE="/var/run/zapret2-lifecycle.lock"
+LIFECYCLE_LOCK_FILE="${LIFECYCLE_LOCK_FILE:-/var/run/zapret2-lifecycle.lock}"
 LIFECYCLE_LOCK_TIMEOUT=30
-LOCKF_BIN="/usr/bin/lockf"
+STRATEGY_LAB_LOCK_TIMEOUT=3
+LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
+STRATEGY_LAB_WORKER="${STRATEGY_LAB_WORKER:-${SCRIPT_DIR}/strategy_lab_worker.sh}"
 
 ensure_runtime_components()
 {
@@ -96,6 +98,58 @@ reconfigure_service()
         "${DVTWS_LOG}" "${SUPERVISOR_LOG}"
 }
 
+strategy_lab_job_id_valid()
+{
+    printf '%s\n' "$1" | grep -Eq '^job\.[A-Za-z0-9]+$'
+}
+
+strategy_lab_lock_owner_valid()
+{
+    [ "${STRATEGY_LAB_LIFECYCLE_OWNER:-0}" = 1 ] || return 1
+    ( : >&9 ) 2>/dev/null
+}
+
+strategy_lab_internal_dispatch()
+{
+    strategy_lab_lock_owner_valid || {
+        echo "ERROR: Strategy Lab internal lifecycle action has no lock owner" >&2
+        return 77
+    }
+
+    case "${1:-}" in
+        strategy-lab-status)
+            service_dispatch status
+            ;;
+        strategy-lab-stop)
+            stop_service
+            ;;
+        strategy-lab-start)
+            start_service
+            ;;
+        *)
+            return 64
+            ;;
+    esac
+}
+
+run_strategy_lab_job()
+{
+    _strategy_lab_job_id="${1:-}"
+    strategy_lab_job_id_valid "${_strategy_lab_job_id}" || {
+        echo "ERROR: invalid Strategy Lab job id" >&2
+        return 64
+    }
+    [ -x "${STRATEGY_LAB_WORKER}" ] || {
+        echo "ERROR: Strategy Lab worker is unavailable: ${STRATEGY_LAB_WORKER}" >&2
+        return 1
+    }
+
+    STRATEGY_LAB_LIFECYCLE_OWNER=1
+    STRATEGY_LAB_SERVICE_SCRIPT="$0"
+    export STRATEGY_LAB_LIFECYCLE_OWNER STRATEGY_LAB_SERVICE_SCRIPT
+    exec "${STRATEGY_LAB_WORKER}" "${_strategy_lab_job_id}"
+}
+
 service_dispatch()
 {
     case "${1:-}" in
@@ -122,6 +176,9 @@ service_dispatch()
                 "${SUPERVISOR_DAEMON_PIDFILE}" "${SUPERVISOR_MONITOR_PIDFILE}" \
                 "${RULE_BASE}" "${RULE_MAX}" "${STAGE_FILE}" \
                 "${2:-dvtws2 runtime failure}"
+            ;;
+        strategy-lab)
+            run_strategy_lab_job "${2:-}"
             ;;
         *)
             echo "usage: zapret_service.sh {start|stop|restart|status|reconfigure}" >&2
@@ -151,6 +208,22 @@ service_with_lifecycle_lock()
 case "${1:-}" in
     status)
         service_dispatch "$@"
+        ;;
+    strategy-lab-status|strategy-lab-stop|strategy-lab-start)
+        strategy_lab_internal_dispatch "$@"
+        ;;
+    strategy-lab)
+        service_with_lifecycle_lock "${STRATEGY_LAB_LOCK_TIMEOUT}" "$@"
+        _service_status=$?
+        if [ "${_service_status}" -eq 75 ]; then
+            echo "ERROR: Strategy Lab could not acquire the zapret lifecycle lock" >&2
+            if [ -x "${STRATEGY_LAB_WORKER}" ] && strategy_lab_job_id_valid "${2:-}"; then
+                STRATEGY_LAB_LIFECYCLE_LOCK_FAILED=1 \
+                STRATEGY_LAB_SERVICE_SCRIPT="$0" \
+                    "${STRATEGY_LAB_WORKER}" "${2}" || true
+            fi
+        fi
+        exit "${_service_status}"
         ;;
     runtime-failure)
         # A callback from the previous supervisor can arrive while stop or
