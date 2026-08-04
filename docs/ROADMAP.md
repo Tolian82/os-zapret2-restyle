@@ -25,109 +25,54 @@ CURRENT STAGE
 
 Milestone 8 — GUI maintenance and managed upstream components
 
-Current source candidate:
-`v0.3.2_7`
-
-Current work package:
-Strategy Lab — asynchronous replacement of synchronous Diagnostics Blockcheck.
-
-Specialist plan:
-`docs/architecture/STRATEGY_LAB.md`
+Current source candidate: `v0.3.2_9`
+Current work package: Strategy Lab asynchronous replacement of synchronous Diagnostics Blockcheck.
+Specialist plan: `docs/architecture/STRATEGY_LAB.md`
 
 ==================================================
 SERIAL DELIVERY GATE
 ==================================================
 
-Patch N+1 is not prepared until Patch N has passed every PR check, been squash merged,
-completed every merge-triggered GitHub workflow, removed its task branch, and been
-verified on `main` with no unresolved processing.
+Patch N+1 is not prepared until Patch N has passed every PR check, been squash merged, completed every merge-triggered GitHub workflow, removed its task branch, and been verified on `main` with no unresolved processing.
 
-Manual checks requiring project-owner participation remain deferred until all 13
-implementation patches pass this gate.
+Manual checks requiring project-owner participation remain deferred until all 13 implementation patches pass this gate.
 
 ==================================================
 PATCH STATUS
 ==================================================
 
-Patch 1 — Documentation and approved architecture
-Status: COMPLETE
+Patch 1 — Documentation and approved architecture: COMPLETE
+Patch 2 — Asynchronous job and dormant GUI shell: COMPLETE
+Patch 3 — Lifecycle stop, cleanup, and restoration: COMPLETE
+Patch 4 — Targets, network precheck, and clean baseline: COMPLETE
+Patch 5 — One isolated temporary candidate runtime: COMPLETE
+Patch 6 — TLS 1.3 family screening: COMPLETE
 
-Patch 2 — Asynchronous job and dormant GUI shell
-Status: COMPLETE
+Patch 7 — Accepted-family parameter expansion: IN DELIVERY
 
-Patch 3 — Lifecycle stop, cleanup, and restoration
-Status: COMPLETE
+- [x] Expand only families accepted by stage 50.
+- [x] Keep different candidate strategies strictly sequential.
+- [x] Reuse the isolated runtime and target-scoped rules.
+- [x] Add bounded family-specific variants.
+- [x] Stop after five working candidates or catalog exhaustion.
+- [x] Preserve every completed result atomically.
+- [x] Classify per-candidate timeout as rejection.
+- [x] Enforce the 60-second stage budget.
+- [x] Add focused accepted-only, order, early-stop, and timeout coverage.
+- [x] Advance package candidate to `0.3.2_9` without changing VERSION.
 
-- clean replacement PR #53 passed all checks and FreeBSD package build;
-- squash merged as `100f324d09539e672586b12e3cd96c26baf351b2`;
-- task branch cleanup and `main` verification completed.
-
-Patch 4 — Targets, network precheck, and clean baseline
-Status: COMPLETE
-
-- [x] Normalize and classify domain or IPv4 input.
-- [x] Reject malformed target values.
-- [x] Persist explicit required endpoints.
-- [x] Add the approved Telegram endpoint pair.
-- [x] Run IPv4, IPv6, and fixed QUIC/IPv4 controls concurrently.
-- [x] Require both an IPv6 default route and control connection.
-- [x] Use only QUIC command exit status for classification.
-- [x] Enforce the six-second stage-30 budget.
-- [x] Run explicit clean TLS 1.3 GET probes for domain endpoints.
-- [x] Run direct TCP/443 baseline for IPv4 targets.
-- [x] Enforce the five-second stage-40 budget.
-- [x] Return `TARGET_ACCESSIBLE` when every required endpoint works cleanly.
-- [x] Separate valid negative results, timeout, and internal errors.
-- [x] Preserve mandatory restoration on every path.
-- [x] Add focused mocked precheck/baseline/timeout coverage.
-- [x] Advance package candidate to `0.3.2_6` without changing VERSION.
-- [x] Synchronize state, roadmap, workflow, audit, changelog, patch note, and devlog.
-
-Patch 5 — One isolated temporary candidate runtime
-Status: IN DELIVERY
-
-- [x] Create a job-specific candidate runtime and artifacts.
-- [x] Start exactly one temporary dvtws2 without supervisor restart behavior.
-- [x] Reserve divert port 9989 and IPFW range 19100–19131.
-- [x] Restrict candidate rules to required endpoint IPv4 addresses and TCP/443.
-- [x] Run up to two endpoints under one active strategy.
-- [x] Store exact strategy, endpoint results, and all-pass classification.
-- [x] Clean candidate process, PID, rules, and runtime on every exit path.
-- [x] Repeat cleanup before exact service restoration in stage 90.
-- [x] Add focused success and injected-firewall-failure coverage.
-- [x] Advance package candidate to `0.3.2_7` without changing VERSION.
-- [x] Synchronize state, roadmap, workflow, audit, patch note, and devlog.
-
-Patch 6 — TLS 1.3 family screening
-Status: BLOCKED BY PATCH 5 GATE
-
-Patch 7 — Accepted-family parameter expansion
-Status: BLOCKED
-
-Patch 8 — Stability, shortlist, and report
-Status: BLOCKED
-
-Patch 9 — Extended TLS 1.2 and HTTP
-Status: BLOCKED
-
-Patch 10 — QUIC strategy branch
-Status: BLOCKED
-
-Patch 11 — Arbitrary UDP strategy branch
-Status: BLOCKED
-
-Patch 12 — Temporary circular live validation
-Status: BLOCKED
-
-Patch 13 — Final synchronous Blockcheck replacement
-Status: BLOCKED
+Patch 8 — Stability, shortlist, and report: BLOCKED BY PATCH 7 GATE
+Patch 9 — Extended TLS 1.2 and HTTP: BLOCKED
+Patch 10 — QUIC strategy branch: BLOCKED
+Patch 11 — Arbitrary UDP strategy branch: BLOCKED
+Patch 12 — Temporary circular live validation: BLOCKED
+Patch 13 — Final synchronous Blockcheck replacement: BLOCKED
 
 ==================================================
 POST-PATCH-13 VERIFICATION
 ==================================================
 
-After every patch completes the serial GitHub gate, run the consolidated owner-assisted
-OPNsense verification matrix recorded in `docs/architecture/STRATEGY_LAB.md`.
+After every patch completes the serial GitHub gate, run the consolidated owner-assisted OPNsense verification matrix recorded in `docs/architecture/STRATEGY_LAB.md`.
 
 ==================================================
 OTHER MILESTONE 8 WORK

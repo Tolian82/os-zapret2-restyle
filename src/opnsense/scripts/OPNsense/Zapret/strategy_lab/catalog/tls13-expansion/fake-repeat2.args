@@ -1,0 +1,2 @@
+--payload=tls_client_hello
+--lua-desync=fake:blob=fake_default_tls:repeats=2
