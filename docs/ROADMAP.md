@@ -1,21 +1,18 @@
 # os-zapret2-restyle — Roadmap
 
-Current candidate: `v0.3.2_11`.
+Current candidate: `v0.3.2_12`.
 
-Strict serial gate applies to every Strategy Lab patch.
-
-- Patches 1–8: COMPLETE.
-- Patch 9 — Extended TLS 1.2 and HTTP: IN DELIVERY.
-  - [x] Explicit TLS 1.2 bounded GET.
-  - [x] Explicit plain HTTP bounded GET.
-  - [x] Protocol-specific port and L7 filtering.
-  - [x] Sequential Zapret2 candidate catalogs.
-  - [x] Structured protocol result persistence.
-  - [x] Extended-mode gating.
-  - [x] Package candidate `0.3.2_11`.
-- Patch 10 — QUIC strategy branch: BLOCKED BY PATCH 9 GATE.
-- Patch 11 — Arbitrary UDP strategy branch: BLOCKED.
+- Patches 1–9: COMPLETE.
+- Patch 10 — QUIC strategy branch: IN DELIVERY.
+  - [x] Fixed capability gate.
+  - [x] Explicit skip when QUIC/IPv4 is closed.
+  - [x] UDP/443 target-scoped runtime and firewall.
+  - [x] Zapret2 QUIC fake and fragmentation catalog.
+  - [x] OpenSSL QUIC target request with ALPN h3.
+  - [x] Sequential result persistence.
+  - [x] Package candidate `0.3.2_12`.
+- Patch 11 — Arbitrary UDP strategy branch: BLOCKED BY PATCH 10 GATE.
 - Patch 12 — Temporary circular live validation: BLOCKED.
 - Patch 13 — Final synchronous Blockcheck replacement: BLOCKED.
 
-Owner-assisted OPNsense verification follows Patch 13.
+Strict serial delivery and deferred owner-assisted verification remain mandatory.

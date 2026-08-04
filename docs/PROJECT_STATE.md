@@ -3,15 +3,13 @@
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Current package candidate: `os-zapret2-restyle-0.3.2_11.pkg`
+Current package candidate: `os-zapret2-restyle-0.3.2_12.pkg`
 
-Strategy Lab:
+- Patches 1–9: complete and merged.
+- Patch 9 merged as `8b76c01e0e8f333af93868dd01ccda11fedb8fdb`; task branch removed.
+- Patch 10: QUIC capability-gated strategy branch in delivery.
+- Patches 11–13: blocked by the serial gate.
 
-- Patches 1–8: complete and merged.
-- Patch 8 merged as `50b4ca23197367ca3cc583d6016d99d2f9620d67`; task branch removed.
-- Patch 9: extended TLS 1.2 and plain HTTP in delivery.
-- Patches 10–13: blocked by the serial gate.
+Patch 10 tests QUIC only when stage 30 reports `quic_ipv4=available`; otherwise it records an explicit skipped result. It uses Zapret2 QUIC syntax, UDP/443 target-scoped rules, and OpenSSL QUIC target requests. `VERSION=0.3.2`; `PLUGIN_REVISION=12`; no release publication is authorized.
 
-Patch 9 adds protocol-specific TCP/443 TLS 1.2 and TCP/80 HTTP testing in extended mode. Standard mode and the legacy synchronous Blockcheck remain unchanged. `VERSION=0.3.2`; `PLUGIN_REVISION=11`; no release publication is authorized.
-
-Next action: completely process Patch 9 before Patch 10.
+Next action: completely process Patch 10 before Patch 11.

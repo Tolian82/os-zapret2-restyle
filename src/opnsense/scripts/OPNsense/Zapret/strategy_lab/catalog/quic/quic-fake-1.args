@@ -1,0 +1,2 @@
+--payload=quic_initial
+--lua-desync=fake:blob=fake_default_quic:repeats=1
