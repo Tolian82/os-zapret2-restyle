@@ -41,14 +41,14 @@ Current published package:
 `os-zapret2-restyle-0.3.2_1.pkg`
 
 Current source/package candidate:
-`os-zapret2-restyle-0.3.2_6.pkg`
+`os-zapret2-restyle-0.3.2_7.pkg`
 
 Current delivery stage:
 `DEVELOPMENT`
 
 Patch boundary:
-Strategy Lab Patch 4 is an ordinary package patch. `VERSION=0.3.2` remains unchanged
-and `PLUGIN_REVISION` advances from `5` to `6`. No tag, GitHub Release, release asset,
+Strategy Lab Patch 5 is an ordinary package patch. `VERSION=0.3.2` remains unchanged
+and `PLUGIN_REVISION` advances from `6` to `7`. No tag, GitHub Release, release asset,
 or pkg-repository publication is authorized.
 
 ==================================================
@@ -63,10 +63,11 @@ Strategy Lab delivery baseline:
 
 - Patch 1 merged as `76bd0f0818223e1d3b3d3eebaaaf4c12a59e95da`;
 - Patch 2 merged as `962f8de7728477ab8d47c375aec24cb147381c0f`;
-- Patch 3 clean replacement PR #53 passed title validation, Validate Project, and the
-  FreeBSD package build;
-- Patch 3 squash merged as `100f324d09539e672586b12e3cd96c26baf351b2`;
-- its task branch was removed and `main` was verified before Patch 4 preparation.
+- Patch 3 merged as `100f324d09539e672586b12e3cd96c26baf351b2`;
+- Patch 4 PR #54 passed title validation, Validate Project, and the FreeBSD package
+  build;
+- Patch 4 squash merged as `ad58111aa2f00588060d167358a73c010abd8ae4`;
+- its task branch was removed and `main` was verified before Patch 5 preparation.
 
 The first Patch 3 delivery attempt, PR #52, was closed without merge because the
 branch-hygiene regression test incorrectly required stale `PLUGIN_REVISION=3`. The clean
@@ -82,32 +83,29 @@ Specialist authority:
 `docs/architecture/STRATEGY_LAB.md`
 
 Current patch:
-Patch 4 — target initialization, network capability precheck, and clean baseline.
+Patch 5 — one isolated temporary Zapret2 candidate runtime.
 
 Implemented in the candidate:
 
-- domain and IPv4 target normalization and classification;
-- rejection of malformed targets and invalid numeric IPv4-like input;
-- explicit required-endpoint lists, including the approved Telegram pair
-  `telegram.org` and `web.telegram.org`;
-- stage 00 persistence of normalized target type and endpoints;
-- concurrent IPv4, IPv6, and fixed QUIC/IPv4 control probes;
-- IPv6 eligibility only when a default IPv6 route and control connection both work;
-- fixed QUIC precheck against `yandex.ru:443`, ALPN `h3`, two-second operation timeout,
-  and classification only from command exit status;
-- stage 30 six-second budget independent from individual operation limits;
-- clean TLS 1.3 baseline for domain endpoints using explicit GET/curl settings;
-- up to two required endpoints under the same baseline stage;
-- direct TCP/443 baseline for an IPv4 target without inventing DNS or SNI semantics;
-- stage 40 five-second budget independent from individual operation limits;
-- `TARGET_ACCESSIBLE` early completion when every required endpoint works cleanly;
-- valid negative DNS, IPv4-control, TLS, TCP, and timeout results separated from
-  internal `ERROR`;
-- exact bilingual progress summaries and mandatory stage 90 restoration.
+- one job-specific temporary runtime, PID file, log, argument file, hostlist, and
+  resolved IPv4 address list;
+- exactly one temporary dvtws2 process without supervisor restart behavior;
+- lifecycle-lock descriptor 9 closed before child creation;
+- reserved divert port 9989 and IPFW range 19100–19131, separate from normal rules;
+- temporary TCP/443 rules limited to resolved IPv4 addresses of required endpoints;
+- up to two required endpoints tested concurrently under the same active strategy;
+- Zapret2-only smoke fixture `--lua-desync=multisplit:pos=1`;
+- structured `candidate_smoke` state with exact strategy, endpoint results, and
+  `all_pass`;
+- unconditional teardown after success, failure, timeout, cancellation, or signal;
+- repeated safety cleanup in mandatory stage 90;
+- worker internals split into message, control, and flow modules without changing the
+  asynchronous contract;
+- lifecycle test fixtures split into bounded helper files for stable CI execution.
 
-Patch 4 does not launch a candidate dvtws2, add candidate firewall rules, search any
-strategy family, connect the dormant Strategy Lab GUI shell, or replace legacy
-Blockcheck.
+Patch 5 does not add the seven-family catalog, family acceptance, parameter expansion,
+stability scoring, shortlist, extended protocols, circular validation, active GUI
+switch-over, or legacy Blockcheck removal.
 
 ==================================================
 AUTOMATED VERIFICATION
@@ -115,19 +113,17 @@ AUTOMATED VERIFICATION
 
 Focused mocked coverage passes for:
 
-- target normalization and domain/IP classification;
-- Telegram two-endpoint contract;
-- IPv4-only with IPv6 unavailable and QUIC closed;
-- complete IPv4/IPv6/QUIC capability;
-- QUIC result determined only by command status;
-- clean TLS 1.3 failure for both required Telegram endpoints;
-- directly accessible target and early `TARGET_ACCESSIBLE` result;
-- DNS failure as a valid stage-40 failure rather than internal error;
-- IPv4-control failure before baseline;
-- IPv4 target using TCP/443 with DNS skipped;
-- stage-level timeout, final `TIMEOUT`, and successful mandatory restoration;
-- all previous lifecycle, cancellation, async-job, API/configd, and legacy-path
-  regression contracts.
+- one temporary dvtws2 process and no supervisor;
+- target-scoped TCP/443 IPFW rules in the reserved range;
+- two endpoints under one active strategy;
+- structured candidate result storage;
+- teardown after success;
+- teardown after injected firewall failure;
+- no remaining candidate PID, process, or temporary rule;
+- RUNNING→RUNNING, STOPPED→STOPPED, cancellation, timeout, and restore-failure
+  lifecycle regressions;
+- all prior target, precheck, baseline, async-job, API/configd, and legacy-path
+  contracts.
 
 Owner-assisted OPNsense checks remain deferred until all 13 Strategy Lab patches are
 published and fully processed by GitHub.
@@ -142,10 +138,12 @@ Patch 2: COMPLETE
 
 Patch 3: COMPLETE
 
-Patch 4: IN DELIVERY
+Patch 4: COMPLETE
 
-Patch 5:
-BLOCKED until Patch 4 completes every PR check, squash merge, post-merge workflow,
+Patch 5: IN DELIVERY
+
+Patch 6:
+BLOCKED until Patch 5 completes every PR check, squash merge, post-merge workflow,
 automatic branch cleanup, `main` verification, branch-absence verification, and all
 remaining GitHub processing.
 
@@ -153,5 +151,5 @@ remaining GitHub processing.
 NEXT ACTION
 ==================================================
 
-Publish and completely process Patch 4. Do not prepare Patch 5 before the complete
-serial delivery gate for Patch 4 is satisfied.
+Publish and completely process Patch 5. Do not prepare Patch 6 before the complete
+serial delivery gate for Patch 5 is satisfied.

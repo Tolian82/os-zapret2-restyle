@@ -88,8 +88,10 @@ strategy_lab_stop_normal_service()
 
 strategy_lab_cleanup_temporary_runtime()
 {
-    # Patch 3 has no temporary candidate runtime yet. The permanent cleanup hook is
-    # present now so every later exit path already converges on stage 90.
+    if command -v strategy_lab_candidate_cleanup >/dev/null 2>&1 &&
+        [ -n "${JOB_ID:-}" ]; then
+        strategy_lab_candidate_cleanup "${JOB_ID}" || return 1
+    fi
     return 0
 }
 

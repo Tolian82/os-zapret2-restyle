@@ -28,6 +28,7 @@ strategy_lab_initialize_state()
             endpoints: [],
             network: {},
             baseline: {},
+            candidate_smoke: {},
             mode: $mode,
             language: $language,
             initial_service_state: "",
@@ -100,6 +101,22 @@ strategy_lab_set_baseline_result()
 
     "${STRATEGY_LAB_JQ}" --slurpfile baseline "${_strategy_lab_baseline_file}" \
         '.baseline=$baseline[0]' "${_strategy_lab_status}" > "${_strategy_lab_tmp}" || {
+            rm -f "${_strategy_lab_tmp}"
+            return 1
+        }
+    chmod 0644 "${_strategy_lab_tmp}"
+    mv -f "${_strategy_lab_tmp}" "${_strategy_lab_status}"
+}
+
+strategy_lab_set_candidate_smoke_result()
+{
+    _strategy_lab_job="$1"
+    _strategy_lab_candidate_file="$2"
+    _strategy_lab_status=$(strategy_lab_status_file "${_strategy_lab_job}")
+    _strategy_lab_tmp=$(mktemp "$(dirname "${_strategy_lab_status}")/.candidate-smoke.XXXXXX") || return 1
+
+    "${STRATEGY_LAB_JQ}" --slurpfile candidate "${_strategy_lab_candidate_file}" \
+        '.candidate_smoke=$candidate[0]' "${_strategy_lab_status}" > "${_strategy_lab_tmp}" || {
             rm -f "${_strategy_lab_tmp}"
             return 1
         }
