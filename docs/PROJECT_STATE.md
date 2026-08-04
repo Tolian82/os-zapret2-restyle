@@ -41,30 +41,35 @@ Current published package:
 `os-zapret2-restyle-0.3.2_1.pkg`
 
 Current source/package candidate:
-`os-zapret2-restyle-0.3.2_3.pkg`
+`os-zapret2-restyle-0.3.2_4.pkg`
 
 Current delivery stage:
 `DEVELOPMENT`
 
 Patch boundary:
-The active Strategy Lab Patch 1 is documentation only. `VERSION=0.3.2` and
-`PLUGIN_REVISION=3` remain unchanged. No project release, tag, GitHub Release, release
-asset, or pkg-repository publication is authorized.
+Strategy Lab Patch 2 is an ordinary package patch. `VERSION=0.3.2` remains unchanged
+and `PLUGIN_REVISION` advances from `3` to `4`. No project release, tag, GitHub Release,
+release asset, or pkg-repository publication is authorized.
 
 ==================================================
-VERIFIED PRODUCT STATE
+VERIFIED BASELINE
 ==================================================
 
-The project owner personally verified release/package `v0.3.1` /
-`os-zapret2-restyle-0.3.1_1.pkg` and confirmed that everything in it works correctly.
+The project owner verified release/package `v0.3.1` /
+`os-zapret2-restyle-0.3.1_1.pkg` and confirmed that its functionality works correctly.
 
 DIAG-002 is resolved and owner live verified. Positive and negative Test Domain
 Connectivity results render correctly.
 
-Release `v0.3.2` preserves that runtime baseline and adds GitHub publication governance.
+Patch `v0.3.2_3` localized initial Blockcheck guidance and is merged to `main`.
 
-Patch `v0.3.2_3` localized the initial Diagnostics Blockcheck guidance according to the
-selected OPNsense language and is merged to `main`.
+Strategy Lab Patch 1 is complete:
+
+- architecture and 13-patch sequence recorded;
+- PR checks and FreeBSD package build passed;
+- PR #50 squash merged as `76bd0f0818223e1d3b3d3eebaaaf4c12a59e95da`;
+- task branch removed;
+- `main` verified before Patch 2 preparation.
 
 ==================================================
 CURRENT WORK PACKAGE
@@ -72,87 +77,79 @@ CURRENT WORK PACKAGE
 
 Strategy Lab — asynchronous replacement of synchronous Diagnostics Blockcheck.
 
-Architecture status:
-Approved for implementation.
-
 Specialist authority:
 `docs/architecture/STRATEGY_LAB.md`
 
-Decision:
-`docs/decisions/DEC-2026-08-04-strategy-lab.md`
+Current patch:
+Patch 2 — asynchronous job and dormant GUI shell.
 
-Audit expansion:
-`docs/audit/DIAG-001-strategy-lab.md`
+Implemented in the candidate:
 
-Patch 1 scope:
-
-- documentation only;
-- record all approved product, lifecycle, timeout, stage, reporting, localization,
-  cancellation, strategy-search, verification, and delivery decisions;
-- record the complete 13-patch implementation order;
-- record that owner-assisted manual OPNsense checks occur only after all implementation
-  patches are published and fully processed by GitHub;
-- record the blocking rule that Patch N+1 is not prepared until Patch N has completed
-  PR checks, squash merge, post-merge workflows, branch cleanup, `main` verification,
-  and branch-absence verification.
-
-==================================================
-APPROVED STRATEGY LAB SUMMARY
-==================================================
-
-- asynchronous start/status/events/cancel/result job model;
-- numbered stages 00 through 99;
-- normal Zapret2 stopped and verified absent during tests;
-- exact initial service-state restoration after every exit path;
-- one active job and one active candidate strategy;
-- up to two endpoints under the same candidate;
-- fixed QUIC precheck: `yandex.ru:443`, IPv4, ALPN `h3`, timeout 2 seconds, exit status
-  only;
-- standard overall budget 150 seconds;
-- separate extended budget 120 seconds;
-- family-first TLS 1.3 search;
-- 3/3 stability for every required endpoint;
-- shortlist of three to five stable strategies;
-- English default and Russian for OPNsense `ru*`;
-- cancellation preserves completed results, shows remaining stages as skipped, and
-  performs mandatory restoration;
-- approved cancellation output:
+- `strategy_lab_launcher.sh` with start, status, cancel, and result modes;
+- `strategy_lab_worker.sh` detached through `daemon(8)`;
+- shared `common.sh` and `state.sh` modules;
+- one active-job pointer and non-blocking launcher lock;
+- atomically replaced `status.json`;
+- ordered `events.ndjson`;
+- per-job PID, cancel marker, and log paths;
+- generated `job_id` returned immediately;
+- busy result for a second start while one job is active;
+- completed partial result for the framework-only worker;
+- cancellation that preserves the job record and marks unfinished stages `SKIPPED`;
+- exact approved canceled messages:
   - `SKIPPED — отменено`;
   - `SKIPPED — canseled`;
-- final patch removes or reduces the old synchronous `blockcheck.sh` to an asynchronous
-  compatibility adapter.
+- four Diagnostics API actions and four configd actions;
+- dormant Diagnostics progress/Stop shell with one-second polling helpers;
+- current Blockcheck button and synchronous execution path intentionally unchanged;
+- focused mocked contract test added to CI.
+
+Patch 2 does not:
+
+- perform DNS, TLS, QUIC, IPv6, HTTP, or UDP probes;
+- stop or start normal Zapret2;
+- launch a temporary candidate dvtws2;
+- modify firewall rules;
+- replace the active Blockcheck button path.
+
+==================================================
+AUTOMATED VERIFICATION
+==================================================
+
+Completed before publication:
+
+- POSIX shell syntax for all new Strategy Lab scripts;
+- PHP syntax for DiagnosticsController;
+- mocked asynchronous start and immediate `job_id` response;
+- normal partial framework completion;
+- one-active-job busy behavior;
+- Russian and English cancellation result text;
+- atomic status and active-job cleanup contract;
+- idle status after completion;
+- unsafe target rejection;
+- static configd, API, dormant GUI, and legacy-path preservation checks.
+
+Owner-assisted OPNsense checks remain deferred until all 13 patches are published and
+fully processed by GitHub.
 
 ==================================================
 SERIAL DELIVERY STATE
 ==================================================
 
-Current patch:
-Patch 1 — Strategy Lab documentation and approved architecture.
+Patch 1:
+COMPLETE
 
-Next patch:
-Patch 2 — asynchronous job and GUI shell.
+Patch 2:
+IN DELIVERY
 
-Blocking gate:
-Patch 2 preparation must not begin until Patch 1 has completed every GitHub check and
-post-merge workflow, its task branch has been deleted, `main` has been verified, and no
-GitHub processing remains unresolved.
-
-==================================================
-MANUAL VERIFICATION STATE
-==================================================
-
-No owner-assisted manual commands are requested during Patches 1 through 13.
-
-Each patch receives automated focused tests, syntax/static validation, standard CI,
-package build where applicable, and complete post-merge GitHub processing.
-
-After Patch 13, one consolidated owner-assisted OPNsense matrix verifies the complete
-Strategy Lab implementation.
+Patch 3:
+BLOCKED until Patch 2 completes PR checks, squash merge, every post-merge workflow,
+automatic branch cleanup, `main` verification, branch-absence verification, and all
+remaining GitHub processing.
 
 ==================================================
 NEXT ACTION
 ==================================================
 
-Publish and completely process Strategy Lab Patch 1 through the mandatory atomic PR,
-CI, squash merge, post-merge workflow, automatic cleanup, `main` verification, and
-branch-absence sequence. Do not prepare Patch 2 before that sequence is complete.
+Publish and completely process Patch 2. Do not prepare Patch 3 before the complete
+serial delivery gate for Patch 2 is satisfied.

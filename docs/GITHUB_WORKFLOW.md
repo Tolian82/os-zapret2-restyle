@@ -40,22 +40,14 @@ The exact current `main` commit recorded before work starts.
 AUTHORIZATION BOUNDARIES
 ==================================================
 
-Ordinary development or patch requests authorize:
+Ordinary development or patch requests authorize one atomic logical commit, exactly one
+remote task branch created only after the commit is final, one ready pull request, one
+complete check set, one squash merge, `main` verification, and automatic branch cleanup.
 
-- one atomic logical commit;
-- exactly one remote task branch, created only after the commit is final;
-- one ready pull request;
-- one complete check set;
-- one squash merge;
-- verification of `main`;
-- automatic deletion and absence verification of the task branch.
+A package patch keeps `VERSION` unchanged and advances only `PLUGIN_REVISION`. It does
+not authorize a tag, GitHub Release, release assets, or pkg-repository publication.
 
-A request for patch `vX.Y.Z_N` keeps `VERSION=X.Y.Z` and sets
-`PLUGIN_REVISION=N`. It does not authorize a tag, GitHub Release, release assets, or
-pkg-repository publication.
-
-A project release requires an explicit request for an exact new version. The assistant
-must never infer or choose that version independently.
+A project release requires an explicit exact new version.
 
 ==================================================
 CURRENT SOURCE AND PACKAGE STATE
@@ -68,20 +60,10 @@ Published package:
 `os-zapret2-restyle-0.3.2_1.pkg`
 
 Current patch candidate:
-`os-zapret2-restyle-0.3.2_3.pkg`
+`os-zapret2-restyle-0.3.2_4.pkg`
 
-Patch `v0.3.2_3` localizes the initial Diagnostics Blockcheck guidance for English
-and Russian OPNsense interfaces. It is not a new project release.
-
-==================================================
-FORWARD-ONLY VERSION POLICY
-==================================================
-
-Published tags, releases, assets, and versions are immutable. Never move a tag, replace
-assets, roll `VERSION` backward, reuse a version, or rewrite published history.
-
-A later project release uses a higher explicitly approved version. A package patch may
-advance only `PLUGIN_REVISION` while `VERSION` stays unchanged.
+Patch `v0.3.2_4` adds the asynchronous Strategy Lab job and dormant GUI shell. It keeps
+the legacy Blockcheck path active and is not a project release.
 
 ==================================================
 CURRENT DELIVERY PROTOCOL
@@ -93,7 +75,7 @@ one logical change
         ↓
 all blobs, one tree, one atomic commit
         ↓
-exactly one remote branch created at the final commit
+exactly one remote branch at the final commit
         ↓
 one ready pull request
         ↓
@@ -103,62 +85,46 @@ one squash merge
         ↓
 automatic branch deletion and verification
 
-The repository workflow `.github/workflows/cleanup-merged-branch.yml` deletes the
-same-repository head branch associated with a new `main` commit. It is idempotent when
-the branch has already been deleted by repository settings.
+Strategy Lab adds a stricter series gate: no later patch is prepared until the previous
+patch also completes every merge-triggered workflow and leaves no unresolved GitHub
+processing.
 
 ==================================================
 PULL-REQUEST PROTOCOL
 ==================================================
 
-Before opening a PR, inspect all workflows triggered by the event.
+Patch `v0.3.2_4` title:
 
-Patch `v0.3.2_3` title:
+`v0.3.2_4: Add Strategy Lab job shell`
 
-`v0.3.2_3: Localize Blockcheck guidance`
-
-Its squash subject is an ordinary logical subject, not `release: prepare v0.3.2`.
-
-The release squash subject is reserved for an explicitly authorized new project version:
-
-`release: prepare vX.Y.Z`
+Its squash subject is an ordinary logical subject, not a release subject.
 
 ==================================================
 ATOMIC API PUBLICATION
 ==================================================
 
-For GitHub integration/API delivery:
-
-1. Prepare all final content and modes without creating a branch.
-2. Create one blob per changed file.
-3. Create one tree based on current `main`.
-4. Create one commit with current `main` as sole parent.
+1. Prepare every final file and mode without a branch.
+2. Create all blobs.
+3. Create one tree based on recorded `main`.
+4. Create one commit with recorded `main` as sole parent.
 5. Validate the commit and recheck `main`.
-6. Verify exact branch-name absence and cleanup availability.
-7. Create exactly one branch at that commit.
+6. Verify branch-name absence and cleanup availability.
+7. Create exactly one task branch.
 8. Open one ready PR.
 
-Never create preparatory sibling branches or stream a multi-file change through
-sequential contents-API commits.
+Never stream a multi-file change through sequential contents-API commits.
 
 ==================================================
 RELEASE CONTROL
 ==================================================
 
-Only an explicitly authorized new `VERSION` follows the release pipeline:
-
-1. set the approved `VERSION`;
-2. set `PLUGIN_REVISION=1`;
-3. pass one atomic PR cycle;
-4. squash merge as `release: prepare vX.Y.Z`;
-5. let repository automation create the immutable tag and run release publication;
-6. verify every public output before installation instructions.
-
-Patch `v0.3.2_3` stops after ordinary merge, branch cleanup, and `main` verification.
+Only an explicitly authorized new `VERSION` follows the release pipeline. Patch
+`v0.3.2_4` stops after ordinary merge, complete GitHub processing, branch cleanup, and
+`main` verification.
 
 ==================================================
 HISTORY RESPONSIBILITY
 ==================================================
 
 Completed work belongs in `DEVLOG.md` or `docs/devlog/`. Decisions belong in
-`DECISIONS.md` or `docs/decisions/`. Patch notes may be stored under `docs/patches/`.
+`DECISIONS.md` or `docs/decisions/`. Patch notes belong under `docs/patches/`.
