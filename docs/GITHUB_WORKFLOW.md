@@ -60,10 +60,10 @@ Published package:
 `os-zapret2-restyle-0.3.2_1.pkg`
 
 Current patch candidate:
-`os-zapret2-restyle-0.3.2_6.pkg`
+`os-zapret2-restyle-0.3.2_7.pkg`
 
-Patch `v0.3.2_6` adds Strategy Lab target normalization, explicit endpoints, network
-capability prechecks, clean TLS 1.3/TCP baselines, and stage-level time budgets. It
+Patch `v0.3.2_7` adds one isolated temporary Zapret2 candidate runtime, target-scoped
+candidate firewall rules, structured candidate results, and unconditional teardown. It
 keeps the legacy Blockcheck path active and is not a project release.
 
 ==================================================
@@ -94,9 +94,9 @@ processing.
 PULL-REQUEST PROTOCOL
 ==================================================
 
-Patch `v0.3.2_6` title:
+Patch `v0.3.2_7` title:
 
-`v0.3.2_6: Add Strategy Lab network baseline`
+`v0.3.2_7: Add Strategy Lab candidate runtime`
 
 Its squash subject is an ordinary logical subject, not a release subject.
 
@@ -120,7 +120,7 @@ RELEASE CONTROL
 ==================================================
 
 Only an explicitly authorized new `VERSION` follows the release pipeline. Patch
-`v0.3.2_6` stops after ordinary merge, complete GitHub processing, branch cleanup, and
+`v0.3.2_7` stops after ordinary merge, complete GitHub processing, branch cleanup, and
 `main` verification.
 
 ==================================================

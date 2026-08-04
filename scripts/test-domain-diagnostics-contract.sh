@@ -72,8 +72,7 @@ printf '%s\n' "${invalid_output}" | grep -Fq 'Invalid domain format.'
 grep -Fq "if (trim(\$response) === '')" "${CONTROLLER}"
 grep -Fq 'Domain connectivity test returned no output.' "${CONTROLLER}"
 
-# Patch 2 Strategy Lab job shell remains part of the Diagnostics contract until
-# the final asynchronous migration replaces the legacy Blockcheck caller.
 sh "${ROOT_DIR}/scripts/test-strategy-lab-job-contract.sh"
+sh "${ROOT_DIR}/scripts/test-strategy-lab-candidate-runtime.sh"
 
 echo 'Domain diagnostics contract tests passed.'

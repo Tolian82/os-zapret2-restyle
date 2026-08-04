@@ -26,7 +26,7 @@ CURRENT STAGE
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current source candidate:
-`v0.3.2_6`
+`v0.3.2_7`
 
 Current work package:
 Strategy Lab — asynchronous replacement of synchronous Diagnostics Blockcheck.
@@ -63,7 +63,7 @@ Status: COMPLETE
 - task branch cleanup and `main` verification completed.
 
 Patch 4 — Targets, network precheck, and clean baseline
-Status: IN DELIVERY
+Status: COMPLETE
 
 - [x] Normalize and classify domain or IPv4 input.
 - [x] Reject malformed target values.
@@ -84,10 +84,22 @@ Status: IN DELIVERY
 - [x] Synchronize state, roadmap, workflow, audit, changelog, patch note, and devlog.
 
 Patch 5 — One isolated temporary candidate runtime
-Status: BLOCKED BY PATCH 4 GATE
+Status: IN DELIVERY
+
+- [x] Create a job-specific candidate runtime and artifacts.
+- [x] Start exactly one temporary dvtws2 without supervisor restart behavior.
+- [x] Reserve divert port 9989 and IPFW range 19100–19131.
+- [x] Restrict candidate rules to required endpoint IPv4 addresses and TCP/443.
+- [x] Run up to two endpoints under one active strategy.
+- [x] Store exact strategy, endpoint results, and all-pass classification.
+- [x] Clean candidate process, PID, rules, and runtime on every exit path.
+- [x] Repeat cleanup before exact service restoration in stage 90.
+- [x] Add focused success and injected-firewall-failure coverage.
+- [x] Advance package candidate to `0.3.2_7` without changing VERSION.
+- [x] Synchronize state, roadmap, workflow, audit, patch note, and devlog.
 
 Patch 6 — TLS 1.3 family screening
-Status: BLOCKED
+Status: BLOCKED BY PATCH 5 GATE
 
 Patch 7 — Accepted-family parameter expansion
 Status: BLOCKED
