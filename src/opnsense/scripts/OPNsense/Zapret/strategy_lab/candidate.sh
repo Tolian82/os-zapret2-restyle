@@ -43,7 +43,6 @@ strategy_lab_candidate_endpoint_probe()
             "${_slcand_probe_exit}" tcp-443 "${_slcand_probe_raw}" "${_slcand_probe_output}"
         return 0
     fi
-
     if strategy_lab_tls13_request ipv4 "${_slcand_probe_endpoint}" "${_slcand_probe_raw}"; then
         _slcand_probe_status=PASS
         _slcand_probe_exit=0
@@ -70,20 +69,28 @@ strategy_lab_candidate_run_probes()
     rm -f "${_slcand_run_results}"/*.json 2>/dev/null || true
     _slcand_run_pids=""
     _slcand_run_index=0
+    _slcand_run_failed=0
     while IFS= read -r _slcand_run_endpoint
     do
         [ -n "${_slcand_run_endpoint}" ] || continue
         _slcand_run_index=$((_slcand_run_index + 1))
-        strategy_lab_candidate_endpoint_probe "${_slcand_run_endpoint}" "${_slcand_run_index}" \
-            "${_slcand_run_workdir}" "${_slcand_run_results}/${_slcand_run_index}.json" &
-        _slcand_run_pids="${_slcand_run_pids} $!"
+        if [ "${STRATEGY_LAB_ENDPOINT_PROBE_MODE:-parallel}" = sequential ]; then
+            strategy_lab_candidate_endpoint_probe "${_slcand_run_endpoint}" "${_slcand_run_index}" \
+                "${_slcand_run_workdir}" "${_slcand_run_results}/${_slcand_run_index}.json" ||
+                _slcand_run_failed=1
+        else
+            strategy_lab_candidate_endpoint_probe "${_slcand_run_endpoint}" "${_slcand_run_index}" \
+                "${_slcand_run_workdir}" "${_slcand_run_results}/${_slcand_run_index}.json" &
+            _slcand_run_pids="${_slcand_run_pids} $!"
+        fi
     done < "${_slcand_run_endpoints}"
     [ "${_slcand_run_index}" -ge 1 ] || return 1
-    _slcand_run_failed=0
-    for _slcand_run_pid in ${_slcand_run_pids}
-    do
-        wait "${_slcand_run_pid}" || _slcand_run_failed=1
-    done
+    if [ "${STRATEGY_LAB_ENDPOINT_PROBE_MODE:-parallel}" != sequential ]; then
+        for _slcand_run_pid in ${_slcand_run_pids}
+        do
+            wait "${_slcand_run_pid}" || _slcand_run_failed=1
+        done
+    fi
     [ "${_slcand_run_failed}" -eq 0 ] || return 1
     set -- "${_slcand_run_results}"/*.json
     [ -e "$1" ] || return 1
@@ -117,19 +124,15 @@ strategy_lab_run_candidate()
     _slcand_addresses=$(strategy_lab_candidate_addresses_file "${_slcand_job}")
     _slcand_wan=$(strategy_lab_candidate_resolve_wan) || return 1
     mkdir -p "${_slcand_runtime}" || return 1
-
     strategy_lab_candidate_cleanup "${_slcand_job}" || return 1
-    strategy_lab_candidate_resolve_addresses "${_slcand_endpoints}" \
-        "${_slcand_addresses}" "${_slcand_runtime}" || return 1
-    strategy_lab_candidate_prepare_files "${_slcand_job}" "${_slcand_endpoints}" \
-        "${_slcand_strategy_file}" "${_slcand_use_hostlist}" || return 1
+    strategy_lab_candidate_resolve_addresses "${_slcand_endpoints}" "${_slcand_addresses}" "${_slcand_runtime}" || return 1
+    strategy_lab_candidate_prepare_files "${_slcand_job}" "${_slcand_endpoints}" "${_slcand_strategy_file}" "${_slcand_use_hostlist}" || return 1
     strategy_lab_firewall_install_ipv4_rules "${_slcand_addresses}" "${_slcand_wan}" || return 1
     strategy_lab_candidate_start "${_slcand_job}" || {
         strategy_lab_candidate_cleanup "${_slcand_job}" || true
         return 1
     }
-    if ! strategy_lab_candidate_run_probes "${_slcand_endpoints}" \
-        "${_slcand_runtime}" "${_slcand_result}" \
+    if ! strategy_lab_candidate_run_probes "${_slcand_endpoints}" "${_slcand_runtime}" "${_slcand_result}" \
         "${_slcand_id}" "${_slcand_family}" "${_slcand_strategy_file}"; then
         strategy_lab_candidate_cleanup "${_slcand_job}" || true
         return 1
@@ -140,6 +143,5 @@ strategy_lab_run_candidate()
 strategy_lab_run_smoke_candidate()
 {
     _slcand_smoke_strategy="${MODULE_DIR}/catalog/tls13/01-multisplit.args"
-    strategy_lab_run_candidate "$1" "$2" "$3" smoke-multisplit multisplit \
-        "${_slcand_smoke_strategy}" 1
+    strategy_lab_run_candidate "$1" "$2" "$3" smoke-multisplit multisplit "${_slcand_smoke_strategy}" 1
 }
