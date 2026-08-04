@@ -26,7 +26,7 @@ CURRENT STAGE
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current source candidate:
-`v0.3.2_4`
+`v0.3.2_5`
 
 Current work package:
 Strategy Lab — asynchronous replacement of synchronous Diagnostics Blockcheck.
@@ -52,43 +52,32 @@ PATCH STATUS
 Patch 1 — Documentation and approved architecture
 Status: COMPLETE
 
-- documentation-only atomic commit;
-- PR #50 checks and FreeBSD package build passed;
-- squash merged to `main`;
-- task branch removed and verified absent.
-
 Patch 2 — Asynchronous job and dormant GUI shell
-Status: IN DELIVERY
+Status: COMPLETE
 
-- [x] Add start/status/cancel/result launcher modes.
-- [x] Add detached framework worker.
-- [x] Add common and state modules.
-- [x] Return an immediate generated `job_id`.
-- [x] Enforce one active job.
-- [x] Write atomic `status.json` and ordered `events.ndjson`.
-- [x] Add cancel marker and partial canceled result.
-- [x] Preserve exact `SKIPPED — отменено` / `SKIPPED — canseled` output.
-- [x] Add four configd actions.
-- [x] Add four Diagnostics API actions.
-- [x] Add dormant progress, polling, and Stop test GUI helpers.
-- [x] Keep the current Blockcheck button on the legacy path.
-- [x] Add focused mocked CI coverage.
-- [x] Advance package candidate to `0.3.2_4` without changing VERSION.
-- [x] Synchronize audit, state, roadmap, changelog, patch note, and devlog.
+- PR #51 checks and FreeBSD package build passed;
+- squash merged as `962f8de7728477ab8d47c375aec24cb147381c0f`;
+- post-merge processing and task-branch cleanup completed.
 
 Patch 3 — Lifecycle stop, cleanup, and restoration
-Status: BLOCKED BY PATCH 2 GATE
+Status: IN DELIVERY
 
-- shared lifecycle exclusion;
-- initial RUNNING/STOPPED snapshot;
-- normal Zapret2 stop and complete absence verification;
-- cleanup after success, cancellation, timeout, signal, and error;
-- exact RUNNING-to-RUNNING and STOPPED-to-STOPPED restoration;
-- explicit RESTORE_FAILED;
-- automated lifecycle mocks only; owner-assisted checks remain deferred.
+- [x] Route the detached Strategy Lab job through `zapret_service.sh`.
+- [x] Hold the existing shared lifecycle lock for the complete transaction.
+- [x] Require inherited descriptor 9 for internal status/stop/start actions.
+- [x] Snapshot complete RUNNING or STOPPED state.
+- [x] Fail closed on incomplete or unknown state.
+- [x] Stop and verify normal Zapret2 before later test stages.
+- [x] Restore RUNNING to RUNNING and STOPPED to STOPPED.
+- [x] Execute stage 90 after normal completion, cancel, signal, timeout, and error.
+- [x] Return explicit RESTORE_FAILED when final state cannot be restored.
+- [x] Preserve approved Russian and English canceled-stage messages.
+- [x] Add focused lifecycle, cancellation, failure-injection, and lock-ownership tests.
+- [x] Advance package candidate to `0.3.2_5` without changing VERSION.
+- [x] Synchronize state, roadmap, workflow, audit, patch note, and devlog.
 
 Patch 4 — Targets, network precheck, and clean baseline
-Status: BLOCKED
+Status: BLOCKED BY PATCH 3 GATE
 
 Patch 5 — One isolated temporary candidate runtime
 Status: BLOCKED

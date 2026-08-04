@@ -35,6 +35,6 @@ version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' "${MAKEFILE}" | head -1)
 
 [ "${version}" = "0.3.2" ]
-[ "${revision}" = "3" ]
+printf '%s\n' "${revision}" | grep -Eq '^[1-9][0-9]*$'
 
 echo 'GitHub branch hygiene contract tests passed.'

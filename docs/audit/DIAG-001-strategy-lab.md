@@ -89,70 +89,90 @@ Status:
 COMPLETE
 
 - complete architecture and patch series recorded;
-- PR #50 contained one documentation-only atomic commit;
-- Validate Project and FreeBSD package build passed;
+- PR #50 checks and FreeBSD package build passed;
 - squash merged as `76bd0f0818223e1d3b3d3eebaaaf4c12a59e95da`;
 - task branch removed;
 - `main` verified before Patch 2 preparation.
 
 ==================================================
-PATCH 2 REMEDIATION
+PATCH 2 EVIDENCE
+==================================================
+
+Status:
+COMPLETE
+
+- asynchronous job, state, events, cancellation, API/configd, and dormant GUI shell
+  implemented;
+- PR #51 passed title validation, Validate Project, and FreeBSD package build;
+- squash merged as `962f8de7728477ab8d47c375aec24cb147381c0f`;
+- post-merge processing completed and task branch was removed;
+- legacy Blockcheck remained active;
+- Patch 3 preparation began only after the serial gate closed.
+
+==================================================
+PATCH 3 REMEDIATION
 ==================================================
 
 Status:
 SOURCE IMPLEMENTED / AUTOMATED CONTRACT PASSED / IN DELIVERY
 
-New files:
+Affected files:
 
+- `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh`;
 - `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_launcher.sh`;
 - `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_worker.sh`;
-- `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/common.sh`;
+- `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/launch.sh`;
 - `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/state.sh`;
+- `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/lifecycle.sh`;
+- `scripts/test-strategy-lab-lifecycle.sh`;
 - `scripts/test-strategy-lab-job-contract.sh`.
 
-Implemented contract:
+Implemented chain:
 
-- immediate generated `job_id`;
-- start, status, cancel, and result modes;
-- detached worker through `daemon(8)`;
-- one active job with busy response;
-- launcher serialization through `lockf`;
-- atomically replaced `status.json` and ordered `events.ndjson`;
-- active pointer, PID, cancellation marker, and log path;
-- honest framework-only `PARTIAL` completion;
-- cancellation produces `PARTIAL` and exact selected-language skipped text;
-- idle state after active cleanup;
-- four configd actions and four API actions;
-- dormant GUI polling/progress/Stop helpers;
-- legacy Blockcheck Run-button behavior unchanged.
+Strategy Lab launcher
+        ↓
+`daemon(8)` starts `zapret_service.sh strategy-lab JOB_ID`
+        ↓
+service owns `/var/run/zapret2-lifecycle.lock` through descriptor 9
+        ↓
+worker snapshots complete RUNNING or STOPPED state
+        ↓
+normal service is stopped and verified absent
+        ↓
+all later exit paths converge on stage 90
+        ↓
+exact initial state is restored and verified
 
-Explicit Patch 2 exclusions:
+Internal `strategy-lab-status`, `strategy-lab-stop`, and `strategy-lab-start` actions
+are accepted only when both the inherited lifecycle-owner marker and open descriptor 9
+are present. They are not ordinary unlocked service actions.
 
-- no network probe;
-- no normal Zapret2 stop/start;
+Automated evidence:
+
+- RUNNING was stopped and restored to RUNNING;
+- STOPPED remained STOPPED without start/stop mutation;
+- cancel after stop preserved completed stages and restored RUNNING;
+- exact Russian and English `SKIPPED` messages were verified;
+- second job returned busy while the first remained active;
+- injected restore-start failure produced `RESTORE_FAILED` and stage 90 FAIL;
+- incomplete initial state failed closed before mutation;
+- service-owned transaction inherited descriptor 9;
+- an internal lifecycle action without inherited ownership returned status 77;
+- POSIX syntax checks passed.
+
+Explicit Patch 3 exclusions:
+
+- no DNS, TLS, IPv4, IPv6, QUIC, HTTP, or UDP probe;
 - no temporary candidate dvtws2;
-- no firewall mutation;
-- no migration of the active Run button.
-
-Automated verification completed before publication:
-
-- shell and PHP syntax;
-- mocked detached start and immediate job ID;
-- normal framework completion;
-- busy response for a second job;
-- exact Russian and English cancellation text;
-- unfinished-stage SKIPPED state;
-- active pointer cleanup and idle result;
-- unsafe target rejection;
-- static actions/API/GUI contract;
-- static confirmation that legacy Blockcheck remains active.
+- no temporary candidate firewall rule;
+- no active Diagnostics Run-button migration.
 
 ==================================================
 REMAINING PATCHES
 ==================================================
 
-Patch 3 implements lifecycle stop, cleanup, and exact restoration. Later patches add
-network precheck, candidate runtime, family search, stability, reporting, extended
+Patch 4 implements target validation, network capability precheck, and clean baseline.
+Later patches add candidate runtime, family search, stability, reporting, extended
 protocols, circular validation, and final migration.
 
 ==================================================
@@ -167,7 +187,7 @@ branch cleanup. One consolidated owner-assisted matrix follows Patch 13.
 SERIAL DELIVERY BLOCKER
 ==================================================
 
-Patch 3 preparation is prohibited until Patch 2 completes every PR check, squash merge,
+Patch 4 preparation is prohibited until Patch 3 completes every PR check, squash merge,
 post-merge workflow, branch cleanup, `main` verification, and all remaining GitHub
 processing.
 

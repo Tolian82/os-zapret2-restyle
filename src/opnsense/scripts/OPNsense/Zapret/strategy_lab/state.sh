@@ -26,6 +26,7 @@ strategy_lab_initialize_state()
             target: $target,
             mode: $mode,
             language: $language,
+            initial_service_state: "",
             cancel_requested: false,
             current_stage: "00",
             message: "",
@@ -73,6 +74,24 @@ strategy_lab_update_job()
     mv -f "${_strategy_lab_tmp}" "${_strategy_lab_status}"
 }
 
+strategy_lab_set_initial_service_state()
+{
+    _strategy_lab_job="$1"
+    _strategy_lab_service_state="$2"
+    _strategy_lab_status=$(strategy_lab_status_file "${_strategy_lab_job}")
+    _strategy_lab_tmp=$(mktemp "$(dirname "${_strategy_lab_status}")/.service-state.XXXXXX") || return 1
+
+    "${STRATEGY_LAB_JQ}" \
+        --arg service_state "${_strategy_lab_service_state}" \
+        '.initial_service_state=$service_state' \
+        "${_strategy_lab_status}" > "${_strategy_lab_tmp}" || {
+            rm -f "${_strategy_lab_tmp}"
+            return 1
+        }
+    chmod 0644 "${_strategy_lab_tmp}"
+    mv -f "${_strategy_lab_tmp}" "${_strategy_lab_status}"
+}
+
 strategy_lab_update_stage()
 {
     _strategy_lab_job="$1"
@@ -106,7 +125,7 @@ strategy_lab_skip_unfinished()
 
     "${STRATEGY_LAB_JQ}" \
         --arg message "${_strategy_lab_message}" \
-        '(.stages[] | select(.status=="PENDING" or .status=="RUNNING") | .status)="SKIPPED" |
+        '(.stages[] | select((.status=="PENDING" or .status=="RUNNING") and .number!="90" and .number!="99") | .status)="SKIPPED" |
          (.stages[] | select(.status=="SKIPPED" and .message=="") | .message)=$message' \
         "${_strategy_lab_status}" > "${_strategy_lab_tmp}" || {
             rm -f "${_strategy_lab_tmp}"
