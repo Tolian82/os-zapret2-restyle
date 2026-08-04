@@ -60,11 +60,11 @@ Published package:
 `os-zapret2-restyle-0.3.2_1.pkg`
 
 Current patch candidate:
-`os-zapret2-restyle-0.3.2_5.pkg`
+`os-zapret2-restyle-0.3.2_6.pkg`
 
-Patch `v0.3.2_5` adds the Strategy Lab lifecycle transaction, service stop, mandatory
-cleanup, exact state restoration, and explicit `RESTORE_FAILED`. It keeps the legacy
-Blockcheck path active and is not a project release.
+Patch `v0.3.2_6` adds Strategy Lab target normalization, explicit endpoints, network
+capability prechecks, clean TLS 1.3/TCP baselines, and stage-level time budgets. It
+keeps the legacy Blockcheck path active and is not a project release.
 
 ==================================================
 CURRENT DELIVERY PROTOCOL
@@ -94,9 +94,9 @@ processing.
 PULL-REQUEST PROTOCOL
 ==================================================
 
-Patch `v0.3.2_5` title:
+Patch `v0.3.2_6` title:
 
-`v0.3.2_5: Add Strategy Lab lifecycle transaction`
+`v0.3.2_6: Add Strategy Lab network baseline`
 
 Its squash subject is an ordinary logical subject, not a release subject.
 
@@ -120,7 +120,7 @@ RELEASE CONTROL
 ==================================================
 
 Only an explicitly authorized new `VERSION` follows the release pipeline. Patch
-`v0.3.2_5` stops after ordinary merge, complete GitHub processing, branch cleanup, and
+`v0.3.2_6` stops after ordinary merge, complete GitHub processing, branch cleanup, and
 `main` verification.
 
 ==================================================

@@ -26,7 +26,7 @@ CURRENT STAGE
 Milestone 8 — GUI maintenance and managed upstream components
 
 Current source candidate:
-`v0.3.2_5`
+`v0.3.2_6`
 
 Current work package:
 Strategy Lab — asynchronous replacement of synchronous Diagnostics Blockcheck.
@@ -55,32 +55,36 @@ Status: COMPLETE
 Patch 2 — Asynchronous job and dormant GUI shell
 Status: COMPLETE
 
-- PR #51 checks and FreeBSD package build passed;
-- squash merged as `962f8de7728477ab8d47c375aec24cb147381c0f`;
-- post-merge processing and task-branch cleanup completed.
-
 Patch 3 — Lifecycle stop, cleanup, and restoration
-Status: IN DELIVERY
+Status: COMPLETE
 
-- [x] Route the detached Strategy Lab job through `zapret_service.sh`.
-- [x] Hold the existing shared lifecycle lock for the complete transaction.
-- [x] Require inherited descriptor 9 for internal status/stop/start actions.
-- [x] Snapshot complete RUNNING or STOPPED state.
-- [x] Fail closed on incomplete or unknown state.
-- [x] Stop and verify normal Zapret2 before later test stages.
-- [x] Restore RUNNING to RUNNING and STOPPED to STOPPED.
-- [x] Execute stage 90 after normal completion, cancel, signal, timeout, and error.
-- [x] Return explicit RESTORE_FAILED when final state cannot be restored.
-- [x] Preserve approved Russian and English canceled-stage messages.
-- [x] Add focused lifecycle, cancellation, failure-injection, and lock-ownership tests.
-- [x] Advance package candidate to `0.3.2_5` without changing VERSION.
-- [x] Synchronize state, roadmap, workflow, audit, patch note, and devlog.
+- clean replacement PR #53 passed all checks and FreeBSD package build;
+- squash merged as `100f324d09539e672586b12e3cd96c26baf351b2`;
+- task branch cleanup and `main` verification completed.
 
 Patch 4 — Targets, network precheck, and clean baseline
-Status: BLOCKED BY PATCH 3 GATE
+Status: IN DELIVERY
+
+- [x] Normalize and classify domain or IPv4 input.
+- [x] Reject malformed target values.
+- [x] Persist explicit required endpoints.
+- [x] Add the approved Telegram endpoint pair.
+- [x] Run IPv4, IPv6, and fixed QUIC/IPv4 controls concurrently.
+- [x] Require both an IPv6 default route and control connection.
+- [x] Use only QUIC command exit status for classification.
+- [x] Enforce the six-second stage-30 budget.
+- [x] Run explicit clean TLS 1.3 GET probes for domain endpoints.
+- [x] Run direct TCP/443 baseline for IPv4 targets.
+- [x] Enforce the five-second stage-40 budget.
+- [x] Return `TARGET_ACCESSIBLE` when every required endpoint works cleanly.
+- [x] Separate valid negative results, timeout, and internal errors.
+- [x] Preserve mandatory restoration on every path.
+- [x] Add focused mocked precheck/baseline/timeout coverage.
+- [x] Advance package candidate to `0.3.2_6` without changing VERSION.
+- [x] Synchronize state, roadmap, workflow, audit, changelog, patch note, and devlog.
 
 Patch 5 — One isolated temporary candidate runtime
-Status: BLOCKED
+Status: BLOCKED BY PATCH 4 GATE
 
 Patch 6 — TLS 1.3 family screening
 Status: BLOCKED

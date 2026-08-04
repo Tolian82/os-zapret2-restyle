@@ -24,11 +24,11 @@ cleanup_stale_active()
 start_job()
 {
     [ "$#" -eq 4 ] || usage_error "start requires TARGET MODE LANGUAGE"
-    _strategy_lab_target="$2"
+    _strategy_lab_target=$(strategy_lab_normalize_target "$2" 2>/dev/null || true)
     _strategy_lab_mode="$3"
     _strategy_lab_language="$4"
 
-    strategy_lab_target_safe "${_strategy_lab_target}" || usage_error "invalid target"
+    [ -n "${_strategy_lab_target}" ] || usage_error "invalid target"
     strategy_lab_mode_valid "${_strategy_lab_mode}" || usage_error "invalid mode"
     strategy_lab_language_valid "${_strategy_lab_language}" || usage_error "invalid language"
     [ -x "${WORKER_SCRIPT}" ] || {

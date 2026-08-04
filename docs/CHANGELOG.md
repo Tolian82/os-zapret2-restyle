@@ -10,29 +10,40 @@ The project starts its own version history at `0.1.0`.
 
 ### Added
 
-- Added the asynchronous Strategy Lab start/status/cancel/result job framework.
-- Added detached worker launch, one-active-job state, atomic `status.json`, ordered
-  `events.ndjson`, per-job logs, PID files, and cancellation markers.
-- Added four configd actions and four Diagnostics API actions.
-- Added a dormant Diagnostics progress/Stop shell while preserving the current
-  synchronous Blockcheck user path.
-- Added focused mocked contract coverage for job lifecycle, busy handling, cancellation,
-  bilingual skipped messages, state cleanup, and legacy-path preservation.
+- Added the asynchronous Strategy Lab start/status/cancel/result job framework,
+  one-active-job state, atomic `status.json`, ordered `events.ndjson`, and dormant
+  Diagnostics progress/Stop shell.
+- Added a service-owned Strategy Lab lifecycle transaction with exact RUNNING/STOPPED
+  snapshot, normal-service stop, mandatory cleanup, exact restoration, and
+  `RESTORE_FAILED`.
+- Added domain and IPv4 target normalization, explicit required endpoints, and the
+  approved Telegram pair `telegram.org` / `web.telegram.org`.
+- Added concurrent IPv4, IPv6, and fixed QUIC/IPv4 capability probes.
+- Added clean TLS 1.3 domain baseline and direct TCP/443 IPv4 baseline.
+- Added independent stage-30 and stage-40 time budgets and structured `TIMEOUT` output.
+- Added focused mocked job, lifecycle, cancellation, target, precheck, baseline, and
+  timeout regression coverage.
 
 ### Changed
 
-- Advanced Strategy Lab implementation from documentation-only planning to the first
-  package code patch.
 - Preserved exact cancellation output `SKIPPED — отменено` and
   `SKIPPED — canseled`.
-- Kept network tests, Zapret2 lifecycle mutation, temporary candidate runtime, and
-  firewall changes outside Patch 2.
+- Made IPv6 eligible only when both a default route and control connection work.
+- Fixed QUIC control at `yandex.ru:443`, IPv4, ALPN `h3`, and two seconds; only command
+  exit status determines success.
+- Added `TARGET_ACCESSIBLE` early completion when every required endpoint works without
+  Zapret2.
+- Corrected the branch-hygiene regression test to accept future positive numeric package
+  revisions instead of requiring stale revision 3.
+- Kept candidate runtime, candidate firewall rules, strategy-family search, active GUI
+  migration, and legacy Blockcheck removal outside the completed patches.
 
 ### Distribution
 
-- Kept `VERSION=0.3.2` and advanced `PLUGIN_REVISION` from `3` to `4`.
-- Package candidate: `os-zapret2-restyle-0.3.2_4.pkg`.
-- This patch does not create a project release or publish package assets.
+- Kept `VERSION=0.3.2` and advanced `PLUGIN_REVISION` through Strategy Lab package
+  candidates `4`, `5`, and `6`.
+- Current package candidate: `os-zapret2-restyle-0.3.2_6.pkg`.
+- These patches do not create a project release or publish package assets.
 
 ## [0.3.2] - 2026-08-03
 

@@ -19,11 +19,15 @@ strategy_lab_initialize_state()
         --arg mode "${_strategy_lab_mode}" \
         --arg language "${_strategy_lab_language}" \
         '{
-            schema: 1,
+            schema: 2,
             job_id: $job_id,
             state: "queued",
             outcome: "",
             target: $target,
+            target_type: "",
+            endpoints: [],
+            network: {},
+            baseline: {},
             mode: $mode,
             language: $language,
             initial_service_state: "",
@@ -45,6 +49,62 @@ strategy_lab_initialize_state()
                 {number:"99", key:"report", status:"PENDING", message:""}
             ]
         }' | strategy_lab_atomic_write "${_strategy_lab_status}"
+}
+
+
+strategy_lab_set_target_contract()
+{
+    _strategy_lab_job="$1"
+    _strategy_lab_target="$2"
+    _strategy_lab_type="$3"
+    _strategy_lab_endpoints_file="$4"
+    _strategy_lab_status=$(strategy_lab_status_file "${_strategy_lab_job}")
+    _strategy_lab_tmp=$(mktemp "$(dirname "${_strategy_lab_status}")/.target-contract.XXXXXX") || return 1
+    _strategy_lab_endpoints_json=$("${STRATEGY_LAB_JQ}" -Rsc 'split("\n") | map(select(length > 0))' "${_strategy_lab_endpoints_file}") || return 1
+
+    "${STRATEGY_LAB_JQ}" \
+        --arg target "${_strategy_lab_target}" \
+        --arg target_type "${_strategy_lab_type}" \
+        --argjson endpoints "${_strategy_lab_endpoints_json}" \
+        '.target=$target | .target_type=$target_type | .endpoints=$endpoints' \
+        "${_strategy_lab_status}" > "${_strategy_lab_tmp}" || {
+            rm -f "${_strategy_lab_tmp}"
+            return 1
+        }
+    chmod 0644 "${_strategy_lab_tmp}"
+    mv -f "${_strategy_lab_tmp}" "${_strategy_lab_status}"
+}
+
+strategy_lab_set_network_capabilities()
+{
+    _strategy_lab_job="$1"
+    _strategy_lab_network_file="$2"
+    _strategy_lab_status=$(strategy_lab_status_file "${_strategy_lab_job}")
+    _strategy_lab_tmp=$(mktemp "$(dirname "${_strategy_lab_status}")/.network.XXXXXX") || return 1
+
+    "${STRATEGY_LAB_JQ}" --slurpfile network "${_strategy_lab_network_file}" \
+        '.network=$network[0]' "${_strategy_lab_status}" > "${_strategy_lab_tmp}" || {
+            rm -f "${_strategy_lab_tmp}"
+            return 1
+        }
+    chmod 0644 "${_strategy_lab_tmp}"
+    mv -f "${_strategy_lab_tmp}" "${_strategy_lab_status}"
+}
+
+strategy_lab_set_baseline_result()
+{
+    _strategy_lab_job="$1"
+    _strategy_lab_baseline_file="$2"
+    _strategy_lab_status=$(strategy_lab_status_file "${_strategy_lab_job}")
+    _strategy_lab_tmp=$(mktemp "$(dirname "${_strategy_lab_status}")/.baseline.XXXXXX") || return 1
+
+    "${STRATEGY_LAB_JQ}" --slurpfile baseline "${_strategy_lab_baseline_file}" \
+        '.baseline=$baseline[0]' "${_strategy_lab_status}" > "${_strategy_lab_tmp}" || {
+            rm -f "${_strategy_lab_tmp}"
+            return 1
+        }
+    chmod 0644 "${_strategy_lab_tmp}"
+    mv -f "${_strategy_lab_tmp}" "${_strategy_lab_status}"
 }
 
 strategy_lab_update_job()

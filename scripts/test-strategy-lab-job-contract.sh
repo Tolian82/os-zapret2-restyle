@@ -5,6 +5,7 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_launcher.sh"
 WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_worker.sh"
+PROBE_RUNNER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_probe_runner.sh"
 MODULE_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab"
 STRATEGY_CONTROLLER="${ROOT_DIR}/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLabController.php"
 VIEW="${ROOT_DIR}/src/opnsense/mvc/app/views/OPNsense/Zapret/diagnostics.volt"
@@ -18,14 +19,20 @@ fail()
 }
 
 sh "${ROOT_DIR}/scripts/test-strategy-lab-lifecycle.sh"
+sh "${ROOT_DIR}/scripts/test-strategy-lab-precheck.sh"
 
 sh -n "${LAUNCHER}"
 sh -n "${WORKER}"
+sh -n "${PROBE_RUNNER}"
 sh -n "${MODULE_DIR}/common.sh"
 sh -n "${MODULE_DIR}/state.sh"
 sh -n "${MODULE_DIR}/lifecycle.sh"
 sh -n "${MODULE_DIR}/launch.sh"
 sh -n "${MODULE_DIR}/query.sh"
+sh -n "${MODULE_DIR}/target.sh"
+sh -n "${MODULE_DIR}/request.sh"
+sh -n "${MODULE_DIR}/result.sh"
+sh -n "${MODULE_DIR}/probe.sh"
 php -l "${STRATEGY_CONTROLLER}" >/dev/null
 
 grep -Fq '[strategy_lab_start]' "${ACTIONS}" || fail "start action is missing"
