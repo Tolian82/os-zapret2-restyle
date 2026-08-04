@@ -17,6 +17,6 @@ run_case(){ set +e; output=$(MOCK_CURL_EXIT="$1" PATH="${MOCK_BIN}:${PATH}" sh "
 run_case 28 '=== Result: TIMEOUT ==='; run_case 56 '=== Result: CONNECTION RESET (likely DPI blocking) ==='; run_case 42 '=== Result: FAILED (curl exit code: 42) ==='
 set +e; invalid=$(PATH="${MOCK_BIN}:${PATH}" sh "${TEST_SCRIPT}" 'bad/domain' 2>&1); code=$?; set -e; [ "${code}" -ne 0 ]; printf '%s\n' "${invalid}" | grep -Fq 'Invalid domain format.'
 grep -Fq "if (trim(\$response) === '')" "${CONTROLLER}"; grep -Fq 'Domain connectivity test returned no output.' "${CONTROLLER}"
-for test in job-contract candidate-runtime family-screening parameter-expansion stability-shortlist extended-tcp quic
+for test in job-contract candidate-runtime family-screening parameter-expansion stability-shortlist extended-tcp quic udp
 do sh "${ROOT_DIR}/scripts/test-strategy-lab-${test}.sh"; done
 echo 'Domain diagnostics contract tests passed.'

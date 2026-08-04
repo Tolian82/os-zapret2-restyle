@@ -1,0 +1,2 @@
+--lua-desync=send:ipfrag:ipfrag_pos_udp=16
+--lua-desync=drop
