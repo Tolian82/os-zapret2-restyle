@@ -18,12 +18,24 @@ done
 
 strategy_lab_require_jq
 
+strategy_lab_probe_runner_kill_tree()
+{
+    _slprobe_parent="$1"
+    if command -v pgrep >/dev/null 2>&1; then
+        for _slprobe_child in $(pgrep -P "${_slprobe_parent}" 2>/dev/null || true)
+        do
+            strategy_lab_probe_runner_kill_tree "${_slprobe_child}"
+        done
+    fi
+    kill -TERM "${_slprobe_parent}" 2>/dev/null || true
+}
+
 strategy_lab_probe_runner_cleanup()
 {
-    jobs -p 2>/dev/null | while IFS= read -r child_pid
+    for _slprobe_child in $(jobs -p 2>/dev/null || true)
     do
-        [ -n "${child_pid}" ] || continue
-        kill -TERM "${child_pid}" 2>/dev/null || true
+        [ -n "${_slprobe_child}" ] || continue
+        strategy_lab_probe_runner_kill_tree "${_slprobe_child}"
     done
     wait 2>/dev/null || true
 }

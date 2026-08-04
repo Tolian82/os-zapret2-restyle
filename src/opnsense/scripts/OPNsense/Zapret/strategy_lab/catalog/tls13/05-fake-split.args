@@ -1,0 +1,3 @@
+--payload=tls_client_hello
+--lua-desync=fake:blob=fake_default_tls
+--lua-desync=multisplit:pos=1

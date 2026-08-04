@@ -77,7 +77,8 @@ strategy_lab_candidate_prepare_files()
 {
     _strategy_lab_job="$1"
     _strategy_lab_endpoints="$2"
-    _strategy_lab_strategy="$3"
+    _strategy_lab_strategy_file="$3"
+    _strategy_lab_use_hostlist="$4"
     _strategy_lab_runtime=$(strategy_lab_candidate_runtime_dir "${_strategy_lab_job}")
     _strategy_lab_args=$(strategy_lab_candidate_args_file "${_strategy_lab_job}")
     _strategy_lab_hostlist=$(strategy_lab_candidate_hostlist_file "${_strategy_lab_job}")
@@ -85,6 +86,7 @@ strategy_lab_candidate_prepare_files()
 
     [ -r "${_strategy_lab_endpoints}" ] || return 1
     [ -s "${_strategy_lab_endpoints}" ] || return 1
+    [ -r "${_strategy_lab_strategy_file}" ] || return 1
     mkdir -p "${_strategy_lab_runtime}" || return 1
     cp "${_strategy_lab_endpoints}" "${_strategy_lab_hostlist}" || return 1
     chmod 0644 "${_strategy_lab_hostlist}"
@@ -98,11 +100,15 @@ strategy_lab_candidate_prepare_files()
                 printf '%s\n' "--lua-init=@${_strategy_lab_lua}"
             done >> "${_strategy_lab_tmp}"
     fi
-    printf '%s\n' \
-        '--filter-tcp=443' \
-        "--hostlist=${_strategy_lab_hostlist}" \
-        '--out-range=-d10' \
-        "${_strategy_lab_strategy}" >> "${_strategy_lab_tmp}"
+    printf '%s\n' '--filter-tcp=443' '--filter-l7=tls' >> "${_strategy_lab_tmp}"
+    if [ "${_strategy_lab_use_hostlist}" = 1 ]; then
+        printf '%s\n' "--hostlist=${_strategy_lab_hostlist}" >> "${_strategy_lab_tmp}"
+    fi
+    printf '%s\n' '--out-range=-d10' >> "${_strategy_lab_tmp}"
+    cat "${_strategy_lab_strategy_file}" >> "${_strategy_lab_tmp}" || {
+        rm -f "${_strategy_lab_tmp}"
+        return 1
+    }
     mv -f "${_strategy_lab_tmp}" "${_strategy_lab_args}"
     chmod 0644 "${_strategy_lab_args}"
 }

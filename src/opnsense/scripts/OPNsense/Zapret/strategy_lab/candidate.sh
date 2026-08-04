@@ -1,7 +1,5 @@
 #!/bin/sh
 
-STRATEGY_LAB_CANDIDATE_STRATEGY="${STRATEGY_LAB_CANDIDATE_STRATEGY:---lua-desync=multisplit:pos=1}"
-
 strategy_lab_candidate_resolve_addresses()
 {
     _slcand_resolve_endpoints="$1"
@@ -64,6 +62,9 @@ strategy_lab_candidate_run_probes()
     _slcand_run_endpoints="$1"
     _slcand_run_workdir="$2"
     _slcand_run_result="$3"
+    _slcand_run_id="$4"
+    _slcand_run_family="$5"
+    _slcand_run_strategy_file="$6"
     _slcand_run_results="${_slcand_run_workdir}/candidate-results"
     mkdir -p "${_slcand_run_results}" || return 1
     rm -f "${_slcand_run_results}"/*.json 2>/dev/null || true
@@ -87,9 +88,10 @@ strategy_lab_candidate_run_probes()
     set -- "${_slcand_run_results}"/*.json
     [ -e "$1" ] || return 1
     "${STRATEGY_LAB_JQ}" -s \
-        --arg id smoke-multisplit \
-        --arg strategy "${STRATEGY_LAB_CANDIDATE_STRATEGY}" \
-        '{id:$id,strategy:$strategy,endpoints:.,all_pass:(length>0 and all(.status=="PASS"))}' \
+        --arg id "${_slcand_run_id}" \
+        --arg family "${_slcand_run_family}" \
+        --rawfile strategy "${_slcand_run_strategy_file}" \
+        '{id:$id,family:$family,strategy:$strategy,endpoints:.,all_pass:(length>0 and all(.status=="PASS"))}' \
         "$@" > "${_slcand_run_result}"
 }
 
@@ -102,30 +104,42 @@ strategy_lab_candidate_cleanup()
     return 0
 }
 
-strategy_lab_run_smoke_candidate()
+strategy_lab_run_candidate()
 {
-    _slcand_smoke_job="$1"
-    _slcand_smoke_endpoints="$2"
-    _slcand_smoke_result="$3"
-    _slcand_smoke_runtime=$(strategy_lab_candidate_runtime_dir "${_slcand_smoke_job}")
-    _slcand_smoke_addresses=$(strategy_lab_candidate_addresses_file "${_slcand_smoke_job}")
-    _slcand_smoke_wan=$(strategy_lab_candidate_resolve_wan) || return 1
-    mkdir -p "${_slcand_smoke_runtime}" || return 1
+    _slcand_job="$1"
+    _slcand_endpoints="$2"
+    _slcand_result="$3"
+    _slcand_id="$4"
+    _slcand_family="$5"
+    _slcand_strategy_file="$6"
+    _slcand_use_hostlist="$7"
+    _slcand_runtime=$(strategy_lab_candidate_runtime_dir "${_slcand_job}")
+    _slcand_addresses=$(strategy_lab_candidate_addresses_file "${_slcand_job}")
+    _slcand_wan=$(strategy_lab_candidate_resolve_wan) || return 1
+    mkdir -p "${_slcand_runtime}" || return 1
 
-    strategy_lab_candidate_cleanup "${_slcand_smoke_job}" || return 1
-    strategy_lab_candidate_resolve_addresses "${_slcand_smoke_endpoints}" \
-        "${_slcand_smoke_addresses}" "${_slcand_smoke_runtime}" || return 1
-    strategy_lab_candidate_prepare_files "${_slcand_smoke_job}" "${_slcand_smoke_endpoints}" \
-        "${STRATEGY_LAB_CANDIDATE_STRATEGY}" || return 1
-    strategy_lab_firewall_install_ipv4_rules "${_slcand_smoke_addresses}" "${_slcand_smoke_wan}" || return 1
-    strategy_lab_candidate_start "${_slcand_smoke_job}" || {
-        strategy_lab_candidate_cleanup "${_slcand_smoke_job}" || true
+    strategy_lab_candidate_cleanup "${_slcand_job}" || return 1
+    strategy_lab_candidate_resolve_addresses "${_slcand_endpoints}" \
+        "${_slcand_addresses}" "${_slcand_runtime}" || return 1
+    strategy_lab_candidate_prepare_files "${_slcand_job}" "${_slcand_endpoints}" \
+        "${_slcand_strategy_file}" "${_slcand_use_hostlist}" || return 1
+    strategy_lab_firewall_install_ipv4_rules "${_slcand_addresses}" "${_slcand_wan}" || return 1
+    strategy_lab_candidate_start "${_slcand_job}" || {
+        strategy_lab_candidate_cleanup "${_slcand_job}" || true
         return 1
     }
-    if ! strategy_lab_candidate_run_probes "${_slcand_smoke_endpoints}" \
-        "${_slcand_smoke_runtime}" "${_slcand_smoke_result}"; then
-        strategy_lab_candidate_cleanup "${_slcand_smoke_job}" || true
+    if ! strategy_lab_candidate_run_probes "${_slcand_endpoints}" \
+        "${_slcand_runtime}" "${_slcand_result}" \
+        "${_slcand_id}" "${_slcand_family}" "${_slcand_strategy_file}"; then
+        strategy_lab_candidate_cleanup "${_slcand_job}" || true
         return 1
     fi
-    strategy_lab_candidate_cleanup "${_slcand_smoke_job}"
+    strategy_lab_candidate_cleanup "${_slcand_job}"
+}
+
+strategy_lab_run_smoke_candidate()
+{
+    _slcand_smoke_strategy="${MODULE_DIR}/catalog/tls13/01-multisplit.args"
+    strategy_lab_run_candidate "$1" "$2" "$3" smoke-multisplit multisplit \
+        "${_slcand_smoke_strategy}" 1
 }

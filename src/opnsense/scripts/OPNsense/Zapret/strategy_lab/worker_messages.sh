@@ -28,9 +28,9 @@ case "${LANGUAGE}" in
         ERROR_FINAL_MESSAGE='ERROR — Этап Strategy Lab завершился внутренней ошибкой; доступные результаты сохранены.'
         PREREQUISITE_FINAL_MESSAGE='PARTIAL — Предварительная проверка завершилась отрицательно; доступные результаты сохранены.'
         TARGET_ACCESSIBLE_FINAL_MESSAGE='TARGET_ACCESSIBLE — Цель доступна без обхода; поиск стратегий не требуется.'
-        CANDIDATE_RUNTIME_PASS_MESSAGE='PASS — Временный runtime одной стратегии создан, проверен и полностью удалён.'
-        CANDIDATE_RUNTIME_FAIL_MESSAGE='PASS — Временный runtime одной стратегии выполнен; тестовый кандидат не открыл все обязательные endpoints.'
-        PARTIAL_FINAL_MESSAGE='Strategy Lab: безопасный runtime одного кандидата готов; каталог семейств пока не активирован.'
+        CANDIDATE_RUNTIME_PASS_MESSAGE='PASS — Проверка семейств завершена; найдено как минимум одно рабочее TLS 1.3-семейство.'
+        CANDIDATE_RUNTIME_FAIL_MESSAGE='PASS — Проверка семейств завершена; рабочие TLS 1.3-семейства не найдены.'
+        PARTIAL_FINAL_MESSAGE='Strategy Lab: последовательная проверка семи TLS 1.3-семейств завершена; расширение параметров пока не выполняется.'
         ;;
     *)
         CANCEL_MESSAGE='SKIPPED — canseled'
@@ -61,8 +61,8 @@ case "${LANGUAGE}" in
         ERROR_FINAL_MESSAGE='ERROR — A Strategy Lab stage failed internally; available results were preserved.'
         PREREQUISITE_FINAL_MESSAGE='PARTIAL — A prerequisite check failed; available results were preserved.'
         TARGET_ACCESSIBLE_FINAL_MESSAGE='TARGET_ACCESSIBLE — The target is accessible without bypass; strategy search is not required.'
-        CANDIDATE_RUNTIME_PASS_MESSAGE='PASS — One temporary strategy runtime was created, tested, and fully removed.'
-        CANDIDATE_RUNTIME_FAIL_MESSAGE='PASS — One temporary strategy runtime completed; the smoke candidate did not open every required endpoint.'
-        PARTIAL_FINAL_MESSAGE='Strategy Lab single-candidate runtime is ready; the family catalog is not active yet.'
+        CANDIDATE_RUNTIME_PASS_MESSAGE='PASS — Family screening completed; at least one working TLS 1.3 family was found.'
+        CANDIDATE_RUNTIME_FAIL_MESSAGE='PASS — Family screening completed; no working TLS 1.3 family was found.'
+        PARTIAL_FINAL_MESSAGE='Strategy Lab completed sequential screening of seven TLS 1.3 families; parameter expansion is not active yet.'
         ;;
 esac

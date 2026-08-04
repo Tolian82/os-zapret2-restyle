@@ -74,5 +74,6 @@ grep -Fq 'Domain connectivity test returned no output.' "${CONTROLLER}"
 
 sh "${ROOT_DIR}/scripts/test-strategy-lab-job-contract.sh"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-candidate-runtime.sh"
+sh "${ROOT_DIR}/scripts/test-strategy-lab-family-screening.sh"
 
 echo 'Domain diagnostics contract tests passed.'

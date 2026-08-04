@@ -4,15 +4,15 @@ SCRIPT_DIR="${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}"
 MODULE_DIR="${MODULE_DIR:-${SCRIPT_DIR}/strategy_lab}"
 WORKER_HOLD_SECONDS="${WORKER_HOLD_SECONDS:-0}"
 PROBE_RUNNER="${PROBE_RUNNER:-${SCRIPT_DIR}/strategy_lab_probe_runner.sh}"
-CANDIDATE_RUNNER="${CANDIDATE_RUNNER:-${SCRIPT_DIR}/strategy_lab_candidate_runner.sh}"
+CANDIDATE_RUNNER="${CANDIDATE_RUNNER:-${SCRIPT_DIR}/strategy_lab_family_runner.sh}"
 STRATEGY_LAB_STAGE30_TIMEOUT="${STRATEGY_LAB_STAGE30_TIMEOUT:-6}"
 STRATEGY_LAB_STAGE40_TIMEOUT="${STRATEGY_LAB_STAGE40_TIMEOUT:-5}"
-STRATEGY_LAB_CANDIDATE_TIMEOUT="${STRATEGY_LAB_CANDIDATE_TIMEOUT:-7}"
+STRATEGY_LAB_CANDIDATE_TIMEOUT="${STRATEGY_LAB_CANDIDATE_TIMEOUT:-45}"
 
 set -eu
 umask 022
 
-for module in common state firewall runtime candidate lifecycle target request result probe
+for module in common state firewall runtime candidate lifecycle target request result probe family
 do
     module_path="${MODULE_DIR}/${module}.sh"
     [ -r "${module_path}" ] || {

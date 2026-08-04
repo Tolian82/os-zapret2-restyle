@@ -20,8 +20,13 @@ strategy_lab_require_jq
 JOB_ID="${1:-}"
 ENDPOINTS_FILE="${2:-}"
 RESULT_FILE="${3:-}"
+CANDIDATE_ID="${4:-smoke-multisplit}"
+CANDIDATE_FAMILY="${5:-multisplit}"
+STRATEGY_FILE="${6:-${MODULE_DIR}/catalog/tls13/01-multisplit.args}"
+USE_HOSTLIST="${7:-1}"
 strategy_lab_job_id_valid "${JOB_ID}" || exit 64
 [ -r "${ENDPOINTS_FILE}" ] || exit 64
+[ -r "${STRATEGY_FILE}" ] || exit 64
 [ -n "${RESULT_FILE}" ] || exit 64
 
 candidate_runner_cleanup()
@@ -30,4 +35,6 @@ candidate_runner_cleanup()
 }
 trap candidate_runner_cleanup EXIT HUP INT TERM
 
-strategy_lab_run_smoke_candidate "${JOB_ID}" "${ENDPOINTS_FILE}" "${RESULT_FILE}"
+strategy_lab_run_candidate \
+    "${JOB_ID}" "${ENDPOINTS_FILE}" "${RESULT_FILE}" \
+    "${CANDIDATE_ID}" "${CANDIDATE_FAMILY}" "${STRATEGY_FILE}" "${USE_HOSTLIST}"
