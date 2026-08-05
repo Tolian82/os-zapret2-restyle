@@ -26,7 +26,7 @@ It validates:
 - restoration failure;
 - initial RUNNING restoration;
 - initial STOPPED preservation;
-- exact first-occurrence stage event order;
+- exact first-occurrence stage event order from the persisted `events.ndjson` stream;
 - persisted terminal JSON;
 - saved Traffic Strategy immutability;
 - latest-job polling recovery after page reload;
