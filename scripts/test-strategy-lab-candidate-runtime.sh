@@ -26,7 +26,16 @@ cat > "${TMP}/bin/ipfw" <<'SH'
 #!/bin/sh
 state=${MOCK_IPFW_STATE:?}
 log=${MOCK_IPFW_LOG:?}
+counter=${MOCK_IPFW_COUNTER:?}
 printf '%s\n' "$*" >> "$log"
+if [ "$1" = -a ] && [ "$2" = list ]; then
+    n=$3
+    packets=$(cat "$counter")
+    rule=$(grep "^${n} " "$state" 2>/dev/null || true)
+    [ -n "$rule" ] || exit 0
+    printf '%s %s %s %s\n' "$n" "$packets" "$((packets * 64))" "${rule#* }"
+    exit 0
+fi
 case "$1" in -q|-qf) shift ;; esac
 case "$1" in
     delete)
@@ -53,18 +62,42 @@ printf '%s. 60 IN A 203.0.113.%s\n' "$host" "${MOCK_DRILL_OCTET:-10}"
 SH
 cat > "${TMP}/bin/curl" <<'SH'
 #!/bin/sh
+counter=${MOCK_IPFW_COUNTER:?}
+packets=$(cat "$counter")
+printf '%s\n' "$((packets + 1))" > "$counter"
 printf 'exit=0 remote_ip=203.0.113.10 http=1.1 code=200 bytes=10\n'
 exit "${MOCK_CURL_STATUS:-0}"
 SH
 cat > "${TMP}/bin/nc" <<'SH'
 #!/bin/sh
+counter=${MOCK_IPFW_COUNTER:?}
+packets=$(cat "$counter")
+printf '%s\n' "$((packets + 1))" > "$counter"
 exit 0
 SH
-cat > "${TMP}/bin/dvtws2" <<'SH'
-#!/bin/sh
-trap 'exit 0' TERM INT
-while :; do sleep 30; done
-SH
+cat > "${TMP}/dvtws2.c" <<'C'
+#include <signal.h>
+#include <unistd.h>
+
+static volatile sig_atomic_t running = 1;
+
+static void stop_runtime(int signal_number)
+{
+    (void)signal_number;
+    running = 0;
+}
+
+int main(void)
+{
+    signal(SIGTERM, stop_runtime);
+    signal(SIGINT, stop_runtime);
+    while (running) {
+        pause();
+    }
+    return 0;
+}
+C
+${CC:-cc} -O2 -o "${TMP}/bin/dvtws2" "${TMP}/dvtws2.c"
 cat > "${TMP}/bin/daemon" <<'SH'
 #!/bin/sh
 pidfile=
@@ -80,9 +113,22 @@ done
 "$@" >> "$logfile" 2>&1 &
 echo $! > "$pidfile"
 SH
+cat > "${TMP}/bin/sockstat" <<'SH'
+#!/bin/sh
+pidfile=${MOCK_DVTWS_PIDFILE:?}
+[ -r "$pidfile" ] || exit 0
+IFS= read -r pid < "$pidfile" || exit 0
+kill -0 "$pid" 2>/dev/null || exit 0
+state=$(ps -p "$pid" -o stat= 2>/dev/null || true)
+case "$state" in
+    ''|*Z*) exit 0 ;;
+esac
+printf 'nobody dvtws2 %s 3 div4 *:9989 *:*\n' "$pid"
+SH
 chmod +x "${TMP}/bin/"*
 : > "${TMP}/ipfw.state"
 : > "${TMP}/ipfw.log"
+printf '%s\n' 0 > "${TMP}/ipfw.counter"
 printf '%s\n' telegram.org web.telegram.org > "${TMP}/endpoints.txt"
 
 export SCRIPT_DIR MODULE_DIR
@@ -99,23 +145,38 @@ export STRATEGY_LAB_KLDSTAT_BIN="${TMP}/bin/kldstat"
 export STRATEGY_LAB_SYSCTL_BIN="${TMP}/bin/sysctl"
 export STRATEGY_LAB_DVTWS_BIN="${TMP}/bin/dvtws2"
 export STRATEGY_LAB_DAEMON_BIN="${TMP}/bin/daemon"
+export STRATEGY_LAB_SOCKSTAT_BIN="${TMP}/bin/sockstat"
+export STRATEGY_LAB_NETSTAT_BIN=/nonexistent
 export STRATEGY_LAB_LUA_DIR="${TMP}/lua"
 export STRATEGY_LAB_WAN_DEVICE=mock0
 export MOCK_IPFW_STATE="${TMP}/ipfw.state"
 export MOCK_IPFW_LOG="${TMP}/ipfw.log"
+export MOCK_IPFW_COUNTER="${TMP}/ipfw.counter"
+export MOCK_DVTWS_PIDFILE="${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.pid"
 
 "${SCRIPT_DIR}/strategy_lab_candidate_runner.sh" job.test "${TMP}/endpoints.txt" "${TMP}/result.json"
-/usr/bin/jq -e '.all_pass == true and (.endpoints|length)==2' "${TMP}/result.json" >/dev/null
+/usr/bin/jq -e '
+    .all_pass == true and (.endpoints|length)==2 and
+    all(.endpoints[];
+        .selected_ip=="203.0.113.10" and
+        .remote_ip=="203.0.113.10" and
+        .endpoint_match==true and
+        .firewall.rule==19100 and
+        .firewall.intercepted==true and
+        .firewall.packets_after > .firewall.packets_before
+    )
+' "${TMP}/result.json" >/dev/null
 [ ! -s "${TMP}/ipfw.state" ]
-[ ! -e "${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.pid" ]
+[ ! -e "${MOCK_DVTWS_PIDFILE}" ]
 ! pgrep -f "${TMP}/bin/dvtws2" >/dev/null 2>&1
 
-grep -q 'add 19100 divert 9989 tcp from any to 203.0.113.10 443' "${TMP}/ipfw.log"
+grep -q 'add 19100 divert 9989 tcp from me to 203.0.113.10 443' "${TMP}/ipfw.log"
 
 echo 'Strategy Lab candidate runtime success contract passed.'
 
 : > "${TMP}/ipfw.state"
 : > "${TMP}/ipfw.log"
+printf '%s\n' 0 > "${TMP}/ipfw.counter"
 rm -rf "${TMP}/run/jobs/job.test/candidate-runtime"
 export MOCK_IPFW_FAIL_ADD=1
 if "${SCRIPT_DIR}/strategy_lab_candidate_runner.sh" job.test "${TMP}/endpoints.txt" "${TMP}/failed.json"; then
@@ -123,7 +184,7 @@ if "${SCRIPT_DIR}/strategy_lab_candidate_runner.sh" job.test "${TMP}/endpoints.t
     exit 1
 fi
 [ ! -s "${TMP}/ipfw.state" ]
-[ ! -e "${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.pid" ]
+[ ! -e "${MOCK_DVTWS_PIDFILE}" ]
 ! pgrep -f "${TMP}/bin/dvtws2" >/dev/null 2>&1
 
 echo 'Strategy Lab candidate runtime failure cleanup contract passed.'

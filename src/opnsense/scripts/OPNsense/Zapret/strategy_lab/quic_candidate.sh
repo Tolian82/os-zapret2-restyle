@@ -33,8 +33,12 @@ strategy_lab_firewall_install_ipv4_rules()
     while IFS= read -r _slqf_address
     do
         [ -n "${_slqf_address}" ] || continue
+        [ "${_slqf_rule}" -le "${STRATEGY_LAB_RULE_MAX}" ] || { strategy_lab_firewall_remove_rules; return 1; }
         "${STRATEGY_LAB_IPFW_BIN}" -qf add "${_slqf_rule}" divert "${STRATEGY_LAB_DIVERT_PORT}" \
-            udp from any to "${_slqf_address}" 443 out not diverted not sockarg xmit "${_slqf_wan}" || { strategy_lab_firewall_remove_rules; return 1; }
+            udp from me to "${_slqf_address}" 443 out not diverted not sockarg xmit "${_slqf_wan}" || {
+                strategy_lab_firewall_remove_rules
+                return 1
+            }
         _slqf_rule=$((_slqf_rule + 1))
     done < "${_slqf_addresses}"
     strategy_lab_firewall_range_empty && return 1
@@ -45,10 +49,24 @@ strategy_lab_candidate_endpoint_probe()
 {
     _slqp_endpoint="$1"; _slqp_index="$2"; _slqp_work="$3"; _slqp_output="$4"
     _slqp_raw="${_slqp_work}/candidate-endpoint-${_slqp_index}.log"
+    _slqp_state="${_slqp_work}/candidate-endpoint-${_slqp_index}.interception"
+    strategy_lab_candidate_probe_begin "${_slqp_work}" "${_slqp_index}" "${_slqp_state}" || return 1
+    _slqp_selected=$(sed -n '1p' "${_slqp_state}")
+
     if strategy_lab_ipv4_valid "${_slqp_endpoint}"; then
-        _slqp_status=FAIL; _slqp_exit=64
+        _slqp_exit=64
+        : > "${_slqp_raw}"
+        _slqp_remote=""
     else
-        if strategy_lab_quic_target_request "${_slqp_endpoint}" "${_slqp_raw}"; then _slqp_status=PASS; _slqp_exit=0; else _slqp_exit=$?; _slqp_status=FAIL; fi
+        if strategy_lab_quic_target_request "${_slqp_endpoint}" "${_slqp_selected}" "${_slqp_raw}"; then
+            _slqp_exit=0
+        else
+            _slqp_exit=$?
+        fi
+        _slqp_remote="${_slqp_selected}"
     fi
-    strategy_lab_endpoint_result_write "${_slqp_endpoint}" "${_slqp_status}" "${_slqp_exit}" quic-ipv4 "${_slqp_raw}" "${_slqp_output}"
+
+    strategy_lab_candidate_endpoint_result_write \
+        "${_slqp_endpoint}" "${_slqp_exit}" quic-ipv4 "${_slqp_raw}" \
+        "${_slqp_remote}" "${_slqp_state}" "${_slqp_output}"
 }

@@ -45,7 +45,7 @@ strategy_lab_firewall_install_ipv4_rules()
         [ -n "${_slext_fw_address}" ] || continue
         [ "${_slext_fw_rule}" -le "${STRATEGY_LAB_RULE_MAX}" ] || { strategy_lab_firewall_remove_rules; return 1; }
         "${STRATEGY_LAB_IPFW_BIN}" -qf add "${_slext_fw_rule}" divert "${STRATEGY_LAB_DIVERT_PORT}" \
-            tcp from any to "${_slext_fw_address}" "${_slext_fw_port}" out not diverted not sockarg xmit "${_slext_fw_wan}" || {
+            tcp from me to "${_slext_fw_address}" "${_slext_fw_port}" out not diverted not sockarg xmit "${_slext_fw_wan}" || {
             strategy_lab_firewall_remove_rules
             return 1
         }

@@ -39,9 +39,10 @@ set -e
 printf '%s\n' "${invalid}" | grep -Fq 'Invalid domain format.'
 grep -Fq "if (trim(\$response) === '')" "${CONTROLLER}"
 grep -Fq 'Domain connectivity test returned no output.' "${CONTROLLER}"
-for test in job-contract target-contract candidate-runtime family-screening parameter-expansion \
-    stability-shortlist extended-tcp quic udp time-budget semantic-restoration \
-    circular diagnostics-activation e2e
+for test in job-contract target-contract candidate-runtime runtime-cleanup preflight-cleanup \
+    hard-deadline stale-worker-recovery state-race local-traffic-rules runtime-readiness \
+    interception-evidence profile-output unified-shortlist family-screening parameter-expansion stability-shortlist extended-tcp \
+    quic udp time-budget semantic-restoration circular diagnostics-activation e2e
 do
     sh "${ROOT_DIR}/scripts/test-strategy-lab-${test}.sh"
 done

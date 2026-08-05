@@ -46,6 +46,37 @@ strategy_lab_tls13_request()
         "https://${_strategy_lab_host}/" > "${_strategy_lab_output}" 2>&1
 }
 
+strategy_lab_tls13_bound_request()
+{
+    _slreq_host="$1"
+    _slreq_ip="$2"
+    _slreq_output="$3"
+
+    strategy_lab_require_executable "${STRATEGY_LAB_TIMEOUT_BIN}" || return 1
+    strategy_lab_require_executable "${STRATEGY_LAB_CURL_BIN}" || return 1
+
+    "${STRATEGY_LAB_TIMEOUT_BIN}" 4 \
+        "${STRATEGY_LAB_CURL_BIN}" \
+        --ipv4 \
+        --proto '=https' \
+        --tlsv1.3 \
+        --tls-max 1.3 \
+        --http1.1 \
+        --request GET \
+        --max-redirs 0 \
+        --resolve "${_slreq_host}:443:${_slreq_ip}" \
+        --connect-timeout 2 \
+        --max-time 3 \
+        --retry 0 \
+        --silent \
+        --show-error \
+        --header 'Connection: close' \
+        --range 0-65535 \
+        --output /dev/null \
+        --write-out 'exit=%{exitcode} remote_ip=%{remote_ip} http=%{http_version} code=%{response_code} bytes=%{size_download}\n' \
+        "https://${_slreq_host}/" > "${_slreq_output}" 2>&1
+}
+
 strategy_lab_dns_request()
 {
     _strategy_lab_host="$1"
