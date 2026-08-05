@@ -29,6 +29,13 @@ Audited source: `main` at `a95fcc33b2bdd97830fe5cd44090ae189a141dfa` (`0.3.2_24`
 14. Extended TLS 1.2/HTTP/QUIC/UDP successes are not unified in the final shortlist; UDP input is not exposed through the supported GUI/API contract.
 15. Progress, localization, retention, and CI coverage are incomplete.
 
+## Hardening progress
+
+- Findings 2, 3, 9, 10 and the runtime-safety portions of findings 1, 4, and 5 are implemented and verified by Patches `_26`–`_32`.
+- Patch `_33` implements the source correction for findings 7 and 8: one selected endpoint address is shared by firewall and request execution, redirects are not followed, and PASS requires exact remote-address equality plus positive IPFW packet-counter growth.
+- Findings 7 and 8 remain pending until Patch `_33` completes all required GitHub checks and the remote commit is verified.
+- Finding 6 is the next ordered implementation scope after `_33`; later findings remain open.
+
 ## Explicit exclusion
 
 No corrective work is required for occupancy detection, ownership validation, snapshotting, or restoration of IPFW rules `19100–19131`. The range is reserved exclusively for Strategy Lab and remains destructively cleaned.

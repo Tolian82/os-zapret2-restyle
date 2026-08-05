@@ -62,6 +62,21 @@ strategy_lab_firewall_range_empty()
     return 0
 }
 
+strategy_lab_firewall_rule_counters()
+{
+    _slfw_rule="$1"
+    strategy_lab_firewall_rule_number_valid "${_slfw_rule}" || return 1
+    "${STRATEGY_LAB_IPFW_BIN}" -a list "${_slfw_rule}" 2>/dev/null |
+        awk -v wanted="${_slfw_rule}" '
+            ($1 + 0) == (wanted + 0) && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ {
+                print $2, $3
+                found=1
+                exit
+            }
+            END { if (!found) exit 1 }
+        '
+}
+
 strategy_lab_firewall_install_ipv4_rules()
 {
     _strategy_lab_addresses="$1"

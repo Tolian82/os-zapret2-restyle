@@ -1,7 +1,7 @@
 #!/bin/sh
 SCRIPT_DIR="${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}"; MODULE_DIR="${MODULE_DIR:-${SCRIPT_DIR}/strategy_lab}"
 set -eu
-for module in common target request udp_request result firewall runtime readiness candidate udp_candidate
+for module in common target request udp_request result firewall runtime readiness interception candidate udp_candidate
 do path="${MODULE_DIR}/${module}.sh"; [ -r "${path}" ] || exit 1; . "${path}"; done
 strategy_lab_require_jq
 JOB_ID="$1"; ENDPOINTS_FILE="$2"; RESULT_FILE="$3"; CANDIDATE_ID="$4"; FAMILY="$5"; STRATEGY_FILE="$6"

@@ -3,7 +3,7 @@ SCRIPT_DIR="${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}"
 MODULE_DIR="${MODULE_DIR:-${SCRIPT_DIR}/strategy_lab}"
 set -eu
 umask 022
-for module in common target request extended_request result firewall runtime readiness extended_runtime candidate extended_candidate
+for module in common target request extended_request result firewall runtime readiness interception extended_runtime candidate extended_candidate
 do
     module_path="${MODULE_DIR}/${module}.sh"
     [ -r "${module_path}" ] || { echo "ERROR: required Strategy Lab candidate module is missing: ${module_path}" >&2; exit 1; }
