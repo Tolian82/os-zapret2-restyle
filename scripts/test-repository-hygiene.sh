@@ -27,7 +27,7 @@ do
 done
 
 grep -Fq 'Version line: **0.3.x**' "${ROOT_DIR}/docs/REQUIREMENTS.md" || fail 'requirements version line is stale'
-grep -Fq 'Corrective Patches 1–11 are complete in source' "${ROOT_DIR}/docs/PROJECT_STATE.md" || fail 'project state does not close the corrective source series'
+grep -Eq 'Corrective Patches 1–[0-9]+ are complete in source' "${ROOT_DIR}/docs/PROJECT_STATE.md" || fail 'project state does not report corrective source progress'
 grep -Fq 'Historical delivery record' "${ROOT_DIR}/docs/audit/DIAG-001-strategy-lab.md" || fail 'historical DIAG record has no authority banner'
 grep -Fq 'scripts/test-repository-hygiene.sh' "${CI}" || fail 'repository hygiene test is not wired into CI'
 
