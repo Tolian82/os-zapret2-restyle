@@ -22,6 +22,8 @@ GITHUB DELIVERY RULES
 `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md` supersedes earlier active
 wording that required one unpublished commit, one CI run, immediate PR abandonment after
 a failure, or complete suspension of later analysis while checks run.
+`docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md` controls title and
+commit-subject identity for every GitHub-delivered change.
 
 Default ordinary delivery:
 
@@ -42,6 +44,12 @@ Rules:
 - Keep one logical scope per pull request.
 - A PR branch may contain multiple same-scope work or repair commits. The permanent
   `main` history remains one logical commit through squash merge.
+- Every PR title, every work or repair commit subject in the PR branch, and the final
+  squash commit subject in `main` must begin with the exact current package-candidate
+  prefix `v<VERSION>_<PLUGIN_REVISION>:` derived from the PR head. This applies to code,
+  documentation, governance, CI, maintenance, and release-preparation changes alike.
+- Governance/documentation/CI-only changes do not increment `VERSION` or
+  `PLUGIN_REVISION`; they use the unchanged current package-candidate prefix.
 - Open a Ready PR when the content is ready for review and merge. Draft is reserved for
   intentional work in progress or early design discussion.
 - CI success is required for the latest mergeable PR state, not for every historical
@@ -52,6 +60,9 @@ Rules:
 - While CI runs, independent analysis and preparation may continue separately. Do not
   mutate the checked PR with unrelated work and do not merge a dependent successor
   before its prerequisite is integrated.
+- Before merge, verify that the intended squash subject retains the exact package-
+  candidate prefix used by the PR title. Never substitute an unversioned conventional
+  subject such as `docs:`, `ci:`, `governance:`, or `chore:`.
 - Use expected head SHA when merging. Never force-update `main`.
 - Branch cleanup is repository hygiene. Cleanup failure must be diagnosed, but it does
   not invalidate an otherwise successful code merge.
@@ -93,6 +104,9 @@ A package patch and a project release are different operations.
 - A project release changes `VERSION`, resets `PLUGIN_REVISION` to `1`, and requires
   explicit owner authorization for that exact version.
 - Published tags, releases, assets, and versions are immutable and forward-only.
+
+All three change classes still use the exact current package-candidate prefix in PR and
+commit subjects.
 
 ==================================================
 OPNSENSE COMMAND RULE
