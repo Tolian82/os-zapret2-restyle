@@ -27,7 +27,7 @@ Additional reading by task type:
 - code or runtime change: applicable sections of `WORKING_CONVENTIONS.md`,
   `DEVELOPMENT_GUIDE.md`, architecture, requirements, audit, and tests;
 - audit: the relevant audit register, architecture, requirements, and decisions;
-- GitHub mutation: `docs/GITHUB_PUBLICATION.md` and the active GitHub decision;
+- GitHub mutation: `docs/GITHUB_PUBLICATION.md` and the active GitHub decisions;
 - release: release workflow, release gate, current state, changelog, and release records;
 - repository-wide audit or genuine lost-context recovery: complete Engineering Memory.
 
@@ -75,8 +75,8 @@ Approved product requirements.
 Compact stable summary of normal GitHub work.
 
 `GITHUB_PUBLICATION.md`
-Final authority for branches, PRs, checks, repairs, merge, cleanup, patch/release
-boundaries, transport selection, and concurrency.
+Final authority for branches, PRs, checks, repairs, title and commit-subject identity,
+merge, cleanup, patch/release boundaries, transport selection, and concurrency.
 
 `CHANGELOG.md`, `docs/releases/`, and `docs/patches/`
 Published changes and historical patch/release records.
@@ -100,8 +100,11 @@ For GitHub delivery, the authority order is:
 1. current owner instruction;
 2. `AGENTS.md`;
 3. `docs/GITHUB_PUBLICATION.md`;
-4. `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`;
-5. other general or historical documents.
+4. `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md` for PR and commit
+   subject identity;
+5. `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md` for branch, PR, CI, repair,
+   merge, and cleanup mechanics;
+6. other general or historical documents.
 
 This GitHub authority explicitly supersedes conflicting wording in older sections of
 `WORKING_CONVENTIONS.md`, `DEVELOPMENT_GUIDE.md`, `STRATEGY_LAB.md`, patch records, and
@@ -114,6 +117,10 @@ prior atomic/serial publication decisions. Such text must not be used to require
 - a low-level blobs/tree API sequence when another safe transport is available;
 - Draft → Ready as a mandatory normal path;
 - branch-cleanup success as proof that code delivery itself succeeded.
+
+No active or historical text may be used to permit an unversioned project-delivery title.
+Every PR title, PR-branch commit subject, and final squash subject must begin with the
+exact current package-candidate prefix.
 
 Never infer current state only from chat history or a historical record. Re-read current
 `main`, current PR state, and the applicable specialist authority.
