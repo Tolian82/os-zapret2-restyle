@@ -15,6 +15,12 @@ Package candidate: `0.3.2_19`
 - Added focused terminal-result matrix coverage.
 - Updated lifecycle expectations, package candidate, audit, patch record, roadmap, and project state.
 
+## Failed publication attempt and diagnosis
+
+PR #73 was closed without merge after the aggregate diagnostics test failed. A dedicated non-PR workflow ran the terminal-result, lifecycle, job-contract, and aggregate tests separately and uploaded exact logs.
+
+The product lifecycle test passed. The two failures were stale test assumptions: the precheck helper waited only for `completed` even though `TIMEOUT` is now correctly terminal `error`, and a broad `_FINAL_MESSAGE` grep matched the new local `WORKER_FINAL_MESSAGE` variable rather than an old load-order override. The clean replacement updates those assertions without changing the approved runtime result contract.
+
 ## Architectural boundary
 
 This patch changes result classification and reporting only. Existing operation and stage timeout values are not changed. One overall deadline and one shared stage-80 budget remain Corrective Patch 6.

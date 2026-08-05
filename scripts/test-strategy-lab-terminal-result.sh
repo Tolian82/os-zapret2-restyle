@@ -111,7 +111,10 @@ WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_worker.sh"
 
 grep -Fq 'worker_finish_search' "${FLOW}" || fail 'normal worker flow does not classify search results'
 ! grep -Fq 'PARTIAL_FINAL_MESSAGE' "${FLOW}" || fail 'worker flow still uses load-order final message'
-! grep -Fq '_FINAL_MESSAGE' "${CONTROL}" || fail 'worker control still uses load-order final messages'
+! grep -Fq 'PARTIAL_FINAL_MESSAGE' "${CONTROL}" || fail 'worker control still uses the partial final-message override'
+! grep -Fq 'ERROR_FINAL_MESSAGE' "${CONTROL}" || fail 'worker control still uses the error final-message override'
+! grep -Fq 'TIMEOUT_FINAL_MESSAGE' "${CONTROL}" || fail 'worker control still uses the timeout final-message override'
+! grep -Fq 'CANCEL_FINAL_MESSAGE' "${CONTROL}" || fail 'worker control still uses the cancel final-message override'
 grep -Fq 'worker_result' "${WORKER}" || fail 'worker does not load the result contract'
 
 echo 'PASS: Strategy Lab terminal state, outcome, report status, and localized messages are truthful'
