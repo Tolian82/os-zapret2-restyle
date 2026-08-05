@@ -1398,3 +1398,13 @@ Remaining live verification:
 - Start/Stop and version reporting;
 - selected reinstall, upgrade, and downgrade while initially running and stopped;
 - completion polling, failure dialog, and setup log reference.
+
+==================================================
+2026-08-05 — CORRECTIVE PATCH 11: REPOSITORY HYGIENE
+==================================================
+
+Removed stale repository artifacts and obsolete branches, added permanent CI hygiene
+coverage, synchronized current documentation authority, and closed the Strategy Lab
+corrective source series. Package metadata remains `0.3.2_24`; the next gate is the
+consolidated owner-assisted OPNsense verification matrix. Detailed record:
+`docs/devlog/DEVLOG-2026-08-05-REPOSITORY-HYGIENE.md`.

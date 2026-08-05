@@ -310,23 +310,19 @@ For fixed release identifiers and commit SHAs, prefer static pipelines such as
 CURRENT IMPLEMENTATION PRIORITY
 ==================================================
 
-For the active milestone, choose work in the order recorded in ROADMAP.md. For Milestone 8, the first work package is GUI management of bol-van/zapret2 stable releases through the existing setup.sh backend. The additional BLOB repository follows only after the project owner supplies its repository and contract.
+The Strategy Lab initial delivery and corrective source series are complete. The active
+next gate is one consolidated owner-assisted OPNsense verification matrix recorded in
+`docs/ROADMAP.md` and the corrective audit. Do not begin another Strategy Lab feature,
+release preparation, tag, GitHub Release, release asset, or pkg-repository publication
+before that live evidence is recorded and the owner explicitly authorizes a release.
 
-Historical Milestone 7 ordering was:
-
-1. Finish the current documentation synchronization.
-2. Move internal documentation into `docs/` and update references.
-3. Verify strategy application to named HOSTLIST and IPSET targets.
-4. Compare actual behavior with REQUIREMENTS.md.
-5. Implement and live-test missing or defective approved behavior in focused commits.
-
-Do not start a general UX audit or redesign programme during this work. A focused
-interface change is appropriate only when required by the functionality being
-implemented or when the current interface prevents use of that functionality.
+The additional BLOB repository remains a later GUI work item. Its repository, manifest,
+versioning, integrity, and update contract remain undefined until supplied and approved
+by the project owner.
 
 Keep process discussion proportional to the project. Existing guidance is sufficient;
-prefer coding and verification over adding more methodological text unless practice
-exposes a concrete gap.
+prefer implementation and verification over adding methodology unless practice exposes
+a concrete repeatable gap.
 
 
 ## Package lifecycle verification
@@ -378,7 +374,7 @@ For each candidate release baseline, verify and record these stages separately:
    - no runtime dependency installation or compilation occurs inside pkg installation.
 
 4. Runtime setup verification
-   - setup.sh install obtains pinned bol-van/zapret2 v1.0.3;
+   - setup.sh install obtains and verifies the selected published stable bol-van/zapret2 release;
    - dependencies are available;
    - dvtws2 is built and executable;
    - setup state/logs reach ready;

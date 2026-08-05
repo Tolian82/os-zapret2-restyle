@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Requirements
 
 Project: **os-zapret2-restyle**  
-Version line: **0.2.x**
+Version line: **0.3.x**
 
 ## Project identity
 
@@ -115,7 +115,7 @@ One IPv4 address or IPv4 CIDR network per line:
 IPSET fields reject domains, malformed addresses, invalid prefixes, and
 unrelated text.
 
-IPv6 target lists are outside version 0.2.0 requirements.
+IPv6 target lists remain outside the approved target-list contract. Strategy Lab accepts a normalized domain only; IPv6 is detected only as an optional network capability and is not accepted as a Strategy Lab target.
 
 ### Normalization
 
@@ -262,47 +262,30 @@ and secrets must not be packaged from a development firewall.
 
 
 ==================================================
-IMPLEMENTATION TRACEABILITY SNAPSHOT — 2026-08-02
+CURRENT IMPLEMENTATION AND VERIFICATION STATE
 ==================================================
 
-Live verified before this work package:
+Active product baseline:
 
-- independent OPNsense package installation;
-- explicit one-time runtime setup after plugin installation;
-- previous pinned bol-van/zapret2 v1.0.3 runtime source;
-- dvtws2 build and execution;
-- configd service control;
-- unified strategy processing;
-- HOSTLIST and IPSET target resolution;
-- automatic one-selector-per-runtime-profile normalization;
-- preservation of user-authored --new boundaries;
-- candidate validation and transactional runtime activation;
-- ipfw divert lifecycle;
-- supervised runtime process;
-- status reaching ready/ok.
+- project version line: `0.3.x`;
+- published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`;
+- current verified source candidate: `os-zapret2-restyle-0.3.2_24.pkg`;
+- asynchronous Strategy Lab is the only strategy-finding path;
+- the initial 13-patch delivery and corrective source patches 1–11 are complete;
+- complete mock-driven API/configd-to-worker regression coverage is mandatory in CI;
+- final owner-assisted OPNsense verification remains required before release authorization.
 
-Implemented and statically verified in the current work package:
+Current Strategy Lab behavior is controlled by:
 
-- GitHub stable-release discovery;
-- latest-release default selection;
-- four-release `show` output;
-- exact published-release selection;
-- shared install/reinstall/upgrade/downgrade path;
-- concise `--help` and `-h` output;
-- selected-version propagation through the setup lock;
-- rejection of malformed, unpublished, draft, and prerelease versions;
-- focused release-selection regression coverage.
+- `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`;
+- `docs/decisions/DEC-2026-08-05-strategy-lab-corrective-series.md`;
+- `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-CORRECTIVE.md`.
 
-Awaiting focused OPNsense verification:
-
-- real `show` output against GitHub;
-- default latest-release installation;
-- explicit repeat installation;
-- upgrade and downgrade between two published releases;
-- running/stopped service-state preservation for each selected-release path.
+Historical audit, devlog, release, and patch records remain evidence only. They do not
+override the current specialist authority and current project state.
 
 Blob requirement interpretation:
 
-- shorthand --blob=<name> addresses files/fake/<name>.bin directly;
+- shorthand `--blob=<name>` addresses `files/fake/<name>.bin` directly;
 - actual preset blob names must correspond to installed files;
 - implicit aliases are not a product requirement.

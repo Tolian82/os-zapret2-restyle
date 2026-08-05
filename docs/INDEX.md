@@ -69,6 +69,9 @@ How is the plugin built and how do components interact?
 `docs/architecture/STRATEGY_LAB_ACTIVATION.md`
 How does the asynchronous Diagnostics path replace synchronous Blockcheck?
 
+`docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`
+What is the current authoritative Strategy Lab state machine, timing, cancellation, restoration, target, result, and circular-validation contract?
+
 `docs/USER_GUIDE_STRATEGY_LAB.md`
 How does an operator use Strategy Lab and temporary circular validation?
 
@@ -100,6 +103,7 @@ PRECEDENCE
 3. This index defines reading order and specialist ownership.
 4. The relevant specialist document controls its subject.
 5. Historical records remain evidence but do not override later active decisions.
+6. Historical DIAG, audit, devlog, release, and patch records require an explicit status banner when their wording can be mistaken for current behavior.
 
 Never infer current state only from chat history, a prior summary, or an older release
 record. Re-read current `main` and the applicable specialist document.
