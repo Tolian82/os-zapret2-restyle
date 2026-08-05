@@ -34,10 +34,10 @@ Audited source: `main` at `a95fcc33b2bdd97830fe5cd44090ae189a141dfa` (`0.3.2_24`
 - Findings 2, 3, 6, 7, 8, 9, 10 and the runtime-safety portions of findings 1, 4, and 5 are implemented and verified by Patches `_26`–`_34`.
 - Patch `_35` completes the shortlist half of finding 14.
 - Patch `_36` completes the UDP-input half of finding 14; finding 14 is source-complete.
-- Patch `_37` closes the evidence-mutation half of finding 11 with immutable parent snapshots and private circular sessions.
-- Patch `_38` completes finding 11 with a dedicated launch lock, PID-plus-start-token ownership, session-local stale cleanup, verified semantic restoration, and retry blocking after `RESTORE_FAILED`.
-- Finding 11 is source-complete after Patch `_38`.
-- Findings 12–13 and the remaining portions of finding 15 remain open.
+- Patches `_37`–`_38` complete finding 11 with immutable parent evidence, private circular sessions, launch serialization, PID-plus-start-token ownership, stale cleanup, verified restoration, and retry blocking after `RESTORE_FAILED`.
+- Patch `_39` completes finding 12 with a fail-closed backend lifecycle guard checked before model mutation and again before save, while shared-lock reconfigure and rollback cover the residual race.
+- Findings 11–12 are source-complete after Patch `_39`.
+- Finding 13 and the remaining portions of finding 15 remain open.
 
 ## Explicit exclusion
 
