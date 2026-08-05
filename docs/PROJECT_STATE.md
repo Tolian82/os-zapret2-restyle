@@ -3,9 +3,9 @@
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Current package candidate: `os-zapret2-restyle-0.3.2_20.pkg`
+Current package candidate: `os-zapret2-restyle-0.3.2_21.pkg`
 
-Patches 1–13 of the initial Strategy Lab delivery are complete. Corrective Patches 1–6 are complete in source.
+Patches 1–13 of the initial Strategy Lab delivery are complete. Corrective Patches 1–7 are complete in source.
 
 Completed corrective contracts:
 
@@ -21,12 +21,14 @@ Completed corrective contracts:
 - one absolute 150-second standard search deadline;
 - one optional 120-second extended allowance;
 - one shared stage-80 deadline across TLS/HTTP, QUIC, and UDP branches;
-- cleanup and restoration remain mandatory after search-budget exhaustion.
+- cleanup and restoration remain mandatory after search-budget exhaustion;
+- initial and final service process, runtime, effective strategy, and normal firewall evidence are compared;
+- temporary candidate process and Strategy Lab IPFW cleanup are verified;
+- semantic mismatch is terminal `RESTORE_FAILED`.
 
 Open corrective findings:
 
-- restoration evidence is weaker than the approved semantic contract;
-- circular eligibility is not yet enforced by the corrected terminal contract;
+- circular eligibility is not yet enforced by the corrected terminal and restoration contracts;
 - IP target semantics are implicit;
 - tests do not yet execute the complete API-to-worker state machine;
 - stale repository artifacts and superseded documentation remain to be cleaned.
@@ -37,6 +39,6 @@ Corrective authority:
 - `docs/decisions/DEC-2026-08-05-strategy-lab-corrective-series.md`;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-CORRECTIVE.md`.
 
-`VERSION=0.3.2`; `PLUGIN_REVISION=20`. No tag, release, release asset, or pkg-repository publication is authorized while the corrective series is active.
+`VERSION=0.3.2`; `PLUGIN_REVISION=21`. No tag, release, release asset, or pkg-repository publication is authorized while the corrective series is active.
 
-Next action: Corrective Patch 7 — stronger semantic lifecycle snapshot and restoration verification. Owner-assisted live OPNsense verification remains deferred until every corrective implementation patch has completed the serial GitHub delivery gate.
+Next action: Corrective Patch 8 — backend and GUI circular eligibility. Owner-assisted live OPNsense verification remains deferred until every corrective implementation patch has completed the serial GitHub delivery gate.

@@ -1,6 +1,6 @@
 # os-zapret2-restyle — Roadmap
 
-Current package candidate: `0.3.2_20`.
+Current package candidate: `0.3.2_21`.
 
 ## Initial Strategy Lab delivery
 
@@ -26,7 +26,7 @@ Current package candidate: `0.3.2_20`.
 - [x] Corrective Patch 4 — explicit monotonic stage machine.
 - [x] Corrective Patch 5 — correct terminal state, outcome, and localized message generation.
 - [x] Corrective Patch 6 — shared overall and stage-80 time budgets.
-- [ ] Corrective Patch 7 — stronger semantic restoration snapshot and verification.
+- [x] Corrective Patch 7 — stronger semantic restoration snapshot and verification.
 - [ ] Corrective Patch 8 — GUI and backend circular eligibility contract.
 - [ ] Corrective Patch 9 — explicit domain/IP target contract.
 - [ ] Corrective Patch 10 — complete API-to-worker integration regression harness.
