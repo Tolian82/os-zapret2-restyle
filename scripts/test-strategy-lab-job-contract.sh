@@ -2,7 +2,7 @@
 
 set -eu
 
-ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ROOT_DIR=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_launcher.sh"
 WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_worker.sh"
 PROBE_RUNNER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_probe_runner.sh"
@@ -20,6 +20,7 @@ fail()
 sh "${ROOT_DIR}/scripts/test-strategy-lab-lifecycle.sh"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-precheck.sh"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-cancel-state.sh"
+sh "${ROOT_DIR}/scripts/test-strategy-lab-active-cancel.sh"
 
 sh -n "${LAUNCHER}"
 sh -n "${WORKER}"
