@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+STRATEGY_LAB_JQ=$(command -v jq)
+export STRATEGY_LAB_JQ
 TEST_SCRIPT="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/test_domain.sh"
 CONTROLLER="${ROOT_DIR}/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/DiagnosticsController.php"
 TMP_ROOT=$(mktemp -d)
