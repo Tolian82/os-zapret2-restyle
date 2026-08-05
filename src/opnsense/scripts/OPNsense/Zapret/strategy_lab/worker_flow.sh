@@ -1,3 +1,4 @@
+worker_budget_initialize || worker_error 00 'Strategy Lab time budget could not be initialized.'
 strategy_lab_update_job "${JOB_ID}" running '' 00 false ''
 strategy_lab_update_stage "${JOB_ID}" 00 RUNNING ''
 strategy_lab_append_event "${JOB_ID}" 00 RUNNING 'Validating target and resolving required endpoints'
@@ -63,7 +64,8 @@ done
 strategy_lab_update_stage "${JOB_ID}" 30 RUNNING ''
 strategy_lab_append_event "${JOB_ID}" 30 RUNNING 'Checking IPv4, IPv6, and QUIC capabilities'
 NETWORK_FILE="${JOB_DIR}/network.json"
-if "${STRATEGY_LAB_TIMEOUT_BIN}" "${STRATEGY_LAB_STAGE30_TIMEOUT}" \
+_strategy_lab_timeout=$(worker_budget_timeout_for 30 "${STRATEGY_LAB_STAGE30_TIMEOUT}") || worker_stage_timeout 30
+if "${STRATEGY_LAB_TIMEOUT_BIN}" "${_strategy_lab_timeout}" \
     "${PROBE_RUNNER}" network "${NETWORK_FILE}" "${JOB_DIR}"
 then
     _strategy_lab_network_status=0
@@ -100,7 +102,8 @@ esac
 strategy_lab_update_stage "${JOB_ID}" 40 RUNNING ''
 strategy_lab_append_event "${JOB_ID}" 40 RUNNING 'Testing the clean target baseline without Zapret2'
 BASELINE_FILE="${JOB_DIR}/baseline.json"
-if "${STRATEGY_LAB_TIMEOUT_BIN}" "${STRATEGY_LAB_STAGE40_TIMEOUT}" \
+_strategy_lab_timeout=$(worker_budget_timeout_for 40 "${STRATEGY_LAB_STAGE40_TIMEOUT}") || worker_stage_timeout 40
+if "${STRATEGY_LAB_TIMEOUT_BIN}" "${_strategy_lab_timeout}" \
     "${PROBE_RUNNER}" baseline \
     "${TARGET}" "${TARGET_TYPE}" "${ENDPOINTS_FILE}" \
     "${NETWORK_FILE}" "${JOB_DIR}" "${BASELINE_FILE}"
@@ -147,7 +150,8 @@ esac
 strategy_lab_update_stage "${JOB_ID}" 50 RUNNING ''
 strategy_lab_append_event "${JOB_ID}" 50 RUNNING 'Running one isolated Zapret2 smoke candidate'
 CANDIDATE_FILE="${JOB_DIR}/candidate-smoke.json"
-if "${STRATEGY_LAB_TIMEOUT_BIN}" "${STRATEGY_LAB_CANDIDATE_TIMEOUT}" \
+_strategy_lab_timeout=$(worker_budget_timeout_for 50 "${STRATEGY_LAB_CANDIDATE_TIMEOUT}") || worker_stage_timeout 50
+if "${STRATEGY_LAB_TIMEOUT_BIN}" "${_strategy_lab_timeout}" \
     "${CANDIDATE_RUNNER}" "${JOB_ID}" "${ENDPOINTS_FILE}" "${CANDIDATE_FILE}"
 then
     _strategy_lab_candidate_status=0
