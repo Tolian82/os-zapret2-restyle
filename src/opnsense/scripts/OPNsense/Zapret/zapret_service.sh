@@ -35,6 +35,9 @@ STRATEGY_LAB_LOCK_TIMEOUT=3
 LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 STRATEGY_LAB_WORKER="${STRATEGY_LAB_WORKER:-${SCRIPT_DIR}/strategy_lab_worker.sh}"
 STRATEGY_LAB_CIRCULAR_WORKER="${STRATEGY_LAB_CIRCULAR_WORKER:-${SCRIPT_DIR}/strategy_lab_circular_worker.sh}"
+STRATEGY_LAB_SEMANTIC_IPFW_BIN="${STRATEGY_LAB_SEMANTIC_IPFW_BIN:-/sbin/ipfw}"
+STRATEGY_LAB_SEMANTIC_PS_BIN="${STRATEGY_LAB_SEMANTIC_PS_BIN:-/bin/ps}"
+STRATEGY_LAB_SEMANTIC_SHA256_BIN="${STRATEGY_LAB_SEMANTIC_SHA256_BIN:-/sbin/sha256}"
 
 ensure_runtime_components()
 {
@@ -110,6 +113,107 @@ strategy_lab_lock_owner_valid()
     ( : >&9 ) 2>/dev/null
 }
 
+strategy_lab_semantic_pid_matches()
+{
+    _strategy_lab_semantic_pidfile="$1"
+    _strategy_lab_semantic_expected="$2"
+    [ -r "${_strategy_lab_semantic_pidfile}" ] || return 1
+    IFS= read -r _strategy_lab_semantic_pid < "${_strategy_lab_semantic_pidfile}" || return 1
+    case "${_strategy_lab_semantic_pid}" in ''|*[!0-9]*) return 1 ;; esac
+    kill -0 "${_strategy_lab_semantic_pid}" 2>/dev/null || return 1
+    [ -x "${STRATEGY_LAB_SEMANTIC_PS_BIN}" ] || return 1
+    _strategy_lab_semantic_command=$("${STRATEGY_LAB_SEMANTIC_PS_BIN}" \
+        -p "${_strategy_lab_semantic_pid}" -o command= 2>/dev/null || true)
+    printf '%s\n' "${_strategy_lab_semantic_command}" | grep -Fq "${_strategy_lab_semantic_expected}"
+}
+
+strategy_lab_semantic_hash_file()
+{
+    _strategy_lab_semantic_file="$1"
+    [ -r "${_strategy_lab_semantic_file}" ] || {
+        printf '%s\n' missing
+        return 0
+    }
+    if [ -x "${STRATEGY_LAB_SEMANTIC_SHA256_BIN}" ]; then
+        "${STRATEGY_LAB_SEMANTIC_SHA256_BIN}" -q "${_strategy_lab_semantic_file}"
+        return $?
+    fi
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "${_strategy_lab_semantic_file}" | awk '{print $1}'
+        return $?
+    fi
+    return 1
+}
+
+strategy_lab_semantic_firewall_hash()
+{
+    [ -x "${STRATEGY_LAB_SEMANTIC_IPFW_BIN}" ] || return 1
+    _strategy_lab_semantic_rules=$(mktemp "${TMPDIR:-/tmp}/zapret-rules.XXXXXX") || return 1
+    : > "${_strategy_lab_semantic_rules}"
+    _strategy_lab_semantic_rule="${RULE_BASE}"
+    while [ "${_strategy_lab_semantic_rule}" -le "${RULE_MAX}" ]
+    do
+        "${STRATEGY_LAB_SEMANTIC_IPFW_BIN}" list "${_strategy_lab_semantic_rule}" 2>/dev/null |
+            grep '^[0-9]' >> "${_strategy_lab_semantic_rules}" || true
+        _strategy_lab_semantic_rule=$((_strategy_lab_semantic_rule + 1))
+    done
+    if [ ! -s "${_strategy_lab_semantic_rules}" ]; then
+        rm -f "${_strategy_lab_semantic_rules}"
+        printf '%s\n' empty
+        return 0
+    fi
+    _strategy_lab_semantic_hash=$(strategy_lab_semantic_hash_file \
+        "${_strategy_lab_semantic_rules}") || {
+            rm -f "${_strategy_lab_semantic_rules}"
+            return 1
+        }
+    rm -f "${_strategy_lab_semantic_rules}"
+    printf '%s\n' "${_strategy_lab_semantic_hash}"
+}
+
+strategy_lab_semantic_service_state()
+{
+    if service_dispatch status >/dev/null 2>&1; then
+        printf '%s\n' RUNNING
+        return 0
+    else
+        _strategy_lab_semantic_status=$?
+    fi
+    case "${_strategy_lab_semantic_status}" in
+        1) printf '%s\n' STOPPED ;;
+        *) printf '%s\n' INCOMPLETE ;;
+    esac
+}
+
+strategy_lab_semantic_evidence()
+{
+    _strategy_lab_semantic_state=$(strategy_lab_semantic_service_state) || return 1
+    if strategy_lab_semantic_pid_matches "${CHILD_PIDFILE}" "${DVTWS_BIN}"; then
+        _strategy_lab_semantic_child=true
+    else
+        _strategy_lab_semantic_child=false
+    fi
+    if strategy_lab_semantic_pid_matches "${SUPERVISOR_MONITOR_PIDFILE}" "${SUPERVISOR_LOOP}"; then
+        _strategy_lab_semantic_supervisor=true
+    else
+        _strategy_lab_semantic_supervisor=false
+    fi
+    _strategy_lab_semantic_args_hash=$(strategy_lab_semantic_hash_file \
+        "${ACTIVE_DIR}/dvtws.args") || return 1
+    _strategy_lab_semantic_config_hash=$(strategy_lab_semantic_hash_file \
+        "${CONFIG}") || return 1
+    _strategy_lab_semantic_firewall_hash=$(strategy_lab_semantic_firewall_hash) || return 1
+
+    printf '{"schema":1,"source":"zapret_service","state":"%s",' \
+        "${_strategy_lab_semantic_state}"
+    printf '"child_running":%s,"supervisor_running":%s,' \
+        "${_strategy_lab_semantic_child}" "${_strategy_lab_semantic_supervisor}"
+    printf '"runtime_args_hash":"%s","effective_config_hash":"%s",' \
+        "${_strategy_lab_semantic_args_hash}" "${_strategy_lab_semantic_config_hash}"
+    printf '"normal_firewall_hash":"%s"}\n' \
+        "${_strategy_lab_semantic_firewall_hash}"
+}
+
 strategy_lab_internal_dispatch()
 {
     strategy_lab_lock_owner_valid || {
@@ -120,6 +224,9 @@ strategy_lab_internal_dispatch()
     case "${1:-}" in
         strategy-lab-status)
             service_dispatch status
+            ;;
+        strategy-lab-evidence)
+            strategy_lab_semantic_evidence
             ;;
         strategy-lab-stop)
             stop_service
@@ -237,7 +344,7 @@ case "${1:-}" in
     status)
         service_dispatch "$@"
         ;;
-    strategy-lab-status|strategy-lab-stop|strategy-lab-start)
+    strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start)
         strategy_lab_internal_dispatch "$@"
         ;;
     strategy-lab|strategy-lab-circular)
