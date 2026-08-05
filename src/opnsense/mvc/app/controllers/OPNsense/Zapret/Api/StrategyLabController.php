@@ -1,29 +1,8 @@
 <?php
 
 /**
- *    Copyright (C) 2026 Umur Gorur
- *    All rights reserved.
- *
- *    Redistribution and use in source and binary forms, with or without
- *    modification, are permitted provided that the following conditions are met:
- *
- *    1. Redistributions of source code must retain the above copyright notice,
- *       this list of conditions and the following disclaimer.
- *
- *    2. Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *
- *    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
- *    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
- *    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
- *    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- *    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- *    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- *    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- *    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *    POSSIBILITY OF SUCH DAMAGE.
+ * Copyright (C) 2026 Umur Gorur
+ * All rights reserved.
  */
 
 namespace OPNsense\Zapret\Api;
@@ -46,18 +25,12 @@ class StrategyLabController extends ApiControllerBase
         ));
 
         if ($response === '') {
-            return [
-                'status' => 'error',
-                'message' => 'Strategy Lab returned no output.'
-            ];
+            return ['status' => 'error', 'message' => 'Strategy Lab returned no output.'];
         }
 
         $decoded = json_decode($response, true);
         if (!is_array($decoded)) {
-            return [
-                'status' => 'error',
-                'message' => 'Strategy Lab returned invalid output.'
-            ];
+            return ['status' => 'error', 'message' => 'Strategy Lab returned invalid output.'];
         }
 
         return $decoded;
@@ -69,10 +42,6 @@ class StrategyLabController extends ApiControllerBase
         return preg_match(self::JOB_PATTERN, $jobId) ? $jobId : '';
     }
 
-    /**
-     * Start the dormant asynchronous Strategy Lab framework. The existing Blockcheck
-     * button remains on the legacy Diagnostics path until the final migration patch.
-     */
     public function startAction(): array
     {
         if (!$this->request->isPost()) {
@@ -93,10 +62,7 @@ class StrategyLabController extends ApiControllerBase
             $language = 'en';
         }
 
-        return $this->backendResponse(
-            'strategy_lab_start',
-            [$target, $mode, $language]
-        );
+        return $this->backendResponse('strategy_lab_start', [$target, $mode, $language]);
     }
 
     public function statusAction(): array
@@ -106,10 +72,7 @@ class StrategyLabController extends ApiControllerBase
         }
 
         $jobId = $this->jobId();
-        return $this->backendResponse(
-            'strategy_lab_status',
-            [$jobId !== '' ? $jobId : '-']
-        );
+        return $this->backendResponse('strategy_lab_status', [$jobId !== '' ? $jobId : '-']);
     }
 
     public function cancelAction(): array

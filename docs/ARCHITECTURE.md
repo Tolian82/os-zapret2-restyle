@@ -5,11 +5,11 @@ DOCUMENT ROLE
 ==================================================
 
 Question answered:
-How is the system built?
+How is the current system built?
 
 Purpose:
-Describe the technical architecture, runtime model, interfaces, and component
-responsibilities.
+Describe the active technical architecture, runtime ownership, interfaces, and
+component responsibilities.
 
 Updated when:
 The system architecture or component responsibilities change.
@@ -18,732 +18,213 @@ Read after:
 DEVELOPMENT_GUIDE.md
 
 Do not store here:
-Current task status, decision rationale, roadmap, or development history.
+Current task status, decision rationale, roadmap, or chronological history.
 
 ==================================================
-REPOSITORY
+IDENTITY AND SOURCE OF TRUTH
 ==================================================
 
-Repository:
-https://github.com/Tolian82/os-zapret2-restyle
+Repository: `https://github.com/Tolian82/os-zapret2-restyle`
+Primary branch: `main`
+Project/package: `os-zapret2-restyle`
+Internal service and configd namespace: `zapret`
+Version source: `VERSION`
 
-Branch:
-main
-
-Baseline tag:
-restyle-start
-
-Development checkout:
-/root/os-zapret2-restyle
-
-This repository is the source of truth and is an independent project.
-
-The project originated from zapret by bol-van and an earlier OPNsense plugin
-code base by Umur Gorur.
-
-Copyright notices and licenses are preserved in LICENSE and NOTICE.
-
-Current architecture, package identity, repository, releases, documentation,
-maintenance, and ongoing development belong to os-zapret2-restyle.
+The repository is independent and contains every project-owned file required to
+build and install the plugin on a supported clean OPNsense system. Generated
+runtime, binaries, logs, PID files, backups, and appliance configuration are not
+source files.
 
 ==================================================
-HIGH-LEVEL PIPELINE
+CONFIGURATION AND RUNTIME PIPELINE
 ==================================================
-
-OPNsense configuration
-        ↓
-Config loader
-        ↓
-Strategy parser
-        ↓
-Target Mode resolver
-        ↓
-Runtime Profile Normalizer
-        ↓
-Generic placeholder index
-        ↓
-Target registry and resolver
-        ↓
-Exclude resolver
-        ↓
-Blob resolver
-        ↓
-Port extractor
-        ↓
-Argument generator
-        ↓
-Release validator
-        ↓
-Atomic activation
-        ↓
-Launcher
-        ↓
-Firewall
-        ↓
-Supervisor
-
-==================================================
-CONFIRMED GUI-TO-RUNTIME INTERFACES
-==================================================
-
-Settings Apply:
-
-/ui/zapret
-        ↓
-IndexController::indexAction()
-        ↓
-general.volt
-        ↓
-/api/zapret/settings/get and /api/zapret/settings/apply
-        ↓
-validate, normalize, and save the OPNsense model
-        ↓
-configctl zapret reconfigure
-        ↓
-zapret_service.sh reloads OPNsense/Zapret
-        ↓
-Backend v2 candidate build, validation, activation, and lifecycle
-
-The service lifecycle is the single owner of generated-template refresh for
-start, restart, and reconfigure. MVC actions accept only the exact configd
-`OK` response as success; the non-empty `Error (N)` response is a failure.
-
-Diagnostics — domain test:
-
-/ui/zapret/diagnostics
-        ↓
-IndexController::diagnosticsAction()
-        ↓
-diagnostics.volt
-        ↓
-/api/zapret/diagnostics/testdomain
-        ↓
-configctl zapret testdomain
-        ↓
-test_domain.sh
-
-Diagnostics — blockcheck:
-
-/ui/zapret/diagnostics
-        ↓
-IndexController::diagnosticsAction()
-        ↓
-diagnostics.volt
-        ↓
-/api/zapret/diagnostics/blockcheck
-        ↓
-configctl zapret blockcheck
-        ↓
-blockcheck.sh
-
-Audit classifications and broken-chain details are maintained in AUDIT.md.
-
-==================================================
-ENTRY POINTS
-==================================================
-
-Service entry point:
-
-src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
-
-Backend v2 coordinator:
-
-src/opnsense/scripts/OPNsense/Zapret/backend/orchestrator.sh
-
-zapret_service.sh exposes service actions and loads backend modules.
-
-orchestrator.sh coordinates:
-
-- Candidate build.
-- Validation.
-- Activation.
-- Rollback.
-- Launcher lifecycle.
-- Firewall lifecycle.
-- Supervisor lifecycle.
-
-==================================================
-BACKEND MODULES
-==================================================
-
-common.sh
-Shared helpers.
-
-config.sh
-Generated configuration and interface resolution.
-
-parser.sh
-Traffic Strategy profiles and generic placeholders.
-
-registry.sh
-Supported target type and target name registry.
-
-target_mode.sh
-Implicit targets for placeholder-free profiles.
-
-profile_normalizer.sh
-Expands a parsed profile containing multiple unique HOSTLIST/IPSET selectors into
-one runtime profile per selector. User-authored `--new` boundaries remain valid,
-non-selector strategy lines are copied unchanged, selector order is preserved, and
-normalization is staged before parser output is replaced.
-
-profile_pipeline.sh
-Provides the count-carrying adapter contract for parsed-profile preparation. Each
-step accepts WORKDIR and PROFILE_COUNT and prints the resulting positive count. The
-ordered steps are parse, registry, Target Mode, normalization, and placeholder index.
-Specialist modules retain their own focused APIs behind these adapters.
-
-targets.sh
-HOSTLIST/IPSET normalization, validation, managed files, and resolution.
-
-exclude.sh
-Global domain exclusions.
-
-storage.sh
-Logical, staged, and active file mapping.
-
-blobs.sh
-Blob resource resolution.
-
-ports.sh
-TCP and UDP extraction from strategy filters.
-
-generator.sh
-Final dvtws2 argument generation.
-
-validator.sh
-Candidate release validation.
-
-atomic.sh
-Active runtime switch and restore.
-
-launcher.sh
-Single dvtws2 process and startup stability check.
-
-firewall.sh
-ipfw lifecycle.
-
-supervisor.sh
-Monitor lifecycle.
-
-stage.sh
-Execution status reporting.
-
-orchestrator.sh
-Lifecycle coordination.
-
-==================================================
-COUNT-CARRYING PROFILE PIPELINE
-==================================================
-
-The profile collection is prepared through one explicit state transition contract:
 
 ```text
-profile_pipeline_<step> WORKDIR PROFILE_COUNT [STEP ARGUMENTS...]
-    -> resulting PROFILE_COUNT on stdout
+OPNsense model
+  -> generated zapret.conf
+  -> parser and count-carrying profile pipeline
+  -> Target Mode and profile normalization
+  -> HOSTLIST/IPSET resolver and exclusions
+  -> blob and port resolution
+  -> dvtws2 argument generation
+  -> candidate validation
+  -> atomic activation or rollback
+  -> launcher
+  -> target firewall rules
+  -> supervisor
 ```
 
-The parser begins with count `0`; all later steps require a positive count. Steps that
-do not change the collection return the incoming count. The normalizer may return a
-larger count. Every transition validates the result before the orchestrator continues.
+The active generated runtime is `/usr/local/etc/zapret2/runtime-v2`. One supervised
+dvtws2 process owns the active strategy. Invalid candidate configuration must not
+change the active runtime, child PID, supervisor, or plugin-owned firewall rules.
 
-This contract applies only to modules that operate on the parsed profile collection.
-Release artifacts, validation, atomic activation, launcher, firewall, and supervisor
-retain typed APIs appropriate to their different responsibilities.
-
-==================================================
-RUNTIME PROFILE NORMALIZATION
-==================================================
-
-The user-facing Traffic Strategy may place multiple target selectors in one
-profile. The backend does not require users to duplicate strategy text or insert
-extra `--new` separators solely for target isolation.
-
-After parsing and Target Mode processing, `profile_normalizer.sh` applies these
-rules:
-
-- zero supported selectors: keep the profile unchanged;
-- one unique supported selector: keep the profile unchanged;
-- multiple unique supported selectors: clone the profile once per selector;
-- each clone contains exactly one unique `HOSTLIST:*` or `IPSET:*` selector;
-- every non-selector line, blank line, and line order is preserved;
-- selector clones follow first-use order;
-- duplicate occurrences of the same selector do not create duplicate profiles.
-
-Only `HOSTLIST:*` and `IPSET:*` are supported selector families. There is no
-`GROUP`, `TARGETSET`, or generic future selector family in this architecture.
-
-The normalizer builds a complete staged profile set before replacing parser
-output and restores the original set if replacement fails. A second run over an
-already normalized set does not change it. The Target Resolver later emits
-runtime `--new` separators between all resulting profiles.
+Only `HOSTLIST:name` and `IPSET:name` target selectors are supported. A user profile
+with multiple unique supported selectors is normalized into one runtime profile per
+selector while preserving non-selector lines and first-use order. User-authored
+`--new` boundaries remain valid.
 
 ==================================================
-RUNTIME
+SETTINGS APPLY
 ==================================================
 
-Engine root:
+```text
+/ui/zapret
+  -> Settings API validates and normalizes the model
+  -> persistent save
+  -> configctl zapret reconfigure
+  -> zapret_service.sh reloads the template
+  -> Backend v2 candidate build and validation
+  -> atomic runtime switch or rollback
+```
 
-/usr/local/etc/zapret2
-
-Generated active runtime:
-
-/usr/local/etc/zapret2/runtime-v2
-
-Important generated files:
-
-traffic.conf
-extra.conf
-dvtws.args
-tcp-ports.txt
-udp-ports.txt
-managed/*
-
-Generated runtime is never committed.
+Only an exact successful configd response completes Apply. On failure, the previous
+persistent model, generated template, and runtime are restored.
 
 ==================================================
-SAFE RECONFIGURE
+DIAGNOSTICS INTERFACES
 ==================================================
 
-build candidate while old runtime works
-        ↓
-validate candidate
-        ↓
-failure → old PID, runtime, and ipfw remain unchanged
-        ↓
-success → controlled switch
-        ↓
-post-switch failure → restore previous runtime
+Short domain connectivity probe:
 
-Regression input:
+```text
+/ui/zapret/diagnostics
+  -> /api/zapret/diagnostics/testdomain
+  -> configctl zapret testdomain
+  -> test_domain.sh
+```
 
-999.999.999.999
+Strategy finding uses only the asynchronous Strategy Lab path:
 
-Expected result:
+```text
+/ui/zapret/diagnostics
+  -> POST /api/zapret/strategy_lab/start
+  -> immediate job_id
+  -> POST status once per second
+  -> structured stages and partial results
+  -> POST result after terminal state
+  -> optional POST cancel
+```
 
-targets|failed
+The synchronous `blockcheck.sh` wrapper, configd `blockcheck` action,
+`DiagnosticsController::blockcheckAction`, synchronous API URL, and long browser
+request are not active or fallback interfaces.
 
-The existing service remains active.
-
-==================================================
-TRANSACTIONAL APPLY
-==================================================
-
-Important files:
-
-SettingsController.php
-ServiceController.php
-general.volt
-Zapret.xml
-targets.sh
-orchestrator.sh
-
-The custom Apply flow validates and normalizes before persistent save.
-
-It returns field-specific errors or normalized values.
-
-It then invokes the service-owned template refresh and safe reconfigure chain.
-Only the exact configd response `OK` completes Apply. On failure, the previous
-persistent model is restored, the previous generated template is rendered again,
-and candidate rollback keeps or restores the previous runtime.
+The detailed GUI and API contract is defined in
+`docs/architecture/STRATEGY_LAB_ACTIVATION.md`.
 
 ==================================================
-PACKAGING INDEPENDENCE
+STRATEGY LAB TRANSACTION
 ==================================================
 
-No runtime dependency on another OPNsense zapret plugin is allowed.
+An automated job owns the shared Zapret2 lifecycle lock from initial snapshot through
+mandatory restoration. The normal service is stopped only after its exact initial
+state is recorded. Temporary dvtws2 processes and target-scoped firewall rules are
+fully removed between candidates and before restoration.
 
-The repository must contain every project-owned file required to build and
-install os-zapret2-restyle on a clean supported OPNsense system.
+Stages are persisted atomically:
 
-External zapret2 engine acquisition and build are handled by this project's own
-setup and maintenance logic.
+```text
+00 target initialization
+10 lifecycle snapshot
+20 normal service stop
+30 network capability precheck
+40 clean baseline
+50 TLS 1.3 family screening
+60 accepted-family parameter expansion
+70 three-of-three stability confirmation
+80 extended protocol branches
+85 shortlist
+90 cleanup and exact service restoration
+99 final report
+```
+
+Different strategies run strictly sequentially. Screening may probe two different
+endpoints of the same service concurrently with one strategy. Stability confirmation
+uses fresh sequential connections and requires every required endpoint to pass three
+of three attempts.
+
+Standard mode searches TLS 1.3. Extended mode adds TLS 1.2, plain HTTP,
+capability-gated QUIC, and configured request-response UDP. IPv6 and QUIC branches are
+skipped when their independent capability gates are unavailable.
+
+Cancellation marks the current work cancelled, preserves completed structured results,
+stops temporary probes/runtime, and always executes stage 90. A restoration failure
+changes the terminal result to `restore_failed`; it is never reported as success.
 
 ==================================================
-STABLE TECHNICAL IDENTITIES
+SHORTLIST AND CIRCULAR VALIDATION
 ==================================================
 
-Project and repository:
-os-zapret2-restyle
+A completed domain job may expose three to five stable candidates, ordered with
+recommendation number one first. Strategy Lab never writes a candidate to the saved
+Traffic Strategy.
 
-Installed package:
-os-zapret2-restyle
+Temporary circular validation is a separate bounded lifecycle transaction:
 
-Internal service:
-zapret
+```text
+completed domain shortlist
+  -> one target-scoped dvtws2 profile
+  -> upstream Zapret2 circular orchestrator
+  -> bidirectional TCP/443 interception
+  -> browser/application validation
+  -> explicit stop or TTL
+  -> temporary cleanup
+  -> exact restoration of initial Zapret2 state
+```
 
-Configd namespace:
-zapret
+Circular validation and automated Strategy Lab jobs cannot run concurrently because
+they share the lifecycle lock. The saved configuration remains immutable.
 
-Version source:
-VERSION
+==================================================
+SERVICE LIFECYCLE
+==================================================
 
-The internal service name is intentionally retained for OPNsense integration
-stability.
+All public mutating operations converge on `zapret_service.sh` and share
+`/var/run/zapret2-lifecycle.lock`:
 
-VERSION is the single source of project version information.
+- start;
+- stop;
+- restart/reconfigure;
+- automated Strategy Lab job;
+- temporary circular validation.
 
-Makefile, build-pkg.sh, CI, and release automation must read or validate VERSION
-instead of maintaining independent version values.
+Status operations are read-only. Long-lived dvtws2 and supervisor processes must not
+inherit the lifecycle lock descriptor. Runtime-failure callbacks use a non-blocking
+try-lock so a stale supervisor cannot tear down a replacement runtime.
+
+The supervisor only detects runtime failure and reports it to the service lifecycle.
+It does not independently regenerate configuration, restart the service, or own a
+second watchdog lifecycle.
+
+==================================================
+PACKAGE AND UPSTREAM RUNTIME BOUNDARY
+==================================================
+
+The FreeBSD package owns plugin files and immediate OPNsense integration. Package
+upgrade stops and verifies the old service before replacement, refreshes plugin and
+Web GUI integration, and restarts only when the service was initially running.
+
+`setup.sh` owns upstream bol-van/zapret2 acquisition, selected stable release checkout,
+dvtws2 compilation, verification, and preservation of the initially running or stopped
+service state. Service Start, Apply, and Reconfigure never install dependencies or
+compile the engine.
+
+Package removal stops packet interception but preserves runtime content,
+configuration, logs, and dependencies. Destructive cleanup requires a separate explicit
+maintenance operation.
 
 ==================================================
 TECHNICAL CONSTRAINTS
 ==================================================
 
-- FreeBSD /bin/sh compatibility.
-- No Bash-only syntax.
-- Repository source is authoritative.
-- Generated runtime is not source.
-- Candidate validation occurs before activation.
-- Invalid configuration must not disturb active service state.
-
-==================================================
-LIFECYCLE ARCHITECTURE
-==================================================
-
-Automatic startup owner:
-
-OPNsense start syshook
-        ↓
-configctl zapret start
-        ↓
-configd action
-        ↓
-zapret_service.sh
-        ↓
-OPNsense/Zapret template reload from saved configuration
-        ↓
-Backend v2 orchestrator
-
-Runtime activation:
-
-candidate generation
-        ↓
-validation
-        ↓
-atomic activation
-        ↓
-launcher
-        ↓
-firewall
-        ↓
-supervisor
-        ↓
-ready
-
-Shutdown:
-
-supervisor stop
-        ↓
-firewall removal
-        ↓
-launcher stop
-
-The rc.d entry point and package lifecycle policy remain under active audit.
-
-Runtime monitoring responsibility:
-
-- launcher owns dvtws2 start, stop, and child PID handling;
-- supervisor_loop.sh is the only runtime failure detector;
-- supervisor verifies on every monitoring interval that the PID still identifies
-  the configured absolute dvtws2 binary before treating the child as healthy;
-- supervisor reports failure through runtime-failure and performs no independent
-  restart, reconfigure, configuration generation, or repair;
-- zapret_service.sh owns lifecycle serialization and cleanup dispatch;
-- no separate watchdog process, cron job, or watchdog script is supported.
-
-Supervisor health checks are added only when proven necessary and in separate focused
-commits. Removing inherited watchdog code must not be combined with expanding
-supervisor behavior.
-
-==================================================
-PROJECT GOVERNANCE FLOW
-==================================================
-
-AUDIT.md
-Findings and Architecture Debt
-        ↓
-DECISIONS.md
-approved behavior for architectural questions
-        ↓
-implementation and verification
-        ↓
-AUDIT.md status update
-        ↓
-PROJECT_STATE.md and DEVLOG.md
-current state and completed work
-        ↓
-CHANGELOG.md when user-visible or release-relevant
-
-Documentation-system changes are architectural changes and follow the same decision,
-implementation, verification, and synchronized-commit discipline as code architecture.
-
-==================================================
-LIFECYCLE SERIALIZATION
-==================================================
-
-All public mutating lifecycle operations converge on
-zapret_service.sh and share one FreeBSD lockf-backed mutex:
-
-/var/run/zapret2-lifecycle.lock
-
-Serialized operations:
-
-- start
-- stop
-- restart
-- reconfigure
-
-These commands wait up to 30 seconds for the current lifecycle owner and fail
-without changing runtime state when the lock remains busy.
-
-status is read-only and intentionally does not acquire the exclusive lock.
-
-runtime-failure is an internal supervisor callback and uses an immediate
-try-lock. When another lifecycle operation already owns the runtime, the callback
-is considered stale and exits without queued cleanup. This prevents an old
-supervisor callback from removing firewall rules or stopping a replacement
-process after reconfigure.
-
-The lock protects the combined mutation boundary, including active and backup
-runtime trees, process and supervisor PID files, execution-stage state, and
-plugin-owned ipfw rules. Candidate workspaces remain unique but are not treated
-as a substitute for lifecycle serialization.
-
-The lock descriptor belongs only to the short-lived lifecycle shell. Every
-long-lived daemon launch closes descriptor 9 before `daemon(8)` starts dvtws2 or
-the supervisor. Otherwise those children retain the open file description and keep
-the lock owned after the lifecycle shell exits, causing every later Apply or service
-mutation to time out with status 75.
-
-
-==================================================
-PACKAGE DISTRIBUTION AND GUI-FIRST INSTALLATION
-==================================================
-
-Public packages are distributed from the project's own FreeBSD pkg repository,
-published through GitHub Pages and backed by GitHub Release assets and checksums.
-The first repository targets FreeBSD:15:amd64 / supported OPNsense 26.7 systems.
-Repository metadata is generated by pkg repo rather than created manually.
-
-A normal user installation must be complete through the OPNsense GUI. The package
-must not require an SSH-only setup step. `+POST_INSTALL` registers the plugin and asks
-configd to launch the detached package lifecycle worker. The worker waits until the
-outer pkg transaction has released the package database before installing dependencies,
-downloading upstream zapret2, compiling dvtws2, and recording lifecycle state. Service
-Start, Apply, Restart, and Reconfigure never perform package installation or compilation;
-they require the package bootstrap to have produced a usable dvtws2 binary.
-
-## Release transport separation
-
-The pkg repository uses the native `pages/${ABI}` layout. GitHub Pages receives the
-complete `pages/` tree through the official Pages artifact action, which first
-archives it. GitHub Release receives only the flat `release-assets/` directory with
-the package and SHA256SUMS. Generic artifact filesystem restrictions therefore do
-not alter the public pkg URL contract.
-
-## Automated release trigger
-
-The normal release control plane is:
-
-```text
-approved release-preparation PR
-  -> VERSION change and canonical squash subject
-  -> merge to main
-  -> release-trigger.yml validates the merge
-  -> workflow GITHUB_TOKEN creates the immutable annotated tag
-  -> workflow_dispatch starts release.yml at that tag
-  -> validation and FreeBSD package/repository build
-  -> GitHub prerelease assets and GitHub Pages/pkg repository
-```
-
-The canonical squash subject is `release: prepare vX.Y.Z`, with the optional GitHub
-`(#PR)` suffix. This is a protocol gate rather than descriptive prose: a VERSION
-change with another subject fails closed and cannot create a tag.
-
-Direct `v*` tag push remains a compatible emergency entry point. The release trigger
-never moves an existing tag; it accepts an existing tag only when it already resolves
-to the exact merge commit. Explicit workflow dispatch is required after workflow-token
-tag creation because GitHub does not recursively start ordinary push workflows from
-events created by GITHUB_TOKEN.
-
-
-==================================================
-PACKAGE LIFECYCLE ARCHITECTURE
-==================================================
-
-The previous detached package-managed install/remove worker design is superseded.
-The active architecture is defined in the following boundary section. Historical
-records remain in DECISIONS.md, AUDIT.md, and DEVLOG.md.
-
-==================================================
-PLUGIN PACKAGE AND RUNTIME SETUP BOUNDARY
-==================================================
-
-The FreeBSD pkg lifecycle owns only plugin files and immediate OPNsense integration.
-
-Install path:
-
-```text
-pkg add
-  -> +POST_INSTALL
-  -> register plugin and run rc.configure_plugins POST_INSTALL
-  -> template reload
-  -> configctl webgui restart 2
-  -> print setup command
-```
-
-Upgrade path:
-
-```text
-new +PRE_INSTALL
-  -> inspect complete service state
-  -> record transient restart marker only when running
-  -> stop synchronously and verify stopped
-  -> stop failure aborts pkg
-old +PRE_DEINSTALL
-  -> repeats/preserves the fail-closed stopped-state contract
-  -> pkg replaces plugin files
-new +POST_INSTALL
-  -> refresh plugin registration and template
-  -> when marked, start through configd using replacement code
-  -> verify complete running state and remove marker
-  -> restart the Web GUI through configd as the final integration action
-```
-
-A stopped service remains stopped across upgrade. An incomplete runtime is cleaned
-before replacement but is not marked for automatic start. The transient marker lives
-under /var/run/zapret2-restyle and survives only the package transaction/retry window.
-
-`rc.configure_plugins POST_INSTALL` remains the standard OPNsense plugin cache and
-configuration refresh and is not removed. Because replacement MVC, menu, ACL, controller,
-and view files may still be held by existing PHP FastCGI workers, the package then uses
-the current core `webgui restart` configd action as its final integration step. That
-action invokes `/usr/local/etc/rc.restart_webgui`, regenerates WebGui templates, and
-replaces lighttpd/php-cgi workers. The historical
-`pluginctl -c webgui.lighttpd_reload` name from the close reference is not part of the
-current OPNsense core contract and is not used.
-
-Runtime preparation is separate:
-
-```text
-setup.sh install
-  -> classify canonical service state as running or stopped
-  -> temporarily enable required FreeBSD repository
-  -> install missing build/runtime tools
-  -> restore repository configuration
-  -> checkout pinned bol-van/zapret2 release
-  -> compile and verify dvtws2
-  -> if initially running: configctl zapret restart and verify running
-  -> if initially stopped: do not restart and verify stopped
-  -> require the matching final state before setup status ready
-```
-
-The setup lock serializes runtime installation and remains distinct from the lifecycle
-lock acquired by the conditional restart command. Runtime setup preserves the complete
-service state observed before mutation: it activates and verifies replacement runtime
-only for an initially running service and leaves an initially stopped service stopped.
-Incomplete or unknown initial state fails before runtime mutation. Full transactional
-runtime staging and rollback are a separate architecture improvement.
-
-A future GUI maintenance action must invoke the same setup backend rather than duplicate
-its logic.
-
-Removal path:
-
-```text
-pkg delete
-  -> +PRE_DEINSTALL stops service and removes active packet interception
-  -> package files are removed
-  -> +POST_DEINSTALL performs no service restart
-```
-
-Package removal preserves runtime content, configuration, logs, and dependencies.
-Destructive cleanup requires a separate explicit maintenance operation.
-
-==================================================
-LIVE-VERIFIED INSTALLATION AND RUNTIME BASELINE — 2026-07-30
-==================================================
-
-The following architecture path is now verified on OPNsense with package 0.2.1_8:
-
-pkg package
-→ package registration and template reload
-→ explicit setup.sh install
-→ pinned bol-van/zapret2 v1.0.3 checkout/build
-→ binaries/my/dvtws2
-→ MVC/template configuration
-→ configd action
-→ zapret_service.sh
-→ Backend v2 orchestrator
-→ parser/profile pipeline/target resolver/blob resolver/generator
-→ candidate validation and activation
-→ ipfw divert rule
-→ launcher
-→ dvtws2
-→ supervisor
-→ ready/ok status
-
-Package/runtime ownership boundary:
-
-- pkg owns plugin integration files;
-- setup owns runtime preparation under /usr/local/etc/zapret2;
-- deleting the plugin package stops the service but does not own destruction of the
-  runtime tree or shared dependencies;
-- +POST_DEINSTALL performs no configd restart.
-
-Blob shorthand boundary:
-
-- --blob=name resolves to <fake-dir>/name.bin;
-- a shorthand token does not carry an alias or compatibility mapping;
-- native declarations containing ':' remain in the strategy unchanged;
-- preset authors must reference actual installed blob filenames without the .bin suffix.
-
-Live evidence confirms the architecture can load both HOSTLIST and IPSET selectors,
-expand mixed selector profiles, generate four runtime profiles, install firewall state,
-and keep a supervised dvtws2 process running.
-
-==================================================
-GUI UPSTREAM RUNTIME MANAGEMENT
-==================================================
-
-The Settings page adds one native collapsible service-maintenance section without
-changing the configuration form model. Its control path is:
-
-```text
-/ui/zapret
-  -> general.volt Zapret2 Service section
-  -> /api/zapret/service/runtime
-       -> configctl zapret setup_status
-       -> setup_launcher.sh status
-  -> /api/zapret/service/releases
-       -> configctl zapret setup_releases
-       -> setup.sh show
-  -> /api/zapret/service/install (selected vX.Y[.Z...])
-       -> strict syntax and current-list validation
-       -> configctl zapret setup install VERSION
-       -> setup_launcher.sh install VERSION
-       -> daemon(8)
-       -> setup.sh install VERSION
-  -> periodic runtime-status polling until setup completes
-```
-
-The existing `ApiMutableServiceControllerBase` Start and Stop actions remain the only
-GUI service-control path. Runtime management does not add a second service lifecycle.
-
-`setup_launcher.sh status` is read-only and reports four constrained fields:
-
-- `service=started|stopped|error`, using canonical zapret_service.sh status;
-- `version=vX.Y[.Z...]` only when the upstream Git HEAD exactly matches a numeric tag;
-- `setup=ready|installing|failed|unknown`, from setup state;
-- `busy=0|1`, from the live daemon PID.
-
-The MVC controller treats this output as untrusted, applies value whitelists, and does
-not expose arbitrary backend text. A requested release must match the numeric tag
-contract and remain present in the current `setup.sh show` result immediately before
-launch. The launcher repeats syntax validation before handing arguments to setup.sh.
-
-The long-running setup process remains outside configd. The normal web request receives
-only successful launch acknowledgement; the GUI disables conflicting controls and polls
-status. setup.sh retains ownership of the setup lock, GitHub validation, checkout/build,
-and preservation of the initially running or stopped service state.
+- FreeBSD `/bin/sh` compatibility; no Bash-only syntax.
+- OPNsense configuration and configd are the integration boundary.
+- Candidate validation precedes activation.
+- Generated runtime is never committed.
+- Lifecycle mutation is serialized and fail-closed.
+- Temporary diagnostics use target-scoped firewall rules.
+- No automatic permanent strategy modification.
+- Ordinary package patches do not create tags, releases, or pkg-repository publication.
+
+Audit evidence is maintained in `AUDIT.md`, approved rationale in `DECISIONS.md`,
+delivery order in `ROADMAP.md`, and completed implementation records in `docs/devlog/`.
