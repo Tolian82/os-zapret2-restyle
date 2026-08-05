@@ -197,6 +197,37 @@ cat > "${BIN_DIR}/udp" <<'MOCK'
 #!/bin/sh
 printf '%s\n' '{"status":"skipped","working":null}' > "$3"
 MOCK
+cat > "${BIN_DIR}/profile-replay" <<'MOCK'
+#!/bin/sh
+output="$3"
+id="$4"
+family="$5"
+profile="$6"
+target="$7"
+target_type="$8"
+jq -nc \
+    --arg id "${id}" --arg family "${family}" --rawfile profile "${profile}" \
+    --arg target "${target}" --arg target_type "${target_type}" '
+    {
+      id:$id,
+      family:$family,
+      strategy:$profile,
+      profile:$profile,
+      target:$target,
+      target_type:$target_type,
+      profile_exact:true,
+      endpoints:[{
+        endpoint:$target,
+        selected_ip:"203.0.113.10",
+        remote_ip:"203.0.113.10",
+        endpoint_match:true,
+        status:"PASS",
+        firewall:{intercepted:true}
+      }],
+      all_pass:true
+    }
+' > "${output}"
+MOCK
 
 cat > "${BIN_DIR}/service" <<'MOCK'
 #!/bin/sh
@@ -313,6 +344,8 @@ api_call()
     EXTENDED_RUNNER="${BIN_DIR}/extended" \
     QUIC_RUNNER="${BIN_DIR}/quic" \
     UDP_RUNNER="${BIN_DIR}/udp" \
+    STRATEGY_LAB_PROFILE_REPLAY_RUNNER="${BIN_DIR}/profile-replay" \
+    STRATEGY_LAB_PROFILE_ENV_BIN="$(command -v env)" \
     STRATEGY_LAB_STAGE30_TIMEOUT="${MOCK_STAGE30_TIMEOUT:-6}" \
     STRATEGY_LAB_STAGE40_TIMEOUT=5 \
     STRATEGY_LAB_CANDIDATE_TIMEOUT=10 \
@@ -390,6 +423,7 @@ SUCCESS_JOB="${LAST_JOB}"
 assert_full_event_order "${SUCCESS_JOB}"
 printf '%s\n' "${LAST_RESULT}" | jq -e '
     .shortlist.count==3 and .circular_eligible==true and
+    (.shortlist.items | all(.profile_replay.verified==true and (.profile|length)>0)) and
     (.stages[] | select(.number=="80" and .status=="SKIPPED")) and
     .restoration.verified==true
 ' >/dev/null || fail 'standard success result contract is invalid'
@@ -400,7 +434,9 @@ strategy_after=$(sha256sum "${STRATEGY_FILE}" | awk '{print $1}')
 run_job success extended RUNNING completed SUCCESS
 assert_full_event_order "${LAST_JOB}"
 printf '%s\n' "${LAST_RESULT}" | jq -e '
-    .shortlist.count==3 and (.stages[] | select(.number=="80" and .status=="PASS"))
+    .shortlist.count==3 and
+    (.shortlist.items | all(.profile_replay.verified==true and (.profile|length)>0)) and
+    (.stages[] | select(.number=="80" and .status=="PASS"))
 ' >/dev/null || fail 'extended success result contract is invalid'
 
 run_job no_candidate standard RUNNING completed NO_CANDIDATE
