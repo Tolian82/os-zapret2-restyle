@@ -182,7 +182,7 @@ grep -Fq 'TRANSACTION_SCRIPT="${TRANSACTION_SCRIPT:-${SCRIPT_DIR}/zapret_service
     fail "launcher does not enter the service-owned lifecycle transaction"
 grep -Fq 'service_with_lifecycle_lock "${STRATEGY_LAB_LOCK_TIMEOUT}"' "${SERVICE_SOURCE}" ||
     fail "Strategy Lab is not protected by the shared lifecycle lock"
-grep -Fq 'strategy-lab-status|strategy-lab-stop|strategy-lab-start' "${SERVICE_SOURCE}" ||
+grep -Fq 'strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start' "${SERVICE_SOURCE}" ||
     fail "internal lock-owned service actions are missing"
 grep -Fq 'STRATEGY_LAB_LIFECYCLE_OWNER=1' "${SERVICE_SOURCE}" ||
     fail "inherited lifecycle ownership is not marked"
