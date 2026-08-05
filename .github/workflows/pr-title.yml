@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   validate-title:
-    name: Validate pull-request title
+    name: Validate versioned PR and commit subjects
     runs-on: ubuntu-latest
 
     steps:
@@ -22,7 +22,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate title for the changed scope
+      - name: Require exact package-candidate prefix everywhere
         shell: bash
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
@@ -31,40 +31,51 @@ jobs:
         run: |
           set -euo pipefail
 
-          changed=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")
-          packaged=false
-          if printf '%s\n' "${changed}" | grep -Eq '^(VERSION|Makefile|pkg/|src/|repository/|scripts/build-pkg\.sh$)'; then
-            packaged=true
-          fi
-
           version=$(tr -d '[:space:]' < VERSION)
           revision=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | head -1)
+
           expected="v${version}"
           if [[ -n "${revision}" && "${revision}" != "0" ]]; then
             expected="${expected}_${revision}"
           fi
 
-          if [[ "${packaged}" == "true" ]]; then
-            case "${PR_TITLE}" in
-              "${expected}: "*)
-                echo "Packaged-change title matches ${expected}."
-                ;;
-              *)
-                echo "Invalid packaged-change title: ${PR_TITLE}" >&2
-                echo "Required format: ${expected}: <logical change>" >&2
-                exit 1
-                ;;
-            esac
-            exit 0
-          fi
-
           case "${PR_TITLE}" in
-            "${expected}: "*|"governance: "*|"docs: "*|"ci: "*|"chore: "*)
-              echo "Governance/documentation title is valid."
+            "${expected}: "*)
+              echo "Pull-request title matches package candidate ${expected}."
               ;;
             *)
-              echo "Invalid governance/documentation title: ${PR_TITLE}" >&2
-              echo "Use ${expected}: ..., governance: ..., docs: ..., ci: ..., or chore: ..." >&2
+              echo "Invalid pull-request title: ${PR_TITLE}" >&2
+              echo "Required format: ${expected}: <logical change>" >&2
               exit 1
               ;;
           esac
+
+          commit_count=0
+          invalid_count=0
+
+          while IFS= read -r subject
+          do
+            commit_count=$((commit_count + 1))
+            case "${subject}" in
+              "${expected}: "*)
+                echo "Valid commit subject: ${subject}"
+                ;;
+              *)
+                echo "Invalid commit subject: ${subject}" >&2
+                echo "Required format: ${expected}: <logical change>" >&2
+                invalid_count=$((invalid_count + 1))
+                ;;
+            esac
+          done < <(git log --format=%s "${BASE_SHA}..${HEAD_SHA}")
+
+          if [[ "${commit_count}" -eq 0 ]]; then
+            echo "No pull-request commits found between ${BASE_SHA} and ${HEAD_SHA}." >&2
+            exit 1
+          fi
+
+          if [[ "${invalid_count}" -ne 0 ]]; then
+            echo "${invalid_count} pull-request commit subject(s) lack ${expected}: prefix." >&2
+            exit 1
+          fi
+
+          echo "All ${commit_count} pull-request commit subject(s) match ${expected}."

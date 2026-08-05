@@ -8,9 +8,9 @@ Question answered:
 How is one logical change delivered safely and efficiently through GitHub?
 
 Purpose:
-Define the authoritative branch, pull-request, CI, repair, merge, cleanup, patch, and
-release procedure. This document describes required outcomes, not one mandatory client
-or low-level API implementation.
+Define the authoritative branch, pull-request, CI, repair, merge, cleanup, title,
+commit-subject, patch, and release procedure. This document describes required outcomes,
+not one mandatory client or low-level API implementation.
 
 Read immediately before any GitHub mutation.
 
@@ -24,6 +24,8 @@ A normal delivery must produce:
 - a reviewable final diff;
 - successful required checks for the latest mergeable PR state;
 - one squash commit in `main`;
+- the exact current package-candidate prefix in the PR title, every PR-branch commit
+  subject, and the final squash commit subject;
 - verified resulting `main` state;
 - no force-update or accidental mutation of unrelated refs;
 - cleanup of the temporary task branch when the available repository mechanism permits.
@@ -60,24 +62,69 @@ Low-level blob/tree/commit construction is an optional transport-specific method
 project architecture rule.
 
 ==================================================
+PACKAGE-CANDIDATE IDENTITY
+==================================================
+
+The exact current working identity is derived from the PR head:
+
+- `VERSION` supplies `VERSION`;
+- `Makefile` supplies `PLUGIN_REVISION`;
+- the required prefix is `v<VERSION>_<PLUGIN_REVISION>:` when revision is non-zero;
+- when revision is zero, the required prefix is `v<VERSION>:`.
+
+For the current source candidate this is:
+
+`v0.3.2_24:`
+
+The required prefix applies universally to:
+
+- pull-request titles;
+- initial work commit subjects;
+- same-scope repair commit subjects;
+- final squash commit subjects in `main`;
+- documentation, governance, CI, maintenance, code, package, and release-preparation
+  changes.
+
+Governance/documentation/CI-only work outside packaged plugin contents does not increment
+`VERSION` or `PLUGIN_REVISION`. It uses the unchanged current package-candidate prefix.
+
+Allowed examples:
+
+- `v0.3.2_24: Restore universal versioned GitHub titles`;
+- `v0.3.2_24: Fix title validation for repair commits`;
+- `v0.3.3_1: Prepare release v0.3.3`.
+
+Forbidden examples:
+
+- `governance: modernize GitHub delivery`;
+- `docs: update workflow`;
+- `ci: fix checks`;
+- `chore: cleanup`;
+- any subject that contains a version elsewhere but does not begin with the exact current
+  package-candidate prefix.
+
+==================================================
 NORMAL DEVELOPMENT FLOW
 ==================================================
 
 1. Resolve the exact owner instruction and stopping boundary.
 2. Read current `main`, current relevant PRs, and the specialist documentation.
 3. Record the base SHA and confirm whether relevant owner-local state is unpublished.
-4. Prepare one logical change and its directly affected documentation.
-5. Run focused validation and review the complete diff.
-6. Create or use one task branch for that logical PR.
-7. Publish the change and open one Ready PR when the content is ready for review and
-   merge. Use Draft only for intentional work in progress or early design discussion.
-8. Let required checks evaluate the latest PR state.
-9. Repair same-scope failures in the same branch and PR when safe.
-10. Before merge, verify scope, mergeability, required checks, and exact expected head
-    SHA.
-11. Squash merge once.
-12. Verify the resulting `main` commit and relevant post-merge/release workflows.
-13. Remove the temporary branch through repository-native deletion or the documented
+4. Derive the exact package-candidate prefix from the intended PR head.
+5. Prepare one logical change and its directly affected documentation.
+6. Run focused validation and review the complete diff.
+7. Create or use one task branch for that logical PR.
+8. Ensure every work and repair commit subject begins with the exact current prefix.
+9. Publish the change and open one Ready PR whose title begins with the same exact prefix.
+   Use Draft only for intentional work in progress or early design discussion.
+10. Let required checks evaluate the latest PR state.
+11. Repair same-scope failures in the same branch and PR when safe, using the same exact
+    prefix in each repair commit subject.
+12. Before merge, verify scope, mergeability, required checks, exact expected head SHA,
+    and the intended squash subject.
+13. Squash merge once using a subject that begins with the same exact prefix.
+14. Verify the resulting `main` commit and relevant post-merge/release workflows.
+15. Remove the temporary branch through repository-native deletion or the documented
     fallback and verify repository hygiene.
 
 An ordinary request to fix, add, change, implement, or complete authorizes this complete
@@ -93,6 +140,8 @@ BRANCH AND PR RULES
 - A valid PR is not abandoned merely because one check failed.
 - A branch may receive same-scope repair commits. Do not add unrelated work while checks
   or review are in progress.
+- Every commit added to the PR branch must begin with the exact package-candidate prefix
+  derived from the current PR head.
 - Close and replace a PR only when its base, scope, or history is materially wrong, the
   intended change is abandoned, or safe repair in place is impossible.
 - Ready means the content is ready to merge once gates pass. It does not mean CI has
@@ -114,6 +163,9 @@ The merge gate is the required result for the latest mergeable PR state.
 
 Rules:
 
+- PR CI validates the exact package-candidate prefix in the PR title and every commit
+  subject reachable from the PR head but not from the base.
+- Post-merge `main` integrity validates the final squash commit subject.
 - Historical failed, canceled, or superseded workflow runs remain evidence but do not
   invalidate a later successful head.
 - Updating a PR with a same-scope repair legitimately creates a new check set.
@@ -136,15 +188,20 @@ FAILURE HANDLING
 
 Classify a failure before acting:
 
-1. Same-scope source or test defect:
+1. Same-scope source, documentation, title, commit-subject, or test defect:
    repair in the same PR and rerun checks for the new head.
 2. Transient runner, network, dependency, or GitHub failure:
    rerun the failed job or workflow when no source change is required.
-3. Incorrect title or PR metadata:
+3. Incorrect PR title:
    correct the metadata and allow its targeted check to rerun.
-4. Incorrect base, mixed scope, damaged history, or abandoned approach:
+4. Incorrect work or repair commit subject:
+   correct it before publication when possible; after publication, add a properly titled
+   same-scope corrective commit only when history rewriting is not appropriate and the
+   active validation contract explicitly permits that state. The normal target is that
+   every PR commit subject is valid.
+5. Incorrect base, mixed scope, damaged history, or abandoned approach:
    close or replace the PR after recording why.
-5. Required protected authority or credentials unavailable:
+6. Required protected authority or credentials unavailable:
    stop at the exact boundary and report the evidence once.
 
 Do not create replacement branches as a reflex. Preserve the PR discussion and check
@@ -164,33 +221,23 @@ Preferred repository configuration:
 - automatic deletion of merged head branches enabled.
 
 When repository-native auto-merge is available, enable it only after the PR is Ready,
-scope is reviewed, and the intended squash title is known. Otherwise merge explicitly
-after checks pass.
+scope is reviewed, and the intended versioned squash title is known. Otherwise merge
+explicitly after checks pass.
+
+Before merge, the operator must compare:
+
+- derived package-candidate prefix;
+- PR title prefix;
+- intended squash subject prefix;
+- exact expected head SHA.
+
+Never substitute an unversioned conventional subject during an explicit squash merge.
 
 When repository-native branch deletion is unavailable, use
 `.github/workflows/cleanup-merged-branch.yml` as the same-repository fallback.
 
 Branch cleanup failure is a repository-hygiene defect. Diagnose and clean it, but do not
 misreport an already verified squash merge as an unsuccessful code delivery.
-
-==================================================
-TITLE AND COMMIT POLICY
-==================================================
-
-Packaged changes may use:
-
-`v<VERSION>_<PLUGIN_REVISION>: <logical change>`
-
-Governance, documentation, or CI-only changes outside packaged plugin contents may use a
-clear conventional title such as:
-
-- `governance: <change>`;
-- `docs: <change>`;
-- `ci: <change>`;
-- `chore: <change>`.
-
-The final squash title must describe the logical change. Package-candidate prefixes are
-required only when the PR actually advances or represents packaged plugin behavior.
 
 ==================================================
 PATCH VERSUS RELEASE
@@ -200,12 +247,14 @@ Ordinary packaged patch:
 
 - keep `VERSION` unchanged;
 - increment `PLUGIN_REVISION` once;
+- use the resulting package-candidate prefix everywhere;
 - merge the logical change;
 - create no tag, GitHub Release, release asset, or pkg-repository publication.
 
 Governance/documentation/CI-only change outside packaged plugin contents:
 
 - change neither `VERSION` nor `PLUGIN_REVISION`;
+- use the unchanged current package-candidate prefix everywhere;
 - run applicable validation;
 - do not imply a release.
 
@@ -213,6 +262,7 @@ Project release:
 
 - requires explicit authority for an exact new `VERSION`;
 - changes `VERSION` and resets `PLUGIN_REVISION` to `1`;
+- uses the resulting release-candidate prefix everywhere;
 - continues through the repository release trigger, tag, GitHub Release, assets, Pages,
   pkg repository, and post-publication verification;
 - never moves or overwrites an already published version.
@@ -235,9 +285,10 @@ The recorded base SHA is a concurrency guard, not a ban on parallel thought.
 SUPERSESSION
 ==================================================
 
-This document and
-`docs/decisions/DEC-2026-08-05-efficient-github-delivery.md` supersede conflicting active
-or historical wording that required:
+This document,
+`docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`, and
+`docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md` supersede conflicting
+active or historical wording that required:
 
 - a final commit before any task branch may exist;
 - exactly one source commit inside a PR branch;
@@ -246,4 +297,6 @@ or historical wording that required:
 - waiting for every check before beginning unrelated analysis or separate preparation;
 - mandatory Draft → Ready transitions;
 - low-level Git data API construction for every change;
-- cleanup success as a condition for the truth of an already completed merge.
+- cleanup success as a condition for the truth of an already completed merge;
+- unversioned conventional PR or commit subjects for governance, documentation, CI, or
+  maintenance work.

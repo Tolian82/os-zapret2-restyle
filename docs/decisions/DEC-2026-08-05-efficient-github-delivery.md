@@ -67,7 +67,8 @@ Adopt an outcome-based GitHub workflow.
 
 ### Merge and cleanup
 
-- Verify scope, required checks, mergeability, and expected head SHA.
+- Verify scope, required checks, mergeability, expected head SHA, and the intended
+  versioned squash subject.
 - Squash merge once.
 - Prefer repository-native auto-merge and automatic merged-branch deletion when enabled.
 - Until repository settings provide native deletion, retain the same-repository cleanup
@@ -77,11 +78,19 @@ Adopt an outcome-based GitHub workflow.
 
 ### Titles and package metadata
 
-- Packaged changes may use `v<VERSION>_<PLUGIN_REVISION>: <logical change>`.
-- Governance, documentation, and CI-only changes may use conventional `governance:`,
-  `docs:`, `ci:`, or `chore:` titles.
+The title subsection is amended and controlled by
+`DEC-2026-08-05-universal-versioned-github-titles.md`.
+
+- Every PR title, every work or repair commit subject in the PR branch, and the final
+  squash commit subject in `main` must begin with the exact current package-candidate
+  prefix `v<VERSION>_<PLUGIN_REVISION>:` derived from the PR head.
+- The same rule applies to code, documentation, governance, CI, maintenance, and
+  release-preparation work.
 - Governance/documentation/CI-only changes outside packaged plugin contents change
-  neither `VERSION` nor `PLUGIN_REVISION`.
+  neither `VERSION` nor `PLUGIN_REVISION`; they use the unchanged current package-
+  candidate prefix.
+- Unversioned conventional subjects such as `governance:`, `docs:`, `ci:`, or `chore:`
+  are not valid project delivery titles.
 
 ## Consequences
 
@@ -91,6 +100,10 @@ Adopt an outcome-based GitHub workflow.
   the working branch.
 - Obsolete runs are canceled, expensive package builds are not duplicated, and docs-only
   changes avoid irrelevant FreeBSD builds.
+- Every visible GitHub delivery title remains tied to the exact current working package
+  candidate.
+- PR CI validates PR and branch-commit subjects; post-merge integrity validates the final
+  squash subject.
 - Process documents describe stable outcomes rather than one connector or API sequence.
 - Current repository settings may temporarily require explicit squash merge and the
   cleanup workflow until native auto-merge and head-branch deletion are enabled.
@@ -99,7 +112,8 @@ Adopt an outcome-based GitHub workflow.
 
 This decision supersedes conflicting delivery wording in:
 
-- `docs/decisions/DEC-2026-08-02-atomic-github-publication.md`;
+- `docs/decisions/DEC-2026-08-02-atomic-github-publication.md` except where a later active
+  title rule explicitly preserves package-candidate identity;
 - `docs/architecture/STRATEGY_LAB.md` serial patch gate;
 - older Git sections of `WORKING_CONVENTIONS.md` and `DEVELOPMENT_GUIDE.md`;
 - historical patch, audit, devlog, and PR text;
@@ -107,7 +121,8 @@ This decision supersedes conflicting delivery wording in:
   separate preparation while checks run.
 
 Product architecture, runtime safety, package/release separation, no-force-push rules,
-and owner authorization boundaries are unchanged.
+universal package-candidate title identity, and owner authorization boundaries are
+unchanged.
 
 ## Affected controls
 
@@ -117,6 +132,7 @@ and owner authorization boundaries are unchanged.
 - `docs/GITHUB_WORKFLOW.md`;
 - `docs/PROJECT_STATE.md`;
 - `docs/architecture/STRATEGY_LAB_ACTIVATION.md`;
+- `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
 - `.github/workflows/ci.yml`;
 - `.github/workflows/pr-title.yml`;
 - `.github/workflows/cleanup-merged-branch.yml`;
