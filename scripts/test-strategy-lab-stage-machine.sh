@@ -76,6 +76,9 @@ strategy_lab_set_quic_result(){ :; }
 strategy_lab_set_udp_result(){ :; }
 strategy_lab_set_stability_result(){ :; }
 strategy_lab_status_file(){ printf '%s\n' "${TEST_ROOT}/status.json"; }
+worker_budget_timeout_for(){ printf '%s\n' "$2"; }
+worker_budget_begin_stage80(){ :; }
+worker_budget_require(){ :; }
 worker_cancel(){ fail 'unexpected cancellation'; }
 worker_error(){ fail "worker_error $*"; }
 worker_stage_timeout(){ fail "worker_stage_timeout $*"; }
