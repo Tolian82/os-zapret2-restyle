@@ -7,13 +7,26 @@ strategy_lab_cancel_message()
     case "${_strategy_lab_language}" in ru) printf '%s\n' 'Запрошена остановка' ;; *) printf '%s\n' 'Cancellation requested' ;; esac
 }
 
-strategy_lab_latest_job()
+strategy_lab_latest_job_scan()
 {
     set -- "${STRATEGY_LAB_JOBS_DIR}"/job.*
     [ "$1" != "${STRATEGY_LAB_JOBS_DIR}/job.*" ] || return 1
     _strategy_lab_latest=$(ls -1dt "$@" 2>/dev/null | head -1)
     [ -d "${_strategy_lab_latest}" ] || return 1
     basename "${_strategy_lab_latest}"
+}
+
+strategy_lab_latest_job()
+{
+    _strategy_lab_latest=$(strategy_lab_read_latest_job 2>/dev/null || true)
+    if [ -n "${_strategy_lab_latest}" ]; then
+        printf '%s\n' "${_strategy_lab_latest}"
+        return 0
+    fi
+    _strategy_lab_latest=$(strategy_lab_latest_job_scan 2>/dev/null || true)
+    [ -n "${_strategy_lab_latest}" ] || return 1
+    strategy_lab_write_latest_job "${_strategy_lab_latest}" || true
+    printf '%s\n' "${_strategy_lab_latest}"
 }
 
 read_job_json()
