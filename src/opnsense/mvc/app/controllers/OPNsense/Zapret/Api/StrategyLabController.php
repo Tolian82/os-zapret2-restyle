@@ -12,7 +12,6 @@ use OPNsense\Base\ApiControllerBase;
 class StrategyLabController extends ApiControllerBase
 {
     private const JOB_PATTERN = '/^job\.[A-Za-z0-9]+$/D';
-    private const TARGET_PATTERN = '/^[A-Za-z0-9][A-Za-z0-9.:-]{0,252}$/D';
 
     private function backendResponse(string $action, array $params = [], int $timeout = 10): array
     {
@@ -42,18 +41,48 @@ class StrategyLabController extends ApiControllerBase
         return preg_match(self::JOB_PATTERN, $jobId) ? $jobId : '';
     }
 
+    private function domainTarget(): string
+    {
+        $target = strtolower(trim((string)$this->request->getPost('target', 'striptags', '')));
+        if (substr($target, -1) === '.') {
+            $target = substr($target, 0, -1);
+        }
+        if ($target === '' || strlen($target) > 253 || filter_var($target, FILTER_VALIDATE_IP) !== false) {
+            return '';
+        }
+
+        $labels = explode('.', $target);
+        if (count($labels) < 2) {
+            return '';
+        }
+        foreach ($labels as $label) {
+            if (
+                strlen($label) < 1 || strlen($label) > 63 ||
+                !preg_match('/^[a-z0-9-]+$/D', $label) ||
+                $label[0] === '-' || substr($label, -1) === '-'
+            ) {
+                return '';
+            }
+        }
+        if (!preg_match('/[a-z]/D', $labels[count($labels) - 1])) {
+            return '';
+        }
+
+        return $target;
+    }
+
     public function startAction(): array
     {
         if (!$this->request->isPost()) {
             return ['status' => 'error', 'message' => 'POST required.'];
         }
 
-        $target = trim((string)$this->request->getPost('target', 'striptags', ''));
+        $target = $this->domainTarget();
         $mode = trim((string)$this->request->getPost('mode', 'striptags', 'standard'));
         $language = trim((string)$this->request->getPost('language', 'striptags', 'en'));
 
-        if (!preg_match(self::TARGET_PATTERN, $target)) {
-            return ['status' => 'error', 'message' => 'Invalid Strategy Lab target.'];
+        if ($target === '') {
+            return ['status' => 'error', 'message' => 'Invalid Strategy Lab domain.'];
         }
         if (!in_array($mode, ['standard', 'extended'], true)) {
             return ['status' => 'error', 'message' => 'Invalid Strategy Lab mode.'];
