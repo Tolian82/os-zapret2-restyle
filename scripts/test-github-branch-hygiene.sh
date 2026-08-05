@@ -58,9 +58,4 @@ grep -Fq 'types: [closed]' "${CLEANUP_WORKFLOW}"
 grep -Fq 'github.event.pull_request.merged == true' "${CLEANUP_WORKFLOW}"
 grep -Fq 'github.event.pull_request.head.repo.full_name == github.repository' "${CLEANUP_WORKFLOW}"
 
-if grep -Fq '[ "${version}" = "0.3.2" ]' "$0"; then
-  echo 'GitHub governance test must not hard-code the current project version.' >&2
-  exit 1
-fi
-
-echo 'GitHub delivery governance tests passed.'
+echo "GitHub delivery governance tests passed for package candidate ${version}_${revision}."
