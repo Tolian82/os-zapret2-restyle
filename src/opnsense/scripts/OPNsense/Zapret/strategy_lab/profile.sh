@@ -24,7 +24,6 @@ strategy_lab_profile_addresses_valid()
             for (i=1; i<=NF; i++) {
                 if ($i !~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) exit 1
                 split($i, octet, ".")
-                if (length(octet) != 4) exit 1
                 for (j=1; j<=4; j++) {
                     if (octet[j] < 0 || octet[j] > 255) exit 1
                 }

@@ -1,56 +1,84 @@
 # AGENTS.md
 
-This repository has a mandatory documentation preflight.
+This repository has a mandatory, risk-based documentation preflight.
 
-Before any project diagnosis, command, file change, GitHub mutation, or release action:
+Before project work:
 
-1. Read `docs/INDEX.md`.
-2. Complete its mandatory Engineering Memory reading order.
-3. Read `docs/GITHUB_PUBLICATION.md` immediately before any GitHub mutation.
-4. Treat the current project-owner instruction as the highest scope boundary.
-5. Do not substitute chat history, memory, or summaries for repository documents.
+1. Read this file, `docs/INDEX.md`, and `docs/PROJECT_STATE.md`.
+2. Read only the specialist documents relevant to the requested scope.
+3. Read `docs/GITHUB_PUBLICATION.md` immediately before a GitHub mutation.
+4. Treat the project owner's current instruction as the highest scope boundary.
+5. Use current repository state and GitHub data; chat history is supporting context only.
+
+A complete read of every audit, decision, devlog, architecture, roadmap, and requirement
+file is required only for a repository-wide audit or genuine full-context recovery. It is
+not a blocking prerequisite for every diagnosis, command, or small change.
 
 ==================================================
-BLOCKING GITHUB RULES
+GITHUB DELIVERY RULES
 ==================================================
 
-The default publication sequence is:
+`docs/GITHUB_PUBLICATION.md` is the final authority for GitHub delivery mechanics.
+`docs/decisions/DEC-2026-08-05-efficient-github-delivery.md` supersedes earlier active
+wording that required one unpublished commit, one CI run, immediate PR abandonment after
+a failure, or complete suspension of later analysis while checks run.
+
+Default ordinary delivery:
 
 one logical change
         ↓
-all blobs and one tree
+one task branch and one pull request
         ↓
-one atomic commit with no remote branch yet
+focused local/static validation
         ↓
-exactly one remote task branch created at that final commit
+required checks for the latest PR state
         ↓
-one ready pull request
+one squash merge into `main`
         ↓
-one complete check set
-        ↓
-one squash merge
-        ↓
-automatic branch cleanup and verification
+verify the resulting `main`
 
-- Exactly one remote task branch may be created for one logical delivery cycle.
-- Branch creation is the last preparation step. Do not create a remote branch before
-  all final blobs, the tree, the atomic commit, validation, title, and cleanup path are
-  ready.
-- Do not create preparatory or replacement remote branches with suffixes such as
-  `-clean`, `-final`, `-atomic`, `-fixed`, `-retry`, or `-publish`.
-- Before branch creation, verify the exact branch name is absent and that merged-branch
-  cleanup is available through repository automation or the selected authenticated
-  transport.
-- Multi-file GitHub/API delivery must use all blobs, one tree, and one commit.
-  Sequential contents-API commits are prohibited.
-- Open the pull request only when the final branch is ready. Do not use Draft → Ready
-  as the normal path.
-- Compute the exact pull-request title before opening it:
-  `v<VERSION>_<PLUGIN_REVISION>: <logical change>` when the revision is non-zero.
-- Leave the pull-request branch unchanged while checks run.
-- After merge, verify both `main` and absence of the task branch.
-- If a cycle fails after branch publication, close the PR, delete that branch, verify
-  its absence, and only then begin one replacement cycle.
+Rules:
+
+- Keep one logical scope per pull request.
+- A PR branch may contain multiple same-scope work or repair commits. The permanent
+  `main` history remains one logical commit through squash merge.
+- Open a Ready PR when the content is ready for review and merge. Draft is reserved for
+  intentional work in progress or early design discussion.
+- CI success is required for the latest mergeable PR state, not for every historical
+  commit or workflow run.
+- A same-scope failure is normally repaired in the same branch and PR. Close and replace
+  a PR only when its base, scope, or history is materially wrong or the change is
+  abandoned.
+- While CI runs, independent analysis and preparation may continue separately. Do not
+  mutate the checked PR with unrelated work and do not merge a dependent successor
+  before its prerequisite is integrated.
+- Use expected head SHA when merging. Never force-update `main`.
+- Branch cleanup is repository hygiene. Cleanup failure must be diagnosed, but it does
+  not invalidate an otherwise successful code merge.
+- Use repository-native auto-merge and automatic head-branch deletion when enabled;
+  otherwise use the documented connector/manual merge and cleanup fallback.
+- No specific client is mandatory. Select the available GitHub connector/API, local
+  `git`, or `gh` according to the operation and verified permissions.
+
+==================================================
+REQUEST SCOPE AND AUTHORIZATION
+==================================================
+
+- analyse, diagnose, explain, review, audit: inspect and report; do not mutate.
+- patch only, branch only, PR only: stop at the named boundary.
+- fix, add, change, implement, complete: perform the ordinary branch → PR → checks →
+  squash-merge → verification cycle unless the owner states a stopping point.
+- release version X.Y.Z: perform the authorized release pipeline for that exact version.
+
+Do not ask for routine branch names, commit messages, PR text, test selection, CI
+inspection, same-scope repair, squash merge, or temporary branch cleanup when the owner
+has authorized the ordinary delivery cycle.
+
+Stop for owner input only on material product/architecture ambiguity, relevant unpublished
+owner state, unavailable credentials or protected authority, destructive changes to user
+data or pre-existing remote objects, history rewriting/direct-main publication, an
+unresolvable required-check failure, or mandatory live OPNsense evidence available only
+from the owner.
 
 ==================================================
 PATCH AND RELEASE BOUNDARY
@@ -58,19 +86,17 @@ PATCH AND RELEASE BOUNDARY
 
 A package patch and a project release are different operations.
 
-- A request for patch `vX.Y.Z_N` keeps `VERSION=X.Y.Z`, sets
-  `PLUGIN_REVISION=N`, uses the ordinary PR/squash cycle, and creates no tag,
-  GitHub Release, release assets, or pkg-repository publication.
-- A project release changes `VERSION` and requires explicit owner authorization for
-  that exact version.
-- Ambiguous phrases such as “continue”, “do it”, or “let’s do this” do not authorize a
-  release by themselves.
-- Never choose a new project version independently.
+- An ordinary packaged change keeps `VERSION`, increments `PLUGIN_REVISION` once, and
+  creates no tag, GitHub Release, release asset, or pkg-repository publication.
+- A governance/documentation/CI-only change outside packaged plugin contents changes
+  neither `VERSION` nor `PLUGIN_REVISION`.
+- A project release changes `VERSION`, resets `PLUGIN_REVISION` to `1`, and requires
+  explicit owner authorization for that exact version.
 - Published tags, releases, assets, and versions are immutable and forward-only.
 
 ==================================================
 OPNSENSE COMMAND RULE
 ==================================================
 
-OPNsense console commands target the default root `csh` shell. POSIX-only syntax must
-be enclosed by an explicit standalone `sh` command and a matching standalone `exit`.
+OPNsense console commands target the default root `csh` shell. POSIX-only syntax must be
+placed between an explicit standalone `sh` command and a matching standalone `exit`.
