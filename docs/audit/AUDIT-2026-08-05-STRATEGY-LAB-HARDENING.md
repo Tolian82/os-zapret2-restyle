@@ -26,8 +26,9 @@ Audited source: `main` at `a95fcc33b2bdd97830fe5cd44090ae189a141dfa` (`0.3.2_24`
 - Patches `_35`–`_36` complete finding 14.
 - Patches `_37`–`_38` complete finding 11.
 - Patch `_39` completes finding 12.
-- Patch `_40` completes the persistence/reload half of finding 13 with atomic latest-job selection and terminal-result restoration after page reload.
-- Patch `_41` remains responsible for the structured final-result and copy-profile half of finding 13.
+- Patch `_40` restores the persisted terminal result after reload.
+- Patch `_41` adds structured target/outcome/restoration and per-profile protocol, port, endpoint, replay, complete-profile, and safe-copy presentation.
+- Finding 13 is source-complete after Patches `_40`–`_41`.
 - Remaining finding 15 work is assigned to revisions `_42`, `_44`, and `_45`; obsolete surfaces are removed in `_43` and final live verification is recorded in `_46`.
 
 ## Explicit exclusion

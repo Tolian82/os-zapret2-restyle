@@ -1,7 +1,7 @@
 {# Copyright (C) 2026 Umur Gorur. All rights reserved. #}
 <script>
 $(document).ready(function () {
-    var activeJobId = '', pollTimer = null, circularTimer = null;
+    var activeJobId = '', pollTimer = null, circularTimer = null, renderedProfiles = [];
     var udpPayloadMaxBytes = 4096;
     var isRussian = ((document.documentElement.lang || '').toLowerCase().indexOf('ru') === 0);
     var strategyLabGuidance = isRussian ? [
@@ -18,7 +18,8 @@ $(document).ready(function () {
         circularReady:'Можно временно проверить найденные стратегии в браузере.',
         udpPair:'Для общей UDP-проверки укажите одновременно порт и payload-файл.',
         udpSize:'Payload-файл должен иметь размер от 1 до 4096 байт.',
-        udpRead:'Не удалось прочитать payload-файл.',
+        udpRead:'Не удалось прочитать payload-файл.', copy:'Копировать профиль',
+        copied:'Профиль скопирован.', copyFailed:'Не удалось скопировать профиль.',
         requestFailed:'Ошибка запроса: '
     } : {
         running:'Strategy Lab is running.', completed:'The check is complete.',
@@ -27,7 +28,8 @@ $(document).ready(function () {
         circularReady:'The candidates can now be tested temporarily in a browser.',
         udpPair:'Generic UDP testing requires both a port and a payload file.',
         udpSize:'The payload file must contain between 1 and 4096 bytes.',
-        udpRead:'The payload file could not be read.',
+        udpRead:'The payload file could not be read.', copy:'Copy profile',
+        copied:'Profile copied.', copyFailed:'The profile could not be copied.',
         requestFailed:'Request failed: '
     };
 
@@ -69,12 +71,43 @@ $(document).ready(function () {
     function shortlist(data) {
         return data.shortlist && Array.isArray(data.shortlist.items) ? data.shortlist.items : [];
     }
+    function endpointText(item) {
+        var values = [], seen = {};
+        (Array.isArray(item.endpoints) ? item.endpoints : []).forEach(function (endpoint) {
+            var value = endpoint.selected_ip || endpoint.remote_ip || endpoint.address || '';
+            if (value && !seen[value]) { seen[value] = true; values.push(value); }
+        });
+        return values.join(', ');
+    }
+    function replayText(item) {
+        var replay = item.profile_replay || {};
+        if (replay.attempt_count != null) return String(replay.pass_count || 0) + '/' + String(replay.attempt_count);
+        return replay.verified === true ? 'verified' : '—';
+    }
+    function renderResultSummary(data) {
+        var visible = terminal(data.state);
+        $('#strategyLabResultBox').toggle(visible);
+        if (!visible) return;
+        $('#strategyLabResultTarget').text(data.target || '—');
+        $('#strategyLabResultMode').text(data.mode || '—');
+        $('#strategyLabResultOutcome').text(data.outcome || data.state || '—');
+        $('#strategyLabResultRestoration').text(data.restoration && data.restoration.verified === true ? 'PASS' : '—');
+    }
     function renderShortlist(data) {
         var items = shortlist(data), html = '';
+        renderedProfiles = [];
         items.forEach(function (item, index) {
+            var profile = String(item.profile || item.strategy || '');
+            var profileIndex = renderedProfiles.push(profile) - 1;
             var mark = index === 0 ? ' <span class="label label-success">#1</span>' : '';
-            html += '<tr><td>' + (index + 1) + mark + '</td><td>' + esc(item.family) + '</td>' +
-                '<td><pre style="margin:0;white-space:pre-wrap;">' + esc(item.strategy) + '</pre></td></tr>';
+            html += '<tr><td>' + (index + 1) + mark + '</td>' +
+                '<td>' + esc(item.protocol || 'tls13') + '</td>' +
+                '<td>' + esc(item.port || '—') + '</td>' +
+                '<td>' + esc(item.family || '—') + '</td>' +
+                '<td>' + esc(endpointText(item) || '—') + '</td>' +
+                '<td>' + esc(replayText(item)) + '</td>' +
+                '<td><pre style="margin:0;white-space:pre-wrap;">' + esc(profile) + '</pre>' +
+                '<button type="button" class="btn btn-xs btn-default strategyLabCopyProfile" data-profile-index="' + profileIndex + '">' + esc(ui.copy) + '</button></td></tr>';
         });
         $('#strategyLabShortlist tbody').html(html);
         $('#strategyLabShortlistBox').toggle(items.length > 0);
@@ -87,12 +120,29 @@ $(document).ready(function () {
     }
     function renderJob(data) {
         renderStages(data);
+        renderResultSummary(data);
         renderShortlist(data);
         $('#strategyLabRaw').text(JSON.stringify(data, null, 2));
         $('#strategyLabJob').text(data.job_id || activeJobId || '—');
         $('#strategyLabState').text(data.state || data.status || '—');
         if (data.message) $('#strategyLabMessage').text(data.message);
     }
+    function copyProfile(profile) {
+        if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(profile);
+        return new Promise(function (resolve, reject) {
+            var area = $('<textarea/>').val(profile).css({position:'fixed',left:'-9999px'}).appendTo('body');
+            area[0].select();
+            try { document.execCommand('copy') ? resolve() : reject(); }
+            catch (error) { reject(error); }
+            area.remove();
+        });
+    }
+    $(document).on('click', '.strategyLabCopyProfile', function () {
+        var profile = renderedProfiles[Number($(this).attr('data-profile-index'))] || '';
+        if (!profile) return;
+        copyProfile(profile).then(function () { $('#strategyLabMessage').text(ui.copied); },
+            function () { $('#strategyLabMessage').text(ui.copyFailed); });
+    });
     function fetchResult() {
         if (!activeJobId) return;
         apiPost('/api/zapret/strategy_lab/result', {job_id:activeJobId}, function (data) {
@@ -123,78 +173,41 @@ $(document).ready(function () {
 
     function startStrategyLab(target, mode, udpPort, udpPayloadBase64) {
         apiPost('/api/zapret/strategy_lab/start', {
-            target:target,
-            mode:mode,
-            language:isRussian ? 'ru' : 'en',
-            udp_port:udpPort,
-            udp_payload_base64:udpPayloadBase64
+            target:target, mode:mode, language:isRussian ? 'ru' : 'en',
+            udp_port:udpPort, udp_payload_base64:udpPayloadBase64
         }, function (data) {
-            if (data.status !== 'ok' || !data.job_id) {
-                setBusy(false);
-                $('#strategyLabMessage').text(data.message || ui.failed);
-                return;
-            }
-            activeJobId = data.job_id;
-            $('#strategyLabJob').text(activeJobId);
-            pollStatus();
+            if (data.status !== 'ok' || !data.job_id) { setBusy(false); $('#strategyLabMessage').text(data.message || ui.failed); return; }
+            activeJobId = data.job_id; $('#strategyLabJob').text(activeJobId); pollStatus();
         });
     }
 
     $('#strategyLabMode').change(toggleUdpInput);
     $('#strategyLabBtn').click(function () {
-        var target = $('#strategyLabDomainInput').val().trim();
-        var mode = $('#strategyLabMode').val();
+        var target = $('#strategyLabDomainInput').val().trim(), mode = $('#strategyLabMode').val();
         if (!target) return;
-        stopPolling(); activeJobId = '';
+        stopPolling(); activeJobId = ''; renderedProfiles = [];
         $('#strategyLabStages tbody,#strategyLabShortlist tbody').empty();
-        $('#strategyLabShortlistBox,#circularControls').hide();
+        $('#strategyLabShortlistBox,#strategyLabResultBox,#circularControls').hide();
         $('#strategyLabRaw').text(''); $('#strategyLabMessage').text(ui.running); setBusy(true);
-
-        if (mode !== 'extended') {
-            startStrategyLab(target, mode, '', '');
-            return;
-        }
-
+        if (mode !== 'extended') { startStrategyLab(target, mode, '', ''); return; }
         var udpPort = $('#strategyLabUdpPort').val().trim();
         var fileInput = document.getElementById('strategyLabUdpPayload');
         var payloadFile = fileInput && fileInput.files ? fileInput.files[0] : null;
-        if (!udpPort && !payloadFile) {
-            startStrategyLab(target, mode, '', '');
-            return;
-        }
-        if (!udpPort || !payloadFile) {
-            setBusy(false);
-            $('#strategyLabMessage').text(ui.udpPair);
-            return;
-        }
-        if (payloadFile.size < 1 || payloadFile.size > udpPayloadMaxBytes) {
-            setBusy(false);
-            $('#strategyLabMessage').text(ui.udpSize);
-            return;
-        }
-
+        if (!udpPort && !payloadFile) { startStrategyLab(target, mode, '', ''); return; }
+        if (!udpPort || !payloadFile) { setBusy(false); $('#strategyLabMessage').text(ui.udpPair); return; }
+        if (payloadFile.size < 1 || payloadFile.size > udpPayloadMaxBytes) { setBusy(false); $('#strategyLabMessage').text(ui.udpSize); return; }
         var reader = new FileReader();
         reader.onload = function (event) {
-            var encoded = String((event.target && event.target.result) || '');
-            var delimiter = encoded.indexOf(',');
-            if (delimiter < 0 || !encoded.substring(delimiter + 1)) {
-                setBusy(false);
-                $('#strategyLabMessage').text(ui.udpRead);
-                return;
-            }
+            var encoded = String((event.target && event.target.result) || ''), delimiter = encoded.indexOf(',');
+            if (delimiter < 0 || !encoded.substring(delimiter + 1)) { setBusy(false); $('#strategyLabMessage').text(ui.udpRead); return; }
             startStrategyLab(target, mode, udpPort, encoded.substring(delimiter + 1));
         };
-        reader.onerror = function () {
-            setBusy(false);
-            $('#strategyLabMessage').text(ui.udpRead);
-        };
+        reader.onerror = function () { setBusy(false); $('#strategyLabMessage').text(ui.udpRead); };
         reader.readAsDataURL(payloadFile);
     });
     $('#strategyLabCancelBtn').click(function () {
         if (!activeJobId) return;
-        apiPost('/api/zapret/strategy_lab/cancel', {job_id:activeJobId}, function (data) {
-            renderJob(data); $('#strategyLabMessage').text(ui.cancel);
-        });
+        apiPost('/api/zapret/strategy_lab/cancel', {job_id:activeJobId}, function (data) { renderJob(data); $('#strategyLabMessage').text(ui.cancel); });
     });
 
     function pollCircular() {
@@ -203,38 +216,26 @@ $(document).ready(function () {
             $('#circularMessage').text(data.message || '');
             $('#circularRaw').text(JSON.stringify(data, null, 2));
             var live = ['queued','preparing','running','stop_requested'].indexOf(data.state) !== -1;
-            $('#circularStartBtn').prop('disabled', live);
-            $('#circularStopBtn').prop('disabled', !live);
+            $('#circularStartBtn').prop('disabled', live); $('#circularStopBtn').prop('disabled', !live);
             if (live) circularTimer = setTimeout(pollCircular, 1000);
         });
     }
     $('#circularStartBtn').click(function () {
         if (!activeJobId) return;
         if (circularTimer !== null) clearTimeout(circularTimer);
-        apiPost('/api/zapret/circular/start', {job_id:activeJobId}, function (data) {
-            $('#circularMessage').text(data.message || ''); pollCircular();
-        });
+        apiPost('/api/zapret/circular/start', {job_id:activeJobId}, function (data) { $('#circularMessage').text(data.message || ''); pollCircular(); });
     });
     $('#circularStopBtn').click(function () {
-        apiPost('/api/zapret/circular/stop', {}, function (data) {
-            $('#circularMessage').text(data.message || ''); pollCircular();
-        });
+        apiPost('/api/zapret/circular/stop', {}, function (data) { $('#circularMessage').text(data.message || ''); pollCircular(); });
     });
 
     apiPost('/api/zapret/strategy_lab/status', {job_id:'-'}, function (data) {
         if (!data.job_id) return;
-        activeJobId = data.job_id;
-        renderJob(data);
-        if (terminal(data.state)) {
-            setBusy(false);
-            fetchResult();
-        } else {
-            setBusy(true);
-            pollStatus();
-        }
+        activeJobId = data.job_id; renderJob(data);
+        if (terminal(data.state)) { setBusy(false); fetchResult(); }
+        else { setBusy(true); pollStatus(); }
     });
-    toggleUdpInput();
-    pollCircular();
+    toggleUdpInput(); pollCircular();
 });
 </script>
 
@@ -253,17 +254,19 @@ $(document).ready(function () {
 <td style="width:200px;">{{ lang._('Blocked Domain') }}</td><td><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org"/></td>
 <td style="width:160px;"><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></td>
 <td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td>
-</tr><tr id="strategyLabUdpRow" style="display:none;">
-<td>{{ lang._('Generic UDP (optional)') }}</td>
+</tr><tr id="strategyLabUdpRow" style="display:none;"><td>{{ lang._('Generic UDP (optional)') }}</td>
 <td><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td>
-<td colspan="2"><input type="file" class="form-control" id="strategyLabUdpPayload"/> <small>{{ lang._('Request payload file, 1–4096 bytes. Both port and file are required.') }}</small></td>
-</tr></tbody></table></div>
+<td colspan="2"><input type="file" class="form-control" id="strategyLabUdpPayload"/> <small>{{ lang._('Request payload file, 1–4096 bytes. Both port and file are required.') }}</small></td></tr></tbody></table></div>
 <div id="strategyLabSummary"></div><p><strong>Job:</strong> <code id="strategyLabJob">—</code> &nbsp; <strong>State:</strong> <span id="strategyLabState">idle</span></p><p id="strategyLabMessage"></p>
 <div class="table-responsive"><table class="table table-condensed" id="strategyLabStages"><thead><tr><th>#</th><th>{{ lang._('Stage') }}</th><th>{{ lang._('Status') }}</th><th>{{ lang._('Details') }}</th></tr></thead><tbody></tbody></table></div>
-<div id="strategyLabShortlistBox" style="display:none;"><h4>{{ lang._('Stable candidates') }}</h4><div class="table-responsive"><table class="table table-striped" id="strategyLabShortlist"><thead><tr><th>#</th><th>{{ lang._('Family') }}</th><th>{{ lang._('Strategy') }}</th></tr></thead><tbody></tbody></table></div></div>
+<div id="strategyLabResultBox" class="well" style="display:none;"><h4>{{ lang._('Result summary') }}</h4>
+<div class="row"><div class="col-sm-3"><strong>{{ lang._('Target') }}:</strong> <span id="strategyLabResultTarget">—</span></div>
+<div class="col-sm-3"><strong>{{ lang._('Mode') }}:</strong> <span id="strategyLabResultMode">—</span></div>
+<div class="col-sm-3"><strong>{{ lang._('Outcome') }}:</strong> <span id="strategyLabResultOutcome">—</span></div>
+<div class="col-sm-3"><strong>{{ lang._('Restoration') }}:</strong> <span id="strategyLabResultRestoration">—</span></div></div></div>
+<div id="strategyLabShortlistBox" style="display:none;"><h4>{{ lang._('Stable candidates') }}</h4><div class="table-responsive"><table class="table table-striped" id="strategyLabShortlist"><thead><tr><th>#</th><th>{{ lang._('Protocol') }}</th><th>{{ lang._('Port') }}</th><th>{{ lang._('Family') }}</th><th>{{ lang._('Endpoints') }}</th><th>{{ lang._('Replay') }}</th><th>{{ lang._('Complete Traffic Strategy profile') }}</th></tr></thead><tbody></tbody></table></div></div>
 <div id="circularControls" class="well" style="display:none;"><h4>{{ lang._('Temporary circular validation') }}</h4>
 <button class="btn btn-success" id="circularStartBtn" type="button">{{ lang._('Start') }}</button> <button class="btn btn-warning" id="circularStopBtn" type="button" disabled>{{ lang._('Stop') }}</button>
 <span style="margin-left:10px;"><strong>{{ lang._('Status') }}:</strong> <span id="circularState">idle</span></span><p id="circularMessage" style="margin-top:10px;"></p><pre id="circularRaw" style="max-height:200px;overflow-y:auto;white-space:pre-wrap;font-size:11px;"></pre></div>
 <details><summary>{{ lang._('Full output (advanced)') }}</summary><pre id="strategyLabRaw" style="max-height:400px;overflow-y:auto;white-space:pre-wrap;font-size:11px;"></pre></details>
-</div></div></section></div>
-</div></section>
+</div></div></section></div></div></section>
