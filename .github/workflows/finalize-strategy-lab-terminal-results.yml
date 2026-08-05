@@ -1,0 +1,122 @@
+name: Finalize Strategy Lab terminal results
+
+on:
+  push:
+    branches:
+      - agent/strategy-lab-terminal-results
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Apply terminal-result integration
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new, label):
+              target = Path(path)
+              text = target.read_text()
+              if old not in text:
+                  raise SystemExit(f'{label} baseline not found')
+              target.write_text(text.replace(old, new))
+
+          replace('Makefile', 'PLUGIN_REVISION=    18', 'PLUGIN_REVISION=    19', 'revision')
+
+          replace(
+              'src/opnsense/scripts/OPNsense/Zapret/strategy_lab_worker.sh',
+              'worker_udp_messages worker_stage_machine worker_control worker_flow',
+              'worker_udp_messages worker_stage_machine worker_result worker_control worker_flow',
+              'worker result module order'
+          )
+
+          replace(
+              'src/opnsense/scripts/OPNsense/Zapret/strategy_lab/worker_flow.sh',
+              'worker_finish TARGET_ACCESSIBLE false "${TARGET_ACCESSIBLE_FINAL_MESSAGE}"',
+              'worker_finish TARGET_ACCESSIBLE false',
+              'target accessible finalization'
+          )
+          replace(
+              'src/opnsense/scripts/OPNsense/Zapret/strategy_lab/worker_flow.sh',
+              'worker_run_search_stages\nworker_finish PARTIAL false "${PARTIAL_FINAL_MESSAGE}"',
+              'worker_run_search_stages\nworker_finish_search',
+              'normal search finalization'
+          )
+
+          cases = Path('scripts/lib/test-strategy-lab-lifecycle-cases.sh')
+          text = cases.read_text()
+          old = '''printf '%s\\n' "${result}" | jq -e '.outcome=="PARTIAL" and .initial_service_state=="RUNNING"' >/dev/null ||
+    fail "running-state snapshot was not recorded"'''
+          new = '''printf '%s\\n' "${result}" | jq -e '.state=="completed" and .outcome=="NO_CANDIDATE" and .initial_service_state=="RUNNING"' >/dev/null ||
+    fail "valid empty shortlist was not classified as NO_CANDIDATE"'''
+          if old not in text:
+              raise SystemExit('lifecycle no-candidate baseline not found')
+          text = text.replace(old, new)
+
+          restore_old = '''job=$(start_job restore-failure.example en)
+wait_for_state "${job}" completed
+result=$(launcher result "${job}")
+printf '%s\\n' "${result}" | jq -e '.outcome=="RESTORE_FAILED"' >/dev/null ||
+    fail "restore failure was not explicit"'''
+          restore_new = '''job=$(start_job restore-failure.example en)
+wait_for_state "${job}" error
+result=$(launcher result "${job}")
+printf '%s\\n' "${result}" | jq -e '.state=="error" and .outcome=="RESTORE_FAILED"' >/dev/null ||
+    fail "restore failure was not an explicit terminal error"'''
+          if restore_old not in text:
+              raise SystemExit('restore failure baseline not found')
+          text = text.replace(restore_old, restore_new)
+
+          incomplete_old = '''job=$(start_job incomplete.example en)
+wait_for_state "${job}" completed
+result=$(launcher result "${job}")
+printf '%s\\n' "${result}" | jq -e '.outcome=="ERROR" and .initial_service_state==""' >/dev/null ||
+    fail "incomplete initial state did not fail closed"'''
+          incomplete_new = '''job=$(start_job incomplete.example en)
+wait_for_state "${job}" error
+result=$(launcher result "${job}")
+printf '%s\\n' "${result}" | jq -e '.state=="error" and .outcome=="ERROR" and .initial_service_state==""' >/dev/null ||
+    fail "incomplete initial state did not fail closed as a terminal error"'''
+          if incomplete_old not in text:
+              raise SystemExit('incomplete state baseline not found')
+          text = text.replace(incomplete_old, incomplete_new)
+
+          lint_marker = 'sh -n "${MODULE_DIR}/worker_messages.sh"\n'
+          if lint_marker not in text:
+              raise SystemExit('lifecycle lint marker not found')
+          text = text.replace(lint_marker, lint_marker + 'sh -n "${MODULE_DIR}/worker_result.sh"\n')
+          cases.write_text(text)
+
+          aggregate = Path('scripts/test-strategy-lab-job-contract.sh')
+          text = aggregate.read_text()
+          marker = 'sh "${ROOT_DIR}/scripts/test-strategy-lab-stage-machine.sh"\n'
+          if marker not in text:
+              raise SystemExit('aggregate marker not found')
+          aggregate.write_text(text.replace(marker, marker + 'sh "${ROOT_DIR}/scripts/test-strategy-lab-terminal-result.sh"\n'))
+
+          roadmap = Path('docs/ROADMAP.md')
+          text = roadmap.read_text()
+          text = text.replace('Current package candidate: `0.3.2_18`.', 'Current package candidate: `0.3.2_19`.')
+          text = text.replace('- [ ] Corrective Patch 5 — correct terminal state, outcome, and localized message generation.', '- [x] Corrective Patch 5 — correct terminal state, outcome, and localized message generation.')
+          roadmap.write_text(text)
+
+          Path('.github/workflows/finalize-strategy-lab-terminal-results.yml').unlink()
+          PY
+
+          chmod 0755 \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab/worker_result.sh \
+            scripts/test-strategy-lab-terminal-result.sh
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "v0.3.2_19: Correct Strategy Lab terminal results"
+          git push origin HEAD:agent/strategy-lab-terminal-results
