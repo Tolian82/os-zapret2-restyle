@@ -79,6 +79,10 @@ Deterministic multi-protocol result and TLS 1.3 circular-boundary contract.
 Validated extended-mode UDP port/payload request, private job-local storage, and cleanup
 contract.
 
+`docs/architecture/STRATEGY_LAB_CIRCULAR_ISOLATION.md`
+Immutable parent-result snapshots and independent circular session state, runtime, and
+restoration evidence.
+
 `DEVLOG.md` and `docs/devlog/`
 Completed work and verification evidence.
 
