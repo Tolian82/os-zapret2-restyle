@@ -85,7 +85,7 @@ strategy_lab_firewall_install_ipv4_rules()
         }
         "${STRATEGY_LAB_IPFW_BIN}" -qf add "${_strategy_lab_rule}" \
             divert "${STRATEGY_LAB_DIVERT_PORT}" \
-            tcp from any to "${_strategy_lab_address}" 443 \
+            tcp from me to "${_strategy_lab_address}" 443 \
             out not diverted not sockarg xmit "${_strategy_lab_wan}" || {
                 strategy_lab_firewall_remove_rules
                 return 1

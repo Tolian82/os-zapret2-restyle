@@ -143,7 +143,7 @@ export MOCK_DVTWS_PIDFILE="${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.pid
 [ ! -e "${MOCK_DVTWS_PIDFILE}" ]
 ! pgrep -f "${TMP}/bin/dvtws2" >/dev/null 2>&1
 
-grep -q 'add 19100 divert 9989 tcp from any to 203.0.113.10 443' "${TMP}/ipfw.log"
+grep -q 'add 19100 divert 9989 tcp from me to 203.0.113.10 443' "${TMP}/ipfw.log"
 
 echo 'Strategy Lab candidate runtime success contract passed.'
 

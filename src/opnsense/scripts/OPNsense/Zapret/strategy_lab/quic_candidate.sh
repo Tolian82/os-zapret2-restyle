@@ -34,7 +34,7 @@ strategy_lab_firewall_install_ipv4_rules()
     do
         [ -n "${_slqf_address}" ] || continue
         "${STRATEGY_LAB_IPFW_BIN}" -qf add "${_slqf_rule}" divert "${STRATEGY_LAB_DIVERT_PORT}" \
-            udp from any to "${_slqf_address}" 443 out not diverted not sockarg xmit "${_slqf_wan}" || { strategy_lab_firewall_remove_rules; return 1; }
+            udp from me to "${_slqf_address}" 443 out not diverted not sockarg xmit "${_slqf_wan}" || { strategy_lab_firewall_remove_rules; return 1; }
         _slqf_rule=$((_slqf_rule + 1))
     done < "${_slqf_addresses}"
     strategy_lab_firewall_range_empty && return 1

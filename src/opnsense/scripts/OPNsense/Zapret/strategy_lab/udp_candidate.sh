@@ -24,7 +24,7 @@ strategy_lab_firewall_install_ipv4_rules()
     while IFS= read -r _sluf_address
     do
         [ -n "${_sluf_address}" ] || continue
-        "${STRATEGY_LAB_IPFW_BIN}" -qf add "${_sluf_rule}" divert "${STRATEGY_LAB_DIVERT_PORT}" udp from any to "${_sluf_address}" "${_sluf_port}" out not diverted not sockarg xmit "${_sluf_wan}" || { strategy_lab_firewall_remove_rules; return 1; }
+        "${STRATEGY_LAB_IPFW_BIN}" -qf add "${_sluf_rule}" divert "${STRATEGY_LAB_DIVERT_PORT}" udp from me to "${_sluf_address}" "${_sluf_port}" out not diverted not sockarg xmit "${_sluf_wan}" || { strategy_lab_firewall_remove_rules; return 1; }
         _sluf_rule=$((_sluf_rule + 1))
     done < "${_sluf_addresses}"
     strategy_lab_firewall_range_empty && return 1
