@@ -32,15 +32,19 @@ Audited source: `main` at `a95fcc33b2bdd97830fe5cd44090ae189a141dfa` (`0.3.2_24`
 ## Hardening progress
 
 - Findings 2, 3, 6, 7, 8, 9, 10 and the runtime-safety portions of findings 1, 4, and 5 are implemented and verified by Patches `_26`–`_34`.
-- Patch `_35` completes the shortlist half of finding 14: verified TLS 1.3, TLS 1.2, HTTP, QUIC, and configured UDP profiles are collected, exact-replayed, and selected through one deterministic final shortlist contract.
-- Patch `_36` completes the UDP-input half of finding 14: extended-mode GUI/API requests may carry a validated UDP port and a bounded payload file; the launcher creates only fixed private job-local files, the worker consumes those files, and every terminal or stale-worker path removes the payload.
-- Finding 14 is therefore source-complete after Patch `_36`.
-- Findings 11–13 and the remaining portions of finding 15 remain open.
+- Patch `_35` completes the shortlist half of finding 14.
+- Patch `_36` completes the UDP-input half of finding 14; finding 14 is source-complete.
+- Patch `_37` closes the evidence-mutation half of finding 11: circular validation snapshots the completed parent and stores all mutable state, runtime, and restoration evidence in an independent private session.
+- The launch-serialization and stale-owner half of finding 11 remains assigned to Patch `_38`.
+- Findings 12–13 and the remaining portions of finding 15 remain open.
 
 ## Explicit exclusion
 
-No corrective work is required for occupancy detection, ownership validation, snapshotting, or restoration of IPFW rules `19100–19131`. The range is reserved exclusively for Strategy Lab and remains destructively cleaned.
+No corrective work is required for occupancy detection, ownership validation, snapshotting,
+or restoration of IPFW rules `19100–19131`. The range is reserved exclusively for Strategy
+Lab and remains destructively cleaned.
 
 ## Release gate
 
-The hardening series must complete focused source tests and an owner-assisted live OPNsense matrix before release preparation.
+The hardening series must complete focused source tests and an owner-assisted live OPNsense
+matrix before release preparation.
