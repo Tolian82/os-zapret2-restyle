@@ -66,6 +66,12 @@ How is normal development performed?
 `ARCHITECTURE.md` and `docs/architecture/`
 How is the plugin built and how do components interact?
 
+`docs/architecture/STRATEGY_LAB_ACTIVATION.md`
+How does the asynchronous Diagnostics path replace synchronous Blockcheck?
+
+`docs/USER_GUIDE_STRATEGY_LAB.md`
+How does an operator use Strategy Lab and temporary circular validation?
+
 `DEVLOG.md` and `docs/devlog/`
 What work and verification were completed?
 

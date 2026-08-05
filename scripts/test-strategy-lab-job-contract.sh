@@ -9,7 +9,6 @@ PROBE_RUNNER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_prob
 MODULE_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab"
 STRATEGY_CONTROLLER="${ROOT_DIR}/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLabController.php"
 VIEW="${ROOT_DIR}/src/opnsense/mvc/app/views/OPNsense/Zapret/diagnostics.volt"
-SHELL_VIEW="${ROOT_DIR}/src/opnsense/mvc/app/views/OPNsense/Zapret/strategy_lab_shell.volt"
 ACTIONS="${ROOT_DIR}/src/opnsense/service/conf/actions.d/actions_zapret.conf"
 
 fail()
@@ -43,13 +42,13 @@ grep -Fq 'startAction' "${STRATEGY_CONTROLLER}" || fail "start API is missing"
 grep -Fq 'statusAction' "${STRATEGY_CONTROLLER}" || fail "status API is missing"
 grep -Fq 'cancelAction' "${STRATEGY_CONTROLLER}" || fail "cancel API is missing"
 grep -Fq 'resultAction' "${STRATEGY_CONTROLLER}" || fail "result API is missing"
-grep -Fq 'id="strategyLabShell"' "${SHELL_VIEW}" || fail "Strategy Lab GUI shell is missing"
-grep -Fq 'style="display: none;"' "${SHELL_VIEW}" || fail "Strategy Lab shell is not dormant"
-grep -Fq 'SKIPPED — canseled' "${SHELL_VIEW}" || fail "English canceled-stage message is missing"
-grep -Fq 'SKIPPED — отменено' "${SHELL_VIEW}" || fail "Russian canceled-stage message is missing"
-grep -Fq "'/api/zapret/diagnostics/blockcheck'" "${VIEW}" || fail "legacy Blockcheck was switched prematurely"
-grep -Fq "'/api/zapret/strategylab/start'" "${SHELL_VIEW}" || fail "Strategy Lab start helper is missing"
+grep -Fq 'id="strategyLabBtn"' "${VIEW}" || fail "active Strategy Lab controls are missing"
+grep -Fq "'/api/zapret/strategy_lab/start'" "${VIEW}" || fail "active Strategy Lab start call is missing"
+grep -Fq "'/api/zapret/strategy_lab/status'" "${VIEW}" || fail "active Strategy Lab status call is missing"
+grep -Fq "'/api/zapret/strategy_lab/cancel'" "${VIEW}" || fail "active Strategy Lab cancel call is missing"
+grep -Fq "'/api/zapret/strategy_lab/result'" "${VIEW}" || fail "active Strategy Lab result call is missing"
+! grep -Fq "'/api/zapret/diagnostics/blockcheck'" "${VIEW}" || fail "legacy Blockcheck call remains active"
 grep -Fq 'TRANSACTION_SCRIPT="${TRANSACTION_SCRIPT:-${SCRIPT_DIR}/zapret_service.sh}"' "${LAUNCHER}" ||
     fail "Strategy Lab launcher does not use the service-owned lifecycle transaction"
 
-echo 'PASS: asynchronous Strategy Lab job, lifecycle, and dormant GUI shell contract'
+echo 'PASS: asynchronous Strategy Lab job, lifecycle, and active Diagnostics GUI contract'
