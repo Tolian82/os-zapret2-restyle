@@ -3,22 +3,23 @@
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Current hardening source candidate: `os-zapret2-restyle-0.3.2_33.pkg`
+Current hardening source candidate: `os-zapret2-restyle-0.3.2_34.pkg`
 
-Patches 1–13 of the initial Strategy Lab delivery are complete. Corrective Patches 1–11 are complete in source. The second owner-approved hardening series is active.
+Patches 1–13 of the initial Strategy Lab delivery are complete. Corrective Patches 1–12 are complete in source. The second owner-approved hardening series is active.
 
 Hardening series status:
 
-- Patches `_25`–`_32`: required GitHub validation and FreeBSD package builds completed successfully;
+- Patches `_25`–`_33`: required GitHub validation and FreeBSD package builds completed successfully;
 - governance commit `e985323a6e0579c739f34cfbd07870405b29a848`: serial publication rule recorded and fully verified;
-- Patch `_33` — endpoint-bound requests and IPFW interception evidence: current source candidate awaiting its own required GitHub checks;
-- Patch `_34` and later work must not begin until `_33` is fully verified.
+- Patch `_34` — complete Traffic Strategy output with exact 3-of-3 profile replay: current source candidate awaiting its own required GitHub checks;
+- Patch `_35` and later work must not begin until `_34` is fully verified.
 
 Accepted hardening authority:
 
 - `docs/decisions/DEC-2026-08-05-strategy-lab-hardening-series.md`;
 - `docs/decisions/DEC-2026-08-05-serial-commit-delivery.md`;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md`;
+- `docs/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md`;
 - revisioned records under `docs/patches/`.
 
 Permanent decisions for this series:
@@ -28,9 +29,13 @@ Permanent decisions for this series:
 - candidate requests use one selected IPv4 address for DNS binding, firewall installation, and the actual connection;
 - candidate PASS requires the observed remote address to equal the selected address and the assigned IPFW rule packet counter to increase;
 - candidate requests do not follow redirects to an unverified endpoint;
-- every published working candidate must contain the tested target and a complete replay-verified Traffic Strategy profile;
+- catalog strategy fragments remain internal evidence and are not presented as ready-to-paste configuration;
+- every shortlist item contains the tested target and a complete self-contained Traffic Strategy profile;
+- domain output uses `--hostlist-domains=<domain>` and IP output uses `--ipset-ip=<address>`;
+- global runtime arguments are excluded from displayed profiles;
+- the exact displayed profile must pass three sequential fresh-runtime replays before shortlist publication;
 - GitHub publication is strictly serialized: one unverified commit at a time, with later patches blocked until all required checks and remote verification succeed.
 
-`VERSION=0.3.2`; `PLUGIN_REVISION=33`.
+`VERSION=0.3.2`; `PLUGIN_REVISION=34`.
 
-Next action: complete required GitHub checks and remote verification for Patch `_33`. Patch `_34` remains blocked until that succeeds.
+Next action: complete required GitHub checks and remote verification for Patch `_34`. Patch `_35` remains blocked until that succeeds.
