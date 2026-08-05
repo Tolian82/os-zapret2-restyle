@@ -34,6 +34,7 @@ LIFECYCLE_LOCK_TIMEOUT=30
 STRATEGY_LAB_LOCK_TIMEOUT=3
 LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 STRATEGY_LAB_WORKER="${STRATEGY_LAB_WORKER:-${SCRIPT_DIR}/strategy_lab_worker.sh}"
+STRATEGY_LAB_CIRCULAR_WORKER="${STRATEGY_LAB_CIRCULAR_WORKER:-${SCRIPT_DIR}/strategy_lab_circular_worker.sh}"
 
 ensure_runtime_components()
 {
@@ -132,22 +133,46 @@ strategy_lab_internal_dispatch()
     esac
 }
 
-run_strategy_lab_job()
+run_strategy_lab_worker()
 {
-    _strategy_lab_job_id="${1:-}"
+    _strategy_lab_worker="$1"
+    _strategy_lab_job_id="$2"
     strategy_lab_job_id_valid "${_strategy_lab_job_id}" || {
         echo "ERROR: invalid Strategy Lab job id" >&2
         return 64
     }
-    [ -x "${STRATEGY_LAB_WORKER}" ] || {
-        echo "ERROR: Strategy Lab worker is unavailable: ${STRATEGY_LAB_WORKER}" >&2
+    [ -x "${_strategy_lab_worker}" ] || {
+        echo "ERROR: Strategy Lab worker is unavailable: ${_strategy_lab_worker}" >&2
         return 1
     }
 
     STRATEGY_LAB_LIFECYCLE_OWNER=1
     STRATEGY_LAB_SERVICE_SCRIPT="$0"
     export STRATEGY_LAB_LIFECYCLE_OWNER STRATEGY_LAB_SERVICE_SCRIPT
-    exec "${STRATEGY_LAB_WORKER}" "${_strategy_lab_job_id}"
+    exec "${_strategy_lab_worker}" "${_strategy_lab_job_id}"
+}
+
+strategy_lab_report_lock_failure()
+{
+    _strategy_lab_action="$1"
+    _strategy_lab_job_id="$2"
+    case "${_strategy_lab_action}" in
+        strategy-lab)
+            _strategy_lab_failure_worker="${STRATEGY_LAB_WORKER}"
+            ;;
+        strategy-lab-circular)
+            _strategy_lab_failure_worker="${STRATEGY_LAB_CIRCULAR_WORKER}"
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+    if [ -x "${_strategy_lab_failure_worker}" ] &&
+        strategy_lab_job_id_valid "${_strategy_lab_job_id}"; then
+        STRATEGY_LAB_LIFECYCLE_LOCK_FAILED=1 \
+        STRATEGY_LAB_SERVICE_SCRIPT="$0" \
+            "${_strategy_lab_failure_worker}" "${_strategy_lab_job_id}" || true
+    fi
 }
 
 service_dispatch()
@@ -178,7 +203,10 @@ service_dispatch()
                 "${2:-dvtws2 runtime failure}"
             ;;
         strategy-lab)
-            run_strategy_lab_job "${2:-}"
+            run_strategy_lab_worker "${STRATEGY_LAB_WORKER}" "${2:-}"
+            ;;
+        strategy-lab-circular)
+            run_strategy_lab_worker "${STRATEGY_LAB_CIRCULAR_WORKER}" "${2:-}"
             ;;
         *)
             echo "usage: zapret_service.sh {start|stop|restart|status|reconfigure}" >&2
@@ -212,16 +240,12 @@ case "${1:-}" in
     strategy-lab-status|strategy-lab-stop|strategy-lab-start)
         strategy_lab_internal_dispatch "$@"
         ;;
-    strategy-lab)
+    strategy-lab|strategy-lab-circular)
         service_with_lifecycle_lock "${STRATEGY_LAB_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
             echo "ERROR: Strategy Lab could not acquire the zapret lifecycle lock" >&2
-            if [ -x "${STRATEGY_LAB_WORKER}" ] && strategy_lab_job_id_valid "${2:-}"; then
-                STRATEGY_LAB_LIFECYCLE_LOCK_FAILED=1 \
-                STRATEGY_LAB_SERVICE_SCRIPT="$0" \
-                    "${STRATEGY_LAB_WORKER}" "${2}" || true
-            fi
+            strategy_lab_report_lock_failure "${1}" "${2:-}"
         fi
         exit "${_service_status}"
         ;;
