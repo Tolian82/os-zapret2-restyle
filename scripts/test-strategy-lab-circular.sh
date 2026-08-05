@@ -5,13 +5,14 @@ SCRIPT_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
 MODULE_DIR="${SCRIPT_DIR}/strategy_lab"
 SERVICE_SCRIPT="${SCRIPT_DIR}/zapret_service.sh"
 WORKER_SCRIPT="${SCRIPT_DIR}/strategy_lab_circular_worker.sh"
+LAUNCHER_SCRIPT="${SCRIPT_DIR}/strategy_lab_circular_launcher.sh"
+VIEW="${ROOT_DIR}/src/opnsense/mvc/app/views/OPNsense/Zapret/diagnostics.volt"
 ACTIONS="${ROOT_DIR}/src/opnsense/service/conf/actions.d/actions_zapret.conf"
 TMP=$(mktemp -d /tmp/strategy-lab-circular-test.XXXXXX)
 trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
 mkdir -p "${TMP}/run/jobs/job.test" "${TMP}/lua" "${TMP}/bin"
 printf '%s\n' '-- lua' > "${TMP}/lua/zapret-auto.lua"
 printf '%s\n' telegram.org web.telegram.org > "${TMP}/run/jobs/job.test/endpoints.txt"
-printf '%s\n' '{"state":"completed","target_type":"ipv4"}' > "${TMP}/run/jobs/job.test/status.json"
 cat > "${TMP}/run/jobs/job.test/shortlist.json" <<'JSON'
 {"count":3,"items":[
  {"id":"c1","family":"multisplit","strategy":"--payload=tls_client_hello\n--lua-desync=multisplit:pos=1\n"},
@@ -53,9 +54,36 @@ export MOCK_IPFW_LOG="${TMP}/ipfw.log" MOCK_IPFW_STATE="${TMP}/ipfw.state"
 . "${MODULE_DIR}/runtime.sh"
 . "${MODULE_DIR}/circular.sh"
 
-! strategy_lab_circular_validate_job job.test
-printf '%s\n' '{"state":"completed","target_type":"domain"}' > "${TMP}/run/jobs/job.test/status.json"
+write_status()
+{
+    state="$1" outcome="$2" target_type="$3" restored="$4" persisted="$5"
+    jq -nc --arg state "${state}" --arg outcome "${outcome}" --arg target_type "${target_type}" \
+        --argjson restored "${restored}" --argjson persisted "${persisted}" '
+        {state:$state,outcome:$outcome,target_type:$target_type,
+         stages:[{number:"85",status:"PASS"},{number:"90",status:"PASS"}],
+         restoration:{verified:$restored},circular_eligible:$persisted,
+         circular_eligibility_reason:(if $persisted then "eligible" else "restoration_required" end),
+         circular_candidate_count:3}
+    ' > "${TMP}/run/jobs/job.test/status.json"
+}
+
+write_status completed SUCCESS ipv4 true true
+eligibility=$(strategy_lab_circular_eligibility job.test || true)
+printf '%s\n' "${eligibility}" | jq -e '.circular_eligible==false and .reason=="domain_required"' >/dev/null
+write_status completed PARTIAL domain true true
+eligibility=$(strategy_lab_circular_eligibility job.test || true)
+printf '%s\n' "${eligibility}" | jq -e '.circular_eligible==false and .reason=="terminal_outcome"' >/dev/null
+write_status completed SUCCESS domain false false
+eligibility=$(strategy_lab_circular_eligibility job.test || true)
+printf '%s\n' "${eligibility}" | jq -e '.circular_eligible==false and .reason=="restoration_required"' >/dev/null
+write_status completed SUCCESS domain true false
+eligibility=$(strategy_lab_circular_eligibility job.test || true)
+printf '%s\n' "${eligibility}" | jq -e '.circular_eligible==false and .reason=="eligibility_not_persisted"' >/dev/null
+write_status completed SUCCESS domain true true
 strategy_lab_circular_validate_job job.test
+eligibility=$(strategy_lab_circular_eligibility job.test)
+printf '%s\n' "${eligibility}" | jq -e '.status=="ok" and .circular_eligible==true and .reason=="eligible" and .candidate_count==3' >/dev/null
+
 strategy_lab_circular_build_profile job.test
 ARGS=$(strategy_lab_candidate_args_file job.test)
 grep -Fxq -- '--lua-desync=circular:fails=1:time=60' "${ARGS}"
@@ -71,7 +99,11 @@ grep -Fq 'add 19100 divert 9989 tcp from any to 203.0.113.10 443 out not diverte
 grep -Fq 'add 19101 divert 9989 tcp from 203.0.113.10 443 to any in not diverted not sockarg recv mock0' "${TMP}/ipfw.log"
 grep -Fq 'strategy-lab-circular)' "${SERVICE_SCRIPT}"
 grep -Fq '[strategy_lab_circular_start]' "${ACTIONS}"
-grep -Fq '[strategy_lab_circular_stop]' "${ACTIONS}"
+grep -Fq 'strategy_lab_circular_eligibility' "${LAUNCHER_SCRIPT}"
+grep -Fq "var circularReady = data.circular_eligible === true;" "${VIEW}"
+! grep -Fq "items.length >= 3 && items.length <= 5" "${VIEW}"
+grep -Fq 'Основной режим проверки ограничен 150 секундами, расширенный — 270 секундами.' "${VIEW}"
+grep -Fq 'Standard mode is limited to 150 seconds and extended mode to 270 seconds.' "${VIEW}"
 
 set +e
 STRATEGY_LAB_LIFECYCLE_LOCK_FAILED=1 \
@@ -85,4 +117,6 @@ set -e
 jq -e '.state=="error" and .reason=="lifecycle_lock"' \
     "${TMP}/run/circular/state.json" >/dev/null
 
-echo 'PASS: Strategy Lab circular validation is domain-only, target-scoped, and fail-closed'
+sh -n "${MODULE_DIR}/circular.sh"
+sh -n "${LAUNCHER_SCRIPT}"
+echo 'PASS: Strategy Lab circular validation requires successful restored domain eligibility and GUI follows the backend decision'
