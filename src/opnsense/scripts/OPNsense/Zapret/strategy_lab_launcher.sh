@@ -11,7 +11,7 @@ MODE="${1:-status}"
 set -eu
 umask 022
 
-for module in common state target firewall runtime launch query
+for module in common state target firewall runtime udp_input launch query
 do
     module_path="${MODULE_DIR}/${module}.sh"
     [ -r "${module_path}" ] || { echo "ERROR: required Strategy Lab module is missing: ${module_path}" >&2; exit 1; }

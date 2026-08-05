@@ -32,10 +32,10 @@ Audited source: `main` at `a95fcc33b2bdd97830fe5cd44090ae189a141dfa` (`0.3.2_24`
 ## Hardening progress
 
 - Findings 2, 3, 6, 7, 8, 9, 10 and the runtime-safety portions of findings 1, 4, and 5 are implemented and verified by Patches `_26`–`_34`.
-- Patch `_35` implements the source correction for the shortlist half of finding 14: verified TLS 1.3, TLS 1.2, HTTP, QUIC, and configured UDP profiles are collected, exact-replayed, and selected through one deterministic final shortlist contract.
-- The UDP input half of finding 14 remains open and is deliberately reserved for Patch `_36` because the current supported GUI/API request does not yet carry UDP port and payload input.
-- Patch `_35` remains pending until all required GitHub checks and the remote commit are verified.
-- Findings 11–13 and 15 remain open.
+- Patch `_35` completes the shortlist half of finding 14: verified TLS 1.3, TLS 1.2, HTTP, QUIC, and configured UDP profiles are collected, exact-replayed, and selected through one deterministic final shortlist contract.
+- Patch `_36` completes the UDP-input half of finding 14: extended-mode GUI/API requests may carry a validated UDP port and a bounded payload file; the launcher creates only fixed private job-local files, the worker consumes those files, and every terminal or stale-worker path removes the payload.
+- Finding 14 is therefore source-complete after Patch `_36`.
+- Findings 11–13 and the remaining portions of finding 15 remain open.
 
 ## Explicit exclusion
 

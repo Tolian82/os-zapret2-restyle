@@ -29,6 +29,8 @@ worker_finish()
         worker_watchdog_stop
     fi
 
+    strategy_lab_udp_input_cleanup "${JOB_ID}" || true
+
     if ! worker_restore; then
         WORKER_FINAL_OUTCOME='RESTORE_FAILED'
     fi

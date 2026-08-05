@@ -45,7 +45,7 @@ Current version, verified baseline, active work, blockers, and next action.
 Confirmed findings, evidence, impact, remediation, and verification state.
 
 `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md`
-Audit-to-patch traceability for Strategy Lab hardening revisions 25–35.
+Audit-to-patch traceability for Strategy Lab hardening revisions 25 onward.
 
 `DECISIONS.md` and `docs/decisions/`
 Approved engineering decisions and their supersession history.
@@ -75,6 +75,10 @@ Complete Traffic Strategy profile construction and exact replay-verification con
 `docs/architecture/STRATEGY_LAB_UNIFIED_SHORTLIST.md`
 Deterministic multi-protocol result and TLS 1.3 circular-boundary contract.
 
+`docs/architecture/STRATEGY_LAB_UDP_INPUT.md`
+Validated extended-mode UDP port/payload request, private job-local storage, and cleanup
+contract.
+
 `DEVLOG.md` and `docs/devlog/`
 Completed work and verification evidence.
 
@@ -92,8 +96,7 @@ Final authority for branches, PRs, checks, repairs, title and commit-subject ide
 merge, cleanup, patch/release boundaries, transport selection, and concurrency.
 
 `CHANGELOG.md`, `docs/releases/`, and `docs/patches/`
-Published changes and historical patch/release records. Strategy Lab hardening revisions
-25–35 are recorded under `docs/patches/` even while their integration PR is pending.
+Published changes and historical patch/release records.
 
 ==================================================
 PRECEDENCE
