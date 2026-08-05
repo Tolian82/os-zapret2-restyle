@@ -19,6 +19,7 @@ fail()
 
 sh "${ROOT_DIR}/scripts/test-strategy-lab-lifecycle.sh"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-precheck.sh"
+sh "${ROOT_DIR}/scripts/test-strategy-lab-cancel-state.sh"
 
 sh -n "${LAUNCHER}"
 sh -n "${WORKER}"
