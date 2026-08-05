@@ -6,12 +6,8 @@ strategy_lab_ipv4_valid()
         NF != 4 { exit 1 }
         {
             for (i = 1; i <= 4; i++) {
-                if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) {
-                    exit 1
-                }
-                if (length($i) > 1 && substr($i, 1, 1) == "0") {
-                    exit 1
-                }
+                if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) exit 1
+                if (length($i) > 1 && substr($i, 1, 1) == "0") exit 1
             }
         }
     '
@@ -22,6 +18,7 @@ strategy_lab_domain_valid()
     _strategy_lab_domain="$1"
     [ -n "${_strategy_lab_domain}" ] || return 1
     [ "${#_strategy_lab_domain}" -le 253 ] || return 1
+    strategy_lab_ipv4_valid "${_strategy_lab_domain}" && return 1
     printf '%s\n' "${_strategy_lab_domain}" | awk '
         BEGIN { FS="." }
         NF < 2 { exit 1 }
@@ -40,26 +37,17 @@ strategy_lab_normalize_target()
 {
     _strategy_lab_input="$1"
     [ -n "${_strategy_lab_input}" ] || return 1
-    [ "${#_strategy_lab_input}" -le 253 ] || return 1
-    _strategy_lab_normalized=$(printf '%s' "${_strategy_lab_input}" | tr '[:upper:]' '[:lower:]' | sed 's/\.$//')
-
-    if strategy_lab_ipv4_valid "${_strategy_lab_normalized}"; then
-        printf '%s\n' "${_strategy_lab_normalized}"
-        return 0
-    fi
-
+    [ "${#_strategy_lab_input}" -le 254 ] || return 1
+    _strategy_lab_normalized=$(printf '%s' "${_strategy_lab_input}" |
+        tr '[:upper:]' '[:lower:]' | sed 's/\.$//')
     strategy_lab_domain_valid "${_strategy_lab_normalized}" || return 1
     printf '%s\n' "${_strategy_lab_normalized}"
 }
 
 strategy_lab_target_type()
 {
-    if strategy_lab_ipv4_valid "$1"; then
-        printf '%s\n' ip
-    else
-        strategy_lab_domain_valid "$1" || return 1
-        printf '%s\n' domain
-    fi
+    strategy_lab_domain_valid "$1" || return 1
+    printf '%s\n' domain
 }
 
 strategy_lab_write_endpoints()
@@ -68,22 +56,14 @@ strategy_lab_write_endpoints()
     _strategy_lab_type="$2"
     _strategy_lab_output="$3"
 
-    case "${_strategy_lab_type}" in
-        domain)
-            case "${_strategy_lab_target}" in
-                telegram.org)
-                    printf '%s\n' telegram.org web.telegram.org > "${_strategy_lab_output}"
-                    ;;
-                *)
-                    printf '%s\n' "${_strategy_lab_target}" > "${_strategy_lab_output}"
-                    ;;
-            esac
-            ;;
-        ip)
-            printf '%s\n' "${_strategy_lab_target}" > "${_strategy_lab_output}"
+    [ "${_strategy_lab_type}" = domain ] || return 1
+    strategy_lab_domain_valid "${_strategy_lab_target}" || return 1
+    case "${_strategy_lab_target}" in
+        telegram.org)
+            printf '%s\n' telegram.org web.telegram.org > "${_strategy_lab_output}"
             ;;
         *)
-            return 1
+            printf '%s\n' "${_strategy_lab_target}" > "${_strategy_lab_output}"
             ;;
     esac
 }
