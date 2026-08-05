@@ -25,6 +25,10 @@ worker_finish()
     WORKER_FINAL_CANCELED="$2"
     WORKER_FINALIZING=1
 
+    if command -v worker_watchdog_stop >/dev/null 2>&1; then
+        worker_watchdog_stop
+    fi
+
     if ! worker_restore; then
         WORKER_FINAL_OUTCOME='RESTORE_FAILED'
     fi

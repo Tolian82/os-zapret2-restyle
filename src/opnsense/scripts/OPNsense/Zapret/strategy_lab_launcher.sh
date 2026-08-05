@@ -11,25 +11,19 @@ MODE="${1:-status}"
 set -eu
 umask 022
 
-for module in common state target launch query
+for module in common state target firewall runtime launch query
 do
     module_path="${MODULE_DIR}/${module}.sh"
-    [ -r "${module_path}" ] || {
-        echo "ERROR: required Strategy Lab module is missing: ${module_path}" >&2
-        exit 1
-    }
+    [ -r "${module_path}" ] || { echo "ERROR: required Strategy Lab module is missing: ${module_path}" >&2; exit 1; }
     . "${module_path}"
 done
 
 strategy_lab_require_jq
 strategy_lab_prepare_directories
-[ -x "${LOCKF_BIN}" ] || {
-    emit_error_json "Strategy Lab lock utility is unavailable"
-    exit 1
-}
+[ -x "${LOCKF_BIN}" ] || { emit_error_json "Strategy Lab lock utility is unavailable"; exit 1; }
 
 case "${MODE}" in
-    start|cancel)
+    start|cancel|status|result)
         (
             if ! "${LOCKF_BIN}" -s -t 0 9; then
                 "${STRATEGY_LAB_JQ}" -nc '{status:"busy",message:"Strategy Lab launcher is busy"}'
@@ -38,16 +32,10 @@ case "${MODE}" in
             case "${MODE}" in
                 start) start_job "$@" ;;
                 cancel) cancel_job "$@" ;;
+                status) show_status "$@" ;;
+                result) show_result "$@" ;;
             esac
         ) 9>"${STRATEGY_LAB_LOCK_FILE}"
         ;;
-    status)
-        show_status "$@"
-        ;;
-    result)
-        show_result "$@"
-        ;;
-    *)
-        usage_error "unsupported mode: ${MODE}"
-        ;;
+    *) usage_error "unsupported mode: ${MODE}" ;;
 esac

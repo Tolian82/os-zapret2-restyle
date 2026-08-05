@@ -62,6 +62,21 @@ strategy_lab_firewall_range_empty()
     return 0
 }
 
+strategy_lab_firewall_rule_counters()
+{
+    _slfw_rule="$1"
+    strategy_lab_firewall_rule_number_valid "${_slfw_rule}" || return 1
+    "${STRATEGY_LAB_IPFW_BIN}" -a list "${_slfw_rule}" 2>/dev/null |
+        awk -v wanted="${_slfw_rule}" '
+            ($1 + 0) == (wanted + 0) && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ {
+                print $2, $3
+                found=1
+                exit
+            }
+            END { if (!found) exit 1 }
+        '
+}
+
 strategy_lab_firewall_install_ipv4_rules()
 {
     _strategy_lab_addresses="$1"
@@ -85,7 +100,7 @@ strategy_lab_firewall_install_ipv4_rules()
         }
         "${STRATEGY_LAB_IPFW_BIN}" -qf add "${_strategy_lab_rule}" \
             divert "${STRATEGY_LAB_DIVERT_PORT}" \
-            tcp from any to "${_strategy_lab_address}" 443 \
+            tcp from me to "${_strategy_lab_address}" 443 \
             out not diverted not sockarg xmit "${_strategy_lab_wan}" || {
                 strategy_lab_firewall_remove_rules
                 return 1

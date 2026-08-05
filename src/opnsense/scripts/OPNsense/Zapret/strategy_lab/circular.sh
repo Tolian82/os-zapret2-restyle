@@ -46,6 +46,15 @@ strategy_lab_circular_endpoints_file()
     printf '%s/endpoints.txt\n' "$(strategy_lab_job_dir "$1")"
 }
 
+strategy_lab_circular_candidate_count()
+{
+    "${STRATEGY_LAB_JQ}" -r '
+        if has("circular_count") then .circular_count
+        elif has("circular_items") then (.circular_items | length)
+        else (.items | length) end
+    ' "$1"
+}
+
 strategy_lab_circular_eligibility()
 {
     _slcirc_job="$1"
@@ -62,7 +71,7 @@ strategy_lab_circular_eligibility()
         elif [ ! -r "${_slcirc_shortlist}" ] || [ ! -s "${_slcirc_endpoints}" ]; then
             _slcirc_reason=artifacts_missing
         else
-            _slcirc_count=$("${STRATEGY_LAB_JQ}" -r '.count // 0' "${_slcirc_shortlist}") || _slcirc_count=0
+            _slcirc_count=$(strategy_lab_circular_candidate_count "${_slcirc_shortlist}" 2>/dev/null || printf '%s\n' 0)
             if ! "${STRATEGY_LAB_JQ}" -e '
                 .state=="completed" and .outcome=="SUCCESS"
             ' "${_slcirc_status}" >/dev/null; then
@@ -77,10 +86,14 @@ strategy_lab_circular_eligibility()
             ' "${_slcirc_status}" >/dev/null; then
                 _slcirc_reason=restoration_required
             elif ! "${STRATEGY_LAB_JQ}" -e '
-                (.count >= 3 and .count <= 5) and
-                ((.items | length) == .count) and
-                all(.items[]; (.id | type == "string" and length > 0) and
-                              (.strategy | type == "string" and length > 0))
+                (.circular_items //
+                    [.items[] | . + {protocol:(.protocol // "tls13"),
+                                     circular_eligible:(.circular_eligible // true)}]) as $items |
+                (($items | length) >= 3 and ($items | length) <= 5) and
+                all($items[];
+                    .protocol=="tls13" and .circular_eligible==true and
+                    (.id | type == "string" and length > 0) and
+                    (.strategy | type == "string" and length > 0))
             ' "${_slcirc_shortlist}" >/dev/null; then
                 _slcirc_reason=shortlist_size
             elif ! "${STRATEGY_LAB_JQ}" -e --argjson count "${_slcirc_count}" '
@@ -157,7 +170,7 @@ strategy_lab_circular_build_profile()
             printf '%s' "${_slcirc_item}" | "${STRATEGY_LAB_JQ}" -r '.strategy' > "${_slcirc_strategy}" || exit 1
             strategy_lab_circular_inject_strategy "${_slcirc_index}" "${_slcirc_strategy}" || exit 1
         done <<ITEMS
-$("${STRATEGY_LAB_JQ}" -c '.items[]' "${_slcirc_shortlist}")
+$("${STRATEGY_LAB_JQ}" -c '(.circular_items // .items)[]' "${_slcirc_shortlist}")
 ITEMS
     } > "${_slcirc_tmp}" || {
         rm -f "${_slcirc_tmp}"

@@ -34,6 +34,11 @@ cleanup_stale_active()
     :
 }
 
+strategy_lab_reconcile_stale_job()
+{
+    :
+}
+
 . "${MODULE_DIR}/query.sh"
 
 fail()

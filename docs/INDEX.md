@@ -44,8 +44,15 @@ Current version, verified baseline, active work, blockers, and next action.
 `AUDIT.md` and `docs/audit/`
 Confirmed findings, evidence, impact, remediation, and verification state.
 
+`docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md`
+Audit-to-patch traceability for Strategy Lab hardening revisions 25–35.
+
 `DECISIONS.md` and `docs/decisions/`
 Approved engineering decisions and their supersession history.
+
+`docs/decisions/DEC-2026-08-05-strategy-lab-hardening-series.md`
+Active Strategy Lab hardening product contract. Its former serial-publication wording is
+superseded by the active GitHub delivery decisions.
 
 `WORKING_CONVENTIONS.md`
 Stable engineering and operational conventions.
@@ -61,6 +68,12 @@ Current Strategy Lab behavioral authority.
 
 `docs/architecture/STRATEGY_LAB_ACTIVATION.md`
 Active Diagnostics path and the delivery-authority override for older Strategy Lab plans.
+
+`docs/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md`
+Complete Traffic Strategy profile construction and exact replay-verification contract.
+
+`docs/architecture/STRATEGY_LAB_UNIFIED_SHORTLIST.md`
+Deterministic multi-protocol result and TLS 1.3 circular-boundary contract.
 
 `DEVLOG.md` and `docs/devlog/`
 Completed work and verification evidence.
@@ -79,7 +92,8 @@ Final authority for branches, PRs, checks, repairs, title and commit-subject ide
 merge, cleanup, patch/release boundaries, transport selection, and concurrency.
 
 `CHANGELOG.md`, `docs/releases/`, and `docs/patches/`
-Published changes and historical patch/release records.
+Published changes and historical patch/release records. Strategy Lab hardening revisions
+25–35 are recorded under `docs/patches/` even while their integration PR is pending.
 
 ==================================================
 PRECEDENCE
