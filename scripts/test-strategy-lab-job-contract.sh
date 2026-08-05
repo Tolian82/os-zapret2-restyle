@@ -21,6 +21,7 @@ sh "${ROOT_DIR}/scripts/test-strategy-lab-lifecycle.sh"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-precheck.sh"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-cancel-state.sh"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-active-cancel.sh"
+sh "${ROOT_DIR}/scripts/test-strategy-lab-stage-machine.sh"
 
 sh -n "${LAUNCHER}"
 sh -n "${WORKER}"

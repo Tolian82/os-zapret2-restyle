@@ -14,5 +14,5 @@ for runner in "${PROBE_RUNNER}" "${CANDIDATE_RUNNER}" "${EXPANSION_RUNNER}" "${S
 STATUS_FILE=$(strategy_lab_status_file "${JOB_ID}"); CANCEL_FILE=$(strategy_lab_cancel_file "${JOB_ID}"); JOB_DIR=$(strategy_lab_job_dir "${JOB_ID}"); [ -r "${STATUS_FILE}" ] || exit 1
 STRATEGY_LAB_WORKER_PID=$$; export CANCEL_FILE STRATEGY_LAB_WORKER_PID
 LANGUAGE=$("${STRATEGY_LAB_JQ}" -r '.language' "${STATUS_FILE}"); TARGET=$("${STRATEGY_LAB_JQ}" -r '.target' "${STATUS_FILE}"); MODE=$("${STRATEGY_LAB_JQ}" -r '.mode' "${STATUS_FILE}"); WORKER_FINALIZING=0
-for worker_module in worker_messages worker_control worker_expansion_messages worker_stability_messages worker_extended_messages worker_quic_messages worker_udp_messages worker_flow
+for worker_module in worker_messages worker_expansion_messages worker_stability_messages worker_extended_messages worker_quic_messages worker_udp_messages worker_stage_machine worker_control worker_flow
 do path="${MODULE_DIR}/${worker_module}.sh"; [ -r "${path}" ] || exit 1; . "${path}"; done
