@@ -18,7 +18,8 @@ and hardening revisions 25–36 are verified on `main`.
   restoration result into the session;
 - preserve evidence fields across circular state transitions;
 - keep the current GUI/API contract based on the parent job ID;
-- add mandatory parent-immutability and session-local-runtime tests.
+- retain transition-only legacy symlink aliases into the private session until revision 43;
+- add mandatory parent-immutability, session-local-runtime, and end-to-end tests.
 
 ## Hardening status
 
@@ -39,17 +40,29 @@ Revision 37 addresses the first half of finding 11. Remaining planned work:
 - `_40` — restore persisted terminal results after page reload;
 - `_41` — structured final-result GUI and profile-copy controls;
 - `_42` — detailed progress and complete localization;
-- `_43` — remove obsolete load-order/hook behavior;
+- `_43` — remove obsolete load-order/hook behavior and transition aliases;
 - `_44` — retention and cleanup policy;
 - `_45` — final mandatory corrective CI matrix;
 - `_46` — final documentation and owner-assisted live OPNsense verification matrix.
 
+## Current product authority
+
+- `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`;
+- `docs/architecture/STRATEGY_LAB_ACTIVATION.md`;
+- `docs/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md`;
+- `docs/architecture/STRATEGY_LAB_UNIFIED_SHORTLIST.md`;
+- `docs/architecture/STRATEGY_LAB_UDP_INPUT.md`;
+- `docs/architecture/STRATEGY_LAB_CIRCULAR_ISOLATION.md`;
+- `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md`.
+
 ## GitHub governance
 
-`docs/GITHUB_PUBLICATION.md` and the active GitHub decisions remain authoritative. Every
-PR title, branch commit subject, and final squash subject uses the exact package-candidate
-prefix. `main` is never force-updated. Documentation accompanies each logical product
-patch.
+`docs/GITHUB_PUBLICATION.md`,
+`docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`, and
+`docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md` remain authoritative.
+Every PR title, branch commit subject, and final squash subject uses the exact
+package-candidate prefix. `main` is never force-updated. Documentation accompanies each
+logical product patch.
 
 `VERSION=0.3.2`; `PLUGIN_REVISION=37` in this candidate.
 
