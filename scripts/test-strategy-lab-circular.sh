@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 SCRIPT_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
 MODULE_DIR="${SCRIPT_DIR}/strategy_lab"
@@ -8,18 +9,21 @@ WORKER_SCRIPT="${SCRIPT_DIR}/strategy_lab_circular_worker.sh"
 LAUNCHER_SCRIPT="${SCRIPT_DIR}/strategy_lab_circular_launcher.sh"
 VIEW="${ROOT_DIR}/src/opnsense/mvc/app/views/OPNsense/Zapret/diagnostics.volt"
 ACTIONS="${ROOT_DIR}/src/opnsense/service/conf/actions.d/actions_zapret.conf"
+
 TMP=$(mktemp -d /tmp/strategy-lab-circular-test.XXXXXX)
 trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
-mkdir -p "${TMP}/run/jobs/job.test" "${TMP}/lua" "${TMP}/bin"
+PARENT_JOBS="${TMP}/run/jobs"
+mkdir -p "${PARENT_JOBS}/job.test" "${TMP}/lua" "${TMP}/bin"
 printf '%s\n' '-- lua' > "${TMP}/lua/zapret-auto.lua"
-printf '%s\n' telegram.org web.telegram.org > "${TMP}/run/jobs/job.test/endpoints.txt"
-cat > "${TMP}/run/jobs/job.test/shortlist.json" <<'JSON'
+printf '%s\n' telegram.org web.telegram.org > "${PARENT_JOBS}/job.test/endpoints.txt"
+cat > "${PARENT_JOBS}/job.test/shortlist.json" <<'JSON'
 {"count":3,"items":[
  {"id":"c1","family":"multisplit","strategy":"--payload=tls_client_hello\n--lua-desync=multisplit:pos=1\n"},
  {"id":"c2","family":"fake+split","strategy":"--payload=tls_client_hello\n--lua-desync=fake:blob=fake_default_tls\n--lua-desync=multisplit:pos=host\n"},
  {"id":"c3","family":"hostfakesplit","strategy":"--payload=tls_client_hello\n--lua-desync=hostfakesplit:midhost=midsld\n"}
 ]}
 JSON
+
 cat > "${TMP}/bin/kldstat" <<'MOCK'
 #!/bin/sh
 exit 0
@@ -42,17 +46,26 @@ MOCK
 chmod +x "${TMP}/bin/"*
 : > "${TMP}/ipfw.log"
 : > "${TMP}/ipfw.state"
+
 export STRATEGY_LAB_JQ=$(command -v jq)
-export STRATEGY_LAB_RUN_DIR="${TMP}/run" STRATEGY_LAB_JOBS_DIR="${TMP}/run/jobs"
-export STRATEGY_LAB_LUA_DIR="${TMP}/lua" STRATEGY_LAB_IPFW_BIN="${TMP}/bin/ipfw"
-export STRATEGY_LAB_KLDSTAT_BIN="${TMP}/bin/kldstat" STRATEGY_LAB_SYSCTL_BIN="${TMP}/bin/sysctl"
-export STRATEGY_LAB_RULE_BASE=19100 STRATEGY_LAB_RULE_MAX=19131 STRATEGY_LAB_DIVERT_PORT=9989
-export MOCK_IPFW_LOG="${TMP}/ipfw.log" MOCK_IPFW_STATE="${TMP}/ipfw.state"
+export STRATEGY_LAB_RUN_DIR="${TMP}/run"
+export STRATEGY_LAB_JOBS_DIR="${PARENT_JOBS}"
+export STRATEGY_LAB_LUA_DIR="${TMP}/lua"
+export STRATEGY_LAB_IPFW_BIN="${TMP}/bin/ipfw"
+export STRATEGY_LAB_KLDSTAT_BIN="${TMP}/bin/kldstat"
+export STRATEGY_LAB_SYSCTL_BIN="${TMP}/bin/sysctl"
+export STRATEGY_LAB_RULE_BASE=19100
+export STRATEGY_LAB_RULE_MAX=19131
+export STRATEGY_LAB_DIVERT_PORT=9989
+export MOCK_IPFW_LOG="${TMP}/ipfw.log"
+export MOCK_IPFW_STATE="${TMP}/ipfw.state"
+
 . "${MODULE_DIR}/common.sh"
 . "${MODULE_DIR}/state.sh"
 . "${MODULE_DIR}/firewall.sh"
 . "${MODULE_DIR}/runtime.sh"
 . "${MODULE_DIR}/circular.sh"
+strategy_lab_circular_prepare_dir
 
 write_status()
 {
@@ -64,7 +77,7 @@ write_status()
          restoration:{verified:$restored},circular_eligible:$persisted,
          circular_eligibility_reason:(if $persisted then "eligible" else "restoration_required" end),
          circular_candidate_count:3}
-    ' > "${TMP}/run/jobs/job.test/status.json"
+    ' > "${PARENT_JOBS}/job.test/status.json"
 }
 
 write_status completed SUCCESS ipv4 true true
@@ -82,10 +95,38 @@ printf '%s\n' "${eligibility}" | jq -e '.circular_eligible==false and .reason=="
 write_status completed SUCCESS domain true true
 strategy_lab_circular_validate_job job.test
 eligibility=$(strategy_lab_circular_eligibility job.test)
-printf '%s\n' "${eligibility}" | jq -e '.status=="ok" and .circular_eligible==true and .reason=="eligible" and .candidate_count==3' >/dev/null
+printf '%s\n' "${eligibility}" |
+    jq -e '.status=="ok" and .circular_eligible==true and .reason=="eligible" and .candidate_count==3' >/dev/null
 
-strategy_lab_circular_build_profile job.test
-ARGS=$(strategy_lab_candidate_args_file job.test)
+STATUS_BEFORE=$(cksum "${PARENT_JOBS}/job.test/status.json")
+SHORTLIST_BEFORE=$(cksum "${PARENT_JOBS}/job.test/shortlist.json")
+ENDPOINTS_BEFORE=$(cksum "${PARENT_JOBS}/job.test/endpoints.txt")
+
+SESSION_ID=$(strategy_lab_circular_session_create job.test)
+strategy_lab_circular_session_validate "${SESSION_ID}" job.test
+SESSION_DIR=$(strategy_lab_circular_session_dir "${SESSION_ID}")
+[ -r "${SESSION_DIR}/parent-status.json" ]
+[ -r "${SESSION_DIR}/shortlist.json" ]
+[ -r "${SESSION_DIR}/endpoints.txt" ]
+[ "$(cat "${SESSION_DIR}/parent.job")" = job.test ]
+cmp "${PARENT_JOBS}/job.test/status.json" "${SESSION_DIR}/parent-status.json"
+cmp "${PARENT_JOBS}/job.test/shortlist.json" "${SESSION_DIR}/shortlist.json"
+cmp "${PARENT_JOBS}/job.test/endpoints.txt" "${SESSION_DIR}/endpoints.txt"
+
+strategy_lab_circular_state_write "${SESSION_ID}" queued job.test 'queued' 3 ''
+STATE_FILE=$(strategy_lab_circular_session_state_file "${SESSION_ID}")
+jq '.session_evidence={marker:"preserved"}' "${STATE_FILE}" > "${STATE_FILE}.tmp"
+mv "${STATE_FILE}.tmp" "${STATE_FILE}"
+strategy_lab_circular_state_write "${SESSION_ID}" running job.test 'running' 3 ''
+jq -e --arg session "${SESSION_ID}" '
+    .session_id==$session and .parent_job_id=="job.test" and .job_id=="job.test" and
+    .state=="running" and .session_evidence.marker=="preserved"
+' "${STATE_FILE}" >/dev/null
+
+STRATEGY_LAB_JOBS_DIR="${STRATEGY_LAB_CIRCULAR_SESSIONS_DIR}"
+export STRATEGY_LAB_JOBS_DIR
+strategy_lab_circular_build_profile "${SESSION_ID}"
+ARGS=$(strategy_lab_candidate_args_file "${SESSION_ID}")
 grep -Fxq -- '--lua-desync=circular:fails=1:time=60' "${ARGS}"
 grep -Fxq -- '--in-range=-s34228' "${ARGS}"
 grep -Fxq -- '--lua-desync=multisplit:pos=1:strategy=1' "${ARGS}"
@@ -93,30 +134,47 @@ grep -Fxq -- '--lua-desync=fake:blob=fake_default_tls:strategy=2' "${ARGS}"
 grep -Fxq -- '--lua-desync=multisplit:pos=host:strategy=2' "${ARGS}"
 grep -Fxq -- '--lua-desync=hostfakesplit:midhost=midsld:strategy=3' "${ARGS}"
 ! grep -Fq -- '--new' "${ARGS}"
+[ ! -e "${PARENT_JOBS}/job.test/candidate-runtime" ]
+STRATEGY_LAB_JOBS_DIR="${PARENT_JOBS}"
+export STRATEGY_LAB_JOBS_DIR
+
+[ "$(cksum "${PARENT_JOBS}/job.test/status.json")" = "${STATUS_BEFORE}" ]
+[ "$(cksum "${PARENT_JOBS}/job.test/shortlist.json")" = "${SHORTLIST_BEFORE}" ]
+[ "$(cksum "${PARENT_JOBS}/job.test/endpoints.txt")" = "${ENDPOINTS_BEFORE}" ]
+
 printf '%s\n' 203.0.113.10 > "${TMP}/addresses.txt"
 strategy_lab_circular_install_firewall "${TMP}/addresses.txt" mock0
 grep -Fq 'add 19100 divert 9989 tcp from any to 203.0.113.10 443 out not diverted not sockarg xmit mock0' "${TMP}/ipfw.log"
 grep -Fq 'add 19101 divert 9989 tcp from 203.0.113.10 443 to any in not diverted not sockarg recv mock0' "${TMP}/ipfw.log"
+
 grep -Fq 'strategy-lab-circular)' "${SERVICE_SCRIPT}"
 grep -Fq '[strategy_lab_circular_start]' "${ACTIONS}"
-grep -Fq 'strategy_lab_circular_eligibility' "${LAUNCHER_SCRIPT}"
-grep -Fq "var circularReady = data.circular_eligible === true;" "${VIEW}"
-! grep -Fq "items.length >= 3 && items.length <= 5" "${VIEW}"
-grep -Fq 'Основной режим проверки ограничен 150 секундами, расширенный — 270 секундами.' "${VIEW}"
-grep -Fq 'Standard mode is limited to 150 seconds and extended mode to 270 seconds.' "${VIEW}"
+grep -Fq 'strategy_lab_circular_session_create' "${LAUNCHER_SCRIPT}"
+grep -Fq 'STRATEGY_LAB_JOBS_DIR="${STRATEGY_LAB_CIRCULAR_SESSIONS_DIR}"' "${WORKER_SCRIPT}"
+grep -Fq 'var circularReady = data.circular_eligible === true;' "${VIEW}"
+! grep -Fq 'items.length >= 3 && items.length <= 5' "${VIEW}"
 
+# A lifecycle-lock failure must be recorded only in the private session state.
+STRATEGY_LAB_JOBS_DIR="${PARENT_JOBS}"
+export STRATEGY_LAB_JOBS_DIR
+LOCK_SESSION=$(strategy_lab_circular_session_create job.test)
+strategy_lab_circular_state_write "${LOCK_SESSION}" queued job.test 'queued' 3 ''
 set +e
 STRATEGY_LAB_LIFECYCLE_LOCK_FAILED=1 \
 SCRIPT_DIR="${SCRIPT_DIR}" MODULE_DIR="${MODULE_DIR}" \
-STRATEGY_LAB_RUN_DIR="${TMP}/run" STRATEGY_LAB_JOBS_DIR="${TMP}/run/jobs" \
+STRATEGY_LAB_RUN_DIR="${TMP}/run" STRATEGY_LAB_JOBS_DIR="${PARENT_JOBS}" \
 STRATEGY_LAB_JQ="${STRATEGY_LAB_JQ}" \
     sh "${WORKER_SCRIPT}" job.test >/dev/null 2>&1
 WORKER_STATUS=$?
 set -e
 [ "${WORKER_STATUS}" -eq 75 ]
-jq -e '.state=="error" and .reason=="lifecycle_lock"' \
-    "${TMP}/run/circular/state.json" >/dev/null
+jq -e --arg session "${LOCK_SESSION}" '
+    .session_id==$session and .parent_job_id=="job.test" and
+    .state=="error" and .reason=="lifecycle_lock"
+' "$(strategy_lab_circular_session_state_file "${LOCK_SESSION}")" >/dev/null
+[ "$(cksum "${PARENT_JOBS}/job.test/status.json")" = "${STATUS_BEFORE}" ]
 
 sh -n "${MODULE_DIR}/circular.sh"
 sh -n "${LAUNCHER_SCRIPT}"
-echo 'PASS: Strategy Lab circular validation requires successful restored domain eligibility and GUI follows the backend decision'
+sh -n "${WORKER_SCRIPT}"
+echo 'PASS: circular validation uses immutable parent snapshots and independent session evidence'
