@@ -22,14 +22,14 @@ fi
 
 strategy_lab_circular_validate_job "${JOB_ID}" || {
     strategy_lab_circular_state_write error "${JOB_ID}" \
-        'Completed domain Strategy Lab shortlist with 3-5 candidates is required' 0 invalid_job
+        'Completed domain Strategy Lab shortlist with 3-5 TLS 1.3 candidates is required' 0 invalid_job
     exit 64
 }
 
 printf '%s\n' "$$" > "${STRATEGY_LAB_CIRCULAR_PID}"
 rm -f "${STRATEGY_LAB_CIRCULAR_STOP}"
 INITIAL_STATE=''
-CIRCULAR_COUNT=$("${STRATEGY_LAB_JQ}" -r '.items | length' \
+CIRCULAR_COUNT=$(strategy_lab_circular_candidate_count \
     "$(strategy_lab_circular_shortlist_file "${JOB_ID}")")
 FINAL_STATE=completed
 FINAL_MESSAGE='Circular validation stopped and Zapret2 state restored'
@@ -74,31 +74,20 @@ circular_signal()
 trap circular_signal HUP INT TERM
 trap circular_cleanup EXIT
 
-strategy_lab_capture_initial_service_state || \
-    circular_fail 'Zapret2 initial state is incomplete' incomplete_state
+strategy_lab_capture_initial_service_state || circular_fail 'Zapret2 initial state is incomplete' incomplete_state
 INITIAL_STATE="${STRATEGY_LAB_INITIAL_SERVICE_STATE}"
-strategy_lab_circular_state_write preparing "${JOB_ID}" \
-    'Stopping Zapret2 and preparing circular profile' "${CIRCULAR_COUNT}" ''
-strategy_lab_stop_normal_service || \
-    circular_fail 'Zapret2 could not be stopped' stop_failed
-strategy_lab_candidate_cleanup "${JOB_ID}" || \
-    circular_fail 'Previous temporary Strategy Lab runtime could not be cleaned' cleanup_failed
-strategy_lab_circular_build_profile "${JOB_ID}" || \
-    circular_fail 'Circular profile could not be built' profile_failed
+strategy_lab_circular_state_write preparing "${JOB_ID}" 'Stopping Zapret2 and preparing circular profile' "${CIRCULAR_COUNT}" ''
+strategy_lab_stop_normal_service || circular_fail 'Zapret2 could not be stopped' stop_failed
+strategy_lab_candidate_cleanup "${JOB_ID}" || circular_fail 'Previous temporary Strategy Lab runtime could not be cleaned' cleanup_failed
+strategy_lab_circular_build_profile "${JOB_ID}" || circular_fail 'Circular profile could not be built' profile_failed
 CIRCULAR_RUNTIME=$(strategy_lab_candidate_runtime_dir "${JOB_ID}")
 CIRCULAR_ADDRESSES=$(strategy_lab_candidate_addresses_file "${JOB_ID}")
 CIRCULAR_ENDPOINTS=$(strategy_lab_circular_endpoints_file "${JOB_ID}")
-CIRCULAR_WAN=$(strategy_lab_candidate_resolve_wan) || \
-    circular_fail 'WAN interface could not be resolved' wan_failed
-strategy_lab_candidate_resolve_addresses "${CIRCULAR_ENDPOINTS}" \
-    "${CIRCULAR_ADDRESSES}" "${CIRCULAR_RUNTIME}" || \
-    circular_fail 'Circular target addresses could not be resolved' resolve_failed
-strategy_lab_circular_install_firewall "${CIRCULAR_ADDRESSES}" "${CIRCULAR_WAN}" || \
-    circular_fail 'Circular firewall rules could not be installed' firewall_failed
-strategy_lab_candidate_start "${JOB_ID}" || \
-    circular_fail 'Temporary circular dvtws2 could not be started' runtime_failed
-strategy_lab_circular_state_write running "${JOB_ID}" \
-    'Temporary circular validation is active' "${CIRCULAR_COUNT}" ''
+CIRCULAR_WAN=$(strategy_lab_candidate_resolve_wan) || circular_fail 'WAN interface could not be resolved' wan_failed
+strategy_lab_candidate_resolve_addresses "${CIRCULAR_ENDPOINTS}" "${CIRCULAR_ADDRESSES}" "${CIRCULAR_RUNTIME}" || circular_fail 'Circular target addresses could not be resolved' resolve_failed
+strategy_lab_circular_install_firewall "${CIRCULAR_ADDRESSES}" "${CIRCULAR_WAN}" || circular_fail 'Circular firewall rules could not be installed' firewall_failed
+strategy_lab_candidate_start "${JOB_ID}" || circular_fail 'Temporary circular dvtws2 could not be started' runtime_failed
+strategy_lab_circular_state_write running "${JOB_ID}" 'Temporary circular validation is active' "${CIRCULAR_COUNT}" ''
 
 elapsed=0
 while [ "${elapsed}" -lt "${STRATEGY_LAB_CIRCULAR_TTL}" ]
@@ -109,8 +98,7 @@ do
         FINAL_REASON=requested
         exit 0
     fi
-    strategy_lab_candidate_process_running "$(strategy_lab_candidate_pid_file "${JOB_ID}")" || \
-        circular_fail 'Temporary circular dvtws2 stopped unexpectedly' runtime_failed
+    strategy_lab_candidate_process_running "$(strategy_lab_candidate_pid_file "${JOB_ID}")" || circular_fail 'Temporary circular dvtws2 stopped unexpectedly' runtime_failed
     sleep 1
     elapsed=$((elapsed + 1))
 done

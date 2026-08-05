@@ -31,10 +31,11 @@ Audited source: `main` at `a95fcc33b2bdd97830fe5cd44090ae189a141dfa` (`0.3.2_24`
 
 ## Hardening progress
 
-- Findings 2, 3, 7, 8, 9, 10 and the runtime-safety portions of findings 1, 4, and 5 are implemented and verified by Patches `_26`–`_33`.
-- Patch `_34` implements the source correction for finding 6: a self-contained profile is generated from the exact tested fragment and static target selector, runtime-only arguments are excluded, and only profiles that pass three sequential exact-profile replays enter the shortlist.
-- Finding 6 remains pending until Patch `_34` completes all required GitHub checks and the remote commit is verified.
-- Finding 14 is the next ordered search-quality scope after `_34`; later findings remain open.
+- Findings 2, 3, 6, 7, 8, 9, 10 and the runtime-safety portions of findings 1, 4, and 5 are implemented and verified by Patches `_26`–`_34`.
+- Patch `_35` implements the source correction for the shortlist half of finding 14: verified TLS 1.3, TLS 1.2, HTTP, QUIC, and configured UDP profiles are collected, exact-replayed, and selected through one deterministic final shortlist contract.
+- The UDP input half of finding 14 remains open and is deliberately reserved for Patch `_36` because the current supported GUI/API request does not yet carry UDP port and payload input.
+- Patch `_35` remains pending until all required GitHub checks and the remote commit are verified.
+- Findings 11–13 and 15 remain open.
 
 ## Explicit exclusion
 
