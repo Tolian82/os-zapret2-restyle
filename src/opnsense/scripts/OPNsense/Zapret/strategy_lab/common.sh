@@ -5,6 +5,7 @@ STRATEGY_LAB_RUN_DIR="${STRATEGY_LAB_RUN_DIR:-/var/run/zapret2-restyle/strategy-
 STRATEGY_LAB_LOG_DIR="${STRATEGY_LAB_LOG_DIR:-/var/log/zapret2/strategy-lab}"
 STRATEGY_LAB_JOBS_DIR="${STRATEGY_LAB_JOBS_DIR:-${STRATEGY_LAB_RUN_DIR}/jobs}"
 STRATEGY_LAB_ACTIVE_FILE="${STRATEGY_LAB_ACTIVE_FILE:-${STRATEGY_LAB_RUN_DIR}/active.job}"
+STRATEGY_LAB_LATEST_FILE="${STRATEGY_LAB_LATEST_FILE:-${STRATEGY_LAB_RUN_DIR}/latest.job}"
 STRATEGY_LAB_LOCK_FILE="${STRATEGY_LAB_LOCK_FILE:-${STRATEGY_LAB_RUN_DIR}/launcher.lock}"
 STRATEGY_LAB_PS_BIN="${STRATEGY_LAB_PS_BIN:-/bin/ps}"
 
@@ -63,16 +64,33 @@ strategy_lab_atomic_write()
     mv -f "${_strategy_lab_tmp}" "${_strategy_lab_path}"
 }
 
-strategy_lab_read_active_job()
+strategy_lab_read_pointer()
 {
-    _strategy_lab_active=""
-    [ -r "${STRATEGY_LAB_ACTIVE_FILE}" ] || return 1
-    IFS= read -r _strategy_lab_active < "${STRATEGY_LAB_ACTIVE_FILE}" || true
-    strategy_lab_job_id_valid "${_strategy_lab_active}" || return 1
-    printf '%s\n' "${_strategy_lab_active}"
+    _strategy_lab_pointer="$1"
+    _strategy_lab_value=''
+    [ -r "${_strategy_lab_pointer}" ] || return 1
+    IFS= read -r _strategy_lab_value < "${_strategy_lab_pointer}" || true
+    strategy_lab_job_id_valid "${_strategy_lab_value}" || return 1
+    [ -r "$(strategy_lab_status_file "${_strategy_lab_value}")" ] || return 1
+    printf '%s\n' "${_strategy_lab_value}"
 }
 
-strategy_lab_write_active_job() { printf '%s\n' "$1" | strategy_lab_atomic_write "${STRATEGY_LAB_ACTIVE_FILE}"; }
+strategy_lab_write_pointer()
+{
+    _strategy_lab_pointer="$1"
+    _strategy_lab_job="$2"
+    strategy_lab_job_id_valid "${_strategy_lab_job}" || return 1
+    printf '%s\n' "${_strategy_lab_job}" | strategy_lab_atomic_write "${_strategy_lab_pointer}"
+}
+
+strategy_lab_read_active_job()
+{
+    strategy_lab_read_pointer "${STRATEGY_LAB_ACTIVE_FILE}"
+}
+
+strategy_lab_write_active_job() { strategy_lab_write_pointer "${STRATEGY_LAB_ACTIVE_FILE}" "$1"; }
+strategy_lab_read_latest_job() { strategy_lab_read_pointer "${STRATEGY_LAB_LATEST_FILE}"; }
+strategy_lab_write_latest_job() { strategy_lab_write_pointer "${STRATEGY_LAB_LATEST_FILE}" "$1"; }
 
 strategy_lab_clear_active_job()
 {

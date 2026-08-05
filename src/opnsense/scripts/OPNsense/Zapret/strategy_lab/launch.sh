@@ -140,6 +140,12 @@ start_job()
         return 1
     fi
 
+    strategy_lab_write_latest_job "${_strategy_lab_job}" || {
+        strategy_lab_udp_input_cleanup "${_strategy_lab_job}" || true
+        rm -rf "${_strategy_lab_jobdir}"
+        emit_error_json "Strategy Lab latest-job pointer could not be written"
+        return 1
+    }
     strategy_lab_write_active_job "${_strategy_lab_job}"
     _strategy_lab_log=$(strategy_lab_log_file "${_strategy_lab_job}")
     _strategy_lab_pid=$(strategy_lab_pid_file "${_strategy_lab_job}")
