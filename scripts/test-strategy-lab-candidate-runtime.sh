@@ -60,11 +60,29 @@ cat > "${TMP}/bin/nc" <<'SH'
 #!/bin/sh
 exit 0
 SH
-cat > "${TMP}/bin/dvtws2" <<'SH'
-#!/bin/sh
-trap 'exit 0' TERM INT
-while :; do sleep 30; done
-SH
+cat > "${TMP}/dvtws2.c" <<'C'
+#include <signal.h>
+#include <unistd.h>
+
+static volatile sig_atomic_t running = 1;
+
+static void stop_runtime(int signal_number)
+{
+    (void)signal_number;
+    running = 0;
+}
+
+int main(void)
+{
+    signal(SIGTERM, stop_runtime);
+    signal(SIGINT, stop_runtime);
+    while (running) {
+        pause();
+    }
+    return 0;
+}
+C
+${CC:-cc} -O2 -o "${TMP}/bin/dvtws2" "${TMP}/dvtws2.c"
 cat > "${TMP}/bin/daemon" <<'SH'
 #!/bin/sh
 pidfile=
@@ -79,6 +97,18 @@ while [ "$#" -gt 0 ]; do
 done
 "$@" >> "$logfile" 2>&1 &
 echo $! > "$pidfile"
+SH
+cat > "${TMP}/bin/sockstat" <<'SH'
+#!/bin/sh
+pidfile=${MOCK_DVTWS_PIDFILE:?}
+[ -r "$pidfile" ] || exit 0
+IFS= read -r pid < "$pidfile" || exit 0
+kill -0 "$pid" 2>/dev/null || exit 0
+state=$(ps -p "$pid" -o stat= 2>/dev/null || true)
+case "$state" in
+    ''|*Z*) exit 0 ;;
+esac
+printf 'nobody dvtws2 %s 3 div4 *:9989 *:*\n' "$pid"
 SH
 chmod +x "${TMP}/bin/"*
 : > "${TMP}/ipfw.state"
@@ -99,15 +129,18 @@ export STRATEGY_LAB_KLDSTAT_BIN="${TMP}/bin/kldstat"
 export STRATEGY_LAB_SYSCTL_BIN="${TMP}/bin/sysctl"
 export STRATEGY_LAB_DVTWS_BIN="${TMP}/bin/dvtws2"
 export STRATEGY_LAB_DAEMON_BIN="${TMP}/bin/daemon"
+export STRATEGY_LAB_SOCKSTAT_BIN="${TMP}/bin/sockstat"
+export STRATEGY_LAB_NETSTAT_BIN=/nonexistent
 export STRATEGY_LAB_LUA_DIR="${TMP}/lua"
 export STRATEGY_LAB_WAN_DEVICE=mock0
 export MOCK_IPFW_STATE="${TMP}/ipfw.state"
 export MOCK_IPFW_LOG="${TMP}/ipfw.log"
+export MOCK_DVTWS_PIDFILE="${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.pid"
 
 "${SCRIPT_DIR}/strategy_lab_candidate_runner.sh" job.test "${TMP}/endpoints.txt" "${TMP}/result.json"
 /usr/bin/jq -e '.all_pass == true and (.endpoints|length)==2' "${TMP}/result.json" >/dev/null
 [ ! -s "${TMP}/ipfw.state" ]
-[ ! -e "${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.pid" ]
+[ ! -e "${MOCK_DVTWS_PIDFILE}" ]
 ! pgrep -f "${TMP}/bin/dvtws2" >/dev/null 2>&1
 
 grep -q 'add 19100 divert 9989 tcp from any to 203.0.113.10 443' "${TMP}/ipfw.log"
@@ -123,7 +156,7 @@ if "${SCRIPT_DIR}/strategy_lab_candidate_runner.sh" job.test "${TMP}/endpoints.t
     exit 1
 fi
 [ ! -s "${TMP}/ipfw.state" ]
-[ ! -e "${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.pid" ]
+[ ! -e "${MOCK_DVTWS_PIDFILE}" ]
 ! pgrep -f "${TMP}/bin/dvtws2" >/dev/null 2>&1
 
 echo 'Strategy Lab candidate runtime failure cleanup contract passed.'
