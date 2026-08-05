@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+STRATEGY_LAB_JQ=$(command -v jq)
+export STRATEGY_LAB_JQ
 TEST_SCRIPT="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/test_domain.sh"
 CONTROLLER="${ROOT_DIR}/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/DiagnosticsController.php"
 TMP_ROOT=$(mktemp -d)
@@ -39,7 +41,7 @@ grep -Fq "if (trim(\$response) === '')" "${CONTROLLER}"
 grep -Fq 'Domain connectivity test returned no output.' "${CONTROLLER}"
 for test in job-contract target-contract candidate-runtime family-screening parameter-expansion \
     stability-shortlist extended-tcp quic udp time-budget semantic-restoration \
-    circular diagnostics-activation
+    circular diagnostics-activation e2e
 do
     sh "${ROOT_DIR}/scripts/test-strategy-lab-${test}.sh"
 done

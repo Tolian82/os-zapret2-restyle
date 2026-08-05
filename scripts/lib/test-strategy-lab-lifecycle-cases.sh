@@ -159,8 +159,15 @@ unauthorized_status=$?
 set -e
 [ "${unauthorized_status}" -eq 77 ] || fail "internal lifecycle action worked without inherited lock ownership"
 
+latest=$(launcher status)
+printf '%s\n' "${latest}" | jq -e --arg job "${job}" '.job_id==$job' >/dev/null ||
+    fail "latest persisted job was not recovered"
+mv "${RUN_DIR}/jobs" "${RUN_DIR}/jobs.saved"
+mkdir -p "${RUN_DIR}/jobs"
 idle=$(launcher status)
-printf '%s\n' "${idle}" | jq -e '.status=="idle"' >/dev/null || fail "idle state was not reported"
+printf '%s\n' "${idle}" | jq -e '.status=="idle"' >/dev/null || fail "empty job store did not report idle"
+rm -rf "${RUN_DIR}/jobs"
+mv "${RUN_DIR}/jobs.saved" "${RUN_DIR}/jobs"
 set +e
 invalid=$(launcher start 'bad/target' standard en 2>&1)
 invalid_status=$?

@@ -3,9 +3,9 @@
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Current package candidate: `os-zapret2-restyle-0.3.2_23.pkg`
+Current package candidate: `os-zapret2-restyle-0.3.2_24.pkg`
 
-Patches 1–13 of the initial Strategy Lab delivery are complete. Corrective Patches 1–9 are complete in source.
+Patches 1–13 of the initial Strategy Lab delivery are complete. Corrective Patches 1–10 are complete in source.
 
 Completed corrective contracts:
 
@@ -28,12 +28,13 @@ Completed corrective contracts:
 - circular eligibility requires completed `SUCCESS`, a domain target, stages 85/90 PASS, verified restoration, and a valid 3–5 item shortlist;
 - GUI circular controls follow the persisted backend decision only;
 - Diagnostics guidance states the enforced 150/270-second limits;
-- API, shell, probes, and GUI now use one normalized domain-only target contract;
-- bare IP, IPv6, URL, host:port, and malformed target inputs are rejected.
+- API, shell, probes, and GUI use one normalized domain-only target contract;
+- bare IP, IPv6, URL, host:port, and malformed target inputs are rejected;
+- a mock-driven API/configd-to-worker integration gate covers stages 00–99, results, recovery, circular validation, lifecycle outcomes, and cleanup;
+- `status -` recovers the newest persisted job after page reload.
 
-Open corrective findings:
+Open corrective finding:
 
-- tests do not yet execute the complete API-to-worker state machine;
 - stale repository artifacts and superseded documentation remain to be cleaned.
 
 Corrective authority:
@@ -42,6 +43,6 @@ Corrective authority:
 - `docs/decisions/DEC-2026-08-05-strategy-lab-corrective-series.md`;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-CORRECTIVE.md`.
 
-`VERSION=0.3.2`; `PLUGIN_REVISION=23`. No tag, release, release asset, or pkg-repository publication is authorized while the corrective series is active.
+`VERSION=0.3.2`; `PLUGIN_REVISION=24`. No tag, release, release asset, or pkg-repository publication is authorized while the corrective series is active.
 
-Next action: Corrective Patch 10 — complete API-to-worker integration regression harness. Owner-assisted live OPNsense verification remains deferred until every corrective implementation patch has completed the serial GitHub delivery gate.
+Next action: Corrective Patch 11 — repository hygiene and documentation authority cleanup. Owner-assisted live OPNsense verification remains deferred until the corrective source series and its serial GitHub delivery gate are complete.
