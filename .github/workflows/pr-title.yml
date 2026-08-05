@@ -8,36 +8,63 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   validate-title:
-    name: Validate package version in title
+    name: Validate pull-request title
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      - name: Require exact package candidate prefix
+      - name: Validate title for the changed scope
         shell: bash
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
 
+          changed=$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")
+          packaged=false
+          if printf '%s\n' "${changed}" | grep -Eq '^(VERSION|Makefile|pkg/|src/|repository/|scripts/build-pkg\.sh$)'; then
+            packaged=true
+          fi
+
           version=$(tr -d '[:space:]' < VERSION)
           revision=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | head -1)
-
           expected="v${version}"
           if [[ -n "${revision}" && "${revision}" != "0" ]]; then
             expected="${expected}_${revision}"
           fi
 
+          if [[ "${packaged}" == "true" ]]; then
+            case "${PR_TITLE}" in
+              "${expected}: "*)
+                echo "Packaged-change title matches ${expected}."
+                ;;
+              *)
+                echo "Invalid packaged-change title: ${PR_TITLE}" >&2
+                echo "Required format: ${expected}: <logical change>" >&2
+                exit 1
+                ;;
+            esac
+            exit 0
+          fi
+
           case "${PR_TITLE}" in
-            "${expected}: "*)
-              echo "Pull-request title matches package candidate ${expected}."
+            "${expected}: "*|"governance: "*|"docs: "*|"ci: "*|"chore: "*)
+              echo "Governance/documentation title is valid."
               ;;
             *)
-              echo "Invalid pull-request title: ${PR_TITLE}" >&2
-              echo "Required format: ${expected}: <logical change>" >&2
+              echo "Invalid governance/documentation title: ${PR_TITLE}" >&2
+              echo "Use ${expected}: ..., governance: ..., docs: ..., ci: ..., or chore: ..." >&2
               exit 1
               ;;
           esac

@@ -1,15 +1,66 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Classify changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      package: ${{ steps.paths.outputs.package }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect packaged-plugin changes
+        id: paths
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            base_sha="${PR_BASE_SHA}"
+            head_sha="${PR_HEAD_SHA}"
+          else
+            base_sha="${PUSH_BEFORE_SHA}"
+            head_sha="${CURRENT_SHA}"
+          fi
+
+          if [[ -z "${base_sha}" || "${base_sha}" =~ ^0+$ ]]; then
+            base_sha="${head_sha}^"
+          fi
+
+          changed=$(git diff --name-only "${base_sha}" "${head_sha}")
+          printf '%s\n' "${changed}"
+
+          package=false
+          if printf '%s\n' "${changed}" | grep -Eq '^(VERSION|Makefile|pkg/|src/|repository/|scripts/build-pkg\.sh$)'; then
+            package=true
+          fi
+
+          echo "package=${package}" >> "${GITHUB_OUTPUT}"
+
   validate:
     name: Validate Project
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
+    needs: changes
 
     steps:
       - uses: actions/checkout@v6
@@ -89,7 +140,7 @@ jobs:
       - name: Test Node 24 release actions
         run: sh scripts/test-release-node24-actions.sh
 
-      - name: Test GitHub branch hygiene contract
+      - name: Test GitHub delivery governance
         run: sh scripts/test-github-branch-hygiene.sh
 
       - name: Test repository artifact hygiene
@@ -112,6 +163,7 @@ jobs:
             docs/ARCHITECTURE.md \
             docs/DEVLOG.md \
             docs/GITHUB_PUBLICATION.md \
+            docs/decisions/DEC-2026-08-05-efficient-github-delivery.md \
             docs/patches/v0.3.2_2.md \
             docs/patches/v0.3.2_3.md \
             docs/devlog/2026-08-04-blockcheck-guidance-localization.md \
@@ -143,35 +195,19 @@ jobs:
             }
           done
 
-          test -x scripts/build-pkg.sh || {
-            echo "scripts/build-pkg.sh is not executable"
-            exit 1
-          }
-
-          test -x scripts/test-release-trigger.sh || {
-            echo "scripts/test-release-trigger.sh is not executable"
-            exit 1
-          }
-
-          test -x scripts/test-package-lifecycle-restart.sh || {
-            echo "scripts/test-package-lifecycle-restart.sh is not executable"
-            exit 1
-          }
-
-          test -x scripts/test-diagnostics-guidance-localization.sh || {
-            echo "scripts/test-diagnostics-guidance-localization.sh is not executable"
-            exit 1
-          }
-
-          test -x scripts/test-github-branch-hygiene.sh || {
-            echo "scripts/test-github-branch-hygiene.sh is not executable"
-            exit 1
-          }
-
-          test -x scripts/test-repository-hygiene.sh || {
-            echo "scripts/test-repository-hygiene.sh is not executable"
-            exit 1
-          }
+          for file in \
+            scripts/build-pkg.sh \
+            scripts/test-release-trigger.sh \
+            scripts/test-package-lifecycle-restart.sh \
+            scripts/test-diagnostics-guidance-localization.sh \
+            scripts/test-github-branch-hygiene.sh \
+            scripts/test-repository-hygiene.sh
+          do
+            test -x "${file}" || {
+              echo "Required executable is not executable: ${file}"
+              exit 1
+            }
+          done
 
       - name: Check repository independence
         run: |
@@ -192,8 +228,9 @@ jobs:
 
   package:
     name: Build FreeBSD package
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.package == 'true' }}
     runs-on: ubuntu-latest
-    needs: validate
+    needs: [changes, validate]
 
     steps:
       - uses: actions/checkout@v6
@@ -236,3 +273,32 @@ jobs:
           name: os-zapret2-restyle-${{ steps.version.outputs.version }}
           path: dist/os-zapret2-restyle-*.pkg
           if-no-files-found: error
+
+  main-integrity:
+    name: Verify main integrity
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    needs: changes
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Check committed diff and core identity
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${BEFORE_SHA}" && ! "${BEFORE_SHA}" =~ ^0+$ ]]; then
+            git diff --check "${BEFORE_SHA}" "${CURRENT_SHA}"
+          fi
+
+          VERSION_VALUE=$(tr -d '[:space:]' < VERSION)
+          [[ "${VERSION_VALUE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          grep -Eq '^PLUGIN_NAME=[[:space:]]+zapret2-restyle$' Makefile
+          sh -n scripts/test-github-branch-hygiene.sh
+          sh scripts/test-github-branch-hygiene.sh
