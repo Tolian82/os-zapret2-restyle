@@ -21,12 +21,19 @@ The session contains:
 - `shortlist.json` — snapshot of the TLS 1.3 circular candidate set;
 - `endpoints.txt` — snapshot of parent endpoints;
 - `state.json` — circular lifecycle and restoration evidence;
-- `worker.pid`, `stop`, and `worker.log`;
+- `worker.pid`, `stop.request`, and `worker.log`;
 - `candidate-runtime/` — session-only dvtws2 arguments, PID, log, hostlist, and addresses;
 - lifecycle snapshot and restoration evidence created by the shared lifecycle helpers.
 
-The global circular directory contains only `active.session`, `latest.session`, and the
-session collection. Parent job directories are read only.
+The global circular directory contains `active.session`, `latest.session`, the session
+collection, and two transition-only symlink aliases:
+
+- `state.json -> sessions/<active-or-latest>/state.json`;
+- `stop -> sessions/<active>/stop.request`.
+
+The aliases do not store independent state and never point into a parent job. They retain
+compatibility with the pre-isolation internal runner and are scheduled for removal with
+the obsolete compatibility surfaces in revision 43. Parent job directories are read only.
 
 ## Immutability contract
 
@@ -55,7 +62,8 @@ and future circular evidence are not discarded by a later state transition.
 
 Session directories and snapshots are private (`0700` directory, `0600` files). The
 browser never receives a filesystem path. Existing API calls continue using the parent
-job identifier.
+job identifier. Compatibility aliases are created only by the root-owned launcher inside
+the root-owned runtime directory.
 
 ## Verification
 
@@ -68,3 +76,6 @@ The focused circular contract test proves:
 - state transitions preserve previously recorded evidence;
 - lifecycle-lock failure is written only to the session state;
 - circular firewall behavior remains intentionally client-wide.
+
+The end-to-end fixture additionally proves that the transitional aliases resolve to the
+same private session state and stop control rather than creating a second state model.
