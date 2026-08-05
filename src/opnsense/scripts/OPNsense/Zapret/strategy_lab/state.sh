@@ -33,6 +33,7 @@ strategy_lab_initialize_state()
             language: $language,
             initial_service_state: "",
             cancel_requested: false,
+            cancel_requested_at: "",
             current_stage: "00",
             message: "",
             stages: [
@@ -51,7 +52,6 @@ strategy_lab_initialize_state()
             ]
         }' | strategy_lab_atomic_write "${_strategy_lab_status}"
 }
-
 
 strategy_lab_set_target_contract()
 {
@@ -124,6 +124,31 @@ strategy_lab_set_candidate_smoke_result()
     mv -f "${_strategy_lab_tmp}" "${_strategy_lab_status}"
 }
 
+strategy_lab_request_cancel()
+{
+    _strategy_lab_job="$1"
+    _strategy_lab_message="$2"
+    _strategy_lab_status=$(strategy_lab_status_file "${_strategy_lab_job}")
+    _strategy_lab_tmp=$(mktemp "$(dirname "${_strategy_lab_status}")/.cancel-state.XXXXXX") || return 1
+    _strategy_lab_requested_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+    "${STRATEGY_LAB_JQ}" \
+        --arg requested_at "${_strategy_lab_requested_at}" \
+        --arg message "${_strategy_lab_message}" \
+        'if (.state=="queued" or .state=="running" or .state=="cancel_requested") then
+             .state="cancel_requested" |
+             .cancel_requested=true |
+             .cancel_requested_at=(if ((.cancel_requested_at // "") | length) > 0 then .cancel_requested_at else $requested_at end) |
+             .message=$message
+         else . end' \
+        "${_strategy_lab_status}" > "${_strategy_lab_tmp}" || {
+            rm -f "${_strategy_lab_tmp}"
+            return 1
+        }
+    chmod 0644 "${_strategy_lab_tmp}"
+    mv -f "${_strategy_lab_tmp}" "${_strategy_lab_status}"
+}
+
 strategy_lab_update_job()
 {
     _strategy_lab_job="$1"
@@ -141,8 +166,10 @@ strategy_lab_update_job()
         --arg stage "${_strategy_lab_stage}" \
         --argjson canceled "${_strategy_lab_canceled}" \
         --arg message "${_strategy_lab_message}" \
-        '.state=$state | .outcome=$outcome | .current_stage=$stage |
-         .cancel_requested=$canceled | .message=$message' \
+        '(.cancel_requested // false) as $existing_cancel |
+         .state=(if $existing_cancel and ($state=="queued" or $state=="running") then "cancel_requested" else $state end) |
+         .outcome=$outcome | .current_stage=$stage |
+         .cancel_requested=($existing_cancel or $canceled) | .message=$message' \
         "${_strategy_lab_status}" > "${_strategy_lab_tmp}" || {
             rm -f "${_strategy_lab_tmp}"
             return 1

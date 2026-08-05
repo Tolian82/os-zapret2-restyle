@@ -34,6 +34,17 @@ grep -Fq "'strategy_lab_start'" "${LAB}" || fail 'Strategy Lab backend start act
 grep -Fq "'strategy_lab_result'" "${LAB}" || fail 'Strategy Lab backend result action missing'
 grep -Fq "'strategy_lab_circular_start'" "${CIRCULAR}" || fail 'circular backend start action missing'
 grep -Fq "'strategy_lab_circular_stop'" "${CIRCULAR}" || fail 'circular backend stop action missing'
-grep -Eq '^PLUGIN_REVISION=[[:space:]]+15$' "${MAKEFILE}" || fail 'package revision is not 15'
+
+plugin_revision=$(awk -F= '
+    /^PLUGIN_REVISION=/ {
+        gsub(/[[:space:]]/, "", $2)
+        print $2
+        exit
+    }
+' "${MAKEFILE}")
+case "${plugin_revision}" in
+    ''|*[!0-9]*) fail 'package revision is not a positive integer' ;;
+esac
+[ "${plugin_revision}" -ge 15 ] || fail 'package revision predates Strategy Lab activation'
 
 echo 'PASS: Diagnostics uses asynchronous Strategy Lab and the synchronous Blockcheck path is retired'

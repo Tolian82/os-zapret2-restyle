@@ -1,6 +1,6 @@
 # os-zapret2-restyle — Roadmap
 
-Current package candidate: `0.3.2_15`.
+Current package candidate: `0.3.2_16`.
 
 ## Initial Strategy Lab delivery
 
@@ -21,7 +21,7 @@ Current package candidate: `0.3.2_15`.
 ## Strategy Lab corrective series
 
 - [x] Corrective Patch 1 — authoritative corrective contract, audit baseline, decision, roadmap, project state, and devlog.
-- [ ] Corrective Patch 2 — atomically persist cancel request state.
+- [x] Corrective Patch 2 — atomically persist localized, timestamped, idempotent cancel request state.
 - [ ] Corrective Patch 3 — cancellation-aware active runners for stages 60, 70, and 80.
 - [ ] Corrective Patch 4 — explicit monotonic stage machine.
 - [ ] Corrective Patch 5 — correct terminal state, outcome, and localized message generation.
