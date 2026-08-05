@@ -83,6 +83,10 @@ contract.
 Immutable parent-result snapshots and independent circular session state, runtime, and
 restoration evidence.
 
+`docs/architecture/STRATEGY_LAB_CIRCULAR_OWNERSHIP.md`
+Dedicated circular launcher serialization, PID-plus-start-token ownership, stale-session
+cleanup, semantic restoration, and retry blocking.
+
 `DEVLOG.md` and `docs/devlog/`
 Completed work and verification evidence.
 
