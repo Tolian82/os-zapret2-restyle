@@ -342,7 +342,7 @@ wait_terminal()
 assert_full_event_order()
 {
     job="$1"
-    events="${RUN_DIR}/jobs/${job}/events.jsonl"
+    events="${RUN_DIR}/jobs/${job}/events.ndjson"
     order=$(jq -r '.stage' "${events}" | awk '!seen[$0]++' | paste -sd, -)
     [ "${order}" = '00,10,20,30,40,50,60,70,80,85,90,99' ] ||
         fail "unexpected stage event order for ${job}: ${order}"
