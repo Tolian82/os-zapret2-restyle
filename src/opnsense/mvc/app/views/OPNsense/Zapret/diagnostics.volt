@@ -222,8 +222,15 @@ $(document).ready(function () {
     });
 
     apiPost('/api/zapret/strategy_lab/status', {job_id:'-'}, function (data) {
-        if (data.job_id && !terminal(data.state)) {
-            activeJobId = data.job_id; setBusy(true); renderJob(data); pollStatus();
+        if (!data.job_id) return;
+        activeJobId = data.job_id;
+        renderJob(data);
+        if (terminal(data.state)) {
+            setBusy(false);
+            fetchResult();
+        } else {
+            setBusy(true);
+            pollStatus();
         }
     });
     toggleUdpInput();
