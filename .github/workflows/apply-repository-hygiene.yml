@@ -21,6 +21,7 @@ jobs:
           set -euo pipefail
           python3 scripts/apply_repository_hygiene.py
           chmod +x scripts/test-repository-hygiene.sh
+          git restore .github/workflows/ci.yml
           rm -f scripts/apply_repository_hygiene.py
           rm -f .github/workflows/apply-repository-hygiene.yml
           git config user.name 'Tolian82'
