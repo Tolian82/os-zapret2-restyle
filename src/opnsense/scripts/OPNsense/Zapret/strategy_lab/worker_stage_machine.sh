@@ -33,7 +33,8 @@ worker_stage_60()
         'Expanding parameters inside accepted TLS 1.3 families' || return 1
 
     _wsm_expansion="${JOB_DIR}/parameter-expansion.json"
-    if "${STRATEGY_LAB_TIMEOUT_BIN}" "${STRATEGY_LAB_STAGE60_TIMEOUT}" \
+    _wsm_timeout=$(worker_budget_timeout_for 60 "${STRATEGY_LAB_STAGE60_TIMEOUT}") || worker_stage_timeout 60
+    if "${STRATEGY_LAB_TIMEOUT_BIN}" "${_wsm_timeout}" \
         "${EXPANSION_RUNNER}" "${JOB_ID}" "${JOB_DIR}/endpoints.txt" \
         "${JOB_DIR}/candidate-smoke.json" "${_wsm_expansion}"
     then
@@ -68,7 +69,8 @@ worker_stage_70()
         'Confirming candidate stability with three sequential fresh-connection attempts' || return 1
 
     _wsm_stability="${JOB_DIR}/stability.json"
-    if "${STRATEGY_LAB_TIMEOUT_BIN}" "${STRATEGY_LAB_STAGE70_TIMEOUT}" \
+    _wsm_timeout=$(worker_budget_timeout_for 70 "${STRATEGY_LAB_STAGE70_TIMEOUT}") || worker_stage_timeout 70
+    if "${STRATEGY_LAB_TIMEOUT_BIN}" "${_wsm_timeout}" \
         "${STABILITY_RUNNER}" "${JOB_ID}" "${JOB_DIR}/endpoints.txt" \
         "${JOB_DIR}/parameter-expansion.json" "${JOB_DIR}/candidate-smoke.json" \
         "${_wsm_stability}"
@@ -99,7 +101,8 @@ worker_stage_80_command()
 {
     _wsm_error="$1"
     shift
-    if "${STRATEGY_LAB_TIMEOUT_BIN}" "${STRATEGY_LAB_STAGE80_TIMEOUT}" "$@"
+    _wsm_timeout=$(worker_budget_timeout_for 80 "${STRATEGY_LAB_STAGE80_TIMEOUT}") || worker_stage_timeout 80
+    if "${STRATEGY_LAB_TIMEOUT_BIN}" "${_wsm_timeout}" "$@"
     then
         _wsm_status=0
     else
@@ -126,6 +129,7 @@ worker_stage_80()
     strategy_lab_update_stage "${JOB_ID}" 80 RUNNING '' || return 1
     strategy_lab_append_event "${JOB_ID}" 80 RUNNING \
         'Testing extended TLS, HTTP, QUIC, and configured UDP branches' || return 1
+    worker_budget_begin_stage80 || worker_stage_timeout 80
 
     _wsm_extended="${JOB_DIR}/extended-tcp.json"
     _wsm_quic="${JOB_DIR}/quic.json"
@@ -164,6 +168,7 @@ worker_stage_80()
 
 worker_stage_85()
 {
+    worker_budget_require 85 || worker_stage_timeout 85
     strategy_lab_update_stage "${JOB_ID}" 85 RUNNING '' || return 1
     strategy_lab_append_event "${JOB_ID}" 85 RUNNING \
         'Building the final stable-candidate shortlist' || return 1
