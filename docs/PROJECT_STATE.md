@@ -30,9 +30,10 @@ Completed corrective contracts:
 
 GitHub governance state:
 
-- `docs/GITHUB_PUBLICATION.md` and
-  `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md` are the active delivery
-  authority;
+- `docs/GITHUB_PUBLICATION.md`,
+  `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`, and
+  `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md` are the active
+  delivery authority;
 - the strict one-commit/one-check-set serial gate is superseded;
 - same-scope repairs remain in one PR, and squash merge provides one logical `main`
   commit;
@@ -41,9 +42,24 @@ GitHub governance state:
 - pull-request concurrency cancels obsolete runs;
 - documentation/governance-only PRs skip the FreeBSD package build;
 - `main` receives a lightweight integrity check instead of a duplicate package build;
+- every PR title, every work or repair commit subject, and every final squash commit
+  subject must begin with the exact current package-candidate prefix;
+- for the current source candidate the required prefix is `v0.3.2_24:`;
+- governance/documentation/CI-only work keeps `VERSION=0.3.2` and
+  `PLUGIN_REVISION=24` unchanged while reusing that prefix;
+- PR title and branch-commit subjects are checked before merge, and the final squash
+  subject is checked after merge on `main`;
 - repository-native auto-merge, squash-only settings, and automatic head-branch deletion
   remain preferred settings; the connector and cleanup workflow remain the current
   fallback where repository settings are not available through the active integration.
+
+Historical correction:
+
+- PR #82 unintentionally weakened the universal title rule and was squash-merged as
+  `governance: modernize GitHub delivery`;
+- that commit remains immutable and is not rewritten;
+- the current corrective patch restores the universal rule forward and adds CI
+  enforcement so the same mistake cannot pass again.
 
 Transition note:
 
@@ -51,6 +67,8 @@ Transition note:
 - do not add another unrelated logical patch to that PR;
 - any serial-delivery decision introduced only by PR #81 is superseded by the active
   governance decision and must not be treated as current authority;
+- before PR #81 can merge, its title, every branch commit subject covered by current CI,
+  and its intended squash subject must comply with the exact package-candidate prefix;
 - finish, split, or reconcile PR #81 against current `main` using the new workflow.
 
 Source status:
@@ -68,7 +86,7 @@ Current product authority:
 - `docs/decisions/DEC-2026-08-05-repository-artifact-hygiene.md`;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-CORRECTIVE.md`.
 
-`VERSION=0.3.2`; `PLUGIN_REVISION=24`. This GitHub governance/CI change is outside the
+`VERSION=0.3.2`; `PLUGIN_REVISION=24`. This GitHub governance/CI correction is outside the
 packaged plugin contents, so package metadata remains unchanged.
 
 Next product action: run the consolidated owner-assisted live OPNsense verification
