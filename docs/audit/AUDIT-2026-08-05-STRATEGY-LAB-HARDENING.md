@@ -2,50 +2,38 @@
 
 Audited source: `main` at `a95fcc33b2bdd97830fe5cd44090ae189a141dfa` (`0.3.2_24`).
 
-## Confirmed strengths
+## Accepted findings
 
-- asynchronous start/status/cancel/result contract;
-- explicit stages 00–99;
-- persistent cancellation and terminal result storage;
-- semantic lifecycle restoration evidence;
-- domain normalization and API/configd integration harness;
-- successful current CI and package build.
-
-## Accepted remaining findings
-
-1. Cooperative budgets do not impose a hard whole-worker deadline.
-2. Candidate cleanup can report success after deleting its PID file without proving process termination or divert-port release.
-3. Residue from a previous abnormal run can contaminate the baseline.
-4. Concurrent status writers can lose updates and terminal state.
-5. Dead workers leave nonterminal jobs and ambiguous active state.
-6. Shortlist items expose a catalog strategy fragment rather than the complete tested Traffic Strategy profile.
-7. Probe success does not prove that the temporary IPFW rule and candidate runtime handled the successful connection.
-8. DNS resolution, firewall installation, and curl may use different addresses; redirects are not bounded by an explicit endpoint contract.
-9. Candidate readiness checks only process existence.
-10. Automated rules currently use `from any`, so normal LAN client traffic can be intercepted during automatic tests.
-11. Circular validation mutates evidence belonging to the completed parent job and has no independent launch serialization.
-12. Settings can be saved while Strategy Lab owns lifecycle state.
-13. Page reload does not render a persisted terminal result.
-14. Extended TLS 1.2/HTTP/QUIC/UDP successes are not unified in the final shortlist; UDP input is not exposed through the supported GUI/API contract.
-15. Progress, localization, retention, and CI coverage are incomplete.
+1. Cooperative budgets lacked a hard whole-worker deadline.
+2. Candidate cleanup lacked proof of process/socket termination.
+3. Previous residue could contaminate baseline.
+4. Concurrent status writers could lose terminal state.
+5. Dead workers left ambiguous active state.
+6. Shortlist exposed incomplete strategy fragments.
+7. Probe success lacked interception evidence.
+8. DNS/firewall/request endpoints could diverge.
+9. Candidate readiness checked process existence only.
+10. Automated rules could intercept LAN traffic.
+11. Circular validation mutated parent evidence and lacked independent ownership.
+12. Settings could save while Strategy Lab owned lifecycle state.
+13. Page reload did not restore a persisted terminal result or structured output.
+14. Extended protocols were not unified and UDP input was not supported.
+15. Progress, localization, retention, and CI coverage were incomplete.
 
 ## Hardening progress
 
-- Findings 2, 3, 6, 7, 8, 9, 10 and the runtime-safety portions of findings 1, 4, and 5 are implemented and verified by Patches `_26`–`_34`.
-- Patch `_35` completes the shortlist half of finding 14.
-- Patch `_36` completes the UDP-input half of finding 14; finding 14 is source-complete.
-- Patches `_37`–`_38` complete finding 11 with immutable parent evidence, private circular sessions, launch serialization, PID-plus-start-token ownership, stale cleanup, verified restoration, and retry blocking after `RESTORE_FAILED`.
-- Patch `_39` completes finding 12 with a fail-closed backend lifecycle guard checked before model mutation and again before save, while shared-lock reconfigure and rollback cover the residual race.
-- Findings 11–12 are source-complete after Patch `_39`.
-- Finding 13 and the remaining portions of finding 15 remain open.
+- Patches `_26`–`_34` address findings 2, 3, 6–10 and runtime-safety portions of 1, 4, and 5.
+- Patches `_35`–`_36` complete finding 14.
+- Patches `_37`–`_38` complete finding 11.
+- Patch `_39` completes finding 12.
+- Patch `_40` completes the persistence/reload half of finding 13 with atomic latest-job selection and terminal-result restoration after page reload.
+- Patch `_41` remains responsible for the structured final-result and copy-profile half of finding 13.
+- Remaining finding 15 work is assigned to revisions `_42`, `_44`, and `_45`; obsolete surfaces are removed in `_43` and final live verification is recorded in `_46`.
 
 ## Explicit exclusion
 
-No corrective work is required for occupancy detection, ownership validation, snapshotting,
-or restoration of IPFW rules `19100–19131`. The range is reserved exclusively for Strategy
-Lab and remains destructively cleaned.
+IPFW rules `19100–19131` remain an exclusive Strategy Lab reservation and are destructively cleaned without external occupancy restoration.
 
 ## Release gate
 
-The hardening series must complete focused source tests and an owner-assisted live OPNsense
-matrix before release preparation.
+The hardening series requires complete source tests and an owner-assisted live OPNsense matrix before release preparation.
