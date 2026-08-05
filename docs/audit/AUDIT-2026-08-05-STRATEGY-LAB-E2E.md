@@ -30,6 +30,7 @@ It validates:
 - persisted terminal JSON;
 - saved Traffic Strategy immutability;
 - latest-job polling recovery after page reload;
+- true `idle` only when neither active nor persisted jobs exist;
 - circular start, status, stop, and cleanup;
 - absence of active-job, candidate-pid, and temporary-process residue.
 
@@ -37,7 +38,7 @@ The integration gate also executes the focused active-cancellation, shared-budge
 
 ## Product correction discovered by the harness
 
-The previous `status -` path returned `idle` once a terminal job cleared the active marker. The query backend now returns the newest persisted job when no active job exists, allowing the existing Diagnostics page reload path to recover terminal progress and results.
+The previous `status -` path returned `idle` once a terminal job cleared the active marker. The query backend now returns the newest persisted job when no active job exists, allowing the existing Diagnostics page reload path to recover terminal progress and results. A completely empty job store still returns `idle`.
 
 ## Remaining boundary
 
