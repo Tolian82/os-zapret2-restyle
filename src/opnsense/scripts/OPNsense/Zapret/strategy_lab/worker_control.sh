@@ -41,6 +41,7 @@ worker_finish()
     strategy_lab_update_job "${JOB_ID}" "${WORKER_FINAL_STATE}" \
         "${WORKER_FINAL_OUTCOME}" 99 "${WORKER_FINAL_CANCELED}" \
         "${WORKER_FINAL_MESSAGE}" || true
+    worker_result_set_circular_eligibility || true
     strategy_lab_clear_active_job "${JOB_ID}"
     exit 0
 }
