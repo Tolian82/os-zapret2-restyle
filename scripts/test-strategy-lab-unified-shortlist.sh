@@ -63,13 +63,24 @@ strategy_lab_ipv4_valid()
 {
     printf '%s\n' "$1" | awk -F. 'NF==4 {for(i=1;i<=4;i++) if($i !~ /^[0-9]+$/ || $i>255) exit 1; ok=1} END{exit !ok}'
 }
-strategy_lab_candidate_runtime_dir(){ printf '%s/jobs/%s/candidate-runtime\n' "${TMP}" "$1"; }
+strategy_lab_candidate_runtime_dir()
+{
+    case "$1" in
+        job.test|job.standard)
+            printf '%s/jobs/%s/candidate-runtime\n' "${TMP}" "$1"
+            ;;
+        *)
+            printf '%s/circular/sessions/%s/candidate-runtime\n' "${TMP}" "$1"
+            ;;
+    esac
+}
 strategy_lab_candidate_args_file(){ printf '%s/args\n' "$(strategy_lab_candidate_runtime_dir "$1")"; }
 strategy_lab_candidate_hostlist_file(){ printf '%s/hostlist.txt\n' "$(strategy_lab_candidate_runtime_dir "$1")"; }
 
 . "${MODULE_DIR}/profile.sh"
 . "${MODULE_DIR}/worker_result.sh"
 . "${MODULE_DIR}/circular.sh"
+strategy_lab_circular_prepare_dir
 
 JOB_DIR="${TMP}/jobs/job.test"
 printf '%s\n' example.com > "${JOB_DIR}/endpoints.txt"
@@ -111,10 +122,13 @@ WORKER_FINAL_OUTCOME=SUCCESS
 worker_result_set_circular_eligibility
 "${STRATEGY_LAB_JQ}" -e '.circular_eligible==true and .circular_eligibility_reason=="eligible" and .circular_candidate_count==3' "${JOB_DIR}/status.json" >/dev/null
 strategy_lab_circular_eligibility job.test >/dev/null
-strategy_lab_circular_build_profile job.test
-CIRCULAR_ARGS=$(strategy_lab_candidate_args_file job.test)
+CIRCULAR_SESSION_ID=$(strategy_lab_circular_session_create job.test)
+strategy_lab_circular_session_validate "${CIRCULAR_SESSION_ID}" job.test
+strategy_lab_circular_build_profile "${CIRCULAR_SESSION_ID}"
+CIRCULAR_ARGS=$(strategy_lab_candidate_args_file "${CIRCULAR_SESSION_ID}")
 [ "$(grep -Ec ':strategy=[1-3]$' "${CIRCULAR_ARGS}")" -eq 3 ]
 if grep -Eq 'pos=2|fake_quic|ipfrag' "${CIRCULAR_ARGS}"; then exit 1; fi
+[ ! -e "${JOB_DIR}/candidate-runtime" ]
 
 STANDARD_DIR="${TMP}/jobs/job.standard"
 printf '%s\n' example.com > "${STANDARD_DIR}/endpoints.txt"
