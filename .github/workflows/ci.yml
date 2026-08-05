@@ -164,6 +164,8 @@ jobs:
             docs/DEVLOG.md \
             docs/GITHUB_PUBLICATION.md \
             docs/decisions/DEC-2026-08-05-efficient-github-delivery.md \
+            docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md \
+            docs/devlog/2026-08-05-universal-versioned-github-titles.md \
             docs/patches/v0.3.2_2.md \
             docs/patches/v0.3.2_3.md \
             docs/devlog/2026-08-04-blockcheck-guidance-localization.md \
@@ -285,7 +287,7 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Check committed diff and core identity
+      - name: Check committed diff, title identity, and core identity
         shell: bash
         env:
           BEFORE_SHA: ${{ github.event.before }}
@@ -298,7 +300,27 @@ jobs:
           fi
 
           VERSION_VALUE=$(tr -d '[:space:]' < VERSION)
+          REVISION=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | head -1)
           [[ "${VERSION_VALUE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          printf '%s\n' "${REVISION}" | grep -Eq '^[0-9]+$'
+
+          EXPECTED="v${VERSION_VALUE}"
+          if [[ -n "${REVISION}" && "${REVISION}" != "0" ]]; then
+            EXPECTED="${EXPECTED}_${REVISION}"
+          fi
+
+          SUBJECT=$(git show -s --format=%s "${CURRENT_SHA}")
+          case "${SUBJECT}" in
+            "${EXPECTED}: "*)
+              echo "Main commit subject matches package candidate ${EXPECTED}."
+              ;;
+            *)
+              echo "Invalid main commit subject: ${SUBJECT}" >&2
+              echo "Required format: ${EXPECTED}: <logical change>" >&2
+              exit 1
+              ;;
+          esac
+
           grep -Eq '^PLUGIN_NAME=[[:space:]]+zapret2-restyle$' Makefile
           sh -n scripts/test-github-branch-hygiene.sh
           sh scripts/test-github-branch-hygiene.sh
