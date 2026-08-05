@@ -260,16 +260,15 @@ printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="30" and .status=
 printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="90" and .status=="PASS")' >/dev/null ||
     fail "IPv4 control failure did not restore service state"
 
-# IPv4 target uses an explicit TCP/443 baseline without pretending to have DNS or SNI.
+# Bare IPv4 is rejected because Strategy Lab requires domain, DNS, SNI, and HTTPS semantics.
 unset MOCK_IPV4_CONTROL_STATUS
-MOCK_NC_STATUS=1
-export MOCK_NC_STATUS
-result=$(run_job 203.0.113.9 ru)
-printf '%s\n' "${result}" | jq -e '.target_type=="ip" and .baseline.dns_a=="SKIPPED" and .baseline.endpoints[0].transport=="tcp-443"' >/dev/null ||
-    fail "IP target baseline contract is incorrect"
-printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="40" and .message=="PASS — Прямое TCP/443-подключение к IP-цели не установлено.")' >/dev/null ||
-    fail "Russian IP baseline summary is incorrect"
-
+set +e
+ip_result=$(launcher start 203.0.113.9 standard ru 2>&1)
+ip_status=$?
+set -e
+[ "${ip_status}" -eq 64 ] || fail "bare IPv4 target was accepted"
+printf '%s\n' "${ip_result}" | grep -Fq 'invalid target' ||
+    fail "bare IPv4 rejection reason is missing"
 
 # Stage budget is enforced independently from individual operation limits.
 unset MOCK_NC_STATUS
