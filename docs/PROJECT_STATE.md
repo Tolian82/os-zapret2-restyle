@@ -3,13 +3,21 @@
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Current package candidate: `os-zapret2-restyle-0.3.2_14.pkg`
+Current package candidate: `os-zapret2-restyle-0.3.2_15.pkg`
 
-- Patches 1–11: complete and merged.
-- Patch 11 merged as `c178106c02ee1fc3c849a6d174fe881d84c4a704`; task branch removed.
-- Patch 12: temporary circular live validation in delivery.
-- Patch 13: blocked by the serial gate.
+Patches 1–13 are complete. Patch 13 activates Strategy Lab on the Diagnostics page and retires the synchronous Blockcheck integration.
 
-Patch 12 adds a separate temporary circular-validation session for a completed domain Strategy Lab job with a shortlist of three to five stable candidates. It uses one target-scoped dvtws2 runtime, upstream Zapret2 `circular`, bidirectional firewall interception, a bounded TTL, explicit stop/status actions, and mandatory restoration of the exact initial Zapret2 service state. It never changes the saved Traffic Strategy. `VERSION=0.3.2`; `PLUGIN_REVISION=14`; no release publication is authorized.
+Active Diagnostics architecture:
 
-Next action: completely process Patch 12 before Patch 13.
+- domain connectivity remains a short synchronous probe;
+- Strategy Lab starts an asynchronous job and returns `job_id`;
+- the GUI polls status every second and renders stage progress;
+- cancellation preserves partial results and cannot bypass stage 90 restoration;
+- completed jobs expose a stable shortlist and recommendation number one;
+- domain shortlists of three to five candidates can start temporary circular validation;
+- circular validation never modifies the saved Traffic Strategy;
+- the old `blockcheck.sh`, configd `blockcheck` action, API action, and ten-minute AJAX request are removed.
+
+`VERSION=0.3.2`; `PLUGIN_REVISION=15`. No tag, release, release asset, or pkg-repository publication is authorized by this patch series.
+
+Next action: owner-assisted live OPNsense verification of package candidate `0.3.2_15`, followed by a separately authorized release decision.
