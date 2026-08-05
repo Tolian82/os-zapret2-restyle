@@ -1,0 +1,37 @@
+name: Fix Patch 76 lifecycle fixture
+
+on:
+  push:
+    paths:
+      - .github/workflows/fix-patch76-lifecycle-fixture.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/strategy-lab-semantic-restoration
+      - name: Update fixture and remove workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/lib/test-strategy-lab-lifecycle-cases.sh')
+          text = path.read_text()
+          old = "grep -Fq 'strategy-lab-status|strategy-lab-stop|strategy-lab-start' \"${SERVICE_SOURCE}\" ||"
+          new = "grep -Fq 'strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start' \"${SERVICE_SOURCE}\" ||"
+          if old not in text:
+              raise SystemExit('expected lifecycle fixture assertion not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          rm -f .github/workflows/fix-patch76-lifecycle-fixture.yml
+          git config user.name 'Tolian82'
+          git config user.email '309637356+Tolian82@users.noreply.github.com'
+          git add scripts/lib/test-strategy-lab-lifecycle-cases.sh .github/workflows/fix-patch76-lifecycle-fixture.yml
+          git commit -m 'test: recognize semantic lifecycle evidence action'
+          git push origin HEAD:agent/strategy-lab-semantic-restoration
