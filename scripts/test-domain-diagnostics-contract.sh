@@ -46,10 +46,6 @@ for test in job-contract target-contract candidate-runtime runtime-cleanup prefl
     quic udp time-budget semantic-restoration circular circular-owner settings-guard \
     diagnostics-activation e2e
 do
-    if [ "${test}" = e2e ]; then
-        sh -x "${ROOT_DIR}/scripts/test-strategy-lab-${test}.sh"
-    else
-        sh "${ROOT_DIR}/scripts/test-strategy-lab-${test}.sh"
-    fi
+    sh "${ROOT_DIR}/scripts/test-strategy-lab-${test}.sh"
 done
 echo 'Domain diagnostics contract tests passed.'
