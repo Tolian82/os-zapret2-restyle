@@ -9,7 +9,7 @@
 
 ## Product authorities
 
-- `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md` — state, cancellation, timeout, restoration, and verification contract;
+- `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md` — state, cancellation, timeout, restoration, and verification;
 - `docs/architecture/STRATEGY_LAB_ACTIVATION.md` — active Diagnostics path;
 - `docs/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md` — complete replay-verified profiles;
 - `docs/architecture/STRATEGY_LAB_UNIFIED_SHORTLIST.md` — multi-protocol shortlist;
@@ -18,18 +18,13 @@
 - `docs/architecture/STRATEGY_LAB_CIRCULAR_OWNERSHIP.md` — circular locking, ownership, and stale restoration;
 - `docs/architecture/STRATEGY_LAB_SETTINGS_GUARD.md` — Settings lifecycle coordination;
 - `docs/architecture/STRATEGY_LAB_PERSISTED_RESULT_RELOAD.md` — latest-job pointer and reload restoration;
+- `docs/architecture/STRATEGY_LAB_STRUCTURED_RESULTS.md` — structured replay evidence and safe complete-profile copy;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — finding-to-patch traceability;
 - `docs/PROJECT_STATE.md` — current verified baseline and next action.
 
 ## Engineering process
 
-- `docs/WORKING_CONVENTIONS.md`;
-- `docs/DEVELOPMENT_GUIDE.md`;
-- `docs/DECISIONS.md` and `docs/decisions/`;
-- `docs/DEVLOG.md` and `docs/devlog/`;
-- `docs/ROADMAP.md`;
-- `docs/REQUIREMENTS.md`;
-- `docs/patches/` and `docs/releases/`.
+`docs/WORKING_CONVENTIONS.md`, `docs/DEVELOPMENT_GUIDE.md`, `docs/DECISIONS.md`, `docs/decisions/`, `docs/DEVLOG.md`, `docs/devlog/`, `docs/ROADMAP.md`, `docs/REQUIREMENTS.md`, `docs/patches/`, and `docs/releases/`.
 
 ## GitHub delivery authority
 
