@@ -29,7 +29,7 @@ A semantic mismatch forces `RESTORE_FAILED`; it cannot be reported as successful
 
 ## Compatibility boundary
 
-Legacy test service fixtures that do not implement `strategy-lab-evidence` retain aggregate lifecycle verification. The packaged production service implements the semantic action and therefore uses the strict path.
+Legacy test service fixtures that do not implement `strategy-lab-evidence` retain aggregate lifecycle verification. The packaged production service implements the semantic action and therefore uses the strict path. The action remains internal and requires the inherited lifecycle-lock ownership marker and descriptor 9.
 
 ## Automated evidence
 
