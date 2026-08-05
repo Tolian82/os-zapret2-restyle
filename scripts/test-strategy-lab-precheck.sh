@@ -187,7 +187,7 @@ wait_for_completion()
     while [ "${attempts}" -lt 40 ]
     do
         state=$(launcher status "${job_id}" | jq -r '.state // ""')
-        [ "${state}" != completed ] || return 0
+        case "${state}" in completed|error) return 0 ;; esac
         sleep 1
         attempts=$((attempts + 1))
     done

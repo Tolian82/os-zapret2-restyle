@@ -119,7 +119,7 @@ case "${_strategy_lab_baseline_status}" in
             strategy_lab_update_stage "${JOB_ID}" 40 PASS "${BASELINE_ACCESSIBLE_MESSAGE}"
             strategy_lab_append_event "${JOB_ID}" 40 PASS "${BASELINE_ACCESSIBLE_MESSAGE}"
             worker_skip_unfinished "${JOB_ID}" "${TARGET_ACCESSIBLE_SKIP}"
-            worker_finish TARGET_ACCESSIBLE false "${TARGET_ACCESSIBLE_FINAL_MESSAGE}"
+            worker_finish TARGET_ACCESSIBLE false
         fi
         _strategy_lab_total=$(strategy_lab_baseline_total_count "${BASELINE_FILE}")
         _strategy_lab_failed=$(strategy_lab_baseline_failed_count "${BASELINE_FILE}")
@@ -171,4 +171,4 @@ strategy_lab_append_event "${JOB_ID}" 50 PASS "${CANDIDATE_MESSAGE}"
 [ ! -e "${CANCEL_FILE}" ] || worker_cancel
 
 worker_run_search_stages
-worker_finish PARTIAL false "${PARTIAL_FINAL_MESSAGE}"
+worker_finish_search

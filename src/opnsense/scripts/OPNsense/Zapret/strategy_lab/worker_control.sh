@@ -23,21 +23,24 @@ worker_finish()
 {
     WORKER_FINAL_OUTCOME="$1"
     WORKER_FINAL_CANCELED="$2"
-    WORKER_FINAL_MESSAGE="$3"
-
     WORKER_FINALIZING=1
+
     if ! worker_restore; then
         WORKER_FINAL_OUTCOME='RESTORE_FAILED'
-        WORKER_FINAL_MESSAGE="${RESTORE_FAILED_MESSAGE}"
-        strategy_lab_update_stage "${JOB_ID}" 99 FAIL "${WORKER_FINAL_MESSAGE}" || true
-        strategy_lab_append_event "${JOB_ID}" 99 FAIL "${WORKER_FINAL_MESSAGE}" || true
-    else
-        strategy_lab_update_stage "${JOB_ID}" 99 PASS "${WORKER_FINAL_MESSAGE}" || true
-        strategy_lab_append_event "${JOB_ID}" 99 PASS "${WORKER_FINAL_MESSAGE}" || true
     fi
 
-    strategy_lab_update_job "${JOB_ID}" completed "${WORKER_FINAL_OUTCOME}" 99 \
-        "${WORKER_FINAL_CANCELED}" "${WORKER_FINAL_MESSAGE}" || true
+    WORKER_FINAL_STATE=$(worker_result_terminal_state "${WORKER_FINAL_OUTCOME}")
+    WORKER_FINAL_REPORT_STATUS=$(worker_result_report_status "${WORKER_FINAL_OUTCOME}")
+    WORKER_FINAL_MESSAGE=$(worker_result_message "${WORKER_FINAL_OUTCOME}" "${WORKER_FINAL_CANCELED}")
+
+    strategy_lab_update_stage "${JOB_ID}" 99 "${WORKER_FINAL_REPORT_STATUS}" \
+        "${WORKER_FINAL_MESSAGE}" || true
+    strategy_lab_append_event "${JOB_ID}" 99 "${WORKER_FINAL_REPORT_STATUS}" \
+        "${WORKER_FINAL_MESSAGE}" || true
+
+    strategy_lab_update_job "${JOB_ID}" "${WORKER_FINAL_STATE}" \
+        "${WORKER_FINAL_OUTCOME}" 99 "${WORKER_FINAL_CANCELED}" \
+        "${WORKER_FINAL_MESSAGE}" || true
     strategy_lab_clear_active_job "${JOB_ID}"
     exit 0
 }
@@ -46,7 +49,7 @@ worker_cancel()
 {
     [ "${WORKER_FINALIZING}" -eq 0 ] || exit 0
     worker_skip_unfinished "${JOB_ID}" "${CANCEL_MESSAGE}" || true
-    worker_finish PARTIAL true "${CANCEL_FINAL_MESSAGE}"
+    worker_finish PARTIAL true
 }
 
 worker_error()
@@ -56,7 +59,7 @@ worker_error()
     strategy_lab_update_stage "${JOB_ID}" "${_strategy_lab_stage}" FAIL "${_strategy_lab_message}" || true
     strategy_lab_append_event "${JOB_ID}" "${_strategy_lab_stage}" FAIL "${_strategy_lab_message}" || true
     worker_skip_unfinished "${JOB_ID}" "${ERROR_SKIP_MESSAGE}" || true
-    worker_finish ERROR false "${ERROR_FINAL_MESSAGE}"
+    worker_finish ERROR false
 }
 
 worker_prerequisite_failed()
@@ -66,7 +69,7 @@ worker_prerequisite_failed()
     strategy_lab_update_stage "${JOB_ID}" "${_strategy_lab_stage}" FAIL "${_strategy_lab_message}" || true
     strategy_lab_append_event "${JOB_ID}" "${_strategy_lab_stage}" FAIL "${_strategy_lab_message}" || true
     worker_skip_unfinished "${JOB_ID}" "${PREREQUISITE_MESSAGE}" || true
-    worker_finish PARTIAL false "${PREREQUISITE_FINAL_MESSAGE}"
+    worker_finish PARTIAL false
 }
 
 worker_stage_timeout()
@@ -75,7 +78,7 @@ worker_stage_timeout()
     strategy_lab_update_stage "${JOB_ID}" "${_strategy_lab_stage}" TIMEOUT "${STAGE_TIMEOUT_MESSAGE}" || true
     strategy_lab_append_event "${JOB_ID}" "${_strategy_lab_stage}" TIMEOUT "${STAGE_TIMEOUT_MESSAGE}" || true
     worker_skip_unfinished "${JOB_ID}" "${TIMEOUT_SKIP_MESSAGE}" || true
-    worker_finish TIMEOUT false "${TIMEOUT_FINAL_MESSAGE}"
+    worker_finish TIMEOUT false
 }
 
 trap worker_cancel HUP INT TERM

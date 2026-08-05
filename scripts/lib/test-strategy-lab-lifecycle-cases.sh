@@ -6,8 +6,8 @@ printf '%s\n' RUNNING > "${STATE_FILE}"
 job=$(start_job telegram.org en)
 wait_for_state "${job}" completed
 result=$(launcher result "${job}")
-printf '%s\n' "${result}" | jq -e '.outcome=="PARTIAL" and .initial_service_state=="RUNNING"' >/dev/null ||
-    fail "running-state snapshot was not recorded"
+printf '%s\n' "${result}" | jq -e '.state=="completed" and .outcome=="NO_CANDIDATE" and .initial_service_state=="RUNNING"' >/dev/null ||
+    fail "valid empty shortlist was not classified as NO_CANDIDATE"
 printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="10" and .status=="PASS")' >/dev/null ||
     fail "snapshot stage did not pass"
 printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="20" and .status=="PASS")' >/dev/null ||
@@ -79,10 +79,10 @@ printf '%s\n' RUNNING > "${STATE_FILE}"
 : > "${CALLS_FILE}"
 : > "${START_FAIL_FILE}"
 job=$(start_job restore-failure.example en)
-wait_for_state "${job}" completed
+wait_for_state "${job}" error
 result=$(launcher result "${job}")
-printf '%s\n' "${result}" | jq -e '.outcome=="RESTORE_FAILED"' >/dev/null ||
-    fail "restore failure was not explicit"
+printf '%s\n' "${result}" | jq -e '.state=="error" and .outcome=="RESTORE_FAILED"' >/dev/null ||
+    fail "restore failure was not an explicit terminal error"
 printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="90" and .status=="FAIL")' >/dev/null ||
     fail "restore stage did not fail"
 rm -f "${START_FAIL_FILE}"
@@ -91,10 +91,10 @@ rm -f "${START_FAIL_FILE}"
 printf '%s\n' INCOMPLETE > "${STATE_FILE}"
 : > "${CALLS_FILE}"
 job=$(start_job incomplete.example en)
-wait_for_state "${job}" completed
+wait_for_state "${job}" error
 result=$(launcher result "${job}")
-printf '%s\n' "${result}" | jq -e '.outcome=="ERROR" and .initial_service_state==""' >/dev/null ||
-    fail "incomplete initial state did not fail closed"
+printf '%s\n' "${result}" | jq -e '.state=="error" and .outcome=="ERROR" and .initial_service_state==""' >/dev/null ||
+    fail "incomplete initial state did not fail closed as a terminal error"
 printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="10" and .status=="FAIL")' >/dev/null ||
     fail "incomplete snapshot stage did not fail"
 [ ! -s "${CALLS_FILE}" ] || fail "incomplete initial state was mutated"
@@ -173,6 +173,7 @@ sh -n "${WORKER}"
 sh -n "${MODULE_DIR}/lifecycle.sh"
 sh -n "${MODULE_DIR}/state.sh"
 sh -n "${MODULE_DIR}/worker_messages.sh"
+sh -n "${MODULE_DIR}/worker_result.sh"
 sh -n "${MODULE_DIR}/worker_control.sh"
 sh -n "${MODULE_DIR}/worker_flow.sh"
 sh -n "${SERVICE_SOURCE}"
