@@ -10,6 +10,15 @@ strategy_lab_cancel_message()
     esac
 }
 
+strategy_lab_latest_job()
+{
+    set -- "${STRATEGY_LAB_JOBS_DIR}"/job.*
+    [ "$1" != "${STRATEGY_LAB_JOBS_DIR}/job.*" ] || return 1
+    _strategy_lab_latest=$(ls -1dt "$@" 2>/dev/null | head -1)
+    [ -d "${_strategy_lab_latest}" ] || return 1
+    basename "${_strategy_lab_latest}"
+}
+
 read_job_json()
 {
     _strategy_lab_job="$1"
@@ -43,6 +52,9 @@ show_status()
     if [ -z "${_strategy_lab_job}" ]; then
         cleanup_stale_active
         _strategy_lab_job=$(strategy_lab_read_active_job 2>/dev/null || true)
+        if [ -z "${_strategy_lab_job}" ]; then
+            _strategy_lab_job=$(strategy_lab_latest_job 2>/dev/null || true)
+        fi
         if [ -z "${_strategy_lab_job}" ]; then
             "${STRATEGY_LAB_JQ}" -nc '{status:"idle"}'
             return 0
