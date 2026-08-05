@@ -5,19 +5,29 @@ Primary branch: `main`
 Published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
 Current package candidate: `os-zapret2-restyle-0.3.2_15.pkg`
 
-Patches 1–13 are complete. Patch 13 activates Strategy Lab on the Diagnostics page and retires the synchronous Blockcheck integration.
+Patches 1–13 of the initial Strategy Lab delivery are complete. Patch 13 activated Strategy Lab on the Diagnostics page and retired the synchronous Blockcheck integration.
 
-Active Diagnostics architecture:
+The 2026-08-05 source audit confirmed that the repository is structurally complete and buildable, but the activated Strategy Lab is not yet contract-complete. The approved corrective series is now active.
 
-- domain connectivity remains a short synchronous probe;
-- Strategy Lab starts an asynchronous job and returns `job_id`;
-- the GUI polls status every second and renders stage progress;
-- cancellation preserves partial results and cannot bypass stage 90 restoration;
-- completed jobs expose a stable shortlist and recommendation number one;
-- domain shortlists of three to five candidates can start temporary circular validation;
-- circular validation never modifies the saved Traffic Strategy;
-- the old `blockcheck.sh`, configd `blockcheck` action, API action, and ten-minute AJAX request are removed.
+Open corrective findings include:
 
-`VERSION=0.3.2`; `PLUGIN_REVISION=15`. No tag, release, release asset, or pkg-repository publication is authorized by this patch series.
+- cancel state is not persisted atomically;
+- active stage 60, 70, and 80 runners are not cancellation-aware;
+- normal completion is always reported as `PARTIAL`;
+- final messages can be factually wrong because of module override order;
+- stage 85 can execute before stage 80;
+- extended work can exceed the documented time budget;
+- `RESTORE_FAILED` can be represented as normal completion;
+- restoration evidence and circular eligibility are weaker than the approved contract;
+- IP target semantics are implicit;
+- tests do not execute the complete state machine.
 
-Next action: owner-assisted live OPNsense verification of package candidate `0.3.2_15`, followed by a separately authorized release decision.
+Corrective authority:
+
+- `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`;
+- `docs/decisions/DEC-2026-08-05-strategy-lab-corrective-series.md`;
+- `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-CORRECTIVE.md`.
+
+`VERSION=0.3.2`; `PLUGIN_REVISION=15`. No tag, release, release asset, or pkg-repository publication is authorized while the corrective series is active.
+
+Next action: Patch 2 of the corrective series — atomically persist Strategy Lab cancellation state. Owner-assisted live OPNsense verification remains deferred until every corrective implementation patch has completed the serial GitHub delivery gate.
