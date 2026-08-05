@@ -1,6 +1,6 @@
 # os-zapret2-restyle — Roadmap
 
-Current package candidate: `0.3.2_22`.
+Current package candidate: `0.3.2_23`.
 
 ## Initial Strategy Lab delivery
 
@@ -28,7 +28,7 @@ Current package candidate: `0.3.2_22`.
 - [x] Corrective Patch 6 — shared overall and stage-80 time budgets.
 - [x] Corrective Patch 7 — stronger semantic restoration snapshot and verification.
 - [x] Corrective Patch 8 — GUI and backend circular eligibility contract.
-- [ ] Corrective Patch 9 — explicit domain/IP target contract.
+- [x] Corrective Patch 9 — explicit domain target contract; implicit raw-IP behavior removed.
 - [ ] Corrective Patch 10 — complete API-to-worker integration regression harness.
 - [ ] Corrective Patch 11 — repository hygiene and stale artifact cleanup.
 

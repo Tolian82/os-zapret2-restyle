@@ -3,9 +3,9 @@
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Current package candidate: `os-zapret2-restyle-0.3.2_22.pkg`
+Current package candidate: `os-zapret2-restyle-0.3.2_23.pkg`
 
-Patches 1–13 of the initial Strategy Lab delivery are complete. Corrective Patches 1–8 are complete in source.
+Patches 1–13 of the initial Strategy Lab delivery are complete. Corrective Patches 1–9 are complete in source.
 
 Completed corrective contracts:
 
@@ -27,11 +27,12 @@ Completed corrective contracts:
 - semantic mismatch is terminal `RESTORE_FAILED`;
 - circular eligibility requires completed `SUCCESS`, a domain target, stages 85/90 PASS, verified restoration, and a valid 3–5 item shortlist;
 - GUI circular controls follow the persisted backend decision only;
-- Diagnostics guidance states the enforced 150/270-second limits.
+- Diagnostics guidance states the enforced 150/270-second limits;
+- API, shell, probes, and GUI now use one normalized domain-only target contract;
+- bare IP, IPv6, URL, host:port, and malformed target inputs are rejected.
 
 Open corrective findings:
 
-- IP target semantics are implicit;
 - tests do not yet execute the complete API-to-worker state machine;
 - stale repository artifacts and superseded documentation remain to be cleaned.
 
@@ -41,6 +42,6 @@ Corrective authority:
 - `docs/decisions/DEC-2026-08-05-strategy-lab-corrective-series.md`;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-CORRECTIVE.md`.
 
-`VERSION=0.3.2`; `PLUGIN_REVISION=22`. No tag, release, release asset, or pkg-repository publication is authorized while the corrective series is active.
+`VERSION=0.3.2`; `PLUGIN_REVISION=23`. No tag, release, release asset, or pkg-repository publication is authorized while the corrective series is active.
 
-Next action: Corrective Patch 9 — explicit domain/IP target contract. Owner-assisted live OPNsense verification remains deferred until every corrective implementation patch has completed the serial GitHub delivery gate.
+Next action: Corrective Patch 10 — complete API-to-worker integration regression harness. Owner-assisted live OPNsense verification remains deferred until every corrective implementation patch has completed the serial GitHub delivery gate.
