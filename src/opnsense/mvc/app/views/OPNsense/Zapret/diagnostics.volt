@@ -4,10 +4,10 @@ $(document).ready(function () {
     var activeJobId = '', pollTimer = null, circularTimer = null;
     var isRussian = ((document.documentElement.lang || '').toLowerCase().indexOf('ru') === 0);
     var strategyLabGuidance = isRussian ? [
-        'Введите домен, который в настоящее время блокируется вашим интернет-провайдером, и нажмите «Запустить». В течение 1–3 минут будут произведены множественные проверки стратегий обхода DPI, после чего будет сообщено, какие из них позволяют успешно открыть сайт.',
+        'Введите домен, который в настоящее время блокируется вашим интернет-провайдером, и нажмите «Запустить». Основной режим проверки ограничен 150 секундами, расширенный — 270 секундами. После завершения будут показаны стабильные стратегии, которые обеспечили доступ к сайту.',
         'Изучите результат и добавьте необходимый профиль в используемую стратегию на странице «Настройки».'
     ] : [
-        'Enter a domain that is currently blocked by your ISP and click “Run.” Multiple DPI bypass strategies will be tested over the next 1–3 minutes, after which the strategies that successfully provide access to the site will be reported.',
+        'Enter a domain that is currently blocked by your ISP and click “Run.” Standard mode is limited to 150 seconds and extended mode to 270 seconds. Stable strategies that successfully provide access to the site will be reported after completion.',
         'Review the results and add the required profile to the strategy currently in use on the “Settings” page.'
     ];
     var ui = isRussian ? {
@@ -68,9 +68,12 @@ $(document).ready(function () {
         });
         $('#strategyLabShortlist tbody').html(html);
         $('#strategyLabShortlistBox').toggle(items.length > 0);
-        var circularReady = items.length >= 3 && items.length <= 5 && data.target_type === 'domain';
+        var circularReady = data.circular_eligible === true;
         $('#circularControls').toggle(circularReady);
-        if (data.state === 'completed') $('#strategyLabMessage').text(items.length ? ui.circularReady : ui.noCandidates);
+        if (data.state === 'completed') {
+            if (circularReady) $('#strategyLabMessage').text(ui.circularReady);
+            else if (!items.length) $('#strategyLabMessage').text(ui.noCandidates);
+        }
     }
     function renderJob(data) {
         renderStages(data);

@@ -68,13 +68,17 @@ case "${MODE}" in
             exit 64
         }
         JOB_ID="$2"
-        strategy_lab_circular_validate_job "${JOB_ID}" || {
-            circular_emit_error 'completed domain Strategy Lab shortlist with 3-5 candidates is required'
+        if _slcl_eligibility=$(strategy_lab_circular_eligibility "${JOB_ID}"); then
+            :
+        else
+            printf '%s\n' "${_slcl_eligibility}"
             exit 64
-        }
+        fi
         _slcl_active_job=$(strategy_lab_read_active_job 2>/dev/null || true)
         [ -z "${_slcl_active_job}" ] || {
-            circular_emit_error 'an automated Strategy Lab job is still active'
+            "${STRATEGY_LAB_JQ}" -nc --arg job_id "${JOB_ID}" \
+                '{status:"error",job_id:$job_id,circular_eligible:false,
+                  reason:"automated_job_active",candidate_count:0}'
             exit 75
         }
         if circular_active; then

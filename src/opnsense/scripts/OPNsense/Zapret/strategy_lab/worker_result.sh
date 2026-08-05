@@ -103,6 +103,56 @@ worker_result_message()
     esac
 }
 
+worker_result_set_circular_eligibility()
+{
+    _wrr_status=$(strategy_lab_status_file "${JOB_ID}")
+    _wrr_shortlist="${JOB_DIR}/shortlist.json"
+    _wrr_tmp=$(mktemp "$(dirname "${_wrr_status}")/.circular-eligibility.XXXXXX") || return 1
+    _wrr_eligible=false
+    _wrr_reason=terminal_outcome
+    _wrr_count=0
+
+    if [ -r "${_wrr_shortlist}" ]; then
+        _wrr_count=$("${STRATEGY_LAB_JQ}" -r '.count // 0' "${_wrr_shortlist}") || _wrr_count=0
+    fi
+
+    if [ "${WORKER_FINAL_STATE}" != completed ] || [ "${WORKER_FINAL_OUTCOME}" != SUCCESS ]; then
+        _wrr_reason=terminal_outcome
+    elif [ "$("${STRATEGY_LAB_JQ}" -r '.target_type // ""' "${_wrr_status}")" != domain ]; then
+        _wrr_reason=domain_required
+    elif ! "${STRATEGY_LAB_JQ}" -e '
+        any(.stages[]; .number=="85" and .status=="PASS") and
+        any(.stages[]; .number=="90" and .status=="PASS") and
+        (.restoration.verified==true)
+    ' "${_wrr_status}" >/dev/null; then
+        _wrr_reason=restoration_required
+    elif [ ! -r "${_wrr_shortlist}" ] || ! "${STRATEGY_LAB_JQ}" -e '
+        (.count >= 3 and .count <= 5) and
+        ((.items | length) == .count) and
+        all(.items[]; (.id | type == "string" and length > 0) and
+                      (.strategy | type == "string" and length > 0))
+    ' "${_wrr_shortlist}" >/dev/null; then
+        _wrr_reason=shortlist_size
+    else
+        _wrr_eligible=true
+        _wrr_reason=eligible
+    fi
+
+    "${STRATEGY_LAB_JQ}" \
+        --argjson eligible "${_wrr_eligible}" \
+        --arg reason "${_wrr_reason}" \
+        --argjson count "${_wrr_count}" \
+        '.circular_eligible=$eligible |
+         .circular_eligibility_reason=$reason |
+         .circular_candidate_count=$count' \
+        "${_wrr_status}" > "${_wrr_tmp}" || {
+            rm -f "${_wrr_tmp}"
+            return 1
+        }
+    chmod 0644 "${_wrr_tmp}"
+    mv -f "${_wrr_tmp}" "${_wrr_status}"
+}
+
 worker_finish_search()
 {
     _wrr_count=$(worker_result_shortlist_count) ||

@@ -46,23 +46,69 @@ strategy_lab_circular_endpoints_file()
     printf '%s/endpoints.txt\n' "$(strategy_lab_job_dir "$1")"
 }
 
-strategy_lab_circular_validate_job()
+strategy_lab_circular_eligibility()
 {
     _slcirc_job="$1"
-    strategy_lab_job_id_valid "${_slcirc_job}" || return 1
-    _slcirc_status=$(strategy_lab_status_file "${_slcirc_job}")
-    _slcirc_shortlist=$(strategy_lab_circular_shortlist_file "${_slcirc_job}")
-    _slcirc_endpoints=$(strategy_lab_circular_endpoints_file "${_slcirc_job}")
-    [ -r "${_slcirc_status}" ] && [ -r "${_slcirc_shortlist}" ] && [ -s "${_slcirc_endpoints}" ] || return 1
-    "${STRATEGY_LAB_JQ}" -e '
-        .state == "completed" and .target_type == "domain"
-    ' "${_slcirc_status}" >/dev/null || return 1
-    "${STRATEGY_LAB_JQ}" -e '
-        (.count >= 3 and .count <= 5) and
-        ((.items | length) == .count) and
-        all(.items[]; (.id | type == "string" and length > 0) and
-                      (.strategy | type == "string" and length > 0))
-    ' "${_slcirc_shortlist}" >/dev/null
+    _slcirc_eligible=false
+    _slcirc_reason=invalid_job
+    _slcirc_count=0
+
+    if strategy_lab_job_id_valid "${_slcirc_job}"; then
+        _slcirc_status=$(strategy_lab_status_file "${_slcirc_job}")
+        _slcirc_shortlist=$(strategy_lab_circular_shortlist_file "${_slcirc_job}")
+        _slcirc_endpoints=$(strategy_lab_circular_endpoints_file "${_slcirc_job}")
+        if [ ! -r "${_slcirc_status}" ]; then
+            _slcirc_reason=job_not_found
+        elif [ ! -r "${_slcirc_shortlist}" ] || [ ! -s "${_slcirc_endpoints}" ]; then
+            _slcirc_reason=artifacts_missing
+        else
+            _slcirc_count=$("${STRATEGY_LAB_JQ}" -r '.count // 0' "${_slcirc_shortlist}") || _slcirc_count=0
+            if ! "${STRATEGY_LAB_JQ}" -e '
+                .state=="completed" and .outcome=="SUCCESS"
+            ' "${_slcirc_status}" >/dev/null; then
+                _slcirc_reason=terminal_outcome
+            elif ! "${STRATEGY_LAB_JQ}" -e '.target_type=="domain"' \
+                "${_slcirc_status}" >/dev/null; then
+                _slcirc_reason=domain_required
+            elif ! "${STRATEGY_LAB_JQ}" -e '
+                any(.stages[]; .number=="85" and .status=="PASS") and
+                any(.stages[]; .number=="90" and .status=="PASS") and
+                (.restoration.verified==true)
+            ' "${_slcirc_status}" >/dev/null; then
+                _slcirc_reason=restoration_required
+            elif ! "${STRATEGY_LAB_JQ}" -e '
+                (.count >= 3 and .count <= 5) and
+                ((.items | length) == .count) and
+                all(.items[]; (.id | type == "string" and length > 0) and
+                              (.strategy | type == "string" and length > 0))
+            ' "${_slcirc_shortlist}" >/dev/null; then
+                _slcirc_reason=shortlist_size
+            elif ! "${STRATEGY_LAB_JQ}" -e --argjson count "${_slcirc_count}" '
+                .circular_eligible==true and
+                .circular_eligibility_reason=="eligible" and
+                .circular_candidate_count==$count
+            ' "${_slcirc_status}" >/dev/null; then
+                _slcirc_reason=eligibility_not_persisted
+            else
+                _slcirc_eligible=true
+                _slcirc_reason=eligible
+            fi
+        fi
+    fi
+
+    "${STRATEGY_LAB_JQ}" -nc \
+        --arg job_id "${_slcirc_job}" \
+        --argjson eligible "${_slcirc_eligible}" \
+        --arg reason "${_slcirc_reason}" \
+        --argjson count "${_slcirc_count}" \
+        '{status:(if $eligible then "ok" else "error" end),job_id:$job_id,
+          circular_eligible:$eligible,reason:$reason,candidate_count:$count}'
+    [ "${_slcirc_eligible}" = true ]
+}
+
+strategy_lab_circular_validate_job()
+{
+    strategy_lab_circular_eligibility "$1" >/dev/null
 }
 
 strategy_lab_circular_inject_strategy()
