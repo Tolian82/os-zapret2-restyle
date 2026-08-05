@@ -47,6 +47,7 @@ export STRATEGY_LAB_PROFILE_ENV_BIN=$(command -v env)
 export STRATEGY_LAB_PROFILE_REPLAY_RUNNER="${TMP}/bin/profile-runner"
 export MOCK_PROFILE_REPLAY_COUNT="${TMP}/replays"
 export STRATEGY_LAB_LUA_DIR="${TMP}/lua"
+export STRATEGY_LAB_DIVERT_PORT=9989
 
 . "${MODULE_DIR}/common.sh"
 . "${MODULE_DIR}/target.sh"
