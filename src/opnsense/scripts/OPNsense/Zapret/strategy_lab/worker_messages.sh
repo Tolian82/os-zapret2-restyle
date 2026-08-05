@@ -33,7 +33,7 @@ case "${LANGUAGE}" in
         PARTIAL_FINAL_MESSAGE='Strategy Lab: последовательная проверка семи TLS 1.3-семейств завершена; расширение параметров пока не выполняется.'
         ;;
     *)
-        CANCEL_MESSAGE='SKIPPED — canseled'
+        CANCEL_MESSAGE='SKIPPED — canceled'
         PENDING_MESSAGE='SKIPPED — implementation pending'
         PREREQUISITE_MESSAGE='SKIPPED — prerequisite failed'
         TARGET_ACCESSIBLE_SKIP='SKIPPED — target accessible without bypass'
