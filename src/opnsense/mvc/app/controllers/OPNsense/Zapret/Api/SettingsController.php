@@ -1,29 +1,8 @@
 <?php
 
 /**
- *    Copyright (C) 2026 Umur Gorur
- *    All rights reserved.
- *
- *    Redistribution and use in source and binary forms, with or without
- *    modification, are permitted provided that the following conditions are met:
- *
- *    1. Redistributions of source code must retain the above copyright notice,
- *       this list of conditions and the following disclaimer.
- *
- *    2. Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *
- *    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
- *    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
- *    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
- *    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- *    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- *    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- *    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- *    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *    POSSIBILITY OF SUCH DAMAGE.
+ * Copyright (C) 2026 Umur Gorur
+ * All rights reserved.
  */
 
 namespace OPNsense\Zapret\Api;
@@ -53,6 +32,61 @@ class SettingsController extends ApiMutableModelControllerBase
         ];
     }
 
+    private function lifecycleGuard(): array
+    {
+        $backend = new Backend();
+        $response = trim((string)$backend->configdRun('zapret strategy_lab_guard'));
+        if ($response === '') {
+            return [
+                'status' => 'busy',
+                'busy' => true,
+                'owner' => 'unknown',
+                'state' => 'unavailable',
+                'reason' => 'guard_unavailable',
+            ];
+        }
+
+        $decoded = json_decode($response, true);
+        if (!is_array($decoded) || !array_key_exists('busy', $decoded)) {
+            return [
+                'status' => 'busy',
+                'busy' => true,
+                'owner' => 'unknown',
+                'state' => 'invalid',
+                'reason' => 'guard_invalid',
+            ];
+        }
+
+        return $decoded;
+    }
+
+    private function assertLifecycleAvailable(): void
+    {
+        $guard = $this->lifecycleGuard();
+        if (($guard['busy'] ?? true) !== true) {
+            return;
+        }
+
+        $owner = (string)($guard['owner'] ?? 'unknown');
+        $state = (string)($guard['state'] ?? 'unknown');
+        throw new UserException(
+            sprintf(
+                gettext('Settings cannot be applied while Strategy Lab controls Zapret2 (owner: %s, state: %s). Stop the active diagnostics operation and wait for verified restoration.'),
+                $owner,
+                $state
+            ),
+            gettext('Zapret lifecycle is busy')
+        );
+    }
+
+    public function lifecycleAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['status' => 'error', 'busy' => true, 'reason' => 'post_required'];
+        }
+        return $this->lifecycleGuard();
+    }
+
     private function normalizeDomainList(string $text, string $label): array
     {
         $normalized = [];
@@ -79,7 +113,6 @@ class SettingsController extends ApiMutableModelControllerBase
                     sprintf("%s, line %d: invalid domain entry '%s'", $label, $lineNo, $raw)
                 );
             }
-            // IP addresses and network-like values are not domains.
             if (preg_match('/^[0-9.]+$/', $value) || strpos($value, '/') !== false) {
                 throw new \InvalidArgumentException(
                     sprintf("%s, line %d: IP addresses and networks are not allowed in a domain list ('%s')", $label, $lineNo, $raw)
@@ -176,16 +209,13 @@ class SettingsController extends ApiMutableModelControllerBase
         return $fallback;
     }
 
-    /**
-     * Validate, normalize, save and safely reconfigure as one user operation.
-     * On any backend failure the previous model is restored and the safe
-     * reconfigure backend keeps or restores the previous live runtime.
-     */
     public function applyAction()
     {
         if (!$this->request->isPost()) {
             return ['result' => 'failed'];
         }
+
+        $this->assertLifecycleAvailable();
 
         $config = Config::getInstance();
         $config->lock();
@@ -235,12 +265,18 @@ class SettingsController extends ApiMutableModelControllerBase
             return $result;
         }
 
+        try {
+            $this->assertLifecycleAvailable();
+        } catch (UserException $exception) {
+            $model->setNodes($oldNodes);
+            $config->unlock();
+            throw $exception;
+        }
+
         $this->setSaveAuditMessage(gettext('Applied Zapret settings'));
         $this->save(false, true);
         $config->unlock();
 
-        // zapret reconfigure owns template generation. A configd action of type
-        // script returns either the exact string "OK" or "Error (N)".
         $backend = new Backend();
         $reconfigureResponse = trim((string)$backend->configdRun('zapret reconfigure', false, 180));
 

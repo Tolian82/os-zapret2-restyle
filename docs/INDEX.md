@@ -87,6 +87,10 @@ restoration evidence.
 Dedicated circular launcher serialization, PID-plus-start-token ownership, stale-session
 cleanup, semantic restoration, and retry blocking.
 
+`docs/architecture/STRATEGY_LAB_SETTINGS_GUARD.md`
+Fail-closed Settings Apply coordination with automated, circular, and shared Zapret
+lifecycle ownership.
+
 `DEVLOG.md` and `docs/devlog/`
 Completed work and verification evidence.
 

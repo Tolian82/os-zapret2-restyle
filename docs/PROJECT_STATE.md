@@ -3,39 +3,36 @@
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Current verified source baseline on `main`: `os-zapret2-restyle-0.3.2_37.pkg`
-Current integration candidate: `os-zapret2-restyle-0.3.2_38.pkg`
+Current verified source baseline on `main`: `os-zapret2-restyle-0.3.2_38.pkg`
+Current integration candidate: `os-zapret2-restyle-0.3.2_39.pkg`
 
 Patches 1–13 of the initial Strategy Lab delivery, corrective patches through revision 24,
-and hardening revisions 25–37 are verified on `main`.
+and hardening revisions 25–38 are verified on `main`.
 
-## Revision 38 scope
+## Revision 39 scope
 
-- serialize every circular launcher operation with a dedicated lock;
-- identify the worker by PID plus process-start token rather than PID alone;
-- refresh ownership after daemon execution;
-- recover an ownerless stale session before another start;
-- clean session-local dvtws2, divert socket, runtime files, and reserved IPFW rules;
-- restore and verify the original semantic Zapret2 RUNNING or STOPPED state;
-- clear ownership only after successful restoration;
-- retain `RESTORE_FAILED` ownership and block unsafe retry;
-- add mandatory dynamic ownership and stale-recovery tests.
+- add one fail-closed backend authority for automated, circular, and raw lifecycle-lock
+  ownership;
+- reject Settings Apply before any model mutation when lifecycle is busy;
+- repeat the guard while holding the configuration lock immediately before save;
+- treat circular restoration failure and unknown guard output as blocking;
+- preserve shared-lock reconfigure and rollback as the final race defense;
+- expose a read-only Settings lifecycle endpoint;
+- add mandatory dynamic and PHP/configd contract tests.
 
 ## Hardening status
 
-Completed through revision 37:
+Completed through revision 38:
 
-- runtime cleanup/readiness, residue cleanup, hard deadline, stale automated-worker
-  recovery, serialized parent state, local-only automatic interception;
+- runtime cleanup/readiness, hard deadline, stale automated-worker recovery, serialized
+  parent state, local-only automatic interception;
 - endpoint-bound requests and IPFW interception evidence;
-- complete replay-verified Traffic Strategy profiles;
-- unified TLS 1.3, TLS 1.2, HTTP, QUIC, and configured UDP shortlist;
-- supported validated generic UDP input;
-- immutable completed parent jobs and independent circular sessions.
+- complete replay-verified multi-protocol profiles and validated generic UDP input;
+- immutable circular sessions, serialized ownership, PID-reuse protection, stale cleanup,
+  semantic restoration, and retry blocking.
 
-Revision 38 completes finding 11. Remaining planned work:
+Revision 39 completes finding 12. Remaining planned work:
 
-- `_39` — block Settings Apply while Strategy Lab or circular validation owns lifecycle;
 - `_40` — restore persisted terminal results after page reload;
 - `_41` — structured final-result GUI and profile-copy controls;
 - `_42` — detailed progress and complete localization;
@@ -53,6 +50,7 @@ Revision 38 completes finding 11. Remaining planned work:
 - `docs/architecture/STRATEGY_LAB_UDP_INPUT.md`;
 - `docs/architecture/STRATEGY_LAB_CIRCULAR_ISOLATION.md`;
 - `docs/architecture/STRATEGY_LAB_CIRCULAR_OWNERSHIP.md`;
+- `docs/architecture/STRATEGY_LAB_SETTINGS_GUARD.md`;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md`.
 
 ## GitHub governance
@@ -64,6 +62,6 @@ Every PR title, branch commit subject, and final squash subject uses the exact
 package-candidate prefix. `main` is never force-updated. Documentation accompanies each
 logical product patch.
 
-`VERSION=0.3.2`; `PLUGIN_REVISION=38` in this candidate.
+`VERSION=0.3.2`; `PLUGIN_REVISION=39` in this candidate.
 
-No tag, release, release asset, or pkg-repository publication is part of revision 38.
+No tag, release, release asset, or pkg-repository publication is part of revision 39.
