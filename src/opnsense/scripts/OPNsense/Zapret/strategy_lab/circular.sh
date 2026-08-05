@@ -83,11 +83,11 @@ strategy_lab_circular_eligibility()
                               (.strategy | type == "string" and length > 0))
             ' "${_slcirc_shortlist}" >/dev/null; then
                 _slcirc_reason=shortlist_size
-            elif ! "${STRATEGY_LAB_JQ}" -e '
+            elif ! "${STRATEGY_LAB_JQ}" -e --argjson count "${_slcirc_count}" '
                 .circular_eligible==true and
                 .circular_eligibility_reason=="eligible" and
                 .circular_candidate_count==$count
-            ' --argjson count "${_slcirc_count}" "${_slcirc_status}" >/dev/null; then
+            ' "${_slcirc_status}" >/dev/null; then
                 _slcirc_reason=eligibility_not_persisted
             else
                 _slcirc_eligible=true
