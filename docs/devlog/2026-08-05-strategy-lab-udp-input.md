@@ -30,3 +30,13 @@ cleanup path.
 `test-strategy-lab-udp-input-contract.sh` covers the complete GUI/API/configd/launcher/
 worker boundary and the dynamic file lifecycle. It is wired into the mandatory domain
 Diagnostics test suite.
+
+PR #86 passed the exact `v0.3.2_36:` title and commit-subject gate, complete project
+validation, the mandatory domain-diagnostics and end-to-end suites, repository governance
+and hygiene checks, and the FreeBSD package build.
+
+The PR was squash-merged into `main` as
+`f7ddb1ed0ca4c1f39e7196e9a919946789e2589c`. Push CI run 273 then passed the post-merge
+committed-diff, title-identity, and core-identity verification. The temporary task branch
+was deleted automatically. No tag, GitHub Release, release asset, or pkg-repository
+publication was created.
