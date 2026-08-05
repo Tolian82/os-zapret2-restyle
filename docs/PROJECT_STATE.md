@@ -3,15 +3,16 @@
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Current hardening source candidate: `os-zapret2-restyle-0.3.2_26.pkg`
+Current hardening source candidate: `os-zapret2-restyle-0.3.2_27.pkg`
 
 Patches 1–13 of the initial Strategy Lab delivery are complete. Corrective Patches 1–11 are complete in source. The second owner-approved hardening series is active.
 
 Hardening series status:
 
 - Patch `_25` — hardening contract and serialized GitHub publication rule: required GitHub checks completed successfully;
-- Patch `_26` — proof-based temporary candidate runtime cleanup: current source candidate awaiting its own required GitHub checks;
-- Patch `_27` and later work must not begin until `_26` is fully verified.
+- Patch `_26` — proof-based temporary candidate runtime cleanup: required GitHub checks and FreeBSD package build completed successfully;
+- Patch `_27` — destructive cleanup of reserved Strategy Lab residue before baseline collection: current source candidate awaiting its own required GitHub checks;
+- Patch `_28` and later work must not begin until `_27` is fully verified.
 
 Accepted hardening authority:
 
@@ -27,6 +28,6 @@ Permanent decisions for this series:
 - GitHub publication is strictly serialized: only one new unverified commit may exist at a time; all required checks and remote verification must complete successfully before the next patch begins;
 - a failed check is corrected within the current patch without stacking later commits.
 
-`VERSION=0.3.2`; `PLUGIN_REVISION=26`.
+`VERSION=0.3.2`; `PLUGIN_REVISION=27`.
 
-Next action: complete required GitHub checks and remote verification for Patch `_26`. Patch `_27` remains blocked until that succeeds.
+Next action: complete required GitHub checks and remote verification for Patch `_27`. Patch `_28` remains blocked until that succeeds.
