@@ -12,6 +12,8 @@ use OPNsense\Base\ApiControllerBase;
 class StrategyLabController extends ApiControllerBase
 {
     private const JOB_PATTERN = '/^job\.[A-Za-z0-9]+$/D';
+    private const UDP_PAYLOAD_MAX_BYTES = 4096;
+    private const UDP_PAYLOAD_MAX_BASE64_LENGTH = 5464;
 
     private function backendResponse(string $action, array $params = [], int $timeout = 10): array
     {
@@ -71,6 +73,55 @@ class StrategyLabController extends ApiControllerBase
         return $target;
     }
 
+    private function udpInput(string $mode): array
+    {
+        $port = trim((string)$this->request->getPost('udp_port', 'striptags', ''));
+        $payload = trim((string)$this->request->getPost('udp_payload_base64', 'striptags', ''));
+
+        if ($port === '' && $payload === '') {
+            return ['status' => 'ok', 'port' => '-', 'payload' => '-'];
+        }
+        if ($mode !== 'extended') {
+            return [
+                'status' => 'error',
+                'message' => 'Generic UDP input is available only in extended mode.'
+            ];
+        }
+        if ($port === '' || $payload === '') {
+            return [
+                'status' => 'error',
+                'message' => 'Generic UDP requires both a port and a payload file.'
+            ];
+        }
+        if (!preg_match('/^[0-9]+$/D', $port)) {
+            return ['status' => 'error', 'message' => 'Invalid generic UDP port.'];
+        }
+
+        $portNumber = (int)$port;
+        if ($portNumber < 1 || $portNumber > 65535) {
+            return ['status' => 'error', 'message' => 'Invalid generic UDP port.'];
+        }
+        if (
+            strlen($payload) > self::UDP_PAYLOAD_MAX_BASE64_LENGTH ||
+            !preg_match('/^[A-Za-z0-9+\/]+={0,2}$/D', $payload) ||
+            strlen($payload) % 4 !== 0
+        ) {
+            return ['status' => 'error', 'message' => 'Invalid generic UDP payload encoding.'];
+        }
+
+        $decoded = base64_decode($payload, true);
+        if (
+            $decoded === false ||
+            $decoded === '' ||
+            strlen($decoded) > self::UDP_PAYLOAD_MAX_BYTES ||
+            base64_encode($decoded) !== $payload
+        ) {
+            return ['status' => 'error', 'message' => 'Invalid generic UDP payload file.'];
+        }
+
+        return ['status' => 'ok', 'port' => (string)$portNumber, 'payload' => $payload];
+    }
+
     public function startAction(): array
     {
         if (!$this->request->isPost()) {
@@ -91,7 +142,18 @@ class StrategyLabController extends ApiControllerBase
             $language = 'en';
         }
 
-        return $this->backendResponse('strategy_lab_start', [$target, $mode, $language]);
+        $udpInput = $this->udpInput($mode);
+        if ($udpInput['status'] !== 'ok') {
+            return $udpInput;
+        }
+
+        return $this->backendResponse('strategy_lab_start', [
+            $target,
+            $mode,
+            $language,
+            $udpInput['port'],
+            $udpInput['payload']
+        ]);
     }
 
     public function statusAction(): array

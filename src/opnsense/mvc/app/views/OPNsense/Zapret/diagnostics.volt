@@ -2,6 +2,7 @@
 <script>
 $(document).ready(function () {
     var activeJobId = '', pollTimer = null, circularTimer = null;
+    var udpPayloadMaxBytes = 4096;
     var isRussian = ((document.documentElement.lang || '').toLowerCase().indexOf('ru') === 0);
     var strategyLabGuidance = isRussian ? [
         'Введите домен, который в настоящее время блокируется вашим интернет-провайдером, и нажмите «Запустить». Основной режим проверки ограничен 150 секундами, расширенный — 270 секундами. После завершения будут показаны стабильные стратегии, которые обеспечили доступ к сайту.',
@@ -15,12 +16,18 @@ $(document).ready(function () {
         cancel:'Остановка запрошена. Выполняется обязательное восстановление Zapret2.',
         failed:'Проверка завершилась с ошибкой.', noCandidates:'Стабильные кандидаты не найдены.',
         circularReady:'Можно временно проверить найденные стратегии в браузере.',
+        udpPair:'Для общей UDP-проверки укажите одновременно порт и payload-файл.',
+        udpSize:'Payload-файл должен иметь размер от 1 до 4096 байт.',
+        udpRead:'Не удалось прочитать payload-файл.',
         requestFailed:'Ошибка запроса: '
     } : {
         running:'Strategy Lab is running.', completed:'The check is complete.',
         cancel:'Cancellation requested. Mandatory Zapret2 restoration is running.',
         failed:'The check ended with an error.', noCandidates:'No stable candidates were found.',
         circularReady:'The candidates can now be tested temporarily in a browser.',
+        udpPair:'Generic UDP testing requires both a port and a payload file.',
+        udpSize:'The payload file must contain between 1 and 4096 bytes.',
+        udpRead:'The payload file could not be read.',
         requestFailed:'Request failed: '
     };
 
@@ -43,6 +50,9 @@ $(document).ready(function () {
     }
     function stopPolling() {
         if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; }
+    }
+    function toggleUdpInput() {
+        $('#strategyLabUdpRow').toggle($('#strategyLabMode').val() === 'extended');
     }
     function renderStages(data) {
         var html = '';
@@ -111,19 +121,74 @@ $(document).ready(function () {
         });
     });
 
+    function startStrategyLab(target, mode, udpPort, udpPayloadBase64) {
+        apiPost('/api/zapret/strategy_lab/start', {
+            target:target,
+            mode:mode,
+            language:isRussian ? 'ru' : 'en',
+            udp_port:udpPort,
+            udp_payload_base64:udpPayloadBase64
+        }, function (data) {
+            if (data.status !== 'ok' || !data.job_id) {
+                setBusy(false);
+                $('#strategyLabMessage').text(data.message || ui.failed);
+                return;
+            }
+            activeJobId = data.job_id;
+            $('#strategyLabJob').text(activeJobId);
+            pollStatus();
+        });
+    }
+
+    $('#strategyLabMode').change(toggleUdpInput);
     $('#strategyLabBtn').click(function () {
         var target = $('#strategyLabDomainInput').val().trim();
+        var mode = $('#strategyLabMode').val();
         if (!target) return;
         stopPolling(); activeJobId = '';
         $('#strategyLabStages tbody,#strategyLabShortlist tbody').empty();
         $('#strategyLabShortlistBox,#circularControls').hide();
         $('#strategyLabRaw').text(''); $('#strategyLabMessage').text(ui.running); setBusy(true);
-        apiPost('/api/zapret/strategy_lab/start', {
-            target:target, mode:$('#strategyLabMode').val(), language:isRussian ? 'ru' : 'en'
-        }, function (data) {
-            if (data.status !== 'ok' || !data.job_id) { setBusy(false); $('#strategyLabMessage').text(data.message || ui.failed); return; }
-            activeJobId = data.job_id; $('#strategyLabJob').text(activeJobId); pollStatus();
-        });
+
+        if (mode !== 'extended') {
+            startStrategyLab(target, mode, '', '');
+            return;
+        }
+
+        var udpPort = $('#strategyLabUdpPort').val().trim();
+        var fileInput = document.getElementById('strategyLabUdpPayload');
+        var payloadFile = fileInput && fileInput.files ? fileInput.files[0] : null;
+        if (!udpPort && !payloadFile) {
+            startStrategyLab(target, mode, '', '');
+            return;
+        }
+        if (!udpPort || !payloadFile) {
+            setBusy(false);
+            $('#strategyLabMessage').text(ui.udpPair);
+            return;
+        }
+        if (payloadFile.size < 1 || payloadFile.size > udpPayloadMaxBytes) {
+            setBusy(false);
+            $('#strategyLabMessage').text(ui.udpSize);
+            return;
+        }
+
+        var reader = new FileReader();
+        reader.onload = function (event) {
+            var encoded = String((event.target && event.target.result) || '');
+            var delimiter = encoded.indexOf(',');
+            if (delimiter < 0 || !encoded.substring(delimiter + 1)) {
+                setBusy(false);
+                $('#strategyLabMessage').text(ui.udpRead);
+                return;
+            }
+            startStrategyLab(target, mode, udpPort, encoded.substring(delimiter + 1));
+        };
+        reader.onerror = function () {
+            setBusy(false);
+            $('#strategyLabMessage').text(ui.udpRead);
+        };
+        reader.readAsDataURL(payloadFile);
     });
     $('#strategyLabCancelBtn').click(function () {
         if (!activeJobId) return;
@@ -161,6 +226,7 @@ $(document).ready(function () {
             activeJobId = data.job_id; setBusy(true); renderJob(data); pollStatus();
         }
     });
+    toggleUdpInput();
     pollCircular();
 });
 </script>
@@ -180,6 +246,10 @@ $(document).ready(function () {
 <td style="width:200px;">{{ lang._('Blocked Domain') }}</td><td><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org"/></td>
 <td style="width:160px;"><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></td>
 <td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td>
+</tr><tr id="strategyLabUdpRow" style="display:none;">
+<td>{{ lang._('Generic UDP (optional)') }}</td>
+<td><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td>
+<td colspan="2"><input type="file" class="form-control" id="strategyLabUdpPayload"/> <small>{{ lang._('Request payload file, 1–4096 bytes. Both port and file are required.') }}</small></td>
 </tr></tbody></table></div>
 <div id="strategyLabSummary"></div><p><strong>Job:</strong> <code id="strategyLabJob">—</code> &nbsp; <strong>State:</strong> <span id="strategyLabState">idle</span></p><p id="strategyLabMessage"></p>
 <div class="table-responsive"><table class="table table-condensed" id="strategyLabStages"><thead><tr><th>#</th><th>{{ lang._('Stage') }}</th><th>{{ lang._('Status') }}</th><th>{{ lang._('Details') }}</th></tr></thead><tbody></tbody></table></div>

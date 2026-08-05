@@ -3,7 +3,7 @@
 usage_error()
 {
     echo "ERROR: $1" >&2
-    echo "Usage: strategy_lab_launcher.sh {start TARGET MODE LANGUAGE|status [JOB_ID]|cancel JOB_ID|result JOB_ID}" >&2
+    echo "Usage: strategy_lab_launcher.sh {start TARGET MODE LANGUAGE [UDP_PORT UDP_PAYLOAD_BASE64]|status [JOB_ID]|cancel JOB_ID|result JOB_ID}" >&2
     exit 64
 }
 
@@ -50,6 +50,7 @@ strategy_lab_reconcile_stale_job()
         _strategy_lab_runtime_clean=true
         strategy_lab_recovery_restore_service "${_strategy_lab_initial}" && _strategy_lab_restored=true
     fi
+    strategy_lab_udp_input_cleanup "${_strategy_lab_job}" || true
 
     _strategy_lab_tmp=$(mktemp "$(dirname "${_strategy_lab_status}")/.stale-recovery.XXXXXX") || return 1
     if [ "${_strategy_lab_restored}" = true ]; then
@@ -95,7 +96,19 @@ cleanup_stale_active()
 
 start_job()
 {
-    [ "$#" -eq 4 ] || usage_error "start requires TARGET MODE LANGUAGE"
+    case "$#" in
+        4)
+            _strategy_lab_udp_port='-'
+            _strategy_lab_udp_payload='-'
+            ;;
+        6)
+            _strategy_lab_udp_port="$5"
+            _strategy_lab_udp_payload="$6"
+            ;;
+        *)
+            usage_error "start requires TARGET MODE LANGUAGE and optional UDP_PORT UDP_PAYLOAD_BASE64"
+            ;;
+    esac
     _strategy_lab_target=$(strategy_lab_normalize_target "$2" 2>/dev/null || true)
     _strategy_lab_mode="$3"
     _strategy_lab_language="$4"
@@ -119,6 +132,14 @@ start_job()
     strategy_lab_job_id_valid "${_strategy_lab_job}" || { rm -rf "${_strategy_lab_jobdir}"; emit_error_json "Strategy Lab job id generation failed"; return 1; }
 
     strategy_lab_initialize_state "${_strategy_lab_job}" "${_strategy_lab_target}" "${_strategy_lab_mode}" "${_strategy_lab_language}"
+    if ! strategy_lab_udp_input_prepare "${_strategy_lab_job}" "${_strategy_lab_mode}" \
+        "${_strategy_lab_udp_port}" "${_strategy_lab_udp_payload}"
+    then
+        rm -rf "${_strategy_lab_jobdir}"
+        emit_error_json "Invalid Strategy Lab generic UDP input"
+        return 1
+    fi
+
     strategy_lab_write_active_job "${_strategy_lab_job}"
     _strategy_lab_log=$(strategy_lab_log_file "${_strategy_lab_job}")
     _strategy_lab_pid=$(strategy_lab_pid_file "${_strategy_lab_job}")
@@ -126,6 +147,7 @@ start_job()
 
     if ! "${DAEMON_BIN}" -f -o "${_strategy_lab_log}" -p "${_strategy_lab_pid}" "${TRANSACTION_SCRIPT}" strategy-lab "${_strategy_lab_job}"; then
         strategy_lab_clear_active_job "${_strategy_lab_job}"
+        strategy_lab_udp_input_cleanup "${_strategy_lab_job}" || true
         strategy_lab_update_job "${_strategy_lab_job}" error ERROR 00 false 'Strategy Lab lifecycle transaction could not be started' || true
         emit_error_json "Strategy Lab lifecycle transaction could not be started"
         return 1
