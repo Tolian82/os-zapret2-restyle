@@ -5,7 +5,7 @@ MODULE_DIR="${MODULE_DIR:-${SCRIPT_DIR}/strategy_lab}"
 set -eu
 umask 022
 
-for module in common state firewall runtime candidate lifecycle circular
+for module in common state firewall runtime candidate lifecycle circular circular_owner
 do
     path="${MODULE_DIR}/${module}.sh"
     [ -r "${path}" ] || exit 1
@@ -31,16 +31,22 @@ if [ "${STRATEGY_LAB_LIFECYCLE_LOCK_FAILED:-0}" = 1 ]; then
     strategy_lab_circular_state_write "${SESSION_ID}" error "${PARENT_JOB_ID}" \
         'Circular validation could not acquire the Zapret2 lifecycle lock' \
         "${CIRCULAR_COUNT}" lifecycle_lock
+    strategy_lab_circular_owner_clear "${SESSION_ID}"
     strategy_lab_circular_active_session_clear "${SESSION_ID}"
     exit 75
 fi
 
-# All generic Strategy Lab runtime and lifecycle helpers now resolve below the
+# All generic Strategy Lab runtime and lifecycle helpers resolve below the
 # private circular-session root. The completed parent job is never mutated.
 STRATEGY_LAB_JOBS_DIR="${STRATEGY_LAB_CIRCULAR_SESSIONS_DIR}"
 export STRATEGY_LAB_JOBS_DIR
 JOB_ID="${SESSION_ID}"
 JOB_DIR=$(strategy_lab_circular_session_dir "${SESSION_ID}")
+export JOB_ID JOB_DIR
+strategy_lab_status_file()
+{
+    strategy_lab_circular_session_state_file "$1"
+}
 
 printf '%s\n' "$$" > "${CIRCULAR_PID}"
 chmod 0600 "${CIRCULAR_PID}"
@@ -70,14 +76,16 @@ circular_cleanup()
     if [ "${_slcw_cleanup_ok}" -eq 1 ]; then
         strategy_lab_circular_state_write "${SESSION_ID}" "${FINAL_STATE}" \
             "${PARENT_JOB_ID}" "${FINAL_MESSAGE}" "${CIRCULAR_COUNT}" "${FINAL_REASON}" || true
+        strategy_lab_circular_owner_clear "${SESSION_ID}"
+        rm -f "${CIRCULAR_PID}" "${CIRCULAR_STOP}"
+        strategy_lab_circular_active_session_clear "${SESSION_ID}"
     else
         strategy_lab_circular_state_write "${SESSION_ID}" restore_failed \
             "${PARENT_JOB_ID}" \
-            'Circular validation cleanup could not restore Zapret2 exactly' \
+            'Circular validation cleanup could not restore Zapret2 exactly; automatic retry is blocked' \
             "${CIRCULAR_COUNT}" RESTORE_FAILED || true
+        rm -f "${CIRCULAR_PID}" "${CIRCULAR_STOP}"
     fi
-    rm -f "${CIRCULAR_PID}" "${CIRCULAR_STOP}"
-    strategy_lab_circular_active_session_clear "${SESSION_ID}"
 }
 
 circular_signal()
@@ -91,6 +99,8 @@ circular_signal()
 trap circular_signal HUP INT TERM
 trap circular_cleanup EXIT
 
+strategy_lab_circular_owner_write "${SESSION_ID}" "${PARENT_JOB_ID}" "$$" ||
+    circular_fail 'Circular validation owner identity could not be refreshed' owner_unavailable
 strategy_lab_capture_initial_service_state ||
     circular_fail 'Zapret2 initial state is incomplete' incomplete_state
 INITIAL_STATE="${STRATEGY_LAB_INITIAL_SERVICE_STATE}"
