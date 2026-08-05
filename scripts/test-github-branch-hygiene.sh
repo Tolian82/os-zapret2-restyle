@@ -66,7 +66,7 @@ require_fixed 'DEC-2026-08-05-universal-versioned-github-titles.md' "${INDEX}" '
 require_fixed 'DEC-2026-08-05-universal-versioned-github-titles.md' "${WORKFLOW_SUMMARY}" 'workflow summary does not name universal title decision'
 
 require_fixed 'every work or repair commit subject' "${AGENTS}" 'AGENTS does not require versioned work and repair commits'
-require_fixed 'final squash commit subject' "${AGENTS}" 'AGENTS does not require a versioned squash subject'
+require_fixed 'squash commit subject in `main`' "${AGENTS}" 'AGENTS does not require a versioned squash subject'
 require_fixed 'pull-request titles' "${PUBLICATION}" 'publication rules do not cover pull-request titles'
 require_fixed 'same-scope repair commit subjects' "${PUBLICATION}" 'publication rules do not cover repair commit subjects'
 require_fixed 'final squash commit subjects in `main`' "${PUBLICATION}" 'publication rules do not cover squash commit subjects'
