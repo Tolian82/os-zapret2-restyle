@@ -62,6 +62,10 @@ run_case()
                 '{state:$state,outcome:$outcome,current_stage:$stage,cancel_requested:$canceled,message:$message}' \
                 > "${_case_dir}/result.json"
         }
+        strategy_lab_status_file()
+        {
+            printf '%s\n' "${_case_dir}/result.json"
+        }
         strategy_lab_clear_active_job(){ :; }
         worker_skip_unfinished(){ :; }
 
