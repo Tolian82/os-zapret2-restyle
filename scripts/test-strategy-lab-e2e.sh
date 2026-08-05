@@ -434,7 +434,10 @@ strategy_after=$(sha256sum "${STRATEGY_FILE}" | awk '{print $1}')
 run_job success extended RUNNING completed SUCCESS
 assert_full_event_order "${LAST_JOB}"
 printf '%s\n' "${LAST_RESULT}" | jq -e '
-    .shortlist.count==3 and
+    .shortlist.count==1 and
+    .shortlist.recommendation.protocol=="tls13" and
+    .shortlist.circular_count==3 and
+    (.shortlist.circular_items | length)==3 and
     (.shortlist.items | all(.profile_replay.verified==true and (.profile|length)>0)) and
     (.stages[] | select(.number=="80" and .status=="PASS"))
 ' >/dev/null || fail 'extended success result contract is invalid'
