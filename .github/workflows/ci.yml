@@ -92,6 +92,9 @@ jobs:
       - name: Test GitHub branch hygiene contract
         run: sh scripts/test-github-branch-hygiene.sh
 
+      - name: Test repository artifact hygiene
+        run: sh scripts/test-repository-hygiene.sh
+
       - name: Check required project files
         run: |
           set -eu
@@ -129,6 +132,7 @@ jobs:
             scripts/test-release-trigger.sh \
             scripts/test-release-node24-actions.sh \
             scripts/test-github-branch-hygiene.sh \
+            scripts/test-repository-hygiene.sh \
             .github/workflows/cleanup-merged-branch.yml \
             .github/workflows/release.yml \
             .github/workflows/release-trigger.yml
@@ -161,6 +165,11 @@ jobs:
 
           test -x scripts/test-github-branch-hygiene.sh || {
             echo "scripts/test-github-branch-hygiene.sh is not executable"
+            exit 1
+          }
+
+          test -x scripts/test-repository-hygiene.sh || {
+            echo "scripts/test-repository-hygiene.sh is not executable"
             exit 1
           }
 

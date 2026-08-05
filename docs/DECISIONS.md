@@ -2336,3 +2336,12 @@ Affected documents:
 - docs/ROADMAP.md
 - docs/REQUIREMENTS.md
 - docs/CHANGELOG.md
+
+==================================================
+DECISION — REPOSITORY ARTIFACT AND AUTHORITY HYGIENE
+==================================================
+
+Accepted on 2026-08-05. Tracked backup/merge/patch/transport artifacts are forbidden,
+historical records that can be mistaken for current behavior require explicit status
+banners, CI enforces the contract, and remote steady state is `main` plus preserved
+`recovery/base`. Full rationale: `docs/decisions/DEC-2026-08-05-repository-artifact-hygiene.md`.

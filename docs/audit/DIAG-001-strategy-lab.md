@@ -1,5 +1,7 @@
 # DIAG-001 — Synchronous Blockcheck replacement by Strategy Lab
 
+> **Status — 2026-08-05:** Historical delivery record. The initial 13-patch delivery and corrective patches 1–11 are source-complete. Statements below about an active legacy path, raw-IP targets, intermediate package candidates, or pending early patches describe their time of writing and are not current authority. Current behavior is governed by `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`, `docs/audit/DIAG-001-strategy-lab-activation.md`, and `docs/PROJECT_STATE.md`.
+
 ==================================================
 DOCUMENT ROLE
 ==================================================

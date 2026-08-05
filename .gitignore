@@ -7,3 +7,14 @@
 work/
 dist/
 *.pkg
+
+# tracked backup, merge and transport artifacts
+*.orig
+*.rej
+*.patch
+*.diff
+*.b64
+*.base64
+*.bak
+*.part-*
+*~

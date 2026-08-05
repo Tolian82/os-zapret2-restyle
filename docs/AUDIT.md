@@ -2419,3 +2419,13 @@ Affected documents:
 - docs/REQUIREMENTS.md
 - docs/CHANGELOG.md
 - README.md
+
+==================================================
+2026-08-05 — REPOSITORY HYGIENE AND STRATEGY LAB SOURCE CLOSURE
+==================================================
+
+`REPO-HYG-001` is closed in source. The stale tracked backup and obsolete remote branches
+were removed, permanent artifact/authority CI checks were added, and current Strategy
+Lab authority was synchronized. Corrective source patches 1–11 are complete. The only
+remaining DIAG-001 gate is consolidated owner-assisted live OPNsense verification.
+Detailed evidence: `docs/audit/AUDIT-2026-08-05-REPOSITORY-HYGIENE.md`.

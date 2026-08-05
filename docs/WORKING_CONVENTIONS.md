@@ -482,3 +482,25 @@ GUI MAINTENANCE BACKEND RULE
 The existing `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh` is the single approved backend for GUI management of bol-van/zapret2 releases. The GUI must not introduce a second independent installer. User-visible requirements are release discovery, installed-version reporting, update notification, release selection, installation, update, and repeat installation. Internal download or Git operations remain backend implementation details and are not the name of the GUI task.
 
 The additional BLOB repository is an approved later GUI work item, but its repository and technical contract remain undefined until supplied by the project owner. Do not invent a URL, manifest, directory layout, version scheme, integrity policy, or update behavior.
+
+==================================================
+REPOSITORY ARTIFACT HYGIENE
+==================================================
+
+Tracked editor backups, merge rejects, ad-hoc patches, transport fragments, encoded
+payloads, and local backup files are forbidden in the authoritative tree. This includes
+`*.orig`, `*.rej`, `*.patch`, `*.diff`, `*.b64`, `*.base64`, `*.bak`, `*.part-*`, and
+editor `*~` files. Build output remains ignored separately.
+
+Historical records may remain when they are genuine engineering evidence, but a record
+whose wording can be confused with current behavior must carry an explicit historical
+or superseded status banner and point to the current authority.
+
+`scripts/test-repository-hygiene.sh` is a mandatory CI gate. It rejects forbidden
+tracked artifacts and verifies the active documentation authority markers. Exceptions
+require a separate recorded decision and a narrow reviewed allowlist; none currently
+exist.
+
+Normal steady-state branch authority is `main`. `recovery/base` is preserved as a
+separate recovery reference. Ordinary task, repair, release-preparation, and transport
+branches are temporary and are removed after their work is superseded or squash merged.

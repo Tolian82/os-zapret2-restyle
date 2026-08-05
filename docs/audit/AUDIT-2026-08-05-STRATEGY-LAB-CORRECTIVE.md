@@ -135,3 +135,15 @@ This audit remains open until:
 - owner-assisted live OPNsense verification confirms active cancellation, bounded
   timing, exact semantic restoration, circular start/stop, cleanup, and saved Traffic
   Strategy immutability.
+
+## Remediation status — 2026-08-05
+
+Corrective Patches 1–11 are source-complete. `SL-COR-001` through `SL-COR-011` are
+remediated and covered by focused and complete integration tests. `REPO-HYG-001` is
+closed by removal of the tracked backup, permanent CI artifact checks, documentation
+authority synchronization, and obsolete branch cleanup.
+
+This audit remains open only for the consolidated owner-assisted live OPNsense matrix.
+That gate must verify real blocked-domain Standard/Extended behavior, active-stage
+cancellation, bounded timeout behavior, RUNNING/STOPPED restoration, circular cleanup,
+Traffic Strategy immutability, and result recovery after page reload.
