@@ -40,7 +40,7 @@ printf '%s\n' "${invalid}" | grep -Fq 'Invalid domain format.'
 grep -Fq "if (trim(\$response) === '')" "${CONTROLLER}"
 grep -Fq 'Domain connectivity test returned no output.' "${CONTROLLER}"
 for test in job-contract target-contract candidate-runtime runtime-cleanup preflight-cleanup \
-    hard-deadline stale-worker-recovery family-screening parameter-expansion \
+    hard-deadline stale-worker-recovery state-race family-screening parameter-expansion \
     stability-shortlist extended-tcp quic udp time-budget semantic-restoration \
     circular diagnostics-activation e2e
 do
