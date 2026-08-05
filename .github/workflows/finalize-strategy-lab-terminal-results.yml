@@ -30,69 +30,34 @@ jobs:
               target.write_text(text.replace(old, new))
 
           replace('Makefile', 'PLUGIN_REVISION=    18', 'PLUGIN_REVISION=    19', 'revision')
-
-          replace(
-              'src/opnsense/scripts/OPNsense/Zapret/strategy_lab_worker.sh',
-              'worker_udp_messages worker_stage_machine worker_control worker_flow',
-              'worker_udp_messages worker_stage_machine worker_result worker_control worker_flow',
-              'worker result module order'
-          )
-
-          replace(
-              'src/opnsense/scripts/OPNsense/Zapret/strategy_lab/worker_flow.sh',
-              'worker_finish TARGET_ACCESSIBLE false "${TARGET_ACCESSIBLE_FINAL_MESSAGE}"',
-              'worker_finish TARGET_ACCESSIBLE false',
-              'target accessible finalization'
-          )
-          replace(
-              'src/opnsense/scripts/OPNsense/Zapret/strategy_lab/worker_flow.sh',
-              'worker_run_search_stages\nworker_finish PARTIAL false "${PARTIAL_FINAL_MESSAGE}"',
-              'worker_run_search_stages\nworker_finish_search',
-              'normal search finalization'
-          )
+          replace('src/opnsense/scripts/OPNsense/Zapret/strategy_lab_worker.sh', 'worker_udp_messages worker_stage_machine worker_control worker_flow', 'worker_udp_messages worker_stage_machine worker_result worker_control worker_flow', 'worker result module order')
+          replace('src/opnsense/scripts/OPNsense/Zapret/strategy_lab/worker_flow.sh', 'worker_finish TARGET_ACCESSIBLE false "${TARGET_ACCESSIBLE_FINAL_MESSAGE}"', 'worker_finish TARGET_ACCESSIBLE false', 'target accessible finalization')
+          replace('src/opnsense/scripts/OPNsense/Zapret/strategy_lab/worker_flow.sh', 'worker_run_search_stages\nworker_finish PARTIAL false "${PARTIAL_FINAL_MESSAGE}"', 'worker_run_search_stages\nworker_finish_search', 'normal search finalization')
 
           cases = Path('scripts/lib/test-strategy-lab-lifecycle-cases.sh')
           text = cases.read_text()
-          old = '''printf '%s\\n' "${result}" | jq -e '.outcome=="PARTIAL" and .initial_service_state=="RUNNING"' >/dev/null ||
-    fail "running-state snapshot was not recorded"'''
-          new = '''printf '%s\\n' "${result}" | jq -e '.state=="completed" and .outcome=="NO_CANDIDATE" and .initial_service_state=="RUNNING"' >/dev/null ||
-    fail "valid empty shortlist was not classified as NO_CANDIDATE"'''
+          old = "printf '%s\\n' \"${result}\" | jq -e '.outcome==\"PARTIAL\" and .initial_service_state==\"RUNNING\"' >/dev/null ||\n    fail \"running-state snapshot was not recorded\""
+          new = "printf '%s\\n' \"${result}\" | jq -e '.state==\"completed\" and .outcome==\"NO_CANDIDATE\" and .initial_service_state==\"RUNNING\"' >/dev/null ||\n    fail \"valid empty shortlist was not classified as NO_CANDIDATE\""
           if old not in text:
               raise SystemExit('lifecycle no-candidate baseline not found')
           text = text.replace(old, new)
 
-          restore_old = '''job=$(start_job restore-failure.example en)
-wait_for_state "${job}" completed
-result=$(launcher result "${job}")
-printf '%s\\n' "${result}" | jq -e '.outcome=="RESTORE_FAILED"' >/dev/null ||
-    fail "restore failure was not explicit"'''
-          restore_new = '''job=$(start_job restore-failure.example en)
-wait_for_state "${job}" error
-result=$(launcher result "${job}")
-printf '%s\\n' "${result}" | jq -e '.state=="error" and .outcome=="RESTORE_FAILED"' >/dev/null ||
-    fail "restore failure was not an explicit terminal error"'''
-          if restore_old not in text:
+          old = "job=$(start_job restore-failure.example en)\nwait_for_state \"${job}\" completed\nresult=$(launcher result \"${job}\")\nprintf '%s\\n' \"${result}\" | jq -e '.outcome==\"RESTORE_FAILED\"' >/dev/null ||\n    fail \"restore failure was not explicit\""
+          new = "job=$(start_job restore-failure.example en)\nwait_for_state \"${job}\" error\nresult=$(launcher result \"${job}\")\nprintf '%s\\n' \"${result}\" | jq -e '.state==\"error\" and .outcome==\"RESTORE_FAILED\"' >/dev/null ||\n    fail \"restore failure was not an explicit terminal error\""
+          if old not in text:
               raise SystemExit('restore failure baseline not found')
-          text = text.replace(restore_old, restore_new)
+          text = text.replace(old, new)
 
-          incomplete_old = '''job=$(start_job incomplete.example en)
-wait_for_state "${job}" completed
-result=$(launcher result "${job}")
-printf '%s\\n' "${result}" | jq -e '.outcome=="ERROR" and .initial_service_state==""' >/dev/null ||
-    fail "incomplete initial state did not fail closed"'''
-          incomplete_new = '''job=$(start_job incomplete.example en)
-wait_for_state "${job}" error
-result=$(launcher result "${job}")
-printf '%s\\n' "${result}" | jq -e '.state=="error" and .outcome=="ERROR" and .initial_service_state==""' >/dev/null ||
-    fail "incomplete initial state did not fail closed as a terminal error"'''
-          if incomplete_old not in text:
+          old = "job=$(start_job incomplete.example en)\nwait_for_state \"${job}\" completed\nresult=$(launcher result \"${job}\")\nprintf '%s\\n' \"${result}\" | jq -e '.outcome==\"ERROR\" and .initial_service_state==\"\"' >/dev/null ||\n    fail \"incomplete initial state did not fail closed\""
+          new = "job=$(start_job incomplete.example en)\nwait_for_state \"${job}\" error\nresult=$(launcher result \"${job}\")\nprintf '%s\\n' \"${result}\" | jq -e '.state==\"error\" and .outcome==\"ERROR\" and .initial_service_state==\"\"' >/dev/null ||\n    fail \"incomplete initial state did not fail closed as a terminal error\""
+          if old not in text:
               raise SystemExit('incomplete state baseline not found')
-          text = text.replace(incomplete_old, incomplete_new)
+          text = text.replace(old, new)
 
-          lint_marker = 'sh -n "${MODULE_DIR}/worker_messages.sh"\n'
-          if lint_marker not in text:
+          marker = 'sh -n "${MODULE_DIR}/worker_messages.sh"\n'
+          if marker not in text:
               raise SystemExit('lifecycle lint marker not found')
-          text = text.replace(lint_marker, lint_marker + 'sh -n "${MODULE_DIR}/worker_result.sh"\n')
+          text = text.replace(marker, marker + 'sh -n "${MODULE_DIR}/worker_result.sh"\n')
           cases.write_text(text)
 
           aggregate = Path('scripts/test-strategy-lab-job-contract.sh')
