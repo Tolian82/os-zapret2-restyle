@@ -1,14 +1,23 @@
 # os-zapret2-restyle — GitHub workflow
 
-Official repository: https://github.com/Tolian82/os-zapret2-restyle
+Official repository: `Tolian82/os-zapret2-restyle`
 Primary branch: `main`
-Published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Current package candidate: `os-zapret2-restyle-0.3.2_15.pkg`
+Authoritative delivery procedure: `docs/GITHUB_PUBLICATION.md`
+Active decision: `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`
 
-Patch 13 is an ordinary package patch. It keeps `VERSION=0.3.2`, sets `PLUGIN_REVISION=15`, and creates no tag, release, release asset, or pkg-repository publication.
+Normal delivery:
 
-Required delivery remains: one atomic commit, one ready PR, pull-request title check, full Validate Project, FreeBSD package build, exact scope review, squash merge, verified `main`, and automatic task-branch deletion.
+1. establish the exact current `main` SHA and requested scope;
+2. prepare one logical change with affected documentation;
+3. validate and review the complete diff;
+4. publish one task branch and open one Ready PR;
+5. keep any repairs in the same PR when they remain in scope;
+6. require successful checks for the latest mergeable PR state;
+7. squash merge using the expected head SHA;
+8. verify `main` and clean the temporary branch.
 
-PR title: `v0.3.2_15: Activate Strategy Lab diagnostics`
+CI is a merge gate, not a ban on independent analysis or separate preparation. A PR may
+contain multiple same-scope work commits; `main` receives one logical squash commit.
 
-Owner-assisted OPNsense verification is intentionally deferred until the merged package candidate is installed on the appliance.
+Current versions, package candidates, active PRs, and next work belong in
+`docs/PROJECT_STATE.md`, not in this stable workflow document.

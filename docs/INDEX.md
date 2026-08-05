@@ -5,105 +5,115 @@ DOCUMENT ROLE
 ==================================================
 
 Question answered:
-Where should I look first?
+Where should I look first, and which document controls a subject?
 
 Purpose:
-Define the mandatory context-recovery order and identify the specialist authority for
-each class of project information.
-
-Updated when:
-A document is added, removed, renamed, reordered, or given a different responsibility.
-
-Read after:
-Repository-root `AGENTS.md`.
-
-Do not store here:
-Detailed project state, decisions, implementation history, architecture, or procedures.
+Define a risk-based context-recovery order and specialist authority without forcing a
+complete reread of the repository for every small task.
 
 ==================================================
-MANDATORY READING ORDER
+DEFAULT READING ORDER
 ==================================================
 
-Before diagnosis, commands, repository mutation, or publication, read in this order:
+For every new or resumed project task:
 
-1. `docs/INDEX.md`
-2. `docs/PROJECT_STATE.md`
-3. `docs/AUDIT.md`
-4. `docs/DECISIONS.md`
-5. `docs/WORKING_CONVENTIONS.md`
-6. `docs/DEVELOPMENT_GUIDE.md`
-7. `docs/ARCHITECTURE.md`
-8. `docs/DEVLOG.md`
-9. `docs/ROADMAP.md`
-10. `docs/REQUIREMENTS.md`
-11. `docs/GITHUB_WORKFLOW.md`
-12. `docs/GITHUB_PUBLICATION.md`
+1. repository-root `AGENTS.md`;
+2. `docs/INDEX.md`;
+3. `docs/PROJECT_STATE.md`;
+4. the specialist documents that directly govern the requested scope.
 
-`docs/GITHUB_PUBLICATION.md` is the final specialist authority immediately before any
-GitHub mutation. Its current atomic-commit, one-remote-branch, automatic-cleanup,
-patch/release, PR, check, and merge rules supersede older generic Draft/Ready or
-repair-commit wording that remains in historical or general documents.
+Additional reading by task type:
+
+- code or runtime change: applicable sections of `WORKING_CONVENTIONS.md`,
+  `DEVELOPMENT_GUIDE.md`, architecture, requirements, audit, and tests;
+- audit: the relevant audit register, architecture, requirements, and decisions;
+- GitHub mutation: `docs/GITHUB_PUBLICATION.md` and the active GitHub decision;
+- release: release workflow, release gate, current state, changelog, and release records;
+- repository-wide audit or genuine lost-context recovery: complete Engineering Memory.
+
+Do not treat a complete reread of every large historical file as a blocking prerequisite
+for a small diagnosis, focused edit, or routine GitHub status action.
 
 ==================================================
 DOCUMENT MAP
 ==================================================
 
 `PROJECT_STATE.md`
-Where is the project now?
+Current version, verified baseline, active work, blockers, and next action.
 
 `AUDIT.md` and `docs/audit/`
-What has been checked, what is broken, and what requires evidence?
+Confirmed findings, evidence, impact, remediation, and verification state.
 
 `DECISIONS.md` and `docs/decisions/`
-Why was a project rule or architecture choice approved?
+Approved engineering decisions and their supersession history.
 
 `WORKING_CONVENTIONS.md`
-Which permanent engineering rules are settled?
+Stable engineering and operational conventions.
 
 `DEVELOPMENT_GUIDE.md`
-How is normal development performed?
+Repeatable implementation and validation workflow.
 
 `ARCHITECTURE.md` and `docs/architecture/`
-How is the plugin built and how do components interact?
-
-`docs/architecture/STRATEGY_LAB_ACTIVATION.md`
-How does the asynchronous Diagnostics path replace synchronous Blockcheck?
+Product and runtime architecture.
 
 `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`
-What is the current authoritative Strategy Lab state machine, timing, cancellation, restoration, target, result, and circular-validation contract?
+Current Strategy Lab behavioral authority.
 
-`docs/USER_GUIDE_STRATEGY_LAB.md`
-How does an operator use Strategy Lab and temporary circular validation?
+`docs/architecture/STRATEGY_LAB_ACTIVATION.md`
+Active Diagnostics path and the delivery-authority override for older Strategy Lab plans.
 
 `DEVLOG.md` and `docs/devlog/`
-What work and verification were completed?
+Completed work and verification evidence.
 
 `ROADMAP.md`
-What is ordered next?
+Ordered product work and gates.
 
 `REQUIREMENTS.md`
-What must the product do?
+Approved product requirements.
 
 `GITHUB_WORKFLOW.md`
-How are repository maintenance, package patches, and project releases controlled?
+Compact stable summary of normal GitHub work.
 
 `GITHUB_PUBLICATION.md`
-How is one clean logical change delivered with exactly one remote task branch and
-automatic cleanup?
+Final authority for branches, PRs, checks, repairs, merge, cleanup, patch/release
+boundaries, transport selection, and concurrency.
 
 `CHANGELOG.md`, `docs/releases/`, and `docs/patches/`
-What changed in a published release or an ordinary package patch?
+Published changes and historical patch/release records.
 
 ==================================================
 PRECEDENCE
 ==================================================
 
-1. The project owner's explicit current instruction defines scope and release version.
-2. Repository-root `AGENTS.md` defines blocking entry rules.
-3. This index defines reading order and specialist ownership.
-4. The relevant specialist document controls its subject.
-5. Historical records remain evidence but do not override later active decisions.
-6. Historical DIAG, audit, devlog, release, and patch records require an explicit status banner when their wording can be mistaken for current behavior.
+1. The project owner's explicit current instruction defines scope and exact release
+   authority.
+2. Repository-root `AGENTS.md` defines blocking safety and entry rules.
+3. This index defines specialist ownership and reading scope.
+4. The relevant active specialist document controls its subject.
+5. A later approved decision explicitly marked active supersedes earlier conflicting
+   decisions and historical plans.
+6. Historical audit, devlog, patch, release, or architecture-delivery records remain
+   evidence but do not override current behavior or process.
 
-Never infer current state only from chat history, a prior summary, or an older release
-record. Re-read current `main` and the applicable specialist document.
+For GitHub delivery, the authority order is:
+
+1. current owner instruction;
+2. `AGENTS.md`;
+3. `docs/GITHUB_PUBLICATION.md`;
+4. `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`;
+5. other general or historical documents.
+
+This GitHub authority explicitly supersedes conflicting wording in older sections of
+`WORKING_CONVENTIONS.md`, `DEVELOPMENT_GUIDE.md`, `STRATEGY_LAB.md`, patch records, and
+prior atomic/serial publication decisions. Such text must not be used to require:
+
+- exactly one work commit inside a PR branch;
+- exactly one workflow run;
+- closing a valid PR after an ordinary same-scope CI failure;
+- waiting idly for CI before independent analysis or preparation;
+- a low-level blobs/tree API sequence when another safe transport is available;
+- Draft → Ready as a mandatory normal path;
+- branch-cleanup success as proof that code delivery itself succeeded.
+
+Never infer current state only from chat history or a historical record. Re-read current
+`main`, current PR state, and the applicable specialist authority.

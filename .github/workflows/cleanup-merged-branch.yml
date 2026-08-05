@@ -1,58 +1,44 @@
-name: Cleanup merged branch
+name: Cleanup merged branch fallback
 
 on:
-  push:
+  pull_request:
     branches: [main]
+    types: [closed]
 
 permissions:
   contents: write
-  pull-requests: read
 
 jobs:
   cleanup:
-    name: Delete merged head branch
+    name: Delete merged same-repository head branch
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
 
     steps:
-      - name: Delete same-repository PR head branch
+      - name: Delete the merged task branch when it still exists
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          COMMIT_SHA: ${{ github.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
 
-          prs=$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            "repos/${REPOSITORY}/commits/${COMMIT_SHA}/pulls")
-
-          head_ref=$(jq -r \
-            --arg repository "${REPOSITORY}" \
-            --arg default_branch "${DEFAULT_BRANCH}" \
-            '
-              map(select(
-                .merged_at != null and
-                .head.repo.full_name == $repository and
-                .base.ref == $default_branch
-              ))
-              | first
-              | .head.ref // empty
-            ' <<<"${prs}")
-
-          if [[ -z "${head_ref}" || "${head_ref}" == "${DEFAULT_BRANCH}" ]]; then
-            echo "No merged same-repository task branch is associated with ${COMMIT_SHA}."
+          if [[ -z "${HEAD_REF}" || "${HEAD_REF}" == "${DEFAULT_BRANCH}" ]]; then
+            echo "No deletable task branch was supplied."
             exit 0
           fi
 
-          get_endpoint="repos/${REPOSITORY}/git/ref/heads/${head_ref}"
-          delete_endpoint="repos/${REPOSITORY}/git/refs/heads/${head_ref}"
+          get_endpoint="repos/${REPOSITORY}/git/ref/heads/${HEAD_REF}"
+          delete_endpoint="repos/${REPOSITORY}/git/refs/heads/${HEAD_REF}"
 
           if ! gh api "${get_endpoint}" >/dev/null 2>&1; then
-            echo "Branch ${head_ref} is already absent."
+            echo "Branch ${HEAD_REF} is already absent."
             exit 0
           fi
 
           gh api --method DELETE "${delete_endpoint}"
-          echo "Deleted merged task branch ${head_ref}."
+          echo "Deleted merged task branch ${HEAD_REF}."
