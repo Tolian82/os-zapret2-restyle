@@ -3,13 +3,13 @@
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Current package candidate: `os-zapret2-restyle-0.3.2_13.pkg`
+Current package candidate: `os-zapret2-restyle-0.3.2_14.pkg`
 
-- Patches 1–10: complete and merged.
-- Patch 10 merged as `4c47c15739ee146b0e48db0f9b3d14c4d3739c2b`; task branch removed.
-- Patch 11: configured request-response UDP branch in delivery.
-- Patches 12–13: blocked by the serial gate.
+- Patches 1–11: complete and merged.
+- Patch 11 merged as `c178106c02ee1fc3c849a6d174fe881d84c4a704`; task branch removed.
+- Patch 12: temporary circular live validation in delivery.
+- Patch 13: blocked by the serial gate.
 
-Patch 11 requires explicit UDP port and request payload, otherwise records a safe skip. Configured testing requires a response and uses sequential Zapret2 UDP-fragment candidates. `VERSION=0.3.2`; `PLUGIN_REVISION=13`; no release publication is authorized.
+Patch 12 adds a separate temporary circular-validation session for a completed domain Strategy Lab job with a shortlist of three to five stable candidates. It uses one target-scoped dvtws2 runtime, upstream Zapret2 `circular`, bidirectional firewall interception, a bounded TTL, explicit stop/status actions, and mandatory restoration of the exact initial Zapret2 service state. It never changes the saved Traffic Strategy. `VERSION=0.3.2`; `PLUGIN_REVISION=14`; no release publication is authorized.
 
-Next action: completely process Patch 11 before Patch 12.
+Next action: completely process Patch 12 before Patch 13.
