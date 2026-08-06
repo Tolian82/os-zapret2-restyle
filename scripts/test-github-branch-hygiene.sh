@@ -136,7 +136,10 @@ require_fixed '^v${ESCAPED_VERSION}_1:\ Prepare\ release\ v${ESCAPED_VERSION}' "
 require_fixed 'concurrency:' "${CI}" 'CI concurrency is missing'
 require_fixed 'cancel-in-progress:' "${CI}" 'CI cancel-in-progress is missing'
 require_fixed 'Classify changed paths' "${CI}" 'CI path classification is missing'
-require_fixed "github.event_name == 'pull_request' && needs.changes.outputs.package == 'true'" "${CI}" 'package build is not path-gated'
+require_fixed 'workflow_dispatch:' "${CI}" 'CI lacks the manual dispatch fallback'
+require_fixed 'github.event_name == '\''pull_request'\'' || github.event_name == '\''workflow_dispatch'\''' "${CI}" 'manual CI does not execute project validation'
+require_fixed 'EVENT_NAME}" == "workflow_dispatch"' "${CI}" 'manual CI event is not classified'
+require_fixed '(github.event_name == '\''pull_request'\'' || github.event_name == '\''workflow_dispatch'\'') && needs.changes.outputs.package == '\''true'\''' "${CI}" 'manual CI does not build the FreeBSD package'
 require_fixed 'Verify main integrity' "${CI}" 'main integrity job is missing'
 require_fixed 'Invalid main commit subject' "${CI}" 'main squash-subject validation is missing'
 
