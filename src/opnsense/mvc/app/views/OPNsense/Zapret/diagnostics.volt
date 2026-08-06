@@ -16,10 +16,12 @@ $(document).ready(function () {
         shortlist:'Final shortlist', restore:'Zapret2 restoration', report:'Final report'
     };
     var statusLabels = isRussian ? {
-        PENDING:'ОЖИДАНИЕ', RUNNING:'ВЫПОЛНЯЕТСЯ', PASS:'УСПЕШНО', FAIL:'ОШИБКА', FAILED:'ОШИБКА',
+        IDLE:'ОЖИДАНИЕ', QUEUED:'В ОЧЕРЕДИ', PREPARING:'ПОДГОТОВКА', PENDING:'ОЖИДАНИЕ', RUNNING:'ВЫПОЛНЯЕТСЯ',
+        STOP_REQUESTED:'ОСТАНОВКА ЗАПРОШЕНА', COMPLETED:'ЗАВЕРШЕНО', PASS:'УСПЕШНО', FAIL:'ОШИБКА', FAILED:'ОШИБКА',
         ERROR:'ОШИБКА', TIMEOUT:'ТАЙМ-АУТ', SKIPPED:'ПРОПУЩЕНО', CANCELLED:'ОТМЕНЕНО', RESTORE_FAILED:'ВОССТАНОВЛЕНИЕ НЕ ВЫПОЛНЕНО'
     } : {
-        PENDING:'PENDING', RUNNING:'RUNNING', PASS:'PASS', FAIL:'FAIL', FAILED:'FAILED', ERROR:'ERROR',
+        IDLE:'IDLE', QUEUED:'QUEUED', PREPARING:'PREPARING', PENDING:'PENDING', RUNNING:'RUNNING',
+        STOP_REQUESTED:'STOP REQUESTED', COMPLETED:'COMPLETED', PASS:'PASS', FAIL:'FAIL', FAILED:'FAILED', ERROR:'ERROR',
         TIMEOUT:'TIMEOUT', SKIPPED:'SKIPPED', CANCELLED:'CANCELED', RESTORE_FAILED:'RESTORE FAILED'
     };
     var outcomeLabels = isRussian ? {
@@ -206,7 +208,7 @@ $(document).ready(function () {
 
     function pollCircular() {
         apiPost('/api/zapret/circular/status',{},function(data){
-            var state=data.state||data.status||'idle'; $('#circularState').text(circularMessages[state] ? label(statusLabels,String(state).toUpperCase()) : state);
+            var state=data.state||data.status||'idle'; $('#circularState').text(label(statusLabels,String(state).toUpperCase()));
             $('#circularMessage').text(circularMessages[state] || data.message || ''); $('#circularRaw').text(JSON.stringify(data,null,2));
             var live=['queued','preparing','running','stop_requested'].indexOf(state)!==-1; $('#circularStartBtn').prop('disabled',live); $('#circularStopBtn').prop('disabled',!live);
             if(live)circularTimer=setTimeout(pollCircular,1000);
