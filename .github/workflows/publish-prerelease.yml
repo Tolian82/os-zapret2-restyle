@@ -1,0 +1,134 @@
+name: Publish testing prerelease
+
+on:
+  push:
+    branches:
+      - 'publish/v*_*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prerelease-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build, verify, and publish FreeBSD 15 prerelease
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Derive and verify candidate identity
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION_VALUE=$(tr -d '[:space:]' < VERSION)
+          REVISION=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | head -1)
+          [[ "${VERSION_VALUE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "${REVISION}" =~ ^[0-9]+$ ]]
+
+          if [[ "${REVISION}" == "0" ]]; then
+            PACKAGE_VERSION="${VERSION_VALUE}"
+          else
+            PACKAGE_VERSION="${VERSION_VALUE}_${REVISION}"
+          fi
+
+          EXPECTED_BRANCH="publish/v${PACKAGE_VERSION}"
+          [[ "${GITHUB_REF_NAME}" == "${EXPECTED_BRANCH}" ]]
+
+          echo "package_version=${PACKAGE_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "tag=v${PACKAGE_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "asset=os-zapret2-restyle-${PACKAGE_VERSION}.pkg" >> "${GITHUB_OUTPUT}"
+
+      - name: Reject duplicate publication state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.candidate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists; published candidates are immutable." >&2
+            exit 1
+          fi
+
+      - name: Build package inside FreeBSD 15 VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '15.0'
+          usesh: true
+          prepare: pkg install -y jq
+          run: |
+            test "$(freebsd-version -u | cut -d. -f1)" = "15"
+            sh scripts/build-pkg.sh
+
+      - name: Verify package manifest
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.candidate.outputs.package_version }}
+          ASSET: ${{ steps.candidate.outputs.asset }}
+        run: |
+          set -euo pipefail
+          PACKAGE="dist/${ASSET}"
+          MANIFEST=$(mktemp)
+          trap 'rm -f "${MANIFEST}"' EXIT
+
+          test -f "${PACKAGE}"
+          tar -xOf "${PACKAGE}" +MANIFEST > "${MANIFEST}"
+          jq -e \
+            --arg version "${PACKAGE_VERSION}" \
+            '.version == $version and .abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64"' \
+            "${MANIFEST}" >/dev/null
+          sha256sum "${PACKAGE}"
+
+      - name: Publish testing prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.candidate.outputs.tag }}
+          ASSET: ${{ steps.candidate.outputs.asset }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          gh release create "${TAG}" "dist/${ASSET}" \
+            --target "${TARGET_SHA}" \
+            --title "${TAG}" \
+            --prerelease \
+            --notes $'Testing candidate for owner-assisted live verification.\n\nFreeBSD 15 amd64 only. This prerelease does not publish GitHub Pages or the pkg repository.'
+
+      - name: Verify published release contract
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.candidate.outputs.tag }}
+          ASSET: ${{ steps.candidate.outputs.asset }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          RELEASE_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}")
+          jq -e \
+            --arg tag "${TAG}" \
+            --arg target "${TARGET_SHA}" \
+            --arg asset "${ASSET}" \
+            '.tag_name == $tag and .target_commitish == $target and .draft == false and .prerelease == true and any(.assets[]; .name == $asset and .state == "uploaded")' \
+            <<< "${RELEASE_JSON}" >/dev/null
+
+      - name: Delete temporary publication branch
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          ENCODED_BRANCH=${BRANCH//\//%2F}
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${ENCODED_BRANCH}"
