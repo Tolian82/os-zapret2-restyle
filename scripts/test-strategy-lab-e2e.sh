@@ -271,15 +271,23 @@ case "${1:-}" in
         ;;
     strategy-lab-circular)
         circular_dir="${STRATEGY_LAB_RUN_DIR}/circular"
-        state_file="${circular_dir}/state.json"
-        stop_file="${circular_dir}/stop"
+        session=$(cat "${circular_dir}/active.session")
+        session_dir="${circular_dir}/sessions/${session}"
+        state_file="${session_dir}/state.json"
+        stop_file="${session_dir}/stop.request"
         job="$2"
-        count=$(jq -r '.count' "${STRATEGY_LAB_JOBS_DIR}/${job}/shortlist.json")
-        jq -nc --arg job_id "${job}" --argjson count "${count}" \
-            '{state:"running",job_id:$job_id,message:"Circular validation running",reason:"",candidate_count:$count}' > "${state_file}"
+        count=$(jq -r '.candidate_count // 0' "${state_file}")
+        jq -nc --arg session_id "${session}" --arg parent_job_id "${job}" \
+            --argjson count "${count}" \
+            '{state:"running",session_id:$session_id,parent_job_id:$parent_job_id,
+              job_id:$parent_job_id,message:"Circular validation running",reason:"",
+              candidate_count:$count}' > "${state_file}"
         while [ ! -e "${stop_file}" ]; do sleep 1; done
-        jq -nc --arg job_id "${job}" --argjson count "${count}" \
-            '{state:"stopped",job_id:$job_id,message:"Circular validation stopped",reason:"requested",candidate_count:$count}' > "${state_file}"
+        jq -nc --arg session_id "${session}" --arg parent_job_id "${job}" \
+            --argjson count "${count}" \
+            '{state:"completed",session_id:$session_id,parent_job_id:$parent_job_id,
+              job_id:$parent_job_id,message:"Circular validation stopped",reason:"requested",
+              candidate_count:$count}' > "${state_file}"
         ;;
     *) exit 64 ;;
 esac
@@ -490,12 +498,14 @@ attempt=0
 while [ "${attempt}" -lt 10 ]
 do
     circular=$(api_call strategy_lab_circular_status)
-    [ "$(printf '%s\n' "${circular}" | jq -r '.state')" = stopped ] && break
+    [ "$(printf '%s\n' "${circular}" | jq -r '.state')" = completed ] && break
     sleep 1
     attempt=$((attempt + 1))
 done
-[ "$(printf '%s\n' "${circular}" | jq -r '.state')" = stopped ] ||
-    fail 'circular validation did not stop'
+[ "$(printf '%s\n' "${circular}" | jq -r '.state')" = completed ] ||
+    fail 'circular validation did not complete'
+[ ! -e "${RUN_DIR}/circular/state.json" ] || fail 'legacy circular state alias remains'
+[ ! -e "${RUN_DIR}/circular/stop" ] || fail 'legacy circular stop alias remains'
 
 [ ! -e "${RUN_DIR}/active.job" ] || fail 'active automated job marker remains'
 find "${RUN_DIR}/jobs" -type f -path '*/candidate-runtime/*.pid' -print |
@@ -520,4 +530,4 @@ sh -n "${WORKER}"
 sh -n "${CIRCULAR_LAUNCHER}"
 sh -n "${MODULE_DIR}/query.sh"
 
-echo 'PASS: Strategy Lab API/configd facade, launcher, lifecycle, worker stages, result recovery, and circular flow integrate end to end'
+echo 'PASS: Strategy Lab API/configd facade, launcher, lifecycle, worker stages, result recovery, and private circular flow integrate end to end'
