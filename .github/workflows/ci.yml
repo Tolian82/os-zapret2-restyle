@@ -116,8 +116,8 @@ jobs:
       - name: Test configuration activation contract
         run: sh scripts/test-config-activation-contract.sh
 
-      - name: Test domain diagnostics contract
-        run: sh scripts/test-domain-diagnostics-contract.sh
+      - name: Test Strategy Lab corrective matrix
+        run: sh scripts/test-strategy-lab-corrective-matrix.sh
 
       - name: Test diagnostics guidance localization
         run: sh scripts/test-diagnostics-guidance-localization.sh
@@ -179,6 +179,8 @@ jobs:
             pkg/+POST_DEINSTALL \
             scripts/build-pkg.sh \
             scripts/test-domain-diagnostics-contract.sh \
+            scripts/test-strategy-lab-corrective-matrix.sh \
+            scripts/test-strategy-lab-corrective-matrix-contract.sh \
             scripts/test-diagnostics-guidance-localization.sh \
             scripts/test-package-lifecycle-restart.sh \
             scripts/test-setup-release-selection.sh \
