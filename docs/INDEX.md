@@ -22,6 +22,7 @@
 - `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md` — persisted progress and complete RU/EN presentation;
 - `docs/architecture/STRATEGY_LAB_OBSOLETE_SURFACES.md` — removed circular aliases and duplicate state hook;
 - `docs/architecture/STRATEGY_LAB_RETENTION.md` — bounded cleanup and protected lifecycle evidence;
+- `docs/architecture/STRATEGY_LAB_CORRECTIVE_MATRIX.md` — one discoverable nonrecursive Strategy Lab CI entry point;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — finding-to-patch traceability;
 - `docs/PROJECT_STATE.md` — current verified baseline and next action.
 
