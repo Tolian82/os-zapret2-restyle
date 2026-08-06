@@ -20,19 +20,27 @@ Audited source: `main` at `a95fcc33b2bdd97830fe5cd44090ae189a141dfa` (`0.3.2_24`
 14. Extended protocols were not unified and UDP input was not supported.
 15. Progress, localization, retention, and CI coverage were incomplete.
 
-## Hardening progress
+## Hardening closure
 
-- Patches `_26`–`_34` address findings 2, 3, 6–10 and runtime-safety portions of 1, 4, and 5.
+- Patches `_26`–`_34` address findings 2, 3, 6–10 and the runtime-safety portions of findings 1, 4, and 5.
 - Patches `_35`–`_36` complete finding 14.
 - Patches `_37`–`_38` complete finding 11.
 - Patch `_39` completes finding 12.
 - Patches `_40`–`_41` complete finding 13.
-- Patch `_42` completes the progress and localization portions of finding 15.
-- Patch `_43` removes obsolete circular aliases and the duplicate state-level skip hook.
-- Patch `_44` completes the retention portion of finding 15.
-- Patch `_45` completes the CI portion of finding 15 with one discoverable nonrecursive corrective matrix, automatic inclusion of focused Strategy Lab tests, and warning-free terminal/stale-worker fixtures.
+- Patch `_42` completes progress and localization.
+- Patch `_43` removes obsolete circular aliases and the duplicate state-level hook.
+- Patch `_44` completes retention with evidence-preserving cleanup.
+- Patch `_45` completes mandatory CI coverage with one nonrecursive corrective matrix and warning-free fixtures.
 - Findings 1–15 are source-complete and covered by mandatory CI after Patch `_45`.
-- Patch `_46` records final closure and the owner-assisted live OPNsense release gate; it must not claim appliance results without collected evidence.
+- Patch `_46` freezes the closure record and the owner-assisted live OPNsense release gate without changing runtime behavior.
+
+Source and CI status: **COMPLETE**.
+
+Live OPNsense status: **PENDING OWNER**.
+
+Release status: **BLOCKED ON LIVE MATRIX**.
+
+The detailed closure authority is `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md`. The live appliance authority is `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
 ## Explicit exclusion
 
@@ -40,4 +48,4 @@ IPFW rules `19100–19131` remain an exclusive Strategy Lab reservation and are 
 
 ## Release gate
 
-The hardening series requires complete source tests and an owner-assisted live OPNsense matrix before release preparation. Source/CI completion is not equivalent to a live appliance PASS.
+Source/CI completion is not equivalent to a live appliance PASS. Release preparation is blocked until every required live row is executed on the owner's OPNsense appliance, marked PASS with recorded evidence, and followed by separate explicit owner authorization for release publication.
