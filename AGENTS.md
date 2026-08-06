@@ -1,3 +1,5 @@
+MANDATORY: Use the connected GitHub plugin first for every repository operation; use another transport only when the plugin lacks the required function or confirmed permission.
+
 # AGENTS.md
 
 This repository uses a mandatory risk-based documentation and GitHub preflight.
@@ -30,6 +32,11 @@ Authority order for GitHub work:
 6. `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`;
 7. `docs/GITHUB_WORKFLOW.md`.
 
+The connected GitHub plugin is the mandatory first transport for repository discovery,
+state inspection, pull requests, branches, commits, reviews, checks, merges, and every
+other operation it supports. Local `git`, `gh`, raw API calls, the web UI, and other
+transports are fallbacks only after the plugin capability or permission gap is confirmed.
+
 The evidence-first decision supersedes conflicting historical or active wording that
 requires mandatory Draft PRs, exactly one branch commit, full-document rereading for
 every operation, unversioned release-preparation titles, replacement publication
@@ -46,7 +53,8 @@ Before creating or changing a branch, PR, workflow, tag, release, or asset, insp
 - existing workflows capable of the operation;
 - active, queued, failed, and successful runs;
 - reusable artifacts, tags, releases, and assets;
-- actual connector/API/Git/`gh` capabilities and permissions.
+- actual GitHub-plugin capabilities and permissions, followed only when necessary by
+  connector/API/Git/`gh` fallback capabilities.
 
 Do not invent a new mechanism until this inventory proves that the existing mechanisms
 cannot safely complete the operation.
@@ -90,7 +98,8 @@ PRERELEASE PUBLICATION RULES
 Publishing an already verified candidate is a release operation, not a code PR.
 
 - Exact owner authorization is required for the candidate tag and asset.
-- Prefer direct Release API/UI/`gh` upload when verified package bytes already exist.
+- Prefer direct Release API/UI/`gh` upload when verified package bytes already exist and
+  the GitHub plugin does not expose the required release-asset write operation.
 - Reuse an Actions artifact only by exact run ID, artifact ID/name, and digest, and
   recheck its `+MANIFEST` before publication.
 - Use `.github/workflows/publish-prerelease.yml` only when repository-owned build and
