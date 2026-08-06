@@ -25,7 +25,8 @@ grep -Fq 'worker_skip_unfinished "${JOB_ID}" "${ERROR_SKIP_MESSAGE}"' "${CONTROL
 grep -Fq 'worker_skip_unfinished "${JOB_ID}" "${TIMEOUT_SKIP_MESSAGE}"' "${CONTROL}"
 
 # End-to-end coverage uses the same private-session contract and rejects aliases.
-grep -Fq 'circular/active.session' "${E2E}"
+grep -Fq 'circular_dir="${STRATEGY_LAB_RUN_DIR}/circular"' "${E2E}"
+grep -Fq 'active.session' "${E2E}"
 grep -Fq 'sessions/${session}' "${E2E}"
 grep -Fq 'stop.request' "${E2E}"
 grep -Fq "legacy circular state alias remains" "${E2E}"
