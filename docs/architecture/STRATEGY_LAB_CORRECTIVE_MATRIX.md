@@ -4,7 +4,9 @@
 
 `scripts/test-strategy-lab-corrective-matrix.sh` is the single CI entry point for Strategy Lab source verification. The GitHub workflow invokes it exactly once.
 
-The matrix first runs the focused domain-connectivity contract, then discovers every `scripts/test-strategy-lab-*.sh` file in stable lexical order and runs each exactly once, excluding only the matrix itself. New focused Strategy Lab tests therefore become mandatory automatically when added to the repository.
+The matrix first runs the focused domain-connectivity contract, then discovers every `scripts/test-strategy-lab-*.sh` file in stable lexical order. Every discovered file is syntax-checked. Focused contracts run directly once except four cleanup-sensitive contracts deliberately delegated to the end-to-end test: active cancellation, candidate runtime, semantic restoration, and time budget. E2E invokes each delegated contract exactly once.
+
+New focused Strategy Lab tests become mandatory automatically when added to the repository unless they are explicitly added to the small delegated set with matching matrix-contract evidence.
 
 ## Nonrecursive contract
 
@@ -15,7 +17,8 @@ The matrix first runs the focused domain-connectivity contract, then discovers e
 - CI invokes the matrix exactly once;
 - CI does not invoke the old domain wrapper as an orchestration path;
 - the domain test contains no Strategy Lab recursion;
-- the matrix excludes itself and discovers all other focused Strategy Lab tests;
+- the matrix excludes itself and discovers all focused Strategy Lab tests;
+- every delegated contract is invoked exactly once by E2E;
 - both matrix files remain required repository artifacts.
 
 ## Clean fixture requirement
