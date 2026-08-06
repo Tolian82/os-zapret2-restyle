@@ -91,13 +91,16 @@ grep -Fq 'FreeBSD) exec "${ZAPRET_NATIVE_PS_BIN}" -xww "$@"' "${WRAPPER}" ||
 grep -Fq '*) exec "${ZAPRET_NATIVE_PS_BIN}" "$@"' "${WRAPPER}" ||
     fail 'non-FreeBSD process wrapper does not preserve caller PID selection'
 grep -Fq 'STRATEGY_LAB_SEMANTIC_PS_BIN="${STRATEGY_LAB_SEMANTIC_PS_BIN:-${ZAPRET_PROCESS_QUERY_BIN}}"' "${BACKEND_COMMON}" ||
-    fail 'semantic process inspection is not routed through the wrapper'
-grep -Fq 'STRATEGY_LAB_SEMANTIC_PS_BIN' "${SERVICE_SOURCE}" ||
-    fail 'zapret service semantic evidence no longer uses the injectable process inspector'
+    fail 'semantic process inspection is not routed through the wrapper in backend common'
+grep -Fq 'STRATEGY_LAB_SEMANTIC_PS_BIN="${STRATEGY_LAB_SEMANTIC_PS_BIN:-${ZAPRET_PROCESS_QUERY_BIN}}"' "${SERVICE_SOURCE}" ||
+    fail 'zapret service overrides semantic evidence away from the FreeBSD-safe wrapper'
+! grep -Fq 'STRATEGY_LAB_SEMANTIC_PS_BIN="${STRATEGY_LAB_SEMANTIC_PS_BIN:-/bin/ps}"' "${SERVICE_SOURCE}" ||
+    fail 'zapret service still restores the obsolete direct /bin/ps default'
 
 sh -n "${WRAPPER}"
 sh -n "${BACKEND_COMMON}"
 sh -n "${STRATEGY_COMMON}"
 sh -n "${CIRCULAR_OWNER}"
+sh -n "${SERVICE_SOURCE}"
 
-echo 'PASS: FreeBSD daemon process queries include no-TTY processes while non-FreeBSD PID selection remains unchanged'
+echo 'PASS: FreeBSD daemon process queries and service semantic evidence share the no-TTY process wrapper'

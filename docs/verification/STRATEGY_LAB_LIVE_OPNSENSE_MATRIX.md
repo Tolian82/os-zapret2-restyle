@@ -10,10 +10,10 @@ Only FreeBSD 15 amd64 packages are valid. The revision 46 GitHub Actions artifac
 
 - Tester: repository owner
 - Test date/time: `2026-08-06 15:14:15 MSK` (installation baseline)
-- OPNsense version: `26.7.1_1`
+- OPNsense version: `26.7.1_1`; later diagnostic kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Architecture / ABI evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`
 - Required package ABI: `FreeBSD:15:amd64`
-- Candidate package: `os-zapret2-restyle-0.3.3_3.pkg`
+- Candidate package: `os-zapret2-restyle-0.3.3_4.pkg`
 - WAN interface: `vtnet1`
 - LAN test client: `PENDING OWNER`
 - Blocked-domain target: `PENDING OWNER`
@@ -21,7 +21,9 @@ Only FreeBSD 15 amd64 packages are valid. The revision 46 GitHub Actions artifac
 
 Installation and service baseline for `0.3.3_1`: **PASS**. The package installed successfully with architecture `FreeBSD:15:amd64`, annotation `FreeBSD_version: 1500068`, and the `zapret` service running after installation. This baseline does not mark any scenario row as passed.
 
-The first scenario 1 attempt on `0.3.3_1` failed before runtime mutation because FreeBSD daemon processes were omitted from PID identity queries. Evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`. Scenario 1 remains pending.
+The first scenario 1 attempt on `0.3.3_1` failed before runtime mutation because FreeBSD daemon processes were omitted from PID identity queries. Evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`.
+
+The diagnostic repeat on `0.3.3_2` proved that the installed process wrapper and shared matcher detected both daemon processes, but `zapret_service.sh strategy-lab-evidence` still reported both as absent because the complete service entry point overwrote the wrapper binding with direct `/bin/ps`. Evidence: `docs/verification/evidence/2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`. Scenario 1 remains pending and must be repeated on `0.3.3_4`.
 
 ## Required evidence bundle
 
@@ -49,7 +51,7 @@ Before installation, preserve the candidate package identity from its `+MANIFEST
 ```text
 abi: FreeBSD:15:amd64
 arch: freebsd:15:x86:64
-version: 0.3.3_3
+version: 0.3.3_4
 ```
 
 Recommended residue evidence after every terminal scenario:
@@ -64,7 +66,7 @@ configctl zapret status
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | `docs/verification/evidence/2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md` (failed `_1` attempt; corrected candidate retest required) | **PENDING OWNER** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | Failed attempts: `2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`, `2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`; corrected `_4` retest required | **PENDING OWNER** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Test completes while final service remains STOPPED; restoration evidence is verified | `PENDING OWNER` | **PENDING OWNER** |
 | 3 | Extended TLS 1.2 and HTTP | Available protocol successes appear as complete replay-verified profiles; unavailable protocols are explicitly skipped | `PENDING OWNER` | **PENDING OWNER** |
 | 4 | Extended QUIC | QUIC result is endpoint-bound and replay-verified when network capability exists; otherwise explicit skip reason | `PENDING OWNER` | **PENDING OWNER** |
