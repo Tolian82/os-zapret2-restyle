@@ -67,6 +67,7 @@ run_case()
             printf '%s\n' "${_case_dir}/result.json"
         }
         strategy_lab_clear_active_job(){ :; }
+        strategy_lab_udp_input_cleanup(){ :; }
         worker_skip_unfinished(){ :; }
 
         . "${MODULE_DIR}/worker_control.sh"
@@ -120,5 +121,6 @@ grep -Fq 'worker_finish_search' "${FLOW}" || fail 'normal worker flow does not c
 ! grep -Fq 'TIMEOUT_FINAL_MESSAGE' "${CONTROL}" || fail 'worker control still uses the timeout final-message override'
 ! grep -Fq 'CANCEL_FINAL_MESSAGE' "${CONTROL}" || fail 'worker control still uses the cancel final-message override'
 grep -Fq 'worker_result' "${WORKER}" || fail 'worker does not load the result contract'
+grep -Fq 'strategy_lab_udp_input_cleanup(){ :; }' "$0" || fail 'terminal fixture does not mock UDP cleanup explicitly'
 
-echo 'PASS: Strategy Lab terminal state, outcome, report status, and localized messages are truthful'
+echo 'PASS: Strategy Lab terminal state, outcome, report status, localized messages, and cleanup fixture are truthful'
