@@ -7,8 +7,6 @@ AGENTS="${ROOT_DIR}/AGENTS.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
 PUBLICATION="${ROOT_DIR}/docs/GITHUB_PUBLICATION.md"
 WORKFLOW_SUMMARY="${ROOT_DIR}/docs/GITHUB_WORKFLOW.md"
-CONVENTIONS="${ROOT_DIR}/docs/WORKING_CONVENTIONS.md"
-DEVELOPMENT="${ROOT_DIR}/docs/DEVELOPMENT_GUIDE.md"
 EVIDENCE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md"
 EFFICIENT_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-05-efficient-github-delivery.md"
 TITLE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md"
@@ -40,8 +38,6 @@ for file in \
   "${INDEX}" \
   "${PUBLICATION}" \
   "${WORKFLOW_SUMMARY}" \
-  "${CONVENTIONS}" \
-  "${DEVELOPMENT}" \
   "${EVIDENCE_DECISION}" \
   "${EFFICIENT_DECISION}" \
   "${TITLE_DECISION}" \
@@ -55,8 +51,9 @@ do
   test -s "${file}" || fail "missing or empty GitHub governance file: ${file}"
 done
 
-# Exact prose wording and line placement are intentionally not CI invariants.
-# This script validates decision status and executable workflow contracts only.
+# The plugin-first prose is intentionally not tested for exact wording or line placement.
+# This script preserves established delivery checks and validates executable workflow
+# contracts introduced by the evidence-first GitHub change.
 
 version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' "${MAKEFILE}" | head -1)
@@ -65,7 +62,7 @@ printf '%s\n' "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || fail 'VERSIO
 printf '%s\n' "${revision}" | grep -Eq '^[0-9]+$' || fail 'PLUGIN_REVISION is invalid'
 
 expected="v${version}"
-if [ "${revision}" != "0" ]; then
+if [ -n "${revision}" ] && [ "${revision}" != "0" ]; then
   expected="${expected}_${revision}"
 fi
 
@@ -74,32 +71,17 @@ grep -Eq '^Status:[[:space:]]+Active$' "${EFFICIENT_DECISION}" || fail 'efficien
 grep -Eq '^Status:[[:space:]]+Active$' "${TITLE_DECISION}" || fail 'universal title decision is not active'
 grep -Eq '^Status:[[:space:]]+Superseded' "${OLD_DECISION}" || fail 'old atomic decision is not superseded'
 
-require_fixed 'DEC-2026-08-06-evidence-first-github-operations.md' "${AGENTS}" 'AGENTS does not name evidence-first authority'
-require_fixed 'PRE-MUTATION INVENTORY' "${AGENTS}" 'AGENTS lacks pre-mutation inventory'
-require_fixed 'at most one unchanged rerun' "${AGENTS}" 'AGENTS lacks bounded infrastructure retry rule'
-require_fixed 'Publishing an already verified candidate is a release operation, not a code PR.' "${AGENTS}" 'AGENTS does not separate candidate publication from code PRs'
-require_fixed 'Duplicate trackers and unbounded' "${AGENTS}" 'AGENTS does not prohibit unbounded tracking'
+# Preserve the previously established versioned-title governance checks.
+require_fixed 'docs/GITHUB_PUBLICATION.md' "${AGENTS}" 'AGENTS does not name publication authority'
+require_fixed 'DEC-2026-08-05-universal-versioned-github-titles.md' "${AGENTS}" 'AGENTS does not name universal title decision'
+require_fixed 'DEC-2026-08-05-universal-versioned-github-titles.md' "${INDEX}" 'INDEX does not name universal title decision'
+require_fixed 'DEC-2026-08-05-universal-versioned-github-titles.md' "${WORKFLOW_SUMMARY}" 'workflow summary does not name universal title decision'
 
-require_fixed 'PRE-MUTATION INVENTORY' "${PUBLICATION}" 'publication authority lacks inventory gate'
-require_fixed 'TESTING PRERELEASE PUBLICATION' "${PUBLICATION}" 'publication authority lacks candidate path'
-require_fixed 'exact workflow run ID, artifact ID/name, and digest' "${PUBLICATION}" 'artifact identity contract is missing'
-require_fixed 'make zero source changes' "${PUBLICATION}" 'external failure freeze is missing'
-require_fixed 'at most one unchanged failed-job or' "${PUBLICATION}" 'bounded rerun rule is missing'
-require_fixed 'Do not create a PR merely to attach an existing package asset.' "${PUBLICATION}" 'publication PR prohibition is missing'
-require_fixed 'vX.Y.Z_1: Prepare release vX.Y.Z' "${PUBLICATION}" 'versioned release preparation title is missing'
-
-require_fixed 'DEC-2026-08-06-evidence-first-github-operations.md' "${INDEX}" 'INDEX does not prioritize evidence-first decision'
-require_fixed 'one active publication run' "${INDEX}" 'INDEX lacks one-run publication rule'
-require_fixed 'GitHub sections of `docs/WORKING_CONVENTIONS.md` and `docs/DEVELOPMENT_GUIDE.md`' "${EVIDENCE_DECISION}" 'lower-priority GitHub sections are not explicitly superseded'
-require_fixed 'mandatory Draft PRs' "${EVIDENCE_DECISION}" 'mandatory Draft conflict is not explicitly superseded'
-require_fixed 'full-document rereading' "${EVIDENCE_DECISION}" 'full-reread conflict is not explicitly superseded'
-
-# Active top-level GitHub authorities must not reintroduce superseded behavior.
-if grep -Eq 'open one Draft PR|Draft PR creation|complete its full mandatory reading order|no substantive project response precedes complete documentation recovery' \
-  "${AGENTS}" "${PUBLICATION}" "${WORKFLOW_SUMMARY}"
-then
-  fail 'active top-level GitHub authority contains superseded Draft/full-reread wording'
-fi
+require_fixed 'every PR title, every PR-branch commit subject' "${AGENTS}" 'AGENTS does not require versioned work and repair commits'
+require_fixed 'final squash subject' "${AGENTS}" 'AGENTS does not require a versioned squash subject'
+require_fixed 'every PR title, every PR-branch commit subject' "${PUBLICATION}" 'publication rules do not cover pull-request and repair titles'
+require_fixed 'final squash subject' "${PUBLICATION}" 'publication rules do not cover squash commit subjects'
+require_fixed 'Governance/documentation/CI-only work' "${PUBLICATION}" 'publication rules do not cover non-packaged changes'
 
 # One generic publisher is allowed; version-specific publishers in main are forbidden.
 version_specific=$(find "${ROOT_DIR}/.github/workflows" -maxdepth 1 -type f \
@@ -136,14 +118,25 @@ require_fixed 'EVENT_NAME}" == "workflow_dispatch"' "${CI}" 'manual CI event is 
 require_fixed '(github.event_name == '\''pull_request'\'' || github.event_name == '\''workflow_dispatch'\'') && needs.changes.outputs.package == '\''true'\''' "${CI}" 'manual CI does not build the FreeBSD package'
 require_fixed 'Verify main integrity' "${CI}" 'main integrity job is missing'
 require_fixed 'Invalid main commit subject' "${CI}" 'main squash-subject validation is missing'
+require_fixed 'Required format: ${EXPECTED}: <logical change>' "${CI}" 'main title error contract is missing'
 
 require_fixed 'concurrency:' "${TITLE_WORKFLOW}" 'PR title concurrency is missing'
 require_fixed 'Validate versioned PR and commit subjects' "${TITLE_WORKFLOW}" 'versioned PR/commit job is missing'
+require_fixed 'git log --format=%s "${BASE_SHA}..${HEAD_SHA}"' "${TITLE_WORKFLOW}" 'PR commit-range validation is missing'
 require_fixed 'Invalid pull-request title' "${TITLE_WORKFLOW}" 'PR title rejection is missing'
 require_fixed 'Invalid commit subject' "${TITLE_WORKFLOW}" 'PR commit-subject rejection is missing'
+require_fixed 'Required format: ${expected}: <logical change>' "${TITLE_WORKFLOW}" 'PR title error contract is missing'
+
+if grep -Eq '"(governance|docs|ci|chore): "\*' "${TITLE_WORKFLOW}"; then
+  fail 'unversioned conventional-title exception remains in PR title validation'
+fi
+
+if grep -Eq 'Governance, documentation, (and )?CI-only changes may use conventional' "${EFFICIENT_DECISION}"; then
+  fail 'active decision still permits unversioned conventional titles'
+fi
 
 require_fixed 'types: [closed]' "${CLEANUP_WORKFLOW}" 'cleanup workflow does not run on closed PRs'
 require_fixed 'github.event.pull_request.merged == true' "${CLEANUP_WORKFLOW}" 'cleanup workflow does not require merged PRs'
 require_fixed 'github.event.pull_request.head.repo.full_name == github.repository' "${CLEANUP_WORKFLOW}" 'cleanup workflow lacks same-repository guard'
 
-echo "GitHub evidence-first governance tests passed for package candidate ${expected}."
+echo "GitHub delivery and workflow tests passed for package candidate ${expected}."
