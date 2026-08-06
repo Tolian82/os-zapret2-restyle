@@ -18,6 +18,9 @@ done
 grep -Fq 'Overall status: **PENDING OWNER**' "${MATRIX}"
 [ "$(grep -c '\*\*PENDING OWNER\*\*' "${MATRIX}")" -ge 19 ]
 
+grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
+grep -Fq 'Candidate package: `os-zapret2-restyle-0.3.2_47.pkg`' "${MATRIX}"
+! grep -Fq 'Candidate package: `os-zapret2-restyle-0.3.2_46.pkg`' "${MATRIX}"
 grep -Fq 'Standard blocked domain, initial Zapret2 RUNNING' "${MATRIX}"
 grep -Fq 'Standard blocked domain, initial Zapret2 STOPPED' "${MATRIX}"
 grep -Fq 'Generic UDP port and payload' "${MATRIX}"
@@ -39,6 +42,7 @@ if grep -Eq '^Overall status:.*PASS|\|[[:space:]]*\*\*PASS\*\*[[:space:]]*\|$' "
 fi
 
 grep -Fq 'Status: **COMPLETE**' "${CLOSURE}"
+grep -Fq 'Status: **COMPLETE IN REVISION 47**' "${CLOSURE}"
 grep -Fq 'Status: **PENDING OWNER**' "${CLOSURE}"
 grep -Fq 'Status: **BLOCKED ON LIVE MATRIX**' "${CLOSURE}"
 grep -Fq 'No live PASS is inferred from CI' "${CLOSURE}"
@@ -47,4 +51,4 @@ grep -Fq 'STRATEGY_LAB_HARDENING_CLOSURE.md' "${STATE}"
 grep -Fq 'STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md' "${INDEX}"
 grep -Fq 'STRATEGY_LAB_HARDENING_CLOSURE.md' "${INDEX}"
 
-echo 'PASS: final records distinguish complete source/CI work from pending live OPNsense evidence and blocked release'
+echo 'PASS: final records require a FreeBSD 15 candidate and distinguish complete source/CI work from pending live OPNsense evidence'

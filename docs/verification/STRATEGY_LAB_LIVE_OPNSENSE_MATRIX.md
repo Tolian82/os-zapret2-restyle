@@ -4,13 +4,16 @@ Overall status: **PENDING OWNER**
 
 This matrix is the final live-appliance gate for the Strategy Lab hardening series. Source tests, GitHub CI, and FreeBSD package builds cannot substitute for evidence collected on the owner's OPNsense appliance.
 
+Only FreeBSD 15 amd64 packages are valid. The revision 46 GitHub Actions artifact has ABI `FreeBSD:14:amd64` and must not be installed or used for this matrix.
+
 ## Test record
 
 - Tester: `PENDING OWNER`
 - Test date/time: `PENDING OWNER`
 - OPNsense version: `PENDING OWNER`
-- Architecture / ABI: `PENDING OWNER`
-- Candidate package: `os-zapret2-restyle-0.3.2_46.pkg`
+- Architecture / ABI evidence: `PENDING OWNER`
+- Required package ABI: `FreeBSD:15:amd64`
+- Candidate package: `os-zapret2-restyle-0.3.2_47.pkg`
 - WAN interface: `PENDING OWNER`
 - LAN test client: `PENDING OWNER`
 - Blocked-domain target: `PENDING OWNER`
@@ -35,6 +38,14 @@ opnsense-version
 uname -a
 pkg info os-zapret2-restyle
 configctl zapret status
+```
+
+Before installation, preserve the candidate package identity from its `+MANIFEST` and confirm:
+
+```text
+abi: FreeBSD:15:amd64
+arch: freebsd:15:x86:64
+version: 0.3.2_47
 ```
 
 Recommended residue evidence after every terminal scenario:
@@ -72,6 +83,7 @@ configctl zapret status
 
 Any of the following keeps the live gate failed:
 
+- candidate package ABI or architecture is not exactly FreeBSD 15 amd64;
 - `RESTORE_FAILED` or unverified restoration;
 - unexpected change to the saved Traffic Strategy;
 - lingering Strategy Lab worker, temporary dvtws2 process, divert socket, PID file, or rules `19100–19131`;
@@ -80,8 +92,8 @@ Any of the following keeps the live gate failed:
 - a terminal result disappearing after page reload;
 - missing required evidence.
 
-A failed row requires one same-scope corrective patch, complete CI/package verification, and repetition of the affected live row plus any dependent rows.
+A failed row requires one same-scope corrective patch, complete CI/FreeBSD 15 package verification, and repetition of the affected live row plus any dependent rows.
 
 ## Release gate
 
-Release preparation is blocked until every required row is marked `PASS` by the owner and linked evidence is recorded. The current matrix contains no live PASS claims. Tagging, GitHub Release publication, release assets, and pkg-repository publication are outside revision 46 and require separate explicit owner authorization after this gate passes.
+Release preparation is blocked until every required row is marked `PASS` by the owner and linked evidence is recorded. The current matrix contains no live PASS claims. Tagging, GitHub Release publication, release assets, and pkg-repository publication are outside the corrective source series and require separate explicit owner authorization after this gate passes.
