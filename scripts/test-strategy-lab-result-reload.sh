@@ -42,8 +42,8 @@ latest=$(strategy_lab_latest_job)
 [ "$(cat "${STRATEGY_LAB_LATEST_FILE}")" = job.new ]
 
 grep -Fq 'strategy_lab_write_latest_job "${_strategy_lab_job}"' "${LAUNCH}"
-grep -Fq "apiPost('/api/zapret/strategy_lab/status', {job_id:'-'}" "${VIEW}"
-grep -Fq 'if (terminal(data.state)) {' "${VIEW}"
+grep -Eq "apiPost\('/api/zapret/strategy_lab/status',[[:space:]]*\{job_id:'-'\}" "${VIEW}"
+grep -Eq 'if[[:space:]]*\(terminal\(data\.state\)\)[[:space:]]*\{' "${VIEW}"
 grep -Fq 'fetchResult();' "${VIEW}"
 grep -Fq 'pollStatus();' "${VIEW}"
 sh -n "${MODULE_DIR}/common.sh"
