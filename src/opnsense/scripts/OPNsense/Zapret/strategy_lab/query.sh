@@ -59,10 +59,22 @@ show_status()
 {
     [ "$#" -le 2 ] || usage_error "status accepts at most one JOB_ID"
     _strategy_lab_job="${2:-}"
-    [ "${_strategy_lab_job}" != "-" ] || _strategy_lab_job=""
+    _strategy_lab_active_only=false
+    case "${_strategy_lab_job}" in
+        @active)
+            _strategy_lab_job=""
+            _strategy_lab_active_only=true
+            ;;
+        -)
+            _strategy_lab_job=""
+            ;;
+    esac
     if [ -z "${_strategy_lab_job}" ]; then
         cleanup_stale_active || { emit_error_json "Strategy Lab stale job recovery failed"; return 1; }
         _strategy_lab_job=$(strategy_lab_read_active_job 2>/dev/null || true)
+        if [ -z "${_strategy_lab_job}" ] && [ "${_strategy_lab_active_only}" = false ]; then
+            _strategy_lab_job=$(strategy_lab_latest_job 2>/dev/null || true)
+        fi
         if [ -z "${_strategy_lab_job}" ]; then
             "${STRATEGY_LAB_JQ}" -nc '{status:"idle"}'
             return 0
