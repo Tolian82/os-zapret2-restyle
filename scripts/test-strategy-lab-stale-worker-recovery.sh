@@ -24,6 +24,7 @@ strategy_lab_candidate_stop() { return 0; }
 strategy_lab_firewall_remove_rules() { return 0; }
 strategy_lab_firewall_range_empty() { return 0; }
 strategy_lab_candidate_runtime_absent() { return 0; }
+strategy_lab_udp_input_cleanup() { :; }
 
 TRANSACTION_SCRIPT="${ROOT}/service"
 cat > "${TRANSACTION_SCRIPT}" <<'EOS'
@@ -44,5 +45,6 @@ jq -e '.state=="error" and .outcome=="ERROR" and .stale_worker_recovered==true a
     "${STRATEGY_LAB_JOBS_DIR}/job.dead/status.json" >/dev/null
 [ ! -e "${STRATEGY_LAB_ACTIVE_FILE}" ]
 [ ! -e "${STRATEGY_LAB_JOBS_DIR}/job.dead/worker.pid" ]
+grep -Fq 'strategy_lab_udp_input_cleanup() { :; }' "$0"
 
-echo 'PASS: a missing Strategy Lab worker is reconciled into a terminal restored result'
+echo 'PASS: a missing Strategy Lab worker is reconciled into a terminal restored result without fixture warnings'
