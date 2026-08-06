@@ -5,6 +5,7 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MATRIX="${ROOT_DIR}/docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md"
 INSTALL_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md"
 FAILURE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md"
+BINDING_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md"
 CLOSURE="${ROOT_DIR}/docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md"
 STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
@@ -12,7 +13,8 @@ VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 
 for file in "${MATRIX}" "${INSTALL_EVIDENCE}" "${FAILURE_EVIDENCE}" \
-    "${CLOSURE}" "${STATE}" "${INDEX}" "${VERSION_FILE}" "${MAKEFILE}"
+    "${BINDING_EVIDENCE}" "${CLOSURE}" "${STATE}" "${INDEX}" \
+    "${VERSION_FILE}" "${MAKEFILE}"
 do
     [ -s "${file}" ] || {
         echo "FAIL: missing final hardening record: ${file}" >&2
@@ -56,7 +58,8 @@ grep -Fq "Candidate package: \`${candidate}\`" "${MATRIX}"
 grep -Fq 'Architecture / ABI evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`' "${MATRIX}"
 grep -Fq 'Installation and service baseline for `0.3.3_1`: **PASS**.' "${MATRIX}"
 grep -Fq '2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md' "${MATRIX}"
-grep -Fq 'Scenario 1 remains pending.' "${MATRIX}"
+grep -Fq '2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md' "${MATRIX}"
+grep -Fq 'Scenario 1 remains pending and must be repeated on `0.3.3_4`.' "${MATRIX}"
 grep -Fq 'Architecture   : FreeBSD:15:amd64' "${INSTALL_EVIDENCE}"
 grep -Fq 'Version        : 0.3.3_1' "${INSTALL_EVIDENCE}"
 grep -Fq 'Zapret2 service running after forced installation: **PASS**' "${INSTALL_EVIDENCE}"
@@ -64,6 +67,11 @@ grep -Fq 'Strategy Lab live scenarios: **NOT YET EXECUTED**' "${INSTALL_EVIDENCE
 grep -Fq 'child_running": false' "${FAILURE_EVIDENCE}"
 grep -Fq 'supervisor_running": false' "${FAILURE_EVIDENCE}"
 grep -Fq 'This record is a failed live attempt, not a scenario PASS.' "${FAILURE_EVIDENCE}"
+grep -Fq 'CHILD_MATCH=true' "${BINDING_EVIDENCE}"
+grep -Fq 'SUPERVISOR_MATCH=true' "${BINDING_EVIDENCE}"
+grep -Fq '"child_running":false,"supervisor_running":false' "${BINDING_EVIDENCE}"
+grep -Fq 'overwrote `STRATEGY_LAB_SEMANTIC_PS_BIN` with the direct `/bin/ps` default' "${BINDING_EVIDENCE}"
+grep -Fq 'Status: **FAILED ATTEMPT — NOT A SCENARIO PASS**' "${BINDING_EVIDENCE}"
 
 grep -Fq 'Standard blocked domain, initial Zapret2 RUNNING' "${MATRIX}"
 grep -Fq 'Standard blocked domain, initial Zapret2 STOPPED' "${MATRIX}"
