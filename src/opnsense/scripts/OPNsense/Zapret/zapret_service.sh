@@ -117,9 +117,8 @@ strategy_lab_semantic_pid_matches()
 {
     _strategy_lab_semantic_pidfile="$1"
     _strategy_lab_semantic_expected="$2"
-    [ -r "${_strategy_lab_semantic_pidfile}" ] || return 1
-    IFS= read -r _strategy_lab_semantic_pid < "${_strategy_lab_semantic_pidfile}" || return 1
-    case "${_strategy_lab_semantic_pid}" in ''|*[!0-9]*) return 1 ;; esac
+    _strategy_lab_semantic_pid=$(common_pidfile_read \
+        "${_strategy_lab_semantic_pidfile}") || return 1
     kill -0 "${_strategy_lab_semantic_pid}" 2>/dev/null || return 1
     [ -x "${STRATEGY_LAB_SEMANTIC_PS_BIN}" ] || return 1
     _strategy_lab_semantic_command=$("${STRATEGY_LAB_SEMANTIC_PS_BIN}" \

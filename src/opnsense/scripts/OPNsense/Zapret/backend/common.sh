@@ -17,6 +17,19 @@ common_cleanup_dir()
     [ -n "${_common_dir}" ] && [ -d "${_common_dir}" ] && rm -rf "${_common_dir}"
 }
 
+common_pidfile_read()
+{
+    _common_pidfile="$1"
+    [ -r "${_common_pidfile}" ] || return 1
+
+    _common_pid=$(sed -n '1{s/[[:space:]]//g;p;}' "${_common_pidfile}")
+    case "${_common_pid}" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    [ "${_common_pid}" -gt 1 ] 2>/dev/null || return 1
+
+    printf '%s\n' "${_common_pid}"
+}
 
 common_process_matches()
 {

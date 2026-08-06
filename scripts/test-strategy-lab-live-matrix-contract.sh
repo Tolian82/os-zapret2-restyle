@@ -6,6 +6,7 @@ MATRIX="${ROOT_DIR}/docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md"
 INSTALL_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md"
 FAILURE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md"
 BINDING_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md"
+PIDFILE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md"
 CLOSURE="${ROOT_DIR}/docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md"
 STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
@@ -13,8 +14,8 @@ VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 
 for file in "${MATRIX}" "${INSTALL_EVIDENCE}" "${FAILURE_EVIDENCE}" \
-    "${BINDING_EVIDENCE}" "${CLOSURE}" "${STATE}" "${INDEX}" \
-    "${VERSION_FILE}" "${MAKEFILE}"
+    "${BINDING_EVIDENCE}" "${PIDFILE_EVIDENCE}" "${CLOSURE}" \
+    "${STATE}" "${INDEX}" "${VERSION_FILE}" "${MAKEFILE}"
 do
     [ -s "${file}" ] || {
         echo "FAIL: missing final hardening record: ${file}" >&2
@@ -59,7 +60,8 @@ grep -Fq 'Architecture / ABI evidence: `docs/verification/evidence/2026-08-06-v0
 grep -Fq 'Installation and service baseline for `0.3.3_1`: **PASS**.' "${MATRIX}"
 grep -Fq '2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md' "${MATRIX}"
 grep -Fq '2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md' "${MATRIX}"
-grep -Fq 'Scenario 1 remains pending and must be repeated on `0.3.3_4`.' "${MATRIX}"
+grep -Fq '2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md' "${MATRIX}"
+grep -Fq 'Scenario 1 remains pending and must be repeated on `0.3.3_5`.' "${MATRIX}"
 grep -Fq 'Architecture   : FreeBSD:15:amd64' "${INSTALL_EVIDENCE}"
 grep -Fq 'Version        : 0.3.3_1' "${INSTALL_EVIDENCE}"
 grep -Fq 'Zapret2 service running after forced installation: **PASS**' "${INSTALL_EVIDENCE}"
@@ -72,6 +74,10 @@ grep -Fq 'SUPERVISOR_MATCH=true' "${BINDING_EVIDENCE}"
 grep -Fq '"child_running":false,"supervisor_running":false' "${BINDING_EVIDENCE}"
 grep -Fq 'overwrote `STRATEGY_LAB_SEMANTIC_PS_BIN` with the direct `/bin/ps` default' "${BINDING_EVIDENCE}"
 grep -Fq 'Status: **FAILED ATTEMPT — NOT A SCENARIO PASS**' "${BINDING_EVIDENCE}"
+grep -Fq 'PID files written by FreeBSD `daemon(8)` may end at EOF without a trailing newline' "${PIDFILE_EVIDENCE}"
+grep -Fq 'IFS= read -r _strategy_lab_semantic_pid' "${PIDFILE_EVIDENCE}"
+grep -Fq '"child_running":false,"supervisor_running":false' "${PIDFILE_EVIDENCE}"
+grep -Fq 'Status: **FAILED ATTEMPT — NOT A SCENARIO PASS**' "${PIDFILE_EVIDENCE}"
 
 grep -Fq 'Standard blocked domain, initial Zapret2 RUNNING' "${MATRIX}"
 grep -Fq 'Standard blocked domain, initial Zapret2 STOPPED' "${MATRIX}"
@@ -88,8 +94,6 @@ grep -Fq 'Reboot after clean terminal completion' "${MATRIX}"
 grep -Fq 'Stable release preparation and pkg-repository promotion remain blocked until every required row is marked `PASS` by the owner' "${MATRIX}"
 grep -Fq 'The current matrix contains no live scenario PASS claims.' "${MATRIX}"
 
-# Installation identity may be PASS after owner evidence, but no scenario row may
-# be marked PASS before that scenario has its own linked evidence.
 if grep -Eq '^Overall status:.*PASS|\|[[:space:]]*\*\*PASS\*\*[[:space:]]*\|$' "${MATRIX}"; then
     echo 'FAIL: live matrix contains an unsupported scenario PASS claim' >&2
     exit 1
@@ -105,4 +109,4 @@ grep -Fq 'STRATEGY_LAB_HARDENING_CLOSURE.md' "${STATE}"
 grep -Fq 'STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md' "${INDEX}"
 grep -Fq 'STRATEGY_LAB_HARDENING_CLOSURE.md' "${INDEX}"
 
-echo 'PASS: final records use the current FreeBSD 15 candidate, preserve populated owner evidence, and keep all 18 live scenarios pending'
+echo 'PASS: final records use the current FreeBSD 15 candidate, preserve all failed live evidence, and keep all 18 scenarios pending'
