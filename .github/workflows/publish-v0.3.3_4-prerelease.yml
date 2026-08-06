@@ -16,7 +16,7 @@ concurrency:
 jobs:
   publish:
     name: Verify and publish FreeBSD 15 prerelease
-    runs-on: windows-2022
+    runs-on: ubuntu-slim
 
     steps:
       - uses: actions/checkout@v6
@@ -46,22 +46,21 @@ jobs:
           trap 'rm -f "${manifest}"' EXIT
           test -f "${package}"
           tar -xOf "${package}" +MANIFEST > "${manifest}"
-          python - "${manifest}" <<'PY'
-          import json
-          import sys
-
-          with open(sys.argv[1], encoding="utf-8") as handle:
-              manifest = json.load(handle)
-
-          expected = {
-              "version": "0.3.3_4",
-              "abi": "FreeBSD:15:amd64",
-              "arch": "freebsd:15:x86:64",
+          node - "${manifest}" <<'NODE'
+          const fs = require('fs');
+          const manifest = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const expected = {
+            version: '0.3.3_4',
+            abi: 'FreeBSD:15:amd64',
+            arch: 'freebsd:15:x86:64',
+          };
+          const actual = Object.fromEntries(
+            Object.keys(expected).map((key) => [key, manifest[key]])
+          );
+          if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+            throw new Error(`unexpected package manifest: ${JSON.stringify(actual)}`);
           }
-          actual = {key: manifest.get(key) for key in expected}
-          if actual != expected:
-              raise SystemExit(f"unexpected package manifest: {actual!r}")
-          PY
+          NODE
 
       - name: Publish prerelease asset
         uses: softprops/action-gh-release@v3
