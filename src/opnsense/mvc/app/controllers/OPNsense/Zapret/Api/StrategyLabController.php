@@ -163,7 +163,7 @@ class StrategyLabController extends ApiControllerBase
         }
 
         $jobId = $this->jobId();
-        return $this->backendResponse('strategy_lab_status', [$jobId !== '' ? $jobId : '-']);
+        return $this->backendResponse('strategy_lab_status', [$jobId !== '' ? $jobId : '@active']);
     }
 
     public function cancelAction(): array

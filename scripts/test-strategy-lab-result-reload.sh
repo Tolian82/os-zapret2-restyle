@@ -5,12 +5,15 @@ MODULE_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab"
 LAUNCH="${MODULE_DIR}/launch.sh"
 QUERY="${MODULE_DIR}/query.sh"
 VIEW="${ROOT_DIR}/src/opnsense/mvc/app/views/OPNsense/Zapret/diagnostics.volt"
+CONTROLLER="${ROOT_DIR}/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLabController.php"
 TMP=$(mktemp -d /tmp/strategy-lab-reload.XXXXXX)
 trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
-mkdir -p "${TMP}/run/jobs/job.old" "${TMP}/run/jobs/job.new" "${TMP}/log"
+mkdir -p "${TMP}/run/jobs/job.old" "${TMP}/run/jobs/job.new" \
+    "${TMP}/run/jobs/job.active" "${TMP}/log"
 printf '%s\n' '{"job_id":"job.old","state":"completed","outcome":"SUCCESS"}' > "${TMP}/run/jobs/job.old/status.json"
 sleep 1
 printf '%s\n' '{"job_id":"job.new","state":"error","outcome":"TIMEOUT"}' > "${TMP}/run/jobs/job.new/status.json"
+printf '%s\n' '{"job_id":"job.active","state":"running","outcome":""}' > "${TMP}/run/jobs/job.active/status.json"
 
 export STRATEGY_LAB_JQ=$(command -v jq)
 export STRATEGY_LAB_RUN_DIR="${TMP}/run"
@@ -26,27 +29,47 @@ cleanup_stale_active(){ return 0; }
 strategy_lab_reconcile_stale_job(){ return 0; }
 . "${QUERY}"
 
+# Historical backend discovery and explicit lookup remain compatible.
 latest=$(strategy_lab_latest_job)
-[ "${latest}" = job.new ]
-[ "$(cat "${STRATEGY_LAB_LATEST_FILE}")" = job.new ]
+[ "${latest}" = job.active ]
+[ "$(cat "${STRATEGY_LAB_LATEST_FILE}")" = job.active ]
+printf '%s\n' job.new > "${STRATEGY_LAB_LATEST_FILE}"
 status=$(show_status status -)
 printf '%s\n' "${status}" | jq -e '.job_id=="job.new" and .state=="error" and .outcome=="TIMEOUT"' >/dev/null
-printf '%s\n' job.old > "${STRATEGY_LAB_LATEST_FILE}"
-status=$(show_status status -)
+status=$(show_status status job.old)
 printf '%s\n' "${status}" | jq -e '.job_id=="job.old" and .state=="completed"' >/dev/null
 
-# A corrupt pointer falls back to the most recent directory and repairs itself.
+# Automatic Diagnostics discovery resumes only a genuinely active job.
+printf '%s\n' job.active > "${STRATEGY_LAB_ACTIVE_FILE}"
+status=$(show_status status @active)
+printf '%s\n' "${status}" | jq -e '.job_id=="job.active" and .state=="running"' >/dev/null
+
+# After terminal cleanup removes active.job, the API opens idle rather than
+# resurrecting the latest completed or failed result.
+rm -f "${STRATEGY_LAB_ACTIVE_FILE}"
+printf '%s\n' job.new > "${STRATEGY_LAB_LATEST_FILE}"
+status=$(show_status status @active)
+printf '%s\n' "${status}" | jq -e '.status=="idle" and (has("job_id")|not)' >/dev/null
+[ "$(cat "${STRATEGY_LAB_LATEST_FILE}")" = job.new ]
+status=$(show_status status -)
+printf '%s\n' "${status}" | jq -e '.job_id=="job.new" and .state=="error"' >/dev/null
+
+# A corrupt latest pointer can still be repaired for retention/history users,
+# while active-only GUI discovery remains idle.
 printf '%s\n' 'invalid/job' > "${STRATEGY_LAB_LATEST_FILE}"
 latest=$(strategy_lab_latest_job)
-[ "${latest}" = job.new ]
-[ "$(cat "${STRATEGY_LAB_LATEST_FILE}")" = job.new ]
+[ "${latest}" = job.active ]
+[ "$(cat "${STRATEGY_LAB_LATEST_FILE}")" = job.active ]
+status=$(show_status status @active)
+printf '%s\n' "${status}" | jq -e '.status=="idle"' >/dev/null
 
 grep -Fq 'strategy_lab_write_latest_job "${_strategy_lab_job}"' "${LAUNCH}"
 grep -Eq "apiPost\('/api/zapret/strategy_lab/status',[[:space:]]*\{job_id:'-'\}" "${VIEW}"
-grep -Eq 'if[[:space:]]*\(terminal\(data\.state\)\)[[:space:]]*\{' "${VIEW}"
-grep -Fq 'fetchResult();' "${VIEW}"
+grep -Fq "return \$this->backendResponse('strategy_lab_status', [\$jobId !== '' ? \$jobId : '@active']);" "${CONTROLLER}"
+grep -Fq '@active)' "${QUERY}"
+grep -Fq 'strategy_lab_latest_job' "${QUERY}"
 grep -Fq 'pollStatus();' "${VIEW}"
 sh -n "${MODULE_DIR}/common.sh"
 sh -n "${QUERY}"
 sh -n "${LAUNCH}"
-echo 'PASS: latest terminal Strategy Lab result is restored after Diagnostics reload'
+echo 'PASS: GUI reload resumes active work, opens idle after terminal work, and preserves backend historical result access'
