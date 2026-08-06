@@ -47,7 +47,7 @@ circular_active_session()
 
 circular_reconcile_stale()
 {
-    _slcl_session=$(strategy_lab_circular_active_session_read 2>//null || true)
+    _slcl_session=$(strategy_lab_circular_active_session_read 2>/dev/null || true)
     [ -n "${_slcl_session}" ] || return 1
     _slcl_state_file=$(strategy_lab_circular_session_state_file "${_slcl_session}") || return 1
     [ -r "${_slcl_state_file}" ] || {
