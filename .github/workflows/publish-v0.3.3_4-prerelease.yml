@@ -16,7 +16,7 @@ concurrency:
 jobs:
   publish:
     name: Verify and publish FreeBSD 15 prerelease
-    runs-on: macos-14
+    runs-on: windows-2022
 
     steps:
       - uses: actions/checkout@v6
@@ -46,7 +46,7 @@ jobs:
           trap 'rm -f "${manifest}"' EXIT
           test -f "${package}"
           tar -xOf "${package}" +MANIFEST > "${manifest}"
-          python3 - "${manifest}" <<'PY'
+          python - "${manifest}" <<'PY'
           import json
           import sys
 
