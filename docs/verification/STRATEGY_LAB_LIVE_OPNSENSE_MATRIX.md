@@ -8,16 +8,18 @@ Only FreeBSD 15 amd64 packages are valid. The revision 46 GitHub Actions artifac
 
 ## Test record
 
-- Tester: `PENDING OWNER`
-- Test date/time: `PENDING OWNER`
+- Tester: repository owner
+- Test date/time: `2026-08-06 15:14:15 MSK` (installation baseline)
 - OPNsense version: `PENDING OWNER`
-- Architecture / ABI evidence: `PENDING OWNER`
+- Architecture / ABI evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`
 - Required package ABI: `FreeBSD:15:amd64`
-- Candidate package: `os-zapret2-restyle-0.3.2_47.pkg`
+- Candidate package: `os-zapret2-restyle-0.3.3_1.pkg`
 - WAN interface: `PENDING OWNER`
 - LAN test client: `PENDING OWNER`
 - Blocked-domain target: `PENDING OWNER`
 - Generic UDP target/port: `PENDING OWNER`
+
+Installation and service baseline: **PASS**. The candidate installed successfully with version `0.3.3_1`, architecture `FreeBSD:15:amd64`, annotation `FreeBSD_version: 1500068`, and the `zapret` service running after installation. This baseline does not mark any scenario row as passed.
 
 ## Required evidence bundle
 
@@ -45,7 +47,7 @@ Before installation, preserve the candidate package identity from its `+MANIFEST
 ```text
 abi: FreeBSD:15:amd64
 arch: freebsd:15:x86:64
-version: 0.3.2_47
+version: 0.3.3_1
 ```
 
 Recommended residue evidence after every terminal scenario:
@@ -96,4 +98,4 @@ A failed row requires one same-scope corrective patch, complete CI/FreeBSD 15 pa
 
 ## Release gate
 
-Release preparation is blocked until every required row is marked `PASS` by the owner and linked evidence is recorded. The current matrix contains no live PASS claims. Tagging, GitHub Release publication, release assets, and pkg-repository publication are outside the corrective source series and require separate explicit owner authorization after this gate passes.
+Stable release preparation and pkg-repository promotion remain blocked until every required row is marked `PASS` by the owner and linked evidence is recorded. The `v0.3.3_1` prerelease is a testing distribution surface only. The current matrix contains no live scenario PASS claims.
