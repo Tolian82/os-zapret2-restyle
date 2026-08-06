@@ -11,7 +11,7 @@ MODE="${1:-status}"
 set -eu
 umask 022
 
-for module in common state target firewall runtime udp_input launch query
+for module in common state target firewall runtime udp_input retention launch query
 do
     module_path="${MODULE_DIR}/${module}.sh"
     [ -r "${module_path}" ] || { echo "ERROR: required Strategy Lab module is missing: ${module_path}" >&2; exit 1; }
@@ -29,6 +29,7 @@ case "${MODE}" in
                 "${STRATEGY_LAB_JQ}" -nc '{status:"busy",message:"Strategy Lab launcher is busy"}'
                 exit 75
             fi
+            strategy_lab_retention_prune_automated || true
             case "${MODE}" in
                 start) start_job "$@" ;;
                 cancel) cancel_job "$@" ;;
