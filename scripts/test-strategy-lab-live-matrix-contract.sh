@@ -3,11 +3,14 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MATRIX="${ROOT_DIR}/docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md"
+EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md"
 CLOSURE="${ROOT_DIR}/docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md"
 STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
+VERSION_FILE="${ROOT_DIR}/VERSION"
+MAKEFILE="${ROOT_DIR}/Makefile"
 
-for file in "${MATRIX}" "${CLOSURE}" "${STATE}" "${INDEX}"
+for file in "${MATRIX}" "${EVIDENCE}" "${CLOSURE}" "${STATE}" "${INDEX}" "${VERSION_FILE}" "${MAKEFILE}"
 do
     [ -s "${file}" ] || {
         echo "FAIL: missing final hardening record: ${file}" >&2
@@ -15,12 +18,38 @@ do
     }
 done
 
+version=$(tr -d '[:space:]' < "${VERSION_FILE}")
+revision=$(awk -F= '
+    /^PLUGIN_REVISION=/ {
+        gsub(/[[:space:]]/, "", $2)
+        print $2
+        exit
+    }
+' "${MAKEFILE}")
+
+case "${revision}" in
+    ''|*[!0-9]*) echo 'FAIL: invalid plugin revision' >&2; exit 1 ;;
+esac
+
+if [ "${revision}" -gt 0 ]; then
+    candidate="os-zapret2-restyle-${version}_${revision}.pkg"
+else
+    candidate="os-zapret2-restyle-${version}.pkg"
+fi
+
 grep -Fq 'Overall status: **PENDING OWNER**' "${MATRIX}"
 [ "$(grep -c '\*\*PENDING OWNER\*\*' "${MATRIX}")" -ge 19 ]
 
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
-grep -Fq 'Candidate package: `os-zapret2-restyle-0.3.2_47.pkg`' "${MATRIX}"
+grep -Fq "Candidate package: \`${candidate}\`" "${MATRIX}"
 ! grep -Fq 'Candidate package: `os-zapret2-restyle-0.3.2_46.pkg`' "${MATRIX}"
+grep -Fq 'Architecture / ABI evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`' "${MATRIX}"
+grep -Fq 'Installation and service baseline: **PASS**' "${MATRIX}"
+grep -Fq 'Architecture   : FreeBSD:15:amd64' "${EVIDENCE}"
+grep -Fq 'Version        : 0.3.3_1' "${EVIDENCE}"
+grep -Fq 'Zapret2 service running after forced installation: **PASS**' "${EVIDENCE}"
+grep -Fq 'Strategy Lab live scenarios: **NOT YET EXECUTED**' "${EVIDENCE}"
+
 grep -Fq 'Standard blocked domain, initial Zapret2 RUNNING' "${MATRIX}"
 grep -Fq 'Standard blocked domain, initial Zapret2 STOPPED' "${MATRIX}"
 grep -Fq 'Generic UDP port and payload' "${MATRIX}"
@@ -32,12 +61,13 @@ grep -Fq 'Diagnostics page reload after terminal result' "${MATRIX}"
 grep -Fq 'Russian and English presentation' "${MATRIX}"
 grep -Fq 'Retention with reduced test limits' "${MATRIX}"
 grep -Fq 'Reboot after clean terminal completion' "${MATRIX}"
-grep -Fq 'Release preparation is blocked until every required row is marked `PASS` by the owner' "${MATRIX}"
-grep -Fq 'The current matrix contains no live PASS claims.' "${MATRIX}"
+grep -Fq 'Stable release preparation and pkg-repository promotion remain blocked until every required row is marked `PASS` by the owner' "${MATRIX}"
+grep -Fq 'The current matrix contains no live scenario PASS claims.' "${MATRIX}"
 
-# The prepared matrix must not contain a claimed PASS result before owner evidence exists.
+# Installation identity may be PASS after owner evidence, but no scenario row may
+# be marked PASS before that scenario has its own linked evidence.
 if grep -Eq '^Overall status:.*PASS|\|[[:space:]]*\*\*PASS\*\*[[:space:]]*\|$' "${MATRIX}"; then
-    echo 'FAIL: live matrix contains an unsupported PASS claim' >&2
+    echo 'FAIL: live matrix contains an unsupported scenario PASS claim' >&2
     exit 1
 fi
 
@@ -51,4 +81,4 @@ grep -Fq 'STRATEGY_LAB_HARDENING_CLOSURE.md' "${STATE}"
 grep -Fq 'STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md' "${INDEX}"
 grep -Fq 'STRATEGY_LAB_HARDENING_CLOSURE.md' "${INDEX}"
 
-echo 'PASS: final records require a FreeBSD 15 candidate and distinguish complete source/CI work from pending live OPNsense evidence'
+echo 'PASS: final records use the current FreeBSD 15 candidate, preserve owner evidence, and keep all live scenarios pending'
