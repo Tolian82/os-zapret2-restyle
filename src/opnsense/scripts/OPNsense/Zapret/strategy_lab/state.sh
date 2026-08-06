@@ -274,22 +274,6 @@ strategy_lab_update_stage()
       --arg message "${_strategy_lab_message}"
 }
 
-strategy_lab_skip_unfinished()
-{
-    strategy_lab_state_transform "$1" '
-        if (.state=="completed" or .state=="error") then .
-        else
-            (.stages[] |
-                select((.status=="PENDING" or .status=="RUNNING") and
-                       .number!="90" and .number!="99") |
-                .status)="SKIPPED" |
-            (.stages[] |
-                select(.status=="SKIPPED" and .message=="") |
-                .message)=$message
-        end
-    ' --arg message "$2"
-}
-
 strategy_lab_append_event()
 {
     _strategy_lab_job="$1"

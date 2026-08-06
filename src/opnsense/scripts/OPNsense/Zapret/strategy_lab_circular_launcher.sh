@@ -30,17 +30,6 @@ circular_emit_error()
     "${STRATEGY_LAB_JQ}" -nc --arg message "$1" '{status:"error",message:$message}'
 }
 
-circular_install_legacy_aliases()
-{
-    _slcl_session="$1"
-    rm -f "${STRATEGY_LAB_CIRCULAR_DIR}/state.json" \
-        "${STRATEGY_LAB_CIRCULAR_DIR}/stop"
-    ln -s "sessions/${_slcl_session}/state.json" \
-        "${STRATEGY_LAB_CIRCULAR_DIR}/state.json" || return 1
-    ln -s "sessions/${_slcl_session}/stop.request" \
-        "${STRATEGY_LAB_CIRCULAR_DIR}/stop" || return 1
-}
-
 circular_active_session()
 {
     _slcl_session=$(strategy_lab_circular_active_session_read 2>/dev/null || true)
@@ -146,11 +135,6 @@ circular_dispatch()
 
             SESSION_ID=$(strategy_lab_circular_session_create "${PARENT_JOB_ID}") || {
                 circular_emit_error 'circular validation session could not be created'
-                return 1
-            }
-            circular_install_legacy_aliases "${SESSION_ID}" || {
-                strategy_lab_circular_active_session_clear "${SESSION_ID}"
-                circular_emit_error 'circular validation compatibility aliases could not be created'
                 return 1
             }
             COUNT=$(strategy_lab_circular_candidate_count \
