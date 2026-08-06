@@ -18,11 +18,20 @@ the connected GitHub plugin was not used as the first authoritative interface. C
 memory, generic API calls, and improvised transports hid available repository state and
 encouraged duplicate or mistimed operations.
 
+The connector audit also established a required distinction between a missing plugin
+function and plugin unavailability. At the 2026-08-07 verification, the repository
+returned no configured rulesets, while the plugin installation returned
+`403 Resource not accessible by integration` for repository Actions-permission settings
+and branch-protection settings. The `403` proves a connector permission boundary only;
+it does not prove that those GitHub controls are disabled. These time-sensitive facts
+must be re-verified before later use.
+
 The audit found these conflicting active rules and mechanisms:
 
 | Topic | Conflicting source | Resolution |
 |---|---|---|
-| Repository transport | GitHub plugin was not consistently used first | use the connected GitHub plugin first; another transport is allowed only for the exact function or permission confirmed missing from the plugin |
+| Repository transport | GitHub plugin was not consistently used first | use the connected GitHub plugin first; another transport is allowed only for the exact function or permission confirmed missing from a responding plugin |
+| Plugin outage | fallback wording did not distinguish a missing function from an unavailable plugin | plugin unavailability stops all GitHub work; inform the owner and wait for explicit direction instead of switching transports automatically |
 | PR state | `WORKING_CONVENTIONS.md` and `DEVELOPMENT_GUIDE.md` still required Draft | Ready is the default when content is ready; Draft is optional work-in-progress state |
 | Branch commits | older rules required one atomic branch commit | one logical PR may contain same-scope repair commits; `main` receives one squash commit |
 | Context preflight | older decisions required a complete reread before every response | use the risk-based preflight in `AGENTS.md`; full repository-wide recovery is required only when scope warrants it |
@@ -31,6 +40,7 @@ The audit found these conflicting active rules and mechanisms:
 | Testing prerelease | older priority wording blocked every tag/asset before the live matrix | a testing prerelease may be published after exact owner authorization; stable release and pkg-repository promotion remain blocked |
 | Candidate publication | version-specific workflows and publication PRs were used | publish an already verified artifact directly through Release API/UI/`gh`; otherwise use one generic prerelease workflow |
 | Infrastructure failure | repeated runner/workflow changes followed external failure | read the job log first; external failure causes no source change and permits at most one unchanged rerun after recovery |
+| Prose enforcement | exact wording and line placement were proposed as shell-test invariants | keep the operational rule in authoritative documentation; do not make wording or line placement a CI contract |
 
 ## Decision
 
@@ -40,12 +50,19 @@ The audit found these conflicting active rules and mechanisms:
   inspection and mutation.
 - Inspect the plugin's actual functions and permissions before declaring an operation
   blocked or selecting another transport.
-- Use authenticated Git, `gh`, the web UI, or another API only for the exact operation
-  whose required plugin function or permission is confirmed absent.
+- Use authenticated Git, `gh`, the web UI, or another API only when the plugin is
+  responding and for the exact operation whose required plugin function or permission
+  is confirmed absent.
 - The fallback covers only that missing operation. Return to the GitHub plugin
   immediately for subsequent repository inspection and supported mutations.
+- If the GitHub plugin stops responding, is unavailable, or cannot provide the
+  authoritative repository state required to proceed safely, stop all GitHub work.
+  Inform the project owner and wait for explicit direction. Do not continue through a
+  fallback transport, automation, or scheduled tracker merely to preserve momentum.
 - Chat history, web search, generic HTTP requests, and assumptions about the GitHub UI
   are not substitutes for plugin reads of current repository state.
+- The plugin-first rule is maintained as project documentation, not as an exact-line or
+  exact-wording assertion in a shell test.
 
 ### Pre-mutation inventory
 
@@ -105,6 +122,8 @@ Publication of an already verified candidate is a release operation, not a code 
   it does not authorize further experiments.
 - Scheduled monitoring must be bounded and unique. Duplicate trackers and unbounded
   automatic retries are forbidden.
+- GitHub-plugin unavailability stops the entire GitHub operation and must be reported to
+  the owner; it does not authorize an automatic fallback.
 
 ### Release preparation
 
@@ -137,8 +156,12 @@ It supersedes conflicting active wording in:
 - any version-specific prerelease publisher stored in `main`;
 - any rule that permits bypassing an available GitHub-plugin operation without first
   checking the plugin;
+- any rule that treats plugin unavailability as permission to continue automatically
+  through another transport;
 - any rule that treats external infrastructure failure as permission to alter source,
-  runner, workflow, or branch without supporting evidence.
+  runner, workflow, or branch without supporting evidence;
+- any rule that makes the exact wording or line placement of the plugin-first prose a
+  shell-test or CI invariant.
 
 Historical records remain immutable evidence and are not deleted merely for cosmetic
 cleanup.

@@ -26,12 +26,27 @@ missed, and generic or improvised transports were used too early.
 The successful operation was direct attachment of the already verified package to the
 owner-created prerelease. No new package build was required.
 
+Connector verification on 2026-08-07 established:
+
+- the repository API returned no configured rulesets;
+- the connected GitHub plugin remained able to read and change ordinary repository
+  objects;
+- repository Actions-permission settings and branch-protection settings returned
+  `403 Resource not accessible by integration` through the plugin;
+- the `403` represents a connector permission boundary, not proof that those controls are
+  disabled.
+
+These connector and repository-state observations are time-sensitive and must be
+re-verified before later use.
+
 ## Conflict audit
 
 The governance audit found these current-document and workflow conflicts:
 
 - the GitHub plugin was not consistently treated as the mandatory first repository
   interface;
+- fallback wording did not distinguish one missing plugin function from complete plugin
+  unavailability;
 - Draft PR wording remained in `WORKING_CONVENTIONS.md` and `DEVELOPMENT_GUIDE.md` while
   Ready-by-default was already active elsewhere;
 - one-atomic-branch-commit wording conflicted with same-scope repairs in one PR;
@@ -42,17 +57,22 @@ The governance audit found these current-document and workflow conflicts:
 - documentation-only text implied an unconditional package job although CI is path-gated;
 - blanket tag/asset blocking before the live matrix did not distinguish an explicitly
   authorized testing prerelease from stable release/pkg-repository promotion;
-- version-specific prerelease workflows accumulated in `main`.
+- version-specific prerelease workflows accumulated in `main`;
+- the initial repair overreached by making exact plugin-first wording and line placement
+  a shell-test invariant.
 
 ## Resolution
 
 - made the connected GitHub plugin mandatory as the first interface for every repository
   inspection and mutation;
 - restricted fallback transports to the exact operation whose plugin function or
-  permission is confirmed missing;
-- placed the plugin-first rule on line 1 of `AGENTS.md` and
-  `docs/GITHUB_PUBLICATION.md`;
-- added CI enforcement for the exact first-line rule;
+  permission is confirmed missing while the plugin is responding;
+- defined plugin unavailability as an immediate stop condition: stop GitHub work, inform
+  the owner, and wait for explicit direction instead of switching transports;
+- recorded the current connector permission limits and the absence of repository
+  rulesets as dated, re-verifiable evidence;
+- kept the plugin-first rule in authoritative documentation without testing its exact
+  text or line placement in shell CI;
 - added `DEC-2026-08-06-evidence-first-github-operations.md`;
 - made pre-mutation inventory mandatory;
 - separated ordinary PR delivery, testing prerelease publication, and full release;
@@ -65,12 +85,16 @@ The governance audit found these current-document and workflow conflicts:
 - replaced version-specific prerelease workflows with one generic FreeBSD 15 publisher;
 - added a manual dispatch path to permanent CI and prerelease publication workflows;
 - aligned the full release trigger with `vX.Y.Z_1: Prepare release vX.Y.Z`;
-- synchronized current GitHub authorities and governance tests.
+- retained the existing repository-hygiene script only for technical workflow and
+  publication invariants, not for policing prose wording or placement.
 
 ## Repository cleanup
 
 The previous eight-commit governance PR was closed without merge. A clean replacement
-was rebuilt atomically from the exact current `main` through the connected GitHub plugin.
+was rebuilt from the exact current `main` through the connected GitHub plugin. The owner
+then corrected the over-strict prose enforcement in the same PR rather than creating a
+replacement branch or sibling PR.
+
 No background automation or active Actions run remained before the replacement work
 started.
 

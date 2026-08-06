@@ -8,6 +8,20 @@ Active evidence-first decision:
 Active title decision:
 `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`
 
+## GitHub plugin boundary
+
+Use the connected GitHub plugin first. A narrow fallback is allowed only when the plugin
+is responding and one exact function or permission is confirmed missing. If the plugin
+is unavailable, non-responsive, or cannot provide the authoritative state required for
+safe work, stop GitHub work, inform the project owner, and wait for explicit direction.
+Do not switch transports automatically.
+
+At the 2026-08-07 verification the repository returned no configured rulesets. The
+current plugin installation returned `403 Resource not accessible by integration` for
+repository Actions-permission settings and branch-protection settings. These facts must
+be re-verified before being treated as current; the `403` is a connector permission
+boundary, not proof that the corresponding GitHub controls are disabled.
+
 ## Before every mutation
 
 Inspect current `main`, candidate metadata, relevant PRs and branches, available
@@ -51,6 +65,10 @@ Read the job log before changing anything. A confirmed external GitHub/runner/ne
 action failure causes no source change and permits at most one unchanged rerun after
 recovery. Do not switch runners, create replacement branches, add version-specific
 workflows, or schedule unbounded retries without evidence of a source defect.
+
+Loss of GitHub-plugin availability is a separate stop condition: report it to the owner
+and do not continue GitHub work through a fallback transport without new explicit
+direction.
 
 ## Full release
 

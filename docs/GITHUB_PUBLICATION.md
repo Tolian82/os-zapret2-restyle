@@ -1,5 +1,20 @@
 MANDATORY: Use the connected GitHub plugin first for every repository operation; use another transport only when the plugin lacks the required function or confirmed permission.
 
+Known connector state and stop rule (re-verify before relying on time-sensitive details):
+
+- At the 2026-08-07 verification, the repository returned no configured rulesets.
+- The connected GitHub plugin can read and change repository objects, but its current
+  installation receives `403 Resource not accessible by integration` when reading the
+  repository Actions-permission settings and branch-protection settings. This is a
+  connector permission boundary; it is not evidence that Actions or branch protection
+  are disabled.
+- When the plugin responds and only one exact function or permission is missing, a
+  fallback is allowed only for that operation under the rules below.
+- If the GitHub plugin stops responding, is unavailable, or cannot provide the
+  authoritative repository state required to proceed, stop all GitHub work. Do not
+  silently continue through local Git, `gh`, raw API calls, the web UI, an automation,
+  or a scheduled tracker. Inform the project owner and wait for explicit direction.
+
 # GitHub publication and delivery discipline
 
 ==================================================
@@ -31,9 +46,14 @@ branches, commits, pull requests, reviews, checks, workflow metadata, artifacts,
 and cleanup when the plugin exposes the operation.
 
 A fallback to local `git`, `gh`, raw API calls, web UI, or another transport is permitted
-only after the exact required plugin function or permission has been checked and found
-unavailable or insufficient. The fallback covers only that missing operation; it does not
-replace the plugin for the rest of the task.
+only when the plugin is available and the exact required plugin function or permission
+has been checked and found unavailable or insufficient. The fallback covers only that
+missing operation; it does not replace the plugin for the rest of the task.
+
+Plugin unavailability is different from a missing function. If the plugin does not
+respond, is unavailable, or cannot read the authoritative state needed for safe work,
+stop all GitHub operations, inform the project owner, and wait for explicit direction.
+Do not use a fallback transport merely to continue progress while the plugin is down.
 
 Never diagnose current GitHub state from chat history, cached assumptions, local files,
 or general web search when the connected plugin can read the authoritative repository
@@ -116,6 +136,8 @@ Classify the failure:
    replace the PR only after recording the evidence.
 5. Missing protected authority or credentials:
    stop at the exact boundary and report it once.
+6. GitHub plugin unavailable or non-responsive:
+   stop all GitHub work, inform the project owner, and wait for explicit direction.
 
 Forbidden reactions to an unproven or external failure:
 
@@ -124,7 +146,8 @@ Forbidden reactions to an unproven or external failure:
 - new version-specific workflows;
 - repeated push-trigger experiments;
 - duplicate scheduled trackers;
-- unbounded automatic retries.
+- unbounded automatic retries;
+- automatic transport switching while the GitHub plugin is unavailable.
 
 A second unchanged infrastructure failure stops the operation for diagnosis. It does
 not authorize another retry or redesign.
@@ -189,7 +212,7 @@ Published tags, releases, assets, and versions are immutable and forward-only.
 TRANSPORT SELECTION
 ==================================================
 
-Transport order is mandatory:
+Transport order is mandatory while the GitHub plugin is available:
 
 1. connected GitHub plugin for every supported read and write;
 2. authenticated ordinary Git for local editing or ref operations that the plugin does
@@ -202,7 +225,8 @@ Transport order is mandatory:
 
 Missing one fallback client is not a blocker while the GitHub plugin or another verified
 mechanism covers the operation. Never claim a plugin capability or gap without checking
-the actual function and permission first.
+the actual function and permission first. If the plugin itself is unavailable, this
+transport order is suspended and the work stops pending owner direction.
 
 ==================================================
 MERGE AND CLEANUP
@@ -264,6 +288,7 @@ that requires:
 
 - using chat history, generic web search, local state, or another transport before the
   connected GitHub plugin for an operation the plugin supports;
+- continuing GitHub work through another transport when the plugin itself is unavailable;
 - mandatory Draft PRs;
 - exactly one commit in a PR branch;
 - exactly one historical workflow run;

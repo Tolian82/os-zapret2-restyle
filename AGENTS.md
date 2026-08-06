@@ -1,5 +1,20 @@
 MANDATORY: Use the connected GitHub plugin first for every repository operation; use another transport only when the plugin lacks the required function or confirmed permission.
 
+Known connector state and stop rule (re-verify before relying on time-sensitive details):
+
+- At the 2026-08-07 verification, the repository returned no configured rulesets.
+- The connected GitHub plugin can read and change repository objects, but its current
+  installation receives `403 Resource not accessible by integration` when reading the
+  repository Actions-permission settings and branch-protection settings. This is a
+  connector permission boundary; it is not evidence that Actions or branch protection
+  are disabled.
+- When the plugin responds and only one exact function or permission is missing, a
+  fallback is allowed only for that operation under the rules below.
+- If the GitHub plugin stops responding, is unavailable, or cannot provide the
+  authoritative repository state required to proceed, stop all GitHub work. Do not
+  silently continue through local Git, `gh`, raw API calls, the web UI, an automation,
+  or a scheduled tracker. Inform the project owner and wait for explicit direction.
+
 # AGENTS.md
 
 This repository uses a mandatory risk-based documentation and GitHub preflight.
@@ -35,7 +50,9 @@ Authority order for GitHub work:
 The connected GitHub plugin is the mandatory first transport for repository discovery,
 state inspection, pull requests, branches, commits, reviews, checks, merges, and every
 other operation it supports. Local `git`, `gh`, raw API calls, the web UI, and other
-transports are fallbacks only after the plugin capability or permission gap is confirmed.
+transports are narrow fallbacks only when the plugin is available and the exact required
+function or permission is confirmed missing. Plugin unavailability is a stop condition,
+not permission to switch transports automatically.
 
 The evidence-first decision supersedes conflicting historical or active wording that
 requires mandatory Draft PRs, exactly one branch commit, full-document rereading for
@@ -124,6 +141,8 @@ Read the exact failed job log before changing source, workflow, runner, or branc
 - A second unchanged infrastructure failure stops the operation for diagnosis.
 - Scheduled monitoring must be unique and bounded. Duplicate trackers and unbounded
   automatic retries are forbidden.
+- Loss of GitHub-plugin availability stops GitHub work immediately and must be reported
+  to the project owner; it does not authorize an automatic transport fallback.
 
 ==================================================
 REQUEST SCOPE AND AUTHORIZATION
@@ -143,8 +162,8 @@ repair, squash merge, or cleanup after the owner has authorized the ordinary cyc
 Stop for owner input only on material product ambiguity, relevant unpublished owner
 state, unavailable credentials/protected authority, destructive changes to user data or
 pre-existing remote objects, history rewriting/direct-main publication, an unresolvable
-required-check failure, or mandatory live OPNsense evidence available only from the
-owner.
+required-check failure, GitHub-plugin unavailability, or mandatory live OPNsense evidence
+available only from the owner.
 
 ==================================================
 PATCH AND RELEASE BOUNDARY

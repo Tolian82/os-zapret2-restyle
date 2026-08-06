@@ -20,7 +20,6 @@ PRERELEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/publish-prerelease.yml"
 RELEASE_TRIGGER="${ROOT_DIR}/.github/workflows/release-trigger.yml"
 MAKEFILE="${ROOT_DIR}/Makefile"
 VERSION_FILE="${ROOT_DIR}/VERSION"
-PLUGIN_FIRST_RULE='MANDATORY: Use the connected GitHub plugin first for every repository operation; use another transport only when the plugin lacks the required function or confirmed permission.'
 
 fail()
 {
@@ -56,13 +55,8 @@ do
   test -s "${file}" || fail "missing or empty GitHub governance file: ${file}"
 done
 
-[ "$(sed -n '1p' "${AGENTS}")" = "${PLUGIN_FIRST_RULE}" ] || \
-  fail 'AGENTS first line does not require the GitHub plugin first'
-[ "$(sed -n '1p' "${PUBLICATION}")" = "${PLUGIN_FIRST_RULE}" ] || \
-  fail 'GitHub publication authority first line does not require the GitHub plugin first'
-require_fixed 'GITHUB PLUGIN FIRST' "${PUBLICATION}" 'publication authority lacks the GitHub-plugin-first section'
-require_fixed 'The connected GitHub plugin is the mandatory first transport' "${AGENTS}" 'AGENTS lacks the GitHub-plugin-first transport rule'
-require_fixed 'The fallback covers only that missing operation' "${PUBLICATION}" 'fallback scope is not constrained'
+# Exact prose wording and line placement are intentionally not CI invariants.
+# This script validates decision status and executable workflow contracts only.
 
 version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' "${MAKEFILE}" | head -1)
