@@ -8,25 +8,22 @@ Question answered:
 Which engineering rules are already settled?
 
 Purpose:
-Store permanent project identities, engineering principles and working rules.
+Store permanent project identities, engineering principles, and working rules.
 
 Updated when:
 A permanent rule or approved convention changes.
 
 Read after:
-DECISIONS.md
+PROJECT_STATE.md and the applicable active decision under `docs/decisions/`.
 
 Do not store here:
-Current project status, history, roadmap or implementation details.
+Current task status, history, roadmap, or implementation detail.
 
 ==================================================
 STABLE IDENTITIES
 ==================================================
 
-Project:
-os-zapret2-restyle
-
-Repository:
+Project and repository:
 os-zapret2-restyle
 
 Installed package:
@@ -38,10 +35,7 @@ zapret2-restyle
 MVC namespace:
 OPNsense\Zapret
 
-Internal service:
-zapret
-
-Configd namespace:
+Internal service and configd namespace:
 zapret
 
 Version source:
@@ -53,7 +47,9 @@ ENGINEERING PRINCIPLES
 
 - Correctness over speed.
 - Preserve working behavior before optimization.
-- One logical change per commit.
+- Keep one logical scope per delivery.
+- A task branch may contain same-scope repair commits; `main` receives one logical
+  squash commit.
 - Repository source is authoritative.
 - Generated runtime is never committed.
 - Validate before activation.
@@ -62,7 +58,23 @@ ENGINEERING PRINCIPLES
 - Audit before refactoring.
 - Documentation is part of the project architecture.
 - Changes to the documentation system are architectural changes.
-- Every approved rule must be recorded in the applicable project documents.
+- Every approved rule must be recorded in the applicable current authority.
+
+==================================================
+DOCUMENTATION AND DECISION AUTHORITY
+==================================================
+
+`docs/INDEX.md` defines the reading order and authority map.
+
+A focused dated decision under `docs/decisions/` may be the primary authority for its
+scope. `docs/DECISIONS.md` remains the consolidated historical ledger. When an older
+entry conflicts with a later active dated decision that explicitly records supersession,
+the later decision controls.
+
+Code and all directly affected documentation belong in the same logical delivery.
+Historical records remain when they are genuine evidence, but wording that may be
+mistaken for current behavior must be marked historical or superseded and point to the
+current authority.
 
 ==================================================
 AUDIT RULES
@@ -79,428 +91,256 @@ duplicate
 inherited
 requires live test
 
-The word "zapret" alone is not evidence of obsolete inheritance.
+The word `zapret` alone is not evidence of obsolete inheritance.
 
-AUDIT.md is the authoritative register for audit scope, verified chains, broken
-chains, classifications, live-test requirements, and remediation status.
+`AUDIT.md` is the authoritative register for audit scope, evidence, chains,
+classifications, live-test requirements, remediation plans, acceptance criteria, and
+status. A broken chain is recorded before remediation and retained after closure.
 
-Each audit block is considered complete only after all affected Engineering
-Memory documents have been updated, reviewed, and committed. Until then, work
-must not proceed to the next audit block or to code changes.
-
-Every non-OK finding must have a stable ID, exact affected locations, chain,
-evidence, impact, verification plan, remediation plan, acceptance criteria,
-required documentation updates, and remediation status in AUDIT.md.
-
-A broken chain must be recorded before it is fixed. After verification, its audit
-status must be updated rather than silently removed.
+Findings and Architecture Debt are separate records. A Finding is a confirmed defect or
+risk. Architecture Debt is an unresolved design question and cannot be implemented or
+closed before a recorded decision, implementation, verification, and documentation.
 
 ==================================================
-CHANGE RULES
+CHANGE AND TESTING RULES
 ==================================================
 
+- Fix the exact GitHub base SHA before editing.
 - Make minimal reviewable changes.
-- Fix the exact GitHub base commit before editing.
-- Keep one logical change in one atomic commit.
-- Include all affected documentation and Git file-mode changes.
-- Verify before commit.
+- Include affected documentation and Git modes.
+- Run appropriate syntax and focused tests.
 - Review the complete diff.
-- Stop immediately if validation fails.
-- Do not publish a failed or partially validated change.
+- Stop when validation fails; do not publish a knowingly failed or partial change.
+- Never claim a test passed unless it was executed.
+- Static verification, package-archive verification, and live OPNsense verification are
+  distinct states.
+- A live finding is closed only by exact recorded live evidence.
+
+Normal local checks when a checkout exists:
+
+`git status --short`
+
+`git diff --check`
+
+`git diff --stat`
 
 ==================================================
-TESTING RULES
-==================================================
-
-Run appropriate syntax checks.
-
-Run:
-
-git status --short
-git diff --check
-git diff --stat
-
-Perform focused live tests when behavior changes.
-
-Never claim a test passed unless it was actually executed.
-
-==================================================
-GIT RULES
-==================================================
-
-Preferred sequence:
-
-read current GitHub main
-record full base SHA
-confirm required state is published
-change one logical unit
-validate
-review diff
-git add explicit paths when using a local checkout
-review staged diff when using a local checkout
-commit
-recheck remote main against base SHA
-publish a working branch
-open a Draft PR
-wait for required CI
-mark Ready and squash merge
-verify published commit
-build
-focused live verification
-
-==================================================
-DOCUMENT SYNCHRONIZATION
-==================================================
-
-Code and affected documentation belong in the same logical commit.
-
-Approved concepts and rules must be recorded in DECISIONS.md and reflected in
-the appropriate specialist documents.
-
-Changes to document structure, document responsibilities, reading order, audit
-method, development workflow, or documentation-maintenance rules are
-architectural changes. They require a decision entry and synchronized updates to
-all affected documents in the same logical commit.
-
-==================================================
-ENGINEERING MEMORY WORKFLOW
-==================================================
-
-Every development stage begins with documentation and ends with documentation.
-
-Before starting work:
-
-- Record the objective.
-- Record the implementation plan.
-- Record the expected verification.
-
-During work:
-
-- Record approved concepts immediately.
-- Record new permanent rules immediately.
-- Record architecture changes immediately.
-- Record important discoveries that affect later work.
-
-After finishing work:
-
-- Record what was completed.
-- Record what was verified.
-- Record what failed or remains unresolved.
-- Update current project state.
-- Update roadmap completion.
-- Record the next planned stage.
-
-Engineering Memory is maintained continuously during development rather than
-written only after the work is finished.
-
-==================================================
-FINDINGS AND ARCHITECTURE DEBT
-==================================================
-
-Findings and Architecture Debt are separate engineering records.
-
-A Finding records a confirmed implementation defect, inconsistency, obsolete or
-unused interface, duplicate, or concrete operational risk. It must include evidence,
-a verification plan, a remediation plan, acceptance criteria, and affected documents.
-Resolved Findings remain in AUDIT.md as history.
-
-Architecture Debt records an unresolved design question. It is not an implementation
-defect and must not be "fixed" in code before the intended behavior is approved in
-DECISIONS.md.
-
-Architecture Debt follows this lifecycle:
-
-Open
-↓
-Discussion
-↓
-Decision
-↓
-Implementation
-↓
-Verification
-↓
-Documentation
-↓
-Closed
-
-Architecture Debt cannot be closed directly. It closes only after a recorded decision,
-required implementation, verification, and synchronized documentation.
-
-A Finding must not be remediated while an open Architecture Debt item determines its
-intended behavior.
-
-==================================================
-MANDATORY RESPONSE PREFLIGHT
+RISK-BASED RESPONSE PREFLIGHT
 ==================================================
 
 For every new or resumed project context:
 
-1. Obey the repository-root `AGENTS.md`, then read INDEX.md first and complete its
-   full mandatory reading order.
-2. Do not provide project diagnosis, recommendations, commands, or repository actions
-   before the reading sequence is complete.
-3. Read DECISIONS.md, WORKING_CONVENTIONS.md, and DEVELOPMENT_GUIDE.md as the
-   approved methodology and principles; do not reduce them to remembered summaries.
-4. Re-read the relevant specialist document when any workflow or command detail is
-   uncertain; memory and earlier chat output are not substitutes.
-5. If OPNsense commands will be delivered, identify the target shell as root csh and
-   perform the command-dialect check below before sending them.
+1. read repository-root `AGENTS.md`, `docs/INDEX.md`, and `docs/PROJECT_STATE.md`;
+2. read the specialist documents and active decisions relevant to the requested scope;
+3. read `docs/GITHUB_PUBLICATION.md` before a GitHub mutation;
+4. re-read any authority whose command or workflow detail is uncertain;
+5. perform the OPNsense root-csh check before sending console commands.
 
-The only permitted pre-reading user message is a brief progress notice required by
-the platform that says documentation recovery is in progress. It contains no technical
-conclusion or command.
-
+A full reading of every audit, decision, architecture, devlog, roadmap, and requirement
+file is required only for repository-wide audit or genuine full-context recovery. It is
+not required before every focused diagnosis or small change.
 
 ==================================================
-COMMAND BLOCK SEPARATION
+GITHUB ORDINARY DELIVERY RULE
 ==================================================
-
-Operational instructions must separate read-only validation from state-changing
-actions. Do not combine them in one shell block.
-
-Use these headings and responsibilities:
-
-- Checks and other: status inspection, dry runs, git apply --check, syntax checks,
-  diff review, staging, and staged-diff validation.
-- Installation: optional git apply, commit, publication, package build or
-  installation, service restart, and other commands that change repository or
-  system state.
-
-Keep package publication and installation commands together where possible, but
-never mix them with the preceding validation block. Commands must remain in actual
-execution order and must be valid for the OPNsense root shell or explicitly invoke
-/bin/sh when POSIX shell syntax is required.
-
-The default and mandatory presentation target for OPNsense console instructions is the root csh shell. Do not silently assume sh, bash, or another shell. If POSIX sh is required, show an explicit `sh` command before the POSIX block and an explicit `exit` command after it. Commands that follow `exit` must again be valid csh commands.
-
-Before sending an OPNsense command block, inspect it for POSIX-only constructs,
-including `$(...)`, `name=value` shell assignments, `export`, `if ...; then`,
-`$((...))`, and shell functions. Replace them with csh-safe commands where practical.
-If any are required, place the complete affected sequence between explicit standalone
-`sh` and `exit` commands. A command copied from a Linux, CI, or local development
-shell is never assumed to be valid on the OPNsense console without this check.
-
-==================================================
-FOCUS, SUFFICIENCY, AND INTERFACE STABILITY
-==================================================
-
-The project is a small applied addon with a defined scope. Prefer reasonable
-sufficiency over speculative completeness or unnecessary abstraction.
-
-Current priorities:
-
-1. Make the already approved functionality work correctly.
-2. Verify it on a real supported OPNsense system.
-3. Keep documentation synchronized at a level that supports development and recovery.
-4. Discuss future expansion only without displacing current implementation work.
-
-UX is supporting work rather than a standalone objective. Consider interface changes
-when expanded functionality needs them or when the existing interface demonstrably
-blocks an implemented capability. Otherwise keep the interface stable.
-
-Do not begin general audits or redesigns of Navigation, First Run, Service,
-Diagnostics, Maintenance, Status, or Strategy while the current approved functionality
-remains incomplete.
-
-Project guidance should normally be treated as recommendations and priorities. Use
-hard requirements only where correctness, compatibility, release safety, or repository
-consistency genuinely depends on them.
-
-Approximate effort preference, not a quota:
-
-- 60% coding;
-- 15% documentation;
-- 15% discussion of current work;
-- 8% discussion of future work;
-- 2% broader process or philosophical discussion.
-
-
-## Runtime lifecycle ownership
-
-Package lifecycle and runtime bootstrap changes are one architectural unit. Code hooks,
-setup backend, service boundaries, configd integration, verification instructions, and
-all affected documentation must be committed together. Runtime setup uses the single
-`setup.sh install` backend, initially exposed as the exact post-install command and later
-through a GUI maintenance action.
-
-Package upgrade preserves service state: replacement +PRE_INSTALL synchronously stops
-the installed running service before the old hook and file replacement; +PRE_DEINSTALL
-keeps the same fail-closed contract for removal and subsequent upgrades; new
-+POST_INSTALL starts replacement code. A stopped service stays stopped. Stop failure
-aborts the package operation and is never suppressed. Incomplete
-runtime state is cleaned but is not automatically promoted to running. Successful
-`setup.sh install` captures complete service state before runtime mutation. It refreshes
-and verifies a previously running service, while a stopped service remains stopped and
-is verified as such before setup reports ready. Incomplete or unknown initial state
-fails closed. Runtime build staging and rollback remain a separate logical change.
-
-==================================================
-AUDIT IDENTIFIER AND LIVE-EVIDENCE RULES
-==================================================
-
-- Every AUDIT.md Finding ID is globally unique within the document.
-- Existing IDs are never reused for a later unrelated finding.
-- Cross-references must be updated when a duplicate historical ID is corrected.
-- A finding may be marked live verified only when the exact package/runtime evidence is recorded.
-- Static verification, package archive verification, and live OPNsense verification are distinct states.
-- A working package built from an uncommitted tree is not a reproducible project baseline until the
-  source and synchronized documentation are committed.
-
-==================================================
-BLOB SHORTHAND RULE
-==================================================
-
-- Supported shorthand is --blob=<name>.
-- It resolves directly to files/fake/<name>.bin.
-- The .bin suffix is omitted in the strategy.
-- There is no implicit alias table.
-- Native upstream --blob=name:value declarations containing ':' remain untouched.
-- Missing files are hard errors and must not be silently substituted.
-
-
-==================================================
-GITHUB-COMMIT DEVELOPMENT RULE
-==================================================
-
-The default source baseline is an exact commit in the official GitHub repository,
-normally the current `main` commit. Record the full SHA before editing and obtain
-all file content and Git modes from that commit.
 
 Required sequence:
 
-read and record current main SHA
+read and record exact current `main`
 ↓
-prepare one logical multi-file change
+perform the pre-mutation GitHub inventory
 ↓
-run static validation and review the complete diff
+prepare and validate one logical change
 ↓
-create one atomic commit
+publish one task branch and one Ready PR
 ↓
-confirm main still equals the recorded base
+keep same-scope repairs in the same PR
 ↓
-publish a working branch and open a Draft PR
+pass required checks for the latest mergeable head
 ↓
-pass required CI and squash merge
+squash merge with expected head SHA and exact versioned subject
 ↓
-build and perform focused verification
+verify `main` and clean the task branch
 
-The working-branch and PR path is the default for ordinary requested development
-work. Standing project-owner authorization covers branch creation, one atomic
-commit, branch publication, Draft PR creation, Ready transition after required CI,
-squash merge, verification of `main`, and cleanup of the temporary branch created
-for that task. No repeated confirmation is required.
+Draft is optional and reserved for intentional work in progress.
 
-Direct publication to `main` requires explicit project-owner instruction and must
-be a fast-forward from the recorded base. Never force-push. A unified patch is used
-only when explicitly requested or when relevant local-only state is transferred in
-that form.
+Every PR title, PR-branch commit subject, and final squash subject begins with the exact
+candidate prefix derived from `VERSION` and `PLUGIN_REVISION`.
 
-No particular GitHub client is mandatory. GitHub CLI is not required when an
-authenticated GitHub integration/API or ordinary Git can perform the approved
-operation safely. Before treating publication as blocked, discover all available
-GitHub integration/API and authenticated Git transports. Missing `gh` alone is never
-a blocker, never a reason to stop after local preparation, and never a question for
-the project owner when another approved transport is available.
+Do not create sibling branches merely named `-clean`, `-final`, `-fixed`, `-retry`, or
+`-publish`. Never force-update `main`, move a published tag, or rewrite published
+history.
 
-Transport fallback order is authenticated GitHub integration/API, authenticated
-ordinary Git, then GitHub CLI. Publication means branch, atomic commit, Draft PR,
-required CI, Ready, squash merge, and verification of `main`; a local patch is not
-a published result. Release assets and the pkg repository additionally require the
-explicit release authority defined below.
+==================================================
+GITHUB PRE-MUTATION INVENTORY
+==================================================
 
-Do not modify tracked repository files directly from the OPNsense console with `vi`,
-`ee`, `nano`, `sed -i`, `perl -pi`, Python rewrite scripts, `cat >`, `echo >>`, or
-equivalent mutation commands.
+Before any branch, PR, workflow, tag, release, or asset mutation, inspect:
 
-This rule does not restrict temporary files, logs, diagnostics, generated build output,
-installed-system configuration, or files outside the repository.
+- exact `main` and candidate metadata;
+- relevant PRs and branches;
+- existing workflows capable of the operation;
+- active, queued, failed, and successful runs;
+- reusable artifacts and their run ID, artifact ID/name, expiry, and digest;
+- existing tags, releases, and assets;
+- actual connector/API/Git/`gh` permissions.
 
-When a unified patch is explicitly selected, it must include all content and
-file-mode changes and pass `git apply --check` against its exact base. This is an
-optional transfer mode, not the default prerequisite for repository work.
+Do not create a new mechanism until the inventory proves the current mechanisms are
+insufficient.
+
+==================================================
+GITHUB FAILURE RULE
+==================================================
+
+Read the exact failed job log before changing source, workflow, runner, or branch.
+
+- A confirmed same-scope defect is repaired in the same PR.
+- An external GitHub, runner, network, action-distribution, or dependency failure causes
+  zero source changes and permits at most one unchanged rerun after recovery.
+- Do not switch runner operating systems, create replacement branches, or add workflows
+  without evidence that the current implementation is defective.
+- A second unchanged infrastructure failure stops the operation for diagnosis.
+- Duplicate trackers and unbounded scheduled retries are forbidden.
+
+==================================================
+TESTING PRERELEASE RULE
+==================================================
+
+Publishing an already verified candidate is a release operation, not a code PR.
+
+- Exact owner authorization is required for `v<VERSION>_<REVISION>` and its asset.
+- Prefer direct Release API/UI/`gh` upload when verified package bytes already exist.
+- Reused Actions artifacts are bound by exact run ID, artifact ID/name, and digest.
+- Recheck package `+MANIFEST` before publication.
+- Use the single generic `.github/workflows/publish-prerelease.yml` only when automated
+  build-and-publish is needed.
+- Permit only one active publication run per candidate.
+- A temporary `publish/v<VERSION>_<REVISION>` branch does not receive a PR.
+- Testing prereleases publish neither GitHub Pages nor the pkg repository.
+- Verify target SHA, tag, flags, asset, and direct URL, then delete the temporary branch.
+
+==================================================
+PATCH, PRERELEASE, AND RELEASE BOUNDARY
+==================================================
+
+Ordinary packaged change:
+
+- keep `VERSION`;
+- increment `PLUGIN_REVISION` once;
+- publish no tag, release, asset, Pages, or pkg repository without separate authority.
+
+Governance/documentation/CI-only change:
+
+- change neither version value;
+- use the unchanged candidate prefix;
+- run applicable path-gated CI.
+
+Testing prerelease:
+
+- explicit authority for exact `v<VERSION>_<REVISION>`;
+- publish one verified package asset only;
+- no Pages/pkg repository.
+
+Full project release:
+
+- explicit authority for exact new `VERSION=X.Y.Z`;
+- reset revision to `1`;
+- release-preparation title is `vX.Y.Z_1: Prepare release vX.Y.Z`;
+- existing product and live gates apply;
+- published tags, releases, assets, and versions are immutable.
 
 ==================================================
 STANDING DELIVERY AUTHORIZATION
 ==================================================
 
-An instruction to fix, add, change, implement, or complete an ordinary project
-task authorizes the complete default PR cycle. The assistant selects routine
-branch, commit, PR, and test details from the current source and documentation.
+An instruction to fix, add, change, implement, or complete an ordinary task authorizes
+the normal branch → Ready PR → CI → squash merge → verification cycle unless the owner
+sets a narrower boundary.
 
-Explicit stopping points override the default. If the owner asks only for analysis,
-diagnosis, review, a local change, a patch, a branch, or a PR, stop at that point.
+Analysis/review/audit requests are read-only. Patch-only, branch-only, and PR-only
+requests stop at the named boundary. Testing prerelease or full release publication
+requires explicit authority for the exact candidate/version.
 
-Do not request confirmation for deterministic routine choices or for the Ready,
-squash-merge, and temporary-task-branch cleanup steps after required checks pass.
+Do not ask for routine branch names, commit text, PR text, CI inspection, same-scope
+repair, Ready state, squash merge, or task-branch cleanup when those choices are
+deterministic.
 
-One explicit request to make a release authorizes its complete verified release
-pipeline. An ordinary development request does not authorize a version tag,
-GitHub Release, package publication, or pkg-repository publication.
+Stop for owner direction only on material product ambiguity, relevant unpublished owner
+state, unavailable credentials/protected authority, destructive changes to user data or
+pre-existing remote objects, history rewriting/direct-main publication, an unresolvable
+required-check failure, or mandatory live evidence available only from the owner.
 
-Stop for owner direction only on material architecture/product ambiguity, relevant
-unpublished local state, an unresolvable required check failure, new credentials or
-protected authority, destructive work affecting user data or pre-existing remote
-objects, force-push/history rewriting/direct-main publication, or mandatory live
-OPNsense evidence available only from the owner.
+==================================================
+COMMAND BLOCK AND CSH RULE
+==================================================
 
-When owner input is genuinely required, ask one consolidated question with the
-evidence and a recommended choice. Never ask the owner to confirm facts available
-from the repository, GitHub, CI, documentation, or read-only diagnostics.
+Operational instructions separate read-only validation from state-changing actions.
 
-Package revision handling is routine. Increment `PLUGIN_REVISION` once for an
-ordinary change to packaged files or package behavior while `VERSION` is unchanged.
-Reset it to `1` when an explicitly requested new project version changes `VERSION`.
-A governance/documentation-only change outside package contents changes neither
-value; standard CI, including its package job, supplies the applicable build and
-verification without implying a release.
+OPNsense console instructions target root `csh`. POSIX-only constructs such as `$(...)`,
+`name=value`, `export`, `if ...; then`, arithmetic expansion, or shell functions require
+an explicit standalone `sh` before the block and standalone `exit` afterward.
+
+Commands remain in actual execution order. A validation block must not silently perform
+installation, publication, restart, or another mutation.
+
+==================================================
+FOCUS AND SUFFICIENCY
+==================================================
+
+The project is a small applied addon. Prefer the least complexity needed for reliable
+approved functionality. Current priorities are working behavior, real OPNsense evidence,
+and sufficient synchronized documentation. UX and broad redesign are supporting work,
+not independent goals.
+
+==================================================
+RUNTIME LIFECYCLE OWNERSHIP
+==================================================
+
+Package lifecycle and runtime bootstrap changes are one architectural unit. Code hooks,
+setup backend, service boundaries, configd integration, verification, and affected
+material documentation are delivered together.
+
+The single approved runtime installation and maintenance backend is
+`/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh`. GUI maintenance must reuse it and
+must not implement an independent installer.
+
+Package and setup operations preserve complete running/stopped service state and fail
+closed on incomplete state or stop failure. Runtime staging/rollback remains a separate
+architectural concern.
+
+==================================================
+BLOB SHORTHAND RULE
+==================================================
+
+- Supported shorthand is `--blob=<name>`.
+- It resolves directly to `files/fake/<name>.bin`.
+- The `.bin` suffix is omitted in strategy text.
+- There is no implicit alias table.
+- Native `--blob=name:value` declarations remain untouched.
+- Missing files are hard errors.
 
 ==================================================
 LOCAL-ONLY STATE EXCEPTION
 ==================================================
 
-GitHub is authoritative only for state that has been committed and pushed. It
-cannot expose uncommitted or unpushed changes in the project owner's local
-OPNsense checkout.
+GitHub is authoritative only for committed and pushed state. If relevant owner changes
+exist only in a local OPNsense checkout, stop before editing and request that exact state
+be committed/pushed or explicitly transferred. Never reconstruct or overwrite
+unpublished state from memory.
 
-If local-only changes are relevant to the requested work:
-
-1. stop before editing;
-2. ask the owner to commit and push them, or explicitly transfer them as an
-   archive or patch;
-3. establish the exact transferred baseline;
-4. never reconstruct or overwrite the unpublished state from memory.
-
-A clean checkout synchronized with the recorded GitHub commit requires no
-archive. Backups of live files outside the repository remain governed by the
-separate operational backup rules.
-
-==================================================
-GUI MAINTENANCE BACKEND RULE
-==================================================
-
-The existing `/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh` is the single approved backend for GUI management of bol-van/zapret2 releases. The GUI must not introduce a second independent installer. User-visible requirements are release discovery, installed-version reporting, update notification, release selection, installation, update, and repeat installation. Internal download or Git operations remain backend implementation details and are not the name of the GUI task.
-
-The additional BLOB repository is an approved later GUI work item, but its repository and technical contract remain undefined until supplied by the project owner. Do not invent a URL, manifest, directory layout, version scheme, integrity policy, or update behavior.
+A clean checkout matching the recorded GitHub SHA requires no archive. Unified patches
+are optional and used only when explicitly requested or transferring local-only state.
 
 ==================================================
 REPOSITORY ARTIFACT HYGIENE
 ==================================================
 
 Tracked editor backups, merge rejects, ad-hoc patches, transport fragments, encoded
-payloads, and local backup files are forbidden in the authoritative tree. This includes
-`*.orig`, `*.rej`, `*.patch`, `*.diff`, `*.b64`, `*.base64`, `*.bak`, `*.part-*`, and
-editor `*~` files. Build output remains ignored separately.
+payloads, and local backup files are forbidden. This includes `*.orig`, `*.rej`,
+`*.patch`, `*.diff`, `*.b64`, `*.base64`, `*.bak`, `*.part-*`, and editor `*~` files.
 
-Historical records may remain when they are genuine engineering evidence, but a record
-whose wording can be confused with current behavior must carry an explicit historical
-or superseded status banner and point to the current authority.
-
-`scripts/test-repository-hygiene.sh` is a mandatory CI gate. It rejects forbidden
-tracked artifacts and verifies the active documentation authority markers. Exceptions
-require a separate recorded decision and a narrow reviewed allowlist; none currently
-exist.
+`scripts/test-repository-hygiene.sh` is a mandatory CI gate.
 
 Normal steady-state branch authority is `main`. `recovery/base` is preserved as a
-separate recovery reference. Ordinary task, repair, release-preparation, and transport
-branches are temporary and are removed after their work is superseded or squash merged.
+recovery reference. Ordinary task and publication branches are temporary and are removed
+after successful merge/publication or proven abandonment.
