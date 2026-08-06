@@ -60,6 +60,23 @@ The repository cannot truthfully claim live OPNsense success without execution o
 
 All rows are intentionally `PENDING OWNER`. No live PASS is inferred from CI, mocked integration tests, or package build success. Only revision 47 or a later FreeBSD 15 amd64 candidate may be used.
 
+## Reopened semantic evidence contract
+
+Status: **CORRECTIVE CANDIDATE 0.3.3_4**
+
+Live scenario 1 attempts on `0.3.3_1` and `0.3.3_2` exposed one affected contract: semantic lifecycle evidence must identify the same running daemon processes as the normal service backend.
+
+The `0.3.3_2` diagnostic isolated the defect:
+
+- the FreeBSD-safe wrapper returned both dvtws2 and supervisor commands;
+- the shared backend matcher returned true for both processes;
+- the complete `zapret_service.sh strategy-lab-evidence` path returned false for both;
+- `zapret_service.sh` had overwritten the wrapper inherited from `backend/common.sh` with direct `/bin/ps`.
+
+Revision `0.3.3_4` removes that later override, binds service semantic evidence to the common process wrapper, and strengthens CI so a future direct `/bin/ps` override is rejected. This correction does not claim scenario 1 PASS; the row must be repeated on the owner appliance with the corrected FreeBSD 15 package.
+
+Revision `0.3.3_3` remains an independent presentation correction for Diagnostics reload behavior and does not substitute for the scenario 1 runtime retest.
+
 ## Release status
 
 Status: **BLOCKED ON LIVE MATRIX**
