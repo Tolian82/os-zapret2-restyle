@@ -20,6 +20,7 @@
 - `docs/architecture/STRATEGY_LAB_PERSISTED_RESULT_RELOAD.md` — latest-job pointer and reload restoration;
 - `docs/architecture/STRATEGY_LAB_STRUCTURED_RESULTS.md` — structured replay evidence and safe complete-profile copy;
 - `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md` — persisted progress and complete RU/EN presentation;
+- `docs/architecture/STRATEGY_LAB_OBSOLETE_SURFACES.md` — removed circular aliases and duplicate state hook;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — finding-to-patch traceability;
 - `docs/PROJECT_STATE.md` — current verified baseline and next action.
 
