@@ -33,8 +33,11 @@ Audited source: `main` at `a95fcc33b2bdd97830fe5cd44090ae189a141dfa` (`0.3.2_24`
 - Patch `_45` completes mandatory CI coverage with one nonrecursive corrective matrix and warning-free fixtures.
 - Findings 1–15 are source-complete and covered by mandatory CI after Patch `_45`.
 - Patch `_46` freezes the closure record and the owner-assisted live OPNsense release gate without changing runtime behavior.
+- Patch `_47` corrects the general PR package builder from FreeBSD 14.2 to FreeBSD 15.0, enforces the package manifest ABI, and replaces `_46` with `_47` as the valid live candidate.
 
 Source and CI status: **COMPLETE**.
+
+Package target status: **FREEBSD 15 AMD64 ONLY**.
 
 Live OPNsense status: **PENDING OWNER**.
 
@@ -46,6 +49,8 @@ The detailed closure authority is `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md`
 
 IPFW rules `19100–19131` remain an exclusive Strategy Lab reservation and are destructively cleaned without external occupancy restoration.
 
+The `os-zapret2-restyle-0.3.2_46.pkg` CI artifact has ABI `FreeBSD:14:amd64` and is explicitly excluded from installation and live verification.
+
 ## Release gate
 
-Source/CI completion is not equivalent to a live appliance PASS. Release preparation is blocked until every required live row is executed on the owner's OPNsense appliance, marked PASS with recorded evidence, and followed by separate explicit owner authorization for release publication.
+Source/CI completion is not equivalent to a live appliance PASS. Release preparation is blocked until every required live row is executed on the owner's OPNsense appliance with a FreeBSD 15 amd64 candidate, marked PASS with recorded evidence, and followed by separate explicit owner authorization for release publication.

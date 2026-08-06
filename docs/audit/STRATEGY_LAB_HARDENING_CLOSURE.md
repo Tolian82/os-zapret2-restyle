@@ -20,17 +20,34 @@ Implemented source contracts include:
 - lock-protected evidence-preserving retention;
 - one authoritative nonrecursive Strategy Lab corrective CI matrix.
 
-Revision 46 itself changes no Strategy Lab runtime behavior. It freezes the final documentation authority and live-appliance release gate.
+Revision 46 itself changed no Strategy Lab runtime behavior. It froze the final documentation authority and live-appliance release gate.
+
+## FreeBSD 15 package correction
+
+Status: **COMPLETE IN REVISION 47**
+
+The revision 46 pull-request package artifact was built by the general CI workflow on FreeBSD 14.2 and contains package ABI `FreeBSD:14:amd64`. That artifact is incompatible with the documented OPNsense 26.7 / FreeBSD 15 target and is explicitly excluded from live verification.
+
+Revision 47:
+
+- moves the pull-request package builder to FreeBSD 15.0;
+- verifies the VM major version before building;
+- rejects any package whose manifest is not `FreeBSD:15:amd64` and `freebsd:15:x86:64`;
+- adds a permanent contract that rejects FreeBSD 14 package builders in GitHub workflows;
+- designates `os-zapret2-restyle-0.3.2_47.pkg` as the only valid live-matrix candidate.
+
+This correction does not reopen findings 1–15 and does not change Strategy Lab runtime behavior.
 
 ## Verified automated gates
 
-Every merged source revision was required to pass:
+Every merged source revision is required to pass:
 
 - exact versioned PR and commit-title identity;
 - PHP, XML, and shell validation;
 - the mandatory Strategy Lab corrective matrix;
+- the FreeBSD 15 package-workflow contract;
 - project lifecycle, release, governance, and repository-hygiene contracts;
-- FreeBSD package build and package inspection;
+- FreeBSD 15 package build and package-manifest inspection;
 - post-merge `main` integrity.
 
 ## Live appliance status
@@ -41,13 +58,13 @@ The repository cannot truthfully claim live OPNsense success without execution o
 
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`
 
-All rows are intentionally `PENDING OWNER`. No live PASS is inferred from CI, mocked integration tests, or package build success.
+All rows are intentionally `PENDING OWNER`. No live PASS is inferred from CI, mocked integration tests, or package build success. Only revision 47 or a later FreeBSD 15 amd64 candidate may be used.
 
 ## Release status
 
 Status: **BLOCKED ON LIVE MATRIX**
 
-Revision 46 does not authorize or perform:
+The hardening and ABI-correction revisions do not authorize or perform:
 
 - a Git tag;
 - GitHub Release creation;
@@ -59,4 +76,4 @@ Release preparation may begin only after every required live row is marked PASS 
 
 ## Reopening rule
 
-A live failure reopens only the affected logical contract. The correction must use a new versioned patch, update the relevant authority and evidence, pass the full corrective matrix and package build, and repeat the affected live scenario plus dependent scenarios.
+A live failure reopens only the affected logical contract. The correction must use a new versioned patch, update the relevant authority and evidence, pass the full corrective matrix and FreeBSD 15 package build, and repeat the affected live scenario plus dependent scenarios.
