@@ -4,7 +4,13 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 SELF="${ROOT_DIR}/scripts/test-strategy-lab-corrective-matrix.sh"
 DOMAIN_TEST="${ROOT_DIR}/scripts/test-domain-diagnostics-contract.sh"
+STRATEGY_LAB_JQ=$(command -v jq)
+export STRATEGY_LAB_JQ
 
+[ -x "${STRATEGY_LAB_JQ}" ] || {
+    echo 'FAIL: jq is unavailable for the Strategy Lab corrective matrix' >&2
+    exit 1
+}
 [ -s "${DOMAIN_TEST}" ] || {
     echo 'FAIL: focused domain diagnostics contract is missing' >&2
     exit 1
