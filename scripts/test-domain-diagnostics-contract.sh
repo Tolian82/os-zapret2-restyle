@@ -44,7 +44,7 @@ for test in job-contract target-contract candidate-runtime runtime-cleanup prefl
     interception-evidence profile-output unified-shortlist udp-input-contract \
     family-screening parameter-expansion stability-shortlist extended-tcp \
     quic udp time-budget semantic-restoration circular circular-owner settings-guard \
-    result-reload structured-results progress-localization obsolete-surfaces \
+    result-reload structured-results progress-localization obsolete-surfaces retention \
     diagnostics-activation e2e
 do
     sh "${ROOT_DIR}/scripts/test-strategy-lab-${test}.sh"
