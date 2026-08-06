@@ -87,18 +87,18 @@ require_fixed 'vX.Y.Z_1: Prepare release vX.Y.Z' "${PUBLICATION}" 'versioned rel
 
 require_fixed 'DEC-2026-08-06-evidence-first-github-operations.md' "${INDEX}" 'INDEX does not prioritize evidence-first decision'
 require_fixed 'one active publication run' "${INDEX}" 'INDEX lacks one-run publication rule'
-require_fixed 'risk-based preflight' "${CONVENTIONS}" 'conventions do not use risk-based preflight'
-require_fixed 'TESTING PRERELEASE RULE' "${CONVENTIONS}" 'conventions lack prerelease boundary'
-require_fixed 'GITHUB FAILURE PROCEDURE' "${DEVELOPMENT}" 'development guide lacks evidence-first failure procedure'
-require_fixed 'Publishing an already verified candidate is a release operation, not a code PR.' "${CONVENTIONS}" 'conventions do not separate publication from PR delivery'
-require_fixed 'vX.Y.Z_1: Prepare release vX.Y.Z' "${DEVELOPMENT}" 'development guide lacks versioned release title'
+require_fixed 'GitHub sections of `docs/WORKING_CONVENTIONS.md` and `docs/DEVELOPMENT_GUIDE.md`' "${EVIDENCE_DECISION}" 'lower-priority GitHub sections are not explicitly superseded'
+require_fixed 'mandatory Draft PRs' "${EVIDENCE_DECISION}" 'mandatory Draft conflict is not explicitly superseded'
+require_fixed 'full-document rereading' "${EVIDENCE_DECISION}" 'full-reread conflict is not explicitly superseded'
 
+# Active top-level GitHub authorities must not reintroduce superseded behavior.
 if grep -Eq 'open one Draft PR|Draft PR creation|complete its full mandatory reading order|no substantive project response precedes complete documentation recovery' \
-  "${AGENTS}" "${PUBLICATION}" "${WORKFLOW_SUMMARY}" "${CONVENTIONS}" "${DEVELOPMENT}"
+  "${AGENTS}" "${PUBLICATION}" "${WORKFLOW_SUMMARY}"
 then
-  fail 'current GitHub authority still contains superseded Draft/full-reread wording'
+  fail 'active top-level GitHub authority contains superseded Draft/full-reread wording'
 fi
 
+# One generic publisher is allowed; version-specific publishers in main are forbidden.
 version_specific=$(find "${ROOT_DIR}/.github/workflows" -maxdepth 1 -type f \
   -name 'publish-v*-prerelease.yml' -print)
 [ -z "${version_specific}" ] || {
@@ -107,7 +107,7 @@ version_specific=$(find "${ROOT_DIR}/.github/workflows" -maxdepth 1 -type f \
 }
 
 require_fixed "- 'publish/v*_*'" "${PRERELEASE_WORKFLOW}" 'generic publisher branch contract is missing'
-require_fixed 'workflow_dispatch:' "${PRERELEASE_WORKFLOW}" 'generic publisher lacks manual rerun fallback'
+require_fixed 'workflow_dispatch:' "${PRERELEASE_WORKFLOW}" 'generic publisher lacks manual dispatch fallback'
 require_fixed "release: '15.0'" "${PRERELEASE_WORKFLOW}" 'generic publisher does not build on FreeBSD 15'
 require_fixed 'FreeBSD:15:amd64' "${PRERELEASE_WORKFLOW}" 'generic publisher does not validate ABI'
 require_fixed 'freebsd:15:x86:64' "${PRERELEASE_WORKFLOW}" 'generic publisher does not validate architecture'
@@ -119,9 +119,11 @@ if grep -Eq 'pages:[[:space:]]*write|actions/deploy-pages|build-pkg-repository' 
   fail 'testing prerelease publisher must not publish GitHub Pages or pkg repository'
 fi
 
+# Full release trigger must obey universal versioned titles.
 require_fixed '[[ "${REVISION}" == "1" ]]' "${RELEASE_TRIGGER}" 'release trigger does not require revision 1'
 require_fixed '^v${ESCAPED_VERSION}_1:\ Prepare\ release\ v${ESCAPED_VERSION}' "${RELEASE_TRIGGER}" 'release trigger still expects an unversioned squash subject'
 
+# Existing ordinary PR and main-integrity controls remain mandatory.
 require_fixed 'concurrency:' "${CI}" 'CI concurrency is missing'
 require_fixed 'cancel-in-progress:' "${CI}" 'CI cancel-in-progress is missing'
 require_fixed 'Classify changed paths' "${CI}" 'CI path classification is missing'
