@@ -3,14 +3,16 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MATRIX="${ROOT_DIR}/docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md"
-EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md"
+INSTALL_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md"
+FAILURE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md"
 CLOSURE="${ROOT_DIR}/docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md"
 STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 
-for file in "${MATRIX}" "${EVIDENCE}" "${CLOSURE}" "${STATE}" "${INDEX}" "${VERSION_FILE}" "${MAKEFILE}"
+for file in "${MATRIX}" "${INSTALL_EVIDENCE}" "${FAILURE_EVIDENCE}" \
+    "${CLOSURE}" "${STATE}" "${INDEX}" "${VERSION_FILE}" "${MAKEFILE}"
 do
     [ -s "${file}" ] || {
         echo "FAIL: missing final hardening record: ${file}" >&2
@@ -38,17 +40,30 @@ else
 fi
 
 grep -Fq 'Overall status: **PENDING OWNER**' "${MATRIX}"
-[ "$(grep -c '\*\*PENDING OWNER\*\*' "${MATRIX}")" -ge 19 ]
+scenario_pending_count=$(awk -F'|' '
+    $2 ~ /^[[:space:]]*[0-9]+[[:space:]]*$/ &&
+    $5 ~ /^[[:space:]]*\*\*PENDING OWNER\*\*[[:space:]]*$/ { count++ }
+    END { print count + 0 }
+' "${MATRIX}")
+[ "${scenario_pending_count}" -eq 18 ] || {
+    echo "FAIL: expected 18 pending scenario rows, found ${scenario_pending_count}" >&2
+    exit 1
+}
 
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
 grep -Fq "Candidate package: \`${candidate}\`" "${MATRIX}"
 ! grep -Fq 'Candidate package: `os-zapret2-restyle-0.3.2_46.pkg`' "${MATRIX}"
 grep -Fq 'Architecture / ABI evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`' "${MATRIX}"
-grep -Fq 'Installation and service baseline: **PASS**' "${MATRIX}"
-grep -Fq 'Architecture   : FreeBSD:15:amd64' "${EVIDENCE}"
-grep -Fq 'Version        : 0.3.3_1' "${EVIDENCE}"
-grep -Fq 'Zapret2 service running after forced installation: **PASS**' "${EVIDENCE}"
-grep -Fq 'Strategy Lab live scenarios: **NOT YET EXECUTED**' "${EVIDENCE}"
+grep -Fq 'Installation and service baseline for `0.3.3_1`: **PASS**.' "${MATRIX}"
+grep -Fq '2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md' "${MATRIX}"
+grep -Fq 'Scenario 1 remains pending and must be repeated with `0.3.3_2`.' "${MATRIX}"
+grep -Fq 'Architecture   : FreeBSD:15:amd64' "${INSTALL_EVIDENCE}"
+grep -Fq 'Version        : 0.3.3_1' "${INSTALL_EVIDENCE}"
+grep -Fq 'Zapret2 service running after forced installation: **PASS**' "${INSTALL_EVIDENCE}"
+grep -Fq 'Strategy Lab live scenarios: **NOT YET EXECUTED**' "${INSTALL_EVIDENCE}"
+grep -Fq 'child_running": false' "${FAILURE_EVIDENCE}"
+grep -Fq 'supervisor_running": false' "${FAILURE_EVIDENCE}"
+grep -Fq 'This record is a failed live attempt, not a scenario PASS.' "${FAILURE_EVIDENCE}"
 
 grep -Fq 'Standard blocked domain, initial Zapret2 RUNNING' "${MATRIX}"
 grep -Fq 'Standard blocked domain, initial Zapret2 STOPPED' "${MATRIX}"
@@ -81,4 +96,4 @@ grep -Fq 'STRATEGY_LAB_HARDENING_CLOSURE.md' "${STATE}"
 grep -Fq 'STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md' "${INDEX}"
 grep -Fq 'STRATEGY_LAB_HARDENING_CLOSURE.md' "${INDEX}"
 
-echo 'PASS: final records use the current FreeBSD 15 candidate, preserve owner evidence, and keep all live scenarios pending'
+echo 'PASS: final records use the current FreeBSD 15 candidate, preserve populated owner evidence, and keep all 18 live scenarios pending'
