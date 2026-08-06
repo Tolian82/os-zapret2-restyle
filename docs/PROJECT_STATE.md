@@ -2,23 +2,18 @@
 
 Project: `os-zapret2-restyle`
 Primary branch: `main`
-Published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Current verified source baseline on `main`: `os-zapret2-restyle-0.3.2_46.pkg`
-Current integration candidate: `os-zapret2-restyle-0.3.2_47.pkg`
+Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
+Current verified source baseline on `main`: `os-zapret2-restyle-0.3.2_47.pkg`
+Current prerelease candidate: `os-zapret2-restyle-0.3.3_1.pkg`
 
-Hardening revisions 25–46 are source-verified on `main`.
+Hardening revisions 25–47 are source-verified on `main`.
 
-## Revision 47
+## Version 0.3.3 revision 1
 
-- correct the pull-request package build from FreeBSD 14.2 to FreeBSD 15.0;
-- require the build VM itself to report FreeBSD major version 15;
-- inspect the generated package manifest and require `FreeBSD:15:amd64` / `freebsd:15:x86:64`;
-- remove truncation-pipe warnings from package-content and manifest inspection;
-- add a permanent GitHub workflow contract rejecting FreeBSD 14 package builders;
-- replace revision 46 with revision 47 as the only valid live OPNsense candidate;
-- make no Strategy Lab runtime behavior change.
-
-The revision 46 source closure remains valid, but its PR package artifact was built with ABI `FreeBSD:14:amd64` and must not be installed or used for the live OPNsense matrix.
+- advance the test candidate from `0.3.2_47` to `0.3.3_1` without runtime behavior changes;
+- preserve the FreeBSD 15 amd64-only package contract;
+- build and publish the package as a GitHub prerelease asset for owner-assisted live OPNsense verification;
+- keep stable release status and final pkg-repository promotion separate from the live verification gate.
 
 ## Completion status
 
@@ -26,9 +21,9 @@ Source and CI hardening: **COMPLETE**.
 
 Target package ABI: **FREEBSD 15 AMD64 ONLY**.
 
-Live OPNsense matrix: **PENDING OWNER** using `os-zapret2-restyle-0.3.2_47.pkg`.
+Live OPNsense matrix: **PENDING OWNER** using `os-zapret2-restyle-0.3.3_1.pkg`.
 
-Release preparation: **BLOCKED ON LIVE MATRIX**.
+Stable release preparation: **BLOCKED ON LIVE MATRIX**.
 
 Authoritative closure records:
 
@@ -36,7 +31,7 @@ Authoritative closure records:
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md`.
 
-No live appliance PASS is claimed. Tagging, GitHub Release creation, release assets, and pkg-repository publication require completion of the live matrix and separate explicit owner authorization.
+No live appliance PASS is claimed. The `v0.3.3_1` GitHub prerelease is a testing distribution surface only and is not a stable product release.
 
 ## Current product authority
 
@@ -46,4 +41,4 @@ No live appliance PASS is claimed. Tagging, GitHub Release creation, release ass
 
 `docs/GITHUB_PUBLICATION.md`, `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`, and `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md` remain authoritative. Every PR title, branch commit subject, and final squash subject uses the exact package-candidate prefix. `main` is never force-updated.
 
-`VERSION=0.3.2`; `PLUGIN_REVISION=47` in this candidate. No release publication is included.
+`VERSION=0.3.3`; `PLUGIN_REVISION=1` in this candidate.
