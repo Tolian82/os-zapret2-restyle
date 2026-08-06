@@ -25,15 +25,16 @@ The session contains:
 - `candidate-runtime/` — session-only dvtws2 arguments, PID, log, hostlist, and addresses;
 - lifecycle snapshot and restoration evidence created by the shared lifecycle helpers.
 
-The global circular directory contains `active.session`, `latest.session`, the session
-collection, and two transition-only symlink aliases:
+The global circular directory contains only:
 
-- `state.json -> sessions/<active-or-latest>/state.json`;
-- `stop -> sessions/<active>/stop.request`.
+- `active.session` — the nonterminal session owner;
+- `latest.session` — the latest persisted session;
+- `sessions/` — the private session collection;
+- the dedicated launcher lock.
 
-The aliases do not store independent state and never point into a parent job. They retain
-compatibility with the pre-isolation internal runner and are scheduled for removal with
-the obsolete compatibility surfaces in revision 43. Parent job directories are read only.
+The former global `circular/state.json` and `circular/stop` compatibility symlinks were
+removed in revision 43. No reader or writer may reintroduce a second circular state or
+stop-control path. Parent job directories are read only.
 
 ## Immutability contract
 
@@ -56,18 +57,17 @@ State updates merge into the existing JSON document so lifecycle snapshot, resto
 and future circular evidence are not discarded by a later state transition.
 
 `status` returns the active session, otherwise the latest terminal session, otherwise
-`idle`.
+`idle`. `stop` writes only the active session's `stop.request` file.
 
 ## Security and permissions
 
 Session directories and snapshots are private (`0700` directory, `0600` files). The
 browser never receives a filesystem path. Existing API calls continue using the parent
-job identifier. Compatibility aliases are created only by the root-owned launcher inside
-the root-owned runtime directory.
+job identifier. All session paths are resolved by validated backend helpers.
 
 ## Verification
 
-The focused circular contract test proves:
+The focused circular and obsolete-surface contracts prove:
 
 - eligibility remains backend-enforced;
 - session snapshots match parent evidence;
@@ -75,7 +75,6 @@ The focused circular contract test proves:
 - runtime/profile files exist only in the session;
 - state transitions preserve previously recorded evidence;
 - lifecycle-lock failure is written only to the session state;
-- circular firewall behavior remains intentionally client-wide.
-
-The end-to-end fixture additionally proves that the transitional aliases resolve to the
-same private session state and stop control rather than creating a second state model.
+- circular firewall behavior remains intentionally client-wide;
+- no global state/stop aliases are created;
+- end-to-end start, status, stop, and terminal result use private session artifacts only.
