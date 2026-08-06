@@ -27,9 +27,10 @@ Audited source: `main` at `a95fcc33b2bdd97830fe5cd44090ae189a141dfa` (`0.3.2_24`
 - Patches `_37`–`_38` complete finding 11.
 - Patch `_39` completes finding 12.
 - Patches `_40`–`_41` complete finding 13.
-- Patch `_42` completes the progress and localization portions of finding 15 with persisted deterministic progress, complete RU/EN display dictionaries, circular lifecycle localization, and mandatory regression tests.
+- Patch `_42` completes the progress and localization portions of finding 15.
+- Patch `_43` removes transitional circular state/stop aliases and the duplicate state-level skip hook; private session artifacts and explicit worker orchestration are now the only active contracts.
 - Retention remains assigned to `_44`; the final corrective CI matrix remains assigned to `_45`.
-- Obsolete surfaces are removed in `_43` and final live verification is recorded in `_46`.
+- Final source closure and owner-assisted live verification are recorded in `_46`.
 
 ## Explicit exclusion
 
