@@ -92,6 +92,12 @@ strategy_lab_initialize_state()
             cancel_requested_at:"",
             current_stage:"00",
             message:"",
+            progress:{
+                percent:0,
+                stage:"00",
+                stage_key:"target_initialization",
+                message:""
+            },
             circular_eligible:false,
             circular_eligibility_reason:"not_completed",
             circular_candidate_count:0,
@@ -164,7 +170,8 @@ strategy_lab_request_cancel()
                 if ((.cancel_requested_at // "") | length) > 0
                 then .cancel_requested_at else $requested_at end
             ) |
-            .message=$message
+            .message=$message |
+            .progress.message=$message
         else . end
     ' --arg requested_at "${_strategy_lab_requested_at}" \
       --arg message "${_strategy_lab_message}"
@@ -180,6 +187,21 @@ strategy_lab_update_job()
     _strategy_lab_message="$6"
 
     strategy_lab_state_transform "${_strategy_lab_job}" '
+        def progress_percent($stage):
+            {
+                "00":0,
+                "10":9,
+                "20":18,
+                "30":27,
+                "40":36,
+                "50":45,
+                "60":55,
+                "70":64,
+                "80":73,
+                "85":82,
+                "90":91,
+                "99":100
+            }[$stage] // 0;
         if (.state=="completed" or .state=="error") then .
         else
             (.cancel_requested // false) as $existing_cancel |
@@ -190,7 +212,13 @@ strategy_lab_update_job()
             .outcome=$outcome |
             .current_stage=$stage |
             .cancel_requested=($existing_cancel or $canceled) |
-            .message=$message
+            .message=$message |
+            .progress.percent=progress_percent($stage) |
+            .progress.stage=$stage |
+            .progress.stage_key=(
+                [.stages[] | select(.number==$stage) | .key][0] // ""
+            ) |
+            .progress.message=$message
         end
     ' --arg state "${_strategy_lab_state}" \
       --arg outcome "${_strategy_lab_outcome}" \
@@ -214,11 +242,32 @@ strategy_lab_update_stage()
     _strategy_lab_message="$4"
 
     strategy_lab_state_transform "${_strategy_lab_job}" '
+        def progress_percent($stage):
+            {
+                "00":0,
+                "10":9,
+                "20":18,
+                "30":27,
+                "40":36,
+                "50":45,
+                "60":55,
+                "70":64,
+                "80":73,
+                "85":82,
+                "90":91,
+                "99":100
+            }[$stage] // 0;
         if (.state=="completed" or .state=="error") then .
         else
             (.stages[] | select(.number==$number) | .status)=$status |
             (.stages[] | select(.number==$number) | .message)=$message |
-            .current_stage=$number
+            .current_stage=$number |
+            .progress.percent=progress_percent($number) |
+            .progress.stage=$number |
+            .progress.stage_key=(
+                [.stages[] | select(.number==$number) | .key][0] // ""
+            ) |
+            .progress.message=$message
         end
     ' --arg number "${_strategy_lab_number}" \
       --arg status "${_strategy_lab_stage_status}" \

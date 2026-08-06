@@ -56,7 +56,7 @@ printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="90" and .status=
     fail "cancel did not execute mandatory restoration"
 [ "$(cat "${STATE_FILE}")" = RUNNING ] || fail "cancel did not restore running state"
 
-# English cancellation uses the exact approved spelling and still restores.
+# English cancellation uses the corrected approved spelling and still restores.
 printf '%s\n' RUNNING > "${STATE_FILE}"
 : > "${CALLS_FILE}"
 job=$(start_job english-cancel.example en)
@@ -69,7 +69,7 @@ done
 launcher cancel "${job}" >/dev/null
 wait_for_state "${job}" completed
 result=$(launcher result "${job}")
-printf '%s\n' "${result}" | jq -e '[.stages[] | select(.number=="30" or .number=="40" or .number=="50" or .number=="60" or .number=="70" or .number=="80" or .number=="85")] | all(.status=="SKIPPED" and .message=="SKIPPED — canseled")' >/dev/null ||
+printf '%s\n' "${result}" | jq -e '[.stages[] | select(.number=="30" or .number=="40" or .number=="50" or .number=="60" or .number=="70" or .number=="80" or .number=="85")] | all(.status=="SKIPPED" and .message=="SKIPPED — canceled")' >/dev/null ||
     fail "canceled unexecuted stages do not use the approved English text"
 [ "$(cat "${STATE_FILE}")" = RUNNING ] || fail "English cancel did not restore running state"
 
