@@ -42,7 +42,7 @@ fi
 grep -Fq 'Overall status: **PENDING OWNER**' "${MATRIX}"
 scenario_pending_count=$(awk -F'|' '
     $2 ~ /^[[:space:]]*[0-9]+[[:space:]]*$/ &&
-    $5 ~ /^[[:space:]]*\*\*PENDING OWNER\*\*[[:space:]]*$/ { count++ }
+    $6 ~ /^[[:space:]]*\*\*PENDING OWNER\*\*[[:space:]]*$/ { count++ }
     END { print count + 0 }
 ' "${MATRIX}")
 [ "${scenario_pending_count}" -eq 18 ] || {
