@@ -69,8 +69,9 @@ strategy_lab_worker_pid_matches job.DAEMON "${PID_FILE}" ||
 
 . "${CIRCULAR_OWNER}"
 MOCK_PS_LSTART='Thu Aug  6 15:42:00 2026'
+EXPECTED_PS_LSTART='Thu Aug 6 15:42:00 2026'
 export MOCK_PS_LSTART
-[ "$(strategy_lab_circular_owner_process_token "${TEST_PID}")" = "${MOCK_PS_LSTART}" ] ||
+[ "$(strategy_lab_circular_owner_process_token "${TEST_PID}")" = "${EXPECTED_PS_LSTART}" ] ||
     fail 'detached circular owner start token was not detected through FreeBSD ps -xww'
 MOCK_PS_COMMAND="/bin/sh ${SCRIPT_DIR}/strategy_lab_circular_worker.sh session.DAEMON"
 export MOCK_PS_COMMAND
