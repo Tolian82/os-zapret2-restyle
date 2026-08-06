@@ -139,8 +139,8 @@ grep -Fq 'strategyLabUdpPayload' "${VIEW}" ||
     fail 'GUI payload file field is missing'
 grep -Fq 'readAsDataURL(payloadFile)' "${VIEW}" ||
     fail 'GUI does not encode the selected payload file'
-grep -Fq 'udp_input launch query' "${LAUNCHER}" ||
-    fail 'launcher does not load the UDP input module'
+grep -Eq 'for module in .*udp_input.*launch.*query' "${LAUNCHER}" ||
+    fail 'launcher does not load the UDP input, launch, and query modules in order'
 grep -Fq 'case "$#" in' "${LAUNCH}" ||
     fail 'launcher start contract is not backward compatible'
 grep -Fq 'strategy_lab_udp_input_prepare' "${LAUNCH}" ||
