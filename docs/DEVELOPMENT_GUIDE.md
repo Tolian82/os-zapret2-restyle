@@ -36,15 +36,15 @@ main
 STANDARD WORKFLOW
 ==================================================
 
-1. Obey the repository-root AGENTS.md and restore project context using the reading
-   order in INDEX.md.
+1. Obey the repository-root `AGENTS.md`, then read `INDEX.md`, `PROJECT_STATE.md`,
+   and the specialist documents relevant to the requested scope.
 
-   This step is a blocking preflight. Until the full reading order is complete,
-   do not diagnose the project, prepare OPNsense commands, modify repository state,
-   or begin publication. A platform-required progress notice may only announce that
-   documentation recovery is in progress. DECISIONS.md, WORKING_CONVENTIONS.md, and
-   DEVELOPMENT_GUIDE.md must be read as the approved methodology and principles,
-   not replaced by chat context or a prior summary.
+   A full repository-wide reading is required only for a repository-wide audit or
+   genuine full-context recovery. It is not a blocking prerequisite for every focused
+   diagnosis, command, or small change. DECISIONS.md, WORKING_CONVENTIONS.md, and
+   DEVELOPMENT_GUIDE.md remain authoritative for the parts of the methodology that
+   apply to the current scope; chat context and prior summaries are supporting context
+   only.
 
 2. Establish the authoritative source baseline.
 
@@ -53,9 +53,10 @@ git status --short
 git branch --show-current
 git log -1 --oneline
 
-Read the current `main` from the official GitHub repository and record its full
-SHA. When a local checkout is used, confirm that it corresponds to that commit
-and that no uncommitted or unpushed local state is required by the change.
+Use the connected GitHub plugin first to read current `main` from the official
+repository and record its full SHA. When a local checkout is used, confirm that it
+corresponds to that commit and that no uncommitted or unpushed local state is required
+by the change.
 
 3. Record the objective, scope, expected verification, affected documents, and
    base SHA.
@@ -93,18 +94,22 @@ php -l file.php
 
 14. Review staged diff when using a local Git checkout.
 
-15. Create one atomic commit containing the complete logical change.
+15. Keep one logical scope in one task branch and pull request. Same-scope work and
+    repair commits may remain in the branch; the final permanent `main` history receives
+    one squash commit.
 
 16. Re-read remote `main` and confirm that it still points to the recorded base
     SHA.
 
-17. For an ordinary requested development task, publish the working branch and
-    open one Draft PR. No separate publication confirmation is required.
+17. For an ordinary requested development task, publish the working branch and open one
+    Ready PR when the diff is ready for review. Use Draft only for intentional work in
+    progress or early design discussion. No separate publication confirmation is
+    required.
 
-18. Wait for required CI, correct same-scope failures when safe, mark the PR Ready,
-    and squash merge after checks pass and the branch is mergeable. No separate
-    merge confirmation is required unless the current request explicitly stops at
-    the branch or PR boundary.
+18. Wait for required CI on the latest head, diagnose exact failures, correct safe
+    same-scope defects in the same PR, and squash merge after checks pass and the branch
+    is mergeable. No separate merge confirmation is required unless the current request
+    explicitly stops at the branch or PR boundary.
 
 19. Verify the resulting `main` commit and clean up the temporary branch created for
     the task. Direct fast-forward publication to `main` remains an exceptional mode
@@ -112,8 +117,9 @@ php -l file.php
 
 20. Build once and run the focused live verification required by the change. For a
     documentation-only governance change outside package contents, leave package
-    metadata unchanged; standard CI, including its package job, is the applicable
-    build/verification stage and no separate release build is required.
+    metadata unchanged and use path-applicable CI. A FreeBSD package build is required
+    only when package inputs or the CI package contract are affected; no release is
+    implied.
 
 ==================================================
 REQUEST SCOPE AND STANDING AUTHORIZATION
@@ -126,35 +132,41 @@ Interpret the project owner's current instruction as follows:
 - prepare only, patch only, branch only, PR only: perform the requested work and
   stop at the named boundary;
 - fix, add, change, implement, complete: perform the complete ordinary branch →
-  Draft PR → CI → Ready → squash-merge cycle;
-- make/release version X: perform the complete verified release cycle for that
-  requested version, including its release-preparation PR, merge, tag, GitHub
-  Release, package/pkg-repository publication, and post-publication checks.
+  Ready PR → CI → squash-merge cycle, keeping same-scope repairs in that PR;
+- publish candidate `vX.Y.Z_N`: publish only that explicitly authorized testing
+  prerelease and asset, without GitHub Pages or pkg-repository promotion;
+- make/release version X: perform the complete verified stable release cycle for that
+  requested version, including its release-preparation PR, merge, tag, GitHub Release,
+  package/pkg-repository publication, and post-publication checks.
 
 For a normal release-preparation PR, set the final squash subject to exactly
-`release: prepare vX.Y.Z` with the optional GitHub `(#PR)` suffix. The VERSION change
-on `main` then starts the repository-owned release trigger, which creates the tag and
-dispatches the Release workflow. Do not ask the owner to push that tag manually unless
-the repository automation itself is unavailable or fails at a genuine protected
+`vX.Y.Z_1: Prepare release vX.Y.Z` with the optional GitHub `(#PR)` suffix. The VERSION
+change on `main` then starts the repository-owned release trigger, which creates the tag
+and dispatches the Release workflow. Do not ask the owner to push that tag manually
+unless the repository automation itself is unavailable or fails at a genuine protected
 authority boundary.
 
 Do not ask for routine branch names, commit messages, PR text, test selection, CI
-waiting, Ready transition, squash merge, or cleanup of the temporary branch created
-for the task. Derive those choices from the exact source, affected Finding or work
-package, and current documentation.
+waiting, squash merge, or cleanup of the temporary branch created for the task. Derive
+those choices from the exact source, affected Finding or work package, and current
+documentation.
 
-Discover and use the publication capabilities already present in the working
-environment. Prefer an authenticated GitHub integration/API, otherwise use an
-authenticated ordinary Git remote, and use GitHub CLI when available. Missing `gh`
-alone never justifies stopping, asking the owner to install it, or reporting the
-change as unpublished. Stop only after every approved transport has been checked
-and a standing escalation boundary remains.
+Use the connected GitHub plugin first for every repository inspection and mutation. If
+the plugin is responding but one exact function or permission is confirmed missing, use
+an authenticated Git remote, `gh`, another API, or the web UI only for that narrow
+operation and then return to the plugin.
+
+If the GitHub plugin is unavailable, non-responsive, or cannot provide the authoritative
+repository state required for safe work, stop all GitHub work, inform the project owner,
+and wait for explicit direction. Do not silently continue through another transport,
+automation, or scheduled tracker. Missing `gh` alone is not a blocker while the plugin or
+another explicitly permitted narrow fallback safely covers the operation.
 
 Stop only when a material choice is not settled, relevant unpublished owner state
-exists, a required check cannot be repaired within scope, new authority or credentials
-are required, a destructive action affects user data or pre-existing remote objects,
-force/history rewrite/direct-main publication is proposed, or mandatory live OPNsense
-evidence must be supplied by the owner.
+exists, a required check cannot be repaired within scope, the GitHub plugin is
+unavailable, new authority or credentials are required, a destructive action affects
+user data or pre-existing remote objects, force/history rewrite/direct-main publication
+is proposed, or mandatory live OPNsense evidence must be supplied by the owner.
 
 If input is required, ask one consolidated question with the evidence and a
 recommended choice. Do not ask for information available through the repository,
@@ -285,7 +297,6 @@ Closed
 Do not implement a dependent Finding before the controlling Architecture Debt reaches
 Decision status.
 
-
 ==================================================
 DELIVERING COMMANDS TO THE TEST SYSTEM
 ==================================================
@@ -311,10 +322,13 @@ CURRENT IMPLEMENTATION PRIORITY
 ==================================================
 
 The Strategy Lab initial delivery and corrective source series are complete. The active
-next gate is one consolidated owner-assisted OPNsense verification matrix recorded in
-`docs/ROADMAP.md` and the corrective audit. Do not begin another Strategy Lab feature,
-release preparation, tag, GitHub Release, release asset, or pkg-repository publication
-before that live evidence is recorded and the owner explicitly authorizes a release.
+next product gate is the consolidated owner-assisted OPNsense verification matrix
+recorded in `docs/ROADMAP.md` and the corrective audit.
+
+An explicitly authorized testing prerelease may be published solely to perform that live
+verification. It does not authorize stable release promotion, GitHub Pages, or the pkg
+repository. Do not begin another Strategy Lab feature or stable release preparation
+before the required live evidence is recorded.
 
 The additional BLOB repository remains a later GUI work item. Its repository, manifest,
 versioning, integrity, and update contract remain undefined until supplied and approved
@@ -323,7 +337,6 @@ by the project owner.
 Keep process discussion proportional to the project. Existing guidance is sufficient;
 prefer implementation and verification over adding methodology unless practice exposes
 a concrete repeatable gap.
-
 
 ## Package lifecycle verification
 
@@ -399,7 +412,6 @@ For each candidate release baseline, verify and record these stages separately:
 Every test result must update AUDIT.md and DEVLOG.md. PROJECT_STATE.md and ROADMAP.md
 must be updated whenever the current baseline or immediate next action changes.
 
-
 ==================================================
 REPOSITORY CHANGE DELIVERY
 ==================================================
@@ -409,27 +421,32 @@ an owner-supplied archive.
 
 Change preparation requirements:
 
-1. Read the current `main` and record its full SHA.
+1. Use the connected GitHub plugin first, read current `main`, and record its full SHA.
 2. Obtain content and Git file modes from that commit.
 3. Confirm that no relevant owner state exists only in a local checkout.
 4. Make one minimal logical change in a separate preparation tree.
 5. Include documentation required by the project's synchronization rules.
 6. Include required Git mode changes, such as 100644 to 100755.
 7. Run static validation and review the complete diff.
-8. Create one atomic commit.
-9. Immediately recheck that remote `main` still equals the base SHA.
-10. Publish an ordinary requested change through a working branch and Draft PR,
-    pass required CI, then squash merge under the standing authorization. Use a
-    narrower branch/PR/patch stopping point only when the current request specifies it.
-11. Verify the published `main` commit, clean up the task-owned temporary branch,
-    then perform one build and one focused verification. Direct publication to
-    `main` remains exceptional and requires explicit instruction.
+8. Publish one task branch and one Ready PR when the change is ready. Same-scope work and
+   repair commits remain in that PR; permanent `main` receives one squash commit.
+9. Immediately recheck that remote `main` still equals the base SHA before publication
+   and again before merge.
+10. Pass required CI for the latest head, then squash merge under the standing
+    authorization. Use a narrower branch/PR/patch stopping point only when the current
+    request specifies it.
+11. Verify the published `main` commit, clean up the task-owned temporary branch, then
+    perform one build and one focused verification when applicable. Direct publication
+    to `main` remains exceptional and requires explicit instruction.
 
-An authenticated GitHub integration/API may construct the blobs, tree, and
-single commit atomically and then fast-forward the branch reference. GitHub CLI
-is not a required dependency. Ordinary Git remains valid when available. Capability
-discovery is mandatory before reporting a publication blocker; transport selection
-is an implementation detail and is not delegated to the project owner.
+The GitHub plugin may construct blobs, trees, commits, branches, PRs, and merges when it
+supports the operation. If the responding plugin lacks one exact function or permission,
+a narrow authenticated fallback may perform only that operation. GitHub CLI is not a
+required dependency.
+
+If the plugin is unavailable, non-responsive, or cannot provide the authoritative state
+required for safe work, stop GitHub work, inform the owner, and wait for explicit
+direction. Transport selection is not silently delegated to another client.
 
 Do not use console editors or ad-hoc rewrite commands to modify tracked repository files.
 Operational work outside the repository remains permitted.
