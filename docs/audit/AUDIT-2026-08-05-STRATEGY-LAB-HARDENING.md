@@ -28,8 +28,9 @@ Audited source: `main` at `a95fcc33b2bdd97830fe5cd44090ae189a141dfa` (`0.3.2_24`
 - Patch `_39` completes finding 12.
 - Patches `_40`–`_41` complete finding 13.
 - Patch `_42` completes the progress and localization portions of finding 15.
-- Patch `_43` removes transitional circular state/stop aliases and the duplicate state-level skip hook; private session artifacts and explicit worker orchestration are now the only active contracts.
-- Retention remains assigned to `_44`; the final corrective CI matrix remains assigned to `_45`.
+- Patch `_43` removes obsolete circular aliases and the duplicate state-level skip hook.
+- Patch `_44` completes the retention portion of finding 15 with lock-protected bounded cleanup that preserves active/latest, nonterminal, malformed, unverified-restoration, and `RESTORE_FAILED` evidence.
+- The final corrective CI matrix remains assigned to `_45`.
 - Final source closure and owner-assisted live verification are recorded in `_46`.
 
 ## Explicit exclusion

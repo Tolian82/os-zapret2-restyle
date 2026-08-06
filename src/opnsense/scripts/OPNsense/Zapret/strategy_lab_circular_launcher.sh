@@ -10,7 +10,7 @@ MODE="${1:-status}"
 set -eu
 umask 022
 
-for module in common state firewall runtime candidate lifecycle circular circular_owner
+for module in common state firewall runtime candidate lifecycle circular circular_owner retention
 do
     path="${MODULE_DIR}/${module}.sh"
     [ -r "${path}" ] || exit 1
@@ -191,5 +191,6 @@ circular_dispatch()
         "${STRATEGY_LAB_JQ}" -nc '{status:"busy",message:"Circular launcher is busy"}'
         exit 75
     fi
+    strategy_lab_retention_prune_circular || true
     circular_dispatch "$@"
 ) 9>"${STRATEGY_LAB_CIRCULAR_LOCK_FILE}"
