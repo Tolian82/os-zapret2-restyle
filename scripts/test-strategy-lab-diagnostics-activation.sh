@@ -9,6 +9,7 @@ ACTIONS="${ROOT_DIR}/src/opnsense/service/conf/actions.d/actions_zapret.conf"
 LEGACY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/blockcheck.sh"
 SHELL_VIEW="${ROOT_DIR}/src/opnsense/mvc/app/views/OPNsense/Zapret/strategy_lab_shell.volt"
 MAKEFILE="${ROOT_DIR}/Makefile"
+VERSION_FILE="${ROOT_DIR}/VERSION"
 
 fail(){ echo "FAIL: $*" >&2; exit 1; }
 
@@ -45,6 +46,28 @@ plugin_revision=$(awk -F= '
 case "${plugin_revision}" in
     ''|*[!0-9]*) fail 'package revision is not a positive integer' ;;
 esac
-[ "${plugin_revision}" -ge 15 ] || fail 'package revision predates Strategy Lab activation'
+
+version=$(tr -d '[:space:]' < "${VERSION_FILE}")
+old_ifs=${IFS}
+IFS=.
+set -- ${version}
+IFS=${old_ifs}
+[ "$#" -eq 3 ] || fail 'package VERSION is not semantic'
+major=$1
+minor=$2
+patch=$3
+case "${major}:${minor}:${patch}" in
+    *[!0-9:]*|'') fail 'package VERSION is not semantic' ;;
+esac
+
+activation_present=0
+if [ "${major}" -gt 0 ] ||
+    [ "${minor}" -gt 3 ] ||
+    { [ "${minor}" -eq 3 ] && [ "${patch}" -gt 2 ]; } ||
+    { [ "${major}" -eq 0 ] && [ "${minor}" -eq 3 ] && [ "${patch}" -eq 2 ] && [ "${plugin_revision}" -ge 15 ]; }
+then
+    activation_present=1
+fi
+[ "${activation_present}" -eq 1 ] || fail 'package identity predates Strategy Lab activation'
 
 echo 'PASS: Diagnostics uses asynchronous Strategy Lab and the synchronous Blockcheck path is retired'
