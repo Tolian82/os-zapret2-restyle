@@ -1,3 +1,5 @@
+MANDATORY: Use the connected GitHub plugin first for every repository operation; use another transport only when the plugin lacks the required function or confirmed permission.
+
 # GitHub publication and delivery discipline
 
 ==================================================
@@ -20,6 +22,24 @@ Active decisions:
 - `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
 
 ==================================================
+GITHUB PLUGIN FIRST
+==================================================
+
+For every repository operation, invoke and use the connected GitHub plugin before any
+other repository transport. This includes repository discovery, current-state reads,
+branches, commits, pull requests, reviews, checks, workflow metadata, artifacts, merges,
+and cleanup when the plugin exposes the operation.
+
+A fallback to local `git`, `gh`, raw API calls, web UI, or another transport is permitted
+only after the exact required plugin function or permission has been checked and found
+unavailable or insufficient. The fallback covers only that missing operation; it does not
+replace the plugin for the rest of the task.
+
+Never diagnose current GitHub state from chat history, cached assumptions, local files,
+or general web search when the connected plugin can read the authoritative repository
+object directly.
+
+==================================================
 PRE-MUTATION INVENTORY
 ==================================================
 
@@ -33,7 +53,8 @@ Before creating or changing any branch, PR, workflow, tag, release, or asset, re
 - active, queued, failed, canceled, and successful workflow runs;
 - reusable artifacts with run ID, artifact ID/name, expiry, and digest;
 - existing tags, releases, and assets;
-- actual permissions and available GitHub connector/API/Git/`gh` operations.
+- actual GitHub-plugin functions and permissions, followed only when needed by fallback
+  connector/API/Git/`gh` capabilities.
 
 Do not introduce a new workflow, runner, branch, PR, or transport until this inventory
 proves that the existing safe mechanism is insufficient.
@@ -61,7 +82,7 @@ ORDINARY DEVELOPMENT FLOW
 
 1. Resolve the exact owner instruction and stopping boundary.
 2. Complete the risk-based context preflight from `AGENTS.md` and `docs/INDEX.md`.
-3. Perform the pre-mutation inventory above.
+3. Perform the GitHub-plugin-first capability check and pre-mutation inventory above.
 4. Record exact base SHA, logical scope, affected documents, and verification plan.
 5. Prepare one reviewable logical change.
 6. Run focused validation and review the complete diff.
@@ -122,17 +143,18 @@ Required authority:
 
 Preferred path when verified package bytes already exist:
 
-1. identify the source commit and successful package build;
+1. identify the source commit and successful package build through the GitHub plugin;
 2. bind the artifact by exact workflow run ID, artifact ID/name, and digest;
 3. download the artifact once;
 4. verify the package `+MANIFEST`:
    - exact package version;
    - `abi: FreeBSD:15:amd64`;
    - `arch: freebsd:15:x86:64`;
-5. create the prerelease directly through GitHub Release API/UI/`gh`;
+5. create the prerelease directly through the plugin when supported, otherwise use the
+   narrow Release API/UI/`gh` fallback for the missing release-asset write;
 6. attach only the verified `.pkg` asset;
 7. verify target SHA, tag, `draft=false`, `prerelease=true`, asset name, state, digest or
-   size, and direct download URL.
+   size, and direct download URL through the GitHub plugin.
 
 Do not create a PR merely to attach an existing package asset.
 
@@ -167,19 +189,20 @@ Published tags, releases, assets, and versions are immutable and forward-only.
 TRANSPORT SELECTION
 ==================================================
 
-Choose transport by verified capability, not habit:
+Transport order is mandatory:
 
-- connected GitHub app/API for repository, PR, status, merge, release inspection, and
-  supported writes;
-- authenticated ordinary Git for local editing and refs when available;
-- `gh` for Actions/release operations not covered elsewhere;
-- Git data API for atomic multi-file commit construction when no checkout exists;
-- GitHub web UI only for a narrow operation that available authenticated tools cannot
-  perform, such as direct owner asset upload.
+1. connected GitHub plugin for every supported read and write;
+2. authenticated ordinary Git for local editing or ref operations that the plugin does
+   not support;
+3. `gh` for Actions or release operations not covered by the plugin;
+4. Git data API for an atomic multi-file commit only when no checkout-based transport is
+   available;
+5. GitHub web UI only for a narrow operation that the authenticated tools cannot perform,
+   such as owner asset upload.
 
-Missing one client is not a blocker while another verified mechanism covers the
-operation. Never claim a connector capability without checking its actual function and
-permission.
+Missing one fallback client is not a blocker while the GitHub plugin or another verified
+mechanism covers the operation. Never claim a plugin capability or gap without checking
+the actual function and permission first.
 
 ==================================================
 MERGE AND CLEANUP
@@ -239,6 +262,8 @@ SUPERSESSION
 This document and the active decisions listed at the top supersede conflicting wording
 that requires:
 
+- using chat history, generic web search, local state, or another transport before the
+  connected GitHub plugin for an operation the plugin supports;
 - mandatory Draft PRs;
 - exactly one commit in a PR branch;
 - exactly one historical workflow run;
