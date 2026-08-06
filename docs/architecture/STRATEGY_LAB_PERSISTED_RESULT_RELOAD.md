@@ -1,28 +1,35 @@
-# Strategy Lab persisted result reload
+# Strategy Lab reload and persisted-result contract
 
 ## Contract
 
 The backend maintains atomic `latest.job` alongside `active.job`. Every accepted start
-writes the new job as latest before publishing it as active. `status -` returns the active
-job when present, otherwise the latest persisted job.
+writes the new job as latest before publishing it as active. Persisted terminal results
+remain available by explicit validated job ID until retention removes them.
 
-For installations predating the pointer, the backend scans existing job directories once,
-selects the newest valid status, repairs `latest.job`, and then uses the pointer normally.
-Invalid or deleted pointers are repaired the same way.
+Automatic Diagnostics initialization uses `status -` only to discover active work:
 
-Diagnostics page initialization always accepts a returned job ID. Nonterminal state resumes
-polling. Terminal `completed` or `error` state is rendered immediately and fetched through
-the result endpoint without starting a new job.
+- when `active.job` identifies a queued, running, or cancellation-requested job, the page
+  restores that job and resumes polling;
+- when there is no active job, `status -` returns `{ "status": "idle" }` even when a latest
+  completed or failed result exists;
+- a completed or failed result remains visible in the current page until navigation or
+  reload, after which the Strategy Lab controls return to their initial state;
+- explicit status/result requests by job ID continue to expose retained evidence.
+
+`latest.job` remains an evidence and retention pointer. For installations predating the
+pointer, the backend can scan existing job directories, select the newest valid status,
+and repair the pointer. Automatic page initialization does not use that historical pointer.
 
 ## Safety
 
 - pointers contain only validated `job.*` IDs with readable status files;
 - writes are atomic;
-- active ownership remains authoritative over latest history;
-- a page reload never mutates the saved result or lifecycle state;
-- terminal results remain available until retention policy explicitly removes them.
+- active ownership remains authoritative;
+- a page reload never mutates or deletes saved evidence or lifecycle state;
+- terminal results remain available to explicit backend consumers until retention removes them;
+- stale terminal errors are not presented as the state of a newly opened Diagnostics page.
 
 ## Verification
 
-The focused test covers pointer creation, terminal completed/error lookup, corrupt-pointer
-fallback and repair, plus the GUI terminal/nonterminal reload branches.
+The focused test covers active-job reload, idle reload after completed/error work, explicit
+historical lookup, latest-pointer repair, and preservation of stored terminal evidence.
