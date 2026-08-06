@@ -10,16 +10,18 @@ Only FreeBSD 15 amd64 packages are valid. The revision 46 GitHub Actions artifac
 
 - Tester: repository owner
 - Test date/time: `2026-08-06 15:14:15 MSK` (installation baseline)
-- OPNsense version: `PENDING OWNER`
+- OPNsense version: `26.7.1_1`
 - Architecture / ABI evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`
 - Required package ABI: `FreeBSD:15:amd64`
-- Candidate package: `os-zapret2-restyle-0.3.3_1.pkg`
-- WAN interface: `PENDING OWNER`
+- Candidate package: `os-zapret2-restyle-0.3.3_2.pkg`
+- WAN interface: `vtnet1`
 - LAN test client: `PENDING OWNER`
 - Blocked-domain target: `PENDING OWNER`
 - Generic UDP target/port: `PENDING OWNER`
 
-Installation and service baseline: **PASS**. The candidate installed successfully with version `0.3.3_1`, architecture `FreeBSD:15:amd64`, annotation `FreeBSD_version: 1500068`, and the `zapret` service running after installation. This baseline does not mark any scenario row as passed.
+Installation and service baseline for `0.3.3_1`: **PASS**. The package installed successfully with architecture `FreeBSD:15:amd64`, annotation `FreeBSD_version: 1500068`, and the `zapret` service running after installation. This baseline does not mark any scenario row as passed.
+
+The first scenario 1 attempt on `0.3.3_1` failed before runtime mutation because FreeBSD daemon processes were omitted from PID identity queries. Evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`. Scenario 1 remains pending and must be repeated with `0.3.3_2`.
 
 ## Required evidence bundle
 
@@ -47,7 +49,7 @@ Before installation, preserve the candidate package identity from its `+MANIFEST
 ```text
 abi: FreeBSD:15:amd64
 arch: freebsd:15:x86:64
-version: 0.3.3_1
+version: 0.3.3_2
 ```
 
 Recommended residue evidence after every terminal scenario:
@@ -62,7 +64,7 @@ configctl zapret status
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | `PENDING OWNER` | **PENDING OWNER** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | `docs/verification/evidence/2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md` (failed `_1` attempt; `_2` retest required) | **PENDING OWNER** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Test completes while final service remains STOPPED; restoration evidence is verified | `PENDING OWNER` | **PENDING OWNER** |
 | 3 | Extended TLS 1.2 and HTTP | Available protocol successes appear as complete replay-verified profiles; unavailable protocols are explicitly skipped | `PENDING OWNER` | **PENDING OWNER** |
 | 4 | Extended QUIC | QUIC result is endpoint-bound and replay-verified when network capability exists; otherwise explicit skip reason | `PENDING OWNER` | **PENDING OWNER** |
@@ -98,4 +100,4 @@ A failed row requires one same-scope corrective patch, complete CI/FreeBSD 15 pa
 
 ## Release gate
 
-Stable release preparation and pkg-repository promotion remain blocked until every required row is marked `PASS` by the owner and linked evidence is recorded. The `v0.3.3_1` prerelease is a testing distribution surface only. The current matrix contains no live scenario PASS claims.
+Stable release preparation and pkg-repository promotion remain blocked until every required row is marked `PASS` by the owner and linked evidence is recorded. The `v0.3.3_2` prerelease will be a testing distribution surface only. The current matrix contains no live scenario PASS claims.
