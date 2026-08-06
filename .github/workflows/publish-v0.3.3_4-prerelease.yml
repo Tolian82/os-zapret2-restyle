@@ -1,0 +1,66 @@
+name: Publish v0.3.3_4 prerelease
+
+on:
+  push:
+    branches:
+      - 'publish/v0.3.3_4'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prerelease-v0.3.3_4
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and publish FreeBSD 15 prerelease
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Verify candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(tr -d '[:space:]' < VERSION)" = "0.3.3"
+          test "$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | head -1)" = "4"
+
+      - name: Build package inside FreeBSD 15 VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '15.0'
+          usesh: true
+          prepare: pkg install -y jq
+          run: |
+            test "$(freebsd-version -u | cut -d. -f1)" = "15"
+            sh scripts/build-pkg.sh
+
+      - name: Verify package identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          package='dist/os-zapret2-restyle-0.3.3_4.pkg'
+          manifest=$(mktemp)
+          trap 'rm -f "${manifest}"' EXIT
+          test -f "${package}"
+          tar -xOf "${package}" +MANIFEST > "${manifest}"
+          jq -e '.version == "0.3.3_4" and .abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64"' "${manifest}" >/dev/null
+
+      - name: Publish prerelease asset
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v0.3.3_4
+          target_commitish: ${{ github.sha }}
+          name: v0.3.3_4
+          prerelease: true
+          draft: false
+          generate_release_notes: false
+          body: |
+            Testing candidate for repeating Strategy Lab live scenario 1 after correcting the semantic process inspector. It also includes the Diagnostics idle-state reload correction from revision 3.
+
+            Target: FreeBSD 15 amd64 only.
+            This prerelease is not a stable product release and does not publish the pkg repository.
+          files: dist/os-zapret2-restyle-0.3.3_4.pkg
+          fail_on_unmatched_files: true
