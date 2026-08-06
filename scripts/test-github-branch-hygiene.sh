@@ -7,12 +7,15 @@ AGENTS="${ROOT_DIR}/AGENTS.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
 PUBLICATION="${ROOT_DIR}/docs/GITHUB_PUBLICATION.md"
 WORKFLOW_SUMMARY="${ROOT_DIR}/docs/GITHUB_WORKFLOW.md"
-ACTIVE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-05-efficient-github-delivery.md"
+EVIDENCE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md"
+EFFICIENT_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-05-efficient-github-delivery.md"
 TITLE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md"
 OLD_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-02-atomic-github-publication.md"
 CI="${ROOT_DIR}/.github/workflows/ci.yml"
 TITLE_WORKFLOW="${ROOT_DIR}/.github/workflows/pr-title.yml"
 CLEANUP_WORKFLOW="${ROOT_DIR}/.github/workflows/cleanup-merged-branch.yml"
+PRERELEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/publish-prerelease.yml"
+RELEASE_TRIGGER="${ROOT_DIR}/.github/workflows/release-trigger.yml"
 MAKEFILE="${ROOT_DIR}/Makefile"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 
@@ -35,15 +38,22 @@ for file in \
   "${INDEX}" \
   "${PUBLICATION}" \
   "${WORKFLOW_SUMMARY}" \
-  "${ACTIVE_DECISION}" \
+  "${EVIDENCE_DECISION}" \
+  "${EFFICIENT_DECISION}" \
   "${TITLE_DECISION}" \
   "${OLD_DECISION}" \
   "${CI}" \
   "${TITLE_WORKFLOW}" \
-  "${CLEANUP_WORKFLOW}"
+  "${CLEANUP_WORKFLOW}" \
+  "${PRERELEASE_WORKFLOW}" \
+  "${RELEASE_TRIGGER}"
 do
   test -s "${file}" || fail "missing or empty GitHub governance file: ${file}"
 done
+
+# The plugin-first prose is intentionally not tested for exact wording or line placement.
+# This script preserves established delivery checks and validates executable workflow
+# contracts introduced by the evidence-first GitHub change.
 
 version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' "${MAKEFILE}" | head -1)
@@ -56,26 +66,56 @@ if [ -n "${revision}" ] && [ "${revision}" != "0" ]; then
   expected="${expected}_${revision}"
 fi
 
-grep -Eq '^Status:[[:space:]]+Active$' "${ACTIVE_DECISION}" || fail 'efficient delivery decision is not active'
+grep -Eq '^Status:[[:space:]]+Active$' "${EVIDENCE_DECISION}" || fail 'evidence-first decision is not active'
+grep -Eq '^Status:[[:space:]]+Active$' "${EFFICIENT_DECISION}" || fail 'efficient delivery decision is not active'
 grep -Eq '^Status:[[:space:]]+Active$' "${TITLE_DECISION}" || fail 'universal title decision is not active'
 grep -Eq '^Status:[[:space:]]+Superseded' "${OLD_DECISION}" || fail 'old atomic decision is not superseded'
 
+# Preserve the previously established versioned-title governance checks.
 require_fixed 'docs/GITHUB_PUBLICATION.md' "${AGENTS}" 'AGENTS does not name publication authority'
 require_fixed 'DEC-2026-08-05-universal-versioned-github-titles.md' "${AGENTS}" 'AGENTS does not name universal title decision'
 require_fixed 'DEC-2026-08-05-universal-versioned-github-titles.md' "${INDEX}" 'INDEX does not name universal title decision'
 require_fixed 'DEC-2026-08-05-universal-versioned-github-titles.md' "${WORKFLOW_SUMMARY}" 'workflow summary does not name universal title decision'
 
-require_fixed 'every work or repair commit subject' "${AGENTS}" 'AGENTS does not require versioned work and repair commits'
-require_fixed 'squash commit subject in `main`' "${AGENTS}" 'AGENTS does not require a versioned squash subject'
-require_fixed 'pull-request titles' "${PUBLICATION}" 'publication rules do not cover pull-request titles'
-require_fixed 'same-scope repair commit subjects' "${PUBLICATION}" 'publication rules do not cover repair commit subjects'
-require_fixed 'final squash commit subjects in `main`' "${PUBLICATION}" 'publication rules do not cover squash commit subjects'
+require_fixed 'every PR title, every PR-branch commit subject' "${AGENTS}" 'AGENTS does not require versioned work and repair commits'
+require_fixed 'final squash subject' "${AGENTS}" 'AGENTS does not require a versioned squash subject'
+require_fixed 'every PR title, every PR-branch commit subject' "${PUBLICATION}" 'publication rules do not cover pull-request and repair titles'
+require_fixed 'final squash subject' "${PUBLICATION}" 'publication rules do not cover squash commit subjects'
 require_fixed 'Governance/documentation/CI-only work' "${PUBLICATION}" 'publication rules do not cover non-packaged changes'
 
+# One generic publisher is allowed; version-specific publishers in main are forbidden.
+version_specific=$(find "${ROOT_DIR}/.github/workflows" -maxdepth 1 -type f \
+  -name 'publish-v*-prerelease.yml' -print)
+[ -z "${version_specific}" ] || {
+  echo "${version_specific}" >&2
+  fail 'version-specific prerelease workflow remains in the authoritative tree'
+}
+
+require_fixed "- 'publish/v*_*'" "${PRERELEASE_WORKFLOW}" 'generic publisher branch contract is missing'
+require_fixed 'workflow_dispatch:' "${PRERELEASE_WORKFLOW}" 'generic publisher lacks manual dispatch fallback'
+require_fixed "release: '15.0'" "${PRERELEASE_WORKFLOW}" 'generic publisher does not build on FreeBSD 15'
+require_fixed 'FreeBSD:15:amd64' "${PRERELEASE_WORKFLOW}" 'generic publisher does not validate ABI'
+require_fixed 'freebsd:15:x86:64' "${PRERELEASE_WORKFLOW}" 'generic publisher does not validate architecture'
+require_fixed 'gh release create' "${PRERELEASE_WORKFLOW}" 'generic publisher does not use repository release API'
+require_fixed 'Delete temporary publication branch' "${PRERELEASE_WORKFLOW}" 'generic publisher lacks branch cleanup'
+require_fixed 'prerelease == true' "${PRERELEASE_WORKFLOW}" 'generic publisher lacks release verification'
+
+if grep -Eq 'pages:[[:space:]]*write|actions/deploy-pages|build-pkg-repository' "${PRERELEASE_WORKFLOW}"; then
+  fail 'testing prerelease publisher must not publish GitHub Pages or pkg repository'
+fi
+
+# Full release trigger must obey universal versioned titles.
+require_fixed '[[ "${REVISION}" == "1" ]]' "${RELEASE_TRIGGER}" 'release trigger does not require revision 1'
+require_fixed '^v${ESCAPED_VERSION}_1:\ Prepare\ release\ v${ESCAPED_VERSION}' "${RELEASE_TRIGGER}" 'release trigger still expects an unversioned squash subject'
+
+# Existing ordinary PR and main-integrity controls remain mandatory.
 require_fixed 'concurrency:' "${CI}" 'CI concurrency is missing'
 require_fixed 'cancel-in-progress:' "${CI}" 'CI cancel-in-progress is missing'
 require_fixed 'Classify changed paths' "${CI}" 'CI path classification is missing'
-require_fixed "github.event_name == 'pull_request' && needs.changes.outputs.package == 'true'" "${CI}" 'package build is not path-gated'
+require_fixed 'workflow_dispatch:' "${CI}" 'CI lacks the manual dispatch fallback'
+require_fixed 'github.event_name == '\''pull_request'\'' || github.event_name == '\''workflow_dispatch'\''' "${CI}" 'manual CI does not execute project validation'
+require_fixed 'EVENT_NAME}" == "workflow_dispatch"' "${CI}" 'manual CI event is not classified'
+require_fixed '(github.event_name == '\''pull_request'\'' || github.event_name == '\''workflow_dispatch'\'') && needs.changes.outputs.package == '\''true'\''' "${CI}" 'manual CI does not build the FreeBSD package'
 require_fixed 'Verify main integrity' "${CI}" 'main integrity job is missing'
 require_fixed 'Invalid main commit subject' "${CI}" 'main squash-subject validation is missing'
 require_fixed 'Required format: ${EXPECTED}: <logical change>' "${CI}" 'main title error contract is missing'
@@ -91,7 +131,7 @@ if grep -Eq '"(governance|docs|ci|chore): "\*' "${TITLE_WORKFLOW}"; then
   fail 'unversioned conventional-title exception remains in PR title validation'
 fi
 
-if grep -Eq 'Governance, documentation, (and )?CI-only changes may use conventional' "${ACTIVE_DECISION}"; then
+if grep -Eq 'Governance, documentation, (and )?CI-only changes may use conventional' "${EFFICIENT_DECISION}"; then
   fail 'active decision still permits unversioned conventional titles'
 fi
 
@@ -99,4 +139,4 @@ require_fixed 'types: [closed]' "${CLEANUP_WORKFLOW}" 'cleanup workflow does not
 require_fixed 'github.event.pull_request.merged == true' "${CLEANUP_WORKFLOW}" 'cleanup workflow does not require merged PRs'
 require_fixed 'github.event.pull_request.head.repo.full_name == github.repository' "${CLEANUP_WORKFLOW}" 'cleanup workflow lacks same-repository guard'
 
-echo "GitHub delivery governance tests passed for package candidate ${expected}."
+echo "GitHub delivery and workflow tests passed for package candidate ${expected}."

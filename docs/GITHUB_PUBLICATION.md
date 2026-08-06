@@ -1,3 +1,20 @@
+MANDATORY: Use the connected GitHub plugin first for every repository operation; use another transport only when the plugin lacks the required function or confirmed permission.
+
+Known connector state and stop rule (re-verify before relying on time-sensitive details):
+
+- At the 2026-08-07 verification, the repository returned no configured rulesets.
+- The connected GitHub plugin can read and change repository objects, but its current
+  installation receives `403 Resource not accessible by integration` when reading the
+  repository Actions-permission settings and branch-protection settings. This is a
+  connector permission boundary; it is not evidence that Actions or branch protection
+  are disabled.
+- When the plugin responds and only one exact function or permission is missing, a
+  fallback is allowed only for that operation under the rules below.
+- If the GitHub plugin stops responding, is unavailable, or cannot provide the
+  authoritative repository state required to proceed, stop all GitHub work. Do not
+  silently continue through local Git, `gh`, raw API calls, the web UI, an automation,
+  or a scheduled tracker. Inform the project owner and wait for explicit direction.
+
 # GitHub publication and delivery discipline
 
 ==================================================
@@ -5,298 +22,280 @@ DOCUMENT ROLE
 ==================================================
 
 Question answered:
-How is one logical change delivered safely and efficiently through GitHub?
+How are code changes, testing prereleases, and full releases delivered through GitHub?
 
 Purpose:
-Define the authoritative branch, pull-request, CI, repair, merge, cleanup, title,
-commit-subject, patch, and release procedure. This document describes required outcomes,
-not one mandatory client or low-level API implementation.
+Define the authoritative preflight, branch, PR, CI, failure, merge, candidate-publication,
+release, verification, and cleanup procedure.
 
 Read immediately before any GitHub mutation.
 
-==================================================
-CORE OUTCOMES
-==================================================
+Active decisions:
 
-A normal delivery must produce:
-
-- one clearly bounded logical pull request;
-- a reviewable final diff;
-- successful required checks for the latest mergeable PR state;
-- one squash commit in `main`;
-- the exact current package-candidate prefix in the PR title, every PR-branch commit
-  subject, and the final squash commit subject;
-- verified resulting `main` state;
-- no force-update or accidental mutation of unrelated refs;
-- cleanup of the temporary task branch when the available repository mechanism permits.
-
-The branch may contain multiple same-scope work and repair commits. Squash merge provides
-one permanent logical commit in `main`. Commit count and historical workflow-run count are
-not correctness metrics.
+- `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
+- `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
+- `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
 
 ==================================================
-CAPABILITY AND TRANSPORT DISCOVERY
+GITHUB PLUGIN FIRST
 ==================================================
 
-Before declaring publication blocked, inspect the capabilities and permissions actually
-available in the current environment.
+For every repository operation, invoke and use the connected GitHub plugin before any
+other repository transport. This includes repository discovery, current-state reads,
+branches, commits, pull requests, reviews, checks, workflow metadata, artifacts, merges,
+and cleanup when the plugin exposes the operation.
 
-Preferred mechanism by operation:
+A fallback to local `git`, `gh`, raw API calls, web UI, or another transport is permitted
+only when the plugin is available and the exact required plugin function or permission
+has been checked and found unavailable or insufficient. The fallback covers only that
+missing operation; it does not replace the plugin for the rest of the task.
 
-- repository, PR, issue, review, status, and merge metadata: connected GitHub app/API;
-- local editing, syntax tests, staging, and work commits: local checkout and ordinary
-  `git` when available;
-- commit construction without a checkout: Git data API when it is the practical safe
-  transport;
-- Actions jobs and logs: connected GitHub app/API, then `gh` when needed and available;
-- tags, releases, and assets: repository release workflow, GitHub app/API, or `gh`;
-- repository settings and protection: GitHub settings/API with verified administrative
-  authority.
+Plugin unavailability is different from a missing function. If the plugin does not
+respond, is unavailable, or cannot read the authoritative state needed for safe work,
+stop all GitHub operations, inform the project owner, and wait for explicit direction.
+Do not use a fallback transport merely to continue progress while the plugin is down.
 
-No particular client is a permanent project requirement. Missing `gh` alone is not a
-blocker when another authenticated mechanism covers the operation. Conversely, do not
-claim a connector can perform an operation until its actual function and permission have
-been verified.
+Never diagnose current GitHub state from chat history, cached assumptions, local files,
+or general web search when the connected plugin can read the authoritative repository
+object directly.
 
-Low-level blob/tree/commit construction is an optional transport-specific method, not a
-project architecture rule.
+==================================================
+PRE-MUTATION INVENTORY
+==================================================
+
+Before creating or changing any branch, PR, workflow, tag, release, or asset, record:
+
+- exact current `main` SHA;
+- current `VERSION`, `PLUGIN_REVISION`, and required title prefix;
+- relevant open and closed PRs;
+- task, publication, recovery, and owner branches;
+- existing workflows capable of the requested operation;
+- active, queued, failed, canceled, and successful workflow runs;
+- reusable artifacts with run ID, artifact ID/name, expiry, and digest;
+- existing tags, releases, and assets;
+- actual GitHub-plugin functions and permissions, followed only when needed by fallback
+  connector/API/Git/`gh` capabilities.
+
+Do not introduce a new workflow, runner, branch, PR, or transport until this inventory
+proves that the existing safe mechanism is insufficient.
 
 ==================================================
 PACKAGE-CANDIDATE IDENTITY
 ==================================================
 
-The exact current working identity is derived from the PR head:
+Derive identity from the proposed head:
 
-- `VERSION` supplies `VERSION`;
+- `VERSION` supplies the semantic version;
 - `Makefile` supplies `PLUGIN_REVISION`;
-- the required prefix is `v<VERSION>_<PLUGIN_REVISION>:` when revision is non-zero;
-- when revision is zero, the required prefix is `v<VERSION>:`.
+- non-zero revision prefix: `v<VERSION>_<PLUGIN_REVISION>:`;
+- zero revision prefix: `v<VERSION>:`.
 
-For the current source candidate this is:
+The exact prefix applies to every PR title, every PR-branch commit subject, and every
+final squash subject, including governance, documentation, CI, maintenance, package,
+and release-preparation changes.
 
-`v0.3.2_24:`
-
-The required prefix applies universally to:
-
-- pull-request titles;
-- initial work commit subjects;
-- same-scope repair commit subjects;
-- final squash commit subjects in `main`;
-- documentation, governance, CI, maintenance, code, package, and release-preparation
-  changes.
-
-Governance/documentation/CI-only work outside packaged plugin contents does not increment
-`VERSION` or `PLUGIN_REVISION`. It uses the unchanged current package-candidate prefix.
-
-Allowed examples:
-
-- `v0.3.2_24: Restore universal versioned GitHub titles`;
-- `v0.3.2_24: Fix title validation for repair commits`;
-- `v0.3.3_1: Prepare release v0.3.3`.
-
-Forbidden examples:
-
-- `governance: modernize GitHub delivery`;
-- `docs: update workflow`;
-- `ci: fix checks`;
-- `chore: cleanup`;
-- any subject that contains a version elsewhere but does not begin with the exact current
-  package-candidate prefix.
+Governance/documentation/CI-only work changes neither version value.
 
 ==================================================
-NORMAL DEVELOPMENT FLOW
+ORDINARY DEVELOPMENT FLOW
 ==================================================
 
 1. Resolve the exact owner instruction and stopping boundary.
-2. Read current `main`, current relevant PRs, and the specialist documentation.
-3. Record the base SHA and confirm whether relevant owner-local state is unpublished.
-4. Derive the exact package-candidate prefix from the intended PR head.
-5. Prepare one logical change and its directly affected documentation.
+2. Complete the risk-based context preflight from `AGENTS.md` and `docs/INDEX.md`.
+3. Perform the GitHub-plugin-first capability check and pre-mutation inventory above.
+4. Record exact base SHA, logical scope, affected documents, and verification plan.
+5. Prepare one reviewable logical change.
 6. Run focused validation and review the complete diff.
-7. Create or use one task branch for that logical PR.
-8. Ensure every work and repair commit subject begins with the exact current prefix.
-9. Publish the change and open one Ready PR whose title begins with the same exact prefix.
-   Use Draft only for intentional work in progress or early design discussion.
-10. Let required checks evaluate the latest PR state.
-11. Repair same-scope failures in the same branch and PR when safe, using the same exact
-    prefix in each repair commit subject.
-12. Before merge, verify scope, mergeability, required checks, exact expected head SHA,
-    and the intended squash subject.
-13. Squash merge once using a subject that begins with the same exact prefix.
-14. Verify the resulting `main` commit and relevant post-merge/release workflows.
-15. Remove the temporary branch through repository-native deletion or the documented
-    fallback and verify repository hygiene.
+7. Publish one task branch and one Ready PR. Use Draft only for intentional work in
+   progress or early design discussion.
+8. Keep same-scope repairs in the same branch and PR.
+9. Require successful checks for the latest mergeable PR head.
+10. Before merge, verify scope, title prefix, mergeability, checks, and expected head SHA.
+11. Squash merge once using the exact versioned subject.
+12. Verify the resulting `main` commit and clean the task branch.
 
-An ordinary request to fix, add, change, implement, or complete authorizes this complete
-cycle unless the owner explicitly stops at analysis, patch, branch, or PR.
+A PR branch may contain multiple same-scope commits. Permanent `main` history receives
+one logical squash commit. Historical workflow-run count is not a correctness metric.
 
 ==================================================
-BRANCH AND PR RULES
+CI AND FAILURE CLASSIFICATION
 ==================================================
 
-- One logical PR normally owns one temporary task branch.
-- Do not create sibling branches merely to rename attempts as `-clean`, `-final`,
-  `-atomic`, `-fixed`, `-retry`, or `-publish`.
-- A valid PR is not abandoned merely because one check failed.
-- A branch may receive same-scope repair commits. Do not add unrelated work while checks
-  or review are in progress.
-- Every commit added to the PR branch must begin with the exact package-candidate prefix
-  derived from the current PR head.
-- Close and replace a PR only when its base, scope, or history is materially wrong, the
-  intended change is abandoned, or safe repair in place is impossible.
-- Ready means the content is ready to merge once gates pass. It does not mean CI has
-  already finished.
-- Draft is not a mandatory staging state.
-- Use an expected head SHA for merge so GitHub rejects a race if the PR moved.
-- Never force-push `main`, move a published tag, or delete a pre-existing owner branch.
+Read the exact job log before changing source, workflow, runner, or branch.
 
-A long corrective programme may use multiple dependent PRs. A successor may be analyzed
-or prepared while its predecessor is in CI, but it must not be merged against an
-unintegrated prerequisite. Independent PRs may proceed concurrently when their scopes do
-not conflict.
+Classify the failure:
 
-==================================================
-CI AND CHECK SEMANTICS
-==================================================
+1. Same-scope source, documentation, title, or test defect:
+   repair in the same PR and validate the new head.
+2. External GitHub, hosted-runner, network, action-distribution, or dependency outage:
+   make zero source changes; after recovery, allow at most one unchanged failed-job or
+   workflow rerun.
+3. Incorrect PR metadata:
+   correct metadata without creating a replacement branch.
+4. Wrong base, mixed scope, damaged history, or abandoned approach:
+   replace the PR only after recording the evidence.
+5. Missing protected authority or credentials:
+   stop at the exact boundary and report it once.
+6. GitHub plugin unavailable or non-responsive:
+   stop all GitHub work, inform the project owner, and wait for explicit direction.
 
-The merge gate is the required result for the latest mergeable PR state.
+Forbidden reactions to an unproven or external failure:
 
-Rules:
+- speculative runner operating-system changes;
+- `-clean`, `-final`, `-fixed`, `-retry`, or sibling publication branches;
+- new version-specific workflows;
+- repeated push-trigger experiments;
+- duplicate scheduled trackers;
+- unbounded automatic retries;
+- automatic transport switching while the GitHub plugin is unavailable.
 
-- PR CI validates the exact package-candidate prefix in the PR title and every commit
-  subject reachable from the PR head but not from the base.
-- Post-merge `main` integrity validates the final squash commit subject.
-- Historical failed, canceled, or superseded workflow runs remain evidence but do not
-  invalidate a later successful head.
-- Updating a PR with a same-scope repair legitimately creates a new check set.
-- Retry only failed jobs when an infrastructure or transient failure makes that safe.
-- Configure PR workflow concurrency so a newer head cancels obsolete in-progress runs.
-- CI is a barrier to merge, not a command to stop all independent analysis or
-  preparation.
-- Do not stack unrelated changes into a checked branch merely to keep working.
-- A product/package PR should perform the meaningful package build once before merge.
-- Documentation/governance-only PRs should not consume a FreeBSD package build unless a
-  packaging input is affected.
-- `main` push validation should be a lightweight integrity check; do not duplicate the
-  complete expensive PR package build after every squash merge.
-
-Never claim a check passed unless the exact workflow/job result was inspected.
+A second unchanged infrastructure failure stops the operation for diagnosis. It does
+not authorize another retry or redesign.
 
 ==================================================
-FAILURE HANDLING
+TESTING PRERELEASE PUBLICATION
 ==================================================
 
-Classify a failure before acting:
+A testing prerelease exposes one already approved package candidate for live validation.
+It is not a stable project release and is not an ordinary code PR.
 
-1. Same-scope source, documentation, title, commit-subject, or test defect:
-   repair in the same PR and rerun checks for the new head.
-2. Transient runner, network, dependency, or GitHub failure:
-   rerun the failed job or workflow when no source change is required.
-3. Incorrect PR title:
-   correct the metadata and allow its targeted check to rerun.
-4. Incorrect work or repair commit subject:
-   correct it before publication when possible; after publication, add a properly titled
-   same-scope corrective commit only when history rewriting is not appropriate and the
-   active validation contract explicitly permits that state. The normal target is that
-   every PR commit subject is valid.
-5. Incorrect base, mixed scope, damaged history, or abandoned approach:
-   close or replace the PR after recording why.
-6. Required protected authority or credentials unavailable:
-   stop at the exact boundary and report the evidence once.
+Required authority:
 
-Do not create replacement branches as a reflex. Preserve the PR discussion and check
-history when the logical change remains valid.
+- explicit owner authorization for the exact tag `v<VERSION>_<REVISION>` and asset;
+- no implied permission to publish GitHub Pages or the pkg repository.
+
+Preferred path when verified package bytes already exist:
+
+1. identify the source commit and successful package build through the GitHub plugin;
+2. bind the artifact by exact workflow run ID, artifact ID/name, and digest;
+3. download the artifact once;
+4. verify the package `+MANIFEST`:
+   - exact package version;
+   - `abi: FreeBSD:15:amd64`;
+   - `arch: freebsd:15:x86:64`;
+5. create the prerelease directly through the plugin when supported, otherwise use the
+   narrow Release API/UI/`gh` fallback for the missing release-asset write;
+6. attach only the verified `.pkg` asset;
+7. verify target SHA, tag, `draft=false`, `prerelease=true`, asset name, state, digest or
+   size, and direct download URL through the GitHub plugin.
+
+Do not create a PR merely to attach an existing package asset.
+
+When a repository-owned build-and-publish operation is actually required, create only
+the exact temporary branch `publish/v<VERSION>_<REVISION>`. The single generic
+`.github/workflows/publish-prerelease.yml` validates branch identity, builds on FreeBSD
+15, checks `+MANIFEST`, creates only a prerelease, verifies it, and deletes the temporary
+branch. Only one active run is permitted for the candidate.
+
+A testing prerelease never deploys GitHub Pages or pkg-repository metadata.
+
+==================================================
+FULL PROJECT RELEASE
+==================================================
+
+A full release is separate from an ordinary patch and a testing prerelease.
+
+Required conditions:
+
+- explicit authority for exact new `VERSION=X.Y.Z`;
+- product and live-verification gates satisfied;
+- `PLUGIN_REVISION=1`;
+- release-preparation PR and squash subject:
+  `vX.Y.Z_1: Prepare release vX.Y.Z`;
+- immutable semantic tag `vX.Y.Z` created at the verified merge commit;
+- full Release workflow builds package and pkg repository from that tag;
+- GitHub Release, GitHub Pages, pkg metadata, assets, and direct URLs are verified.
+
+Published tags, releases, assets, and versions are immutable and forward-only.
+
+==================================================
+TRANSPORT SELECTION
+==================================================
+
+Transport order is mandatory while the GitHub plugin is available:
+
+1. connected GitHub plugin for every supported read and write;
+2. authenticated ordinary Git for local editing or ref operations that the plugin does
+   not support;
+3. `gh` for Actions or release operations not covered by the plugin;
+4. Git data API for an atomic multi-file commit only when no checkout-based transport is
+   available;
+5. GitHub web UI only for a narrow operation that the authenticated tools cannot perform,
+   such as owner asset upload.
+
+Missing one fallback client is not a blocker while the GitHub plugin or another verified
+mechanism covers the operation. Never claim a plugin capability or gap without checking
+the actual function and permission first. If the plugin itself is unavailable, this
+transport order is suspended and the work stops pending owner direction.
 
 ==================================================
 MERGE AND CLEANUP
 ==================================================
 
-Preferred repository configuration:
-
-- squash merge enabled as the normal method;
-- merge-commit and rebase methods disabled when practical;
-- required checks and pull requests enforced for `main`;
-- force push and deletion of `main` prohibited;
-- auto-merge enabled;
-- automatic deletion of merged head branches enabled.
-
-When repository-native auto-merge is available, enable it only after the PR is Ready,
-scope is reviewed, and the intended versioned squash title is known. Otherwise merge
-explicitly after checks pass.
-
-Before merge, the operator must compare:
+Before merge compare:
 
 - derived package-candidate prefix;
 - PR title prefix;
-- intended squash subject prefix;
-- exact expected head SHA.
+- intended squash subject;
+- exact expected head SHA;
+- required-check state.
 
-Never substitute an unversioned conventional subject during an explicit squash merge.
+Use squash merge once. Never force-update `main`.
 
-When repository-native branch deletion is unavailable, use
-`.github/workflows/cleanup-merged-branch.yml` as the same-repository fallback.
-
-Branch cleanup failure is a repository-hygiene defect. Diagnose and clean it, but do not
-misreport an already verified squash merge as an unsuccessful code delivery.
+Temporary task and publication branches are deleted after successful verification.
+`recovery/base` and pre-existing owner branches are not removed without separate
+evidence and authority. Cleanup failure is a repository-hygiene defect, not evidence
+that a verified merge or release failed.
 
 ==================================================
-PATCH VERSUS RELEASE
+PATCH VERSUS PUBLICATION
 ==================================================
 
 Ordinary packaged patch:
 
-- keep `VERSION` unchanged;
+- keep `VERSION`;
 - increment `PLUGIN_REVISION` once;
-- use the resulting package-candidate prefix everywhere;
-- merge the logical change;
-- create no tag, GitHub Release, release asset, or pkg-repository publication.
+- merge through the normal PR path;
+- create no tag, Release, asset, Pages deployment, or pkg-repository publication without
+  separate authority.
 
-Governance/documentation/CI-only change outside packaged plugin contents:
+Governance/documentation/CI-only patch:
 
-- change neither `VERSION` nor `PLUGIN_REVISION`;
-- use the unchanged current package-candidate prefix everywhere;
-- run applicable validation;
-- do not imply a release.
+- change neither version value;
+- use the unchanged candidate prefix;
+- run path-applicable CI;
+- do not imply package publication.
 
-Project release:
+Testing prerelease:
 
-- requires explicit authority for an exact new `VERSION`;
-- changes `VERSION` and resets `PLUGIN_REVISION` to `1`;
-- uses the resulting release-candidate prefix everywhere;
-- continues through the repository release trigger, tag, GitHub Release, assets, Pages,
-  pkg repository, and post-publication verification;
-- never moves or overwrites an already published version.
+- explicit authority for exact `v<VERSION>_<REVISION>`;
+- publish one verified package asset only;
+- no Pages/pkg repository.
 
-Ambiguous continuation language does not independently authorize a new release version.
+Full release:
 
-==================================================
-CONCURRENCY AND LOCAL STATE
-==================================================
-
-The recorded base SHA is a concurrency guard, not a ban on parallel thought.
-
-- Reconcile before merge when `main` changes materially.
-- Independent branches may proceed concurrently.
-- Dependent work may be prepared separately but must integrate in prerequisite order.
-- Relevant uncommitted or unpushed owner state cannot be recovered from GitHub. Ask for
-  that state only when it materially affects the requested scope.
+- exact new `VERSION` authority;
+- revision reset to `1`;
+- versioned release-preparation title;
+- full immutable tag/Release/Pages/pkg-repository pipeline.
 
 ==================================================
 SUPERSESSION
 ==================================================
 
-This document,
-`docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`, and
-`docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md` supersede conflicting
-active or historical wording that required:
+This document and the active decisions listed at the top supersede conflicting wording
+that requires:
 
-- a final commit before any task branch may exist;
-- exactly one source commit inside a PR branch;
-- exactly one complete check set or workflow run;
-- closing and replacing a valid PR after an ordinary CI failure;
-- waiting for every check before beginning unrelated analysis or separate preparation;
-- mandatory Draft → Ready transitions;
-- low-level Git data API construction for every change;
-- cleanup success as a condition for the truth of an already completed merge;
-- unversioned conventional PR or commit subjects for governance, documentation, CI, or
-  maintenance work.
+- using chat history, generic web search, local state, or another transport before the
+  connected GitHub plugin for an operation the plugin supports;
+- continuing GitHub work through another transport when the plugin itself is unavailable;
+- mandatory Draft PRs;
+- exactly one commit in a PR branch;
+- exactly one historical workflow run;
+- closing a valid PR after an ordinary same-scope failure;
+- stopping independent analysis while CI runs;
+- full-document rereading for every small operation;
+- unversioned governance or release-preparation subjects;
+- version-specific prerelease workflows in `main`;
+- source/workflow/runner changes in response to an external infrastructure failure;
+- publication PRs for already verified assets.

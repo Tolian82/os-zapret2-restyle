@@ -53,7 +53,7 @@ ENGINEERING PRINCIPLES
 
 - Correctness over speed.
 - Preserve working behavior before optimization.
-- One logical change per commit.
+- One logical scope per pull request; `main` receives one squash commit.
 - Repository source is authoritative.
 - Generated runtime is never committed.
 - Validate before activation.
@@ -101,12 +101,16 @@ CHANGE RULES
 
 - Make minimal reviewable changes.
 - Fix the exact GitHub base commit before editing.
-- Keep one logical change in one atomic commit.
-- Include all affected documentation and Git file-mode changes.
-- Verify before commit.
+- Keep one logical scope in one task branch and pull request.
+- Same-scope work and repair commits may remain in that branch; `main` receives one
+  squash commit.
+- Include all affected documentation and Git file-mode changes in the same logical
+  scope.
+- Validate before publication.
 - Review the complete diff.
-- Stop immediately if validation fails.
-- Do not publish a failed or partially validated change.
+- Diagnose validation failures from exact evidence and repair same-scope defects in the
+  same PR.
+- Do not merge or publish a failed or partially validated latest head.
 
 ==================================================
 TESTING RULES
@@ -130,29 +134,37 @@ GIT RULES
 
 Preferred sequence:
 
+use the connected GitHub plugin first
 read current GitHub main
 record full base SHA
+inventory relevant PRs, branches, workflows, runs, artifacts, tags, releases, and assets
 confirm required state is published
 change one logical unit
 validate
 review diff
 git add explicit paths when using a local checkout
 review staged diff when using a local checkout
-commit
+commit or publish same-scope repair commits
 recheck remote main against base SHA
-publish a working branch
-open a Draft PR
-wait for required CI
-mark Ready and squash merge
+publish one working branch
+open one Ready PR when the diff is ready
+wait for required CI on the latest head
+repair same-scope failures in the same PR
+squash merge with the expected head SHA
 verify published commit
-build
-focused live verification
+clean the temporary branch
+build and perform focused live verification when applicable
+
+A narrow fallback transport is allowed only when the GitHub plugin is responding and one
+exact function or permission is confirmed missing. If the plugin is unavailable,
+non-responsive, or cannot provide the authoritative state required for safe work, stop
+all GitHub work, inform the owner, and wait for explicit direction.
 
 ==================================================
 DOCUMENT SYNCHRONIZATION
 ==================================================
 
-Code and affected documentation belong in the same logical commit.
+Code and affected documentation belong in the same logical change.
 
 Approved concepts and rules must be recorded in DECISIONS.md and reflected in
 the appropriate specialist documents.
@@ -160,7 +172,7 @@ the appropriate specialist documents.
 Changes to document structure, document responsibilities, reading order, audit
 method, development workflow, or documentation-maintenance rules are
 architectural changes. They require a decision entry and synchronized updates to
-all affected documents in the same logical commit.
+all affected documents in the same logical change.
 
 ==================================================
 ENGINEERING MEMORY WORKFLOW
@@ -236,21 +248,19 @@ MANDATORY RESPONSE PREFLIGHT
 
 For every new or resumed project context:
 
-1. Obey the repository-root `AGENTS.md`, then read INDEX.md first and complete its
-   full mandatory reading order.
-2. Do not provide project diagnosis, recommendations, commands, or repository actions
-   before the reading sequence is complete.
-3. Read DECISIONS.md, WORKING_CONVENTIONS.md, and DEVELOPMENT_GUIDE.md as the
-   approved methodology and principles; do not reduce them to remembered summaries.
-4. Re-read the relevant specialist document when any workflow or command detail is
+1. Obey the repository-root `AGENTS.md`, then read `INDEX.md` and `PROJECT_STATE.md`.
+2. Read the specialist documents relevant to the requested scope.
+3. Complete a full repository-wide reading only for a repository-wide audit or genuine
+   full-context recovery; it is not a blocking prerequisite for every diagnosis,
+   command, or small change.
+4. Read the current active decision and procedure for any GitHub mutation.
+5. Re-read the relevant specialist document when any workflow or command detail is
    uncertain; memory and earlier chat output are not substitutes.
-5. If OPNsense commands will be delivered, identify the target shell as root csh and
+6. If OPNsense commands will be delivered, identify the target shell as root csh and
    perform the command-dialect check below before sending them.
 
-The only permitted pre-reading user message is a brief progress notice required by
-the platform that says documentation recovery is in progress. It contains no technical
-conclusion or command.
-
+A brief progress notice may be sent while context is being restored, but it must not
+claim conclusions that have not yet been verified.
 
 ==================================================
 COMMAND BLOCK SEPARATION
@@ -315,7 +325,6 @@ Approximate effort preference, not a quota:
 - 8% discussion of future work;
 - 2% broader process or philosophical discussion.
 
-
 ## Runtime lifecycle ownership
 
 Package lifecycle and runtime bootstrap changes are one architectural unit. Code hooks,
@@ -358,56 +367,61 @@ BLOB SHORTHAND RULE
 - Native upstream --blob=name:value declarations containing ':' remain untouched.
 - Missing files are hard errors and must not be silently substituted.
 
-
 ==================================================
 GITHUB-COMMIT DEVELOPMENT RULE
 ==================================================
 
 The default source baseline is an exact commit in the official GitHub repository,
-normally the current `main` commit. Record the full SHA before editing and obtain
-all file content and Git modes from that commit.
+normally the current `main` commit. Record the full SHA before editing and obtain all
+file content and Git modes from that commit.
 
 Required sequence:
 
-read and record current main SHA
+use the connected GitHub plugin first
+↓
+read and record current `main` SHA and complete the pre-mutation inventory
 ↓
 prepare one logical multi-file change
 ↓
-run static validation and review the complete diff
+run focused validation and review the complete diff
 ↓
-create one atomic commit
+publish one task branch and one Ready PR when the diff is ready
 ↓
-confirm main still equals the recorded base
+keep same-scope work and repair commits in that PR
 ↓
-publish a working branch and open a Draft PR
+pass required CI for the latest mergeable head
 ↓
-pass required CI and squash merge
+squash merge with the expected head SHA and exact versioned subject
 ↓
-build and perform focused verification
+verify `main` and clean the temporary branch
+↓
+build and perform focused verification when applicable
 
-The working-branch and PR path is the default for ordinary requested development
-work. Standing project-owner authorization covers branch creation, one atomic
-commit, branch publication, Draft PR creation, Ready transition after required CI,
-squash merge, verification of `main`, and cleanup of the temporary branch created
-for that task. No repeated confirmation is required.
+The working-branch and PR path is the default for ordinary requested development work.
+Standing project-owner authorization covers branch creation, same-scope commits, Ready
+PR creation, required-check inspection, same-scope repair, squash merge, verification of
+`main`, and cleanup of the temporary branch created for that task. No repeated
+confirmation is required.
 
-Direct publication to `main` requires explicit project-owner instruction and must
-be a fast-forward from the recorded base. Never force-push. A unified patch is used
-only when explicitly requested or when relevant local-only state is transferred in
-that form.
+Direct publication to `main` requires explicit project-owner instruction and must be a
+fast-forward from the recorded base. Never force-push. A unified patch is used only when
+explicitly requested or when relevant local-only state is transferred in that form.
 
-No particular GitHub client is mandatory. GitHub CLI is not required when an
-authenticated GitHub integration/API or ordinary Git can perform the approved
-operation safely. Before treating publication as blocked, discover all available
-GitHub integration/API and authenticated Git transports. Missing `gh` alone is never
-a blocker, never a reason to stop after local preparation, and never a question for
-the project owner when another approved transport is available.
+The connected GitHub plugin is the mandatory first repository interface. When it is
+responding but one exact function or permission is confirmed missing, authenticated Git,
+`gh`, another API, or the web UI may be used only for that narrow operation. Return to
+the plugin for subsequent supported reads and writes.
 
-Transport fallback order is authenticated GitHub integration/API, authenticated
-ordinary Git, then GitHub CLI. Publication means branch, atomic commit, Draft PR,
-required CI, Ready, squash merge, and verification of `main`; a local patch is not
-a published result. Release assets and the pkg repository additionally require the
-explicit release authority defined below.
+If the GitHub plugin is unavailable, non-responsive, or cannot provide the authoritative
+state required for safe work, stop all GitHub work, inform the owner, and wait for
+explicit direction. Do not continue through a fallback transport, automation, or
+scheduled tracker merely to preserve progress. Missing `gh` alone is not a blocker while
+the plugin or another explicitly permitted narrow fallback safely covers the operation.
+
+Publication means branch, versioned work or repair commits, one Ready PR, required CI on
+the latest head, squash merge, verification of `main`, and branch cleanup; a local patch
+is not a published result. Release assets and the pkg repository additionally require
+the explicit release authority defined below.
 
 Do not modify tracked repository files directly from the OPNsense console with `vi`,
 `ee`, `nano`, `sed -i`, `perl -pi`, Python rewrite scripts, `cat >`, `echo >>`, or
@@ -416,9 +430,9 @@ equivalent mutation commands.
 This rule does not restrict temporary files, logs, diagnostics, generated build output,
 installed-system configuration, or files outside the repository.
 
-When a unified patch is explicitly selected, it must include all content and
-file-mode changes and pass `git apply --check` against its exact base. This is an
-optional transfer mode, not the default prerequisite for repository work.
+When a unified patch is explicitly selected, it must include all content and file-mode
+changes and pass `git apply --check` against its exact base. This is an optional transfer
+mode, not the default prerequisite for repository work.
 
 ==================================================
 STANDING DELIVERY AUTHORIZATION
@@ -439,10 +453,10 @@ pipeline. An ordinary development request does not authorize a version tag,
 GitHub Release, package publication, or pkg-repository publication.
 
 Stop for owner direction only on material architecture/product ambiguity, relevant
-unpublished local state, an unresolvable required check failure, new credentials or
-protected authority, destructive work affecting user data or pre-existing remote
-objects, force-push/history rewriting/direct-main publication, or mandatory live
-OPNsense evidence available only from the owner.
+unpublished local state, an unresolvable required check failure, GitHub-plugin
+unavailability, new credentials or protected authority, destructive work affecting user
+data or pre-existing remote objects, force-push/history rewriting/direct-main
+publication, or mandatory live OPNsense evidence available only from the owner.
 
 When owner input is genuinely required, ask one consolidated question with the
 evidence and a recommended choice. Never ask the owner to confirm facts available
@@ -452,8 +466,7 @@ Package revision handling is routine. Increment `PLUGIN_REVISION` once for an
 ordinary change to packaged files or package behavior while `VERSION` is unchanged.
 Reset it to `1` when an explicitly requested new project version changes `VERSION`.
 A governance/documentation-only change outside package contents changes neither
-value; standard CI, including its package job, supplies the applicable build and
-verification without implying a release.
+value; path-applicable CI supplies the required verification without implying a release.
 
 ==================================================
 LOCAL-ONLY STATE EXCEPTION

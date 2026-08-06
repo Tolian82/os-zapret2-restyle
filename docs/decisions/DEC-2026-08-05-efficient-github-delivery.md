@@ -1,6 +1,6 @@
 # DEC-2026-08-05 — Efficient GitHub delivery
 
-Status: Active
+Status: Active, amended 2026-08-06
 Date: 2026-08-05
 
 ## Context
@@ -57,13 +57,18 @@ Adopt an outcome-based GitHub workflow.
 
 ### Transport selection
 
-- Use the connected GitHub app/API for repository, PR, checks, reviews, and merge when it
-  covers the operation.
-- Use local `git` for editing and commits when an authenticated checkout is available.
-- Use `gh` for Actions logs or uncovered operations when available.
+- Use the connected GitHub plugin first for repository, PR, checks, reviews, merge, and
+  every other operation it supports.
+- When the plugin is responding but one exact function or permission is confirmed
+  missing, use local `git`, `gh`, the web UI, or another authenticated API only for that
+  narrow operation.
+- Return to the plugin for subsequent supported reads and writes.
+- If the plugin is unavailable, non-responsive, or cannot provide the authoritative
+  repository state required for safe work, stop all GitHub work, inform the project
+  owner, and wait for explicit direction. Do not switch transports automatically.
 - Git data blobs/trees are optional for API-only atomic construction, not mandatory.
-- Missing one client is not a blocker when another verified authenticated mechanism can
-  safely complete the action.
+- Missing one fallback client is not a blocker while the plugin is available and another
+  verified authenticated mechanism safely covers the exact confirmed gap.
 
 ### Merge and cleanup
 
@@ -92,6 +97,32 @@ The title subsection is amended and controlled by
 - Unversioned conventional subjects such as `governance:`, `docs:`, `ci:`, or `chore:`
   are not valid project delivery titles.
 
+## 2026-08-06 amendment — Evidence-first operations
+
+`DEC-2026-08-06-evidence-first-github-operations.md` controls pre-mutation inventory,
+GitHub transport selection and outage handling, testing-prerelease publication,
+publication-run limits, artifact identity, and release-preparation title mechanics.
+
+Compatible rules above remain active. The amendment additionally requires:
+
+- the connected GitHub plugin as the first repository interface;
+- a narrow fallback only when the responding plugin lacks one exact function or
+  permission;
+- immediate stop, owner notification, and no automatic fallback when the plugin itself
+  is unavailable or cannot provide the authoritative state required for safe work;
+- inventory of workflows, branches, PRs, runs, artifacts, tags, releases, assets, and
+  permissions before mutation;
+- job-log evidence before changing source, workflow, runner, or branch;
+- zero source changes and at most one unchanged rerun for an external infrastructure
+  failure;
+- no speculative runner switching, replacement publication branches, duplicate
+  trackers, or unbounded retries;
+- direct release upload for an already verified package when available;
+- one generic prerelease publisher instead of version-specific workflows;
+- release-preparation title `vX.Y.Z_1: Prepare release vX.Y.Z`;
+- no shell-test or CI contract for the exact wording or line placement of the
+  plugin-first prose.
+
 ## Consequences
 
 - GitHub Actions waiting no longer idles all project work.
@@ -104,9 +135,10 @@ The title subsection is amended and controlled by
   candidate.
 - PR CI validates PR and branch-commit subjects; post-merge integrity validates the final
   squash subject.
-- Process documents describe stable outcomes rather than one connector or API sequence.
-- Current repository settings may temporarily require explicit squash merge and the
-  cleanup workflow until native auto-merge and head-branch deletion are enabled.
+- Candidate publication no longer creates a code PR merely to attach an existing asset.
+- External GitHub failures no longer trigger speculative repository changes.
+- GitHub-plugin outages stop repository work visibly instead of causing silent transport
+  substitution.
 
 ## Supersession
 
@@ -120,6 +152,10 @@ This decision supersedes conflicting delivery wording in:
 - any unmerged decision that requires one published commit at a time and prohibits even
   separate preparation while checks run.
 
+The 2026-08-06 amendment additionally supersedes conflicting publication, transport, and
+failure wording as specified in
+`docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`.
+
 Product architecture, runtime safety, package/release separation, no-force-push rules,
 universal package-candidate title identity, and owner authorization boundaries are
 unchanged.
@@ -131,9 +167,12 @@ unchanged.
 - `docs/GITHUB_PUBLICATION.md`;
 - `docs/GITHUB_WORKFLOW.md`;
 - `docs/PROJECT_STATE.md`;
-- `docs/architecture/STRATEGY_LAB_ACTIVATION.md`;
-- `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
+- `docs/WORKING_CONVENTIONS.md`;
+- `docs/DEVELOPMENT_GUIDE.md`;
+- `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
 - `.github/workflows/ci.yml`;
 - `.github/workflows/pr-title.yml`;
 - `.github/workflows/cleanup-merged-branch.yml`;
+- `.github/workflows/publish-prerelease.yml`;
+- `.github/workflows/release-trigger.yml`;
 - `scripts/test-github-branch-hygiene.sh`.
