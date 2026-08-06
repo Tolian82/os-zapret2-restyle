@@ -63,8 +63,10 @@ show_status()
     if [ -z "${_strategy_lab_job}" ]; then
         cleanup_stale_active || { emit_error_json "Strategy Lab stale job recovery failed"; return 1; }
         _strategy_lab_job=$(strategy_lab_read_active_job 2>/dev/null || true)
-        [ -n "${_strategy_lab_job}" ] || _strategy_lab_job=$(strategy_lab_latest_job 2>/dev/null || true)
-        if [ -z "${_strategy_lab_job}" ]; then "${STRATEGY_LAB_JQ}" -nc '{status:"idle"}'; return 0; fi
+        if [ -z "${_strategy_lab_job}" ]; then
+            "${STRATEGY_LAB_JQ}" -nc '{status:"idle"}'
+            return 0
+        fi
     fi
     read_job_json "${_strategy_lab_job}"
 }
