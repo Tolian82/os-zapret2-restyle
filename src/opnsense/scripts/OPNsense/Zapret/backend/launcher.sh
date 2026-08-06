@@ -14,17 +14,7 @@
 
 launcher_pidfile_read()
 {
-    _launcher_pidfile="$1"
-
-    [ -f "${_launcher_pidfile}" ] || return 1
-    _launcher_pid=$(sed -n '1{s/[[:space:]]//g;p;}' "${_launcher_pidfile}")
-
-    case "${_launcher_pid}" in
-        ''|*[!0-9]*) return 1 ;;
-    esac
-
-    [ "${_launcher_pid}" -gt 1 ] 2>/dev/null || return 1
-    printf '%s\n' "${_launcher_pid}"
+    common_pidfile_read "$1"
 }
 
 launcher_is_running()

@@ -15,16 +15,7 @@
 
 supervisor_pidfile_read()
 {
-    _supervisor_pidfile="$1"
-    [ -f "${_supervisor_pidfile}" ] || return 1
-
-    _supervisor_pid=$(sed -n '1{s/[[:space:]]//g;p;}' "${_supervisor_pidfile}")
-    case "${_supervisor_pid}" in
-        ''|*[!0-9]*) return 1 ;;
-    esac
-
-    [ "${_supervisor_pid}" -gt 1 ] 2>/dev/null || return 1
-    printf '%s\n' "${_supervisor_pid}"
+    common_pidfile_read "$1"
 }
 
 supervisor_is_running()
