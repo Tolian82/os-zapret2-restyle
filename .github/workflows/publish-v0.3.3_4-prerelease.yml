@@ -6,16 +6,17 @@ on:
       - 'publish/v0.3.3_4'
 
 permissions:
+  actions: read
   contents: write
 
 concurrency:
   group: prerelease-v0.3.3_4
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   publish:
-    name: Build and publish FreeBSD 15 prerelease
-    runs-on: ubuntu-latest
+    name: Verify and publish FreeBSD 15 prerelease
+    runs-on: macos-14
 
     steps:
       - uses: actions/checkout@v6
@@ -27,15 +28,14 @@ jobs:
           test "$(tr -d '[:space:]' < VERSION)" = "0.3.3"
           test "$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | head -1)" = "4"
 
-      - name: Build package inside FreeBSD 15 VM
-        uses: vmactions/freebsd-vm@v1
+      - name: Download immutable FreeBSD 15 package artifact
+        uses: actions/download-artifact@v8
         with:
-          release: '15.0'
-          usesh: true
-          prepare: pkg install -y jq
-          run: |
-            test "$(freebsd-version -u | cut -d. -f1)" = "15"
-            sh scripts/build-pkg.sh
+          artifact-ids: '8972953786'
+          github-token: ${{ github.token }}
+          repository: Tolian82/os-zapret2-restyle
+          run-id: '31113842984'
+          path: dist
 
       - name: Verify package identity
         shell: bash
@@ -46,13 +46,28 @@ jobs:
           trap 'rm -f "${manifest}"' EXIT
           test -f "${package}"
           tar -xOf "${package}" +MANIFEST > "${manifest}"
-          jq -e '.version == "0.3.3_4" and .abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64"' "${manifest}" >/dev/null
+          python3 - "${manifest}" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              manifest = json.load(handle)
+
+          expected = {
+              "version": "0.3.3_4",
+              "abi": "FreeBSD:15:amd64",
+              "arch": "freebsd:15:x86:64",
+          }
+          actual = {key: manifest.get(key) for key in expected}
+          if actual != expected:
+              raise SystemExit(f"unexpected package manifest: {actual!r}")
+          PY
 
       - name: Publish prerelease asset
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v0.3.3_4
-          target_commitish: ${{ github.sha }}
+          target_commitish: 34f69490f57f50aca85c9aa8e684a7f9bc72ca81
           name: v0.3.3_4
           prerelease: true
           draft: false
