@@ -52,6 +52,25 @@ Evidence-first GitHub operations are authoritative through:
 - `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
 - `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
 
+GitHub governance reconciliation is currently open in PR #110. Its base is the exact
+current `main` commit `5629615100f9919c57a13fc3c067f90fb8521af8`; product code,
+`VERSION=0.3.3`, and `PLUGIN_REVISION=5` are unchanged by that PR.
+
+The connected GitHub plugin is the first repository interface. A fallback is narrow and
+allowed only while the plugin is responding and one exact function or permission is
+confirmed missing. If the plugin is unavailable, non-responsive, or cannot provide the
+authoritative state required for safe work, all GitHub work stops, the owner is informed,
+and no fallback transport, automation, or tracker is started without explicit direction.
+
+Connector state verified on 2026-08-07:
+
+- the repository API returned no configured rulesets;
+- the current plugin installation returned `403 Resource not accessible by integration`
+  for repository Actions-permission settings and branch-protection settings;
+- this `403` is a connector permission boundary, not proof that Actions or branch
+  protection are disabled;
+- these facts are time-sensitive and must be re-verified before later reliance.
+
 The repository uses one generic testing-prerelease workflow. Version-specific publisher
 files are forbidden. Existing verified package bytes are published directly when
 possible; automated publication uses one temporary `publish/v<VERSION>_<REVISION>`

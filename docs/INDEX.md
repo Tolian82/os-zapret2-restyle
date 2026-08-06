@@ -55,6 +55,12 @@ must state its supersession explicitly.
 
 Key rules:
 
+- use the connected GitHub plugin first for every repository operation;
+- use a narrow fallback only when the plugin is responding and one exact function or
+  permission is confirmed missing;
+- if the GitHub plugin is unavailable, non-responsive, or cannot provide the
+  authoritative state required for safe work, stop GitHub work, inform the owner, and
+  wait for explicit direction;
 - inventory workflows, branches, PRs, runs, artifacts, tags, releases, assets, and
   permissions before mutation;
 - ordinary changes use one logical Ready PR and one squash merge;
