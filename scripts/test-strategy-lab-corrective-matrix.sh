@@ -13,10 +13,7 @@ DOMAIN_TEST="${ROOT_DIR}/scripts/test-domain-diagnostics-contract.sh"
 strategy_lab_test_delegated_to_e2e()
 {
     case "$(basename "$1")" in
-        test-strategy-lab-active-cancel.sh|
-        test-strategy-lab-candidate-runtime.sh|
-        test-strategy-lab-semantic-restoration.sh|
-        test-strategy-lab-time-budget.sh)
+        test-strategy-lab-active-cancel.sh|test-strategy-lab-candidate-runtime.sh|test-strategy-lab-semantic-restoration.sh|test-strategy-lab-time-budget.sh)
             return 0
             ;;
     esac
