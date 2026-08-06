@@ -24,6 +24,8 @@
 - `docs/architecture/STRATEGY_LAB_RETENTION.md` — bounded cleanup and protected lifecycle evidence;
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_MATRIX.md` — one discoverable nonrecursive Strategy Lab CI entry point;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — finding-to-patch traceability;
+- `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — final source/CI closure and release-block status;
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — authoritative owner-assisted appliance verification gate;
 - `docs/PROJECT_STATE.md` — current verified baseline and next action.
 
 ## Engineering process
@@ -41,4 +43,4 @@
 
 Every PR title, PR-branch commit subject, and final squash subject must begin with the exact package-candidate prefix. `main` is never force-updated. Historical atomic/serial wording cannot override current GitHub governance.
 
-Never infer current state only from chat history or historical patch records. Re-read current `main`, current PR state, and applicable active authorities.
+Never infer current state only from chat history or historical patch records. Re-read current `main`, current PR state, and applicable active authorities. Source/CI completion must never be used as a substitute for owner-provided live OPNsense evidence.
