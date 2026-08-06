@@ -65,7 +65,7 @@ printf '%s\n' "${status}" | jq -e '.status=="idle"' >/dev/null
 
 grep -Fq 'strategy_lab_write_latest_job "${_strategy_lab_job}"' "${LAUNCH}"
 grep -Eq "apiPost\('/api/zapret/strategy_lab/status',[[:space:]]*\{job_id:'-'\}" "${VIEW}"
-grep -Fq "[$jobId !== '' ? $jobId : '@active']" "${CONTROLLER}"
+grep -Fq "return \$this->backendResponse('strategy_lab_status', [\$jobId !== '' ? \$jobId : '@active']);" "${CONTROLLER}"
 grep -Fq '@active)' "${QUERY}"
 grep -Fq 'strategy_lab_latest_job' "${QUERY}"
 grep -Fq 'pollStatus();' "${VIEW}"
