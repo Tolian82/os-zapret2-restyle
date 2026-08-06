@@ -32,8 +32,9 @@ Live OPNsense matrix: **PENDING OWNER AFTER `_5` PACKAGE PUBLICATION**.
 
 Stable release preparation: **BLOCKED ON LIVE MATRIX**.
 
-Authoritative closure records:
+## Current product authority
 
+- `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`;
 - `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md`;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md`.
