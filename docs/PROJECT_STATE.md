@@ -5,7 +5,7 @@ Primary branch: `main`
 Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
 Latest published testing prerelease: `v0.3.3_5` / `os-zapret2-restyle-0.3.3_5.pkg`
 Current source line: `VERSION=0.3.3`
-Current corrective package revision: `PLUGIN_REVISION=11`
+Current corrective package revision: `PLUGIN_REVISION=12`
 Target ABI: **FreeBSD:15:amd64 only**
 
 ## Historical live boundary
@@ -14,7 +14,7 @@ Target ABI: **FreeBSD:15:amd64 only**
 
 ## Third audit corrective series
 
-Status: **SOURCE/CI COMPLETE — LIVE VERIFICATION PENDING**
+Status: **SOURCE/CI COMPLETE — FINAL `_12` PACKAGE ROLL-UP IN PROGRESS**
 
 Authoritative audit: `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
 
@@ -29,15 +29,16 @@ All seven third-audit findings `SL3-001` through `SL3-007` are implemented in so
 - Patch 5 (`SL3-004`) — PR #119, main `41ccadd47136375cb58a64e527f2fecff9f1630e`; CI `31155184080`; artifact `8984931432`, package `_10`.
 - Patch 6 (`SL3-007`) — PR #120, main `00107d38f287462a2c0627a04629f6381774d05c`; CI `31156513189`; artifact `8985427611`, package `_11`.
 - Patch 7 (integrated regression gate) — PR #121, exact latest head `dd2a484a4aa3711834b722aae0cc025d3fd4758e`, main `256ffa09452dabfb001665b729c1f4c3d3462688`; title check `31157848071` PASS; CI `31157848056` PASS; FreeBSD 15 artifact `8985927074` contains `os-zapret2-restyle-0.3.3_11.pkg` and passed manifest inspection.
-- Patch 8 — documentation-only source/CI closure and live handoff; no package metadata or runtime behavior change.
+- Patch 8 — PR #122, main `124cdef9fb68a9d749c052d1c806b637c8878bf9`; documentation-only source/CI closure and live handoff; no runtime behavior change.
+- Final roll-up — package revision `_12`; no new product behavior. Its purpose is to build one newest FreeBSD 15 package from the complete post-Patch-8 repository state before owner-assisted live verification.
 
-The Patch 7 artifact is the authoritative source/CI-qualified package for the next owner-assisted live run because it was built from the exact final integration-gate head after all product fixes and integration contracts were present.
+Patch 7 remains the final integrated runtime-regression qualification. Revision `_12` does not alter that runtime logic; it advances package identity so the installation candidate is built after every approved Patch 1–8 repository change is present.
 
 ## Current verification boundary
 
 Live OPNsense matrix: **READY — SCENARIO 1 PENDING OWNER**.
 
-Designated candidate: `os-zapret2-restyle-0.3.3_11.pkg`, FreeBSD 15 amd64, GitHub Actions artifact `8985927074` from CI run `31157848056` / head `dd2a484a4aa3711834b722aae0cc025d3fd4758e`.
+Designated candidate: `os-zapret2-restyle-0.3.3_12.pkg`, FreeBSD 15 amd64. The exact GitHub Actions artifact must come from the successful `_12` candidate build and is the package to install for Scenario 1.
 
 Scenario 1 must be executed first on the owner's OPNsense appliance. Scenarios 2–18 remain blocked until scenario 1 passes. No source test, CI run, package build, mock, or integration fixture substitutes for owner-provided appliance evidence.
 
@@ -60,7 +61,7 @@ The connected GitHub plugin is the mandatory first repository interface. One log
 
 Stable release preparation and pkg-repository promotion: **BLOCKED ON LIVE MATRIX**.
 
-Testing prerelease publication of `_11` is not part of this corrective plan and still requires separate exact owner authorization. Patch 8 does not publish a release, tag, GitHub Release asset, Pages repository, or pkg-repository package.
+Testing prerelease publication of `_12` is not part of this roll-up and still requires separate exact owner authorization. This work does not publish a release, tag, GitHub Release asset, Pages repository, or pkg-repository package.
 
 Current product authority:
 
@@ -71,4 +72,4 @@ Current product authority:
 - `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md`;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
-Next action: **owner-assisted live Scenario 1 on `os-zapret2-restyle-0.3.3_11.pkg`**.
+Next action after successful `_12` build: **owner-assisted live Scenario 1 on `os-zapret2-restyle-0.3.3_12.pkg`**.
