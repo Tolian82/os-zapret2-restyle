@@ -79,6 +79,9 @@ elif grep -Fq 'Overall status: **FAILED ON _13 — STAGE-40 CORRECTION `_14` IN 
 elif grep -Fq 'Overall status: **FAILED ON _14 — STAGE-50 CORRECTION `_15` IN PROGRESS**' "${MATRIX}"; then
     grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" ||
         fail "stage-50 live matrix does not select the current corrective source package: ${candidate}"
+elif grep -Fq 'Overall status: **FAILED ON _15 — STAGE-50 CORRECTION `_16` IN PROGRESS**' "${MATRIX}"; then
+    grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" ||
+        fail "FreeBSD daemon live matrix does not select the current corrective source package: ${candidate}"
 else
     grep -Fq "Current corrective candidate: \`${candidate}\`" "${MATRIX}" ||
         fail "live matrix does not select the current corrective package: ${candidate}"

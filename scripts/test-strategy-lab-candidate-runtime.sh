@@ -111,7 +111,12 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 "$@" >> "$logfile" 2>&1 &
-echo $! > "$pidfile"
+child=$!
+echo "$child" > "$pidfile"
+# FreeBSD daemon(8) stays resident when -p/-o is used. Model that behavior so
+# production startup must detach the monitor before it can run readiness checks.
+wait "$child"
+rm -f "$pidfile"
 SH
 cat > "${TMP}/bin/sockstat" <<'SH'
 #!/bin/sh
@@ -154,7 +159,25 @@ export MOCK_IPFW_LOG="${TMP}/ipfw.log"
 export MOCK_IPFW_COUNTER="${TMP}/ipfw.counter"
 export MOCK_DVTWS_PIDFILE="${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.pid"
 
-"${SCRIPT_DIR}/strategy_lab_candidate_runner.sh" job.test "${TMP}/endpoints.txt" "${TMP}/result.json"
+set +e
+/usr/bin/timeout 15 "${SCRIPT_DIR}/strategy_lab_candidate_runner.sh" job.test "${TMP}/endpoints.txt" "${TMP}/result.json"
+candidate_status=$?
+set -e
+if [ "${candidate_status}" -ne 0 ]; then
+    echo "candidate runtime regression failed or timed out: rc=${candidate_status}" >&2
+    ps ax -o pid= -o ppid= -o stat= -o command= | grep -F "${TMP}" >&2 || true
+    if [ -r "${MOCK_DVTWS_PIDFILE}" ]; then
+        printf 'candidate pidfile: ' >&2
+        cat "${MOCK_DVTWS_PIDFILE}" >&2 || true
+    fi
+    [ ! -r "${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.log" ] || {
+        echo 'candidate dvtws2.log:' >&2
+        cat "${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.log" >&2 || true
+    }
+    echo 'candidate ipfw state:' >&2
+    cat "${TMP}/ipfw.state" >&2 || true
+    exit "${candidate_status}"
+fi
 /usr/bin/jq -e '
     .all_pass == true and (.endpoints|length)==2 and
     all(.endpoints[];
@@ -172,7 +195,7 @@ export MOCK_DVTWS_PIDFILE="${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.pid
 
 grep -q 'add 19100 divert 9989 tcp from me to 203.0.113.10 443' "${TMP}/ipfw.log"
 
-echo 'Strategy Lab candidate runtime success contract passed.'
+echo 'Strategy Lab candidate runtime success contract passed with a resident daemon supervisor.'
 
 : > "${TMP}/ipfw.state"
 : > "${TMP}/ipfw.log"
