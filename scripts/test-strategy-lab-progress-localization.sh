@@ -34,12 +34,20 @@ strategy_lab_update_job job.test completed SUCCESS 99 false 'done'
 jq -e '.state=="completed" and .progress.percent==100 and .progress.stage=="99" and .progress.stage_key=="report" and .progress.message=="done"' \
     "$(strategy_lab_status_file job.test)" >/dev/null
 
+strategy_lab_initialize_state job.cancel example.org standard en
+strategy_lab_request_cancel job.cancel 'Cancellation requested'
+cancel_state=$(jq -r '.state' "$(strategy_lab_status_file job.cancel)")
+[ "${cancel_state}" = cancel_requested ]
+cancel_key=$(printf '%s\n' "${cancel_state}" | tr '[:lower:]' '[:upper:]')
+
 grep -Fq 'var stageLabels = isRussian' "${VIEW}"
 grep -Fq 'var statusLabels = isRussian' "${VIEW}"
 grep -Fq 'var outcomeLabels = isRussian' "${VIEW}"
 grep -Fq 'var circularMessages = isRussian' "${VIEW}"
 grep -Fq 'function renderProgress(data)' "${VIEW}"
 grep -Fq 'id="strategyLabProgressBar"' "${VIEW}"
+grep -Fq "${cancel_key}:'ОСТАНОВКА ЗАПРОШЕНА'" "${VIEW}"
+grep -Fq "${cancel_key}:'CANCELLATION REQUESTED'" "${VIEW}"
 grep -Fq "STOP_REQUESTED:'ОСТАНОВКА ЗАПРОШЕНА'" "${VIEW}"
 grep -Fq "COMPLETED:'ЗАВЕРШЕНО'" "${VIEW}"
 grep -Fq "completed:'Circular validation finished and Zapret2 was restored.'" "${VIEW}"
@@ -47,4 +55,4 @@ grep -Fq "completed:'Циклическая проверка завершена,
 ! grep -Fq 'canseled' "${MESSAGES}"
 grep -Fq "CANCEL_MESSAGE='SKIPPED — canceled'" "${MESSAGES}"
 sh -n "${STATE}"
-echo 'PASS: persisted stage progress and complete RU/EN Strategy Lab localization are enforced'
+echo 'PASS: persisted progress and complete RU/EN Strategy Lab state localization are enforced'

@@ -17,12 +17,14 @@ $(document).ready(function () {
     };
     var statusLabels = isRussian ? {
         IDLE:'ОЖИДАНИЕ', QUEUED:'В ОЧЕРЕДИ', PREPARING:'ПОДГОТОВКА', PENDING:'ОЖИДАНИЕ', RUNNING:'ВЫПОЛНЯЕТСЯ',
-        STOP_REQUESTED:'ОСТАНОВКА ЗАПРОШЕНА', COMPLETED:'ЗАВЕРШЕНО', PASS:'УСПЕШНО', FAIL:'ОШИБКА', FAILED:'ОШИБКА',
-        ERROR:'ОШИБКА', TIMEOUT:'ТАЙМ-АУТ', SKIPPED:'ПРОПУЩЕНО', CANCELLED:'ОТМЕНЕНО', RESTORE_FAILED:'ВОССТАНОВЛЕНИЕ НЕ ВЫПОЛНЕНО'
+        CANCEL_REQUESTED:'ОСТАНОВКА ЗАПРОШЕНА', STOP_REQUESTED:'ОСТАНОВКА ЗАПРОШЕНА', COMPLETED:'ЗАВЕРШЕНО',
+        PASS:'УСПЕШНО', FAIL:'ОШИБКА', FAILED:'ОШИБКА', ERROR:'ОШИБКА', TIMEOUT:'ТАЙМ-АУТ', SKIPPED:'ПРОПУЩЕНО',
+        CANCELLED:'ОТМЕНЕНО', RESTORE_FAILED:'ВОССТАНОВЛЕНИЕ НЕ ВЫПОЛНЕНО'
     } : {
         IDLE:'IDLE', QUEUED:'QUEUED', PREPARING:'PREPARING', PENDING:'PENDING', RUNNING:'RUNNING',
-        STOP_REQUESTED:'STOP REQUESTED', COMPLETED:'COMPLETED', PASS:'PASS', FAIL:'FAIL', FAILED:'FAILED', ERROR:'ERROR',
-        TIMEOUT:'TIMEOUT', SKIPPED:'SKIPPED', CANCELLED:'CANCELED', RESTORE_FAILED:'RESTORE FAILED'
+        CANCEL_REQUESTED:'CANCELLATION REQUESTED', STOP_REQUESTED:'STOP REQUESTED', COMPLETED:'COMPLETED', PASS:'PASS',
+        FAIL:'FAIL', FAILED:'FAILED', ERROR:'ERROR', TIMEOUT:'TIMEOUT', SKIPPED:'SKIPPED', CANCELLED:'CANCELED',
+        RESTORE_FAILED:'RESTORE FAILED'
     };
     var outcomeLabels = isRussian ? {
         SUCCESS:'Успешно', NO_CANDIDATE:'Рабочие стратегии не найдены', TARGET_ACCESSIBLE:'Цель доступна без обхода',
