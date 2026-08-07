@@ -25,7 +25,7 @@ from strategy_lab_py import orchestrator
 from strategy_lab_py import state
 
 expected = ("00", "10", "20", "30", "40", "50", "60", "70", "80", "85", "90", "99")
-actual = tuple(item["number"] for item in state.STAGE_TEMPLATE)
+actual = tuple(number for number, _key in state.STAGES)
 assert actual == expected, (actual, expected)
 assert tuple(orchestrator.RUNNING_EVENTS) == expected[:-1]
 assert orchestrator.RUNNING_EVENTS["90"]
