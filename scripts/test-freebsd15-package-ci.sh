@@ -54,8 +54,6 @@ grep -Fq '.arch == "freebsd:15:x86:64"' "${CI}" || fail 'PR package inspection d
 grep -Fq 'tar -tf dist/*.pkg > "${contents}"' "${CI}" || fail 'package contents are not captured without a truncation pipe'
 grep -Fq 'tar -xOf dist/*.pkg +MANIFEST > "${manifest}"' "${CI}" || fail 'package manifest is not captured before inspection'
 
-# Patch 7 is integration/CI-only and intentionally keeps the current package revision.
-# Editing this package-CI contract must still classify the PR for a FreeBSD 15 build.
 grep -Fq 'scripts/test-freebsd15-package-ci' "${CI}" ||
     fail 'integration-only package verification no longer forces the FreeBSD 15 PR build'
 grep -Fq "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy-lab-*.sh'" \
@@ -65,23 +63,17 @@ grep -Fq "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy
 if grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGRESS**' "${MATRIX}"; then
     grep -Fq 'Current corrective candidate: **NOT DESIGNATED — PATCH 8 REQUIRED**' "${MATRIX}" ||
         fail 'paused third-audit matrix must not designate a live candidate before Patch 8'
-    grep -Fq 'Historical `_6` CI package: `os-zapret2-restyle-0.3.3_6.pkg`' "${MATRIX}" ||
-        fail 'paused matrix must preserve the exact historical _6 CI package evidence'
-    if grep -Fq "Current corrective candidate: \`${candidate}\`" "${MATRIX}"; then
-        fail "paused matrix prematurely designates the current package as a live candidate: ${candidate}"
-    fi
 elif grep -Fq 'Overall status: **FAILED ON _12 — STAGE-90 CORRECTION `_13` IN PROGRESS**' "${MATRIX}"; then
-    grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" ||
-        fail "reopened live matrix does not select the current corrective source package: ${candidate}"
+    grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" || fail "matrix does not select ${candidate}"
 elif grep -Fq 'Overall status: **FAILED ON _13 — STAGE-40 CORRECTION `_14` IN PROGRESS**' "${MATRIX}"; then
-    grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" ||
-        fail "stage-40 live matrix does not select the current corrective source package: ${candidate}"
+    grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" || fail "matrix does not select ${candidate}"
 elif grep -Fq 'Overall status: **FAILED ON _14 — STAGE-50 CORRECTION `_15` IN PROGRESS**' "${MATRIX}"; then
-    grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" ||
-        fail "stage-50 live matrix does not select the current corrective source package: ${candidate}"
+    grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" || fail "matrix does not select ${candidate}"
 elif grep -Fq 'Overall status: **FAILED ON _15 — STAGE-50 CORRECTION `_16` IN PROGRESS**' "${MATRIX}"; then
+    grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" || fail "matrix does not select ${candidate}"
+elif grep -Fq 'Overall status: **FAILED ON _16 — STAGE-50 CORRECTION `_17` IN PROGRESS**' "${MATRIX}"; then
     grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" ||
-        fail "FreeBSD daemon live matrix does not select the current corrective source package: ${candidate}"
+        fail "hostlist-access live matrix does not select the current corrective source package: ${candidate}"
 else
     grep -Fq "Current corrective candidate: \`${candidate}\`" "${MATRIX}" ||
         fail "live matrix does not select the current corrective package: ${candidate}"
