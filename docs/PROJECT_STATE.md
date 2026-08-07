@@ -10,79 +10,36 @@ Target ABI: **FreeBSD:15:amd64 only**
 
 ## Historical live boundary
 
-`v0.3.3_5` remains the latest owner-tested package. Revision `_6` corrected its confirmed stage-50/stage-90 defects but was not owner-tested before the third audit reopened the corrective series. Live verification remains paused until Patch 8 designates a later candidate.
+`v0.3.3_5` remains the latest owner-tested package. `_6` corrected confirmed `_5` stage-50/stage-90 failures but was never owner-tested and was superseded by the third audit before its planned retest.
 
 ## Third audit corrective series
 
-Status: **IN PROGRESS — PRODUCT FIXES COMPLETE, INTEGRATED REGRESSION GATE ACTIVE**
+Status: **SOURCE/CI COMPLETE — LIVE VERIFICATION PENDING**
 
-Authoritative plan: `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
+Authoritative audit: `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
 
-## Patch progress
+All seven third-audit findings `SL3-001` through `SL3-007` are implemented in source and protected by focused regressions plus the mandatory Strategy Lab corrective matrix. This statement is source/CI scope only and is not a live OPNsense PASS claim.
 
-### Patch 1 — documentation and corrective plan
+## Patch evidence
 
-Status: **MERGED AND VERIFIED** — PR #115, main `ed82ddff891ece514fac01895c197ef07d844557`.
+- Patch 1 — PR #115, main `ed82ddff891ece514fac01895c197ef07d844557`.
+- Patch 2 (`SL3-001` + `SL3-005`) — PR #116, main `dd95d77e4d75e6751315ff893798cc2ea66a9330`; CI `31151805919`; FreeBSD 15 artifact `8983642442`, package `_7`.
+- Patch 3 (`SL3-002`) — PR #117, main `f0c43de7133f8ba337a5458de0803409949a0096`; CI `31152455413`; artifact `8983891990`, package `_8`.
+- Patch 4 (`SL3-003` + `SL3-006`) — PR #118, main `15ed2b057ca94a1a780ecf9da9f304d0e6cd652c`; CI `31154664416`; artifact `8984745215`, package `_9`.
+- Patch 5 (`SL3-004`) — PR #119, main `41ccadd47136375cb58a64e527f2fecff9f1630e`; CI `31155184080`; artifact `8984931432`, package `_10`.
+- Patch 6 (`SL3-007`) — PR #120, main `00107d38f287462a2c0627a04629f6381774d05c`; CI `31156513189`; artifact `8985427611`, package `_11`.
+- Patch 7 (integrated regression gate) — PR #121, exact latest head `dd2a484a4aa3711834b722aae0cc025d3fd4758e`, main `256ffa09452dabfb001665b729c1f4c3d3462688`; title check `31157848071` PASS; CI `31157848056` PASS; FreeBSD 15 artifact `8985927074` contains `os-zapret2-restyle-0.3.3_11.pkg` and passed manifest inspection.
+- Patch 8 — documentation-only source/CI closure and live handoff; no package metadata or runtime behavior change.
 
-### Patch 2 — ordinary stale recovery and timeout chain
-
-Status: **MERGED AND VERIFIED** — PR #116, main `dd95d77e4d75e6751315ff893798cc2ea66a9330`; CI `31151805919`; FreeBSD 15 artifact `8983642442`, package `_7`.
-
-### Patch 3 — circular stale recovery lifecycle ownership
-
-Status: **MERGED AND VERIFIED** — PR #117, main `f0c43de7133f8ba337a5458de0803409949a0096`; CI `31152455413`; FreeBSD 15 artifact `8983891990`, package `_8`.
-
-### Patch 4 — remove load-order overrides and obsolete hooks
-
-Status: **MERGED AND VERIFIED** — PR #118, main `15ed2b057ca94a1a780ecf9da9f304d0e6cd652c`; latest-head CI `31154664416`; FreeBSD 15 artifact `8984745215`, package `_9`.
-
-`SL3-003` + `SL3-006` source scope is implemented: load order no longer selects worker behavior, `worker_state_serialization.sh` and transitional skip hooks are removed, canonical state writers retain lock/revision semantics, circular eligibility uses the TLS 1.3 circular subset, and the namespace contract rejects future duplicate functions in jointly loaded worker modules.
-
-Implementation log: `docs/devlog/2026-08-07-v0.3.3_9-module-order.md`.
-
-### Patch 5 — serialize worker state transitions
-
-Status: **MERGED AND VERIFIED** — PR #119, main `41ccadd47136375cb58a64e527f2fecff9f1630e`; latest-head CI `31155184080`; FreeBSD 15 artifact `8984931432`, package `_10`.
-
-`SL3-004` source scope is implemented: unfinished-stage skipping uses the canonical state transform, cancellation evidence survives concurrent skip/finalization, every mutation remains revisioned, and terminal state is irreversible under the race regression.
-
-Implementation log: `docs/devlog/2026-08-07-v0.3.3_10-state-serialization.md`.
-
-### Patch 6 — complete RU/EN progress localization
-
-Status: **MERGED AND VERIFIED** — PR #120, main `00107d38f287462a2c0627a04629f6381774d05c`; latest-head CI `31156513189` passed the complete corrective matrix and repository validation. FreeBSD 15 artifact `8985427611` contains package `os-zapret2-restyle-0.3.3_11.pkg`.
-
-`SL3-007` source scope is implemented: backend `cancel_requested` has deliberate RU/EN presentation, circular `stop_requested` remains distinct, and the focused regression derives the actual backend state key and requires both mappings.
-
-Architecture authority: `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md`.
-
-Implementation log: `docs/devlog/2026-08-07-v0.3.3_11-localization.md`.
-
-### Patch 7 — integrated third-audit regression gate
-
-Status: **SOURCE IMPLEMENTED — PR/CI VERIFICATION PENDING**
-
-Package revision remains `_11`; this patch changes CI/test coverage only and introduces no product behavior.
-
-Integration scope:
-
-- one new third-audit integration contract binds the canonical matrix to ordinary stale RUNNING/STOPPED recovery, semantic mismatch failure, circular stale recovery ownership, Extended mixed shortlist versus TLS 1.3 circular subset, cancel/skip/finalize serialization, the 180/190/200 recovery envelope, saved Traffic Strategy immutability, and residue cleanup;
-- the canonical corrective matrix continues to execute focused regressions directly once each and retains only its existing explicit e2e delegations, preventing duplicate orchestration;
-- the FreeBSD 15 package-CI contract is part of this patch so the integration-only PR still requires a fresh `_11` package build and manifest verification on its exact head.
-
-Implementation log: `docs/devlog/2026-08-07-strategy-lab-third-audit-integration.md`.
-
-## Remaining approved sequence
-
-8. **Patch 8 — source/CI closure and live-test handoff.** Record exact evidence and designate the resulting FreeBSD 15 `_11` package for owner-assisted live verification. Do not claim live PASS.
-
-Packaged behavior patches keep `VERSION=0.3.3`, increment `PLUGIN_REVISION` once, use one task branch and one Ready PR, pass focused validation plus required CI/package gates, and squash-merge to `main` with the expected head SHA. Documentation/CI-only patches do not increment package metadata.
+The Patch 7 artifact is the authoritative source/CI-qualified package for the next owner-assisted live run because it was built from the exact final integration-gate head after all product fixes and integration contracts were present.
 
 ## Current verification boundary
 
-Live OPNsense matrix: **PAUSED PENDING THIRD-AUDIT SOURCE/CI COMPLETION**.
+Live OPNsense matrix: **READY — SCENARIO 1 PENDING OWNER**.
 
-Scenario 1 resumes only after Patch 8 designates the new corrective candidate; scenarios 2–18 remain blocked until Scenario 1 passes. No source/CI result substitutes for owner-provided live OPNsense evidence.
+Designated candidate: `os-zapret2-restyle-0.3.3_11.pkg`, FreeBSD 15 amd64, GitHub Actions artifact `8985927074` from CI run `31157848056` / head `dd2a484a4aa3711834b722aae0cc025d3fd4758e`.
+
+Scenario 1 must be executed first on the owner's OPNsense appliance. Scenarios 2–18 remain blocked until scenario 1 passes. No source test, CI run, package build, mock, or integration fixture substitutes for owner-provided appliance evidence.
 
 Authoritative live plan: `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
@@ -97,21 +54,21 @@ Evidence-first GitHub operations remain authoritative through:
 - `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`;
 - `docs/GITHUB_WORKFLOW.md`.
 
-The connected GitHub plugin is the mandatory first repository interface. One logical scope uses one task branch and one Ready PR; same-scope repairs stay in that PR; the latest head must pass required checks; merge is squash with the expected head SHA; published history is not rewritten.
+The connected GitHub plugin is the mandatory first repository interface. One logical scope uses one task branch and one Ready PR; same-scope repairs stay in that PR; the latest head must pass required checks; merge is squash with the expected head SHA; published `main` history is not rewritten.
 
 ## Release gate
 
-Stable release preparation and pkg-repository promotion: **BLOCKED ON THIRD-AUDIT CORRECTIVE SERIES AND LIVE MATRIX**.
+Stable release preparation and pkg-repository promotion: **BLOCKED ON LIVE MATRIX**.
 
-Testing prerelease publication for a later live candidate requires separate exact owner authorization.
+Testing prerelease publication of `_11` is not part of this corrective plan and still requires separate exact owner authorization. Patch 8 does not publish a release, tag, GitHub Release asset, Pages repository, or pkg-repository package.
 
 Current product authority:
 
 - `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`;
+- `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md`;
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`;
 - `docs/architecture/STRATEGY_LAB_OBSOLETE_SURFACES.md`;
 - `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md`;
-- `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md`;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
-Next action after Patch 7 merge/verification: **Patch 8 — source/CI closure and live-test handoff**.
+Next action: **owner-assisted live Scenario 1 on `os-zapret2-restyle-0.3.3_11.pkg`**.
