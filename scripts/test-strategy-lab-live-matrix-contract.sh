@@ -43,15 +43,15 @@ else
     candidate="os-zapret2-restyle-${version}.pkg"
 fi
 
-grep -Fq 'Overall status: **BLOCKED ON SCENARIO 1 CORRECTION**' "${MATRIX}"
+grep -Fq 'Overall status: **PENDING OWNER — SCENARIO 1 RETEST ON _6**' "${MATRIX}"
 
-scenario_failed_count=$(awk -F'|' '
+scenario_retest_count=$(awk -F'|' '
     $2 ~ /^[[:space:]]*1[[:space:]]*$/ &&
-    $6 ~ /^[[:space:]]*\*\*FAILED — CORRECTION REQUIRED\*\*[[:space:]]*$/ { count++ }
+    $6 ~ /^[[:space:]]*\*\*PENDING OWNER — RETEST REQUIRED\*\*[[:space:]]*$/ { count++ }
     END { print count + 0 }
 ' "${MATRIX}")
-[ "${scenario_failed_count}" -eq 1 ] || {
-    echo "FAIL: expected scenario 1 to be the single failed row, found ${scenario_failed_count}" >&2
+[ "${scenario_retest_count}" -eq 1 ] || {
+    echo "FAIL: expected scenario 1 to be the single owner-retest row, found ${scenario_retest_count}" >&2
     exit 1
 }
 
@@ -75,7 +75,10 @@ grep -Fq '2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md' "${MATRIX}"
 grep -Fq '2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md' "${MATRIX}"
 grep -Fq '2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md' "${MATRIX}"
 grep -Fq '2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md' "${MATRIX}"
-grep -Fq 'Scenario 1 is therefore blocked on a new corrective patch.' "${MATRIX}"
+grep -Fq 'The `_6` source corrective sequence for those later failures is now complete in `main`:' "${MATRIX}"
+grep -Fq 'Scenario 1 is therefore pending owner retest on `_6`; dependent scenarios remain blocked until #1 passes.' "${MATRIX}"
+grep -Fq 'artifact `8980876980`' "${MATRIX}"
+grep -Fq 'Post-merge `main` CI run `31144323095` also passed.' "${MATRIX}"
 
 grep -Fq 'Architecture   : FreeBSD:15:amd64' "${INSTALL_EVIDENCE}"
 grep -Fq 'Version        : 0.3.3_1' "${INSTALL_EVIDENCE}"
@@ -132,5 +135,6 @@ grep -Fq 'STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md' "${STATE}"
 grep -Fq 'STRATEGY_LAB_HARDENING_CLOSURE.md' "${STATE}"
 grep -Fq 'STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md' "${INDEX}"
 grep -Fq 'STRATEGY_LAB_HARDENING_CLOSURE.md' "${INDEX}"
+grep -Fq '2026-08-07-v0.3.3_6-repository-reconciliation.md' "${INDEX}"
 
-echo 'PASS: final records preserve failed live evidence, mark scenario 1 failed, and block dependent scenarios without unsupported PASS claims'
+echo 'PASS: final records preserve failed live evidence, require scenario 1 owner retest, and block dependents without unsupported PASS claims'

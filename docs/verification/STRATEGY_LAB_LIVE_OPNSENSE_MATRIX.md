@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **BLOCKED ON SCENARIO 1 CORRECTION**
+Overall status: **PENDING OWNER — SCENARIO 1 RETEST ON _6**
 
 This matrix is the final live-appliance gate for the Strategy Lab hardening series. Source tests, GitHub CI, and FreeBSD package builds cannot substitute for evidence collected on the owner's OPNsense appliance.
 
@@ -30,7 +30,15 @@ The live check on `0.3.3_4` proved that the wrapper binding correction alone was
 
 The `0.3.3_5` live attempt confirmed that the PID-file correction works: before Strategy Lab execution, semantic evidence correctly reported `RUNNING` with both child and supervisor present. The run then failed later at stage 50 with `Temporary candidate runtime failed internally.` Stage 90 failed with `RESTORE_FAILED`, and the final normal service state was `INCOMPLETE` with both child and supervisor absent. Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`.
 
-Scenario 1 is therefore blocked on a new corrective patch. Dependent live scenarios must not continue until the candidate-runtime and restoration path is corrected and a new FreeBSD 15 package restores the original RUNNING state successfully.
+The `_6` source corrective sequence for those later failures is now complete in `main`:
+
+- baseline repository reconciliation: `471ad322b805c14423c4cee553e6cb111a569b29`;
+- stage-50 candidate-runtime ownership correction: `808d77bcdb4f9e5fb63f94985d01144e7f2216a4`;
+- stage-90 bounded restoration-path correction: `4fca1fccbdd92237c76d84e11f864090fc4d1a9d`.
+
+The exact final restoration-path PR head passed full CI run `31144038425` and produced FreeBSD 15 artifact `8980876980`, package `os-zapret2-restyle-0.3.3_6.pkg`, with manifest `0.3.3_6 / FreeBSD:15:amd64 / freebsd:15:x86:64 / FreeBSD_version 1500068`. Post-merge `main` CI run `31144323095` also passed.
+
+These source/CI results do not convert the failed `_5` live attempt into PASS. `_6` has not yet been owner-tested on OPNsense. Scenario 1 is therefore pending owner retest on `_6`; dependent scenarios remain blocked until #1 passes.
 
 ## Required evidence bundle
 
@@ -73,7 +81,7 @@ configctl zapret status
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | Failed attempts: `2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`, `2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`, `2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md`, `2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`; `_6` correction required | **FAILED — CORRECTION REQUIRED** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | Failed attempts: `2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`, `2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`, `2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md`, `2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`; `_6` source corrections merged; owner retest required | **PENDING OWNER — RETEST REQUIRED** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Test completes while final service remains STOPPED; restoration evidence is verified | `PENDING OWNER` | **BLOCKED BY #1** |
 | 3 | Extended TLS 1.2 and HTTP | Available protocol successes appear as complete replay-verified profiles; unavailable protocols are explicitly skipped | `PENDING OWNER` | **BLOCKED BY #1** |
 | 4 | Extended QUIC | QUIC result is endpoint-bound and replay-verified when network capability exists; otherwise explicit skip reason | `PENDING OWNER` | **BLOCKED BY #1** |
@@ -94,7 +102,7 @@ configctl zapret status
 
 ## Failure handling
 
-Any of the following keeps the live gate failed:
+Any of the following keeps the live gate failed or pending:
 
 - candidate package ABI or architecture is not exactly FreeBSD 15 amd64;
 - `RESTORE_FAILED` or unverified restoration;
@@ -107,7 +115,7 @@ Any of the following keeps the live gate failed:
 - a reload deletes retained terminal evidence;
 - missing required evidence.
 
-A failed row requires one same-scope corrective patch, complete CI/FreeBSD 15 package verification, and repetition of the affected live row plus any dependent rows.
+A failed live row requires same-scope source correction when a source defect is identified, complete CI/FreeBSD 15 package verification, and repetition of the affected live row plus dependent rows. Once source correction is complete, the row remains pending owner until new appliance evidence is collected; CI alone never marks it PASS.
 
 ## Release gate
 
