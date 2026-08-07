@@ -21,7 +21,7 @@ grep -Fq 'strategy-lab-recover "${_slco_session}"' "${OWNER}"
 grep -Fq 'strategy_lab_circular_recovery_verified' "${OWNER}"
 grep -Fq 'strategy_lab_circular_recovery_mark_unverified' "${OWNER}"
 
-grep -Fq 'for module in common firewall runtime candidate lifecycle circular' "${RECOVERY}"
+grep -Fq 'for module in common state firewall runtime candidate lifecycle circular' "${RECOVERY}"
 grep -Fq 'STRATEGY_LAB_CIRCULAR_SESSIONS_DIR' "${RECOVERY}"
 grep -Fq 'strategy_lab_circular_session_state_file' "${RECOVERY}"
 grep -Fq 'strategy_lab_restore_initial_service_state' "${RECOVERY}"
@@ -53,4 +53,4 @@ grep -Fq 'timeout:200000' "${VIEW}"
 
 sh -n "${OWNER}"
 sh -n "${RECOVERY}"
-echo 'PASS: circular stale recovery uses the lifecycle-owned semantic transaction and a monotonic 180/190/200 second response envelope'
+echo 'PASS: circular stale recovery uses the lifecycle-owned semantic transaction, loads the automated-job state adapter, keeps private circular state shell-owned, and preserves the 180/190/200 second response envelope'
