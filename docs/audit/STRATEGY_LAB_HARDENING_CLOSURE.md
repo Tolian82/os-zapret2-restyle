@@ -2,13 +2,13 @@
 
 ## Current closure state
 
-Status: **REOPENED BY THIRD AUDIT — CORRECTIVE SERIES IN PROGRESS**
+Status: **SOURCE/CI CLOSED AFTER THIRD AUDIT — LIVE MATRIX PENDING**
 
-The earlier hardening series and the `_6` live-evidence corrections remain valid historical evidence for the exact source states they tested. A third source audit on 2026-08-07 found seven additional defects or inconsistencies, recorded in:
+The Strategy Lab source/CI hardening line is closed for the currently known findings through the third audit of 2026-08-07. This is not a production-readiness declaration and not a live OPNsense PASS. The remaining product gate is the owner-assisted live matrix.
+
+Authoritative third-audit record:
 
 `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`
-
-Therefore the repository must no longer describe Strategy Lab source/CI closure as final. The `_6` owner-assisted live scenario-1 retest is paused. A later FreeBSD 15 amd64 package produced after the approved third-audit corrective series will become the next live candidate.
 
 ## Earlier hardening source/CI evidence
 
@@ -24,7 +24,6 @@ Implemented source contracts included:
 - Settings lifecycle coordination;
 - persisted terminal-result reload and structured profile-copy presentation;
 - deterministic progress and Russian/English presentation;
-- removal of transitional aliases and duplicate hooks as understood at that stage;
 - lock-protected evidence-preserving retention;
 - one authoritative nonrecursive Strategy Lab corrective CI matrix.
 
@@ -32,78 +31,87 @@ Revision 46 changed no Strategy Lab runtime behavior. It froze the then-known do
 
 ## FreeBSD 15 package correction
 
-Status: **COMPLETE IN HISTORICAL LINE**
+Status: **COMPLETE**
 
-The revision 46 pull-request package artifact was built by the general CI workflow on FreeBSD 14.2 and was excluded from live verification. The subsequent package workflow correction moved the PR package builder to FreeBSD 15 and enforced manifest ABI `FreeBSD:15:amd64` / `freebsd:15:x86:64`.
+The revision 46 pull-request package artifact was built by the general CI workflow on FreeBSD 14.2 and was excluded from live verification. The package workflow was corrected to FreeBSD 15 and now enforces manifest ABI `FreeBSD:15:amd64` / architecture `freebsd:15:x86:64`.
 
-The current third-audit corrective series preserves the same package target: **FreeBSD 15 amd64 only**.
+The final third-audit source/CI candidate preserves that target: **FreeBSD 15 amd64 only**.
 
 ## Live-evidence `_5` and `_6` history
 
-The `_5` live scenario-1 attempt proved the semantic PID detection correction but then exposed candidate-runtime and restoration failures. Those failures remain historical evidence.
+The `_5` live Scenario 1 attempt proved the semantic PID detection correction but then exposed candidate-runtime and restoration failures. Those failures remain historical evidence.
 
-Revision `_6` subsequently corrected:
+Revision `_6` subsequently corrected stage-50 candidate runtime ownership/teardown and stage-90 bounded restoration startup/recovery. Its exact PR head passed full CI and produced a valid FreeBSD 15 package, but `_6` was never owner-tested. Before that retest, the third audit identified seven additional defects/inconsistencies and superseded `_6` as the next live candidate.
 
-- stage-50 candidate runtime ownership/teardown; and
-- stage-90 bounded restoration startup/recovery.
-
-The exact `_6` pull-request head for the restoration correction passed full CI and produced a FreeBSD 15 package artifact, and post-merge `main` CI also passed. No `_6` testing prerelease was published and no `_6` owner-assisted OPNsense retest was performed.
-
-The third audit now supersedes `_6` as the next live-test candidate because additional source defects were identified before that retest.
+No historical failure has been converted into PASS by later source work.
 
 ## Third-audit corrective sequence
 
-Status: **OPEN**
+Status: **SOURCE/CI COMPLETE**
 
-Approved order:
+Completed order:
 
 1. Patch 1 — third-audit documentation and corrective plan;
-2. Patch 2 — ordinary stale recovery and timeout chain;
-3. Patch 3 — circular stale recovery lifecycle ownership;
-4. Patch 4 — remove load-order overrides and obsolete hooks;
-5. Patch 5 — serialize worker state transitions;
-6. Patch 6 — complete RU/EN progress localization;
+2. Patch 2 — ordinary stale recovery and timeout chain (`SL3-001` + `SL3-005`);
+3. Patch 3 — circular stale recovery lifecycle ownership (`SL3-002`);
+4. Patch 4 — remove load-order overrides and obsolete hooks (`SL3-003` + `SL3-006`);
+5. Patch 5 — serialize worker state transitions (`SL3-004`);
+6. Patch 6 — complete RU/EN progress localization (`SL3-007`);
 7. Patch 7 — integrated third-audit regression gate;
 8. Patch 8 — source/CI closure and live-test handoff.
 
-Stable findings `SL3-001` through `SL3-007`, affected files, evidence, remediation plans, acceptance criteria, and patch mapping are authoritative in `AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
+Final source/CI qualification is bound to Patch 7:
+
+- PR #121;
+- exact latest head `dd2a484a4aa3711834b722aae0cc025d3fd4758e`;
+- title check `31157848071` PASS;
+- repository CI `31157848056` PASS;
+- complete Strategy Lab corrective matrix PASS;
+- FreeBSD 15 build/manifest inspection PASS;
+- artifact `8985927074` containing `os-zapret2-restyle-0.3.3_11.pkg`;
+- main squash commit `256ffa09452dabfb001665b729c1f4c3d3462688`.
+
+Patch 8 is documentation-only and therefore does not supersede that package with a different runtime candidate.
 
 ## Automated gate requirement
 
-Every packaged corrective patch must pass the latest applicable repository gates, including:
+For the current source state the required automated gates are satisfied through Patch 7 evidence, including:
 
-- exact versioned PR and commit-title identity;
+- exact versioned PR and commit identity;
 - PHP, XML, and shell validation;
-- focused regression for its logical scope;
+- focused regressions for all third-audit findings;
 - the mandatory Strategy Lab corrective matrix;
-- project lifecycle, release, governance, and repository-hygiene contracts;
-- FreeBSD 15 package build and manifest inspection when package inputs change;
-- post-merge `main` verification.
+- the third-audit integration contract;
+- lifecycle, release, governance, and repository-hygiene contracts;
+- FreeBSD 15 package build and manifest inspection.
 
-Patch 1 and Patch 8 are documentation-only and do not change package metadata.
+Automated proof closes source/CI scope only.
 
 ## Live appliance status
 
-Status: **PAUSED PENDING THIRD-AUDIT SOURCE/CI COMPLETION**
+Status: **READY — SCENARIO 1 PENDING OWNER**
 
-The authoritative live plan remains:
+The authoritative live plan is:
 
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`
 
-No live PASS is inferred from CI, mocked integration tests, or package build success. Scenario 1 resumes only after Patch 8 designates a new FreeBSD 15 amd64 candidate. Dependent scenarios remain blocked until scenario 1 passes.
+Designated candidate: `os-zapret2-restyle-0.3.3_11.pkg`, artifact `8985927074`, CI `31157848056`.
+
+No live PASS is inferred from CI, mocked integration tests, or package build success. Scenario 1 must be retested first by the owner. Scenarios 2–18 remain blocked until Scenario 1 passes.
 
 ## Release status
 
-Status: **BLOCKED ON CORRECTIVE SERIES AND LIVE MATRIX**
+Status: **BLOCKED ON LIVE MATRIX**
 
-The current work does not authorize or perform:
+Source/CI closure does not authorize or perform:
 
 - stable release declaration;
 - pkg-repository promotion;
 - GitHub Pages promotion;
-- production-readiness declaration.
+- production-readiness declaration;
+- testing prerelease publication.
 
-Testing prerelease publication for a later candidate still requires separate exact owner authorization under the GitHub publication rules.
+Testing prerelease publication for `_11` still requires separate exact owner authorization under the GitHub publication rules.
 
 ## Reopening rule
 
