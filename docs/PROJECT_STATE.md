@@ -35,20 +35,25 @@ The subsequent standard Strategy Lab run against `rutracker.org` exposed the nex
 Durable evidence:
 `docs/verification/evidence/2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`.
 
-Scenario 1 therefore remains failed pending owner re-verification. Dependent live
-Strategy Lab scenarios remain blocked until the `_6` corrective source line is complete
-in `main` and scenario 1 is repeated.
+The `_5` attempt remains a failed live attempt. It is historical evidence and is not
+converted into PASS by later source corrections.
 
-## Version 0.3.3 revision 6 — current corrective line
+## Version 0.3.3 revision 6 — source/CI corrective line complete
 
-Revision `_6` is the corrective candidate used to reconcile the repository and repair
-the confirmed stage-50/stage-90 lifecycle failures without changing `VERSION=0.3.3`.
+Revision `_6` reconciled the repository and repaired the confirmed stage-50/stage-90
+source defects without changing `VERSION=0.3.3`.
 
-Baseline `_6` reconciliation merged to `main` as
-`471ad322b805c14423c4cee553e6cb111a569b29`. Its exact PR head produced verified
-FreeBSD 15 Actions artifact `8979980843` for `os-zapret2-restyle-0.3.3_6.pkg`.
+### Baseline reconciliation — merged
 
-### Stage 50 — source correction merged
+PR `#111`, `v0.3.3_6: Reconcile repository state after live failure`, was squash-merged
+to `main` as `471ad322b805c14423c4cee553e6cb111a569b29` after full CI and FreeBSD 15
+package verification.
+
+Its exact PR head produced Actions artifact `8979980843`, package
+`os-zapret2-restyle-0.3.3_6.pkg`, with manifest identity
+`0.3.3_6 / FreeBSD:15:amd64 / freebsd:15:x86:64 / FreeBSD_version 1500068`.
+
+### Stage 50 — candidate-runtime source correction merged
 
 The first `_6` runtime patch corrected the candidate ownership mismatch:
 
@@ -60,53 +65,73 @@ The first `_6` runtime patch corrected the candidate ownership mismatch:
   and the divert listener before success;
 - focused regression covers a valid owned PID omitted by both secondary discovery paths.
 
-The exact final PR head passed full CI and FreeBSD 15 package verification, producing
-Actions artifact `8980523385`, package `os-zapret2-restyle-0.3.3_6.pkg`, ABI
-`FreeBSD:15:amd64`, architecture `freebsd:15:x86:64`.
+PR `#112`, `v0.3.3_6: Fix Strategy Lab candidate runtime`, final head
+`1d77cc2a6a6fd9b4a28856e375c107b00f869361`, passed full CI and FreeBSD 15 package
+verification. Its exact-head artifact was `8980523385`, package
+`os-zapret2-restyle-0.3.3_6.pkg`, manifest
+`0.3.3_6 / FreeBSD:15:amd64 / freebsd:15:x86:64 / 1500068`.
 
 The patch was squash-merged to `main` as
-`808d77bcdb4f9e5fb63f94985d01144e7f2216a4` with title
-`v0.3.3_6: Fix Strategy Lab candidate runtime`.
+`808d77bcdb4f9e5fb63f94985d01144e7f2216a4`.
 
-This is a source/CI correction, not a live scenario PASS.
+### Stage 90 — restoration-path source correction merged
 
-### Stage 90 — restoration-path source correction
-
-The second `_6` runtime patch addresses a separate bounded-start defect. Before the
-correction, Strategy Lab gave normal restoration only 15 seconds even though the native
-service start can legitimately consume up to 10 seconds waiting for dvtws2 PID, then a
-5-second stability window, then up to 5 seconds for the supervisor, in addition to
-runtime generation/activation and firewall work. The outer restoration timeout could
-therefore terminate a valid normal start before its own bounded transaction completed.
+The second `_6` runtime patch corrected a bounded-start mismatch. Strategy Lab previously
+gave normal restoration only 15 seconds although the native service path can legitimately
+consume up to 10 seconds waiting for dvtws2 PID, then a 5-second stability window, then
+up to 5 seconds for the supervisor, in addition to runtime generation/activation and
+firewall work.
 
 The correction:
 
 - raises the default restoration-start bound to 45 seconds;
 - verifies actual service state after a nonzero outer start result;
-- accepts healthy RUNNING if native start completed at the timeout boundary;
+- accepts healthy RUNNING if native start completed at the boundary;
 - otherwise normalizes `INCOMPLETE` to verified STOPPED and permits exactly one bounded
   recovery start;
 - after a second failure, best-effort normalizes to STOPPED instead of deliberately
-  leaving a known incomplete runtime;
-- retains exact semantic verification and `RESTORE_FAILED` when healthy RUNNING and the
-  initial runtime/config/firewall evidence cannot be restored.
+  retaining a known incomplete runtime;
+- retains exact semantic verification and truthful `RESTORE_FAILED` when healthy RUNNING
+  and the initial runtime/config/firewall evidence cannot be restored.
 
-A focused regression covers successful one-retry recovery, late healthy completion, and
-two-start failure with safe STOPPED normalization. The retry count is finite and no
-unbounded automatic service restart loop is introduced.
+Focused regression covers successful one-retry recovery, late healthy completion, and
+two-start failure with safe STOPPED normalization. Existing e2e restoration-failure
+coverage still requires `error/RESTORE_FAILED` when final semantic evidence is corrupted.
 
-Per owner instruction, this patch is merged to `main` only after full repository CI and
-FreeBSD 15 package verification; no intermediate manual OPNsense test is required.
-Repository CI still does not create a live PASS.
+PR `#113`, `v0.3.3_6: Fix Strategy Lab restoration path`, final head
+`e7380ddf01077a6e7b6acb9302e8c9aa07bfd6c0`, passed full CI run `31144038425` and
+FreeBSD 15 package verification.
 
-The detailed complete recovery ledger is:
+Its exact-head artifact is:
+
+- artifact ID `8980876980`;
+- name `os-zapret2-restyle-0.3.3_6`;
+- artifact ZIP digest `sha256:bac8a77c6e01024c2e0b9e899689c1e22821abd39ab7349ec313156c714f151f`;
+- manifest `0.3.3_6 / FreeBSD:15:amd64 / freebsd:15:x86:64 / FreeBSD_version 1500068`.
+
+The patch was squash-merged to `main` as
+`4fca1fccbdd92237c76d84e11f864090fc4d1a9d`. Post-merge `main` CI run
+`31144323095` completed successfully.
+
+## Current verification boundary
+
+The `_6` source/CI corrective sequence is complete in `main`.
+
+No `_6` testing prerelease was published as part of this sequence. No `_6` owner-assisted
+OPNsense test has been performed yet. Repository CI therefore does **not** mark scenario 1
+PASS.
+
+The live gate is now **owner retest required for scenario 1 on `_6`**. The `_5` failed
+attempt remains evidence; scenario 1 becomes PASS only after new owner evidence proves a
+truthful terminal result, successful stage-90 restoration of the original RUNNING service,
+and absence of Strategy Lab residue. Dependent scenarios remain blocked by scenario 1.
+
+The complete recovery ledger is:
 `docs/devlog/2026-08-07-v0.3.3_6-repository-reconciliation.md`.
-
-No `_6` testing prerelease publication or live PASS is claimed by these source patches.
 
 ## Current GitHub state
 
-The repository owner removed the stale temporary publication branches:
+Stale temporary publication branches removed during recovery:
 
 - `publish/v0.3.3_1`;
 - `publish/v0.3.3_2`;
@@ -136,7 +161,7 @@ release contract, and removes itself after success.
 
 ## Release gate
 
-Live OPNsense matrix: **BLOCKED ON SCENARIO 1 OWNER RE-VERIFICATION AFTER `_6` SOURCE CORRECTIONS**.
+Live OPNsense matrix: **PENDING OWNER — SCENARIO 1 RETEST ON `_6`**.
 
 Stable release preparation and pkg-repository promotion: **BLOCKED ON LIVE MATRIX**.
 

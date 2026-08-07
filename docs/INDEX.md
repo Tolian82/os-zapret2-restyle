@@ -13,7 +13,7 @@ in `AGENTS.md`.
 
 ## Product authorities
 
-- `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md` — state, cancellation, timeout, restoration, and verification;
+- `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md` — state, cancellation, timeout, candidate ownership, restoration recovery, and verification;
 - `docs/architecture/STRATEGY_LAB_ACTIVATION.md` — active Diagnostics path;
 - `docs/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md` — complete replay-verified profiles;
 - `docs/architecture/STRATEGY_LAB_UNIFIED_SHORTLIST.md` — multi-protocol shortlist;
@@ -30,6 +30,7 @@ in `AGENTS.md`.
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — finding-to-patch traceability;
 - `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — source/CI closure and release-block status;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — owner-assisted live gate;
+- `docs/devlog/2026-08-07-v0.3.3_6-repository-reconciliation.md` — complete `_6` recovery ledger, source/CI corrective closure, and remaining owner-retest boundary;
 - `docs/PROJECT_STATE.md` — current verified baseline and next action.
 
 ## Engineering process
