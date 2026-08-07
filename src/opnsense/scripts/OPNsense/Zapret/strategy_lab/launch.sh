@@ -146,5 +146,5 @@ start_job()
         emit_error_json "Strategy Lab lifecycle transaction could not be started"
         return 1
     fi
-    "${STRATEGY_LAB_JQ}" -nc --arg job_id "${_strategy_lab_job}" '{status:"ok",job_id:${_strategy_lab_job},state:"queued"}'
+    "${STRATEGY_LAB_JQ}" -nc --arg job_id "${_strategy_lab_job}" '{status:"ok",job_id:$job_id,state:"queued"}'
 }
