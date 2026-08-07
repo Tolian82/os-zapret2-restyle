@@ -73,6 +73,9 @@ if grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGR
 elif grep -Fq 'Overall status: **FAILED ON _12 — STAGE-90 CORRECTION `_13` IN PROGRESS**' "${MATRIX}"; then
     grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" ||
         fail "reopened live matrix does not select the current corrective source package: ${candidate}"
+elif grep -Fq 'Overall status: **FAILED ON _13 — STAGE-40 CORRECTION `_14` IN PROGRESS**' "${MATRIX}"; then
+    grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" ||
+        fail "stage-40 live matrix does not select the current corrective source package: ${candidate}"
 else
     grep -Fq "Current corrective candidate: \`${candidate}\`" "${MATRIX}" ||
         fail "live matrix does not select the current corrective package: ${candidate}"
