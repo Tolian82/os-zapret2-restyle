@@ -84,7 +84,7 @@ A rewrite may remove the implementation mechanism that caused a defect, but the 
 
 At the `v0.3.3_17` handoff the preserved backlog includes:
 
-- Stage 50 still terminates as `Temporary candidate runtime failed internally.`;
+- Stage 50 still terminates as `Temporary candidate runtime failed internally.`; the exact `_17` Stage-50 root cause is not yet established because no `_17` candidate-runtime log bundle was collected;
 - immediate stale/new-job GUI `ERROR` presentation;
 - `Strategy Lab returned no output.` during active work;
 - visible progress remaining at 0% until terminal 100%;
