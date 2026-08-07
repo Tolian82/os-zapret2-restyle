@@ -39,7 +39,7 @@ grep -Fq 'docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md' "${PROJECT_STAT
     fail 'project state does not name the current Strategy Lab authority'
 grep -Fq 'DEC-2026-08-05-efficient-github-delivery.md' "${PROJECT_STATE}" || \
     fail 'project state does not name the active GitHub delivery authority'
-grep -Eq '^Status:[[:space:]]+Active$' "${ACTIVE_GITHUB_DECISION}" || \
+grep -Eq '^Status:[[:space:]]+Active([,[:space:]].*)?$' "${ACTIVE_GITHUB_DECISION}" || \
     fail 'new GitHub delivery decision is not active'
 grep -Eq '^Status:[[:space:]]+Superseded' "${OLD_GITHUB_DECISION}" || \
     fail 'old atomic GitHub decision is not marked superseded'
