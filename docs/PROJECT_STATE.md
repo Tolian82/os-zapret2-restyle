@@ -29,10 +29,10 @@ Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
 Latest published testing prerelease: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
 Latest owner-tested testing candidate: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
 Current source line: `VERSION=0.3.3`
-Current package revision: `PLUGIN_REVISION=19`
-Current migration source candidate: `os-zapret2-restyle-0.3.3_19.pkg`
+Current package revision: `PLUGIN_REVISION=20`
+Current migration source candidate: `os-zapret2-restyle-0.3.3_20.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Strategy Lab Migration Patch 2 — Python automated-job state/progress/structured persistence**
+Current phase: **Strategy Lab Migration Patch 3 — Python stage machine/budgets/cancellation/finalization**
 Stable release: **BLOCKED ON POST-MIGRATION LIVE MATRIX**
 
 Current primary Strategy Lab authority:
@@ -56,52 +56,67 @@ Migration Patch 1 established the supported OPNsense 26.7 platform contract:
 - standard-library-only Python migration code;
 - packaged Python launcher/entry point/foundation.
 
-`zapret_service.sh` still launches `strategy_lab_worker.sh` directly. That remains true in
-Patch 2; the production worker and numbered stage machine have not yet moved to Python.
-
 ==================================================
 MIGRATION PATCH 2 STATE OWNERSHIP
 ==================================================
 
-Migration Patch 2 moves authoritative automated-job persistence to Python 3.13.
+Migration Patch 2 made `strategy_lab_py/state.py` the authoritative automated-job
+persistence owner for:
 
-`strategy_lab_py/state.py` now owns automated-job:
-
-- initial schema-2 `status.json` creation;
-- per-job revision ownership and serialized status mutations;
-- persisted `current_stage` and `progress` snapshots;
-- cancellation state and timestamp persistence;
-- atomic `events.ndjson` persistence;
+- schema-2 `status.json` creation;
+- revisioned serialized status mutations;
+- persisted `current_stage` and progress;
+- cancellation state/timestamp;
+- atomic `events.ndjson`;
 - structured target/network/baseline/family/expansion/stability/shortlist/extended/QUIC/UDP fields;
-- lifecycle snapshot and restoration fields;
-- stale-worker terminal reconciliation state;
-- terminal circular-eligibility fields stored in the parent automated job.
+- lifecycle/restoration and stale-worker reconciliation fields;
+- parent-job circular eligibility.
 
-The shell `strategy_lab/state.sh` retains the existing public helper names only as thin
-adapters into the Python writer. The previous shell `strategy_lab_state_transform` and
-private jq/temp/mv writers for authoritative automated-job state are removed from the
-migrated paths.
+The shell `strategy_lab/state.sh` remains a compatibility adapter only. Private circular
+session `state.json` remains shell-owned.
 
-Persistence invariants:
+==================================================
+MIGRATION PATCH 3 ORCHESTRATION OWNERSHIP
+==================================================
 
-- public automated-job JSON schema remains version 2;
-- stage numbers/keys and progress percentages remain unchanged;
-- every serialized automated-job status mutation increments `revision` exactly once,
-  including a terminal semantic no-op;
-- writes use one Python state lock, same-directory temporary files, fsync, atomic replace,
-  and mode `0644`;
-- the GUI/API does not need to know which language owns automated-job persistence.
+Migration Patch 3 moves the production high-level worker control path to Python 3.13.
 
-Private circular-session `state.json` remains on its pre-existing shell writer in Patch 2.
-Shared lifecycle code preserves a circular fallback rather than creating two owners of
-that private file. The Python automated-job writer explicitly rejects private circular
-`state.json` paths; a separate migration scope is required before that ownership can
-change.
+Current production boundary:
 
-Patch 2 does **not** move stage ordering, budgets, cancellation/finalization policy,
-lifecycle decisions, probes, candidate execution, search algorithms, or circular-session
-state transitions. Those remain shell responsibilities until their designated migration
-patches.
+```text
+zapret_service.sh
+  -> strategy_lab_worker.sh
+  -> strategy_lab_python_launcher.sh
+  -> strategy_lab_python.py orchestrate JOB_ID
+  -> strategy_lab_py/orchestrator.py
+  -> strategy_lab_stage_adapter.sh for still-unmigrated stage operations
+```
+
+Python now owns:
+
+- numbered stage order `00,10,20,30,40,50,60,70,80,85,90,99`;
+- Standard and Extended absolute budgets and per-stage remaining-time arbitration;
+- stage-80 shared deadline arbitration;
+- cancel/signal detection and active adapter process-group termination;
+- orchestration timeout classification;
+- terminal state/outcome/report policy;
+- mandatory stage 90 restoration on success, no-candidate, prerequisite exit, timeout,
+  cancellation, signal, or internal error;
+- mandatory stage 99 terminal convergence;
+- restoration-failure override to `RESTORE_FAILED`.
+
+The shell `strategy_lab_stage_adapter.sh` is intentionally narrow: it reuses audited
+FreeBSD/OPNsense lifecycle/system helpers and the stage-specific search algorithms that
+have not yet reached their designated Python migration patch. It does not choose stage
+order, deadlines, cancellation policy, or the terminal outcome.
+
+The shared lifecycle lock remains authoritative. Inherited lock fd 9 is preserved into
+Python and passed to stage adapters. Active automated-job PID recognition accepts the
+Python `orchestrate` process as the legitimate worker owner.
+
+Patch 3 does **not** move finite request/probe execution/parsing, candidate/family
+screening algorithms, expansion/stability algorithms, extended protocol algorithms, or
+final result/shortlist ownership. Those remain scheduled for Patch 4–7.
 
 ==================================================
 FINAL SHELL-ERA LIVE BOUNDARY
@@ -170,8 +185,9 @@ or automatically resolve the backlog.
 8. **Terminal reload/state presentation defect.** Retained terminal state can be presented incorrectly on Diagnostics reopen.
 9. **Candidate fatal-log classification defect.** Readiness evidence can report a clean log while fatal runtime text exists.
 
-Patch 2 removes shell-global/private-writer mechanisms from the migrated automated-job
-persistence layer, but it does not close any owner-observed defect by itself. Closure
+Patch 2 removed shell-private automated-job persistence ownership. Patch 3 removes shell
+ownership of stage progression, budget arbitration, cancellation orchestration, and
+terminal policy. Neither source migration alone closes owner-observed defects; closure
 still requires focused replacement regression and, where applicable, live/UI evidence.
 
 ==================================================
@@ -180,13 +196,13 @@ PYTHON MIGRATION PATCH SEQUENCE
 
 Patch 0 — documentation/handoff: **COMPLETE**.
 
-Patch 1 — Python platform and compatibility foundation: **COMPLETE IN `_18` SOURCE / MERGED**.
+Patch 1 — Python platform and compatibility foundation: **COMPLETE / MERGED AS `_18`**.
 
-Patch 2 — Python automated-job state, progress, and structured persistence: **CURRENT `_19` SOURCE CHANGE**.
+Patch 2 — Python automated-job state, progress, and structured persistence: **COMPLETE / MERGED AS `_19`**.
 
-Patch 3 — Python stage machine, budgets, cancellation, and finalization: **NEXT AFTER PATCH 2 QUALIFICATION**.
+Patch 3 — Python stage machine, budgets, cancellation, and finalization: **CURRENT `_20` SOURCE CHANGE**.
 
-Patch 4 — Python request/probe execution and parsing.
+Patch 4 — Python request/probe execution and parsing: **NEXT AFTER PATCH 3 QUALIFICATION**.
 
 Patch 5 — Python candidate runtime and family screening.
 
@@ -203,18 +219,20 @@ change. It must not compress the migration into a monolithic rewrite.
 DELIVERY AND PACKAGE BOUNDARY
 ==================================================
 
-Migration Patch 2 is an installable package-source change:
+Migration Patch 3 is an installable package-source change:
 
 - `VERSION` remains `0.3.3`;
-- `PLUGIN_REVISION` advances to `19`;
-- current source candidate is `os-zapret2-restyle-0.3.3_19.pkg`;
+- `PLUGIN_REVISION` advances to `20`;
+- current source candidate is `os-zapret2-restyle-0.3.3_20.pkg`;
 - latest published/owner-tested live evidence remains `_17`;
-- `_19` does not resume the live matrix because the stage machine/search path has not yet reached the designated Python parity gate.
+- `_20` does not resume the owner-assisted live matrix because request/probe/candidate and
+  later high-level search responsibilities have not yet reached the designated Python
+  functional-parity gate.
 
-The `_19` source must pass focused Python state tests, the complete corrective matrix,
-full repository CI, and FreeBSD 15 package/content verification before squash merge.
-Testing-prerelease publication remains a separate operation requiring the repository's
-normal publication authority.
+The `_20` source must pass the focused Python orchestration regression, the complete
+corrective matrix, full repository CI, and FreeBSD 15 package/content verification before
+squash merge. Testing-prerelease publication remains a separate operation requiring the
+repository's normal publication authority.
 
 Stable release and pkg-repository promotion remain blocked until the Python path reaches
 functional parity and the owner-assisted live matrix passes.
@@ -223,15 +241,16 @@ functional parity and the owner-assisted live matrix passes.
 NEXT ACTION
 ==================================================
 
-Complete Migration Patch 2 qualification on `_19`:
+Complete Migration Patch 3 qualification on `_20`:
 
-1. Python 3.13 foundation/import checks;
-2. focused automated-job state/progress/event persistence parity and concurrency regression;
+1. Python 3.13 foundation/state/orchestration checks;
+2. focused stage-order, Standard/Extended budget, cancellation, timeout, restoration and terminal convergence regression;
 3. canonical Strategy Lab corrective matrix;
 4. full repository CI;
 5. FreeBSD 15 package build/content/manifest verification;
 6. squash merge only from the successfully validated latest head.
 
-After Patch 2 is merged, begin **Migration Patch 3 only**: move the numbered stage
-machine, budgets, cancellation orchestration, and terminal finalization policy to Python
-while preserving the persistence/API contract established here.
+After Patch 3 is merged, begin **Migration Patch 4 only**: move finite request/probe
+execution and parsing to Python while preserving distinct return-code/stdout/stderr/
+timeout evidence and adding focused DNS/parser regressions. Candidate/family migration
+remains Patch 5.
