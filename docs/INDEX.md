@@ -30,8 +30,9 @@ in `AGENTS.md`.
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_MATRIX.md` — discoverable corrective CI entry point;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — earlier hardening finding-to-patch traceability;
 - `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — Strategy Lab source/CI closure after the third audit; live matrix remains the final product gate;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — owner-assisted live gate; Scenario 1 is pending on the designated `_11` FreeBSD 15 candidate and scenarios 2–18 remain blocked by Scenario 1;
-- `docs/devlog/2026-08-07-v0.3.3_11-third-audit-handoff.md` — Patch 8 source/CI closure and live-handoff record;
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — owner-assisted live gate; Scenario 1 is pending on the designated `_12` FreeBSD 15 candidate and scenarios 2–18 remain blocked by Scenario 1;
+- `docs/devlog/2026-08-07-v0.3.3_12-final-rollup.md` — final post-Patch-8 package roll-up used to build the newest live candidate;
+- `docs/devlog/2026-08-07-v0.3.3_11-third-audit-handoff.md` — Patch 8 source/CI closure and historical `_11` handoff record;
 - `docs/devlog/2026-08-07-v0.3.3_6-repository-reconciliation.md` — `_6` recovery ledger and historical source/CI evidence;
 - `docs/PROJECT_STATE.md` — current verified baseline and next action.
 

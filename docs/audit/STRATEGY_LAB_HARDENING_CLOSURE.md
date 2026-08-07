@@ -60,7 +60,7 @@ Completed order:
 7. Patch 7 — integrated third-audit regression gate;
 8. Patch 8 — source/CI closure and live-test handoff.
 
-Final source/CI qualification is bound to Patch 7:
+Final integrated runtime qualification is bound to Patch 7:
 
 - PR #121;
 - exact latest head `dd2a484a4aa3711834b722aae0cc025d3fd4758e`;
@@ -71,11 +71,11 @@ Final source/CI qualification is bound to Patch 7:
 - artifact `8985927074` containing `os-zapret2-restyle-0.3.3_11.pkg`;
 - main squash commit `256ffa09452dabfb001665b729c1f4c3d3462688`.
 
-Patch 8 is documentation-only and therefore does not supersede that package with a different runtime candidate.
+Patch 8 is documentation-only and closed the source/CI handoff without changing runtime behavior. The subsequent `_12` roll-up changes package revision only so that the owner installs one package built after the complete Patch 1–8 repository state is present. `_12` must pass the same FreeBSD 15 build/manifest gate before use.
 
 ## Automated gate requirement
 
-For the current source state the required automated gates are satisfied through Patch 7 evidence, including:
+For the current source state the required automated gates include:
 
 - exact versioned PR and commit identity;
 - PHP, XML, and shell validation;
@@ -83,7 +83,7 @@ For the current source state the required automated gates are satisfied through 
 - the mandatory Strategy Lab corrective matrix;
 - the third-audit integration contract;
 - lifecycle, release, governance, and repository-hygiene contracts;
-- FreeBSD 15 package build and manifest inspection.
+- FreeBSD 15 package build and manifest inspection for `_12`.
 
 Automated proof closes source/CI scope only.
 
@@ -95,7 +95,7 @@ The authoritative live plan is:
 
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`
 
-Designated candidate: `os-zapret2-restyle-0.3.3_11.pkg`, artifact `8985927074`, CI `31157848056`.
+Designated candidate: `os-zapret2-restyle-0.3.3_12.pkg`. Its exact GitHub Actions artifact is the successful FreeBSD 15 output of the final `_12` roll-up and must be used for Scenario 1.
 
 No live PASS is inferred from CI, mocked integration tests, or package build success. Scenario 1 must be retested first by the owner. Scenarios 2–18 remain blocked until Scenario 1 passes.
 
@@ -111,7 +111,7 @@ Source/CI closure does not authorize or perform:
 - production-readiness declaration;
 - testing prerelease publication.
 
-Testing prerelease publication for `_11` still requires separate exact owner authorization under the GitHub publication rules.
+Testing prerelease publication for `_12` still requires separate exact owner authorization under the GitHub publication rules.
 
 ## Reopening rule
 
