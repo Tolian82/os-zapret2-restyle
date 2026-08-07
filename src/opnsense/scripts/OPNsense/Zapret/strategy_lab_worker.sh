@@ -16,7 +16,7 @@ STATUS_FILE=$(strategy_lab_status_file "${JOB_ID}"); CANCEL_FILE=$(strategy_lab_
 STRATEGY_LAB_WORKER_PID=$$; export CANCEL_FILE STRATEGY_LAB_WORKER_PID
 LANGUAGE=$("${STRATEGY_LAB_JQ}" -r '.language' "${STATUS_FILE}"); TARGET=$("${STRATEGY_LAB_JQ}" -r '.target' "${STATUS_FILE}"); MODE=$("${STRATEGY_LAB_JQ}" -r '.mode' "${STATUS_FILE}"); WORKER_FINALIZING=0
 strategy_lab_preflight_enforce "${JOB_ID}" || exit 1
-for worker_module in worker_messages worker_expansion_messages worker_stability_messages worker_extended_messages worker_quic_messages worker_udp_messages worker_budget worker_stage_machine worker_result worker_state_serialization worker_control worker_watchdog
+for worker_module in worker_messages worker_expansion_messages worker_stability_messages worker_extended_messages worker_quic_messages worker_udp_messages worker_budget worker_stage_machine worker_result worker_control worker_watchdog
 do path="${MODULE_DIR}/${worker_module}.sh"; [ -r "${path}" ] || exit 1; . "${path}"; done
 strategy_lab_udp_input_export "${JOB_ID}" || worker_error 00 'Strategy Lab generic UDP input is missing or invalid.'
 path="${MODULE_DIR}/worker_flow.sh"; [ -r "${path}" ] || exit 1; . "${path}"
