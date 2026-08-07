@@ -35,6 +35,7 @@ STRATEGY_LAB_LOCK_TIMEOUT=3
 LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 STRATEGY_LAB_WORKER="${STRATEGY_LAB_WORKER:-${SCRIPT_DIR}/strategy_lab_worker.sh}"
 STRATEGY_LAB_CIRCULAR_WORKER="${STRATEGY_LAB_CIRCULAR_WORKER:-${SCRIPT_DIR}/strategy_lab_circular_worker.sh}"
+STRATEGY_LAB_RECOVERY_WORKER="${STRATEGY_LAB_RECOVERY_WORKER:-${SCRIPT_DIR}/strategy_lab_recovery_worker.sh}"
 STRATEGY_LAB_SEMANTIC_IPFW_BIN="${STRATEGY_LAB_SEMANTIC_IPFW_BIN:-/sbin/ipfw}"
 STRATEGY_LAB_SEMANTIC_PS_BIN="${STRATEGY_LAB_SEMANTIC_PS_BIN:-${ZAPRET_PROCESS_QUERY_BIN}}"
 STRATEGY_LAB_SEMANTIC_SHA256_BIN="${STRATEGY_LAB_SEMANTIC_SHA256_BIN:-/sbin/sha256}"
@@ -314,6 +315,9 @@ service_dispatch()
         strategy-lab-circular)
             run_strategy_lab_worker "${STRATEGY_LAB_CIRCULAR_WORKER}" "${2:-}"
             ;;
+        strategy-lab-recover)
+            run_strategy_lab_worker "${STRATEGY_LAB_RECOVERY_WORKER}" "${2:-}"
+            ;;
         *)
             echo "usage: zapret_service.sh {start|stop|restart|status|reconfigure}" >&2
             return 64
@@ -346,7 +350,7 @@ case "${1:-}" in
     strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start)
         strategy_lab_internal_dispatch "$@"
         ;;
-    strategy-lab|strategy-lab-circular)
+    strategy-lab|strategy-lab-circular|strategy-lab-recover)
         service_with_lifecycle_lock "${STRATEGY_LAB_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
