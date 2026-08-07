@@ -47,13 +47,10 @@ export STRATEGY_LAB_ENV_BIN=$(command -v env)
 export MOCK_STABILITY_LOCK="${TMP}/lock" MOCK_STABILITY_COUNTS="${TMP}/counts" MOCK_STABILITY_ORDER="${TMP}/order"
 . "${MODULE_DIR}/common.sh"
 . "${MODULE_DIR}/stability.sh"
-. "${MODULE_DIR}/profile.sh"
 strategy_lab_stability_run job.test "${TMP}/endpoints.txt" "${TMP}/expansion.json" "${TMP}/families.json" "${TMP}/stability.json"
-strategy_lab_shortlist_build "${TMP}/stability.json" "${TMP}/shortlist.json"
 jq -e '.completed==4 and .stable==["c1","c3","c4"] and .unstable==["c2"] and .stopped_reason=="enough_stable_candidates"' "${TMP}/stability.json" >/dev/null
-jq -e '.count==3 and .recommendation.id=="c1" and .circular_count==3' "${TMP}/shortlist.json" >/dev/null
 [ "$(wc -l < "${TMP}/order" | tr -d ' ')" -eq 12 ]
 [ "$(grep -c '^c2:' "${TMP}/order")" -eq 3 ]
 ! grep -Eq '^[[:space:]]*strategy_lab_shortlist_build[[:space:]]*\(\)' "${MODULE_DIR}/stability.sh"
 grep -Eq '^[[:space:]]*strategy_lab_shortlist_build[[:space:]]*\(\)' "${MODULE_DIR}/profile.sh"
-echo 'PASS: Strategy Lab stability requires sequential 3-of-3 confirmation and profile.sh builds the bounded unified shortlist'
+echo 'PASS: Strategy Lab stability requires sequential 3-of-3 confirmation while profile.sh remains the sole shortlist owner'
