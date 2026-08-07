@@ -40,7 +40,7 @@ Live OPNsense matrix: **FAILED ON `_12` — CORRECTIVE `_13` REQUIRED**.
 
 The `_12` live watcher proved that the normal Zapret2 runtime became fully healthy during stage 90 and remained healthy for approximately 38 seconds, but `/usr/bin/timeout` without `-f` retained reaper ownership of daemon descendants. At the configured 45-second restoration timeout it terminated the already restored dvtws2/supervisor tree. The lifecycle code then repeated the same sequence once and ended `RESTORE_FAILED` with the normal service stopped.
 
-The `_13` correction changes lifecycle service-action timeout invocation to FreeBSD foreground mode (`timeout -f`) and adds a deterministic regression that refuses lifecycle timeout calls without foreground mode.
+The `_13` correction applies FreeBSD foreground timeout mode (`timeout -f`) only to the daemonizing `strategy-lab-start` action; stop and non-FreeBSD actions retain normal timeout semantics. A deterministic regression emulates FreeBSD and requires that exact split.
 
 Scenario 1 itself will still encounter the independent stage-50 blocker until that next logical defect is corrected. After `_13` passes CI and FreeBSD 15 package verification, owner-assisted testing must confirm that an error-path Strategy Lab run restores initial RUNNING to RUNNING instead of leaving Zapret2 stopped. Only then proceed to the separate stage-50 correction.
 
