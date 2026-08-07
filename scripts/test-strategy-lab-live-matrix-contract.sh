@@ -65,7 +65,7 @@ if grep -Fq 'Overall status: **FAILED ON _12 — STAGE-90 CORRECTION `_13` IN PR
     [ -s "${CURRENT_RESTORE_EVIDENCE}" ] || { echo 'FAIL: current _12 restoration evidence is missing' >&2; exit 1; }
     grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_12.pkg`' "${MATRIX}"
     grep -Fq 'Current corrective source candidate: `os-zapret2-restyle-0.3.3_13.pkg`' "${MATRIX}"
-    grep -Fq 'job `job.sl7JGM`' "${MATRIX}"
+    grep -Fq 'Job `job.sl7JGM`' "${MATRIX}"
     grep -Fq 'FreeBSD `timeout` without `-f` acts as a reaper' "${MATRIX}"
     scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /FAILED ON `_12` — `_13` RESTORATION RETEST REQUIRED/ {n++} END {print n+0}' "${MATRIX}")
     [ "${scenario_one}" -eq 1 ] || { echo 'FAIL: scenario 1 reopened-live row mismatch' >&2; exit 1; }
