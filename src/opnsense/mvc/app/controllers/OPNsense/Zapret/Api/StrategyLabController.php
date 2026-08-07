@@ -14,15 +14,16 @@ class StrategyLabController extends ApiControllerBase
     private const JOB_PATTERN = '/^job\.[A-Za-z0-9]+$/D';
     private const UDP_PAYLOAD_MAX_BYTES = 4096;
     private const UDP_PAYLOAD_MAX_BASE64_LENGTH = 5464;
+    private const BACKEND_TIMEOUT_SECONDS = 190;
 
-    private function backendResponse(string $action, array $params = [], int $timeout = 10): array
+    private function backendResponse(string $action, array $params = []): array
     {
         $backend = new \OPNsense\Core\Backend();
         $response = trim((string)$backend->configdpRun(
             'zapret ' . $action,
             $params,
             false,
-            $timeout
+            self::BACKEND_TIMEOUT_SECONDS
         ));
 
         if ($response === '') {
