@@ -3,7 +3,7 @@ name: Publish testing prerelease
 on:
   push:
     branches:
-      - 'publish/v0.3.3_5'
+      - 'publish/v*_*'
   workflow_dispatch:
 
 permissions:
