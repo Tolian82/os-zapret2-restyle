@@ -9,6 +9,7 @@ STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
 RESTORE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md"
 CURRENT_RESTORE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md"
+CURRENT_DNS_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_13-scenario-01-stage40-freebsd-dns-timeout.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 
@@ -57,6 +58,25 @@ if grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGR
     grep -Fq 'Status: **BLOCKED ON CORRECTIVE SERIES AND LIVE MATRIX**' "${CLOSURE}"
     grep -Fq 'Live OPNsense matrix: **PAUSED PENDING THIRD-AUDIT SOURCE/CI COMPLETION**' "${STATE}"
     echo 'PASS: live matrix is paused for the third-audit corrective series without unsupported PASS claims'
+    exit 0
+fi
+
+if grep -Fq 'Overall status: **FAILED ON _13 — STAGE-40 CORRECTION `_14` IN PROGRESS**' "${MATRIX}"; then
+    [ "${revision}" -eq 14 ] || { echo 'FAIL: stage-40 live matrix must designate revision 14' >&2; exit 1; }
+    [ -s "${CURRENT_DNS_EVIDENCE}" ] || { echo 'FAIL: current _13 stage-40 DNS evidence is missing' >&2; exit 1; }
+    grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_13.pkg`' "${MATRIX}"
+    grep -Fq 'Current corrective source candidate: `os-zapret2-restyle-0.3.3_14.pkg`' "${MATRIX}"
+    grep -Fq 'job `job.3mc9c6`' "${MATRIX}"
+    grep -Fq '/usr/bin/timeout 2 /usr/bin/drill rutracker.org A' "${MATRIX}"
+    grep -Fq '/usr/bin/timeout -f 2 /usr/bin/drill rutracker.org A' "${MATRIX}"
+    scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /FAILED ON `_13` — `_14` STAGE-40 RETEST REQUIRED/ {n++} END {print n+0}' "${MATRIX}")
+    [ "${scenario_one}" -eq 1 ] || { echo 'FAIL: scenario 1 stage-40 live row mismatch' >&2; exit 1; }
+    grep -Fq 'Live OPNsense matrix: **FAILED AT STAGE 40 ON `_13` — CORRECTIVE `_14` REQUIRED**.' "${STATE}"
+    grep -Fq 'Current corrective package revision: `PLUGIN_REVISION=14`' "${STATE}"
+    grep -Fq 'Stage 90 passed' "${CURRENT_DNS_EVIDENCE}"
+    grep -Fq 'result: `rc=124`' "${CURRENT_DNS_EVIDENCE}"
+    grep -Fq 'result: `rc=0`' "${CURRENT_DNS_EVIDENCE}"
+    echo 'PASS: live matrix records _13 stage-90 success and gates Scenario 1 on the _14 FreeBSD DNS timeout correction'
     exit 0
 fi
 

@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **FAILED ON _12 — STAGE-90 CORRECTION `_13` IN PROGRESS**
+Overall status: **FAILED ON _13 — STAGE-40 CORRECTION `_14` IN PROGRESS**
 
 This matrix is the final live-appliance gate for the Strategy Lab hardening series. Source tests, GitHub CI, and FreeBSD package builds cannot substitute for evidence collected on the owner's OPNsense appliance.
 
@@ -13,10 +13,11 @@ Only FreeBSD 15 amd64 packages are valid. The revision 46 GitHub Actions artifac
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Architecture / ABI evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_12.pkg`
-- Current corrective source candidate: `os-zapret2-restyle-0.3.3_13.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_13.pkg`
+- Current corrective source candidate: `os-zapret2-restyle-0.3.3_14.pkg`
 - Patch 7 source/CI qualification: exact PR head `dd2a484a4aa3711834b722aae0cc025d3fd4758e`; title check `31157848071` PASS; CI run `31157848056` PASS; FreeBSD 15 artifact `8985927074`; squash-merged main `256ffa09452dabfb001665b729c1f4c3d3462688`.
 - Final `_12` roll-up: owner-installed testing prerelease `v0.3.3_12`; live Scenario 1 failed.
+- Corrective `_13`: PR #125, main `9a9879c6f88d77ab64c06647dd8d1e2437fc5f25`; published testing prerelease `v0.3.3_13`; owner-tested stage-90 restoration PASS.
 - Historical `_6` CI package: `os-zapret2-restyle-0.3.3_6.pkg` (not owner-tested; superseded by `_12`)
 - WAN interface: `vtnet1`
 - LAN test client: `PENDING OWNER`
@@ -45,11 +46,17 @@ These source/CI results do not convert the failed `_5` live attempt into PASS. `
 
 The approved third-audit corrective sequence completed source/CI scope, but owner-assisted Scenario 1 on `_12` reopened the live gate. Job `job.sl7JGM` passed stages 00–40, failed immediately at stage 50, and then failed stage 90 with `RESTORE_FAILED`.
 
-A one-second live watcher proved the stage-90 root cause. The normal runtime became fully healthy at 13:31:07 and remained `RUNNING` with dvtws2, supervisor, and rule 19000 present until the 45-second restoration timeout expired. It was then stopped and the lifecycle made a second attempt. The second runtime became fully healthy at 13:31:52 and was stopped again when the second 45-second timeout expired at 13:32:31. FreeBSD `timeout` without `-f` acts as a reaper for command descendants, so the lifecycle wrapper waited on the intentionally long-lived daemon descendants and timed them out even though the service-control command had already completed successfully.
+A one-second live watcher proved the `_12` stage-90 root cause. The normal runtime became fully healthy at 13:31:07 and remained `RUNNING` with dvtws2, supervisor, and rule 19000 present until the 45-second restoration timeout expired. It was then stopped and the lifecycle made a second attempt. The second runtime became fully healthy at 13:31:52 and was stopped again when the second 45-second timeout expired at 13:32:31. FreeBSD `timeout` without `-f` acts as a reaper for command descendants, so the lifecycle wrapper waited on the intentionally long-lived daemon descendants and timed them out even though the service-control command had already completed successfully.
 
 Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`.
 
-The `_13` corrective scope is intentionally limited to this stage-90 defect: on FreeBSD only, daemonizing `strategy-lab-start` uses foreground timeout mode so its long-lived runtime descendants are not reaped by the timeout wrapper; stop and non-FreeBSD actions retain normal timeout semantics. Stage 50 remains a separate live blocker and requires its own subsequent logical correction.
+The `_13` correction limited foreground timeout mode to daemonizing `strategy-lab-start` on FreeBSD. Owner-assisted Scenario 1 on `_13`, job `job.3mc9c6`, verified that correction live: stage 90 passed, the initially RUNNING Zapret2 service was restored completely, and the normal generated runtime remained healthy after the Strategy Lab terminal result.
+
+That `_13` run failed earlier at stage 40 with the message that mandatory endpoint DNS resolution failed. The preserved `endpoint-1.a.log` was zero bytes. Direct reproduction proved that the DNS resolver itself was healthy: `/usr/bin/drill rutracker.org A` returned `rc=0`, `NOERROR`, and both A records in 96 ms. The exact Strategy Lab wrapper `/usr/bin/timeout 2 /usr/bin/drill rutracker.org A` returned `rc=124` after exactly two seconds with zero output, while `/usr/bin/timeout -f 2 /usr/bin/drill rutracker.org A` returned `rc=0`, `NOERROR`, and the same A records in 30 ms. A `yandex.ru` control query through the non-foreground timeout wrapper returned `rc=0`.
+
+Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_13-scenario-01-stage40-freebsd-dns-timeout.md`.
+
+The `_14` corrective scope is intentionally limited to this stage-40 FreeBSD timeout defect: `strategy_lab_dns_request()` uses foreground timeout mode on FreeBSD only; non-FreeBSD DNS requests preserve existing behavior. The observed `baseline.json` value `target_type:"A"` is a separate shell-variable namespace defect and remains outside `_14`. The previously identified stage-50 family-runner defect also remains separate and will be addressed only after Scenario 1 advances past stage 40.
 
 Authoritative third-audit record:
 
@@ -81,7 +88,7 @@ Before installation of the designated candidate, preserve its `+MANIFEST` and co
 ```text
 abi: FreeBSD:15:amd64
 arch: freebsd:15:x86:64
-version: 0.3.3_13
+version: 0.3.3_14
 ```
 
 Recommended residue evidence after every terminal scenario:
@@ -96,7 +103,7 @@ configctl zapret status
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | Failed attempts: `2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`, `2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`, `2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md`, `2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`, `2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`; `_13` must first prove stage-90 RUNNING restoration, then stage 50 will be corrected separately | **FAILED ON `_12` — `_13` RESTORATION RETEST REQUIRED** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | Failed attempts: `2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`, `2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`, `2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md`, `2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`, `2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`, `2026-08-07-v0.3.3_13-scenario-01-stage40-freebsd-dns-timeout.md`; `_13` proved stage-90 restoration but failed stage 40; `_14` must advance past stage 40 | **FAILED ON `_13` — `_14` STAGE-40 RETEST REQUIRED** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Test completes while final service remains STOPPED; restoration evidence is verified | `PENDING OWNER` | **BLOCKED BY #1** |
 | 3 | Extended TLS 1.2 and HTTP | Available protocol successes appear as complete replay-verified profiles; unavailable protocols are explicitly skipped | `PENDING OWNER` | **BLOCKED BY #1** |
 | 4 | Extended QUIC | QUIC result is endpoint-bound and replay-verified when network capability exists; otherwise explicit skip reason | `PENDING OWNER` | **BLOCKED BY #1** |
@@ -134,4 +141,4 @@ A failed live row requires same-scope source correction when a source defect is 
 
 ## Release gate
 
-Third-audit source/CI closure remains historical source evidence only. Stable release preparation and pkg-repository promotion remain blocked until every required live row is marked `PASS` by the owner and linked evidence is recorded. The matrix contains no successful Strategy Lab live scenario PASS claim yet.
+Third-audit source/CI closure remains historical source evidence only. Stable release preparation and pkg-repository promotion remain blocked until every required live row is marked `PASS` by the owner and linked evidence is recorded. The matrix contains no successful complete Strategy Lab live scenario PASS claim yet; `_13` does, however, provide a live PASS for the stage-90 restoration sub-gate.

@@ -6,6 +6,7 @@ STRATEGY_LAB_DRILL_BIN="${STRATEGY_LAB_DRILL_BIN:-/usr/bin/drill}"
 STRATEGY_LAB_OPENSSL_BIN="${STRATEGY_LAB_OPENSSL_BIN:-/usr/bin/openssl}"
 STRATEGY_LAB_NETSTAT_BIN="${STRATEGY_LAB_NETSTAT_BIN:-/usr/bin/netstat}"
 STRATEGY_LAB_NC_BIN="${STRATEGY_LAB_NC_BIN:-/usr/bin/nc}"
+STRATEGY_LAB_UNAME_BIN="${STRATEGY_LAB_UNAME_BIN:-/usr/bin/uname}"
 
 strategy_lab_require_executable()
 {
@@ -82,13 +83,24 @@ strategy_lab_dns_request()
     _strategy_lab_host="$1"
     _strategy_lab_type="$2"
     _strategy_lab_output="$3"
+    _strategy_lab_platform=""
 
     strategy_lab_require_executable "${STRATEGY_LAB_TIMEOUT_BIN}" || return 1
     strategy_lab_require_executable "${STRATEGY_LAB_DRILL_BIN}" || return 1
 
-    "${STRATEGY_LAB_TIMEOUT_BIN}" 2 \
-        "${STRATEGY_LAB_DRILL_BIN}" "${_strategy_lab_host}" "${_strategy_lab_type}" \
-        > "${_strategy_lab_output}" 2>&1
+    if [ -x "${STRATEGY_LAB_UNAME_BIN}" ]; then
+        _strategy_lab_platform=$("${STRATEGY_LAB_UNAME_BIN}" -s 2>/dev/null || true)
+    fi
+
+    if [ "${_strategy_lab_platform}" = FreeBSD ]; then
+        "${STRATEGY_LAB_TIMEOUT_BIN}" -f 2 \
+            "${STRATEGY_LAB_DRILL_BIN}" "${_strategy_lab_host}" "${_strategy_lab_type}" \
+            > "${_strategy_lab_output}" 2>&1
+    else
+        "${STRATEGY_LAB_TIMEOUT_BIN}" 2 \
+            "${STRATEGY_LAB_DRILL_BIN}" "${_strategy_lab_host}" "${_strategy_lab_type}" \
+            > "${_strategy_lab_output}" 2>&1
+    fi
 }
 
 strategy_lab_ipv6_default_route_available()
