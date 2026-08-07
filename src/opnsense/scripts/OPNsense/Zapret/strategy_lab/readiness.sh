@@ -101,7 +101,12 @@ strategy_lab_candidate_start()
     done < "${_slready_args}"
     set -- "$@" '--sockarg=0x200' '--user=nobody'
 
-    "${STRATEGY_LAB_DAEMON_BIN}" -p "${_slready_pidfile}" -o "${_slready_log}" -f "$@" 9>&- || return 1
+    # readiness.sh is sourced after runtime.sh by the production candidate runner
+    # and therefore owns the effective startup implementation. FreeBSD daemon(8)
+    # remains resident while -p/-o supervision is active, so run that monitor in
+    # the background and let the existing pid/socket/log readiness proof observe
+    # the long-lived dvtws2 child.
+    "${STRATEGY_LAB_DAEMON_BIN}" -p "${_slready_pidfile}" -o "${_slready_log}" -f "$@" 9>&- &
     _slready_wait=0
     while [ "${_slready_wait}" -lt "${STRATEGY_LAB_RUNTIME_START_TIMEOUT}" ]
     do
