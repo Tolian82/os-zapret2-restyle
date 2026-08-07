@@ -5,7 +5,7 @@ Primary branch: `main`
 Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
 Latest published testing prerelease: `v0.3.3_5` / `os-zapret2-restyle-0.3.3_5.pkg`
 Current source line: `VERSION=0.3.3`
-Current corrective package revision: `PLUGIN_REVISION=10`
+Current corrective package revision: `PLUGIN_REVISION=11`
 Target ABI: **FreeBSD:15:amd64 only**
 
 ## Historical live boundary
@@ -34,7 +34,7 @@ Status: **MERGED AND VERIFIED** — PR #117, main `f0c43de7133f8ba337a5458de0803
 
 ### Patch 4 — remove load-order overrides and obsolete hooks
 
-Status: **MERGED AND VERIFIED** — PR #118, main `15ed2b057ca94a1a780ecf9da9f304d0e6cd652c`; latest-head CI `31154664416` passed the complete corrective matrix, unique-module-namespace gate, obsolete-surface contract, repository validation, and FreeBSD 15 package build. Artifact `8984745215` contains `os-zapret2-restyle-0.3.3_9.pkg`.
+Status: **MERGED AND VERIFIED** — PR #118, main `15ed2b057ca94a1a780ecf9da9f304d0e6cd652c`; latest-head CI `31154664416`; FreeBSD 15 artifact `8984745215`, package `_9`.
 
 `SL3-003` + `SL3-006` source scope is implemented: load order no longer selects worker behavior, `worker_state_serialization.sh` and transitional skip hooks are removed, canonical state writers retain lock/revision semantics, circular eligibility uses the TLS 1.3 circular subset, and the namespace contract rejects future duplicate functions in jointly loaded worker modules.
 
@@ -42,23 +42,32 @@ Implementation log: `docs/devlog/2026-08-07-v0.3.3_9-module-order.md`.
 
 ### Patch 5 — serialize worker state transitions
 
-Status: **SOURCE IMPLEMENTED — PR/CI VERIFICATION PENDING**
+Status: **MERGED AND VERIFIED** — PR #119, main `41ccadd47136375cb58a64e527f2fecff9f1630e`; latest-head CI `31155184080` passed the complete corrective matrix and repository validation. FreeBSD 15 artifact `8984931432` contains `os-zapret2-restyle-0.3.3_10`.
 
-Package revision: `_10`.
-
-Implemented scope for `SL3-004`:
-
-- `worker_skip_unfinished()` no longer reads/replaces `status.json` directly;
-- skip state now uses the canonical `strategy_lab_state_transform()` lock, atomic replacement, and revision increment;
-- cancel, repeated cancel, unfinished-stage skip, finalization, and terminal-state protection are exercised in one race regression;
-- cancellation timestamp and boolean must survive concurrent skip/finalization state changes;
-- the regression rejects reintroduction of the old private `.worker-skip.*` writer.
+`SL3-004` source scope is implemented: unfinished-stage skipping uses the canonical state transform, cancellation evidence survives concurrent skip/finalization, every mutation remains revisioned, and terminal state is irreversible under the race regression.
 
 Implementation log: `docs/devlog/2026-08-07-v0.3.3_10-state-serialization.md`.
 
+### Patch 6 — complete RU/EN progress localization
+
+Status: **SOURCE IMPLEMENTED — PR/CI VERIFICATION PENDING**
+
+Package revision: `_11`.
+
+Implemented scope for `SL3-007`:
+
+- Diagnostics explicitly maps backend `cancel_requested` as `CANCEL_REQUESTED` in both RU and EN dictionaries;
+- Russian presentation uses `ОСТАНОВКА ЗАПРОШЕНА`; English presentation uses `CANCELLATION REQUESTED`;
+- the focused localization regression creates a real backend `cancel_requested` state, derives its presentation key, and requires both mappings;
+- circular `stop_requested` remains a distinct localized state/message contract;
+- raw technical `CANCEL_REQUESTED` fallback is no longer reachable for the supported backend state.
+
+Architecture authority: `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md`.
+
+Implementation log: `docs/devlog/2026-08-07-v0.3.3_11-localization.md`.
+
 ## Remaining approved sequence
 
-6. **Patch 6 — complete RU/EN progress localization.** Close `SL3-007`.
 7. **Patch 7 — integrated third-audit regression gate.** Exercise corrected paths together and require the complete corrective matrix, repository CI, and FreeBSD 15 package build.
 8. **Patch 8 — source/CI closure and live-test handoff.** Record exact evidence and designate the resulting FreeBSD 15 package for owner-assisted live verification.
 
@@ -96,7 +105,8 @@ Current product authority:
 - `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`;
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`;
 - `docs/architecture/STRATEGY_LAB_OBSOLETE_SURFACES.md`;
+- `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md`;
 - `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md`;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
-Next action after Patch 5 merge/verification: **Patch 6 — complete RU/EN progress localization**.
+Next action after Patch 6 merge/verification: **Patch 7 — integrated third-audit regression gate**.
