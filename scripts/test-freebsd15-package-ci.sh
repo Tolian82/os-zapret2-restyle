@@ -53,11 +53,11 @@ grep -Fq '.arch == "freebsd:15:x86:64"' "${CI}" || fail 'PR package inspection d
 grep -Fq 'tar -tf dist/*.pkg > "${contents}"' "${CI}" || fail 'package contents are not captured without a truncation pipe'
 grep -Fq 'tar -xOf dist/*.pkg +MANIFEST > "${manifest}"' "${CI}" || fail 'package manifest is not captured before inspection'
 
-grep -Fq "Candidate package: \`${candidate}\`" "${MATRIX}" ||
-    fail "live matrix does not select the current package: ${candidate}"
+grep -Fq "Current corrective candidate: \`${candidate}\`" "${MATRIX}" ||
+    fail "live matrix does not select the current corrective package: ${candidate}"
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}" ||
     fail 'live matrix does not require the FreeBSD 15 ABI'
-if grep -Fq 'Candidate package: `os-zapret2-restyle-0.3.2_46.pkg`' "${MATRIX}"; then
+if grep -Fq 'Current corrective candidate: `os-zapret2-restyle-0.3.2_46.pkg`' "${MATRIX}"; then
     fail 'the incompatible revision 46 package remains selected for live verification'
 fi
 
