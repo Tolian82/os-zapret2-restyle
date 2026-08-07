@@ -73,7 +73,7 @@ if grep -Fq 'Overall status: **FAILED ON _13 — STAGE-40 CORRECTION `_14` IN PR
     [ "${scenario_one}" -eq 1 ] || { echo 'FAIL: scenario 1 stage-40 live row mismatch' >&2; exit 1; }
     grep -Fq 'Live OPNsense matrix: **FAILED AT STAGE 40 ON `_13` — CORRECTIVE `_14` REQUIRED**.' "${STATE}"
     grep -Fq 'Current corrective package revision: `PLUGIN_REVISION=14`' "${STATE}"
-    grep -Fq 'stage 90 passed' "${CURRENT_DNS_EVIDENCE}"
+    grep -Fq 'Stage 90 passed' "${CURRENT_DNS_EVIDENCE}"
     grep -Fq 'result: `rc=124`' "${CURRENT_DNS_EVIDENCE}"
     grep -Fq 'result: `rc=0`' "${CURRENT_DNS_EVIDENCE}"
     echo 'PASS: live matrix records _13 stage-90 success and gates Scenario 1 on the _14 FreeBSD DNS timeout correction'
