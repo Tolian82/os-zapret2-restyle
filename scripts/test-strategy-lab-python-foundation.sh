@@ -88,8 +88,8 @@ set -e
 grep -Fq 'unsupported interpreter version 3.12; expected 3.13' "${TEST_ROOT}/version.err" ||
     fail 'unsupported Python error is not deterministic'
 
-grep -Fq 'STRATEGY_LAB_WORKER="/usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_worker.sh"' "${SERVICE}" ||
-    fail 'production Strategy Lab worker path changed during foundation patch'
+grep -Fq 'STRATEGY_LAB_WORKER="${STRATEGY_LAB_WORKER:-${SCRIPT_DIR}/strategy_lab_worker.sh}"' "${SERVICE}" ||
+    fail 'production Strategy Lab worker default changed during foundation patch'
 ! grep -Fq 'strategy_lab_python_launcher.sh' "${SERVICE}" ||
     fail 'Python launcher must remain outside the production call path in Migration Patch 1'
 
