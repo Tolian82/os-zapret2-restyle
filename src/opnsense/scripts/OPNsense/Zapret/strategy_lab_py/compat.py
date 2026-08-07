@@ -8,10 +8,12 @@ import sys
 from collections.abc import Sequence
 
 from . import FOUNDATION_REVISION, SUPPORTED_PYTHON
+from . import state as state_persistence
 
 EX_OK = 0
 EX_USAGE = 64
 EX_SOFTWARE = 70
+EX_TEMPFAIL = 75
 DEFAULT_SHELL_WORKER = "/usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_worker.sh"
 JOB_ID_RE = re.compile(r"^job\.[A-Za-z0-9]{6,64}$")
 
@@ -45,6 +47,23 @@ def _delegate_shell(job_id: str) -> int:
     return EX_SOFTWARE
 
 
+def _run_state(args: Sequence[str]) -> int:
+    try:
+        return state_persistence.main(args)
+    except state_persistence.UsageError as exc:
+        _error(str(exc))
+        return EX_USAGE
+    except state_persistence.LockTimeout as exc:
+        _error(str(exc))
+        return EX_TEMPFAIL
+    except state_persistence.StateError as exc:
+        _error(str(exc))
+        return EX_SOFTWARE
+    except OSError as exc:
+        _error(f"Strategy Lab state persistence failed: {exc}")
+        return EX_SOFTWARE
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
 
@@ -58,8 +77,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return EX_OK
 
+    if args[:1] == ["state"]:
+        return _run_state(args[1:])
+
     if len(args) != 1:
-        _error("usage: strategy_lab_python.py job_id | --self-test")
+        _error("usage: strategy_lab_python.py job_id | --self-test | state OPERATION ...")
         return EX_USAGE
 
     return _delegate_shell(args[0])
