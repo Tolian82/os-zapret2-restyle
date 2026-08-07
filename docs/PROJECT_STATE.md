@@ -32,7 +32,7 @@ Current source line: `VERSION=0.3.3`
 Current package revision: `PLUGIN_REVISION=19`
 Current migration source candidate: `os-zapret2-restyle-0.3.3_19.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Strategy Lab Migration Patch 2 — Python state/progress/structured persistence**
+Current phase: **Strategy Lab Migration Patch 2 — Python automated-job state/progress/structured persistence**
 Stable release: **BLOCKED ON POST-MIGRATION LIVE MATRIX**
 
 Current primary Strategy Lab authority:
@@ -65,7 +65,7 @@ MIGRATION PATCH 2 STATE OWNERSHIP
 
 Migration Patch 2 moves authoritative automated-job persistence to Python 3.13.
 
-`strategy_lab_py/state.py` now owns:
+`strategy_lab_py/state.py` now owns automated-job:
 
 - initial schema-2 `status.json` creation;
 - per-job revision ownership and serialized status mutations;
@@ -75,28 +75,32 @@ Migration Patch 2 moves authoritative automated-job persistence to Python 3.13.
 - structured target/network/baseline/family/expansion/stability/shortlist/extended/QUIC/UDP fields;
 - lifecycle snapshot and restoration fields;
 - stale-worker terminal reconciliation state;
-- terminal circular-eligibility fields.
+- terminal circular-eligibility fields stored in the parent automated job.
 
 The shell `strategy_lab/state.sh` retains the existing public helper names only as thin
 adapters into the Python writer. The previous shell `strategy_lab_state_transform` and
-private jq/temp/mv writers for authoritative job state are removed from the migrated
-paths.
+private jq/temp/mv writers for authoritative automated-job state are removed from the
+migrated paths.
 
 Persistence invariants:
 
-- public JSON schema remains version 2;
+- public automated-job JSON schema remains version 2;
 - stage numbers/keys and progress percentages remain unchanged;
-- every serialized status mutation increments `revision` exactly once, including a
-  terminal semantic no-op;
-- writes use one state lock, same-directory temporary files, fsync, atomic replace, and
-  mode `0644`;
-- ordinary `status.json` and private circular `state.json` are both accepted through the
-  existing lifecycle reuse boundary;
-- the GUI/API does not need to know which language owns persistence.
+- every serialized automated-job status mutation increments `revision` exactly once,
+  including a terminal semantic no-op;
+- writes use one Python state lock, same-directory temporary files, fsync, atomic replace,
+  and mode `0644`;
+- the GUI/API does not need to know which language owns automated-job persistence.
+
+Private circular-session `state.json` remains on its pre-existing shell writer in Patch 2.
+Shared lifecycle code preserves a circular fallback rather than creating two owners of
+that private file. Python includes state-path validation for future migration coverage,
+but is not the production circular-state owner yet.
 
 Patch 2 does **not** move stage ordering, budgets, cancellation/finalization policy,
-lifecycle decisions, probes, candidate execution, or search algorithms. Those remain
-shell responsibilities until their designated migration patches.
+lifecycle decisions, probes, candidate execution, search algorithms, or circular-session
+state transitions. Those remain shell responsibilities until their designated migration
+patches.
 
 ==================================================
 FINAL SHELL-ERA LIVE BOUNDARY
@@ -165,9 +169,9 @@ or automatically resolve the backlog.
 8. **Terminal reload/state presentation defect.** Retained terminal state can be presented incorrectly on Diagnostics reopen.
 9. **Candidate fatal-log classification defect.** Readiness evidence can report a clean log while fatal runtime text exists.
 
-Patch 2 removes shell-global/private-writer mechanisms from the migrated persistence
-layer, but it does not close any owner-observed defect by itself. Closure still requires
-focused replacement regression and, where applicable, live/UI evidence.
+Patch 2 removes shell-global/private-writer mechanisms from the migrated automated-job
+persistence layer, but it does not close any owner-observed defect by itself. Closure
+still requires focused replacement regression and, where applicable, live/UI evidence.
 
 ==================================================
 PYTHON MIGRATION PATCH SEQUENCE
@@ -177,7 +181,7 @@ Patch 0 — documentation/handoff: **COMPLETE**.
 
 Patch 1 — Python platform and compatibility foundation: **COMPLETE IN `_18` SOURCE / MERGED**.
 
-Patch 2 — Python job state, progress, and structured persistence: **CURRENT `_19` SOURCE CHANGE**.
+Patch 2 — Python automated-job state, progress, and structured persistence: **CURRENT `_19` SOURCE CHANGE**.
 
 Patch 3 — Python stage machine, budgets, cancellation, and finalization: **NEXT AFTER PATCH 2 QUALIFICATION**.
 
@@ -221,7 +225,7 @@ NEXT ACTION
 Complete Migration Patch 2 qualification on `_19`:
 
 1. Python 3.13 foundation/import checks;
-2. focused state/progress/event persistence parity and concurrency regression;
+2. focused automated-job state/progress/event persistence parity and concurrency regression;
 3. canonical Strategy Lab corrective matrix;
 4. full repository CI;
 5. FreeBSD 15 package build/content/manifest verification;
