@@ -414,10 +414,15 @@ run_job()
         fail "configd start did not return a valid job id"
     wait_terminal "${job}"
     result=$(api_call strategy_lab_result "${job}")
-    printf '%s\n' "${result}" | jq -e \
+    if ! printf '%s\n' "${result}" | jq -e \
         --arg state "${expected_state}" --arg outcome "${expected_outcome}" \
-        '.state==$state and .outcome==$outcome and .current_stage=="99"' >/dev/null ||
-        fail "unexpected terminal result for ${scenario}/${mode}"
+        '.state==$state and .outcome==$outcome and .current_stage=="99"' >/dev/null; then
+        actual_state=$(printf '%s\n' "${result}" | jq -r '.state // "<missing>"')
+        actual_outcome=$(printf '%s\n' "${result}" | jq -r '.outcome // "<missing>"')
+        actual_stage=$(printf '%s\n' "${result}" | jq -r '.current_stage // "<missing>"')
+        printf '%s\n' "${result}" >&2
+        fail "unexpected terminal result for ${scenario}/${mode}: expected ${expected_state}/${expected_outcome}/99, got ${actual_state}/${actual_outcome}/${actual_stage}"
+    fi
     recovered=$(api_call strategy_lab_status -)
     printf '%s\n' "${recovered}" | jq -e --arg job "${job}" '.job_id==$job' >/dev/null ||
         fail "polling recovery did not return latest job ${job}"
