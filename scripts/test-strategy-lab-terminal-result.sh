@@ -62,6 +62,7 @@ run_case()
                 '{state:$state,outcome:$outcome,current_stage:$stage,cancel_requested:$canceled,message:$message}' \
                 > "${_case_dir}/result.json"
         }
+        strategy_lab_set_circular_eligibility(){ :; }
         strategy_lab_status_file()
         {
             printf '%s\n' "${_case_dir}/result.json"
@@ -122,5 +123,6 @@ grep -Fq 'worker_finish_search' "${FLOW}" || fail 'normal worker flow does not c
 ! grep -Fq 'CANCEL_FINAL_MESSAGE' "${CONTROL}" || fail 'worker control still uses the cancel final-message override'
 grep -Fq 'worker_result' "${WORKER}" || fail 'worker does not load the result contract'
 grep -Fq 'strategy_lab_udp_input_cleanup(){ :; }' "$0" || fail 'terminal fixture does not mock UDP cleanup explicitly'
+grep -Fq 'strategy_lab_set_circular_eligibility(){ :; }' "$0" || fail 'terminal fixture does not mock circular eligibility persistence explicitly'
 
 echo 'PASS: Strategy Lab terminal state, outcome, report status, localized messages, and cleanup fixture are truthful'
