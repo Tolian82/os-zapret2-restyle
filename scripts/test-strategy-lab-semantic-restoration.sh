@@ -33,13 +33,27 @@ mkdir -p "${JOB_DIR}"
 
 cat > "${TIMEOUT}" <<'TIMEOUT'
 #!/bin/sh
-[ "${1:-}" = -f ] || {
-    echo "FAIL: lifecycle timeout must use foreground mode" >&2
-    exit 97
-}
-shift
+foreground=0
+if [ "${1:-}" = -f ]; then
+    foreground=1
+    shift
+fi
 [ "$#" -ge 2 ] || exit 64
 shift
+case "${1:-}" in
+    *strategy-lab-start)
+        [ "${foreground}" -eq 1 ] || {
+            echo "FAIL: daemonizing lifecycle start must use foreground timeout mode" >&2
+            exit 97
+        }
+        ;;
+    *strategy-lab-stop)
+        [ "${foreground}" -eq 0 ] || {
+            echo "FAIL: lifecycle stop must retain normal timeout semantics" >&2
+            exit 98
+        }
+        ;;
+esac
 exec "$@"
 TIMEOUT
 chmod 0755 "${TIMEOUT}"
@@ -175,7 +189,7 @@ grep -Fq 'runtime_args_hash' "${SERVICE_SOURCE}" || fail 'runtime identity evide
 grep -Fq 'effective_config_hash' "${SERVICE_SOURCE}" || fail 'effective strategy evidence is missing'
 grep -Fq 'normal_firewall_hash' "${SERVICE_SOURCE}" || fail 'normal firewall evidence is missing'
 grep -Fq 'strategy_lab_firewall_range_empty' "${MODULE_DIR}/lifecycle.sh" || fail 'temporary firewall cleanup is not verified'
-grep -Fq '"${STRATEGY_LAB_TIMEOUT_BIN}" -f' "${MODULE_DIR}/lifecycle.sh" || fail 'lifecycle timeout is not foreground-safe for daemon descendants'
+grep -Fq '"${STRATEGY_LAB_TIMEOUT_BIN}" -f' "${MODULE_DIR}/lifecycle.sh" || fail 'daemonizing lifecycle start is not foreground-safe'
 
 sh -n "${MODULE_DIR}/lifecycle.sh"
 sh -n "${SERVICE_SOURCE}"
