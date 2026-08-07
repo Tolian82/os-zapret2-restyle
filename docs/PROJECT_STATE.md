@@ -3,34 +3,39 @@
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Latest published testing prerelease: `v0.3.3_14` / `os-zapret2-restyle-0.3.3_14.pkg`
-Latest owner-tested testing candidate: `v0.3.3_14` / `os-zapret2-restyle-0.3.3_14.pkg`
+Latest published testing prerelease: `v0.3.3_15` / `os-zapret2-restyle-0.3.3_15.pkg`
+Latest owner-tested testing candidate: `v0.3.3_15` / `os-zapret2-restyle-0.3.3_15.pkg`
 Current source line: `VERSION=0.3.3`
-Current corrective package revision: `PLUGIN_REVISION=15`
+Current corrective package revision: `PLUGIN_REVISION=16`
 Target ABI: **FreeBSD:15:amd64 only**
 
 ## Historical live boundary
 
-`v0.3.3_14` is the latest owner-tested package. Live Scenario 1 on `_14`, job
-`job.mCqg7Y`, proved that the `_14` FreeBSD DNS timeout correction works on OPNsense:
-stage 40 passed with `DNS: OK`, a 416-byte `drill` result containing `NOERROR` and two A
-records, and the blocked clean TLS 1.3 baseline correctly continued to candidate testing.
-Stage 90 also passed and restored the initially RUNNING Zapret2 service completely.
+`v0.3.3_15` is the latest owner-tested package. Live Scenario 1 on `_15`, job
+`job.6eZM24`, again passed stages 00–40, failed at stage 50 with
+`Temporary candidate runtime failed internally.`, skipped stages 60–85, then passed stage
+90 and completely restored the initially RUNNING Zapret2 service. The visible result is
+therefore still blocked at temporary candidate execution even though the `_15` unset
+`STRATEGY_LAB_TIMEOUT_BIN` defect was corrected in source.
 
-The same live run exposed the next independent blocker at stage 50. The worker log
-reported:
+The same `_15` run reconfirmed the already tracked GUI defects: the new job id appeared
+with a stale visible `ERROR` immediately after Run, the progress display stayed at
+`0% — —` while work was active, and the display jumped directly to 100% at terminal
+completion.
 
-`strategy_lab_family_runner.sh: STRATEGY_LAB_TIMEOUT_BIN: parameter not set`
-
-The family summary remained `total:7, completed:0`, proving that the runner aborted before
-the first family candidate completed.
+Fresh source review found the next deterministic FreeBSD blocker in
+`strategy_lab_candidate_start()`: `/usr/sbin/daemon` is invoked synchronously with `-p`
+and `-o`. FreeBSD `daemon(8)` remains resident and waits while the supervised dvtws2 child
+is alive when these supervision/output options are used. A healthy candidate therefore
+prevents the shell from reaching the readiness loop. The Linux fixture had hidden this by
+using a fake daemon launcher that returned immediately.
 
 Evidence:
-`docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md`.
+`docs/verification/evidence/2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md`.
 
 ## Third audit corrective series
 
-Status: **SOURCE/CI COMPLETE — LIVE SCENARIO 1 BLOCKED AT STAGE 50; `_15` CORRECTION IN PROGRESS**
+Status: **SOURCE/CI COMPLETE — LIVE SCENARIO 1 BLOCKED AT STAGE 50; `_16` CORRECTION IN PROGRESS**
 
 Authoritative audit: `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
 
@@ -55,41 +60,42 @@ logical defect at a time.
 - Live `_13` Scenario 1 — stage 90 PASS and normal Zapret2 remained healthy; stage 40 failed because `/usr/bin/timeout 2 /usr/bin/drill rutracker.org A` returned 124 with zero output while direct `drill` and `timeout -f` both returned `NOERROR`. Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_13-scenario-01-stage40-freebsd-dns-timeout.md`.
 - Corrective `_14` — PR #126, main `36e34414c869ff6e1062e37b91772aa8cdc05455`; published testing prerelease `v0.3.3_14`; FreeBSD DNS requests use foreground timeout mode.
 - Live `_14` Scenario 1 — stage 40 PASS, stage 90 PASS, stage 50 FAIL before the first family because `STRATEGY_LAB_TIMEOUT_BIN` was unset in the family runner context. Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md`.
-- Corrective `_15` — family module owns the timeout executable default and a focused regression invokes the production family runner under `set -u` with no caller-provided timeout variable.
+- Corrective `_15` — PR #127, main `6807bd7068f960832bf0ee42005c58cdf9d355ff`; published testing prerelease `v0.3.3_15`; family module owns the timeout executable default and the focused `set -u` regression passes.
+- Live `_15` Scenario 1 — stage 40 PASS, stage 90 PASS, stage 50 still FAIL with generic candidate-runtime internal error; GUI stale-error/progress defects reconfirmed. Fresh source review proves synchronous FreeBSD `daemon(8)` supervision prevents candidate readiness from being reached. Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md`.
+- Corrective `_16` — temporary candidate `daemon(8)` supervision is detached so the existing pid/socket/log readiness proof can execute while dvtws2 remains healthy; the candidate-runtime fixture now models a resident FreeBSD-style supervisor.
 
 ## Current verification boundary
 
-Live OPNsense matrix: **FAILED AT STAGE 50 ON `_14` — CORRECTIVE `_15` REQUIRED**.
+Live OPNsense matrix: **FAILED AT STAGE 50 ON `_15` — CORRECTIVE `_16` REQUIRED**.
 
-The `_14` live run verified two safety/flow sub-gates:
+The `_15` live run verified the same safety/flow sub-gates:
 
-- stage 40 now advances correctly on FreeBSD with `DNS: OK` and a blocked clean TLS 1.3 baseline;
+- stage 40 advances correctly on FreeBSD with `DNS: OK` and a blocked clean TLS 1.3 baseline;
 - stage 90 restores the initial RUNNING Zapret2 service completely and leaves it healthy.
 
-The current stage-50 root cause is deterministic. `strategy_lab_family_runner.sh` enables
-`set -eu` and sources `common.sh`, `result.sh`, and `family.sh`. In `_14`, `family.sh`
-uses `${STRATEGY_LAB_TIMEOUT_BIN}` without defining it, so the runner aborts before the
-first family candidate. `_15` limits the product change to ownership of that default in
-the family module.
+The next deterministic stage-50 source blocker is the foreground `daemon(8)` monitor in
+`strategy_lab_candidate_start()`. FreeBSD keeps that monitor alive while the child pidfile
+or output supervision is active, so candidate readiness cannot run until the candidate has
+already terminated. `_16` changes only that startup ownership/lifecycle behavior.
 
 Authoritative live plan: `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
 ## Confirmed defect backlog
 
 The following defects are confirmed and must remain documented until corrected and live
-or source-qualified as applicable. They are intentionally outside the `_15` stage-50
+or source-qualified as applicable. They are intentionally outside the `_16` stage-50
 scope unless stated otherwise.
 
-1. **Stage-50 family timeout variable ownership — correcting in `_15`.** The family runner aborts under `set -u` because `STRATEGY_LAB_TIMEOUT_BIN` is not owned by a sourced module.
+1. **Stage-50 FreeBSD candidate daemon startup — correcting in `_16`.** The temporary runtime invokes resident FreeBSD `daemon(8)` supervision synchronously, so the readiness loop cannot execute while dvtws2 is healthy.
 2. **Baseline target-type corruption — pending.** `baseline.json` records `target_type:"A"` for a domain because DNS helpers reuse the shell-global `_strategy_lab_type` variable.
-3. **Immediate stale GUI error after Run — pending.** A newly created job id can be displayed together with the previous terminal job's visible `ERROR` state before fresh polling renders the new state.
-4. **GUI progress stuck at 0% while backend advances — pending.** On job `job.mCqg7Y`, the UI stayed at `0%` until completion while authoritative `status.json` advanced through 18%, 27%, 36%, 91%, and 100%.
+3. **Immediate stale GUI error after Run — pending.** A newly created job id can be displayed together with the previous terminal job's visible `ERROR` state before fresh polling renders the new state. Reconfirmed on `_15` job `job.6eZM24`.
+4. **GUI progress stuck at 0% while backend advances — pending.** The UI remained at `0% — —` during both `_14` and `_15` owner runs and jumped to 100% only at terminal completion; `_14` authoritative `status.json` evidence already proved backend progress itself advances normally.
 5. **DNS answer parser accepts question lines — pending.** The current raw-output grep can match `IN A`/`IN AAAA` in `QUESTION SECTION`; it does not prove a real answer record.
 6. **DNS failure diagnostics flatten distinct failures — pending.** Endpoint DNS failures are collapsed to generic return/exit code 1, losing timeout versus command failure versus parser rejection.
 7. **Terminal-result reload/state presentation — pending.** Scenario 15 requires a completed/error job not to be resurrected as the active state of a newly opened Diagnostics page; the current initial status path still reads retained latest-job state and is part of the GUI state correction scope.
 
-Live/source evidence for items 2–6 is preserved in
-`docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md`.
+Live/source evidence for items 2–7 is preserved in the `_14` and `_15` Scenario 1 evidence
+records under `docs/verification/evidence/`.
 
 ## Current GitHub delivery authority
 
@@ -113,7 +119,7 @@ published `main` history is not rewritten.
 Stable release preparation and pkg-repository promotion: **BLOCKED ON LIVE MATRIX**.
 
 The owner's current installable-package instruction authorizes publication of the next
-deterministically derived testing prerelease after the `_15` ordinary PR/CI/squash cycle.
+deterministically derived testing prerelease after the `_16` ordinary PR/CI/squash cycle.
 It does not authorize stable release or pkg-repository promotion.
 
 Current product authority:
@@ -125,4 +131,4 @@ Current product authority:
 - `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md`;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
-Next action: **complete `_15` source/CI/FreeBSD 15 package verification, squash-merge it, publish testing prerelease `v0.3.3_15`, then owner-assisted Scenario 1 must confirm that stage 50 actually enters family execution while stage 40 and stage 90 remain PASS.**
+Next action: **complete `_16` source/CI/FreeBSD 15 package verification, squash-merge it, publish testing prerelease `v0.3.3_16`, then owner-assisted Scenario 1 must confirm that stage 50 reaches real candidate readiness/family execution while stage 40 and stage 90 remain PASS.**
