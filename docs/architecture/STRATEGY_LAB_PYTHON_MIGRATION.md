@@ -131,8 +131,8 @@ necessary.
 STATE AND DATA MODEL
 ==================================================
 
-Python represents migrated state explicitly rather than through reused shell-global
-mutation pipelines.
+Python represents migrated automated-job state explicitly rather than through reused
+shell-global mutation pipelines.
 
 Minimum structured concepts remain:
 
@@ -156,12 +156,14 @@ Migration Patch 2 establishes these concrete ownership rules:
 - `strategy_lab_py/state.py` is the sole authoritative writer for automated-job
   `status.json` and `events.ndjson`;
 - the shell `strategy_lab/state.sh` exposes compatibility helper names only and delegates
-  all authoritative state/event mutations to Python;
+  authoritative automated-job state/event mutations to Python;
 - shell algorithms may continue to produce stage-specific intermediate/result files
-  until their designated migration patch, but embedding those results into authoritative
-  job state is Python-owned;
-- both ordinary `status.json` and private circular-session `state.json` paths are valid
-  targets where existing lifecycle code intentionally shares the persistence adapter;
+  until their designated migration patch, but embedding those results into automated-job
+  state is Python-owned;
+- private circular-session `state.json` remains on its pre-existing shell writer in Patch
+  2, preventing simultaneous Python/shell ownership of that separate contract;
+- the Python state engine validates `state.json` paths for future migration/testing, but
+  that support is not a production circular-state cutover;
 - public JSON schema is the compatibility authority, not the internal Python layout.
 
 ==================================================
@@ -176,22 +178,24 @@ Existing evidence locations remain stable during migration:
 - `events.ndjson`;
 - stage/candidate evidence files required by the current result contracts.
 
-Patch 2 persistence invariants:
+Patch 2 automated-job persistence invariants:
 
 1. Schema remains `2` for automated `status.json`.
 2. Existing stage numbers, stage keys, progress percentages, state/outcome fields,
    cancellation fields, and structured-result field names remain unchanged.
-3. Every serialized status mutation increments `revision` exactly once, including a
-   mutation whose semantic body becomes a terminal no-op.
-4. Concurrent state/event writers use the Python state lock; the removed shell
-   `strategy_lab_state_transform` is not a competing owner.
+3. Every serialized automated-job status mutation increments `revision` exactly once,
+   including a mutation whose semantic body becomes a terminal no-op.
+4. Concurrent automated-job state/event writers use the Python state lock; the removed
+   shell `strategy_lab_state_transform` is not a competing owner.
 5. JSON/NDJSON replacement uses a same-directory temporary file, flush, fsync, atomic
    `os.replace`, and mode `0644`.
-6. Event writes are serialized through the same state ownership boundary and remain valid
-   line-delimited JSON.
-7. The GUI/API never needs to know which language owns persistence.
+6. Event writes are serialized through the same automated-job state ownership boundary
+   and remain valid line-delimited JSON.
+7. The GUI/API never needs to know which language owns automated-job persistence.
 8. Moving persisted progress to Python does not itself prove the owner-observed GUI
    progress defect is fixed; that remains live/UI gated.
+9. Private circular-session `state.json` keeps its existing shell persistence contract
+   until a separately scoped cutover.
 
 ==================================================
 SUBPROCESS CONTRACT
@@ -230,9 +234,10 @@ The following requirements are migration invariants:
 10. Saved Traffic Strategy remains immutable.
 
 Patch 2 does not move lifecycle decisions. Existing audited lifecycle/recovery helpers
-still make those decisions, but lifecycle snapshot/restoration fields in authoritative job
-state are persisted through Python. This includes the shared circular-recovery path via
-its actual private `state.json` path.
+still make those decisions. For ordinary automated jobs, lifecycle snapshot/restoration
+fields are persisted through Python. For private circular sessions, the shared lifecycle
+helper retains the existing circular-state writer until that separate state contract is
+explicitly migrated.
 
 ==================================================
 CONFIRMED DEFECTS TO CARRY FORWARD
@@ -250,9 +255,10 @@ The migration backlog is not reset. At the live handoff boundary:
 8. Terminal reload/state presentation can resurrect retained terminal work incorrectly.
 9. Candidate readiness log classification can miss fatal runtime log evidence.
 
-Patch 2 removes shell-private authoritative state mutation from the migrated layer. This
-is architectural progress, not automatic defect closure. Each backlog item remains open
-until focused replacement tests and any required live/UI verification close it.
+Patch 2 removes shell-private authoritative automated-job state mutation from the migrated
+layer. This is architectural progress, not automatic defect closure. Each backlog item
+remains open until focused replacement tests and any required live/UI verification close
+it.
 
 ==================================================
 MIGRATION PATCH SERIES
@@ -273,13 +279,14 @@ Patch 1 — Python platform and compatibility foundation: **COMPLETE / MERGED AS
 - keep runtime behavior unchanged;
 - establish a thin compatibility launcher and deterministic error reporting if Python cannot start.
 
-Patch 2 — Python job state, progress, and structured persistence: **IMPLEMENTED IN `_19` SOURCE**
+Patch 2 — Python automated-job state, progress, and structured persistence: **IMPLEMENTED IN `_19` SOURCE**
 
-- move authoritative status/event persistence helpers to Python;
+- move authoritative automated-job status/event persistence helpers to Python;
 - preserve exact public JSON, progress, cancellation, and revision contracts;
-- route structured result/lifecycle/stale-recovery/eligibility state fields through Python;
-- remove the migrated shell jq/temp/mv state writers;
-- add atomic-write, concurrency, revision, progress, event, stale-recovery, and circular-path parity tests;
+- route automated-job structured result/lifecycle/stale-recovery/eligibility fields through Python;
+- remove the migrated shell jq/temp/mv status writers;
+- keep private circular-session `state.json` on its existing writer until a separate cutover;
+- add atomic-write, concurrency, revision, progress, event, stale-recovery, and state-path parity tests;
 - keep numbered stage orchestration outside this patch.
 
 Patch 3 — Python stage machine, budgets, cancellation, and finalization: **NEXT AFTER PATCH 2 QUALIFICATION**
@@ -339,16 +346,15 @@ Migration Patch 2 additionally requires:
 - Python 3.13 import and `py_compile` for `strategy_lab_py/state.py`;
 - exact schema-2 initialization parity;
 - exact stage-key and progress-percentage parity;
-- revision increments under sequential and concurrent mutations;
+- revision increments under sequential and concurrent automated-job mutations;
 - terminal-state guards with preserved revision semantics;
 - cancellation timestamp preservation on repeated requests;
 - valid concurrent readers during concurrent writes;
 - atomic valid `events.ndjson` persistence;
-- mode `0644` and no leftover temporary state/event files;
-- ordinary `status.json` and circular `state.json` path coverage;
-- deterministic invalid-path handling;
-- absence of shell `strategy_lab_state_transform` and private stale-recovery state writers;
-- complete existing Strategy Lab corrective matrix;
+- mode `0644` and no leftover temporary automated-job state/event files;
+- deterministic state-path validation, including future-compatible private `state.json` syntax without changing current circular ownership;
+- absence of shell `strategy_lab_state_transform` and private stale-recovery automated-job state writers;
+- complete existing Strategy Lab corrective matrix, including unchanged circular isolation/ownership fixtures;
 - FreeBSD 15 execution with `python313` and built-package presence of `state.py`.
 
 Required principles:
@@ -374,5 +380,6 @@ For each responsibility:
 
 Patch 1 stopped before an ownership switch. Patch 2 performs the first responsibility
 cutover: authoritative automated-job state/progress/event persistence switches to Python
-and the competing shell transforms are removed. The shell numbered stage machine remains
-a caller of that persistence API until Patch 3.
+and the competing shell transforms for that contract are removed. The shell numbered
+stage machine remains a caller of that persistence API until Patch 3. Private circular
+session state remains outside this cutover and retains its existing single shell owner.
