@@ -44,23 +44,40 @@ restoration failure are corrected.
 Revision `_6` is the corrective candidate used to restore repository consistency and then
 repair the confirmed Strategy Lab lifecycle failure.
 
-The baseline `_6` reconciliation scope:
+Baseline `_6` reconciliation merged to `main` as
+`471ad322b805c14423c4cee553e6cb111a569b29`. Its exact PR head produced the verified
+FreeBSD 15 artifact `os-zapret2-restyle-0.3.3_6.pkg` in Actions artifact `8979980843`.
+That package artifact verifies source/package identity only and is not a published or
+live-tested `_6` candidate.
 
-- advances `PLUGIN_REVISION` to `6` without changing `VERSION=0.3.3`;
-- records the truthful `_5` live failure;
-- restores the generic testing-prerelease publisher now that stale `publish/*` refs have
-  been removed;
-- reconciles GitHub governance/current-state tests and documentation with actual
-  repository state;
-- keeps the live matrix blocked while source correction is incomplete.
+The first `_6` source correction targets stage 50. The live message proves that a
+candidate result existed before the runner returned non-zero. Source inspection found
+that startup/readiness trusted the job-owned candidate PID file, while teardown stopped
+using that ownership proof and depended solely on rediscovery through a global `ps ax`
+snapshot. The corrective patch now:
+
+- validates the PID from the job-owned candidate PID file with the same executable and
+  `--port=9989` identity used at startup;
+- sends TERM and, if required, KILL to that owned process first;
+- retains the global process scan only as a secondary sweep for duplicate/stale
+  candidate processes;
+- still requires proven absence of candidate processes and the divert listener before
+  teardown succeeds;
+- adds a regression where pid-specific identity is valid while global discovery omits
+  the process, which the previous teardown cannot clean.
+
+This stage-50 correction is currently a source/CI claim only. It does not convert live
+scenario 1 to PASS.
 
 The remaining `_6` source work is deliberately split into two sequential logical patches:
 
-1. correct the stage-50 temporary candidate runtime internal failure and merge that patch
-   to `main` after full CI plus FreeBSD 15 package verification;
-2. starting from that `main`, correct the stage-90 restoration path so the original
-   service state is restored deterministically, then merge after the same repository
-   verification.
+1. **Stage-50 candidate runtime ownership correction:** in delivery; merge to `main`
+   after full CI plus FreeBSD 15 package verification, without an intermediate manual
+   OPNsense test.
+2. **Stage-90 restoration-path correction:** starts from the resulting `main`; restore
+   the original RUNNING service deterministically and retain truthful `RESTORE_FAILED`
+   on a genuine restoration failure; merge after the same repository verification,
+   again without an intermediate manual OPNsense test.
 
 The owner requested these source corrections to reach `main` without an intermediate
 manual OPNsense test. Repository CI does not create a live PASS: owner-assisted live
