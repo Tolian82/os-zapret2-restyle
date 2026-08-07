@@ -49,7 +49,7 @@ A one-second live watcher proved the stage-90 root cause. The normal runtime bec
 
 Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`.
 
-The `_13` corrective scope is intentionally limited to this stage-90 defect: lifecycle service actions use FreeBSD foreground timeout mode so daemon descendants are not reaped by the timeout wrapper. Stage 50 remains a separate live blocker and requires its own subsequent logical correction.
+The `_13` corrective scope is intentionally limited to this stage-90 defect: on FreeBSD only, daemonizing `strategy-lab-start` uses foreground timeout mode so its long-lived runtime descendants are not reaped by the timeout wrapper; stop and non-FreeBSD actions retain normal timeout semantics. Stage 50 remains a separate live blocker and requires its own subsequent logical correction.
 
 Authoritative third-audit record:
 
