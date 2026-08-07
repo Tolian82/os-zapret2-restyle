@@ -168,7 +168,7 @@ grep -Fq 'def terminal_message(language: str, mode: str, outcome: str, canceled:
     fail 'Python localized terminal message mapping is missing'
 grep -Fq 'outcome = self._restore(outcome)' "${ORCHESTRATOR}" ||
     fail 'Python finalization does not enforce restoration before terminal persistence'
-grep -Fq 'outcome = "RESTORE_FAILED"' "${ORCHESTRATOR}" ||
+grep -Fq 'return "RESTORE_FAILED"' "${ORCHESTRATOR}" ||
     fail 'Python restoration failure does not override the prior outcome'
 grep -Fq 'strategy_lab_udp_input_cleanup(){ :; }' "$0" || fail 'legacy terminal fixture does not mock UDP cleanup explicitly'
 grep -Fq 'strategy_lab_set_circular_eligibility(){ :; }' "$0" || fail 'legacy terminal fixture does not mock circular eligibility persistence explicitly'
