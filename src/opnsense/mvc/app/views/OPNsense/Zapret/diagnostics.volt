@@ -72,7 +72,7 @@ $(document).ready(function () {
     function esc(value) { return $('<div/>').text(value == null ? '' : String(value)).html(); }
     function label(map, key) { return map[key] || key || '—'; }
     function apiPost(url, data, done) {
-        $.ajax({type:'POST', url:url, data:data || {}, dataType:'json', timeout:15000,
+        $.ajax({type:'POST', url:url, data:data || {}, dataType:'json', timeout:200000,
             success:function (reply) { done(reply || {}); }, error:function (xhr, status) { done({status:'error', message:ui.requestFailed + status}); }});
     }
     function terminal(state) { return state === 'completed' || state === 'error'; }

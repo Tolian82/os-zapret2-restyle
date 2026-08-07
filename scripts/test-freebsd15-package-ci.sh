@@ -56,8 +56,11 @@ grep -Fq 'tar -xOf dist/*.pkg +MANIFEST > "${manifest}"' "${CI}" || fail 'packag
 if grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGRESS**' "${MATRIX}"; then
     grep -Fq 'Current corrective candidate: **NOT DESIGNATED — PATCH 8 REQUIRED**' "${MATRIX}" ||
         fail 'paused third-audit matrix must not designate a live candidate before Patch 8'
-    grep -Fq "Historical \`_6\` CI package: \`${candidate}\`" "${MATRIX}" ||
-        fail "paused matrix does not preserve the current historical package identity: ${candidate}"
+    grep -Fq 'Historical `_6` CI package: `os-zapret2-restyle-0.3.3_6.pkg`' "${MATRIX}" ||
+        fail 'paused matrix must preserve the exact historical _6 CI package evidence'
+    if grep -Fq "Current corrective candidate: \`${candidate}\`" "${MATRIX}"; then
+        fail "paused matrix prematurely designates the current package as a live candidate: ${candidate}"
+    fi
 else
     grep -Fq "Current corrective candidate: \`${candidate}\`" "${MATRIX}" ||
         fail "live matrix does not select the current corrective package: ${candidate}"
