@@ -3,7 +3,11 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-MODULE_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab"
+ZAPRET_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
+MODULE_DIR="${ZAPRET_DIR}/strategy_lab"
+ORCHESTRATOR="${ZAPRET_DIR}/strategy_lab_py/orchestrator.py"
+WORKER="${ZAPRET_DIR}/strategy_lab_worker.sh"
+PYTHON_BIN=${STRATEGY_LAB_TEST_PYTHON:-${STRATEGY_LAB_PYTHON_BIN:-python3.13}}
 TEST_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-terminal-result.XXXXXX")
 trap 'rm -rf "${TEST_ROOT}"' EXIT HUP INT TERM
 
@@ -13,7 +17,9 @@ fail()
     exit 1
 }
 
-run_case()
+# Keep the retired shell terminal helper under compatibility coverage until Patch 7
+# removes obsolete shell orchestration modules. It is no longer the production owner.
+run_legacy_case()
 {
     _case="$1"
     _language="$2"
@@ -85,44 +91,89 @@ run_case()
         --arg outcome "${_expected_outcome}" \
         --argjson canceled "${_canceled}" \
         '.state==$state and .outcome==$outcome and .current_stage=="99" and .cancel_requested==$canceled' \
-        "${_case_dir}/result.json" >/dev/null || fail "${_case}: terminal state mapping is invalid"
+        "${_case_dir}/result.json" >/dev/null || fail "${_case}: legacy terminal state mapping is invalid"
     "$(command -v jq)" -r '.message' "${_case_dir}/result.json" |
-        grep -Fq "${_message_fragment}" || fail "${_case}: terminal message is not truthful"
+        grep -Fq "${_message_fragment}" || fail "${_case}: legacy terminal message is not truthful"
     grep -Fq "99|${_expected_report}|" "${_case_dir}/stages" ||
-        fail "${_case}: stage 99 status is invalid"
+        fail "${_case}: legacy stage 99 status is invalid"
 }
 
-run_case standard-success en standard SEARCH false true 2 completed SUCCESS \
+run_legacy_case standard-success en standard SEARCH false true 2 completed SUCCESS \
     'Standard search completed with 2 stable working strategies' PASS
-run_case extended-success en extended SEARCH false true 1 completed SUCCESS \
+run_legacy_case extended-success en extended SEARCH false true 1 completed SUCCESS \
     'Extended search completed with 1 stable working strategies' PASS
-run_case standard-no-candidate en standard SEARCH false true 0 completed NO_CANDIDATE \
+run_legacy_case standard-no-candidate en standard SEARCH false true 0 completed NO_CANDIDATE \
     'no stable working strategy was found' PASS
-run_case accessible ru standard TARGET_ACCESSIBLE false true 0 completed TARGET_ACCESSIBLE \
+run_legacy_case accessible ru standard TARGET_ACCESSIBLE false true 0 completed TARGET_ACCESSIBLE \
     'Цель доступна без обхода' PASS
-run_case canceled en standard PARTIAL true true 0 completed PARTIAL \
+run_legacy_case canceled en standard PARTIAL true true 0 completed PARTIAL \
     'Test canceled' PASS
-run_case prerequisite ru standard PARTIAL false true 0 completed PARTIAL \
+run_legacy_case prerequisite ru standard PARTIAL false true 0 completed PARTIAL \
     'Поиск завершён не полностью' PASS
-run_case timeout en extended TIMEOUT false true 0 error TIMEOUT \
+run_legacy_case timeout en extended TIMEOUT false true 0 error TIMEOUT \
     'time limit was reached' FAIL
-run_case internal-error ru standard ERROR false true 0 error ERROR \
+run_legacy_case internal-error ru standard ERROR false true 0 error ERROR \
     'Внутренняя ошибка Strategy Lab' FAIL
-run_case restore-failed en standard SUCCESS false false 2 error RESTORE_FAILED \
+run_legacy_case restore-failed en standard SUCCESS false false 2 error RESTORE_FAILED \
     'original Zapret2 state could not be restored' FAIL
+
+# Patch 3 production authority: terminal mapping and localized terminal messages are Python-owned.
+command -v "${PYTHON_BIN}" >/dev/null 2>&1 || fail 'Python 3.13 runtime is unavailable'
+PYTHONPATH="${ZAPRET_DIR}" "${PYTHON_BIN}" - <<'PY'
+from strategy_lab_py.orchestrator import terminal_message, terminal_report_status, terminal_state
+
+cases = [
+    ("SUCCESS", False, "completed", "PASS"),
+    ("NO_CANDIDATE", False, "completed", "PASS"),
+    ("TARGET_ACCESSIBLE", False, "completed", "PASS"),
+    ("PARTIAL", True, "completed", "PASS"),
+    ("TIMEOUT", False, "error", "FAIL"),
+    ("ERROR", False, "error", "FAIL"),
+    ("RESTORE_FAILED", False, "error", "FAIL"),
+]
+for outcome, _canceled, expected_state, expected_report in cases:
+    assert terminal_state(outcome) == expected_state
+    assert terminal_report_status(outcome) == expected_report
+
+assert "Standard search completed with 2 stable working strategies" in terminal_message("en", "standard", "SUCCESS", False, 2)
+assert "Extended search completed with 1 stable working strategies" in terminal_message("en", "extended", "SUCCESS", False, 1)
+assert "no stable working strategy was found" in terminal_message("en", "standard", "NO_CANDIDATE", False, 0)
+assert "Цель доступна без обхода" in terminal_message("ru", "standard", "TARGET_ACCESSIBLE", False, 0)
+assert "Test canceled" in terminal_message("en", "standard", "PARTIAL", True, 0)
+assert "Поиск завершён не полностью" in terminal_message("ru", "standard", "PARTIAL", False, 0)
+assert "time limit was reached" in terminal_message("en", "extended", "TIMEOUT", False, 0)
+assert "Внутренняя ошибка Strategy Lab" in terminal_message("ru", "standard", "ERROR", False, 0)
+assert "original Zapret2 state could not be restored" in terminal_message("en", "standard", "RESTORE_FAILED", False, 0)
+PY
 
 FLOW="${MODULE_DIR}/worker_flow.sh"
 CONTROL="${MODULE_DIR}/worker_control.sh"
-WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_worker.sh"
 
-grep -Fq 'worker_finish_search' "${FLOW}" || fail 'normal worker flow does not classify search results'
-! grep -Fq 'PARTIAL_FINAL_MESSAGE' "${FLOW}" || fail 'worker flow still uses load-order final message'
-! grep -Fq 'PARTIAL_FINAL_MESSAGE' "${CONTROL}" || fail 'worker control still uses the partial final-message override'
-! grep -Fq 'ERROR_FINAL_MESSAGE' "${CONTROL}" || fail 'worker control still uses the error final-message override'
-! grep -Fq 'TIMEOUT_FINAL_MESSAGE' "${CONTROL}" || fail 'worker control still uses the timeout final-message override'
-! grep -Fq 'CANCEL_FINAL_MESSAGE' "${CONTROL}" || fail 'worker control still uses the cancel final-message override'
-grep -Fq 'worker_result' "${WORKER}" || fail 'worker does not load the result contract'
-grep -Fq 'strategy_lab_udp_input_cleanup(){ :; }' "$0" || fail 'terminal fixture does not mock UDP cleanup explicitly'
-grep -Fq 'strategy_lab_set_circular_eligibility(){ :; }' "$0" || fail 'terminal fixture does not mock circular eligibility persistence explicitly'
+grep -Fq 'worker_finish_search' "${FLOW}" || fail 'legacy worker flow does not retain result-classification compatibility'
+! grep -Fq 'PARTIAL_FINAL_MESSAGE' "${FLOW}" || fail 'legacy worker flow still uses load-order final message'
+! grep -Fq 'PARTIAL_FINAL_MESSAGE' "${CONTROL}" || fail 'legacy worker control still uses the partial final-message override'
+! grep -Fq 'ERROR_FINAL_MESSAGE' "${CONTROL}" || fail 'legacy worker control still uses the error final-message override'
+! grep -Fq 'TIMEOUT_FINAL_MESSAGE' "${CONTROL}" || fail 'legacy worker control still uses the timeout final-message override'
+! grep -Fq 'CANCEL_FINAL_MESSAGE' "${CONTROL}" || fail 'legacy worker control still uses the cancel final-message override'
 
-echo 'PASS: Strategy Lab terminal state, outcome, report status, localized messages, and cleanup fixture are truthful'
+grep -Fq 'exec "${PYTHON_LAUNCHER}" orchestrate "${JOB_ID}"' "${WORKER}" ||
+    fail 'production worker does not delegate terminal policy to Python'
+! grep -Fq 'worker_result' "${WORKER}" ||
+    fail 'production worker still loads the retired shell terminal-result owner'
+grep -Fq 'def terminal_state(outcome: str)' "${ORCHESTRATOR}" ||
+    fail 'Python terminal state mapping is missing'
+grep -Fq 'def terminal_report_status(outcome: str)' "${ORCHESTRATOR}" ||
+    fail 'Python terminal report mapping is missing'
+grep -Fq 'def terminal_message(language: str, mode: str, outcome: str, canceled: bool, count: int = 0)' "${ORCHESTRATOR}" ||
+    fail 'Python localized terminal message mapping is missing'
+grep -Fq 'outcome = self._restore(outcome)' "${ORCHESTRATOR}" ||
+    fail 'Python finalization does not enforce restoration before terminal persistence'
+grep -Fq 'return "RESTORE_FAILED"' "${ORCHESTRATOR}" ||
+    fail 'Python restoration failure does not override the prior outcome'
+grep -Fq 'strategy_lab_udp_input_cleanup(){ :; }' "$0" || fail 'legacy terminal fixture does not mock UDP cleanup explicitly'
+grep -Fq 'strategy_lab_set_circular_eligibility(){ :; }' "$0" || fail 'legacy terminal fixture does not mock circular eligibility persistence explicitly'
+
+"${PYTHON_BIN}" -m py_compile "${ORCHESTRATOR}"
+sh -n "${WORKER}"
+
+echo 'PASS: Python owns Strategy Lab terminal state/outcome/report/localization/finalization while legacy shell result helpers remain compatibility-only'

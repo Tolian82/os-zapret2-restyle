@@ -126,6 +126,9 @@ jobs:
       - name: Test Strategy Lab Python state persistence
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-state-persistence.sh
 
+      - name: Test Strategy Lab Python orchestration
+        run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-orchestration.sh
+
       - name: Test runtime profile normalization
         run: sh scripts/test-profile-normalizer.sh
 
@@ -205,6 +208,7 @@ jobs:
             scripts/test-strategy-lab-corrective-matrix-contract.sh \
             scripts/test-strategy-lab-python-foundation.sh \
             scripts/test-strategy-lab-python-state-persistence.sh \
+            scripts/test-strategy-lab-python-orchestration.sh \
             scripts/test-diagnostics-guidance-localization.sh \
             scripts/test-package-lifecycle-restart.sh \
             scripts/test-setup-release-selection.sh \
@@ -294,6 +298,7 @@ jobs:
             test "$(freebsd-version -u | cut -d. -f1)" = "15"
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-foundation.sh
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-state-persistence.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-orchestration.sh
             sh scripts/build-pkg.sh
 
       - name: Inspect built FreeBSD 15 package
@@ -310,6 +315,8 @@ jobs:
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_python.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/compat.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/state.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/orchestrator.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_stage_adapter.sh' "${contents}"
           tar -xOf dist/*.pkg +MANIFEST > "${manifest}"
           jq -e '.abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64" and .deps.python313.origin == "lang/python313"' "${manifest}" >/dev/null
           head -80 "${manifest}"

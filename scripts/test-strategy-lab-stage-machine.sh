@@ -3,12 +3,12 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-MODULE="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab/worker_stage_machine.sh"
-WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_worker.sh"
-FLOW="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab/worker_flow.sh"
-CONTROL="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab/worker_control.sh"
-TEST_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-stage-machine.XXXXXX")
-trap 'rm -rf "${TEST_ROOT}"' EXIT HUP INT TERM
+ZAPRET_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
+PYTHON_BIN=${STRATEGY_LAB_TEST_PYTHON:-${STRATEGY_LAB_PYTHON_BIN:-python3.13}}
+ORCHESTRATOR="${ZAPRET_DIR}/strategy_lab_py/orchestrator.py"
+WORKER="${ZAPRET_DIR}/strategy_lab_worker.sh"
+STATE_MODULE="${ZAPRET_DIR}/strategy_lab_py/state.py"
+LEGACY_STAGE_MACHINE="${ZAPRET_DIR}/strategy_lab/worker_stage_machine.sh"
 
 fail()
 {
@@ -16,131 +16,45 @@ fail()
     exit 1
 }
 
-mkdir -p "${TEST_ROOT}/job"
-CANCEL_FILE="${TEST_ROOT}/cancel"
-rm -f "${CANCEL_FILE}"
+command -v "${PYTHON_BIN}" >/dev/null 2>&1 || fail 'Python 3.13 runtime is unavailable'
+"${PYTHON_BIN}" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)' ||
+    fail 'Strategy Lab stage-machine test requires Python 3.13'
 
-STRATEGY_LAB_JQ=$(command -v jq)
-STRATEGY_LAB_TIMEOUT_BIN="${TEST_ROOT}/timeout"
-JOB_ID=job.TEST
-JOB_DIR="${TEST_ROOT}/job"
-LANGUAGE=en
-STRATEGY_LAB_STAGE60_TIMEOUT=60
-STRATEGY_LAB_STAGE70_TIMEOUT=60
-STRATEGY_LAB_STAGE80_TIMEOUT=120
-export STRATEGY_LAB_JQ
+PYTHONPATH="${ZAPRET_DIR}" "${PYTHON_BIN}" - <<'PY'
+from strategy_lab_py import orchestrator
+from strategy_lab_py import state
 
-cat > "${STRATEGY_LAB_TIMEOUT_BIN}" <<'TIMEOUT'
-#!/bin/sh
-shift
-exec "$@"
-TIMEOUT
-cat > "${TEST_ROOT}/expansion" <<'RUNNER'
-#!/bin/sh
-printf '%s\n' '{"working":["x"],"completed":1}' > "$4"
-RUNNER
-cat > "${TEST_ROOT}/stability" <<'RUNNER'
-#!/bin/sh
-printf '%s\n' '{"stable":["x"],"completed":1,"candidates":[{"id":"x","family":"f","strategy":"--x","stable":true,"line_count":1,"character_count":3}]}' > "$5"
-RUNNER
-cat > "${TEST_ROOT}/extended" <<'RUNNER'
-#!/bin/sh
-printf '%s\n' '{"protocols":{"tls12":{"working":null},"http":{"working":null}}}' > "$3"
-RUNNER
-cat > "${TEST_ROOT}/quic" <<'RUNNER'
-#!/bin/sh
-printf '%s\n' '{"status":"skipped"}' > "$4"
-RUNNER
-cat > "${TEST_ROOT}/udp" <<'RUNNER'
-#!/bin/sh
-printf '%s\n' '{"status":"skipped"}' > "$3"
-RUNNER
-chmod 0755 "${STRATEGY_LAB_TIMEOUT_BIN}" "${TEST_ROOT}/expansion" \
-    "${TEST_ROOT}/stability" "${TEST_ROOT}/extended" \
-    "${TEST_ROOT}/quic" "${TEST_ROOT}/udp"
+expected = ("00", "10", "20", "30", "40", "50", "60", "70", "80", "85", "90", "99")
+actual = tuple(number for number, _key in state.STAGES)
+assert actual == expected, (actual, expected)
+assert tuple(orchestrator.RUNNING_EVENTS) == expected[:-1]
+assert orchestrator.RUNNING_EVENTS["90"]
+PY
 
-EXPANSION_RUNNER="${TEST_ROOT}/expansion"
-STABILITY_RUNNER="${TEST_ROOT}/stability"
-EXTENDED_RUNNER="${TEST_ROOT}/extended"
-QUIC_RUNNER="${TEST_ROOT}/quic"
-UDP_RUNNER="${TEST_ROOT}/udp"
+grep -Fq 'for stage in ("00", "10", "20", "30", "40", "50", "60", "70"):' "${ORCHESTRATOR}" ||
+    fail 'Python orchestrator does not own the ordered pre-search stage sequence'
+grep -Fq 'outcome = self._run_stage80()' "${ORCHESTRATOR}" ||
+    fail 'Python orchestrator does not own stage 80 progression'
+grep -Fq 'outcome = self._run_regular_stage("85")' "${ORCHESTRATOR}" ||
+    fail 'Python orchestrator does not own stage 85 progression'
+grep -Fq 'self.current_stage = "90"' "${ORCHESTRATOR}" ||
+    fail 'Python finalizer does not own mandatory stage 90 progression'
+grep -Fq 'self.current_stage = "99"' "${ORCHESTRATOR}" ||
+    fail 'Python finalizer does not own terminal stage 99 progression'
+grep -Fq 'self._skip("80", _message(self.language, "stage80_skip"))' "${ORCHESTRATOR}" ||
+    fail 'standard mode does not preserve explicit stage-80 skip semantics'
 
-strategy_lab_update_stage()
-{
-    printf '%s %s\n' "$2" "$3" >> "${TEST_ROOT}/order"
-}
-strategy_lab_append_event(){ :; }
-strategy_lab_set_parameter_expansion_result(){ :; }
-strategy_lab_set_extended_result(){ :; }
-strategy_lab_set_quic_result(){ :; }
-strategy_lab_set_udp_result(){ :; }
-strategy_lab_set_stability_result(){ :; }
-strategy_lab_status_file(){ printf '%s\n' "${TEST_ROOT}/status.json"; }
-worker_budget_timeout_for(){ printf '%s\n' "$2"; }
-worker_budget_begin_stage80(){ :; }
-worker_budget_require(){ :; }
-worker_cancel(){ fail 'unexpected cancellation'; }
-worker_error(){ fail "worker_error $*"; }
-worker_stage_timeout(){ fail "worker_stage_timeout $*"; }
-strategy_lab_shortlist_build()
-{
-    printf '%s\n' '{"count":1,"items":[{"id":"x"}],"recommendation":{"id":"x"}}' > "$2"
-}
+grep -Fq 'exec "${PYTHON_LAUNCHER}" orchestrate "${JOB_ID}"' "${WORKER}" ||
+    fail 'production worker does not delegate the explicit stage machine to Python'
+! grep -Fq 'worker_stage_machine' "${WORKER}" ||
+    fail 'production worker still loads the retired shell stage-machine owner'
+! grep -Fq 'worker_run_search_stages' "${WORKER}" ||
+    fail 'production worker still calls the retired shell stage-machine entry point'
 
-printf '%s\n' '{"stages":[]}' > "${TEST_ROOT}/status.json"
-printf '%s\n' example.com > "${JOB_DIR}/endpoints.txt"
-printf '%s\n' '{}' > "${JOB_DIR}/candidate-smoke.json"
-printf '%s\n' '{}' > "${JOB_DIR}/network.json"
+# The old module remains temporarily packaged only because Patch 7 owns broad shell
+# retirement. It must stay syntactically valid but may not be authoritative after Patch 3.
+sh -n "${LEGACY_STAGE_MACHINE}"
+"${PYTHON_BIN}" -m py_compile "${ORCHESTRATOR}" "${STATE_MODULE}"
+sh -n "${WORKER}"
 
-. "${MODULE}"
-
-MODE=standard
-: > "${TEST_ROOT}/order"
-worker_run_search_stages
-cat > "${TEST_ROOT}/expected-standard" <<'EXPECTED'
-60 RUNNING
-60 PASS
-70 RUNNING
-70 PASS
-80 SKIPPED
-85 RUNNING
-85 PASS
-EXPECTED
-cmp -s "${TEST_ROOT}/expected-standard" "${TEST_ROOT}/order" || {
-    cat "${TEST_ROOT}/order" >&2
-    fail 'standard stage order is not monotonic'
-}
-
-MODE=extended
-rm -f "${JOB_DIR}/parameter-expansion.json" "${JOB_DIR}/stability.json" \
-    "${JOB_DIR}/shortlist.json" "${JOB_DIR}/extended-tcp.json" \
-    "${JOB_DIR}/quic.json" "${JOB_DIR}/udp.json"
-: > "${TEST_ROOT}/order"
-worker_run_search_stages
-cat > "${TEST_ROOT}/expected-extended" <<'EXPECTED'
-60 RUNNING
-60 PASS
-70 RUNNING
-70 PASS
-80 RUNNING
-80 PASS
-85 RUNNING
-85 PASS
-EXPECTED
-cmp -s "${TEST_ROOT}/expected-extended" "${TEST_ROOT}/order" || {
-    cat "${TEST_ROOT}/order" >&2
-    fail 'extended stage order is not monotonic'
-}
-
-! grep -Fq 'strategy_lab_skip_unfinished' "${FLOW}" ||
-    fail 'worker flow still invokes the load-order hook'
-! grep -Fq 'strategy_lab_skip_unfinished' "${CONTROL}" ||
-    fail 'worker control still invokes the load-order hook'
-! grep -Fq 'strategy_lab_skip_remaining' "${FLOW}" ||
-    fail 'worker flow still invokes the remaining-stage hook'
-grep -Fq 'worker_run_search_stages' "${FLOW}" ||
-    fail 'worker flow does not call the explicit stage machine'
-grep -Fq 'worker_stage_machine' "${WORKER}" ||
-    fail 'worker does not load the explicit stage machine'
-
-echo 'PASS: Strategy Lab search stages use one explicit monotonic stage machine'
+echo 'PASS: Python Strategy Lab owns one explicit monotonic stage machine while the production worker cannot fall back to the shell owner'

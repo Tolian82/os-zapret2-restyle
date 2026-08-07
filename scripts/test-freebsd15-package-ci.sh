@@ -60,8 +60,14 @@ grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-str
     fail 'FreeBSD 15 package job does not execute the Python 3.13 foundation test'
 grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-state-persistence.sh' "${CI}" ||
     fail 'FreeBSD 15 package job does not execute the Python state persistence regression'
+grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-orchestration.sh' "${CI}" ||
+    fail 'FreeBSD 15 package job does not execute the Python stage orchestration regression'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/state.py' "${CI}" ||
     fail 'package inspection does not require the Python state persistence module'
+grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/orchestrator.py' "${CI}" ||
+    fail 'package inspection does not require the Python stage orchestration module'
+grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_stage_adapter.sh' "${CI}" ||
+    fail 'package inspection does not require the Strategy Lab stage adapter'
 grep -Fq '.deps.python313.origin == "lang/python313"' "${CI}" ||
     fail 'package inspection does not enforce the python313 dependency origin'
 
@@ -113,4 +119,4 @@ if grep -Fq 'Current corrective candidate: `os-zapret2-restyle-0.3.2_46.pkg`' "$
 fi
 
 sh -n "$0"
-echo "PASS: GitHub package builds stay on FreeBSD 15, Python 3.13 state persistence is qualified, and live-candidate selection respects the active live gate for ${candidate}"
+echo "PASS: GitHub package builds stay on FreeBSD 15, Python 3.13 state/orchestration are qualified, and live-candidate selection respects the active live gate for ${candidate}"

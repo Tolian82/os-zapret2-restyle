@@ -127,7 +127,7 @@ strategy_lab_worker_pid_matches()
     [ -x "${STRATEGY_LAB_PS_BIN}" ] || return 1
     _strategy_lab_command=$("${STRATEGY_LAB_PS_BIN}" -p "${_strategy_lab_pid}" -o command= 2>/dev/null || true)
     printf '%s\n' "${_strategy_lab_command}" | grep -Fq "${_strategy_lab_job}" || return 1
-    printf '%s\n' "${_strategy_lab_command}" | grep -Eq 'strategy_lab_worker\.sh|zapret_service\.sh.*strategy-lab'
+    printf '%s\n' "${_strategy_lab_command}" | grep -Eq 'strategy_lab_worker\.sh|zapret_service\.sh.*strategy-lab|strategy_lab_python\.py[[:space:]]+orchestrate'
 }
 
 strategy_lab_job_active()

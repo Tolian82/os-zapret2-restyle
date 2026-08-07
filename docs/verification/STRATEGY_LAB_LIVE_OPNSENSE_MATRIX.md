@@ -18,7 +18,7 @@ TEST RECORD
 - Required package ABI: `FreeBSD:15:amd64`
 - Latest published testing candidate: `os-zapret2-restyle-0.3.3_17.pkg`
 - Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_17.pkg`
-- Current migration source candidate: `os-zapret2-restyle-0.3.3_19.pkg`
+- Current migration source candidate: `os-zapret2-restyle-0.3.3_20.pkg`
 - Latest owner-tested job: `job.w0nXxQ`
 - WAN interface: `vtnet1`
 - Blocked-domain target: `rutracker.org`
@@ -86,14 +86,17 @@ Decision:
 `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
 
 Migration Patch 1 (`_18`) established the packaged Python 3.13 platform and compatibility
-boundary. Migration Patch 2 source candidate `_19` moves authoritative automated-job
-`status.json`, `events.ndjson`, persisted progress, revision ownership, and structured
-state-field persistence to Python while leaving the production shell worker and numbered
-stage machine in place.
+boundary. Migration Patch 2 (`_19`) moved authoritative automated-job `status.json`,
+`events.ndjson`, progress, revision ownership, and structured state-field persistence to
+Python. Migration Patch 3 source candidate `_20` moves the production numbered stage
+machine, Standard/Extended budget arbitration, cancellation orchestration, and terminal
+restoration/finalization policy to Python while leaving stage-specific request/probe,
+candidate, expansion/stability, and extended-protocol algorithms behind an explicit shell
+adapter until their designated migration patches.
 
-Neither `_18` nor `_19` supersedes the owner-tested `_17` live evidence or resumes
-Scenario 1. In particular, moving progress persistence to Python is not evidence that the
-owner-observed GUI 0%-until-terminal defect is closed.
+None of `_18`, `_19`, or `_20` supersedes the owner-tested `_17` live evidence or resumes
+Scenario 1. In particular, source-side Python progress/stage ownership is not evidence
+that the owner-observed GUI 0%-until-terminal defect is closed.
 
 The live matrix remains failed during migration. Do not mark a row PASS because a defect
 mechanism was rewritten. Resume live Scenario 1 only when the Python implementation has
