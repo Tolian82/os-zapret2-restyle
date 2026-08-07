@@ -6,6 +6,7 @@ GITIGNORE="${ROOT_DIR}/.gitignore"
 CI="${ROOT_DIR}/.github/workflows/ci.yml"
 PROJECT_STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
+ACTIVE_STRATEGY_LAB_AUTHORITY="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md"
 ACTIVE_GITHUB_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-05-efficient-github-delivery.md"
 OLD_GITHUB_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-02-atomic-github-publication.md"
 
@@ -32,10 +33,11 @@ done
 
 # Verify durable authority relationships instead of exact mutable prose.
 test -s "${PROJECT_STATE}" || fail 'current project state is missing'
+test -s "${ACTIVE_STRATEGY_LAB_AUTHORITY}" || fail 'active Strategy Lab authority is missing'
 test -s "${ACTIVE_GITHUB_DECISION}" || fail 'active GitHub delivery decision is missing'
 test -s "${OLD_GITHUB_DECISION}" || fail 'superseded GitHub decision record is missing'
 
-grep -Fq 'docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md' "${PROJECT_STATE}" || \
+grep -Fq 'docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md' "${PROJECT_STATE}" || \
     fail 'project state does not name the current Strategy Lab authority'
 grep -Fq 'DEC-2026-08-05-efficient-github-delivery.md' "${PROJECT_STATE}" || \
     fail 'project state does not name the active GitHub delivery authority'
@@ -45,6 +47,8 @@ grep -Eq '^Status:[[:space:]]+Superseded' "${OLD_GITHUB_DECISION}" || \
     fail 'old atomic GitHub decision is not marked superseded'
 grep -Fq 'DEC-2026-08-05-efficient-github-delivery.md' "${INDEX}" || \
     fail 'Engineering Memory index does not route to the active GitHub decision'
+grep -Fq 'docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md' "${INDEX}" || \
+    fail 'Engineering Memory index does not route to the active Strategy Lab authority'
 grep -Eq 'Historical( delivery)? record' "${ROOT_DIR}/docs/audit/DIAG-001-strategy-lab.md" || \
     fail 'historical DIAG record has no authority banner'
 grep -Fq 'scripts/test-repository-hygiene.sh' "${CI}" || \
