@@ -108,10 +108,11 @@ POST_DEINSTALL_JSON=$(jq -Rs . < pkg/+POST_DEINSTALL)
 dep_origin()
 {
     case "$1" in
-        luajit) echo "lang/luajit" ;;
-        jq)     echo "textproc/jq" ;;
-        git)    echo "devel/git" ;;
-        *)      echo "$1" ;;
+        luajit)     echo "lang/luajit" ;;
+        jq)         echo "textproc/jq" ;;
+        git)        echo "devel/git" ;;
+        python313)  echo "lang/python313" ;;
+        *)          echo "$1" ;;
     esac
 }
 

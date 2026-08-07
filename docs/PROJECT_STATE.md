@@ -29,9 +29,10 @@ Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
 Latest published testing prerelease: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
 Latest owner-tested testing candidate: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
 Current source line: `VERSION=0.3.3`
-Current package revision: `PLUGIN_REVISION=17`
+Current package revision: `PLUGIN_REVISION=18`
+Current migration source candidate: `os-zapret2-restyle-0.3.3_18.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Strategy Lab Python migration handoff; source migration not started yet**
+Current phase: **Strategy Lab Migration Patch 1 — packaged Python platform/compatibility foundation**
 Stable release: **BLOCKED ON POST-MIGRATION LIVE MATRIX**
 
 Current primary Strategy Lab authority:
@@ -42,6 +43,31 @@ Current migration decision:
 
 Active GitHub delivery authority:
 `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md` together with repository-root `AGENTS.md` and `docs/GITHUB_PUBLICATION.md`.
+
+==================================================
+MIGRATION PATCH 1 FOUNDATION
+==================================================
+
+The supported OPNsense 26.7 platform contract is now explicit:
+
+- OPNsense 26.7 build configuration targets FreeBSD 15.1 and Python 3.13 (`PYTHON=313`);
+- OPNsense core provides `/usr/local/bin/python3` as the stable interpreter link;
+- the plugin declares the direct package dependency `python313`;
+- the custom package manifest maps it to `lang/python313`;
+- Python migration code remains standard-library-only; no third-party `pip` dependency is approved.
+
+Packaged foundation files:
+
+- `strategy_lab_python_launcher.sh` — thin runtime/version check and compatibility launcher;
+- `strategy_lab_python.py` — minimal packaged entry point;
+- `strategy_lab_py/` — Python compatibility foundation module.
+
+Important cutover boundary:
+
+`zapret_service.sh` still launches the existing `strategy_lab_worker.sh` directly. The
+Python launcher is packaged and tested but is not the production call path in Migration
+Patch 1. Therefore no Strategy Lab state-machine, lifecycle, persistence, probe,
+candidate, or result ownership changes in `_18`.
 
 ==================================================
 FINAL SHELL-ERA LIVE BOUNDARY
@@ -135,10 +161,6 @@ Responsibilities intentionally retained outside Python unless separately justifi
   ownership, and other short FreeBSD-specific mutations where reusing existing behavior
   is safer than duplicating it.
 
-No Python interpreter path/version is assumed yet. Migration Patch 1 must verify the
-supported OPNsense Python runtime/dependency model before packaged code relies on it.
-No third-party `pip` dependency is approved by default.
-
 ==================================================
 CONFIRMED DEFECT BACKLOG
 ==================================================
@@ -164,11 +186,11 @@ removed, but it is closed only after a focused regression and required live evid
 PYTHON MIGRATION PATCH SEQUENCE
 ==================================================
 
-Patch 0 — documentation/handoff: **CURRENT DOCUMENTATION CHANGE**.
+Patch 0 — documentation/handoff: **COMPLETE**.
 
-Patch 1 — Python platform and compatibility foundation.
+Patch 1 — Python platform and compatibility foundation: **CURRENT `_18` SOURCE CHANGE**.
 
-Patch 2 — Python job state, progress, and structured persistence.
+Patch 2 — Python job state, progress, and structured persistence: **NEXT AFTER PATCH 1 QUALIFICATION**.
 
 Patch 3 — Python stage machine, budgets, cancellation, and finalization.
 
@@ -189,15 +211,16 @@ change. It must not compress the migration into a monolithic rewrite.
 DELIVERY AND PACKAGE BOUNDARY
 ==================================================
 
-This handoff is documentation/governance only:
+Migration Patch 1 is an installable package-source change:
 
 - `VERSION` remains `0.3.3`;
-- `PLUGIN_REVISION` remains `17`;
-- no new package bytes are required for the documentation handoff;
-- the already published `_17` package remains the final shell-era live evidence package.
+- `PLUGIN_REVISION` advances to `18`;
+- current source candidate is `os-zapret2-restyle-0.3.3_18.pkg`;
+- published and owner-tested live evidence remains `_17` until a newer artifact is actually published/tested;
+- `_18` does not resume the live matrix because the production Strategy Lab call path is unchanged.
 
-Every packaged Python migration change uses the normal Ready-PR/CI/squash path and
-FreeBSD 15 package build. Testing-prerelease publication follows the owner's standing
+The `_18` source must pass the normal Ready-PR, complete CI, and FreeBSD 15 package gate
+before squash merge. Testing-prerelease publication follows the owner's standing
 installable-patch authority without an additional routine confirmation.
 
 Stable release and pkg-repository promotion remain blocked until the Python path reaches
@@ -207,14 +230,14 @@ functional parity and the owner-assisted live matrix passes.
 NEXT ACTION
 ==================================================
 
-Start the next development topic from current `main` and read, in order:
+Complete Migration Patch 1 qualification on `_18`:
 
-1. repository-root `AGENTS.md`;
-2. `docs/INDEX.md`;
-3. this `docs/PROJECT_STATE.md`;
-4. `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`;
-5. `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
+1. focused Python 3.13 foundation test;
+2. canonical Strategy Lab corrective matrix;
+3. full repository CI;
+4. FreeBSD 15 package build/content/manifest verification;
+5. squash merge only from the successfully validated latest head.
 
-Then inspect current Strategy Lab source and perform **Migration Patch 1 only**:
-verify the target OPNsense Python interpreter/dependency model and add the minimal
-packaged Python compatibility foundation without changing product behavior.
+After Patch 1 is merged, begin **Migration Patch 2 only**: move job state, progress, and
+structured persistence to Python while preserving the public JSON contract and keeping the
+stage machine outside that patch.

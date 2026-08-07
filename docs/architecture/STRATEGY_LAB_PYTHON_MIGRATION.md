@@ -23,9 +23,13 @@ Chronological implementation results or final live evidence.
 STATUS
 ==================================================
 
-Approved for implementation after the documentation/handoff patch is merged.
+Migration Patch 0 is complete. Migration Patch 1 is implemented as package-source
+candidate `v0.3.3_18` and is subject to the normal PR/CI/FreeBSD 15 qualification gate.
 
-Current runtime implementation remains the shell Strategy Lab from `v0.3.3_17` until a migration patch explicitly replaces one responsibility. This document describes the target transition; it does not claim Python is already active.
+The active production runtime implementation remains the shell Strategy Lab from
+`v0.3.3_17`: `zapret_service.sh` still launches `strategy_lab_worker.sh` directly. Patch 1
+packages and tests the Python compatibility boundary but deliberately does not switch the
+production call path or move state-machine ownership.
 
 ==================================================
 OBJECTIVE
@@ -102,17 +106,26 @@ A shell helper must have a narrow input/output contract. It must not retain hidd
 PYTHON RUNTIME CONSTRAINT
 ==================================================
 
-No Python interpreter path/version is assumed by this document.
+Migration Patch 1 establishes the supported runtime contract for OPNsense 26.7 / FreeBSD 15:
 
-Migration Patch 1 must first establish on the supported OPNsense/FreeBSD 15 target:
+- OPNsense 26.7 build configuration selects FreeBSD 15.1 and `PYTHON=313`;
+- the supported interpreter family is Python 3.13;
+- OPNsense core owns the stable `/usr/local/bin/python3` compatibility link to its
+  selected `python${CORE_PYTHON}` interpreter;
+- `os-zapret2-restyle` declares `python313` directly in `PLUGIN_DEPENDS` because the new
+  packaged Strategy Lab foundation directly requires Python;
+- the custom package builder maps `python313` to package origin `lang/python313`;
+- `.py` sources under `src/opnsense/` are staged automatically into the package;
+- retained shell launchers remain executable through the existing package-mode handling.
 
-- the Python interpreter path available to the plugin;
-- the supported Python version;
-- whether the interpreter is base-system, OPNsense-managed, or must be declared as a plugin dependency;
-- package installation behavior for `.py` sources;
-- CI/FreeBSD 15 syntax and execution coverage.
+The production compatibility launcher defaults to `/usr/local/bin/python3`, following the
+OPNsense-managed stable link rather than hard-coding a minor-version binary path. The
+stock FreeBSD 15 CI VM uses `/usr/local/bin/python3.13` explicitly because it does not
+provide the OPNsense core compatibility link.
 
-No third-party `pip` dependency is approved. Prefer the Python standard library so installation remains deterministic and offline-safe.
+No third-party `pip` dependency is approved. Python migration code must remain standard
+library only unless a later independent architectural decision proves another dependency
+necessary.
 
 ==================================================
 STATE AND DATA MODEL
@@ -215,14 +228,14 @@ Each item remains open until the Python implementation has a focused regression 
 MIGRATION PATCH SERIES
 ==================================================
 
-Patch 0 — documentation and handoff (this work)
+Patch 0 — documentation and handoff: **COMPLETE**
 
 - freeze `v0.3.3_17` live boundary;
 - record bug backlog;
 - approve Python/PHP/shell responsibilities;
 - prepare next-topic entry point.
 
-Patch 1 — Python platform and compatibility foundation
+Patch 1 — Python platform and compatibility foundation: **IMPLEMENTED IN `_18` SOURCE**
 
 - verify target Python interpreter path/version/dependency model on OPNsense FreeBSD 15;
 - add the minimal packaged Python module/entry point;
@@ -287,6 +300,16 @@ TEST STRATEGY
 
 Every migration patch must include focused automated coverage for the responsibility it moves.
 
+Migration Patch 1 additionally requires:
+
+- Python 3.13 import and syntax/bytecode compilation;
+- launcher self-test on Python 3.13;
+- deterministic invalid-job, missing-interpreter, and unsupported-version results;
+- exact compatibility delegation of the job ID to a mock legacy worker;
+- a guard proving `zapret_service.sh` still points directly to the shell worker;
+- FreeBSD 15 execution with package `python313`;
+- built-package content and dependency-origin inspection.
+
 Required principles:
 
 - old public fixtures remain useful as compatibility tests where they express product behavior rather than shell implementation details;
@@ -308,20 +331,7 @@ For each responsibility:
 4. Verify there is only one owner of mutations/state.
 5. Remove obsolete shell implementation in the same logical migration scope when safe, or in the immediately following dedicated retirement patch if removal would make the scope too large.
 
-Do not keep a hidden shell fallback that can silently activate and recreate the same divergent behavior.
-
-==================================================
-NEXT-TOPIC ENTRY POINT
-==================================================
-
-When development resumes in a fresh chat/topic, the first action is:
-
-1. Read repository-root `AGENTS.md`.
-2. Read `docs/INDEX.md`.
-3. Read `docs/PROJECT_STATE.md`.
-4. Read this migration plan.
-5. Read `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
-6. Inspect current `main`, package identity, and relevant Strategy Lab source.
-7. Begin only Migration Patch 1: Python platform and compatibility foundation.
-
-Do not resume speculative shell Stage-50 patching before this foundation unless a service-safety issue is discovered.
+Migration Patch 1 stops after step 1 for the general orchestration boundary: it packages
+and qualifies the compatibility foundation but intentionally does not switch production
+ownership. The first responsibility cutover begins in later migration patches only after
+its focused parity contract exists.

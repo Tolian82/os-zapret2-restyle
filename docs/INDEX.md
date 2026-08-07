@@ -15,15 +15,17 @@ in `AGENTS.md`.
 
 For any new Strategy Lab work after the `v0.3.3_17` live handoff, read these first:
 
-- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved incremental migration map from large shell orchestration to Python while preserving PHP/API and lifecycle contracts;
+- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved incremental migration map and the verified Python 3.13 runtime/dependency boundary;
 - `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md` — rationale, language responsibility boundary, compatibility invariants, bug-backlog policy, and migration delivery rules;
+- `docs/patches/v0.3.3_18.md` — Migration Patch 1 packaged Python foundation and unchanged production-worker boundary;
+- `docs/devlog/2026-08-07-v0.3.3_18-python-foundation.md` — Patch 1 platform evidence, implementation, and next migration unit;
 - `docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md` — final owner-observed shell-era boundary: stage 40 PASS, stage 50 ERROR, stage 90 PASS, immediate GUI error/no-output and active 0% progress;
-- `docs/devlog/2026-08-07-strategy-lab-python-migration-handoff.md` — completed handoff and exact next work unit;
 - `docs/PROJECT_STATE.md` — current candidate identity, confirmed defect backlog, migration phase, and next action.
 
-The next source task is Migration Patch 1 only: verify the supported OPNsense Python
-runtime/dependency model and add the minimal packaged compatibility foundation without
-changing Strategy Lab product behavior.
+Migration Patch 1 establishes and qualifies the packaged compatibility foundation only.
+The next source task after `_18` qualification is Migration Patch 2: move Strategy Lab job
+state, progress, and structured persistence to Python while preserving the exact public
+JSON contract. Do not move the numbered stage machine in the same patch.
 
 ## Existing Strategy Lab product authorities
 
@@ -48,7 +50,7 @@ changes implementation ownership. Migration is not permission to weaken product 
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_MATRIX.md` — discoverable corrective CI entry point;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — earlier hardening finding-to-patch traceability;
 - `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — shell-era source/CI closure; live matrix remains the product gate;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — live gate, now paused at failed `_17` Scenario 1 pending Python migration parity;
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — live gate, paused at failed `_17` Scenario 1 until Python functional parity;
 - `docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md` — `_16` post-drop hostlist traversal evidence;
 - `docs/verification/evidence/2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md` — `_15` resident FreeBSD daemon startup evidence;
 - `docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md` — `_14` family-runner failure and GUI backlog evidence.
