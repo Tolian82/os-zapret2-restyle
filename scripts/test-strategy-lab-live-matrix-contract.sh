@@ -69,7 +69,7 @@ if grep -Fq 'Overall status: **FAILED ON _14 — STAGE-50 CORRECTION `_15` IN PR
     grep -Fq 'Current corrective source candidate: `os-zapret2-restyle-0.3.3_15.pkg`' "${MATRIX}"
     grep -Fq 'job `job.mCqg7Y`' "${MATRIX}"
     grep -Fq 'STRATEGY_LAB_TIMEOUT_BIN: parameter not set' "${MATRIX}"
-    grep -Fq 'stage 40 completed PASS' "${MATRIX}"
+    grep -Fq 'Stage 40 completed PASS' "${MATRIX}"
     scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /FAILED ON `_14` — `_15` STAGE-50 RETEST REQUIRED/ {n++} END {print n+0}' "${MATRIX}")
     [ "${scenario_one}" -eq 1 ] || { echo 'FAIL: scenario 1 stage-50 live row mismatch' >&2; exit 1; }
     grep -Fq 'Live OPNsense matrix: **FAILED AT STAGE 50 ON `_14` — CORRECTIVE `_15` REQUIRED**.' "${STATE}"
