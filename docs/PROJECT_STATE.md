@@ -3,22 +3,22 @@
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Latest published testing prerelease: `v0.3.3_12` / `os-zapret2-restyle-0.3.3_12.pkg`
+Latest published testing prerelease: `v0.3.3_13` / `os-zapret2-restyle-0.3.3_13.pkg`
 Current source line: `VERSION=0.3.3`
-Current corrective package revision: `PLUGIN_REVISION=13`
+Current corrective package revision: `PLUGIN_REVISION=14`
 Target ABI: **FreeBSD:15:amd64 only**
 
 ## Historical live boundary
 
-`v0.3.3_12` is the latest owner-tested package. Live Scenario 1 on `_12` reproduced two independent blockers after the third-audit source/CI series: an immediate stage-50 family-runner failure and a deterministic stage-90 restoration failure on FreeBSD.
+`v0.3.3_13` is the latest owner-tested package. Live Scenario 1 on `_13` proved that the `_13` stage-90 restoration correction works on OPNsense: after the run failed earlier, stage 90 restored the initially RUNNING Zapret2 service completely and left it healthy. The same run exposed the next independent blocker at stage 40: a FreeBSD `timeout(1)` wrapper falsely reports the mandatory DNS lookup as failed even though `drill` itself resolves the target immediately.
 
 ## Third audit corrective series
 
-Status: **SOURCE/CI COMPLETE — LIVE SCENARIO 1 REOPENED BY `_12` EVIDENCE**
+Status: **SOURCE/CI COMPLETE — LIVE SCENARIO 1 BLOCKED AT STAGE 40; `_14` CORRECTION IN PROGRESS**
 
 Authoritative audit: `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
 
-All seven third-audit findings `SL3-001` through `SL3-007` remain implemented in source and protected by their focused regressions plus the mandatory Strategy Lab corrective matrix. The `_12` live run exposed additional defects outside those findings; therefore source/CI closure did not satisfy the live gate.
+All seven third-audit findings `SL3-001` through `SL3-007` remain implemented in source and protected by their focused regressions plus the mandatory Strategy Lab corrective matrix. Subsequent owner-assisted runs are now correcting additional FreeBSD live defects one logical defect at a time.
 
 ## Patch evidence
 
@@ -31,18 +31,22 @@ All seven third-audit findings `SL3-001` through `SL3-007` remain implemented in
 - Patch 7 (integrated regression gate) — PR #121, exact latest head `dd2a484a4aa3711834b722aae0cc025d3fd4758e`, main `256ffa09452dabfb001665b729c1f4c3d3462688`; title check `31157848071` PASS; CI `31157848056` PASS; FreeBSD 15 artifact `8985927074` contains `os-zapret2-restyle-0.3.3_11.pkg` and passed manifest inspection.
 - Patch 8 — PR #122, main `124cdef9fb68a9d749c052d1c806b637c8878bf9`; documentation-only source/CI closure and live handoff; no runtime behavior change.
 - Final roll-up — package revision `_12`; no new product behavior; owner-installed testing prerelease `v0.3.3_12`.
-- Live `_12` Scenario 1 — failed. Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`.
-- Corrective `_13` — stage-90 FreeBSD timeout/reaper correction in progress. It is intentionally limited to exact restoration safety; stage 50 remains a separate next correction.
+- Live `_12` Scenario 1 — stage 50 failed and stage 90 failed because FreeBSD timeout reaped the successfully restored daemon runtime. Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`.
+- Corrective `_13` — PR #125, main `9a9879c6f88d77ab64c06647dd8d1e2437fc5f25`; published testing prerelease `v0.3.3_13`; FreeBSD stage-90 `strategy-lab-start` uses `timeout -f`.
+- Live `_13` Scenario 1 — stage 90 PASS and normal Zapret2 remained healthy; stage 40 failed because `/usr/bin/timeout 2 /usr/bin/drill rutracker.org A` returned 124 with zero output while direct `drill` and `timeout -f` both returned `NOERROR`. Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_13-scenario-01-stage40-freebsd-dns-timeout.md`.
+- Corrective `_14` — FreeBSD stage-40 DNS request timeout correction in progress. It is intentionally limited to the live-proven timeout wrapper defect; `target_type:"A"` and stage 50 remain separate later corrections.
 
 ## Current verification boundary
 
-Live OPNsense matrix: **FAILED ON `_12` — CORRECTIVE `_13` REQUIRED**.
+Live OPNsense matrix: **FAILED AT STAGE 40 ON `_13` — CORRECTIVE `_14` REQUIRED**.
 
-The `_12` live watcher proved that the normal Zapret2 runtime became fully healthy during stage 90 and remained healthy for approximately 38 seconds, but `/usr/bin/timeout` without `-f` retained reaper ownership of daemon descendants. At the configured 45-second restoration timeout it terminated the already restored dvtws2/supervisor tree. The lifecycle code then repeated the same sequence once and ended `RESTORE_FAILED` with the normal service stopped.
+The `_13` live run verified the stage-90 safety requirement: initial RUNNING was restored to a complete healthy RUNNING state with no manual restart required.
 
-The `_13` correction applies FreeBSD foreground timeout mode (`timeout -f`) only to the daemonizing `strategy-lab-start` action; stop and non-FreeBSD actions retain normal timeout semantics. A deterministic regression emulates FreeBSD and requires that exact split.
+The stage-40 failure is not a resolver outage. On the appliance, `/usr/bin/drill rutracker.org A` returned `rc=0`, `NOERROR`, and both A records in 96 ms. The exact Strategy Lab wrapper `/usr/bin/timeout 2 /usr/bin/drill rutracker.org A` returned `rc=124` after exactly two seconds with zero output. The identical call with `/usr/bin/timeout -f 2` returned `rc=0` and `NOERROR` in 30 ms.
 
-Scenario 1 itself will still encounter the independent stage-50 blocker until that next logical defect is corrected. After `_13` passes CI and FreeBSD 15 package verification, owner-assisted testing must confirm that an error-path Strategy Lab run restores initial RUNNING to RUNNING instead of leaving Zapret2 stopped. Only then proceed to the separate stage-50 correction.
+The `_14` correction applies FreeBSD foreground timeout mode (`timeout -f`) only to `strategy_lab_dns_request()`; non-FreeBSD DNS requests retain the existing timeout semantics. A focused regression requires that exact platform split and is automatically executed by the mandatory corrective matrix.
+
+The observed `baseline.json` value `target_type:"A"` is a separate confirmed shell-variable namespace defect and is not part of `_14`. The previously identified stage-50 family-runner defect also remains separate. Scenario 1 must first advance beyond the corrected stage 40 before those later defects are changed or requalified.
 
 Authoritative live plan: `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
@@ -63,7 +67,7 @@ The connected GitHub plugin is the mandatory first repository interface. One log
 
 Stable release preparation and pkg-repository promotion: **BLOCKED ON LIVE MATRIX**.
 
-Testing prerelease publication follows `docs/GITHUB_PUBLICATION.md`. The `_13` source correction itself does not imply stable release or pkg-repository promotion.
+Testing prerelease publication follows `docs/GITHUB_PUBLICATION.md`. The `_14` source correction itself does not imply testing-prerelease publication, stable release, or pkg-repository promotion.
 
 Current product authority:
 
@@ -74,4 +78,4 @@ Current product authority:
 - `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md`;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
-Next action: **complete `_13` stage-90 restoration correction, verify CI/FreeBSD 15 package, then retest the `_12` failure path on OPNsense to confirm exact RUNNING restoration before correcting stage 50.**
+Next action: **complete `_14` source/CI/FreeBSD 15 package verification, then owner-assisted Scenario 1 must confirm that stage 40 no longer falsely fails on the FreeBSD DNS timeout wrapper while stage 90 remains PASS.**
