@@ -57,9 +57,11 @@ strategy_lab_reconcile_stale_job()
     "${STRATEGY_LAB_JQ}" \
         --arg outcome "${_strategy_lab_outcome}" \
         --arg message "${_strategy_lab_message}" \
-        --arg restore_status "${_strategy_lab_restore_status}" '
+        --arg restore_status "${_strategy_lab_restore_status}" \
+        --argjson restored "${_strategy_lab_restored}" '
         .state="error" | .outcome=$outcome | .current_stage="99" | .message=$message |
         .stale_worker_recovered=true |
+        (if $restored then . else .restoration=((.restoration // {}) | .verified=false) end) |
         (.stages[] | select((.status=="PENDING" or .status=="RUNNING") and .number!="90" and .number!="99") | .status)="SKIPPED" |
         (.stages[] | select(.number=="90") | .status)=$restore_status |
         (.stages[] | select(.number=="90") | .message)=$message |
@@ -144,5 +146,5 @@ start_job()
         emit_error_json "Strategy Lab lifecycle transaction could not be started"
         return 1
     fi
-    "${STRATEGY_LAB_JQ}" -nc --arg job_id "${_strategy_lab_job}" '{status:"ok",job_id:$job_id,state:"queued"}'
+    "${STRATEGY_LAB_JQ}" -nc --arg job_id "${_strategy_lab_job}" '{status:"ok",job_id:${_strategy_lab_job},state:"queued"}'
 }
