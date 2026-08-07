@@ -6,6 +6,8 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 SCRIPT_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
 WRAPPER="${SCRIPT_DIR}/strategy_lab_cancellable_runner.sh"
 WORKER="${SCRIPT_DIR}/strategy_lab_worker.sh"
+ADAPTER="${SCRIPT_DIR}/strategy_lab_stage_adapter.sh"
+ORCHESTRATOR="${SCRIPT_DIR}/strategy_lab_py/orchestrator.py"
 TEST_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-active-cancel.XXXXXX")
 
 cleanup()
@@ -114,6 +116,9 @@ run_cancel_case()
     [ "${elapsed}" -le 8 ] || fail "cancellation exceeded the bounded window for ${_label}: ${elapsed}s"
 }
 
+# The cancellable wrappers remain stage-specific implementation adapters until
+# their algorithms migrate in later patches, so their bounded process-tree cleanup
+# remains protected independently of the new Python high-level cancel owner.
 for label in stage60 stage70 stage80-tcp stage80-quic stage80-udp
 do
     run_cancel_case "${label}"
@@ -128,9 +133,12 @@ else
 fi
 [ "${status}" -eq 7 ] || fail "expected status 7, got ${status}"
 
+# Migration Patch 3 moves runner selection out of the production worker and into
+# the explicit one-action stage adapter. Requiring these mappings in the worker
+# would reintroduce the retired shell orchestration ownership.
 while IFS='|' read -r expected script
 do
-    grep -Fq "${expected}" "${WORKER}" || fail "worker does not select ${script}"
+    grep -Fq "${expected}" "${ADAPTER}" || fail "stage adapter does not select ${script}"
 done <<'MAPPINGS'
 EXPANSION_RUNNER="${EXPANSION_RUNNER:-${SCRIPT_DIR}/strategy_lab_cancellable_expansion_runner.sh}"|strategy_lab_cancellable_expansion_runner.sh
 STABILITY_RUNNER="${STABILITY_RUNNER:-${SCRIPT_DIR}/strategy_lab_cancellable_stability_runner.sh}"|strategy_lab_cancellable_stability_runner.sh
@@ -139,8 +147,14 @@ QUIC_RUNNER="${QUIC_RUNNER:-${SCRIPT_DIR}/strategy_lab_cancellable_quic_runner.s
 UDP_RUNNER="${UDP_RUNNER:-${SCRIPT_DIR}/strategy_lab_cancellable_udp_runner.sh}"|strategy_lab_cancellable_udp_runner.sh
 MAPPINGS
 
-grep -Fq 'export CANCEL_FILE STRATEGY_LAB_WORKER_PID' "${WORKER}" ||
-    fail "worker cancellation context is not exported"
+grep -Fq 'STRATEGY_LAB_WORKER_PID=str(os.getpid())' "${ORCHESTRATOR}" ||
+    fail "Python orchestrator does not export its worker identity to stage adapters"
+grep -Fq 'start_new_session=True' "${ORCHESTRATOR}" ||
+    fail "Python orchestrator does not isolate adapter process groups"
+grep -Fq 'os.killpg(proc.pid, signal.SIGTERM)' "${ORCHESTRATOR}" ||
+    fail "Python orchestrator does not own active adapter cancellation"
+grep -Fq 'exec "${PYTHON_LAUNCHER}" orchestrate "${JOB_ID}"' "${WORKER}" ||
+    fail "production worker does not delegate cancellation/finalization ownership to Python"
 
 for wrapper in expansion stability extended quic udp
 do
@@ -149,4 +163,4 @@ do
     grep -Fq 'strategy_lab_cancellable_runner.sh' "${file}" || fail "${file} bypasses the common cancellation runner"
 done
 
-echo 'PASS: active Strategy Lab runners terminate their process trees and transfer cancellation to mandatory worker finalization'
+echo 'PASS: active stage adapters retain bounded child cleanup while Python owns production cancellation and mandatory finalization'
