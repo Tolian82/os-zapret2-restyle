@@ -41,18 +41,33 @@ restoration failure are corrected.
 
 ## Version 0.3.3 revision 6 — current corrective line
 
-Revision `_6` is the new corrective candidate used to restore repository consistency and
-then repair the confirmed Strategy Lab lifecycle failure.
+Revision `_6` is the corrective candidate used to restore repository consistency and then
+repair the confirmed Strategy Lab lifecycle failure.
 
-The `_6` reconciliation scope starts by:
+The baseline `_6` reconciliation scope:
 
-- advancing `PLUGIN_REVISION` to `6` without changing `VERSION=0.3.3`;
-- recording the truthful `_5` live failure;
-- restoring the generic testing-prerelease publisher now that stale `publish/*` refs have
+- advances `PLUGIN_REVISION` to `6` without changing `VERSION=0.3.3`;
+- records the truthful `_5` live failure;
+- restores the generic testing-prerelease publisher now that stale `publish/*` refs have
   been removed;
-- reconciling GitHub governance/current-state documentation with actual repository state;
-- keeping the live matrix blocked until the lifecycle restoration defect is fixed and a
-  new FreeBSD 15 package is verified.
+- reconciles GitHub governance/current-state tests and documentation with actual
+  repository state;
+- keeps the live matrix blocked while source correction is incomplete.
+
+The remaining `_6` source work is deliberately split into two sequential logical patches:
+
+1. correct the stage-50 temporary candidate runtime internal failure and merge that patch
+   to `main` after full CI plus FreeBSD 15 package verification;
+2. starting from that `main`, correct the stage-90 restoration path so the original
+   service state is restored deterministically, then merge after the same repository
+   verification.
+
+The owner requested these source corrections to reach `main` without an intermediate
+manual OPNsense test. Repository CI does not create a live PASS: owner-assisted live
+scenario 1 remains deferred until both corrective patches are merged.
+
+The detailed reconciliation ledger for this thread is:
+`docs/devlog/2026-08-07-v0.3.3_6-repository-reconciliation.md`.
 
 No `_6` live PASS or publication is claimed yet.
 

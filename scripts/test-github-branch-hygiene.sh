@@ -30,7 +30,7 @@ require_fixed()
   pattern=$1
   file=$2
   description=$3
-  grep -Fq "${pattern}" "${file}" || fail "${description}"
+  grep -Fq -- "${pattern}" "${file}" || fail "${description}"
 }
 
 require_doc_marker()
@@ -38,7 +38,7 @@ require_doc_marker()
   pattern=$1
   file=$2
   description=$3
-  grep -Fiq "${pattern}" "${file}" || fail "${description}"
+  grep -Fiq -- "${pattern}" "${file}" || fail "${description}"
 }
 
 for file in \
