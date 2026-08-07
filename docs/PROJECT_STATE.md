@@ -3,22 +3,22 @@
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Latest published testing prerelease: `v0.3.3_5` / `os-zapret2-restyle-0.3.3_5.pkg`
+Latest published testing prerelease: `v0.3.3_12` / `os-zapret2-restyle-0.3.3_12.pkg`
 Current source line: `VERSION=0.3.3`
-Current corrective package revision: `PLUGIN_REVISION=12`
+Current corrective package revision: `PLUGIN_REVISION=13`
 Target ABI: **FreeBSD:15:amd64 only**
 
 ## Historical live boundary
 
-`v0.3.3_5` remains the latest owner-tested package. `_6` corrected confirmed `_5` stage-50/stage-90 failures but was never owner-tested and was superseded by the third audit before its planned retest.
+`v0.3.3_12` is the latest owner-tested package. Live Scenario 1 on `_12` reproduced two independent blockers after the third-audit source/CI series: an immediate stage-50 family-runner failure and a deterministic stage-90 restoration failure on FreeBSD.
 
 ## Third audit corrective series
 
-Status: **SOURCE/CI COMPLETE — FINAL `_12` PACKAGE ROLL-UP IN PROGRESS**
+Status: **SOURCE/CI COMPLETE — LIVE SCENARIO 1 REOPENED BY `_12` EVIDENCE**
 
 Authoritative audit: `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
 
-All seven third-audit findings `SL3-001` through `SL3-007` are implemented in source and protected by focused regressions plus the mandatory Strategy Lab corrective matrix. This statement is source/CI scope only and is not a live OPNsense PASS claim.
+All seven third-audit findings `SL3-001` through `SL3-007` remain implemented in source and protected by their focused regressions plus the mandatory Strategy Lab corrective matrix. The `_12` live run exposed additional defects outside those findings; therefore source/CI closure did not satisfy the live gate.
 
 ## Patch evidence
 
@@ -30,17 +30,19 @@ All seven third-audit findings `SL3-001` through `SL3-007` are implemented in so
 - Patch 6 (`SL3-007`) — PR #120, main `00107d38f287462a2c0627a04629f6381774d05c`; CI `31156513189`; artifact `8985427611`, package `_11`.
 - Patch 7 (integrated regression gate) — PR #121, exact latest head `dd2a484a4aa3711834b722aae0cc025d3fd4758e`, main `256ffa09452dabfb001665b729c1f4c3d3462688`; title check `31157848071` PASS; CI `31157848056` PASS; FreeBSD 15 artifact `8985927074` contains `os-zapret2-restyle-0.3.3_11.pkg` and passed manifest inspection.
 - Patch 8 — PR #122, main `124cdef9fb68a9d749c052d1c806b637c8878bf9`; documentation-only source/CI closure and live handoff; no runtime behavior change.
-- Final roll-up — package revision `_12`; no new product behavior. Its purpose is to build one newest FreeBSD 15 package from the complete post-Patch-8 repository state before owner-assisted live verification.
-
-Patch 7 remains the final integrated runtime-regression qualification. Revision `_12` does not alter that runtime logic; it advances package identity so the installation candidate is built after every approved Patch 1–8 repository change is present.
+- Final roll-up — package revision `_12`; no new product behavior; owner-installed testing prerelease `v0.3.3_12`.
+- Live `_12` Scenario 1 — failed. Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`.
+- Corrective `_13` — stage-90 FreeBSD timeout/reaper correction in progress. It is intentionally limited to exact restoration safety; stage 50 remains a separate next correction.
 
 ## Current verification boundary
 
-Live OPNsense matrix: **READY — SCENARIO 1 PENDING OWNER**.
+Live OPNsense matrix: **FAILED ON `_12` — CORRECTIVE `_13` REQUIRED**.
 
-Designated candidate: `os-zapret2-restyle-0.3.3_12.pkg`, FreeBSD 15 amd64. The exact GitHub Actions artifact must come from the successful `_12` candidate build and is the package to install for Scenario 1.
+The `_12` live watcher proved that the normal Zapret2 runtime became fully healthy during stage 90 and remained healthy for approximately 38 seconds, but `/usr/bin/timeout` without `-f` retained reaper ownership of daemon descendants. At the configured 45-second restoration timeout it terminated the already restored dvtws2/supervisor tree. The lifecycle code then repeated the same sequence once and ended `RESTORE_FAILED` with the normal service stopped.
 
-Scenario 1 must be executed first on the owner's OPNsense appliance. Scenarios 2–18 remain blocked until scenario 1 passes. No source test, CI run, package build, mock, or integration fixture substitutes for owner-provided appliance evidence.
+The `_13` correction applies FreeBSD foreground timeout mode (`timeout -f`) only to the daemonizing `strategy-lab-start` action; stop and non-FreeBSD actions retain normal timeout semantics. A deterministic regression emulates FreeBSD and requires that exact split.
+
+Scenario 1 itself will still encounter the independent stage-50 blocker until that next logical defect is corrected. After `_13` passes CI and FreeBSD 15 package verification, owner-assisted testing must confirm that an error-path Strategy Lab run restores initial RUNNING to RUNNING instead of leaving Zapret2 stopped. Only then proceed to the separate stage-50 correction.
 
 Authoritative live plan: `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
@@ -61,7 +63,7 @@ The connected GitHub plugin is the mandatory first repository interface. One log
 
 Stable release preparation and pkg-repository promotion: **BLOCKED ON LIVE MATRIX**.
 
-Testing prerelease publication of `_12` is not part of this roll-up and still requires separate exact owner authorization. This work does not publish a release, tag, GitHub Release asset, Pages repository, or pkg-repository package.
+Testing prerelease publication follows `docs/GITHUB_PUBLICATION.md`. The `_13` source correction itself does not imply stable release or pkg-repository promotion.
 
 Current product authority:
 
@@ -72,4 +74,4 @@ Current product authority:
 - `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md`;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
-Next action after successful `_12` build: **owner-assisted live Scenario 1 on `os-zapret2-restyle-0.3.3_12.pkg`**.
+Next action: **complete `_13` stage-90 restoration correction, verify CI/FreeBSD 15 package, then retest the `_12` failure path on OPNsense to confirm exact RUNNING restoration before correcting stage 50.**

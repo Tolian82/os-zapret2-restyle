@@ -23,12 +23,49 @@ ARGS_FILE="${TEST_ROOT}/dvtws.args"
 RULES_FILE="${TEST_ROOT}/normal.rules"
 TEMP_CLEAN_FILE="${TEST_ROOT}/temporary.clean"
 SERVICE="${TEST_ROOT}/service"
+TIMEOUT="${TEST_ROOT}/timeout"
+UNAME="${TEST_ROOT}/uname"
 STRATEGY_LAB_JQ=$(command -v jq)
-STRATEGY_LAB_TIMEOUT_BIN=$(command -v timeout)
+STRATEGY_LAB_TIMEOUT_BIN="${TIMEOUT}"
+STRATEGY_LAB_UNAME_BIN="${UNAME}"
 STRATEGY_LAB_SERVICE_SCRIPT="${SERVICE}"
 STRATEGY_LAB_STOP_TIMEOUT=2
 STRATEGY_LAB_RESTORE_TIMEOUT=2
 mkdir -p "${JOB_DIR}"
+
+cat > "${UNAME}" <<'UNAME'
+#!/bin/sh
+[ "${1:-}" = -s ] || exit 64
+printf '%s\n' FreeBSD
+UNAME
+chmod 0755 "${UNAME}"
+
+cat > "${TIMEOUT}" <<'TIMEOUT'
+#!/bin/sh
+foreground=0
+if [ "${1:-}" = -f ]; then
+    foreground=1
+    shift
+fi
+[ "$#" -ge 2 ] || exit 64
+shift
+case "${1:-}" in
+    *strategy-lab-start)
+        [ "${foreground}" -eq 1 ] || {
+            echo "FAIL: FreeBSD daemonizing lifecycle start must use foreground timeout mode" >&2
+            exit 97
+        }
+        ;;
+    *strategy-lab-stop)
+        [ "${foreground}" -eq 0 ] || {
+            echo "FAIL: lifecycle stop must retain normal timeout semantics" >&2
+            exit 98
+        }
+        ;;
+esac
+exec "$@"
+TIMEOUT
+chmod 0755 "${TIMEOUT}"
 
 cat > "${SERVICE}" <<'SERVICE'
 #!/bin/sh
@@ -161,6 +198,8 @@ grep -Fq 'runtime_args_hash' "${SERVICE_SOURCE}" || fail 'runtime identity evide
 grep -Fq 'effective_config_hash' "${SERVICE_SOURCE}" || fail 'effective strategy evidence is missing'
 grep -Fq 'normal_firewall_hash' "${SERVICE_SOURCE}" || fail 'normal firewall evidence is missing'
 grep -Fq 'strategy_lab_firewall_range_empty' "${MODULE_DIR}/lifecycle.sh" || fail 'temporary firewall cleanup is not verified'
+grep -Fq '"${STRATEGY_LAB_TIMEOUT_BIN}" -f' "${MODULE_DIR}/lifecycle.sh" || fail 'FreeBSD daemonizing lifecycle start is not foreground-safe'
+grep -Fq 'FreeBSD' "${MODULE_DIR}/lifecycle.sh" || fail 'foreground timeout is not scoped to FreeBSD'
 
 sh -n "${MODULE_DIR}/lifecycle.sh"
 sh -n "${SERVICE_SOURCE}"

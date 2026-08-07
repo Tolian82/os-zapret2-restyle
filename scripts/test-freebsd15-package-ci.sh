@@ -70,6 +70,9 @@ if grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGR
     if grep -Fq "Current corrective candidate: \`${candidate}\`" "${MATRIX}"; then
         fail "paused matrix prematurely designates the current package as a live candidate: ${candidate}"
     fi
+elif grep -Fq 'Overall status: **FAILED ON _12 — STAGE-90 CORRECTION `_13` IN PROGRESS**' "${MATRIX}"; then
+    grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" ||
+        fail "reopened live matrix does not select the current corrective source package: ${candidate}"
 else
     grep -Fq "Current corrective candidate: \`${candidate}\`" "${MATRIX}" ||
         fail "live matrix does not select the current corrective package: ${candidate}"
@@ -82,4 +85,4 @@ if grep -Fq 'Current corrective candidate: `os-zapret2-restyle-0.3.2_46.pkg`' "$
 fi
 
 sh -n "$0"
-echo "PASS: GitHub package builds stay on FreeBSD 15 and live-candidate selection respects the third-audit gate for ${candidate}"
+echo "PASS: GitHub package builds stay on FreeBSD 15 and live-candidate selection respects the active live gate for ${candidate}"

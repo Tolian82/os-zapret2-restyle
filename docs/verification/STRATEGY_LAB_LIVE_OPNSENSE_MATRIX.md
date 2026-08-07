@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **PENDING OWNER — SCENARIO 1 RETEST ON _12**
+Overall status: **FAILED ON _12 — STAGE-90 CORRECTION `_13` IN PROGRESS**
 
 This matrix is the final live-appliance gate for the Strategy Lab hardening series. Source tests, GitHub CI, and FreeBSD package builds cannot substitute for evidence collected on the owner's OPNsense appliance.
 
@@ -9,18 +9,18 @@ Only FreeBSD 15 amd64 packages are valid. The revision 46 GitHub Actions artifac
 ## Test record
 
 - Tester: repository owner
-- Test date/time: `2026-08-07` (latest completed scenario 1 attempt; `_12` retest pending)
-- OPNsense version: `26.7.1_1`; later diagnostic kernel evidence: `15.1-RELEASE-p1 stable/26.7`
+- Test date/time: `2026-08-07`
+- OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Architecture / ABI evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`
 - Required package ABI: `FreeBSD:15:amd64`
-- Current corrective candidate: `os-zapret2-restyle-0.3.3_12.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_12.pkg`
+- Current corrective source candidate: `os-zapret2-restyle-0.3.3_13.pkg`
 - Patch 7 source/CI qualification: exact PR head `dd2a484a4aa3711834b722aae0cc025d3fd4758e`; title check `31157848071` PASS; CI run `31157848056` PASS; FreeBSD 15 artifact `8985927074`; squash-merged main `256ffa09452dabfb001665b729c1f4c3d3462688`.
-- Final `_12` roll-up: package revision only; no runtime behavior change. The `_12` artifact must be produced by the successful final-roll-up GitHub Actions build and is the installation candidate for Scenario 1.
+- Final `_12` roll-up: owner-installed testing prerelease `v0.3.3_12`; live Scenario 1 failed.
 - Historical `_6` CI package: `os-zapret2-restyle-0.3.3_6.pkg` (not owner-tested; superseded by `_12`)
-- Latest tested package: `os-zapret2-restyle-0.3.3_5.pkg`
 - WAN interface: `vtnet1`
 - LAN test client: `PENDING OWNER`
-- Blocked-domain target: `rutracker.org` for the latest scenario 1 attempt
+- Blocked-domain target: `rutracker.org`
 - Generic UDP target/port: `PENDING OWNER`
 
 Installation and service baseline for `0.3.3_1`: **PASS**. The package installed successfully with architecture `FreeBSD:15:amd64`, annotation `FreeBSD_version: 1500068`, and the `zapret` service running after installation. This baseline does not mark any scenario row as passed.
@@ -43,7 +43,13 @@ The exact final restoration-path PR head passed full CI run `31144038425` and pr
 
 These source/CI results do not convert the failed `_5` live attempt into PASS. `_6` was never owner-tested. A third source audit on 2026-08-07 then identified `SL3-001` through `SL3-007` and superseded `_6` before live retest.
 
-The approved third-audit corrective sequence is source/CI complete. Patches 2–6 implemented every finding, Patch 7 bound all corrected paths into the mandatory integration/corrective matrix, and Patch 8 closed the source/CI handoff. Revision `_12` is a final package roll-up from the complete post-Patch-8 repository state; it adds no new runtime behavior and therefore inherits the Patch 7 integrated runtime qualification while requiring its own successful FreeBSD 15 package build/manifest inspection before installation. This evidence authorizes resuming the owner-assisted matrix at Scenario 1; it does **not** authorize any live PASS claim.
+The approved third-audit corrective sequence completed source/CI scope, but owner-assisted Scenario 1 on `_12` reopened the live gate. Job `job.sl7JGM` passed stages 00–40, failed immediately at stage 50, and then failed stage 90 with `RESTORE_FAILED`.
+
+A one-second live watcher proved the stage-90 root cause. The normal runtime became fully healthy at 13:31:07 and remained `RUNNING` with dvtws2, supervisor, and rule 19000 present until the 45-second restoration timeout expired. It was then stopped and the lifecycle made a second attempt. The second runtime became fully healthy at 13:31:52 and was stopped again when the second 45-second timeout expired at 13:32:31. FreeBSD `timeout` without `-f` acts as a reaper for command descendants, so the lifecycle wrapper waited on the intentionally long-lived daemon descendants and timed them out even though the service-control command had already completed successfully.
+
+Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`.
+
+The `_13` corrective scope is intentionally limited to this stage-90 defect: on FreeBSD only, daemonizing `strategy-lab-start` uses foreground timeout mode so its long-lived runtime descendants are not reaped by the timeout wrapper; stop and non-FreeBSD actions retain normal timeout semantics. Stage 50 remains a separate live blocker and requires its own subsequent logical correction.
 
 Authoritative third-audit record:
 
@@ -75,7 +81,7 @@ Before installation of the designated candidate, preserve its `+MANIFEST` and co
 ```text
 abi: FreeBSD:15:amd64
 arch: freebsd:15:x86:64
-version: 0.3.3_12
+version: 0.3.3_13
 ```
 
 Recommended residue evidence after every terminal scenario:
@@ -90,7 +96,7 @@ configctl zapret status
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | Failed attempts: `2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`, `2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`, `2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md`, `2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`; next evidence must be collected on `_12` | **PENDING OWNER — RETEST REQUIRED** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | Failed attempts: `2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`, `2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`, `2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md`, `2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`, `2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`; `_13` must first prove stage-90 RUNNING restoration, then stage 50 will be corrected separately | **FAILED ON `_12` — `_13` RESTORATION RETEST REQUIRED** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Test completes while final service remains STOPPED; restoration evidence is verified | `PENDING OWNER` | **BLOCKED BY #1** |
 | 3 | Extended TLS 1.2 and HTTP | Available protocol successes appear as complete replay-verified profiles; unavailable protocols are explicitly skipped | `PENDING OWNER` | **BLOCKED BY #1** |
 | 4 | Extended QUIC | QUIC result is endpoint-bound and replay-verified when network capability exists; otherwise explicit skip reason | `PENDING OWNER` | **BLOCKED BY #1** |
@@ -128,4 +134,4 @@ A failed live row requires same-scope source correction when a source defect is 
 
 ## Release gate
 
-Third-audit source/CI closure is complete. Stable release preparation and pkg-repository promotion remain blocked until every required live row is marked `PASS` by the owner and linked evidence is recorded. The matrix contains no successful Strategy Lab live scenario PASS claim yet.
+Third-audit source/CI closure remains historical source evidence only. Stable release preparation and pkg-repository promotion remain blocked until every required live row is marked `PASS` by the owner and linked evidence is recorded. The matrix contains no successful Strategy Lab live scenario PASS claim yet.

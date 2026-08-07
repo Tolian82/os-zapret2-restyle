@@ -2,6 +2,7 @@
 
 STRATEGY_LAB_SERVICE_SCRIPT="${STRATEGY_LAB_SERVICE_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh}"
 STRATEGY_LAB_TIMEOUT_BIN="${STRATEGY_LAB_TIMEOUT_BIN:-/usr/bin/timeout}"
+STRATEGY_LAB_UNAME_BIN="${STRATEGY_LAB_UNAME_BIN:-/usr/bin/uname}"
 STRATEGY_LAB_STOP_TIMEOUT="${STRATEGY_LAB_STOP_TIMEOUT:-10}"
 STRATEGY_LAB_RESTORE_TIMEOUT="${STRATEGY_LAB_RESTORE_TIMEOUT:-45}"
 STRATEGY_LAB_INITIAL_SERVICE_STATE=""
@@ -97,7 +98,19 @@ strategy_lab_timed_service_action()
     _strategy_lab_action="$1"; _strategy_lab_timeout="$2"
     [ -x "${STRATEGY_LAB_TIMEOUT_BIN}" ] || { echo "ERROR: Strategy Lab timeout utility is unavailable" >&2; return 1; }
     [ -x "${STRATEGY_LAB_SERVICE_SCRIPT}" ] || { echo "ERROR: Strategy Lab service control is unavailable" >&2; return 1; }
-    "${STRATEGY_LAB_TIMEOUT_BIN}" "${_strategy_lab_timeout}" "${STRATEGY_LAB_SERVICE_SCRIPT}" "strategy-lab-${_strategy_lab_action}"
+
+    _strategy_lab_platform=""
+    if [ -x "${STRATEGY_LAB_UNAME_BIN}" ]; then
+        _strategy_lab_platform=$("${STRATEGY_LAB_UNAME_BIN}" -s 2>/dev/null || true)
+    fi
+
+    if [ "${_strategy_lab_action}" = start ] && [ "${_strategy_lab_platform}" = FreeBSD ]; then
+        "${STRATEGY_LAB_TIMEOUT_BIN}" -f "${_strategy_lab_timeout}" \
+            "${STRATEGY_LAB_SERVICE_SCRIPT}" "strategy-lab-${_strategy_lab_action}"
+    else
+        "${STRATEGY_LAB_TIMEOUT_BIN}" "${_strategy_lab_timeout}" \
+            "${STRATEGY_LAB_SERVICE_SCRIPT}" "strategy-lab-${_strategy_lab_action}"
+    fi
 }
 
 strategy_lab_verify_stopped()
