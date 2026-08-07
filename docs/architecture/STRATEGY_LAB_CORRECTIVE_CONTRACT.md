@@ -10,14 +10,14 @@ contracts must the activated Strategy Lab satisfy before live OPNsense validatio
 
 Purpose:
 Record the approved corrective contract derived from the 2026-08-05 source audit of
-package candidate `0.3.2_15`.
+package candidate `0.3.2_15` and later live corrective evidence.
 
 Authority:
 This document supplements `docs/architecture/STRATEGY_LAB.md` and supersedes any
 conflicting implementation assumptions in earlier Strategy Lab delivery documents.
 The existing product architecture remains valid unless explicitly corrected here.
 
-Approved by the project owner on 2026-08-05.
+Approved by the project owner on 2026-08-05 and extended by the `_6` corrective series.
 
 ==================================================
 CORRECTIVE OBJECTIVE
@@ -178,8 +178,8 @@ Overall budgets:
 - cleanup and restoration remain bounded separately and must still run after search
   budget exhaustion.
 
-At job start the worker records an absolute deadline. Every operation receives the
-minimum of:
+At job start the worker records an absolute deadline. Every search operation receives
+the minimum of:
 
 - its own operation limit;
 - its stage remaining budget;
@@ -188,7 +188,13 @@ minimum of:
 Stage 80 has one shared 120-second budget. TLS 1.2/HTTP, QUIC, and UDP do not each
 receive a fresh independent 120-second timeout.
 
-When a budget is exhausted:
+Stage 90 is outside the exhausted search budget when necessary to restore the router.
+Its service-action bound must be large enough to contain the complete bounded native
+service transaction it wraps. An outer timeout shorter than the sum of the native
+launcher/supervisor waits is invalid because it can manufacture an `INCOMPLETE` service
+state by killing a correct start operation in flight.
+
+When a search budget is exhausted:
 
 - already completed results are retained;
 - active temporary work is stopped and cleaned;
@@ -234,22 +240,25 @@ A temporary candidate accepted by stage 50 is job-owned runtime. The candidate P
 is the primary ownership proof after the PID has been validated against both the expected
 dvtws2 executable and the reserved `--port=9989` command identity.
 
-The same ownership proof must be used during teardown. Cleanup must:
+The same ownership proof must be used during teardown and absence verification. Cleanup
+must:
 
 1. read and validate the job-owned PID;
-2. send TERM to that exact validated process;
-3. use a bounded wait for process/socket disappearance;
-4. send KILL to that exact validated process when the grace interval expires;
-5. additionally sweep globally for matching executable/port processes to remove
+2. treat a still-valid owned PID as runtime-present even if secondary discovery misses it;
+3. send TERM to that exact validated process;
+4. use a bounded wait for owned-process/socket disappearance;
+5. send KILL to that exact validated process when the grace interval expires;
+6. additionally sweep globally for matching executable/port processes to remove
    duplicate or stale candidates;
-6. require both candidate-process absence and divert-port absence before declaring
-   runtime teardown successful;
-7. remove the candidate PID file only after absence is proven.
+7. require owned-PID absence, matching-process absence, and divert-port absence before
+   declaring runtime teardown successful;
+8. remove the candidate PID file only after absence is proven.
 
-A global process listing is secondary evidence. It must never replace an already proven
-pidfile owner as the sole termination path. This preserves the ownership relationship
-used at startup and avoids a FreeBSD-specific false cleanup failure when pid-specific
-inspection succeeds but a global process snapshot omits or formats the child differently.
+A global process listing and socket discovery are secondary evidence. They must never
+replace an already proven pidfile owner as the sole termination or absence path. This
+preserves the ownership relationship used at startup and avoids a FreeBSD-specific false
+cleanup result when pid-specific inspection succeeds but a secondary snapshot omits or
+formats the child differently.
 
 Failure to prove candidate absence remains an internal error. The correction does not
 permit stage 50 to continue while a candidate process or listener remains active.
@@ -269,7 +278,28 @@ The initial snapshot records sufficient evidence to classify and verify:
 - plugin-owned normal firewall state;
 - absence or presence of any pre-existing incomplete temporary state.
 
-After Strategy Lab cleanup, verification requires:
+For initial RUNNING, stage 90 must use a bounded restoration-start window that exceeds
+the complete native startup waits. The current native path can spend up to 10 seconds
+waiting for the dvtws2 PID, then a 5-second stability interval, then up to 5 seconds
+waiting for the supervisor, in addition to runtime generation/activation and firewall
+work. A 15-second outer restoration bound is therefore forbidden. The corrective default
+is 45 seconds.
+
+A nonzero outer start result is not by itself semantic proof that restoration failed.
+Stage 90 must immediately inspect the service state:
+
+- healthy RUNNING is accepted and proceeds to semantic evidence verification;
+- STOPPED may be used as the clean base for the one permitted recovery start;
+- INCOMPLETE must first be normalized by bounded stop and verified STOPPED;
+- an unknown/unclassifiable state fails restoration.
+
+Exactly one bounded recovery start is permitted after the first unsuccessful or
+semantically incomplete start. There is no automatic restart loop. If the second start
+still does not establish healthy RUNNING, stage 90 performs a best-effort bounded
+normalization to STOPPED and returns failure; semantic restoration remains failed because
+the initial state was RUNNING.
+
+After Strategy Lab cleanup and service-state recovery, final verification still requires:
 
 - initial RUNNING becomes healthy RUNNING with supervisor and dvtws2;
 - initial STOPPED remains fully STOPPED;
@@ -277,7 +307,9 @@ After Strategy Lab cleanup, verification requires:
 - no Strategy Lab rules remain in reserved range `19100–19131`;
 - no temporary listener remains on divert port `9989`;
 - no active candidate runtime is left behind;
-- the saved Traffic Strategy is unchanged.
+- the saved Traffic Strategy is unchanged;
+- initial runtime args/effective configuration/normal firewall evidence match the final
+  semantic evidence where semantic evidence is available.
 
 A restoration verification failure produces:
 
@@ -287,6 +319,9 @@ outcome=RESTORE_FAILED
 stage 90=FAIL
 stage 99=FAIL
 ```
+
+The recovery attempt does not weaken this outcome contract. A successful command exit
+without semantic RUNNING/evidence equivalence is not restoration success.
 
 ==================================================
 TARGET CONTRACT
@@ -350,8 +385,14 @@ Required scenarios:
 12. process and IPFW cleanup;
 13. saved Traffic Strategy immutability;
 14. polling recovery after page reload;
-15. candidate teardown when pid-specific ownership remains valid but global process
-    discovery omits the candidate.
+15. candidate teardown when pid-specific ownership remains valid but secondary process
+    and socket discovery omit the candidate;
+16. first restoration start leaves INCOMPLETE, then one bounded normalization/recovery
+    start reaches RUNNING;
+17. outer start returns nonzero while semantic state is already healthy RUNNING, with no
+    unnecessary second start;
+18. two failed restoration starts return failure and best-effort normalize the service to
+    STOPPED rather than accepting or intentionally retaining INCOMPLETE.
 
 Tests must assert the event order and final persisted JSON, not only grep for source
 strings.
@@ -372,12 +413,16 @@ The approved implementation series is strictly serial:
 8. GUI and backend circular eligibility;
 9. explicit domain/IP target contract;
 10. end-to-end regression harness;
-11. repository hygiene.
+11. repository hygiene;
+12. live-evidence candidate ownership correction;
+13. live-evidence bounded restoration recovery.
 
 Each patch follows:
 
 `one logical change -> one task branch -> focused tests -> CI/package build -> one squash
-merge -> post-merge CI -> verified branch deletion`.
+merge -> post-merge verification -> verified branch deletion`.
 
-Owner-assisted OPNsense verification is deferred until every corrective code patch has
-completed the serial delivery gate.
+For the `_6` live-evidence corrective pair, the owner explicitly requested repository
+CI/package verification and merge to `main` without an intermediate manual OPNsense test.
+Owner-assisted OPNsense scenario 1 is repeated only after both source corrections are in
+`main`.
