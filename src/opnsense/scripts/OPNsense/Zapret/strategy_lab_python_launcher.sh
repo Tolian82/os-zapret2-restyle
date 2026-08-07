@@ -12,7 +12,17 @@ runtime_error()
     exit 70
 }
 
-[ -x "${PYTHON_BIN}" ] || runtime_error "interpreter is not executable: ${PYTHON_BIN}"
+requested_python=${PYTHON_BIN}
+case "${PYTHON_BIN}" in
+    */*)
+        ;;
+    *)
+        PYTHON_BIN=$(command -v "${PYTHON_BIN}" 2>/dev/null) ||
+            runtime_error "interpreter is not executable: ${requested_python}"
+        ;;
+esac
+
+[ -x "${PYTHON_BIN}" ] || runtime_error "interpreter is not executable: ${requested_python}"
 [ -r "${PYTHON_ENTRY}" ] || runtime_error "entry point is not readable: ${PYTHON_ENTRY}"
 
 python_version=$("${PYTHON_BIN}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null) ||
