@@ -83,6 +83,19 @@ The authoritative live plan remains:
 
 No source/CI result substitutes for owner-provided live OPNsense evidence.
 
+## Current GitHub delivery authority
+
+Evidence-first GitHub operations remain authoritative through:
+
+- repository-root `AGENTS.md`;
+- `docs/GITHUB_PUBLICATION.md`;
+- `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
+- `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
+- `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`;
+- `docs/GITHUB_WORKFLOW.md`.
+
+The connected GitHub plugin is the mandatory first repository interface. One logical scope uses one task branch and one Ready PR; same-scope repairs stay in that PR; the latest head must pass required checks; merge is squash with the expected head SHA; published history is not rewritten.
+
 ## Release gate
 
 Stable release preparation and pkg-repository promotion: **BLOCKED ON THIRD-AUDIT CORRECTIVE SERIES AND LIVE MATRIX**.
