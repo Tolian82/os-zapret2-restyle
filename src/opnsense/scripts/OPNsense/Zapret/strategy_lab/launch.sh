@@ -12,23 +12,16 @@ emit_error_json()
     "${STRATEGY_LAB_JQ}" -nc --arg message "$1" '{status:"error",message:$message}'
 }
 
-strategy_lab_recovery_service_status()
+strategy_lab_recovery_verified()
 {
-    if "${TRANSACTION_SCRIPT}" status >/dev/null 2>&1; then return 0; fi
-    return $?
-}
-
-strategy_lab_recovery_restore_service()
-{
-    _strategy_lab_initial="$1"
-    if strategy_lab_recovery_service_status; then _strategy_lab_current=0; else _strategy_lab_current=$?; fi
-    case "${_strategy_lab_initial}:${_strategy_lab_current}" in
-        RUNNING:0|STOPPED:1) return 0 ;;
-        RUNNING:1) "${TRANSACTION_SCRIPT}" start >/dev/null 2>&1 ;;
-        RUNNING:2) "${TRANSACTION_SCRIPT}" stop >/dev/null 2>&1 && "${TRANSACTION_SCRIPT}" start >/dev/null 2>&1 ;;
-        STOPPED:0|STOPPED:2) "${TRANSACTION_SCRIPT}" stop >/dev/null 2>&1 ;;
-        *) return 1 ;;
-    esac
+    _strategy_lab_recovery_status="$1"
+    "${STRATEGY_LAB_JQ}" -e '
+        (.restoration.verified // false)==true and
+        (.restoration.strategy_unchanged // false)==true and
+        (.restoration.temporary_runtime_clean // false)==true and
+        (.restoration.initial_state==.restoration.final_state) and
+        (.restoration.initial_state=="RUNNING" or .restoration.initial_state=="STOPPED")
+    ' "${_strategy_lab_recovery_status}" >/dev/null 2>&1
 }
 
 strategy_lab_reconcile_stale_job()
@@ -40,40 +33,33 @@ strategy_lab_reconcile_stale_job()
     case "${_strategy_lab_state}" in queued|running|cancel_requested) ;; *) return 0 ;; esac
     strategy_lab_job_active "${_strategy_lab_job}" && return 0
 
-    _strategy_lab_initial=$("${STRATEGY_LAB_JQ}" -r '.initial_service_state // ""' "${_strategy_lab_status}" 2>/dev/null || true)
-    _strategy_lab_runtime_clean=false
+    _strategy_lab_recovery_status=0
+    "${TRANSACTION_SCRIPT}" strategy-lab-recover "${_strategy_lab_job}" >/dev/null 2>&1 ||
+        _strategy_lab_recovery_status=$?
+
     _strategy_lab_restored=false
-    if strategy_lab_candidate_stop "${_strategy_lab_job}" &&
-       strategy_lab_firewall_remove_rules &&
-       strategy_lab_firewall_range_empty &&
-       strategy_lab_candidate_runtime_absent; then
-        _strategy_lab_runtime_clean=true
-        strategy_lab_recovery_restore_service "${_strategy_lab_initial}" && _strategy_lab_restored=true
+    if [ "${_strategy_lab_recovery_status}" -eq 0 ] &&
+       strategy_lab_recovery_verified "${_strategy_lab_status}"; then
+        _strategy_lab_restored=true
     fi
     strategy_lab_udp_input_cleanup "${_strategy_lab_job}" || true
 
     _strategy_lab_tmp=$(mktemp "$(dirname "${_strategy_lab_status}")/.stale-recovery.XXXXXX") || return 1
     if [ "${_strategy_lab_restored}" = true ]; then
         _strategy_lab_outcome=ERROR
-        _strategy_lab_message='ERROR — Strategy Lab worker disappeared; temporary state was cleaned and the original service state was restored.'
+        _strategy_lab_message='ERROR — Strategy Lab worker disappeared; temporary state was cleaned and semantic restoration of the original service state was verified.'
         _strategy_lab_restore_status=PASS
     else
         _strategy_lab_outcome=RESTORE_FAILED
-        _strategy_lab_message='RESTORE_FAILED — Strategy Lab worker disappeared and the original service state could not be proven restored.'
+        _strategy_lab_message='RESTORE_FAILED — Strategy Lab worker disappeared and semantic restoration of the original service state could not be proven.'
         _strategy_lab_restore_status=FAIL
     fi
     "${STRATEGY_LAB_JQ}" \
         --arg outcome "${_strategy_lab_outcome}" \
         --arg message "${_strategy_lab_message}" \
-        --arg restore_status "${_strategy_lab_restore_status}" \
-        --arg initial "${_strategy_lab_initial}" \
-        --argjson restored "${_strategy_lab_restored}" \
-        --argjson clean "${_strategy_lab_runtime_clean}" '
+        --arg restore_status "${_strategy_lab_restore_status}" '
         .state="error" | .outcome=$outcome | .current_stage="99" | .message=$message |
         .stale_worker_recovered=true |
-        .restoration={verified:$restored,source:"stale-worker-recovery",initial_state:$initial,
-                      final_state:(if $restored then $initial else "unknown" end),
-                      strategy_unchanged:false,temporary_runtime_clean:$clean} |
         (.stages[] | select((.status=="PENDING" or .status=="RUNNING") and .number!="90" and .number!="99") | .status)="SKIPPED" |
         (.stages[] | select(.number=="90") | .status)=$restore_status |
         (.stages[] | select(.number=="90") | .message)=$message |
