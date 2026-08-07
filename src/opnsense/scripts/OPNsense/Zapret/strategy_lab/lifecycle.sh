@@ -19,19 +19,7 @@ strategy_lab_lifecycle_restoration_file(){ printf '%s/lifecycle-restoration.json
 
 strategy_lab_record_json_field()
 {
-    _strategy_lab_record_field="$1"
-    _strategy_lab_record_file="$2"
-    if command -v strategy_lab_state_transform >/dev/null 2>&1; then
-        strategy_lab_state_transform "${JOB_ID}" '.[$field]=$value[0]' \
-            --arg field "${_strategy_lab_record_field}" --slurpfile value "${_strategy_lab_record_file}"
-        return $?
-    fi
-    _strategy_lab_record_status=$(strategy_lab_status_file "${JOB_ID}")
-    _strategy_lab_record_tmp=$(mktemp "$(dirname "${_strategy_lab_record_status}")/.lifecycle.XXXXXX") || return 1
-    "${STRATEGY_LAB_JQ}" --arg field "${_strategy_lab_record_field}" --slurpfile value "${_strategy_lab_record_file}" \
-        '.[$field]=$value[0]' "${_strategy_lab_record_status}" > "${_strategy_lab_record_tmp}" || { rm -f "${_strategy_lab_record_tmp}"; return 1; }
-    chmod 0644 "${_strategy_lab_record_tmp}"
-    mv -f "${_strategy_lab_record_tmp}" "${_strategy_lab_record_status}"
+    strategy_lab_set_json_field "${JOB_ID}" "$1" "$2"
 }
 
 strategy_lab_fetch_semantic_evidence()
