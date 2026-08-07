@@ -1,143 +1,217 @@
 # os-zapret2-restyle — Current state
 
+==================================================
+DOCUMENT ROLE
+==================================================
+
+Question answered:
+Where is the project now?
+
+Purpose:
+Provide the fastest authoritative recovery of current version, verified live boundary, blockers, active architectural direction, and next action.
+
+Updated when:
+Current source/package identity, live boundary, blocker, approved implementation direction, or next action changes.
+
+Read after:
+`AGENTS.md` and `docs/INDEX.md`.
+
+Do not store here:
+Full chronological history, detailed implementation design, or complete test logs.
+
+==================================================
+QUICK CONTEXT
+==================================================
+
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Latest published testing prerelease: `v0.3.3_16` / `os-zapret2-restyle-0.3.3_16.pkg`
-Latest owner-tested testing candidate: `v0.3.3_16` / `os-zapret2-restyle-0.3.3_16.pkg`
+Latest published testing prerelease: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
+Latest owner-tested testing candidate: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
 Current source line: `VERSION=0.3.3`
-Current corrective package revision: `PLUGIN_REVISION=17`
+Current package revision: `PLUGIN_REVISION=17`
 Target ABI: **FreeBSD:15:amd64 only**
+Current phase: **Strategy Lab Python migration handoff; source migration not started yet**
+Stable release: **BLOCKED ON POST-MIGRATION LIVE MATRIX**
 
-## Historical live boundary
+Current primary authority:
+`docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
 
-`v0.3.3_16` is the latest owner-tested package. Live Scenario 1 on `_16`, job
-`job.VmWk32`, passed stages 00–40, failed at stage 50 with
-`Temporary candidate runtime failed internally.`, skipped stages 60–85, then passed stage
-90 and completely restored the initially RUNNING Zapret2 service.
+Current migration decision:
+`docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
 
-Unlike earlier stage-50 failures, `_16` created the full temporary candidate runtime. The
-candidate resolved `rutracker.org`, prepared rule 19100 and divert port 9989, started
-dvtws2, loaded the hostlist, bound the divert socket, and dropped to UID/GID 65534. dvtws2
-then exited on its post-drop file-access check:
+==================================================
+FINAL SHELL-ERA LIVE BOUNDARY
+==================================================
 
-```text
-Running as UID=65534 GID=65534
-file_open_test: Permission denied
-cannot access hostlist file '/var/run/zapret2-restyle/strategy-lab/jobs/job.VmWk32/candidate-runtime/hostlist.txt'
-```
+Owner-assisted Standard Strategy Lab test on `v0.3.3_17`:
 
-The hostlist itself is mode 0644. The live/source root cause is the private random job
-directory created with `mktemp -d`: after dvtws2 switches to `nobody`, the nested hostlist
-cannot be reopened unless the parent job directory grants search permission.
+- target: `rutracker.org`;
+- job shown by GUI: `job.w0nXxQ`;
+- initial Zapret2 state: RUNNING.
 
-The same `_16` run reconfirmed the separate GUI defects: a new job can immediately display
-stale `ERROR`, active progress remains visually at 0%, and the UI jumps to 100% only at
-terminal output. It also reconfirmed baseline `target_type:"A"` corruption.
+Final stages:
+
+- 00 PASS — target initialized as domain;
+- 10 PASS — initial RUNNING state captured;
+- 20 PASS — normal Zapret2 stopped;
+- 30 PASS — IPv4 available; IPv6 unavailable; QUIC/IPv4 closed;
+- 40 PASS — DNS OK; direct TLS 1.3 connection not established;
+- 50 ERROR — `Temporary candidate runtime failed internally.`;
+- 60–85 SKIPPED;
+- 90 PASS — temporary state cleaned and original Zapret2 restored healthy RUNNING;
+- 99 ERROR — internal Strategy Lab error with retained results.
+
+Immediate active-GUI observation on the same run:
+
+- the new job ID appeared together with `Статус: ОШИБКА` immediately after Run;
+- `Strategy Lab returned no output.` was displayed while the job was still active;
+- visible progress stayed at 0% during active work;
+- terminal presentation jumped directly to 100%.
+
+No `_17` candidate-runtime log bundle was collected in this run. Therefore the exact
+remaining `_17` Stage-50 root cause is intentionally not claimed. The previous `_16`
+hostlist traversal failure was real and corrected in `_17`, but the repeated high-level
+Stage-50 message proves only that another Stage-50 failure remains.
 
 Evidence:
-`docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md`.
+`docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md`.
 
-## Third audit corrective series
+==================================================
+CONFIRMED LIVE SUB-GATES
+==================================================
 
-Status: **SOURCE/CI COMPLETE — LIVE SCENARIO 1 BLOCKED AT STAGE 50; `_17` CORRECTION IN PROGRESS**
+The owner-assisted series has established these reusable facts:
 
-Authoritative audit: `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
+- FreeBSD DNS foreground-timeout correction is live-proven: stage 40 can pass with `DNS: OK`;
+- normal Zapret2 restoration is live-proven after the earlier FreeBSD timeout correction: stage 90 repeatedly returns initially RUNNING service to healthy RUNNING;
+- temporary Strategy Lab runtime can reach real dvtws2 startup/bind/privilege-drop paths;
+- `v0.3.3_17` still does not complete Stage 50 successfully;
+- no complete Standard Strategy Lab scenario is yet live PASS.
 
-All seven third-audit findings `SL3-001` through `SL3-007` remain implemented in source
-and protected by their focused regressions plus the mandatory Strategy Lab corrective
-matrix. Subsequent owner-assisted runs are correcting additional FreeBSD live defects one
-logical defect at a time.
+Authoritative live matrix:
+`docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
-## Patch evidence
+==================================================
+APPROVED IMPLEMENTATION DIRECTION
+==================================================
 
-- Patch 1 — PR #115, main `ed82ddff891ece514fac01895c197ef07d844557`.
-- Patch 2 (`SL3-001` + `SL3-005`) — PR #116, main `dd95d77e4d75e6751315ff893798cc2ea66a9330`; CI `31151805919`; FreeBSD 15 artifact `8983642442`, package `_7`.
-- Patch 3 (`SL3-002`) — PR #117, main `f0c43de7133f8ba337a5458de0803409949a0096`; CI `31152455413`; artifact `8983891990`, package `_8`.
-- Patch 4 (`SL3-003` + `SL3-006`) — PR #118, main `15ed2b057ca94a1a780ecf9da9f304d0e6cd652c`; CI `31154664416`; artifact `8984745215`, package `_9`.
-- Patch 5 (`SL3-004`) — PR #119, main `41ccadd47136375cb58a64e527f2fecff9f1630e`; CI `31155184080`; artifact `8984931432`, package `_10`.
-- Patch 6 (`SL3-007`) — PR #120, main `00107d38f287462a2c0627a04629f6381774d05c`; CI `31156513189`; artifact `8985427611`, package `_11`.
-- Patch 7 (integrated regression gate) — PR #121, main `256ffa09452dabfb001665b729c1f4c3d3462688`; CI `31157848056` PASS; FreeBSD 15 artifact `8985927074`.
-- Patch 8 — PR #122, main `124cdef9fb68a9d749c052d1c806b637c8878bf9`; documentation-only source/CI closure and live handoff.
-- Final roll-up — package revision `_12`; owner-installed testing prerelease `v0.3.3_12`.
-- Live `_12` — stage 50 failed and stage 90 failed because FreeBSD timeout reaped the successfully restored daemon runtime.
-- Corrective `_13` — PR #125, main `9a9879c6f88d77ab64c06647dd8d1e2437fc5f25`; stage-90 FreeBSD `timeout -f`; owner live stage 90 PASS.
-- Corrective `_14` — PR #126, main `36e34414c869ff6e1062e37b91772aa8cdc05455`; FreeBSD DNS foreground timeout; owner live stage 40 PASS and stage 90 PASS.
-- Corrective `_15` — PR #127, main `6807bd7068f960832bf0ee42005c58cdf9d355ff`; family module owns its timeout executable default.
-- Live `_15` — stage 50 still failed; source review found synchronous resident FreeBSD `daemon(8)` supervision blocked candidate readiness.
-- Corrective `_16` — PR #128, main `88d33360be7b9fda8ddd8a8e903296cd775aae41`; published `v0.3.3_16`; temporary candidate daemon supervision detached and resident-supervisor regression added.
-- Live `_16` — stage 40 PASS, stage 90 PASS, stage 50 FAIL after dvtws2 successfully starts/binds/drops privileges but cannot reopen its nested hostlist through the private job directory. Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md`.
-- Corrective `_17` — temporary search-only job-directory access is granted only while a hostlist-backed candidate runs and private 0700 mode is restored on every candidate cleanup; regression models post-drop access and cleanup privacy.
+The project will not continue growing the large sourced POSIX-shell Strategy Lab worker
+as the primary orchestration implementation.
 
-## Current verification boundary
+Approved target boundary:
 
-Live OPNsense matrix: **FAILED AT STAGE 50 ON `_16` — CORRECTIVE `_17` REQUIRED**.
+```text
+Diagnostics GUI / JavaScript
+        ↓
+OPNsense PHP MVC/API
+        ↓
+configd
+        ↓
+thin compatibility launcher
+        ↓
+Python Strategy Lab orchestration
+        ↓
+small explicit FreeBSD/OPNsense system adapters and external tools
+```
 
-The `_16` live run verifies these sub-gates:
+Responsibilities intended for Python:
 
-- stage 40 advances correctly on FreeBSD with `DNS: OK` and a blocked clean TLS 1.3 baseline;
-- `_16` candidate startup reaches real dvtws2 execution, divert binding, and privilege drop;
-- stage 90 restores the initial RUNNING Zapret2 service completely and leaves it healthy;
-- temporary Strategy Lab firewall/runtime residue is removed at terminal completion.
+- job/state model and atomic JSON persistence;
+- stage machine, progress, budgets, cancellation, and terminal finalization;
+- subprocess execution with separate return code/stdout/stderr/timeout state;
+- DNS/TLS/HTTP parsing and error classification;
+- candidate and family orchestration;
+- expansion, stability, extended-protocol orchestration;
+- structured result/shortlist generation.
 
-The current stage-50 blocker is deterministic: dvtws2 is intentionally started with
-`--user=nobody`; after dropping privileges it reopens the hostlist, but the hostlist is
-nested below a random `mktemp -d` job directory that is private. `_17` keeps the job
-private by default, grants only search traversal during hostlist-backed candidate lifetime,
-and restores private mode during cleanup.
+Responsibilities intentionally retained outside Python unless separately justified:
 
-Authoritative live plan: `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
+- PHP MVC/API request validation and configd integration;
+- small audited shell/service adapters for Zapret2 lifecycle, shared lock, `ipfw`, process
+  ownership, and other short FreeBSD-specific mutations where reusing existing behavior
+  is safer than duplicating it.
 
-## Confirmed defect backlog
+No Python interpreter path/version is assumed yet. Migration Patch 1 must verify the
+supported OPNsense Python runtime/dependency model before packaged code relies on it.
+No third-party `pip` dependency is approved by default.
 
-The following defects are confirmed and must remain documented until corrected and live
-or source-qualified as applicable. They are intentionally outside the `_17` stage-50
-scope unless stated otherwise.
+==================================================
+CONFIRMED DEFECT BACKLOG
+==================================================
 
-1. **Stage-50 post-drop hostlist access — correcting in `_17`.** dvtws2 loads the hostlist as root but, after `--user=nobody`, cannot reopen it because the random parent job directory does not grant search permission.
-2. **Baseline target-type corruption — pending.** `baseline.json` records `target_type:"A"` for a domain because DNS helpers reuse the shell-global `_strategy_lab_type` variable.
-3. **Immediate stale GUI error after Run — pending.** A newly created job id can be displayed together with the previous terminal job's visible `ERROR` state before fresh polling renders the new state. Reconfirmed on `_16` job `job.VmWk32`.
-4. **GUI progress stuck at 0% while backend advances — pending.** The UI remains at 0% during active work and jumps to 100% only at terminal completion; backend evidence already proves stage progress itself advances normally.
-5. **DNS answer parser accepts question lines — pending.** The raw-output match can accept `IN A`/`IN AAAA` from `QUESTION SECTION`; it does not prove an answer record.
-6. **DNS failure diagnostics flatten distinct failures — pending.** Endpoint DNS failures collapse timeout, command failure, and parser rejection to generic code 1.
-7. **Terminal-result reload/state presentation — pending.** A retained terminal job can be resurrected as active-looking state when Diagnostics is reopened.
-8. **Candidate fatal-log classifier misses hostlist-access failure — pending.** `_16` persisted `log_clean:true` even though dvtws2 logged `file_open_test: Permission denied` and `cannot access hostlist file`.
+All items remain open until replacement evidence closes them. Migration does not reset
+or automatically resolve the backlog.
 
-Live/source evidence for these items is preserved in the `_14`, `_15`, and `_16` Scenario 1
-evidence records under `docs/verification/evidence/`.
+1. **Stage 50 remains ERROR on `_17`.** Exact `_17` root cause is not yet established.
+2. **Immediate stale/new-job GUI error.** A fresh job ID can be shown with visible `ERROR` before terminal evidence exists.
+3. **Active GUI no-output message.** `Strategy Lab returned no output.` can appear while backend work continues.
+4. **GUI progress stuck at 0%.** Backend work advances while visible progress remains 0%, then jumps to terminal 100%.
+5. **Baseline target-type corruption.** Shell-global `_strategy_lab_type` can turn domain state into `A`.
+6. **DNS answer parser is semantically weak.** `IN A`/`IN AAAA` text can be matched without proving an answer-section record.
+7. **DNS diagnostics flatten failure classes.** Timeout, command failure, and parser rejection can collapse into generic failure code 1.
+8. **Terminal reload/state presentation defect.** Retained terminal state can be presented incorrectly on Diagnostics reopen.
+9. **Candidate fatal-log classification defect.** Readiness evidence can report a clean log while fatal runtime text exists.
 
-## Current GitHub delivery authority
+The Python migration plan maps these defects to replacement tests and later live/UI
+verification. A defect may disappear because the old implementation mechanism is
+removed, but it is closed only after a focused regression and required live evidence.
 
-Evidence-first GitHub operations remain authoritative through:
+==================================================
+PYTHON MIGRATION PATCH SEQUENCE
+==================================================
 
-- repository-root `AGENTS.md`;
-- `docs/GITHUB_PUBLICATION.md`;
-- `docs/decisions/DEC-2026-08-07-installable-patch-shorthand.md`;
-- `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
-- `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
-- `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`;
-- `docs/GITHUB_WORKFLOW.md`.
+Patch 0 — documentation/handoff: **CURRENT DOCUMENTATION CHANGE**.
 
-The connected GitHub plugin is the mandatory first repository interface. One logical
-scope uses one task branch and one Ready PR; same-scope repairs stay in that PR; the
-latest head must pass required checks; merge is squash with the expected head SHA;
-published `main` history is not rewritten.
+Patch 1 — Python platform and compatibility foundation.
 
-## Release gate
+Patch 2 — Python job state, progress, and structured persistence.
 
-Stable release preparation and pkg-repository promotion: **BLOCKED ON LIVE MATRIX**.
+Patch 3 — Python stage machine, budgets, cancellation, and finalization.
 
-The owner's installable-package instruction authorizes publication of the next
-deterministically derived testing prerelease after the `_17` ordinary PR/CI/squash cycle.
-It does not authorize stable release or pkg-repository promotion.
+Patch 4 — Python request/probe execution and parsing.
 
-Current product authority:
+Patch 5 — Python candidate runtime and family screening.
 
-- `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`;
-- `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md`;
-- `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`;
-- `docs/architecture/STRATEGY_LAB_OBSOLETE_SURFACES.md`;
-- `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md`;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
+Patch 6 — Python expansion, stability, and extended protocol orchestration.
 
-Next action: **complete `_17` source/CI/FreeBSD 15 package verification, squash-merge it, publish testing prerelease `v0.3.3_17`, then owner-assisted Scenario 1 must confirm that stage 50 survives post-drop hostlist access and enters real family execution while stages 40 and 90 remain PASS.**
+Patch 7 — Python result/shortlist completion and obsolete shell-orchestration retirement.
+
+Patch 8 — GUI/status reconciliation and post-migration live gate.
+
+The specialist plan may split a listed patch further when one item exceeds one logical
+change. It must not compress the migration into a monolithic rewrite.
+
+==================================================
+DELIVERY AND PACKAGE BOUNDARY
+==================================================
+
+This handoff is documentation/governance only:
+
+- `VERSION` remains `0.3.3`;
+- `PLUGIN_REVISION` remains `17`;
+- no new package bytes are required for the documentation handoff;
+- the already published `_17` package remains the final shell-era live evidence package.
+
+Every packaged Python migration change uses the normal Ready-PR/CI/squash path and
+FreeBSD 15 package build. Testing-prerelease publication follows the owner's standing
+installable-patch authority without an additional routine confirmation.
+
+Stable release and pkg-repository promotion remain blocked until the Python path reaches
+functional parity and the owner-assisted live matrix passes.
+
+==================================================
+NEXT ACTION
+==================================================
+
+Start the next development topic from current `main` and read, in order:
+
+1. repository-root `AGENTS.md`;
+2. `docs/INDEX.md`;
+3. this `docs/PROJECT_STATE.md`;
+4. `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`;
+5. `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
+
+Then inspect current Strategy Lab source and perform **Migration Patch 1 only**:
+verify the target OPNsense Python interpreter/dependency model and add the minimal
+packaged Python compatibility foundation without changing product behavior.
