@@ -122,13 +122,39 @@ strategy_lab_candidate_run_probes()
         "$@" > "${_slcand_run_result}"
 }
 
+strategy_lab_candidate_jobdir_allow_hostlist_access()
+{
+    _slcand_access_job="$1"
+    _slcand_access_jobdir=$(strategy_lab_job_dir "${_slcand_access_job}")
+    _slcand_access_runtime=$(strategy_lab_candidate_runtime_dir "${_slcand_access_job}")
+    [ -d "${_slcand_access_jobdir}" ] && [ -d "${_slcand_access_runtime}" ] || return 1
+
+    # Job directories are created by mktemp(1) as private 0700 directories. dvtws2
+    # deliberately drops to nobody and then reopens its hostlist, so grant search-only
+    # traversal on the random job directory while the hostlist-backed candidate is alive.
+    # The runtime directory remains listable only behind that random search-only parent.
+    chmod 0711 "${_slcand_access_jobdir}" || return 1
+    chmod 0755 "${_slcand_access_runtime}" || {
+        chmod 0700 "${_slcand_access_jobdir}" || true
+        return 1
+    }
+}
+
+strategy_lab_candidate_jobdir_restore_private()
+{
+    _slcand_private_jobdir=$(strategy_lab_job_dir "$1")
+    [ ! -d "${_slcand_private_jobdir}" ] || chmod 0700 "${_slcand_private_jobdir}"
+}
+
 strategy_lab_candidate_cleanup()
 {
     _slcand_cleanup_job="$1"
-    strategy_lab_candidate_stop "${_slcand_cleanup_job}" || return 1
-    strategy_lab_firewall_remove_rules
-    strategy_lab_firewall_range_empty || return 1
-    return 0
+    _slcand_cleanup_status=0
+    strategy_lab_candidate_stop "${_slcand_cleanup_job}" || _slcand_cleanup_status=1
+    strategy_lab_firewall_remove_rules || _slcand_cleanup_status=1
+    strategy_lab_firewall_range_empty || _slcand_cleanup_status=1
+    strategy_lab_candidate_jobdir_restore_private "${_slcand_cleanup_job}" || _slcand_cleanup_status=1
+    return "${_slcand_cleanup_status}"
 }
 
 strategy_lab_run_candidate()
@@ -151,6 +177,12 @@ strategy_lab_run_candidate()
         "${_slcand_job}" "${_slcand_endpoints}" "${_slcand_strategy_file}" \
         "${_slcand_use_hostlist}" || return 1
     strategy_lab_firewall_install_ipv4_rules "${_slcand_addresses}" "${_slcand_wan}" || return 1
+    if [ "${_slcand_use_hostlist}" = 1 ]; then
+        strategy_lab_candidate_jobdir_allow_hostlist_access "${_slcand_job}" || {
+            strategy_lab_candidate_cleanup "${_slcand_job}" || true
+            return 1
+        }
+    fi
     strategy_lab_candidate_start "${_slcand_job}" || {
         strategy_lab_candidate_cleanup "${_slcand_job}" || true
         return 1

@@ -1,10 +1,13 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **FAILED ON _15 — STAGE-50 CORRECTION `_16` IN PROGRESS**
+Overall status: **FAILED ON _16 — STAGE-50 CORRECTION `_17` IN PROGRESS**
 
-This matrix is the final live-appliance gate for the Strategy Lab hardening series. Source tests, GitHub CI, and FreeBSD package builds cannot substitute for evidence collected on the owner's OPNsense appliance.
+This matrix is the final live-appliance gate for the Strategy Lab hardening series. Source
+tests, GitHub CI, and FreeBSD package builds cannot substitute for evidence collected on
+the owner's OPNsense appliance.
 
-Only FreeBSD 15 amd64 packages are valid. The revision 46 GitHub Actions artifact has ABI `FreeBSD:14:amd64` and must not be installed or used for this matrix.
+Only FreeBSD 15 amd64 packages are valid. The historical revision 46 GitHub Actions
+artifact has ABI `FreeBSD:14:amd64` and must not be installed or used for this matrix.
 
 ## Test record
 
@@ -13,74 +16,81 @@ Only FreeBSD 15 amd64 packages are valid. The revision 46 GitHub Actions artifac
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Architecture / ABI evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_15.pkg`
-- Current corrective source candidate: `os-zapret2-restyle-0.3.3_16.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_16.pkg`
+- Current corrective source candidate: `os-zapret2-restyle-0.3.3_17.pkg`
 - Patch 7 source/CI qualification: exact PR head `dd2a484a4aa3711834b722aae0cc025d3fd4758e`; title check `31157848071` PASS; CI run `31157848056` PASS; FreeBSD 15 artifact `8985927074`; squash-merged main `256ffa09452dabfb001665b729c1f4c3d3462688`.
-- Final `_12` roll-up: owner-installed testing prerelease `v0.3.3_12`; live Scenario 1 failed.
-- Corrective `_13`: PR #125, main `9a9879c6f88d77ab64c06647dd8d1e2437fc5f25`; published testing prerelease `v0.3.3_13`; owner-tested stage-90 restoration PASS.
-- Corrective `_14`: PR #126, main `36e34414c869ff6e1062e37b91772aa8cdc05455`; published testing prerelease `v0.3.3_14`; owner-tested stage-40 DNS correction PASS and stage-90 restoration PASS.
-- Corrective `_15`: PR #127, main `6807bd7068f960832bf0ee42005c58cdf9d355ff`; published testing prerelease `v0.3.3_15`; timeout-variable ownership correction passed source/CI but owner-tested stage 50 still failed before usable candidate execution.
-- Historical `_6` CI package: `os-zapret2-restyle-0.3.3_6.pkg` (not owner-tested; superseded by later candidates)
+- Historical `_6` final restoration-path CI produced artifact `8980876980`; Post-merge `main` CI run `31144323095` also passed.
+- Corrective `_13`: PR #125, main `9a9879c6f88d77ab64c06647dd8d1e2437fc5f25`; owner-tested stage 90 PASS.
+- Corrective `_14`: PR #126, main `36e34414c869ff6e1062e37b91772aa8cdc05455`; owner-tested stage 40 and stage 90 PASS.
+- Corrective `_15`: PR #127, main `6807bd7068f960832bf0ee42005c58cdf9d355ff`; timeout-variable ownership corrected.
+- Corrective `_16`: PR #128, main `88d33360be7b9fda8ddd8a8e903296cd775aae41`; published testing prerelease `v0.3.3_16`; resident FreeBSD candidate supervisor detached so readiness can execute.
 - WAN interface: `vtnet1`
 - LAN test client: `PENDING OWNER`
 - Blocked-domain target: `rutracker.org`
 - Generic UDP target/port: `PENDING OWNER`
 
-Installation and service baseline for `0.3.3_1`: **PASS**. The package installed successfully with architecture `FreeBSD:15:amd64`, annotation `FreeBSD_version: 1500068`, and the `zapret` service running after installation. This baseline does not mark any scenario row as passed.
+Installation and service baseline for `0.3.3_1` is historical **PASS** evidence only. It
+does not mark any scenario row as passed.
 
-The first scenario 1 attempt on `0.3.3_1` failed before runtime mutation because FreeBSD daemon processes were omitted from PID identity queries. Evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`.
+## Scenario 1 failure history and live sub-gates
 
-The diagnostic repeat on `0.3.3_2` proved that the installed process wrapper and shared matcher detected both daemon processes, but `zapret_service.sh strategy-lab-evidence` still reported both as absent because the complete service entry point overwrote the wrapper binding with direct `/bin/ps`. Evidence: `docs/verification/evidence/2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`.
+The early failed attempts and their exact evidence remain preserved under
+`docs/verification/evidence/`. The third-audit source record is
+`docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
 
-The live check on `0.3.3_4` proved that the wrapper binding correction alone was insufficient. Semantic evidence still returned both processes as absent because its direct `read ... || return 1` rejected valid FreeBSD `daemon(8)` PID files that ended at EOF without a trailing newline. Evidence: `docs/verification/evidence/2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md`.
+`_12` reopened the live gate: stage 50 failed and FreeBSD non-foreground `timeout` reaped
+healthy restored daemon descendants at stage 90. `_13` corrected the stage-90 timeout and
+owner testing proved restoration PASS.
 
-The `0.3.3_5` live attempt confirmed that the PID-file correction works: before Strategy Lab execution, semantic evidence correctly reported `RUNNING` with both child and supervisor present. The run then failed later at stage 50 with `Temporary candidate runtime failed internally.` Stage 90 failed with `RESTORE_FAILED`, and the final normal service state was `INCOMPLETE` with both child and supervisor absent. Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`.
+`_13` then exposed the stage-40 DNS wrapper defect: direct `drill` succeeded while
+non-foreground `/usr/bin/timeout 2 /usr/bin/drill rutracker.org A` returned 124. `_14`
+used FreeBSD foreground timeout and owner testing proved stage 40 PASS with `DNS: OK`.
 
-The `_6` source corrective sequence for those later failures completed and remains historical evidence:
+`_14` then exposed the stage-50 unset `STRATEGY_LAB_TIMEOUT_BIN` defect before any family
+completed. `_15` corrected ownership of that timeout default.
 
-- baseline repository reconciliation: `471ad322b805c14423c4cee553e6cb111a569b29`;
-- stage-50 candidate-runtime ownership correction: `808d77bcdb4f9e5fb63f94985d01144e7f2216a4`;
-- stage-90 bounded restoration-path correction: `4fca1fccbdd92237c76d84e11f864090fc4d1a9d`.
+Owner-assisted `_15`, job `job.6eZM24`, still failed stage 50. Source review proved that
+FreeBSD `daemon(8)` remains resident with the candidate child and synchronous startup
+prevented readiness from running. `_16` detached that monitor.
 
-The exact final restoration-path PR head passed full CI run `31144038425` and produced FreeBSD 15 artifact `8980876980`, package `os-zapret2-restyle-0.3.3_6.pkg`, with manifest `0.3.3_6 / FreeBSD:15:amd64 / freebsd:15:x86:64 / FreeBSD_version 1500068`. Post-merge `main` CI run `31144323095` also passed.
+Evidence:
+`docs/verification/evidence/2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md`.
 
-These source/CI results do not convert the failed `_5` live attempt into PASS. `_6` was never owner-tested. A third source audit on 2026-08-07 then identified `SL3-001` through `SL3-007` and superseded `_6` before live retest.
-
-The approved third-audit corrective sequence completed source/CI scope, but owner-assisted Scenario 1 on `_12` reopened the live gate. Job `job.sl7JGM` passed stages 00–40, failed immediately at stage 50, and then failed stage 90 with `RESTORE_FAILED`.
-
-A one-second live watcher proved the `_12` stage-90 root cause. The normal runtime became fully healthy at 13:31:07 and remained `RUNNING` with dvtws2, supervisor, and rule 19000 present until the 45-second restoration timeout expired. It was then stopped and the lifecycle made a second attempt. The second runtime became fully healthy at 13:31:52 and was stopped again when the second 45-second timeout expired at 13:32:31. FreeBSD `timeout` without `-f` acts as a reaper for command descendants, so the lifecycle wrapper waited on the intentionally long-lived daemon descendants and timed them out even though the service-control command had already completed successfully.
-
-Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`.
-
-The `_13` correction limited foreground timeout mode to daemonizing `strategy-lab-start` on FreeBSD. Owner-assisted Scenario 1 on `_13`, job `job.3mc9c6`, verified that correction live: stage 90 passed, the initially RUNNING Zapret2 service was restored completely, and the normal generated runtime remained healthy after the Strategy Lab terminal result.
-
-That `_13` run failed earlier at stage 40 with the message that mandatory endpoint DNS resolution failed. The preserved `endpoint-1.a.log` was zero bytes. Direct reproduction proved that the DNS resolver itself was healthy: `/usr/bin/drill rutracker.org A` returned `rc=0`, `NOERROR`, and both A records in 96 ms. The exact Strategy Lab wrapper `/usr/bin/timeout 2 /usr/bin/drill rutracker.org A` returned `rc=124` after exactly two seconds with zero output, while `/usr/bin/timeout -f 2 /usr/bin/drill rutracker.org A` returned `rc=0`, `NOERROR`, and the same A records in 30 ms. A `yandex.ru` control query through the non-foreground timeout wrapper returned `rc=0`.
-
-Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_13-scenario-01-stage40-freebsd-dns-timeout.md`.
-
-The `_14` correction applied foreground timeout mode to Strategy Lab DNS requests on FreeBSD only. Owner-assisted Scenario 1 on `_14`, job `job.mCqg7Y`, verified the correction live. The authoritative watcher recorded stage 40 at 36% with `endpoint-1.a.log` already 416 bytes. The DNS log contained `rcode: NOERROR`, two A answers for `rutracker.org`, query time 29 ms, and resolver `127.0.0.1`. Stage 40 completed PASS with `DNS: OK; прямое TLS 1.3-соединение не установлено.` The direct TLS 1.3 baseline timed out with curl exit 28, so candidate testing correctly continued.
-
-The same `_14` run then failed immediately at stage 50. The worker log contains the exact failure:
+Owner-assisted `_16`, job `job.VmWk32`, provides the current authoritative boundary.
+Stages 00–40 passed; stage 50 failed; stage 90 again restored the normal RUNNING Zapret2
+service completely. Unlike previous stage-50 attempts, `_16` created the full temporary
+runtime and dvtws2 reached real execution:
 
 ```text
-/usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_family_runner.sh: STRATEGY_LAB_TIMEOUT_BIN: parameter not set
+Loading hostlist /var/run/zapret2-restyle/strategy-lab/jobs/job.VmWk32/candidate-runtime/hostlist.txt
+Loaded 1 hosts from /var/run/zapret2-restyle/strategy-lab/jobs/job.VmWk32/candidate-runtime/hostlist.txt
+creating divert4 socket
+binding divert4 socket
+Running as UID=65534 GID=65534
+file_open_test: Permission denied
+cannot access hostlist file '/var/run/zapret2-restyle/strategy-lab/jobs/job.VmWk32/candidate-runtime/hostlist.txt'
 ```
 
-The persisted family result remained `total:7`, `completed:0`, with no family entries. `strategy_lab_family_runner.sh` enables `set -eu` and sources only `common.sh`, `result.sh`, and `family.sh`; in `_14`, `family.sh` uses `${STRATEGY_LAB_TIMEOUT_BIN}` without defining it. The `_15` corrective scope therefore gave the family module ownership of the timeout executable default and added a regression that runs the production family runner under `set -u` with no caller-provided timeout variable.
+Candidate DNS was successful and selected `104.21.32.39`; the runtime prepared rule 19100,
+divert port 9989, and the intended smoke strategy. The hostlist itself is mode 0644. The
+blocking boundary is parent-directory traversal after `--user=nobody`: the random job
+directory is created privately by `mktemp -d`, so dvtws2 cannot reopen the nested hostlist
+after dropping privileges.
 
-The same `_14` watcher also proved two separate GUI defects: the UI showed the new job id with an immediate stale `ERROR`, and progress stayed at 0% until terminal completion even though authoritative `status.json` advanced through 18%, 27%, 36%, 91%, and 100%. The run also reconfirmed baseline `target_type:"A"` corruption. The source review further preserved the pending DNS parser/diagnostic defects: raw `IN A`/`IN AAAA` matching can accept a question line, and failed DNS request causes are flattened to generic code 1.
+The `_17` corrective scope keeps the job directory private at rest, grants only
+search-only traversal while a hostlist-backed candidate is alive, keeps the candidate
+runtime traversable, and restores mode 0700 during candidate cleanup. Its regression
+starts from a private job directory, models post-drop non-owner/non-group access, and
+requires privacy restoration after teardown.
 
-Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md`.
+The same `_16` evidence reconfirmed the separately tracked baseline `target_type:"A"`,
+stale immediate GUI `ERROR`, stuck visible 0% progress, terminal reload, DNS parsing, and
+DNS failure-diagnostic defects. It also exposed a new deferred diagnostic defect:
+`readiness.json` recorded `log_clean:true` even though the dvtws2 log contained
+`file_open_test: Permission denied` and `cannot access hostlist file`.
 
-Owner-assisted Scenario 1 on `_15`, job `job.6eZM24`, confirmed that the unset timeout-variable defect was no longer the complete stage-50 explanation: stages 00–40 passed, stage 50 still failed with `Temporary candidate runtime failed internally.`, stages 60–85 were skipped, and stage 90 again restored the normal RUNNING Zapret2 service completely. The GUI again showed the new job id with an immediate stale `ERROR`, kept progress at `0% — —` during execution, then jumped to 100% at the final report.
-
-Fresh source review of the exact `_15` runtime found the next deterministic FreeBSD blocker. `strategy_lab_candidate_start()` invokes `/usr/sbin/daemon` synchronously with `-p` and `-o` before entering readiness checks. FreeBSD `daemon(8)` remains resident and waits while the spawned dvtws2 child is alive when child-pidfile/output supervision is requested. A healthy candidate can therefore never reach the current readiness loop. The Linux candidate-runtime fixture hid this by using a fake daemon launcher that returned immediately. `_16` launches the resident monitor asynchronously while preserving the existing child-pidfile, process, divert-port, log, stop, and cleanup proofs; its fixture now models the blocking supervisor behavior.
-
-Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md`.
-
-Authoritative third-audit record:
-
-`docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`
+Evidence:
+`docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md`.
 
 ## Required evidence bundle
 
@@ -108,7 +118,7 @@ Before installation of the designated candidate, preserve its `+MANIFEST` and co
 ```text
 abi: FreeBSD:15:amd64
 arch: freebsd:15:x86:64
-version: 0.3.3_16
+version: 0.3.3_17
 ```
 
 Recommended residue evidence after every terminal scenario:
@@ -123,7 +133,7 @@ configctl zapret status
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | Failed attempts: `2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`, `2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`, `2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md`, `2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`, `2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`, `2026-08-07-v0.3.3_13-scenario-01-stage40-freebsd-dns-timeout.md`, `2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md`, `2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md`; `_15` reconfirmed stage 40 and stage 90 but failed stage 50; `_16` must reach candidate readiness and family execution | **FAILED ON `_15` — `_16` STAGE-50 RETEST REQUIRED** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | Failed attempts include `_1`, `_2`, `_4`, `_5`, `_12`, `_13`, `_14`, `_15`, and `2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md`; `_16` proves real dvtws2 startup/bind/drop but fails post-drop hostlist access; `_17` must survive that access and enter family execution | **FAILED ON `_16` — `_17` STAGE-50 RETEST REQUIRED** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Test completes while final service remains STOPPED; restoration evidence is verified | `PENDING OWNER` | **BLOCKED BY #1** |
 | 3 | Extended TLS 1.2 and HTTP | Available protocol successes appear as complete replay-verified profiles; unavailable protocols are explicitly skipped | `PENDING OWNER` | **BLOCKED BY #1** |
 | 4 | Extended QUIC | QUIC result is endpoint-bound and replay-verified when network capability exists; otherwise explicit skip reason | `PENDING OWNER` | **BLOCKED BY #1** |
@@ -157,8 +167,15 @@ Any of the following keeps the live gate failed or pending:
 - a reload deletes retained terminal evidence;
 - missing required evidence.
 
-A failed live row requires same-scope source correction when a source defect is identified, complete CI/FreeBSD 15 package verification, and repetition of the affected live row plus dependent rows. Once source correction is complete, the row remains pending owner until new appliance evidence is collected; CI alone never marks it PASS.
+A failed live row requires same-scope source correction when a source defect is identified,
+complete CI/FreeBSD 15 package verification, and repetition of the affected live row plus
+dependent rows. CI alone never marks a live row PASS.
 
 ## Release gate
 
-Third-audit source/CI closure remains historical source evidence only. Stable release preparation and pkg-repository promotion remain blocked until every required live row is marked `PASS` by the owner and linked evidence is recorded. The matrix contains no successful complete Strategy Lab live scenario PASS claim yet; `_15` does, however, provide live PASS evidence for the stage-40 DNS and stage-90 restoration sub-gates.
+Third-audit source/CI closure remains historical source evidence only. Stable release
+preparation and pkg-repository promotion remain blocked until every required live row is
+marked `PASS` by the owner and linked evidence is recorded. The matrix contains no
+successful complete Strategy Lab live scenario PASS claim yet; `_16` does provide live
+PASS evidence for stage-40 DNS and stage-90 restoration, and proves temporary dvtws2 now
+reaches startup, divert bind, and privilege drop before the hostlist traversal failure.
