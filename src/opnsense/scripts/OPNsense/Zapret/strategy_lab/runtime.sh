@@ -202,6 +202,14 @@ strategy_lab_candidate_runtime_absent()
         ! strategy_lab_candidate_divert_port_in_use
 }
 
+strategy_lab_candidate_job_runtime_absent()
+{
+    _strategy_lab_job="$1"
+    _strategy_lab_pidfile=$(strategy_lab_candidate_pid_file "${_strategy_lab_job}")
+    ! strategy_lab_candidate_process_running "${_strategy_lab_pidfile}" &&
+        strategy_lab_candidate_runtime_absent
+}
+
 strategy_lab_candidate_wait_absent()
 {
     _strategy_lab_limit="$1"
@@ -213,6 +221,30 @@ strategy_lab_candidate_wait_absent()
         _strategy_lab_wait=$((_strategy_lab_wait + 1))
     done
     strategy_lab_candidate_runtime_absent
+}
+
+strategy_lab_candidate_wait_job_absent()
+{
+    _strategy_lab_job="$1"
+    _strategy_lab_limit="$2"
+    _strategy_lab_wait=0
+    while [ "${_strategy_lab_wait}" -lt "${_strategy_lab_limit}" ]
+    do
+        strategy_lab_candidate_job_runtime_absent "${_strategy_lab_job}" && return 0
+        sleep 1
+        _strategy_lab_wait=$((_strategy_lab_wait + 1))
+    done
+    strategy_lab_candidate_job_runtime_absent "${_strategy_lab_job}"
+}
+
+strategy_lab_candidate_signal_owned_pid()
+{
+    _strategy_lab_pidfile="$1"
+    _strategy_lab_signal="$2"
+    _strategy_lab_owned_pid=$(strategy_lab_candidate_pid_read "${_strategy_lab_pidfile}" 2>/dev/null || true)
+    [ -n "${_strategy_lab_owned_pid}" ] || return 0
+    strategy_lab_candidate_pid_identity "${_strategy_lab_owned_pid}" || return 0
+    kill -"${_strategy_lab_signal}" "${_strategy_lab_owned_pid}" 2>/dev/null || true
 }
 
 strategy_lab_candidate_signal_all()
@@ -230,18 +262,23 @@ strategy_lab_candidate_stop()
     _strategy_lab_job="$1"
     _strategy_lab_pidfile=$(strategy_lab_candidate_pid_file "${_strategy_lab_job}")
 
-    if strategy_lab_candidate_runtime_absent; then
+    if strategy_lab_candidate_job_runtime_absent "${_strategy_lab_job}"; then
         rm -f "${_strategy_lab_pidfile}"
         return 0
     fi
 
+    # The pidfile is the ownership proof used to accept this candidate at startup.
+    # Signal that verified child first. A global ps scan is only a secondary sweep
+    # for duplicate/stale candidates and must not be the sole termination path.
+    strategy_lab_candidate_signal_owned_pid "${_strategy_lab_pidfile}" TERM
     strategy_lab_candidate_signal_all TERM
-    if ! strategy_lab_candidate_wait_absent "${STRATEGY_LAB_RUNTIME_STOP_TIMEOUT}"; then
+    if ! strategy_lab_candidate_wait_job_absent "${_strategy_lab_job}" "${STRATEGY_LAB_RUNTIME_STOP_TIMEOUT}"; then
+        strategy_lab_candidate_signal_owned_pid "${_strategy_lab_pidfile}" KILL
         strategy_lab_candidate_signal_all KILL
-        strategy_lab_candidate_wait_absent "${STRATEGY_LAB_RUNTIME_KILL_TIMEOUT}" || return 1
+        strategy_lab_candidate_wait_job_absent "${_strategy_lab_job}" "${STRATEGY_LAB_RUNTIME_KILL_TIMEOUT}" || return 1
     fi
 
-    strategy_lab_candidate_runtime_absent || return 1
+    strategy_lab_candidate_job_runtime_absent "${_strategy_lab_job}" || return 1
     rm -f "${_strategy_lab_pidfile}"
 }
 

@@ -227,6 +227,34 @@ Circular controls must not overwrite a more important terminal or restoration me
 The GUI displays `state` and `outcome` separately.
 
 ==================================================
+CANDIDATE RUNTIME OWNERSHIP CONTRACT
+==================================================
+
+A temporary candidate accepted by stage 50 is job-owned runtime. The candidate PID file
+is the primary ownership proof after the PID has been validated against both the expected
+dvtws2 executable and the reserved `--port=9989` command identity.
+
+The same ownership proof must be used during teardown. Cleanup must:
+
+1. read and validate the job-owned PID;
+2. send TERM to that exact validated process;
+3. use a bounded wait for process/socket disappearance;
+4. send KILL to that exact validated process when the grace interval expires;
+5. additionally sweep globally for matching executable/port processes to remove
+   duplicate or stale candidates;
+6. require both candidate-process absence and divert-port absence before declaring
+   runtime teardown successful;
+7. remove the candidate PID file only after absence is proven.
+
+A global process listing is secondary evidence. It must never replace an already proven
+pidfile owner as the sole termination path. This preserves the ownership relationship
+used at startup and avoids a FreeBSD-specific false cleanup failure when pid-specific
+inspection succeeds but a global process snapshot omits or formats the child differently.
+
+Failure to prove candidate absence remains an internal error. The correction does not
+permit stage 50 to continue while a candidate process or listener remains active.
+
+==================================================
 RESTORATION CONTRACT
 ==================================================
 
@@ -321,7 +349,9 @@ Required scenarios:
 11. circular start and stop;
 12. process and IPFW cleanup;
 13. saved Traffic Strategy immutability;
-14. polling recovery after page reload.
+14. polling recovery after page reload;
+15. candidate teardown when pid-specific ownership remains valid but global process
+    discovery omits the candidate.
 
 Tests must assert the event order and final persisted JSON, not only grep for source
 strings.
