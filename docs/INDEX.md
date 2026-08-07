@@ -11,9 +11,27 @@ A full repository-wide reading is required for a repository-wide audit or genuin
 full-context recovery. Small focused work uses the risk-based specialist reading defined
 in `AGENTS.md`.
 
-## Product authorities
+## Current Strategy Lab transition authorities
 
-- `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md` — third-audit findings SL3-001…SL3-007, completed Patch 1–8 source/CI traceability, exact qualification evidence, and live-test handoff;
+For any new Strategy Lab work after the `v0.3.3_17` live handoff, read these first:
+
+- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved incremental migration map from large shell orchestration to Python while preserving PHP/API and lifecycle contracts;
+- `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md` — rationale, language responsibility boundary, compatibility invariants, bug-backlog policy, and migration delivery rules;
+- `docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md` — final owner-observed shell-era boundary: stage 40 PASS, stage 50 ERROR, stage 90 PASS, immediate GUI error/no-output and active 0% progress;
+- `docs/devlog/2026-08-07-strategy-lab-python-migration-handoff.md` — completed handoff and exact next work unit;
+- `docs/PROJECT_STATE.md` — current candidate identity, confirmed defect backlog, migration phase, and next action.
+
+The next source task is Migration Patch 1 only: verify the supported OPNsense Python
+runtime/dependency model and add the minimal packaged compatibility foundation without
+changing Strategy Lab product behavior.
+
+## Existing Strategy Lab product authorities
+
+These contracts remain authoritative unless the Python migration decision explicitly
+changes implementation ownership. Migration is not permission to weaken product behavior.
+
+- `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md` — third-audit findings SL3-001…SL3-007 and source/CI traceability;
+- `docs/architecture/STRATEGY_LAB.md` — original approved product/stage/lifecycle/search contract;
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md` — state, cancellation, timeout, candidate ownership, restoration recovery, and verification;
 - `docs/architecture/STRATEGY_LAB_ACTIVATION.md` — active Diagnostics path;
 - `docs/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md` — complete replay-verified profiles;
@@ -22,23 +40,18 @@ in `AGENTS.md`.
 - `docs/architecture/STRATEGY_LAB_CIRCULAR_ISOLATION.md` — immutable parent and private circular sessions;
 - `docs/architecture/STRATEGY_LAB_CIRCULAR_OWNERSHIP.md` — circular locking, ownership, and stale restoration;
 - `docs/architecture/STRATEGY_LAB_SETTINGS_GUARD.md` — Settings lifecycle coordination;
-- `docs/architecture/STRATEGY_LAB_PERSISTED_RESULT_RELOAD.md` — active-job resume and idle terminal reload;
+- `docs/architecture/STRATEGY_LAB_PERSISTED_RESULT_RELOAD.md` — active-job resume and idle terminal reload contract;
 - `docs/architecture/STRATEGY_LAB_STRUCTURED_RESULTS.md` — structured replay evidence and safe profile copy;
-- `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md` — persisted progress and RU/EN presentation;
+- `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md` — persisted progress and RU/EN presentation contract;
 - `docs/architecture/STRATEGY_LAB_OBSOLETE_SURFACES.md` — removed obsolete interfaces and canonical module ownership;
 - `docs/architecture/STRATEGY_LAB_RETENTION.md` — bounded cleanup and protected evidence;
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_MATRIX.md` — discoverable corrective CI entry point;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — earlier hardening finding-to-patch traceability;
-- `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — Strategy Lab source/CI closure after the third audit; live matrix remains the final product gate;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — owner-assisted live gate; `_16` reaches real candidate startup but Scenario 1 is blocked at stage 50 on post-drop hostlist access pending `_17`;
-- `docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md` — current `_16` live stage-50 permission evidence plus preserved GUI, target-type, DNS, and readiness-log backlog defects;
-- `docs/devlog/2026-08-07-v0.3.3_17-stage50-hostlist-access.md` — `_17` bounded hostlist-access correction and verification boundary;
+- `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — shell-era source/CI closure; live matrix remains the product gate;
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — live gate, now paused at failed `_17` Scenario 1 pending Python migration parity;
+- `docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md` — `_16` post-drop hostlist traversal evidence;
 - `docs/verification/evidence/2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md` — `_15` resident FreeBSD daemon startup evidence;
-- `docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md` — `_14` family-runner failure and backlog evidence;
-- `docs/devlog/2026-08-07-v0.3.3_12-final-rollup.md` — final post-Patch-8 package roll-up used to build the historical `_12` live candidate;
-- `docs/devlog/2026-08-07-v0.3.3_11-third-audit-handoff.md` — Patch 8 source/CI closure and historical `_11` handoff record;
-- `docs/devlog/2026-08-07-v0.3.3_6-repository-reconciliation.md` — `_6` recovery ledger and historical source/CI evidence;
-- `docs/PROJECT_STATE.md` — current verified baseline, confirmed defect backlog, and next action.
+- `docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md` — `_14` family-runner failure and GUI backlog evidence.
 
 ## Engineering process
 
