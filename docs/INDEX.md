@@ -13,7 +13,7 @@ in `AGENTS.md`.
 
 ## Product authorities
 
-- `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md` — current third-audit findings SL3-001…SL3-007, approved Patch 1–8 corrective plan, acceptance criteria, and live-test pause;
+- `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md` — third-audit findings SL3-001…SL3-007, completed Patch 1–8 source/CI traceability, exact qualification evidence, and live-test handoff;
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md` — state, cancellation, timeout, candidate ownership, restoration recovery, and verification;
 - `docs/architecture/STRATEGY_LAB_ACTIVATION.md` — active Diagnostics path;
 - `docs/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md` — complete replay-verified profiles;
@@ -25,12 +25,13 @@ in `AGENTS.md`.
 - `docs/architecture/STRATEGY_LAB_PERSISTED_RESULT_RELOAD.md` — active-job resume and idle terminal reload;
 - `docs/architecture/STRATEGY_LAB_STRUCTURED_RESULTS.md` — structured replay evidence and safe profile copy;
 - `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md` — persisted progress and RU/EN presentation;
-- `docs/architecture/STRATEGY_LAB_OBSOLETE_SURFACES.md` — removed obsolete interfaces;
+- `docs/architecture/STRATEGY_LAB_OBSOLETE_SURFACES.md` — removed obsolete interfaces and canonical module ownership;
 - `docs/architecture/STRATEGY_LAB_RETENTION.md` — bounded cleanup and protected evidence;
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_MATRIX.md` — discoverable corrective CI entry point;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — earlier hardening finding-to-patch traceability;
-- `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — current closure state, reopened by the third audit;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — owner-assisted live gate, currently paused pending the third-audit corrective series;
+- `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — Strategy Lab source/CI closure after the third audit; live matrix remains the final product gate;
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — owner-assisted live gate; Scenario 1 is pending on the designated `_11` FreeBSD 15 candidate and scenarios 2–18 remain blocked by Scenario 1;
+- `docs/devlog/2026-08-07-v0.3.3_11-third-audit-handoff.md` — Patch 8 source/CI closure and live-handoff record;
 - `docs/devlog/2026-08-07-v0.3.3_6-repository-reconciliation.md` — `_6` recovery ledger and historical source/CI evidence;
 - `docs/PROJECT_STATE.md` — current verified baseline and next action.
 
