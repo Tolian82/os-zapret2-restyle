@@ -1,12 +1,20 @@
 # Strategy Lab hardening closure
 
-## Source and CI status
+## Current closure state
 
-Status: **COMPLETE**
+Status: **REOPENED BY THIRD AUDIT — CORRECTIVE SERIES IN PROGRESS**
 
-The corrective series from revision 25 through revision 46 closes the accepted source findings recorded in `AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md`.
+The earlier hardening series and the `_6` live-evidence corrections remain valid historical evidence for the exact source states they tested. A third source audit on 2026-08-07 found seven additional defects or inconsistencies, recorded in:
 
-Implemented source contracts include:
+`docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`
+
+Therefore the repository must no longer describe Strategy Lab source/CI closure as final. The `_6` owner-assisted live scenario-1 retest is paused. A later FreeBSD 15 amd64 package produced after the approved third-audit corrective series will become the next live candidate.
+
+## Earlier hardening source/CI evidence
+
+The corrective series from revision 25 through revision 46 addressed the accepted source findings recorded in `AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md`.
+
+Implemented source contracts included:
 
 - strict runtime cleanup, readiness, deadline, stale-worker, and serialized-state safety;
 - local-only automated traffic interception and endpoint-bound proof;
@@ -15,82 +23,88 @@ Implemented source contracts include:
 - immutable circular parent evidence, private sessions, owner identity, stale restoration, and retry blocking;
 - Settings lifecycle coordination;
 - persisted terminal-result reload and structured profile-copy presentation;
-- deterministic progress and complete Russian/English presentation;
-- removal of transitional aliases and duplicate hooks;
+- deterministic progress and Russian/English presentation;
+- removal of transitional aliases and duplicate hooks as understood at that stage;
 - lock-protected evidence-preserving retention;
 - one authoritative nonrecursive Strategy Lab corrective CI matrix.
 
-Revision 46 itself changed no Strategy Lab runtime behavior. It froze the final documentation authority and live-appliance release gate.
+Revision 46 changed no Strategy Lab runtime behavior. It froze the then-known documentation authority and live-appliance release gate.
 
 ## FreeBSD 15 package correction
 
-Status: **COMPLETE IN REVISION 47**
+Status: **COMPLETE IN HISTORICAL LINE**
 
-The revision 46 pull-request package artifact was built by the general CI workflow on FreeBSD 14.2 and contains package ABI `FreeBSD:14:amd64`. That artifact is incompatible with the documented OPNsense 26.7 / FreeBSD 15 target and is explicitly excluded from live verification.
+The revision 46 pull-request package artifact was built by the general CI workflow on FreeBSD 14.2 and was excluded from live verification. The subsequent package workflow correction moved the PR package builder to FreeBSD 15 and enforced manifest ABI `FreeBSD:15:amd64` / `freebsd:15:x86:64`.
 
-Revision 47:
+The current third-audit corrective series preserves the same package target: **FreeBSD 15 amd64 only**.
 
-- moves the pull-request package builder to FreeBSD 15.0;
-- verifies the VM major version before building;
-- rejects any package whose manifest is not `FreeBSD:15:amd64` and `freebsd:15:x86:64`;
-- adds a permanent contract that rejects FreeBSD 14 package builders in GitHub workflows;
-- designates `os-zapret2-restyle-0.3.2_47.pkg` as the only valid live-matrix candidate.
+## Live-evidence `_5` and `_6` history
 
-This correction does not reopen findings 1–15 and does not change Strategy Lab runtime behavior.
+The `_5` live scenario-1 attempt proved the semantic PID detection correction but then exposed candidate-runtime and restoration failures. Those failures remain historical evidence.
 
-## Verified automated gates
+Revision `_6` subsequently corrected:
 
-Every merged source revision is required to pass:
+- stage-50 candidate runtime ownership/teardown; and
+- stage-90 bounded restoration startup/recovery.
+
+The exact `_6` pull-request head for the restoration correction passed full CI and produced a FreeBSD 15 package artifact, and post-merge `main` CI also passed. No `_6` testing prerelease was published and no `_6` owner-assisted OPNsense retest was performed.
+
+The third audit now supersedes `_6` as the next live-test candidate because additional source defects were identified before that retest.
+
+## Third-audit corrective sequence
+
+Status: **OPEN**
+
+Approved order:
+
+1. Patch 1 — third-audit documentation and corrective plan;
+2. Patch 2 — ordinary stale recovery and timeout chain;
+3. Patch 3 — circular stale recovery lifecycle ownership;
+4. Patch 4 — remove load-order overrides and obsolete hooks;
+5. Patch 5 — serialize worker state transitions;
+6. Patch 6 — complete RU/EN progress localization;
+7. Patch 7 — integrated third-audit regression gate;
+8. Patch 8 — source/CI closure and live-test handoff.
+
+Stable findings `SL3-001` through `SL3-007`, affected files, evidence, remediation plans, acceptance criteria, and patch mapping are authoritative in `AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
+
+## Automated gate requirement
+
+Every packaged corrective patch must pass the latest applicable repository gates, including:
 
 - exact versioned PR and commit-title identity;
 - PHP, XML, and shell validation;
+- focused regression for its logical scope;
 - the mandatory Strategy Lab corrective matrix;
-- the FreeBSD 15 package-workflow contract;
 - project lifecycle, release, governance, and repository-hygiene contracts;
-- FreeBSD 15 package build and package-manifest inspection;
-- post-merge `main` integrity.
+- FreeBSD 15 package build and manifest inspection when package inputs change;
+- post-merge `main` verification.
+
+Patch 1 and Patch 8 are documentation-only and do not change package metadata.
 
 ## Live appliance status
 
-Status: **PENDING OWNER**
+Status: **PAUSED PENDING THIRD-AUDIT SOURCE/CI COMPLETION**
 
-The repository cannot truthfully claim live OPNsense success without execution on the owner's appliance. The authoritative live plan is:
+The authoritative live plan remains:
 
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`
 
-All rows are intentionally `PENDING OWNER`. No live PASS is inferred from CI, mocked integration tests, or package build success. Only revision 47 or a later FreeBSD 15 amd64 candidate may be used.
-
-## Reopened semantic evidence contract
-
-Status: **CORRECTIVE CANDIDATE 0.3.3_4**
-
-Live scenario 1 attempts on `0.3.3_1` and `0.3.3_2` exposed one affected contract: semantic lifecycle evidence must identify the same running daemon processes as the normal service backend.
-
-The `0.3.3_2` diagnostic isolated the defect:
-
-- the FreeBSD-safe wrapper returned both dvtws2 and supervisor commands;
-- the shared backend matcher returned true for both processes;
-- the complete `zapret_service.sh strategy-lab-evidence` path returned false for both;
-- `zapret_service.sh` had overwritten the wrapper inherited from `backend/common.sh` with direct `/bin/ps`.
-
-Revision `0.3.3_4` removes that later override, binds service semantic evidence to the common process wrapper, and strengthens CI so a future direct `/bin/ps` override is rejected. This correction does not claim scenario 1 PASS; the row must be repeated on the owner appliance with the corrected FreeBSD 15 package.
-
-Revision `0.3.3_3` remains an independent presentation correction for Diagnostics reload behavior and does not substitute for the scenario 1 runtime retest.
+No live PASS is inferred from CI, mocked integration tests, or package build success. Scenario 1 resumes only after Patch 8 designates a new FreeBSD 15 amd64 candidate. Dependent scenarios remain blocked until scenario 1 passes.
 
 ## Release status
 
-Status: **BLOCKED ON LIVE MATRIX**
+Status: **BLOCKED ON CORRECTIVE SERIES AND LIVE MATRIX**
 
-The hardening and ABI-correction revisions do not authorize or perform:
+The current work does not authorize or perform:
 
-- a Git tag;
-- GitHub Release creation;
-- release asset publication;
-- pkg-repository publication;
-- declaration of production readiness.
+- stable release declaration;
+- pkg-repository promotion;
+- GitHub Pages promotion;
+- production-readiness declaration.
 
-Release preparation may begin only after every required live row is marked PASS with recorded evidence and the owner gives separate explicit release authorization.
+Testing prerelease publication for a later candidate still requires separate exact owner authorization under the GitHub publication rules.
 
 ## Reopening rule
 
-A live failure reopens only the affected logical contract. The correction must use a new versioned patch, update the relevant authority and evidence, pass the full corrective matrix and FreeBSD 15 package build, and repeat the affected live scenario plus dependent scenarios.
+A source audit or live failure reopens only the affected logical contract. The correction must use a new versioned patch, update the relevant authority and evidence, pass the full applicable regression/CI/package gates, and repeat the affected live scenario plus dependent scenarios where required.
