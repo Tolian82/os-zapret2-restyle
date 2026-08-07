@@ -65,7 +65,6 @@ worker_result_set_circular_eligibility()
 {
     _wrr_status=$(strategy_lab_status_file "${JOB_ID}")
     _wrr_shortlist="${JOB_DIR}/shortlist.json"
-    _wrr_tmp=$(mktemp "$(dirname "${_wrr_status}")/.circular-eligibility.XXXXXX") || return 1
     _wrr_eligible=false
     _wrr_reason=terminal_outcome
     _wrr_count=0
@@ -104,6 +103,18 @@ worker_result_set_circular_eligibility()
         _wrr_reason=eligible
     fi
 
+    if command -v strategy_lab_state_transform >/dev/null 2>&1; then
+        strategy_lab_state_transform "${JOB_ID}" '
+            .circular_eligible=$eligible |
+            .circular_eligibility_reason=$reason |
+            .circular_candidate_count=$count
+        ' --argjson eligible "${_wrr_eligible}" \
+          --arg reason "${_wrr_reason}" \
+          --argjson count "${_wrr_count}"
+        return $?
+    fi
+
+    _wrr_tmp=$(mktemp "$(dirname "${_wrr_status}")/.circular-eligibility.XXXXXX") || return 1
     "${STRATEGY_LAB_JQ}" \
         --argjson eligible "${_wrr_eligible}" \
         --arg reason "${_wrr_reason}" \
