@@ -23,13 +23,15 @@ Chronological implementation results or final live evidence.
 STATUS
 ==================================================
 
-Migration Patch 0 is complete. Migration Patch 1 is implemented as package-source
-candidate `v0.3.3_18` and is subject to the normal PR/CI/FreeBSD 15 qualification gate.
+Migration Patch 0 is complete. Migration Patch 1 is complete and merged as source
+candidate `v0.3.3_18`. Migration Patch 2 is implemented as source candidate
+`v0.3.3_19` and is subject to the normal PR/CI/FreeBSD 15 qualification gate.
 
-The active production runtime implementation remains the shell Strategy Lab from
-`v0.3.3_17`: `zapret_service.sh` still launches `strategy_lab_worker.sh` directly. Patch 1
-packages and tests the Python compatibility boundary but deliberately does not switch the
-production call path or move state-machine ownership.
+The production process entry remains the shell Strategy Lab worker:
+`zapret_service.sh` still launches `strategy_lab_worker.sh` directly. Patch 2 changes one
+internal responsibility boundary only: Python is now the authoritative writer for
+automated-job state/progress/event persistence while the shell worker still owns numbered
+stage orchestration and all later migration responsibilities.
 
 ==================================================
 OBJECTIVE
@@ -106,24 +108,22 @@ A shell helper must have a narrow input/output contract. It must not retain hidd
 PYTHON RUNTIME CONSTRAINT
 ==================================================
 
-Migration Patch 1 establishes the supported runtime contract for OPNsense 26.7 / FreeBSD 15:
+Migration Patch 1 established the supported runtime contract for OPNsense 26.7 / FreeBSD 15:
 
 - OPNsense 26.7 build configuration selects FreeBSD 15.1 and `PYTHON=313`;
 - the supported interpreter family is Python 3.13;
 - OPNsense core owns the stable `/usr/local/bin/python3` compatibility link to its
   selected `python${CORE_PYTHON}` interpreter;
-- `os-zapret2-restyle` declares `python313` directly in `PLUGIN_DEPENDS` because the new
-  packaged Strategy Lab foundation directly requires Python;
+- `os-zapret2-restyle` declares `python313` directly in `PLUGIN_DEPENDS`;
 - the custom package builder maps `python313` to package origin `lang/python313`;
 - `.py` sources under `src/opnsense/` are staged automatically into the package;
 - retained shell launchers remain executable through the existing package-mode handling.
 
-The production compatibility launcher defaults to `/usr/local/bin/python3`, following the
-OPNsense-managed stable link rather than hard-coding a minor-version binary path. The
-stock FreeBSD 15 CI VM uses `/usr/local/bin/python3.13` explicitly because it does not
-provide the OPNsense core compatibility link.
+The production compatibility launcher defaults to `/usr/local/bin/python3`. The stock
+FreeBSD 15 CI VM uses `/usr/local/bin/python3.13` explicitly because it does not provide
+the OPNsense core compatibility link.
 
-No third-party `pip` dependency is approved. Python migration code must remain standard
+No third-party `pip` dependency is approved. Python migration code remains standard
 library only unless a later independent architectural decision proves another dependency
 necessary.
 
@@ -131,9 +131,10 @@ necessary.
 STATE AND DATA MODEL
 ==================================================
 
-Python should represent state explicitly rather than through reused shell-global variables.
+Python represents migrated state explicitly rather than through reused shell-global
+mutation pipelines.
 
-Minimum structured concepts:
+Minimum structured concepts remain:
 
 - Job identity and mode;
 - normalized target and immutable target type;
@@ -150,7 +151,47 @@ Minimum structured concepts:
 - restoration evidence;
 - terminal outcome.
 
-The implementation may use dataclasses or ordinary typed dictionaries/classes according to the verified Python version. The public JSON schema remains the compatibility authority, not the internal class layout.
+Migration Patch 2 establishes these concrete ownership rules:
+
+- `strategy_lab_py/state.py` is the sole authoritative writer for automated-job
+  `status.json` and `events.ndjson`;
+- the shell `strategy_lab/state.sh` exposes compatibility helper names only and delegates
+  all authoritative state/event mutations to Python;
+- shell algorithms may continue to produce stage-specific intermediate/result files
+  until their designated migration patch, but embedding those results into authoritative
+  job state is Python-owned;
+- both ordinary `status.json` and private circular-session `state.json` paths are valid
+  targets where existing lifecycle code intentionally shares the persistence adapter;
+- public JSON schema is the compatibility authority, not the internal Python layout.
+
+==================================================
+PERSISTENCE CONTRACT
+==================================================
+
+Existing evidence locations remain stable during migration:
+
+- `/var/run/zapret2-restyle/strategy-lab/`;
+- `/var/log/zapret2/strategy-lab/`;
+- per-job `status.json`;
+- `events.ndjson`;
+- stage/candidate evidence files required by the current result contracts.
+
+Patch 2 persistence invariants:
+
+1. Schema remains `2` for automated `status.json`.
+2. Existing stage numbers, stage keys, progress percentages, state/outcome fields,
+   cancellation fields, and structured-result field names remain unchanged.
+3. Every serialized status mutation increments `revision` exactly once, including a
+   mutation whose semantic body becomes a terminal no-op.
+4. Concurrent state/event writers use the Python state lock; the removed shell
+   `strategy_lab_state_transform` is not a competing owner.
+5. JSON/NDJSON replacement uses a same-directory temporary file, flush, fsync, atomic
+   `os.replace`, and mode `0644`.
+6. Event writes are serialized through the same state ownership boundary and remain valid
+   line-delimited JSON.
+7. The GUI/API never needs to know which language owns persistence.
+8. Moving persisted progress to Python does not itself prove the owner-observed GUI
+   progress defect is fixed; that remains live/UI gated.
 
 ==================================================
 SUBPROCESS CONTRACT
@@ -172,22 +213,6 @@ Timeout must not be flattened into a generic code 1. Parser rejection must not b
 Python standard-library subprocess timeouts are preferred for ordinary finite probes. FreeBSD-specific daemon/lifecycle behavior must still be modeled explicitly where long-lived descendants are intentional.
 
 ==================================================
-PERSISTENCE CONTRACT
-==================================================
-
-Existing evidence locations remain stable during migration:
-
-- `/var/run/zapret2-restyle/strategy-lab/`;
-- `/var/log/zapret2/strategy-lab/`;
-- per-job `status.json`;
-- `events.ndjson`;
-- stage/candidate evidence files required by the current result contracts.
-
-JSON writes must remain atomic. A Python implementation should use write-to-temporary-file plus atomic rename/replace in the same filesystem.
-
-The GUI must never need to know whether the active worker implementation is shell or Python.
-
-==================================================
 LIFECYCLE SAFETY
 ==================================================
 
@@ -204,13 +229,16 @@ The following requirements are migration invariants:
 9. A restoration failure is never hidden by a successful test result.
 10. Saved Traffic Strategy remains immutable.
 
-Migration patches must prefer reusing already-audited lifecycle helpers over duplicating them in Python until a separate patch is justified.
+Patch 2 does not move lifecycle decisions. Existing audited lifecycle/recovery helpers
+still make those decisions, but lifecycle snapshot/restoration fields in authoritative job
+state are persisted through Python. This includes the shared circular-recovery path via
+its actual private `state.json` path.
 
 ==================================================
 CONFIRMED DEFECTS TO CARRY FORWARD
 ==================================================
 
-The migration backlog is not reset. At the handoff boundary:
+The migration backlog is not reset. At the live handoff boundary:
 
 1. `_17` Standard `rutracker.org` still fails stage 50 with `Temporary candidate runtime failed internally.`; exact `_17` stage-50 root cause is not yet established from runtime logs.
 2. New job UI can show `Статус: ОШИБКА` immediately after Run before the new job has terminal evidence.
@@ -222,7 +250,9 @@ The migration backlog is not reset. At the handoff boundary:
 8. Terminal reload/state presentation can resurrect retained terminal work incorrectly.
 9. Candidate readiness log classification can miss fatal runtime log evidence.
 
-Each item remains open until the Python implementation has a focused regression and any required live/UI verification.
+Patch 2 removes shell-private authoritative state mutation from the migrated layer. This
+is architectural progress, not automatic defect closure. Each backlog item remains open
+until focused replacement tests and any required live/UI verification close it.
 
 ==================================================
 MIGRATION PATCH SERIES
@@ -235,7 +265,7 @@ Patch 0 — documentation and handoff: **COMPLETE**
 - approve Python/PHP/shell responsibilities;
 - prepare next-topic entry point.
 
-Patch 1 — Python platform and compatibility foundation: **IMPLEMENTED IN `_18` SOURCE**
+Patch 1 — Python platform and compatibility foundation: **COMPLETE / MERGED AS `_18`**
 
 - verify target Python interpreter path/version/dependency model on OPNsense FreeBSD 15;
 - add the minimal packaged Python module/entry point;
@@ -243,14 +273,16 @@ Patch 1 — Python platform and compatibility foundation: **IMPLEMENTED IN `_18`
 - keep runtime behavior unchanged;
 - establish a thin compatibility launcher and deterministic error reporting if Python cannot start.
 
-Patch 2 — Python job state, progress, and structured persistence
+Patch 2 — Python job state, progress, and structured persistence: **IMPLEMENTED IN `_19` SOURCE**
 
-- move status/event/result persistence helpers to Python;
-- preserve the exact public JSON contract;
-- remove shared-variable classes of state corruption from the migrated layer;
-- add atomic-write and revision/progress parity tests.
+- move authoritative status/event persistence helpers to Python;
+- preserve exact public JSON, progress, cancellation, and revision contracts;
+- route structured result/lifecycle/stale-recovery/eligibility state fields through Python;
+- remove the migrated shell jq/temp/mv state writers;
+- add atomic-write, concurrency, revision, progress, event, stale-recovery, and circular-path parity tests;
+- keep numbered stage orchestration outside this patch.
 
-Patch 3 — Python stage machine, budgets, cancellation, and finalization
+Patch 3 — Python stage machine, budgets, cancellation, and finalization: **NEXT AFTER PATCH 2 QUALIFICATION**
 
 - move numbered-stage orchestration and overall/stage budgets;
 - model cancel and terminal outcomes explicitly;
@@ -300,23 +332,32 @@ TEST STRATEGY
 
 Every migration patch must include focused automated coverage for the responsibility it moves.
 
-Migration Patch 1 additionally requires:
+Migration Patch 1 requirements remain protected by the Python foundation test.
 
-- Python 3.13 import and syntax/bytecode compilation;
-- launcher self-test on Python 3.13;
-- deterministic invalid-job, missing-interpreter, and unsupported-version results;
-- exact compatibility delegation of the job ID to a mock legacy worker;
-- a guard proving `zapret_service.sh` still points directly to the shell worker;
-- FreeBSD 15 execution with package `python313`;
-- built-package content and dependency-origin inspection.
+Migration Patch 2 additionally requires:
+
+- Python 3.13 import and `py_compile` for `strategy_lab_py/state.py`;
+- exact schema-2 initialization parity;
+- exact stage-key and progress-percentage parity;
+- revision increments under sequential and concurrent mutations;
+- terminal-state guards with preserved revision semantics;
+- cancellation timestamp preservation on repeated requests;
+- valid concurrent readers during concurrent writes;
+- atomic valid `events.ndjson` persistence;
+- mode `0644` and no leftover temporary state/event files;
+- ordinary `status.json` and circular `state.json` path coverage;
+- deterministic invalid-path handling;
+- absence of shell `strategy_lab_state_transform` and private stale-recovery state writers;
+- complete existing Strategy Lab corrective matrix;
+- FreeBSD 15 execution with `python313` and built-package presence of `state.py`.
 
 Required principles:
 
-- old public fixtures remain useful as compatibility tests where they express product behavior rather than shell implementation details;
-- new Python unit tests should target state transitions, timeout/error classification, parser behavior, and candidate orchestration without requiring real DPI traffic;
-- integration tests should continue to exercise configd/API-compatible entry points;
+- old public fixtures remain compatibility tests where they express product behavior rather than shell implementation details;
+- new Python tests target migrated ownership directly without requiring real DPI traffic;
+- integration tests continue to exercise configd/API-compatible entry points;
 - FreeBSD-specific behavior remains represented by deterministic fixtures and FreeBSD 15 package CI;
-- no test should require exact internal shell function names after their responsibility migrates;
+- no test requires an obsolete internal shell transform after its responsibility migrates;
 - a test proving old shell implementation detail may be retired only when an equivalent product/contract test protects the replacement.
 
 ==================================================
@@ -331,7 +372,7 @@ For each responsibility:
 4. Verify there is only one owner of mutations/state.
 5. Remove obsolete shell implementation in the same logical migration scope when safe, or in the immediately following dedicated retirement patch if removal would make the scope too large.
 
-Migration Patch 1 stops after step 1 for the general orchestration boundary: it packages
-and qualifies the compatibility foundation but intentionally does not switch production
-ownership. The first responsibility cutover begins in later migration patches only after
-its focused parity contract exists.
+Patch 1 stopped before an ownership switch. Patch 2 performs the first responsibility
+cutover: authoritative automated-job state/progress/event persistence switches to Python
+and the competing shell transforms are removed. The shell numbered stage machine remains
+a caller of that persistence API until Patch 3.
