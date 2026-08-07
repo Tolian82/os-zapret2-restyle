@@ -5,6 +5,7 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 CI="${ROOT_DIR}/.github/workflows/ci.yml"
 RELEASE="${ROOT_DIR}/.github/workflows/release.yml"
 MATRIX="${ROOT_DIR}/docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md"
+INTEGRATION="${ROOT_DIR}/scripts/test-strategy-lab-third-audit-integration-contract.sh"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 
@@ -14,7 +15,7 @@ fail()
     exit 1
 }
 
-for file in "${CI}" "${RELEASE}" "${MATRIX}" "${VERSION_FILE}" "${MAKEFILE}"
+for file in "${CI}" "${RELEASE}" "${MATRIX}" "${INTEGRATION}" "${VERSION_FILE}" "${MAKEFILE}"
 do
     [ -s "${file}" ] || fail "required file is missing: ${file}"
 done
@@ -52,6 +53,14 @@ grep -Fq '.abi == "FreeBSD:15:amd64"' "${CI}" || fail 'PR package inspection doe
 grep -Fq '.arch == "freebsd:15:x86:64"' "${CI}" || fail 'PR package inspection does not enforce FreeBSD 15 architecture'
 grep -Fq 'tar -tf dist/*.pkg > "${contents}"' "${CI}" || fail 'package contents are not captured without a truncation pipe'
 grep -Fq 'tar -xOf dist/*.pkg +MANIFEST > "${manifest}"' "${CI}" || fail 'package manifest is not captured before inspection'
+
+# Patch 7 is integration/CI-only and intentionally keeps the current package revision.
+# Editing this package-CI contract must still classify the PR for a FreeBSD 15 build.
+grep -Fq 'scripts/test-freebsd15-package-ci' "${CI}" ||
+    fail 'integration-only package verification no longer forces the FreeBSD 15 PR build'
+grep -Fq "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy-lab-*.sh'" \
+    "${ROOT_DIR}/scripts/test-strategy-lab-corrective-matrix.sh" ||
+    fail 'canonical matrix no longer discovers the third-audit integration contract'
 
 if grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGRESS**' "${MATRIX}"; then
     grep -Fq 'Current corrective candidate: **NOT DESIGNATED — PATCH 8 REQUIRED**' "${MATRIX}" ||
