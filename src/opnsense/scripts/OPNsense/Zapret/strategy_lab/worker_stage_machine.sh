@@ -4,21 +4,13 @@ worker_skip_unfinished()
 {
     _wsm_job="$1"
     _wsm_message="$2"
-    _wsm_status=$(strategy_lab_status_file "${_wsm_job}")
-    _wsm_tmp=$(mktemp "$(dirname "${_wsm_status}")/.worker-skip.XXXXXX") || return 1
-
-    "${STRATEGY_LAB_JQ}" --arg message "${_wsm_message}" '
+    strategy_lab_state_transform "${_wsm_job}" '
         (.stages[] |
             select((.status=="PENDING" or .status=="RUNNING") and
                    .number!="90" and .number!="99") |
             .status)="SKIPPED" |
         (.stages[] | select(.status=="SKIPPED" and .message=="") | .message)=$message
-    ' "${_wsm_status}" > "${_wsm_tmp}" || {
-        rm -f "${_wsm_tmp}"
-        return 1
-    }
-    chmod 0644 "${_wsm_tmp}"
-    mv -f "${_wsm_tmp}" "${_wsm_status}"
+    ' --arg message "${_wsm_message}"
 }
 
 worker_check_cancel()
