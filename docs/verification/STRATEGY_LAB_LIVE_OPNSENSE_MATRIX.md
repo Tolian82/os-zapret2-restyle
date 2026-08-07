@@ -18,6 +18,7 @@ TEST RECORD
 - Required package ABI: `FreeBSD:15:amd64`
 - Latest published testing candidate: `os-zapret2-restyle-0.3.3_17.pkg`
 - Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_17.pkg`
+- Current migration source candidate: `os-zapret2-restyle-0.3.3_18.pkg`
 - Latest owner-tested job: `job.w0nXxQ`
 - WAN interface: `vtnet1`
 - Blocked-domain target: `rutracker.org`
@@ -83,6 +84,11 @@ Authoritative migration plan:
 
 Decision:
 `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
+
+Migration Patch 1 source candidate `_18` only establishes the packaged Python 3.13
+platform and compatibility boundary. Its production service path still invokes the shell
+worker directly, so `_18` neither supersedes the owner-tested `_17` live evidence nor
+resumes Scenario 1.
 
 The live matrix remains failed during migration. Do not mark a row PASS because a defect
 mechanism was rewritten. Resume live Scenario 1 only when the Python implementation has

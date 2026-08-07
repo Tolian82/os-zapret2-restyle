@@ -39,6 +39,11 @@ else
     candidate="os-zapret2-restyle-${version}.pkg"
 fi
 
+grep -Eq '^PLUGIN_DEPENDS=[[:space:]]+python313([[:space:]]|$)' "${MAKEFILE}" ||
+    fail 'Migration Patch 1 must declare the verified python313 package dependency'
+grep -Fq 'python313)  echo "lang/python313"' "${ROOT_DIR}/scripts/build-pkg.sh" ||
+    fail 'package builder does not map python313 to lang/python313'
+
 grep -Fq 'release: "15.0"' "${CI}" || fail 'PR package build does not use FreeBSD 15.0'
 grep -Fq "release: '15.0'" "${RELEASE}" || fail 'release package build does not use FreeBSD 15.0'
 
@@ -47,6 +52,13 @@ if grep -REn "release:[[:space:]]*['\"]?14([.]|['\"]|$)" \
 then
     fail 'a GitHub workflow still selects FreeBSD 14'
 fi
+
+grep -Fq 'python-version: "3.13"' "${CI}" || fail 'Linux validation does not select Python 3.13'
+grep -Fq 'pkg install -y jq python313' "${CI}" || fail 'FreeBSD 15 package job does not install python313'
+grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-foundation.sh' "${CI}" ||
+    fail 'FreeBSD 15 package job does not execute the Python 3.13 foundation test'
+grep -Fq '.deps.python313.origin == "lang/python313"' "${CI}" ||
+    fail 'package inspection does not enforce the python313 dependency origin'
 
 grep -Fq 'freebsd-version -u' "${CI}" || fail 'PR package build does not verify the VM major version'
 grep -Fq '.abi == "FreeBSD:15:amd64"' "${CI}" || fail 'PR package inspection does not enforce FreeBSD 15 ABI'
@@ -64,11 +76,15 @@ if grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGR
     grep -Fq 'Current corrective candidate: **NOT DESIGNATED — PATCH 8 REQUIRED**' "${MATRIX}" ||
         fail 'paused third-audit matrix must not designate a live candidate before Patch 8'
 elif grep -Fq 'Overall status: **FAILED ON `_17` — LIVE MATRIX PAUSED FOR PYTHON MIGRATION**' "${MATRIX}"; then
-    [ "${revision}" -eq 17 ] || fail 'Python migration handoff must preserve revision 17'
+    [ "${revision}" -ge 17 ] || fail 'Python migration source revision cannot precede shell-era revision 17'
     grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.3.3_17.pkg`' "${MATRIX}" ||
-        fail 'Python migration handoff does not preserve the published _17 package identity'
+        fail 'Python migration does not preserve the published _17 package identity'
     grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_17.pkg`' "${MATRIX}" ||
-        fail 'Python migration handoff does not preserve the owner-tested _17 package identity'
+        fail 'Python migration does not preserve the owner-tested _17 package identity'
+    if [ "${revision}" -gt 17 ]; then
+        grep -Fq "Current migration source candidate: \`${candidate}\`" "${MATRIX}" ||
+            fail "Python migration matrix does not select current source package ${candidate}"
+    fi
 elif grep -Fq 'Overall status: **FAILED ON _12 — STAGE-90 CORRECTION `_13` IN PROGRESS**' "${MATRIX}"; then
     grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" || fail "matrix does not select ${candidate}"
 elif grep -Fq 'Overall status: **FAILED ON _13 — STAGE-40 CORRECTION `_14` IN PROGRESS**' "${MATRIX}"; then
@@ -92,4 +108,4 @@ if grep -Fq 'Current corrective candidate: `os-zapret2-restyle-0.3.2_46.pkg`' "$
 fi
 
 sh -n "$0"
-echo "PASS: GitHub package builds stay on FreeBSD 15 and live-candidate selection respects the active live gate for ${candidate}"
+echo "PASS: GitHub package builds stay on FreeBSD 15, Python 3.13 is qualified, and live-candidate selection respects the active live gate for ${candidate}"
