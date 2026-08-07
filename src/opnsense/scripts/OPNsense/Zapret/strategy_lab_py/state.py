@@ -221,6 +221,16 @@ def _bool(value: str) -> bool:
     raise UsageError("expected boolean true or false")
 
 
+def _nonnegative_integer(value: str, label: str) -> int:
+    try:
+        result = int(value, 10)
+    except ValueError as exc:
+        raise UsageError(f"invalid Strategy Lab {label}") from exc
+    if result < 0:
+        raise UsageError(f"invalid Strategy Lab {label}")
+    return result
+
+
 def initialize(job_id: str, state_name: str, events_name: str, target: str, mode: str, language: str) -> None:
     state = _state(job_id, state_name)
     events = _events(job_id, events_name, state)
@@ -280,6 +290,67 @@ def set_stability(job: str, state_name: str, stability_name: str, shortlist_name
 
     def apply(value: dict[str, Any]) -> None:
         value["stability"], value["shortlist"] = stability, shortlist
+
+    _mutate(_state(job, state_name), apply)
+
+
+def set_budget(
+    job: str,
+    state_name: str,
+    started_at: str,
+    standard_deadline_at: str,
+    deadline_at: str,
+    standard_budget_seconds: str,
+    extended_budget_seconds: str,
+    search_budget_seconds: str,
+    stage80_budget_seconds: str,
+) -> None:
+    standard = _nonnegative_integer(standard_budget_seconds, "standard budget")
+    extended = _nonnegative_integer(extended_budget_seconds, "extended budget")
+    search = _nonnegative_integer(search_budget_seconds, "search budget")
+    stage80 = _nonnegative_integer(stage80_budget_seconds, "stage-80 budget")
+
+    def apply(value: dict[str, Any]) -> None:
+        value.update(
+            started_at=started_at,
+            standard_deadline_at=standard_deadline_at,
+            deadline_at=deadline_at,
+            standard_budget_seconds=standard,
+            extended_budget_seconds=extended,
+            search_budget_seconds=search,
+            stage80_budget_seconds=stage80,
+        )
+
+    _mutate(_state(job, state_name), apply)
+
+
+def set_stage80_budget(job: str, state_name: str, started_at: str, deadline_at: str) -> None:
+    def apply(value: dict[str, Any]) -> None:
+        value["stage80_started_at"] = started_at
+        value["stage80_deadline_at"] = deadline_at
+
+    _mutate(_state(job, state_name), apply)
+
+
+def set_udp_request(
+    job: str,
+    state_name: str,
+    configured_value: str,
+    port_value: str,
+    payload_bytes_value: str,
+) -> None:
+    configured = _bool(configured_value)
+    port = _nonnegative_integer(port_value, "UDP port")
+    payload_bytes = _nonnegative_integer(payload_bytes_value, "UDP payload size")
+    if configured and not 1 <= port <= 65535:
+        raise UsageError("invalid Strategy Lab UDP port")
+
+    def apply(value: dict[str, Any]) -> None:
+        value["udp_request"] = {
+            "configured": configured,
+            "port": port if configured else None,
+            "payload_bytes": payload_bytes,
+        }
 
     _mutate(_state(job, state_name), apply)
 
@@ -438,6 +509,12 @@ def main(argv: Sequence[str]) -> int:
         set_candidate(*args)
     elif op == "set-stability" and len(args) == 4:
         set_stability(*args)
+    elif op == "set-budget" and len(args) == 9:
+        set_budget(*args)
+    elif op == "set-stage80-budget" and len(args) == 4:
+        set_stage80_budget(*args)
+    elif op == "set-udp-request" and len(args) == 5:
+        set_udp_request(*args)
     elif op == "request-cancel" and len(args) == 3:
         request_cancel(*args)
     elif op == "update-job" and len(args) == 7:
