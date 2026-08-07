@@ -11,7 +11,8 @@ ACTIONS="${ROOT_DIR}/src/opnsense/service/conf/actions.d/actions_zapret.conf"
 LAUNCHER="${ZAPRET_DIR}/strategy_lab_launcher.sh"
 LAUNCH="${MODULE_DIR}/launch.sh"
 WORKER="${ZAPRET_DIR}/strategy_lab_worker.sh"
-CONTROL="${MODULE_DIR}/worker_control.sh"
+STAGE_ADAPTER="${ZAPRET_DIR}/strategy_lab_stage_adapter.sh"
+UDP_RUNNER="${ZAPRET_DIR}/strategy_lab_udp_runner.sh"
 
 fail()
 {
@@ -20,7 +21,7 @@ fail()
 }
 
 for file in "${MODULE}" "${CONTROLLER}" "${VIEW}" "${ACTIONS}" \
-    "${LAUNCHER}" "${LAUNCH}" "${WORKER}" "${CONTROL}"
+    "${LAUNCHER}" "${LAUNCH}" "${WORKER}" "${STAGE_ADAPTER}" "${UDP_RUNNER}"
 do
     [ -s "${file}" ] || fail "missing UDP input contract file: ${file}"
 done
@@ -130,12 +131,20 @@ grep -Fq 'case "$#" in' "${LAUNCH}" ||
     fail 'launcher start contract is not backward compatible'
 grep -Fq 'strategy_lab_udp_input_prepare' "${LAUNCH}" ||
     fail 'launcher does not create job-local UDP input'
-grep -Fq 'udp udp_input preflight' "${WORKER}" ||
-    fail 'worker does not load the UDP input module'
-grep -Fq 'strategy_lab_udp_input_export' "${WORKER}" ||
-    fail 'worker does not import job-local UDP input'
-grep -Fq 'strategy_lab_udp_input_cleanup "${JOB_ID}"' "${CONTROL}" ||
-    fail 'terminal cleanup does not remove the payload'
+
+# Patch 3 moved UDP execution out of the production worker. The explicit stage adapter
+# selects the UDP runner, and the runner reloads/exports the private job-local input
+# immediately before executing the UDP algorithm.
+grep -Fq 'UDP_RUNNER="${UDP_RUNNER:-${SCRIPT_DIR}/strategy_lab_cancellable_udp_runner.sh}"' "${STAGE_ADAPTER}" ||
+    fail 'stage adapter does not select the UDP runner'
+grep -Fq 'for module in common state udp udp_input' "${UDP_RUNNER}" ||
+    fail 'UDP runner does not load the job-local UDP input contract'
+grep -Fq 'strategy_lab_udp_input_export "${JOB_ID}"' "${UDP_RUNNER}" ||
+    fail 'UDP runner does not import job-local UDP input before execution'
+! grep -Fq 'udp_input' "${WORKER}" ||
+    fail 'production worker regained UDP input ownership after the Python cutover'
+grep -Fq 'strategy_lab_udp_input_cleanup "${JOB_ID}"' "${STAGE_ADAPTER}" ||
+    fail 'terminal restoration adapter does not remove the UDP payload'
 grep -Fq 'strategy_lab_state_python set-udp-request' "${MODULE}" ||
     fail 'UDP request metadata does not use the Python state owner'
 
@@ -143,6 +152,7 @@ sh -n "${MODULE}"
 sh -n "${LAUNCHER}"
 sh -n "${LAUNCH}"
 sh -n "${WORKER}"
-sh -n "${CONTROL}"
+sh -n "${STAGE_ADAPTER}"
+sh -n "${UDP_RUNNER}"
 
-echo 'PASS: validated generic UDP GUI/API input becomes private job-local worker state and is always cleaned'
+echo 'PASS: validated generic UDP GUI/API input stays private job-local state, is reloaded by the UDP stage runner, and is always cleaned'
