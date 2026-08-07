@@ -44,7 +44,6 @@ strategy_lab_reconcile_stale_job()
     fi
     strategy_lab_udp_input_cleanup "${_strategy_lab_job}" || true
 
-    _strategy_lab_tmp=$(mktemp "$(dirname "${_strategy_lab_status}")/.stale-recovery.XXXXXX") || return 1
     if [ "${_strategy_lab_restored}" = true ]; then
         _strategy_lab_outcome=ERROR
         _strategy_lab_message='ERROR — Strategy Lab worker disappeared; temporary state was cleaned and semantic restoration of the original service state was verified.'
@@ -54,22 +53,9 @@ strategy_lab_reconcile_stale_job()
         _strategy_lab_message='RESTORE_FAILED — Strategy Lab worker disappeared and semantic restoration of the original service state could not be proven.'
         _strategy_lab_restore_status=FAIL
     fi
-    "${STRATEGY_LAB_JQ}" \
-        --arg outcome "${_strategy_lab_outcome}" \
-        --arg message "${_strategy_lab_message}" \
-        --arg restore_status "${_strategy_lab_restore_status}" \
-        --argjson restored "${_strategy_lab_restored}" '
-        .state="error" | .outcome=$outcome | .current_stage="99" | .message=$message |
-        .stale_worker_recovered=true |
-        (if $restored then . else .restoration=((.restoration // {}) | .verified=false) end) |
-        (.stages[] | select((.status=="PENDING" or .status=="RUNNING") and .number!="90" and .number!="99") | .status)="SKIPPED" |
-        (.stages[] | select(.number=="90") | .status)=$restore_status |
-        (.stages[] | select(.number=="90") | .message)=$message |
-        (.stages[] | select(.number=="99") | .status)="FAIL" |
-        (.stages[] | select(.number=="99") | .message)=$message
-    ' "${_strategy_lab_status}" > "${_strategy_lab_tmp}" || { rm -f "${_strategy_lab_tmp}"; return 1; }
-    chmod 0644 "${_strategy_lab_tmp}"
-    mv -f "${_strategy_lab_tmp}" "${_strategy_lab_status}"
+    strategy_lab_finalize_stale_recovery \
+        "${_strategy_lab_job}" "${_strategy_lab_outcome}" "${_strategy_lab_message}" \
+        "${_strategy_lab_restore_status}" "${_strategy_lab_restored}" || return 1
     rm -f "$(strategy_lab_pid_file "${_strategy_lab_job}")"
     strategy_lab_clear_active_job "${_strategy_lab_job}"
 }
