@@ -8,6 +8,7 @@ import sys
 from collections.abc import Sequence
 
 from . import FOUNDATION_REVISION, SUPPORTED_PYTHON
+from . import orchestrator as stage_orchestrator
 from . import state as state_persistence
 
 EX_OK = 0
@@ -64,6 +65,20 @@ def _run_state(args: Sequence[str]) -> int:
         return EX_SOFTWARE
 
 
+def _run_orchestrator(args: Sequence[str]) -> int:
+    try:
+        return stage_orchestrator.main(args)
+    except stage_orchestrator.UsageError as exc:
+        _error(str(exc))
+        return EX_USAGE
+    except stage_orchestrator.OrchestrationError as exc:
+        _error(str(exc))
+        return EX_SOFTWARE
+    except OSError as exc:
+        _error(f"Strategy Lab orchestration failed: {exc}")
+        return EX_SOFTWARE
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
 
@@ -80,8 +95,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args[:1] == ["state"]:
         return _run_state(args[1:])
 
+    if args[:1] == ["orchestrate"]:
+        return _run_orchestrator(args[1:])
+
     if len(args) != 1:
-        _error("usage: strategy_lab_python.py job_id | --self-test | state OPERATION ...")
+        _error("usage: strategy_lab_python.py job_id | --self-test | state OPERATION ... | orchestrate JOB_ID")
         return EX_USAGE
 
     return _delegate_shell(args[0])
