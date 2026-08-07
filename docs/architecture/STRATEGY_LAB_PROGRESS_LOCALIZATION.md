@@ -10,8 +10,10 @@ The persisted value is authoritative for live polling and reloaded results. The 
 
 The job language continues to select backend worker messages. Diagnostics additionally maps every visible stage key, job/circular state, outcome, mode, progress label, UDP validation message, profile-copy message, and circular lifecycle explanation to Russian or English according to the selected OPNsense language.
 
+The non-terminal backend job state `cancel_requested` is explicitly mapped in both RU and EN dictionaries. It must never fall through to raw technical `CANCEL_REQUESTED` rendering. Circular `stop_requested` remains a separate machine state and has its own localized label/message contract.
+
 All dynamic backend detail text remains escaped. Internal machine keys remain stable and untranslated in JSON.
 
 ## Verification
 
-The mandatory focused test exercises persisted progress at initialization, family screening, restoration, and terminal report, verifies RU/EN dictionaries and circular messages, and rejects the historical English `canseled` typo.
+The mandatory focused test exercises persisted progress at initialization, family screening, restoration, and terminal report. It also creates a real backend `cancel_requested` state, derives its machine presentation key, and requires deliberate RU and EN mappings in Diagnostics. Circular messages remain covered and the historical English `canseled` typo remains rejected.
