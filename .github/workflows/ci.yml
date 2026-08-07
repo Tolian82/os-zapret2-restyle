@@ -67,6 +67,8 @@ jobs:
     if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: changes
+    env:
+      STRATEGY_LAB_PYTHON_BIN: python3.13
 
     steps:
       - uses: actions/checkout@v6
@@ -120,6 +122,9 @@ jobs:
 
       - name: Test Strategy Lab Python foundation
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-foundation.sh
+
+      - name: Test Strategy Lab Python state persistence
+        run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-state-persistence.sh
 
       - name: Test runtime profile normalization
         run: sh scripts/test-profile-normalizer.sh
@@ -199,6 +204,7 @@ jobs:
             scripts/test-strategy-lab-corrective-matrix.sh \
             scripts/test-strategy-lab-corrective-matrix-contract.sh \
             scripts/test-strategy-lab-python-foundation.sh \
+            scripts/test-strategy-lab-python-state-persistence.sh \
             scripts/test-diagnostics-guidance-localization.sh \
             scripts/test-package-lifecycle-restart.sh \
             scripts/test-setup-release-selection.sh \
@@ -221,6 +227,7 @@ jobs:
           for file in \
             scripts/build-pkg.sh \
             scripts/test-strategy-lab-python-foundation.sh \
+            scripts/test-strategy-lab-python-state-persistence.sh \
             scripts/test-release-trigger.sh \
             scripts/test-package-lifecycle-restart.sh \
             scripts/test-diagnostics-guidance-localization.sh \
@@ -286,6 +293,7 @@ jobs:
           run: |
             test "$(freebsd-version -u | cut -d. -f1)" = "15"
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-foundation.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-state-persistence.sh
             sh scripts/build-pkg.sh
 
       - name: Inspect built FreeBSD 15 package
@@ -301,6 +309,7 @@ jobs:
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_python_launcher.sh' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_python.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/compat.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/state.py' "${contents}"
           tar -xOf dist/*.pkg +MANIFEST > "${manifest}"
           jq -e '.abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64" and .deps.python313.origin == "lang/python313"' "${manifest}" >/dev/null
           head -80 "${manifest}"
