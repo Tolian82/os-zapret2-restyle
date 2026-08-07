@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGRESS**
+Overall status: **PENDING OWNER — SCENARIO 1 RETEST ON _11**
 
 This matrix is the final live-appliance gate for the Strategy Lab hardening series. Source tests, GitHub CI, and FreeBSD package builds cannot substitute for evidence collected on the owner's OPNsense appliance.
 
@@ -9,12 +9,13 @@ Only FreeBSD 15 amd64 packages are valid. The revision 46 GitHub Actions artifac
 ## Test record
 
 - Tester: repository owner
-- Test date/time: `2026-08-07` (latest scenario 1 attempt)
+- Test date/time: `2026-08-07` (latest completed scenario 1 attempt; `_11` retest pending)
 - OPNsense version: `26.7.1_1`; later diagnostic kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Architecture / ABI evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`
 - Required package ABI: `FreeBSD:15:amd64`
-- Current corrective candidate: **NOT DESIGNATED — PATCH 8 REQUIRED**
-- Historical `_6` CI package: `os-zapret2-restyle-0.3.3_6.pkg` (not owner-tested; superseded as next live candidate by the third audit)
+- Current corrective candidate: `os-zapret2-restyle-0.3.3_11.pkg`
+- Patch 7 source/CI qualification: exact PR head `dd2a484a4aa3711834b722aae0cc025d3fd4758e`; title check `31157848071` PASS; CI run `31157848056` PASS; FreeBSD 15 artifact `8985927074`; squash-merged main `256ffa09452dabfb001665b729c1f4c3d3462688`.
+- Historical `_6` CI package: `os-zapret2-restyle-0.3.3_6.pkg` (not owner-tested; superseded by `_11`)
 - Latest tested package: `os-zapret2-restyle-0.3.3_5.pkg`
 - WAN interface: `vtnet1`
 - LAN test client: `PENDING OWNER`
@@ -39,9 +40,11 @@ The `_6` source corrective sequence for those later failures completed and remai
 
 The exact final restoration-path PR head passed full CI run `31144038425` and produced FreeBSD 15 artifact `8980876980`, package `os-zapret2-restyle-0.3.3_6.pkg`, with manifest `0.3.3_6 / FreeBSD:15:amd64 / freebsd:15:x86:64 / FreeBSD_version 1500068`. Post-merge `main` CI run `31144323095` also passed.
 
-These source/CI results do not convert the failed `_5` live attempt into PASS. `_6` was never owner-tested. A third source audit on 2026-08-07 identified additional defects `SL3-001` through `SL3-007`; therefore the planned `_6` scenario-1 retest is cancelled as the next action. Live verification is paused until the approved Patch 2–8 corrective sequence is complete and Patch 8 designates a new FreeBSD 15 amd64 candidate.
+These source/CI results do not convert the failed `_5` live attempt into PASS. `_6` was never owner-tested. A third source audit on 2026-08-07 then identified `SL3-001` through `SL3-007` and superseded `_6` before live retest.
 
-Authoritative third-audit plan:
+The approved third-audit corrective sequence is now source/CI complete. Patches 2–6 implemented every finding, Patch 7 bound all corrected paths into the mandatory integration/corrective matrix, and its exact latest head passed repository CI and produced the designated `_11` FreeBSD 15 package. Patch 8 changes documentation/handoff state only. This evidence authorizes resuming the owner-assisted matrix at Scenario 1; it does **not** authorize any live PASS claim.
+
+Authoritative third-audit record:
 
 `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`
 
@@ -66,12 +69,12 @@ pkg info os-zapret2-restyle
 configctl zapret status
 ```
 
-Before installation of the next designated candidate, preserve its `+MANIFEST` and confirm:
+Before installation of the designated candidate, preserve its `+MANIFEST` and confirm:
 
 ```text
 abi: FreeBSD:15:amd64
 arch: freebsd:15:x86:64
-version: <Patch-8 designated candidate>
+version: 0.3.3_11
 ```
 
 Recommended residue evidence after every terminal scenario:
@@ -86,7 +89,7 @@ configctl zapret status
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | Failed attempts: `2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`, `2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`, `2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md`, `2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`; third-audit source corrective series required before next owner retest | **PAUSED — PATCH 8 REQUIRED** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | Failed attempts: `2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`, `2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`, `2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md`, `2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`; next evidence must be collected on `_11` | **PENDING OWNER — RETEST REQUIRED** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Test completes while final service remains STOPPED; restoration evidence is verified | `PENDING OWNER` | **BLOCKED BY #1** |
 | 3 | Extended TLS 1.2 and HTTP | Available protocol successes appear as complete replay-verified profiles; unavailable protocols are explicitly skipped | `PENDING OWNER` | **BLOCKED BY #1** |
 | 4 | Extended QUIC | QUIC result is endpoint-bound and replay-verified when network capability exists; otherwise explicit skip reason | `PENDING OWNER` | **BLOCKED BY #1** |
@@ -107,10 +110,8 @@ configctl zapret status
 
 ## Failure handling
 
-Any of the following keeps the live gate failed, paused, or pending:
+Any of the following keeps the live gate failed or pending:
 
-- source/CI corrective series is not complete;
-- no Patch-8 candidate has been designated;
 - candidate package ABI or architecture is not exactly FreeBSD 15 amd64;
 - `RESTORE_FAILED` or unverified restoration;
 - unexpected change to the saved Traffic Strategy;
@@ -126,4 +127,4 @@ A failed live row requires same-scope source correction when a source defect is 
 
 ## Release gate
 
-Stable release preparation and pkg-repository promotion remain blocked until the third-audit corrective series is source/CI complete, every required row is marked `PASS` by the owner, and linked evidence is recorded. The matrix contains no successful live scenario PASS claim yet.
+Third-audit source/CI closure is complete. Stable release preparation and pkg-repository promotion remain blocked until every required live row is marked `PASS` by the owner and linked evidence is recorded. The matrix contains no successful Strategy Lab live scenario PASS claim yet.
