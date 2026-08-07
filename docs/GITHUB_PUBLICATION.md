@@ -32,6 +32,7 @@ Read immediately before any GitHub mutation.
 
 Active decisions:
 
+- `docs/decisions/DEC-2026-08-07-installable-patch-shorthand.md`;
 - `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
 - `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
 - `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
@@ -153,6 +154,53 @@ A second unchanged infrastructure failure stops the operation for diagnosis. It 
 not authorize another retry or redesign.
 
 ==================================================
+INSTALLABLE PATCH SHORTHAND
+==================================================
+
+The owner uses the following phrases, and obvious Russian-language equivalents, as an
+explicit request for an installable GitHub package rather than an Actions artifact:
+
+- `дай мне патч для установки`;
+- `дай мне ссылку для установки патча`;
+- `дай мне команду для установки патча`;
+- `собери патч для установки`;
+- `собери патч на репозитории и дай команду для установки`.
+
+When one of these instructions is given, it constitutes explicit owner authorization to
+complete the entire testing-prerelease publication cycle for the package candidate that
+must be installed next. Do not ask for another publication confirmation.
+
+Candidate selection is deterministic:
+
+1. Read current `main`, `VERSION`, and `PLUGIN_REVISION` through the GitHub plugin.
+2. If the current package candidate has not yet been published and already contains all
+   requested packaged changes, publish that exact candidate.
+3. If additional packaged changes are required, increment `PLUGIN_REVISION` once through
+   the normal PR/CI/squash path and publish the resulting candidate.
+4. A documentation/governance-only clarification does not itself force another package
+   revision; publication must still target the latest complete `main` tree.
+
+The shorthand authorizes exactly:
+
+- the testing-prerelease tag `v<VERSION>_<REVISION>` derived by the rule above;
+- one verified asset `os-zapret2-restyle-<VERSION>_<REVISION>.pkg`;
+- the repository-owned FreeBSD 15 build-and-publish workflow;
+- verification of the resulting Release and direct asset URL.
+
+It does not authorize a stable release, a semantic `VERSION` change, GitHub Pages,
+pkg-repository promotion, unrelated source changes, or rewriting an existing published
+candidate.
+
+The user-facing result of this shorthand is the direct OPNsense install/update command,
+not an Actions ZIP, artifact-download procedure, GitHub token workflow, or extraction
+instructions. Default final form:
+
+`pkg add -f https://github.com/Tolian82/os-zapret2-restyle/releases/download/v<VERSION>_<REVISION>/os-zapret2-restyle-<VERSION>_<REVISION>.pkg`
+
+Only add extra installation detail when it is materially required by an observed error
+or the owner explicitly requests it.
+
+==================================================
 TESTING PRERELEASE PUBLICATION
 ==================================================
 
@@ -161,7 +209,9 @@ It is not a stable project release and is not an ordinary code PR.
 
 Required authority:
 
-- explicit owner authorization for the exact tag `v<VERSION>_<REVISION>` and asset;
+- explicit owner authorization for the exact tag `v<VERSION>_<REVISION>` and asset; or
+- an installable-patch shorthand instruction defined above, which is itself explicit
+  authorization for the deterministically derived exact tag and `.pkg` asset;
 - no implied permission to publish GitHub Pages or the pkg repository.
 
 Preferred path when verified package bytes already exist:
@@ -259,16 +309,25 @@ Ordinary packaged patch:
 - create no tag, Release, asset, Pages deployment, or pkg-repository publication without
   separate authority.
 
+Installable patch shorthand:
+
+- means a testing prerelease is required, not an Actions artifact;
+- uses the current unpublished complete package candidate when one already exists;
+- otherwise creates the next package revision through the normal PR/CI/squash path;
+- publishes one direct `.pkg` Release asset;
+- returns the `pkg add -f https://github.com/...pkg` command without ZIP/token steps.
+
 Governance/documentation/CI-only patch:
 
 - change neither version value;
 - use the unchanged candidate prefix;
 - run path-applicable CI;
-- do not imply package publication.
+- do not imply package publication unless the owner simultaneously invokes the
+  installable-patch shorthand above.
 
 Testing prerelease:
 
-- explicit authority for exact `v<VERSION>_<REVISION>`;
+- explicit authority for exact `v<VERSION>_<REVISION>` or installable-patch shorthand;
 - publish one verified package asset only;
 - no Pages/pkg repository.
 
@@ -298,4 +357,6 @@ that requires:
 - unversioned governance or release-preparation subjects;
 - version-specific prerelease workflows in `main`;
 - source/workflow/runner changes in response to an external infrastructure failure;
-- publication PRs for already verified assets.
+- publication PRs for already verified assets;
+- asking for an additional prerelease confirmation after the owner has invoked the
+  installable-patch shorthand defined above.
