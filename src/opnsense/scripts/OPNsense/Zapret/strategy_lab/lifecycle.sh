@@ -97,7 +97,16 @@ strategy_lab_timed_service_action()
     _strategy_lab_action="$1"; _strategy_lab_timeout="$2"
     [ -x "${STRATEGY_LAB_TIMEOUT_BIN}" ] || { echo "ERROR: Strategy Lab timeout utility is unavailable" >&2; return 1; }
     [ -x "${STRATEGY_LAB_SERVICE_SCRIPT}" ] || { echo "ERROR: Strategy Lab service control is unavailable" >&2; return 1; }
-    "${STRATEGY_LAB_TIMEOUT_BIN}" -f "${_strategy_lab_timeout}" "${STRATEGY_LAB_SERVICE_SCRIPT}" "strategy-lab-${_strategy_lab_action}"
+    case "${_strategy_lab_action}" in
+        start)
+            "${STRATEGY_LAB_TIMEOUT_BIN}" -f "${_strategy_lab_timeout}" \
+                "${STRATEGY_LAB_SERVICE_SCRIPT}" "strategy-lab-${_strategy_lab_action}"
+            ;;
+        *)
+            "${STRATEGY_LAB_TIMEOUT_BIN}" "${_strategy_lab_timeout}" \
+                "${STRATEGY_LAB_SERVICE_SCRIPT}" "strategy-lab-${_strategy_lab_action}"
+            ;;
+    esac
 }
 
 strategy_lab_verify_stopped()
