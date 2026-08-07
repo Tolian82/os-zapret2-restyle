@@ -13,6 +13,7 @@ in `AGENTS.md`.
 
 ## Product authorities
 
+- `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md` — current third-audit findings SL3-001…SL3-007, approved Patch 1–8 corrective plan, acceptance criteria, and live-test pause;
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md` — state, cancellation, timeout, candidate ownership, restoration recovery, and verification;
 - `docs/architecture/STRATEGY_LAB_ACTIVATION.md` — active Diagnostics path;
 - `docs/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md` — complete replay-verified profiles;
@@ -27,10 +28,10 @@ in `AGENTS.md`.
 - `docs/architecture/STRATEGY_LAB_OBSOLETE_SURFACES.md` — removed obsolete interfaces;
 - `docs/architecture/STRATEGY_LAB_RETENTION.md` — bounded cleanup and protected evidence;
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_MATRIX.md` — discoverable corrective CI entry point;
-- `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — finding-to-patch traceability;
-- `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — source/CI closure and release-block status;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — owner-assisted live gate;
-- `docs/devlog/2026-08-07-v0.3.3_6-repository-reconciliation.md` — complete `_6` recovery ledger, source/CI corrective closure, and remaining owner-retest boundary;
+- `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — earlier hardening finding-to-patch traceability;
+- `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — current closure state, reopened by the third audit;
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — owner-assisted live gate, currently paused pending the third-audit corrective series;
+- `docs/devlog/2026-08-07-v0.3.3_6-repository-reconciliation.md` — `_6` recovery ledger and historical source/CI evidence;
 - `docs/PROJECT_STATE.md` — current verified baseline and next action.
 
 ## Engineering process
