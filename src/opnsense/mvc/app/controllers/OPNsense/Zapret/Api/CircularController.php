@@ -12,6 +12,7 @@ use OPNsense\Base\ApiControllerBase;
 class CircularController extends ApiControllerBase
 {
     private const JOB_PATTERN = '/^job\.[A-Za-z0-9]+$/D';
+    private const BACKEND_TIMEOUT_SECONDS = 190;
 
     private function backendResponse(string $action, array $params = []): array
     {
@@ -20,7 +21,7 @@ class CircularController extends ApiControllerBase
             'zapret ' . $action,
             $params,
             false,
-            10
+            self::BACKEND_TIMEOUT_SECONDS
         ));
 
         if ($response === '') {
