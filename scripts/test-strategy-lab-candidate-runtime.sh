@@ -7,6 +7,9 @@ MODULE_DIR="${SCRIPT_DIR}/strategy_lab"
 TMP=$(mktemp -d /tmp/strategy-lab-candidate-test.XXXXXX)
 trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
 mkdir -p "${TMP}/bin" "${TMP}/run/jobs/job.test" "${TMP}/log" "${TMP}/lua"
+# Production job directories are created with mktemp -d and start private. The temporary
+# dvtws2 runtime later drops to nobody, so this fixture must preserve that boundary.
+chmod 0700 "${TMP}/run/jobs/job.test"
 
 cat > "${TMP}/bin/timeout" <<'SH'
 #!/bin/sh
@@ -77,6 +80,9 @@ exit 0
 SH
 cat > "${TMP}/dvtws2.c" <<'C'
 #include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 static volatile sig_atomic_t running = 1;
@@ -87,8 +93,30 @@ static void stop_runtime(int signal_number)
     running = 0;
 }
 
+static int require_other_access(const char *path, mode_t bit, const char *label)
+{
+    struct stat st;
+    if (path == NULL || stat(path, &st) != 0 || (st.st_mode & bit) == 0) {
+        fprintf(stderr, "file_open_test: Permission denied\n");
+        fprintf(stderr, "cannot access %s '%s'\n", label, path == NULL ? "" : path);
+        return 0;
+    }
+    return 1;
+}
+
 int main(void)
 {
+    const char *jobdir = getenv("MOCK_DVTWS_JOBDIR");
+    const char *runtime = getenv("MOCK_DVTWS_RUNTIME_DIR");
+    const char *hostlist = getenv("MOCK_DVTWS_HOSTLIST");
+
+    /* Model dvtws2 after --user=nobody: it is neither owner nor owning group. */
+    if (!require_other_access(jobdir, S_IXOTH, "job directory") ||
+        !require_other_access(runtime, S_IXOTH, "candidate runtime directory") ||
+        !require_other_access(hostlist, S_IROTH, "hostlist file")) {
+        return 1;
+    }
+
     signal(SIGTERM, stop_runtime);
     signal(SIGINT, stop_runtime);
     while (running) {
@@ -158,6 +186,9 @@ export MOCK_IPFW_STATE="${TMP}/ipfw.state"
 export MOCK_IPFW_LOG="${TMP}/ipfw.log"
 export MOCK_IPFW_COUNTER="${TMP}/ipfw.counter"
 export MOCK_DVTWS_PIDFILE="${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.pid"
+export MOCK_DVTWS_JOBDIR="${TMP}/run/jobs/job.test"
+export MOCK_DVTWS_RUNTIME_DIR="${TMP}/run/jobs/job.test/candidate-runtime"
+export MOCK_DVTWS_HOSTLIST="${TMP}/run/jobs/job.test/candidate-runtime/hostlist.txt"
 
 set +e
 /usr/bin/timeout 15 "${SCRIPT_DIR}/strategy_lab_candidate_runner.sh" job.test "${TMP}/endpoints.txt" "${TMP}/result.json"
@@ -192,10 +223,11 @@ fi
 [ ! -s "${TMP}/ipfw.state" ]
 [ ! -e "${MOCK_DVTWS_PIDFILE}" ]
 ! pgrep -f "${TMP}/bin/dvtws2" >/dev/null 2>&1
+[ "$(stat -c '%a' "${TMP}/run/jobs/job.test")" = 700 ]
 
 grep -q 'add 19100 divert 9989 tcp from me to 203.0.113.10 443' "${TMP}/ipfw.log"
 
-echo 'Strategy Lab candidate runtime success contract passed with a resident daemon supervisor.'
+echo 'Strategy Lab candidate runtime success contract passed with post-drop hostlist access and private cleanup.'
 
 : > "${TMP}/ipfw.state"
 : > "${TMP}/ipfw.log"
@@ -209,5 +241,6 @@ fi
 [ ! -s "${TMP}/ipfw.state" ]
 [ ! -e "${MOCK_DVTWS_PIDFILE}" ]
 ! pgrep -f "${TMP}/bin/dvtws2" >/dev/null 2>&1
+[ "$(stat -c '%a' "${TMP}/run/jobs/job.test")" = 700 ]
 
 echo 'Strategy Lab candidate runtime failure cleanup contract passed.'
