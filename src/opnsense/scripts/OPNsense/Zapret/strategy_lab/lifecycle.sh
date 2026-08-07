@@ -19,7 +19,28 @@ strategy_lab_lifecycle_restoration_file(){ printf '%s/lifecycle-restoration.json
 
 strategy_lab_record_json_field()
 {
-    strategy_lab_set_json_field "${JOB_ID}" "$1" "$2"
+    _strategy_lab_record_field="$1"
+    _strategy_lab_record_input="$2"
+    _strategy_lab_record_status=$(strategy_lab_status_file "${JOB_ID}")
+
+    # Migration Patch 2 moves automated-job status.json persistence to Python.
+    # Private circular session state.json remains on its pre-existing shell writer
+    # until the circular state contract receives its own explicit cutover.
+    case "${_strategy_lab_record_status}" in
+        */state.json)
+            _strategy_lab_record_tmp=$(mktemp "$(dirname "${_strategy_lab_record_status}")/.state-field.XXXXXX") || return 1
+            "${STRATEGY_LAB_JQ}" --arg field "${_strategy_lab_record_field}" --slurpfile value "${_strategy_lab_record_input}" \
+                '.[$field]=$value[0]' "${_strategy_lab_record_status}" > "${_strategy_lab_record_tmp}" || {
+                    rm -f "${_strategy_lab_record_tmp}"
+                    return 1
+                }
+            chmod 0600 "${_strategy_lab_record_tmp}"
+            mv -f "${_strategy_lab_record_tmp}" "${_strategy_lab_record_status}"
+            ;;
+        *)
+            strategy_lab_set_json_field "${JOB_ID}" "${_strategy_lab_record_field}" "${_strategy_lab_record_input}"
+            ;;
+    esac
 }
 
 strategy_lab_fetch_semantic_evidence()
