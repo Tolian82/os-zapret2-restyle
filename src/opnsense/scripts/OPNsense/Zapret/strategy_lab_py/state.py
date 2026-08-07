@@ -1,4 +1,4 @@
-"""Atomic Strategy Lab state/progress persistence for the Python migration."""
+"""Atomic Strategy Lab automated-job state/progress persistence."""
 
 from __future__ import annotations
 
@@ -55,8 +55,8 @@ def _job(value: str) -> str:
 def _state(job_id: str, value: str) -> Path:
     job_id = _job(job_id)
     path = Path(value)
-    if path.name not in {"status.json", "state.json"} or path.parent.name != job_id:
-        raise UsageError("invalid Strategy Lab state path")
+    if path.name != "status.json" or path.parent.name != job_id:
+        raise UsageError("invalid Strategy Lab automated-job state path")
     return path
 
 
@@ -80,7 +80,7 @@ def _timeout() -> float:
 @contextmanager
 def _locked(state: Path):
     state.parent.mkdir(parents=True, exist_ok=True)
-    lock = state.with_name("status.lock" if state.name == "status.json" else "state.lock")
+    lock = state.with_name("status.lock")
     fd = os.open(lock, os.O_WRONLY | os.O_CREAT, 0o644)
     deadline = time.monotonic() + _timeout()
     try:
