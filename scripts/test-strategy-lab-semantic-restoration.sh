@@ -3,8 +3,9 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-MODULE_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab"
-SERVICE_SOURCE="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
+SCRIPT_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
+MODULE_DIR="${SCRIPT_DIR}/strategy_lab"
+SERVICE_SOURCE="${SCRIPT_DIR}/zapret_service.sh"
 TEST_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-semantic-restoration.XXXXXX")
 trap 'rm -rf "${TEST_ROOT}"' EXIT HUP INT TERM
 
@@ -15,7 +16,7 @@ fail()
 }
 
 JOB_ID=job.SEMANTIC
-JOB_DIR="${TEST_ROOT}/job"
+JOB_DIR="${TEST_ROOT}/${JOB_ID}"
 STATUS_FILE="${JOB_DIR}/status.json"
 STATE_FILE="${TEST_ROOT}/service.state"
 CONFIG_FILE="${TEST_ROOT}/zapret.conf"
@@ -31,6 +32,8 @@ STRATEGY_LAB_UNAME_BIN="${UNAME}"
 STRATEGY_LAB_SERVICE_SCRIPT="${SERVICE}"
 STRATEGY_LAB_STOP_TIMEOUT=2
 STRATEGY_LAB_RESTORE_TIMEOUT=2
+STRATEGY_LAB_PYTHON_BIN=${STRATEGY_LAB_TEST_PYTHON:-${STRATEGY_LAB_PYTHON_BIN:-python3.13}}
+STRATEGY_LAB_PYTHON_LAUNCHER="${SCRIPT_DIR}/strategy_lab_python_launcher.sh"
 mkdir -p "${JOB_DIR}"
 
 cat > "${UNAME}" <<'UNAME'
@@ -116,6 +119,7 @@ export MOCK_STATE_FILE="${STATE_FILE}"
 export MOCK_CONFIG_FILE="${CONFIG_FILE}"
 export MOCK_ARGS_FILE="${ARGS_FILE}"
 export MOCK_RULES_FILE="${RULES_FILE}"
+export STRATEGY_LAB_PYTHON_BIN STRATEGY_LAB_PYTHON_LAUNCHER
 
 strategy_lab_status_file()
 {
@@ -127,11 +131,12 @@ strategy_lab_firewall_range_empty()
     [ "$(cat "${TEMP_CLEAN_FILE}")" = clean ]
 }
 
+. "${MODULE_DIR}/state.sh"
 . "${MODULE_DIR}/lifecycle.sh"
 
 reset_fixture()
 {
-    printf '%s\n' '{"job_id":"job.SEMANTIC","lifecycle_snapshot":{},"restoration":{}}' > "${STATUS_FILE}"
+    printf '%s\n' '{"job_id":"job.SEMANTIC","revision":0,"lifecycle_snapshot":{},"restoration":{}}' > "${STATUS_FILE}"
     printf '%s\n' 'TRAFFIC_ARGS=--lua-desync=multisplit:pos=1' > "${CONFIG_FILE}"
     printf '%s\n' '--filter-tcp=443' '--lua-desync=multisplit:pos=1' > "${ARGS_FILE}"
     printf '%s\n' '19000 divert 989 tcp from any to any 443 out' > "${RULES_FILE}"
@@ -200,8 +205,10 @@ grep -Fq 'normal_firewall_hash' "${SERVICE_SOURCE}" || fail 'normal firewall evi
 grep -Fq 'strategy_lab_firewall_range_empty' "${MODULE_DIR}/lifecycle.sh" || fail 'temporary firewall cleanup is not verified'
 grep -Fq '"${STRATEGY_LAB_TIMEOUT_BIN}" -f' "${MODULE_DIR}/lifecycle.sh" || fail 'FreeBSD daemonizing lifecycle start is not foreground-safe'
 grep -Fq 'FreeBSD' "${MODULE_DIR}/lifecycle.sh" || fail 'foreground timeout is not scoped to FreeBSD'
+grep -Fq 'strategy_lab_set_json_field' "${MODULE_DIR}/lifecycle.sh" || fail 'lifecycle evidence is not persisted through the state adapter'
 
+sh -n "${MODULE_DIR}/state.sh"
 sh -n "${MODULE_DIR}/lifecycle.sh"
 sh -n "${SERVICE_SOURCE}"
 
-echo 'PASS: Strategy Lab captures and verifies semantic Zapret2 restoration evidence'
+echo 'PASS: Strategy Lab captures and verifies semantic Zapret2 restoration evidence through the Python-owned automated-job state adapter'

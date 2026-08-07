@@ -5,6 +5,8 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 COMMON_UNDER_TEST="${COMMON_UNDER_TEST:-${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab/common.sh}"
 STATE_UNDER_TEST="${STATE_UNDER_TEST:-${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab/state.sh}"
 STAGE_MACHINE_UNDER_TEST="${STAGE_MACHINE_UNDER_TEST:-${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab/worker_stage_machine.sh}"
+PYTHON_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_python_launcher.sh"
+PYTHON_BIN=${STRATEGY_LAB_TEST_PYTHON:-python3.13}
 ROOT=$(mktemp -d /tmp/strategy-lab-state-race.XXXXXX)
 trap 'rm -rf "${ROOT}"' EXIT HUP INT TERM
 
@@ -12,30 +14,10 @@ STRATEGY_LAB_JQ=$(command -v jq)
 STRATEGY_LAB_RUN_DIR="${ROOT}/run"
 STRATEGY_LAB_JOBS_DIR="${STRATEGY_LAB_RUN_DIR}/jobs"
 STRATEGY_LAB_LOG_DIR="${ROOT}/log"
+STRATEGY_LAB_PYTHON_BIN="${PYTHON_BIN}"
+STRATEGY_LAB_PYTHON_LAUNCHER="${PYTHON_LAUNCHER}"
 export STRATEGY_LAB_JQ STRATEGY_LAB_RUN_DIR STRATEGY_LAB_JOBS_DIR
-export STRATEGY_LAB_LOG_DIR
-
-if command -v lockf >/dev/null 2>&1; then
-    STRATEGY_LAB_STATE_LOCKF_BIN=$(command -v lockf)
-else
-    FLOCK_BIN=$(command -v flock)
-    cat > "${ROOT}/lockf" <<EOS
-#!/bin/sh
-while [ "\$#" -gt 0 ]
-do
-    case "\$1" in
-        -s) shift ;;
-        -t) shift 2 ;;
-        9) shift; break ;;
-        *) shift ;;
-    esac
-done
-exec "${FLOCK_BIN}" -x 9
-EOS
-    chmod +x "${ROOT}/lockf"
-    STRATEGY_LAB_STATE_LOCKF_BIN="${ROOT}/lockf"
-fi
-export STRATEGY_LAB_STATE_LOCKF_BIN
+export STRATEGY_LAB_LOG_DIR STRATEGY_LAB_PYTHON_BIN STRATEGY_LAB_PYTHON_LAUNCHER
 
 . "${COMMON_UNDER_TEST}"
 . "${STATE_UNDER_TEST}"
@@ -57,8 +39,8 @@ wait
 strategy_lab_update_stage job.race 60 RUNNING active
 [ "$("${STRATEGY_LAB_JQ}" -r '.revision' "${status}")" -eq 21 ]
 
-# This is the third-audit regression: cancel persistence and unfinished-stage skipping
-# mutate the same status document concurrently and therefore must share one state lock.
+# Cancel persistence and unfinished-stage skipping mutate the same status document
+# concurrently and must therefore share the Python state lock and revision owner.
 strategy_lab_request_cancel job.race cancel &
 worker_skip_unfinished job.race skipped &
 wait
@@ -106,10 +88,11 @@ strategy_lab_update_stage job.race 50 RUNNING late
     .revision==28
 ' "${status}" >/dev/null
 
-# The worker path must not reintroduce a private read/jq/mv writer.
-grep -Fq 'strategy_lab_state_transform "${_wsm_job}"' "${STAGE_MACHINE_UNDER_TEST}"
+# The worker path must delegate unfinished-stage persistence instead of owning JSON writes.
+grep -Fq 'strategy_lab_skip_unfinished "$1" "$2"' "${STAGE_MACHINE_UNDER_TEST}"
+! grep -Fq 'strategy_lab_state_transform' "${STAGE_MACHINE_UNDER_TEST}"
 ! grep -Fq '.worker-skip.' "${STAGE_MACHINE_UNDER_TEST}"
 
 "${STRATEGY_LAB_JQ}" -e . "${status}" >/dev/null
 
-echo 'PASS: cancel, skip, and finalization state updates share the canonical lock/revision transform and preserve cancellation evidence'
+echo 'PASS: cancel, skip, and finalization state updates share the Python lock/revision owner and preserve cancellation evidence'

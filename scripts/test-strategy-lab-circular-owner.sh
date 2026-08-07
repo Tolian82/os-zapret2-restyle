@@ -117,7 +117,7 @@ fi
 ! grep -Fq 'strategy_lab_restore_initial_service_state' "${MODULE_DIR}/circular_owner.sh"
 grep -Fq 'STRATEGY_LAB_CIRCULAR_RECOVERY_SCRIPT' "${MODULE_DIR}/circular_owner.sh"
 grep -Fq 'strategy-lab-recover "${_slco_session}"' "${MODULE_DIR}/circular_owner.sh"
-grep -Fq 'for module in common firewall runtime candidate lifecycle circular' "${SCRIPT_DIR}/strategy_lab_recovery_worker.sh"
+grep -Fq 'for module in common state firewall runtime candidate lifecycle circular' "${SCRIPT_DIR}/strategy_lab_recovery_worker.sh"
 grep -Fq 'STRATEGY_LAB_CIRCULAR_SESSIONS_DIR' "${SCRIPT_DIR}/strategy_lab_recovery_worker.sh"
 grep -Fq 'strategy_lab_restore_initial_service_state' "${SCRIPT_DIR}/strategy_lab_recovery_worker.sh"
 grep -Fq 'strategy-lab|strategy-lab-circular|strategy-lab-recover)' "${SCRIPT_DIR}/zapret_service.sh"
@@ -125,4 +125,4 @@ grep -Fq 'STRATEGY_LAB_LIFECYCLE_OWNER=1' "${SCRIPT_DIR}/zapret_service.sh"
 sh -n "${MODULE_DIR}/circular_owner.sh"
 sh -n "${SCRIPT_DIR}/strategy_lab_recovery_worker.sh"
 sh -n "${SCRIPT_DIR}/strategy_lab_circular_launcher.sh"
-echo 'PASS: circular stale recovery delegates protected restoration to the lifecycle-owned semantic recovery transaction and blocks inconsistent proof'
+echo 'PASS: circular stale recovery delegates protected restoration to the lifecycle-owned semantic recovery transaction, loads the automated-job state adapter, and keeps private circular state shell-owned'

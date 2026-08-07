@@ -40,7 +40,7 @@ else
 fi
 
 grep -Eq '^PLUGIN_DEPENDS=[[:space:]]+python313([[:space:]]|$)' "${MAKEFILE}" ||
-    fail 'Migration Patch 1 must declare the verified python313 package dependency'
+    fail 'Python migration must declare the verified python313 package dependency'
 grep -Fq 'python313)  echo "lang/python313"' "${ROOT_DIR}/scripts/build-pkg.sh" ||
     fail 'package builder does not map python313 to lang/python313'
 
@@ -54,9 +54,14 @@ then
 fi
 
 grep -Fq 'python-version: "3.13"' "${CI}" || fail 'Linux validation does not select Python 3.13'
+grep -Fq 'STRATEGY_LAB_PYTHON_BIN: python3.13' "${CI}" || fail 'Linux validation does not expose Python 3.13 to Strategy Lab compatibility tests'
 grep -Fq 'pkg install -y jq python313' "${CI}" || fail 'FreeBSD 15 package job does not install python313'
 grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-foundation.sh' "${CI}" ||
     fail 'FreeBSD 15 package job does not execute the Python 3.13 foundation test'
+grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-state-persistence.sh' "${CI}" ||
+    fail 'FreeBSD 15 package job does not execute the Python state persistence regression'
+grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/state.py' "${CI}" ||
+    fail 'package inspection does not require the Python state persistence module'
 grep -Fq '.deps.python313.origin == "lang/python313"' "${CI}" ||
     fail 'package inspection does not enforce the python313 dependency origin'
 
@@ -108,4 +113,4 @@ if grep -Fq 'Current corrective candidate: `os-zapret2-restyle-0.3.2_46.pkg`' "$
 fi
 
 sh -n "$0"
-echo "PASS: GitHub package builds stay on FreeBSD 15, Python 3.13 is qualified, and live-candidate selection respects the active live gate for ${candidate}"
+echo "PASS: GitHub package builds stay on FreeBSD 15, Python 3.13 state persistence is qualified, and live-candidate selection respects the active live gate for ${candidate}"

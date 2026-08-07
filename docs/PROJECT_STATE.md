@@ -29,10 +29,10 @@ Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
 Latest published testing prerelease: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
 Latest owner-tested testing candidate: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
 Current source line: `VERSION=0.3.3`
-Current package revision: `PLUGIN_REVISION=18`
-Current migration source candidate: `os-zapret2-restyle-0.3.3_18.pkg`
+Current package revision: `PLUGIN_REVISION=19`
+Current migration source candidate: `os-zapret2-restyle-0.3.3_19.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Strategy Lab Migration Patch 1 — packaged Python platform/compatibility foundation**
+Current phase: **Strategy Lab Migration Patch 2 — Python automated-job state/progress/structured persistence**
 Stable release: **BLOCKED ON POST-MIGRATION LIVE MATRIX**
 
 Current primary Strategy Lab authority:
@@ -48,26 +48,60 @@ Active GitHub delivery authority:
 MIGRATION PATCH 1 FOUNDATION
 ==================================================
 
-The supported OPNsense 26.7 platform contract is now explicit:
+Migration Patch 1 established the supported OPNsense 26.7 platform contract:
 
-- OPNsense 26.7 build configuration targets FreeBSD 15.1 and Python 3.13 (`PYTHON=313`);
-- OPNsense core provides `/usr/local/bin/python3` as the stable interpreter link;
-- the plugin declares the direct package dependency `python313`;
-- the custom package manifest maps it to `lang/python313`;
-- Python migration code remains standard-library-only; no third-party `pip` dependency is approved.
+- FreeBSD 15.1 / Python 3.13 (`PYTHON=313`);
+- stable OPNsense interpreter link `/usr/local/bin/python3`;
+- direct plugin dependency `python313` mapped to `lang/python313`;
+- standard-library-only Python migration code;
+- packaged Python launcher/entry point/foundation.
 
-Packaged foundation files:
+`zapret_service.sh` still launches `strategy_lab_worker.sh` directly. That remains true in
+Patch 2; the production worker and numbered stage machine have not yet moved to Python.
 
-- `strategy_lab_python_launcher.sh` — thin runtime/version check and compatibility launcher;
-- `strategy_lab_python.py` — minimal packaged entry point;
-- `strategy_lab_py/` — Python compatibility foundation module.
+==================================================
+MIGRATION PATCH 2 STATE OWNERSHIP
+==================================================
 
-Important cutover boundary:
+Migration Patch 2 moves authoritative automated-job persistence to Python 3.13.
 
-`zapret_service.sh` still launches the existing `strategy_lab_worker.sh` directly. The
-Python launcher is packaged and tested but is not the production call path in Migration
-Patch 1. Therefore no Strategy Lab state-machine, lifecycle, persistence, probe,
-candidate, or result ownership changes in `_18`.
+`strategy_lab_py/state.py` now owns automated-job:
+
+- initial schema-2 `status.json` creation;
+- per-job revision ownership and serialized status mutations;
+- persisted `current_stage` and `progress` snapshots;
+- cancellation state and timestamp persistence;
+- atomic `events.ndjson` persistence;
+- structured target/network/baseline/family/expansion/stability/shortlist/extended/QUIC/UDP fields;
+- lifecycle snapshot and restoration fields;
+- stale-worker terminal reconciliation state;
+- terminal circular-eligibility fields stored in the parent automated job.
+
+The shell `strategy_lab/state.sh` retains the existing public helper names only as thin
+adapters into the Python writer. The previous shell `strategy_lab_state_transform` and
+private jq/temp/mv writers for authoritative automated-job state are removed from the
+migrated paths.
+
+Persistence invariants:
+
+- public automated-job JSON schema remains version 2;
+- stage numbers/keys and progress percentages remain unchanged;
+- every serialized automated-job status mutation increments `revision` exactly once,
+  including a terminal semantic no-op;
+- writes use one Python state lock, same-directory temporary files, fsync, atomic replace,
+  and mode `0644`;
+- the GUI/API does not need to know which language owns automated-job persistence.
+
+Private circular-session `state.json` remains on its pre-existing shell writer in Patch 2.
+Shared lifecycle code preserves a circular fallback rather than creating two owners of
+that private file. The Python automated-job writer explicitly rejects private circular
+`state.json` paths; a separate migration scope is required before that ownership can
+change.
+
+Patch 2 does **not** move stage ordering, budgets, cancellation/finalization policy,
+lifecycle decisions, probes, candidate execution, search algorithms, or circular-session
+state transitions. Those remain shell responsibilities until their designated migration
+patches.
 
 ==================================================
 FINAL SHELL-ERA LIVE BOUNDARY
@@ -99,9 +133,7 @@ Immediate active-GUI observation on the same run:
 - terminal presentation jumped directly to 100%.
 
 No `_17` candidate-runtime log bundle was collected in this run. Therefore the exact
-remaining `_17` Stage-50 root cause is intentionally not claimed. The previous `_16`
-hostlist traversal failure was real and corrected in `_17`, but the repeated high-level
-Stage-50 message proves only that another Stage-50 failure remains.
+remaining `_17` Stage-50 root cause is intentionally not claimed.
 
 Evidence:
 `docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md`.
@@ -113,53 +145,13 @@ CONFIRMED LIVE SUB-GATES
 The owner-assisted series has established these reusable facts:
 
 - FreeBSD DNS foreground-timeout correction is live-proven: stage 40 can pass with `DNS: OK`;
-- normal Zapret2 restoration is live-proven after the earlier FreeBSD timeout correction: stage 90 repeatedly returns initially RUNNING service to healthy RUNNING;
+- normal Zapret2 restoration is live-proven: stage 90 repeatedly returns initially RUNNING service to healthy RUNNING;
 - temporary Strategy Lab runtime can reach real dvtws2 startup/bind/privilege-drop paths;
 - `v0.3.3_17` still does not complete Stage 50 successfully;
 - no complete Standard Strategy Lab scenario is yet live PASS.
 
 Authoritative live matrix:
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
-
-==================================================
-APPROVED IMPLEMENTATION DIRECTION
-==================================================
-
-The project will not continue growing the large sourced POSIX-shell Strategy Lab worker
-as the primary orchestration implementation.
-
-Approved target boundary:
-
-```text
-Diagnostics GUI / JavaScript
-        ↓
-OPNsense PHP MVC/API
-        ↓
-configd
-        ↓
-thin compatibility launcher
-        ↓
-Python Strategy Lab orchestration
-        ↓
-small explicit FreeBSD/OPNsense system adapters and external tools
-```
-
-Responsibilities intended for Python:
-
-- job/state model and atomic JSON persistence;
-- stage machine, progress, budgets, cancellation, and terminal finalization;
-- subprocess execution with separate return code/stdout/stderr/timeout state;
-- DNS/TLS/HTTP parsing and error classification;
-- candidate and family orchestration;
-- expansion, stability, extended-protocol orchestration;
-- structured result/shortlist generation.
-
-Responsibilities intentionally retained outside Python unless separately justified:
-
-- PHP MVC/API request validation and configd integration;
-- small audited shell/service adapters for Zapret2 lifecycle, shared lock, `ipfw`, process
-  ownership, and other short FreeBSD-specific mutations where reusing existing behavior
-  is safer than duplicating it.
 
 ==================================================
 CONFIRMED DEFECT BACKLOG
@@ -178,9 +170,9 @@ or automatically resolve the backlog.
 8. **Terminal reload/state presentation defect.** Retained terminal state can be presented incorrectly on Diagnostics reopen.
 9. **Candidate fatal-log classification defect.** Readiness evidence can report a clean log while fatal runtime text exists.
 
-The Python migration plan maps these defects to replacement tests and later live/UI
-verification. A defect may disappear because the old implementation mechanism is
-removed, but it is closed only after a focused regression and required live evidence.
+Patch 2 removes shell-global/private-writer mechanisms from the migrated automated-job
+persistence layer, but it does not close any owner-observed defect by itself. Closure
+still requires focused replacement regression and, where applicable, live/UI evidence.
 
 ==================================================
 PYTHON MIGRATION PATCH SEQUENCE
@@ -188,11 +180,11 @@ PYTHON MIGRATION PATCH SEQUENCE
 
 Patch 0 — documentation/handoff: **COMPLETE**.
 
-Patch 1 — Python platform and compatibility foundation: **CURRENT `_18` SOURCE CHANGE**.
+Patch 1 — Python platform and compatibility foundation: **COMPLETE IN `_18` SOURCE / MERGED**.
 
-Patch 2 — Python job state, progress, and structured persistence: **NEXT AFTER PATCH 1 QUALIFICATION**.
+Patch 2 — Python automated-job state, progress, and structured persistence: **CURRENT `_19` SOURCE CHANGE**.
 
-Patch 3 — Python stage machine, budgets, cancellation, and finalization.
+Patch 3 — Python stage machine, budgets, cancellation, and finalization: **NEXT AFTER PATCH 2 QUALIFICATION**.
 
 Patch 4 — Python request/probe execution and parsing.
 
@@ -211,17 +203,18 @@ change. It must not compress the migration into a monolithic rewrite.
 DELIVERY AND PACKAGE BOUNDARY
 ==================================================
 
-Migration Patch 1 is an installable package-source change:
+Migration Patch 2 is an installable package-source change:
 
 - `VERSION` remains `0.3.3`;
-- `PLUGIN_REVISION` advances to `18`;
-- current source candidate is `os-zapret2-restyle-0.3.3_18.pkg`;
-- published and owner-tested live evidence remains `_17` until a newer artifact is actually published/tested;
-- `_18` does not resume the live matrix because the production Strategy Lab call path is unchanged.
+- `PLUGIN_REVISION` advances to `19`;
+- current source candidate is `os-zapret2-restyle-0.3.3_19.pkg`;
+- latest published/owner-tested live evidence remains `_17`;
+- `_19` does not resume the live matrix because the stage machine/search path has not yet reached the designated Python parity gate.
 
-The `_18` source must pass the normal Ready-PR, complete CI, and FreeBSD 15 package gate
-before squash merge. Testing-prerelease publication follows the owner's standing
-installable-patch authority without an additional routine confirmation.
+The `_19` source must pass focused Python state tests, the complete corrective matrix,
+full repository CI, and FreeBSD 15 package/content verification before squash merge.
+Testing-prerelease publication remains a separate operation requiring the repository's
+normal publication authority.
 
 Stable release and pkg-repository promotion remain blocked until the Python path reaches
 functional parity and the owner-assisted live matrix passes.
@@ -230,14 +223,15 @@ functional parity and the owner-assisted live matrix passes.
 NEXT ACTION
 ==================================================
 
-Complete Migration Patch 1 qualification on `_18`:
+Complete Migration Patch 2 qualification on `_19`:
 
-1. focused Python 3.13 foundation test;
-2. canonical Strategy Lab corrective matrix;
-3. full repository CI;
-4. FreeBSD 15 package build/content/manifest verification;
-5. squash merge only from the successfully validated latest head.
+1. Python 3.13 foundation/import checks;
+2. focused automated-job state/progress/event persistence parity and concurrency regression;
+3. canonical Strategy Lab corrective matrix;
+4. full repository CI;
+5. FreeBSD 15 package build/content/manifest verification;
+6. squash merge only from the successfully validated latest head.
 
-After Patch 1 is merged, begin **Migration Patch 2 only**: move job state, progress, and
-structured persistence to Python while preserving the public JSON contract and keeping the
-stage machine outside that patch.
+After Patch 2 is merged, begin **Migration Patch 3 only**: move the numbered stage
+machine, budgets, cancellation orchestration, and terminal finalization policy to Python
+while preserving the persistence/API contract established here.

@@ -53,12 +53,5 @@ strategy_lab_extended_run()
 
 strategy_lab_set_extended_result()
 {
-    _slexts_job="$1"; _slexts_result="$2"
-    if command -v strategy_lab_state_transform >/dev/null 2>&1; then
-        strategy_lab_state_transform "${_slexts_job}" '.extended=$extended[0]' --slurpfile extended "${_slexts_result}"
-        return $?
-    fi
-    _slexts_status=$(strategy_lab_status_file "${_slexts_job}"); _slexts_tmp=$(mktemp "$(dirname "${_slexts_status}")/.extended-state.XXXXXX") || return 1
-    "${STRATEGY_LAB_JQ}" --slurpfile extended "${_slexts_result}" '.extended=$extended[0]' "${_slexts_status}" > "${_slexts_tmp}" || { rm -f "${_slexts_tmp}"; return 1; }
-    chmod 0644 "${_slexts_tmp}"; mv -f "${_slexts_tmp}" "${_slexts_status}"
+    strategy_lab_set_json_field "$1" extended "$2"
 }

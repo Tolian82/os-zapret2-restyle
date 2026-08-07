@@ -103,31 +103,8 @@ worker_result_set_circular_eligibility()
         _wrr_reason=eligible
     fi
 
-    if command -v strategy_lab_state_transform >/dev/null 2>&1; then
-        strategy_lab_state_transform "${JOB_ID}" '
-            .circular_eligible=$eligible |
-            .circular_eligibility_reason=$reason |
-            .circular_candidate_count=$count
-        ' --argjson eligible "${_wrr_eligible}" \
-          --arg reason "${_wrr_reason}" \
-          --argjson count "${_wrr_count}"
-        return $?
-    fi
-
-    _wrr_tmp=$(mktemp "$(dirname "${_wrr_status}")/.circular-eligibility.XXXXXX") || return 1
-    "${STRATEGY_LAB_JQ}" \
-        --argjson eligible "${_wrr_eligible}" \
-        --arg reason "${_wrr_reason}" \
-        --argjson count "${_wrr_count}" \
-        '.circular_eligible=$eligible |
-         .circular_eligibility_reason=$reason |
-         .circular_candidate_count=$count' \
-        "${_wrr_status}" > "${_wrr_tmp}" || {
-            rm -f "${_wrr_tmp}"
-            return 1
-        }
-    chmod 0644 "${_wrr_tmp}"
-    mv -f "${_wrr_tmp}" "${_wrr_status}"
+    strategy_lab_set_circular_eligibility \
+        "${JOB_ID}" "${_wrr_eligible}" "${_wrr_reason}" "${_wrr_count}"
 }
 
 worker_finish_search()

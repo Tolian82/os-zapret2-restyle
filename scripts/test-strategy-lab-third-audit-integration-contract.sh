@@ -79,16 +79,17 @@ grep -Fq '([.circular_items[].protocol]|unique)==["tls13"]' "${SHORTLIST}"
 grep -Fq '.circular_candidate_count==3' "${SHORTLIST}"
 grep -Fq "if grep -Eq 'pos=2|fake_quic|ipfrag'" "${SHORTLIST}"
 
-# SL3-004: cancel/skip/finalize state mutations share one revisioned transform.
+# SL3-004: cancel/skip/finalize state mutations share one Python lock/revision owner.
 grep -Fq 'strategy_lab_request_cancel job.race cancel &' "${STATE_RACE}"
 grep -Fq 'worker_skip_unfinished job.race skipped &' "${STATE_RACE}"
 grep -Fq '.cancel_requested_at==$requested_at' "${STATE_RACE}"
 grep -Fq '.revision==28' "${STATE_RACE}"
-grep -Fq 'strategy_lab_state_transform "${_wsm_job}"' "${STATE_RACE}"
+grep -Fq 'strategy_lab_skip_unfinished "$1" "$2"' "${STATE_RACE}"
+! grep -Fq 'strategy_lab_state_transform' "${STATE_RACE}"
 
 # The integration contract binds coverage only; it must not recursively execute the matrix.
 if grep -Eq '^[[:space:]]*sh[[:space:]]+"?\$\{MATRIX\}' "$0"; then
     fail 'third-audit integration contract recursively invokes the authoritative matrix'
 fi
 
-printf '%s\n' 'PASS: third-audit corrected paths are bound to one canonical matrix with integrated lifecycle, shortlist, race, timeout, immutability, and cleanup coverage'
+printf '%s\n' 'PASS: third-audit corrected paths are bound to one canonical matrix with integrated lifecycle, shortlist, Python-owned race persistence, timeout, immutability, and cleanup coverage'

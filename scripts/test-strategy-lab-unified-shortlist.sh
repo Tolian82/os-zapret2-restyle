@@ -54,6 +54,8 @@ export STRATEGY_LAB_PROFILE_ENV_BIN=$(command -v env)
 export MOCK_PROFILE_REPLAY_COUNT="${TMP}/replay-count"
 export STRATEGY_LAB_LUA_DIR="${TMP}/lua"
 export STRATEGY_LAB_DIVERT_PORT=9989
+export STRATEGY_LAB_PYTHON_BIN=${STRATEGY_LAB_TEST_PYTHON:-${STRATEGY_LAB_PYTHON_BIN:-python3.13}}
+export STRATEGY_LAB_PYTHON_LAUNCHER="${SCRIPT_DIR}/strategy_lab_python_launcher.sh"
 
 strategy_lab_job_dir(){ printf '%s/jobs/%s\n' "${TMP}" "$1"; }
 strategy_lab_status_file(){ printf '%s/jobs/%s/status.json\n' "${TMP}" "$1"; }
@@ -77,6 +79,7 @@ strategy_lab_candidate_runtime_dir()
 strategy_lab_candidate_args_file(){ printf '%s/args\n' "$(strategy_lab_candidate_runtime_dir "$1")"; }
 strategy_lab_candidate_hostlist_file(){ printf '%s/hostlist.txt\n' "$(strategy_lab_candidate_runtime_dir "$1")"; }
 
+. "${MODULE_DIR}/state.sh"
 . "${MODULE_DIR}/profile.sh"
 . "${MODULE_DIR}/worker_result.sh"
 . "${MODULE_DIR}/circular.sh"
@@ -85,7 +88,7 @@ strategy_lab_circular_prepare_dir
 JOB_DIR="${TMP}/jobs/job.test"
 printf '%s\n' example.com > "${JOB_DIR}/endpoints.txt"
 cat > "${JOB_DIR}/status.json" <<'JSON'
-{"target":"example.com","target_type":"domain","mode":"extended","state":"completed","outcome":"SUCCESS","stages":[{"number":"85","status":"PASS"},{"number":"90","status":"PASS"}],"restoration":{"verified":true}}
+{"revision":0,"target":"example.com","target_type":"domain","mode":"extended","state":"completed","outcome":"SUCCESS","stages":[{"number":"85","status":"PASS"},{"number":"90","status":"PASS"}],"restoration":{"verified":true}}
 JSON
 cat > "${JOB_DIR}/stability.json" <<'JSON'
 {"candidates":[
@@ -120,7 +123,7 @@ JOB_ID=job.test
 WORKER_FINAL_STATE=completed
 WORKER_FINAL_OUTCOME=SUCCESS
 worker_result_set_circular_eligibility
-"${STRATEGY_LAB_JQ}" -e '.circular_eligible==true and .circular_eligibility_reason=="eligible" and .circular_candidate_count==3' "${JOB_DIR}/status.json" >/dev/null
+"${STRATEGY_LAB_JQ}" -e '.circular_eligible==true and .circular_eligibility_reason=="eligible" and .circular_candidate_count==3 and .revision==1' "${JOB_DIR}/status.json" >/dev/null
 strategy_lab_circular_eligibility job.test >/dev/null
 CIRCULAR_SESSION_ID=$(strategy_lab_circular_session_create job.test)
 strategy_lab_circular_session_validate "${CIRCULAR_SESSION_ID}" job.test
@@ -132,7 +135,7 @@ if grep -Eq 'pos=2|fake_quic|ipfrag' "${CIRCULAR_ARGS}"; then exit 1; fi
 
 STANDARD_DIR="${TMP}/jobs/job.standard"
 printf '%s\n' example.com > "${STANDARD_DIR}/endpoints.txt"
-printf '%s\n' '{"target":"example.com","target_type":"domain","mode":"standard"}' > "${STANDARD_DIR}/status.json"
+printf '%s\n' '{"revision":0,"target":"example.com","target_type":"domain","mode":"standard"}' > "${STANDARD_DIR}/status.json"
 cp "${JOB_DIR}/stability.json" "${STANDARD_DIR}/stability.json"
 strategy_lab_shortlist_build "${STANDARD_DIR}/stability.json" "${STANDARD_DIR}/shortlist.json"
 "${STRATEGY_LAB_JQ}" -e '.count==3 and .circular_count==3 and all(.items[];.protocol=="tls13")' "${STANDARD_DIR}/shortlist.json" >/dev/null
@@ -140,4 +143,5 @@ strategy_lab_shortlist_build "${STANDARD_DIR}/stability.json" "${STANDARD_DIR}/s
 grep -Fq 'PROTOCOL="${9:-tls13}"' "${SCRIPT_DIR}/strategy_lab_profile_replay_runner.sh"
 grep -Fq 'source_module quic_candidate' "${SCRIPT_DIR}/strategy_lab_profile_replay_runner.sh"
 grep -Fq 'source_module udp_candidate' "${SCRIPT_DIR}/strategy_lab_profile_replay_runner.sh"
-echo 'PASS: verified TLS 1.3, TLS 1.2, HTTP, QUIC, and UDP profiles share one deterministic shortlist'
+grep -Fq 'strategy_lab_set_circular_eligibility' "${MODULE_DIR}/worker_result.sh"
+echo 'PASS: verified TLS 1.3, TLS 1.2, HTTP, QUIC, and UDP profiles share one deterministic shortlist with Python-owned automated-job eligibility persistence'

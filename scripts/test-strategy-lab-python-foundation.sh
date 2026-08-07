@@ -26,19 +26,23 @@ python_version=$("${PYTHON_BIN}" -c 'import sys; print(f"{sys.version_info.major
 [ -r "${ENTRY}" ] || fail 'Python entry point is missing'
 [ -r "${PACKAGE_DIR}/__init__.py" ] || fail 'Python package initializer is missing'
 [ -r "${PACKAGE_DIR}/compat.py" ] || fail 'Python compatibility module is missing'
+[ -r "${PACKAGE_DIR}/state.py" ] || fail 'Python state persistence module is missing'
 
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="${ZAPRET_DIR}" "${PYTHON_BIN}" - <<'PY'
 import strategy_lab_py
-from strategy_lab_py import compat
+from strategy_lab_py import compat, state
 
 assert strategy_lab_py.SUPPORTED_PYTHON == (3, 13)
 assert compat.DEFAULT_SHELL_WORKER.endswith("/strategy_lab_worker.sh")
+assert state.PROGRESS["50"] == 45
+assert state.PROGRESS["99"] == 100
 PY
 
 PYTHONDONTWRITEBYTECODE=1 "${PYTHON_BIN}" -m py_compile \
     "${ENTRY}" \
     "${PACKAGE_DIR}/__init__.py" \
-    "${PACKAGE_DIR}/compat.py"
+    "${PACKAGE_DIR}/compat.py" \
+    "${PACKAGE_DIR}/state.py"
 
 self_test=$(STRATEGY_LAB_PYTHON_BIN="${PYTHON_BIN}" "${LAUNCHER}" --self-test)
 printf '%s\n' "${self_test}" | grep -Fq 'Strategy Lab Python foundation: OK (Python 3.13, revision 1)' ||
@@ -91,8 +95,8 @@ grep -Fq 'unsupported interpreter version 3.12; expected 3.13' "${TEST_ROOT}/ver
 grep -Fq 'STRATEGY_LAB_WORKER="${STRATEGY_LAB_WORKER:-${SCRIPT_DIR}/strategy_lab_worker.sh}"' "${SERVICE}" ||
     fail 'production Strategy Lab worker default changed during foundation patch'
 ! grep -Fq 'strategy_lab_python_launcher.sh' "${SERVICE}" ||
-    fail 'Python launcher must remain outside the production call path in Migration Patch 1'
+    fail 'Python launcher must remain outside the production worker call path before the stage-machine cutover'
 
 sh -n "${LAUNCHER}"
 sh -n "$0"
-echo 'PASS: Strategy Lab Python 3.13 compatibility foundation is packaged-ready without changing the production worker path'
+echo 'PASS: Strategy Lab Python 3.13 foundation, state module imports, compatibility delegation, and unchanged production worker path'

@@ -84,12 +84,5 @@ strategy_lab_expansion_run()
 
 strategy_lab_set_parameter_expansion_result()
 {
-    _slexs_job="$1"; _slexs_result="$2"
-    if command -v strategy_lab_state_transform >/dev/null 2>&1; then
-        strategy_lab_state_transform "${_slexs_job}" '.parameter_expansion=$expansion[0]' --slurpfile expansion "${_slexs_result}"
-        return $?
-    fi
-    _slexs_status=$(strategy_lab_status_file "${_slexs_job}"); _slexs_tmp=$(mktemp "$(dirname "${_slexs_status}")/.parameter-expansion.XXXXXX") || return 1
-    "${STRATEGY_LAB_JQ}" --slurpfile expansion "${_slexs_result}" '.parameter_expansion=$expansion[0]' "${_slexs_status}" > "${_slexs_tmp}" || { rm -f "${_slexs_tmp}"; return 1; }
-    chmod 0644 "${_slexs_tmp}"; mv -f "${_slexs_tmp}" "${_slexs_status}"
+    strategy_lab_set_json_field "$1" parameter_expansion "$2"
 }

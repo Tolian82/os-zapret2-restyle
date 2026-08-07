@@ -2,15 +2,7 @@
 
 worker_skip_unfinished()
 {
-    _wsm_job="$1"
-    _wsm_message="$2"
-    strategy_lab_state_transform "${_wsm_job}" '
-        (.stages[] |
-            select((.status=="PENDING" or .status=="RUNNING") and
-                   .number!="90" and .number!="99") |
-            .status)="SKIPPED" |
-        (.stages[] | select(.status=="SKIPPED" and .message=="") | .message)=$message
-    ' --arg message "${_wsm_message}"
+    strategy_lab_skip_unfinished "$1" "$2"
 }
 
 worker_check_cancel()

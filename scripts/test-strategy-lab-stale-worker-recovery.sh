@@ -3,7 +3,10 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 COMMON_UNDER_TEST="${COMMON_UNDER_TEST:-${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab/common.sh}"
+STATE_UNDER_TEST="${STATE_UNDER_TEST:-${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab/state.sh}"
 LAUNCH_UNDER_TEST="${LAUNCH_UNDER_TEST:-${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab/launch.sh}"
+PYTHON_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_python_launcher.sh"
+PYTHON_BIN=${STRATEGY_LAB_TEST_PYTHON:-${STRATEGY_LAB_PYTHON_BIN:-python3.13}}
 ROOT=$(mktemp -d /tmp/strategy-lab-stale.XXXXXX)
 trap 'rm -rf "${ROOT}"' EXIT HUP INT TERM
 
@@ -12,10 +15,13 @@ STRATEGY_LAB_RUN_DIR="${ROOT}/run"
 STRATEGY_LAB_JOBS_DIR="${STRATEGY_LAB_RUN_DIR}/jobs"
 STRATEGY_LAB_ACTIVE_FILE="${STRATEGY_LAB_RUN_DIR}/active.job"
 STRATEGY_LAB_LOG_DIR="${ROOT}/log"
+STRATEGY_LAB_PYTHON_BIN="${PYTHON_BIN}"
+STRATEGY_LAB_PYTHON_LAUNCHER="${PYTHON_LAUNCHER}"
 TEST_JOBS_DIR="${STRATEGY_LAB_JOBS_DIR}"
 TEST_SERVICE_LOG="${ROOT}/service.log"
 export STRATEGY_LAB_JQ STRATEGY_LAB_RUN_DIR STRATEGY_LAB_JOBS_DIR
 export STRATEGY_LAB_ACTIVE_FILE STRATEGY_LAB_LOG_DIR TEST_JOBS_DIR TEST_SERVICE_LOG
+export STRATEGY_LAB_PYTHON_BIN STRATEGY_LAB_PYTHON_LAUNCHER
 
 mkdir -p "${STRATEGY_LAB_JOBS_DIR}" "${STRATEGY_LAB_LOG_DIR}"
 
@@ -26,7 +32,7 @@ make_job()
     mkdir -p "${STRATEGY_LAB_JOBS_DIR}/${job}"
     printf '%s\n' 999999 > "${STRATEGY_LAB_JOBS_DIR}/${job}/worker.pid"
     "${STRATEGY_LAB_JQ}" -nc --arg state "${initial}" '
-        {state:"running",outcome:"",initial_service_state:$state,
+        {revision:0,state:"running",outcome:"",initial_service_state:$state,
          stages:[{number:"00",status:"PASS",message:""},
                  {number:"90",status:"PENDING",message:""},
                  {number:"99",status:"PENDING",message:""}]}
@@ -73,6 +79,7 @@ EOS
 chmod +x "${TRANSACTION_SCRIPT}"
 
 . "${COMMON_UNDER_TEST}"
+. "${STATE_UNDER_TEST}"
 . "${LAUNCH_UNDER_TEST}"
 
 make_job job.good STOPPED
@@ -83,7 +90,7 @@ strategy_lab_reconcile_stale_job job.good
     .state=="error" and .outcome=="ERROR" and .stale_worker_recovered==true and
     .restoration.verified==true and .restoration.strategy_unchanged==true and
     .restoration.temporary_runtime_clean==true and
-    any(.stages[]; .number=="90" and .status=="PASS")
+    any(.stages[]; .number=="90" and .status=="PASS") and .revision==1
 ' "${STRATEGY_LAB_JOBS_DIR}/job.good/status.json" >/dev/null
 [ ! -e "${STRATEGY_LAB_ACTIVE_FILE}" ]
 [ ! -e "${STRATEGY_LAB_JOBS_DIR}/job.good/worker.pid" ]
@@ -95,7 +102,7 @@ strategy_lab_reconcile_stale_job job.bad
 "${STRATEGY_LAB_JQ}" -e '
     .state=="error" and .outcome=="RESTORE_FAILED" and .stale_worker_recovered==true and
     .restoration.verified==false and .restoration.strategy_unchanged==false and
-    any(.stages[]; .number=="90" and .status=="FAIL")
+    any(.stages[]; .number=="90" and .status=="FAIL") and .revision==1
 ' "${STRATEGY_LAB_JOBS_DIR}/job.bad/status.json" >/dev/null
 
 make_job job.fail RUNNING
@@ -105,7 +112,7 @@ strategy_lab_reconcile_stale_job job.fail
 "${STRATEGY_LAB_JQ}" -e '
     .state=="error" and .outcome=="RESTORE_FAILED" and
     .restoration.verified==false and
-    any(.stages[]; .number=="90" and .status=="FAIL")
+    any(.stages[]; .number=="90" and .status=="FAIL") and .revision==1
 ' "${STRATEGY_LAB_JOBS_DIR}/job.fail/status.json" >/dev/null
 
 [ "$(wc -l < "${TEST_SERVICE_LOG}" | tr -d ' ')" -eq 3 ]
@@ -115,5 +122,9 @@ if grep -Ev '^strategy-lab-recover job\.(good|bad|fail)$' "${TEST_SERVICE_LOG}" 
 fi
 
 grep -Fq 'strategy_lab_udp_input_cleanup() { :; }' "$0"
+grep -Fq '.stale-recovery.' "${LAUNCH_UNDER_TEST}" && {
+    echo 'FAIL: stale recovery still owns a private shell state writer' >&2
+    exit 1
+}
 
-echo 'PASS: stale-worker reconciliation delegates to lifecycle-owned recovery and accepts only complete semantic restoration proof'
+echo 'PASS: stale-worker reconciliation delegates lifecycle recovery and Python owns the final revisioned status write'

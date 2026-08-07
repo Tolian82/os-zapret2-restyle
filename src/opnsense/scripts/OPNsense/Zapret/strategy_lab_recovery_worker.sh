@@ -6,7 +6,7 @@ MODULE_DIR="${MODULE_DIR:-${SCRIPT_DIR}/strategy_lab}"
 set -eu
 umask 022
 
-for module in common firewall runtime candidate lifecycle circular
+for module in common state firewall runtime candidate lifecycle circular
 do
     module_path="${MODULE_DIR}/${module}.sh"
     [ -r "${module_path}" ] || {

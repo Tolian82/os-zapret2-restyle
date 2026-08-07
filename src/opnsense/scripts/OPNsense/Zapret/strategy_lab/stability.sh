@@ -99,14 +99,6 @@ EOF
 
 strategy_lab_set_stability_result()
 {
-    _slsets_job="$1"; _slsets_stability="$2"; _slsets_shortlist="$3"
-    if command -v strategy_lab_state_transform >/dev/null 2>&1; then
-        strategy_lab_state_transform "${_slsets_job}" '.stability=$stability[0] | .shortlist=$shortlist[0]' \
-            --slurpfile stability "${_slsets_stability}" --slurpfile shortlist "${_slsets_shortlist}"
-        return $?
-    fi
-    _slsets_status=$(strategy_lab_status_file "${_slsets_job}"); _slsets_tmp=$(mktemp "$(dirname "${_slsets_status}")/.stability-state.XXXXXX") || return 1
-    "${STRATEGY_LAB_JQ}" --slurpfile stability "${_slsets_stability}" --slurpfile shortlist "${_slsets_shortlist}" \
-        '.stability=$stability[0] | .shortlist=$shortlist[0]' "${_slsets_status}" > "${_slsets_tmp}" || { rm -f "${_slsets_tmp}"; return 1; }
-    chmod 0644 "${_slsets_tmp}"; mv -f "${_slsets_tmp}" "${_slsets_status}"
+    strategy_lab_state_python set-stability \
+        "$1" "$(strategy_lab_status_file "$1")" "$2" "$3"
 }

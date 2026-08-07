@@ -20,15 +20,9 @@ strategy_lab_udp_input_record()
     _sluir_port="$3"
     _sluir_bytes="$4"
 
-    strategy_lab_state_transform "${_sluir_job}" '
-        .udp_request={
-            configured:$configured,
-            port:(if $configured then $port else null end),
-            payload_bytes:$bytes
-        }
-    ' --argjson configured "${_sluir_configured}" \
-      --argjson port "${_sluir_port}" \
-      --argjson bytes "${_sluir_bytes}"
+    strategy_lab_state_python set-udp-request \
+        "${_sluir_job}" "$(strategy_lab_status_file "${_sluir_job}")" \
+        "${_sluir_configured}" "${_sluir_port}" "${_sluir_bytes}"
 }
 
 strategy_lab_udp_input_cleanup()

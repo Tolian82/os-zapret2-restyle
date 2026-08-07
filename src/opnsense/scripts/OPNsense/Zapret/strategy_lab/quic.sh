@@ -49,12 +49,5 @@ strategy_lab_quic_run()
 
 strategy_lab_set_quic_result()
 {
-    _slqs_job="$1"; _slqs_result="$2"
-    if command -v strategy_lab_state_transform >/dev/null 2>&1; then
-        strategy_lab_state_transform "${_slqs_job}" '.quic=$quic[0]' --slurpfile quic "${_slqs_result}"
-        return $?
-    fi
-    _slqs_status=$(strategy_lab_status_file "${_slqs_job}"); _slqs_tmp=$(mktemp "$(dirname "${_slqs_status}")/.quic-state.XXXXXX") || return 1
-    "${STRATEGY_LAB_JQ}" --slurpfile quic "${_slqs_result}" '.quic=$quic[0]' "${_slqs_status}" > "${_slqs_tmp}" || { rm -f "${_slqs_tmp}"; return 1; }
-    chmod 0644 "${_slqs_tmp}"; mv -f "${_slqs_tmp}" "${_slqs_status}"
+    strategy_lab_set_json_field "$1" quic "$2"
 }

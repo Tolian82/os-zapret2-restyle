@@ -54,12 +54,5 @@ strategy_lab_udp_run()
 
 strategy_lab_set_udp_result()
 {
-    _slus_job="$1"; _slus_result="$2"
-    if command -v strategy_lab_state_transform >/dev/null 2>&1; then
-        strategy_lab_state_transform "${_slus_job}" '.udp=$udp[0]' --slurpfile udp "${_slus_result}"
-        return $?
-    fi
-    _slus_status=$(strategy_lab_status_file "${_slus_job}"); _slus_tmp=$(mktemp "$(dirname "${_slus_status}")/.udp-state.XXXXXX") || return 1
-    "${STRATEGY_LAB_JQ}" --slurpfile udp "${_slus_result}" '.udp=$udp[0]' "${_slus_status}" > "${_slus_tmp}" || { rm -f "${_slus_tmp}"; return 1; }
-    chmod 0644 "${_slus_tmp}"; mv -f "${_slus_tmp}" "${_slus_status}"
+    strategy_lab_set_json_field "$1" udp "$2"
 }

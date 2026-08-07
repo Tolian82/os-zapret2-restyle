@@ -18,7 +18,7 @@ TEST RECORD
 - Required package ABI: `FreeBSD:15:amd64`
 - Latest published testing candidate: `os-zapret2-restyle-0.3.3_17.pkg`
 - Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_17.pkg`
-- Current migration source candidate: `os-zapret2-restyle-0.3.3_18.pkg`
+- Current migration source candidate: `os-zapret2-restyle-0.3.3_19.pkg`
 - Latest owner-tested job: `job.w0nXxQ`
 - WAN interface: `vtnet1`
 - Blocked-domain target: `rutracker.org`
@@ -47,7 +47,7 @@ Key live progression:
 - `_16` corrected resident FreeBSD daemon startup blocking and reached real candidate dvtws2 startup/bind/privilege-drop; it then failed post-drop hostlist traversal through a private job directory.
 - `_17` corrected that hostlist traversal permission boundary and was published/installed for owner testing.
 
-Owner-assisted `_17`, job `job.w0nXxQ`, is the final shell-era boundary before the
+Owner-assisted `_17`, job `job.w0nXxQ`, is the frozen shell-era live boundary before the
 approved Python migration:
 
 - 00 PASS;
@@ -85,10 +85,15 @@ Authoritative migration plan:
 Decision:
 `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
 
-Migration Patch 1 source candidate `_18` only establishes the packaged Python 3.13
-platform and compatibility boundary. Its production service path still invokes the shell
-worker directly, so `_18` neither supersedes the owner-tested `_17` live evidence nor
-resumes Scenario 1.
+Migration Patch 1 (`_18`) established the packaged Python 3.13 platform and compatibility
+boundary. Migration Patch 2 source candidate `_19` moves authoritative automated-job
+`status.json`, `events.ndjson`, persisted progress, revision ownership, and structured
+state-field persistence to Python while leaving the production shell worker and numbered
+stage machine in place.
+
+Neither `_18` nor `_19` supersedes the owner-tested `_17` live evidence or resumes
+Scenario 1. In particular, moving progress persistence to Python is not evidence that the
+owner-observed GUI 0%-until-terminal defect is closed.
 
 The live matrix remains failed during migration. Do not mark a row PASS because a defect
 mechanism was rewritten. Resume live Scenario 1 only when the Python implementation has

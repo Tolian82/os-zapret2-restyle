@@ -3,7 +3,8 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-MODULE_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab"
+ZAPRET_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
+MODULE_DIR="${ZAPRET_DIR}/strategy_lab"
 TEST_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-time-budget.XXXXXX")
 trap 'rm -rf "${TEST_ROOT}"' EXIT HUP INT TERM
 
@@ -14,19 +15,27 @@ fail()
 }
 
 JOB_ID=job.BUDGET
-JOB_DIR="${TEST_ROOT}/job"
-STATUS_FILE="${JOB_DIR}/status.json"
+STRATEGY_LAB_RUN_DIR="${TEST_ROOT}/run"
+STRATEGY_LAB_LOG_DIR="${TEST_ROOT}/log"
+STRATEGY_LAB_JOBS_DIR="${STRATEGY_LAB_RUN_DIR}/jobs"
 STRATEGY_LAB_JQ=$(command -v jq)
 STRATEGY_LAB_NOW_EPOCH_FILE="${TEST_ROOT}/clock"
 STRATEGY_LAB_STANDARD_BUDGET=150
 STRATEGY_LAB_EXTENDED_BUDGET=120
 STRATEGY_LAB_STAGE80_TIMEOUT=120
-mkdir -p "${JOB_DIR}"
+STRATEGY_LAB_PYTHON_BIN=${STRATEGY_LAB_TEST_PYTHON:-${STRATEGY_LAB_PYTHON_BIN:-python3.13}}
+STRATEGY_LAB_PYTHON_LAUNCHER="${ZAPRET_DIR}/strategy_lab_python_launcher.sh"
+export STRATEGY_LAB_RUN_DIR STRATEGY_LAB_LOG_DIR STRATEGY_LAB_JOBS_DIR STRATEGY_LAB_JQ
+export STRATEGY_LAB_NOW_EPOCH_FILE STRATEGY_LAB_STANDARD_BUDGET STRATEGY_LAB_EXTENDED_BUDGET
+export STRATEGY_LAB_STAGE80_TIMEOUT STRATEGY_LAB_PYTHON_BIN STRATEGY_LAB_PYTHON_LAUNCHER
 
-strategy_lab_status_file()
-{
-    printf '%s\n' "${STATUS_FILE}"
-}
+. "${MODULE_DIR}/common.sh"
+. "${MODULE_DIR}/state.sh"
+. "${MODULE_DIR}/worker_budget.sh"
+
+strategy_lab_prepare_directories
+JOB_DIR=$(strategy_lab_job_dir "${JOB_ID}")
+STATUS_FILE=$(strategy_lab_status_file "${JOB_ID}")
 
 set_clock()
 {
@@ -35,13 +44,13 @@ set_clock()
 
 reset_status()
 {
-    printf '%s\n' '{"job_id":"job.BUDGET","state":"queued"}' > "${STATUS_FILE}"
+    _tb_mode="$1"
+    rm -rf "${JOB_DIR}"
+    strategy_lab_initialize_state "${JOB_ID}" budget.example "${_tb_mode}" en
 }
 
-. "${MODULE_DIR}/worker_budget.sh"
-
-reset_status
 MODE=standard
+reset_status "${MODE}"
 set_clock 1000
 worker_budget_initialize || fail 'standard budget initialization failed'
 "${STRATEGY_LAB_JQ}" -e '
@@ -65,8 +74,8 @@ if worker_budget_timeout_for 70 60 >/dev/null 2>&1; then
     fail 'expired standard deadline still produced an operation timeout'
 fi
 
-reset_status
 MODE=extended
+reset_status "${MODE}"
 set_clock 2000
 worker_budget_initialize || fail 'extended budget initialization failed'
 "${STRATEGY_LAB_JQ}" -e '
@@ -104,7 +113,7 @@ fi
 
 FLOW="${MODULE_DIR}/worker_flow.sh"
 STAGE_MACHINE="${MODULE_DIR}/worker_stage_machine.sh"
-WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_worker.sh"
+WORKER="${ZAPRET_DIR}/strategy_lab_worker.sh"
 
 grep -Fq 'worker_budget_initialize' "${FLOW}" || fail 'worker flow does not initialize the overall budget'
 grep -Fq 'worker_budget_timeout_for 30' "${FLOW}" || fail 'stage 30 is not clipped by the overall budget'
@@ -114,6 +123,10 @@ grep -Fq 'worker_budget_timeout_for 80' "${STAGE_MACHINE}" || fail 'stage-80 bra
 grep -Fq 'worker_budget_require 85' "${STAGE_MACHINE}" || fail 'shortlist is not bounded by the overall deadline'
 grep -Fq 'STRATEGY_LAB_STANDARD_BUDGET' "${WORKER}" || fail 'worker standard budget default is missing'
 grep -Fq 'STRATEGY_LAB_EXTENDED_BUDGET' "${WORKER}" || fail 'worker extended budget default is missing'
+grep -Fq 'strategy_lab_state_python set-budget' "${MODULE_DIR}/worker_budget.sh" ||
+    fail 'budget metadata does not use the Python state owner'
+grep -Fq 'strategy_lab_state_python set-stage80-budget' "${MODULE_DIR}/worker_budget.sh" ||
+    fail 'stage-80 budget metadata does not use the Python state owner'
 
 sh -n "${MODULE_DIR}/worker_budget.sh"
 sh -n "${FLOW}"
