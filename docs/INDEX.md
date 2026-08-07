@@ -15,8 +15,10 @@ in `AGENTS.md`.
 
 For any new Strategy Lab work after the `v0.3.3_17` live handoff, read these first:
 
-- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved incremental migration map, Python 3.13 runtime boundary, and current persistence ownership;
+- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved incremental migration map, Python 3.13 runtime boundary, persistence ownership, and stage-orchestration ownership;
 - `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md` — rationale, language responsibility boundary, compatibility invariants, bug-backlog policy, and migration delivery rules;
+- `docs/patches/v0.3.3_20.md` — Migration Patch 3 stage machine/budget/cancellation/finalization cutover and exact scope guard;
+- `docs/devlog/2026-08-07-v0.3.3_20-python-stage-orchestration.md` — Patch 3 ownership, lifecycle-adapter boundary, verification, and Patch 4 handoff;
 - `docs/patches/v0.3.3_19.md` — Migration Patch 2 state/progress/event persistence cutover and exact scope guard;
 - `docs/devlog/2026-08-07-v0.3.3_19-python-state-persistence.md` — Patch 2 ownership, atomicity, parity, verification, and handoff record;
 - `docs/patches/v0.3.3_18.md` — Migration Patch 1 packaged Python foundation and unchanged production-worker boundary;
@@ -24,14 +26,15 @@ For any new Strategy Lab work after the `v0.3.3_17` live handoff, read these fir
 - `docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md` — final owner-observed shell-era boundary: stage 40 PASS, stage 50 ERROR, stage 90 PASS, immediate GUI error/no-output and active 0% progress;
 - `docs/PROJECT_STATE.md` — current candidate identity, confirmed defect backlog, migration phase, and next action.
 
-Migration Patch 2 makes Python the authoritative writer for automated-job `status.json`,
-`events.ndjson`, persisted progress, lifecycle/result fields, stale recovery state, and
-revision ownership. The production worker and numbered stage machine remain shell.
+Migration Patch 2 made Python the authoritative writer for automated-job persistence.
+Migration Patch 3 makes Python the authoritative owner of numbered stage progression,
+wall-clock budgets, cancellation orchestration, and terminal restoration/finalization.
+The existing stage-specific FreeBSD/OPNsense and search algorithms remain behind a narrow
+shell adapter until their designated migration patches.
 
-The next source task after `_19` qualification is Migration Patch 3: move the numbered
-stage machine, budgets, cancellation orchestration, and terminal finalization policy to
-Python while preserving the state contract established by Patch 2. Do not combine probe
-or candidate migration with that patch.
+The next source task after `_20` qualification is Migration Patch 4: move finite request/
+probe execution and parsing to Python while preserving separate return-code/stdout/stderr/
+timeout evidence. Do not combine candidate/family migration with that patch.
 
 ## Existing Strategy Lab product authorities
 
