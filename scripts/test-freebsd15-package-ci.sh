@@ -53,8 +53,16 @@ grep -Fq '.arch == "freebsd:15:x86:64"' "${CI}" || fail 'PR package inspection d
 grep -Fq 'tar -tf dist/*.pkg > "${contents}"' "${CI}" || fail 'package contents are not captured without a truncation pipe'
 grep -Fq 'tar -xOf dist/*.pkg +MANIFEST > "${manifest}"' "${CI}" || fail 'package manifest is not captured before inspection'
 
-grep -Fq "Current corrective candidate: \`${candidate}\`" "${MATRIX}" ||
-    fail "live matrix does not select the current corrective package: ${candidate}"
+if grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGRESS**' "${MATRIX}"; then
+    grep -Fq 'Current corrective candidate: **NOT DESIGNATED — PATCH 8 REQUIRED**' "${MATRIX}" ||
+        fail 'paused third-audit matrix must not designate a live candidate before Patch 8'
+    grep -Fq "Historical \`_6\` CI package: \`${candidate}\`" "${MATRIX}" ||
+        fail "paused matrix does not preserve the current historical package identity: ${candidate}"
+else
+    grep -Fq "Current corrective candidate: \`${candidate}\`" "${MATRIX}" ||
+        fail "live matrix does not select the current corrective package: ${candidate}"
+fi
+
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}" ||
     fail 'live matrix does not require the FreeBSD 15 ABI'
 if grep -Fq 'Current corrective candidate: `os-zapret2-restyle-0.3.2_46.pkg`' "${MATRIX}"; then
@@ -62,4 +70,4 @@ if grep -Fq 'Current corrective candidate: `os-zapret2-restyle-0.3.2_46.pkg`' "$
 fi
 
 sh -n "$0"
-echo "PASS: all GitHub package builds and ${candidate} are restricted to FreeBSD 15 amd64"
+echo "PASS: GitHub package builds stay on FreeBSD 15 and live-candidate selection respects the third-audit gate for ${candidate}"
