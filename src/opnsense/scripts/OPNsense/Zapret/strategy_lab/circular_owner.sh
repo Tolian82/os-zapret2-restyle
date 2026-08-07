@@ -2,6 +2,7 @@
 
 STRATEGY_LAB_PS_BIN="${STRATEGY_LAB_PS_BIN:-/bin/ps}"
 STRATEGY_LAB_CIRCULAR_OWNER_WAIT="${STRATEGY_LAB_CIRCULAR_OWNER_WAIT:-3}"
+STRATEGY_LAB_CIRCULAR_RECOVERY_SCRIPT="${STRATEGY_LAB_CIRCULAR_RECOVERY_SCRIPT:-${TRANSACTION_SCRIPT:-${SCRIPT_DIR}/zapret_service.sh}}"
 
 strategy_lab_circular_session_owner_file()
 {
@@ -101,6 +102,31 @@ strategy_lab_circular_recovery_state_file()
     strategy_lab_circular_session_state_file "$1"
 }
 
+strategy_lab_circular_recovery_verified()
+{
+    _slco_state="$1"
+    "${STRATEGY_LAB_JQ}" -e '
+        (.restoration.verified // false)==true and
+        (.restoration.strategy_unchanged // false)==true and
+        (.restoration.temporary_runtime_clean // false)==true and
+        (.restoration.initial_state==.restoration.final_state) and
+        (.restoration.initial_state=="RUNNING" or .restoration.initial_state=="STOPPED")
+    ' "${_slco_state}" >/dev/null 2>&1
+}
+
+strategy_lab_circular_recovery_mark_unverified()
+{
+    _slco_state="$1"
+    _slco_tmp=$(mktemp "$(dirname "${_slco_state}")/.recovery.XXXXXX") || return 1
+    "${STRATEGY_LAB_JQ}" '.restoration=((.restoration // {}) | .verified=false)' \
+        "${_slco_state}" > "${_slco_tmp}" || {
+            rm -f "${_slco_tmp}"
+            return 1
+        }
+    chmod 0600 "${_slco_tmp}"
+    mv -f "${_slco_tmp}" "${_slco_state}"
+}
+
 strategy_lab_circular_recover_stale_session()
 (
     _slco_session="$1"
@@ -113,16 +139,6 @@ strategy_lab_circular_recover_stale_session()
     _slco_count=$("${STRATEGY_LAB_JQ}" -r '.candidate_count // 0' "${_slco_state}")
     _slco_lifecycle_state=$("${STRATEGY_LAB_JQ}" -r '.state // ""' "${_slco_state}")
     _slco_snapshot="$(strategy_lab_circular_session_dir "${_slco_session}")/lifecycle-snapshot.json"
-
-    STRATEGY_LAB_JOBS_DIR="${STRATEGY_LAB_CIRCULAR_SESSIONS_DIR}"
-    export STRATEGY_LAB_JOBS_DIR
-    JOB_ID="${_slco_session}"
-    JOB_DIR=$(strategy_lab_circular_session_dir "${_slco_session}")
-    export JOB_ID JOB_DIR
-    strategy_lab_status_file()
-    {
-        strategy_lab_circular_session_state_file "$1"
-    }
 
     if [ ! -r "${_slco_snapshot}" ]; then
         if [ "${_slco_lifecycle_state}" = queued ] &&
@@ -144,16 +160,14 @@ strategy_lab_circular_recover_stale_session()
         exit 1
     fi
 
-    STRATEGY_LAB_INITIAL_SERVICE_STATE=$("${STRATEGY_LAB_JQ}" -r '.state // ""' "${_slco_snapshot}")
-    STRATEGY_LAB_INITIAL_EVIDENCE_SOURCE=$("${STRATEGY_LAB_JQ}" -r '.source // ""' "${_slco_snapshot}")
-    export STRATEGY_LAB_INITIAL_SERVICE_STATE STRATEGY_LAB_INITIAL_EVIDENCE_SOURCE
+    _slco_recovery_status=0
+    "${STRATEGY_LAB_CIRCULAR_RECOVERY_SCRIPT}" strategy-lab-recover "${_slco_session}" \
+        >/dev/null 2>&1 || _slco_recovery_status=$?
 
-    if strategy_lab_candidate_cleanup "${_slco_session}" &&
-       strategy_lab_firewall_remove_rules &&
-       strategy_lab_firewall_range_empty &&
-       strategy_lab_restore_initial_service_state; then
+    if [ "${_slco_recovery_status}" -eq 0 ] &&
+       strategy_lab_circular_recovery_verified "${_slco_state}"; then
         strategy_lab_circular_state_write "${_slco_session}" error "${_slco_parent}" \
-            'Circular owner disappeared; temporary state was cleaned and Zapret2 was restored' \
+            'Circular owner disappeared; temporary state was cleaned and semantic Zapret2 restoration was verified' \
             "${_slco_count}" stale_worker_restored
         strategy_lab_circular_owner_clear "${_slco_session}"
         rm -f "$(strategy_lab_circular_session_pid_file "${_slco_session}")" \
@@ -162,6 +176,7 @@ strategy_lab_circular_recover_stale_session()
         exit 0
     fi
 
+    strategy_lab_circular_recovery_mark_unverified "${_slco_state}" || true
     strategy_lab_circular_state_write "${_slco_session}" restore_failed "${_slco_parent}" \
         'Circular owner disappeared and semantic Zapret2 restoration could not be proven; automatic retry is blocked' \
         "${_slco_count}" RESTORE_FAILED
