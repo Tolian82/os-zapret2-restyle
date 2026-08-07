@@ -4,6 +4,7 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 SCRIPT_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
 MODULE_DIR="${SCRIPT_DIR}/strategy_lab"
+STAGE_ADAPTER="${SCRIPT_DIR}/strategy_lab_stage_adapter.sh"
 TMP=$(mktemp -d /tmp/strategy-lab-profile.XXXXXX)
 trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
 mkdir -p "${TMP}/bin" "${TMP}/run/jobs/job.test" "${TMP}/lua"
@@ -111,8 +112,11 @@ grep -Fqx -- "--hostlist=$(strategy_lab_candidate_hostlist_file job.test)" "${PR
 ! grep -Fq -- '--hostlist-domains=' "${PROFILE_ARGS}"
 grep -Fqx -- '--lua-desync=multisplit:pos=1' "${PROFILE_ARGS}"
 
-grep -Eq '(^|[[:space:]])profile([[:space:]]|$)' "${SCRIPT_DIR}/strategy_lab_worker.sh"
+# Patch 3 moved stage progression out of the production worker. Stage 85 still owns
+# shortlist/profile construction through the explicit shell stage adapter until Patch 7.
+grep -Fq '85)' "${STAGE_ADAPTER}" || exit 1
+grep -Fq 'strategy_lab_shortlist_build "${STABILITY_FILE}" "${SHORTLIST_FILE}"' "${STAGE_ADAPTER}" || exit 1
 grep -Fq 'strategy_lab_profile_replay_runner.sh' "${MODULE_DIR}/profile.sh"
 grep -Fq 'profile_runtime' "${SCRIPT_DIR}/strategy_lab_profile_replay_runner.sh"
 
-echo 'PASS: complete Traffic Strategy profiles are exact-replayed 3 of 3 before shortlist publication'
+echo 'PASS: complete Traffic Strategy profiles are exact-replayed 3 of 3 before shortlist publication and stage 85 retains explicit adapter ownership'
