@@ -34,45 +34,11 @@ worker_budget_record_initial()
     _wb_standard_deadline_at=$(worker_budget_iso8601 "${WORKER_STANDARD_DEADLINE_EPOCH}") || return 1
     _wb_deadline_at=$(worker_budget_iso8601 "${WORKER_OVERALL_DEADLINE_EPOCH}") || return 1
 
-    if command -v strategy_lab_state_transform >/dev/null 2>&1; then
-        strategy_lab_state_transform "${JOB_ID}" '
-            .started_at=$started_at |
-            .standard_deadline_at=$standard_deadline_at |
-            .deadline_at=$deadline_at |
-            .standard_budget_seconds=$standard_budget_seconds |
-            .extended_budget_seconds=$extended_budget_seconds |
-            .search_budget_seconds=$search_budget_seconds |
-            .stage80_budget_seconds=$stage80_budget_seconds
-        ' --arg started_at "${_wb_started_at}" \
-          --arg standard_deadline_at "${_wb_standard_deadline_at}" \
-          --arg deadline_at "${_wb_deadline_at}" \
-          --argjson standard_budget_seconds "${STRATEGY_LAB_STANDARD_BUDGET}" \
-          --argjson extended_budget_seconds "${STRATEGY_LAB_EXTENDED_BUDGET}" \
-          --argjson search_budget_seconds "${WORKER_SEARCH_BUDGET_SECONDS}" \
-          --argjson stage80_budget_seconds "${STRATEGY_LAB_STAGE80_TIMEOUT}"
-        return $?
-    fi
-
-    _wb_status=$(strategy_lab_status_file "${JOB_ID}")
-    _wb_tmp=$(mktemp "$(dirname "${_wb_status}")/.budget.XXXXXX") || return 1
-    "${STRATEGY_LAB_JQ}" \
-        --arg started_at "${_wb_started_at}" \
-        --arg standard_deadline_at "${_wb_standard_deadline_at}" \
-        --arg deadline_at "${_wb_deadline_at}" \
-        --argjson standard_budget_seconds "${STRATEGY_LAB_STANDARD_BUDGET}" \
-        --argjson extended_budget_seconds "${STRATEGY_LAB_EXTENDED_BUDGET}" \
-        --argjson search_budget_seconds "${WORKER_SEARCH_BUDGET_SECONDS}" \
-        --argjson stage80_budget_seconds "${STRATEGY_LAB_STAGE80_TIMEOUT}" \
-        '.started_at=$started_at |
-         .standard_deadline_at=$standard_deadline_at |
-         .deadline_at=$deadline_at |
-         .standard_budget_seconds=$standard_budget_seconds |
-         .extended_budget_seconds=$extended_budget_seconds |
-         .search_budget_seconds=$search_budget_seconds |
-         .stage80_budget_seconds=$stage80_budget_seconds' \
-        "${_wb_status}" > "${_wb_tmp}" || { rm -f "${_wb_tmp}"; return 1; }
-    chmod 0644 "${_wb_tmp}"
-    mv -f "${_wb_tmp}" "${_wb_status}"
+    strategy_lab_state_python set-budget \
+        "${JOB_ID}" "$(strategy_lab_status_file "${JOB_ID}")" \
+        "${_wb_started_at}" "${_wb_standard_deadline_at}" "${_wb_deadline_at}" \
+        "${STRATEGY_LAB_STANDARD_BUDGET}" "${STRATEGY_LAB_EXTENDED_BUDGET}" \
+        "${WORKER_SEARCH_BUDGET_SECONDS}" "${STRATEGY_LAB_STAGE80_TIMEOUT}"
 }
 
 worker_budget_initialize()
@@ -103,20 +69,9 @@ worker_budget_record_stage80()
     _wb_started_at=$(worker_budget_iso8601 "${WORKER_STAGE80_STARTED_EPOCH}") || return 1
     _wb_deadline_at=$(worker_budget_iso8601 "${WORKER_STAGE80_DEADLINE_EPOCH}") || return 1
 
-    if command -v strategy_lab_state_transform >/dev/null 2>&1; then
-        strategy_lab_state_transform "${JOB_ID}" '
-            .stage80_started_at=$started_at | .stage80_deadline_at=$deadline_at
-        ' --arg started_at "${_wb_started_at}" --arg deadline_at "${_wb_deadline_at}"
-        return $?
-    fi
-
-    _wb_status=$(strategy_lab_status_file "${JOB_ID}")
-    _wb_tmp=$(mktemp "$(dirname "${_wb_status}")/.stage80-budget.XXXXXX") || return 1
-    "${STRATEGY_LAB_JQ}" --arg started_at "${_wb_started_at}" --arg deadline_at "${_wb_deadline_at}" \
-        '.stage80_started_at=$started_at | .stage80_deadline_at=$deadline_at' \
-        "${_wb_status}" > "${_wb_tmp}" || { rm -f "${_wb_tmp}"; return 1; }
-    chmod 0644 "${_wb_tmp}"
-    mv -f "${_wb_tmp}" "${_wb_status}"
+    strategy_lab_state_python set-stage80-budget \
+        "${JOB_ID}" "$(strategy_lab_status_file "${JOB_ID}")" \
+        "${_wb_started_at}" "${_wb_deadline_at}"
 }
 
 worker_budget_begin_stage80()
