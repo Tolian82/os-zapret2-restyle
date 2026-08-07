@@ -138,37 +138,43 @@ for name in sys.argv[1:]:
     assert mode == 0o644, (name, oct(mode))
 PY
 
-if find "${STRATEGY_LAB_JOBS_DIR}" -type f \( -name '.status.*' -o -name '.events.*' -o -name '.state.*' \) | grep -q .; then
-    fail 'atomic persistence left temporary state/event files behind'
+if find "${STRATEGY_LAB_JOBS_DIR}" -type f \( -name '.status.*' -o -name '.events.*' \) | grep -q .; then
+    fail 'atomic persistence left temporary automated-job state/event files behind'
 fi
 
 mkdir -p "${TEST_ROOT}/circular/job.circular"
-printf '%s\n' '{"schema":1,"state":"active","revision":4}' > "${TEST_ROOT}/circular/job.circular/state.json"
-strategy_lab_state_python set-json-field job.circular "${TEST_ROOT}/circular/job.circular/state.json" restoration "${TEST_ROOT}/restoration.json"
-"${STRATEGY_LAB_JQ}" -e '.revision==5 and .state=="active" and .restoration.verified==true' "${TEST_ROOT}/circular/job.circular/state.json" >/dev/null ||
-    fail 'actual circular state path is not supported by Python persistence'
+printf '%s\n' '{"schema":1,"state":"active"}' > "${TEST_ROOT}/circular/job.circular/state.json"
+set +e
+STRATEGY_LAB_PYTHON_BIN="${PYTHON_BIN}" "${PYTHON_LAUNCHER}" state set-json-field job.circular "${TEST_ROOT}/circular/job.circular/state.json" restoration "${TEST_ROOT}/restoration.json" >"${TEST_ROOT}/circular.out" 2>"${TEST_ROOT}/circular.err"
+circular_status=$?
+set -e
+[ "${circular_status}" -eq 64 ] || fail "private circular state path returned ${circular_status}, expected 64"
+grep -Fq 'ERROR: invalid Strategy Lab automated-job state path' "${TEST_ROOT}/circular.err" ||
+    fail 'private circular state path was not rejected by the automated-job writer'
 
 set +e
 STRATEGY_LAB_PYTHON_BIN="${PYTHON_BIN}" "${PYTHON_LAUNCHER}" state set-json-field job.test "${TEST_ROOT}/wrong/status.json" network "${TEST_ROOT}/network.json" >"${TEST_ROOT}/invalid.out" 2>"${TEST_ROOT}/invalid.err"
 invalid_status=$?
 set -e
-[ "${invalid_status}" -eq 64 ] || fail "invalid state path returned ${invalid_status}, expected 64"
-grep -Fq 'ERROR: invalid Strategy Lab state path' "${TEST_ROOT}/invalid.err" || fail 'invalid state path error is not deterministic'
+[ "${invalid_status}" -eq 64 ] || fail "invalid automated-job state path returned ${invalid_status}, expected 64"
+grep -Fq 'ERROR: invalid Strategy Lab automated-job state path' "${TEST_ROOT}/invalid.err" || fail 'invalid automated-job state path error is not deterministic'
 
 ! grep -Fq 'strategy_lab_state_transform' "${STATE_MODULE}" || fail 'shell state transform still exists'
-! grep -Fq 'STRATEGY_LAB_JQ' "${STATE_MODULE}" || fail 'shell state adapter still owns jq state mutation'
-! grep -Fq 'mktemp' "${STATE_MODULE}" || fail 'shell state adapter still owns temporary state files'
-! grep -Fq 'mv -f' "${STATE_MODULE}" || fail 'shell state adapter still owns atomic state replacement'
-grep -Fq 'strategy_lab_finalize_stale_recovery' "${MODULE_DIR}/launch.sh" || fail 'stale recovery does not use Python persistence'
-! grep -Fq '.stale-recovery.' "${MODULE_DIR}/launch.sh" || fail 'stale recovery still has a private shell state writer'
+! grep -Fq 'STRATEGY_LAB_JQ' "${STATE_MODULE}" || fail 'shell automated-job state adapter still owns jq mutation'
+! grep -Fq 'mktemp' "${STATE_MODULE}" || fail 'shell automated-job state adapter still owns temporary state files'
+! grep -Fq 'mv -f' "${STATE_MODULE}" || fail 'shell automated-job state adapter still owns atomic state replacement'
+grep -Fq 'strategy_lab_finalize_stale_recovery' "${MODULE_DIR}/launch.sh" || fail 'stale automated-job recovery does not use Python persistence'
+! grep -Fq '.stale-recovery.' "${MODULE_DIR}/launch.sh" || fail 'stale recovery still has a private automated-job state writer'
 grep -Fq 'for module in common state firewall runtime candidate lifecycle circular' "${ZAPRET_DIR}/strategy_lab_recovery_worker.sh" ||
-    fail 'recovery worker does not load the Python state adapter'
+    fail 'recovery worker does not load the Python automated-job state adapter'
 
 if grep -RFn 'strategy_lab_state_transform' "${MODULE_DIR}"; then
-    fail 'a Strategy Lab shell module still owns authoritative status transforms'
+    fail 'a Strategy Lab shell module still owns the removed automated-job status transform'
 fi
+
+grep -Fq '*/state.json)' "${MODULE_DIR}/lifecycle.sh" || fail 'shared lifecycle code does not preserve the separate circular-state writer boundary'
 
 PYTHONDONTWRITEBYTECODE=1 "${PYTHON_BIN}" -m py_compile "${PYTHON_STATE}"
 sh -n "${STATE_MODULE}"
 sh -n "$0"
-echo 'PASS: Python 3.13 exclusively owns Strategy Lab status/progress/event persistence with atomic revisioned writes and public JSON parity'
+echo 'PASS: Python 3.13 exclusively owns automated-job status/progress/event persistence with atomic revisioned writes and public JSON parity'
