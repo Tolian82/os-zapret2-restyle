@@ -215,6 +215,16 @@ strategy_lab_candidate_wait_absent()
     strategy_lab_candidate_runtime_absent
 }
 
+strategy_lab_candidate_signal_owned_pid()
+{
+    _strategy_lab_pidfile="$1"
+    _strategy_lab_signal="$2"
+    _strategy_lab_owned_pid=$(strategy_lab_candidate_pid_read "${_strategy_lab_pidfile}" 2>/dev/null || true)
+    [ -n "${_strategy_lab_owned_pid}" ] || return 0
+    strategy_lab_candidate_pid_identity "${_strategy_lab_owned_pid}" || return 0
+    kill -"${_strategy_lab_signal}" "${_strategy_lab_owned_pid}" 2>/dev/null || true
+}
+
 strategy_lab_candidate_signal_all()
 {
     _strategy_lab_signal="$1"
@@ -235,8 +245,13 @@ strategy_lab_candidate_stop()
         return 0
     fi
 
+    # The pidfile is the ownership proof used to accept this candidate at startup.
+    # Signal that verified child first. A global ps scan is only a secondary sweep
+    # for duplicate/stale candidates and must not be the sole termination path.
+    strategy_lab_candidate_signal_owned_pid "${_strategy_lab_pidfile}" TERM
     strategy_lab_candidate_signal_all TERM
     if ! strategy_lab_candidate_wait_absent "${STRATEGY_LAB_RUNTIME_STOP_TIMEOUT}"; then
+        strategy_lab_candidate_signal_owned_pid "${_strategy_lab_pidfile}" KILL
         strategy_lab_candidate_signal_all KILL
         strategy_lab_candidate_wait_absent "${STRATEGY_LAB_RUNTIME_KILL_TIMEOUT}" || return 1
     fi
