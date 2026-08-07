@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **FAILED ON _13 — STAGE-40 CORRECTION `_14` IN PROGRESS**
+Overall status: **FAILED ON _14 — STAGE-50 CORRECTION `_15` IN PROGRESS**
 
 This matrix is the final live-appliance gate for the Strategy Lab hardening series. Source tests, GitHub CI, and FreeBSD package builds cannot substitute for evidence collected on the owner's OPNsense appliance.
 
@@ -13,12 +13,13 @@ Only FreeBSD 15 amd64 packages are valid. The revision 46 GitHub Actions artifac
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Architecture / ABI evidence: `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_13.pkg`
-- Current corrective source candidate: `os-zapret2-restyle-0.3.3_14.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_14.pkg`
+- Current corrective source candidate: `os-zapret2-restyle-0.3.3_15.pkg`
 - Patch 7 source/CI qualification: exact PR head `dd2a484a4aa3711834b722aae0cc025d3fd4758e`; title check `31157848071` PASS; CI run `31157848056` PASS; FreeBSD 15 artifact `8985927074`; squash-merged main `256ffa09452dabfb001665b729c1f4c3d3462688`.
 - Final `_12` roll-up: owner-installed testing prerelease `v0.3.3_12`; live Scenario 1 failed.
 - Corrective `_13`: PR #125, main `9a9879c6f88d77ab64c06647dd8d1e2437fc5f25`; published testing prerelease `v0.3.3_13`; owner-tested stage-90 restoration PASS.
-- Historical `_6` CI package: `os-zapret2-restyle-0.3.3_6.pkg` (not owner-tested; superseded by `_12`)
+- Corrective `_14`: PR #126, main `36e34414c869ff6e1062e37b91772aa8cdc05455`; published testing prerelease `v0.3.3_14`; owner-tested stage-40 DNS correction PASS and stage-90 restoration PASS.
+- Historical `_6` CI package: `os-zapret2-restyle-0.3.3_6.pkg` (not owner-tested; superseded by later candidates)
 - WAN interface: `vtnet1`
 - LAN test client: `PENDING OWNER`
 - Blocked-domain target: `rutracker.org`
@@ -56,7 +57,19 @@ That `_13` run failed earlier at stage 40 with the message that mandatory endpoi
 
 Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_13-scenario-01-stage40-freebsd-dns-timeout.md`.
 
-The `_14` corrective scope is intentionally limited to this stage-40 FreeBSD timeout defect: `strategy_lab_dns_request()` uses foreground timeout mode on FreeBSD only; non-FreeBSD DNS requests preserve existing behavior. The observed `baseline.json` value `target_type:"A"` is a separate shell-variable namespace defect and remains outside `_14`. The previously identified stage-50 family-runner defect also remains separate and will be addressed only after Scenario 1 advances past stage 40.
+The `_14` correction applied foreground timeout mode to Strategy Lab DNS requests on FreeBSD only. Owner-assisted Scenario 1 on `_14`, job `job.mCqg7Y`, verified the correction live. The authoritative watcher recorded stage 40 at 36% with `endpoint-1.a.log` already 416 bytes. The DNS log contained `rcode: NOERROR`, two A answers for `rutracker.org`, query time 29 ms, and resolver `127.0.0.1`. Stage 40 completed PASS with `DNS: OK; прямое TLS 1.3-соединение не установлено.` The direct TLS 1.3 baseline timed out with curl exit 28, so candidate testing correctly continued.
+
+The same `_14` run then failed immediately at stage 50. The worker log contains the exact failure:
+
+```text
+/usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_family_runner.sh: STRATEGY_LAB_TIMEOUT_BIN: parameter not set
+```
+
+The persisted family result remained `total:7`, `completed:0`, with no family entries. `strategy_lab_family_runner.sh` enables `set -eu` and sources only `common.sh`, `result.sh`, and `family.sh`; in `_14`, `family.sh` uses `${STRATEGY_LAB_TIMEOUT_BIN}` without defining it. The `_15` corrective scope therefore gives the family module ownership of the timeout executable default and adds a regression that runs the production family runner under `set -u` with no caller-provided timeout variable.
+
+The same watcher also proved two separate GUI defects that are not part of `_15`: the UI showed the new job id with an immediate stale `ERROR`, and progress stayed at 0% until terminal completion even though authoritative `status.json` advanced through 18%, 27%, 36%, 91%, and 100%. The run also reconfirmed baseline `target_type:"A"` corruption. The source review further preserves the pending DNS parser/diagnostic defects: raw `IN A`/`IN AAAA` matching can accept a question line, and failed DNS request causes are flattened to generic code 1.
+
+Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md`.
 
 Authoritative third-audit record:
 
@@ -88,7 +101,7 @@ Before installation of the designated candidate, preserve its `+MANIFEST` and co
 ```text
 abi: FreeBSD:15:amd64
 arch: freebsd:15:x86:64
-version: 0.3.3_14
+version: 0.3.3_15
 ```
 
 Recommended residue evidence after every terminal scenario:
@@ -103,7 +116,7 @@ configctl zapret status
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | Failed attempts: `2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`, `2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`, `2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md`, `2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`, `2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`, `2026-08-07-v0.3.3_13-scenario-01-stage40-freebsd-dns-timeout.md`; `_13` proved stage-90 restoration but failed stage 40; `_14` must advance past stage 40 | **FAILED ON `_13` — `_14` STAGE-40 RETEST REQUIRED** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; stage 90 restores RUNNING; no temporary residue | Failed attempts: `2026-08-06-v0.3.3_1-scenario-01-stage10-failure.md`, `2026-08-06-v0.3.3_2-scenario-01-semantic-inspector-binding.md`, `2026-08-06-v0.3.3_4-scenario-01-pidfile-eof.md`, `2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md`, `2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`, `2026-08-07-v0.3.3_13-scenario-01-stage40-freebsd-dns-timeout.md`, `2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md`; `_14` proved stage 40 and stage 90 but failed stage 50; `_15` must enter family execution | **FAILED ON `_14` — `_15` STAGE-50 RETEST REQUIRED** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Test completes while final service remains STOPPED; restoration evidence is verified | `PENDING OWNER` | **BLOCKED BY #1** |
 | 3 | Extended TLS 1.2 and HTTP | Available protocol successes appear as complete replay-verified profiles; unavailable protocols are explicitly skipped | `PENDING OWNER` | **BLOCKED BY #1** |
 | 4 | Extended QUIC | QUIC result is endpoint-bound and replay-verified when network capability exists; otherwise explicit skip reason | `PENDING OWNER` | **BLOCKED BY #1** |
@@ -141,4 +154,4 @@ A failed live row requires same-scope source correction when a source defect is 
 
 ## Release gate
 
-Third-audit source/CI closure remains historical source evidence only. Stable release preparation and pkg-repository promotion remain blocked until every required live row is marked `PASS` by the owner and linked evidence is recorded. The matrix contains no successful complete Strategy Lab live scenario PASS claim yet; `_13` does, however, provide a live PASS for the stage-90 restoration sub-gate.
+Third-audit source/CI closure remains historical source evidence only. Stable release preparation and pkg-repository promotion remain blocked until every required live row is marked `PASS` by the owner and linked evidence is recorded. The matrix contains no successful complete Strategy Lab live scenario PASS claim yet; `_14` does, however, provide live PASS evidence for the stage-40 DNS and stage-90 restoration sub-gates.

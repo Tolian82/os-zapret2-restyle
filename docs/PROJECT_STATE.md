@@ -3,22 +3,41 @@
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Latest published testing prerelease: `v0.3.3_13` / `os-zapret2-restyle-0.3.3_13.pkg`
+Latest published testing prerelease: `v0.3.3_14` / `os-zapret2-restyle-0.3.3_14.pkg`
+Latest owner-tested testing candidate: `v0.3.3_14` / `os-zapret2-restyle-0.3.3_14.pkg`
 Current source line: `VERSION=0.3.3`
-Current corrective package revision: `PLUGIN_REVISION=14`
+Current corrective package revision: `PLUGIN_REVISION=15`
 Target ABI: **FreeBSD:15:amd64 only**
 
 ## Historical live boundary
 
-`v0.3.3_13` is the latest owner-tested package. Live Scenario 1 on `_13` proved that the `_13` stage-90 restoration correction works on OPNsense: after the run failed earlier, stage 90 restored the initially RUNNING Zapret2 service completely and left it healthy. The same run exposed the next independent blocker at stage 40: a FreeBSD `timeout(1)` wrapper falsely reports the mandatory DNS lookup as failed even though `drill` itself resolves the target immediately.
+`v0.3.3_14` is the latest owner-tested package. Live Scenario 1 on `_14`, job
+`job.mCqg7Y`, proved that the `_14` FreeBSD DNS timeout correction works on OPNsense:
+stage 40 passed with `DNS: OK`, a 416-byte `drill` result containing `NOERROR` and two A
+records, and the blocked clean TLS 1.3 baseline correctly continued to candidate testing.
+Stage 90 also passed and restored the initially RUNNING Zapret2 service completely.
+
+The same live run exposed the next independent blocker at stage 50. The worker log
+reported:
+
+`strategy_lab_family_runner.sh: STRATEGY_LAB_TIMEOUT_BIN: parameter not set`
+
+The family summary remained `total:7, completed:0`, proving that the runner aborted before
+the first family candidate completed.
+
+Evidence:
+`docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md`.
 
 ## Third audit corrective series
 
-Status: **SOURCE/CI COMPLETE — LIVE SCENARIO 1 BLOCKED AT STAGE 40; `_14` CORRECTION IN PROGRESS**
+Status: **SOURCE/CI COMPLETE — LIVE SCENARIO 1 BLOCKED AT STAGE 50; `_15` CORRECTION IN PROGRESS**
 
 Authoritative audit: `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
 
-All seven third-audit findings `SL3-001` through `SL3-007` remain implemented in source and protected by their focused regressions plus the mandatory Strategy Lab corrective matrix. Subsequent owner-assisted runs are now correcting additional FreeBSD live defects one logical defect at a time.
+All seven third-audit findings `SL3-001` through `SL3-007` remain implemented in source
+and protected by their focused regressions plus the mandatory Strategy Lab corrective
+matrix. Subsequent owner-assisted runs are correcting additional FreeBSD live defects one
+logical defect at a time.
 
 ## Patch evidence
 
@@ -34,21 +53,43 @@ All seven third-audit findings `SL3-001` through `SL3-007` remain implemented in
 - Live `_12` Scenario 1 — stage 50 failed and stage 90 failed because FreeBSD timeout reaped the successfully restored daemon runtime. Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md`.
 - Corrective `_13` — PR #125, main `9a9879c6f88d77ab64c06647dd8d1e2437fc5f25`; published testing prerelease `v0.3.3_13`; FreeBSD stage-90 `strategy-lab-start` uses `timeout -f`.
 - Live `_13` Scenario 1 — stage 90 PASS and normal Zapret2 remained healthy; stage 40 failed because `/usr/bin/timeout 2 /usr/bin/drill rutracker.org A` returned 124 with zero output while direct `drill` and `timeout -f` both returned `NOERROR`. Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_13-scenario-01-stage40-freebsd-dns-timeout.md`.
-- Corrective `_14` — FreeBSD stage-40 DNS request timeout correction in progress. It is intentionally limited to the live-proven timeout wrapper defect; `target_type:"A"` and stage 50 remain separate later corrections.
+- Corrective `_14` — PR #126, main `36e34414c869ff6e1062e37b91772aa8cdc05455`; published testing prerelease `v0.3.3_14`; FreeBSD DNS requests use foreground timeout mode.
+- Live `_14` Scenario 1 — stage 40 PASS, stage 90 PASS, stage 50 FAIL before the first family because `STRATEGY_LAB_TIMEOUT_BIN` was unset in the family runner context. Evidence: `docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md`.
+- Corrective `_15` — family module owns the timeout executable default and a focused regression invokes the production family runner under `set -u` with no caller-provided timeout variable.
 
 ## Current verification boundary
 
-Live OPNsense matrix: **FAILED AT STAGE 40 ON `_13` — CORRECTIVE `_14` REQUIRED**.
+Live OPNsense matrix: **FAILED AT STAGE 50 ON `_14` — CORRECTIVE `_15` REQUIRED**.
 
-The `_13` live run verified the stage-90 safety requirement: initial RUNNING was restored to a complete healthy RUNNING state with no manual restart required.
+The `_14` live run verified two safety/flow sub-gates:
 
-The stage-40 failure is not a resolver outage. On the appliance, `/usr/bin/drill rutracker.org A` returned `rc=0`, `NOERROR`, and both A records in 96 ms. The exact Strategy Lab wrapper `/usr/bin/timeout 2 /usr/bin/drill rutracker.org A` returned `rc=124` after exactly two seconds with zero output. The identical call with `/usr/bin/timeout -f 2` returned `rc=0` and `NOERROR` in 30 ms.
+- stage 40 now advances correctly on FreeBSD with `DNS: OK` and a blocked clean TLS 1.3 baseline;
+- stage 90 restores the initial RUNNING Zapret2 service completely and leaves it healthy.
 
-The `_14` correction applies FreeBSD foreground timeout mode (`timeout -f`) only to `strategy_lab_dns_request()`; non-FreeBSD DNS requests retain the existing timeout semantics. A focused regression requires that exact platform split and is automatically executed by the mandatory corrective matrix.
-
-The observed `baseline.json` value `target_type:"A"` is a separate confirmed shell-variable namespace defect and is not part of `_14`. The previously identified stage-50 family-runner defect also remains separate. Scenario 1 must first advance beyond the corrected stage 40 before those later defects are changed or requalified.
+The current stage-50 root cause is deterministic. `strategy_lab_family_runner.sh` enables
+`set -eu` and sources `common.sh`, `result.sh`, and `family.sh`. In `_14`, `family.sh`
+uses `${STRATEGY_LAB_TIMEOUT_BIN}` without defining it, so the runner aborts before the
+first family candidate. `_15` limits the product change to ownership of that default in
+the family module.
 
 Authoritative live plan: `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
+
+## Confirmed defect backlog
+
+The following defects are confirmed and must remain documented until corrected and live
+or source-qualified as applicable. They are intentionally outside the `_15` stage-50
+scope unless stated otherwise.
+
+1. **Stage-50 family timeout variable ownership — correcting in `_15`.** The family runner aborts under `set -u` because `STRATEGY_LAB_TIMEOUT_BIN` is not owned by a sourced module.
+2. **Baseline target-type corruption — pending.** `baseline.json` records `target_type:"A"` for a domain because DNS helpers reuse the shell-global `_strategy_lab_type` variable.
+3. **Immediate stale GUI error after Run — pending.** A newly created job id can be displayed together with the previous terminal job's visible `ERROR` state before fresh polling renders the new state.
+4. **GUI progress stuck at 0% while backend advances — pending.** On job `job.mCqg7Y`, the UI stayed at `0%` until completion while authoritative `status.json` advanced through 18%, 27%, 36%, 91%, and 100%.
+5. **DNS answer parser accepts question lines — pending.** The current raw-output grep can match `IN A`/`IN AAAA` in `QUESTION SECTION`; it does not prove a real answer record.
+6. **DNS failure diagnostics flatten distinct failures — pending.** Endpoint DNS failures are collapsed to generic return/exit code 1, losing timeout versus command failure versus parser rejection.
+7. **Terminal-result reload/state presentation — pending.** Scenario 15 requires a completed/error job not to be resurrected as the active state of a newly opened Diagnostics page; the current initial status path still reads retained latest-job state and is part of the GUI state correction scope.
+
+Live/source evidence for items 2–6 is preserved in
+`docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md`.
 
 ## Current GitHub delivery authority
 
@@ -56,18 +97,24 @@ Evidence-first GitHub operations remain authoritative through:
 
 - repository-root `AGENTS.md`;
 - `docs/GITHUB_PUBLICATION.md`;
+- `docs/decisions/DEC-2026-08-07-installable-patch-shorthand.md`;
 - `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
 - `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
 - `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`;
 - `docs/GITHUB_WORKFLOW.md`.
 
-The connected GitHub plugin is the mandatory first repository interface. One logical scope uses one task branch and one Ready PR; same-scope repairs stay in that PR; the latest head must pass required checks; merge is squash with the expected head SHA; published `main` history is not rewritten.
+The connected GitHub plugin is the mandatory first repository interface. One logical
+scope uses one task branch and one Ready PR; same-scope repairs stay in that PR; the
+latest head must pass required checks; merge is squash with the expected head SHA;
+published `main` history is not rewritten.
 
 ## Release gate
 
 Stable release preparation and pkg-repository promotion: **BLOCKED ON LIVE MATRIX**.
 
-Testing prerelease publication follows `docs/GITHUB_PUBLICATION.md`. The `_14` source correction itself does not imply testing-prerelease publication, stable release, or pkg-repository promotion.
+The owner's current installable-package instruction authorizes publication of the next
+deterministically derived testing prerelease after the `_15` ordinary PR/CI/squash cycle.
+It does not authorize stable release or pkg-repository promotion.
 
 Current product authority:
 
@@ -78,4 +125,4 @@ Current product authority:
 - `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md`;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
-Next action: **complete `_14` source/CI/FreeBSD 15 package verification, then owner-assisted Scenario 1 must confirm that stage 40 no longer falsely fails on the FreeBSD DNS timeout wrapper while stage 90 remains PASS.**
+Next action: **complete `_15` source/CI/FreeBSD 15 package verification, squash-merge it, publish testing prerelease `v0.3.3_15`, then owner-assisted Scenario 1 must confirm that stage 50 actually enters family execution while stage 40 and stage 90 remain PASS.**

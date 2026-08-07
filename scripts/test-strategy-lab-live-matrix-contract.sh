@@ -10,6 +10,7 @@ INDEX="${ROOT_DIR}/docs/INDEX.md"
 RESTORE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md"
 CURRENT_RESTORE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_12-scenario-01-freebsd-timeout-restoration.md"
 CURRENT_DNS_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_13-scenario-01-stage40-freebsd-dns-timeout.md"
+CURRENT_STAGE50_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 
@@ -58,6 +59,26 @@ if grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGR
     grep -Fq 'Status: **BLOCKED ON CORRECTIVE SERIES AND LIVE MATRIX**' "${CLOSURE}"
     grep -Fq 'Live OPNsense matrix: **PAUSED PENDING THIRD-AUDIT SOURCE/CI COMPLETION**' "${STATE}"
     echo 'PASS: live matrix is paused for the third-audit corrective series without unsupported PASS claims'
+    exit 0
+fi
+
+if grep -Fq 'Overall status: **FAILED ON _14 — STAGE-50 CORRECTION `_15` IN PROGRESS**' "${MATRIX}"; then
+    [ "${revision}" -eq 15 ] || { echo 'FAIL: stage-50 live matrix must designate revision 15' >&2; exit 1; }
+    [ -s "${CURRENT_STAGE50_EVIDENCE}" ] || { echo 'FAIL: current _14 stage-50 evidence is missing' >&2; exit 1; }
+    grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_14.pkg`' "${MATRIX}"
+    grep -Fq 'Current corrective source candidate: `os-zapret2-restyle-0.3.3_15.pkg`' "${MATRIX}"
+    grep -Fq 'job `job.mCqg7Y`' "${MATRIX}"
+    grep -Fq 'STRATEGY_LAB_TIMEOUT_BIN: parameter not set' "${MATRIX}"
+    grep -Fq 'Stage 40 completed PASS' "${MATRIX}"
+    scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /FAILED ON `_14` — `_15` STAGE-50 RETEST REQUIRED/ {n++} END {print n+0}' "${MATRIX}")
+    [ "${scenario_one}" -eq 1 ] || { echo 'FAIL: scenario 1 stage-50 live row mismatch' >&2; exit 1; }
+    grep -Fq 'Live OPNsense matrix: **FAILED AT STAGE 50 ON `_14` — CORRECTIVE `_15` REQUIRED**.' "${STATE}"
+    grep -Fq 'Current corrective package revision: `PLUGIN_REVISION=15`' "${STATE}"
+    grep -Fq 'Stage 40 and stage 90 are live PASS sub-gates' "${CURRENT_STAGE50_EVIDENCE}"
+    grep -Fq '17:37:39 — stage 40 / 36%' "${CURRENT_STAGE50_EVIDENCE}"
+    grep -Fq '17:37:48 — stage 99 / 100%' "${CURRENT_STAGE50_EVIDENCE}"
+    grep -Fq 'completed:0' "${CURRENT_STAGE50_EVIDENCE}"
+    echo 'PASS: live matrix records _14 stage-40/stage-90 success and gates Scenario 1 on the _15 stage-50 family-runner correction'
     exit 0
 fi
 
