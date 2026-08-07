@@ -8,23 +8,26 @@ CLOSURE="${ROOT_DIR}/docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md"
 STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
 RESTORE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_5-scenario-01-candidate-runtime-restore-failure.md"
+VERSION_FILE="${ROOT_DIR}/VERSION"
+MAKEFILE="${ROOT_DIR}/Makefile"
 
-for file in "${MATRIX}" "${THIRD_AUDIT}" "${CLOSURE}" "${STATE}" "${INDEX}" "${RESTORE_EVIDENCE}"
+for file in "${MATRIX}" "${THIRD_AUDIT}" "${CLOSURE}" "${STATE}" "${INDEX}" \
+    "${RESTORE_EVIDENCE}" "${VERSION_FILE}" "${MAKEFILE}"
 do
     [ -s "${file}" ] || { echo "FAIL: missing Strategy Lab live-gate record: ${file}" >&2; exit 1; }
 done
 
-grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGRESS**' "${MATRIX}"
-grep -Fq 'Current corrective candidate: **NOT DESIGNATED — PATCH 8 REQUIRED**' "${MATRIX}"
-grep -Fq 'Historical `_6` CI package: `os-zapret2-restyle-0.3.3_6.pkg`' "${MATRIX}"
+version=$(tr -d '[:space:]' < "${VERSION_FILE}")
+revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; exit}' "${MAKEFILE}")
+case "${revision}" in ''|*[!0-9]*) echo 'FAIL: invalid plugin revision' >&2; exit 1 ;; esac
+candidate="os-zapret2-restyle-${version}_${revision}.pkg"
+
 grep -Fq 'Latest tested package: `os-zapret2-restyle-0.3.3_5.pkg`' "${MATRIX}"
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
 grep -Fq 'AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md' "${MATRIX}"
 grep -Fq 'artifact `8980876980`' "${MATRIX}"
 grep -Fq 'Post-merge `main` CI run `31144323095` also passed.' "${MATRIX}"
 
-paused_count=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /PAUSED — PATCH 8 REQUIRED/ {n++} END {print n+0}' "${MATRIX}")
-[ "${paused_count}" -eq 1 ] || { echo "FAIL: scenario 1 pause row mismatch" >&2; exit 1; }
 blocked_count=$(awk -F'|' '$2 ~ /^[[:space:]]*[0-9]+[[:space:]]*$/ && $6 ~ /BLOCKED BY #1/ {n++} END {print n+0}' "${MATRIX}")
 [ "${blocked_count}" -eq 17 ] || { echo "FAIL: dependent live rows are not all blocked" >&2; exit 1; }
 
@@ -37,16 +40,36 @@ grep -Fq 'Temporary candidate runtime failed internally.' "${RESTORE_EVIDENCE}"
 grep -Fq 'RESTORE_FAILED' "${RESTORE_EVIDENCE}"
 grep -Fq 'Scenario 1 remains **FAILED / PENDING CORRECTION** for `_5`.' "${RESTORE_EVIDENCE}"
 
-grep -Fq 'Status: **CORRECTIVE SERIES OPEN**' "${THIRD_AUDIT}"
 grep -Fq 'SL3-001' "${THIRD_AUDIT}"
 grep -Fq 'SL3-007' "${THIRD_AUDIT}"
 grep -Fq 'Patch 8 — Source/CI closure and live-test handoff' "${THIRD_AUDIT}"
-
-grep -Fq 'Status: **REOPENED BY THIRD AUDIT — CORRECTIVE SERIES IN PROGRESS**' "${CLOSURE}"
-grep -Fq 'Status: **PAUSED PENDING THIRD-AUDIT SOURCE/CI COMPLETION**' "${CLOSURE}"
-grep -Fq 'Status: **BLOCKED ON CORRECTIVE SERIES AND LIVE MATRIX**' "${CLOSURE}"
-grep -Fq 'Live OPNsense matrix: **PAUSED PENDING THIRD-AUDIT SOURCE/CI COMPLETION**' "${STATE}"
 grep -Fq 'AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md' "${STATE}"
 grep -Fq 'AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md' "${INDEX}"
 
-echo 'PASS: live matrix is paused for the third-audit corrective series without unsupported PASS claims'
+if grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGRESS**' "${MATRIX}"; then
+    grep -Fq 'Current corrective candidate: **NOT DESIGNATED — PATCH 8 REQUIRED**' "${MATRIX}"
+    grep -Fq 'Historical `_6` CI package: `os-zapret2-restyle-0.3.3_6.pkg`' "${MATRIX}"
+    paused_count=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /PAUSED — PATCH 8 REQUIRED/ {n++} END {print n+0}' "${MATRIX}")
+    [ "${paused_count}" -eq 1 ] || { echo "FAIL: scenario 1 pause row mismatch" >&2; exit 1; }
+    grep -Fq 'Status: **CORRECTIVE SERIES OPEN**' "${THIRD_AUDIT}"
+    grep -Fq 'Status: **REOPENED BY THIRD AUDIT — CORRECTIVE SERIES IN PROGRESS**' "${CLOSURE}"
+    grep -Fq 'Status: **PAUSED PENDING THIRD-AUDIT SOURCE/CI COMPLETION**' "${CLOSURE}"
+    grep -Fq 'Status: **BLOCKED ON CORRECTIVE SERIES AND LIVE MATRIX**' "${CLOSURE}"
+    grep -Fq 'Live OPNsense matrix: **PAUSED PENDING THIRD-AUDIT SOURCE/CI COMPLETION**' "${STATE}"
+    echo 'PASS: live matrix is paused for the third-audit corrective series without unsupported PASS claims'
+    exit 0
+fi
+
+# Patch 8 handoff state: source/CI is closed, but no appliance row is promoted to PASS.
+grep -Fq "Overall status: **PENDING OWNER — SCENARIO 1 RETEST ON _${revision}**" "${MATRIX}"
+grep -Fq "Current corrective candidate: \`${candidate}\`" "${MATRIX}"
+grep -Fq 'Patch 7 source/CI qualification:' "${MATRIX}"
+scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /PENDING OWNER — RETEST REQUIRED/ {n++} END {print n+0}' "${MATRIX}")
+[ "${scenario_one}" -eq 1 ] || { echo 'FAIL: scenario 1 handoff row mismatch' >&2; exit 1; }
+grep -Fq 'Status: **SOURCE/CI CORRECTIVE SERIES COMPLETE — LIVE VERIFICATION PENDING**' "${THIRD_AUDIT}"
+grep -Fq 'Status: **SOURCE/CI CLOSED AFTER THIRD AUDIT — LIVE MATRIX PENDING**' "${CLOSURE}"
+grep -Fq 'Status: **READY — SCENARIO 1 PENDING OWNER**' "${CLOSURE}"
+grep -Fq 'Status: **BLOCKED ON LIVE MATRIX**' "${CLOSURE}"
+grep -Fq 'Live OPNsense matrix: **READY — SCENARIO 1 PENDING OWNER**' "${STATE}"
+
+echo "PASS: source/CI handoff selects ${candidate} while all live PASS claims remain owner-gated"

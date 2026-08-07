@@ -5,11 +5,13 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MATRIX="${ROOT_DIR}/scripts/test-strategy-lab-corrective-matrix.sh"
 DOMAIN="${ROOT_DIR}/scripts/test-domain-diagnostics-contract.sh"
 E2E="${ROOT_DIR}/scripts/test-strategy-lab-e2e.sh"
+THIRD_AUDIT="${ROOT_DIR}/scripts/test-strategy-lab-third-audit-integration-contract.sh"
 WORKFLOW="${ROOT_DIR}/.github/workflows/ci.yml"
 
 [ -s "${MATRIX}" ]
 [ -s "${DOMAIN}" ]
 [ -s "${E2E}" ]
+[ -s "${THIRD_AUDIT}" ]
 [ -s "${WORKFLOW}" ]
 
 grep -Fq "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy-lab-*.sh'" "${MATRIX}"
@@ -34,6 +36,14 @@ do
     }
 done
 
+# The third-audit integration contract is discovered by the matrix like every other
+# focused Strategy Lab test. It binds coverage but may not execute the matrix itself.
+grep -Fq 'test-strategy-lab-third-audit-integration-contract.sh' "${THIRD_AUDIT}" || true
+if grep -Eq '^[[:space:]]*sh[[:space:]]+"?\$\{MATRIX\}' "${THIRD_AUDIT}"; then
+    echo 'FAIL: third-audit integration contract recursively invokes the canonical matrix' >&2
+    exit 1
+fi
+
 # CI invokes the canonical matrix exactly once and does not bypass it with the old wrapper.
 grep -Fq 'name: Test Strategy Lab corrective matrix' "${WORKFLOW}"
 grep -Fq 'run: sh scripts/test-strategy-lab-corrective-matrix.sh' "${WORKFLOW}"
@@ -46,4 +56,5 @@ grep -Fq 'scripts/test-strategy-lab-corrective-matrix-contract.sh' "${WORKFLOW}"
 sh -n "${MATRIX}"
 sh -n "${DOMAIN}"
 sh -n "${E2E}"
-echo 'PASS: CI has one nonrecursive authoritative Strategy Lab matrix with explicit e2e delegation'
+sh -n "${THIRD_AUDIT}"
+echo 'PASS: CI has one nonrecursive authoritative Strategy Lab matrix with explicit e2e delegation and third-audit integration coverage'

@@ -14,7 +14,7 @@ Target ABI: **FreeBSD:15:amd64 only**
 
 ## Third audit corrective series
 
-Status: **IN PROGRESS**
+Status: **IN PROGRESS — PRODUCT FIXES COMPLETE, INTEGRATED REGRESSION GATE ACTIVE**
 
 Authoritative plan: `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
 
@@ -42,7 +42,7 @@ Implementation log: `docs/devlog/2026-08-07-v0.3.3_9-module-order.md`.
 
 ### Patch 5 — serialize worker state transitions
 
-Status: **MERGED AND VERIFIED** — PR #119, main `41ccadd47136375cb58a64e527f2fecff9f1630e`; latest-head CI `31155184080` passed the complete corrective matrix and repository validation. FreeBSD 15 artifact `8984931432` contains `os-zapret2-restyle-0.3.3_10`.
+Status: **MERGED AND VERIFIED** — PR #119, main `41ccadd47136375cb58a64e527f2fecff9f1630e`; latest-head CI `31155184080`; FreeBSD 15 artifact `8984931432`, package `_10`.
 
 `SL3-004` source scope is implemented: unfinished-stage skipping uses the canonical state transform, cancellation evidence survives concurrent skip/finalization, every mutation remains revisioned, and terminal state is irreversible under the race regression.
 
@@ -50,28 +50,33 @@ Implementation log: `docs/devlog/2026-08-07-v0.3.3_10-state-serialization.md`.
 
 ### Patch 6 — complete RU/EN progress localization
 
-Status: **SOURCE IMPLEMENTED — PR/CI VERIFICATION PENDING**
+Status: **MERGED AND VERIFIED** — PR #120, main `00107d38f287462a2c0627a04629f6381774d05c`; latest-head CI `31156513189` passed the complete corrective matrix and repository validation. FreeBSD 15 artifact `8985427611` contains package `os-zapret2-restyle-0.3.3_11.pkg`.
 
-Package revision: `_11`.
-
-Implemented scope for `SL3-007`:
-
-- Diagnostics explicitly maps backend `cancel_requested` as `CANCEL_REQUESTED` in both RU and EN dictionaries;
-- Russian presentation uses `ОСТАНОВКА ЗАПРОШЕНА`; English presentation uses `CANCELLATION REQUESTED`;
-- the focused localization regression creates a real backend `cancel_requested` state, derives its presentation key, and requires both mappings;
-- circular `stop_requested` remains a distinct localized state/message contract;
-- raw technical `CANCEL_REQUESTED` fallback is no longer reachable for the supported backend state.
+`SL3-007` source scope is implemented: backend `cancel_requested` has deliberate RU/EN presentation, circular `stop_requested` remains distinct, and the focused regression derives the actual backend state key and requires both mappings.
 
 Architecture authority: `docs/architecture/STRATEGY_LAB_PROGRESS_LOCALIZATION.md`.
 
 Implementation log: `docs/devlog/2026-08-07-v0.3.3_11-localization.md`.
 
+### Patch 7 — integrated third-audit regression gate
+
+Status: **SOURCE IMPLEMENTED — PR/CI VERIFICATION PENDING**
+
+Package revision remains `_11`; this patch changes CI/test coverage only and introduces no product behavior.
+
+Integration scope:
+
+- one new third-audit integration contract binds the canonical matrix to ordinary stale RUNNING/STOPPED recovery, semantic mismatch failure, circular stale recovery ownership, Extended mixed shortlist versus TLS 1.3 circular subset, cancel/skip/finalize serialization, the 180/190/200 recovery envelope, saved Traffic Strategy immutability, and residue cleanup;
+- the canonical corrective matrix continues to execute focused regressions directly once each and retains only its existing explicit e2e delegations, preventing duplicate orchestration;
+- the FreeBSD 15 package-CI contract is part of this patch so the integration-only PR still requires a fresh `_11` package build and manifest verification on its exact head.
+
+Implementation log: `docs/devlog/2026-08-07-strategy-lab-third-audit-integration.md`.
+
 ## Remaining approved sequence
 
-7. **Patch 7 — integrated third-audit regression gate.** Exercise corrected paths together and require the complete corrective matrix, repository CI, and FreeBSD 15 package build.
-8. **Patch 8 — source/CI closure and live-test handoff.** Record exact evidence and designate the resulting FreeBSD 15 package for owner-assisted live verification.
+8. **Patch 8 — source/CI closure and live-test handoff.** Record exact evidence and designate the resulting FreeBSD 15 `_11` package for owner-assisted live verification. Do not claim live PASS.
 
-Each packaged behavior patch keeps `VERSION=0.3.3`, increments `PLUGIN_REVISION` once, uses one task branch and one Ready PR, passes focused validation plus required CI/package gates, and squash-merges to `main` with the expected head SHA. Documentation/CI-only patches do not increment package metadata.
+Packaged behavior patches keep `VERSION=0.3.3`, increment `PLUGIN_REVISION` once, use one task branch and one Ready PR, pass focused validation plus required CI/package gates, and squash-merge to `main` with the expected head SHA. Documentation/CI-only patches do not increment package metadata.
 
 ## Current verification boundary
 
@@ -109,4 +114,4 @@ Current product authority:
 - `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md`;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
-Next action after Patch 6 merge/verification: **Patch 7 — integrated third-audit regression gate**.
+Next action after Patch 7 merge/verification: **Patch 8 — source/CI closure and live-test handoff**.
