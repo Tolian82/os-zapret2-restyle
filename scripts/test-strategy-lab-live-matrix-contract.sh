@@ -41,15 +41,26 @@ if grep -Eq '^Overall status:.*PASS|\|[[:space:]]*\*\*PASS\*\*[[:space:]]*\|$' "
     exit 1
 fi
 
-# Current documentation handoff: _17 remains failed and live testing is intentionally
-# paused until the approved Python implementation reaches functional parity.
+# During Python migration, _17 remains the frozen published/owner-tested shell-era
+# evidence boundary while package-source revisions may advance before live parity.
 if grep -Fq 'Overall status: **FAILED ON `_17` — LIVE MATRIX PAUSED FOR PYTHON MIGRATION**' "${MATRIX}"; then
-    [ "${revision}" -eq 17 ] || { echo 'FAIL: Python migration handoff must remain on revision 17' >&2; exit 1; }
+    [ "${revision}" -ge 17 ] || { echo 'FAIL: Python migration source revision cannot precede revision 17' >&2; exit 1; }
     for file in "${CURRENT_PYTHON_HANDOFF_EVIDENCE}" "${PYTHON_PLAN}" "${PYTHON_DECISION}"
     do
         [ -s "${file}" ] || { echo "FAIL: Python migration handoff record is missing: ${file}" >&2; exit 1; }
     done
+    grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.3.3_17.pkg`' "${MATRIX}"
     grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_17.pkg`' "${MATRIX}"
+    if [ "${revision}" -gt 17 ]; then
+        grep -Fq "Current migration source candidate: \`${candidate}\`" "${MATRIX}" || {
+            echo "FAIL: live matrix does not select migration source candidate ${candidate}" >&2
+            exit 1
+        }
+        grep -Fq "Current migration source candidate: \`${candidate}\`" "${STATE}" || {
+            echo "FAIL: project state does not select migration source candidate ${candidate}" >&2
+            exit 1
+        }
+    fi
     grep -Fq 'Latest owner-tested job: `job.w0nXxQ`' "${MATRIX}"
     grep -Fq '50 ERROR — `Temporary candidate runtime failed internally.`' "${MATRIX}"
     grep -Fq '90 PASS — temporary state removed and initial RUNNING Zapret2 restored healthy' "${MATRIX}"
@@ -58,14 +69,13 @@ if grep -Fq 'Overall status: **FAILED ON `_17` — LIVE MATRIX PAUSED FOR PYTHON
     scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /FAILED ON `_17` — RETEST AFTER PYTHON PARITY/ {n++} END {print n+0}' "${MATRIX}")
     [ "${scenario_one}" -eq 1 ] || { echo 'FAIL: scenario 1 Python migration handoff row mismatch' >&2; exit 1; }
     grep -Fq 'Latest owner-tested testing candidate: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`' "${STATE}"
-    grep -Fq 'Current phase: **Strategy Lab Python migration handoff; source migration not started yet**' "${STATE}"
+    grep -Fq 'Current phase: **Strategy Lab' "${STATE}"
     grep -Fq 'Stage 50 remains ERROR on `_17`.' "${STATE}"
-    grep -Fq 'Migration Patch 1 only' "${STATE}"
     grep -Fq 'STRATEGY_LAB_PYTHON_MIGRATION.md' "${INDEX}"
     grep -Fq 'Job shown in GUI: `job.w0nXxQ`' "${CURRENT_PYTHON_HANDOFF_EVIDENCE}"
     grep -Fq 'Stage 50 remains the backend blocker.' "${CURRENT_PYTHON_HANDOFF_EVIDENCE}"
     grep -Fq 'exact `_17` Stage-50 root cause is not yet established' "${PYTHON_DECISION}"
-    echo 'PASS: live matrix freezes the failed _17 shell-era boundary and gates owner retest on Python parity without unsupported PASS claims'
+    echo "PASS: live matrix freezes the failed _17 shell-era evidence while Python migration source candidate ${candidate} may advance without unsupported PASS claims"
     exit 0
 fi
 
