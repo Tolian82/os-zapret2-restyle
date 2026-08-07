@@ -162,8 +162,8 @@ Migration Patch 2 establishes these concrete ownership rules:
   state is Python-owned;
 - private circular-session `state.json` remains on its pre-existing shell writer in Patch
   2, preventing simultaneous Python/shell ownership of that separate contract;
-- the Python state engine validates `state.json` paths for future migration/testing, but
-  that support is not a production circular-state cutover;
+- the Python automated-job state writer explicitly rejects private circular-session
+  `state.json` paths; changing that ownership requires a separate migration scope;
 - public JSON schema is the compatibility authority, not the internal Python layout.
 
 ==================================================
@@ -195,7 +195,7 @@ Patch 2 automated-job persistence invariants:
 8. Moving persisted progress to Python does not itself prove the owner-observed GUI
    progress defect is fixed; that remains live/UI gated.
 9. Private circular-session `state.json` keeps its existing shell persistence contract
-   until a separately scoped cutover.
+   until a separately scoped cutover, and the Patch-2 Python writer rejects that path.
 
 ==================================================
 SUBPROCESS CONTRACT
@@ -286,7 +286,7 @@ Patch 2 — Python automated-job state, progress, and structured persistence: **
 - route automated-job structured result/lifecycle/stale-recovery/eligibility fields through Python;
 - remove the migrated shell jq/temp/mv status writers;
 - keep private circular-session `state.json` on its existing writer until a separate cutover;
-- add atomic-write, concurrency, revision, progress, event, stale-recovery, and state-path parity tests;
+- add atomic-write, concurrency, revision, progress, event, stale-recovery, and negative circular-state-path tests;
 - keep numbered stage orchestration outside this patch.
 
 Patch 3 — Python stage machine, budgets, cancellation, and finalization: **NEXT AFTER PATCH 2 QUALIFICATION**
@@ -352,7 +352,7 @@ Migration Patch 2 additionally requires:
 - valid concurrent readers during concurrent writes;
 - atomic valid `events.ndjson` persistence;
 - mode `0644` and no leftover temporary automated-job state/event files;
-- deterministic state-path validation, including future-compatible private `state.json` syntax without changing current circular ownership;
+- deterministic rejection of private circular-session `state.json` by the automated-job writer;
 - absence of shell `strategy_lab_state_transform` and private stale-recovery automated-job state writers;
 - complete existing Strategy Lab corrective matrix, including unchanged circular isolation/ownership fixtures;
 - FreeBSD 15 execution with `python313` and built-package presence of `state.py`.
