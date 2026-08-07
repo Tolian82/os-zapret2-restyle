@@ -30,9 +30,11 @@ in `AGENTS.md`.
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_MATRIX.md` — discoverable corrective CI entry point;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — earlier hardening finding-to-patch traceability;
 - `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — Strategy Lab source/CI closure after the third audit; live matrix remains the final product gate;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — owner-assisted live gate; `_14` now passes stage 40 and stage 90 but Scenario 1 is blocked at stage 50 pending `_15`;
-- `docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md` — live `_14` stage-50 root cause plus preserved target-type, GUI progress/state, and DNS parsing/diagnostic backlog defects;
-- `docs/devlog/2026-08-07-v0.3.3_15-stage50-family-timeout-default.md` — `_15` stage-50 corrective scope and verification boundary;
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — owner-assisted live gate; `_16` reaches real candidate startup but Scenario 1 is blocked at stage 50 on post-drop hostlist access pending `_17`;
+- `docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md` — current `_16` live stage-50 permission evidence plus preserved GUI, target-type, DNS, and readiness-log backlog defects;
+- `docs/devlog/2026-08-07-v0.3.3_17-stage50-hostlist-access.md` — `_17` bounded hostlist-access correction and verification boundary;
+- `docs/verification/evidence/2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md` — `_15` resident FreeBSD daemon startup evidence;
+- `docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md` — `_14` family-runner failure and backlog evidence;
 - `docs/devlog/2026-08-07-v0.3.3_12-final-rollup.md` — final post-Patch-8 package roll-up used to build the historical `_12` live candidate;
 - `docs/devlog/2026-08-07-v0.3.3_11-third-audit-handoff.md` — Patch 8 source/CI closure and historical `_11` handoff record;
 - `docs/devlog/2026-08-07-v0.3.3_6-repository-reconciliation.md` — `_6` recovery ledger and historical source/CI evidence;
@@ -62,21 +64,15 @@ must state its supersession explicitly.
 Key rules:
 
 - use the connected GitHub plugin first for every repository operation;
-- use a narrow fallback only when the plugin is responding and one exact function or
-  permission is confirmed missing;
-- if the GitHub plugin is unavailable, non-responsive, or cannot provide the
-  authoritative state required for safe work, stop GitHub work, inform the owner, and
-  wait for explicit direction;
-- inventory workflows, branches, PRs, runs, artifacts, tags, releases, assets, and
-  permissions before mutation;
+- use a narrow fallback only when the plugin is responding and one exact function or permission is confirmed missing;
+- if the GitHub plugin is unavailable, stop GitHub work and wait for explicit owner direction;
+- inventory workflows, branches, PRs, runs, artifacts, tags, releases, assets, and permissions before mutation;
 - ordinary changes use one logical Ready PR and one squash merge;
 - candidate publication is not a code PR;
 - only one active publication run is allowed per candidate;
 - read the exact job log before any response to failure;
-- external infrastructure failure causes no source change and allows at most one
-  unchanged rerun after recovery;
-- no speculative runner switching, replacement branches, duplicate trackers, or
-  unbounded retries;
+- external infrastructure failure causes no source change and allows at most one unchanged rerun after recovery;
+- no speculative runner switching, replacement branches, duplicate trackers, or unbounded retries;
 - all PR/commit/squash titles use the exact package-candidate prefix;
 - `main` and published tags are never force-updated.
 
