@@ -94,8 +94,9 @@ Persistence invariants:
 
 Private circular-session `state.json` remains on its pre-existing shell writer in Patch 2.
 Shared lifecycle code preserves a circular fallback rather than creating two owners of
-that private file. Python includes state-path validation for future migration coverage,
-but is not the production circular-state owner yet.
+that private file. The Python automated-job writer explicitly rejects private circular
+`state.json` paths; a separate migration scope is required before that ownership can
+change.
 
 Patch 2 does **not** move stage ordering, budgets, cancellation/finalization policy,
 lifecycle decisions, probes, candidate execution, search algorithms, or circular-session
