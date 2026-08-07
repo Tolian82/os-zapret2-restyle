@@ -23,12 +23,26 @@ ARGS_FILE="${TEST_ROOT}/dvtws.args"
 RULES_FILE="${TEST_ROOT}/normal.rules"
 TEMP_CLEAN_FILE="${TEST_ROOT}/temporary.clean"
 SERVICE="${TEST_ROOT}/service"
+TIMEOUT="${TEST_ROOT}/timeout"
 STRATEGY_LAB_JQ=$(command -v jq)
-STRATEGY_LAB_TIMEOUT_BIN=$(command -v timeout)
+STRATEGY_LAB_TIMEOUT_BIN="${TIMEOUT}"
 STRATEGY_LAB_SERVICE_SCRIPT="${SERVICE}"
 STRATEGY_LAB_STOP_TIMEOUT=2
 STRATEGY_LAB_RESTORE_TIMEOUT=2
 mkdir -p "${JOB_DIR}"
+
+cat > "${TIMEOUT}" <<'TIMEOUT'
+#!/bin/sh
+[ "${1:-}" = -f ] || {
+    echo "FAIL: lifecycle timeout must use foreground mode" >&2
+    exit 97
+}
+shift
+[ "$#" -ge 2 ] || exit 64
+shift
+exec "$@"
+TIMEOUT
+chmod 0755 "${TIMEOUT}"
 
 cat > "${SERVICE}" <<'SERVICE'
 #!/bin/sh
@@ -161,6 +175,7 @@ grep -Fq 'runtime_args_hash' "${SERVICE_SOURCE}" || fail 'runtime identity evide
 grep -Fq 'effective_config_hash' "${SERVICE_SOURCE}" || fail 'effective strategy evidence is missing'
 grep -Fq 'normal_firewall_hash' "${SERVICE_SOURCE}" || fail 'normal firewall evidence is missing'
 grep -Fq 'strategy_lab_firewall_range_empty' "${MODULE_DIR}/lifecycle.sh" || fail 'temporary firewall cleanup is not verified'
+grep -Fq '"${STRATEGY_LAB_TIMEOUT_BIN}" -f' "${MODULE_DIR}/lifecycle.sh" || fail 'lifecycle timeout is not foreground-safe for daemon descendants'
 
 sh -n "${MODULE_DIR}/lifecycle.sh"
 sh -n "${SERVICE_SOURCE}"
