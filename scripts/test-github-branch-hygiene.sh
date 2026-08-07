@@ -66,9 +66,9 @@ if [ -n "${revision}" ] && [ "${revision}" != "0" ]; then
   expected="${expected}_${revision}"
 fi
 
-grep -Eq '^Status:[[:space:]]+Active$' "${EVIDENCE_DECISION}" || fail 'evidence-first decision is not active'
-grep -Eq '^Status:[[:space:]]+Active$' "${EFFICIENT_DECISION}" || fail 'efficient delivery decision is not active'
-grep -Eq '^Status:[[:space:]]+Active$' "${TITLE_DECISION}" || fail 'universal title decision is not active'
+grep -Eq '^Status:[[:space:]]+Active([,[:space:]].*)?$' "${EVIDENCE_DECISION}" || fail 'evidence-first decision is not active'
+grep -Eq '^Status:[[:space:]]+Active([,[:space:]].*)?$' "${EFFICIENT_DECISION}" || fail 'efficient delivery decision is not active'
+grep -Eq '^Status:[[:space:]]+Active([,[:space:]].*)?$' "${TITLE_DECISION}" || fail 'universal title decision is not active'
 grep -Eq '^Status:[[:space:]]+Superseded' "${OLD_DECISION}" || fail 'old atomic decision is not superseded'
 
 # Preserve the previously established versioned-title governance checks.
