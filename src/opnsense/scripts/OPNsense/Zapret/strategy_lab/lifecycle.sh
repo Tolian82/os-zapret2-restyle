@@ -3,7 +3,7 @@
 STRATEGY_LAB_SERVICE_SCRIPT="${STRATEGY_LAB_SERVICE_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh}"
 STRATEGY_LAB_TIMEOUT_BIN="${STRATEGY_LAB_TIMEOUT_BIN:-/usr/bin/timeout}"
 STRATEGY_LAB_STOP_TIMEOUT="${STRATEGY_LAB_STOP_TIMEOUT:-10}"
-STRATEGY_LAB_RESTORE_TIMEOUT="${STRATEGY_LAB_RESTORE_TIMEOUT:-15}"
+STRATEGY_LAB_RESTORE_TIMEOUT="${STRATEGY_LAB_RESTORE_TIMEOUT:-45}"
 STRATEGY_LAB_INITIAL_SERVICE_STATE=""
 STRATEGY_LAB_INITIAL_EVIDENCE_SOURCE=""
 
@@ -212,31 +212,7 @@ strategy_lab_cleanup_temporary_runtime()
     return 0
 }
 
-strategy_lab_restore_running_state()
-{
-    if strategy_lab_service_status_code; then
-        return 0
-    else
-        _strategy_lab_current_status=$?
-    fi
-
-    case "${_strategy_lab_current_status}" in
-        1)
-            ;;
-        2)
-            strategy_lab_timed_service_action stop "${STRATEGY_LAB_STOP_TIMEOUT}" || return 1
-            strategy_lab_verify_stopped || return 1
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-
-    strategy_lab_timed_service_action start "${STRATEGY_LAB_RESTORE_TIMEOUT}" || return 1
-    strategy_lab_verify_running
-}
-
-strategy_lab_restore_stopped_state()
+strategy_lab_normalize_stopped_state()
 {
     if strategy_lab_service_status_code; then
         _strategy_lab_current_status=0
@@ -256,6 +232,55 @@ strategy_lab_restore_stopped_state()
             return 1
             ;;
     esac
+}
+
+strategy_lab_restore_running_state()
+{
+    if strategy_lab_service_status_code; then
+        return 0
+    else
+        _strategy_lab_current_status=$?
+    fi
+
+    case "${_strategy_lab_current_status}" in
+        1)
+            ;;
+        2)
+            strategy_lab_normalize_stopped_state || return 1
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    _strategy_lab_restore_attempt=1
+    while [ "${_strategy_lab_restore_attempt}" -le 2 ]
+    do
+        if strategy_lab_timed_service_action start "${STRATEGY_LAB_RESTORE_TIMEOUT}"; then
+            strategy_lab_verify_running && return 0
+        else
+            # A bounded outer timeout may expire while the native start finishes.
+            # Accept only a semantically RUNNING service; otherwise recover below.
+            strategy_lab_verify_running && return 0
+        fi
+
+        if [ "${_strategy_lab_restore_attempt}" -ge 2 ]; then
+            # Do not leave a failed second start in a known INCOMPLETE state when
+            # bounded stop can still return the runtime to a safe STOPPED state.
+            strategy_lab_normalize_stopped_state || true
+            return 1
+        fi
+
+        strategy_lab_normalize_stopped_state || return 1
+        _strategy_lab_restore_attempt=$((_strategy_lab_restore_attempt + 1))
+    done
+
+    return 1
+}
+
+strategy_lab_restore_stopped_state()
+{
+    strategy_lab_normalize_stopped_state
 }
 
 strategy_lab_write_restoration_result()
