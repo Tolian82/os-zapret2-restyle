@@ -34,11 +34,14 @@ Target ABI: **FreeBSD:15:amd64 only**
 Current phase: **Strategy Lab Python migration handoff; source migration not started yet**
 Stable release: **BLOCKED ON POST-MIGRATION LIVE MATRIX**
 
-Current primary authority:
+Current primary Strategy Lab authority:
 `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
 
 Current migration decision:
 `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
+
+Active GitHub delivery authority:
+`docs/decisions/DEC-2026-08-05-efficient-github-delivery.md` together with repository-root `AGENTS.md` and `docs/GITHUB_PUBLICATION.md`.
 
 ==================================================
 FINAL SHELL-ERA LIVE BOUNDARY
