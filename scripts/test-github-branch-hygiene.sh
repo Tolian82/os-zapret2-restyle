@@ -33,6 +33,14 @@ require_fixed()
   grep -Fq "${pattern}" "${file}" || fail "${description}"
 }
 
+require_doc_marker()
+{
+  pattern=$1
+  file=$2
+  description=$3
+  grep -Fiq "${pattern}" "${file}" || fail "${description}"
+}
+
 for file in \
   "${AGENTS}" \
   "${INDEX}" \
@@ -51,9 +59,8 @@ do
   test -s "${file}" || fail "missing or empty GitHub governance file: ${file}"
 done
 
-# The plugin-first prose is intentionally not tested for exact wording or line placement.
-# This script preserves established delivery checks and validates executable workflow
-# contracts introduced by the evidence-first GitHub change.
+# Documentation markers are semantic guards, not exact prose/line-placement contracts.
+# Executable workflow markers below remain case-sensitive and exact.
 
 version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' "${MAKEFILE}" | head -1)
@@ -71,17 +78,15 @@ grep -Eq '^Status:[[:space:]]+Active([,[:space:]].*)?$' "${EFFICIENT_DECISION}" 
 grep -Eq '^Status:[[:space:]]+Active([,[:space:]].*)?$' "${TITLE_DECISION}" || fail 'universal title decision is not active'
 grep -Eq '^Status:[[:space:]]+Superseded' "${OLD_DECISION}" || fail 'old atomic decision is not superseded'
 
-# Preserve the previously established versioned-title governance checks.
-require_fixed 'docs/GITHUB_PUBLICATION.md' "${AGENTS}" 'AGENTS does not name publication authority'
-require_fixed 'DEC-2026-08-05-universal-versioned-github-titles.md' "${AGENTS}" 'AGENTS does not name universal title decision'
-require_fixed 'DEC-2026-08-05-universal-versioned-github-titles.md' "${INDEX}" 'INDEX does not name universal title decision'
-require_fixed 'DEC-2026-08-05-universal-versioned-github-titles.md' "${WORKFLOW_SUMMARY}" 'workflow summary does not name universal title decision'
-
-require_fixed 'every PR title, every PR-branch commit subject' "${AGENTS}" 'AGENTS does not require versioned work and repair commits'
-require_fixed 'final squash subject' "${AGENTS}" 'AGENTS does not require a versioned squash subject'
-require_fixed 'every PR title, every PR-branch commit subject' "${PUBLICATION}" 'publication rules do not cover pull-request and repair titles'
-require_fixed 'final squash subject' "${PUBLICATION}" 'publication rules do not cover squash commit subjects'
-require_fixed 'Governance/documentation/CI-only work' "${PUBLICATION}" 'publication rules do not cover non-packaged changes'
+require_doc_marker 'docs/GITHUB_PUBLICATION.md' "${AGENTS}" 'AGENTS does not name publication authority'
+require_doc_marker 'DEC-2026-08-05-universal-versioned-github-titles.md' "${AGENTS}" 'AGENTS does not name universal title decision'
+require_doc_marker 'DEC-2026-08-05-universal-versioned-github-titles.md' "${INDEX}" 'INDEX does not name universal title decision'
+require_doc_marker 'DEC-2026-08-05-universal-versioned-github-titles.md' "${WORKFLOW_SUMMARY}" 'workflow summary does not name universal title decision'
+require_doc_marker 'every PR title, every PR-branch commit subject' "${AGENTS}" 'AGENTS does not require versioned work and repair commits'
+require_doc_marker 'final squash subject' "${AGENTS}" 'AGENTS does not require a versioned squash subject'
+require_doc_marker 'every PR title, every PR-branch commit subject' "${PUBLICATION}" 'publication rules do not cover pull-request and repair titles'
+require_doc_marker 'final squash subject' "${PUBLICATION}" 'publication rules do not cover squash commit subjects'
+require_doc_marker 'Governance/documentation/CI-only work' "${PUBLICATION}" 'publication rules do not cover non-packaged changes'
 
 # One generic publisher is allowed; version-specific publishers in main are forbidden.
 version_specific=$(find "${ROOT_DIR}/.github/workflows" -maxdepth 1 -type f \
