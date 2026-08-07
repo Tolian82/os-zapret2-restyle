@@ -322,7 +322,10 @@ strategy_lab_candidate_start()
     done < "${_strategy_lab_args}"
     set -- "$@" '--sockarg=0x200' '--user=nobody'
 
-    "${STRATEGY_LAB_DAEMON_BIN}" -p "${_strategy_lab_pidfile}" -o "${_strategy_lab_log}" -f "$@" 9>&- || return 1
+    # FreeBSD daemon(8) remains resident while a child pidfile or output file is
+    # requested. Launch that monitor asynchronously so startup can proceed to the
+    # pid/socket/log readiness proof while dvtws2 is intentionally still running.
+    "${STRATEGY_LAB_DAEMON_BIN}" -p "${_strategy_lab_pidfile}" -o "${_strategy_lab_log}" -f "$@" 9>&- &
     _strategy_lab_wait=0
     while [ "${_strategy_lab_wait}" -lt "${STRATEGY_LAB_RUNTIME_START_TIMEOUT}" ]
     do
