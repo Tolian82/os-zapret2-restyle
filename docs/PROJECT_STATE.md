@@ -5,7 +5,7 @@ Primary branch: `main`
 Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
 Latest published testing prerelease: `v0.3.3_5` / `os-zapret2-restyle-0.3.3_5.pkg`
 Current source line: `VERSION=0.3.3`
-Current corrective package revision: `PLUGIN_REVISION=8`
+Current corrective package revision: `PLUGIN_REVISION=9`
 Target ABI: **FreeBSD:15:amd64 only**
 
 ## Historical live boundary
@@ -40,30 +40,42 @@ Implementation log: `docs/devlog/2026-08-07-v0.3.3_7-stale-recovery.md`.
 
 ### Patch 3 — circular stale recovery lifecycle ownership
 
-Status: **SOURCE IMPLEMENTED — PR/CI VERIFICATION PENDING**
+Status: **MERGED AND VERIFIED**
 
-Package revision: `_8`.
+PR #117 merged as `f0c43de7133f8ba337a5458de0803409949a0096`. Latest-head CI run `31152455413` passed the complete Strategy Lab corrective matrix, repository validation, and FreeBSD 15 package build. Artifact `8983891990` contains `os-zapret2-restyle-0.3.3_8.pkg`.
 
-Implemented scope for `SL3-002`:
-
-- circular stale recovery no longer calls protected normal-service restoration directly from the circular launcher/module context;
-- the lifecycle-owned `strategy-lab-recover` transaction introduced in Patch 2 now detects and binds private circular-session state when no ordinary job state exists;
-- circular stale recovery delegates to that transaction and accepts success only when persisted restoration proves verified semantic equality, unchanged strategy evidence, and clean temporary runtime;
-- inconsistent or failed proof is forced unverified, persisted as `restore_failed/RESTORE_FAILED`, and keeps automatic retry blocked;
-- circular configd actions use 180 seconds, `CircularController` uses 190 seconds, and the shared browser request envelope remains 200 seconds;
-- focused circular-owner and recovery-contract regressions no longer mock the protected restore function inside `circular_owner.sh`.
+Source scope `SL3-002` is implemented: stale circular restoration delegates to the lifecycle-owned semantic recovery transaction, contradictory proof is rejected and retry remains blocked, and circular control/recovery uses the same 180/190/200-second outer timeout ordering.
 
 Implementation log: `docs/devlog/2026-08-07-v0.3.3_8-circular-recovery.md`.
 
+### Patch 4 — remove load-order overrides and obsolete hooks
+
+Status: **SOURCE IMPLEMENTED — PR/CI VERIFICATION PENDING**
+
+Package revision: `_9`.
+
+Implemented scope for `SL3-003` + `SL3-006`:
+
+- removed `worker_state_serialization.sh` after migrating its lock/revision behavior into canonical module owners;
+- removed the worker source-order dependency on that override module;
+- `worker_result.sh` is the sole owner of circular eligibility and uses the TLS 1.3 `circular_items/circular_count` subset rather than the general multi-protocol shortlist count;
+- `profile.sh` is the sole owner of unified shortlist construction; the old TLS-only shortlist implementation in `stability.sh` is removed;
+- obsolete `strategy_lab_skip_unfinished()` and `strategy_lab_skip_remaining()` control-flow hooks are removed from expansion/stability/extended/QUIC/UDP paths;
+- canonical lifecycle, budget, expansion, stability, extended, QUIC, UDP, candidate/family, and result persistence uses `strategy_lab_state_transform()` in the main worker path, preserving the state lock and revision contract;
+- added a mandatory namespace regression that parses the exact modules loaded together by the main worker and rejects duplicate function definitions.
+
+Architecture authority: `docs/architecture/STRATEGY_LAB_OBSOLETE_SURFACES.md`.
+
+Implementation log: `docs/devlog/2026-08-07-v0.3.3_9-module-order.md`.
+
 ## Remaining approved sequence
 
-4. **Patch 4 — remove load-order overrides and obsolete hooks.** Close `SL3-003` + `SL3-006`.
 5. **Patch 5 — serialize worker state transitions.** Close `SL3-004`.
 6. **Patch 6 — complete RU/EN progress localization.** Close `SL3-007`.
 7. **Patch 7 — integrated third-audit regression gate.** Exercise corrected paths together and require the complete corrective matrix, repository CI, and FreeBSD 15 package build.
 8. **Patch 8 — source/CI closure and live-test handoff.** Record exact evidence and designate the resulting FreeBSD 15 package for owner-assisted live verification.
 
-Each packaged behavior patch keeps `VERSION=0.3.3`, increments `PLUGIN_REVISION` once, uses one task branch and Ready PR, passes focused validation plus required CI/package gates, and squash-merges to `main` with the expected head SHA. Documentation/CI-only patches do not increment package metadata.
+Each packaged behavior patch keeps `VERSION=0.3.3`, increments `PLUGIN_REVISION` once, uses one task branch and one Ready PR, passes focused validation plus required CI/package gates, and squash-merges to `main` with the expected head SHA. Documentation/CI-only patches do not increment package metadata.
 
 ## Current verification boundary
 
@@ -96,7 +108,8 @@ Current product authority:
 
 - `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`;
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`;
+- `docs/architecture/STRATEGY_LAB_OBSOLETE_SURFACES.md`;
 - `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md`;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
-Next action after Patch 3 merge/verification: **Patch 4 — remove load-order overrides and obsolete hooks**.
+Next action after Patch 4 merge/verification: **Patch 5 — serialize worker state transitions**.
