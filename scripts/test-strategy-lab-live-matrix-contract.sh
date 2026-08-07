@@ -13,6 +13,9 @@ CURRENT_DNS_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_1
 CURRENT_STAGE50_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md"
 CURRENT_STAGE50_DAEMON_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md"
 CURRENT_STAGE50_HOSTLIST_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md"
+CURRENT_PYTHON_HANDOFF_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md"
+PYTHON_PLAN="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md"
+PYTHON_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 
@@ -29,8 +32,6 @@ candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
 grep -Fq 'AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md' "${MATRIX}"
-grep -Fq 'artifact `8980876980`' "${MATRIX}"
-grep -Fq 'Post-merge `main` CI run `31144323095` also passed.' "${MATRIX}"
 
 blocked_count=$(awk -F'|' '$2 ~ /^[[:space:]]*[0-9]+[[:space:]]*$/ && $6 ~ /BLOCKED BY #1/ {n++} END {print n+0}' "${MATRIX}")
 [ "${blocked_count}" -eq 17 ] || { echo "FAIL: dependent live rows are not all blocked" >&2; exit 1; }
@@ -40,6 +41,38 @@ if grep -Eq '^Overall status:.*PASS|\|[[:space:]]*\*\*PASS\*\*[[:space:]]*\|$' "
     exit 1
 fi
 
+# Current documentation handoff: _17 remains failed and live testing is intentionally
+# paused until the approved Python implementation reaches functional parity.
+if grep -Fq 'Overall status: **FAILED ON `_17` — LIVE MATRIX PAUSED FOR PYTHON MIGRATION**' "${MATRIX}"; then
+    [ "${revision}" -eq 17 ] || { echo 'FAIL: Python migration handoff must remain on revision 17' >&2; exit 1; }
+    for file in "${CURRENT_PYTHON_HANDOFF_EVIDENCE}" "${PYTHON_PLAN}" "${PYTHON_DECISION}"
+    do
+        [ -s "${file}" ] || { echo "FAIL: Python migration handoff record is missing: ${file}" >&2; exit 1; }
+    done
+    grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_17.pkg`' "${MATRIX}"
+    grep -Fq 'Latest owner-tested job: `job.w0nXxQ`' "${MATRIX}"
+    grep -Fq '50 ERROR — `Temporary candidate runtime failed internally.`' "${MATRIX}"
+    grep -Fq '90 PASS — temporary state removed and initial RUNNING Zapret2 restored healthy' "${MATRIX}"
+    grep -Fq 'Strategy Lab returned no output.' "${MATRIX}"
+    grep -Fq 'visible progress remained 0%' "${MATRIX}"
+    scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /FAILED ON `_17` — RETEST AFTER PYTHON PARITY/ {n++} END {print n+0}' "${MATRIX}")
+    [ "${scenario_one}" -eq 1 ] || { echo 'FAIL: scenario 1 Python migration handoff row mismatch' >&2; exit 1; }
+    grep -Fq 'Latest owner-tested testing candidate: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`' "${STATE}"
+    grep -Fq 'Current phase: **Strategy Lab Python migration handoff; source migration not started yet**' "${STATE}"
+    grep -Fq 'Stage 50 remains ERROR on `_17`.' "${STATE}"
+    grep -Fq 'Migration Patch 1 only' "${STATE}"
+    grep -Fq 'STRATEGY_LAB_PYTHON_MIGRATION.md' "${INDEX}"
+    grep -Fq 'Job shown in GUI: `job.w0nXxQ`' "${CURRENT_PYTHON_HANDOFF_EVIDENCE}"
+    grep -Fq 'Stage 50 remains the backend blocker.' "${CURRENT_PYTHON_HANDOFF_EVIDENCE}"
+    grep -Fq 'exact `_17` Stage-50 root cause is not yet established' "${PYTHON_DECISION}"
+    echo 'PASS: live matrix freezes the failed _17 shell-era boundary and gates owner retest on Python parity without unsupported PASS claims'
+    exit 0
+fi
+
+# Historical live-state fixtures below remain accepted so older corrective states are
+# still mechanically recognizable when replayed from their own source revisions.
+grep -Fq 'artifact `8980876980`' "${MATRIX}"
+grep -Fq 'Post-merge `main` CI run `31144323095` also passed.' "${MATRIX}"
 grep -Fq 'Temporary candidate runtime failed internally.' "${RESTORE_EVIDENCE}"
 grep -Fq 'RESTORE_FAILED' "${RESTORE_EVIDENCE}"
 grep -Fq 'Scenario 1 remains **FAILED / PENDING CORRECTION** for `_5`.' "${RESTORE_EVIDENCE}"

@@ -152,6 +152,54 @@ stops temporary probes/runtime, and always executes stage 90. A restoration fail
 changes the terminal result to `restore_failed`; it is never reported as success.
 
 ==================================================
+STRATEGY LAB IMPLEMENTATION TRANSITION
+==================================================
+
+At the `v0.3.3_17` live boundary the active Strategy Lab implementation is still the
+large POSIX-shell worker assembled from sourced Strategy Lab modules. That implementation
+remains active until individual migration patches switch authoritative ownership.
+
+The approved target implementation boundary is:
+
+```text
+Diagnostics GUI / JavaScript
+        ↓
+OPNsense PHP MVC/API
+        ↓
+configd
+        ↓
+thin compatibility launcher
+        ↓
+Python Strategy Lab orchestration
+        ↓
+small explicit FreeBSD/OPNsense adapters and external tools
+```
+
+PHP remains the web/API integration layer. Python is the target owner for job state,
+stage orchestration, budgets/cancellation, subprocess execution, output parsing,
+candidate/family control, and structured result generation. Small shell/service adapters
+may remain for already-audited Zapret2 lifecycle, shared-lock, `ipfw`, process ownership,
+and short FreeBSD-specific mutations where reuse is safer than duplication.
+
+The public asynchronous API, stage numbers, evidence locations, lifecycle/restoration
+semantics, temporary firewall ownership, saved-configuration immutability, and result
+contracts do not change merely because the implementation language changes.
+
+There must be only one authoritative owner for each migrated responsibility. A replaced
+shell orchestration path is removed after parity qualification; it is not kept as a
+silent fallback competitor.
+
+No Python interpreter path/version is assumed until the first migration patch verifies
+the supported OPNsense/FreeBSD 15 runtime and dependency model. No third-party `pip`
+dependency is approved by default.
+
+Specialist authority:
+`docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
+
+Decision authority:
+`docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
+
+==================================================
 SHORTLIST AND CIRCULAR VALIDATION
 ==================================================
 
@@ -217,7 +265,8 @@ maintenance operation.
 TECHNICAL CONSTRAINTS
 ==================================================
 
-- FreeBSD `/bin/sh` compatibility; no Bash-only syntax.
+- FreeBSD `/bin/sh` compatibility remains required for retained shell entry points and adapters.
+- Python migration code must use only the verified supported OPNsense interpreter/dependency model.
 - OPNsense configuration and configd are the integration boundary.
 - Candidate validation precedes activation.
 - Generated runtime is never committed.
@@ -226,5 +275,6 @@ TECHNICAL CONSTRAINTS
 - No automatic permanent strategy modification.
 - Ordinary package patches do not create tags, releases, or pkg-repository publication.
 
-Audit evidence is maintained in `AUDIT.md`, approved rationale in `DECISIONS.md`,
-delivery order in `ROADMAP.md`, and completed implementation records in `docs/devlog/`.
+Audit evidence is maintained in `AUDIT.md`, approved rationale in `DECISIONS.md` and
+`docs/decisions/`, delivery order in `ROADMAP.md`, and completed implementation records
+in `docs/devlog/`.
