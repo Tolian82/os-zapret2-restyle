@@ -3,9 +3,12 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 ZAPRET_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
+REQUEST_PY="${ZAPRET_DIR}/strategy_lab_py/request.py"
 PROBE_PY="${ZAPRET_DIR}/strategy_lab_py/probe.py"
 COMPAT_PY="${ZAPRET_DIR}/strategy_lab_py/compat.py"
 RUNNER="${ZAPRET_DIR}/strategy_lab_probe_runner.sh"
+REQUEST_SH="${ZAPRET_DIR}/strategy_lab/request.sh"
+EXTENDED_REQUEST_SH="${ZAPRET_DIR}/strategy_lab/extended_request.sh"
 LAUNCHER="${ZAPRET_DIR}/strategy_lab_python_launcher.sh"
 PYTHON=${STRATEGY_LAB_TEST_PYTHON:-python3.13}
 
@@ -17,8 +20,8 @@ fail()
 
 "${PYTHON}" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)' ||
     fail 'Python 3.13 is unavailable'
-"${PYTHON}" -m py_compile "${PROBE_PY}" "${COMPAT_PY}" ||
-    fail 'Python probe modules do not compile'
+"${PYTHON}" -m py_compile "${REQUEST_PY}" "${PROBE_PY}" "${COMPAT_PY}" ||
+    fail 'Python request/probe modules do not compile'
 
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-python-probes.XXXXXX")
 trap 'rm -rf "${TMP_ROOT}"' EXIT HUP INT TERM
@@ -42,9 +45,9 @@ cat > "${MOCK_BIN}/curl" <<'MOCK'
 url=
 for arg in "$@"
 do
-    case "${arg}" in https://*) url="${arg}" ;; esac
+    case "${arg}" in https://*|http://*) url="${arg}" ;; esac
 done
-host=$(printf '%s' "${url}" | sed -e 's#^https://##' -e 's#/$##')
+host=$(printf '%s' "${url}" | sed -e 's#^https\?://##' -e 's#/$##')
 printf 'curl-stderr-%s\n' "${host}" >&2
 case "${MOCK_CURL_MODE:-baseline-fail}:${host}" in
     network-pass:yandex.ru)
@@ -115,20 +118,20 @@ chmod +x "${MOCK_BIN}"/*
 
 PYTHONPATH="${ZAPRET_DIR}" "${PYTHON}" - "${MOCK_BIN}/io" "${MOCK_BIN}/sleepy" <<'PY'
 import sys
-from strategy_lab_py import probe
+from strategy_lab_py import request
 
 poison = ''';; QUESTION SECTION:\npoison.example. 60 IN A 203.0.113.99\n;; AUTHORITY SECTION:\npoison.example. 60 IN A 203.0.113.98\n'''
-assert probe.parse_drill_answers(poison, 'A') == []
+assert request.parse_drill_answers(poison, 'A') == []
 valid = poison + ''';; ANSWER SECTION:\nvalid.example. 60 IN A 203.0.113.10\nvalid.example. 60 IN AAAA 2001:db8::10\n;; AUTHORITY SECTION:\nvalid.example. 60 IN A 203.0.113.77\n'''
-assert probe.parse_drill_answers(valid, 'A') == ['203.0.113.10']
-assert probe.parse_drill_answers(valid, 'AAAA') == ['2001:db8::10']
-result = probe.run_command([sys.argv[1]], timeout=1)
+assert request.parse_drill_answers(valid, 'A') == ['203.0.113.10']
+assert request.parse_drill_answers(valid, 'AAAA') == ['2001:db8::10']
+result = request.run_command([sys.argv[1]], timeout=1)
 assert result.returncode == 7
 assert result.stdout == 'stdout-evidence\n'
 assert result.stderr == 'stderr-evidence\n'
 assert result.timed_out is False
 assert result.termination == 'completed'
-timeout = probe.run_command([sys.argv[2]], timeout=0.1)
+timeout = request.run_command([sys.argv[2]], timeout=0.1)
 assert timeout.returncode is None
 assert timeout.timed_out is True
 assert timeout.termination == 'timeout'
@@ -156,11 +159,9 @@ export MOCK_CURL_MODE
 run_probe network "${NETWORK_FILE}" "${WORK}"
 jq -e '. == {ipv4:"available",ipv6:"unavailable",quic_ipv4:"closed",quic_ipv6:"skipped"}' "${NETWORK_FILE}" >/dev/null ||
     fail 'public network JSON changed during Python cutover'
-jq -e '
-    .ipv4.returncode==0 and
-    .ipv4.stdout|contains("exit=0")
-' "${WORK}/network-evidence.json" >/dev/null || fail 'IPv4 structured evidence is missing'
-jq -e '.ipv4.stderr|contains("curl-stderr-yandex.ru")' "${WORK}/network-evidence.json" >/dev/null ||
+jq -e '(.ipv4.returncode==0) and (.ipv4.stdout|contains("exit=0"))' "${WORK}/network-evidence.json" >/dev/null ||
+    fail 'IPv4 structured evidence is missing'
+jq -e '(.ipv4.stderr|contains("curl-stderr-yandex.ru"))' "${WORK}/network-evidence.json" >/dev/null ||
     fail 'IPv4 stderr was flattened into stdout'
 jq -e '.quic_ipv4.returncode==7 and .quic_ipv4.timed_out==false' "${WORK}/network-evidence.json" >/dev/null ||
     fail 'QUIC command status was flattened into timeout'
@@ -208,13 +209,26 @@ jq -e '.endpoints[0].dns_a.classification=="timeout" and .endpoints[0].dns_a.exe
 
 grep -Fq 'exec "${PYTHON_LAUNCHER}" probe "$@"' "${RUNNER}" ||
     fail 'production probe runner does not delegate to Python'
+grep -Fq '"${STRATEGY_LAB_PYTHON_LAUNCHER}" request "$@"' "${REQUEST_SH}" ||
+    fail 'finite request shell adapter does not delegate to Python'
+grep -Fq 'strategy_lab_request_python tls12' "${EXTENDED_REQUEST_SH}" ||
+    fail 'TLS 1.2 request adapter does not delegate to Python'
+grep -Fq 'strategy_lab_request_python http' "${EXTENDED_REQUEST_SH}" ||
+    fail 'HTTP request adapter does not delegate to Python'
 if grep -Eq 'strategy_lab_run_network_precheck|strategy_lab_run_clean_baseline|for module in .*request.*probe' "${RUNNER}"; then
     fail 'production probe runner still owns shell probe logic'
 fi
+if grep -Eq 'STRATEGY_LAB_TIMEOUT_BIN.*STRATEGY_LAB_CURL_BIN|> "\$\{_.*output\}" 2>&1' "${EXTENDED_REQUEST_SH}"; then
+    fail 'extended finite request execution still has a shell subprocess owner'
+fi
+grep -Fq 'from . import request as request_execution' "${COMPAT_PY}" ||
+    fail 'Python compatibility entry point does not expose structured request execution'
 grep -Fq 'from . import probe as probe_execution' "${COMPAT_PY}" ||
     fail 'Python compatibility entry point does not expose probe execution'
 
 sh -n "${RUNNER}"
+sh -n "${REQUEST_SH}"
+sh -n "${EXTENDED_REQUEST_SH}"
 sh -n "${LAUNCHER}"
 
-echo 'PASS: Python 3.13 owns finite Strategy Lab probe execution, answer-aware DNS parsing, and distinct subprocess diagnostics'
+echo 'PASS: Python 3.13 owns finite Strategy Lab requests/probes, answer-aware DNS parsing, and distinct subprocess diagnostics'
