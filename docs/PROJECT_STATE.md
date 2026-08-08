@@ -27,16 +27,15 @@ QUICK CONTEXT
 
 Project: `os-zapret2-restyle`
 Primary branch: `main`
-Previous published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Release being prepared: `v0.4.0` / `os-zapret2-restyle-0.4.0_1.pkg`
+Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_1.pkg`
 Latest published testing prerelease: `v0.3.3_27` / `os-zapret2-restyle-0.3.3_27.pkg`
 Latest owner-tested testing candidate: `v0.3.3_27` / `os-zapret2-restyle-0.3.3_27.pkg`
 Current source line: `VERSION=0.4.0`
 Current package revision: `PLUGIN_REVISION=1`
-Current release candidate: `os-zapret2-restyle-0.4.0_1.pkg`
+Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **v0.4.0 release-preparation PR/CI and automated publication**
-Stable release gate: **SATISFIED FOR v0.4.0; PUBLICATION VERIFICATION PENDING**
+Current phase: **post-v0.4.0 adaptive-search handoff; `_28` is the next source cycle**
+v0.4.0 release gate: **COMPLETE — published and installed by the owner**
 
 Current primary Strategy Lab authority:
 `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
@@ -290,6 +289,12 @@ The owner installed `_27` and completed Scenario 1 on `rutracker.org`: Stage 40 
 Stage 50 PASS, Stages 60/70 PASS, Stage 90 PASS and truthful `NO_CANDIDATE`. Under the
 risk-based live-release policy, this is the mandatory v0.4.0 post-migration live row.
 Rows 2–18 remain useful regression backlog without blocking v0.4.0 solely because they
-are pending. The authorized `v0.4.0 / 0.4.0_1` release-preparation cycle is now active;
-the repository workflow must still verify tag placement, release assets, checksum and
-Pages/pkg publication before the release cycle is called complete.
+are pending.
+
+The `v0.4.0 / 0.4.0_1` release cycle is complete. Immutable tag `v0.4.0` resolves to
+release commit `5e2f98c503a94413be76d7fd6b7f5721fc436f56`; Release workflow run 17 passed and
+published the package/checksum plus the Pages/pkg repository. The post-release EOF-only
+hygiene repair is on current `main` at `b733cd76528c8284e2831b17ddc9e1cacba512ef`, whose
+push CI run 564 passed. The owner subsequently installed `0.4.0_1` on OPNsense. The next
+source action is adaptive-search `_28`; no additional live-matrix row is a prerequisite
+unless new change risk or evidence selects it under the active risk-based policy.

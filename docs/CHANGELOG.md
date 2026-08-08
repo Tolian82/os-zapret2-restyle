@@ -60,8 +60,10 @@ No unreleased changes.
 
 - Advanced `VERSION` from the `0.3.3` testing line to `0.4.0` and reset
   `PLUGIN_REVISION` from `27` to `1`.
-- Release tag: `v0.4.0`.
-- Package: `os-zapret2-restyle-0.4.0_1.pkg` for `FreeBSD:15:amd64`.
+- Published immutable release tag `v0.4.0` and package
+  `os-zapret2-restyle-0.4.0_1.pkg` for `FreeBSD:15:amd64` with the matching checksum and
+  Pages/pkg repository.
+- The owner installed `0.4.0_1` on OPNsense after publication.
 
 ## [0.3.2] - 2026-08-03
 
