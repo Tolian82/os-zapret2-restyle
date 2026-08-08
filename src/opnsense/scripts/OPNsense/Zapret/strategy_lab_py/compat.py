@@ -8,6 +8,8 @@ import sys
 from collections.abc import Sequence
 
 from . import FOUNDATION_REVISION, SUPPORTED_PYTHON
+from . import candidate as candidate_screening
+from . import family as family_screening
 from . import orchestrator as stage_orchestrator
 from . import probe as probe_execution
 from . import request as request_execution
@@ -112,6 +114,34 @@ def _run_request(args: Sequence[str]) -> int:
         return EX_SOFTWARE
 
 
+def _run_candidate(args: Sequence[str]) -> int:
+    try:
+        return candidate_screening.main(args)
+    except ValueError as exc:
+        _error(str(exc))
+        return EX_USAGE
+    except (RuntimeError, request_execution.RequestError) as exc:
+        _error(str(exc))
+        return EX_SOFTWARE
+    except OSError as exc:
+        _error(f"Strategy Lab candidate execution failed: {exc}")
+        return EX_SOFTWARE
+
+
+def _run_family(args: Sequence[str]) -> int:
+    try:
+        return family_screening.main(args)
+    except ValueError as exc:
+        _error(str(exc))
+        return EX_USAGE
+    except RuntimeError as exc:
+        _error(str(exc))
+        return EX_SOFTWARE
+    except OSError as exc:
+        _error(f"Strategy Lab family screening failed: {exc}")
+        return EX_SOFTWARE
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
 
@@ -127,18 +157,23 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args[:1] == ["state"]:
         return _run_state(args[1:])
-
     if args[:1] == ["orchestrate"]:
         return _run_orchestrator(args[1:])
-
     if args[:1] == ["probe"]:
         return _run_probe(args[1:])
-
     if args[:1] == ["request"]:
         return _run_request(args[1:])
+    if args[:1] == ["candidate"]:
+        return _run_candidate(args[1:])
+    if args[:1] == ["family"]:
+        return _run_family(args[1:])
 
     if len(args) != 1:
-        _error("usage: strategy_lab_python.py job_id | --self-test | state OPERATION ... | orchestrate JOB_ID | probe OPERATION ... | request OPERATION ...")
+        _error(
+            "usage: strategy_lab_python.py job_id | --self-test | state OPERATION ... | "
+            "orchestrate JOB_ID | probe OPERATION ... | request OPERATION ... | "
+            "candidate run ... | family screen ..."
+        )
         return EX_USAGE
 
     return _delegate_shell(args[0])
