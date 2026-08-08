@@ -22,10 +22,10 @@ Experimental verification plan:
 `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
 Status:
-Active design decision. Source implementation is intentionally deferred to the planned
-`_28`–`_33` series. Until a corresponding source patch is merged, documentation that
-describes current executable behavior must distinguish the existing `_27` implementation
-from this approved target architecture.
+Active design decision with incremental source implementation. `_28` implements the
+Stage-50/60 hard-gate removal in the `0.4.0_2` source candidate; `_29`–`_33` remain
+planned. Documentation must continue to distinguish each implemented slice from the
+remaining approved target architecture.
 
 ==================================================
 CONTEXT
@@ -246,7 +246,8 @@ IMPLEMENTATION SEQUENCE
 After this documentation-only design record, source work is split into separate logical
 package revisions:
 
-- `_28` — remove Stage-50 accepted-family hard gating while preserving evidence;
+- `_28` — implemented in `0.4.0_2` source: remove Stage-50 accepted-family hard gating
+  while preserving accepted-first evidence priority;
 - `_29` — introduce Python `CandidateSpec` and job-scoped `ResourceInventory`, and move
   candidate resource/search decisions out of the shell adapter;
 - `_30` — introduce the native-Zapret2 search graph, golden corpus, BLOB-free/builtin/

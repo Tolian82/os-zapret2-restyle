@@ -25,7 +25,7 @@ RUNNING_EVENTS = {
     "30": "Checking IPv4, IPv6, and QUIC capabilities",
     "40": "Testing the clean target baseline without Zapret2",
     "50": "Running one isolated Zapret2 smoke candidate",
-    "60": "Expanding parameters inside accepted TLS 1.3 families",
+    "60": "Expanding TLS 1.3 candidates using Stage-50 evidence for priority",
     "70": "Confirming candidate stability with three sequential fresh-connection attempts",
     "80": "Testing extended TLS, HTTP, QUIC, and configured UDP branches",
     "85": "Building the final stable-candidate shortlist",

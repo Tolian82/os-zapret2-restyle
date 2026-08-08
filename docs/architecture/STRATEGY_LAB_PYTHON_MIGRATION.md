@@ -24,23 +24,23 @@ STATUS
 ==================================================
 
 Migration Patches 0–8 are complete through `v0.3.3_25`. Corrective `_26` preserved the
-same ownership while isolating Stage-50 candidate-local failures. Owner retesting of
-published `_26` exposed a separate Stage-40 DNS deadline mismatch, and corrective `_27`
-widens only the bounded DNS/stage envelope.
+same ownership while isolating Stage-50 candidate-local failures, and corrective `_27`
+fixed the bounded DNS/stage envelope. Owner Scenario 1 on published `_27` passes the
+post-migration Stage-40/50/60/70/90 path and supplied the live gate used for v0.4.0.
 
 The automated backend migration is complete: Python is the single automated owner of job
 state, stage orchestration, requests/probes, candidate/search policy and final result
 assembly. Patch 8 must not move those responsibilities back into PHP, JavaScript or shell.
 
-The 2026-08-08 adaptive-search decision changes the **future Python search policy**, not
-this ownership boundary. Its target contract is
+The 2026-08-08 adaptive-search decision changes Python search policy without changing
+this ownership boundary. `_28` is its first source slice: Stage-50 acceptance now affects
+Stage-60 priority but not candidate-family reachability. Its remaining target contract is
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`; runtime-model hypotheses are gated by
 `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
-The latest owner-tested live candidate remains `_26`; Scenario 1 remains failed at Stage
-40. Corrective `_27` source/CI is merged on `main`, while replacement owner live evidence
-remains pending. Candidate/package publication state remains governed separately by
-`docs/GITHUB_PUBLICATION.md`.
+The latest owner-tested live candidate is published `_27`; Scenario 1 passes. The current
+`0.4.0_2` `_28` source candidate has no owner live evidence yet. Candidate/package
+publication state remains governed separately by `docs/GITHUB_PUBLICATION.md`.
 
 ==================================================
 OBJECTIVE
@@ -149,16 +149,17 @@ Patch 5 — `strategy_lab_py/candidate.py` and `family.py`
 
 Patch 6 — `strategy_lab_py/search.py` and `extended.py`
 
-- current `_27` Stage-60 accepted-family expansion catalog/order/early-stop behavior;
+- current `_28` Stage-60 catalog expansion keeps Stage-50 accepted families first as
+  evidence-based priority and then keeps every remaining catalog family reachable;
 - Stage-70 source de-duplication/ranking/three-attempt stability replay;
 - Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP orchestration;
 - one generalized candidate lifecycle across supported protocols;
 - exact-endpoint QUIC and generic-UDP request execution through the request owner.
 
-The accepted-family gate and QUIC candidate-search branch above describe the completed
-migration baseline, not the approved next search architecture. `_28` removes the hard
-family gate; the adaptive target keeps only the fixed IPv4 UDP/443 QUIC precheck and
-concentrates search on native Zapret2 TCP/TLS plus the approved non-QUIC extended branches.
+The accepted-family gate was part of the completed migration baseline and is superseded
+by `_28`. The current QUIC candidate-search branch remains pre-redesign behavior; the
+later adaptive target keeps only the fixed IPv4 UDP/443 QUIC precheck and concentrates
+search on native Zapret2 TCP/TLS plus the approved non-QUIC extended branches.
 
 Patch 7 — `strategy_lab_py/result.py`
 
@@ -264,11 +265,11 @@ Supported final protocol profiles:
 - TLS 1.3 — TCP/443, TLS L7;
 - TLS 1.2 — TCP/443, TLS L7;
 - HTTP — TCP/80, HTTP L7;
-- QUIC — UDP/443, QUIC L7 in the current `_27` implementation only; the approved
+- QUIC — UDP/443, QUIC L7 in the current `_28` implementation only; the approved
   adaptive-search target removes QUIC candidate search and retains only the fixed precheck;
 - generic UDP — validated configured port, no L7 filter, validated job-local payload.
 
-In the current `_27` implementation each published profile contains one transport filter,
+In the current `_28` implementation each published profile contains one transport filter,
 optional protocol L7 filter, one validated target selector, `--out-range=-d10`, and the
 candidate desynchronization fragment. Runtime-only arguments, nested selectors/filters,
 placeholders and `--new` are rejected.
@@ -358,12 +359,14 @@ MIGRATION PATCH SERIES
 - Patch 7 — final profile/replay/shortlist/eligibility + competing shell-owner retirement:
   **COMPLETE / `_24`**.
 - Patch 8 — GUI/status reconciliation and post-migration live gate: **COMPLETE / `_25`**.
-- Corrective `_26` — Stage-50 candidate-local failure isolation: **SOURCE/CI COMPLETE;
-  OWNER LIVE CLOSURE PENDING**.
-- Corrective `_27` — Stage-40 DNS/stage deadline correction: **MERGED ON `main`;
-  OWNER LIVE CLOSURE PENDING**.
+- Corrective `_26` — Stage-50 candidate-local failure isolation: **COMPLETE / live closure
+  proven by `_27` Scenario 1**.
+- Corrective `_27` — Stage-40 DNS/stage deadline correction: **COMPLETE / owner Scenario 1
+  live PASS; promoted into v0.4.0**.
+- Adaptive-search `_28` — remove Stage-50 accepted-family hard gating while preserving
+  accepted-first evidence priority: **CURRENT `0.4.0_2` SOURCE CANDIDATE / LIVE PENDING**.
 
-The next approved search-quality source sequence is `_28`–`_33` in
+The remaining approved search-quality source sequence is `_29`–`_33` in
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and `docs/ROADMAP.md`.
 
 ==================================================

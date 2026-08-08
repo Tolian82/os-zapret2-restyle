@@ -8,7 +8,13 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
-No unreleased changes.
+### Changed
+
+- Began the adaptive-search implementation with `_28`: Stage-50 `accepted` evidence now
+  prioritizes matching Stage-60 catalog families but no longer excludes the remaining
+  families. An all-rejected Stage-50 result therefore still enters bounded Stage-60
+  candidate testing instead of reporting zero candidates solely because no family was
+  accepted.
 
 ## [0.4.0] - 2026-08-09
 

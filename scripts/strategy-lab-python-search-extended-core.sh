@@ -54,14 +54,17 @@ chmod 0755 "${FAKE}"
 
 EXP_CATALOG="${TMP}/expansion.tsv"
 printf '%s\n' \
-  'f1	e1	1	e1.args' \
+  'f2	e1	1	e1.args' \
   'f1	e2	1	e2.args' \
   'f2	e3	1	e3.args' > "${EXP_CATALOG}"
 printf '%s\n' '--lua-desync=fake:blob=fake_default_tls' > "${TMP}/args/e1.args"
 printf '%s\n' '--lua-desync=multisplit:pos=1' > "${TMP}/args/e2.args"
 printf '%s\n' '--lua-desync=syndata' > "${TMP}/args/e3.args"
 cat > "${TMP}/family.json" <<'JSON'
-{"total":1,"completed":1,"families":[{"id":"fbase","family":"f1","strategy":"--lua-desync=multisplit:pos=2\n","endpoints":[],"all_pass":true}],"accepted":["f1"],"rejected":[],"all_pass":true}
+{"total":2,"completed":2,"families":[{"id":"fbase1","family":"f1","strategy":"--lua-desync=multisplit:pos=2\n","endpoints":[],"all_pass":true},{"id":"fbase2","family":"f2","strategy":"--lua-desync=fake:blob=fake_default_tls\n","endpoints":[],"all_pass":false}],"accepted":["f1"],"rejected":["f2"],"all_pass":true}
+JSON
+cat > "${TMP}/family-none.json" <<'JSON'
+{"total":2,"completed":2,"families":[{"id":"fbase1","family":"f1","strategy":"--lua-desync=multisplit:pos=2\n","endpoints":[],"all_pass":false},{"id":"fbase2","family":"f2","strategy":"--lua-desync=fake:blob=fake_default_tls\n","endpoints":[],"all_pass":false}],"accepted":[],"rejected":["f1","f2"],"all_pass":false}
 JSON
 
 COMMON_ENV="STRATEGY_LAB_JOBS_DIR=${JOBS} STRATEGY_LAB_PYTHON_BIN=${PYTHON} MOCK_LOG=${LOG}"
@@ -70,15 +73,26 @@ env ${COMMON_ENV} \
   STRATEGY_LAB_EXPANSION_CATALOG="${EXP_CATALOG}" \
   STRATEGY_LAB_EXPANSION_ARGS_DIR="${TMP}/args" \
   STRATEGY_LAB_EXPANSION_CANDIDATE_RUNNER="${FAKE}" \
-  STRATEGY_LAB_EXPANSION_TARGET=1 \
+  STRATEGY_LAB_EXPANSION_TARGET=99 \
   sh "${LAUNCHER}" search expand "${JOB}" "${TMP}/endpoints.txt" "${TMP}/family.json" "${TMP}/expansion.json"
-"${JQ}" -e '.total_available==2 and .completed==2 and .working==["e2"] and .failed==["e1"] and .stopped_reason=="enough_candidates"' "${TMP}/expansion.json" >/dev/null || fail 'Python expansion contract failed'
+"${JQ}" -e '.total_available==3 and .completed==3 and .working==["e2"] and .failed==["e1","e3"] and .stopped_reason=="catalog_exhausted"' "${TMP}/expansion.json" >/dev/null || fail 'Stage-50 evidence priority/reachability contract failed'
+[ "$(sed -n '1,3p' "${LOG}" | cut -d '|' -f 2 | paste -sd, -)" = 'e2,e1,e3' ] || fail 'accepted Stage-50 evidence did not affect priority without gating rejected families'
+
+: > "${LOG}"
+env ${COMMON_ENV} \
+  STRATEGY_LAB_EXPANSION_CATALOG="${EXP_CATALOG}" \
+  STRATEGY_LAB_EXPANSION_ARGS_DIR="${TMP}/args" \
+  STRATEGY_LAB_EXPANSION_CANDIDATE_RUNNER="${FAKE}" \
+  STRATEGY_LAB_EXPANSION_TARGET=1 \
+  sh "${LAUNCHER}" search expand "${JOB}" "${TMP}/endpoints.txt" "${TMP}/family-none.json" "${TMP}/expansion.json"
+"${JQ}" -e '.total_available==3 and .completed==2 and .working==["e2"] and .failed==["e1"] and .stopped_reason=="enough_candidates"' "${TMP}/expansion.json" >/dev/null || fail 'all-rejected Stage-50 evidence still gated Stage-60 reachability'
+[ "$(sed -n '1,2p' "${LOG}" | cut -d '|' -f 2 | paste -sd, -)" = 'e1,e2' ] || fail 'all-rejected Stage-50 evidence did not retain catalog reachability/order'
 
 env ${COMMON_ENV} \
   STRATEGY_LAB_STABILITY_CANDIDATE_RUNNER="${FAKE}" \
   STRATEGY_LAB_STABILITY_ATTEMPTS=3 \
   STRATEGY_LAB_STABILITY_TARGET=1 \
-  sh "${LAUNCHER}" search stabilize "${JOB}" "${TMP}/endpoints.txt" "${TMP}/expansion.json" "${TMP}/family.json" "${TMP}/stability.json"
+  sh "${LAUNCHER}" search stabilize "${JOB}" "${TMP}/endpoints.txt" "${TMP}/expansion.json" "${TMP}/family-none.json" "${TMP}/stability.json"
 "${JQ}" -e '.completed==1 and (.stable|length)==1 and .candidates[0].stable==true and (.candidates[0].attempts|length)==3 and .stopped_reason=="enough_stable_candidates"' "${TMP}/stability.json" >/dev/null || fail 'Python stability contract failed'
 [ "$(grep -c '|sequential|' "${LOG}")" -eq 3 ] || fail 'stability attempts were not forced to sequential fresh-connection mode'
 
@@ -119,4 +133,4 @@ PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_CANDIDATE_PROTOCOL=http "${PYTHON}" -c '
 PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_CANDIDATE_PROTOCOL=quic "${PYTHON}" -c 'from strategy_lab_py.candidate import _protocol_spec; s=_protocol_spec(); assert (s.protocol,s.transport,s.port,s.l7)==("quic","udp",443,"quic")'
 PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_CANDIDATE_PROTOCOL=udp STRATEGY_LAB_UDP_PORT=3478 STRATEGY_LAB_UDP_PAYLOAD_FILE="${TMP}/payload.bin" "${PYTHON}" -c 'from strategy_lab_py.candidate import _protocol_spec; s=_protocol_spec(); assert (s.protocol,s.transport,s.port)==("udp","udp",3478)'
 
-echo 'PASS: Python 3.13 owns Strategy Lab expansion, stability replay, and extended TLS/HTTP/QUIC/UDP orchestration with preserved result contracts'
+echo 'PASS: Python 3.13 keeps Stage-50 evidence as priority without gating Stage-60 reachability and preserves stability/extended contracts'

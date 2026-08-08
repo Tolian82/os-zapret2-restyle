@@ -33,7 +33,7 @@ amended on 2026-08-08 by
 
 This document remains the base product/lifecycle/stage authority. The current Python
 ownership is defined by `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`; the approved
-next search implementation is defined by
+adaptive-search target, partially implemented beginning with `_28`, is defined by
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`.
 
 The synchronous Blockcheck path has already been replaced. Historical initial-delivery

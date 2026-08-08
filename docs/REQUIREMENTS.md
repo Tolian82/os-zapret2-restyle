@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Requirements
 
 Project: **os-zapret2-restyle**  
-Version line: **0.3.x**
+Version line: **0.4.x**
 
 ## Project identity
 
@@ -311,13 +311,14 @@ CURRENT IMPLEMENTATION AND VERIFICATION STATE
 Active product baseline:
 
 - project version line: `0.4.x`;
-- previous stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`;
-- current release-preparation source: `0.4.0_1`, promoted from the owner-tested `_27`
-  line; owner live Scenario 1 passes on published testing prerelease `_27`;
+- current stable release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_1.pkg`;
+- current source candidate: `0.4.0_2`, adaptive-search `_28`; latest owner live evidence
+  remains the published `_27` Scenario-1 PASS until `_28` is separately published/tested;
 - asynchronous Strategy Lab is the only strategy-finding path;
 - the initial delivery, corrective series and Python migration through Patch 8 are source
   complete; corrective `_27` is merged and has replacement owner live evidence;
-- the adaptive-search design is approved but is not yet executable `_27` behavior;
+- the adaptive-search design is approved and partially implemented: `_28` removes the
+  Stage-50 family hard gate while `_29`–`_33` remain pending;
 - complete mock-driven API/configd-to-worker regression coverage is mandatory in CI;
 - release-selected owner-assisted OPNsense verification is required before stable release;
   the full live matrix remains regression inventory rather than an unconditional all-row

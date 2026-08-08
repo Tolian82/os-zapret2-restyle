@@ -228,7 +228,7 @@ case "${ACTION}" in
     60)
         EXPANSION_FILE="${JOB_DIR}/parameter-expansion.json"
         if run_timed "${EXPANSION_RUNNER}" "${JOB_ID}" "${ENDPOINTS_FILE}" "${JOB_DIR}/candidate-smoke.json" "${EXPANSION_FILE}"; then status=0; else status=$?; fi
-        [ "${status}" -eq 0 ] || error 'Accepted-family parameter expansion failed internally.'
+        [ "${status}" -eq 0 ] || error 'TLS 1.3 parameter expansion failed internally.'
         [ -r "${EXPANSION_FILE}" ] || error 'Parameter expansion result was not produced.'
         strategy_lab_set_parameter_expansion_result "${JOB_ID}" "${EXPANSION_FILE}" ||
             error 'Parameter expansion state could not be recorded.'

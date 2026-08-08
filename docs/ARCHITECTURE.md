@@ -118,7 +118,7 @@ STRATEGY LAB TRANSACTION
 
 An automated job owns the shared Zapret2 lifecycle lock from initial snapshot through
 mandatory restoration. The normal service is stopped only after its exact initial
-state is recorded. The current `_27` implementation starts and fully removes one cold
+state is recorded. The current `_28` implementation starts and fully removes one cold
 temporary dvtws2 candidate between probes. Whether a later search implementation keeps
 multiple isolated workers or a compatible candidate bucket warm is deliberately open
 under `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
@@ -131,8 +131,8 @@ Stages are persisted atomically:
 20 normal service stop
 30 network capability precheck
 40 clean baseline
-50 TLS 1.3 reconnaissance (current `_27` family-screening implementation)
-60 adaptive candidate search target (current `_27` still uses accepted-family expansion)
+50 TLS 1.3 reconnaissance (current `_28` family-screening implementation)
+60 catalog expansion (current `_28`: accepted evidence gets priority; every catalog family remains reachable)
 70 three-of-three stability confirmation
 80 extended protocol branches
 85 shortlist
@@ -140,14 +140,14 @@ Stages are persisted atomically:
 99 final report
 ```
 
-The current `_27` implementation runs different strategies strictly sequentially.
+The current `_28` implementation runs different strategies strictly sequentially.
 Screening may probe two different endpoints of the same service concurrently with one
 strategy. Stability confirmation uses fresh sequential connections and requires every
 required endpoint to pass three of three attempts. The approved target keeps 3/3 but
 makes it fail-fast and does not assume that cold process startup is permanently required
 for discovery.
 
-In the current `_27` source, Standard mode searches TLS 1.3 and Extended mode adds TLS
+In the current `_28` source, Standard mode searches TLS 1.3 and Extended mode adds TLS
 1.2, plain HTTP, capability-gated QUIC, and configured request-response UDP. The approved
 next search architecture removes the QUIC candidate-search branch while retaining the
 fixed IPv4 UDP/443 capability/precheck; IPv4/TCP/TLS receives the primary search budget
@@ -164,7 +164,8 @@ STRATEGY LAB IMPLEMENTATION TRANSITION
 The `v0.3.3_17` live boundary was the final shell-era handoff. Migration Patches 1–8
 (`_18`–`_25`) subsequently moved the complete automated Strategy Lab backend to Python
 and reconciled Diagnostics/status presentation. Correctives `_26` and `_27` preserve
-that ownership.
+that ownership; adaptive-search `_28` changes only Python-owned Stage-60 catalog
+reachability/prioritization.
 
 The active implementation boundary is:
 
@@ -209,8 +210,9 @@ Decision authority:
 APPROVED ADAPTIVE SEARCH TARGET
 ==================================================
 
-The current family-gated `_27` search is not the final Strategy Lab search architecture.
-The approved post-migration target is defined in
+The current `_28` search implements the first adaptive-search slice: Stage-50 acceptance
+can prioritize a family but cannot gate other Stage-60 catalog families. It is not yet
+the final Strategy Lab search architecture. The approved post-migration target is defined in
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and
 `docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md`.
 
@@ -237,7 +239,7 @@ proves result equivalence, deterministic routing, no state leakage and exact cle
 SHORTLIST AND CIRCULAR VALIDATION
 ==================================================
 
-The current `_27` result contract may expose three to five stable candidates, ordered
+The current `_28` result contract may expose three to five stable candidates, ordered
 with recommendation number one first. The adaptive-search target changes the normal
 search/validation early-stop goal to two to three strong candidates; source/result-schema
 behavior changes only in its dedicated implementation patch. Strategy Lab never writes a
