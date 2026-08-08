@@ -18,7 +18,7 @@ TEST RECORD
 - Required package ABI: `FreeBSD:15:amd64`
 - Latest published testing candidate: `os-zapret2-restyle-0.3.3_17.pkg`
 - Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_17.pkg`
-- Current migration source candidate: `os-zapret2-restyle-0.3.3_23.pkg`
+- Current migration source candidate: `os-zapret2-restyle-0.3.3_24.pkg`
 - Latest owner-tested job: `job.w0nXxQ`
 - WAN interface: `vtnet1`
 - Blocked-domain target: `rutracker.org`
@@ -99,16 +99,23 @@ endpoint-bound interception policy, ordered family screening, per-candidate time
 Stage-50 result aggregation to Python. Audited FreeBSD process/firewall/WAN mutations
 remain behind a narrow shell adapter.
 
-Migration Patch 6 source candidate `_23` moves Stage-60 parameter expansion, Stage-70
-stability/replay, and Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP orchestration to Python. The
-same Python candidate runtime/readiness/interception owner now serves standard and
-extended protocols; the shell candidate adapter remains limited to audited FreeBSD
-mutations and observations. Stage-85 final shortlist/result ownership remains assigned to
-Patch 7, and GUI/status reconciliation remains Patch 8.
+Migration Patch 6 (`_23`) moved Stage-60 parameter expansion, Stage-70 stability/replay,
+and Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP orchestration to Python. The same Python
+candidate runtime/readiness/interception owner serves standard and extended protocols;
+the shell candidate adapter remains limited to audited FreeBSD mutations and observations.
 
-None of `_18`, `_19`, `_20`, `_21`, `_22`, or `_23` supersedes the owner-tested `_17`
-live evidence or resumes Scenario 1. Source-side corrections to migration mechanisms are
-not owner-assisted live closure claims.
+Migration Patch 7 source candidate `_24` completes automated final profile construction,
+exact three-pass replay, unified shortlist publication and automated-job circular-
+eligibility ownership in Python. Published user-ready profiles are replayed through the
+same Python candidate lifecycle/readiness/interception owner; the replay-specific shell
+boundary is limited to preparing dvtws2 runtime arguments from an already validated
+profile. Obsolete competing shell result/replay orchestration is retired in this patch.
+GUI/status reconciliation and owner-assisted post-migration live verification remain
+assigned to Patch 8.
+
+None of `_18`, `_19`, `_20`, `_21`, `_22`, `_23`, or `_24` supersedes the owner-tested
+`_17` live evidence or resumes Scenario 1. Source-side corrections to migration mechanisms
+are not owner-assisted live closure claims.
 
 The live matrix remains failed during migration. Do not mark a row PASS because a defect
 mechanism was rewritten. Resume live Scenario 1 only when the Python implementation has
