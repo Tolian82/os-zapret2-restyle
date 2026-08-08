@@ -17,6 +17,13 @@ This document supplements `docs/architecture/STRATEGY_LAB.md` and supersedes any
 conflicting implementation assumptions in earlier Strategy Lab delivery documents.
 The existing product architecture remains valid unless explicitly corrected here.
 
+Search-policy amendment:
+`docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md` supersedes this document
+only where it describes family hard gating, QUIC candidate search, fixed candidate count,
+fixed output range or one-cold-process search as a permanent policy. State, cancellation,
+restoration and lifecycle safety remain authoritative. The `_27` executable path retains
+its current behavior until the corresponding `_28`–`_33` source patch changes it.
+
 Approved by the project owner on 2026-08-05 and extended by the `_6` corrective series.
 
 ==================================================
@@ -53,10 +60,11 @@ Meaning:
 - 20 — verified stop of the normal Zapret2 service when required;
 - 30 — network capability precheck;
 - 40 — clean target baseline;
-- 50 — TLS 1.3 family screening;
-- 60 — accepted-family parameter expansion;
+- 50 — low-cost TLS 1.3 reconnaissance/evidence;
+- 60 — adaptive TLS 1.3 candidate search;
 - 70 — stability confirmation;
-- 80 — extended branches;
+- 80 — extended TLS 1.2/HTTP/configured-UDP branches; QUIC remains only the fixed
+  Stage-30 capability/precheck in the adaptive target;
 - 85 — final shortlist and recommendation;
 - 90 — temporary cleanup and semantic restoration;
 - 99 — final report.
@@ -141,7 +149,8 @@ Cancellation must be observed:
 - between stages;
 - while stage 60 expansion is active;
 - while stage 70 stability probes are active;
-- while any TLS/HTTP, QUIC, or UDP runner in stage 80 is active;
+- while any applicable TLS/HTTP/configured-UDP runner in stage 80 is active (the current
+  `_27` compatibility path may still contain QUIC until its search-removal patch);
 - during bounded helper operations where waiting for the full stage timeout would
   violate responsive cancellation.
 
@@ -185,8 +194,14 @@ the minimum of:
 - its stage remaining budget;
 - the overall remaining search budget.
 
-Stage 80 has one shared 120-second budget. TLS 1.2/HTTP, QUIC, and UDP do not each
-receive a fresh independent 120-second timeout.
+Stage 80 has one shared 120-second implementation baseline. TLS 1.2/HTTP and configured
+UDP do not each receive a fresh independent 120-second timeout. The current `_27` QUIC
+branch shares that same bound until removed by the adaptive-search implementation.
+
+The 2026-08-08 timeout redesign reopens all numeric search limits for telemetry-driven
+review while preserving bounded execution. Future containment is
+`operation <= candidate <= stage <= job`; an outer deadline may not knowingly expire
+before an allowed child operation plus required cleanup can finish.
 
 Stage 90 is outside the exhausted search budget when necessary to restore the router.
 Its service-action bound must be large enough to contain the complete bounded native
@@ -236,9 +251,14 @@ The GUI displays `state` and `outcome` separately.
 CANDIDATE RUNTIME OWNERSHIP CONTRACT
 ==================================================
 
-A temporary candidate accepted by stage 50 is job-owned runtime. The candidate PID file
+A temporary candidate executed by Strategy Lab is job-owned runtime. In the current cold
+Model-A implementation the candidate PID file
 is the primary ownership proof after the PID has been validated against both the expected
 dvtws2 executable and the reserved `--port=9989` command identity.
+
+Port `9989` and single-candidate teardown are the current cold reference, not proof that a
+warm multi-worker layout is safe. Models B/C must define non-overlapping ownership and
+meet the dedicated A/B/C experiment gates before they change this runtime contract.
 
 The same ownership proof must be used during teardown and absence verification. Cleanup
 must:

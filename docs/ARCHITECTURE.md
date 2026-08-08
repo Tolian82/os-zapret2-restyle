@@ -118,8 +118,10 @@ STRATEGY LAB TRANSACTION
 
 An automated job owns the shared Zapret2 lifecycle lock from initial snapshot through
 mandatory restoration. The normal service is stopped only after its exact initial
-state is recorded. Temporary dvtws2 processes and target-scoped firewall rules are
-fully removed between candidates and before restoration.
+state is recorded. The current `_27` implementation starts and fully removes one cold
+temporary dvtws2 candidate between probes. Whether a later search implementation keeps
+multiple isolated workers or a compatible candidate bucket warm is deliberately open
+under `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
 Stages are persisted atomically:
 
@@ -129,8 +131,8 @@ Stages are persisted atomically:
 20 normal service stop
 30 network capability precheck
 40 clean baseline
-50 TLS 1.3 family screening
-60 accepted-family parameter expansion
+50 TLS 1.3 reconnaissance (current `_27` family-screening implementation)
+60 adaptive candidate search target (current `_27` still uses accepted-family expansion)
 70 three-of-three stability confirmation
 80 extended protocol branches
 85 shortlist
@@ -138,14 +140,18 @@ Stages are persisted atomically:
 99 final report
 ```
 
-Different strategies run strictly sequentially. Screening may probe two different
-endpoints of the same service concurrently with one strategy. Stability confirmation
-uses fresh sequential connections and requires every required endpoint to pass three
-of three attempts.
+The current `_27` implementation runs different strategies strictly sequentially.
+Screening may probe two different endpoints of the same service concurrently with one
+strategy. Stability confirmation uses fresh sequential connections and requires every
+required endpoint to pass three of three attempts. The approved target keeps 3/3 but
+makes it fail-fast and does not assume that cold process startup is permanently required
+for discovery.
 
-Standard mode searches TLS 1.3. Extended mode adds TLS 1.2, plain HTTP,
-capability-gated QUIC, and configured request-response UDP. IPv6 and QUIC branches are
-skipped when their independent capability gates are unavailable.
+In the current `_27` source, Standard mode searches TLS 1.3 and Extended mode adds TLS
+1.2, plain HTTP, capability-gated QUIC, and configured request-response UDP. The approved
+next search architecture removes the QUIC candidate-search branch while retaining the
+fixed IPv4 UDP/443 capability/precheck; IPv4/TCP/TLS receives the primary search budget
+and IPv6 remains capability-gated/lower priority.
 
 Cancellation marks the current work cancelled, preserves completed structured results,
 stops temporary probes/runtime, and always executes stage 90. A restoration failure
@@ -155,11 +161,12 @@ changes the terminal result to `restore_failed`; it is never reported as success
 STRATEGY LAB IMPLEMENTATION TRANSITION
 ==================================================
 
-At the `v0.3.3_17` live boundary the active Strategy Lab implementation is still the
-large POSIX-shell worker assembled from sourced Strategy Lab modules. That implementation
-remains active until individual migration patches switch authoritative ownership.
+The `v0.3.3_17` live boundary was the final shell-era handoff. Migration Patches 1–8
+(`_18`–`_25`) subsequently moved the complete automated Strategy Lab backend to Python
+and reconciled Diagnostics/status presentation. Correctives `_26` and `_27` preserve
+that ownership.
 
-The approved target implementation boundary is:
+The active implementation boundary is:
 
 ```text
 Diagnostics GUI / JavaScript
@@ -175,11 +182,11 @@ Python Strategy Lab orchestration
 small explicit FreeBSD/OPNsense adapters and external tools
 ```
 
-PHP remains the web/API integration layer. Python is the target owner for job state,
+PHP remains the web/API integration layer. Python is the automated owner for job state,
 stage orchestration, budgets/cancellation, subprocess execution, output parsing,
-candidate/family control, and structured result generation. Small shell/service adapters
-may remain for already-audited Zapret2 lifecycle, shared-lock, `ipfw`, process ownership,
-and short FreeBSD-specific mutations where reuse is safer than duplication.
+candidate/search control, and structured result generation. Small shell/service adapters
+remain for already-audited Zapret2 lifecycle, shared-lock, `ipfw`, process ownership,
+and short FreeBSD-specific mutations.
 
 The public asynchronous API, stage numbers, evidence locations, lifecycle/restoration
 semantics, temporary firewall ownership, saved-configuration immutability, and result
@@ -189,9 +196,8 @@ There must be only one authoritative owner for each migrated responsibility. A r
 shell orchestration path is removed after parity qualification; it is not kept as a
 silent fallback competitor.
 
-No Python interpreter path/version is assumed until the first migration patch verifies
-the supported OPNsense/FreeBSD 15 runtime and dependency model. No third-party `pip`
-dependency is approved by default.
+The packaged runtime contract is Python 3.13 through the OPNsense-managed interpreter;
+no third-party `pip` dependency is approved by default.
 
 Specialist authority:
 `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
@@ -200,12 +206,42 @@ Decision authority:
 `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
 
 ==================================================
+APPROVED ADAPTIVE SEARCH TARGET
+==================================================
+
+The current family-gated `_27` search is not the final Strategy Lab search architecture.
+The approved post-migration target is defined in
+`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and
+`docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md`.
+
+Key target properties:
+
+- native Zapret2-only candidate semantics;
+- Stage-50 results are evidence rather than hard family permission for Stage 60;
+- explicit Python `CandidateSpec` and job-scoped installed `ResourceInventory`;
+- semantic BLOB-free/built-in/inline/external resource selection;
+- candidate-owned optional output range instead of global `-d10`;
+- golden native/owner working strategies prove representability and graph reachability;
+- adaptive cost/evidence-based graph exploration with historical hits affecting order,
+  never reachability;
+- pinned endpoint/search-epoch comparison;
+- inexpensive discovery followed by fail-fast 3/3 and cold finalist long-GET validation;
+- normal early stop after two to three strong stable winners;
+- telemetry-driven timeout containment.
+
+Cold A, multiple-warm-worker B and warm-bucket/dispatcher C are experimental execution
+models. The architecture does not select one until the dedicated OPNsense experiment plan
+proves result equivalence, deterministic routing, no state leakage and exact cleanup.
+
+==================================================
 SHORTLIST AND CIRCULAR VALIDATION
 ==================================================
 
-A completed domain job may expose three to five stable candidates, ordered with
-recommendation number one first. Strategy Lab never writes a candidate to the saved
-Traffic Strategy.
+The current `_27` result contract may expose three to five stable candidates, ordered
+with recommendation number one first. The adaptive-search target changes the normal
+search/validation early-stop goal to two to three strong candidates; source/result-schema
+behavior changes only in its dedicated implementation patch. Strategy Lab never writes a
+candidate to the saved Traffic Strategy.
 
 Temporary circular validation is a separate bounded lifecycle transaction:
 

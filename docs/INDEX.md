@@ -17,6 +17,10 @@ For current Strategy Lab post-migration live correction work, read these first:
 
 - `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved migration map and completed automated Python ownership;
 - `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md` — rationale, language responsibility boundary, compatibility invariants, bug-backlog policy, and migration delivery rules;
+- `docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md` — active post-migration search-policy decision; supersedes family hard gating, fixed `-d10`, and the planned QUIC strategy-search branch while keeping warm-runtime selection experimental;
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — approved native-Zapret2 `CandidateSpec`/`ResourceInventory`, adaptive search graph, resource classes, validation and timeout target architecture;
+- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — A/B/C cold/warm runtime, dispatcher, preload, discovery-probe and timeout-telemetry verification plan;
+- `docs/devlog/2026-08-08-strategy-lab-adaptive-search-design.md` — documentation-only design handoff into the planned `_28`–`_33` implementation series;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — current owner-assisted live gate, failed on `_26` at Stage 40 and selecting corrective source `_27`;
 - `docs/verification/evidence/2026-08-08-v0.3.3_26-scenario-01-stage40-dns-deadline.md` — current `_26` live evidence proving the 2-second DNS deadline rejects intermittent 8–10-second valid local-resolver answers;
 - `docs/patches/v0.3.3_27.md` — corrective Stage-40 DNS/stage deadline contract;
@@ -59,6 +63,11 @@ candidate-local structured error is rejected locally rather than aborting the en
 catalog. Corrective `_27` likewise preserves ownership and DNS semantics; it widens the
 Python DNS deadline and enclosing Stage-40 operation envelope using new owner evidence.
 
+The 2026-08-08 adaptive-search decision is a later approved target architecture, not a
+claim that `_27` already implements it. The current executable search remains the cold,
+family-gated implementation until the `_28`–`_33` source patches replace those pieces.
+The A/B/C warm-runtime choice remains evidence-gated by the experiment plan.
+
 ## Existing Strategy Lab product authorities
 
 These contracts remain authoritative unless the Python migration decision explicitly
@@ -66,7 +75,10 @@ changes implementation ownership. Migration and corrective work are not permissi
 weaken product behavior.
 
 - `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md` — third-audit findings SL3-001…SL3-007 and source/CI traceability;
-- `docs/architecture/STRATEGY_LAB.md` — original approved product/stage/lifecycle/search contract;
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — approved next search architecture and explicit current-vs-target boundary;
+- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — required evidence before warm/multi-process search optimizations become production rules;
+- `docs/architecture/STRATEGY_LAB.md` — base product/stage/lifecycle contract with the
+  2026-08-08 search-policy supersession linked explicitly;
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md` — state, cancellation, timeout, candidate ownership, restoration recovery, and verification;
 - `docs/architecture/STRATEGY_LAB_ACTIVATION.md` — active Diagnostics path;
 - `docs/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md` — complete replay-verified profiles;

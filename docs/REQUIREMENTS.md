@@ -157,6 +157,49 @@ Apply must:
 
 Invalid user input remains visible for correction.
 
+## Strategy Lab adaptive search
+
+The approved post-migration Strategy Lab search target is defined by
+`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and
+`docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md`.
+
+Product requirements for the redesign:
+
+- search candidates use native `bol-van/zapret2` semantics only; classic zapret/nfqws1
+  strategy syntax is not a candidate source;
+- Python remains the automated planner/search/result owner and shell remains limited to
+  audited OPNsense/FreeBSD system adapters;
+- a simple Stage-50 representative result is evidence, not an allow/deny gate for all
+  related Stage-60 candidates;
+- each candidate has an explicit reproducible `CandidateSpec` including ordered Lua
+  actions, technique arguments, optional ranges and resource dependencies;
+- installed Lua and fake-file resources are captured in a job-scoped `ResourceInventory`
+  rather than assumed from a fixed release-specific list;
+- BLOB-free, Zapret2 built-in, inline and installed external-file resource forms are all
+  valid when the native technique supports them;
+- a reported bypass candidate contains at least one native Zapret2 Lua action; a no-action
+  profile is baseline/pass-through evidence;
+- `--out-range=-d10` is not a global Strategy Lab requirement; output range is candidate
+  data and may be another valid value or absent when the native strategy does not need it;
+- known native/owner-proven Zapret2 strategies are retained as golden representation and
+  search-reachability regressions, not universal provider presets;
+- the primary search budget is IPv4/TCP/TLS; IPv6 is capability-gated/lower priority;
+- QUIC is limited to the fixed IPv4 UDP/443 capability/precheck signal and does not have
+  an adaptive Strategy Lab bypass-search branch;
+- mass discovery and finalist validation are separate evidence levels;
+- strict stability remains 3/3 but stops immediately after a failure makes 3/3
+  impossible;
+- the best two to three candidates normally receive finalist validation and form the
+  early-stop target; a smaller truthful result remains valid;
+- finalist validation uses a real bounded GET and records whether at least 16 KiB of body
+  data was obtained; a valid shorter resource is `inconclusive` for the 16-KiB depth
+  criterion rather than falsely reported as PASS;
+- operation, candidate, stage and job deadlines must form a measured containing hierarchy
+  and must be reviewed from timing telemetry rather than copied indefinitely as constants;
+- a warm/multiple-dvtws2 execution model is not a requirement until the A/B/C experiment
+  plan proves deterministic candidate attribution, cold-result equivalence, isolation,
+  cleanup/restoration and material performance value.
+
 ## Service lifecycle
 
 - Start validates saved configuration before launch.
@@ -269,17 +312,28 @@ Active product baseline:
 
 - project version line: `0.3.x`;
 - published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`;
-- current verified source candidate: `os-zapret2-restyle-0.3.2_24.pkg`;
+- current source line: `0.3.3_27` on `main`; owner live evidence still follows the
+  separately recorded testing-prerelease/live matrix boundary;
 - asynchronous Strategy Lab is the only strategy-finding path;
-- the initial 13-patch delivery and corrective source patches 1–11 are complete;
+- the initial delivery, corrective series and Python migration through Patch 8 are source
+  complete; corrective `_27` is merged and awaits replacement owner live evidence;
+- the adaptive-search design is approved but is not yet executable `_27` behavior;
 - complete mock-driven API/configd-to-worker regression coverage is mandatory in CI;
 - final owner-assisted OPNsense verification remains required before release authorization.
 
 Current Strategy Lab behavior is controlled by:
 
+- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`;
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`;
 - `docs/decisions/DEC-2026-08-05-strategy-lab-corrective-series.md`;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-CORRECTIVE.md`.
+
+Approved next search behavior is controlled by:
+
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
+- `docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md`;
+- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` for unresolved runtime
+  optimizations.
 
 Historical audit, devlog, release, and patch records remain evidence only. They do not
 override the current specialist authority and current project state.

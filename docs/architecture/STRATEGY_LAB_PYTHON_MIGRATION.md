@@ -32,9 +32,15 @@ The automated backend migration is complete: Python is the single automated owne
 state, stage orchestration, requests/probes, candidate/search policy and final result
 assembly. Patch 8 must not move those responsibilities back into PHP, JavaScript or shell.
 
-The latest published and owner-tested live candidate is `_26`; Scenario 1 remains failed
-at Stage 40 and selects `_27` for corrective source qualification. Candidate publication
-remains governed separately by `docs/GITHUB_PUBLICATION.md`.
+The 2026-08-08 adaptive-search decision changes the **future Python search policy**, not
+this ownership boundary. Its target contract is
+`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`; runtime-model hypotheses are gated by
+`docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
+
+The latest owner-tested live candidate remains `_26`; Scenario 1 remains failed at Stage
+40. Corrective `_27` source/CI is merged on `main`, while replacement owner live evidence
+remains pending. Candidate/package publication state remains governed separately by
+`docs/GITHUB_PUBLICATION.md`.
 
 ==================================================
 OBJECTIVE
@@ -143,11 +149,16 @@ Patch 5 — `strategy_lab_py/candidate.py` and `family.py`
 
 Patch 6 — `strategy_lab_py/search.py` and `extended.py`
 
-- Stage-60 accepted-family expansion catalog/order/early-stop policy;
+- current `_27` Stage-60 accepted-family expansion catalog/order/early-stop behavior;
 - Stage-70 source de-duplication/ranking/three-attempt stability replay;
 - Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP orchestration;
 - one generalized candidate lifecycle across supported protocols;
 - exact-endpoint QUIC and generic-UDP request execution through the request owner.
+
+The accepted-family gate and QUIC candidate-search branch above describe the completed
+migration baseline, not the approved next search architecture. `_28` removes the hard
+family gate; the adaptive target keeps only the fixed IPv4 UDP/443 QUIC precheck and
+concentrates search on native Zapret2 TCP/TLS plus the approved non-QUIC extended branches.
 
 Patch 7 — `strategy_lab_py/result.py`
 
@@ -253,13 +264,18 @@ Supported final protocol profiles:
 - TLS 1.3 — TCP/443, TLS L7;
 - TLS 1.2 — TCP/443, TLS L7;
 - HTTP — TCP/80, HTTP L7;
-- QUIC — UDP/443, QUIC L7;
+- QUIC — UDP/443, QUIC L7 in the current `_27` implementation only; the approved
+  adaptive-search target removes QUIC candidate search and retains only the fixed precheck;
 - generic UDP — validated configured port, no L7 filter, validated job-local payload.
 
-Each published profile contains one transport filter, optional protocol L7 filter, one
-validated target selector, `--out-range=-d10`, and the candidate desynchronization
-fragment. Runtime-only arguments, nested selectors/filters, placeholders and `--new` are
-rejected.
+In the current `_27` implementation each published profile contains one transport filter,
+optional protocol L7 filter, one validated target selector, `--out-range=-d10`, and the
+candidate desynchronization fragment. Runtime-only arguments, nested selectors/filters,
+placeholders and `--new` are rejected.
+
+The adaptive-search target explicitly supersedes fixed `-d10`: `out-range` becomes
+optional candidate data represented by `CandidateSpec`, and final profile replay must
+preserve the exact range (or absence of range) that was actually tested.
 
 Each final source is replayed exactly three times. A shortlist entry is accepted only when
 all three attempts pass and each replay proves the exact complete published profile was
@@ -295,9 +311,11 @@ Mandatory invariants:
 1. Snapshot exact initial Zapret2 state before mutation.
 2. Use the shared lifecycle ownership boundary.
 3. Stop normal runtime only through approved lifecycle paths.
-4. Run one temporary candidate at a time.
+4. Keep candidate identity, traffic effects and evidence deterministically isolated.
 5. Keep temporary firewall/divert ownership isolated.
-6. Clean candidate runtime before the next candidate.
+6. The current cold reference cleans candidate runtime before the next candidate; a
+   future warm model may reuse job-owned runtime only after the A/B/C experiment proves
+   cold-result equivalence, deterministic dispatch and no state leakage.
 7. Execute Stage 90 on normal completion, timeout, cancel, signal or internal error.
 8. Restore initial RUNNING to healthy RUNNING and initial STOPPED to STOPPED.
 9. Never hide restoration failure behind a successful result.
@@ -339,8 +357,14 @@ MIGRATION PATCH SERIES
 - Patch 6 — expansion/stability/extended orchestration: **COMPLETE / `_23`**.
 - Patch 7 — final profile/replay/shortlist/eligibility + competing shell-owner retirement:
   **COMPLETE / `_24`**.
-- Patch 8 — GUI/status reconciliation and post-migration live gate:
-  **CURRENT `_25` SOURCE CHANGE; OWNER LIVE EVIDENCE PENDING**.
+- Patch 8 — GUI/status reconciliation and post-migration live gate: **COMPLETE / `_25`**.
+- Corrective `_26` — Stage-50 candidate-local failure isolation: **SOURCE/CI COMPLETE;
+  OWNER LIVE CLOSURE PENDING**.
+- Corrective `_27` — Stage-40 DNS/stage deadline correction: **MERGED ON `main`;
+  OWNER LIVE CLOSURE PENDING**.
+
+The next approved search-quality source sequence is `_28`–`_33` in
+`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and `docs/ROADMAP.md`.
 
 ==================================================
 PATCH 8 VERIFICATION

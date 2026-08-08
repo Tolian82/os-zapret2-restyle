@@ -28,14 +28,23 @@ active. Latest owner-tested candidate `v0.3.3_26` fails at Stage 40 on a DNS dea
 mismatch; corrective source candidate is `_27`.
 
 Current objective:
-**qualify `_27`, repeat Scenario 1 through Stage 40/50, then continue the owner-assisted
-live matrix without starting unrelated Strategy Lab feature work.**
+**repeat Scenario 1 on the qualified `_27` source/package boundary through Stage 40/50,
+then continue the owner-assisted live matrix; the separately approved adaptive-search
+design remains the next Strategy Lab search-quality source series, not evidence that the
+current live defects are closed.**
 
 Primary plan:
 `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
 
 Decision:
 `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
+
+Approved post-migration search redesign:
+`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and
+`docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md`.
+
+Runtime/search experiment plan:
+`docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
 ==================================================
 COMPLETED STRATEGY LAB FOUNDATION
@@ -64,11 +73,56 @@ PYTHON MIGRATION SERIES
 - [x] Corrective `_26` — Stage-50 candidate-local failure isolation; source/CI/package
   qualified and published, live verification still pending because `_26` now stops at Stage 40.
 - [ ] Corrective `_27` — widen DNS deadline to 15 seconds and enclosing Stage-40 envelope
-  to 20 seconds; qualify and repeat Scenario 1.
+  to 20 seconds; source/CI merged, repeat Scenario 1 for owner live evidence.
 
 If a listed patch exceeds one logical change, split it. Do not compress the migration into a monolithic rewrite.
 
 Every packaged migration patch must pass applicable focused tests, normal CI, and the FreeBSD 15 package build. Testing-prerelease publication follows the owner's standing installable-patch authority without another routine confirmation.
+
+==================================================
+APPROVED ADAPTIVE-SEARCH SERIES
+==================================================
+
+The 2026-08-08 design review approved a second, post-migration search-quality series.
+This does not erase the `_27` live boundary above: existing corrective findings remain
+open until replacement OPNsense evidence closes them.
+
+Target authority:
+`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`.
+
+Experimental authority:
+`docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
+
+Planned source cycles:
+
+- [ ] `_28` — remove Stage-50 `accepted` as a hard gate for Stage-60 candidate reachability;
+- [ ] `_29` — add Python `CandidateSpec` and job-scoped installed `ResourceInventory`;
+  remove candidate resource/search policy from the shell adapter;
+- [ ] `_30` — native-Zapret2 adaptive search graph, golden/reference corpus,
+  BLOB-free/built-in/inline/external resource paths, and candidate-defined output range;
+- [ ] `_31` — adaptive neighbor ordering, fixed search-epoch endpoint binding, two-to-three
+  winner early stop, and per-phase timing telemetry;
+- [ ] `_32` — review every operation/candidate/stage/job deadline from measured telemetry
+  and enforce deadline containment;
+- [ ] `_33` — lightweight discovery, fail-fast 3/3 stability, and finalist cold long-GET/
+  16-KiB validation.
+
+Warm runtime is deliberately not preselected as one of these implementation facts.
+Before a warm design becomes production, compare:
+
+- A — cold one-candidate/one-process reference;
+- B — multiple isolated warm dvtws2 workers, initially with sequential probes;
+- C — one compatible warm candidate bucket with deterministic dispatcher.
+
+Required measurements include cold-result equivalence, candidate attribution,
+false PASS/FAIL, startup/readiness/probe/cleanup time, total search wall time, RSS,
+state leakage, cancellation, IPFW/divert isolation and exact restoration. Controlled
+source-port dispatch, common Lua preload, lazy buckets and true simultaneous candidate
+testing remain separate hypotheses until their individual evidence passes.
+
+QUIC is not an adaptive-search work item: retain only the existing fixed IPv4 UDP/443
+capability/precheck. The target search budget is concentrated on IPv4/TCP/TLS; IPv6
+remains capability-gated and lower priority.
 
 ==================================================
 CONFIRMED DEFECTS CARRIED INTO MIGRATION

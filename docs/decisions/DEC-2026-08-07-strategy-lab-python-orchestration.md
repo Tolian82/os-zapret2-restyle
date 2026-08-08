@@ -74,6 +74,15 @@ The migration must preserve unless separately approved:
 
 Migration is not permission to weaken lifecycle safety or silently change product behavior.
 
+Later search-policy amendment:
+
+`docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md` keeps this Python/PHP/shell
+ownership boundary active but explicitly changes the target search algorithm, QUIC search
+scope, candidate/resource representation, finalist validation and timeout-review policy.
+Where the 2026-08-08 decision deliberately changes one of the compatibility items above,
+the later decision controls; lifecycle/restoration safety and public asynchronous job
+ownership remain unchanged.
+
 ==================================================
 BUG BACKLOG POLICY
 ==================================================
