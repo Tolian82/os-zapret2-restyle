@@ -119,6 +119,14 @@ grep -Fq "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy
 if grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGRESS**' "${MATRIX}"; then
     grep -Fq 'Current corrective candidate: **NOT DESIGNATED — PATCH 8 REQUIRED**' "${MATRIX}" ||
         fail 'paused third-audit matrix must not designate a live candidate before Patch 8'
+elif grep -Fq 'Overall status: **FAILED ON `_25` — CORRECTIVE `_26` REQUIRED**' "${MATRIX}"; then
+    [ "${revision}" -eq 26 ] || fail '_25 live failure must designate revision 26'
+    grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.3.3_25.pkg`' "${MATRIX}" ||
+        fail 'post-migration live matrix does not preserve published _25 identity'
+    grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_25.pkg`' "${MATRIX}" ||
+        fail 'post-migration live matrix does not preserve owner-tested _25 identity'
+    grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}" ||
+        fail "post-migration live matrix does not select current corrective source package ${candidate}"
 elif grep -Fq 'Overall status: **FAILED ON `_17` — LIVE MATRIX PAUSED FOR PYTHON MIGRATION**' "${MATRIX}"; then
     [ "${revision}" -ge 17 ] || fail 'Python migration source revision cannot precede shell-era revision 17'
     grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.3.3_17.pkg`' "${MATRIX}" ||
