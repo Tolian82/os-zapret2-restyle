@@ -3,6 +3,7 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MODULE_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab"
+REQUEST_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py"
 ROOT=$(mktemp -d /tmp/strategy-lab-interception.XXXXXX)
 trap 'rm -rf "${ROOT}"' EXIT HUP INT TERM
 
@@ -71,7 +72,20 @@ strategy_lab_dns_request()
         example.com|alias.example.com) address=203.0.113.10 ;;
         *) return 1 ;;
     esac
-    printf '%s. 60 IN A %s\n' "$1" "${address}" > "$3"
+    printf '%s\n' ';; QUESTION SECTION:' > "$3"
+    printf '%s. 60 IN A 198.51.100.99\n' "$1" >> "$3"
+    printf '%s\n' ';; ANSWER SECTION:' >> "$3"
+    printf '%s. 60 IN A %s\n' "$1" "${address}" >> "$3"
+    printf '%s\n' ';; AUTHORITY SECTION:' >> "$3"
+    printf '%s. 60 IN A 198.51.100.98\n' "$1" >> "$3"
+}
+strategy_lab_dns_first_answer()
+{
+    awk -v wanted="$1" '
+        /^;; ANSWER SECTION:/ { answer=1; next }
+        /^;; [A-Z]+ SECTION:/ { answer=0 }
+        answer && $(NF-1)==wanted { print $NF; exit }
+    ' "$2"
 }
 ENDPOINTS="${ROOT}/endpoints"
 ADDRESSES="${ROOT}/addresses"
@@ -86,28 +100,15 @@ awk -F '\t' '
     END { exit !(NR==3 && ok) }
 ' "${BINDINGS}"
 
-tls13_bound=$(awk '/^strategy_lab_tls13_bound_request\(\)/{show=1} show{print} show && /^}/{exit}' "${MODULE_DIR}/request.sh")
-printf '%s\n' "${tls13_bound}" | grep -Fq -- '--resolve "${_slreq_host}:443:${_slreq_ip}"'
-printf '%s\n' "${tls13_bound}" | grep -Fq -- '--max-redirs 0'
-if printf '%s\n' "${tls13_bound}" | grep -Fq -- '--location'; then
-    echo 'bound TLS 1.3 request still follows redirects' >&2
-    exit 1
-fi
-
-for function_name in strategy_lab_tls12_bound_request strategy_lab_http_bound_request
-do
-    body=$(awk -v wanted="${function_name}()" '
-        $0 == wanted { show=1 }
-        show { print }
-        show && /^}/ { exit }
-    ' "${MODULE_DIR}/extended_request.sh")
-    printf '%s\n' "${body}" | grep -Fq -- '--resolve '
-    printf '%s\n' "${body}" | grep -Fq -- '--max-redirs 0'
-    if printf '%s\n' "${body}" | grep -Fq -- '--location'; then
-        echo "${function_name} still follows redirects" >&2
-        exit 1
-    fi
-done
+# Bound TLS/HTTP finite requests are Python-owned in Migration Patch 4. The
+# invariant remains: a bound probe pins the exact endpoint and cannot follow a
+# redirect away from that IP.
+grep -Fq 'command.extend(["--max-redirs", "0", "--resolve", f"{host}:{port}:{bound_ip}"])' "${REQUEST_PY}"
+grep -Fq 'if bound_ip is None:' "${REQUEST_PY}"
+grep -Fq 'command.extend(["--location", "--max-redirs", "2"])' "${REQUEST_PY}"
+grep -Fq 'strategy_lab_request_python tls13-bound' "${MODULE_DIR}/request.sh"
+grep -Fq 'strategy_lab_request_python tls12-bound' "${MODULE_DIR}/extended_request.sh"
+grep -Fq 'strategy_lab_request_python http-bound' "${MODULE_DIR}/extended_request.sh"
 
 grep -Fq -- '-connect "${_slquicreq_ip}:443"' "${MODULE_DIR}/quic_request.sh"
 for file in candidate.sh extended_candidate.sh quic_candidate.sh udp_candidate.sh
@@ -125,4 +126,4 @@ if grep -Fq '_slcand_run_pids' "${MODULE_DIR}/candidate.sh"; then
     exit 1
 fi
 
-echo 'PASS: candidate success requires one bound endpoint and verified IPFW counter growth'
+echo 'PASS: candidate success requires one bound endpoint and verified IPFW counter growth while Python owns finite bound-request execution'
