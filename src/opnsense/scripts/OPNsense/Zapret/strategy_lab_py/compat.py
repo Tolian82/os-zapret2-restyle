@@ -9,6 +9,7 @@ from collections.abc import Sequence
 
 from . import FOUNDATION_REVISION, SUPPORTED_PYTHON
 from . import orchestrator as stage_orchestrator
+from . import probe as probe_execution
 from . import state as state_persistence
 
 EX_OK = 0
@@ -79,6 +80,20 @@ def _run_orchestrator(args: Sequence[str]) -> int:
         return EX_SOFTWARE
 
 
+def _run_probe(args: Sequence[str]) -> int:
+    try:
+        return probe_execution.main(args)
+    except probe_execution.UsageError as exc:
+        _error(str(exc))
+        return EX_USAGE
+    except probe_execution.ProbeError as exc:
+        _error(str(exc))
+        return EX_SOFTWARE
+    except OSError as exc:
+        _error(f"Strategy Lab probe execution failed: {exc}")
+        return EX_SOFTWARE
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
 
@@ -98,8 +113,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args[:1] == ["orchestrate"]:
         return _run_orchestrator(args[1:])
 
+    if args[:1] == ["probe"]:
+        return _run_probe(args[1:])
+
     if len(args) != 1:
-        _error("usage: strategy_lab_python.py job_id | --self-test | state OPERATION ... | orchestrate JOB_ID")
+        _error("usage: strategy_lab_python.py job_id | --self-test | state OPERATION ... | orchestrate JOB_ID | probe OPERATION ...")
         return EX_USAGE
 
     return _delegate_shell(args[0])
