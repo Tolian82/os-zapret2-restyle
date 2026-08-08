@@ -47,7 +47,7 @@ for arg in "$@"
 do
     case "${arg}" in https://*|http://*) url="${arg}" ;; esac
 done
-host=$(printf '%s' "${url}" | sed -e 's#^https\?://##' -e 's#/$##')
+host=$(printf '%s' "${url}" | sed -e 's#^https://##' -e 's#^http://##' -e 's#/$##')
 printf 'curl-stderr-%s\n' "${host}" >&2
 case "${MOCK_CURL_MODE:-baseline-fail}:${host}" in
     network-pass:yandex.ru)
