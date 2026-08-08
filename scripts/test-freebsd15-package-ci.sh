@@ -10,10 +10,13 @@ VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 PATCH4_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-probes.sh"
 PATCH5_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-candidate-family.sh"
+PATCH6_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-search-extended.sh"
 REQUEST_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py"
 PROBE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py"
 CANDIDATE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate.py"
 FAMILY_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/family.py"
+SEARCH_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/search.py"
+EXTENDED_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/extended.py"
 CANDIDATE_ADAPTER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_adapter.sh"
 
 fail()
@@ -23,7 +26,8 @@ fail()
 }
 
 for file in "${CI}" "${RELEASE}" "${MATRIX}" "${INTEGRATION}" "${VERSION_FILE}" "${MAKEFILE}" \
-    "${PATCH4_TEST}" "${PATCH5_TEST}" "${REQUEST_PY}" "${PROBE_PY}" "${CANDIDATE_PY}" "${FAMILY_PY}" "${CANDIDATE_ADAPTER}"
+    "${PATCH4_TEST}" "${PATCH5_TEST}" "${PATCH6_TEST}" \
+    "${REQUEST_PY}" "${PROBE_PY}" "${CANDIDATE_PY}" "${FAMILY_PY}" "${SEARCH_PY}" "${EXTENDED_PY}" "${CANDIDATE_ADAPTER}"
 do
     [ -s "${file}" ] || fail "required file is missing: ${file}"
 done
@@ -75,6 +79,8 @@ grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-str
     fail 'FreeBSD 15 package job does not execute the Python request/probe regression'
 grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-candidate-family.sh' "${CI}" ||
     fail 'FreeBSD 15 package job does not execute the Python candidate/family regression'
+grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-search-extended.sh' "${CI}" ||
+    fail 'FreeBSD 15 package job does not execute the Python search/extended regression'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/state.py' "${CI}" ||
     fail 'package inspection does not require the Python state persistence module'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/orchestrator.py' "${CI}" ||
@@ -87,6 +93,10 @@ grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate.p
     fail 'package inspection does not require the Python candidate runtime module'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/family.py' "${CI}" ||
     fail 'package inspection does not require the Python family screening module'
+grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/search.py' "${CI}" ||
+    fail 'package inspection does not require the Python search orchestration module'
+grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/extended.py' "${CI}" ||
+    fail 'package inspection does not require the Python extended-protocol orchestration module'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_adapter.sh' "${CI}" ||
     fail 'package inspection does not require the narrow candidate system adapter'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_stage_adapter.sh' "${CI}" ||
@@ -142,4 +152,4 @@ if grep -Fq 'Current corrective candidate: `os-zapret2-restyle-0.3.2_46.pkg`' "$
 fi
 
 sh -n "$0"
-echo "PASS: GitHub package builds stay on FreeBSD 15, Python 3.13 persistence/orchestration/request-probe/candidate-family layers are qualified, and live-candidate selection respects the active live gate for ${candidate}"
+echo "PASS: GitHub package builds stay on FreeBSD 15, Python 3.13 persistence/orchestration/request-probe/candidate-family/search-extended layers are qualified, and live-candidate selection respects the active live gate for ${candidate}"
