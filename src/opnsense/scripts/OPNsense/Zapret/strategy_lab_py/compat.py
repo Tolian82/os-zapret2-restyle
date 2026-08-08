@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from . import FOUNDATION_REVISION, SUPPORTED_PYTHON
 from . import orchestrator as stage_orchestrator
 from . import probe as probe_execution
+from . import request as request_execution
 from . import state as state_persistence
 
 EX_OK = 0
@@ -89,8 +90,25 @@ def _run_probe(args: Sequence[str]) -> int:
     except probe_execution.ProbeError as exc:
         _error(str(exc))
         return EX_SOFTWARE
+    except request_execution.RequestError as exc:
+        _error(str(exc))
+        return EX_SOFTWARE
     except OSError as exc:
         _error(f"Strategy Lab probe execution failed: {exc}")
+        return EX_SOFTWARE
+
+
+def _run_request(args: Sequence[str]) -> int:
+    try:
+        return request_execution.main(args)
+    except request_execution.UsageError as exc:
+        _error(str(exc))
+        return EX_USAGE
+    except request_execution.RequestError as exc:
+        _error(str(exc))
+        return EX_SOFTWARE
+    except OSError as exc:
+        _error(f"Strategy Lab request execution failed: {exc}")
         return EX_SOFTWARE
 
 
@@ -116,8 +134,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args[:1] == ["probe"]:
         return _run_probe(args[1:])
 
+    if args[:1] == ["request"]:
+        return _run_request(args[1:])
+
     if len(args) != 1:
-        _error("usage: strategy_lab_python.py job_id | --self-test | state OPERATION ... | orchestrate JOB_ID | probe OPERATION ...")
+        _error("usage: strategy_lab_python.py job_id | --self-test | state OPERATION ... | orchestrate JOB_ID | probe OPERATION ... | request OPERATION ...")
         return EX_USAGE
 
     return _delegate_shell(args[0])
