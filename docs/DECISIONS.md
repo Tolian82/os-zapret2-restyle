@@ -2414,3 +2414,24 @@ Affected documents:
 
 Status:
 Active design decision; source implementation pending.
+
+==================================================
+2026-08-09 — RISK-BASED LIVE RELEASE GATES
+==================================================
+
+Decision:
+
+Keep the 18-row Strategy Lab OPNsense matrix as the canonical live regression inventory,
+but select mandatory stable-release rows from current change risk, live-only defects and
+lifecycle/restoration safety instead of blocking every release on every pending row.
+
+For `v0.4.0`, owner-tested `v0.3.3_27` Scenario 1 is the mandatory post-migration live
+row and is PASS: Stage 40, Stage 50, Stages 60/70 and Stage 90 pass; terminal
+`NO_CANDIDATE` is truthful. Rows 2–18 remain pending regression coverage without a false
+PASS claim and do not block v0.4.0 solely because they are pending.
+
+Full rationale and supersession:
+`docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
+
+Status:
+Active.

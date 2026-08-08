@@ -23,15 +23,14 @@ Detailed rationale, current live logs, or completed implementation internals.
 CURRENT PRIORITY
 ==================================================
 
-Strategy Lab migration is source-complete and owner-assisted post-migration testing is
-active. Latest owner-tested candidate `v0.3.3_26` fails at Stage 40 on a DNS deadline
-mismatch; corrective source candidate is `_27`.
+Strategy Lab migration is source-complete. Owner-assisted `_27` testing passes the
+release-selected Standard Scenario 1, including Stages 40/50, continued search and exact
+Stage-90 restoration.
 
 Current objective:
-**repeat Scenario 1 on the qualified `_27` source/package boundary through Stage 40/50,
-then continue the owner-assisted live matrix; the separately approved adaptive-search
-design remains the next Strategy Lab search-quality source series, not evidence that the
-current live defects are closed.**
+**prepare and release `v0.4.0 / 0.4.0_1`; retain the remaining live scenarios as a
+risk-selected regression inventory and then continue the separately approved adaptive-
+search source series.**
 
 Primary plan:
 `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
@@ -72,8 +71,8 @@ PYTHON MIGRATION SERIES
 - [x] Patch 8 (`_25`) — GUI/status reconciliation and post-migration live-gate handoff.
 - [x] Corrective `_26` — Stage-50 candidate-local failure isolation; source/CI/package
   qualified and published, live verification still pending because `_26` now stops at Stage 40.
-- [ ] Corrective `_27` — widen DNS deadline to 15 seconds and enclosing Stage-40 envelope
-  to 20 seconds; source/CI merged, repeat Scenario 1 for owner live evidence.
+- [x] Corrective `_27` — widen DNS deadline to 15 seconds and enclosing Stage-40 envelope
+  to 20 seconds; source/CI merged and owner Scenario 1 live PASS.
 
 If a listed patch exceeds one logical change, split it. Do not compress the migration into a monolithic rewrite.
 
@@ -128,12 +127,11 @@ remains capability-gated and lower priority.
 CONFIRMED DEFECTS CARRIED INTO MIGRATION
 ==================================================
 
-These remain open until replacement evidence closes them:
+Closed corrective items and remaining regression/presentation backlog:
 
-- [ ] `_26` repeatedly fails Stage 40 because the 2-second DNS deadline is shorter than
-  an observed valid 8–10-second local-Unbound response; `_27` correction pending live retest.
-- [ ] `_25` Stage-50 aggregate abort is corrected in `_26` source but still needs live
-  verification after `_27` allows Scenario 1 to reach Stage 50.
+- [x] `_26` Stage-40 DNS deadline mismatch — closed by `_27` Scenario 1 live PASS.
+- [x] `_25` Stage-50 aggregate abort — closed by `_27` Stage-50 PASS and continuation
+  through Stages 60/70.
 - [ ] Fresh-job immediate `ERROR` was not reproduced on `_26`; retain until a complete
   Scenario-1 run confirms behavior.
 - [ ] `Strategy Lab returned no output.` can appear during active work.
@@ -151,12 +149,13 @@ Migration may remove the implementation mechanism behind an item, but the item i
 POST-MIGRATION OWNER-ASSISTED VERIFICATION GATE
 ==================================================
 
-The matrix is resumed. Scenario 1 currently selects `_27`; dependent rows remain blocked
-until Scenario 1 passes.
+The matrix remains the canonical live regression inventory. Scenario 1 is PASS on `_27`.
+Rows below are selected for future live execution by release/change risk; they are not
+all unconditional blockers for every stable release.
 
 Then verify:
 
-- [ ] Standard blocked domain with initial Zapret2 RUNNING.
+- [x] Standard blocked domain with initial Zapret2 RUNNING (`_27`, v0.4.0 mandatory row).
 - [ ] Standard blocked domain with initial Zapret2 STOPPED.
 - [ ] Extended TLS 1.2 and HTTP.
 - [ ] Extended QUIC when capability exists.
@@ -177,8 +176,9 @@ Then verify:
 RELEASE BOUNDARY
 ==================================================
 
-Stable release preparation and pkg-repository promotion remain blocked until the post-migration live matrix passes.
+Stable release preparation requires all release-selected live rows to PASS and no known
+critical lifecycle/restoration defect. It does not require every unrelated regression
+row to be manually executed. `v0.4.0` has its selected Scenario-1 live gate PASS on `_27`.
 
-Corrective `_27` remains `VERSION=0.3.3` and uses `PLUGIN_REVISION=27`. Testing-prerelease
-publication remains separate from source/CI qualification and stable release promotion
-remains blocked on the complete live matrix.
+Corrective `_27` remains `VERSION=0.3.3` and uses `PLUGIN_REVISION=27`; the next release
+cycle changes `VERSION` to `0.4.0` and resets `PLUGIN_REVISION` to `1`.

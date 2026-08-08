@@ -114,7 +114,10 @@ MIGRATION DELIVERY RULES
 5. Existing shell helpers may be called as explicit adapters while Python orchestration is introduced.
 6. Obsolete shell orchestration is removed only after its Python replacement passes CI and package qualification.
 7. Packaged migration changes receive the normal FreeBSD 15 package build. Testing-prerelease publication follows the project owner's standing installable-patch authority; live owner testing may be concentrated at meaningful parity gates rather than every internal layer.
-8. Stable release and pkg-repository promotion remain blocked until the post-migration live matrix passes.
+8. Stable release and pkg-repository promotion require owner-assisted post-migration live
+   evidence selected for the release. The later
+   `DEC-2026-08-09-risk-based-live-release-gates.md` supersedes the original blanket
+   interpretation that every matrix row must PASS for every release.
 
 ==================================================
 CONSEQUENCES
