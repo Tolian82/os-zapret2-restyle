@@ -15,33 +15,33 @@ in `AGENTS.md`.
 
 For any new Strategy Lab work after the `v0.3.3_17` live handoff, read these first:
 
-- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved incremental migration map and current Python ownership boundaries;
+- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved migration map, completed automated Python ownership and Patch 8 boundary;
 - `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md` — rationale, language responsibility boundary, compatibility invariants, bug-backlog policy, and migration delivery rules;
-- `docs/patches/v0.3.3_23.md` — Migration Patch 6 expansion/stability/extended-orchestration cutover and exact scope guard;
-- `docs/devlog/2026-08-08-v0.3.3_23-python-search-extended.md` — Patch 6 implementation, CI compatibility repairs, verification and Patch 7 handoff;
-- `docs/patches/v0.3.3_22.md` — Migration Patch 5 candidate-runtime/family-screening cutover and exact scope guard;
-- `docs/devlog/2026-08-08-v0.3.3_22-python-candidate-family.md` — Patch 5 implementation, CI compatibility repairs, verification and Patch 6 handoff;
+- `docs/patches/v0.3.3_24.md` — Migration Patch 7 final-result/shortlist ownership and obsolete automated-shell retirement;
+- `docs/devlog/2026-08-08-v0.3.3_24-python-final-results.md` — Patch 7 implementation, compatibility repairs, verification and Patch 8 handoff;
+- `docs/patches/v0.3.3_23.md` — Migration Patch 6 expansion/stability/extended-orchestration cutover;
+- `docs/devlog/2026-08-08-v0.3.3_23-python-search-extended.md` — Patch 6 implementation and Patch 7 handoff;
+- `docs/patches/v0.3.3_22.md` — Migration Patch 5 candidate-runtime/family-screening cutover;
+- `docs/devlog/2026-08-08-v0.3.3_22-python-candidate-family.md` — Patch 5 implementation and Patch 6 handoff;
 - `docs/patches/v0.3.3_21.md` — Migration Patch 4 request/probe execution and parsing cutover;
-- `docs/devlog/2026-08-08-v0.3.3_21-python-request-probes.md` — Patch 4 implementation, terminal-race correction, verification and Patch 5 handoff;
-- `docs/patches/v0.3.3_20.md` — Migration Patch 3 stage machine/budget/cancellation/finalization cutover and exact scope guard;
+- `docs/devlog/2026-08-08-v0.3.3_21-python-request-probes.md` — Patch 4 implementation, terminal-race correction and Patch 5 handoff;
+- `docs/patches/v0.3.3_20.md` — Migration Patch 3 stage machine/budget/cancellation/finalization cutover;
 - `docs/devlog/2026-08-07-v0.3.3_20-python-stage-orchestration.md` — Patch 3 ownership and lifecycle-adapter boundary;
-- `docs/patches/v0.3.3_19.md` — Migration Patch 2 state/progress/event persistence cutover and exact scope guard;
+- `docs/patches/v0.3.3_19.md` — Migration Patch 2 state/progress/event persistence cutover;
 - `docs/devlog/2026-08-07-v0.3.3_19-python-state-persistence.md` — Patch 2 ownership, atomicity, parity and verification;
 - `docs/patches/v0.3.3_18.md` — Migration Patch 1 packaged Python foundation;
 - `docs/devlog/2026-08-07-v0.3.3_18-python-foundation.md` — Patch 1 platform evidence and implementation;
-- `docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md` — final owner-observed shell-era boundary;
+- `docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md` — final owner-observed shell-era live boundary;
 - `docs/PROJECT_STATE.md` — current candidate identity, confirmed defect backlog, migration phase, and next action.
 
-Migration Patches 2–6 make Python authoritative for automated-job persistence, high-level
-stage orchestration/budgets/cancellation/finalization, finite request/probe execution and
-parsing, the unified candidate runtime/readiness/interception path, ordered Stage-50 family
-screening, Stage-60 parameter expansion, Stage-70 stability/replay, and Stage-80 extended
-TLS 1.2/HTTP/QUIC/generic-UDP orchestration. Audited FreeBSD mutations remain behind
-explicit adapters.
-
-The next source task after `_23` qualification is Migration Patch 7: complete final
-result/shortlist ownership and retire obsolete shell orchestration. Do not combine
-GUI/status reconciliation or owner-assisted live verification with that patch.
+Migration Patches 2–7 make Python authoritative for the complete automated Strategy Lab
+job path: state/persistence, stage orchestration/budgets/cancellation/finalization,
+finite request/probe execution and parsing, unified candidate runtime/readiness/
+interception, Stage-50 family screening, Stage-60 expansion, Stage-70 stability/replay,
+Stage-80 extended TLS 1.2/HTTP/QUIC/generic-UDP orchestration, Stage-85 complete profile
+construction/exact replay/unified shortlist publication, and automated-job circular
+eligibility. Audited FreeBSD mutations remain behind explicit narrow shell adapters and
+private circular-session state remains shell-owned by design.
 
 ## Existing Strategy Lab product authorities
 

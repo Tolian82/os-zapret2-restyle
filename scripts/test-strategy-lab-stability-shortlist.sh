@@ -3,6 +3,8 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 SCRIPT_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
 MODULE_DIR="${SCRIPT_DIR}/strategy_lab"
+PY_RESULT="${SCRIPT_DIR}/strategy_lab_py/result.py"
+WORKER="${SCRIPT_DIR}/strategy_lab_worker.sh"
 TMP=$(mktemp -d /tmp/strategy-lab-stability-test.XXXXXX)
 trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
 mkdir -p "${TMP}/bin" "${TMP}/run/jobs/job.test"
@@ -52,5 +54,7 @@ jq -e '.completed==4 and .stable==["c1","c3","c4"] and .unstable==["c2"] and .st
 [ "$(wc -l < "${TMP}/order" | tr -d ' ')" -eq 12 ]
 [ "$(grep -c '^c2:' "${TMP}/order")" -eq 3 ]
 ! grep -Eq '^[[:space:]]*strategy_lab_shortlist_build[[:space:]]*\(\)' "${MODULE_DIR}/stability.sh"
-grep -Eq '^[[:space:]]*strategy_lab_shortlist_build[[:space:]]*\(\)' "${MODULE_DIR}/profile.sh"
-echo 'PASS: Strategy Lab stability requires sequential 3-of-3 confirmation while profile.sh remains the sole shortlist owner'
+# profile.sh may retain a compatibility helper, but automated Stage 85 is Python-owned.
+grep -Fq 'def build_shortlist(' "${PY_RESULT}"
+grep -Fq 'strategy_lab_python_stage_adapter.sh' "${WORKER}"
+echo 'PASS: Strategy Lab stability compatibility preserves sequential 3-of-3 confirmation while Python result.py owns the automated shortlist'

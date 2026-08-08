@@ -3,8 +3,12 @@
 ## Scope
 
 Stage 85 is the single final publication gate for verified Strategy Lab profiles.
+Migration Patch 7 makes `strategy_lab_py/result.py` the authoritative automated Stage-85
+publisher.
 
-Standard mode considers only stable TLS 1.3 candidates. Extended mode additionally considers the confirmed working candidate, when present, from TLS 1.2, HTTP, QUIC, and configured generic UDP results produced by Stage 80.
+Standard mode considers only stable TLS 1.3 candidates. Extended mode additionally
+considers the confirmed working candidate, when present, from TLS 1.2, HTTP, QUIC, and
+configured generic UDP results produced by Stage 80.
 
 ## Deterministic selection
 
@@ -16,22 +20,38 @@ All source candidates receive these ranks:
 4. QUIC;
 5. configured UDP.
 
-Within a protocol, candidates are ordered by profile line count, character count, and stable candidate ID. Duplicate protocol/port/strategy combinations are removed.
+Within a protocol, candidates are ordered by profile line count, character count, and
+stable candidate ID. Duplicate protocol/port/strategy combinations are removed.
 
 After exact replay verification:
 
-- standard mode publishes up to five TLS 1.3 profiles;
-- extended mode publishes the best verified profile for each available protocol, up to five items;
+- Standard mode publishes up to five TLS 1.3 profiles;
+- Extended mode publishes the best verified profile for each available protocol, up to five items;
 - the first item is the recommendation, so a verified TLS 1.3 result remains preferred when available.
+
+Every source is replayed exactly three times using the complete user-ready profile through
+the same Python candidate lifecycle/readiness/interception owner used by search stages.
+Only 3/3 exact-profile PASS results are publishable.
 
 ## Circular boundary
 
-Circular validation is not generalized by this patch. The shortlist stores a separate `circular_items` array and `circular_count` containing only the best three-to-five replay-verified TLS 1.3 candidates. Legacy shortlist files without these fields remain readable as TLS 1.3-only historical results.
+Circular validation is not generalized by Patch 7. The Python-published shortlist stores a
+separate `circular_items` array and `circular_count` containing only the best three-to-five
+replay-verified TLS 1.3 candidates. Legacy shortlist files without these fields remain
+readable as TLS 1.3-only historical results.
 
-Extended TLS 1.2, HTTP, QUIC, and UDP profiles are never injected into the current TLS circular runtime.
+Extended TLS 1.2, HTTP, QUIC, and UDP profiles are never injected into the current TLS
+circular runtime. Private circular session state remains shell-owned and must not mutate
+the parent automated shortlist.
 
 ## UDP boundary
 
-A generic UDP domain profile has no domain-layer selector. Its user-ready profile therefore uses the exact selected IPv4 addresses recorded by the successful candidate as `--ipset-ip=`. A fresh replay must still hit and intercept those same addresses.
+A generic UDP domain profile has no domain-layer selector. Its user-ready profile therefore
+uses replay evidence selected IPv4 addresses as `--ipset-ip=` and the validated configured
+UDP port. Generic UDP input is already supplied by the approved GUI/API job-local
+port/payload contract; Patch 7 consumes that persisted evidence but does not change the
+input surface.
 
-This patch consumes configured UDP evidence when it already exists. Supplying UDP port and payload through the supported GUI/API request is a separate following change.
+A fresh final replay must still send the configured payload to the selected endpoint and
+prove exact endpoint identity plus IPFW interception before the UDP profile can enter the
+shortlist.

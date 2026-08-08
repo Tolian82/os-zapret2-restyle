@@ -50,11 +50,10 @@ grep -Fq 'exec "${PYTHON_LAUNCHER}" orchestrate "${JOB_ID}"' "${WORKER}" ||
     fail 'production worker still loads the retired shell stage-machine owner'
 ! grep -Fq 'worker_run_search_stages' "${WORKER}" ||
     fail 'production worker still calls the retired shell stage-machine entry point'
+[ ! -e "${LEGACY_STAGE_MACHINE}" ] ||
+    fail 'retired shell stage-machine owner is still packaged after Migration Patch 7'
 
-# The old module remains temporarily packaged only because Patch 7 owns broad shell
-# retirement. It must stay syntactically valid but may not be authoritative after Patch 3.
-sh -n "${LEGACY_STAGE_MACHINE}"
 "${PYTHON_BIN}" -m py_compile "${ORCHESTRATOR}" "${STATE_MODULE}"
 sh -n "${WORKER}"
 
-echo 'PASS: Python Strategy Lab owns one explicit monotonic stage machine while the production worker cannot fall back to the shell owner'
+echo 'PASS: Python Strategy Lab owns the explicit monotonic stage machine and the retired shell owner is absent'
