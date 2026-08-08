@@ -157,6 +157,18 @@ def _timeout_result(candidate_id: str, family: str, strategy: str) -> dict[str, 
     }
 
 
+def _candidate_result(path: Path, candidate_id: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise RuntimeError(f"Strategy Lab candidate result is missing: {candidate_id}")
+    try:
+        candidate = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"invalid Strategy Lab candidate result: {candidate_id}") from exc
+    if not isinstance(candidate, dict):
+        raise RuntimeError(f"invalid Strategy Lab candidate result object: {candidate_id}")
+    return candidate
+
+
 def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
     if not JOB_RE.fullmatch(job_id):
         return EX_USAGE
@@ -189,6 +201,10 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
         if not strategy_path.is_file():
             raise RuntimeError(f"Strategy Lab candidate args are unavailable: {strategy_path}")
         candidate_path = work / f"{candidate_id}.json"
+        try:
+            candidate_path.unlink()
+        except FileNotFoundError:
+            pass
         command = [
             str(runner), job_id, str(endpoints), str(candidate_path), candidate_id,
             family, str(strategy_path), hostlist,
@@ -199,17 +215,16 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
         if timed_out:
             candidate = _timeout_result(candidate_id, family, strategy_path.read_text(encoding="utf-8"))
             _atomic_json(candidate_path, candidate)
-        elif status != 0:
-            raise RuntimeError(f"Strategy Lab candidate runner failed for {candidate_id} with status {status}")
         else:
-            if not candidate_path.is_file():
-                raise RuntimeError(f"Strategy Lab candidate result is missing: {candidate_id}")
-            try:
-                candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
-            except json.JSONDecodeError as exc:
-                raise RuntimeError(f"invalid Strategy Lab candidate result: {candidate_id}") from exc
-        if not isinstance(candidate, dict):
-            raise RuntimeError(f"invalid Strategy Lab candidate result object: {candidate_id}")
+            candidate = _candidate_result(candidate_path, candidate_id)
+            if status != 0:
+                if candidate.get("error") is not True:
+                    raise RuntimeError(
+                        f"Strategy Lab candidate runner failed for {candidate_id} with status {status} "
+                        "without structured candidate error evidence"
+                    )
+                candidate["runner_status"] = status
+                _atomic_json(candidate_path, candidate)
         result["families"].append(candidate)
         result["completed"] = len(result["families"])
         result["accepted"] = [item.get("family", "") for item in result["families"] if item.get("all_pass") is True]
