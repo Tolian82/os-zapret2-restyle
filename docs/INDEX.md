@@ -17,6 +17,8 @@ For any new Strategy Lab work after the `v0.3.3_17` live handoff, read these fir
 
 - `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved incremental migration map and current Python ownership boundaries;
 - `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md` — rationale, language responsibility boundary, compatibility invariants, bug-backlog policy, and migration delivery rules;
+- `docs/patches/v0.3.3_23.md` — Migration Patch 6 expansion/stability/extended-orchestration cutover and exact scope guard;
+- `docs/devlog/2026-08-08-v0.3.3_23-python-search-extended.md` — Patch 6 implementation, CI compatibility repairs, verification and Patch 7 handoff;
 - `docs/patches/v0.3.3_22.md` — Migration Patch 5 candidate-runtime/family-screening cutover and exact scope guard;
 - `docs/devlog/2026-08-08-v0.3.3_22-python-candidate-family.md` — Patch 5 implementation, CI compatibility repairs, verification and Patch 6 handoff;
 - `docs/patches/v0.3.3_21.md` — Migration Patch 4 request/probe execution and parsing cutover;
@@ -30,15 +32,16 @@ For any new Strategy Lab work after the `v0.3.3_17` live handoff, read these fir
 - `docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md` — final owner-observed shell-era boundary;
 - `docs/PROJECT_STATE.md` — current candidate identity, confirmed defect backlog, migration phase, and next action.
 
-Migration Patches 2–5 make Python authoritative for automated-job persistence, high-level
+Migration Patches 2–6 make Python authoritative for automated-job persistence, high-level
 stage orchestration/budgets/cancellation/finalization, finite request/probe execution and
-parsing, and the standard TLS 1.3 candidate runtime plus ordered Stage-50 family
-screening. Audited FreeBSD mutations and later search/extended algorithms remain behind
-explicit adapters until their designated migration patches.
+parsing, the unified candidate runtime/readiness/interception path, ordered Stage-50 family
+screening, Stage-60 parameter expansion, Stage-70 stability/replay, and Stage-80 extended
+TLS 1.2/HTTP/QUIC/generic-UDP orchestration. Audited FreeBSD mutations remain behind
+explicit adapters.
 
-The next source task after `_22` qualification is Migration Patch 6: move parameter
-expansion, stability/replay, and extended-protocol orchestration to Python. Do not combine
-final result/shortlist retirement or GUI/status reconciliation with that patch.
+The next source task after `_23` qualification is Migration Patch 7: complete final
+result/shortlist ownership and retire obsolete shell orchestration. Do not combine
+GUI/status reconciliation or owner-assisted live verification with that patch.
 
 ## Existing Strategy Lab product authorities
 

@@ -27,8 +27,9 @@ strategy_lab_atomic_write() { cat > "$1"; }
 
 . "${READINESS_UNDER_TEST}"
 
-# Shell readiness remains a compatibility/system helper for QUIC/UDP and later
-# extended protocol paths until Migration Patch 6.
+# The shell readiness helper remains a compatibility/system contract until the
+# Patch-7 obsolete-orchestration retirement. It is no longer a production
+# protocol-policy owner after Migration Patch 6.
 mkdir -p "$(strategy_lab_candidate_runtime_dir job.test)"
 : > "$(strategy_lab_candidate_log_file job.test)"
 strategy_lab_candidate_readiness_write job.test true
@@ -52,9 +53,9 @@ if strategy_lab_candidate_readiness_write job.test true; then
 fi
 "${STRATEGY_LAB_JQ}" -e '.ready==false and .log_clean==false' "${READINESS}" >/dev/null
 
-# Migration Patch 5 moves standard TLS13 readiness ownership to Python. It must
-# require process identity + divert socket + clean log for two stable snapshots,
-# persist readiness evidence, and reject classified fatal log text.
+# Migration Patches 5/6 make one Python candidate readiness owner authoritative
+# for TLS 1.3, TLS 1.2, HTTP, QUIC, and generic UDP. It requires process identity
+# + divert socket + clean log for two stable snapshots and rejects fatal log text.
 grep -Fq 'def _readiness(job_id: str)' "${CANDIDATE_PY}"
 grep -Fq 'identity = bool(snapshot.get("process_identity"))' "${CANDIDATE_PY}"
 grep -Fq 'socket_ready = bool(snapshot.get("socket_ready"))' "${CANDIDATE_PY}"
@@ -65,17 +66,25 @@ grep -Fq '_atomic_json(output, last)' "${CANDIDATE_PY}"
 grep -Fq 'fatal = _fatal_reason(log_text)' "${CANDIDATE_PY}"
 grep -Fq 'runtime_evidence = _readiness(job_id)' "${CANDIDATE_PY}"
 grep -Fq '"runtime": runtime_evidence' "${CANDIDATE_PY}"
+grep -Fq 'if protocol == "tls12":' "${CANDIDATE_PY}"
+grep -Fq 'if protocol == "http":' "${CANDIDATE_PY}"
+grep -Fq 'if protocol == "quic":' "${CANDIDATE_PY}"
+grep -Fq 'if protocol == "udp":' "${CANDIDATE_PY}"
 grep -Fq 'candidate run' "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_runner.sh"
 
-# Protocol candidate paths scheduled for Patch 6 intentionally retain the
-# existing shell readiness evidence contract for now.
+# QUIC/UDP compatibility runners may only select protocol parameters and enter
+# the same Python candidate runner; they cannot regain shell readiness policy.
 for runner in \
     strategy_lab_quic_candidate_runner.sh \
     strategy_lab_udp_candidate_runner.sh
 do
     file="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/${runner}"
-    grep -Eq '(^|[[:space:]])readiness([[:space:]]|$)' "${file}"
-    grep -Fq 'strategy_lab_candidate_attach_runtime_evidence' "${file}"
+    grep -Fq 'STRATEGY_LAB_CANDIDATE_PROTOCOL=' "${file}"
+    grep -Fq 'strategy_lab_candidate_runner.sh' "${file}"
+    if grep -Eq '(^|[[:space:]])readiness([[:space:]]|$)|strategy_lab_candidate_attach_runtime_evidence|strategy_lab_candidate_readiness_write' "${file}"; then
+        echo "${runner} still owns shell readiness policy" >&2
+        exit 1
+    fi
 done
 
-echo 'PASS: standard candidate readiness is Python-owned while remaining protocol candidates retain audited shell readiness until Patch 6'
+echo 'PASS: one Python readiness owner qualifies standard and extended candidates while the shell helper remains compatibility-only until Patch 7'

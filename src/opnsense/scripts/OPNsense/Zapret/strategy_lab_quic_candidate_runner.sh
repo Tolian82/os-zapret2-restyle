@@ -1,13 +1,10 @@
 #!/bin/sh
 SCRIPT_DIR="${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}"
-MODULE_DIR="${MODULE_DIR:-${SCRIPT_DIR}/strategy_lab}"
+CANDIDATE_RUNNER="${STRATEGY_LAB_BASE_CANDIDATE_RUNNER:-${SCRIPT_DIR}/strategy_lab_candidate_runner.sh}"
 set -eu
-for module in common target request quic_request result firewall runtime readiness interception candidate quic_candidate
-do path="${MODULE_DIR}/${module}.sh"; [ -r "${path}" ] || exit 1; . "${path}"; done
-strategy_lab_require_jq
-JOB_ID="$1"; ENDPOINTS_FILE="$2"; RESULT_FILE="$3"; CANDIDATE_ID="$4"; FAMILY="$5"; STRATEGY_FILE="$6"; USE_HOSTLIST="${7:-1}"
-strategy_lab_job_id_valid "${JOB_ID}" || exit 64
-cleanup(){ strategy_lab_candidate_cleanup "${JOB_ID}" || true; }
-trap cleanup EXIT HUP INT TERM
-strategy_lab_run_candidate "${JOB_ID}" "${ENDPOINTS_FILE}" "${RESULT_FILE}" "${CANDIDATE_ID}" "${FAMILY}" "${STRATEGY_FILE}" "${USE_HOSTLIST}"
-strategy_lab_candidate_attach_runtime_evidence "${JOB_ID}" "${RESULT_FILE}"
+[ "$#" -ge 6 ] && [ "$#" -le 7 ] || exit 64
+[ -x "${CANDIDATE_RUNNER}" ] || exit 69
+export STRATEGY_LAB_CANDIDATE_PROTOCOL=quic
+export STRATEGY_LAB_CANDIDATE_PORT=443
+export STRATEGY_LAB_CANDIDATE_L7=quic
+exec "${CANDIDATE_RUNNER}" "$1" "$2" "$3" "$4" "$5" "$6" "${7:-1}"

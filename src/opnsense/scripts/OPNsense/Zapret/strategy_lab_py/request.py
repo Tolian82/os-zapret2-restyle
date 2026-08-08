@@ -1,4 +1,4 @@
-"""Structured finite subprocess execution and DNS/TLS/HTTP parsing for Strategy Lab."""
+"""Structured finite subprocess execution and DNS/TLS/HTTP/UDP parsing for Strategy Lab."""
 
 from __future__ import annotations
 
@@ -95,19 +95,30 @@ def binary(name: str) -> str:
     return value
 
 
-def run_command(command: Sequence[str], *, timeout: float, stdin_devnull: bool = False) -> CommandResult:
+def run_command(
+    command: Sequence[str],
+    *,
+    timeout: float,
+    stdin_devnull: bool = False,
+    stdin_path: Path | None = None,
+) -> CommandResult:
     if timeout <= 0:
         raise UsageError("Strategy Lab subprocess timeout must be positive")
+    if stdin_devnull and stdin_path is not None:
+        raise UsageError("Strategy Lab subprocess stdin source is ambiguous")
     argv = [str(item) for item in command]
     started = time.monotonic()
+    stdin_handle = None
     try:
+        if stdin_path is not None:
+            stdin_handle = stdin_path.open("rb")
         completed = subprocess.run(
             argv,
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
-            stdin=subprocess.DEVNULL if stdin_devnull else None,
+            stdin=stdin_handle if stdin_handle is not None else (subprocess.DEVNULL if stdin_devnull else None),
             timeout=timeout,
             check=False,
         )
@@ -125,6 +136,9 @@ def run_command(command: Sequence[str], *, timeout: float, stdin_devnull: bool =
         )
     except OSError as exc:
         raise RequestError(f"Strategy Lab subprocess could not start: {argv[0]}: {exc}") from exc
+    finally:
+        if stdin_handle is not None:
+            stdin_handle.close()
 
     duration = max(0, round((time.monotonic() - started) * 1000))
     signal_number = -completed.returncode if completed.returncode < 0 else None
@@ -294,8 +308,33 @@ def quic_ipv4_request() -> CommandResult:
     ], timeout=2, stdin_devnull=True)
 
 
+def quic_target_request(host: str, address: str) -> CommandResult:
+    try:
+        normalized = str(ipaddress.IPv4Address(address))
+    except ipaddress.AddressValueError as exc:
+        raise UsageError("invalid QUIC IPv4 endpoint") from exc
+    return run_command([
+        binary("openssl"), "s_client", "-4", "-quic",
+        "-connect", f"{normalized}:443", "-servername", host,
+        "-alpn", "h3", "-verify_hostname", host,
+        "-verify_return_error", "-brief", "-no-interactive",
+    ], timeout=3, stdin_devnull=True)
+
+
 def tcp_request(host: str, port: int) -> CommandResult:
     return run_command([binary("nc"), "-z", "-w", "2", host, str(port)], timeout=3)
+
+
+def udp_response_request(host: str, port: int, payload_path: Path) -> CommandResult:
+    if port < 1 or port > 65535:
+        raise UsageError("invalid UDP port")
+    if not payload_path.is_file() or payload_path.stat().st_size <= 0:
+        raise UsageError("UDP payload is unavailable")
+    return run_command(
+        [binary("nc"), "-u", "-w", "2", host, str(port)],
+        timeout=4,
+        stdin_path=payload_path,
+    )
 
 
 def _status(result: CommandResult) -> int:
@@ -360,6 +399,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if len(args) != 2:
             raise UsageError("request quic-ipv4 requires OUTPUT")
         return _write_result(args[1], quic_ipv4_request())
+    if op == "quic-bound":
+        if len(args) != 4:
+            raise UsageError("request quic-bound requires HOST IP OUTPUT")
+        return _write_result(args[3], quic_target_request(args[1], args[2]))
     if op == "tcp":
         if len(args) != 4:
             raise UsageError("request tcp requires HOST PORT OUTPUT")
@@ -370,4 +413,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         if port < 1 or port > 65535:
             raise UsageError("invalid TCP port")
         return _write_result(args[3], tcp_request(args[1], port))
+    if op == "udp":
+        if len(args) != 5:
+            raise UsageError("request udp requires HOST PORT PAYLOAD OUTPUT")
+        try:
+            port = int(args[2], 10)
+        except ValueError as exc:
+            raise UsageError("invalid UDP port") from exc
+        result = udp_response_request(args[1], port, Path(args[3]))
+        status = _write_result(args[4], result)
+        if status == 0 and not result.stdout:
+            return 1
+        return status
     raise UsageError(f"unsupported Strategy Lab request operation: {op}")

@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -27,6 +28,15 @@ FATAL_RE = re.compile(
 REMOTE_IP_RE = re.compile(r"(?:^|\s)remote_ip=([^\s]+)")
 
 
+@dataclass(frozen=True)
+class ProtocolSpec:
+    protocol: str
+    transport: str
+    port: int
+    l7: str
+    payload_path: Path | None = None
+
+
 def _positive_int(name: str, default: int) -> int:
     raw = os.environ.get(name, str(default))
     try:
@@ -36,6 +46,36 @@ def _positive_int(name: str, default: int) -> int:
     if value <= 0:
         raise ValueError(f"{name} must be a positive integer")
     return value
+
+
+def _port(value: str, name: str) -> int:
+    try:
+        port = int(value, 10)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a valid port") from exc
+    if port < 1 or port > 65535:
+        raise ValueError(f"{name} must be a valid port")
+    return port
+
+
+def _protocol_spec() -> ProtocolSpec:
+    protocol = os.environ.get("STRATEGY_LAB_CANDIDATE_PROTOCOL", "tls13")
+    if protocol == "tls13":
+        return ProtocolSpec("tls13", "tcp", _port(os.environ.get("STRATEGY_LAB_CANDIDATE_PORT", "443"), "candidate port"), os.environ.get("STRATEGY_LAB_CANDIDATE_L7", "tls"))
+    if protocol == "tls12":
+        return ProtocolSpec("tls12", "tcp", _port(os.environ.get("STRATEGY_LAB_CANDIDATE_PORT", "443"), "candidate port"), os.environ.get("STRATEGY_LAB_CANDIDATE_L7", "tls"))
+    if protocol == "http":
+        return ProtocolSpec("http", "tcp", _port(os.environ.get("STRATEGY_LAB_CANDIDATE_PORT", "80"), "candidate port"), os.environ.get("STRATEGY_LAB_CANDIDATE_L7", "http"))
+    if protocol == "quic":
+        return ProtocolSpec("quic", "udp", _port(os.environ.get("STRATEGY_LAB_CANDIDATE_PORT", "443"), "candidate port"), os.environ.get("STRATEGY_LAB_CANDIDATE_L7", "quic"))
+    if protocol == "udp":
+        port = _port(os.environ.get("STRATEGY_LAB_UDP_PORT", os.environ.get("STRATEGY_LAB_CANDIDATE_PORT", "")), "UDP port")
+        payload_raw = os.environ.get("STRATEGY_LAB_UDP_PAYLOAD_FILE", "")
+        payload = Path(payload_raw) if payload_raw else None
+        if payload is None or not payload.is_file() or payload.stat().st_size <= 0:
+            raise ValueError("UDP payload is unavailable")
+        return ProtocolSpec("udp", "udp", port, "-", payload)
+    raise ValueError(f"unsupported Strategy Lab candidate protocol: {protocol}")
 
 
 def script_dir() -> Path:
@@ -285,22 +325,62 @@ def _detail(result: request.CommandResult) -> str:
     return request.tail20(request.combined_log(result))[:4096]
 
 
-def _probe_endpoint(binding: dict[str, Any]) -> dict[str, Any]:
+def _execution_status(result: request.CommandResult) -> int:
+    if result.timed_out:
+        return 124
+    if result.returncode is None or result.returncode < 0:
+        return 1
+    return result.returncode
+
+
+def _unsupported_execution(reason: str) -> request.CommandResult:
+    return request.CommandResult(
+        command=[], returncode=64, stdout="", stderr=reason, timed_out=False,
+        termination="completed", signal=None, duration_ms=0,
+    )
+
+
+def _probe_endpoint(binding: dict[str, Any], spec: ProtocolSpec | None = None) -> dict[str, Any]:
+    spec = spec or ProtocolSpec("tls13", "tcp", 443, "tls")
     endpoint = str(binding["endpoint"])
     selected = str(binding["selected_ip"])
     rule = int(binding["rule"])
     before_packets, before_bytes = _counter(rule)
 
-    if _is_ipv4(endpoint):
-        execution = request.tcp_request(selected, 443)
-        exit_code = 124 if execution.timed_out else (execution.returncode if execution.returncode is not None and execution.returncode >= 0 else 1)
+    if spec.protocol == "udp":
+        assert spec.payload_path is not None
+        execution = request.udp_response_request(selected, spec.port, spec.payload_path)
+        exit_code = _execution_status(execution)
+        if exit_code == 0 and not execution.stdout:
+            exit_code = 1
         remote_ip = selected
-        transport = "tcp-443"
-    else:
-        execution = request.curl_request(endpoint, scheme="https", tls_version="1.3", bound_ip=selected)
+        transport = f"udp-{spec.port}"
+    elif spec.protocol == "quic":
+        if _is_ipv4(endpoint):
+            execution = _unsupported_execution("QUIC hostname verification requires a domain endpoint")
+            exit_code = 64
+            remote_ip = ""
+        else:
+            execution = request.quic_target_request(endpoint, selected)
+            exit_code = _execution_status(execution)
+            remote_ip = selected
+        transport = "quic-ipv4"
+    elif _is_ipv4(endpoint):
+        execution = request.tcp_request(selected, spec.port)
+        exit_code = _execution_status(execution)
+        remote_ip = selected
+        transport = f"tcp-{spec.port}"
+    elif spec.protocol == "http":
+        execution = request.curl_request(endpoint, scheme="http", bound_ip=selected)
         exit_code = request.curl_exit(execution)
         remote_ip = _remote_ip(execution.stdout)
-        transport = "tls13-ipv4"
+        transport = "http-ipv4"
+    else:
+        tls_version = "1.2" if spec.protocol == "tls12" else "1.3"
+        execution = request.curl_request(endpoint, scheme="https", tls_version=tls_version, bound_ip=selected)
+        exit_code = request.curl_exit(execution)
+        remote_ip = _remote_ip(execution.stdout)
+        transport = f"{spec.protocol}-ipv4"
 
     after_packets, after_bytes = _counter(rule)
     endpoint_match = remote_ip == selected
@@ -365,6 +445,7 @@ def run_candidate(
     cleanup_error = ""
 
     try:
+        spec = _protocol_spec()
         endpoints = _read_endpoints(endpoints_path)
         work = runtime_dir(job_id)
         work.mkdir(parents=True, exist_ok=True)
@@ -373,8 +454,18 @@ def run_candidate(
         wan = _require_adapter("wan").strip()
         if not wan:
             raise RuntimeError("candidate WAN interface could not be resolved")
-        _require_adapter("prepare", job_id, str(endpoints_path), str(strategy_path), use_hostlist)
-        _require_adapter("firewall-install", str(work / "addresses-ipv4.txt"), wan)
+        if spec.protocol == "tls13" and spec.port == 443 and spec.l7 == "tls":
+            _require_adapter("prepare", job_id, str(endpoints_path), str(strategy_path), use_hostlist)
+            _require_adapter("firewall-install", str(work / "addresses-ipv4.txt"), wan)
+        else:
+            _require_adapter(
+                "prepare-protocol", job_id, str(endpoints_path), str(strategy_path), use_hostlist,
+                spec.transport, str(spec.port), spec.l7 or "-",
+            )
+            _require_adapter(
+                "firewall-install-protocol", str(work / "addresses-ipv4.txt"), wan,
+                spec.transport, str(spec.port),
+            )
         if use_hostlist == "1":
             _require_adapter("allow-access", job_id)
         _require_adapter("launch", job_id)
@@ -382,7 +473,7 @@ def run_candidate(
         if not runtime_evidence.get("ready"):
             reason = runtime_evidence.get("fatal_reason") or "candidate runtime did not become ready"
             raise RuntimeError(str(reason))
-        endpoint_results = [_probe_endpoint(binding) for binding in bindings]
+        endpoint_results = [_probe_endpoint(binding, spec) for binding in bindings]
         result = {
             "id": candidate_id,
             "family": family,
@@ -391,6 +482,8 @@ def run_candidate(
             "all_pass": bool(endpoint_results) and all(item["status"] == "PASS" for item in endpoint_results),
             "runtime": runtime_evidence,
         }
+        if spec.protocol != "tls13":
+            result["protocol"] = spec.protocol
         _atomic_json(result_path, result)
         return EX_OK
     except (OSError, ValueError, RuntimeError, request.RequestError) as exc:

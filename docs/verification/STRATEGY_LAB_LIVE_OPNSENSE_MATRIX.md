@@ -18,7 +18,7 @@ TEST RECORD
 - Required package ABI: `FreeBSD:15:amd64`
 - Latest published testing candidate: `os-zapret2-restyle-0.3.3_17.pkg`
 - Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_17.pkg`
-- Current migration source candidate: `os-zapret2-restyle-0.3.3_22.pkg`
+- Current migration source candidate: `os-zapret2-restyle-0.3.3_23.pkg`
 - Latest owner-tested job: `job.w0nXxQ`
 - WAN interface: `vtnet1`
 - Blocked-domain target: `rutracker.org`
@@ -94,15 +94,21 @@ Migration Patch 4 (`_21`) moved bounded DNS/TLS/HTTP/TCP/QUIC-control execution 
 Stage-30/40 probe parsing to Python with separate command/return-code/stdout/stderr/
 timeout evidence and DNS ANSWER-section-aware parsing.
 
-Migration Patch 5 source candidate `_22` moves standard TLS 1.3 candidate runtime,
-readiness, endpoint-bound interception policy, ordered family screening, per-candidate
-timeouts and Stage-50 result aggregation to Python. Audited FreeBSD process/firewall/WAN
-mutations remain behind a narrow shell adapter. Expansion/stability and QUIC/UDP/extended
-protocol orchestration remain scheduled for Patch 6.
+Migration Patch 5 (`_22`) moved standard TLS 1.3 candidate runtime, readiness,
+endpoint-bound interception policy, ordered family screening, per-candidate timeouts and
+Stage-50 result aggregation to Python. Audited FreeBSD process/firewall/WAN mutations
+remain behind a narrow shell adapter.
 
-None of `_18`, `_19`, `_20`, `_21`, or `_22` supersedes the owner-tested `_17` live
-evidence or resumes Scenario 1. Source-side corrections to migration mechanisms are not
-owner-assisted live closure claims.
+Migration Patch 6 source candidate `_23` moves Stage-60 parameter expansion, Stage-70
+stability/replay, and Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP orchestration to Python. The
+same Python candidate runtime/readiness/interception owner now serves standard and
+extended protocols; the shell candidate adapter remains limited to audited FreeBSD
+mutations and observations. Stage-85 final shortlist/result ownership remains assigned to
+Patch 7, and GUI/status reconciliation remains Patch 8.
+
+None of `_18`, `_19`, `_20`, `_21`, `_22`, or `_23` supersedes the owner-tested `_17`
+live evidence or resumes Scenario 1. Source-side corrections to migration mechanisms are
+not owner-assisted live closure claims.
 
 The live matrix remains failed during migration. Do not mark a row PASS because a defect
 mechanism was rewritten. Resume live Scenario 1 only when the Python implementation has

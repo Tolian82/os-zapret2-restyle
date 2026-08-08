@@ -24,17 +24,22 @@ STATUS
 ==================================================
 
 Migration Patch 0 is complete. Patch 1 is merged as `_18`, Patch 2 as `_19`, Patch 3 as
-`_20`, and Patch 4 as `_21`. Migration Patch 5 is the current source candidate
-`v0.3.3_22` and is subject to the normal Ready-PR / corrective-CI / FreeBSD-15
+`_20`, Patch 4 as `_21`, and Patch 5 as `_22`. Migration Patch 6 is the current source
+candidate `v0.3.3_23` and is subject to the normal Ready-PR / corrective-CI / FreeBSD-15
 qualification gate.
 
 The stable outer production boundary remains compatible: `zapret_service.sh` launches
 `strategy_lab_worker.sh`, which is a thin launcher into Python `orchestrate JOB_ID`.
 Python owns numbered-stage order, wall-clock budgets, cancellation and terminal policy.
-Patch 4 makes Python the finite request/probe executor and parser. Patch 5 additionally
-makes Python the standard TLS 1.3 candidate runtime/readiness/interception owner and the
-ordered Stage-50 family-screening owner. Expansion/stability and extended-protocol
-orchestration remain behind explicit shell adapters until Patch 6.
+Patch 4 made Python the finite request/probe executor and parser. Patch 5 made Python the
+standard candidate runtime/readiness/interception owner and Stage-50 family-screening
+owner. Patch 6 extends that candidate owner across TLS 1.2, HTTP, QUIC and generic UDP and
+moves Stage-60 expansion, Stage-70 stability/replay and Stage-80 extended-protocol search
+policy to Python.
+
+Stage-85 final result/shortlist ownership and dedicated obsolete-shell retirement remain
+Patch 7. GUI/status reconciliation and the post-migration owner-assisted live gate remain
+Patch 8.
 
 ==================================================
 OBJECTIVE
@@ -49,7 +54,7 @@ The migration is successful when:
 
 - public Strategy Lab API behavior remains compatible;
 - lifecycle safety and exact restoration are preserved;
-- Python owns the high-level job state machine and candidate orchestration;
+- Python owns the high-level job state machine and candidate/search orchestration;
 - shell is reduced to small explicit system adapters where useful;
 - obsolete shell orchestration is removed rather than retained as a fallback competitor;
 - the current confirmed bug backlog is re-evaluated against focused tests and live evidence;
@@ -72,9 +77,9 @@ thin compatibility launcher
         ↓
 Python Strategy Lab orchestration
         ↓
-Python finite request/probe/candidate/family execution + explicit system adapters
+Python request/probe/candidate/family/search/extended execution + explicit system adapters
         ↓
-zapret_service.sh, ipfw, drill/curl, dvtws2, sockstat/ps and related FreeBSD tools
+zapret_service.sh, ipfw, drill/curl/openssl/nc, dvtws2, sockstat/ps and related FreeBSD tools
 ```
 
 PHP remains responsible for HTTP request validation, API response shape, OPNsense MVC
@@ -87,9 +92,10 @@ orchestration, family/search algorithms, result/shortlist assembly and diagnosti
 Shell may remain responsible for small explicit boundaries where preserving audited
 OPNsense/FreeBSD behavior is safer or clearer: public service lifecycle entry points,
 shared lifecycle locking until intentionally migrated, short `ipfw` mutation helpers,
-audited process cleanup helpers, compatibility wrappers, and stage-specific algorithms
+audited process cleanup helpers, compatibility wrappers, and stage-specific responsibilities
 not yet migrated. Such helpers must not choose Python-owned stage order, budget,
-cancellation policy, terminal outcome, candidate readiness verdict, or family outcome.
+cancellation policy, terminal outcome, candidate readiness verdict, search order or
+protocol result.
 
 ==================================================
 PYTHON RUNTIME CONSTRAINT
@@ -114,43 +120,35 @@ STATE AND DATA MODEL
 Python represents migrated automated-job state explicitly rather than through reused
 shell-global mutation pipelines. Public JSON schema is the compatibility authority.
 
-Migration Patch 2 established:
+Migration Patch 2 established `strategy_lab_py/state.py` as sole authoritative writer for
+automated-job `status.json` and `events.ndjson`; shell state helpers are adapters only and
+private circular-session `state.json` remains shell-owned.
 
-- `strategy_lab_py/state.py` as sole authoritative writer for automated-job `status.json`
-  and `events.ndjson`;
-- shell state helpers as adapters only;
-- Python ownership of persisted structured result/lifecycle fields;
-- private circular-session `state.json` remains shell-owned;
-- the Python automated-job writer rejects private circular-session paths.
+Migration Patch 3 established `strategy_lab_py/orchestrator.py` as production owner of
+stage order, Standard/Extended budgets, cancellation orchestration and terminal policy,
+with inherited lifecycle lock fd 9 preserved across Python/adapters.
 
-Migration Patch 3 established:
+Migration Patch 4 established `strategy_lab_py/request.py` as the finite subprocess owner
+and `strategy_lab_py/probe.py` as the Stage-30/40 execution/parsing owner. Candidate DNS
+binding reuses the same ANSWER-section-aware parser.
 
-- `strategy_lab_py/orchestrator.py` as production owner of stage order, Standard/Extended
-  budgets, cancellation orchestration and terminal policy;
-- thin `strategy_lab_worker.sh` launcher;
-- one-action `strategy_lab_stage_adapter.sh` without next-stage/final-outcome policy;
-- inherited lifecycle lock fd 9 preservation;
-- Python orchestrator PID as legitimate active-job owner.
+Migration Patch 5 established `strategy_lab_py/candidate.py` as the standard TLS 1.3
+candidate endpoint-binding/runtime-readiness/interception owner and `family.py` as the
+ordered Stage-50 family-screening owner. `strategy_lab_candidate_adapter.sh` is the narrow
+FreeBSD system adapter.
 
-Migration Patch 4 established:
+Migration Patch 6 establishes:
 
-- `strategy_lab_py/request.py` as the finite subprocess owner for DNS, TLS 1.3, TLS 1.2,
-  HTTP, TCP, QUIC-control and route checks;
-- `strategy_lab_py/probe.py` as the Stage-30 network-capability and Stage-40 clean-baseline
-  execution/parsing owner;
-- shell request/probe files as thin compatibility adapters;
-- candidate address selection reuses the Python DNS first-answer parser.
-
-Migration Patch 5 establishes:
-
-- `strategy_lab_py/candidate.py` as the standard TLS 1.3 candidate endpoint-binding,
-  runtime-readiness, interception-evidence and candidate-result owner;
-- `strategy_lab_py/family.py` as the ordered Stage-50 TLS 1.3 family-screening,
-  per-candidate timeout/cancellation and aggregation owner;
-- `strategy_lab_candidate_adapter.sh` as a narrow FreeBSD system adapter only;
-- thin candidate/family launchers without a shell Stage-50 policy fallback;
-- Stage 60/70 callers continue to reuse the candidate runner while their expansion/
-  stability policy remains shell-owned until Patch 6.
+- `strategy_lab_py/search.py` as Stage-60 accepted-family expansion and Stage-70
+  stability/replay owner;
+- `strategy_lab_py/extended.py` as Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP search owner;
+- one generalized `candidate.py` owner for TLS 1.3, TLS 1.2, HTTP, QUIC and generic UDP;
+- Patch-4 request ownership extended to exact selected-endpoint QUIC and generic-UDP
+  payload/response execution;
+- production expansion/stability/extended/QUIC/UDP runners reduced to Python launch
+  boundaries;
+- legacy shell search/extended modules retained only until Patch-7 dedicated retirement,
+  not as authoritative production owners.
 
 ==================================================
 PERSISTENCE CONTRACT
@@ -170,10 +168,16 @@ same-directory fsync + atomic replacement, valid NDJSON, and no competing shell 
 transform. Private circular-session state keeps its separate shell contract.
 
 Patch 4 keeps public `network.json` and `baseline.json` unchanged and records richer
-subprocess diagnostics in `network-evidence.json` and `baseline-evidence.json`.
+subprocess diagnostics in sidecar evidence. Patch 5 preserves candidate and `family.json`
+public evidence fields.
 
-Patch 5 preserves standard candidate and `family.json` public evidence fields. Additional
-finite request execution evidence may be nested without changing existing result meaning.
+Patch 6 preserves the public Stage-60/70/80 result contracts:
+
+- expansion: `total_available`, `completed`, `candidates`, `working`, `failed`, `stopped_reason`;
+- stability: `total_candidates`, `completed`, `candidates`, `stable`, `unstable`, `stopped_reason`;
+- extended TCP: independent TLS 1.2 / HTTP `tested` and `working` objects;
+- QUIC: capability, skip reason, tested candidates, working candidate and `not_found`;
+- generic UDP: configured port, skip reason, tested candidates, working candidate and `not_found`.
 
 ==================================================
 STAGE / BUDGET / CANCELLATION CONTRACT
@@ -183,24 +187,21 @@ Patch 3 production stage order remains exactly:
 
 `00 -> 10 -> 20 -> 30 -> 40 -> 50 -> 60 -> 70 -> 80 -> 85 -> 90 -> 99`.
 
-Python owns the existing Standard 150-second budget, Extended +120-second budget,
-per-operation ceilings, Stage-80 shared deadline, typed timeout handling, cancellation
-process-group termination and mandatory Stage 90/99 convergence.
+Python owns the Standard 150-second budget, Extended +120-second budget, per-operation
+ceilings, Stage-80 shared deadline, typed timeout handling, cancellation process-group
+termination and mandatory Stage 90/99 convergence.
 
 Terminal mapping remains unchanged: `ERROR`, `TIMEOUT`, `RESTORE_FAILED` => terminal
 `error` / report FAIL; `SUCCESS`, `NO_CANDIDATE`, `TARGET_ACCESSIBLE`, `PARTIAL` =>
 terminal `completed` / report PASS; restoration failure overrides prior outcome.
 
-Patch 4 does not change those semantics. A race exposed by the faster request/probe path
-was corrected only in publication ordering: Stage 99 report and circular eligibility are
-persisted before terminal `completed/error` state becomes visible.
-
-Patch 5 preserves Stage-50 placement and the outer stage return contract. Candidate
-timeouts remain bounded by the existing per-operation ceiling and cancellation remains a
-first-class result rather than a generic candidate rejection.
+Patch 6 does not change whole-job budget semantics. Search/protocol candidate limits are
+clipped by `STRATEGY_LAB_OPERATION_TIMEOUT`; candidate subprocess groups are terminated on
+timeout/cancellation and the audited candidate cleanup adapter is invoked before search
+continues or exits.
 
 ==================================================
-SUBPROCESS / PARSER CONTRACT
+SUBPROCESS / PARSER / CANDIDATE CONTRACT
 ==================================================
 
 Every migrated external command execution preserves independently:
@@ -217,21 +218,54 @@ Every migrated external command execution preserves independently:
 Timeout is not flattened into generic code 1. Parser rejection is not indistinguishable
 from command execution failure.
 
-Patch 4 implements this contract for finite Strategy Lab requests. DNS A/AAAA parsing:
+Patch 4 implements this contract for DNS/TLS/HTTP/TCP/QUIC-control/route requests and
+ANSWER-section-aware DNS parsing. Patch 6 extends it to exact selected-endpoint QUIC and
+generic-UDP payload/response execution.
 
-- accepts only records in the actual `ANSWER SECTION`;
-- validates returned addresses with Python `ipaddress`;
-- rejects QUESTION, AUTHORITY or unrelated `IN A`/`IN AAAA` text;
-- distinguishes `timeout`, `command_error`, `parser_rejected`, and `pass` evidence.
+The unified Python candidate owner uses explicit protocol specs:
 
-Stage 30 and 40 preserve their existing public JSON while sidecar evidence keeps the full
-structured subprocess facts. Target type is local Python data, eliminating the old
-shell-global `_strategy_lab_type` collision from the production baseline path.
+- TLS 1.3: TCP 443, TLS L7;
+- TLS 1.2: TCP 443, TLS L7;
+- HTTP: TCP 80, HTTP L7;
+- QUIC: UDP 443, QUIC L7;
+- generic UDP: validated configured port, no L7 classifier, validated job-local payload.
 
-Patch 5 reuses Patch-4 request evidence for standard candidate endpoint probes and adds
-Python-owned readiness/interception classification. Candidate PASS requires finite request
-success, selected remote-IP identity, and observed IPFW counter growth for the reserved
-rule. Fatal startup-log text cannot be reported as a clean/ready standard candidate.
+For all protocols candidate PASS requires finite request success, exact selected endpoint
+identity, and IPFW packet-counter growth. Runtime readiness remains process identity +
+divert socket + clean startup log with two stable snapshots. Fatal startup-log text cannot
+be reported as ready.
+
+==================================================
+SEARCH CONTRACT
+==================================================
+
+Stage 60 expansion:
+
+- only candidates belonging to accepted Stage-50 families are considered;
+- catalog order is preserved;
+- candidates run one at a time;
+- default target remains five working expansion candidates;
+- stop reasons remain `no_accepted_family`, `enough_candidates`, `catalog_exhausted`;
+- timeout is recorded as candidate failure evidence, not silently flattened.
+
+Stage 70 stability:
+
+- passing expansion and family candidates are combined;
+- identical strategies are de-duplicated;
+- ranking remains deterministic by line count, character count, then id;
+- default limit remains five candidates;
+- default replay remains three sequential fresh-connection attempts;
+- default target remains three stable candidates;
+- stop reasons remain `no_working_candidate`, `enough_stable_candidates`, `candidates_exhausted`.
+
+Stage 80 extended protocols:
+
+- TLS 1.2 and HTTP are independent first-working searches;
+- unavailable QUIC capability is explicitly skipped using the existing capability reason;
+- available QUIC candidates run sequentially until first working or `not_found`;
+- generic UDP consumes validated job-local port/payload data and preserves explicit skip
+  semantics when not configured;
+- configured UDP candidates run sequentially until first working or `not_found`.
 
 ==================================================
 LIFECYCLE SAFETY
@@ -250,10 +284,11 @@ Migration invariants remain:
 9. Never hide restoration failure behind a successful result.
 10. Saved Traffic Strategy remains immutable.
 
-Patch 5 does not duplicate audited FreeBSD process/firewall mutation logic in Python.
-`strategy_lab_candidate_adapter.sh` retains only WAN lookup, candidate-file preparation,
-IPFW install/remove/counters, temporary job-directory access, daemon launch/stop,
-process-identity and divert-socket observations. Python owns sequencing/readiness/outcome.
+Patch 6 still does not duplicate audited FreeBSD process/firewall mutation logic in Python.
+`strategy_lab_candidate_adapter.sh` retains WAN lookup, candidate-file preparation, IPFW
+install/remove/counters, temporary job-directory access, daemon launch/stop, process
+identity and divert-socket observations. Protocol transport/port/L7 are explicit adapter
+inputs; Python owns sequencing/readiness/search/outcome.
 
 ==================================================
 CONFIRMED DEFECTS TO CARRY FORWARD
@@ -271,10 +306,10 @@ At the frozen `_17` live boundary:
 8. Terminal reload/state presentation can resurrect retained terminal work incorrectly.
 9. Candidate readiness log classification can miss fatal runtime log evidence.
 
-Patch 4 replaces source mechanisms behind items 5–7. Patch 5 replaces the standard
-candidate readiness mechanism behind item 9 and adds focused regression. Live/UI closure
-is not claimed from source changes alone. All owner-observed items remain open until the
-required evidence closes them.
+Patch 4 replaces source mechanisms behind items 5–7. Patch 5 replaces the candidate
+readiness mechanism behind item 9 and adds focused regression. Patch 6 extends that unified
+candidate path to extended protocols. Live/UI closure is not claimed from source changes
+alone. All owner-observed items remain open until required evidence closes them.
 
 ==================================================
 MIGRATION PATCH SERIES
@@ -290,26 +325,19 @@ Patch 3 — Python stage machine, budgets, cancellation, and finalization: **COM
 
 Patch 4 — Python request/probe execution and parsing: **COMPLETE / MERGED AS `_21`**.
 
-- finite DNS/TLS/HTTP/TCP/QUIC-control execution moved to Python;
-- returncode/stdout/stderr/timeout/termination/duration remain distinct;
-- DNS parsing is answer-section-aware;
-- Stage 30/40 execution/parsing moved to Python with unchanged public JSON;
-- candidate DNS binding uses the same parser;
-- focused Linux and FreeBSD 15 regressions cover parser and diagnostic separation.
+Patch 5 — Python candidate runtime and family screening: **COMPLETE / MERGED AS `_22`**.
 
-Patch 5 — Python candidate runtime and family screening: **CURRENT `_22` SOURCE CHANGE**.
+Patch 6 — Python expansion, stability/replay, and extended protocol orchestration: **CURRENT `_23` SOURCE CHANGE**.
 
-- standard TLS 1.3 candidate sequencing/readiness/interception moves to Python;
+- Stage-60 expansion and Stage-70 stability/replay policy moves to `search.py`;
+- Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP policy moves to `extended.py`;
+- one generalized Python candidate owner serves all protocols;
 - exact endpoint/IPFW evidence remains required;
-- ordered seven-family screening and per-candidate timeout/cancel moves to Python;
-- audited FreeBSD system mutations remain behind `strategy_lab_candidate_adapter.sh`;
-- existing candidate/family result contracts and runner defaults remain compatible;
-- shell Stage-50 family policy is retired without fallback;
-- focused Linux and FreeBSD 15 regression qualifies the new owner.
+- audited FreeBSD mutations remain behind `strategy_lab_candidate_adapter.sh`;
+- public search/protocol result schemas and stop/skip reasons remain compatible;
+- focused Linux and FreeBSD 15 regression qualifies the new ownership.
 
-Patch 6 — Python expansion, stability, and extended protocol orchestration: **NEXT AFTER PATCH 5 QUALIFICATION**.
-
-Patch 7 — Python result/shortlist completion and shell-orchestration retirement.
+Patch 7 — Python final result/shortlist completion and shell-orchestration retirement: **NEXT AFTER PATCH 6 QUALIFICATION**.
 
 Patch 8 — GUI/status reconciliation and post-migration live gate.
 
@@ -322,30 +350,26 @@ TEST STRATEGY
 
 Every migration patch includes focused coverage for the responsibility it moves.
 
-Patch 1 remains protected by the Python foundation test. Patch 2 remains protected by
-state/revision/progress/event/atomicity/concurrency tests. Patch 3 remains protected by
-stage-order, budget, cancellation, timeout, restoration and terminal tests. Patch 4 is
-protected by finite request/probe/parser and structured-diagnostic tests.
+Patches 1–5 retain their existing focused regressions and the full authoritative Strategy
+Lab corrective matrix remains the cross-surface compatibility gate.
 
-Patch 5 additionally requires:
+Patch 6 additionally requires:
 
-- Python 3.13 import and `py_compile` for `candidate.py`, `family.py`, and compatibility dispatch;
-- candidate endpoint binding through the Patch-4 ANSWER-section parser;
-- two-stable-snapshot readiness convergence;
-- fatal startup-log rejection;
-- bound endpoint identity plus IPFW counter-growth success condition;
-- cleanup request on success and failure;
-- exact seven-family order and one-at-a-time isolation;
-- per-candidate timeout and cancellation behavior;
-- unchanged candidate and `family.json` compatibility fields;
-- existing 3–7 argument candidate-runner defaults;
+- Python 3.13 import/`py_compile` for `search.py`, `extended.py`, generalized candidate and request owners;
+- accepted-family expansion filtering, ordering, timeout and early-stop compatibility;
+- stability source de-duplication/ranking, three sequential replay attempts and stable-target early stop;
+- TLS 1.2 / HTTP independent first-working behavior;
+- QUIC capability skip and available first-working behavior;
+- generic UDP unconfigured skip, validated configured input, sequential search and first-working behavior;
+- protocol environment/transport/port propagation into the unified candidate owner;
+- endpoint/IPFW evidence invariant across standard and extended candidates;
 - complete existing Strategy Lab corrective matrix;
 - FreeBSD 15 execution with `python313`;
-- built-package presence of `candidate.py`, `family.py`, and the narrow candidate adapter.
+- built-package presence of `search.py` and `extended.py` plus all earlier Python migration layers.
 
 Old fixtures remain compatibility tests when they express product behavior rather than
-retired shell implementation details. No test may require an obsolete shell Stage-50
-policy owner after Patch 5 switches that responsibility.
+retired shell implementation details. No test may require shell ownership of Stage-60/70/
+80 search policy or protocol candidate interception after Patch 6 switches those paths.
 
 ==================================================
 CUTOVER RULE
@@ -360,7 +384,8 @@ For each responsibility:
 5. Remove obsolete shell implementation in the same logical scope when safe, or the immediately following dedicated retirement patch if necessary.
 
 Patch 2 switched persistence; Patch 3 switched stage/budget/cancel/finalization ownership;
-Patch 4 switched finite request/probe execution and parsing; Patch 5 switches standard
-candidate runtime/readiness/interception and Stage-50 family screening. Private circular-
-session state remains shell-owned. Expansion/stability and extended-protocol algorithms
-remain outside these cutovers until Patch 6.
+Patch 4 switched finite request/probe execution and parsing; Patch 5 switched candidate
+runtime/readiness/interception and Stage-50 family screening; Patch 6 switches Stage-60/70
+search and Stage-80 extended-protocol orchestration. Private circular-session state remains
+shell-owned. Stage-85 final result/shortlist ownership and dedicated obsolete-shell
+retirement remain Patch 7.

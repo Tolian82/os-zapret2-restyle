@@ -101,36 +101,35 @@ awk -F '\t' '
     END { exit !(NR==3 && ok) }
 ' "${BINDINGS}"
 
-# Bound TLS/HTTP finite requests are Python-owned in Migration Patch 4. The
-# invariant remains: a bound probe pins the exact endpoint and cannot follow a
-# redirect away from that IP.
+# Bound finite requests remain Python-owned. Redirects cannot escape the exact
+# selected endpoint, and Patch 6 adds bound QUIC plus generic UDP request/response.
 grep -Fq 'command.extend(["--max-redirs", "0", "--resolve", f"{host}:{port}:{bound_ip}"])' "${REQUEST_PY}"
 grep -Fq 'if bound_ip is None:' "${REQUEST_PY}"
-grep -Fq 'command.extend(["--location", "--max-redirs", "2"])' "${REQUEST_PY}"
-grep -Fq 'strategy_lab_request_python tls13-bound' "${MODULE_DIR}/request.sh"
-grep -Fq 'strategy_lab_request_python tls12-bound' "${MODULE_DIR}/extended_request.sh"
-grep -Fq 'strategy_lab_request_python http-bound' "${MODULE_DIR}/extended_request.sh"
+grep -Fq 'def quic_target_request(host: str, address: str)' "${REQUEST_PY}"
+grep -Fq 'def udp_response_request(host: str, port: int, payload_path: Path)' "${REQUEST_PY}"
 
-# Migration Patch 5 moves standard TLS13 candidate interception policy to
-# Python. It still requires both endpoint identity and IPFW counter growth.
+# Migration Patches 5/6 make one Python candidate owner authoritative for all
+# standard and extended protocols. Every protocol still requires endpoint
+# identity plus verified IPFW counter growth.
 grep -Fq 'before_packets, before_bytes = _counter(rule)' "${CANDIDATE_PY}"
 grep -Fq 'after_packets, after_bytes = _counter(rule)' "${CANDIDATE_PY}"
 grep -Fq 'endpoint_match = remote_ip == selected' "${CANDIDATE_PY}"
 grep -Fq 'intercepted = after_packets > before_packets' "${CANDIDATE_PY}"
 grep -Fq 'passed = exit_code == 0 and endpoint_match and intercepted' "${CANDIDATE_PY}"
+grep -Fq 'if protocol == "tls12":' "${CANDIDATE_PY}"
+grep -Fq 'if protocol == "http":' "${CANDIDATE_PY}"
+grep -Fq 'if protocol == "quic":' "${CANDIDATE_PY}"
+grep -Fq 'if protocol == "udp":' "${CANDIDATE_PY}"
 
-grep -Fq -- '-connect "${_slquicreq_ip}:443"' "${MODULE_DIR}/quic_request.sh"
-for file in candidate.sh extended_candidate.sh quic_candidate.sh udp_candidate.sh
-do
-    grep -Fq 'strategy_lab_candidate_probe_begin' "${MODULE_DIR}/${file}"
-    grep -Fq 'strategy_lab_candidate_endpoint_result_write' "${MODULE_DIR}/${file}"
-done
-# QUIC/UDP/extended protocol candidate orchestration is intentionally still
-# shell-owned until Migration Patch 6.
 for runner in strategy_lab_quic_candidate_runner.sh strategy_lab_udp_candidate_runner.sh
 do
-    grep -Eq '(^|[[:space:]])interception([[:space:]]|$)' \
-        "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/${runner}"
+    file="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/${runner}"
+    grep -Fq 'STRATEGY_LAB_CANDIDATE_PROTOCOL=' "${file}"
+    grep -Fq 'strategy_lab_candidate_runner.sh' "${file}"
+    if grep -Eq '(^|[[:space:]])interception([[:space:]]|$)|strategy_lab_candidate_probe_begin|strategy_lab_run_candidate' "${file}"; then
+        echo "${runner} still owns shell candidate/interception policy" >&2
+        exit 1
+    fi
 done
 grep -Fq 'candidate run' "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_runner.sh"
 if grep -Fq '_slcand_run_pids' "${MODULE_DIR}/candidate.sh"; then
@@ -138,4 +137,4 @@ if grep -Fq '_slcand_run_pids' "${MODULE_DIR}/candidate.sh"; then
     exit 1
 fi
 
-echo 'PASS: candidate success requires one bound endpoint and verified IPFW counter growth across Python standard and shell extended candidate owners'
+echo 'PASS: candidate success requires one bound endpoint and verified IPFW counter growth across the unified Python standard and extended candidate owner'
