@@ -1,10 +1,12 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **FAILED ON `_26` — CORRECTIVE `_27` REQUIRED**
+Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; FULL REGRESSION MATRIX OPEN**
 
-This matrix is the final live-appliance gate for Strategy Lab. Source tests, GitHub CI,
-and FreeBSD package builds cannot substitute for evidence collected on the owner's
-OPNsense appliance.
+This matrix is the canonical live-appliance regression inventory for Strategy Lab.
+Source tests, GitHub CI, and FreeBSD package builds cannot substitute for a live PASS when
+a row is selected as mandatory for a release. Not every pending row is automatically a
+release blocker; selection follows
+`docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
 
 Only FreeBSD 15 amd64 packages are valid.
 
@@ -16,11 +18,11 @@ TEST RECORD
 - Latest test date/time: `2026-08-08`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.3.3_26.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_26.pkg`
+- Latest published testing candidate: `os-zapret2-restyle-0.3.3_27.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_27.pkg`
 - Current corrective source candidate: `os-zapret2-restyle-0.3.3_27.pkg`
 - Current migration source candidate: `os-zapret2-restyle-0.3.3_27.pkg`
-- Latest owner-tested diagnostic job: `job.Cs5ryG`
+- Latest owner-tested diagnostic job: not captured in the supplied `_27` transcript
 - WAN interface: `vtnet1`
 - Blocked-domain target: `rutracker.org`
 - Generic UDP target/port: `PENDING OWNER`
@@ -29,7 +31,7 @@ Architecture / ABI baseline evidence:
 `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`.
 
 Latest live evidence:
-`docs/verification/evidence/2026-08-08-v0.3.3_26-scenario-01-stage40-dns-deadline.md`.
+`docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md`.
 
 Previous migration-handoff evidence:
 `docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md`.
@@ -56,6 +58,9 @@ Key live progression:
   qualification, was published as a testing prerelease and was installed for live retest.
 - `_26` live retesting exposed an earlier Stage-40 blocker: the Python DNS subprocess
   deadline is shorter than intermittent valid local-Unbound response time.
+- `_27` widened the DNS/stage deadline envelope; owner retesting passed Stage 40, passed
+  Stage 50, continued through Stages 60/70 and ended truthfully as `NO_CANDIDATE` with
+  Stage-90 cleanup/restoration PASS.
 
 Historical `_17`, job `job.w0nXxQ`, ended with Stage 50 ERROR and Stage 90 PASS. Its
 candidate-runtime bundle was not collected, so the exact `_17` Stage-50 root cause remains
@@ -176,6 +181,27 @@ The `PARTIAL` summary wording observed after the early `_26` stop is a separate 
 presentation issue and is not part of `_27`.
 
 ==================================================
+POST-MIGRATION OWNER TEST — `_27`
+==================================================
+
+Owner-assisted `_27` Standard run against `rutracker.org`:
+
+- Stages 00, 10, 20, 30 and 40 PASS;
+- Stage 40 reports `DNS: OK` and no direct TLS 1.3 connection;
+- Stage 50 PASS and finds at least one working TLS 1.3 family;
+- Stage 60 PASS: two working candidates from two tested;
+- Stage 70 PASS: three stable candidates from three tested;
+- Stage 80 SKIPPED as expected in Standard mode;
+- Stage 85 PASS and forms the final result;
+- Stage 90 PASS: temporary processes/rules removed and initial RUNNING Zapret2 restored
+  healthy;
+- Stage 99: `NO_CANDIDATE`, which is a valid terminal outcome rather than internal error.
+
+This closes the `_26` Stage-50 and `_27` Stage-40 corrective live boundary. Exact supplied
+evidence is preserved in
+`docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md`.
+
+==================================================
 PYTHON MIGRATION OWNERSHIP
 ==================================================
 
@@ -202,7 +228,16 @@ boundaries.
 REQUIRED EVIDENCE BUNDLE
 ==================================================
 
-For each applicable scenario preserve:
+For each mandatory release-selected scenario preserve at minimum:
+
+- exact installed candidate/version and supported ABI;
+- the terminal stage/result report for the exercised behavior;
+- restoration/cleanup outcome when the scenario owns the Zapret2 lifecycle.
+
+When available, preserve the deeper diagnostic bundle below. It is required when needed
+to diagnose a failure, resolve ambiguous behavior, or prove a safety property that the
+terminal report does not itself establish; absence of an unrelated diagnostic artifact
+does not invalidate an otherwise unambiguous successful release-selected row:
 
 - screenshot of Diagnostics result and progress display;
 - final automated `status.json` or circular `state.json`;
@@ -235,34 +270,32 @@ SCENARIO MATRIX
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; Stage 90 restores RUNNING; no temporary residue | Latest: `2026-08-08-v0.3.3_26-scenario-01-stage40-dns-deadline.md`; historical failed attempts remain under `docs/verification/evidence/` | **FAILED ON `_26` — `_27` STAGE-40 RETEST REQUIRED** |
-| 2 | Standard blocked domain, initial Zapret2 STOPPED | Test completes while final service remains STOPPED; restoration evidence verified | `PENDING OWNER` | **BLOCKED BY #1** |
-| 3 | Extended TLS 1.2 and HTTP | Available protocol successes appear as complete replay-verified profiles; unavailable protocols explicitly skipped | `PENDING OWNER` | **BLOCKED BY #1** |
-| 4 | Extended QUIC | QUIC result endpoint-bound and replay-verified when capability exists; otherwise explicit skip reason | `PENDING OWNER` | **BLOCKED BY #1** |
-| 5 | Generic UDP port and payload | Port/payload pair accepted only in Extended mode; result identifies selected IP and complete profile; payload removed after terminal cleanup | `PENDING OWNER` | **BLOCKED BY #1** |
-| 6 | Target already accessible | Outcome `TARGET_ACCESSIBLE`; strategy search skipped; service state remains exact | `PENDING OWNER` | **BLOCKED BY #1** |
-| 7 | No working candidate | Outcome `NO_CANDIDATE`; shortlist empty; not reported as internal error | `PENDING OWNER` | **BLOCKED BY #1** |
-| 8 | User cancellation after service stop | Cancel requested; unfinished stages skipped; stages 90 and 99 run; original service restored | `PENDING OWNER` | **BLOCKED BY #1** |
-| 9 | Hard whole-worker timeout | Outcome `TIMEOUT`; available results persist; Stage 90 restoration verified; no residue | `PENDING OWNER` | **BLOCKED BY #1** |
-| 10 | Controlled internal failure | Outcome `ERROR`; failure stage truthful; original service restored and verified | `PENDING OWNER` | **BLOCKED BY #1** |
-| 11 | Circular start, browser validation, and stop | Parent job files unchanged; private session active; stop ends completed; no global circular aliases | `PENDING OWNER` | **BLOCKED BY #1** |
-| 12 | Circular stale-worker recovery | Owner mismatch detected; temporary runtime/rules cleaned; semantic restoration verified before retry | `PENDING OWNER` | **BLOCKED BY #1** |
-| 13 | Settings Apply during automated Strategy Lab | Apply rejected before model mutation with lifecycle-owner information; saved configuration unchanged | `PENDING OWNER` | **BLOCKED BY #1** |
-| 14 | Settings Apply during circular or `restore_failed` state | Apply rejected; unsafe retry blocked until restoration proven | `PENDING OWNER` | **BLOCKED BY #1** |
-| 15 | Diagnostics page reload | Active reload resumes job; terminal reload opens idle view without deleting retained evidence or starting a new job | `PENDING OWNER` | **BLOCKED BY #1** |
-| 16 | Russian and English presentation | Progress deterministic; stage/state/outcome/circular/UDP/copy/messages correct in both languages | `PENDING OWNER` | **BLOCKED BY #1** |
-| 17 | Retention with reduced test limits | Only excess verified terminal artifacts removed; active/latest/nonterminal/unverified/`RESTORE_FAILED` evidence protected | `PENDING OWNER` | **BLOCKED BY #1** |
-| 18 | Reboot after clean terminal completion | No temporary process or reserved IPFW residue returns; normal Zapret2 service/rule identity valid | `PENDING OWNER` | **BLOCKED BY #1** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; Stage 90 restores RUNNING; no temporary residue | `2026-08-08-v0.3.3_27-scenario-01-pass.md` | **PASS ON `_27` — v0.4.0 mandatory row** |
+| 2 | Standard blocked domain, initial Zapret2 STOPPED | Test completes while final service remains STOPPED; restoration evidence verified | `PENDING OWNER` | **PENDING REGRESSION** |
+| 3 | Extended TLS 1.2 and HTTP | Available protocol successes appear as complete replay-verified profiles; unavailable protocols explicitly skipped | `PENDING OWNER` | **PENDING REGRESSION** |
+| 4 | Extended QUIC | QUIC result endpoint-bound and replay-verified when capability exists; otherwise explicit skip reason | `PENDING OWNER` | **PENDING REGRESSION** |
+| 5 | Generic UDP port and payload | Port/payload pair accepted only in Extended mode; result identifies selected IP and complete profile; payload removed after terminal cleanup | `PENDING OWNER` | **PENDING REGRESSION** |
+| 6 | Target already accessible | Outcome `TARGET_ACCESSIBLE`; strategy search skipped; service state remains exact | `PENDING OWNER` | **PENDING REGRESSION** |
+| 7 | No working candidate | Outcome `NO_CANDIDATE`; shortlist empty; not reported as internal error | `_27` Scenario 1 also terminates `NO_CANDIDATE`, but this dedicated row remains unexecuted | **PENDING REGRESSION** |
+| 8 | User cancellation after service stop | Cancel requested; unfinished stages skipped; stages 90 and 99 run; original service restored | `PENDING OWNER` | **PENDING REGRESSION** |
+| 9 | Hard whole-worker timeout | Outcome `TIMEOUT`; available results persist; Stage 90 restoration verified; no residue | `PENDING OWNER` | **PENDING REGRESSION** |
+| 10 | Controlled internal failure | Outcome `ERROR`; failure stage truthful; original service restored and verified | `PENDING OWNER` | **PENDING REGRESSION** |
+| 11 | Circular start, browser validation, and stop | Parent job files unchanged; private session active; stop ends completed; no global circular aliases | `PENDING OWNER` | **PENDING REGRESSION** |
+| 12 | Circular stale-worker recovery | Owner mismatch detected; temporary runtime/rules cleaned; semantic restoration verified before retry | `PENDING OWNER` | **PENDING REGRESSION** |
+| 13 | Settings Apply during automated Strategy Lab | Apply rejected before model mutation with lifecycle-owner information; saved configuration unchanged | `PENDING OWNER` | **PENDING REGRESSION** |
+| 14 | Settings Apply during circular or `restore_failed` state | Apply rejected; unsafe retry blocked until restoration proven | `PENDING OWNER` | **PENDING REGRESSION** |
+| 15 | Diagnostics page reload | Active reload resumes job; terminal reload opens idle view without deleting retained evidence or starting a new job | `PENDING OWNER` | **PENDING REGRESSION** |
+| 16 | Russian and English presentation | Progress deterministic; stage/state/outcome/circular/UDP/copy/messages correct in both languages | `PENDING OWNER` | **PENDING REGRESSION** |
+| 17 | Retention with reduced test limits | Only excess verified terminal artifacts removed; active/latest/nonterminal/unverified/`RESTORE_FAILED` evidence protected | `PENDING OWNER` | **PENDING REGRESSION** |
+| 18 | Reboot after clean terminal completion | No temporary process or reserved IPFW residue returns; normal Zapret2 service/rule identity valid | `PENDING OWNER` | **PENDING REGRESSION** |
 
 ==================================================
 CONFIRMED DEFECTS / LIVE RECHECKS
 ==================================================
 
-- **Stage 40 DNS timeout on `_26`.** Root cause identified: the 2-second DNS subprocess
-  and 5-second stage envelope are shorter than an observed valid 8–10-second local
-  resolver response; corrective `_27` required.
-- **Stage 50 aggregate abort on `_25`.** Corrective `_26` source/CI/package qualification
-  is complete, but live closure remains pending because `_26` stops earlier at Stage 40.
+- **Stage 40 DNS timeout on `_26`.** Closed by `_27` owner live Scenario 1 PASS.
+- **Stage 50 aggregate abort on `_25`.** Closed by `_27` owner live Scenario 1 reaching
+  Stage 50 PASS and continuing through Stages 60/70.
 - **Immediate stale/new-job GUI error.** Not reproduced on `_26`, but retain as open until
   a complete Scenario-1 run confirms behavior.
 - **Active `Strategy Lab returned no output.` message.** Patch-8 source correction exists;
@@ -282,7 +315,8 @@ CONFIRMED DEFECTS / LIVE RECHECKS
 FAILURE HANDLING
 ==================================================
 
-Any of the following keeps the live gate failed or pending:
+Any of the following blocks a release when it occurs on a mandatory release-selected row
+or is a known critical condition in the candidate:
 
 - candidate ABI/architecture is not exactly FreeBSD 15 amd64;
 - `RESTORE_FAILED` or unverified restoration;
@@ -293,7 +327,7 @@ Any of the following keeps the live gate failed or pending:
 - active work not resumed after reload;
 - completed/error result automatically resurrected as the state of a newly opened Diagnostics page;
 - reload deleting retained terminal evidence;
-- missing required evidence.
+- missing evidence required for the release-selected behavior or for an observed failure.
 
 A failed live row requires source correction when a source defect is identified, complete
 CI/FreeBSD 15 package verification, and repetition of the affected live row plus required
@@ -303,14 +337,11 @@ independent rows. CI alone never marks a live row PASS.
 RELEASE GATE
 ==================================================
 
-Stable release preparation and pkg-repository promotion remain blocked until every
-required live row is marked PASS by the owner and linked evidence is recorded.
+Stable release preparation uses the risk-based selection policy in
+`docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`. Every row selected as
+mandatory for the release must have owner evidence and PASS. Pending rows that are not
+selected remain regression backlog and are not blockers merely because they are pending.
 
-Corrective `_27` is not published merely because source exists. It must first pass the
-normal latest-head CI and FreeBSD 15 package gate. Testing-prerelease publication requires
-separate explicit owner authorization under `docs/GITHUB_PUBLICATION.md`.
-
-There is no successful complete Strategy Lab live scenario PASS claim yet. The current
-live record preserves the prior `_25` evidence for a functioning/intercepting candidate
-runtime, a working `seqovl` family during partial Stage 50, and Stage 90 restoration. The
-latest `_26` record supersedes Stage 40 as the active blocker and requires `_27` retest.
+For `v0.4.0`, Scenario 1 is the selected mandatory post-migration row and is PASS on
+`v0.3.3_27`. No known critical restoration/runtime defect remains from the `_26`/`_27`
+corrective cycle. Rows 2–18 remain open regression coverage without a claimed PASS.

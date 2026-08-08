@@ -119,6 +119,13 @@ grep -Fq "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy
 if grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGRESS**' "${MATRIX}"; then
     grep -Fq 'Current corrective candidate: **NOT DESIGNATED — PATCH 8 REQUIRED**' "${MATRIX}" ||
         fail 'paused third-audit matrix must not designate a live candidate before Patch 8'
+elif grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"; then
+    grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.3.3_27.pkg`' "${MATRIX}" ||
+        fail 'release-selected live matrix does not preserve published _27 identity'
+    grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_27.pkg`' "${MATRIX}" ||
+        fail 'release-selected live matrix does not preserve owner-tested _27 identity'
+    grep -Fq '**PASS ON `_27` — v0.4.0 mandatory row**' "${MATRIX}" ||
+        fail 'release-selected live matrix does not record the v0.4.0 mandatory Scenario 1 PASS'
 elif grep -Fq 'Overall status: **FAILED ON `_26` — CORRECTIVE `_27` REQUIRED**' "${MATRIX}"; then
     [ "${revision}" -eq 27 ] || fail '_26 live failure must designate revision 27'
     grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.3.3_26.pkg`' "${MATRIX}" ||

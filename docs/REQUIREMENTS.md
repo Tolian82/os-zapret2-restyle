@@ -312,14 +312,16 @@ Active product baseline:
 
 - project version line: `0.3.x`;
 - published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`;
-- current source line: `0.3.3_27` on `main`; owner live evidence still follows the
-  separately recorded testing-prerelease/live matrix boundary;
+- current source line: `0.3.3_27` on `main`; owner live Scenario 1 passes on published
+  testing prerelease `_27`;
 - asynchronous Strategy Lab is the only strategy-finding path;
 - the initial delivery, corrective series and Python migration through Patch 8 are source
-  complete; corrective `_27` is merged and awaits replacement owner live evidence;
+  complete; corrective `_27` is merged and has replacement owner live evidence;
 - the adaptive-search design is approved but is not yet executable `_27` behavior;
 - complete mock-driven API/configd-to-worker regression coverage is mandatory in CI;
-- final owner-assisted OPNsense verification remains required before release authorization.
+- release-selected owner-assisted OPNsense verification is required before stable release;
+  the full live matrix remains regression inventory rather than an unconditional all-row
+  gate.
 
 Current Strategy Lab behavior is controlled by:
 

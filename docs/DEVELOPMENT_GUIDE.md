@@ -321,14 +321,15 @@ For fixed release identifiers and commit SHAs, prefer static pipelines such as
 CURRENT IMPLEMENTATION PRIORITY
 ==================================================
 
-The Strategy Lab initial delivery and corrective source series are complete. The active
-next product gate is the consolidated owner-assisted OPNsense verification matrix
-recorded in `docs/ROADMAP.md` and the corrective audit.
+The Strategy Lab initial delivery and corrective source series are complete. Owner `_27`
+Scenario 1 provides the release-selected live closure for the Stage-40/50 corrective
+cycle. The consolidated OPNsense matrix remains the regression inventory recorded in
+`docs/ROADMAP.md`.
 
-An explicitly authorized testing prerelease may be published solely to perform that live
-verification. It does not authorize stable release promotion, GitHub Pages, or the pkg
-repository. Do not begin another Strategy Lab feature or stable release preparation
-before the required live evidence is recorded.
+Stable-release live rows are selected by current product risk under
+`docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`; pending unrelated rows
+do not block a release automatically. Required live evidence must still be recorded before
+release, and CI never substitutes for a selected live PASS.
 
 The additional BLOB repository remains a later GUI work item. Its repository, manifest,
 versioning, integrity, and update contract remain undefined until supplied and approved

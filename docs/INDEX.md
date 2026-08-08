@@ -21,8 +21,9 @@ For current Strategy Lab post-migration live correction work, read these first:
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — approved native-Zapret2 `CandidateSpec`/`ResourceInventory`, adaptive search graph, resource classes, validation and timeout target architecture;
 - `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — A/B/C cold/warm runtime, dispatcher, preload, discovery-probe and timeout-telemetry verification plan;
 - `docs/devlog/2026-08-08-strategy-lab-adaptive-search-design.md` — documentation-only design handoff into the planned `_28`–`_33` implementation series;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — current owner-assisted live gate, failed on `_26` at Stage 40 and selecting corrective source `_27`;
-- `docs/verification/evidence/2026-08-08-v0.3.3_26-scenario-01-stage40-dns-deadline.md` — current `_26` live evidence proving the 2-second DNS deadline rejects intermittent 8–10-second valid local-resolver answers;
+- `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md` — active release-specific live-selection policy; preserves the full regression matrix without making every pending row an unconditional release blocker;
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical owner-assisted live regression inventory; v0.4.0-selected Scenario 1 is PASS on `_27`;
+- `docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md` — current `_27` live evidence: Stages 40/50/60/70/90 PASS and truthful `NO_CANDIDATE`;
 - `docs/patches/v0.3.3_27.md` — corrective Stage-40 DNS/stage deadline contract;
 - `docs/devlog/2026-08-08-v0.3.3_27-stage40-dns-deadline.md` — `_26` Stage-40 diagnosis and `_27` corrective implementation record;
 - `docs/verification/evidence/2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md` — `_25` live Stage-50 evidence proving a working `seqovl` candidate and aggregate candidate-isolation defect;
@@ -95,8 +96,8 @@ weaken product behavior.
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_MATRIX.md` — discoverable corrective CI entry point;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — earlier hardening finding-to-patch traceability;
 - `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — shell-era source/CI closure; live matrix remains the product gate;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — current live gate, failed on `_26`, corrective `_27` required;
-- `docs/verification/evidence/2026-08-08-v0.3.3_26-scenario-01-stage40-dns-deadline.md` — latest owner evidence;
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical live regression inventory with release-specific mandatory-row selection;
+- `docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md` — latest owner evidence and v0.4.0 live-gate PASS;
 - `docs/verification/evidence/2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md` — prior post-migration Stage-50 evidence;
 - `docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md` — `_16` post-drop hostlist traversal evidence;
 - `docs/verification/evidence/2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md` — `_15` resident FreeBSD daemon startup evidence;

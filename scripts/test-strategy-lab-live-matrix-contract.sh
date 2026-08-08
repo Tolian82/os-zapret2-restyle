@@ -16,6 +16,8 @@ CURRENT_STAGE50_HOSTLIST_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-0
 CURRENT_PYTHON_HANDOFF_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md"
 CURRENT_POST_MIGRATION_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md"
 CURRENT_DNS_DEADLINE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-08-v0.3.3_26-scenario-01-stage40-dns-deadline.md"
+CURRENT_RELEASE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md"
+LIVE_GATE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md"
 PYTHON_PLAN="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md"
 PYTHON_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
@@ -34,6 +36,31 @@ candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
 grep -Fq 'AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md' "${MATRIX}"
+
+# Current policy: the full matrix is a regression inventory. v0.4.0 selects Scenario 1
+# as its mandatory post-migration appliance row; unrelated pending rows are not blanket
+# blockers and must not be promoted to unsupported PASS claims.
+if grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"; then
+    for file in "${CURRENT_RELEASE_EVIDENCE}" "${LIVE_GATE_DECISION}"
+    do
+        [ -s "${file}" ] || { echo "FAIL: current release live-gate record is missing: ${file}" >&2; exit 1; }
+    done
+    grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.3.3_27.pkg`' "${MATRIX}"
+    grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_27.pkg`' "${MATRIX}"
+    scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /PASS ON `_27` — v0.4.0 mandatory row/ {n++} END {print n+0}' "${MATRIX}")
+    [ "${scenario_one}" -eq 1 ] || { echo 'FAIL: v0.4.0 mandatory Scenario 1 PASS row mismatch' >&2; exit 1; }
+    pending_count=$(awk -F'|' '$2 ~ /^[[:space:]]*([2-9]|1[0-8])[[:space:]]*$/ && $6 ~ /PENDING REGRESSION/ {n++} END {print n+0}' "${MATRIX}")
+    [ "${pending_count}" -eq 17 ] || { echo 'FAIL: rows 2-18 must remain honest pending regression coverage' >&2; exit 1; }
+    grep -Fq 'Result: **SCENARIO 1 PASS on `v0.3.3_27`**.' "${CURRENT_RELEASE_EVIDENCE}"
+    grep -Fq 'It is not an' "${LIVE_GATE_DECISION}"
+    grep -Fq 'all-or-nothing release checklist.' "${LIVE_GATE_DECISION}"
+    if grep -Fq 'Stable release preparation and pkg-repository promotion remain blocked until every' "${MATRIX}"; then
+        echo 'FAIL: blanket all-row stable-release gate returned' >&2
+        exit 1
+    fi
+    echo 'PASS: v0.4.0 selects owner-proven _27 Scenario 1 while rows 2-18 remain non-blocking regression backlog'
+    exit 0
+fi
 
 blocked_count=$(awk -F'|' '$2 ~ /^[[:space:]]*[0-9]+[[:space:]]*$/ && $6 ~ /BLOCKED BY #1/ {n++} END {print n+0}' "${MATRIX}")
 [ "${blocked_count}" -eq 17 ] || { echo "FAIL: dependent live rows are not all blocked" >&2; exit 1; }

@@ -1437,3 +1437,13 @@ Decision:
 `docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md`.
 
 No runtime/source code or package metadata changed. Planned source handoff is `_28`–`_33`.
+
+==================================================
+2026-08-09 — RISK-BASED LIVE RELEASE GATE
+==================================================
+
+Recorded owner `v0.3.3_27` Scenario-1 PASS through Stages 40/50/60/70/90 with truthful
+`NO_CANDIDATE`, and replaced the blanket all-18-rows stable-release gate with a
+release-specific risk-based live selection policy. The complete matrix remains regression
+coverage; no PASS is claimed for unexecuted rows 2–18. Detailed record:
+`docs/devlog/2026-08-09-risk-based-live-release-gate.md`.

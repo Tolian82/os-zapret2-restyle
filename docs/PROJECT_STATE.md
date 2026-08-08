@@ -28,15 +28,15 @@ QUICK CONTEXT
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Latest published testing prerelease: `v0.3.3_26` / `os-zapret2-restyle-0.3.3_26.pkg`
-Latest owner-tested testing candidate: `v0.3.3_26` / `os-zapret2-restyle-0.3.3_26.pkg`
+Latest published testing prerelease: `v0.3.3_27` / `os-zapret2-restyle-0.3.3_27.pkg`
+Latest owner-tested testing candidate: `v0.3.3_27` / `os-zapret2-restyle-0.3.3_27.pkg`
 Current source line: `VERSION=0.3.3`
 Current package revision: `PLUGIN_REVISION=27`
 Current corrective source candidate: `os-zapret2-restyle-0.3.3_27.pkg`
 Current migration source candidate: `os-zapret2-restyle-0.3.3_27.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Strategy Lab post-migration live correction — Stage-40 DNS deadline**
-Stable release: **BLOCKED ON POST-MIGRATION LIVE MATRIX**
+Current phase: **v0.4.0 release preparation after `_27` live closure**
+Stable release: **LIVE GATE SATISFIED FOR v0.4.0; RELEASE PIPELINE PENDING**
 
 Current primary Strategy Lab authority:
 `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
@@ -60,7 +60,10 @@ Current live-gate authority:
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
 Current live evidence:
-`docs/verification/evidence/2026-08-08-v0.3.3_26-scenario-01-stage40-dns-deadline.md`.
+`docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md`.
+
+Current live-release-gate decision:
+`docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
 
 ==================================================
 MIGRATION OWNERSHIP
@@ -237,14 +240,12 @@ logical presentation task.
 CONFIRMED DEFECT BACKLOG
 ==================================================
 
-All owner-observed items remain open until replacement evidence closes them.
+Owner evidence on `_27` closes the release-blocking `_26`/`_27` corrective items. Other
+presentation/regression observations remain backlog rather than implicit release blockers.
 
-1. **Scenario 1 fails on `_26` at Stage 40.** The Python DNS request deadline is 2 seconds
-   while the owner's local Unbound can validly answer after 8–10 seconds. Corrective `_27`
-   widens the DNS/stage envelope; live retest required.
-2. **Stage-50 candidate isolation.** Corrective `_26` source/CI/package qualification is
-   complete, but `_26` never reached Stage 50 during the latest live retest; live closure
-   remains pending behind `_27`.
+1. **Stage-40 DNS deadline — CLOSED for release.** `_27` owner Scenario 1 passes Stage 40.
+2. **Stage-50 candidate isolation — CLOSED for release.** The same `_27` run passes Stage
+   50 and advances through Stages 60/70.
 3. **Immediate stale/new-job GUI error.** The owner reported that the start error was not
    reproduced on `_26`; retain as open until a complete Scenario-1 run confirms it.
 4. **Active GUI no-output message.** Patch 8 separates transient reads from persisted state;
@@ -267,7 +268,8 @@ DELIVERY AND LIVE-GATE BOUNDARY
 
 Corrective `_27` source is squash-merged on `main` at
 `0420dbf0632dc823a2d9086974db365030596a61`. Its source/CI qualification is complete;
-owner-assisted replacement live evidence remains pending.
+owner-assisted replacement live evidence now passes Scenario 1 on the published `_27`
+prerelease.
 
 Its delivery contract was:
 
@@ -284,8 +286,9 @@ Testing-prerelease/package publication state remains distinct from source qualif
 and must be read from current GitHub Release state under `docs/GITHUB_PUBLICATION.md`
 before an installation instruction is issued.
 
-After an authorized `_27` prerelease is installed, repeat Scenario 1 on `rutracker.org`.
-Stage 40 must accept the owner's slow-but-valid DNS case and retain truthful failure
-classification when resolution genuinely exceeds the new bound. The same run must then
-retest `_26` candidate-local Stage-50 isolation and proceed to Stage 60 when screening can
-complete. Scenario 1 remains failed until the owner collects replacement live evidence.
+The owner installed `_27` and completed Scenario 1 on `rutracker.org`: Stage 40 PASS,
+Stage 50 PASS, Stages 60/70 PASS, Stage 90 PASS and truthful `NO_CANDIDATE`. Under the
+risk-based live-release policy, this is the mandatory v0.4.0 post-migration live row.
+Rows 2–18 remain useful regression backlog without blocking v0.4.0 solely because they
+are pending. The next action is the separately authorized `v0.4.0 / 0.4.0_1` release
+preparation cycle.
