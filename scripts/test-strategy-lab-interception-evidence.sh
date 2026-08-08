@@ -4,6 +4,7 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MODULE_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab"
 REQUEST_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py"
+CANDIDATE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate.py"
 ROOT=$(mktemp -d /tmp/strategy-lab-interception.XXXXXX)
 trap 'rm -rf "${ROOT}"' EXIT HUP INT TERM
 
@@ -110,20 +111,31 @@ grep -Fq 'strategy_lab_request_python tls13-bound' "${MODULE_DIR}/request.sh"
 grep -Fq 'strategy_lab_request_python tls12-bound' "${MODULE_DIR}/extended_request.sh"
 grep -Fq 'strategy_lab_request_python http-bound' "${MODULE_DIR}/extended_request.sh"
 
+# Migration Patch 5 moves standard TLS13 candidate interception policy to
+# Python. It still requires both endpoint identity and IPFW counter growth.
+grep -Fq 'before_packets, before_bytes = _counter(rule)' "${CANDIDATE_PY}"
+grep -Fq 'after_packets, after_bytes = _counter(rule)' "${CANDIDATE_PY}"
+grep -Fq 'endpoint_match = remote_ip == selected' "${CANDIDATE_PY}"
+grep -Fq 'intercepted = after_packets > before_packets' "${CANDIDATE_PY}"
+grep -Fq 'passed = exit_code == 0 and endpoint_match and intercepted' "${CANDIDATE_PY}"
+
 grep -Fq -- '-connect "${_slquicreq_ip}:443"' "${MODULE_DIR}/quic_request.sh"
 for file in candidate.sh extended_candidate.sh quic_candidate.sh udp_candidate.sh
 do
     grep -Fq 'strategy_lab_candidate_probe_begin' "${MODULE_DIR}/${file}"
     grep -Fq 'strategy_lab_candidate_endpoint_result_write' "${MODULE_DIR}/${file}"
 done
-for runner in strategy_lab_candidate_runner.sh strategy_lab_quic_candidate_runner.sh strategy_lab_udp_candidate_runner.sh
+# QUIC/UDP/extended protocol candidate orchestration is intentionally still
+# shell-owned until Migration Patch 6.
+for runner in strategy_lab_quic_candidate_runner.sh strategy_lab_udp_candidate_runner.sh
 do
     grep -Eq '(^|[[:space:]])interception([[:space:]]|$)' \
         "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/${runner}"
 done
+grep -Fq 'candidate run' "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_runner.sh"
 if grep -Fq '_slcand_run_pids' "${MODULE_DIR}/candidate.sh"; then
     echo 'candidate probes still share counters in parallel' >&2
     exit 1
 fi
 
-echo 'PASS: candidate success requires one bound endpoint and verified IPFW counter growth while Python owns finite bound-request execution'
+echo 'PASS: candidate success requires one bound endpoint and verified IPFW counter growth across Python standard and shell extended candidate owners'
