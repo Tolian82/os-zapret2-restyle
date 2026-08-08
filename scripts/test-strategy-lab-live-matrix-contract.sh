@@ -61,7 +61,7 @@ if grep -Fq 'Overall status: **FAILED ON `_25` — CORRECTIVE `_26` REQUIRED**' 
     [ "${scenario_one}" -eq 1 ] || { echo 'FAIL: scenario 1 _25/_26 live row mismatch' >&2; exit 1; }
     grep -Fq 'Latest owner-tested testing candidate: `v0.3.3_25` / `os-zapret2-restyle-0.3.3_25.pkg`' "${STATE}"
     grep -Fq 'Current phase: **Strategy Lab post-migration live correction — Stage-50 candidate isolation**' "${STATE}"
-    grep -Fq 'candidate: `v0.3.3_25` / `os-zapret2-restyle-0.3.3_25.pkg`' "${CURRENT_POST_MIGRATION_EVIDENCE}"
+    grep -Fq 'Candidate: `v0.3.3_25` / `os-zapret2-restyle-0.3.3_25.pkg`' "${CURRENT_POST_MIGRATION_EVIDENCE}"
     grep -Fq '`accepted`: `["seqovl"]`' "${CURRENT_POST_MIGRATION_EVIDENCE}"
     grep -Fq 'Corrective source candidate `_26` implements and regression-tests that boundary.' "${CURRENT_POST_MIGRATION_EVIDENCE}"
     echo "PASS: live matrix records _25 partial Stage-50 success/failure and gates Scenario 1 on corrective ${candidate}"
