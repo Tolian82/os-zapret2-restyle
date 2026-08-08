@@ -2,7 +2,7 @@
 <script>
 $(document).ready(function () {
     var activeJobId = '', pollTimer = null, circularTimer = null, renderedProfiles = [];
-    var udpPayloadMaxBytes = 4096;
+    var udpPayloadMaxBytes = 4096, discoveryRetryLimit = 5;
     var isRussian = ((document.documentElement.lang || '').toLowerCase().indexOf('ru') === 0);
     var stageLabels = isRussian ? {
         target_initialization:'Подготовка цели', lifecycle_snapshot:'Снимок состояния', service_stop:'Остановка службы',
@@ -57,13 +57,15 @@ $(document).ready(function () {
         failed:'Проверка завершилась с ошибкой.', noCandidates:'Стабильные кандидаты не найдены.', circularReady:'Можно временно проверить найденные стратегии в браузере.',
         udpPair:'Для общей UDP-проверки укажите одновременно порт и payload-файл.', udpSize:'Payload-файл должен иметь размер от 1 до 4096 байт.',
         udpRead:'Не удалось прочитать payload-файл.', copy:'Копировать профиль', copied:'Профиль скопирован.', copyFailed:'Не удалось скопировать профиль.',
-        progress:'Прогресс', restorationPass:'Успешно', requestFailed:'Ошибка запроса: '
+        progress:'Прогресс', restorationPass:'Успешно', requestFailed:'Ошибка запроса: ',
+        statusRetry:'Статус Strategy Lab временно недоступен. Повторная попытка…', statusFailed:'Не удалось получить актуальный статус Strategy Lab.'
     } : {
         running:'Strategy Lab is running.', completed:'The check is complete.', cancel:'Cancellation requested. Mandatory Zapret2 restoration is running.',
         failed:'The check ended with an error.', noCandidates:'No stable candidates were found.', circularReady:'The candidates can now be tested temporarily in a browser.',
         udpPair:'Generic UDP testing requires both a port and a payload file.', udpSize:'The payload file must contain between 1 and 4096 bytes.',
         udpRead:'The payload file could not be read.', copy:'Copy profile', copied:'Profile copied.', copyFailed:'The profile could not be copied.',
-        progress:'Progress', restorationPass:'Pass', requestFailed:'Request failed: '
+        progress:'Progress', restorationPass:'Pass', requestFailed:'Request failed: ',
+        statusRetry:'Strategy Lab status is temporarily unavailable. Retrying…', statusFailed:'The current Strategy Lab status could not be read.'
     };
 
     var guidance = $('#strategyLabSummary').empty();
@@ -75,14 +77,25 @@ $(document).ready(function () {
     function label(map, key) { return map[key] || key || '—'; }
     function apiPost(url, data, done) {
         $.ajax({type:'POST', url:url, data:data || {}, dataType:'json', timeout:200000,
-            success:function (reply) { done(reply || {}); }, error:function (xhr, status) { done({status:'error', message:ui.requestFailed + status}); }});
+            success:function (reply) { done(reply || {}); },
+            error:function (xhr, status) { done({status:'error', transient:true, message:ui.requestFailed + status}); }});
     }
     function terminal(state) { return state === 'completed' || state === 'error'; }
+    function jobSnapshot(data) {
+        var jobId = String((data && data.job_id) || ''), state = String((data && data.state) || '');
+        return /^job\.[A-Za-z0-9]+$/.test(jobId) && ['queued','running','cancel_requested','completed','error'].indexOf(state) !== -1;
+    }
+    function transientReply(data) { return !!(data && (data.transient === true || data.status === 'busy')); }
+    function circularSnapshot(data) {
+        var state = String((data && data.state) || '');
+        return ['idle','queued','preparing','running','stop_requested','completed','error','restore_failed'].indexOf(state) !== -1;
+    }
     function setBusy(busy) {
         $('#strategyLabBtn_progress').toggleClass('fa fa-spinner fa-pulse', busy);
         $('#strategyLabBtn').prop('disabled', busy); $('#strategyLabCancelBtn').prop('disabled', !busy || !activeJobId);
     }
     function stopPolling() { if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; } }
+    function schedulePoll(callback) { stopPolling(); pollTimer = setTimeout(callback, 1000); }
     function toggleUdpInput() { $('#strategyLabUdpRow').toggle($('#strategyLabMode').val() === 'extended'); }
     function fallbackPercent(stage) {
         return ({'00':0,'10':9,'20':18,'30':27,'40':36,'50':45,'60':55,'70':64,'80':73,'85':82,'90':91,'99':100})[String(stage || '00')] || 0;
@@ -142,10 +155,16 @@ $(document).ready(function () {
         if (data.state === 'completed') { if (circularReady) $('#strategyLabMessage').text(ui.circularReady); else if (!items.length) $('#strategyLabMessage').text(ui.noCandidates); }
     }
     function renderJob(data) {
+        if (!jobSnapshot(data)) return false;
         renderProgress(data); renderStages(data); renderResultSummary(data); renderShortlist(data);
-        $('#strategyLabRaw').text(JSON.stringify(data, null, 2)); $('#strategyLabJob').text(data.job_id || activeJobId || '—');
-        $('#strategyLabState').text(label(statusLabels, String(data.state || data.status || 'idle').toUpperCase()));
+        $('#strategyLabRaw').text(JSON.stringify(data, null, 2)); $('#strategyLabJob').text(data.job_id);
+        $('#strategyLabState').text(label(statusLabels, String(data.state).toUpperCase()));
         if (data.message) $('#strategyLabMessage').text(data.message);
+        return true;
+    }
+    function renderTransientStatus() {
+        $('#strategyLabMessage').text(ui.statusRetry);
+        if (activeJobId) $('#strategyLabJob').text(activeJobId);
     }
     function copyProfile(profile) {
         if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(profile);
@@ -161,6 +180,11 @@ $(document).ready(function () {
     function fetchResult() {
         if (!activeJobId) return;
         apiPost('/api/zapret/strategy_lab/result', {job_id:activeJobId}, function (data) {
+            if (!jobSnapshot(data)) {
+                setBusy(false);
+                if (!transientReply(data)) $('#strategyLabMessage').text(data.message || ui.statusFailed);
+                return;
+            }
             renderJob(data); setBusy(false);
             if (data.state === 'completed') $('#strategyLabMessage').text(data.message || ui.completed);
             else if (data.state === 'error') $('#strategyLabMessage').text(data.message || ui.failed);
@@ -169,8 +193,28 @@ $(document).ready(function () {
     function pollStatus() {
         if (!activeJobId) return;
         apiPost('/api/zapret/strategy_lab/status', {job_id:activeJobId}, function (data) {
-            renderJob(data); if (terminal(data.state)) { stopPolling(); fetchResult(); return; }
-            setBusy(true); pollTimer = setTimeout(pollStatus, 1000);
+            if (!jobSnapshot(data)) {
+                if (transientReply(data)) { renderTransientStatus(); setBusy(true); schedulePoll(pollStatus); return; }
+                stopPolling(); setBusy(false); $('#strategyLabMessage').text(data.message || ui.statusFailed); return;
+            }
+            renderJob(data);
+            if (terminal(data.state)) { stopPolling(); fetchResult(); return; }
+            setBusy(true); schedulePoll(pollStatus);
+        });
+    }
+    function discoverActive(attempt) {
+        apiPost('/api/zapret/strategy_lab/status', {job_id:'-'}, function (data) {
+            if (jobSnapshot(data)) {
+                activeJobId=data.job_id; renderJob(data);
+                if (terminal(data.state)) { setBusy(false); fetchResult(); }
+                else { setBusy(true); pollStatus(); }
+                return;
+            }
+            if (data.status === 'idle') { activeJobId=''; setBusy(false); return; }
+            if (transientReply(data) && attempt < discoveryRetryLimit) {
+                renderTransientStatus(); setBusy(true); schedulePoll(function(){ discoverActive(attempt + 1); }); return;
+            }
+            activeJobId=''; setBusy(false); $('#strategyLabMessage').text(data.message || ui.statusFailed);
         });
     }
 
@@ -184,8 +228,16 @@ $(document).ready(function () {
     });
     function startStrategyLab(target, mode, udpPort, udpPayloadBase64) {
         apiPost('/api/zapret/strategy_lab/start', {target:target,mode:mode,language:isRussian?'ru':'en',udp_port:udpPort,udp_payload_base64:udpPayloadBase64}, function (data) {
-            if (data.status !== 'ok' || !data.job_id) { setBusy(false); $('#strategyLabMessage').text(data.message || ui.failed); return; }
-            activeJobId=data.job_id; $('#strategyLabJob').text(activeJobId); pollStatus();
+            if (data.status === 'busy' && /^job\.[A-Za-z0-9]+$/.test(String(data.job_id || ''))) {
+                activeJobId=data.job_id; $('#strategyLabJob').text(activeJobId); setBusy(true); pollStatus(); return;
+            }
+            if (data.status !== 'ok' || !data.job_id) {
+                if (transientReply(data)) { renderTransientStatus(); setBusy(true); discoverActive(0); return; }
+                setBusy(false); $('#strategyLabMessage').text(data.message || ui.failed); return;
+            }
+            activeJobId=data.job_id;
+            renderJob({job_id:activeJobId,state:'queued',target:target,mode:mode,current_stage:'00',progress:{percent:0,stage:'00',stage_key:'target_initialization',message:''},stages:[]});
+            $('#strategyLabMessage').text(ui.running); setBusy(true); pollStatus();
         });
     }
     $('#strategyLabMode').change(toggleUdpInput);
@@ -193,6 +245,7 @@ $(document).ready(function () {
         var target=$('#strategyLabDomainInput').val().trim(), mode=$('#strategyLabMode').val(); if (!target) return;
         stopPolling(); activeJobId=''; renderedProfiles=[]; $('#strategyLabStages tbody,#strategyLabShortlist tbody').empty();
         $('#strategyLabShortlistBox,#strategyLabResultBox,#circularControls').hide(); $('#strategyLabRaw').text(''); $('#strategyLabMessage').text(ui.running); setBusy(true);
+        $('#strategyLabState').text(label(statusLabels,'QUEUED'));
         renderProgress({current_stage:'00',progress:{percent:0,stage_key:'target_initialization'}});
         if (mode !== 'extended') { startStrategyLab(target,mode,'',''); return; }
         var udpPort=$('#strategyLabUdpPort').val().trim(), fileInput=document.getElementById('strategyLabUdpPayload');
@@ -206,11 +259,22 @@ $(document).ready(function () {
             startStrategyLab(target,mode,udpPort,encoded.substring(delimiter+1));};
         reader.onerror=function(){setBusy(false);$('#strategyLabMessage').text(ui.udpRead);}; reader.readAsDataURL(payloadFile);
     });
-    $('#strategyLabCancelBtn').click(function(){if(!activeJobId)return;apiPost('/api/zapret/strategy_lab/cancel',{job_id:activeJobId},function(data){renderJob(data);$('#strategyLabMessage').text(ui.cancel);});});
+    $('#strategyLabCancelBtn').click(function(){
+        if(!activeJobId)return;
+        apiPost('/api/zapret/strategy_lab/cancel',{job_id:activeJobId},function(data){
+            if (jobSnapshot(data)) { renderJob(data); $('#strategyLabMessage').text(ui.cancel); setBusy(true); schedulePoll(pollStatus); return; }
+            if (transientReply(data)) { renderTransientStatus(); setBusy(true); schedulePoll(pollStatus); return; }
+            $('#strategyLabMessage').text(data.message || ui.statusFailed);
+        });
+    });
 
     function pollCircular() {
         apiPost('/api/zapret/circular/status',{},function(data){
-            var state=data.state||data.status||'idle'; $('#circularState').text(label(statusLabels,String(state).toUpperCase()));
+            if (!circularSnapshot(data)) {
+                if (transientReply(data)) { circularTimer=setTimeout(pollCircular,1000); return; }
+                $('#circularMessage').text(data.message || ''); return;
+            }
+            var state=data.state; $('#circularState').text(label(statusLabels,String(state).toUpperCase()));
             $('#circularMessage').text(circularMessages[state] || data.message || ''); $('#circularRaw').text(JSON.stringify(data,null,2));
             var live=['queued','preparing','running','stop_requested'].indexOf(state)!==-1; $('#circularStartBtn').prop('disabled',live); $('#circularStopBtn').prop('disabled',!live);
             if(live)circularTimer=setTimeout(pollCircular,1000);
@@ -219,7 +283,7 @@ $(document).ready(function () {
     $('#circularStartBtn').click(function(){if(!activeJobId)return;if(circularTimer!==null)clearTimeout(circularTimer);apiPost('/api/zapret/circular/start',{job_id:activeJobId},function(){pollCircular();});});
     $('#circularStopBtn').click(function(){apiPost('/api/zapret/circular/stop',{},function(){pollCircular();});});
 
-    apiPost('/api/zapret/strategy_lab/status',{job_id:'-'},function(data){if(!data.job_id)return;activeJobId=data.job_id;renderJob(data);if(terminal(data.state)){setBusy(false);fetchResult();}else{setBusy(true);pollStatus();}});
+    discoverActive(0);
     toggleUdpInput(); pollCircular();
 });
 </script>
