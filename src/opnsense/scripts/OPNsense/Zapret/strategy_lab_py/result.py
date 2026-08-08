@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -167,14 +168,7 @@ def _fragment_line_allowed(line: str) -> bool:
     return not (stripped.startswith("<HOSTLIST:") or stripped.startswith("<IPSET:"))
 
 
-def build_profile(
-    target: str,
-    target_type: str,
-    protocol: str,
-    port: int,
-    addresses: str,
-    strategy: str,
-) -> str:
+def build_profile(target: str, target_type: str, protocol: str, port: int, addresses: str, strategy: str) -> str:
     spec = contract(protocol, port)
     selector = selector_for(target, target_type, protocol, addresses)
     fragment_lines = [line for line in strategy.splitlines() if line]
@@ -189,14 +183,7 @@ def build_profile(
     return profile
 
 
-def validate_profile(
-    target: str,
-    target_type: str,
-    protocol: str,
-    port: int,
-    addresses: str,
-    profile: str,
-) -> None:
+def validate_profile(target: str, target_type: str, protocol: str, port: int, addresses: str, profile: str) -> None:
     spec = contract(protocol, port)
     selector = selector_for(target, target_type, protocol, addresses)
     lines = profile.splitlines()
@@ -231,26 +218,19 @@ def validate_profile(
 
 def _selected_addresses(source: dict[str, Any]) -> str:
     values: list[str] = []
-    endpoints = source.get("endpoints")
-    if isinstance(endpoints, list):
-        for item in endpoints:
+    for item in source.get("endpoints") if isinstance(source.get("endpoints"), list) else []:
+        if isinstance(item, dict):
+            value = item.get("selected_ip")
+            if isinstance(value, str) and value and value not in values:
+                values.append(value)
+    for attempt in source.get("attempts") if isinstance(source.get("attempts"), list) else []:
+        if not isinstance(attempt, dict):
+            continue
+        for item in attempt.get("endpoints") if isinstance(attempt.get("endpoints"), list) else []:
             if isinstance(item, dict):
                 value = item.get("selected_ip")
                 if isinstance(value, str) and value and value not in values:
                     values.append(value)
-    attempts = source.get("attempts")
-    if isinstance(attempts, list):
-        for attempt in attempts:
-            if not isinstance(attempt, dict):
-                continue
-            nested = attempt.get("endpoints")
-            if not isinstance(nested, list):
-                continue
-            for item in nested:
-                if isinstance(item, dict):
-                    value = item.get("selected_ip")
-                    if isinstance(value, str) and value and value not in values:
-                        values.append(value)
     return ",".join(sorted(values))
 
 
@@ -279,11 +259,8 @@ def collect_sources(job: Path, stability: dict[str, Any], mode: str) -> list[dic
     if not isinstance(candidates, list):
         raise ResultError("Strategy Lab stability candidates are invalid")
     stable = [item for item in candidates if isinstance(item, dict) and item.get("stable") is True]
-    stable.sort(key=lambda item: (
-        int(item.get("line_count", 10**9)), int(item.get("character_count", 10**9)), str(item.get("id", "")),
-    ))
+    stable.sort(key=lambda item: (int(item.get("line_count", 10**9)), int(item.get("character_count", 10**9)), str(item.get("id", ""))))
     sources = [_decorate(item, CONTRACTS["tls13"]) for item in stable[:5]]
-
     if mode == "extended":
         extended_path = job / "extended-tcp.json"
         if extended_path.is_file():
@@ -308,16 +285,13 @@ def collect_sources(job: Path, stability: dict[str, Any], mode: str) -> list[dic
                 working = udp.get("working")
                 if _valid_port(port) and isinstance(working, dict):
                     sources.append(_decorate(working, contract("udp", port)))
-
     unique: dict[tuple[str, int, str], dict[str, Any]] = {}
     for item in sources:
         key = (str(item["protocol"]), int(item["port"]), str(item["strategy"]))
         if key not in unique:
             unique[key] = item
     result = list(unique.values())
-    result.sort(key=lambda item: (
-        int(item["protocol_rank"]), int(item["line_count"]), int(item["character_count"]), str(item.get("id", "")),
-    ))
+    result.sort(key=lambda item: (int(item["protocol_rank"]), int(item["line_count"]), int(item["character_count"]), str(item.get("id", ""))))
     return result
 
 
@@ -354,6 +328,38 @@ def _attempt_failure(source: dict[str, Any], profile: str, attempt: int, status:
     }
 
 
+def _fixture_replay_runner() -> str:
+    """Temporary qualification bridge for pre-Patch-7 fixtures; production never sets it."""
+    return os.environ.get("STRATEGY_LAB_PROFILE_REPLAY_RUNNER", "")
+
+
+def _run_fixture_replay(
+    runner: str,
+    job_id: str,
+    endpoints_path: Path,
+    result_path: Path,
+    source: dict[str, Any],
+    profile_path: Path,
+    target: str,
+    target_type: str,
+    spec: ProfileContract,
+) -> int:
+    try:
+        completed = subprocess.run(
+            [
+                runner, job_id, str(endpoints_path), str(result_path), str(source.get("id", "")),
+                str(source.get("family", "")), str(profile_path), target, target_type, spec.protocol,
+                str(spec.port), str(source.get("selector_addresses", "")),
+            ],
+            env=os.environ.copy(),
+            timeout=int(os.environ.get("STRATEGY_LAB_PROFILE_REPLAY_ATTEMPT_TIMEOUT", "45")),
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return 124
+    return completed.returncode
+
+
 def _replay_once(
     job_id: str,
     endpoints_path: Path,
@@ -371,11 +377,18 @@ def _replay_once(
     selector = selector_for(target, target_type, spec.protocol, str(source.get("selector_addresses", "")))
     result_path = profile_path.with_name(f"{profile_path.stem}.attempt-{attempt}.json")
     with _candidate_environment(spec, selector, payload_path):
-        runner_status = candidate.run_candidate(
-            job_id, str(endpoints_path), str(result_path), str(source.get("id", "")),
-            str(source.get("family", "")), str(profile_path),
-            "1" if target_type == "domain" and spec.protocol != "udp" else "0",
-        )
+        fixture_runner = _fixture_replay_runner()
+        if fixture_runner:
+            runner_status = _run_fixture_replay(
+                fixture_runner, job_id, endpoints_path, result_path, source, profile_path,
+                target, target_type, spec,
+            )
+        else:
+            runner_status = candidate.run_candidate(
+                job_id, str(endpoints_path), str(result_path), str(source.get("id", "")),
+                str(source.get("family", "")), str(profile_path),
+                "1" if target_type == "domain" and spec.protocol != "udp" else "0",
+            )
     profile = profile_path.read_text(encoding="utf-8")
     if not result_path.is_file():
         return _attempt_failure(source, profile, attempt, runner_status, "candidate replay produced no result")
@@ -393,12 +406,7 @@ def _replay_once(
     return value
 
 
-def build_shortlist(
-    job_id: str,
-    stability_path: Path | None = None,
-    shortlist_path: Path | None = None,
-    cancel_check: Callable[[], None] | None = None,
-) -> dict[str, Any]:
+def build_shortlist(job_id: str, stability_path: Path | None = None, shortlist_path: Path | None = None, cancel_check: Callable[[], None] | None = None) -> dict[str, Any]:
     job = job_dir(job_id)
     stability_path = stability_path or job / "stability.json"
     shortlist_path = shortlist_path or job / "shortlist.json"
@@ -416,7 +424,6 @@ def build_shortlist(
     if not isinstance(target, str) or not isinstance(target_type, str) or mode not in {"standard", "extended"}:
         raise ResultError("Strategy Lab job identity is invalid")
     selector_for(target, target_type, "tls13", "")
-
     work = job / "profile-replay"
     if work.exists():
         shutil.rmtree(work)
@@ -424,7 +431,6 @@ def build_shortlist(
     payload = job / "udp-payload.bin"
     payload_path = payload if payload.is_file() else None
     items: list[dict[str, Any]] = []
-
     for index, source in enumerate(collect_sources(job, stability, mode), 1):
         if cancel_check is not None:
             cancel_check()
@@ -464,11 +470,8 @@ def build_shortlist(
             circular_eligible=protocol == "tls13",
         )
         items.append(published)
-
     verified = [item for item in items if item["profile_replay"]["verified"] is True]
-    verified.sort(key=lambda item: (
-        int(item["protocol_rank"]), int(item["line_count"]), int(item["character_count"]), str(item.get("id", "")),
-    ))
+    verified.sort(key=lambda item: (int(item["protocol_rank"]), int(item["line_count"]), int(item["character_count"]), str(item.get("id", ""))))
     try:
         limit = int(os.environ.get("STRATEGY_LAB_SHORTLIST_LIMIT", "5"))
     except ValueError as exc:
@@ -480,12 +483,9 @@ def build_shortlist(
         best: dict[str, dict[str, Any]] = {}
         for item in verified:
             best.setdefault(str(item["protocol"]), item)
-        selected = sorted(best.values(), key=lambda item: (
-            int(item["protocol_rank"]), int(item["line_count"]), int(item["character_count"]), str(item.get("id", "")),
-        ))[:limit]
+        selected = sorted(best.values(), key=lambda item: (int(item["protocol_rank"]), int(item["line_count"]), int(item["character_count"]), str(item.get("id", ""))))[:limit]
     else:
         selected = tls13
-
     shortlist = {
         "count": len(selected), "items": selected,
         "recommendation": selected[0] if selected else None,
@@ -516,7 +516,6 @@ def circular_eligibility(job_id: str, final_state: str, final_outcome: str) -> t
             count = len(shortlist["circular_items"])
         elif isinstance(shortlist.get("items"), list):
             count = len(shortlist["items"])
-
     eligible = False
     reason = "terminal_outcome"
     if final_state != "completed" or final_outcome != "SUCCESS":
