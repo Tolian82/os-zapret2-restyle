@@ -180,10 +180,13 @@ sh -n "${WORKER}"
 sh -n "${MODULE_DIR}/lifecycle.sh"
 sh -n "${MODULE_DIR}/state.sh"
 sh -n "${MODULE_DIR}/worker_messages.sh"
-sh -n "${MODULE_DIR}/worker_result.sh"
 sh -n "${MODULE_DIR}/worker_control.sh"
 sh -n "${MODULE_DIR}/worker_flow.sh"
 sh -n "${SERVICE_SOURCE}"
+[ ! -e "${MODULE_DIR}/worker_result.sh" ] ||
+    fail "retired shell automated result owner returned after Migration Patch 7"
+grep -Fq 'strategy_lab_python_stage_adapter.sh' "${WORKER}" ||
+    fail "production lifecycle worker does not route final result actions through Python"
 
 grep -Fq 'TRANSACTION_SCRIPT="${TRANSACTION_SCRIPT:-${SCRIPT_DIR}/zapret_service.sh}"' "${LAUNCHER}" ||
     fail "launcher does not enter the service-owned lifecycle transaction"
@@ -195,6 +198,6 @@ grep -Fq 'STRATEGY_LAB_LIFECYCLE_OWNER=1' "${SERVICE_SOURCE}" ||
     fail "inherited lifecycle ownership is not marked"
 grep -Fq '( : >&9 ) 2>/dev/null' "${SERVICE_SOURCE}" ||
     fail "internal service actions do not require inherited lock descriptor 9"
-grep -Fq 'RESTORE_FAILED' "${MODULE_DIR}/worker_messages.sh" || fail "worker has no explicit restore failure result"
+grep -Fq 'RESTORE_FAILED' "${MODULE_DIR}/worker_messages.sh" || fail "worker has no explicit restore failure message"
 
-echo 'PASS: Strategy Lab lifecycle snapshot, stop, cancel, cleanup, and restoration contract'
+echo 'PASS: Strategy Lab lifecycle snapshot, stop, cancel, cleanup, restoration, and Python final-result ownership contract'
