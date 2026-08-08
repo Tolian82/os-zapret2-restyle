@@ -162,7 +162,7 @@ SCENARIO MATRIX
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; Stage 90 restores RUNNING; no temporary residue | Failed shell-era attempts include `_1`, `_2`, `_4`, `_5`, `_12`, `_13`, `_14`, `_15`, `_16`, and `_17`; current handoff is `2026-08-07-v0.3.3_17-scenario-01-python-handoff.md` | **FAILED ON `_17` — RETEST AFTER POST-MIGRATION CANDIDATE PUBLICATION** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; Stage 90 restores RUNNING; no temporary residue | Failed shell-era attempts include `_1`, `_2`, `_4`, `_5`, `_12`, `_13`, `_14`, `_15`, `_16`, and `_17`; current handoff is `2026-08-07-v0.3.3_17-scenario-01-python-handoff.md` | **FAILED ON `_17` — RETEST AFTER PYTHON PARITY** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Test completes while final service remains STOPPED; restoration evidence verified | `PENDING OWNER` | **BLOCKED BY #1** |
 | 3 | Extended TLS 1.2 and HTTP | Available protocol successes appear as complete replay-verified profiles; unavailable protocols explicitly skipped | `PENDING OWNER` | **BLOCKED BY #1** |
 | 4 | Extended QUIC | QUIC result endpoint-bound and replay-verified when capability exists; otherwise explicit skip reason | `PENDING OWNER` | **BLOCKED BY #1** |
