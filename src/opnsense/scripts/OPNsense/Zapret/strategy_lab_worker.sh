@@ -2,7 +2,7 @@
 
 SCRIPT_DIR="${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}"
 PYTHON_LAUNCHER="${STRATEGY_LAB_PYTHON_LAUNCHER:-${SCRIPT_DIR}/strategy_lab_python_launcher.sh}"
-STRATEGY_LAB_STAGE_ADAPTER="${STRATEGY_LAB_STAGE_ADAPTER:-${SCRIPT_DIR}/strategy_lab_stage_adapter.sh}"
+STRATEGY_LAB_STAGE_ADAPTER="${STRATEGY_LAB_STAGE_ADAPTER:-${SCRIPT_DIR}/strategy_lab_python_stage_adapter.sh}"
 JOB_ID="${1:-}"
 
 set -eu

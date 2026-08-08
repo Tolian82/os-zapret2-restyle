@@ -14,6 +14,7 @@ from . import family as family_screening
 from . import orchestrator as stage_orchestrator
 from . import probe as probe_execution
 from . import request as request_execution
+from . import result as final_result
 from . import search as search_orchestration
 from . import state as state_persistence
 
@@ -144,6 +145,17 @@ def _run_extended(args: Sequence[str]) -> int:
         _error(f"Strategy Lab extended orchestration failed: {exc}"); return EX_SOFTWARE
 
 
+def _run_result(args: Sequence[str]) -> int:
+    try:
+        return final_result.main(args)
+    except final_result.ResultError as exc:
+        _error(str(exc)); return EX_SOFTWARE
+    except (RuntimeError, ValueError, request_execution.RequestError) as exc:
+        _error(str(exc)); return EX_SOFTWARE
+    except OSError as exc:
+        _error(f"Strategy Lab final result processing failed: {exc}"); return EX_SOFTWARE
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not _runtime_supported():
@@ -162,11 +174,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args[:1] == ["family"]: return _run_family(args[1:])
     if args[:1] == ["search"]: return _run_search(args[1:])
     if args[:1] == ["extended"]: return _run_extended(args[1:])
+    if args[:1] == ["result"]: return _run_result(args[1:])
     if len(args) != 1:
         _error(
             "usage: strategy_lab_python.py job_id | --self-test | state OPERATION ... | "
             "orchestrate JOB_ID | probe OPERATION ... | request OPERATION ... | candidate run ... | "
-            "family screen ... | search OPERATION ... | extended OPERATION ..."
+            "family screen ... | search OPERATION ... | extended OPERATION ... | result OPERATION ..."
         )
         return EX_USAGE
     return _delegate_shell(args[0])
