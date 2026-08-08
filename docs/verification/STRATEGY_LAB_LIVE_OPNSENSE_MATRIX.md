@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **FAILED ON `_17` — LIVE MATRIX PAUSED FOR PYTHON MIGRATION**
+Overall status: **FAILED ON `_25` — CORRECTIVE `_26` REQUIRED**
 
 This matrix is the final live-appliance gate for Strategy Lab. Source tests, GitHub CI,
 and FreeBSD package builds cannot substitute for evidence collected on the owner's
@@ -13,13 +13,14 @@ TEST RECORD
 ==================================================
 
 - Tester: repository owner
-- Test date/time: `2026-08-07`
+- Latest test date/time: `2026-08-08`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.3.3_17.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_17.pkg`
-- Current migration source candidate: `os-zapret2-restyle-0.3.3_25.pkg`
-- Latest owner-tested job: `job.w0nXxQ`
+- Latest published testing candidate: `os-zapret2-restyle-0.3.3_25.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_25.pkg`
+- Current corrective source candidate: `os-zapret2-restyle-0.3.3_26.pkg`
+- Current migration source candidate: `os-zapret2-restyle-0.3.3_26.pkg`
+- Latest owner-tested job: `job.c0oydv`
 - WAN interface: `vtnet1`
 - Blocked-domain target: `rutracker.org`
 - Generic UDP target/port: `PENDING OWNER`
@@ -27,11 +28,14 @@ TEST RECORD
 Architecture / ABI baseline evidence:
 `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`.
 
-Current handoff evidence:
+Latest live evidence:
+`docs/verification/evidence/2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md`.
+
+Previous migration-handoff evidence:
 `docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md`.
 
 ==================================================
-SCENARIO 1 HISTORY AND CURRENT BOUNDARY
+SCENARIO 1 HISTORY
 ==================================================
 
 The early failed attempts and their exact evidence remain preserved under
@@ -45,39 +49,85 @@ Key live progression:
 - `_14` corrected FreeBSD DNS foreground timeout; owner testing proved Stage 40 PASS with `DNS: OK`.
 - `_15` corrected unset family-runner timeout ownership but Stage 50 still failed.
 - `_16` corrected resident FreeBSD daemon startup blocking and reached real candidate dvtws2 startup/bind/privilege-drop; it then failed post-drop hostlist traversal through a private job directory.
-- `_17` corrected that hostlist traversal permission boundary and was published/installed for owner testing.
+- `_17` corrected that hostlist traversal permission boundary and became the frozen shell-era handoff to the Python migration.
+- `_18` through `_24` completed the automated Python migration.
+- `_25` reconciled GUI/status transport behavior, was published as a testing prerelease and was installed for post-migration owner testing.
 
-Owner-assisted `_17`, job `job.w0nXxQ`, is the frozen shell-era live boundary before the
-approved Python migration:
+Historical `_17`, job `job.w0nXxQ`, ended with Stage 50 ERROR and Stage 90 PASS. Its
+candidate-runtime bundle was not collected, so the exact `_17` Stage-50 root cause remains
+unclaimed historical context.
+
+==================================================
+POST-MIGRATION OWNER TEST — `_25`
+==================================================
+
+Owner-assisted `_25`, job `job.c0oydv`:
 
 - 00 PASS;
-- 10 PASS;
-- 20 PASS;
-- 30 PASS;
+- 10 PASS — initial Zapret2 RUNNING;
+- 20 PASS — normal service stopped;
+- 30 PASS — IPv4 available; IPv6 unavailable; QUIC/IPv4 closed;
 - 40 PASS — `DNS: OK`; direct TLS 1.3 connection not established;
-- 50 ERROR — `Temporary candidate runtime failed internally.`;
+- 50 ERROR — visible message `Temporary candidate runtime failed internally.`;
 - 60–85 SKIPPED;
 - 90 PASS — temporary state removed and initial RUNNING Zapret2 restored healthy;
 - 99 ERROR.
 
-Immediate GUI behavior on the same active job:
+GUI behavior on `_25`:
 
-- new job ID appeared with `Статус: ОШИБКА` immediately after Run;
-- `Strategy Lab returned no output.` appeared while the job was still active;
-- visible progress remained 0%;
-- terminal result jumped directly to 100%.
+- the owner still observed a brief immediate `Статус: ОШИБКА` after pressing Run;
+- a later active screenshot correctly showed `Статус: ВЫПОЛНЯЕТСЯ`;
+- persisted progress was visible at 36% / Stage 40 instead of remaining at 0% until terminal;
+- no unsupported closure is claimed for active no-output or reload behavior that was not
+  explicitly exercised during this run.
 
-No `_17` candidate-runtime log bundle was collected. Therefore this matrix does not claim
-the exact remaining `_17` Stage-50 root cause. The identical high-level message does not
-prove that the `_16` permission defect survived `_17`; it proves only that Stage 50 still
-contains at least one unresolved failure.
+The preserved Stage-50 evidence proves the temporary candidate runtime itself was capable
+of running correctly and that a working family was already found before Stage 50 aborted:
+
+- `candidate-smoke.json`: `total=7`, `completed=4`, `accepted=["seqovl"]`, `all_pass=true`;
+- `multisplit`: normal candidate FAIL, curl exit 28;
+- `multidisorder`: normal candidate FAIL, curl exit 28;
+- `seqovl`: **candidate PASS**;
+- `fake`: normal candidate FAIL, curl exit 35;
+- the `seqovl` candidate used selected IP `172.67.182.196`;
+- curl returned exit 0, HTTP/1.1 301 and matching remote IP;
+- IPFW rule 19100 counters increased and `intercepted=true`;
+- runtime evidence recorded `process_identity=true`, `socket_ready=true`, `log_clean=true`,
+  `stable=true`, `ready=true` after two stable checks;
+- dvtws2 bound the divert socket, dropped to UID/GID 65534 and shut down cleanly.
+
+Therefore `_25` Stage 50 did **not** fail because every temporary runtime was broken. The
+aggregate stage failed after four catalog entries despite already having a working family.
 
 ==================================================
-PYTHON MIGRATION HOLD / PATCH 8 SOURCE CANDIDATE
+CORRECTIVE `_26` SOURCE DIAGNOSIS
 ==================================================
 
-The owner approved pausing further growth of the large sourced shell Strategy Lab worker
-and migrating appropriate orchestration to Python.
+`strategy_lab_py/candidate.py` writes a structured JSON result for candidate-local errors.
+The compatibility `strategy_lab_candidate_runner.sh` intentionally returns status 1 when
+that JSON contains `"error":true`.
+
+Before corrective `_26`, `strategy_lab_py/family.py` treated every nonzero candidate-runner
+status as a fatal Stage-50 exception before reading the candidate JSON. A candidate-local
+error could therefore abort the entire catalog, discard continuation after an already
+accepted family and produce the misleading generic Stage-50 internal-error message.
+
+Correct `_26` contract:
+
+- timeout remains a rejected candidate and screening continues;
+- nonzero runner status plus a fresh valid structured candidate result with `error:true`
+  remains a rejected candidate and screening continues;
+- already accepted candidates remain preserved;
+- missing/invalid structured evidence or nonzero runner status without a structured
+  candidate error remains a true screening failure;
+- stale candidate JSON is removed before each launch and cannot be reused.
+
+Focused regression:
+`scripts/test-strategy-lab-stage50-candidate-isolation.sh`.
+
+==================================================
+PYTHON MIGRATION OWNERSHIP
+==================================================
 
 Authoritative migration plan:
 `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
@@ -86,44 +136,17 @@ Decision:
 `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
 
 Migration Patch 1 (`_18`) established the packaged Python 3.13 platform and compatibility
-boundary. Migration Patch 2 (`_19`) moved automated-job state/progress/event persistence
-to Python. Migration Patch 3 (`_20`) moved numbered stage order, budgets, cancellation,
-timeout and terminal restoration/finalization policy to Python.
+boundary. Patch 2 (`_19`) moved automated-job state/progress/event persistence to Python.
+Patch 3 (`_20`) moved numbered stage order, budgets, cancellation, timeout and terminal
+restoration/finalization policy to Python. Patch 4 (`_21`) moved finite network requests and
+Stage-30/40 parsing. Patch 5 (`_22`) moved candidate runtime/readiness/interception and
+Stage-50 family screening. Patch 6 (`_23`) moved Stage-60 expansion, Stage-70 stability and
+Stage-80 extended protocols. Patch 7 (`_24`) completed final profile/exact replay/shortlist
+ownership. Patch 8 (`_25`) reconciled GUI/status polling with persisted Python state.
 
-Migration Patch 4 (`_21`) moved bounded DNS/TLS/HTTP/TCP/QUIC-control execution and
-Stage-30/40 probe parsing to Python with separate command/return-code/stdout/stderr/
-timeout evidence and DNS ANSWER-section-aware parsing.
-
-Migration Patch 5 (`_22`) moved standard TLS 1.3 candidate runtime, readiness,
-endpoint-bound interception policy, ordered family screening, per-candidate timeouts and
-Stage-50 result aggregation to Python. Audited FreeBSD process/firewall/WAN mutations
-remain behind a narrow shell adapter.
-
-Migration Patch 6 (`_23`) moved Stage-60 parameter expansion, Stage-70 stability/replay,
-and Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP orchestration to Python. The same Python
-candidate runtime/readiness/interception owner serves standard and extended protocols;
-the shell candidate adapter remains limited to audited FreeBSD mutations and observations.
-
-Migration Patch 7 (`_24`) completed automated final profile construction, exact three-pass
-replay, unified shortlist publication and automated-job circular-eligibility ownership in
-Python and retired the competing automated shell result/replay/stage-machine owners.
-
-Migration Patch 8 source candidate `_25` reconciles the remaining GUI/status boundary
-without reopening Python backend ownership. The automated background worker now closes the
-launcher lock FD before `daemon(8)` execution. Empty/invalid configd output and AJAX failures
-are treated as transient read failures, not persisted job state. Diagnostics accepts visible
-state/progress only from validated persisted job snapshots, retries transient active reads,
-renders an accepted start as queued Stage 00, and preserves active reload/idle-history
-separation.
-
-None of `_18`, `_19`, `_20`, `_21`, `_22`, `_23`, `_24`, or source candidate `_25`
-supersedes the owner-tested `_17` live evidence. `_25` is not a published testing candidate
-merely because its source exists. Source-side corrections are not owner-assisted live
-closure claims.
-
-The live matrix remains failed until an explicitly authorized post-migration testing
-candidate has passed CI/FreeBSD 15 qualification, is published/installed, and owner evidence
-is collected. Do not mark a row PASS because a defect mechanism was rewritten.
+Audited FreeBSD system mutations remain behind narrow shell adapters; private circular
+sessions remain shell-owned by design. Corrective `_26` does not change those ownership
+boundaries.
 
 ==================================================
 REQUIRED EVIDENCE BUNDLE
@@ -162,7 +185,7 @@ SCENARIO MATRIX
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; Stage 90 restores RUNNING; no temporary residue | Failed shell-era attempts include `_1`, `_2`, `_4`, `_5`, `_12`, `_13`, `_14`, `_15`, `_16`, and `_17`; current handoff is `2026-08-07-v0.3.3_17-scenario-01-python-handoff.md` | **FAILED ON `_17` — RETEST AFTER PYTHON PARITY** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; Stage 90 restores RUNNING; no temporary residue | Latest: `2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md`; historical failed attempts remain under `docs/verification/evidence/` | **FAILED ON `_25` — `_26` STAGE-50 RETEST REQUIRED** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Test completes while final service remains STOPPED; restoration evidence verified | `PENDING OWNER` | **BLOCKED BY #1** |
 | 3 | Extended TLS 1.2 and HTTP | Available protocol successes appear as complete replay-verified profiles; unavailable protocols explicitly skipped | `PENDING OWNER` | **BLOCKED BY #1** |
 | 4 | Extended QUIC | QUIC result endpoint-bound and replay-verified when capability exists; otherwise explicit skip reason | `PENDING OWNER` | **BLOCKED BY #1** |
@@ -182,22 +205,19 @@ SCENARIO MATRIX
 | 18 | Reboot after clean terminal completion | No temporary process or reserved IPFW residue returns; normal Zapret2 service/rule identity valid | `PENDING OWNER` | **BLOCKED BY #1** |
 
 ==================================================
-CONFIRMED DEFECTS TO RECHECK AFTER MIGRATION
+CONFIRMED DEFECTS / LIVE RECHECKS
 ==================================================
 
-- Stage 50 internal failure on `_17`.
-- Immediate stale/new-job GUI error — `_25` source reconciliation present; live closure pending.
-- Active `Strategy Lab returned no output.` message — `_25` transient-read separation present; live closure pending.
-- Visible 0%-until-terminal progress behavior — `_25` launcher-lock/status polling correction present; live closure pending.
-- shell-global target-type corruption — old source mechanism replaced in `_21`, live closure pending.
-- DNS answer-section/parser weakness — old source mechanism replaced in `_21`, live closure pending.
-- DNS failure-class flattening — structured distinctions added in `_21`, live closure pending.
-- terminal reload/state presentation — `_25` active discovery reconciliation present; live closure pending.
-- candidate fatal-log classification — standard candidate readiness source mechanism replaced and regression-covered in `_22`; live closure pending.
-
-These defects remain open records. The Python migration and Patch-8 source reconciliation
-may eliminate their old mechanism, but closure requires focused replacement tests and the
-required owner live/UI evidence.
+- **Stage 50 aggregate abort on `_25`.** Root cause identified; corrective `_26` required.
+- **Immediate stale/new-job GUI error.** Still briefly observed on `_25`; open.
+- **Active `Strategy Lab returned no output.` message.** Patch-8 source correction exists;
+  `_25` live run did not explicitly reproduce or close it.
+- **Visible 0%-until-terminal progress.** `_25` showed live persisted progress at 36%; treat
+  as improved evidence but do not close the whole presentation row until Scenario 1 runs
+  through later stages.
+- **Terminal reload/state presentation.** Live recheck pending.
+- **Patch-4 target/DNS corrections.** Source regressions pass; matrix closure pending.
+- **Patch-5 candidate fatal-log classification.** Source regressions pass; matrix closure pending.
 
 ==================================================
 FAILURE HANDLING
@@ -227,5 +247,11 @@ RELEASE GATE
 Stable release preparation and pkg-repository promotion remain blocked until every
 required live row is marked PASS by the owner and linked evidence is recorded.
 
-There is no successful complete Strategy Lab live scenario PASS claim yet. The shell-era
-series does provide reusable live PASS evidence for Stage-40 DNS and Stage-90 restoration.
+Corrective `_26` is not published merely because source exists. It must first pass the
+normal latest-head CI and FreeBSD 15 package gate. Testing-prerelease publication requires
+separate explicit owner authorization under `docs/GITHUB_PUBLICATION.md`.
+
+There is no successful complete Strategy Lab live scenario PASS claim yet. The current
+live record does provide reusable PASS evidence for Stage 40, a functioning/intercepting
+candidate runtime, a working `seqovl` family during partial Stage 50, and Stage 90
+restoration on `_25`.

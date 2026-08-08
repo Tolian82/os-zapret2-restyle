@@ -14,6 +14,7 @@ CURRENT_STAGE50_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3
 CURRENT_STAGE50_DAEMON_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md"
 CURRENT_STAGE50_HOSTLIST_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md"
 CURRENT_PYTHON_HANDOFF_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md"
+CURRENT_POST_MIGRATION_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md"
 PYTHON_PLAN="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md"
 PYTHON_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
@@ -39,6 +40,32 @@ blocked_count=$(awk -F'|' '$2 ~ /^[[:space:]]*[0-9]+[[:space:]]*$/ && $6 ~ /BLOC
 if grep -Eq '^Overall status:.*PASS|\|[[:space:]]*\*\*PASS\*\*[[:space:]]*\|$' "${MATRIX}"; then
     echo 'FAIL: live matrix contains an unsupported scenario PASS claim' >&2
     exit 1
+fi
+
+# Post-migration _25 is the latest published/owner-tested boundary. Corrective _26
+# isolates candidate-local failures without promoting Scenario 1 to PASS.
+if grep -Fq 'Overall status: **FAILED ON `_25` — CORRECTIVE `_26` REQUIRED**' "${MATRIX}"; then
+    [ "${revision}" -eq 26 ] || { echo 'FAIL: _25 live failure must designate corrective revision 26' >&2; exit 1; }
+    [ -s "${CURRENT_POST_MIGRATION_EVIDENCE}" ] || { echo 'FAIL: _25 post-migration live evidence is missing' >&2; exit 1; }
+    grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.3.3_25.pkg`' "${MATRIX}"
+    grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_25.pkg`' "${MATRIX}"
+    grep -Fq "Current corrective source candidate: \`${candidate}\`" "${MATRIX}"
+    grep -Fq "Current corrective source candidate: \`${candidate}\`" "${STATE}"
+    grep -Fq 'Latest owner-tested job: `job.c0oydv`' "${MATRIX}"
+    grep -Fq '50 ERROR — visible message `Temporary candidate runtime failed internally.`' "${MATRIX}"
+    grep -Fq '`accepted=["seqovl"]`' "${MATRIX}"
+    grep -Fq '`process_identity=true`' "${MATRIX}"
+    grep -Fq 'persisted progress was visible at 36%' "${MATRIX}"
+    grep -Fq '90 PASS — temporary state removed and initial RUNNING Zapret2 restored healthy' "${MATRIX}"
+    scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /FAILED ON `_25` — `_26` STAGE-50 RETEST REQUIRED/ {n++} END {print n+0}' "${MATRIX}")
+    [ "${scenario_one}" -eq 1 ] || { echo 'FAIL: scenario 1 _25/_26 live row mismatch' >&2; exit 1; }
+    grep -Fq 'Latest owner-tested testing candidate: `v0.3.3_25` / `os-zapret2-restyle-0.3.3_25.pkg`' "${STATE}"
+    grep -Fq 'Current phase: **Strategy Lab post-migration live correction — Stage-50 candidate isolation**' "${STATE}"
+    grep -Fq 'Candidate: `v0.3.3_25` / `os-zapret2-restyle-0.3.3_25.pkg`' "${CURRENT_POST_MIGRATION_EVIDENCE}"
+    grep -Fq '`accepted`: `["seqovl"]`' "${CURRENT_POST_MIGRATION_EVIDENCE}"
+    grep -Fq 'Corrective source candidate `_26` implements and regression-tests that boundary.' "${CURRENT_POST_MIGRATION_EVIDENCE}"
+    echo "PASS: live matrix records _25 partial Stage-50 success/failure and gates Scenario 1 on corrective ${candidate}"
+    exit 0
 fi
 
 # During Python migration, _17 remains the frozen published/owner-tested shell-era

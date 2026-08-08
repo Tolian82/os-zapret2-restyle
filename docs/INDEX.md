@@ -13,10 +13,14 @@ in `AGENTS.md`.
 
 ## Current Strategy Lab transition authorities
 
-For any new Strategy Lab work after the `v0.3.3_17` live handoff, read these first:
+For current Strategy Lab post-migration live correction work, read these first:
 
-- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved migration map, completed automated Python ownership and current Patch 8 GUI/live boundary;
+- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved migration map and completed automated Python ownership;
 - `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md` — rationale, language responsibility boundary, compatibility invariants, bug-backlog policy, and migration delivery rules;
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — current owner-assisted live gate, failed on `_25` and selecting corrective source `_26`;
+- `docs/verification/evidence/2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md` — `_25` live Stage-50 evidence proving a working `seqovl` candidate and aggregate candidate-isolation defect;
+- `docs/patches/v0.3.3_26.md` — corrective Stage-50 candidate-local failure isolation contract;
+- `docs/devlog/2026-08-08-v0.3.3_26-stage50-candidate-isolation.md` — `_25` diagnosis and `_26` corrective implementation record;
 - `docs/patches/v0.3.3_25.md` — Migration Patch 8 GUI/status reconciliation and post-migration live-gate source candidate;
 - `docs/devlog/2026-08-08-v0.3.3_25-gui-status-reconciliation.md` — Patch 8 source diagnosis, reconciliation and live-gate handoff;
 - `docs/patches/v0.3.3_24.md` — Migration Patch 7 final-result/shortlist ownership and obsolete automated-shell retirement;
@@ -33,8 +37,8 @@ For any new Strategy Lab work after the `v0.3.3_17` live handoff, read these fir
 - `docs/devlog/2026-08-07-v0.3.3_19-python-state-persistence.md` — Patch 2 ownership, atomicity, parity and verification;
 - `docs/patches/v0.3.3_18.md` — Migration Patch 1 packaged Python foundation;
 - `docs/devlog/2026-08-07-v0.3.3_18-python-foundation.md` — Patch 1 platform evidence and implementation;
-- `docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md` — final owner-observed shell-era live boundary;
-- `docs/PROJECT_STATE.md` — current candidate identity, confirmed defect backlog, migration phase, and next action.
+- `docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md` — final owner-observed shell-era live boundary before migration;
+- `docs/PROJECT_STATE.md` — current candidate identity, confirmed defect backlog, live phase, and next action.
 
 Migration Patches 2–7 make Python authoritative for the complete automated Strategy Lab
 job path: state/persistence, stage orchestration/budgets/cancellation/finalization,
@@ -45,15 +49,17 @@ construction/exact replay/unified shortlist publication, and automated-job circu
 eligibility. Audited FreeBSD mutations remain behind explicit narrow shell adapters and
 private circular-session state remains shell-owned by design.
 
-Migration Patch 8 does not reopen those backend responsibilities. It reconciles
-Diagnostics/API presentation and status-read behavior with the persisted Python state,
-then resumes the owner-assisted OPNsense live matrix only after a separately authorized
-post-migration testing candidate is published and installed.
+Migration Patch 8 reconciled Diagnostics/API status-read presentation with persisted
+Python state and reopened the owner-assisted post-migration live matrix. Corrective `_26`
+does not change ownership: it fixes the Stage-50 Python family aggregator so one
+candidate-local structured error is rejected locally rather than aborting the entire
+catalog.
 
 ## Existing Strategy Lab product authorities
 
 These contracts remain authoritative unless the Python migration decision explicitly
-changes implementation ownership. Migration is not permission to weaken product behavior.
+changes implementation ownership. Migration and corrective work are not permission to
+weaken product behavior.
 
 - `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md` — third-audit findings SL3-001…SL3-007 and source/CI traceability;
 - `docs/architecture/STRATEGY_LAB.md` — original approved product/stage/lifecycle/search contract;
@@ -73,7 +79,8 @@ changes implementation ownership. Migration is not permission to weaken product 
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_MATRIX.md` — discoverable corrective CI entry point;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — earlier hardening finding-to-patch traceability;
 - `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — shell-era source/CI closure; live matrix remains the product gate;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — live gate, still frozen at `_17` until an authorized post-migration candidate is installed;
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — current live gate, failed on `_25`, corrective `_26` required;
+- `docs/verification/evidence/2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md` — latest owner evidence;
 - `docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md` — `_16` post-drop hostlist traversal evidence;
 - `docs/verification/evidence/2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md` — `_15` resident FreeBSD daemon startup evidence;
 - `docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md` — `_14` family-runner failure and GUI backlog evidence.
