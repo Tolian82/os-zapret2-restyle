@@ -41,6 +41,9 @@ Current primary Strategy Lab authority:
 Current migration decision:
 `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
 
+Current GitHub delivery authority:
+`docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
+
 ==================================================
 MIGRATION PATCH 1 FOUNDATION
 ==================================================
