@@ -42,7 +42,9 @@ Current migration decision:
 `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
 
 Current GitHub delivery authority:
-`docs/GITHUB_PUBLICATION.md` and the active dated GitHub decisions referenced there.
+`docs/GITHUB_PUBLICATION.md`,
+`docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`, and the other active dated
+GitHub decisions referenced by the publication authority.
 
 ==================================================
 AUTOMATED PYTHON OWNERSHIP THROUGH PATCH 7
