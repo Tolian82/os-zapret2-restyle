@@ -29,10 +29,10 @@ Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
 Latest published testing prerelease: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
 Latest owner-tested testing candidate: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
 Current source line: `VERSION=0.3.3`
-Current package revision: `PLUGIN_REVISION=23`
-Current migration source candidate: `os-zapret2-restyle-0.3.3_23.pkg`
+Current package revision: `PLUGIN_REVISION=24`
+Current migration source candidate: `os-zapret2-restyle-0.3.3_24.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Strategy Lab Migration Patch 6 — Python search and extended orchestration**
+Current phase: **Strategy Lab Migration Patch 7 — Python final result ownership and shell-orchestration retirement**
 Stable release: **BLOCKED ON POST-MIGRATION LIVE MATRIX**
 
 Current primary Strategy Lab authority:
@@ -45,7 +45,7 @@ Current GitHub delivery authority:
 `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
 
 ==================================================
-MIGRATION OWNERSHIP THROUGH PATCH 5
+MIGRATION OWNERSHIP THROUGH PATCH 6
 ==================================================
 
 Migration Patch 1 established FreeBSD 15 / Python 3.13 packaging and compatibility.
@@ -55,48 +55,43 @@ cancellation and terminal restoration/finalization owner. Migration Patch 4 made
 `strategy_lab_py/request.py` and `probe.py` authoritative for finite requests and Stage
 30/40 parsing. Migration Patch 5 made `candidate.py` and `family.py` authoritative for the
 standard TLS 1.3 candidate runtime/readiness/interception path and ordered Stage-50 family
-screening.
+screening. Migration Patch 6 made `search.py` and `extended.py` authoritative for Stage-60
+parameter expansion, Stage-70 stability/replay, and Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP
+orchestration while generalizing the Python candidate owner across those protocols.
 
 The shared lifecycle lock, private circular-session state, and audited FreeBSD system
 mutations remain outside Python unless explicitly migrated by a designated patch.
 
 ==================================================
-MIGRATION PATCH 6 SEARCH / EXTENDED OWNERSHIP
+MIGRATION PATCH 7 FINAL RESULT OWNERSHIP
 ==================================================
 
-Migration Patch 6 makes Python 3.13 authoritative for Stages 60, 70 and 80 search policy.
+Migration Patch 7 makes Python 3.13 authoritative for the remaining automated final-result
+policy.
 
-`strategy_lab_py/search.py` owns:
+`strategy_lab_py/result.py` owns:
 
-- Stage-60 accepted-family expansion catalog selection and ordering;
-- per-expansion-candidate timeout/cancellation and early-stop policy;
-- incremental expansion result aggregation with existing stop reasons;
-- Stage-70 passing-source collection and strategy de-duplication;
-- deterministic stability ranking by line count, character count and id;
-- replay-attempt sequencing, candidate limits, stable/unstable aggregation and early stop;
-- process-group termination plus audited cleanup request after candidate timeout/cancel.
+- complete user-ready profile construction and validation;
+- deterministic collection/ranking of stable TLS 1.3 and Extended protocol sources;
+- exact three-attempt replay of the complete published profile;
+- replay verification requiring request success plus exact profile identity on every pass;
+- Standard and Extended unified shortlist selection;
+- recommendation and circular-compatible TLS 1.3 subset publication;
+- automated-job circular-eligibility evaluation after Stage 90 restoration.
 
-`strategy_lab_py/extended.py` owns:
+Final replay reuses `strategy_lab_py/candidate.py`; there is no separate runtime,
+readiness, interception, cleanup, timeout or protocol candidate state machine. The narrow
+`strategy_lab_profile_candidate_adapter.sh` changes only the validated static domain
+selector into the temporary runtime hostlist required by dvtws2 and delegates every other
+candidate system action to `strategy_lab_candidate_adapter.sh`.
 
-- Stage-80 TLS 1.2 and HTTP catalog sequencing and first-working selection;
-- QUIC capability-derived skip policy, sequential candidate search and first-working/not-found result;
-- configured generic-UDP input consumption, skip policy, sequential candidate search and first-working/not-found result.
+`strategy_lab_worker.sh` routes Stage 85 and automated eligibility through
+`strategy_lab_python_stage_adapter.sh`; all non-final OS-specific stage actions continue to
+the audited system stage adapter. Legacy shell final-profile/replay/eligibility ownership
+is being removed in this same patch rather than retained as a fallback competitor.
 
-`strategy_lab_py/candidate.py` is generalized rather than duplicated. TLS 1.3, TLS 1.2,
-HTTP, QUIC and generic UDP now share one Python candidate lifecycle/readiness/interception/
-cleanup policy. PASS requires successful finite request execution, exact selected endpoint,
-and verified IPFW packet-counter growth.
-
-`strategy_lab_py/request.py` now also owns exact selected-endpoint QUIC and generic-UDP
-request/response execution while preserving structured subprocess evidence.
-
-`strategy_lab_candidate_adapter.sh` remains a narrow shell system boundary for audited
-FreeBSD mutations/observations. It accepts explicit protocol transport/port/L7 settings but
-does not choose search order, timeouts, readiness verdict or candidate/protocol outcome.
-
-Production expansion/stability/extended-TCP/QUIC/UDP runners are thin Python launchers.
-Legacy shell search/extended modules remain packaged only until Patch 7 retires obsolete
-orchestration surfaces; they are not production owners after `_23`.
+Public status/shortlist/profile/circular contracts remain compatible. Private circular
+session `state.json` and its frozen-parent consumer remain shell-owned by design.
 
 ==================================================
 FINAL SHELL-ERA LIVE BOUNDARY
@@ -154,46 +149,26 @@ Patch 4 — Python finite request/probe execution and parsing: **COMPLETE / MERG
 
 Patch 5 — Python candidate runtime and family screening: **COMPLETE / MERGED AS `_22`**.
 
-Patch 6 — Python expansion, stability/replay, and extended protocol orchestration: **CURRENT `_23` SOURCE CHANGE**.
+Patch 6 — Python expansion, stability/replay, and extended protocol orchestration: **COMPLETE / MERGED AS `_23`**.
 
-Patch 7 — Python final result/shortlist completion and obsolete shell-orchestration retirement: **NEXT AFTER PATCH 6 QUALIFICATION**.
+Patch 7 — Python final result/shortlist completion and obsolete shell-orchestration retirement: **CURRENT `_24` SOURCE CHANGE**.
 
-Patch 8 — GUI/status reconciliation and post-migration live gate.
+Patch 8 — GUI/status reconciliation and post-migration live gate: **NEXT AFTER PATCH 7 QUALIFICATION**.
 
 ==================================================
 DELIVERY AND PACKAGE BOUNDARY
 ==================================================
 
-Migration Patch 6 is an installable package-source change:
+Migration Patch 7 is an installable package-source change:
 
 - `VERSION` remains `0.3.3`;
-- `PLUGIN_REVISION` advances to `23`;
-- current source candidate is `os-zapret2-restyle-0.3.3_23.pkg`;
+- `PLUGIN_REVISION` advances to `24`;
+- current source candidate is `os-zapret2-restyle-0.3.3_24.pkg`;
 - latest published and owner-tested live candidate remains `_17`;
-- `_23` does not resume the owner-assisted live matrix because final result/shortlist
-  retirement and GUI/status reconciliation remain Patches 7 and 8.
+- `_24` does not resume or close the owner-assisted live matrix;
+- GUI/status reconciliation and the post-migration owner-assisted live gate remain Patch 8.
 
-The `_23` source must pass all earlier Python migration regressions, the focused Patch-6
-search/extended regression, the complete Strategy Lab corrective matrix, full repository
-CI, and FreeBSD 15 package/content/manifest verification before squash merge.
+The `_24` source must pass all earlier Python migration regressions, focused final-result
+ownership/replay/shortlist coverage, the complete Strategy Lab corrective matrix, full
+repository CI, and FreeBSD 15 package/content/manifest verification before squash merge.
 Testing-prerelease publication remains a separate operation requiring explicit authority.
-
-Stable release and pkg-repository promotion remain blocked until the Python path reaches
-functional parity and the owner-assisted live matrix passes.
-
-==================================================
-NEXT ACTION
-==================================================
-
-Complete Migration Patch 6 qualification on `_23`:
-
-1. focused Python expansion/stability/extended protocol regression;
-2. all Patch-1…5 Python compatibility checks;
-3. canonical Strategy Lab corrective matrix;
-4. full repository CI;
-5. FreeBSD 15 Python 3.13 Patch-6 test and package/content/manifest verification;
-6. squash merge only from the successfully validated latest head.
-
-After Patch 6 merges, begin **Migration Patch 7 only**: move final result/shortlist
-completion to the intended owner and retire obsolete shell orchestration. GUI/status
-reconciliation and owner-assisted live verification remain Patch 8.
