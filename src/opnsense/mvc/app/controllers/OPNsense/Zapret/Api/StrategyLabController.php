@@ -27,12 +27,20 @@ class StrategyLabController extends ApiControllerBase
         ));
 
         if ($response === '') {
-            return ['status' => 'error', 'message' => 'Strategy Lab returned no output.'];
+            return [
+                'status' => 'error',
+                'transient' => true,
+                'message' => 'Strategy Lab returned no output.'
+            ];
         }
 
         $decoded = json_decode($response, true);
         if (!is_array($decoded)) {
-            return ['status' => 'error', 'message' => 'Strategy Lab returned invalid output.'];
+            return [
+                'status' => 'error',
+                'transient' => true,
+                'message' => 'Strategy Lab returned invalid output.'
+            ];
         }
 
         return $decoded;
