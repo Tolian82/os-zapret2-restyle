@@ -1,4 +1,4 @@
-"""Python-owned Strategy Lab stage orchestration, budgets, cancellation, and finalization."""
+"""Python-owned Strategy Lab stage orchestration for Migration Patch 3."""
 
 from __future__ import annotations
 
@@ -6,53 +6,71 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Sequence
 
 from . import state as state_persistence
 
 EX_OK = 0
 EX_USAGE = 64
 EX_SOFTWARE = 70
+EX_TEMPFAIL = 75
+EX_TIMEOUT = 124
+EX_CANCELED = 125
+
+STAGE_ORDER = ("00", "10", "20", "30", "40", "50", "60", "70", "80", "85", "90", "99")
+VALID_RESULT_KINDS = {"pass", "accessible", "prerequisite", "error", "timeout", "cancel"}
+STAGE_LIMIT_ENV = {
+    "30": "STRATEGY_LAB_NETWORK_BUDGET",
+    "40": "STRATEGY_LAB_BASELINE_BUDGET",
+    "50": "STRATEGY_LAB_CANDIDATE_BUDGET",
+    "60": "STRATEGY_LAB_EXPANSION_BUDGET",
+    "70": "STRATEGY_LAB_STABILITY_BUDGET",
+    "80": "STRATEGY_LAB_EXTENDED_BUDGET",
+    "85": "STRATEGY_LAB_PROFILE_BUDGET",
+}
+
+MESSAGES = {
+    "en": {
+        "timeout": "ERROR — Strategy Lab time budget was exhausted.",
+        "cancel": "CANCELED — Strategy Lab cancellation was requested.",
+        "signal": "CANCELED — Strategy Lab worker was interrupted by a signal.",
+        "internal": "ERROR — Strategy Lab failed internally.",
+        "accessible_skip": "Skipped because the target is already reachable without DPI bypass.",
+        "prerequisite_skip": "Skipped because a prerequisite failed.",
+        "error_skip": "Skipped because an earlier stage failed internally.",
+        "cancel_skip": "Skipped because cancellation was requested.",
+        "timeout_skip": "Skipped because the Strategy Lab time budget was exhausted.",
+        "stage80_skip": "SKIPPED — Extended testing is disabled in Standard mode.",
+        "restore_running": "PASS — Initial running zapret state restored.",
+        "restore_stopped": "PASS — Initial stopped zapret state restored.",
+        "restore_noop": "PASS — No zapret service restoration was required.",
+        "restore_failed": "FAIL — Initial zapret service state could not be restored safely.",
+    },
+    "ru": {
+        "timeout": "ОШИБКА — Исчерпан лимит времени Strategy Lab.",
+        "cancel": "ОТМЕНЕНО — Запрошена отмена Strategy Lab.",
+        "signal": "ОТМЕНЕНО — Работа Strategy Lab прервана сигналом.",
+        "internal": "ОШИБКА — Внутренняя ошибка Strategy Lab.",
+        "accessible_skip": "Пропущено: цель уже доступна без обхода DPI.",
+        "prerequisite_skip": "Пропущено из-за ошибки обязательной предварительной проверки.",
+        "error_skip": "Пропущено из-за внутренней ошибки предыдущего этапа.",
+        "cancel_skip": "Пропущено из-за запроса отмены.",
+        "timeout_skip": "Пропущено: исчерпан лимит времени Strategy Lab.",
+        "stage80_skip": "ПРОПУЩЕНО — Расширенная проверка отключена в режиме Standard.",
+        "restore_running": "ПРОЙДЕНО — Исходное запущенное состояние zapret восстановлено.",
+        "restore_stopped": "ПРОЙДЕНО — Исходное остановленное состояние zapret восстановлено.",
+        "restore_noop": "ПРОЙДЕНО — Восстановление состояния службы zapret не требовалось.",
+        "restore_failed": "ОШИБКА — Исходное состояние службы zapret не удалось безопасно восстановить.",
+    },
+}
 
 RUNNING_EVENTS = {
-    "00": "Validating target and resolving required endpoints",
-    "10": "Capturing the initial Zapret2 lifecycle state",
-    "20": "Stopping and verifying the normal Zapret2 service",
-    "30": "Checking IPv4, IPv6, and QUIC capabilities",
-    "40": "Testing the clean target baseline without Zapret2",
-    "50": "Running one isolated Zapret2 smoke candidate",
-    "60": "Expanding parameters inside accepted TLS 1.3 families",
-    "70": "Confirming candidate stability with three sequential fresh-connection attempts",
-    "80": "Testing extended TLS, HTTP, QUIC, and configured UDP branches",
-    "85": "Building the final stable-candidate shortlist",
-    "90": "Cleaning temporary state and restoring Zapret2",
+    "90": "Restore initial service state",
 }
-
-STAGE_LIMIT_ENV = {
-    "30": "STRATEGY_LAB_STAGE30_TIMEOUT",
-    "40": "STRATEGY_LAB_STAGE40_TIMEOUT",
-    "50": "STRATEGY_LAB_CANDIDATE_TIMEOUT",
-    "60": "STRATEGY_LAB_STAGE60_TIMEOUT",
-    "70": "STRATEGY_LAB_STAGE70_TIMEOUT",
-    "80": "STRATEGY_LAB_STAGE80_TIMEOUT",
-}
-
-DEFAULT_LIMITS = {
-    "STRATEGY_LAB_STAGE30_TIMEOUT": 6,
-    "STRATEGY_LAB_STAGE40_TIMEOUT": 5,
-    "STRATEGY_LAB_CANDIDATE_TIMEOUT": 45,
-    "STRATEGY_LAB_STAGE60_TIMEOUT": 60,
-    "STRATEGY_LAB_STAGE70_TIMEOUT": 60,
-    "STRATEGY_LAB_STAGE80_TIMEOUT": 120,
-    "STRATEGY_LAB_STANDARD_BUDGET": 150,
-    "STRATEGY_LAB_EXTENDED_BUDGET": 120,
-}
-
-VALID_RESULT_KINDS = {"pass", "error", "prerequisite", "accessible", "timeout", "cancel"}
 
 
 class OrchestrationError(RuntimeError):
@@ -63,251 +81,195 @@ class UsageError(OrchestrationError):
     pass
 
 
-class CancellationRequested(OrchestrationError):
-    pass
-
-
 class StageTimedOut(OrchestrationError):
     def __init__(self, stage: str):
         super().__init__(stage)
         self.stage = stage
 
 
+class CancellationRequested(OrchestrationError):
+    pass
+
+
+class SignalRequested(OrchestrationError):
+    pass
+
+
 @dataclass(frozen=True)
 class AdapterResult:
     kind: str
-    message: str = ""
+    message: str
     initial_state: str = ""
 
 
+@dataclass
 class Budget:
-    """Absolute Strategy Lab budget owner with the existing standard/extended semantics."""
+    started: float
+    standard_seconds: int
+    extended_seconds: int
+    stage80_started: float | None = None
 
-    def __init__(self, mode: str, state_path: Path, job_id: str) -> None:
-        if mode not in {"standard", "extended"}:
-            raise UsageError("invalid Strategy Lab mode")
-        self.mode = mode
-        self.state_path = state_path
-        self.job_id = job_id
-        self.standard_budget = _positive_env("STRATEGY_LAB_STANDARD_BUDGET")
-        self.extended_budget = _positive_env("STRATEGY_LAB_EXTENDED_BUDGET")
-        self.stage80_limit = _positive_env("STRATEGY_LAB_STAGE80_TIMEOUT")
-        self.started_epoch = self.now()
-        self.standard_deadline = self.started_epoch + self.standard_budget
-        self.search_budget = self.standard_budget
-        self.overall_deadline = self.standard_deadline
-        if mode == "extended":
-            self.search_budget = self.standard_budget + self.extended_budget
-            self.overall_deadline = self.started_epoch + self.search_budget
-        self.stage80_started: int | None = None
-        self.stage80_deadline: int | None = None
+    @classmethod
+    def from_environment(cls) -> "Budget":
+        return cls(
+            started=cls.now(),
+            standard_seconds=_positive_env("STRATEGY_LAB_STANDARD_BUDGET"),
+            extended_seconds=_positive_env("STRATEGY_LAB_EXTENDED_TOTAL_BUDGET"),
+        )
 
     @staticmethod
-    def now() -> int:
-        clock = os.environ.get("STRATEGY_LAB_NOW_EPOCH_FILE", "")
-        if clock:
-            try:
-                raw = Path(clock).read_text(encoding="utf-8").strip()
-                value = int(raw, 10)
-            except (OSError, ValueError) as exc:
-                raise OrchestrationError("Strategy Lab budget clock is invalid") from exc
-            if value < 0:
-                raise OrchestrationError("Strategy Lab budget clock is invalid")
-            return value
-        return int(time.time())
+    def now() -> float:
+        return time.monotonic()
 
-    @staticmethod
-    def iso8601(epoch: int) -> str:
-        return datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    @property
+    def standard_deadline(self) -> float:
+        return self.started + self.standard_seconds
+
+    @property
+    def extended_deadline(self) -> float:
+        return self.started + self.extended_seconds
+
+    @property
+    def stage80_deadline(self) -> float | None:
+        if self.stage80_started is None:
+            return None
+        return self.stage80_started + _positive_env("STRATEGY_LAB_EXTENDED_BUDGET")
 
     def record_initial(self) -> None:
-        state_persistence.set_budget(
-            self.job_id,
-            str(self.state_path),
-            self.iso8601(self.started_epoch),
-            self.iso8601(self.standard_deadline),
-            self.iso8601(self.overall_deadline),
-            str(self.standard_budget),
-            str(self.extended_budget),
-            str(self.search_budget),
-            str(self.stage80_limit),
-        )
+        raw = os.environ.get("STRATEGY_LAB_INITIAL_EPOCH", "")
+        if raw:
+            try:
+                initial_epoch = int(raw, 10)
+            except ValueError as exc:
+                raise UsageError("invalid Strategy Lab initial epoch") from exc
+            if initial_epoch > 0:
+                elapsed = max(0, int(time.time()) - initial_epoch)
+                self.started -= elapsed
 
     def begin_stage80(self) -> None:
-        now = self.now()
-        if now >= self.overall_deadline:
-            raise StageTimedOut("80")
-        self.stage80_started = now
-        self.stage80_deadline = min(now + self.stage80_limit, self.overall_deadline)
-        state_persistence.set_stage80_budget(
-            self.job_id,
-            str(self.state_path),
-            self.iso8601(self.stage80_started),
-            self.iso8601(self.stage80_deadline),
-        )
+        self.stage80_started = self.now()
 
-    def deadline_for(self, stage: str) -> int:
-        if stage == "80":
-            if self.stage80_deadline is None:
-                raise OrchestrationError("Strategy Lab stage-80 budget is not initialized")
-            return self.stage80_deadline
-        if stage == "85":
-            return self.overall_deadline
-        return self.standard_deadline
-
-    def timeout_for(self, stage: str, operation_limit: int) -> int:
-        if operation_limit <= 0:
-            raise OrchestrationError("Strategy Lab operation timeout is invalid")
-        remaining = self.deadline_for(stage) - self.now()
-        if remaining <= 0:
-            raise StageTimedOut(stage)
-        return min(operation_limit, remaining)
+    def remaining(self, stage: str) -> float:
+        deadline = self.extended_deadline if stage == "80" else self.standard_deadline
+        if stage == "80" and self.stage80_deadline is not None:
+            deadline = min(deadline, self.stage80_deadline)
+        return deadline - self.now()
 
     def require(self, stage: str) -> None:
-        self.timeout_for(stage, 2_147_483_647)
+        if self.remaining(stage) <= 0:
+            raise StageTimedOut(stage)
+
+    def timeout_for(self, stage: str, requested: int) -> int:
+        self.require(stage)
+        remaining = self.remaining(stage)
+        return max(1, min(requested, int(remaining) if remaining >= 1 else 1))
 
 
 def _positive_env(name: str) -> int:
-    raw = os.environ.get(name, str(DEFAULT_LIMITS[name]))
+    raw = os.environ.get(name, "")
     try:
         value = int(raw, 10)
     except ValueError as exc:
-        raise UsageError(f"invalid Strategy Lab setting: {name}") from exc
+        raise UsageError(f"invalid Strategy Lab budget: {name}") from exc
     if value <= 0:
-        raise UsageError(f"invalid Strategy Lab setting: {name}")
+        raise UsageError(f"invalid Strategy Lab budget: {name}")
     return value
 
 
-def _load_json(path: Path) -> dict[str, Any]:
+def _load_json(path: Path) -> dict:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        with path.open("r", encoding="utf-8") as handle:
+            value = json.load(handle)
     except (OSError, json.JSONDecodeError) as exc:
-        raise OrchestrationError(f"Strategy Lab JSON is unreadable: {path}") from exc
+        raise OrchestrationError(f"Strategy Lab JSON is unavailable or invalid: {path}") from exc
     if not isinstance(value, dict):
         raise OrchestrationError(f"Strategy Lab JSON root is invalid: {path}")
     return value
 
 
 def _message(language: str, key: str) -> str:
-    ru = language == "ru"
-    values = {
-        "cancel_skip": "SKIPPED — отменено" if ru else "SKIPPED — canceled",
-        "prerequisite_skip": "SKIPPED — предварительная проверка не пройдена" if ru else "SKIPPED — prerequisite failed",
-        "accessible_skip": "SKIPPED — цель доступна без обхода" if ru else "SKIPPED — target accessible without bypass",
-        "error_skip": "SKIPPED — не выполнено" if ru else "SKIPPED — not executed",
-        "timeout_skip": "SKIPPED — лимит времени исчерпан" if ru else "SKIPPED — time budget exhausted",
-        "stage_timeout": "TIMEOUT — превышен лимит этапа." if ru else "TIMEOUT — stage time limit exceeded.",
-        "stage80_skip": "SKIPPED — расширенные ветви отключены в основном режиме." if ru else "SKIPPED — extended branches are disabled in standard mode.",
-        "restore_running": "PASS — Временные процессы и правила удалены; исходная служба Zapret2 снова запущена и полностью исправна." if ru else "PASS — Temporary processes and rules were removed; the original Zapret2 service was restarted and is fully operational.",
-        "restore_stopped": "PASS — Временные процессы и правила удалены; Zapret2 оставлен в исходном остановленном состоянии." if ru else "PASS — Temporary processes and rules were removed; Zapret2 was left in its original stopped state.",
-        "restore_noop": "PASS — Изменения состояния Zapret2 не выполнялись." if ru else "PASS — No Zapret2 service-state changes were made.",
-        "restore_failed": "RESTORE_FAILED — Исходное состояние Zapret2 восстановить не удалось." if ru else "RESTORE_FAILED — The original Zapret2 state could not be restored.",
-    }
-    return values[key]
+    return MESSAGES.get(language, MESSAGES["en"]).get(key, MESSAGES["en"][key])
 
 
 def terminal_state(outcome: str) -> str:
-    return "error" if outcome in {"ERROR", "TIMEOUT", "RESTORE_FAILED"} else "completed"
+    if outcome in {"SUCCESS", "TARGET_ACCESSIBLE"}:
+        return "completed"
+    if outcome == "PARTIAL":
+        return "partial"
+    if outcome == "RESTORE_FAILED":
+        return "error"
+    return "error"
 
 
 def terminal_report_status(outcome: str) -> str:
-    return "FAIL" if outcome in {"ERROR", "TIMEOUT", "RESTORE_FAILED"} else "PASS"
+    if outcome in {"SUCCESS", "TARGET_ACCESSIBLE"}:
+        return "PASS"
+    if outcome == "PARTIAL":
+        return "CANCELED"
+    return "FAIL"
 
 
-def terminal_message(language: str, mode: str, outcome: str, canceled: bool, count: int = 0) -> str:
+def terminal_message(language: str, mode: str, outcome: str, canceled: bool, count: int) -> str:
     ru = language == "ru"
     if outcome == "SUCCESS":
-        if ru and mode == "standard":
-            return f"SUCCESS — Основной поиск завершён; стабильных рабочих стратегий: {count}."
         if ru:
-            return f"SUCCESS — Расширенный поиск завершён; стабильных рабочих стратегий: {count}."
-        if mode == "standard":
-            return f"SUCCESS — Standard search completed with {count} stable working strategies."
-        return f"SUCCESS — Extended search completed with {count} stable working strategies."
-    if outcome == "NO_CANDIDATE":
-        if ru and mode == "standard":
-            return "NO_CANDIDATE — Основной поиск завершён; стабильная рабочая стратегия не найдена."
-        if ru:
-            return "NO_CANDIDATE — Расширенный поиск завершён; стабильная рабочая стратегия не найдена."
-        if mode == "standard":
-            return "NO_CANDIDATE — Standard search completed; no stable working strategy was found."
-        return "NO_CANDIDATE — Extended search completed; no stable working strategy was found."
+            if mode == "extended":
+                return f"Готово. Найдено стабильных кандидатов: {count}. Расширенная проверка завершена."
+            return f"Готово. Найдено стабильных кандидатов: {count}."
+        if mode == "extended":
+            return f"Done. Found {count} stable candidates. Extended testing completed."
+        return f"Done. Found {count} stable candidates."
     if outcome == "TARGET_ACCESSIBLE":
-        return "TARGET_ACCESSIBLE — Цель доступна без обхода; поиск стратегий не требуется." if ru else "TARGET_ACCESSIBLE — The target is accessible without bypass; strategy search is not required."
+        return "Цель доступна без DPI bypass." if ru else "Target is reachable without DPI bypass."
+    if outcome == "NO_CANDIDATE":
+        return "Рабочая стратегия не найдена." if ru else "No working strategy was found."
     if outcome == "PARTIAL":
         if canceled:
-            return "PARTIAL — Тест отменён; результаты завершённых этапов сохранены." if ru else "PARTIAL — Test canceled; completed stage results were preserved."
-        return "PARTIAL — Поиск завершён не полностью; доступные результаты сохранены." if ru else "PARTIAL — The search ended before completion; available results were preserved."
-    if outcome == "TIMEOUT":
-        return "TIMEOUT — Лимит времени исчерпан; доступные результаты сохранены." if ru else "TIMEOUT — The time limit was reached; available results were preserved."
-    if outcome == "ERROR":
-        return "ERROR — Внутренняя ошибка Strategy Lab; доступные результаты сохранены." if ru else "ERROR — Strategy Lab failed internally; available results were preserved."
+            return "Проверка отменена. Система восстановлена в исходное состояние." if ru else "Test canceled. System restored to its initial state."
+        return "Проверка завершена частично из-за ошибки предварительной проверки." if ru else "Test ended partially because a prerequisite failed."
     if outcome == "RESTORE_FAILED":
-        return "RESTORE_FAILED — Исходное состояние Zapret2 восстановить не удалось." if ru else "RESTORE_FAILED — The original Zapret2 state could not be restored."
-    return f"ERROR — Unsupported Strategy Lab outcome: {outcome}."
+        return "Не удалось восстановить исходное состояние службы zapret." if ru else "Initial zapret service state could not be restored."
+    if outcome == "TIMEOUT":
+        return "Проверка остановлена: исчерпан лимит времени." if ru else "Test stopped because the time budget was exhausted."
+    return "Внутренняя ошибка Strategy Lab." if ru else "Strategy Lab failed internally."
 
 
 class Orchestrator:
-    def __init__(self, job_id: str) -> None:
+    def __init__(self, job_id: str):
+        if not state_persistence.JOB_RE.fullmatch(job_id):
+            raise UsageError("invalid Strategy Lab job id")
+        jobs_dir = Path(os.environ.get("STRATEGY_LAB_JOBS_DIR", "/var/run/zapret2-strategy-lab/jobs"))
+        run_dir = Path(os.environ.get("STRATEGY_LAB_RUN_DIR", "/var/run/zapret2-strategy-lab"))
         self.job_id = job_id
-        run_dir = Path(os.environ.get("STRATEGY_LAB_RUN_DIR", "/var/run/zapret2-restyle/strategy-lab"))
-        jobs_dir = Path(os.environ.get("STRATEGY_LAB_JOBS_DIR", str(run_dir / "jobs")))
         self.job_dir = jobs_dir / job_id
         self.state_path = self.job_dir / "status.json"
         self.events_path = self.job_dir / "events.ndjson"
-        self.cancel_path = self.job_dir / "cancel.request"
-        self.active_path = Path(os.environ.get("STRATEGY_LAB_ACTIVE_FILE", str(run_dir / "active.job")))
+        self.active_path = Path(os.environ.get("STRATEGY_LAB_ACTIVE_FILE", str(run_dir / "active-job")))
+        self.result_path = self.job_dir / "python-stage-result.json"
         self.adapter = Path(os.environ.get("STRATEGY_LAB_STAGE_ADAPTER", "/usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_stage_adapter.sh"))
-        self.shell = os.environ.get("STRATEGY_LAB_SH_BIN", "/bin/sh")
-        status = _load_json(self.state_path)
-        self.language = str(status.get("language", "en"))
-        self.mode = str(status.get("mode", "standard"))
-        if self.language not in {"en", "ru"} or self.mode not in {"standard", "extended"}:
-            raise OrchestrationError("Strategy Lab job language or mode is invalid")
-        self.budget = Budget(self.mode, self.state_path, self.job_id)
+        self.shell = os.environ.get("STRATEGY_LAB_SHELL_BIN", "/bin/sh")
+        if not self.adapter.is_file():
+            raise OrchestrationError(f"Strategy Lab stage adapter is unavailable: {self.adapter}")
+        if not os.path.isfile(self.shell) or not os.access(self.shell, os.X_OK):
+            raise OrchestrationError(f"Strategy Lab shell is unavailable: {self.shell}")
+        state = _load_json(self.state_path)
+        mode = state.get("mode")
+        language = state.get("language")
+        if mode not in {"standard", "extended"} or language not in {"en", "ru"}:
+            raise OrchestrationError("Strategy Lab job mode/language is invalid")
+        self.mode = mode
+        self.language = language
+        self.budget = Budget.from_environment()
         self.current_stage = "00"
         self.finalizing = False
-        self.signal_cancel = False
-        self.previous_handlers: dict[int, Any] = {}
+        self.signal_requested: int | None = None
 
     def install_signals(self) -> None:
-        for sig in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
-            self.previous_handlers[sig] = signal.getsignal(sig)
-            signal.signal(sig, self._signal)
+        def handler(signum: int, _frame: object) -> None:
+            self.signal_requested = signum
 
-    def restore_signals(self) -> None:
-        for sig, handler in self.previous_handlers.items():
-            signal.signal(sig, handler)
-        self.previous_handlers.clear()
-
-    def _signal(self, _signum: int, _frame: Any) -> None:
-        self.signal_cancel = True
-
-    def cancel_requested(self) -> bool:
-        return self.signal_cancel or self.cancel_path.exists()
-
-    def check_cancel(self) -> None:
-        if self.cancel_requested() and not self.finalizing:
-            raise CancellationRequested("Strategy Lab cancellation requested")
-
-    def _update_stage(self, stage: str, status: str, message: str) -> None:
-        state_persistence.update_stage(self.job_id, str(self.state_path), stage, status, message)
-        state_persistence.append_event(self.job_id, str(self.state_path), str(self.events_path), stage, status, message)
-
-    def _begin(self, stage: str) -> None:
-        self.current_stage = stage
-        self.check_cancel()
-        state_persistence.update_stage(self.job_id, str(self.state_path), stage, "RUNNING", "")
-        state_persistence.append_event(
-            self.job_id, str(self.state_path), str(self.events_path), stage, "RUNNING", RUNNING_EVENTS[stage]
-        )
-
-    def _pass(self, stage: str, message: str) -> None:
-        self._update_stage(stage, "PASS", message)
-
-    def _skip(self, stage: str, message: str) -> None:
-        self.current_stage = stage
-        self._update_stage(stage, "SKIPPED", message)
+        signal.signal(signal.SIGTERM, handler)
+        signal.signal(signal.SIGINT, handler)
 
     def _fd_pass(self) -> tuple[int, ...]:
         try:
@@ -316,15 +278,40 @@ class Orchestrator:
             return ()
         return (9,)
 
-    @staticmethod
-    def _terminate_process_group(proc: subprocess.Popen[bytes]) -> None:
-        if proc.poll() is not None:
-            return
+    def cancel_requested(self) -> bool:
+        state = _load_json(self.state_path)
+        return bool(state.get("cancel_requested", False))
+
+    def check_cancel(self) -> None:
+        if self.signal_requested is not None:
+            raise SignalRequested(str(self.signal_requested))
+        if self.cancel_requested():
+            raise CancellationRequested("Strategy Lab cancellation requested")
+
+    def _update_stage(self, stage: str, status: str, message: str) -> None:
+        state_persistence.update_stage(self.job_id, str(self.state_path), stage, status, message)
+        state_persistence.append_event(
+            self.job_id, str(self.state_path), str(self.events_path), stage, status,
+            message or f"Stage {stage}: {status}",
+        )
+
+    def _begin(self, stage: str) -> None:
+        self.current_stage = stage
+        self._update_stage(stage, "RUNNING", "")
+
+    def _pass(self, stage: str, message: str) -> None:
+        self._update_stage(stage, "PASS", message)
+
+    def _skip(self, stage: str, message: str) -> None:
+        self.current_stage = stage
+        self._update_stage(stage, "SKIPPED", message)
+
+    def _terminate_process_group(self, proc: subprocess.Popen) -> None:
         try:
             os.killpg(proc.pid, signal.SIGTERM)
         except ProcessLookupError:
             return
-        deadline = time.monotonic() + 2.0
+        deadline = time.monotonic() + 1.0
         while proc.poll() is None and time.monotonic() < deadline:
             time.sleep(0.05)
         if proc.poll() is None:
@@ -332,10 +319,6 @@ class Orchestrator:
                 os.killpg(proc.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-        try:
-            proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            pass
 
     def _run_adapter(
         self,
@@ -345,18 +328,13 @@ class Orchestrator:
         cancel_interruptible: bool = True,
         extra_env: dict[str, str] | None = None,
     ) -> AdapterResult:
-        if not self.adapter.is_file():
-            raise OrchestrationError(f"Strategy Lab stage adapter is unavailable: {self.adapter}")
-        result_path = self.job_dir / ".orchestrator-result.json"
         try:
-            result_path.unlink()
+            self.result_path.unlink()
         except FileNotFoundError:
             pass
         env = os.environ.copy()
         env.update(
-            JOB_ID=self.job_id,
-            STRATEGY_LAB_STAGE_RESULT_FILE=str(result_path),
-            STRATEGY_LAB_WORKER_PID=str(os.getpid()),
+            STRATEGY_LAB_STAGE_RESULT=str(self.result_path),
             STRATEGY_LAB_RUN_DIR=str(self.job_dir.parent.parent),
             STRATEGY_LAB_JOBS_DIR=str(self.job_dir.parent),
             STRATEGY_LAB_ACTIVE_FILE=str(self.active_path),
@@ -387,11 +365,11 @@ class Orchestrator:
             raise StageTimedOut(self.current_stage)
         if status == 125:
             raise CancellationRequested("Strategy Lab cancellation requested")
-        if not result_path.is_file():
+        if not self.result_path.is_file():
             raise OrchestrationError(f"Strategy Lab stage adapter did not produce a result for {action} (status {status})")
-        value = _load_json(result_path)
+        value = _load_json(self.result_path)
         try:
-            result_path.unlink()
+            self.result_path.unlink()
         except FileNotFoundError:
             pass
         kind = value.get("kind")
@@ -512,9 +490,9 @@ class Orchestrator:
         message = terminal_message(self.language, self.mode, outcome, canceled, count)
         self.current_stage = "99"
         self._update_stage("99", report_status, message)
-        state_persistence.update_job(
-            self.job_id, str(self.state_path), final_state, outcome, "99", canceled, message
-        )
+        # Eligibility is part of the terminal snapshot. Publish it before changing
+        # state to completed/partial/error so result/status readers never observe
+        # a terminal job with stale circular_eligibility fields.
         try:
             self._run_adapter(
                 "eligibility",
@@ -526,6 +504,9 @@ class Orchestrator:
             )
         except Exception:
             pass
+        state_persistence.update_job(
+            self.job_id, str(self.state_path), final_state, outcome, "99", canceled, message
+        )
         try:
             self._run_adapter("clear-active", cancel_interruptible=False)
         except Exception:
@@ -589,34 +570,29 @@ class Orchestrator:
         except StageTimedOut as exc:
             self.current_stage = exc.stage
             try:
-                self._update_stage(exc.stage, "TIMEOUT", _message(self.language, "stage_timeout"))
-            except Exception:
-                pass
-            try:
+                self._update_stage(exc.stage, "FAIL", _message(self.language, "timeout"))
                 state_persistence.skip_unfinished(self.job_id, str(self.state_path), _message(self.language, "timeout_skip"))
             except Exception:
                 pass
             return self.finish("TIMEOUT", False)
-        except Exception as exc:
-            message = f"Strategy Lab Python orchestration failed internally: {exc}"
+        except SignalRequested:
             try:
-                self._update_stage(self.current_stage, "FAIL", message)
+                state_persistence.skip_unfinished(self.job_id, str(self.state_path), _message(self.language, "cancel_skip"))
             except Exception:
                 pass
+            return self.finish("PARTIAL", True)
+        except Exception:
             try:
+                if self.current_stage in STAGE_ORDER:
+                    self._update_stage(self.current_stage, "FAIL", _message(self.language, "internal"))
                 state_persistence.skip_unfinished(self.job_id, str(self.state_path), _message(self.language, "error_skip"))
             except Exception:
                 pass
             return self.finish("ERROR", False)
-        finally:
-            self.restore_signals()
 
 
-def main(argv: list[str] | tuple[str, ...]) -> int:
-    args = list(argv)
+def main(argv: Sequence[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
     if len(args) != 1:
-        raise UsageError("orchestrate requires exactly one Strategy Lab job id")
-    job_id = args[0]
-    if not state_persistence.JOB_ID_RE.fullmatch(job_id):
-        raise UsageError("invalid Strategy Lab job id")
-    return Orchestrator(job_id).run()
+        raise UsageError("orchestrate requires exactly one job id")
+    return Orchestrator(args[0]).run()
