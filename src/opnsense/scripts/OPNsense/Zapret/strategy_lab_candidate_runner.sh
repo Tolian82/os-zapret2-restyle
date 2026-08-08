@@ -12,6 +12,14 @@ CANDIDATE_ID="${4:-smoke-multisplit}"
 CANDIDATE_FAMILY="${5:-multisplit}"
 STRATEGY_FILE="${6:-${MODULE_DIR}/catalog/tls13/01-multisplit.args}"
 USE_HOSTLIST="${7:-1}"
-exec "${PYTHON_LAUNCHER}" candidate run \
+set +e
+"${PYTHON_LAUNCHER}" candidate run \
     "${JOB_ID}" "${ENDPOINTS_FILE}" "${RESULT_FILE}" \
     "${CANDIDATE_ID}" "${CANDIDATE_FAMILY}" "${STRATEGY_FILE}" "${USE_HOSTLIST}"
+status=$?
+set -e
+[ "${status}" -eq 0 ] || exit "${status}"
+if [ -r "${RESULT_FILE}" ] && grep -Eq '"error":[[:space:]]*true' "${RESULT_FILE}"; then
+    exit 1
+fi
+exit 0
