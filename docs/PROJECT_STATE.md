@@ -29,10 +29,10 @@ Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
 Latest published testing prerelease: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
 Latest owner-tested testing candidate: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
 Current source line: `VERSION=0.3.3`
-Current package revision: `PLUGIN_REVISION=24`
-Current migration source candidate: `os-zapret2-restyle-0.3.3_24.pkg`
+Current package revision: `PLUGIN_REVISION=25`
+Current migration source candidate: `os-zapret2-restyle-0.3.3_25.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Strategy Lab Migration Patch 7 — Python final result ownership and shell-orchestration retirement**
+Current phase: **Strategy Lab Migration Patch 8 — GUI/status reconciliation and post-migration live gate**
 Stable release: **BLOCKED ON POST-MIGRATION LIVE MATRIX**
 
 Current primary Strategy Lab authority:
@@ -42,10 +42,12 @@ Current migration decision:
 `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
 
 Current GitHub delivery authority:
-`docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
+`docs/GITHUB_PUBLICATION.md`,
+`docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`, and the other active dated
+GitHub decisions referenced by the publication authority.
 
 ==================================================
-MIGRATION OWNERSHIP THROUGH PATCH 6
+AUTOMATED PYTHON OWNERSHIP THROUGH PATCH 7
 ==================================================
 
 Migration Patch 1 established FreeBSD 15 / Python 3.13 packaging and compatibility.
@@ -54,44 +56,50 @@ Migration Patch 3 made `strategy_lab_py/orchestrator.py` the numbered-stage, bud
 cancellation and terminal restoration/finalization owner. Migration Patch 4 made
 `strategy_lab_py/request.py` and `probe.py` authoritative for finite requests and Stage
 30/40 parsing. Migration Patch 5 made `candidate.py` and `family.py` authoritative for the
-standard TLS 1.3 candidate runtime/readiness/interception path and ordered Stage-50 family
-screening. Migration Patch 6 made `search.py` and `extended.py` authoritative for Stage-60
-parameter expansion, Stage-70 stability/replay, and Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP
-orchestration while generalizing the Python candidate owner across those protocols.
+unified candidate runtime/readiness/interception path and Stage-50 family screening.
+Migration Patch 6 made `search.py` and `extended.py` authoritative for Stage-60 expansion,
+Stage-70 stability/replay and Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP orchestration.
+Migration Patch 7 made `result.py` authoritative for complete profile construction, exact
+three-pass final replay, unified shortlist publication and automated circular eligibility,
+and removed the competing automated shell replay/result/stage-machine owners.
 
-The shared lifecycle lock, private circular-session state, and audited FreeBSD system
-mutations remain outside Python unless explicitly migrated by a designated patch.
+The shared lifecycle lock, audited FreeBSD system mutations and private circular-session
+state remain deliberate shell boundaries. Patch 8 must not reopen automated backend
+ownership that Patches 2–7 moved to Python.
 
 ==================================================
-MIGRATION PATCH 7 FINAL RESULT OWNERSHIP
+MIGRATION PATCH 8 GUI / STATUS RECONCILIATION
 ==================================================
 
-Migration Patch 7 makes Python 3.13 authoritative for the remaining automated final-result
-policy.
+The `_25` source candidate addresses the presentation/status boundary required before the
+post-migration live matrix can resume.
 
-`strategy_lab_py/result.py` owns:
+Confirmed source defect:
 
-- complete user-ready profile construction and validation;
-- deterministic collection/ranking of stable TLS 1.3 and Extended protocol sources;
-- exact three-attempt replay of the complete published profile;
-- replay verification requiring request success plus exact profile identity on every pass;
-- Standard and Extended unified shortlist selection;
-- recommendation and circular-compatible TLS 1.3 subset publication;
-- automated-job circular-eligibility evaluation after Stage 90 restoration.
+- automated `start_job()` launched the long-lived lifecycle worker through `daemon(8)`
+  without closing launcher lock FD 9;
+- the private circular launcher already closed FD 9 correctly;
+- the automated worker could therefore inherit the launcher serialization lock while
+  status/result/cancel requests attempted the same nonblocking lock;
+- transient/empty configd output was then rendered by Diagnostics as if transport
+  `status:error` were persisted job `state:error`.
 
-Final replay reuses `strategy_lab_py/candidate.py`; there is no separate runtime,
-readiness, interception, cleanup, timeout or protocol candidate state machine. The narrow
-`strategy_lab_profile_candidate_adapter.sh` changes only the validated static domain
-selector into the temporary runtime hostlist required by dvtws2 and delegates every other
-candidate system action to `strategy_lab_candidate_adapter.sh`.
+Patch 8 source reconciliation:
 
-`strategy_lab_worker.sh` routes Stage 85 and automated eligibility through
-`strategy_lab_python_stage_adapter.sh`; all non-final OS-specific stage actions continue to
-the audited system stage adapter. Legacy shell final-profile/replay/eligibility ownership
-is being removed in this same patch rather than retained as a fallback competitor.
+- automated daemon launch now uses `9>&-`;
+- empty/invalid configd output is marked `transient=true` by the API controller;
+- AJAX/network errors use the same transient channel;
+- Diagnostics renders job state only from a validated persisted job snapshot;
+- transport `status` can no longer masquerade as visible job state;
+- transient active polling preserves the last valid state/progress and retries;
+- accepted starts render immediately as queued Stage 00;
+- persisted Python `progress.percent` remains authoritative;
+- active reload discovery retries transient reads but explicit idle does not resurrect
+  retained terminal history;
+- circular presentation preserves its last valid state across transient/busy reads.
 
-Public status/shortlist/profile/circular contracts remain compatible. Private circular
-session `state.json` and its frozen-parent consumer remain shell-owned by design.
+Focused source regression:
+`scripts/test-strategy-lab-gui-status-reconciliation.sh`.
 
 ==================================================
 FINAL SHELL-ERA LIVE BOUNDARY
@@ -108,8 +116,13 @@ Owner-assisted Standard Strategy Lab test on `v0.3.3_17`:
 - Stage 90 PASS — initial RUNNING state restored healthy;
 - terminal Stage 99 ERROR.
 
-Observed GUI defects on the same run remain open: immediate visible ERROR for the new job,
-`Strategy Lab returned no output.` while active, and visible 0% progress until terminal.
+Observed GUI defects on the same run remain open until replacement live evidence exists:
+
+- immediate visible ERROR for the new job;
+- `Strategy Lab returned no output.` while the job remained active;
+- visible progress remained 0%, then jumped to terminal 100%;
+- terminal/reload state presentation required recheck.
+
 No `_17` candidate-runtime log bundle exists, so the exact `_17` Stage-50 root cause is not
 claimed.
 
@@ -121,17 +134,17 @@ CONFIRMED DEFECT BACKLOG
 ==================================================
 
 All owner-observed items remain open until replacement evidence closes them. Source
-migration does not substitute for live/UI evidence.
+migration or a focused regression does not substitute for live/UI evidence.
 
 1. **Stage 50 remains ERROR on `_17`.** Exact `_17` root cause is not established.
-2. **Immediate stale/new-job GUI error.** A fresh job ID can be shown with visible ERROR before terminal evidence exists.
-3. **Active GUI no-output message.** `Strategy Lab returned no output.` can appear while backend work continues.
-4. **GUI progress stuck at 0%.** Backend work advances while visible progress remains 0%, then jumps to terminal 100%.
-5. **Baseline target-type corruption.** Patch 4 replaces the old source mechanism; live/UI closure remains pending.
-6. **DNS answer parser weakness.** Patch 4 replaces the old parser with ANSWER-section-aware Python parsing; live closure remains pending where applicable.
-7. **DNS diagnostics flatten failure classes.** Patch 4 preserves distinct timeout/command/parser evidence; live closure remains pending where applicable.
-8. **Terminal reload/state presentation defect.** Retained terminal state can be presented incorrectly on Diagnostics reopen.
-9. **Candidate fatal-log classification defect.** Patch 5 replaces the standard source mechanism and regression-covers fatal-log rejection; live closure remains pending.
+2. **Immediate stale/new-job GUI error.** `_25` changes the launcher/status mechanism; live closure pending.
+3. **Active GUI no-output message.** `_25` separates transient reads from persisted state; live closure pending.
+4. **GUI progress stuck at 0%.** `_25` restores concurrent status reads and persisted-progress rendering; live closure pending.
+5. **Baseline target-type corruption.** Patch 4 replaced the old source mechanism; live closure pending.
+6. **DNS answer parser weakness.** Patch 4 replaced the old parser; live closure pending.
+7. **DNS diagnostics flatten failure classes.** Patch 4 preserves distinct evidence; live closure pending.
+8. **Terminal reload/state presentation defect.** `_25` reconciles active discovery versus idle history; live closure pending.
+9. **Candidate fatal-log classification defect.** Patch 5 replaced the source mechanism; live closure pending.
 
 ==================================================
 PYTHON MIGRATION PATCH SEQUENCE
@@ -151,24 +164,27 @@ Patch 5 — Python candidate runtime and family screening: **COMPLETE / MERGED A
 
 Patch 6 — Python expansion, stability/replay, and extended protocol orchestration: **COMPLETE / MERGED AS `_23`**.
 
-Patch 7 — Python final result/shortlist completion and obsolete shell-orchestration retirement: **CURRENT `_24` SOURCE CHANGE**.
+Patch 7 — Python final result/shortlist completion and obsolete shell-orchestration retirement: **COMPLETE / MERGED AS `_24`**.
 
-Patch 8 — GUI/status reconciliation and post-migration live gate: **NEXT AFTER PATCH 7 QUALIFICATION**.
+Patch 8 — GUI/status reconciliation and post-migration live gate: **CURRENT `_25` SOURCE CHANGE; LIVE EVIDENCE PENDING**.
 
 ==================================================
-DELIVERY AND PACKAGE BOUNDARY
+DELIVERY AND LIVE-GATE BOUNDARY
 ==================================================
 
-Migration Patch 7 is an installable package-source change:
+Migration Patch 8 `_25` is an installable package-source change:
 
 - `VERSION` remains `0.3.3`;
-- `PLUGIN_REVISION` advances to `24`;
-- current source candidate is `os-zapret2-restyle-0.3.3_24.pkg`;
+- `PLUGIN_REVISION` advances to `25`;
+- current source candidate is `os-zapret2-restyle-0.3.3_25.pkg`;
 - latest published and owner-tested live candidate remains `_17`;
-- `_24` does not resume or close the owner-assisted live matrix;
-- GUI/status reconciliation and the post-migration owner-assisted live gate remain Patch 8.
+- no `_25` tag/prerelease/Release is authorized merely by starting this source patch.
 
-The `_24` source must pass all earlier Python migration regressions, focused final-result
-ownership/replay/shortlist coverage, the complete Strategy Lab corrective matrix, full
-repository CI, and FreeBSD 15 package/content/manifest verification before squash merge.
-Testing-prerelease publication remains a separate operation requiring explicit authority.
+Before squash merge, `_25` must pass the focused GUI/status reconciliation regression,
+all Python migration continuity tests, the complete Strategy Lab corrective matrix, full
+repository CI/governance/hygiene checks and the FreeBSD 15 package gate.
+
+After source merge, testing-prerelease publication is a separate operation requiring
+explicit owner authorization under `docs/GITHUB_PUBLICATION.md`. Only after an authorized
+post-migration candidate is installed can Scenario 1 resume and the frozen live defects be
+closed or carried forward from new evidence.

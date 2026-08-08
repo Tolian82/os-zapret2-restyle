@@ -125,7 +125,8 @@ start_job()
     _strategy_lab_pid=$(strategy_lab_pid_file "${_strategy_lab_job}")
     rm -f "${_strategy_lab_pid}"
 
-    if ! "${DAEMON_BIN}" -f -o "${_strategy_lab_log}" -p "${_strategy_lab_pid}" "${TRANSACTION_SCRIPT}" strategy-lab "${_strategy_lab_job}"; then
+    if ! "${DAEMON_BIN}" -f -o "${_strategy_lab_log}" -p "${_strategy_lab_pid}" \
+        "${TRANSACTION_SCRIPT}" strategy-lab "${_strategy_lab_job}" 9>&-; then
         strategy_lab_clear_active_job "${_strategy_lab_job}"
         strategy_lab_udp_input_cleanup "${_strategy_lab_job}" || true
         strategy_lab_update_job "${_strategy_lab_job}" error ERROR 00 false 'Strategy Lab lifecycle transaction could not be started' || true

@@ -5,13 +5,13 @@ DOCUMENT ROLE
 ==================================================
 
 Question answered:
-How is Strategy Lab split between Python and the remaining OPNsense/FreeBSD shell boundaries after the approved incremental migration?
+How is Strategy Lab split between Python, the remaining OPNsense/FreeBSD shell boundaries, and the Diagnostics presentation layer after the approved incremental migration?
 
 Purpose:
-Record the migration sequence, authoritative ownership, compatibility invariants, test gates, and handoff into GUI/live reconciliation.
+Record migration ownership, compatibility invariants, Patch-8 GUI/status reconciliation, verification gates, and the handoff into owner-assisted live validation.
 
 Updated when:
-Migration scope, module ownership, compatibility boundaries, or patch sequence changes.
+Migration scope, module ownership, compatibility boundaries, GUI/status reconciliation, or live-gate sequencing changes.
 
 Read after:
 `docs/ARCHITECTURE.md`, `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`, and `docs/PROJECT_STATE.md`.
@@ -23,47 +23,53 @@ Chronological implementation logs or owner-assisted live evidence.
 STATUS
 ==================================================
 
-Migration Patches 0–6 are complete. Migration Patch 7 is source candidate
-`v0.3.3_24` and completes the automated Strategy Lab Python ownership boundary.
+Migration Patches 0–7 are complete. Migration Patch 8 is current source candidate
+`v0.3.3_25` and owns GUI/status reconciliation plus preparation of the post-migration live
+gate.
 
-After `_24` qualification and merge, the only planned migration work is Patch 8:
-GUI/status reconciliation followed by the owner-assisted post-migration OPNsense live gate.
+The automated backend migration is complete: Python is the single automated owner of job
+state, stage orchestration, requests/probes, candidate/search policy and final result
+assembly. Patch 8 must not move those responsibilities back into PHP, JavaScript or shell.
 
 The latest published and owner-tested live candidate remains `_17`. Source qualification of
-`_18` through `_24` does not supersede that live evidence.
+`_18` through `_25` does not supersede that live evidence. A post-migration candidate may
+be published only under the separate publication authority in `docs/GITHUB_PUBLICATION.md`.
 
 ==================================================
 OBJECTIVE
 ==================================================
 
-Move Strategy Lab responsibilities that require structured state, reliable subprocess
-handling, explicit scoping, parsing, cancellation, deterministic search policy and final
-result assembly out of large sourced POSIX-shell orchestration into Python 3.13 without
-rewriting unrelated plugin code or weakening OPNsense lifecycle safety.
+Move responsibilities that benefit from structured state, reliable subprocess handling,
+explicit scoping, parsing, cancellation, deterministic search policy and final result
+assembly out of large sourced POSIX-shell orchestration into Python 3.13 while preserving
+OPNsense lifecycle safety and public behavior.
 
-The automated migration is complete when:
+The migration and reconciliation series is complete only when:
 
 - public Strategy Lab API/state/result contracts remain compatible;
 - lifecycle safety and exact restoration remain authoritative;
-- Python is the single automated owner of state, stage progression, request/probe,
-  candidate/search and final result policy;
-- shell remains only where an audited system boundary or private circular-session contract
-  is deliberate;
-- obsolete competing automated shell owners are removed rather than retained as fallback;
-- the owner-assisted OPNsense matrix can resume from a separately authorized post-migration
-  testing candidate.
+- Python is the single automated backend owner;
+- shell remains only at audited system or private circular-session boundaries;
+- obsolete competing automated shell owners stay removed;
+- Diagnostics renders only persisted job state and progress rather than transport status;
+- transient status-read failures do not fabricate terminal job state;
+- active reload and terminal-idle behavior follow the persisted-result contract;
+- the owner-assisted OPNsense matrix resumes on a separately authorized post-migration
+  testing candidate and records the required evidence.
 
 ==================================================
-TARGET FLOW AFTER PATCH 7
+TARGET FLOW AFTER PATCH 8 SOURCE RECONCILIATION
 ==================================================
 
 ```text
 Diagnostics GUI / JavaScript
-        ↓
+        ↓  validates persisted job snapshots; retries transient reads
 OPNsense PHP MVC/API
-        ↓
+        ↓  request validation + transient transport classification
 configd action
         ↓
+strategy_lab_launcher.sh / short launcher lock
+        ↓  background daemon closes launcher FD 9
 zapret_service.sh / shared lifecycle lock
         ↓
 strategy_lab_worker.sh
@@ -77,12 +83,12 @@ Python strategy_lab_py/orchestrator.py
              ↓
         narrow shell system adapters
              ↓
-FreeBSD/OPNsense: dvtws2, ipfw, drill/curl/openssl/nc, sockstat/ps, service lifecycle
+FreeBSD/OPNsense: dvtws2, ipfw, process/file observations, service lifecycle
 ```
 
-PHP remains responsible for HTTP validation, OPNsense MVC/API integration and bounded
-configd invocation. Patch 8 may reconcile GUI presentation with already persisted Python
-state, but it must not take backend ownership back from Python.
+PHP remains responsible for HTTP/API validation and bounded configd invocation. JavaScript
+owns presentation only. Neither layer may derive automated backend truth independently of
+the persisted Python-owned job snapshot.
 
 ==================================================
 PYTHON RUNTIME CONTRACT
@@ -109,8 +115,7 @@ Patch 2 — `strategy_lab_py/state.py`
 - schema/revision/progress/stage/result/lifecycle/circular-eligibility persistence;
 - atomic revisioned writes and stale reconciliation.
 
-Private circular-session `state.json` is deliberately not part of this ownership and
-remains shell-owned.
+Private circular-session `state.json` remains deliberately shell-owned.
 
 Patch 3 — `strategy_lab_py/orchestrator.py`
 
@@ -118,13 +123,13 @@ Patch 3 — `strategy_lab_py/orchestrator.py`
 - Standard/Extended wall-clock budgets;
 - cancellation/signals/adapter process-group termination;
 - mandatory Stage 90 restoration and Stage 99 convergence;
-- terminal state/outcome/report/localized terminal message policy;
+- terminal state/outcome/report policy;
 - restoration-failure override.
 
 Patch 4 — `strategy_lab_py/request.py` and `probe.py`
 
 - finite DNS/TLS/HTTP/TCP/QUIC-control request execution;
-- stdout/stderr/return-code/timeout/termination evidence kept distinct;
+- distinct stdout/stderr/return-code/timeout/termination evidence;
 - DNS ANSWER-section-aware A/AAAA parsing;
 - Stage 30/40 network/baseline execution and public result compatibility.
 
@@ -140,20 +145,19 @@ Patch 6 — `strategy_lab_py/search.py` and `extended.py`
 - Stage-60 accepted-family expansion catalog/order/early-stop policy;
 - Stage-70 source de-duplication/ranking/three-attempt stability replay;
 - Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP orchestration;
-- one generalized candidate lifecycle for TLS 1.3, TLS 1.2, HTTP, QUIC and generic UDP;
+- one generalized candidate lifecycle across supported protocols;
 - exact-endpoint QUIC and generic-UDP request execution through the request owner.
 
 Patch 7 — `strategy_lab_py/result.py`
 
 - complete user-ready profile construction and validation;
 - deterministic final source collection/ranking;
-- exact three-attempt replay of the complete profile that will be published;
+- exact three-attempt replay of the complete published profile;
 - Standard and Extended unified shortlist selection;
 - recommendation and TLS 1.3 circular subset publication;
 - automated-job circular eligibility after verified restoration.
 
-Final replay reuses `candidate.py`; Patch 7 does not create a second candidate state
-machine.
+Final replay reuses `candidate.py`; there is no second candidate state machine.
 
 ==================================================
 REMAINING SHELL RESPONSIBILITIES
@@ -165,28 +169,63 @@ Shell remains authoritative only for deliberate boundaries such as:
 - audited FreeBSD dvtws2/IPFW/process/file mutations and observations behind explicit
   adapters;
 - short compatibility launch wrappers;
-- private circular-session ownership/state and its immutable-parent consumer.
+- private circular-session ownership/state and immutable-parent consumption.
 
 The replay-specific `strategy_lab_profile_candidate_adapter.sh` is a system adapter, not a
-result/search owner. It receives a complete already validated profile, replaces only the
-static domain selector with the temporary runtime hostlist required by dvtws2 when needed,
-and delegates all other candidate system actions to the canonical candidate adapter.
+result/search owner. It receives an already validated profile, replaces only the static
+domain selector with the temporary runtime hostlist when needed, and delegates all other
+candidate system actions to the canonical candidate adapter.
 
-Patch 7 physically retires these competing automated owners:
+Patch 7 physically retired these competing automated owners:
 
 - `strategy_lab_profile_replay_runner.sh`;
 - `strategy_lab/worker_result.sh`;
 - `strategy_lab/worker_stage_machine.sh`.
 
-Some older helper modules can remain packaged where compatibility/system/private-circular
-code still sources them. Presence alone does not make them authoritative. No production
-path may delegate Python-owned automated policy back to them.
+Some older helper modules may remain where compatibility/system/private-circular code still
+sources them. Presence does not make them authoritative and no production path may delegate
+Python-owned policy back to them.
+
+==================================================
+PATCH 8 GUI / STATUS RECONCILIATION
+==================================================
+
+The automated launcher serializes short launcher operations with a nonblocking lock on FD
+9. Before `_25`, `start_job()` launched the long-lived background lifecycle process through
+`daemon(8)` without closing that descriptor. The private circular launcher already closed
+FD 9 correctly.
+
+Patch 8 requires the automated daemon launch to close FD 9 before the worker starts. The
+short start transaction remains serialized, but the background worker must not inherit the
+launcher lock that status/result/cancel requests need.
+
+Transport/read status is separate from job state:
+
+- empty or invalid configd output is reported by PHP as `status:"error"` plus
+  `transient:true`;
+- AJAX/network failures use the same transient marker;
+- a browser job snapshot is accepted only with a valid `job.*` ID and persisted state
+  `queued`, `running`, `cancel_requested`, `completed`, or `error`;
+- visible job state is derived only from `data.state`;
+- `data.status` is transport/API metadata and must never be used as fallback job state;
+- a transient read preserves the last valid rendered state/progress and schedules a retry;
+- accepted start may render the known accepted job as queued Stage 00 until the first
+  persisted snapshot arrives;
+- persisted Python `progress.percent` is authoritative; the stage-to-percent map remains
+  compatibility fallback only;
+- initial Diagnostics discovery retries transient reads, resumes an actual active snapshot,
+  and treats explicit `{status:"idle"}` as idle without resurrecting terminal history;
+- private circular presentation also preserves its last valid state across transient/busy
+  reads.
+
+This reconciliation changes presentation/read semantics only. It does not create another
+state writer or backend owner.
 
 ==================================================
 PERSISTENCE / RESULT COMPATIBILITY
 ==================================================
 
-Existing evidence locations remain stable:
+Evidence locations remain stable:
 
 - `/var/run/zapret2-restyle/strategy-lab/`;
 - `/var/log/zapret2/strategy-lab/`;
@@ -194,17 +233,15 @@ Existing evidence locations remain stable:
 - `events.ndjson`;
 - stage/candidate/search/final evidence files required by public contracts.
 
-Patch 4 preserves public `network.json` / `baseline.json`; richer subprocess evidence may
-live in sidecars. Patches 5/6 preserve candidate/family/expansion/stability/extended/QUIC/
-UDP public contracts.
-
 Patch 7 preserves the unified shortlist contract while making Python its publisher:
 
 - `count` and `items` for the public shortlist;
 - deterministic `recommendation`;
-- `circular_count` and `circular_items` as the replay-verified TLS 1.3 subset for private
-  circular validation;
-- complete user-ready `profile` plus structured replay evidence on published items.
+- `circular_count` and `circular_items` as replay-verified TLS 1.3 subset;
+- complete user-ready `profile` plus structured replay evidence.
+
+Patch 8 does not alter these persistence or result schemas. It makes Diagnostics consume
+them consistently.
 
 ==================================================
 PROFILE / FINAL REPLAY CONTRACT
@@ -220,12 +257,12 @@ Supported final protocol profiles:
 
 Each published profile contains one transport filter, optional protocol L7 filter, one
 validated target selector, `--out-range=-d10`, and the candidate desynchronization
-fragment. Runtime-only dvtws2 arguments, nested selectors/filters, placeholders and
-`--new` are rejected.
+fragment. Runtime-only arguments, nested selectors/filters, placeholders and `--new` are
+rejected.
 
 Each final source is replayed exactly three times. A shortlist entry is accepted only when
-all three attempts pass and each replay proves that the exact complete published profile
-was used.
+all three attempts pass and each replay proves the exact complete published profile was
+used.
 
 ==================================================
 STAGE / BUDGET / CANCELLATION CONTRACT
@@ -259,14 +296,14 @@ Mandatory invariants:
 3. Stop normal runtime only through approved lifecycle paths.
 4. Run one temporary candidate at a time.
 5. Keep temporary firewall/divert ownership isolated.
-6. Clean candidate runtime before moving to the next candidate.
+6. Clean candidate runtime before the next candidate.
 7. Execute Stage 90 on normal completion, timeout, cancel, signal or internal error.
 8. Restore initial RUNNING to healthy RUNNING and initial STOPPED to STOPPED.
 9. Never hide restoration failure behind a successful result.
 10. Saved Traffic Strategy remains immutable.
-11. Final profile replay uses the same unified candidate readiness/interception/cleanup
-    owner as search candidates.
+11. Final profile replay uses the same unified candidate readiness/interception/cleanup owner.
 12. Private circular sessions cannot mutate the parent automated result.
+13. Long-lived automated or circular workers must not inherit short launcher serialization locks.
 
 ==================================================
 CONFIRMED LIVE/UI BACKLOG
@@ -284,9 +321,9 @@ At the frozen `_17` live boundary:
 8. Terminal reload/state presentation can resurrect retained terminal work incorrectly.
 9. Candidate readiness log classification could miss fatal runtime log evidence.
 
-Patches 4–7 replace several old source mechanisms and add focused regressions, but source
-migration alone does not close owner-observed defects. Patch 8 owns GUI/status reconciliation
-and post-migration live evidence.
+Patches 4–7 replaced several old backend mechanisms. Patch 8 `_25` adds focused source
+reconciliation for the launcher-lock and GUI/status presentation mechanisms. None of these
+owner-observed defects is closed until replacement live evidence exists.
 
 ==================================================
 MIGRATION PATCH SERIES
@@ -300,34 +337,31 @@ MIGRATION PATCH SERIES
 - Patch 5 — candidate runtime/family screening: **COMPLETE / `_22`**.
 - Patch 6 — expansion/stability/extended orchestration: **COMPLETE / `_23`**.
 - Patch 7 — final profile/replay/shortlist/eligibility + competing shell-owner retirement:
-  **CURRENT `_24` SOURCE CHANGE**.
-- Patch 8 — GUI/status reconciliation and post-migration live gate: **NEXT**.
-
-Patch 8 must not reopen automated backend ownership that Patches 2–7 already moved to
-Python.
+  **COMPLETE / `_24`**.
+- Patch 8 — GUI/status reconciliation and post-migration live gate:
+  **CURRENT `_25` SOURCE CHANGE; OWNER LIVE EVIDENCE PENDING**.
 
 ==================================================
-PATCH 7 VERIFICATION
+PATCH 8 VERIFICATION
 ==================================================
 
-Patch 7 requires all earlier migration regressions plus:
+Patch 8 source qualification requires all earlier migration regressions plus:
 
-- Python 3.13 compile/import of `result.py`;
-- complete profile build/validation for domain, IPv4 and generic UDP;
-- exactly three complete-profile replay attempts per final source;
-- exact-profile identity evidence on every accepted replay;
-- Standard TLS 1.3 shortlist and Extended per-protocol shortlist behavior;
-- circular TLS 1.3 subset and automated eligibility persistence;
-- immutable private-circular consumption of the parent shortlist;
-- absence of the retired automated shell replay/result/stage-machine owners;
+- automated daemon launch closes launcher FD 9;
+- empty/invalid configd and AJAX failures are classified as transient reads;
+- GUI renders automated state only from validated persisted job snapshots;
+- transport status cannot masquerade as job state;
+- active polling preserves the last valid state/progress and retries transient reads;
+- accepted starts present queued Stage 00 until persisted state arrives;
+- active reload resumes work, transient discovery retries, and explicit idle remains idle;
+- private circular presentation remains stable across transient/busy reads;
+- deliberate RU/EN transient status messaging;
 - complete authoritative Strategy Lab corrective matrix;
-- full repository CI;
-- FreeBSD 15 VM with `python313` and migration continuity tests through Patch 7;
+- full repository CI/governance/hygiene checks;
 - FreeBSD 15 package/content/manifest verification.
 
-The legacy e2e harness may provide a fixture-only replay callback through
-`STRATEGY_LAB_PROFILE_REPLAY_RUNNER`; production does not set that variable and the former
-production shell replay runner is removed. This test bridge is not a production fallback.
+The focused regression is
+`scripts/test-strategy-lab-gui-status-reconciliation.sh`.
 
 ==================================================
 CUTOVER RULE
@@ -342,22 +376,21 @@ For each migrated responsibility:
 5. Remove obsolete competing shell implementation in the designated retirement scope.
 6. Keep shell only for explicit audited system/private-session boundaries.
 
-Patches 2–7 now satisfy this rule for the complete automated Strategy Lab path.
+Patches 2–7 satisfy this rule for the complete automated backend path. Patch 8 does not
+alter that ownership; it reconciles presentation with the existing persisted state.
 
 ==================================================
-HANDOFF TO PATCH 8
+HANDOFF TO POST-MIGRATION LIVE GATE
 ==================================================
 
-After `_24` passes latest-head CI and FreeBSD 15 qualification and is squash-merged:
+After `_25` passes latest-head CI and FreeBSD 15 qualification and is squash-merged:
 
-1. re-inventory `main` and the frozen `_17` owner evidence;
-2. inspect persisted Python state/result contracts against Diagnostics GUI behavior;
-3. correct stale/new-job state, active no-output, progress and terminal reload presentation
-   without changing Python backend ownership;
-4. run full CI and FreeBSD package qualification;
-5. only with explicit publication authority, publish the designated post-migration testing
-   candidate;
-6. resume the owner-assisted OPNsense live matrix from Scenario 1 and retain evidence for
-   every applicable row.
-
-Stable release remains blocked until the required live matrix is PASS.
+1. keep `_17` as the latest owner-tested evidence until a new candidate is actually tested;
+2. publish `_25` only with explicit owner publication authority;
+3. install the exact verified FreeBSD 15 package on the owner's OPNsense appliance;
+4. resume Scenario 1 with `rutracker.org` and initial Zapret2 RUNNING;
+5. capture GUI screenshot, final `status.json`, service/process/IPFW initial/final evidence,
+   and candidate runtime log if a failure occurs;
+6. close only defects proven by new evidence and repeat all affected/required live rows;
+7. keep stable release and pkg-repository promotion blocked until the required live matrix
+   is PASS.

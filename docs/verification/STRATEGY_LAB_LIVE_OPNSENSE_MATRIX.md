@@ -18,7 +18,7 @@ TEST RECORD
 - Required package ABI: `FreeBSD:15:amd64`
 - Latest published testing candidate: `os-zapret2-restyle-0.3.3_17.pkg`
 - Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_17.pkg`
-- Current migration source candidate: `os-zapret2-restyle-0.3.3_24.pkg`
+- Current migration source candidate: `os-zapret2-restyle-0.3.3_25.pkg`
 - Latest owner-tested job: `job.w0nXxQ`
 - WAN interface: `vtnet1`
 - Blocked-domain target: `rutracker.org`
@@ -73,7 +73,7 @@ prove that the `_16` permission defect survived `_17`; it proves only that Stage
 contains at least one unresolved failure.
 
 ==================================================
-PYTHON MIGRATION HOLD
+PYTHON MIGRATION HOLD / PATCH 8 SOURCE CANDIDATE
 ==================================================
 
 The owner approved pausing further growth of the large sourced shell Strategy Lab worker
@@ -104,23 +104,26 @@ and Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP orchestration to Python. The same Pyt
 candidate runtime/readiness/interception owner serves standard and extended protocols;
 the shell candidate adapter remains limited to audited FreeBSD mutations and observations.
 
-Migration Patch 7 source candidate `_24` completes automated final profile construction,
-exact three-pass replay, unified shortlist publication and automated-job circular-
-eligibility ownership in Python. Published user-ready profiles are replayed through the
-same Python candidate lifecycle/readiness/interception owner; the replay-specific shell
-boundary is limited to preparing dvtws2 runtime arguments from an already validated
-profile. Obsolete competing shell result/replay orchestration is retired in this patch.
-GUI/status reconciliation and owner-assisted post-migration live verification remain
-assigned to Patch 8.
+Migration Patch 7 (`_24`) completed automated final profile construction, exact three-pass
+replay, unified shortlist publication and automated-job circular-eligibility ownership in
+Python and retired the competing automated shell result/replay/stage-machine owners.
 
-None of `_18`, `_19`, `_20`, `_21`, `_22`, `_23`, or `_24` supersedes the owner-tested
-`_17` live evidence or resumes Scenario 1. Source-side corrections to migration mechanisms
-are not owner-assisted live closure claims.
+Migration Patch 8 source candidate `_25` reconciles the remaining GUI/status boundary
+without reopening Python backend ownership. The automated background worker now closes the
+launcher lock FD before `daemon(8)` execution. Empty/invalid configd output and AJAX failures
+are treated as transient read failures, not persisted job state. Diagnostics accepts visible
+state/progress only from validated persisted job snapshots, retries transient active reads,
+renders an accepted start as queued Stage 00, and preserves active reload/idle-history
+separation.
 
-The live matrix remains failed during migration. Do not mark a row PASS because a defect
-mechanism was rewritten. Resume live Scenario 1 only when the Python implementation has
-reached the designated functional parity gate and a testing candidate has passed CI and
-the FreeBSD 15 package gate.
+None of `_18`, `_19`, `_20`, `_21`, `_22`, `_23`, `_24`, or source candidate `_25`
+supersedes the owner-tested `_17` live evidence. `_25` is not a published testing candidate
+merely because its source exists. Source-side corrections are not owner-assisted live
+closure claims.
+
+The live matrix remains failed until an explicitly authorized post-migration testing
+candidate has passed CI/FreeBSD 15 qualification, is published/installed, and owner evidence
+is collected. Do not mark a row PASS because a defect mechanism was rewritten.
 
 ==================================================
 REQUIRED EVIDENCE BUNDLE
@@ -174,7 +177,7 @@ SCENARIO MATRIX
 | 13 | Settings Apply during automated Strategy Lab | Apply rejected before model mutation with lifecycle-owner information; saved configuration unchanged | `PENDING OWNER` | **BLOCKED BY #1** |
 | 14 | Settings Apply during circular or `restore_failed` state | Apply rejected; unsafe retry blocked until restoration proven | `PENDING OWNER` | **BLOCKED BY #1** |
 | 15 | Diagnostics page reload | Active reload resumes job; terminal reload opens idle view without deleting retained evidence or starting a new job | `PENDING OWNER` | **BLOCKED BY #1** |
-| 16 | Russian and English presentation | Progress deterministic; stage/state/outcome/circular/UDP/copy messages correct in both languages | `PENDING OWNER` | **BLOCKED BY #1** |
+| 16 | Russian and English presentation | Progress deterministic; stage/state/outcome/circular/UDP/copy/messages correct in both languages | `PENDING OWNER` | **BLOCKED BY #1** |
 | 17 | Retention with reduced test limits | Only excess verified terminal artifacts removed; active/latest/nonterminal/unverified/`RESTORE_FAILED` evidence protected | `PENDING OWNER` | **BLOCKED BY #1** |
 | 18 | Reboot after clean terminal completion | No temporary process or reserved IPFW residue returns; normal Zapret2 service/rule identity valid | `PENDING OWNER` | **BLOCKED BY #1** |
 
@@ -183,17 +186,18 @@ CONFIRMED DEFECTS TO RECHECK AFTER MIGRATION
 ==================================================
 
 - Stage 50 internal failure on `_17`.
-- Immediate stale/new-job GUI error.
-- Active `Strategy Lab returned no output.` message.
-- Visible 0%-until-terminal progress behavior.
+- Immediate stale/new-job GUI error — `_25` source reconciliation present; live closure pending.
+- Active `Strategy Lab returned no output.` message — `_25` transient-read separation present; live closure pending.
+- Visible 0%-until-terminal progress behavior — `_25` launcher-lock/status polling correction present; live closure pending.
 - shell-global target-type corruption — old source mechanism replaced in `_21`, live closure pending.
 - DNS answer-section/parser weakness — old source mechanism replaced in `_21`, live closure pending.
 - DNS failure-class flattening — structured distinctions added in `_21`, live closure pending.
-- terminal reload/state presentation.
+- terminal reload/state presentation — `_25` active discovery reconciliation present; live closure pending.
 - candidate fatal-log classification — standard candidate readiness source mechanism replaced and regression-covered in `_22`; live closure pending.
 
-These defects remain open records. The Python migration may eliminate their old mechanism,
-but closure requires focused replacement tests and any required owner live/UI evidence.
+These defects remain open records. The Python migration and Patch-8 source reconciliation
+may eliminate their old mechanism, but closure requires focused replacement tests and the
+required owner live/UI evidence.
 
 ==================================================
 FAILURE HANDLING

@@ -15,8 +15,10 @@ in `AGENTS.md`.
 
 For any new Strategy Lab work after the `v0.3.3_17` live handoff, read these first:
 
-- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved migration map, completed automated Python ownership and Patch 8 boundary;
+- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved migration map, completed automated Python ownership and current Patch 8 GUI/live boundary;
 - `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md` — rationale, language responsibility boundary, compatibility invariants, bug-backlog policy, and migration delivery rules;
+- `docs/patches/v0.3.3_25.md` — Migration Patch 8 GUI/status reconciliation and post-migration live-gate source candidate;
+- `docs/devlog/2026-08-08-v0.3.3_25-gui-status-reconciliation.md` — Patch 8 source diagnosis, reconciliation and live-gate handoff;
 - `docs/patches/v0.3.3_24.md` — Migration Patch 7 final-result/shortlist ownership and obsolete automated-shell retirement;
 - `docs/devlog/2026-08-08-v0.3.3_24-python-final-results.md` — Patch 7 implementation, compatibility repairs, verification and Patch 8 handoff;
 - `docs/patches/v0.3.3_23.md` — Migration Patch 6 expansion/stability/extended-orchestration cutover;
@@ -43,6 +45,11 @@ construction/exact replay/unified shortlist publication, and automated-job circu
 eligibility. Audited FreeBSD mutations remain behind explicit narrow shell adapters and
 private circular-session state remains shell-owned by design.
 
+Migration Patch 8 does not reopen those backend responsibilities. It reconciles
+Diagnostics/API presentation and status-read behavior with the persisted Python state,
+then resumes the owner-assisted OPNsense live matrix only after a separately authorized
+post-migration testing candidate is published and installed.
+
 ## Existing Strategy Lab product authorities
 
 These contracts remain authoritative unless the Python migration decision explicitly
@@ -66,7 +73,7 @@ changes implementation ownership. Migration is not permission to weaken product 
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_MATRIX.md` — discoverable corrective CI entry point;
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — earlier hardening finding-to-patch traceability;
 - `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — shell-era source/CI closure; live matrix remains the product gate;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — live gate, paused at failed `_17` Scenario 1 until Python functional parity;
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — live gate, still frozen at `_17` until an authorized post-migration candidate is installed;
 - `docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md` — `_16` post-drop hostlist traversal evidence;
 - `docs/verification/evidence/2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md` — `_15` resident FreeBSD daemon startup evidence;
 - `docs/verification/evidence/2026-08-07-v0.3.3_14-scenario-01-stage50-family-runner-and-ui.md` — `_14` family-runner failure and GUI backlog evidence.
