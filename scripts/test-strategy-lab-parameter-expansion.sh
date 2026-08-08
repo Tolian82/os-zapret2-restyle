@@ -79,4 +79,4 @@ grep -Fxq -- '--lua-desync=fake:blob=fake_default_tls:repeats=2' "${MODULE_DIR}/
 grep -Fxq -- '--lua-desync=syndata:blob=0x1603' "${MODULE_DIR}/catalog/tls13-expansion/syndata-1603.args"
 grep -Fxq -- '--lua-desync=hostfakesplit:midhost=midsld:disorder_after=-1' "${MODULE_DIR}/catalog/tls13-expansion/hostfakesplit-disorder.args"
 
-echo 'PASS: Strategy Lab expands only accepted families and preserves ordered partial results'
+echo 'PASS: legacy shell expansion compatibility fixture remains deterministic; Python owns active Stage-60 policy'

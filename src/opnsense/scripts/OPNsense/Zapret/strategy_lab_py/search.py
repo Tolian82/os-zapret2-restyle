@@ -233,12 +233,14 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
     family_result = _load_json(family_path)
     accepted_raw = family_result.get("accepted", [])
     if not isinstance(accepted_raw, list) or not all(isinstance(item, str) for item in accepted_raw):
-        raise RuntimeError("Strategy Lab accepted-family result is invalid")
+        raise RuntimeError("Strategy Lab Stage-50 family evidence is invalid")
     accepted = set(accepted_raw)
     catalog_path = Path(os.environ.get("STRATEGY_LAB_EXPANSION_CATALOG", str(module_dir() / "catalog/tls13-expansion.tsv")))
     args_dir = Path(os.environ.get("STRATEGY_LAB_EXPANSION_ARGS_DIR", str(module_dir() / "catalog/tls13-expansion")))
     rows = _catalog(catalog_path, 4)
+    # Stage-50 acceptance is priority evidence only; it never removes catalog reachability.
     selected = [row for row in rows if row[0] in accepted]
+    selected.extend(row for row in rows if row[0] not in accepted)
     runner = _candidate_runner("STRATEGY_LAB_EXPANSION_CANDIDATE_RUNNER")
     if not runner.is_file() or not os.access(runner, os.X_OK):
         raise RuntimeError(f"Strategy Lab expansion candidate runner is unavailable: {runner}")
@@ -256,7 +258,7 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
     }
     _atomic_json(output, result)
     if not selected:
-        result["stopped_reason"] = "no_accepted_family"
+        result["stopped_reason"] = "catalog_exhausted"
         _atomic_json(output, result)
         return EX_OK
 

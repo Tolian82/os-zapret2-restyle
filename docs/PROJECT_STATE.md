@@ -31,10 +31,11 @@ Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_
 Latest published testing prerelease: `v0.3.3_27` / `os-zapret2-restyle-0.3.3_27.pkg`
 Latest owner-tested testing candidate: `v0.3.3_27` / `os-zapret2-restyle-0.3.3_27.pkg`
 Current source line: `VERSION=0.4.0`
-Current package revision: `PLUGIN_REVISION=1`
+Current package revision: `PLUGIN_REVISION=2`
+Current source candidate: `os-zapret2-restyle-0.4.0_2.pkg` (source only; not yet published)
 Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **post-v0.4.0 adaptive-search handoff; `_28` is the next source cycle**
+Current phase: **adaptive-search `_28` source candidate; focused OPNsense verification remains pending**
 v0.4.0 release gate: **COMPLETE — published and installed by the owner**
 
 Current primary Strategy Lab authority:
@@ -87,8 +88,11 @@ ownership without a new architectural decision.
 APPROVED POST-MIGRATION SEARCH REDESIGN
 ==================================================
 
-The owner approved the next Strategy Lab search architecture on 2026-08-08. It is a
-target design only; `_27` still executes the existing family-gated/cold candidate path.
+The owner approved the next Strategy Lab search architecture on 2026-08-08. `_28`
+implements its first source slice: Stage-50 `accepted` remains evidence/prioritization
+input but no longer removes other Stage-60 catalog families from reachability. The
+remaining cold runtime, fixed catalog, fixed `-d10`, QUIC search and validation behavior
+stay on the pre-redesign implementation until their later dedicated patches.
 
 Approved direction:
 
@@ -121,8 +125,9 @@ Detailed target architecture:
 Experiment/measurement authority:
 `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
-Planned source sequence after this documentation record: `_28` hard-gate removal, `_29`
-CandidateSpec/ResourceInventory, `_30` native search graph/resources/golden corpus,
+Implementation sequence: `_28` hard-gate removal is the current source candidate; `_29`
+CandidateSpec/ResourceInventory follows after `_28` qualification, then `_30` native
+search graph/resources/golden corpus,
 `_31` adaptive planner/endpoint pinning/telemetry, `_32` timeout model, `_33`
 discovery/stability/deep validation.
 
@@ -293,8 +298,12 @@ are pending.
 
 The `v0.4.0 / 0.4.0_1` release cycle is complete. Immutable tag `v0.4.0` resolves to
 release commit `5e2f98c503a94413be76d7fd6b7f5721fc436f56`; Release workflow run 17 passed and
-published the package/checksum plus the Pages/pkg repository. The post-release EOF-only
-hygiene repair is on current `main` at `b733cd76528c8284e2831b17ddc9e1cacba512ef`, whose
-push CI run 564 passed. The owner subsequently installed `0.4.0_1` on OPNsense. The next
-source action is adaptive-search `_28`; no additional live-matrix row is a prerequisite
-unless new change risk or evidence selects it under the active risk-based policy.
+published the package/checksum plus the Pages/pkg repository. The owner subsequently
+installed `0.4.0_1` on OPNsense.
+
+Adaptive-search `_28` advances only the source candidate to `0.4.0_2`. Its focused live
+verification is intentionally narrower than the full regression matrix: after a
+separately authorized testing-prerelease publication, a blocked target whose Stage 50
+accepts no family must still enter real Stage-60 candidate testing, preserve bounded
+cleanup, and pass Stage-90 restoration. `_27` remains the latest owner-tested evidence
+until that run exists. `_29` remains the next source cycle after `_28` qualification.

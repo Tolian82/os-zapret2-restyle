@@ -13,7 +13,7 @@ in `AGENTS.md`.
 
 ## Current Strategy Lab transition authorities
 
-For current Strategy Lab post-migration live correction work, read these first:
+For current Strategy Lab post-migration/adaptive-search work, read these first:
 
 - `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved migration map and completed automated Python ownership;
 - `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md` — rationale, language responsibility boundary, compatibility invariants, bug-backlog policy, and migration delivery rules;
@@ -21,6 +21,8 @@ For current Strategy Lab post-migration live correction work, read these first:
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — approved native-Zapret2 `CandidateSpec`/`ResourceInventory`, adaptive search graph, resource classes, validation and timeout target architecture;
 - `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — A/B/C cold/warm runtime, dispatcher, preload, discovery-probe and timeout-telemetry verification plan;
 - `docs/devlog/2026-08-08-strategy-lab-adaptive-search-design.md` — documentation-only design handoff into the planned `_28`–`_33` implementation series;
+- `docs/patches/v0.4.0_2.md` — `_28` source contract: Stage-50 evidence changes Stage-60 priority but never catalog-family reachability;
+- `docs/devlog/2026-08-09-v0.4.0_2-stage60-family-reachability.md` — `_28` implementation, regression and focused live handoff;
 - `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md` — active release-specific live-selection policy; preserves the full regression matrix without making every pending row an unconditional release blocker;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical owner-assisted live regression inventory; v0.4.0-selected Scenario 1 is PASS on `_27`;
 - `docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md` — current `_27` live evidence: Stages 40/50/60/70/90 PASS and truthful `NO_CANDIDATE`;
@@ -64,9 +66,11 @@ candidate-local structured error is rejected locally rather than aborting the en
 catalog. Corrective `_27` likewise preserves ownership and DNS semantics; it widens the
 Python DNS deadline and enclosing Stage-40 operation envelope using new owner evidence.
 
-The 2026-08-08 adaptive-search decision is a later approved target architecture, not a
-claim that `_27` already implements it. The current executable search remains the cold,
-family-gated implementation until the `_28`–`_33` source patches replace those pieces.
+The 2026-08-08 adaptive-search decision is the active target architecture. `_28`
+implements its first slice in the current source: Stage-50 acceptance is priority
+evidence only and no longer gates Stage-60 catalog reachability. Cold execution, current
+candidate representation/resources/range, QUIC branch, ordering/telemetry, timeout and
+validation changes remain assigned to `_29`–`_33` as documented.
 The A/B/C warm-runtime choice remains evidence-gated by the experiment plan.
 
 ## Existing Strategy Lab product authorities

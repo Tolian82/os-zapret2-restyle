@@ -28,9 +28,9 @@ release-selected Standard Scenario 1, including Stages 40/50, continued search a
 Stage-90 restoration.
 
 Current objective:
-**start adaptive-search `_28`: remove Stage-50 `accepted` as a hard gate for Stage-60
-candidate reachability. `v0.4.0 / 0.4.0_1` is released and owner-installed; remaining
-live scenarios stay available as risk-selected regression inventory.**
+**qualify adaptive-search `_28`: Stage-50 `accepted` now changes Stage-60 priority only
+and cannot make other catalog families unreachable. After source/CI qualification, run
+one focused owner-assisted OPNsense check before starting `_29`.**
 
 Primary plan:
 `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
@@ -94,7 +94,10 @@ Experimental authority:
 
 Planned source cycles:
 
-- [ ] `_28` — remove Stage-50 `accepted` as a hard gate for Stage-60 candidate reachability;
+- [x] `_28` source — remove Stage-50 `accepted` as a hard gate for Stage-60 candidate
+  reachability while keeping accepted families first as evidence-based priority;
+- [ ] `_28` live — on an explicitly published testing candidate, prove an all-rejected
+  Stage-50 result still executes Stage-60 candidates and preserves Stage-90 restoration;
 - [ ] `_29` — add Python `CandidateSpec` and job-scoped installed `ResourceInventory`;
   remove candidate resource/search policy from the shell adapter;
 - [ ] `_30` — native-Zapret2 adaptive search graph, golden/reference corpus,
@@ -183,4 +186,5 @@ row to be manually executed. `v0.4.0` has its selected Scenario-1 live gate PASS
 The `v0.4.0 / 0.4.0_1` release cycle is complete: release-preparation and FreeBSD 15
 checks passed, immutable tag `v0.4.0` points to the verified release commit, Release run
 17 published the package/checksum and Pages/pkg repository, and the owner installed
-`0.4.0_1` on OPNsense. Adaptive-search `_28` is therefore the next source cycle.
+`0.4.0_1` on OPNsense. Adaptive-search `_28` is the current `0.4.0_2` source candidate;
+its focused owner-assisted reachability/restoration check precedes `_29`.
