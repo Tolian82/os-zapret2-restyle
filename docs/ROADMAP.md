@@ -28,9 +28,9 @@ release-selected Standard Scenario 1, including Stages 40/50, continued search a
 Stage-90 restoration.
 
 Current objective:
-**prepare and release `v0.4.0 / 0.4.0_1`; retain the remaining live scenarios as a
-risk-selected regression inventory and then continue the separately approved adaptive-
-search source series.**
+**start adaptive-search `_28`: remove Stage-50 `accepted` as a hard gate for Stage-60
+candidate reachability. `v0.4.0 / 0.4.0_1` is released and owner-installed; remaining
+live scenarios stay available as risk-selected regression inventory.**
 
 Primary plan:
 `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
@@ -180,7 +180,7 @@ Stable release preparation requires all release-selected live rows to PASS and n
 critical lifecycle/restoration defect. It does not require every unrelated regression
 row to be manually executed. `v0.4.0` has its selected Scenario-1 live gate PASS on `_27`.
 
-The active release cycle sets `VERSION=0.4.0` and resets `PLUGIN_REVISION=1`. After its
-PR/FreeBSD 15 checks pass, the exact verified merge must flow through the repository tag,
-Release, checksum and Pages/pkg publication pipeline. Adaptive-search `_28` starts only
-after that release cycle is complete.
+The `v0.4.0 / 0.4.0_1` release cycle is complete: release-preparation and FreeBSD 15
+checks passed, immutable tag `v0.4.0` points to the verified release commit, Release run
+17 published the package/checksum and Pages/pkg repository, and the owner installed
+`0.4.0_1` on OPNsense. Adaptive-search `_28` is therefore the next source cycle.
