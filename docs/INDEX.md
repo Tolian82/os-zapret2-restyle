@@ -17,6 +17,8 @@ For any new Strategy Lab work after the `v0.3.3_17` live handoff, read these fir
 
 - `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — approved incremental migration map and current Python ownership boundaries;
 - `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md` — rationale, language responsibility boundary, compatibility invariants, bug-backlog policy, and migration delivery rules;
+- `docs/patches/v0.3.3_22.md` — Migration Patch 5 candidate-runtime/family-screening cutover and exact scope guard;
+- `docs/devlog/2026-08-08-v0.3.3_22-python-candidate-family.md` — Patch 5 implementation, CI compatibility repairs, verification and Patch 6 handoff;
 - `docs/patches/v0.3.3_21.md` — Migration Patch 4 request/probe execution and parsing cutover;
 - `docs/devlog/2026-08-08-v0.3.3_21-python-request-probes.md` — Patch 4 implementation, terminal-race correction, verification and Patch 5 handoff;
 - `docs/patches/v0.3.3_20.md` — Migration Patch 3 stage machine/budget/cancellation/finalization cutover and exact scope guard;
@@ -28,14 +30,15 @@ For any new Strategy Lab work after the `v0.3.3_17` live handoff, read these fir
 - `docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md` — final owner-observed shell-era boundary;
 - `docs/PROJECT_STATE.md` — current candidate identity, confirmed defect backlog, migration phase, and next action.
 
-Migration Patches 2–4 make Python authoritative for automated-job persistence, high-level
-stage orchestration/budgets/cancellation/finalization, and finite request/probe execution
-and parsing. Stage-specific candidate/family/search algorithms remain behind explicit
-shell adapters until their designated migration patches.
+Migration Patches 2–5 make Python authoritative for automated-job persistence, high-level
+stage orchestration/budgets/cancellation/finalization, finite request/probe execution and
+parsing, and the standard TLS 1.3 candidate runtime plus ordered Stage-50 family
+screening. Audited FreeBSD mutations and later search/extended algorithms remain behind
+explicit adapters until their designated migration patches.
 
-The next source task after `_21` qualification is Migration Patch 5: move candidate
-runtime and family screening to Python. Do not combine expansion/stability or extended
-protocol orchestration with that patch.
+The next source task after `_22` qualification is Migration Patch 6: move parameter
+expansion, stability/replay, and extended-protocol orchestration to Python. Do not combine
+final result/shortlist retirement or GUI/status reconciliation with that patch.
 
 ## Existing Strategy Lab product authorities
 
