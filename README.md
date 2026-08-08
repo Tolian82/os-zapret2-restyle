@@ -2,9 +2,9 @@
 
 Native OPNsense plugin for managing the bol-van/zapret2 DPI-bypass runtime.
 
-**Current release:** `v0.3.2`  
-**Package:** `os-zapret2-restyle-0.3.2_1.pkg`  
-**Target:** OPNsense 26.7 / FreeBSD 15 amd64  
+**Current release:** `v0.4.0`
+**Package:** `os-zapret2-restyle-0.4.0_1.pkg`
+**Target:** OPNsense 26.7 / FreeBSD 15 amd64
 **Internal service name:** `zapret`
 
 ## What the plugin provides
@@ -319,15 +319,15 @@ This permits later reinstall or investigation without deleting user state.
 Engineering documentation is stored in `docs/`. Repository-aware development starts
 with `AGENTS.md`, then follows the mandatory order in `docs/INDEX.md`.
 
-Important v0.3.2 documents:
+Important v0.4.0 documents:
 
 - `docs/PROJECT_STATE.md`
 - `docs/ROADMAP.md`
 - `docs/GITHUB_WORKFLOW.md`
 - `docs/GITHUB_PUBLICATION.md`
-- `docs/decisions/DEC-2026-08-02-atomic-github-publication.md`
-- `docs/audit/AUDIT-2026-08-03-DOMAIN-DIAGNOSTICS.md`
-- `docs/releases/v0.3.2.md`
+- `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`
+- `docs/releases/v0.4.0.md`
 
 ## Acknowledgements
 

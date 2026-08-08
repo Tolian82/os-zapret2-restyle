@@ -109,6 +109,9 @@ weaken product behavior.
 `docs/decisions/`, `docs/DEVLOG.md`, `docs/devlog/`, `docs/ROADMAP.md`,
 `docs/REQUIREMENTS.md`, `docs/patches/`, and `docs/releases/`.
 
+Current stable-release preparation records:
+`docs/releases/v0.4.0.md` and `docs/devlog/2026-08-09-release-v0.4.0.md`.
+
 A dated file under `docs/decisions/` may be the primary authority for a focused decision.
 `docs/DECISIONS.md` remains the consolidated historical ledger; when old consolidated
 wording conflicts with a later active dated decision, the later decision controls and

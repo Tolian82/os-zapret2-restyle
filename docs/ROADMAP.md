@@ -180,5 +180,7 @@ Stable release preparation requires all release-selected live rows to PASS and n
 critical lifecycle/restoration defect. It does not require every unrelated regression
 row to be manually executed. `v0.4.0` has its selected Scenario-1 live gate PASS on `_27`.
 
-Corrective `_27` remains `VERSION=0.3.3` and uses `PLUGIN_REVISION=27`; the next release
-cycle changes `VERSION` to `0.4.0` and resets `PLUGIN_REVISION` to `1`.
+The active release cycle sets `VERSION=0.4.0` and resets `PLUGIN_REVISION=1`. After its
+PR/FreeBSD 15 checks pass, the exact verified merge must flow through the repository tag,
+Release, checksum and Pages/pkg publication pipeline. Adaptive-search `_28` starts only
+after that release cycle is complete.
