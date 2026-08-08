@@ -86,7 +86,7 @@ host="$1"
 type="$2"
 case "${MOCK_DNS_MODE:-valid}" in
     timeout)
-        sleep 3
+        sleep 16
         exit 0
         ;;
     command)
@@ -100,7 +100,10 @@ case "${MOCK_DNS_MODE:-valid}" in
         printf '%s. 60 IN %s %s\n' "${host}" "${type}" "${MOCK_DNS_VALUE:-203.0.113.99}"
         exit 0
         ;;
-    valid)
+    valid|slow-valid)
+        if [ "${MOCK_DNS_MODE:-valid}" = slow-valid ]; then
+            sleep 3
+        fi
         printf '%s\n' ';; QUESTION SECTION:'
         printf '%s. 60 IN %s %s\n' "${host}" "${type}" "${MOCK_DNS_VALUE:-203.0.113.99}"
         printf '%s\n' ';; ANSWER SECTION:'
@@ -120,6 +123,7 @@ PYTHONPATH="${ZAPRET_DIR}" "${PYTHON}" - "${MOCK_BIN}/io" "${MOCK_BIN}/sleepy" <
 import sys
 from strategy_lab_py import request
 
+assert request.DNS_TIMEOUT_SECONDS == 15
 poison = ''';; QUESTION SECTION:\npoison.example. 60 IN A 203.0.113.99\n;; AUTHORITY SECTION:\npoison.example. 60 IN A 203.0.113.98\n'''
 assert request.parse_drill_answers(poison, 'A') == []
 valid = poison + ''';; ANSWER SECTION:\nvalid.example. 60 IN A 203.0.113.10\nvalid.example. 60 IN AAAA 2001:db8::10\n;; AUTHORITY SECTION:\nvalid.example. 60 IN A 203.0.113.77\n'''
@@ -174,7 +178,7 @@ baseline_case()
     mode="$1"
     expected="$2"
     result_file="${WORK}/baseline-${mode}.json"
-    case "${mode}" in valid) MOCK_DNS_MODE=valid ;; parser) MOCK_DNS_MODE=parser ;; command) MOCK_DNS_MODE=command ;; timeout) MOCK_DNS_MODE=timeout ;; esac
+    case "${mode}" in valid) MOCK_DNS_MODE=valid ;; slow) MOCK_DNS_MODE=slow-valid ;; parser) MOCK_DNS_MODE=parser ;; command) MOCK_DNS_MODE=command ;; timeout) MOCK_DNS_MODE=timeout ;; esac
     MOCK_CURL_MODE=baseline-fail
     export MOCK_DNS_MODE MOCK_CURL_MODE
     set +e
@@ -190,6 +194,12 @@ jq -e '.target=="probe.example" and .target_type=="domain" and .dns_a=="PASS" an
     fail 'Python baseline changed target/type or public DNS contract'
 jq -e '.endpoints[0].dns_a.classification=="pass" and .endpoints[0].dns_a.execution.returncode==0' "${WORK}/baseline-evidence.json" >/dev/null ||
     fail 'valid DNS execution evidence is missing'
+
+slow_file=$(baseline_case slow 0)
+jq -e '.dns_a=="PASS"' "${slow_file}" >/dev/null ||
+    fail 'slow successful DNS response was rejected by the Stage 40 deadline'
+jq -e '.endpoints[0].dns_a.classification=="pass" and .endpoints[0].dns_a.execution.duration_ms>=2500 and .endpoints[0].dns_a.execution.timed_out==false' "${WORK}/baseline-evidence.json" >/dev/null ||
+    fail 'slow successful DNS execution evidence is missing'
 
 parser_file=$(baseline_case parser 2)
 jq -e '.target_type=="domain" and .dns_a=="FAIL" and .endpoints[0].transport=="dns-a"' "${parser_file}" >/dev/null ||

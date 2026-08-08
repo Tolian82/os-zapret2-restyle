@@ -27,8 +27,9 @@ sh -n "${ADAPTER}"
 sh -n "${WORKER}"
 
 PYTHONPATH="${ZAPRET_DIR}" "${PYTHON_BIN}" - <<'PY'
-from strategy_lab_py.orchestrator import terminal_message, terminal_report_status, terminal_state
+from strategy_lab_py.orchestrator import DEFAULT_LIMITS, terminal_message, terminal_report_status, terminal_state
 
+assert DEFAULT_LIMITS["STRATEGY_LAB_STAGE40_TIMEOUT"] == 20
 assert terminal_state("SUCCESS") == "completed"
 assert terminal_state("PARTIAL") == "completed"
 assert terminal_state("TIMEOUT") == "error"

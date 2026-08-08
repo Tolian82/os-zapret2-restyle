@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **FAILED ON `_25` — CORRECTIVE `_26` REQUIRED**
+Overall status: **FAILED ON `_26` — CORRECTIVE `_27` REQUIRED**
 
 This matrix is the final live-appliance gate for Strategy Lab. Source tests, GitHub CI,
 and FreeBSD package builds cannot substitute for evidence collected on the owner's
@@ -16,11 +16,11 @@ TEST RECORD
 - Latest test date/time: `2026-08-08`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.3.3_25.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_25.pkg`
-- Current corrective source candidate: `os-zapret2-restyle-0.3.3_26.pkg`
-- Current migration source candidate: `os-zapret2-restyle-0.3.3_26.pkg`
-- Latest owner-tested job: `job.c0oydv`
+- Latest published testing candidate: `os-zapret2-restyle-0.3.3_26.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_26.pkg`
+- Current corrective source candidate: `os-zapret2-restyle-0.3.3_27.pkg`
+- Current migration source candidate: `os-zapret2-restyle-0.3.3_27.pkg`
+- Latest owner-tested diagnostic job: `job.Cs5ryG`
 - WAN interface: `vtnet1`
 - Blocked-domain target: `rutracker.org`
 - Generic UDP target/port: `PENDING OWNER`
@@ -29,7 +29,7 @@ Architecture / ABI baseline evidence:
 `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`.
 
 Latest live evidence:
-`docs/verification/evidence/2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md`.
+`docs/verification/evidence/2026-08-08-v0.3.3_26-scenario-01-stage40-dns-deadline.md`.
 
 Previous migration-handoff evidence:
 `docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md`.
@@ -52,6 +52,10 @@ Key live progression:
 - `_17` corrected that hostlist traversal permission boundary and became the frozen shell-era handoff to the Python migration.
 - `_18` through `_24` completed the automated Python migration.
 - `_25` reconciled GUI/status transport behavior, was published as a testing prerelease and was installed for post-migration owner testing.
+- `_26` corrected Stage-50 candidate-local failure isolation, passed CI/package
+  qualification, was published as a testing prerelease and was installed for live retest.
+- `_26` live retesting exposed an earlier Stage-40 blocker: the Python DNS subprocess
+  deadline is shorter than intermittent valid local-Unbound response time.
 
 Historical `_17`, job `job.w0nXxQ`, ended with Stage 50 ERROR and Stage 90 PASS. Its
 candidate-runtime bundle was not collected, so the exact `_17` Stage-50 root cause remains
@@ -126,6 +130,52 @@ Focused regression:
 `scripts/test-strategy-lab-stage50-candidate-isolation.sh`.
 
 ==================================================
+POST-MIGRATION OWNER TEST — `_26`
+==================================================
+
+Owner-assisted `_26`, diagnostic job `job.Cs5ryG`, against `rutracker.org`:
+
+- Stage 40 ERROR — required A resolution failed;
+- `baseline-evidence.json` records `/usr/bin/drill rutracker.org A` as `timeout`;
+- subprocess duration was `2024 ms`, with `returncode:null`, `timed_out:true` and no
+  stdout/stderr before termination;
+- Stage 50–85 did not run because Stage 40 is a prerequisite gate;
+- Stage 99 completed as `PARTIAL`, preserving completed diagnostic results;
+- five additional Strategy Lab attempts stopped at the same Stage-40 prerequisite.
+
+Manual owner testing of `/usr/bin/drill rutracker.org A` against resolver `127.0.0.1`
+shows the same query can return immediately (captured at 33 ms) or intermittently take
+about 8–10 seconds before returning valid A answers.
+
+The `_26` change did not touch `request.py`/`probe.py`, so this is not loss of the `_21`
+ANSWER-section parsing correction. It is a newly proven deadline mismatch.
+
+The `_26` Stage-50 correction remains live-unverified because these runs do not reach
+Stage 50.
+
+==================================================
+CORRECTIVE `_27` SOURCE DIAGNOSIS
+==================================================
+
+`strategy_lab_py/request.py` gives DNS subprocesses 2 seconds. The Python orchestrator
+also gives the entire Stage-40 adapter only 5 seconds. A valid 8–10-second local-resolver
+response therefore cannot complete reliably under either current limit.
+
+Correct `_27` contract:
+
+- keep `/usr/bin/drill` and local OPNsense resolver semantics;
+- DNS subprocess deadline: 15 seconds;
+- enclosing Stage-40 operation limit: 20 seconds;
+- Standard overall job budget remains 150 seconds;
+- `timeout`, `command_error` and `parser_rejected` evidence remain distinct;
+- ANSWER-section-only A/AAAA parsing remains unchanged;
+- a delayed valid answer beyond the old two-second cutoff must pass;
+- an over-deadline subprocess must still terminate as timeout.
+
+The `PARTIAL` summary wording observed after the early `_26` stop is a separate logical
+presentation issue and is not part of `_27`.
+
+==================================================
 PYTHON MIGRATION OWNERSHIP
 ==================================================
 
@@ -185,7 +235,7 @@ SCENARIO MATRIX
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; Stage 90 restores RUNNING; no temporary residue | Latest: `2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md`; historical failed attempts remain under `docs/verification/evidence/` | **FAILED ON `_25` — `_26` STAGE-50 RETEST REQUIRED** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result is truthful; at least one verified profile or `NO_CANDIDATE`; Stage 90 restores RUNNING; no temporary residue | Latest: `2026-08-08-v0.3.3_26-scenario-01-stage40-dns-deadline.md`; historical failed attempts remain under `docs/verification/evidence/` | **FAILED ON `_26` — `_27` STAGE-40 RETEST REQUIRED** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Test completes while final service remains STOPPED; restoration evidence verified | `PENDING OWNER` | **BLOCKED BY #1** |
 | 3 | Extended TLS 1.2 and HTTP | Available protocol successes appear as complete replay-verified profiles; unavailable protocols explicitly skipped | `PENDING OWNER` | **BLOCKED BY #1** |
 | 4 | Extended QUIC | QUIC result endpoint-bound and replay-verified when capability exists; otherwise explicit skip reason | `PENDING OWNER` | **BLOCKED BY #1** |
@@ -208,15 +258,24 @@ SCENARIO MATRIX
 CONFIRMED DEFECTS / LIVE RECHECKS
 ==================================================
 
-- **Stage 50 aggregate abort on `_25`.** Root cause identified; corrective `_26` required.
-- **Immediate stale/new-job GUI error.** Still briefly observed on `_25`; open.
+- **Stage 40 DNS timeout on `_26`.** Root cause identified: the 2-second DNS subprocess
+  and 5-second stage envelope are shorter than an observed valid 8–10-second local
+  resolver response; corrective `_27` required.
+- **Stage 50 aggregate abort on `_25`.** Corrective `_26` source/CI/package qualification
+  is complete, but live closure remains pending because `_26` stops earlier at Stage 40.
+- **Immediate stale/new-job GUI error.** Not reproduced on `_26`, but retain as open until
+  a complete Scenario-1 run confirms behavior.
 - **Active `Strategy Lab returned no output.` message.** Patch-8 source correction exists;
   `_25` live run did not explicitly reproduce or close it.
 - **Visible 0%-until-terminal progress.** `_25` showed live persisted progress at 36%; treat
   as improved evidence but do not close the whole presentation row until Scenario 1 runs
   through later stages.
 - **Terminal reload/state presentation.** Live recheck pending.
-- **Patch-4 target/DNS corrections.** Source regressions pass; matrix closure pending.
+- **PARTIAL summary wording.** `_26` preserves diagnostics but reports that available
+  results were saved even though search never ran and no strategies exist; separate
+  presentation correction pending outside `_27`.
+- **Patch-4 target/DNS corrections.** Parser/classification source regressions pass; `_27`
+  changes deadlines only and matrix closure remains pending.
 - **Patch-5 candidate fatal-log classification.** Source regressions pass; matrix closure pending.
 
 ==================================================
@@ -247,11 +306,11 @@ RELEASE GATE
 Stable release preparation and pkg-repository promotion remain blocked until every
 required live row is marked PASS by the owner and linked evidence is recorded.
 
-Corrective `_26` is not published merely because source exists. It must first pass the
+Corrective `_27` is not published merely because source exists. It must first pass the
 normal latest-head CI and FreeBSD 15 package gate. Testing-prerelease publication requires
 separate explicit owner authorization under `docs/GITHUB_PUBLICATION.md`.
 
 There is no successful complete Strategy Lab live scenario PASS claim yet. The current
-live record does provide reusable PASS evidence for Stage 40, a functioning/intercepting
-candidate runtime, a working `seqovl` family during partial Stage 50, and Stage 90
-restoration on `_25`.
+live record preserves the prior `_25` evidence for a functioning/intercepting candidate
+runtime, a working `seqovl` family during partial Stage 50, and Stage 90 restoration. The
+latest `_26` record supersedes Stage 40 as the active blocker and requires `_27` retest.

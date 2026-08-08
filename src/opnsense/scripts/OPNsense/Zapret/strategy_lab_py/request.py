@@ -16,6 +16,7 @@ EX_OK = 0
 EX_USAGE = 64
 EX_SOFTWARE = 70
 EX_TIMEOUT = 124
+DNS_TIMEOUT_SECONDS = 15
 
 DEFAULT_BINARIES = {
     "curl": "/usr/local/bin/curl",
@@ -225,7 +226,10 @@ def classify_dns(result: CommandResult, record_type: str) -> DnsResult:
 
 
 def dns_request(host: str, record_type: str) -> DnsResult:
-    return classify_dns(run_command([binary("drill"), host, record_type], timeout=2), record_type)
+    return classify_dns(
+        run_command([binary("drill"), host, record_type], timeout=DNS_TIMEOUT_SECONDS),
+        record_type,
+    )
 
 
 def _curl_command(
@@ -358,7 +362,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if op == "dns":
         if len(args) != 4:
             raise UsageError("request dns requires HOST TYPE OUTPUT")
-        result = run_command([binary("drill"), args[1], args[2]], timeout=2)
+        result = run_command(
+            [binary("drill"), args[1], args[2]], timeout=DNS_TIMEOUT_SECONDS
+        )
         return _write_result(args[3], result)
     if op == "parse-dns":
         if len(args) != 3:

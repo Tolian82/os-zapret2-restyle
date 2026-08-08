@@ -28,14 +28,14 @@ QUICK CONTEXT
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
-Latest published testing prerelease: `v0.3.3_25` / `os-zapret2-restyle-0.3.3_25.pkg`
-Latest owner-tested testing candidate: `v0.3.3_25` / `os-zapret2-restyle-0.3.3_25.pkg`
+Latest published testing prerelease: `v0.3.3_26` / `os-zapret2-restyle-0.3.3_26.pkg`
+Latest owner-tested testing candidate: `v0.3.3_26` / `os-zapret2-restyle-0.3.3_26.pkg`
 Current source line: `VERSION=0.3.3`
-Current package revision: `PLUGIN_REVISION=26`
-Current corrective source candidate: `os-zapret2-restyle-0.3.3_26.pkg`
-Current migration source candidate: `os-zapret2-restyle-0.3.3_26.pkg`
+Current package revision: `PLUGIN_REVISION=27`
+Current corrective source candidate: `os-zapret2-restyle-0.3.3_27.pkg`
+Current migration source candidate: `os-zapret2-restyle-0.3.3_27.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Strategy Lab post-migration live correction — Stage-50 candidate isolation**
+Current phase: **Strategy Lab post-migration live correction — Stage-40 DNS deadline**
 Stable release: **BLOCKED ON POST-MIGRATION LIVE MATRIX**
 
 Current primary Strategy Lab authority:
@@ -53,7 +53,7 @@ Current live-gate authority:
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
 Current live evidence:
-`docs/verification/evidence/2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md`.
+`docs/verification/evidence/2026-08-08-v0.3.3_26-scenario-01-stage40-dns-deadline.md`.
 
 ==================================================
 MIGRATION OWNERSHIP
@@ -75,34 +75,26 @@ state remain deliberate shell boundaries. Corrective work must not reopen automa
 ownership without a new architectural decision.
 
 ==================================================
-LATEST OWNER LIVE RESULT — `_25`
+LATEST OWNER LIVE RESULT — `_26`
 ==================================================
 
 Owner-assisted Standard Strategy Lab test:
 
-- candidate: `v0.3.3_25` / `os-zapret2-restyle-0.3.3_25.pkg`;
+- candidate: `v0.3.3_26` / `os-zapret2-restyle-0.3.3_26.pkg`;
 - target: `rutracker.org`;
-- job: `job.c0oydv`;
-- initial Zapret2 state: RUNNING;
-- 00 PASS;
-- 10 PASS;
-- 20 PASS;
-- 30 PASS — IPv4 available; IPv6 unavailable; QUIC/IPv4 closed;
-- 40 PASS — DNS OK; direct TLS 1.3 connection not established;
-- 50 ERROR — visible message `Temporary candidate runtime failed internally.`;
-- 60–85 SKIPPED;
-- 90 PASS — temporary state removed and initial RUNNING Zapret2 restored healthy;
-- 99 ERROR.
+- diagnostic job: `job.Cs5ryG`;
+- Stage 40 ERROR — required A lookup timed out;
+- `baseline-evidence.json` classifies the lookup as `timeout` with `duration_ms=2024`,
+  `returncode:null`, empty stdout/stderr and command `/usr/bin/drill rutracker.org A`;
+- Stage 50–85 did not run because Stage 40 is a prerequisite gate;
+- Stage 99 completed as `PARTIAL` because completed diagnostic results were preserved;
+- the owner repeated the test five more times and every run stopped at Stage 40;
+- a manual `/usr/bin/drill rutracker.org A` can answer in about 33 ms but intermittently
+  takes roughly 8–10 seconds against local resolver `127.0.0.1`.
 
-Patch-8 GUI/status live observations:
-
-- the owner still saw an immediate visible `Статус: ОШИБКА` briefly after pressing Run;
-- a later active screenshot correctly showed `Статус: ВЫПОЛНЯЕТСЯ`;
-- persisted progress was visible at 36% / Stage 40 instead of remaining at 0% until terminal;
-- no unsupported closure is claimed for GUI observations that were not explicitly exercised.
-
-The previous shell-era `_17` result remains historical evidence, but `_25` is now the
-latest published and owner-tested live boundary.
+The `_26` source did not change `request.py` or `probe.py`; it only corrected Stage-50
+candidate aggregation. The new failure is therefore a newly demonstrated deadline defect,
+not a regression of the Patch-4 ANSWER-section parser correction.
 
 ==================================================
 STAGE-50 LIVE DIAGNOSIS
@@ -165,37 +157,70 @@ Focused regression:
 Existing Python candidate/family regression remains authoritative:
 `scripts/test-strategy-lab-python-candidate-family.sh`.
 
+`_26` passed source/CI/package qualification, was published as a testing prerelease and
+installed by the owner. Its Stage-50 correction remains live-unverified because the `_26`
+Scenario-1 runs now stop earlier at Stage 40.
+
+==================================================
+CORRECTIVE `_27`
+==================================================
+
+Corrective `_27` has one logical purpose: **accept slow but valid local DNS resolution at
+the mandatory Stage-40 baseline while preserving bounded execution**.
+
+Implementation contract:
+
+- keep `/usr/bin/drill` and the local OPNsense resolver path;
+- increase the Python-owned DNS subprocess deadline from 2 to 15 seconds;
+- increase the enclosing Stage-40 operation limit from 5 to 20 seconds so the outer stage
+  watchdog cannot kill a still-valid DNS request before its own deadline;
+- keep DNS timeout, command failure and parser rejection as distinct structured evidence;
+- keep ANSWER-section-only A/AAAA parsing unchanged;
+- keep the 150-second Standard overall budget unchanged;
+- prove that a DNS answer arriving after the old 2-second deadline succeeds and that a
+  genuinely over-deadline request still terminates as timeout.
+
+Changing the `PARTIAL` GUI/result wording is explicitly outside `_27`; that is a separate
+logical presentation task.
+
 ==================================================
 CONFIRMED DEFECT BACKLOG
 ==================================================
 
 All owner-observed items remain open until replacement evidence closes them.
 
-1. **Scenario 1 fails on `_25` at Stage 50.** Corrective `_26` source addresses the
-   candidate-isolation defect; live retest required.
-2. **Immediate stale/new-job GUI error.** Still observed briefly on `_25`; root cause remains
-   open and must be rechecked after Stage 50 can progress further.
-3. **Active GUI no-output message.** Patch 8 separates transient reads from persisted state;
+1. **Scenario 1 fails on `_26` at Stage 40.** The Python DNS request deadline is 2 seconds
+   while the owner's local Unbound can validly answer after 8–10 seconds. Corrective `_27`
+   widens the DNS/stage envelope; live retest required.
+2. **Stage-50 candidate isolation.** Corrective `_26` source/CI/package qualification is
+   complete, but `_26` never reached Stage 50 during the latest live retest; live closure
+   remains pending behind `_27`.
+3. **Immediate stale/new-job GUI error.** The owner reported that the start error was not
+   reproduced on `_26`; retain as open until a complete Scenario-1 run confirms it.
+4. **Active GUI no-output message.** Patch 8 separates transient reads from persisted state;
    `_25` evidence did not explicitly reproduce or close this item.
-4. **GUI progress stuck at 0%.** `_25` showed live persisted progress at 36%; retain as
+5. **GUI progress stuck at 0%.** `_25` showed live persisted progress at 36%; retain as
    partially improved evidence until a complete Scenario-1 run confirms behavior through
    later stages.
-5. **Terminal reload/state presentation.** Live recheck still required.
-6. **Baseline target-type / DNS parser / DNS failure-class corrections from Patch 4.** Source
-   regressions pass; final live closure remains tied to the matrix.
-7. **Candidate fatal-log classification from Patch 5.** Source regressions pass; final live
+6. **PARTIAL summary wording/presentation.** `_26` Stage 99 says available results were
+   preserved even though search stages never ran and no strategies exist. The GUI exposes
+   the partial summary but no strategy list. Clarifying this is a separate logical task.
+7. **Terminal reload/state presentation.** Live recheck still required.
+8. **Baseline target-type / DNS parser / DNS failure-class corrections from Patch 4.** Source
+   regressions pass; `_27` preserves those semantics while changing only deadlines.
+9. **Candidate fatal-log classification from Patch 5.** Source regressions pass; final live
    closure remains tied to the matrix.
 
 ==================================================
 DELIVERY AND LIVE-GATE BOUNDARY
 ==================================================
 
-Corrective `_26` is a source candidate only until the normal delivery gates pass:
+Corrective `_27` is a source candidate only until the normal delivery gates pass:
 
 - `VERSION` remains `0.3.3`;
-- `PLUGIN_REVISION=26`;
-- candidate identity is `os-zapret2-restyle-0.3.3_26.pkg`;
-- focused Stage-50 candidate-isolation regression must pass;
+- `PLUGIN_REVISION=27`;
+- candidate identity is `os-zapret2-restyle-0.3.3_27.pkg`;
+- focused Python request/probe and orchestration deadline regressions must pass;
 - all Python migration continuity tests must pass;
 - complete Strategy Lab corrective matrix must pass;
 - repository CI/governance/hygiene must pass;
@@ -203,10 +228,10 @@ Corrective `_26` is a source candidate only until the normal delivery gates pass
 
 Testing-prerelease publication remains a separate operation requiring explicit owner
 authorization under `docs/GITHUB_PUBLICATION.md`. Do not create tag/prerelease/Release or
-publish a package merely because `_26` source/CI is complete.
+publish a package merely because `_27` source/CI is complete.
 
-After an authorized `_26` prerelease is installed, repeat Scenario 1 on `rutracker.org`.
-The expected next boundary is that Stage 50 completes all family entries without turning a
-single candidate-local failure into terminal ERROR, preserves the already proven `seqovl`
-family when applicable, and proceeds to Stage 60. Scenario 1 remains failed until the owner
-collects replacement live evidence.
+After an authorized `_27` prerelease is installed, repeat Scenario 1 on `rutracker.org`.
+Stage 40 must accept the owner's slow-but-valid DNS case and retain truthful failure
+classification when resolution genuinely exceeds the new bound. The same run must then
+retest `_26` candidate-local Stage-50 isolation and proceed to Stage 60 when screening can
+complete. Scenario 1 remains failed until the owner collects replacement live evidence.

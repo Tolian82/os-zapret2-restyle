@@ -495,9 +495,10 @@ Timeouts are enforced at three levels:
 2. Numbered stage timeout.
 3. Overall standard or extended job budget.
 
-Initial operation limits approved from the 2026-08-04 OPNsense measurements:
+Current operation limits. The Stage-40 DNS limit was widened by corrective `_27` after
+owner evidence showed valid local-Unbound answers taking 8–10 seconds:
 
-- DNS query: 2 seconds;
+- DNS query: 15 seconds;
 - IPv6 route/capability inspection: 1 second;
 - QUIC precheck: 2 seconds;
 - TCP connect: 2 seconds;
@@ -508,13 +509,13 @@ Initial operation limits approved from the 2026-08-04 OPNsense measurements:
 - normal Zapret2 stop stage: 10 seconds;
 - normal Zapret2 restore stage: 15 seconds.
 
-Initial stage budgets:
+Current stage budgets:
 
 - 00: 2 seconds;
 - 10: 3 seconds;
 - 20: 10 seconds;
 - 30: 6 seconds;
-- 40: 5 seconds;
+- 40: 20 seconds;
 - 50: 45 seconds;
 - 60: 60 seconds;
 - 70: 60 seconds;
