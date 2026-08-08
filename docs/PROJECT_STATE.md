@@ -29,10 +29,10 @@ Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
 Latest published testing prerelease: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
 Latest owner-tested testing candidate: `v0.3.3_17` / `os-zapret2-restyle-0.3.3_17.pkg`
 Current source line: `VERSION=0.3.3`
-Current package revision: `PLUGIN_REVISION=21`
-Current migration source candidate: `os-zapret2-restyle-0.3.3_21.pkg`
+Current package revision: `PLUGIN_REVISION=22`
+Current migration source candidate: `os-zapret2-restyle-0.3.3_22.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Strategy Lab Migration Patch 4 — Python finite request/probe execution and parsing**
+Current phase: **Strategy Lab Migration Patch 5 — Python candidate runtime and family screening**
 Stable release: **BLOCKED ON POST-MIGRATION LIVE MATRIX**
 
 Current primary Strategy Lab authority:
@@ -94,52 +94,53 @@ The inherited lifecycle lock fd 9 remains authoritative and is passed to adapter
 MIGRATION PATCH 4 REQUEST / PROBE OWNERSHIP
 ==================================================
 
-Migration Patch 4 moves finite subprocess execution and probe parsing to Python 3.13.
+Migration Patch 4 made Python 3.13 authoritative for bounded DNS/TLS/HTTP/TCP/QUIC-control
+subprocess execution and Stage 30/40 probe parsing.
 
-`strategy_lab_py/request.py` now owns bounded:
+`strategy_lab_py/request.py` owns finite request execution with command, return code,
+stdout, stderr, timeout/termination/signal and duration preserved separately.
+`strategy_lab_py/probe.py` owns Stage 30 network capability probing and Stage 40 clean
+baseline execution/parsing while preserving the public `network.json` and `baseline.json`
+contracts. DNS A/AAAA records are accepted only from the real `ANSWER SECTION`.
 
-- DNS A/AAAA requests;
-- TLS 1.3 / TLS 1.2 requests, including endpoint-bound `--resolve` probes;
-- HTTP requests;
-- TCP connectivity requests;
-- QUIC control requests;
-- IPv6 default-route checks.
+Shell request/probe files are compatibility adapters only. Patch 4 also corrected terminal
+publication ordering so circular eligibility is persisted before terminal state is visible.
 
-Every finite subprocess result keeps these dimensions separate:
+==================================================
+MIGRATION PATCH 5 CANDIDATE / FAMILY OWNERSHIP
+==================================================
 
-- exact command/arguments;
-- return code;
-- stdout;
-- stderr;
-- timeout flag;
-- termination kind and signal where applicable;
-- duration.
+Migration Patch 5 makes Python 3.13 authoritative for the standard TLS 1.3 Stage-50 path.
 
-`strategy_lab_py/probe.py` now owns Stage 30 network capability probing and Stage 40
-clean-baseline execution/parsing. Existing public `network.json` and `baseline.json`
-contracts remain unchanged. Rich diagnostic evidence is written separately as
-`network-evidence.json` and `baseline-evidence.json`.
+`strategy_lab_py/candidate.py` owns:
 
-DNS A/AAAA parsing now accepts records only from the actual `ANSWER SECTION`; QUESTION,
-AUTHORITY and unrelated text cannot satisfy a successful parse. Candidate IPv4 binding
-resolution reuses the same Python first-answer parser, but candidate lifecycle/family
-screening remains shell-owned for Patch 5.
+- endpoint-to-IPv4 binding via the Patch-4 DNS parser;
+- standard candidate runtime sequencing;
+- readiness qualification from process identity, divert socket and startup-log evidence;
+- two-stable-snapshot readiness convergence;
+- fatal startup-log classification;
+- endpoint-bound TLS 1.3/TCP checks;
+- remote-IP identity and IPFW before/after interception evidence;
+- standard candidate success/error evidence and mandatory cleanup request.
 
-The old shell-global `_strategy_lab_type` baseline collision no longer exists in the
-production Stage-40 path because target type is local Python state. Timeout, subprocess
-failure and parser rejection are preserved as distinct structured classifications.
+`strategy_lab_py/family.py` owns:
 
-Shell `strategy_lab/request.sh`, `extended_request.sh` and
-`strategy_lab_probe_runner.sh` are compatibility adapters only for the finite operations.
-They do not regain subprocess/parsing ownership.
+- the existing ordered seven-family TLS 1.3 catalog;
+- one-candidate-at-a-time isolation;
+- per-candidate timeout and cancellation;
+- `family.json` completed/accepted/rejected aggregation.
 
-During this cutover CI exposed a terminal publication race: a result reader could observe
-terminal SUCCESS before circular eligibility had been persisted. The correction preserves
-all Patch-3 terminal semantics and only changes publication order so eligibility is part
-of the terminal snapshot before `completed/error` becomes visible.
+`strategy_lab_candidate_adapter.sh` is the narrow shell boundary for audited FreeBSD
+mutations/observations only: WAN lookup, candidate files, reserved IPFW rules/counters,
+job-directory access, daemon launch/stop, process identity and divert-socket snapshots.
+It does not choose readiness, candidate outcome, family order or timeout policy.
 
-Patch 4 does **not** move candidate process/rule/port lifecycle, family screening,
-expansion/stability, extended-protocol orchestration or final shortlist ownership.
+`strategy_lab_candidate_runner.sh` and `strategy_lab_family_runner.sh` are Python launch
+boundaries. The candidate runner preserves its historical 3–7 argument/default contract.
+The old shell `strategy_lab_family_screen()` owner is retired and has no fallback.
+
+Expansion/stability and TLS 1.2/HTTP/QUIC/UDP extended orchestration remain shell-owned
+until Migration Patch 6.
 
 ==================================================
 FINAL SHELL-ERA LIVE BOUNDARY
@@ -191,7 +192,7 @@ migration does not substitute for live/UI evidence.
 6. **DNS answer parser weakness.** Patch 4 replaces the old parser with ANSWER-section-aware Python parsing; live closure is still pending where applicable.
 7. **DNS diagnostics flatten failure classes.** Patch 4 adds distinct structured timeout/command/parser evidence; live closure is still pending where applicable.
 8. **Terminal reload/state presentation defect.** Retained terminal state can be presented incorrectly on Diagnostics reopen.
-9. **Candidate fatal-log classification defect.** Readiness evidence can report a clean log while fatal runtime text exists.
+9. **Candidate fatal-log classification defect.** Patch 5 replaces the standard-candidate readiness mechanism and adds focused fatal-log rejection regression; live closure remains pending.
 
 ==================================================
 PYTHON MIGRATION PATCH SEQUENCE
@@ -205,11 +206,11 @@ Patch 2 — Python automated-job state, progress, and structured persistence: **
 
 Patch 3 — Python stage machine, budgets, cancellation, and finalization: **COMPLETE / MERGED AS `_20`**.
 
-Patch 4 — Python finite request/probe execution and parsing: **CURRENT `_21` SOURCE CHANGE**.
+Patch 4 — Python finite request/probe execution and parsing: **COMPLETE / MERGED AS `_21`**.
 
-Patch 5 — Python candidate runtime and family screening: **NEXT AFTER PATCH 4 QUALIFICATION**.
+Patch 5 — Python candidate runtime and family screening: **CURRENT `_22` SOURCE CHANGE**.
 
-Patch 6 — Python expansion, stability, and extended protocol orchestration.
+Patch 6 — Python expansion, stability, and extended protocol orchestration: **NEXT AFTER PATCH 5 QUALIFICATION**.
 
 Patch 7 — Python result/shortlist completion and obsolete shell-orchestration retirement.
 
@@ -219,19 +220,19 @@ Patch 8 — GUI/status reconciliation and post-migration live gate.
 DELIVERY AND PACKAGE BOUNDARY
 ==================================================
 
-Migration Patch 4 is an installable package-source change:
+Migration Patch 5 is an installable package-source change:
 
 - `VERSION` remains `0.3.3`;
-- `PLUGIN_REVISION` advances to `21`;
-- current source candidate is `os-zapret2-restyle-0.3.3_21.pkg`;
+- `PLUGIN_REVISION` advances to `22`;
+- current source candidate is `os-zapret2-restyle-0.3.3_22.pkg`;
 - latest published/owner-tested live evidence remains `_17`;
-- `_21` does not resume the owner-assisted live matrix because candidate/family and later
-  search responsibilities have not yet reached the designated Python parity gate.
+- `_22` does not resume the owner-assisted live matrix because Patch 6–8 responsibilities
+  have not yet reached the designated Python parity gate.
 
-The `_21` source must pass Python foundation/state/orchestration/request-probe tests, the
-complete corrective matrix, full repository CI, and FreeBSD 15 package/content/manifest
-verification before squash merge. Testing-prerelease publication remains a separate
-operation requiring explicit publication authority.
+The `_22` source must pass Python foundation/state/orchestration/request-probe/candidate-
+family tests, the complete corrective matrix, full repository CI, and FreeBSD 15
+package/content/manifest verification before squash merge. Testing-prerelease publication
+remains a separate operation requiring explicit publication authority.
 
 Stable release and pkg-repository promotion remain blocked until the Python path reaches
 functional parity and the owner-assisted live matrix passes.
@@ -240,15 +241,15 @@ functional parity and the owner-assisted live matrix passes.
 NEXT ACTION
 ==================================================
 
-Complete Migration Patch 4 qualification on `_21`:
+Complete Migration Patch 5 qualification on `_22`:
 
-1. focused Python finite request/probe and DNS-parser regression;
-2. Python foundation/state/orchestration compatibility checks;
+1. focused Python candidate/runtime/readiness/family regression;
+2. Python foundation/state/orchestration/request-probe compatibility checks;
 3. canonical Strategy Lab corrective matrix;
 4. full repository CI;
-5. FreeBSD 15 Python 3.13 request/probe test and package/content/manifest verification;
+5. FreeBSD 15 Python 3.13 candidate/family test and package/content/manifest verification;
 6. squash merge only from the successfully validated latest head.
 
-After Patch 4 is merged, begin **Migration Patch 5 only**: move candidate runtime and
-family screening to Python while preserving audited runtime/firewall/lifecycle behavior.
-Expansion/stability and extended-protocol orchestration remain Patch 6.
+After Patch 5 is merged, begin **Migration Patch 6 only**: move parameter expansion,
+stability/replay, and extended-protocol orchestration to Python. Final result/shortlist
+retirement remains Patch 7 and GUI/status reconciliation remains Patch 8.

@@ -1,21 +1,25 @@
 #!/bin/sh
 SCRIPT_DIR="${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}"
 MODULE_DIR="${MODULE_DIR:-${SCRIPT_DIR}/strategy_lab}"
+PYTHON_LAUNCHER="${STRATEGY_LAB_PYTHON_LAUNCHER:-${SCRIPT_DIR}/strategy_lab_python_launcher.sh}"
 set -eu
-umask 022
-for module in common target request extended_request result firewall runtime readiness interception extended_runtime candidate extended_candidate
-do
-    module_path="${MODULE_DIR}/${module}.sh"
-    [ -r "${module_path}" ] || { echo "ERROR: required Strategy Lab candidate module is missing: ${module_path}" >&2; exit 1; }
-    . "${module_path}"
-done
-strategy_lab_require_jq
-JOB_ID="${1:-}"; ENDPOINTS_FILE="${2:-}"; RESULT_FILE="${3:-}"
-CANDIDATE_ID="${4:-smoke-multisplit}"; CANDIDATE_FAMILY="${5:-multisplit}"
-STRATEGY_FILE="${6:-${MODULE_DIR}/catalog/tls13/01-multisplit.args}"; USE_HOSTLIST="${7:-1}"
-strategy_lab_job_id_valid "${JOB_ID}" || exit 64
-[ -r "${ENDPOINTS_FILE}" ] && [ -r "${STRATEGY_FILE}" ] && [ -n "${RESULT_FILE}" ] || exit 64
-candidate_runner_cleanup(){ strategy_lab_candidate_cleanup "${JOB_ID}" || true; }
-trap candidate_runner_cleanup EXIT HUP INT TERM
-strategy_lab_run_candidate "${JOB_ID}" "${ENDPOINTS_FILE}" "${RESULT_FILE}" "${CANDIDATE_ID}" "${CANDIDATE_FAMILY}" "${STRATEGY_FILE}" "${USE_HOSTLIST}"
-strategy_lab_candidate_attach_runtime_evidence "${JOB_ID}" "${RESULT_FILE}"
+[ "$#" -ge 3 ] && [ "$#" -le 7 ] || exit 64
+[ -x "${PYTHON_LAUNCHER}" ] || exit 69
+JOB_ID="$1"
+ENDPOINTS_FILE="$2"
+RESULT_FILE="$3"
+CANDIDATE_ID="${4:-smoke-multisplit}"
+CANDIDATE_FAMILY="${5:-multisplit}"
+STRATEGY_FILE="${6:-${MODULE_DIR}/catalog/tls13/01-multisplit.args}"
+USE_HOSTLIST="${7:-1}"
+set +e
+"${PYTHON_LAUNCHER}" candidate run \
+    "${JOB_ID}" "${ENDPOINTS_FILE}" "${RESULT_FILE}" \
+    "${CANDIDATE_ID}" "${CANDIDATE_FAMILY}" "${STRATEGY_FILE}" "${USE_HOSTLIST}"
+status=$?
+set -e
+[ "${status}" -eq 0 ] || exit "${status}"
+if [ -r "${RESULT_FILE}" ] && grep -Eq '"error":[[:space:]]*true' "${RESULT_FILE}"; then
+    exit 1
+fi
+exit 0

@@ -3,6 +3,7 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 READINESS_UNDER_TEST="${READINESS_UNDER_TEST:-${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab/readiness.sh}"
+CANDIDATE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate.py"
 ROOT=$(mktemp -d /tmp/strategy-lab-readiness.XXXXXX)
 trap 'rm -rf "${ROOT}"' EXIT HUP INT TERM
 
@@ -26,6 +27,8 @@ strategy_lab_atomic_write() { cat > "$1"; }
 
 . "${READINESS_UNDER_TEST}"
 
+# Shell readiness remains a compatibility/system helper for QUIC/UDP and later
+# extended protocol paths until Migration Patch 6.
 mkdir -p "$(strategy_lab_candidate_runtime_dir job.test)"
 : > "$(strategy_lab_candidate_log_file job.test)"
 strategy_lab_candidate_readiness_write job.test true
@@ -49,8 +52,24 @@ if strategy_lab_candidate_readiness_write job.test true; then
 fi
 "${STRATEGY_LAB_JQ}" -e '.ready==false and .log_clean==false' "${READINESS}" >/dev/null
 
+# Migration Patch 5 moves standard TLS13 readiness ownership to Python. It must
+# require process identity + divert socket + clean log for two stable snapshots,
+# persist readiness evidence, and reject classified fatal log text.
+grep -Fq 'def _readiness(job_id: str)' "${CANDIDATE_PY}"
+grep -Fq 'identity = bool(snapshot.get("process_identity"))' "${CANDIDATE_PY}"
+grep -Fq 'socket_ready = bool(snapshot.get("socket_ready"))' "${CANDIDATE_PY}"
+grep -Fq 'log_clean = not fatal' "${CANDIDATE_PY}"
+grep -Fq 'if identity and socket_ready and log_clean:' "${CANDIDATE_PY}"
+grep -Fq 'ready = stable >= 2' "${CANDIDATE_PY}"
+grep -Fq '_atomic_json(output, last)' "${CANDIDATE_PY}"
+grep -Fq 'fatal = _fatal_reason(log_text)' "${CANDIDATE_PY}"
+grep -Fq 'runtime_evidence = _readiness(job_id)' "${CANDIDATE_PY}"
+grep -Fq '"runtime": runtime_evidence' "${CANDIDATE_PY}"
+grep -Fq 'candidate run' "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_runner.sh"
+
+# Protocol candidate paths scheduled for Patch 6 intentionally retain the
+# existing shell readiness evidence contract for now.
 for runner in \
-    strategy_lab_candidate_runner.sh \
     strategy_lab_quic_candidate_runner.sh \
     strategy_lab_udp_candidate_runner.sh
 do
@@ -59,4 +78,4 @@ do
     grep -Fq 'strategy_lab_candidate_attach_runtime_evidence' "${file}"
 done
 
-echo 'PASS: candidate results require persisted executable, divert socket, startup log, and stability evidence'
+echo 'PASS: standard candidate readiness is Python-owned while remaining protocol candidates retain audited shell readiness until Patch 6'
