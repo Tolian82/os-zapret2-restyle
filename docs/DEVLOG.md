@@ -1408,3 +1408,32 @@ coverage, synchronized current documentation authority, and closed the Strategy 
 corrective source series. Package metadata remains `0.3.2_24`; the next gate is the
 consolidated owner-assisted OPNsense verification matrix. Detailed record:
 `docs/devlog/DEVLOG-2026-08-05-REPOSITORY-HYGIENE.md`.
+
+==================================================
+2026-08-08 — ADAPTIVE NATIVE-ZAPRET2 SEARCH DESIGN
+==================================================
+
+Completed a documentation-only redesign of the next Strategy Lab search phase after the
+Python migration:
+
+- removed family acceptance as a target-architecture hard gate;
+- defined Python `CandidateSpec` and job-scoped installed `ResourceInventory`;
+- defined BLOB-free, built-in, inline and installed external resource classes;
+- removed fixed `-d10` and QUIC candidate search from the approved target;
+- preserved the fixed IPv4 UDP/443 QUIC precheck;
+- defined native/owner strategy golden reachability cases;
+- separated cheap discovery from fail-fast 3/3 and cold long-GET finalist validation;
+- set normal early stop to two to three strong candidates;
+- recorded timeout telemetry and deadline-containment requirements;
+- defined A/B/C cold/warm runtime experiments without preselecting a winner.
+
+Detailed architecture:
+`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`.
+
+Experiment plan:
+`docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
+
+Decision:
+`docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md`.
+
+No runtime/source code or package metadata changed. Planned source handoff is `_28`–`_33`.

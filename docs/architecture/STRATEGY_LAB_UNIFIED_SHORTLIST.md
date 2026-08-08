@@ -6,9 +6,14 @@ Stage 85 is the single final publication gate for verified Strategy Lab profiles
 Migration Patch 7 makes `strategy_lab_py/result.py` the authoritative automated Stage-85
 publisher.
 
-Standard mode considers only stable TLS 1.3 candidates. Extended mode additionally
-considers the confirmed working candidate, when present, from TLS 1.2, HTTP, QUIC, and
-configured generic UDP results produced by Stage 80.
+The 2026-08-08 adaptive-search decision amends search selection without changing Python
+ownership. The current `_27` source still contains the original QUIC/five-item-compatible
+logic; `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` defines the approved target.
+
+Standard mode considers stable TLS 1.3 candidates. Extended mode additionally considers
+confirmed working candidates, when present, from TLS 1.2, HTTP and configured generic UDP
+results produced by Stage 80. QUIC remains only the fixed IPv4 UDP/443 precheck in the
+adaptive target and does not publish a bypass profile.
 
 ## Deterministic selection
 
@@ -17,16 +22,16 @@ All source candidates receive these ranks:
 1. TLS 1.3;
 2. TLS 1.2;
 3. HTTP;
-4. QUIC;
-5. configured UDP.
+4. configured UDP.
 
 Within a protocol, candidates are ordered by profile line count, character count, and
 stable candidate ID. Duplicate protocol/port/strategy combinations are removed.
 
 After exact replay verification:
 
-- Standard mode publishes up to five TLS 1.3 profiles;
-- Extended mode publishes the best verified profile for each available protocol, up to five items;
+- Standard adaptive search normally stops after two to three strong TLS 1.3 profiles;
+- Extended mode may add the best verified requested non-QUIC protocol profiles without
+  forcing the primary search to fill an arbitrary five-item quota;
 - the first item is the recommendation, so a verified TLS 1.3 result remains preferred when available.
 
 Every source is replayed exactly three times using the complete user-ready profile through
@@ -40,9 +45,13 @@ separate `circular_items` array and `circular_count` containing only the best th
 replay-verified TLS 1.3 candidates. Legacy shortlist files without these fields remain
 readable as TLS 1.3-only historical results.
 
-Extended TLS 1.2, HTTP, QUIC, and UDP profiles are never injected into the current TLS
+Extended TLS 1.2, HTTP, and UDP profiles are never injected into the current TLS
 circular runtime. Private circular session state remains shell-owned and must not mutate
 the parent automated shortlist.
+
+The current circular eligibility/count contract is deliberately separate from the new
+two-to-three primary-search early-stop rule. Circular must not cause adaptive discovery to
+manufacture extra winners merely to satisfy its existing three-to-five input shape.
 
 ## UDP boundary
 

@@ -26,6 +26,30 @@ The first patch is documentation only and records the complete approved design b
 source implementation begins.
 
 ==================================================
+SUPERSESSION NOTICE — 2026-08-08
+==================================================
+
+This file records the original Strategy Lab decision and is retained as engineering
+history. It is **partially superseded**:
+
+- `docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md` supersedes item 14's
+  family-first/accepted-family-only search rule;
+- item 6 remains active for one Strategy Lab **job**, but its one-candidate-process
+  interpretation is reopened for the A/B/C cold/warm experiment; deterministic candidate
+  isolation remains mandatory;
+- item 15 is superseded for the QUIC candidate-search branch; the fixed IPv4 UDP/443 QUIC
+  precheck remains diagnostic evidence only;
+- warm-worker/dispatcher/source-port/parallel-probe mechanisms are hypotheses until the
+  dedicated experiment plan passes;
+- the strict serial GitHub delivery rule below was already superseded by
+  `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md` and current
+  `docs/GITHUB_PUBLICATION.md`.
+
+Lifecycle safety, cancellation, exact restoration, saved Traffic Strategy immutability,
+stage numbering and the fixed QUIC precheck itself remain active unless a later decision
+explicitly changes them.
+
+==================================================
 APPROVED PRODUCT BEHAVIOR
 ==================================================
 
@@ -75,6 +99,10 @@ The precheck is fixed:
 A failed IPv4 precheck excludes QUIC/IPv6 and every QUIC strategy branch. The runtime
 algorithm does not add output interpretation, OpenSSL capability probing, or local
 firewall-rule investigation around this decision.
+
+2026-08-08 amendment: retain the fixed IPv4 UDP/443 precheck itself, but do not open a
+Strategy Lab QUIC candidate-search branch on PASS or FAIL. The quoted branch-exclusion
+behavior above is historical implementation context only.
 
 ==================================================
 PATCH DELIVERY DECISION
@@ -149,4 +177,4 @@ AFFECTED DOCUMENTS
 - later code-patch documentation as listed in the specialist architecture
 
 Status:
-Active
+Partially superseded; see the 2026-08-08 search decision and 2026-08-06 GitHub decision.

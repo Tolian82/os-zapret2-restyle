@@ -2345,3 +2345,72 @@ Accepted on 2026-08-05. Tracked backup/merge/patch/transport artifacts are forbi
 historical records that can be mistaken for current behavior require explicit status
 banners, CI enforces the contract, and remote steady state is `main` plus preserved
 `recovery/base`. Full rationale: `docs/decisions/DEC-2026-08-05-repository-artifact-hygiene.md`.
+
+==================================================
+2026-08-08 — ADAPTIVE NATIVE-ZAPRET2 STRATEGY LAB SEARCH
+==================================================
+
+Decision:
+
+Replace the original family-first/accepted-family-only Strategy Lab search target with an
+adaptive native-Zapret2 search architecture owned by Python. Stage-50 results become
+ranking evidence rather than a hard Stage-60 allowlist. Introduce an explicit
+`CandidateSpec`, job-scoped installed `ResourceInventory`, four BLOB resource classes,
+candidate-defined optional output ranges, a golden native-Zapret2 reachability corpus,
+fixed search-epoch endpoint comparison, two-level discovery/final validation, fail-fast
+3/3 stability and a normal two-to-three-winner early stop.
+
+Keep the main search budget on IPv4/TCP/TLS. IPv6 remains capability-gated and lower
+priority. QUIC keeps only the existing fixed IPv4 UDP/443 capability/precheck; do not
+expand a QUIC bypass-strategy search branch.
+
+Do not decide the temporary dvtws2 execution model from theory. Compare cold Model A,
+multiple warm-worker Model B and compatible warm-bucket/dispatcher Model C on OPNsense.
+Controlled source-port dispatch, common Lua preload, lazy buckets and true parallel
+candidate probing remain hypotheses until measured. Any warm discovery winner remains
+cold-reference verifiable.
+
+Reopen all timeout constants for telemetry-driven review and require
+`operation <= candidate <= stage <= job` containment.
+
+Reason:
+
+The Python migration preserved deliberate first-generation simplifications that can hide
+working native Zapret2 combinations and repeat process/resource startup for every
+candidate. Current Zapret2 semantics support BLOB-free/built-in/inline/file-backed Lua
+strategies and startup-time resource initialization, while ordered first-match profiles
+mean `--new` alone cannot select an arbitrary preloaded candidate. Search reachability and
+runtime acceleration therefore need separate, evidence-driven designs.
+
+Consequences:
+
+- old family acceptance cannot permanently eliminate a search branch;
+- fixed `--out-range=-d10` is removed from the target architecture;
+- external `.bin` resources are optional rather than structurally required;
+- classic zapret/nfqws1 strategy syntax is not used as search or translation input;
+- upstream Zapret2 `blockcheck2` may inform methodology but is not imported as shell
+  orchestration;
+- source implementation is split into `_28`–`_33`;
+- A/B/C runtime selection is deferred until the dedicated experiment evidence exists;
+- current `_27` executable behavior remains unchanged by this documentation-only
+  decision.
+
+Affected documents:
+
+- `docs/INDEX.md`
+- `docs/PROJECT_STATE.md`
+- `docs/ARCHITECTURE.md`
+- `docs/ROADMAP.md`
+- `docs/REQUIREMENTS.md`
+- `docs/architecture/STRATEGY_LAB.md`
+- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`
+- `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`
+- `docs/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md`
+- `docs/architecture/STRATEGY_LAB_UNIFIED_SHORTLIST.md`
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`
+- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`
+- `docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md`
+- `docs/devlog/2026-08-08-strategy-lab-adaptive-search-design.md`
+
+Status:
+Active design decision; source implementation pending.

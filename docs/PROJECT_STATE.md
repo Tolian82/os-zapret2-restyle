@@ -44,6 +44,13 @@ Current primary Strategy Lab authority:
 Current migration decision:
 `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
 
+Approved next search architecture:
+`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`.
+
+Active adaptive-search decision and experiment gate:
+`docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md` and
+`docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
+
 Current GitHub delivery authority:
 `docs/GITHUB_PUBLICATION.md`,
 `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`, and the other active dated
@@ -73,6 +80,49 @@ The automated Strategy Lab migration is complete through Patch 8:
 The shared lifecycle lock, audited FreeBSD system mutations and private circular-session
 state remain deliberate shell boundaries. Corrective work must not reopen automated Python
 ownership without a new architectural decision.
+
+==================================================
+APPROVED POST-MIGRATION SEARCH REDESIGN
+==================================================
+
+The owner approved the next Strategy Lab search architecture on 2026-08-08. It is a
+target design only; `_27` still executes the existing family-gated/cold candidate path.
+
+Approved direction:
+
+- native Zapret2 search semantics only; classic zapret strategy syntax is not a search
+  source;
+- Stage 50 becomes evidence rather than an allowlist for Stage 60;
+- Python gains explicit `CandidateSpec` and job-scoped installed-resource
+  `ResourceInventory`;
+- BLOB-free, built-in, inline and installed external BLOB cases are representable;
+- `--out-range` is candidate data rather than a fixed `-d10` invariant;
+- native/owner working strategies form a golden expressiveness/reachability corpus;
+- adaptive graph search prioritizes useful neighboring candidates without making a
+  family unreachable because its simple representative failed;
+- IPv4/TCP/TLS receives the primary budget; IPv6 stays capability-gated/lower priority;
+- QUIC retains only the fixed IPv4 UDP/443 capability/precheck and no longer has a
+  planned Strategy Lab candidate-search branch;
+- discovery and finalist deep validation are separated; 3/3 is fail-fast and finalists
+  receive real bounded long-GET evidence;
+- two to three strong stable candidates are the normal early-stop target;
+- all timeout constants receive telemetry-driven review.
+
+Warm candidate execution remains unresolved by design. Cold-per-candidate A, multiple
+warm-worker B and warm-bucket/dispatcher C are compared under the explicit experiment
+matrix before any one becomes production architecture. Coexisting warm workers and truly
+parallel candidate probes are separate questions.
+
+Detailed target architecture:
+`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`.
+
+Experiment/measurement authority:
+`docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
+
+Planned source sequence after this documentation record: `_28` hard-gate removal, `_29`
+CandidateSpec/ResourceInventory, `_30` native search graph/resources/golden corpus,
+`_31` adaptive planner/endpoint pinning/telemetry, `_32` timeout model, `_33`
+discovery/stability/deep validation.
 
 ==================================================
 LATEST OWNER LIVE RESULT — `_26`
@@ -215,7 +265,11 @@ All owner-observed items remain open until replacement evidence closes them.
 DELIVERY AND LIVE-GATE BOUNDARY
 ==================================================
 
-Corrective `_27` is a source candidate only until the normal delivery gates pass:
+Corrective `_27` source is squash-merged on `main` at
+`0420dbf0632dc823a2d9086974db365030596a61`. Its source/CI qualification is complete;
+owner-assisted replacement live evidence remains pending.
+
+Its delivery contract was:
 
 - `VERSION` remains `0.3.3`;
 - `PLUGIN_REVISION=27`;
@@ -226,9 +280,9 @@ Corrective `_27` is a source candidate only until the normal delivery gates pass
 - repository CI/governance/hygiene must pass;
 - FreeBSD 15 package build/inspection must pass.
 
-Testing-prerelease publication remains a separate operation requiring explicit owner
-authorization under `docs/GITHUB_PUBLICATION.md`. Do not create tag/prerelease/Release or
-publish a package merely because `_27` source/CI is complete.
+Testing-prerelease/package publication state remains distinct from source qualification
+and must be read from current GitHub Release state under `docs/GITHUB_PUBLICATION.md`
+before an installation instruction is issued.
 
 After an authorized `_27` prerelease is installed, repeat Scenario 1 on `rutracker.org`.
 Stage 40 must accept the owner's slow-but-valid DNS case and retain truthful failure
