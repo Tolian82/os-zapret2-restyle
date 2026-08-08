@@ -9,6 +9,7 @@ STALE_CONTRACT="${ROOT_DIR}/scripts/test-strategy-lab-stale-recovery-contract.sh
 CIRCULAR_OWNER="${ROOT_DIR}/scripts/test-strategy-lab-circular-owner.sh"
 CIRCULAR_CONTRACT="${ROOT_DIR}/scripts/test-strategy-lab-circular-recovery-contract.sh"
 SHORTLIST="${ROOT_DIR}/scripts/test-strategy-lab-unified-shortlist.sh"
+FINAL_RESULTS="${ROOT_DIR}/scripts/test-strategy-lab-python-final-results.sh"
 STATE_RACE="${ROOT_DIR}/scripts/test-strategy-lab-state-race.sh"
 
 fail()
@@ -19,7 +20,8 @@ fail()
 
 for file in \
     "${MATRIX}" "${E2E}" "${STALE}" "${STALE_CONTRACT}" \
-    "${CIRCULAR_OWNER}" "${CIRCULAR_CONTRACT}" "${SHORTLIST}" "${STATE_RACE}"
+    "${CIRCULAR_OWNER}" "${CIRCULAR_CONTRACT}" "${SHORTLIST}" \
+    "${FINAL_RESULTS}" "${STATE_RACE}"
 do
     [ -s "${file}" ] || fail "missing third-audit integration surface: ${file}"
     sh -n "${file}"
@@ -30,7 +32,7 @@ done
 grep -Fq "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy-lab-*.sh'" "${MATRIX}"
 for test_name in \
     stale-worker-recovery stale-recovery-contract circular-owner \
-    circular-recovery-contract unified-shortlist state-race
+    circular-recovery-contract unified-shortlist state-race python-final-results
 do
     if grep -Fq "test-strategy-lab-${test_name}.sh" "${MATRIX}"; then
         fail "${test_name} must be discovered directly by the canonical matrix, not separately delegated"
@@ -72,19 +74,24 @@ grep -Fq 'must contain the 180-second circular stale-recovery envelope' "${CIRCU
 grep -Fq 'private const BACKEND_TIMEOUT_SECONDS = 190;' "${CIRCULAR_CONTRACT}"
 grep -Fq 'timeout:200000' "${CIRCULAR_CONTRACT}"
 
-# SL3-003: Extended result may be multi-protocol while circular remains TLS 1.3-only.
-grep -Fq '.count==5' "${SHORTLIST}"
-grep -Fq '.circular_count==3' "${SHORTLIST}"
-grep -Fq '([.circular_items[].protocol]|unique)==["tls13"]' "${SHORTLIST}"
-grep -Fq '.circular_candidate_count==3' "${SHORTLIST}"
-grep -Fq "if grep -Eq 'pos=2|fake_quic|ipfrag'" "${SHORTLIST}"
+# SL3-003: Python publishes the multi-protocol final result while circular consumes only
+# the frozen replay-verified TLS 1.3 subset.
+grep -Fq 'assert shortlist["count"] == 5' "${FINAL_RESULTS}"
+grep -Fq 'assert shortlist["circular_count"] == 3' "${FINAL_RESULTS}"
+grep -Fq '["tls13","tls12","http","quic","udp"]' "${FINAL_RESULTS}"
+grep -Fq 'strategy_lab_circular_session_create job.test' "${SHORTLIST}"
+grep -Fq 'strategy_lab_circular_build_profile "${CIRCULAR_SESSION_ID}"' "${SHORTLIST}"
+grep -Fq 'private circular consumer mutated the parent Python-published shortlist' "${SHORTLIST}"
+grep -Fq 'private circular profile does not contain exactly three frozen TLS 1.3 strategies' "${SHORTLIST}"
 
-# SL3-004: cancel/skip/finalize state mutations share one Python lock/revision owner.
+# SL3-004: cancel/skip/finalize state mutations share one Python lock/revision owner after
+# the shell stage-machine retirement.
 grep -Fq 'strategy_lab_request_cancel job.race cancel &' "${STATE_RACE}"
-grep -Fq 'worker_skip_unfinished job.race skipped &' "${STATE_RACE}"
+grep -Fq 'strategy_lab_skip_unfinished job.race skipped &' "${STATE_RACE}"
 grep -Fq '.cancel_requested_at==$requested_at' "${STATE_RACE}"
 grep -Fq '.revision==28' "${STATE_RACE}"
-grep -Fq 'strategy_lab_skip_unfinished "$1" "$2"' "${STATE_RACE}"
+grep -Fq 'strategy_lab_state_python skip-unfinished' "${STATE_RACE}"
+grep -Fq '[ ! -e "${RETIRED_STAGE_MACHINE}" ]' "${STATE_RACE}"
 ! grep -Fq 'strategy_lab_state_transform' "${STATE_RACE}"
 
 # The integration contract binds coverage only; it must not recursively execute the matrix.
@@ -92,4 +99,4 @@ if grep -Eq '^[[:space:]]*sh[[:space:]]+"?\$\{MATRIX\}' "$0"; then
     fail 'third-audit integration contract recursively invokes the authoritative matrix'
 fi
 
-printf '%s\n' 'PASS: third-audit corrected paths are bound to one canonical matrix with integrated lifecycle, shortlist, Python-owned race persistence, timeout, immutability, and cleanup coverage'
+printf '%s\n' 'PASS: third-audit corrected paths are bound to one canonical matrix with integrated lifecycle, Python final shortlist, Python-owned race persistence, timeout, immutability, and cleanup coverage'
