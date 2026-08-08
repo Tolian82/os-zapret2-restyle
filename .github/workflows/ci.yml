@@ -129,6 +129,9 @@ jobs:
       - name: Test Strategy Lab Python orchestration
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-orchestration.sh
 
+      - name: Test Strategy Lab Python request and probe execution
+        run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-probes.sh
+
       - name: Test runtime profile normalization
         run: sh scripts/test-profile-normalizer.sh
 
@@ -198,6 +201,8 @@ jobs:
             src/etc/rc.syshook.d/stop/20-zapret \
             src/etc/inc/plugins.inc.d/zapret.inc \
             src/opnsense/service/conf/actions.d/actions_zapret.conf \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py \
             pkg/+PRE_INSTALL \
             pkg/+POST_INSTALL \
             pkg/+PRE_DEINSTALL \
@@ -209,6 +214,7 @@ jobs:
             scripts/test-strategy-lab-python-foundation.sh \
             scripts/test-strategy-lab-python-state-persistence.sh \
             scripts/test-strategy-lab-python-orchestration.sh \
+            scripts/test-strategy-lab-python-probes.sh \
             scripts/test-diagnostics-guidance-localization.sh \
             scripts/test-package-lifecycle-restart.sh \
             scripts/test-setup-release-selection.sh \
@@ -232,6 +238,7 @@ jobs:
             scripts/build-pkg.sh \
             scripts/test-strategy-lab-python-foundation.sh \
             scripts/test-strategy-lab-python-state-persistence.sh \
+            scripts/test-strategy-lab-python-probes.sh \
             scripts/test-release-trigger.sh \
             scripts/test-package-lifecycle-restart.sh \
             scripts/test-diagnostics-guidance-localization.sh \
@@ -299,6 +306,7 @@ jobs:
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-foundation.sh
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-state-persistence.sh
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-orchestration.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-probes.sh
             sh scripts/build-pkg.sh
 
       - name: Inspect built FreeBSD 15 package
@@ -316,6 +324,8 @@ jobs:
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/compat.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/state.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/orchestrator.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_stage_adapter.sh' "${contents}"
           tar -xOf dist/*.pkg +MANIFEST > "${manifest}"
           jq -e '.abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64" and .deps.python313.origin == "lang/python313"' "${manifest}" >/dev/null
