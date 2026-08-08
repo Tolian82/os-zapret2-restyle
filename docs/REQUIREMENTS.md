@@ -310,10 +310,10 @@ CURRENT IMPLEMENTATION AND VERIFICATION STATE
 
 Active product baseline:
 
-- project version line: `0.3.x`;
-- published release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`;
-- current source line: `0.3.3_27` on `main`; owner live Scenario 1 passes on published
-  testing prerelease `_27`;
+- project version line: `0.4.x`;
+- previous stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`;
+- current release-preparation source: `0.4.0_1`, promoted from the owner-tested `_27`
+  line; owner live Scenario 1 passes on published testing prerelease `_27`;
 - asynchronous Strategy Lab is the only strategy-finding path;
 - the initial delivery, corrective series and Python migration through Patch 8 are source
   complete; corrective `_27` is merged and has replacement owner live evidence;

@@ -8,42 +8,60 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [0.4.0] - 2026-08-09
+
 ### Added
 
-- Added the asynchronous Strategy Lab start/status/cancel/result job framework,
-  one-active-job state, atomic `status.json`, ordered `events.ndjson`, and dormant
-  Diagnostics progress/Stop shell.
-- Added a service-owned Strategy Lab lifecycle transaction with exact RUNNING/STOPPED
-  snapshot, normal-service stop, mandatory cleanup, exact restoration, and
-  `RESTORE_FAILED`.
-- Added domain and IPv4 target normalization, explicit required endpoints, and the
-  approved Telegram pair `telegram.org` / `web.telegram.org`.
-- Added concurrent IPv4, IPv6, and fixed QUIC/IPv4 capability probes.
-- Added clean TLS 1.3 domain baseline and direct TCP/443 IPv4 baseline.
-- Added independent stage-30 and stage-40 time budgets and structured `TIMEOUT` output.
-- Added focused mocked job, lifecycle, cancellation, target, precheck, baseline, and
-  timeout regression coverage.
+- Added Strategy Lab as an asynchronous Diagnostics workflow with start/status/cancel/
+  result handling, persisted progress/events, bounded stages, candidate isolation,
+  stability/replay validation, shortlist output, circular testing, and exact service
+  restoration.
+- Added Standard and Extended protocol evidence for TLS 1.3, TLS 1.2, HTTP, fixed QUIC
+  capability and validated generic UDP paths, with target normalization and IPv4/IPv6
+  capability handling.
+- Added Python 3.13 as the packaged automated Strategy Lab orchestration runtime while
+  retaining audited FreeBSD system mutations and private circular-session state behind
+  narrow shell boundaries.
+- Added comprehensive corrective, integration, repository-hygiene, FreeBSD 15 package,
+  migration-continuity, and live-regression contracts.
 
 ### Changed
 
-- Preserved exact cancellation output `SKIPPED — отменено` and
-  `SKIPPED — canseled`.
-- Made IPv6 eligible only when both a default route and control connection work.
-- Fixed QUIC control at `yandex.ru:443`, IPv4, ALPN `h3`, and two seconds; only command
-  exit status determines success.
-- Added `TARGET_ACCESSIBLE` early completion when every required endpoint works without
-  Zapret2.
-- Corrected the branch-hygiene regression test to accept future positive numeric package
-  revisions instead of requiring stale revision 3.
-- Kept candidate runtime, candidate firewall rules, strategy-family search, active GUI
-  migration, and legacy Blockcheck removal outside the completed patches.
+- Migrated automated Strategy Lab ownership from the first-generation shell worker to
+  structured Python state, stage orchestration, request/probe execution, candidate
+  search, replay, result construction, and Diagnostics status reconciliation.
+- Hardened cancellation, stage/terminal semantics, deadline containment, restoration,
+  candidate ownership, eligibility, persisted reload, retention, progress localization,
+  Settings coordination, and package/repository CI.
+- Approved the next native-Zapret2 adaptive-search architecture and A/B/C cold/warm
+  measurement plan without changing the v0.4.0 executable search behavior.
+- Replaced the blanket all-row stable-release live gate with release-specific risk-based
+  row selection while retaining the complete 18-row matrix as regression inventory.
+
+### Fixed
+
+- Corrected the post-migration Stage-50 aggregator so a candidate-local structured
+  failure rejects that candidate instead of aborting the family screen.
+- Increased the DNS request deadline and enclosing Stage-40 envelope so real FreeBSD
+  resolver latency no longer causes the observed false timeout at two seconds.
+
+### Verification
+
+- Source, focused regression, complete corrective-matrix and FreeBSD 15 package checks
+  qualify the `_27` source used for this release.
+- Owner live Scenario 1 on `v0.3.3_27` passed Stages 40, 50, 60, 70 and exact Stage-90
+  restoration; terminal `NO_CANDIDATE` was truthful.
+- Scenario 1 is the risk-selected mandatory live row for v0.4.0. Matrix rows 2–18 remain
+  pending regression coverage and are not claimed as PASS.
 
 ### Distribution
 
-- Kept `VERSION=0.3.2` and advanced `PLUGIN_REVISION` through Strategy Lab package
-  candidates `4`, `5`, and `6`.
-- Current package candidate: `os-zapret2-restyle-0.3.2_6.pkg`.
-- These patches do not create a project release or publish package assets.
+- Advanced `VERSION` from the `0.3.3` testing line to `0.4.0` and reset
+  `PLUGIN_REVISION` from `27` to `1`.
+- Release tag: `v0.4.0`.
+- Package: `os-zapret2-restyle-0.4.0_1.pkg` for `FreeBSD:15:amd64`.
 
 ## [0.3.2] - 2026-08-03
 

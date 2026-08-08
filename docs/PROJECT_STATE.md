@@ -27,16 +27,16 @@ QUICK CONTEXT
 
 Project: `os-zapret2-restyle`
 Primary branch: `main`
-Published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
+Previous published stable release/package: `v0.3.2` / `os-zapret2-restyle-0.3.2_1.pkg`
+Release being prepared: `v0.4.0` / `os-zapret2-restyle-0.4.0_1.pkg`
 Latest published testing prerelease: `v0.3.3_27` / `os-zapret2-restyle-0.3.3_27.pkg`
 Latest owner-tested testing candidate: `v0.3.3_27` / `os-zapret2-restyle-0.3.3_27.pkg`
-Current source line: `VERSION=0.3.3`
-Current package revision: `PLUGIN_REVISION=27`
-Current corrective source candidate: `os-zapret2-restyle-0.3.3_27.pkg`
-Current migration source candidate: `os-zapret2-restyle-0.3.3_27.pkg`
+Current source line: `VERSION=0.4.0`
+Current package revision: `PLUGIN_REVISION=1`
+Current release candidate: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **v0.4.0 release preparation after `_27` live closure**
-Stable release: **LIVE GATE SATISFIED FOR v0.4.0; RELEASE PIPELINE PENDING**
+Current phase: **v0.4.0 release-preparation PR/CI and automated publication**
+Stable release gate: **SATISFIED FOR v0.4.0; PUBLICATION VERIFICATION PENDING**
 
 Current primary Strategy Lab authority:
 `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
@@ -290,5 +290,6 @@ The owner installed `_27` and completed Scenario 1 on `rutracker.org`: Stage 40 
 Stage 50 PASS, Stages 60/70 PASS, Stage 90 PASS and truthful `NO_CANDIDATE`. Under the
 risk-based live-release policy, this is the mandatory v0.4.0 post-migration live row.
 Rows 2–18 remain useful regression backlog without blocking v0.4.0 solely because they
-are pending. The next action is the separately authorized `v0.4.0 / 0.4.0_1` release
-preparation cycle.
+are pending. The authorized `v0.4.0 / 0.4.0_1` release-preparation cycle is now active;
+the repository workflow must still verify tag placement, release assets, checksum and
+Pages/pkg publication before the release cycle is called complete.
