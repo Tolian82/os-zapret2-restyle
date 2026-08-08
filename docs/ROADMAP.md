@@ -23,10 +23,13 @@ Detailed rationale, current live logs, or completed implementation internals.
 CURRENT PRIORITY
 ==================================================
 
-Strategy Lab shell-era live debugging is paused at owner-tested `v0.3.3_17`.
+Strategy Lab migration is source-complete and owner-assisted post-migration testing is
+active. Latest owner-tested candidate `v0.3.3_26` fails at Stage 40 on a DNS deadline
+mismatch; corrective source candidate is `_27`.
 
 Current objective:
-**migrate appropriate Strategy Lab orchestration to Python incrementally, preserve the existing product/lifecycle contract, then resume the owner-assisted live matrix.**
+**qualify `_27`, repeat Scenario 1 through Stage 40/50, then continue the owner-assisted
+live matrix without starting unrelated Strategy Lab feature work.**
 
 Primary plan:
 `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
@@ -50,14 +53,18 @@ PYTHON MIGRATION SERIES
 ==================================================
 
 - [x] Patch 0 — documentation and handoff; freeze `_17` live boundary and confirmed defect backlog.
-- [ ] Patch 1 — verify OPNsense Python interpreter/dependency model; add minimal packaged Python foundation and compatibility launcher without product-behavior change.
-- [ ] Patch 2 — move job state, progress, events, and structured persistence to Python with exact JSON compatibility.
-- [ ] Patch 3 — move stage machine, budgets, cancellation, and terminal finalization to Python while retaining audited lifecycle adapters.
-- [ ] Patch 4 — move finite request/probe execution and DNS/TLS/HTTP parsing to Python; preserve return code/stdout/stderr/timeout separately and close the target-type/DNS diagnostic defect class by tests.
-- [ ] Patch 5 — move candidate runtime and Stage-50 family screening orchestration to Python; preserve explicit readiness, PID/divert, privilege, log, probe, and cleanup evidence.
-- [ ] Patch 6 — move expansion, stability, and extended-protocol orchestration to Python.
-- [ ] Patch 7 — complete Python result/shortlist ownership and remove obsolete shell orchestration/load-order surfaces.
-- [ ] Patch 8 — reconcile remaining GUI status/polling/progress/reload defects against the stable Python backend contract and prepare the designated live candidate.
+- [x] Patch 1 (`_18`) — Python 3.13 packaged foundation and compatibility launcher.
+- [x] Patch 2 (`_19`) — Python job state, progress, events, and structured persistence.
+- [x] Patch 3 (`_20`) — Python stage machine, budgets, cancellation, and finalization.
+- [x] Patch 4 (`_21`) — Python finite request/probe execution and Stage-30/40 parsing.
+- [x] Patch 5 (`_22`) — Python candidate runtime and Stage-50 family screening.
+- [x] Patch 6 (`_23`) — Python expansion, stability, and extended protocols.
+- [x] Patch 7 (`_24`) — Python final result/shortlist ownership and obsolete automated-shell retirement.
+- [x] Patch 8 (`_25`) — GUI/status reconciliation and post-migration live-gate handoff.
+- [x] Corrective `_26` — Stage-50 candidate-local failure isolation; source/CI/package
+  qualified and published, live verification still pending because `_26` now stops at Stage 40.
+- [ ] Corrective `_27` — widen DNS deadline to 15 seconds and enclosing Stage-40 envelope
+  to 20 seconds; qualify and repeat Scenario 1.
 
 If a listed patch exceeds one logical change, split it. Do not compress the migration into a monolithic rewrite.
 
@@ -69,15 +76,20 @@ CONFIRMED DEFECTS CARRIED INTO MIGRATION
 
 These remain open until replacement evidence closes them:
 
-- [ ] Stage 50 still returns `Temporary candidate runtime failed internally.` on `_17`; exact `_17` runtime root cause not yet established.
-- [ ] Fresh job can immediately display visible `ERROR` before terminal evidence.
+- [ ] `_26` repeatedly fails Stage 40 because the 2-second DNS deadline is shorter than
+  an observed valid 8–10-second local-Unbound response; `_27` correction pending live retest.
+- [ ] `_25` Stage-50 aggregate abort is corrected in `_26` source but still needs live
+  verification after `_27` allows Scenario 1 to reach Stage 50.
+- [ ] Fresh-job immediate `ERROR` was not reproduced on `_26`; retain until a complete
+  Scenario-1 run confirms behavior.
 - [ ] `Strategy Lab returned no output.` can appear during active work.
-- [ ] Visible GUI progress can remain at 0% while backend stages advance, then jump to 100%.
-- [ ] Shell-global target type can be corrupted from `domain` to `A`.
-- [ ] DNS parser can match question-section text rather than a proved answer record.
-- [ ] DNS failure diagnostics flatten timeout, command failure, and parser rejection.
+- [ ] Visible GUI progress improved on `_25` but needs complete-run confirmation.
+- [ ] Patch-4 target-type/parser/failure-class corrections pass source regressions but
+  still require final live closure.
 - [ ] Terminal reload/state presentation can resurrect retained terminal work incorrectly.
 - [ ] Candidate readiness fatal-log classification can miss fatal runtime text.
+- [ ] `_26` `PARTIAL` summary wording can imply usable saved strategies when Stage 40
+  prevented the search from running; handle as a separate presentation patch.
 
 Migration may remove the implementation mechanism behind an item, but the item is closed only by focused regression and required live/UI verification.
 
@@ -85,7 +97,8 @@ Migration may remove the implementation mechanism behind an item, but the item i
 POST-MIGRATION OWNER-ASSISTED VERIFICATION GATE
 ==================================================
 
-Resume `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` only after the Python path reaches the designated functional parity gate.
+The matrix is resumed. Scenario 1 currently selects `_27`; dependent rows remain blocked
+until Scenario 1 passes.
 
 Then verify:
 
@@ -112,4 +125,6 @@ RELEASE BOUNDARY
 
 Stable release preparation and pkg-repository promotion remain blocked until the post-migration live matrix passes.
 
-Documentation/governance-only migration planning changes do not change `VERSION` or `PLUGIN_REVISION` and do not require a new package. The first source migration patch begins from `VERSION=0.3.3`, `PLUGIN_REVISION=17` and advances package revision only when packaged source changes are made.
+Corrective `_27` remains `VERSION=0.3.3` and uses `PLUGIN_REVISION=27`. Testing-prerelease
+publication remains separate from source/CI qualification and stable release promotion
+remains blocked on the complete live matrix.

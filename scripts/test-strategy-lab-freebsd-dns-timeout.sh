@@ -21,7 +21,7 @@ mkdir -p "${MOCK_BIN}"
 cat > "${MOCK_BIN}/drill" <<'MOCK'
 #!/bin/sh
 if [ "${MOCK_DNS_SLEEP:-0}" = 1 ]; then
-    sleep 3
+    sleep 16
 fi
 printf '%s\n' ';; ANSWER SECTION:'
 printf '%s. 60 IN %s 203.0.113.10\n' "$1" "$2"

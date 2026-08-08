@@ -23,17 +23,18 @@ Chronological implementation logs or owner-assisted live evidence.
 STATUS
 ==================================================
 
-Migration Patches 0–7 are complete. Migration Patch 8 is current source candidate
-`v0.3.3_25` and owns GUI/status reconciliation plus preparation of the post-migration live
-gate.
+Migration Patches 0–8 are complete through `v0.3.3_25`. Corrective `_26` preserved the
+same ownership while isolating Stage-50 candidate-local failures. Owner retesting of
+published `_26` exposed a separate Stage-40 DNS deadline mismatch, and corrective `_27`
+widens only the bounded DNS/stage envelope.
 
 The automated backend migration is complete: Python is the single automated owner of job
 state, stage orchestration, requests/probes, candidate/search policy and final result
 assembly. Patch 8 must not move those responsibilities back into PHP, JavaScript or shell.
 
-The latest published and owner-tested live candidate remains `_17`. Source qualification of
-`_18` through `_25` does not supersede that live evidence. A post-migration candidate may
-be published only under the separate publication authority in `docs/GITHUB_PUBLICATION.md`.
+The latest published and owner-tested live candidate is `_26`; Scenario 1 remains failed
+at Stage 40 and selects `_27` for corrective source qualification. Candidate publication
+remains governed separately by `docs/GITHUB_PUBLICATION.md`.
 
 ==================================================
 OBJECTIVE
