@@ -13,6 +13,7 @@ LAUNCH="${MODULE_DIR}/launch.sh"
 WORKER="${ZAPRET_DIR}/strategy_lab_worker.sh"
 STAGE_ADAPTER="${ZAPRET_DIR}/strategy_lab_stage_adapter.sh"
 UDP_RUNNER="${ZAPRET_DIR}/strategy_lab_udp_runner.sh"
+EXTENDED_PY="${ZAPRET_DIR}/strategy_lab_py/extended.py"
 
 fail()
 {
@@ -21,7 +22,7 @@ fail()
 }
 
 for file in "${MODULE}" "${CONTROLLER}" "${VIEW}" "${ACTIONS}" \
-    "${LAUNCHER}" "${LAUNCH}" "${WORKER}" "${STAGE_ADAPTER}" "${UDP_RUNNER}"
+    "${LAUNCHER}" "${LAUNCH}" "${WORKER}" "${STAGE_ADAPTER}" "${UDP_RUNNER}" "${EXTENDED_PY}"
 do
     [ -s "${file}" ] || fail "missing UDP input contract file: ${file}"
 done
@@ -66,12 +67,14 @@ strategy_lab_udp_input_prepare "${job}" extended 5353 cGluZw== ||
 ' "$(strategy_lab_status_file "${job}")" >/dev/null ||
     fail 'public UDP request metadata is invalid'
 
+# The shell export helper remains a compatibility contract through Patch 7 even
+# though the Patch-6 production UDP runner no longer consumes it.
 strategy_lab_udp_input_export "${job}" ||
     fail 'valid job-local UDP input was not exported'
 [ "${STRATEGY_LAB_UDP_PORT}" = 5353 ] ||
     fail 'exported UDP port is invalid'
 [ "${STRATEGY_LAB_UDP_PAYLOAD_FILE}" = "$(strategy_lab_udp_payload_file "${job}")" ] ||
-    fail 'worker received a non-job-local payload path'
+    fail 'compatibility export returned a non-job-local payload path'
 
 strategy_lab_udp_input_cleanup "${job}"
 [ ! -e "$(strategy_lab_udp_port_file "${job}")" ] ||
@@ -132,15 +135,28 @@ grep -Fq 'case "$#" in' "${LAUNCH}" ||
 grep -Fq 'strategy_lab_udp_input_prepare' "${LAUNCH}" ||
     fail 'launcher does not create job-local UDP input'
 
-# Patch 3 moved UDP execution out of the production worker. The explicit stage adapter
-# selects the UDP runner, and the runner reloads/exports the private job-local input
-# immediately before executing the UDP algorithm.
+# Patch 6 moves production UDP input consumption into Python extended
+# orchestration. The stage adapter selects the thin UDP runner, Python reads the
+# private job-local metadata/payload directly, and terminal restoration still
+# owns cleanup of those private files.
 grep -Fq 'UDP_RUNNER="${UDP_RUNNER:-${SCRIPT_DIR}/strategy_lab_cancellable_udp_runner.sh}"' "${STAGE_ADAPTER}" ||
     fail 'stage adapter does not select the UDP runner'
-grep -Fq 'for module in common state udp udp_input' "${UDP_RUNNER}" ||
-    fail 'UDP runner does not load the job-local UDP input contract'
-grep -Fq 'strategy_lab_udp_input_export "${JOB_ID}"' "${UDP_RUNNER}" ||
-    fail 'UDP runner does not import job-local UDP input before execution'
+grep -Fq 'extended udp' "${UDP_RUNNER}" ||
+    fail 'UDP runner is not a thin Python extended launcher'
+! grep -Fq 'udp_input' "${UDP_RUNNER}" ||
+    fail 'UDP runner regained shell UDP input ownership after Patch 6'
+grep -Fq 'status_path = job_dir(job_id) / "status.json"' "${EXTENDED_PY}" ||
+    fail 'Python UDP orchestration does not read job-local status metadata'
+grep -Fq 'udp_request = status.get("udp_request", {})' "${EXTENDED_PY}" ||
+    fail 'Python UDP orchestration does not inspect validated UDP request metadata'
+grep -Fq 'port_file = job_dir(job_id) / "udp-port"' "${EXTENDED_PY}" ||
+    fail 'Python UDP orchestration does not read the private job-local UDP port'
+grep -Fq 'payload = job_dir(job_id) / "udp-payload.bin"' "${EXTENDED_PY}" ||
+    fail 'Python UDP orchestration does not read the private job-local UDP payload'
+grep -Fq '"STRATEGY_LAB_UDP_PORT": str(port)' "${EXTENDED_PY}" ||
+    fail 'Python UDP orchestration does not pass validated port to the unified candidate'
+grep -Fq '"STRATEGY_LAB_UDP_PAYLOAD_FILE": str(payload)' "${EXTENDED_PY}" ||
+    fail 'Python UDP orchestration does not pass the job-local payload to the unified candidate'
 ! grep -Fq 'udp_input' "${WORKER}" ||
     fail 'production worker regained UDP input ownership after the Python cutover'
 grep -Fq 'strategy_lab_udp_input_cleanup "${JOB_ID}"' "${STAGE_ADAPTER}" ||
@@ -155,4 +171,4 @@ sh -n "${WORKER}"
 sh -n "${STAGE_ADAPTER}"
 sh -n "${UDP_RUNNER}"
 
-echo 'PASS: validated generic UDP GUI/API input stays private job-local state, is reloaded by the UDP stage runner, and is always cleaned'
+echo 'PASS: validated generic UDP GUI/API input stays private job-local state, is consumed by Python extended orchestration, and is always cleaned'
