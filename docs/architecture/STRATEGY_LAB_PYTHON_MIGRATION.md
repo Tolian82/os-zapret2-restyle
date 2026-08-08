@@ -23,24 +23,25 @@ Chronological implementation results or final live evidence.
 STATUS
 ==================================================
 
-Migration Patch 0 is complete. Migration Patch 1 is complete and merged as source
-candidate `v0.3.3_18`. Migration Patch 2 is complete and merged as source candidate
-`v0.3.3_19`. Migration Patch 3 is implemented as source candidate `v0.3.3_20` and is
-subject to the normal PR/CI/FreeBSD 15 qualification gate.
+Migration Patch 0 is complete. Patch 1 is merged as `_18`, Patch 2 as `_19`, and Patch 3
+as `_20`. Migration Patch 4 is the current source candidate `v0.3.3_21` and is subject to
+the normal Ready-PR / corrective-CI / FreeBSD-15 qualification gate.
 
 The stable outer production boundary remains compatible: `zapret_service.sh` launches
-`strategy_lab_worker.sh`. Patch 3 makes that worker a thin launcher into Python
-`orchestrate JOB_ID`. Python now owns the numbered stage machine, wall-clock budgets,
-cancellation orchestration, and terminal finalization. Stage-specific FreeBSD/OPNsense
-and still-unmigrated search operations remain behind one explicit shell stage adapter.
+`strategy_lab_worker.sh`, which is a thin launcher into Python `orchestrate JOB_ID`.
+Python owns numbered-stage order, wall-clock budgets, cancellation and terminal policy.
+Patch 4 additionally makes Python the finite request/probe executor and parser. Candidate
+runtime/family policy and later search algorithms remain behind explicit shell adapters
+until their designated patches.
 
 ==================================================
 OBJECTIVE
 ==================================================
 
-Move the Strategy Lab responsibilities that require structured state, reliable subprocess handling, explicit scoping, parsing, cancellation, and deterministic error classification from large sourced POSIX-shell composition into Python.
-
-Do not rewrite unrelated plugin code.
+Move Strategy Lab responsibilities that require structured state, reliable subprocess
+handling, explicit scoping, parsing, cancellation, and deterministic error classification
+from large sourced POSIX-shell composition into Python without rewriting unrelated plugin
+code.
 
 The migration is successful when:
 
@@ -69,111 +70,76 @@ thin compatibility launcher
         ↓
 Python Strategy Lab orchestration
         ↓
-explicit system adapters / subprocesses
+Python finite request/probe execution + explicit system adapters
         ↓
 zapret_service.sh, ipfw, drill/curl, dvtws2, sockstat/ps and related FreeBSD tools
 ```
 
-PHP remains responsible for:
+PHP remains responsible for HTTP request validation, API response shape, OPNsense MVC
+integration, and configd invocation/bounded backend handling.
 
-- HTTP request validation;
-- API response shape;
-- OPNsense MVC integration;
-- configd invocation and bounded backend request handling.
+Python is the target owner for job state, persistence, stage progression/progress,
+budgets, cancellation/finalization, structured subprocess execution/parsing, candidate
+orchestration, family/search algorithms, result/shortlist assembly and diagnostic typing.
 
-Python is the target owner for:
-
-- job model and state transitions;
-- atomic status/event/result persistence;
-- stage progression and progress percentages;
-- stage and overall time budgets;
-- cancellation state and signal-aware finalization;
-- subprocess execution with explicit `returncode`, stdout, stderr, and timeout classification;
-- DNS/TLS/HTTP output parsing;
-- candidate runtime orchestration state;
-- family screening, parameter expansion, stability confirmation, extended protocol orchestration;
-- structured result generation and shortlist assembly;
-- error typing and diagnostic evidence.
-
-Shell may remain responsible for small, explicit boundaries where it is safer or clearer to reuse the existing audited OPNsense/FreeBSD lifecycle behavior, including:
-
-- public Zapret2 service lifecycle entry points;
-- shared lifecycle lock integration until intentionally migrated;
-- short `ipfw` mutation helpers;
-- process ownership/cleanup helpers that are already audited and easier to preserve than duplicate;
-- compatibility launch wrappers during migration;
-- stage-specific operations not yet migrated, provided they are invoked through a narrow
-  structured adapter and do not choose stage order, budgets, cancellation policy, or the
-  terminal outcome.
-
-A shell helper must have a narrow input/output contract. It must not retain hidden ownership of the Python job state machine.
+Shell may remain responsible for small explicit boundaries where preserving audited
+OPNsense/FreeBSD behavior is safer or clearer: public service lifecycle entry points,
+shared lifecycle locking until intentionally migrated, short `ipfw` mutation helpers,
+audited process cleanup helpers, compatibility wrappers, and stage-specific algorithms
+not yet migrated. Such helpers must not choose Python-owned stage order, budget,
+cancellation policy or terminal outcome.
 
 ==================================================
 PYTHON RUNTIME CONSTRAINT
 ==================================================
 
-Migration Patch 1 established the supported runtime contract for OPNsense 26.7 / FreeBSD 15:
+Migration Patch 1 established the supported OPNsense 26.7 / FreeBSD 15 contract:
 
-- OPNsense 26.7 build configuration selects FreeBSD 15.1 and `PYTHON=313`;
-- the supported interpreter family is Python 3.13;
-- OPNsense core owns the stable `/usr/local/bin/python3` compatibility link to its selected `python${CORE_PYTHON}` interpreter;
-- `os-zapret2-restyle` declares `python313` directly in `PLUGIN_DEPENDS`;
-- the custom package builder maps `python313` to package origin `lang/python313`;
-- `.py` sources under `src/opnsense/` are staged automatically into the package;
-- retained shell launchers remain executable through the existing package-mode handling.
+- OPNsense selects FreeBSD 15.1 and `PYTHON=313`;
+- supported interpreter family is Python 3.13;
+- OPNsense core owns `/usr/local/bin/python3`;
+- the plugin declares `python313` mapped to `lang/python313`;
+- `.py` sources under `src/opnsense/` are packaged automatically;
+- retained shell launchers remain executable.
 
-The production compatibility launcher defaults to `/usr/local/bin/python3`. The stock
-FreeBSD 15 CI VM uses `/usr/local/bin/python3.13` explicitly because it does not provide
-the OPNsense core compatibility link.
-
-No third-party `pip` dependency is approved. Python migration code remains standard
-library only unless a later independent architectural decision proves another dependency
-necessary.
+The production launcher defaults to `/usr/local/bin/python3`; FreeBSD 15 CI uses
+`/usr/local/bin/python3.13` explicitly. No third-party `pip` dependency is approved.
 
 ==================================================
 STATE AND DATA MODEL
 ==================================================
 
 Python represents migrated automated-job state explicitly rather than through reused
-shell-global mutation pipelines.
+shell-global mutation pipelines. Public JSON schema is the compatibility authority.
 
-Minimum structured concepts remain:
+Migration Patch 2 established:
 
-- Job identity and mode;
-- normalized target and immutable target type;
-- required endpoints;
-- lifecycle snapshot;
-- current stage;
-- progress snapshot;
-- cancellation state;
-- stage result;
-- subprocess/probe result;
-- candidate identity and runtime evidence;
-- family result;
-- shortlist/profile result;
-- restoration evidence;
-- terminal outcome.
+- `strategy_lab_py/state.py` as sole authoritative writer for automated-job `status.json`
+  and `events.ndjson`;
+- shell state helpers as adapters only;
+- Python ownership of persisted structured result/lifecycle fields;
+- private circular-session `state.json` remains shell-owned;
+- the Python automated-job writer rejects private circular-session paths.
 
-Migration Patch 2 established these concrete ownership rules:
+Migration Patch 3 established:
 
-- `strategy_lab_py/state.py` is the sole authoritative writer for automated-job `status.json` and `events.ndjson`;
-- the shell `strategy_lab/state.sh` exposes compatibility helper names only and delegates authoritative automated-job state/event mutations to Python;
-- shell algorithms may continue to produce stage-specific intermediate/result files until their designated migration patch, but embedding those results into automated-job state is Python-owned;
-- private circular-session `state.json` remains on its pre-existing shell writer until a separate cutover;
-- the Python automated-job state writer explicitly rejects private circular-session `state.json` paths;
-- public JSON schema is the compatibility authority, not the internal Python layout.
+- `strategy_lab_py/orchestrator.py` as production owner of stage order, Standard/Extended
+  budgets, cancellation orchestration and terminal policy;
+- thin `strategy_lab_worker.sh` launcher;
+- one-action `strategy_lab_stage_adapter.sh` without next-stage/final-outcome policy;
+- inherited lifecycle lock fd 9 preservation;
+- Python orchestrator PID as legitimate active-job owner.
 
-Migration Patch 3 adds these orchestration ownership rules:
+Migration Patch 4 establishes:
 
-- `strategy_lab_py/orchestrator.py` is the sole production owner of numbered-stage order,
-  Standard/Extended budget arbitration, cancellation orchestration, and terminal policy;
-- `strategy_lab_worker.sh` is a thin `orchestrate JOB_ID` launcher and does not source the
-  former shell control graph;
-- `strategy_lab_stage_adapter.sh` performs exactly one requested stage/system action and
-  returns a structured result; it does not choose the next stage or final outcome;
-- the shared lifecycle lock remains authoritative; inherited fd 9 is retained by Python
-  and passed to the adapter when present;
-- active-job process ownership recognizes the Python orchestrator PID.
+- `strategy_lab_py/request.py` as the finite subprocess owner for DNS, TLS 1.3, TLS 1.2,
+  HTTP, TCP, QUIC-control and route checks;
+- `strategy_lab_py/probe.py` as the Stage-30 network-capability and Stage-40 clean-baseline
+  execution/parsing owner;
+- shell `request.sh`, `extended_request.sh`, and `strategy_lab_probe_runner.sh` as thin
+  compatibility adapters;
+- candidate address selection reuses the Python DNS first-answer parser without moving
+  candidate runtime/family orchestration from Patch 5.
 
 ==================================================
 PERSISTENCE CONTRACT
@@ -185,237 +151,169 @@ Existing evidence locations remain stable during migration:
 - `/var/log/zapret2/strategy-lab/`;
 - per-job `status.json`;
 - `events.ndjson`;
-- stage/candidate evidence files required by the current result contracts.
+- stage/candidate evidence files required by current result contracts.
 
-Automated-job persistence invariants established by Patch 2 remain mandatory:
+Patch-2 persistence invariants remain mandatory: schema 2, unchanged public stage/progress/
+outcome fields, one revision increment per serialized mutation, Python state lock,
+same-directory fsync + atomic replacement, valid NDJSON, and no competing shell state
+transform. Private circular-session state keeps its separate shell contract.
 
-1. Schema remains `2` for automated `status.json`.
-2. Existing stage numbers, stage keys, progress percentages, state/outcome fields,
-   cancellation fields, and structured-result field names remain unchanged.
-3. Every serialized automated-job status mutation increments `revision` exactly once,
-   including a mutation whose semantic body becomes a terminal no-op.
-4. Concurrent automated-job state/event writers use the Python state lock; the removed
-   shell `strategy_lab_state_transform` is not a competing owner.
-5. JSON/NDJSON replacement uses a same-directory temporary file, flush, fsync, atomic
-   `os.replace`, and mode `0644`.
-6. Event writes are serialized through the same automated-job state ownership boundary
-   and remain valid line-delimited JSON.
-7. The GUI/API never needs to know which language owns automated-job persistence.
-8. Moving persisted progress or stage orchestration to Python does not itself prove the
-   owner-observed GUI progress defect is fixed; that remains live/UI gated.
-9. Private circular-session `state.json` keeps its existing shell persistence contract
-   until a separately scoped cutover.
+Patch 4 keeps public `network.json` and `baseline.json` unchanged and records richer
+subprocess diagnostics in `network-evidence.json` and `baseline-evidence.json`.
 
 ==================================================
 STAGE / BUDGET / CANCELLATION CONTRACT
 ==================================================
 
-Patch 3 production stage order is exactly:
+Patch 3 production stage order remains exactly:
 
 `00 -> 10 -> 20 -> 30 -> 40 -> 50 -> 60 -> 70 -> 80 -> 85 -> 90 -> 99`.
 
-Python owns the wall-clock budget model:
+Python owns the existing Standard 150-second budget, Extended +120-second budget,
+per-operation ceilings, Stage-80 shared deadline, typed timeout handling, cancellation
+process-group termination and mandatory Stage 90/99 convergence.
 
-- Standard overall search budget: 150 seconds by default;
-- Extended adds 120 seconds by default;
-- stage-specific operation ceilings remain compatible with the prior contract;
-- each operation receives the smaller of its operation ceiling and remaining absolute
-  deadline;
-- Extended stage 80 owns one shared deadline, recalculated before each sequential
-  protocol branch;
-- an exhausted deadline is a typed timeout, not a generic internal error.
+Terminal mapping remains unchanged: `ERROR`, `TIMEOUT`, `RESTORE_FAILED` => terminal
+`error` / report FAIL; `SUCCESS`, `NO_CANDIDATE`, `TARGET_ACCESSIBLE`, `PARTIAL` =>
+terminal `completed` / report PASS; restoration failure overrides prior outcome.
 
-Cancellation contract:
-
-- persisted cancel request and cancel marker remain compatible inputs;
-- HUP/INT/TERM also request cancellation;
-- Python terminates the active adapter process group with TERM then bounded KILL fallback;
-- cancellation preserves already persisted evidence and converges to `PARTIAL`;
-- cancellation never bypasses mandatory restoration/finalization.
-
-Terminal contract:
-
-- stage 90 is attempted on success, no candidate, prerequisite exit, timeout, cancel,
-  signal, or internal orchestration error;
-- stage 99 is the terminal stage after restoration;
-- `ERROR`, `TIMEOUT`, and `RESTORE_FAILED` map to terminal job state `error` / report FAIL;
-- `SUCCESS`, `NO_CANDIDATE`, `TARGET_ACCESSIBLE`, and `PARTIAL` map to terminal job state
-  `completed` / report PASS;
-- restoration failure overrides any preceding result to `RESTORE_FAILED`.
+Patch 4 does not change those semantics. A race exposed by the faster request/probe path
+is corrected only in publication ordering: Stage 99 report and circular eligibility are
+persisted before terminal `completed/error` state becomes visible, preventing readers from
+observing a terminal SUCCESS with stale `not_evaluated` eligibility.
 
 ==================================================
-SUBPROCESS CONTRACT
+SUBPROCESS / PARSER CONTRACT
 ==================================================
 
-Every external command execution must preserve independently:
+Every migrated external command execution preserves independently:
 
-- command/arguments;
-- start and completion/timeout state;
+- command and arguments;
+- completion/timeout state;
 - return code when one exists;
 - stdout;
 - stderr;
 - timeout classification;
-- cancellation/termination classification;
-- duration when needed for budget accounting.
+- termination/signal classification;
+- duration.
 
-Timeout must not be flattened into a generic code 1. Parser rejection must not be indistinguishable from command execution failure.
+Timeout is not flattened into generic code 1. Parser rejection is not indistinguishable
+from command execution failure.
 
-Patch 3 moves only high-level adapter process control. Patch 4 is the designated cutover
-for finite DNS/TLS/HTTP request execution and parsing with full structured subprocess
-evidence.
+Patch 4 implements this contract for finite Strategy Lab requests. DNS A/AAAA parsing:
+
+- accepts only records in the actual `ANSWER SECTION`;
+- validates returned addresses with Python `ipaddress`;
+- rejects QUESTION, AUTHORITY or unrelated `IN A`/`IN AAAA` text;
+- distinguishes `timeout`, `command_error`, `parser_rejected`, and `pass` evidence.
+
+Stage 30 and 40 preserve their existing public JSON while sidecar evidence keeps the full
+structured subprocess facts. Target type is local Python data, eliminating the old
+shell-global `_strategy_lab_type` collision from the production baseline path.
 
 ==================================================
 LIFECYCLE SAFETY
 ==================================================
 
-The following requirements are migration invariants:
+Migration invariants remain:
 
 1. Snapshot exact initial Zapret2 state before mutation.
-2. Use the existing shared lifecycle ownership boundary.
+2. Use the shared lifecycle ownership boundary.
 3. Stop normal runtime only through approved lifecycle paths.
 4. Run one temporary candidate at a time.
 5. Keep temporary firewall/divert ownership isolated.
 6. Clean candidate runtime before moving to the next candidate.
-7. Execute stage 90 on normal completion, timeout, cancel, signal, or internal error.
+7. Execute stage 90 on normal completion, timeout, cancel, signal or internal error.
 8. Restore initial RUNNING to healthy RUNNING and initial STOPPED to STOPPED.
-9. A restoration failure is never hidden by a successful test result.
+9. Never hide restoration failure behind a successful result.
 10. Saved Traffic Strategy remains immutable.
 
-Patch 3 does not duplicate lifecycle mutation logic in Python. Stage 10/20/90 delegate to
-the existing audited lifecycle shell boundary under the inherited shared lifecycle lock.
-Python owns when restoration is mandatory and how restoration evidence affects the final
-outcome. For private circular sessions, the shared lifecycle helper retains the existing
-circular-state writer until that separate state contract is explicitly migrated.
+Patch 4 does not duplicate lifecycle mutation logic in Python and does not move candidate
+runtime/firewall ownership early.
 
 ==================================================
 CONFIRMED DEFECTS TO CARRY FORWARD
 ==================================================
 
-The migration backlog is not reset. At the live handoff boundary:
+At the frozen `_17` live boundary:
 
-1. `_17` Standard `rutracker.org` still fails stage 50 with `Temporary candidate runtime failed internally.`; exact `_17` stage-50 root cause is not yet established from runtime logs.
-2. New job UI can show `Статус: ОШИБКА` immediately after Run before the new job has terminal evidence.
-3. Active GUI can show `Strategy Lab returned no output.` while backend work continues.
-4. Visible progress can remain 0% during active backend stages and jump directly to 100% at terminal result.
-5. Shell-global `_strategy_lab_type` corruption can change domain target type to `A`.
-6. DNS parser can accept `IN A`/`IN AAAA` text outside a proved answer record.
-7. DNS diagnostics flatten timeout, command failure, and parser rejection.
+1. Standard `rutracker.org` still fails Stage 50; exact `_17` root cause is not established.
+2. New-job GUI can show visible ERROR before terminal evidence.
+3. Active GUI can show `Strategy Lab returned no output.` while work continues.
+4. Visible progress can remain 0% until terminal.
+5. Shell-global target-type corruption existed in the shell baseline path.
+6. DNS parser could accept non-answer `IN A`/`IN AAAA` text.
+7. DNS diagnostics flattened timeout, command failure and parser rejection.
 8. Terminal reload/state presentation can resurrect retained terminal work incorrectly.
 9. Candidate readiness log classification can miss fatal runtime log evidence.
 
-Patches 2 and 3 eliminate two classes of competing shell ownership, but they do not
-close owner-observed defects automatically. Each backlog item remains open until focused
-replacement tests and any required live/UI verification close it.
+Patch 4 replaces the source mechanisms behind items 5–7 and adds focused regressions, but
+live/UI closure is not claimed from source changes alone. All owner-observed items remain
+open until the required evidence closes them.
 
 ==================================================
 MIGRATION PATCH SERIES
 ==================================================
 
-Patch 0 — documentation and handoff: **COMPLETE**
+Patch 0 — documentation/handoff: **COMPLETE**.
 
-- freeze `v0.3.3_17` live boundary;
-- record bug backlog;
-- approve Python/PHP/shell responsibilities;
-- prepare next-topic entry point.
+Patch 1 — Python platform and compatibility foundation: **COMPLETE / MERGED AS `_18`**.
 
-Patch 1 — Python platform and compatibility foundation: **COMPLETE / MERGED AS `_18`**
+Patch 2 — Python automated-job state, progress, and structured persistence: **COMPLETE / MERGED AS `_19`**.
 
-- verify target Python interpreter path/version/dependency model on OPNsense FreeBSD 15;
-- add the minimal packaged Python module/entry point;
-- add CI syntax/import execution on the verified interpreter family;
-- keep runtime behavior unchanged;
-- establish a thin compatibility launcher and deterministic error reporting if Python cannot start.
+Patch 3 — Python stage machine, budgets, cancellation, and finalization: **COMPLETE / MERGED AS `_20`**.
 
-Patch 2 — Python automated-job state, progress, and structured persistence: **COMPLETE / MERGED AS `_19`**
+Patch 4 — Python request/probe execution and parsing: **CURRENT `_21` SOURCE CHANGE**.
 
-- move authoritative automated-job status/event persistence helpers to Python;
-- preserve exact public JSON, progress, cancellation, and revision contracts;
-- route automated-job structured result/lifecycle/stale-recovery/eligibility fields through Python;
-- remove the migrated shell jq/temp/mv status writers;
-- keep private circular-session `state.json` on its existing writer until a separate cutover;
-- add atomic-write, concurrency, revision, progress, event, stale-recovery, and negative circular-state-path tests.
+- finite DNS/TLS/HTTP/TCP/QUIC-control execution moves to Python;
+- returncode/stdout/stderr/timeout/termination/duration remain distinct;
+- DNS parsing is answer-section-aware;
+- Stage 30/40 execution/parsing moves to Python with unchanged public JSON;
+- candidate DNS binding uses the same parser without moving candidate orchestration;
+- focused Linux and FreeBSD 15 regressions cover parser and diagnostic separation.
 
-Patch 3 — Python stage machine, budgets, cancellation, and finalization: **IMPLEMENTED IN `_20` SOURCE**
+Patch 5 — Python candidate runtime and family screening: **NEXT AFTER PATCH 4 QUALIFICATION**.
 
-- move numbered-stage orchestration and overall/stage budgets to Python;
-- model cancel, timeout, and terminal outcomes explicitly;
-- preserve mandatory stage 90 and stage 99 convergence;
-- retain lifecycle mutations behind existing audited adapters;
-- replace the production sourced shell control graph with a thin Python worker launch;
-- keep stage-specific request/probe/candidate/search algorithms outside this patch;
-- add focused stage-order/budget/cancel/timeout/restoration parity tests on Linux and FreeBSD 15.
+- move Stage-50 candidate/family orchestration and readiness state;
+- keep audited lifecycle/system helpers as explicit adapters where appropriate;
+- preserve startup, privilege-drop access, logs, PID/divert ownership, probe and cleanup evidence;
+- remove replaced Stage-50 shell orchestration after parity tests pass.
 
-Patch 4 — Python request/probe execution and parsing: **NEXT AFTER PATCH 3 QUALIFICATION**
+Patch 6 — Python expansion, stability, and extended protocol orchestration.
 
-- move DNS/TLS/HTTP finite subprocess execution;
-- preserve returncode/stdout/stderr/timeout separately;
-- implement answer-section-aware DNS parsing;
-- eliminate target-type variable collision in the new state model;
-- add focused regressions for the confirmed DNS/diagnostic backlog.
+Patch 7 — Python result/shortlist completion and shell-orchestration retirement.
 
-Patch 5 — Python candidate runtime and family screening
+Patch 8 — GUI/status reconciliation and post-migration live gate.
 
-- move stage-50 candidate/family orchestration and readiness state;
-- keep audited system/lifecycle helpers as explicit adapters where appropriate;
-- make candidate startup, privilege-drop access, logs, PID ownership, divert readiness, probe result, and cleanup distinct evidence;
-- remove the replaced shell stage-50 orchestration after parity tests pass.
-
-Patch 6 — Python expansion, stability, and extended protocol orchestration
-
-- move stages 60, 70, and 80 high-level search algorithms;
-- preserve ordered sequential strategy ownership and protocol gates;
-- keep complete profile/replay contracts unchanged.
-
-Patch 7 — Python result/shortlist completion and shell-orchestration retirement
-
-- complete Python result/shortlist ownership;
-- remove remaining obsolete sourced shell worker modules and load-order surfaces;
-- retain only approved small adapters;
-- run the full corrective matrix against the Python path.
-
-Patch 8 — GUI/status reconciliation and post-migration live gate
-
-- close remaining GUI polling/stale-error/no-output/progress/reload defects against the now-stable backend contract;
-- publish the designated testing candidate;
-- resume Scenario 1 and then the remaining owner-assisted OPNsense matrix;
-- close backlog items only from evidence.
-
-Patch numbering may be split further when one item becomes more than one logical change. It must not be compressed into a monolithic rewrite.
+Patch numbering may be split further when one item becomes more than one logical change;
+it must not be compressed into a monolithic rewrite.
 
 ==================================================
 TEST STRATEGY
 ==================================================
 
-Every migration patch must include focused automated coverage for the responsibility it moves.
+Every migration patch includes focused coverage for the responsibility it moves.
 
-Patch 1 remains protected by the Python foundation test.
+Patch 1 remains protected by the Python foundation test. Patch 2 remains protected by
+state/revision/progress/event/atomicity/concurrency tests. Patch 3 remains protected by
+stage-order, budget, cancellation, timeout, restoration and terminal tests.
 
-Patch 2 remains protected by tests for schema-2 parity, revision/progress/event ownership,
-atomicity, concurrency, stale recovery, and circular-state rejection.
+Patch 4 additionally requires:
 
-Migration Patch 3 additionally requires:
-
-- Python 3.13 import and `py_compile` for `strategy_lab_py/orchestrator.py`;
-- exact stage-order parity and unchanged progress keys;
-- deterministic Standard and Extended absolute-budget tests;
-- stage-80 shared-deadline arbitration;
-- typed timeout convergence through stages 90 and 99;
-- active cancellation convergence through stages 90 and 99 with preserved cancel evidence;
-- restoration-failure override to `RESTORE_FAILED`;
-- proof that the production worker delegates to Python rather than loading the shell stage
-  machine/budget control graph;
+- Python 3.13 import and `py_compile` for `request.py`, `probe.py`, and compatibility dispatch;
+- subprocess stdout/stderr/returncode separation;
+- explicit timeout evidence distinct from command/parser failure;
+- DNS ANSWER-section positive and QUESTION/AUTHORITY negative cases;
+- exact public `network.json` and `baseline.json` parity fixtures;
+- candidate first-answer parser delegation without candidate-policy migration;
+- terminal eligibility-before-terminal-publication regression;
 - complete existing Strategy Lab corrective matrix;
-- FreeBSD 15 execution with `python313` and built-package presence of `orchestrator.py`
-  and the explicit stage adapter.
+- FreeBSD 15 execution with `python313`;
+- built-package presence of `request.py` and `probe.py`.
 
-Required principles:
-
-- old public fixtures remain compatibility tests where they express product behavior rather than shell implementation details;
-- new Python tests target migrated ownership directly without requiring real DPI traffic;
-- integration tests continue to exercise configd/API-compatible entry points;
-- FreeBSD-specific behavior remains represented by deterministic fixtures and FreeBSD 15 package CI;
-- no test requires an obsolete internal shell transform/control owner after its responsibility migrates;
-- a test proving old shell implementation detail may be retired only when an equivalent product/contract test protects the replacement.
+Old fixtures remain compatibility tests when they express product behavior rather than
+retired shell implementation details. No test may require an obsolete shell subprocess or
+parser owner after Patch 4 switches that responsibility.
 
 ==================================================
 CUTOVER RULE
@@ -427,11 +325,9 @@ For each responsibility:
 2. Run focused parity tests against required behavior.
 3. Switch the authoritative call path once.
 4. Verify there is only one owner of mutations/state/control policy.
-5. Remove obsolete shell implementation in the same logical migration scope when safe, or in the immediately following dedicated retirement patch if removal would make the scope too large.
+5. Remove obsolete shell implementation in the same logical scope when safe, or the immediately following dedicated retirement patch if necessary.
 
-Patch 1 stopped before an ownership switch. Patch 2 switched authoritative automated-job
-persistence to Python and removed competing state transforms. Patch 3 switches production
-numbered-stage/budget/cancellation/finalization ownership to Python: the outer
-`strategy_lab_worker.sh` boundary remains, but it is now a thin launcher and the shell
-stage adapter cannot choose orchestration policy. Private circular session state and
-stage-specific algorithms remain outside these cutovers until their designated patches.
+Patch 2 switched persistence; Patch 3 switched stage/budget/cancel/finalization ownership;
+Patch 4 switches finite request/probe execution and parsing. Private circular-session state
+and candidate/family/search algorithms remain outside these cutovers until their designated
+patches.

@@ -512,9 +512,9 @@ class Orchestrator:
         message = terminal_message(self.language, self.mode, outcome, canceled, count)
         self.current_stage = "99"
         self._update_stage("99", report_status, message)
-        state_persistence.update_job(
-            self.job_id, str(self.state_path), final_state, outcome, "99", canceled, message
-        )
+        # Circular eligibility belongs to the terminal snapshot. Calculate and
+        # persist it before publishing the terminal job state, otherwise result
+        # readers can observe completed SUCCESS with stale not_evaluated fields.
         try:
             self._run_adapter(
                 "eligibility",
@@ -526,6 +526,9 @@ class Orchestrator:
             )
         except Exception:
             pass
+        state_persistence.update_job(
+            self.job_id, str(self.state_path), final_state, outcome, "99", canceled, message
+        )
         try:
             self._run_adapter("clear-active", cancel_interruptible=False)
         except Exception:

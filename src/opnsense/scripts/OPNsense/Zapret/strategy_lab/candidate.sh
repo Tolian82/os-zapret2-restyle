@@ -21,13 +21,7 @@ strategy_lab_candidate_resolve_addresses()
         else
             _slcand_resolve_dns="${_slcand_resolve_workdir}/candidate-${_slcand_resolve_index}.a.log"
             strategy_lab_dns_request "${_slcand_resolve_endpoint}" A "${_slcand_resolve_dns}" || return 1
-            _slcand_resolve_selected=$(awk '
-                $0 ~ /[[:space:]]IN[[:space:]]+A[[:space:]]/ &&
-                $NF ~ /^[0-9]+(\.[0-9]+){3}$/ {
-                    print $NF
-                    exit
-                }
-            ' "${_slcand_resolve_dns}")
+            _slcand_resolve_selected=$(strategy_lab_dns_first_answer A "${_slcand_resolve_dns}") || return 1
         fi
         strategy_lab_ipv4_valid "${_slcand_resolve_selected}" || return 1
 
@@ -117,7 +111,7 @@ strategy_lab_candidate_run_probes()
     "${STRATEGY_LAB_JQ}" -s \
         --arg id "${_slcand_run_id}" \
         --arg family "${_slcand_run_family}" \
-        --rawfile strategy "${_slcand_run_strategy_file}" \
+        --rawfile strategy "${_slcand_strategy_file}" \
         '{id:$id,family:$family,strategy:$strategy,endpoints:.,all_pass:(length>0 and all(.status=="PASS"))}' \
         "$@" > "${_slcand_run_result}"
 }

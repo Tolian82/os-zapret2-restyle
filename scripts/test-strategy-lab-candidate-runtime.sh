@@ -61,7 +61,13 @@ SH
 cat > "${TMP}/bin/drill" <<'SH'
 #!/bin/sh
 host=$1
+type=${2:-A}
+printf '%s\n' ';; QUESTION SECTION:'
+printf '%s. 60 IN %s 198.51.100.99\n' "$host" "$type"
+printf '%s\n' ';; ANSWER SECTION:'
 printf '%s. 60 IN A 203.0.113.%s\n' "$host" "${MOCK_DRILL_OCTET:-10}"
+printf '%s\n' ';; AUTHORITY SECTION:'
+printf '%s. 60 IN A 198.51.100.98\n' "$host"
 SH
 cat > "${TMP}/bin/curl" <<'SH'
 #!/bin/sh
@@ -227,7 +233,7 @@ fi
 
 grep -q 'add 19100 divert 9989 tcp from me to 203.0.113.10 443' "${TMP}/ipfw.log"
 
-echo 'Strategy Lab candidate runtime success contract passed with post-drop hostlist access and private cleanup.'
+echo 'Strategy Lab candidate runtime success contract passed with Python answer-section DNS binding, post-drop hostlist access, and private cleanup.'
 
 : > "${TMP}/ipfw.state"
 : > "${TMP}/ipfw.log"
