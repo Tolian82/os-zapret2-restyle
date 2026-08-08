@@ -1,10 +1,7 @@
 #!/bin/sh
-SCRIPT_DIR="${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}"; MODULE_DIR="${MODULE_DIR:-${SCRIPT_DIR}/strategy_lab}"
+SCRIPT_DIR="${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}"
+PYTHON_LAUNCHER="${STRATEGY_LAB_PYTHON_LAUNCHER:-${SCRIPT_DIR}/strategy_lab_python_launcher.sh}"
 set -eu
-for module in common state udp udp_input; do path="${MODULE_DIR}/${module}.sh"; [ -r "${path}" ] || exit 1; . "${path}"; done
-strategy_lab_require_jq
-JOB_ID="$1"; ENDPOINTS_FILE="$2"; RESULT_FILE="$3"
-strategy_lab_job_id_valid "${JOB_ID}" || exit 64
-[ -r "${ENDPOINTS_FILE}" ] || exit 64
-strategy_lab_udp_input_export "${JOB_ID}" || exit 1
-strategy_lab_udp_run "${JOB_ID}" "${ENDPOINTS_FILE}" "${RESULT_FILE}"
+[ "$#" -eq 3 ] || exit 64
+[ -x "${PYTHON_LAUNCHER}" ] || exit 69
+exec "${PYTHON_LAUNCHER}" extended udp "$1" "$2" "$3"
