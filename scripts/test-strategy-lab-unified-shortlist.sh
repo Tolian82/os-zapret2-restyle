@@ -7,7 +7,7 @@ MODULE_DIR="${SCRIPT_DIR}/strategy_lab"
 PYTHON=${STRATEGY_LAB_TEST_PYTHON:-python3.13}
 TMP=$(mktemp -d /tmp/strategy-lab-unified.XXXXXX)
 trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
-mkdir -p "${TMP}/jobs/job.test" "${TMP}/circular/sessions"
+mkdir -p "${TMP}/jobs/job.test" "${TMP}/circular/sessions" "${TMP}/lua"
 
 fail(){ echo "FAIL: $*" >&2; exit 1; }
 
@@ -20,6 +20,7 @@ export STRATEGY_LAB_RUN_DIR="${TMP}"
 export STRATEGY_LAB_JOBS_DIR="${TMP}/jobs"
 export STRATEGY_LAB_CIRCULAR_DIR="${TMP}/circular"
 export STRATEGY_LAB_CIRCULAR_SESSIONS_DIR="${TMP}/circular/sessions"
+export STRATEGY_LAB_LUA_DIR="${TMP}/lua"
 export STRATEGY_LAB_DIVERT_PORT=9989
 
 strategy_lab_job_dir(){ printf '%s/jobs/%s\n' "${TMP}" "$1"; }
