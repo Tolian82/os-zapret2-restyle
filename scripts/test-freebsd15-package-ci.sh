@@ -12,12 +12,14 @@ PATCH4_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-probes.sh"
 PATCH5_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-candidate-family.sh"
 PATCH6_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-search-extended.sh"
 PATCH29_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-candidate-spec.sh"
+PATCH30_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-search-graph.sh"
 REQUEST_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py"
 PROBE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py"
 RESOURCES_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/resources.py"
 CANDIDATE_SPEC_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate_spec.py"
 CANDIDATE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate.py"
 FAMILY_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/family.py"
+SEARCH_GRAPH_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/search_graph.py"
 SEARCH_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/search.py"
 EXTENDED_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/extended.py"
 CANDIDATE_ADAPTER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_adapter.sh"
@@ -29,14 +31,15 @@ fail()
 }
 
 for file in "${CI}" "${RELEASE}" "${MATRIX}" "${INTEGRATION}" "${VERSION_FILE}" "${MAKEFILE}" \
-    "${PATCH4_TEST}" "${PATCH5_TEST}" "${PATCH6_TEST}" "${PATCH29_TEST}" \
+    "${PATCH4_TEST}" "${PATCH5_TEST}" "${PATCH6_TEST}" "${PATCH29_TEST}" "${PATCH30_TEST}" \
     "${REQUEST_PY}" "${PROBE_PY}" "${RESOURCES_PY}" "${CANDIDATE_SPEC_PY}" \
-    "${CANDIDATE_PY}" "${FAMILY_PY}" "${SEARCH_PY}" "${EXTENDED_PY}" "${CANDIDATE_ADAPTER}"
+    "${CANDIDATE_PY}" "${FAMILY_PY}" "${SEARCH_GRAPH_PY}" "${SEARCH_PY}" "${EXTENDED_PY}" "${CANDIDATE_ADAPTER}"
 do
     [ -s "${file}" ] || fail "required file is missing: ${file}"
 done
 [ -x "${PATCH4_TEST}" ] || fail 'Python request/probe focused test is not executable'
 [ -x "${PATCH29_TEST}" ] || fail 'Python CandidateSpec/ResourceInventory focused test is not executable'
+[ -x "${PATCH30_TEST}" ] || fail 'Python native search-graph focused test is not executable'
 
 version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(awk -F= '
@@ -86,6 +89,8 @@ grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-str
     fail 'FreeBSD 15 package job does not execute the Python candidate/family regression'
 grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-candidate-spec.sh' "${CI}" ||
     fail 'FreeBSD 15 package job does not execute the Python CandidateSpec/ResourceInventory regression'
+grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-search-graph.sh' "${CI}" ||
+    fail 'FreeBSD 15 package job does not execute the native search-graph regression'
 grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-search-extended.sh' "${CI}" ||
     fail 'FreeBSD 15 package job does not execute the Python search/extended regression'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/state.py' "${CI}" ||
@@ -104,6 +109,8 @@ grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate.p
     fail 'package inspection does not require the Python candidate runtime module'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/family.py' "${CI}" ||
     fail 'package inspection does not require the Python family screening module'
+grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/search_graph.py' "${CI}" ||
+    fail 'package inspection does not require the native search-graph module'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/search.py' "${CI}" ||
     fail 'package inspection does not require the Python search orchestration module'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/extended.py' "${CI}" ||
@@ -190,4 +197,4 @@ if grep -Fq 'Current corrective candidate: `os-zapret2-restyle-0.3.2_46.pkg`' "$
 fi
 
 sh -n "$0"
-echo "PASS: GitHub package builds stay on FreeBSD 15, Python 3.13 persistence/orchestration/request-probe/candidate-family/search-extended layers are qualified, and live-candidate selection respects the active live gate for ${candidate}"
+echo "PASS: GitHub package builds stay on FreeBSD 15, Python 3.13 persistence/orchestration/request-probe/candidate-family/native-search-graph/search-extended layers are qualified, and live-candidate selection respects the active live gate for ${candidate}"

@@ -1,3 +1,4 @@
+--out-range=-d10
 --payload=quic_initial
 --lua-desync=send:ipfrag:ipfrag_pos_udp=8
 --lua-desync=drop

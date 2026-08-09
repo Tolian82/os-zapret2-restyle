@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import candidate_spec, resources
+from . import candidate_spec, resources, search_graph
 
 EX_OK = 0
 EX_USAGE = 64
@@ -25,10 +25,6 @@ JOB_RE = re.compile(r"^job\.[A-Za-z0-9]+$")
 
 def script_dir() -> Path:
     return Path(__file__).resolve().parent.parent
-
-
-def module_dir() -> Path:
-    return Path(os.environ.get("MODULE_DIR", str(script_dir() / "strategy_lab")))
 
 
 def jobs_dir() -> Path:
@@ -98,20 +94,6 @@ def _atomic_json(path: Path, value: Any) -> None:
             tmp.unlink()
         except FileNotFoundError:
             pass
-
-
-def _catalog(path: Path, fields: int) -> list[tuple[str, ...]]:
-    if not path.is_file():
-        raise RuntimeError(f"Strategy Lab catalog is unavailable: {path}")
-    rows: list[tuple[str, ...]] = []
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        if not raw.strip() or raw.lstrip().startswith("#"):
-            continue
-        values = tuple(part.strip() for part in raw.split("\t"))
-        if len(values) != fields or not all(values):
-            raise RuntimeError(f"invalid Strategy Lab catalog row: {path}")
-        rows.append(values)
-    return rows
 
 
 def _cancel_requested(job_id: str) -> bool:
@@ -222,18 +204,24 @@ def _timeout_result(
     l7: str | None = "tls",
     target_binding: bool = True,
     attempt: int | None = None,
+    description: candidate_spec.CandidateSpec | None = None,
 ) -> dict[str, Any]:
-    description = candidate_spec.CandidateSpec.from_strategy(
-        candidate_id=candidate_id,
-        family=family,
-        protocol=protocol,
-        transport=transport,
-        port=port,
-        l7=l7,
-        strategy=strategy,
-        target_binding=target_binding,
-        out_range="-d10",
-    )
+    if description is None:
+        description = candidate_spec.CandidateSpec.from_strategy(
+            candidate_id=candidate_id,
+            family=family,
+            protocol=protocol,
+            transport=transport,
+            port=port,
+            l7=l7,
+            strategy=strategy,
+            target_binding=target_binding,
+        )
+    else:
+        candidate_id = description.candidate_id
+        family = description.family
+        strategy = description.strategy
+        target_binding = description.target_binding
     result: dict[str, Any] = {
         "id": candidate_id,
         "family": family,
@@ -273,13 +261,10 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
     accepted_raw = family_result.get("accepted", [])
     if not isinstance(accepted_raw, list) or not all(isinstance(item, str) for item in accepted_raw):
         raise RuntimeError("Strategy Lab Stage-50 family evidence is invalid")
-    accepted = set(accepted_raw)
-    catalog_path = Path(os.environ.get("STRATEGY_LAB_EXPANSION_CATALOG", str(module_dir() / "catalog/tls13-expansion.tsv")))
-    args_dir = Path(os.environ.get("STRATEGY_LAB_EXPANSION_ARGS_DIR", str(module_dir() / "catalog/tls13-expansion")))
-    rows = _catalog(catalog_path, 4)
-    # Stage-50 acceptance is priority evidence only; it never removes catalog reachability.
-    selected = [row for row in rows if row[0] in accepted]
-    selected.extend(row for row in rows if row[0] not in accepted)
+    inventory = resources.ensure_job_inventory(job_dir(job_id))
+    graph = search_graph.native_tls13_graph()
+    plan = graph.plan("expansion", accepted_raw, inventory)
+    _atomic_json(job_dir(job_id) / "search-graph.json", plan.to_dict())
     runner = _candidate_runner("STRATEGY_LAB_EXPANSION_CANDIDATE_RUNNER")
     if not runner.is_file() or not os.access(runner, os.X_OK):
         raise RuntimeError(f"Strategy Lab expansion candidate runner is unavailable: {runner}")
@@ -288,26 +273,36 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
     work = job_dir(job_id) / "parameter-expansion"
     work.mkdir(parents=True, exist_ok=True)
     result: dict[str, Any] = {
-        "total_available": len(selected),
+        "search_graph_id": plan.graph_id,
+        "total_graph_nodes": plan.total_graph_nodes,
+        "total_available": len(plan.scheduled),
         "completed": 0,
         "candidates": [],
         "working": [],
         "failed": [],
+        "golden_ids": list(plan.golden_ids),
+        "skipped": list(plan.skipped),
         "stopped_reason": "",
     }
     _atomic_json(output, result)
-    if not selected:
-        result["stopped_reason"] = "catalog_exhausted"
+    if not plan.scheduled:
+        result["stopped_reason"] = "graph_exhausted"
         _atomic_json(output, result)
         return EX_OK
 
-    for family, candidate_id, hostlist, args_name in selected:
+    for node in plan.scheduled:
         if _cancel_requested(job_id):
             return EX_CANCEL
-        strategy_path = args_dir / args_name
-        if not strategy_path.is_file():
-            raise RuntimeError(f"Strategy Lab expansion args are unavailable: {strategy_path}")
-        strategy = strategy_path.read_text(encoding="utf-8")
+        description = node.spec
+        candidate_id = description.candidate_id
+        family = description.family
+        hostlist = "1" if description.target_binding else "0"
+        strategy = description.strategy
+        strategy_path = work / f"{candidate_id}.args"
+        strategy_path.write_text(strategy, encoding="utf-8")
+        os.chmod(strategy_path, 0o644)
+        spec_path = work / f"{candidate_id}.spec.json"
+        _atomic_json(spec_path, description.to_dict())
         candidate_path = work / f"{candidate_id}.json"
         try:
             candidate_path.unlink()
@@ -315,7 +310,7 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
             pass
         command = [
             str(runner), job_id, str(endpoints), str(candidate_path), candidate_id,
-            family, str(strategy_path), hostlist,
+            family, str(strategy_path), hostlist, str(spec_path),
         ]
         status, timed_out = _run_candidate(command, timeout, job_id)
         if status == EX_CANCEL:
@@ -326,13 +321,18 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
                 family,
                 strategy,
                 job_id=job_id,
-                target_binding=hostlist == "1",
+                description=description,
             )
             _atomic_json(candidate_path, candidate)
         elif status != 0:
             raise RuntimeError(f"Strategy Lab expansion candidate runner failed for {candidate_id} with status {status}")
         else:
             candidate = _read_candidate(candidate_path, candidate_id)
+        candidate["strategy"] = description.strategy
+        candidate["candidate_spec"] = description.to_dict()
+        candidate["resource_inventory_id"] = inventory.inventory_id
+        candidate["graph_node"] = node.to_dict()
+        _atomic_json(candidate_path, candidate)
         result["candidates"].append(candidate)
         result["completed"] = len(result["candidates"])
         result["working"] = [str(item.get("id", "")) for item in result["candidates"] if item.get("all_pass") is True]
@@ -343,7 +343,7 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
             _atomic_json(output, result)
             return EX_OK
 
-    result["stopped_reason"] = "catalog_exhausted"
+    result["stopped_reason"] = "graph_exhausted"
     _atomic_json(output, result)
     return EX_OK
 
@@ -369,6 +369,34 @@ def _stability_sources(expansion: dict[str, Any], family: dict[str, Any]) -> lis
         sources.append(enriched)
     sources.sort(key=lambda item: (int(item["line_count"]), int(item["character_count"]), str(item.get("id", ""))))
     return sources
+
+
+def _source_description(source: dict[str, Any]) -> candidate_spec.CandidateSpec:
+    raw = source.get("candidate_spec")
+    if isinstance(raw, dict):
+        try:
+            description = candidate_spec.CandidateSpec.from_dict(raw)
+        except candidate_spec.CandidateSpecError as exc:
+            raise RuntimeError("Strategy Lab stability candidate spec is invalid") from exc
+        if (
+            description.candidate_id != source.get("id")
+            or description.family != source.get("family")
+            or description.strategy_lines
+            != tuple(line for line in str(source.get("strategy", "")).splitlines() if line)
+        ):
+            raise RuntimeError("Strategy Lab stability candidate spec does not match its source")
+        return description
+    return candidate_spec.CandidateSpec.from_strategy(
+        candidate_id=str(source.get("id", "")),
+        family=str(source.get("family", "")),
+        protocol="tls13",
+        transport="tcp",
+        port=443,
+        l7="tls",
+        strategy=str(source.get("strategy", "")),
+        target_binding=True,
+        provenance="stability-compatibility-source",
+    )
 
 
 def stabilize(
@@ -419,9 +447,12 @@ def stabilize(
         strategy = str(source.get("strategy", ""))
         if not candidate_id or not family or not strategy:
             raise RuntimeError("Strategy Lab stability source is incomplete")
+        description = _source_description(source)
         strategy_path = work / f"{index}.args"
-        strategy_path.write_text(strategy, encoding="utf-8")
+        strategy_path.write_text(description.strategy, encoding="utf-8")
         os.chmod(strategy_path, 0o644)
+        spec_path = work / f"{index}.spec.json"
+        _atomic_json(spec_path, description.to_dict())
         attempt_dir = work / f"{index}-attempts"
         attempt_dir.mkdir(parents=True, exist_ok=True)
         attempt_results: list[dict[str, Any]] = []
@@ -435,7 +466,8 @@ def stabilize(
                 pass
             command = [
                 str(runner), job_id, str(endpoints), str(attempt_path), candidate_id,
-                family, str(strategy_path), "1",
+                family, str(strategy_path),
+                "1" if description.target_binding else "0", str(spec_path),
             ]
             status, timed_out = _run_candidate(
                 command, timeout, job_id,
@@ -450,6 +482,7 @@ def stabilize(
                     strategy,
                     job_id=job_id,
                     attempt=attempt,
+                    description=description,
                 )
                 _atomic_json(attempt_path, candidate)
             elif status != 0:
@@ -461,13 +494,17 @@ def stabilize(
         candidate_result = {
             "id": candidate_id,
             "family": family,
-            "strategy": strategy,
+            "strategy": description.strategy,
+            "candidate_spec": description.to_dict(),
             "attempts": attempt_results,
             "stable": stable,
             "pass_count": len([item for item in attempt_results if item.get("all_pass") is True]),
-            "line_count": len([line for line in strategy.split("\n") if line]),
-            "character_count": len(strategy),
+            "line_count": len(description.strategy_lines),
+            "character_count": len(description.strategy),
         }
+        for key in ("resource_inventory_id", "graph_node"):
+            if key in source:
+                candidate_result[key] = source[key]
         _atomic_json(work / f"{index}.json", candidate_result)
         result["candidates"].append(candidate_result)
         result["completed"] = len(result["candidates"])

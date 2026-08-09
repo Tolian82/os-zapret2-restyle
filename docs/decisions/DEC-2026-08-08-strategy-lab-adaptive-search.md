@@ -25,8 +25,9 @@ Status:
 Active design decision with incremental source implementation. `_28` implements the
 Stage-50/60 hard-gate removal in the published/owner-tested `0.4.0_2` candidate. `_29`
 implements `CandidateSpec`, job-scoped `ResourceInventory`, exact Python rendering and
-active shell-adapter policy cleanup in the `0.4.0_3` source candidate; `_30`–`_33` remain
-planned. Documentation must continue to distinguish each implemented slice from the
+active shell-adapter policy cleanup in `0.4.0_3`; `_30` implements the native graph,
+golden corpus, semantic resource branches and candidate-defined ranges in the `0.4.0_4`
+source candidate. `_31`–`_33` remain planned. Documentation must continue to distinguish each implemented slice from the
 remaining approved target architecture.
 
 ==================================================
@@ -253,8 +254,9 @@ package revisions:
 - `_29` — implemented in `0.4.0_3` source: introduce Python `CandidateSpec` and
   job-scoped `ResourceInventory`, and move candidate resource/search decisions out of
   the active shell adapters;
-- `_30` — introduce the native-Zapret2 search graph, golden corpus, BLOB-free/builtin/
-  inline/file-resource branches and candidate-defined output ranges;
+- `_30` — implemented in `0.4.0_4` source: introduce the native-Zapret2 search graph,
+  golden corpus, BLOB-free/builtin/inline/file-resource branches and candidate-defined
+  output ranges;
 - `_31` — adaptive ordering, endpoint pinning, early-stop policy and timing telemetry;
 - `_32` — telemetry-driven operation/candidate/stage/job timeout model;
 - `_33` — lightweight discovery, fail-fast 3/3 stability and finalist long-GET/16-KiB

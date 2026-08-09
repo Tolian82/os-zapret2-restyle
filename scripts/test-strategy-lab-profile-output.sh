@@ -18,12 +18,13 @@ command -v "${PYTHON}" >/dev/null 2>&1 || fail 'Python 3.13 runtime is unavailab
 PYTHONPATH="${SCRIPT_DIR}" "${PYTHON}" - <<'PY'
 from strategy_lab_py import result
 
-fragment = "--lua-desync=multisplit:pos=1\n--lua-desync=syndata:blob=0x1603\n"
+fragment = "--out-range=-d8\n--lua-desync=multisplit:pos=1\n--lua-desync=syndata:blob=0x1603\n"
 profile = result.build_profile("telegram.org", "domain", "tls13", 443, "", fragment)
 assert "--filter-tcp=443\n" in profile
 assert "--filter-l7=tls\n" in profile
 assert "--hostlist-domains=telegram.org\n" in profile
-assert "--out-range=-d10\n" in profile
+assert "--out-range=-d8\n" in profile
+assert "--out-range=-d10\n" not in profile
 assert "--lua-desync=multisplit:pos=1\n" in profile
 assert "--port=" not in profile and "--lua-init=" not in profile
 result.validate_profile("telegram.org", "domain", "tls13", 443, "", profile)
@@ -31,6 +32,7 @@ result.validate_profile("telegram.org", "domain", "tls13", 443, "", profile)
 ip_profile = result.build_profile("203.0.113.10", "ip", "tls13", 443, "", "--lua-desync=multisplit:pos=2\n")
 assert "--ipset-ip=203.0.113.10\n" in ip_profile
 assert "--hostlist-domains=" not in ip_profile
+assert "--out-range=" not in ip_profile
 
 udp_profile = result.build_profile(
     "udp.example", "domain", "udp", 5353, "203.0.113.53",
@@ -45,6 +47,7 @@ for bad in (
     "--filter-tcp=443\n--lua-desync=multisplit:pos=1\n",
     "--new\n--lua-desync=multisplit:pos=1\n",
     "--hostlist-domains=evil.example\n--lua-desync=multisplit:pos=1\n",
+    "--out-range=-d8\n--out-range=-d10\n--lua-desync=multisplit:pos=1\n",
 ):
     try:
         result.build_profile("telegram.org", "domain", "tls13", 443, "", bad)

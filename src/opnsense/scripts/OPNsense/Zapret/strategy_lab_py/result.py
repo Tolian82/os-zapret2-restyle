@@ -156,7 +156,7 @@ def selector_for(target: str, target_type: str, protocol: str, addresses: str = 
 
 
 def _fragment_line_allowed(line: str) -> bool:
-    if not line or line == "--new" or line.startswith("--filter-") or line.startswith("--out-range="):
+    if not line or line == "--new" or line.startswith("--filter-"):
         return False
     if line.startswith((
         "--port=", "--lua-init=", "--sockarg=", "--user=", "--uid=", "--gid=",
@@ -177,7 +177,7 @@ def build_profile(target: str, target_type: str, protocol: str, port: int, addre
     lines = [f"--filter-{spec.transport}={spec.port}"]
     if spec.l7:
         lines.append(f"--filter-l7={spec.l7}")
-    lines.extend([selector, "--out-range=-d10", *fragment_lines])
+    lines.extend([selector, *fragment_lines])
     profile = "\n".join(lines) + "\n"
     validate_profile(target, target_type, protocol, port, addresses, profile)
     return profile
@@ -202,8 +202,13 @@ def validate_profile(target: str, target_type: str, protocol: str, port: int, ad
             raise ResultError("generic UDP profile must not contain an L7 filter")
     elif l7_filters != [f"--filter-l7={spec.l7}"]:
         raise ResultError("Strategy Lab profile L7 filter is invalid")
-    if lines.count("--out-range=-d10") != 1:
-        raise ResultError("Strategy Lab profile output range is invalid")
+    for prefix in ("--in-range=", "--out-range="):
+        ranges = [line.removeprefix(prefix) for line in lines if line.startswith(prefix)]
+        if len(ranges) > 1 or any(
+            not value or any(character.isspace() for character in value)
+            for value in ranges
+        ):
+            raise ResultError("Strategy Lab profile range is invalid")
     if not any(line.startswith("--lua-desync=") for line in lines):
         raise ResultError("Strategy Lab profile contains no desynchronization directive")
     for line in lines:

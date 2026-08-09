@@ -1,3 +1,4 @@
+--out-range=-d10
 --payload=tls_client_hello
 --lua-desync=fake:blob=fake_default_tls
 --lua-desync=multisplit:pos=host

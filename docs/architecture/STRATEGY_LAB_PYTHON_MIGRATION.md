@@ -36,12 +36,14 @@ The 2026-08-08 adaptive-search decision changes Python search policy without cha
 this ownership boundary. `_28` makes Stage-50 acceptance affect priority but not
 candidate-family reachability. `_29` adds `candidate_spec.py` and `resources.py`: Python
 snapshots installed resources at job initialization, normalizes every candidate and
-renders exact runtime arguments before invoking the narrow system adapter. Its remaining target contract is
+renders exact runtime arguments before invoking the narrow system adapter. `_30` adds
+`search_graph.py`: Python validates and plans the native TLS 1.3 DAG, persists graph
+evidence and carries the exact node spec through stability and profile rendering. Its remaining target contract is
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`; runtime-model hypotheses are gated by
 `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
 The latest published and owner-tested testing candidate is `v0.4.0_2`; focused `_28`
-reachability/restoration passes. The current `0.4.0_3` `_29` source candidate has no new
+reachability/restoration passes. The current `0.4.0_4` `_30` source candidate has no new
 owner live evidence. Candidate/package publication state remains governed separately by
 `docs/GITHUB_PUBLICATION.md`.
 
@@ -155,10 +157,16 @@ Adaptive-search `_29` extends this owner with `strategy_lab_py/candidate_spec.py
 resource snapshot, exact candidate-minimal Lua/BLOB/range rendering and persisted
 resource/spec identity. It does not change the fixed catalog or search graph.
 
+Adaptive-search `_30` adds `strategy_lab_py/search_graph.py`: a validated seven-seed/
+sixteen-node native Zapret2 DAG, semantic resource eligibility, exact golden candidates,
+candidate-defined ranges and persisted planning/node evidence. Active Stage 50/60 no
+longer obtains policy from flat TSV catalogs.
+
 Patch 6 — `strategy_lab_py/search.py` and `extended.py`
 
-- current `_29` Stage-60 catalog expansion (introduced by `_28`) keeps Stage-50 accepted families first as
-  evidence-based priority and then keeps every remaining catalog family reachable;
+- current `_30` Stage-60 graph exploration keeps Stage-50 accepted families first as
+  evidence-based priority and then keeps every other resource-eligible graph node
+  reachable;
 - Stage-70 source de-duplication/ranking/three-attempt stability replay;
 - Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP orchestration;
 - one generalized candidate lifecycle across supported protocols;
@@ -273,14 +281,14 @@ Supported final protocol profiles:
 - TLS 1.3 — TCP/443, TLS L7;
 - TLS 1.2 — TCP/443, TLS L7;
 - HTTP — TCP/80, HTTP L7;
-- QUIC — UDP/443, QUIC L7 in the current `_29` implementation only; the approved
+- QUIC — UDP/443, QUIC L7 in the current `_30` implementation only; the approved
   adaptive-search target removes QUIC candidate search and retains only the fixed precheck;
 - generic UDP — validated configured port, no L7 filter, validated job-local payload.
 
-In the current `_29` implementation each published profile contains one transport filter,
-optional protocol L7 filter, one validated target selector, `--out-range=-d10`, and the
-candidate desynchronization fragment. The fixed `-d10` value is now carried through
-`CandidateSpec` candidate data rather than inserted by shell. Runtime-only arguments,
+In the current `_30` implementation each published profile contains one transport filter,
+optional protocol L7 filter, one validated target selector, the candidate's optional
+input/output range data, and the candidate desynchronization fragment. `-d8`, `-d10` and
+absence are preserved exactly rather than inserted by shell. Runtime-only arguments,
 nested selectors/filters,
 placeholders and `--new` are rejected.
 
@@ -377,9 +385,12 @@ MIGRATION PATCH SERIES
   accepted-first evidence priority: **COMPLETE / PUBLISHED AND OWNER-TESTED `v0.4.0_2`**.
 - Adaptive-search `_29` — immutable normalized `CandidateSpec`, job-scoped installed
   `ResourceInventory`, exact Python rendering and active shell-adapter policy cleanup:
-  **CURRENT `0.4.0_3` SOURCE CANDIDATE / LIVE NOT CLAIMED**.
+  **COMPLETE / `0.4.0_3` SOURCE**.
+- Adaptive-search `_30` — native Zapret2 DAG, golden corpus, semantic resource branches
+  and candidate-defined range preservation:
+  **CURRENT `0.4.0_4` SOURCE CANDIDATE / LIVE NOT CLAIMED**.
 
-The remaining approved search-quality source sequence is `_30`–`_33` in
+The remaining approved search-quality source sequence is `_31`–`_33` in
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and `docs/ROADMAP.md`.
 
 ==================================================

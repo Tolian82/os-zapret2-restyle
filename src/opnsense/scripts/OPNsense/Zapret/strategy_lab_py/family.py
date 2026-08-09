@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import candidate_spec, resources
+from . import candidate_spec, resources, search_graph
 
 EX_OK = 0
 EX_USAGE = 64
@@ -24,10 +24,6 @@ JOB_RE = re.compile(r"^job\.[A-Za-z0-9]+$")
 
 def script_dir() -> Path:
     return Path(__file__).resolve().parent.parent
-
-
-def module_dir() -> Path:
-    return Path(os.environ.get("MODULE_DIR", str(script_dir() / "strategy_lab")))
 
 
 def jobs_dir() -> Path:
@@ -71,23 +67,6 @@ def _atomic_json(path: Path, value: Any) -> None:
             tmp.unlink()
         except FileNotFoundError:
             pass
-
-
-def _catalog() -> list[tuple[str, str, str, str]]:
-    path = Path(os.environ.get("STRATEGY_LAB_FAMILY_CATALOG", str(module_dir() / "catalog/tls13-families.tsv")))
-    if not path.is_file():
-        raise RuntimeError(f"Strategy Lab family catalog is unavailable: {path}")
-    rows: list[tuple[str, str, str, str]] = []
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        if not raw.strip() or raw.lstrip().startswith("#"):
-            continue
-        fields = raw.split("\t")
-        if len(fields) != 4 or not fields[0].strip():
-            raise RuntimeError("invalid Strategy Lab family catalog row")
-        rows.append((fields[0].strip(), fields[1].strip(), fields[2].strip(), fields[3].strip()))
-    if not rows:
-        raise RuntimeError("Strategy Lab family catalog is empty")
-    return rows
 
 
 def _cancel_requested(job_id: str) -> bool:
@@ -150,33 +129,21 @@ def _run_candidate(command: list[str], timeout: float, job_id: str) -> tuple[int
 
 def _timeout_result(
     job_id: str,
-    candidate_id: str,
-    family: str,
-    strategy: str,
-    target_binding: bool,
+    description: candidate_spec.CandidateSpec,
 ) -> dict[str, Any]:
-    description = candidate_spec.CandidateSpec.from_strategy(
-        candidate_id=candidate_id,
-        family=family,
-        protocol="tls13",
-        transport="tcp",
-        port=443,
-        l7="tls",
-        strategy=strategy,
-        target_binding=target_binding,
-        out_range="-d10",
-    )
     job = jobs_dir() / job_id
     inventory = resources.ensure_job_inventory(job)
     runtime_arguments = description.render_runtime_arguments(
         inventory,
         divert_port=int(os.environ.get("STRATEGY_LAB_DIVERT_PORT", "9989")),
-        hostlist_path=job / "candidate-runtime/hostlist.txt" if target_binding else None,
+        hostlist_path=(
+            job / "candidate-runtime/hostlist.txt" if description.target_binding else None
+        ),
     )
     return {
-        "id": candidate_id,
-        "family": family,
-        "strategy": strategy,
+        "id": description.candidate_id,
+        "family": description.family,
+        "strategy": description.strategy,
         "candidate_spec": description.to_dict(),
         "resource_inventory_id": inventory.inventory_id,
         "runtime_arguments": list(runtime_arguments),
@@ -205,8 +172,10 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
     if not endpoints.is_file():
         return EX_USAGE
     output = Path(result_file)
-    rows = _catalog()
-    args_dir = Path(os.environ.get("STRATEGY_LAB_FAMILY_ARGS_DIR", str(module_dir() / "catalog/tls13")))
+    graph = search_graph.native_tls13_graph()
+    inventory = resources.ensure_job_inventory(jobs_dir() / job_id)
+    plan = graph.plan("reconnaissance", (), inventory)
+    _atomic_json(jobs_dir() / job_id / "family-search-graph.json", plan.to_dict())
     runner = _candidate_runner()
     if not runner.is_file():
         raise RuntimeError(f"Strategy Lab candidate runner is unavailable: {runner}")
@@ -214,21 +183,30 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
     work = jobs_dir() / job_id / "family-screening"
     work.mkdir(parents=True, exist_ok=True)
     result: dict[str, Any] = {
-        "total": len(rows),
+        "search_graph_id": plan.graph_id,
+        "total_graph_nodes": plan.total_graph_nodes,
+        "total": len(plan.scheduled),
         "completed": 0,
         "families": [],
         "accepted": [],
         "rejected": [],
+        "skipped": list(plan.skipped),
         "all_pass": False,
     }
     _atomic_json(output, result)
 
-    for candidate_id, family, hostlist, args_name in rows:
+    for node in plan.scheduled:
         if _cancel_requested(job_id):
             return EX_CANCEL
-        strategy_path = args_dir / args_name
-        if not strategy_path.is_file():
-            raise RuntimeError(f"Strategy Lab candidate args are unavailable: {strategy_path}")
+        description = node.spec
+        candidate_id = description.candidate_id
+        family = description.family
+        hostlist = "1" if description.target_binding else "0"
+        strategy_path = work / f"{candidate_id}.args"
+        strategy_path.write_text(description.strategy, encoding="utf-8")
+        os.chmod(strategy_path, 0o644)
+        spec_path = work / f"{candidate_id}.spec.json"
+        _atomic_json(spec_path, description.to_dict())
         candidate_path = work / f"{candidate_id}.json"
         try:
             candidate_path.unlink()
@@ -236,19 +214,13 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
             pass
         command = [
             str(runner), job_id, str(endpoints), str(candidate_path), candidate_id,
-            family, str(strategy_path), hostlist,
+            family, str(strategy_path), hostlist, str(spec_path),
         ]
         status, timed_out = _run_candidate(command, timeout, job_id)
         if status == EX_CANCEL:
             return EX_CANCEL
         if timed_out:
-            candidate = _timeout_result(
-                job_id,
-                candidate_id,
-                family,
-                strategy_path.read_text(encoding="utf-8"),
-                hostlist == "1",
-            )
+            candidate = _timeout_result(job_id, description)
             _atomic_json(candidate_path, candidate)
         else:
             candidate = _candidate_result(candidate_path, candidate_id)
@@ -260,6 +232,11 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
                     )
                 candidate["runner_status"] = status
                 _atomic_json(candidate_path, candidate)
+        candidate["strategy"] = description.strategy
+        candidate["candidate_spec"] = description.to_dict()
+        candidate["resource_inventory_id"] = inventory.inventory_id
+        candidate["graph_node"] = node.to_dict()
+        _atomic_json(candidate_path, candidate)
         result["families"].append(candidate)
         result["completed"] = len(result["families"])
         result["accepted"] = [item.get("family", "") for item in result["families"] if item.get("all_pass") is True]

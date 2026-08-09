@@ -278,6 +278,55 @@ class CandidateSpec:
             target_selector=target_selector,
         )
 
+    @classmethod
+    def from_dict(cls, value: Any) -> "CandidateSpec":
+        """Restore an exact serialized candidate and reject derived-field drift."""
+        if not isinstance(value, dict) or value.get("schema") != CANDIDATE_SPEC_SCHEMA:
+            raise CandidateSpecError("candidate spec schema is invalid")
+        strategy_lines = value.get("strategy_lines")
+        ranges = value.get("ranges")
+        search = value.get("search")
+        lua_dependencies = value.get("lua_dependencies")
+        if (
+            not isinstance(strategy_lines, list)
+            or not all(isinstance(line, str) for line in strategy_lines)
+            or not isinstance(ranges, dict)
+            or not isinstance(search, dict)
+            or not isinstance(lua_dependencies, list)
+            or not all(isinstance(name, str) for name in lua_dependencies)
+        ):
+            raise CandidateSpecError("candidate spec structure is invalid")
+        try:
+            restored = cls.from_strategy(
+                candidate_id=value["candidate_id"],
+                family=value["family"],
+                protocol=value["protocol"],
+                l3=value["l3"],
+                transport=value["transport"],
+                port=value["port"],
+                l7=value["l7"],
+                target_binding=value["target_binding"],
+                strategy="\n".join(strategy_lines),
+                in_range=ranges.get("in"),
+                out_range=ranges.get("out"),
+                provenance=value["provenance"],
+                search_cost=search["cost"],
+                complexity=search["complexity"],
+                render_mode=value["render_mode"],
+                target_selector=value.get("target_selector"),
+                lua_dependencies=tuple(lua_dependencies),
+            )
+        except (KeyError, TypeError) as exc:
+            raise CandidateSpecError("candidate spec fields are invalid") from exc
+        if restored.to_dict() != value:
+            raise CandidateSpecError("candidate spec identity or derived fields do not match")
+        return restored
+
+    @property
+    def strategy(self) -> str:
+        """Canonical newline-terminated strategy text for runner handoff."""
+        return "\n".join(self.strategy_lines) + "\n"
+
     def _identity_payload(self) -> dict[str, Any]:
         return {
             "schema": CANDIDATE_SPEC_SCHEMA,

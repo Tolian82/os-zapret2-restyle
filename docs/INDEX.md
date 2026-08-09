@@ -25,6 +25,8 @@ For current Strategy Lab post-migration/adaptive-search work, read these first:
 - `docs/devlog/2026-08-09-v0.4.0_2-stage60-family-reachability.md` — `_28` implementation, regression, publication and owner-tested closeout;
 - `docs/patches/v0.4.0_3.md` — `_29` source contract: immutable normalized `CandidateSpec`, job-scoped installed `ResourceInventory`, exact Python rendering and active shell-adapter policy cleanup;
 - `docs/devlog/2026-08-09-v0.4.0_3-candidate-spec-resource-inventory.md` — `_29` implementation, resource-dependency review, regression boundary and `_30` handoff;
+- `docs/patches/v0.4.0_4.md` — `_30` source contract: native Zapret2 DAG, golden/reference corpus, semantic resource branches and candidate-defined output ranges;
+- `docs/devlog/2026-08-09-v0.4.0_4-native-search-graph.md` — `_30` graph implementation, exact-spec handoff, regressions and `_31` handoff;
 - `docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md` — `_28` focused live PASS: `accepted=[]`, all 14 Stage-60 catalog candidates attempted, Stage-90 restoration PASS and no temporary IPFW residue;
 - `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md` — active release-specific live-selection policy; preserves the full regression matrix without making every pending row an unconditional release blocker;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical owner-assisted live regression inventory; v0.4.0-selected Scenario 1 is PASS on `_27`;
@@ -72,10 +74,10 @@ Python DNS deadline and enclosing Stage-40 operation envelope using new owner ev
 The 2026-08-08 adaptive-search decision is the active target architecture. `_28` makes
 Stage-50 acceptance priority evidence only and no longer gates Stage-60 catalog
 reachability; published `v0.4.0_2` has source/CI/FreeBSD and focused owner-live
-qualification. Current source `_29` adds the canonical Python candidate/resource
-boundary and removes active shell-adapter policy while deliberately retaining the fixed
-catalog, current range values and cold execution. Search graph/resource branches/golden
-corpus, ordering/telemetry, timeouts and validation remain assigned to `_30`–`_33`.
+qualification. Current source `_30` adds the native Zapret2 DAG, golden/reference
+corpus, semantic resource eligibility and candidate-defined range preservation on top of
+the `_29` candidate/resource boundary. Result-adaptive ordering/endpoint pinning/
+telemetry, timeouts and validation remain assigned to `_31`–`_33`.
 The A/B/C warm-runtime choice remains evidence-gated by the experiment plan.
 
 ## Existing Strategy Lab product authorities

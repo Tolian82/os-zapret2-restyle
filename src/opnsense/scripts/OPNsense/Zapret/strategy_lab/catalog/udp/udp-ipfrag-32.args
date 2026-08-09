@@ -1,2 +1,3 @@
+--out-range=-d10
 --lua-desync=send:ipfrag:ipfrag_pos_udp=32
 --lua-desync=drop
