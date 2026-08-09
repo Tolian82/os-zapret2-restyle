@@ -9,7 +9,11 @@ RUNNER="${SCRIPT_DIR}/strategy_lab_family_runner.sh"
 CATALOG="${MODULE_DIR}/catalog/tls13-families.tsv"
 TMP_ROOT=$(mktemp -d /tmp/strategy-lab-family-test.XXXXXX)
 trap 'rm -rf "${TMP_ROOT}"' EXIT HUP INT TERM
-mkdir -p "${TMP_ROOT}/bin" "${TMP_ROOT}/run/jobs/job.test"
+mkdir -p "${TMP_ROOT}/bin" "${TMP_ROOT}/lua" "${TMP_ROOT}/run/jobs/job.test"
+for lua in zapret-lib.lua zapret-antidpi.lua
+do
+    printf '%s\n' '-- fixture' > "${TMP_ROOT}/lua/${lua}"
+done
 
 cat > "${TMP_ROOT}/bin/candidate" <<'MOCK'
 #!/bin/sh
@@ -60,6 +64,7 @@ export STRATEGY_LAB_SINGLE_CANDIDATE_RUNNER="${TMP_ROOT}/bin/candidate"
 export STRATEGY_LAB_FAMILY_CATALOG="${CATALOG}"
 export STRATEGY_LAB_FAMILY_ARGS_DIR="${MODULE_DIR}/catalog/tls13"
 export STRATEGY_LAB_PYTHON_BIN="${STRATEGY_LAB_TEST_PYTHON:-python3.13}"
+export STRATEGY_LAB_LUA_DIR="${TMP_ROOT}/lua"
 export MOCK_FAMILY_LOCK="${TMP_ROOT}/family.lock"
 export MOCK_FAMILY_ORDER="${TMP_ROOT}/order.txt"
 
