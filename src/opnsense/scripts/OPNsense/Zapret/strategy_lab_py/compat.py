@@ -11,6 +11,7 @@ from . import FOUNDATION_REVISION, SUPPORTED_PYTHON
 from . import candidate as candidate_screening
 from . import extended as extended_orchestration
 from . import family as family_screening
+from . import late_containment
 from . import orchestrator as stage_orchestrator
 from . import probe as probe_execution
 from . import request as request_execution
@@ -68,7 +69,7 @@ def _run_state(args: Sequence[str]) -> int:
 
 def _run_orchestrator(args: Sequence[str]) -> int:
     try:
-        return stage_orchestrator.main(args)
+        return late_containment.orchestrator_main(args)
     except stage_orchestrator.UsageError as exc:
         _error(str(exc)); return EX_USAGE
     except stage_orchestrator.OrchestrationError as exc:
@@ -127,7 +128,7 @@ def _run_family(args: Sequence[str]) -> int:
 
 def _run_search(args: Sequence[str]) -> int:
     try:
-        return search_orchestration.main(args)
+        return late_containment.run_search(args)
     except ValueError as exc:
         _error(str(exc)); return EX_USAGE
     except RuntimeError as exc:
@@ -138,7 +139,7 @@ def _run_search(args: Sequence[str]) -> int:
 
 def _run_extended(args: Sequence[str]) -> int:
     try:
-        return extended_orchestration.main(args)
+        return late_containment.run_extended(args)
     except ValueError as exc:
         _error(str(exc)); return EX_USAGE
     except RuntimeError as exc:

@@ -29,7 +29,7 @@ STAGES = [
     ("85", "shortlist"), ("90", "restore"), ("99", "report"),
 ]
 JSON_FIELDS = {
-    "network", "baseline", "parameter_expansion", "extended", "quic", "udp",
+    "network", "baseline", "parameter_expansion", "stability", "extended", "quic", "udp",
     "lifecycle_snapshot", "restoration",
 }
 

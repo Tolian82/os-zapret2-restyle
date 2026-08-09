@@ -29,10 +29,16 @@ For current Strategy Lab post-migration/adaptive-search work, read these first:
 - `docs/devlog/2026-08-09-v0.4.0_4-native-search-graph.md` — `_30` graph implementation, exact-spec handoff, regressions and `_31` handoff;
 - `docs/patches/v0.4.0_5.md` — `_31` source contract: live-evidence graph ordering, fixed search-epoch endpoint binding, two-to-three-winner defaults and durable phase timing;
 - `docs/devlog/2026-08-09-v0.4.0_5-adaptive-search-planner.md` — `_31` implementation, regressions, unchanged timeout/runtime boundary and `_32` handoff;
+- `docs/patches/v0.4.0_6.md` — first `_32` containment slice: Stage-50 enclosing timeout and child-cleanup envelope correction;
+- `docs/verification/evidence/2026-08-09-v0.4.0_6-stage60-timeout.md` — owner evidence that `_6` closes Stage 50 and exposes the fixed Stage-60 70-second parent timeout;
+- `docs/patches/v0.4.0_7.md` — second `_32` containment slice: Stage-60 candidate admission and use of remaining Standard search budget;
+- `docs/verification/evidence/2026-08-10-v0.4.0_7-late-stage-pass.md` — owner Standard/Extended evidence: Stage 60 PASS 16/16, truthful `NO_CANDIDATE`, restoration PASS and late-stage timing;
+- `docs/patches/v0.4.0_8.md` — current final `_32` source slice: Stage-70/80 admission plus explicit Stage-85/restoration parent bounds;
+- `docs/devlog/2026-08-10-v0.4.0_8-late-stage-containment.md` — `_8` implementation and `_33` handoff boundary;
 - `docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md` — `_28` focused live PASS: `accepted=[]`, all 14 Stage-60 catalog candidates attempted, Stage-90 restoration PASS and no temporary IPFW residue;
 - `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md` — active release-specific live-selection policy; preserves the full regression matrix without making every pending row an unconditional release blocker;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical owner-assisted live regression inventory; v0.4.0-selected Scenario 1 is PASS on `_27`;
-- `docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md` — current `_27` live evidence: Stages 40/50/60/70/90 PASS and truthful `NO_CANDIDATE`;
+- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical owner-assisted live regression inventory; v0.4.0-selected Scenario 1 is PASS on `_27`, latest adaptive timeout evidence is `_7`, and `_8` is live-pending;
+- `docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md` — v0.4.0-selected `_27` live evidence: Stages 40/50/60/70/90 PASS and truthful `NO_CANDIDATE`;
 - `docs/patches/v0.3.3_27.md` — corrective Stage-40 DNS/stage deadline contract;
 - `docs/devlog/2026-08-08-v0.3.3_27-stage40-dns-deadline.md` — `_26` Stage-40 diagnosis and `_27` corrective implementation record;
 - `docs/verification/evidence/2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md` — `_25` live Stage-50 evidence proving a working `seqovl` candidate and aggregate candidate-isolation defect;
@@ -68,18 +74,16 @@ private circular-session state remains shell-owned by design.
 
 Migration Patch 8 reconciled Diagnostics/API status-read presentation with persisted
 Python state and reopened the owner-assisted post-migration live matrix. Corrective `_26`
-does not change ownership: it fixes the Stage-50 Python family aggregator so one
-candidate-local structured error is rejected locally rather than aborting the entire
-catalog. Corrective `_27` likewise preserves ownership and DNS semantics; it widens the
-Python DNS deadline and enclosing Stage-40 operation envelope using new owner evidence.
+fixes candidate-local Stage-50 failure isolation and `_27` widens the valid Stage-40 DNS
+operation envelope without changing ownership or parser semantics.
 
-The 2026-08-08 adaptive-search decision is the active target architecture. `_28` makes
-Stage-50 acceptance priority evidence only and no longer gates Stage-60 catalog
-reachability; published `v0.4.0_2` has source/CI/FreeBSD and focused owner-live
-qualification. Current source `_31` adds live-evidence graph decisions, one fixed
-Stage-40 endpoint epoch, a two-to-three-winner default and durable timing telemetry on
-top of the `_30` native graph. Timeout containment and discovery/stability/finalist
-validation remain assigned to `_32`–`_33`.
+The 2026-08-08 adaptive-search decision remains the target architecture. `_28` through
+`_31` implement reachability, candidate/resource normalization, the native graph,
+adaptive ordering, fixed endpoint identity, winner bounds and timing telemetry. `_32` is
+implemented incrementally from owner telemetry: `_6` closes the observed Stage-50 parent
+boundary, `_7` closes the observed Stage-60 fixed-parent boundary, and current `_8`
+contains Stage 70/80 candidate admission plus Stage 85/restoration parent bounds. `_33`
+remains the separate discovery/fail-fast-stability/finalist-deep-validation cycle.
 The A/B/C warm-runtime choice remains evidence-gated by the experiment plan.
 
 ## Existing Strategy Lab product authorities
@@ -91,8 +95,7 @@ weaken product behavior.
 - `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md` — third-audit findings SL3-001…SL3-007 and source/CI traceability;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — approved next search architecture and explicit current-vs-target boundary;
 - `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — required evidence before warm/multi-process search optimizations become production rules;
-- `docs/architecture/STRATEGY_LAB.md` — base product/stage/lifecycle contract with the
-  2026-08-08 search-policy supersession linked explicitly;
+- `docs/architecture/STRATEGY_LAB.md` — base product/stage/lifecycle contract with the 2026-08-08 search-policy supersession linked explicitly;
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md` — state, cancellation, timeout, candidate ownership, restoration recovery, and verification;
 - `docs/architecture/STRATEGY_LAB_ACTIVATION.md` — active Diagnostics path;
 - `docs/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md` — complete replay-verified profiles;
@@ -110,7 +113,8 @@ weaken product behavior.
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — earlier hardening finding-to-patch traceability;
 - `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — shell-era source/CI closure; live matrix remains the product gate;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical live regression inventory with release-specific mandatory-row selection;
-- `docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md` — latest owner evidence and adaptive-search `_28` focused live PASS;
+- `docs/verification/evidence/2026-08-10-v0.4.0_7-late-stage-pass.md` — latest owner evidence and timeout-containment `_7` Stage-60 PASS;
+- `docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md` — adaptive-search `_28` focused live PASS;
 - `docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md` — v0.4.0 release-selected Scenario-1 live-gate PASS;
 - `docs/verification/evidence/2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md` — prior post-migration Stage-50 evidence;
 - `docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md` — `_16` post-drop hostlist traversal evidence;
