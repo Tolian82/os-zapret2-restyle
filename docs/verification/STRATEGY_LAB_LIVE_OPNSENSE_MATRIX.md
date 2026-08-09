@@ -15,13 +15,14 @@ TEST RECORD
 ==================================================
 
 - Tester: repository owner
-- Latest test date/time: `2026-08-09`
+- Latest test date/time: `2026-08-10`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.4.0_6.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_6.pkg`
-- Current adaptive-search source candidate: `os-zapret2-restyle-0.4.0_7.pkg`
-- Latest owner-tested diagnostic job: `job.Y8bR9M`
+- Latest published testing candidate: `os-zapret2-restyle-0.4.0_7.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_7.pkg`
+- Current adaptive-search source candidate: `os-zapret2-restyle-0.4.0_8.pkg`
+- Latest owner-tested Standard job: `job.RFVs75`
+- Latest owner-tested diagnostic job: `job.QbUuYO`
 - WAN interface: `vtnet1`
 - Latest blocked-domain target: `telegram.org`
 - Generic UDP target/port: `PENDING OWNER`
@@ -30,6 +31,9 @@ Architecture / ABI baseline evidence:
 `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`.
 
 Latest live evidence:
+`docs/verification/evidence/2026-08-10-v0.4.0_7-late-stage-pass.md`.
+
+Previous timeout evidence:
 `docs/verification/evidence/2026-08-09-v0.4.0_6-stage60-timeout.md`.
 
 v0.4.0 release-selected evidence:
@@ -71,8 +75,13 @@ Key live progression:
   Standard and Extended runs then exposed the next `_32` boundary when the fixed 70-second
   Stage-60 parent limit terminated expansion after 12 of 16 candidates. Stage 90 restored
   the initially RUNNING service and no temporary IPFW rule remained.
-- `v0.4.0_7` is the current source correction for that Stage-60 parent/child deadline
-  mismatch; owner-live verification remains pending.
+- `v0.4.0_7` owner retesting closed that Stage-60 boundary: both Standard and Extended
+  runs completed all 16 expansion candidates, continued through Stage 70/80/85 as
+  applicable, ended truthfully as `NO_CANDIDATE`, and restored the initially RUNNING
+  service without temporary IPFW residue.
+- `v0.4.0_8` is the current `_32` source correction for the remaining late-stage
+  containment gaps: Stage-70/80 candidate admission plus explicit Stage-85 and Stage-90
+  parent bounds. Owner-live verification remains pending.
 
 Historical `_17`, job `job.w0nXxQ`, ended with Stage 50 ERROR and Stage 90 PASS. Its
 candidate-runtime bundle was not collected, so the exact `_17` Stage-50 root cause remains
@@ -262,6 +271,33 @@ parent/child deadline admission as the next `_32` correction. Exact evidence is 
 in `docs/verification/evidence/2026-08-09-v0.4.0_6-stage60-timeout.md`.
 
 ==================================================
+TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_7`
+==================================================
+
+Owner-assisted Standard job `job.RFVs75` and Extended job `job.QbUuYO` against
+`telegram.org`:
+
+- package version/ABI: `0.4.0_7`, `FreeBSD:15:amd64`;
+- both runs passed Stage 50 and Stage 60;
+- Standard Stage 60 completed all 16 candidates in about 90.243 seconds;
+- Extended Stage 60 completed all 16 candidates in about 89.249 seconds;
+- Stage 70 completed normally with no stability candidates because Stage 60 found no
+  working candidate; its measured parent allowance was only 13–14 seconds;
+- Standard Stage 80 was skipped by mode; Extended Stage 80 completed, with QUIC and
+  configured UDP explicitly skipped by capability/input state;
+- Stage 85 completed in about 0.2 seconds in both runs but had no Python parent operation
+  timeout in telemetry;
+- Stage 90 restoration completed in about 6.9 seconds in both runs and likewise had no
+  Python parent operation timeout;
+- both jobs ended truthfully as `NO_CANDIDATE`;
+- the post-run snapshot showed Zapret2 running and only normal IPFW rule `19000`, with no
+  temporary Strategy Lab rule in `19100–19131`.
+
+This closes the observed Stage-60 timeout defect and selects the remaining `_32`
+late-stage containment work for `v0.4.0_8`. Exact evidence is preserved in
+`docs/verification/evidence/2026-08-10-v0.4.0_7-late-stage-pass.md`.
+
+==================================================
 PYTHON MIGRATION OWNERSHIP
 ==================================================
 
@@ -358,8 +394,11 @@ CONFIRMED DEFECTS / LIVE RECHECKS
   Stage 50 PASS and continuing through Stages 60/70.
 - **Stage 50 parent-timeout boundary on `v0.4.0_5`.** Closed for the observed live target
   by `v0.4.0_6`: Stage 50 completed all seven families and published PASS.
-- **Stage 60 fixed 70-second parent timeout on `v0.4.0_6`.** Confirmed in both Standard
-  and Extended owner runs; corrective `v0.4.0_7` source candidate pending live retest.
+- **Stage 60 fixed 70-second parent timeout on `v0.4.0_6`.** Closed by `v0.4.0_7` in both
+  Standard and Extended owner runs; all 16 Stage-60 candidates completed.
+- **Late-stage containment after Stage 60.** `v0.4.0_7` proved the normal no-winner
+  Stage-70/80/85/90 path and exposed missing Stage-70/80 admission plus unbounded Python
+  parent calls for Stage 85/90; corrective `v0.4.0_8` is source-qualified/live-pending.
 - **Immediate stale/new-job GUI error.** Not reproduced on `_26`, but retain as open until
   a complete Scenario-1 run confirms behavior.
 - **Active `Strategy Lab returned no output.` message.** Patch-8 source correction exists;
@@ -410,5 +449,6 @@ For `v0.4.0`, Scenario 1 is the selected mandatory post-migration row and is PAS
 `v0.3.3_27`. No known critical restoration/runtime defect remains from the `_26`/`_27`
 corrective cycle. Adaptive-search `_28` additionally has its focused change-specific
 owner PASS on `v0.4.0_2`. Rows 2–18 remain open regression coverage without a claimed
-PASS. The newer `v0.4.0_6` timeout-hierarchy finding is tracked as `_32` corrective work
-and does not retroactively invalidate the release-selected `_27` or focused `_28` evidence.
+PASS. The newer `v0.4.0_7` live evidence closes the observed Stage-60 timeout and selects
+`v0.4.0_8` for the remaining `_32` late-stage containment work; it does not retroactively
+invalidate the release-selected `_27` or focused `_28` evidence.
