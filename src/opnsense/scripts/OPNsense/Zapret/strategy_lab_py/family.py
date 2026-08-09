@@ -18,6 +18,7 @@ from . import candidate_spec, endpoint_epoch, resources, search_graph, telemetry
 EX_OK = 0
 EX_USAGE = 64
 EX_SOFTWARE = 70
+EX_TEMPFAIL = 75
 EX_TIMEOUT = 124
 EX_CANCEL = 125
 JOB_RE = re.compile(r"^job\.[A-Za-z0-9]+$")
@@ -31,24 +32,37 @@ def jobs_dir() -> Path:
     return Path(os.environ.get("STRATEGY_LAB_JOBS_DIR", "/var/run/zapret2-restyle/strategy-lab/jobs"))
 
 
-def _positive_timeout() -> float:
-    raw = os.environ.get("STRATEGY_LAB_SINGLE_CANDIDATE_TIMEOUT", "5")
+def _positive_float(name: str, default: float) -> float:
+    raw = os.environ.get(name, str(default))
     try:
         value = float(raw)
     except ValueError as exc:
-        raise ValueError("STRATEGY_LAB_SINGLE_CANDIDATE_TIMEOUT must be positive") from exc
+        raise ValueError(f"{name} must be positive") from exc
     if value <= 0:
-        raise ValueError("STRATEGY_LAB_SINGLE_CANDIDATE_TIMEOUT must be positive")
-    operation = os.environ.get("STRATEGY_LAB_OPERATION_TIMEOUT", "").strip()
-    if operation:
-        try:
-            op_value = float(operation)
-        except ValueError as exc:
-            raise ValueError("STRATEGY_LAB_OPERATION_TIMEOUT must be positive") from exc
-        if op_value <= 0:
-            raise ValueError("STRATEGY_LAB_OPERATION_TIMEOUT must be positive")
-        value = min(value, op_value)
+        raise ValueError(f"{name} must be positive")
     return value
+
+
+def _positive_timeout() -> float:
+    return _positive_float("STRATEGY_LAB_SINGLE_CANDIDATE_TIMEOUT", 8.0)
+
+
+def _candidate_envelope(timeout: float) -> float:
+    termination = _positive_float("STRATEGY_LAB_CANDIDATE_TERMINATION_RESERVE", 2.0)
+    cleanup = _positive_float("STRATEGY_LAB_CANDIDATE_CLEANUP_RESERVE", 7.0)
+    return timeout + termination + cleanup
+
+
+def _candidate_admitted(timeout: float) -> bool:
+    raw = os.environ.get("STRATEGY_LAB_OPERATION_DEADLINE_MONOTONIC", "").strip()
+    if not raw:
+        return True
+    try:
+        deadline = float(raw)
+    except ValueError as exc:
+        raise ValueError("STRATEGY_LAB_OPERATION_DEADLINE_MONOTONIC must be numeric") from exc
+    guard = _positive_float("STRATEGY_LAB_ADMISSION_GUARD", 2.0)
+    return deadline - time.monotonic() >= _candidate_envelope(timeout) + guard
 
 
 def _atomic_json(path: Path, value: Any) -> None:
@@ -99,6 +113,24 @@ def _terminate(process: subprocess.Popen[str]) -> None:
     process.wait(timeout=1)
 
 
+def _cleanup_after_forced_stop(job_id: str) -> None:
+    adapter = Path(os.environ.get("STRATEGY_LAB_CANDIDATE_SYSTEM_ADAPTER", str(script_dir() / "strategy_lab_candidate_adapter.sh")))
+    if not adapter.is_file():
+        return
+    shell = os.environ.get("STRATEGY_LAB_SH_BIN", "/bin/sh")
+    cleanup_timeout = _positive_float("STRATEGY_LAB_CANDIDATE_CLEANUP_RESERVE", 7.0)
+    try:
+        subprocess.run(
+            [shell, str(adapter), "cleanup", job_id],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=cleanup_timeout,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
 def _run_candidate(command: list[str], timeout: float, job_id: str) -> tuple[int, bool, int]:
     started = time.monotonic()
     try:
@@ -118,9 +150,11 @@ def _run_candidate(command: list[str], timeout: float, job_id: str) -> tuple[int
     while process.poll() is None:
         if _cancel_requested(job_id):
             _terminate(process)
+            _cleanup_after_forced_stop(job_id)
             return EX_CANCEL, False, telemetry.elapsed_ms(started)
         if elapsed >= timeout:
             _terminate(process)
+            _cleanup_after_forced_stop(job_id)
             return EX_TIMEOUT, True, telemetry.elapsed_ms(started)
         try:
             process.wait(timeout=poll)
@@ -229,6 +263,11 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
             str(runner), job_id, str(endpoints), str(candidate_path), candidate_id,
             family, str(strategy_path), hostlist, str(spec_path),
         ]
+        if not _candidate_admitted(timeout):
+            result["stopped_reason"] = "insufficient_stage_budget"
+            result["partial"] = True
+            _atomic_json(output, result)
+            return EX_TEMPFAIL
         status, timed_out, runner_ms = _run_candidate(command, timeout, job_id)
         if status == EX_CANCEL:
             return EX_CANCEL
