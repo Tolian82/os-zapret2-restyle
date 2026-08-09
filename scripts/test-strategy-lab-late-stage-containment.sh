@@ -101,6 +101,30 @@ roomy = late._defer_candidate(
 check(roomy is None, "sufficient Stage-70 budget was rejected")
 
 
+# A Stage-70 admission rejection must be publishable into the persisted job state even
+# though a normal successful Stage 70 writes stability and shortlist together at Stage 85.
+with tempfile.TemporaryDirectory() as temp_dir:
+    temp = Path(temp_dir)
+    job = "job.Test01"
+    job_dir = temp / job
+    state = job_dir / "status.json"
+    events = job_dir / "events.ndjson"
+    job_dir.mkdir(parents=True)
+    late.state_persistence.initialize(job, str(state), str(events), "example.test", "standard", "en")
+    partial = job_dir / "stability.json"
+    partial.write_text(
+        '{"partial":true,"stopped_reason":"insufficient_stage_budget"}\n',
+        encoding="utf-8",
+    )
+    late.state_persistence.set_json_field(job, str(state), "stability", str(partial))
+    persisted = json.loads(state.read_text(encoding="utf-8"))
+    check(persisted["stability"]["partial"] is True, "partial Stage-70 evidence was not persisted")
+    check(
+        persisted["stability"]["stopped_reason"] == "insufficient_stage_budget",
+        "partial Stage-70 stop reason was not persisted",
+    )
+
+
 # Stage 80 refuses a new candidate before launch when the action envelope cannot fit,
 # persists a structured partial result, and returns timeout status to the stage adapter.
 with tempfile.TemporaryDirectory() as temp_dir:
@@ -167,5 +191,5 @@ with tempfile.TemporaryDirectory() as temp_dir:
         late.search_orchestration._persist_partial_result = original_persist
         late.telemetry.record = original_record
 
-print("PASS: Strategy Lab late-stage candidate admission and parent bounds")
+print("PASS: Strategy Lab late-stage candidate admission, partial persistence, and parent bounds")
 PY
