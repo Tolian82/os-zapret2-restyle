@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import candidate_spec, endpoint_epoch, resources, search_graph, telemetry
+from . import candidate_spec, endpoint_epoch, resources, search_graph, state as state_persistence, telemetry
 
 EX_OK = 0
 EX_USAGE = 64
@@ -37,7 +37,7 @@ def job_dir(job_id: str) -> Path:
     return jobs_dir() / job_id
 
 
-def _positive_float(name: str, default: float) -> float:
+def _positive_setting_float(name: str, default: float) -> float:
     raw = os.environ.get(name, str(default))
     try:
         value = float(raw)
@@ -45,6 +45,11 @@ def _positive_float(name: str, default: float) -> float:
         raise ValueError(f"{name} must be positive") from exc
     if value <= 0:
         raise ValueError(f"{name} must be positive")
+    return value
+
+
+def _positive_float(name: str, default: float) -> float:
+    value = _positive_setting_float(name, default)
     operation = os.environ.get("STRATEGY_LAB_OPERATION_TIMEOUT", "").strip()
     if operation:
         try:
@@ -65,6 +70,39 @@ def _positive_int(name: str, default: int) -> int:
     if value <= 0:
         raise ValueError(f"{name} must be a positive integer")
     return value
+
+
+def _operation_deadline_monotonic() -> float | None:
+    raw = os.environ.get("STRATEGY_LAB_OPERATION_DEADLINE_MONOTONIC", "").strip()
+    if raw:
+        try:
+            deadline = float(raw)
+        except ValueError as exc:
+            raise ValueError("STRATEGY_LAB_OPERATION_DEADLINE_MONOTONIC must be positive") from exc
+        if deadline <= 0:
+            raise ValueError("STRATEGY_LAB_OPERATION_DEADLINE_MONOTONIC must be positive")
+        return deadline
+    operation = os.environ.get("STRATEGY_LAB_OPERATION_TIMEOUT", "").strip()
+    if not operation:
+        return None
+    try:
+        seconds = float(operation)
+    except ValueError as exc:
+        raise ValueError("STRATEGY_LAB_OPERATION_TIMEOUT must be positive") from exc
+    if seconds <= 0:
+        raise ValueError("STRATEGY_LAB_OPERATION_TIMEOUT must be positive")
+    return time.monotonic() + seconds
+
+
+def _candidate_admission(timeout: float, deadline: float | None) -> tuple[bool, float | None, float]:
+    termination = _positive_setting_float("STRATEGY_LAB_CANDIDATE_TERMINATION_RESERVE", 2)
+    cleanup = _positive_setting_float("STRATEGY_LAB_CANDIDATE_CLEANUP_RESERVE", 7)
+    guard = _positive_setting_float("STRATEGY_LAB_CANDIDATE_ADMISSION_GUARD", 2)
+    required = timeout + termination + cleanup + guard
+    if deadline is None:
+        return True, None, required
+    remaining = max(0.0, deadline - time.monotonic())
+    return remaining >= required, remaining, required
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -94,6 +132,13 @@ def _atomic_json(path: Path, value: Any) -> None:
             tmp.unlink()
         except FileNotFoundError:
             pass
+
+
+def _persist_partial_result(job_id: str, field: str, output: Path, value: dict[str, Any]) -> None:
+    _atomic_json(output, value)
+    state_path = job_dir(job_id) / "status.json"
+    if state_path.is_file():
+        state_persistence.set_json_field(job_id, str(state_path), field, str(output))
 
 
 def _cancel_requested(job_id: str) -> bool:
@@ -133,12 +178,13 @@ def _cleanup_after_forced_stop(job_id: str) -> None:
     if not adapter.is_file():
         return
     shell = os.environ.get("STRATEGY_LAB_SH_BIN", "/bin/sh")
+    cleanup_timeout = _positive_setting_float("STRATEGY_LAB_CANDIDATE_CLEANUP_RESERVE", 7)
     try:
         subprocess.run(
             [shell, str(adapter), "cleanup", job_id],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=15,
+            timeout=cleanup_timeout,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -291,6 +337,7 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
     if not runner.is_file() or not os.access(runner, os.X_OK):
         raise RuntimeError(f"Strategy Lab expansion candidate runner is unavailable: {runner}")
     timeout = _positive_float("STRATEGY_LAB_EXPANSION_CANDIDATE_TIMEOUT", 5)
+    operation_deadline = _operation_deadline_monotonic()
     target = _positive_int("STRATEGY_LAB_EXPANSION_TARGET", 3)
     minimum = _positive_int("STRATEGY_LAB_EXPANSION_MIN_WINNERS", min(2, target))
     if minimum > target:
@@ -313,6 +360,7 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
         "winner_band": {"minimum": minimum, "target": target},
         "early_stop": {"triggered": False, "winner_count": 0},
         "stopped_reason": "",
+        "partial": False,
     }
     _atomic_json(output, result)
     if not plan.scheduled:
@@ -331,6 +379,27 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
         description = node.spec
         candidate_id = description.candidate_id
         family = description.family
+        admitted, remaining, required = _candidate_admission(timeout, operation_deadline)
+        if not admitted:
+            result["stopped_reason"] = "insufficient_stage_budget"
+            result["partial"] = True
+            result["budget_admission"] = {
+                "next_candidate": candidate_id,
+                "remaining_seconds": round(remaining or 0.0, 3),
+                "required_seconds": round(required, 3),
+            }
+            _persist_partial_result(job_id, "parameter_expansion", output, result)
+            telemetry.record(
+                job_dir(job_id),
+                "candidate_admission",
+                0,
+                stage="60",
+                candidate_id=candidate_id,
+                protocol="tls13",
+                outcome="deferred",
+                details=result["budget_admission"],
+            )
+            return EX_TIMEOUT
         hostlist = "1" if description.target_binding else "0"
         strategy = description.strategy
         strategy_path = work / f"{candidate_id}.args"

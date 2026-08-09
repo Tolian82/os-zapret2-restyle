@@ -87,6 +87,10 @@ for outcome in (True, False):
 telemetry.record(job, "fixture", 0, stage="test", outcome="pass")
 PY
 
+STRATEGY_LAB_JOBS_DIR="${JOBS}" STRATEGY_LAB_PYTHON_BIN="${PYTHON}" \
+sh "${LAUNCHER}" state initialize "${JOB}" \
+    "${JOB_DIR}/status.json" "${JOB_DIR}/events.ndjson" example.test standard en
+
 EPOCH_ID=$("${JQ}" -r .epoch_id "${JOB_DIR}/search-epoch.json")
 "${JQ}" -n --arg epoch "${EPOCH_ID}" '{
   search_epoch_id:$epoch,
@@ -131,6 +135,7 @@ sh "${LAUNCHER}" search expand \
   .completed==4 and
   .working==["golden-fake-default-tls","fake-rnd","syndata-1603"] and
   .failed==["fake-repeat2"] and
+  .partial==false and
   .early_stop=={triggered:true,winner_count:3} and
   .stopped_reason=="enough_candidates" and
   [.schedule[].candidate_id]==["golden-fake-default-tls","fake-repeat2","fake-rnd","syndata-1603"] and
@@ -147,4 +152,41 @@ sh "${LAUNCHER}" search expand \
 ' "${JOB_DIR}/timing-telemetry.json" >/dev/null ||
   fail 'adaptive candidate timing telemetry is invalid'
 
-echo 'PASS: Strategy Lab pins a search epoch, orders graph neighbors from live PASS/FAIL evidence, and stops at the default three-winner target'
+: > "${LOG}"
+DEADLINE=$("${PYTHON}" -c 'import time; print(time.monotonic() + 1.0)')
+if STRATEGY_LAB_JOBS_DIR="${JOBS}" \
+    STRATEGY_LAB_LUA_DIR="${TMP}/lua" \
+    STRATEGY_LAB_FAKE_DIR="${TMP}/fake" \
+    STRATEGY_LAB_EXPANSION_CANDIDATE_RUNNER="${RUNNER}" \
+    STRATEGY_LAB_OPERATION_DEADLINE_MONOTONIC="${DEADLINE}" \
+    STRATEGY_LAB_EXPANSION_TARGET=99 \
+    STRATEGY_LAB_PYTHON_BIN="${PYTHON}" \
+    MOCK_ORDER="${LOG}" \
+    sh "${LAUNCHER}" search expand \
+        "${JOB}" "${ENDPOINTS}" "${TMP}/family.json" "${TMP}/deadline-expansion.json"
+then
+    fail 'Stage-60 admission accepted a candidate that cannot fit its parent deadline'
+else
+    DEADLINE_STATUS=$?
+fi
+[ "${DEADLINE_STATUS}" -eq 124 ] || fail "Stage-60 deadline admission returned ${DEADLINE_STATUS}, expected 124"
+[ ! -s "${LOG}" ] || fail 'Stage-60 deadline admission started a candidate before rejecting the budget'
+"${JQ}" -e '
+  .partial==true and .completed==0 and .stopped_reason=="insufficient_stage_budget" and
+  .budget_admission.next_candidate=="golden-fake-default-tls" and
+  .budget_admission.required_seconds==19.0 and
+  .budget_admission.remaining_seconds>=0 and .budget_admission.remaining_seconds<2
+' "${TMP}/deadline-expansion.json" >/dev/null ||
+  fail 'Stage-60 partial deadline result is invalid'
+"${JQ}" -e '
+  .parameter_expansion.partial==true and
+  .parameter_expansion.stopped_reason=="insufficient_stage_budget" and
+  .parameter_expansion.completed==0
+' "${JOB_DIR}/status.json" >/dev/null ||
+  fail 'Stage-60 partial deadline result was not persisted into job state'
+"${JQ}" -e '
+  ([.events[]|select(.phase=="candidate_admission" and .stage=="60" and .outcome=="deferred")]|length)==1
+' "${JOB_DIR}/timing-telemetry.json" >/dev/null ||
+  fail 'Stage-60 deadline admission telemetry is missing'
+
+echo 'PASS: Strategy Lab pins a search epoch, adapts from live evidence, stops at the winner target, and rejects Stage-60 work that cannot fit its parent deadline'

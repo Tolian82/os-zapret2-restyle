@@ -6,9 +6,11 @@ PYTHON_BIN=${STRATEGY_LAB_PYTHON_BIN:-/usr/local/bin/python3}
 PYTHON_ENTRY="${SCRIPT_DIR}/strategy_lab_python.py"
 EXPECTED_PYTHON=3.13
 
-# Telemetry-derived containment defaults for Strategy Lab 0.4.0_6.
-# Keep the 150/270-second search budgets unchanged while allowing a complete
-# cold candidate lifecycle to finish instead of being cut off at five seconds.
+# Telemetry-derived containment defaults for Strategy Lab 0.4.0_7.
+# Keep the 150/270-second search budgets unchanged, retain an 8-second cold
+# candidate lifecycle, and let Stage 60 use the remaining Standard search
+# budget. Python candidate admission prevents a new child from starting unless
+# its full execution/termination/cleanup envelope fits before the parent limit.
 : "${STRATEGY_LAB_SINGLE_CANDIDATE_TIMEOUT:=8}"
 : "${STRATEGY_LAB_EXPANSION_CANDIDATE_TIMEOUT:=8}"
 : "${STRATEGY_LAB_STABILITY_ATTEMPT_TIMEOUT:=8}"
@@ -16,7 +18,7 @@ EXPECTED_PYTHON=3.13
 : "${STRATEGY_LAB_QUIC_CANDIDATE_TIMEOUT:=8}"
 : "${STRATEGY_LAB_UDP_CANDIDATE_TIMEOUT:=8}"
 : "${STRATEGY_LAB_CANDIDATE_TIMEOUT:=60}"
-: "${STRATEGY_LAB_STAGE60_TIMEOUT:=70}"
+: "${STRATEGY_LAB_STAGE60_TIMEOUT:=120}"
 export STRATEGY_LAB_SINGLE_CANDIDATE_TIMEOUT \
     STRATEGY_LAB_EXPANSION_CANDIDATE_TIMEOUT \
     STRATEGY_LAB_STABILITY_ATTEMPT_TIMEOUT \
