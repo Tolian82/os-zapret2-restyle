@@ -43,10 +43,26 @@ set -eu
 output="$3"
 id="$4"
 family="$5"
-printf '{"id":"%s","family":"%s","strategy":"","endpoints":[],"all_pass":false}\n' \
-    "${id}" "${family}" > "${output}"
+epoch=$(jq -r .epoch_id "${STRATEGY_LAB_JOBS_DIR}/${1}/search-epoch.json")
+jq -n --arg id "${id}" --arg family "${family}" --arg epoch "${epoch}" \
+    '{id:$id,family:$family,strategy:"",search_epoch_id:$epoch,endpoints:[],all_pass:false}' \
+    > "${output}"
 EOF
 chmod +x "${FAKE_RUNNER}"
+
+PYTHON_BIN="${STRATEGY_LAB_TEST_PYTHON:-python3.13}"
+PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_EPOCH_JOB_DIR="${JOB_DIR}" \
+STRATEGY_LAB_EPOCH_ENDPOINTS="${ENDPOINTS}" "${PYTHON_BIN}" - <<'PY'
+import os
+from pathlib import Path
+
+from strategy_lab_py.endpoint_epoch import create
+
+job = Path(os.environ["STRATEGY_LAB_EPOCH_JOB_DIR"])
+endpoints = Path(os.environ["STRATEGY_LAB_EPOCH_ENDPOINTS"]).read_text().splitlines()
+evidence = [{"endpoint": value, "dns_a": {"classification": "pass", "answers": ["203.0.113.10"]}} for value in endpoints]
+create(job, "rutracker.org", "domain", endpoints, evidence)
+PY
 
 # The production runner enables set -u and does not source request.sh. The family module
 # therefore must own a safe default for STRATEGY_LAB_TIMEOUT_BIN rather than relying on
@@ -61,7 +77,7 @@ env -u STRATEGY_LAB_TIMEOUT_BIN \
     STRATEGY_LAB_FAMILY_ARGS_DIR="${ARGS_DIR}" \
     STRATEGY_LAB_SINGLE_CANDIDATE_RUNNER="${FAKE_RUNNER}" \
     STRATEGY_LAB_SINGLE_CANDIDATE_TIMEOUT=2 \
-    STRATEGY_LAB_PYTHON_BIN="${STRATEGY_LAB_TEST_PYTHON:-python3.13}" \
+    STRATEGY_LAB_PYTHON_BIN="${PYTHON_BIN}" \
     sh "${RUNNER}" "${JOB}" "${ENDPOINTS}" "${RESULT}"
 
 "${STRATEGY_LAB_JQ}" -e '

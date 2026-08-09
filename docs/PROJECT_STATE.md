@@ -31,11 +31,11 @@ Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_
 Latest published testing prerelease: `v0.4.0_2` / `os-zapret2-restyle-0.4.0_2.pkg`
 Latest owner-tested testing candidate: `v0.4.0_2` / `os-zapret2-restyle-0.4.0_2.pkg`
 Current source line: `VERSION=0.4.0`
-Current package revision: `PLUGIN_REVISION=4`
-Current source candidate: `os-zapret2-restyle-0.4.0_4.pkg` (source-qualified; not published or owner-tested)
+Current package revision: `PLUGIN_REVISION=5`
+Current source candidate: `os-zapret2-restyle-0.4.0_5.pkg` (source-qualified; not published or owner-tested)
 Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **adaptive-search `_30` source-qualified; `_31` adaptive ordering/endpoint epoch/telemetry is next**
+Current phase: **adaptive-search `_31` source-qualified; `_32` telemetry-driven timeout containment is next**
 v0.4.0 release gate: **COMPLETE — published and installed by the owner**
 
 Current primary Strategy Lab authority:
@@ -90,13 +90,15 @@ APPROVED POST-MIGRATION SEARCH REDESIGN
 
 The owner approved the next Strategy Lab search architecture on 2026-08-08. `_28`
 removed Stage-50 family hard gating and `_29` established the normalized immutable Python
-candidate/resource boundary. `_30` now replaces the active Stage-50/60 TSV policy with a
+candidate/resource boundary. `_30` replaced the active Stage-50/60 TSV policy with a
 validated native Zapret2 DAG: seven reconnaissance seeds and sixteen expansion nodes,
 including exact built-in and owner-external golden candidates. Resource eligibility is
 semantic, Stage-50 evidence changes priority without removing graph reachability, and
 candidate-defined `-d8`, `-d10` or absent ranges survive runtime and final-profile
-rendering. QUIC search, cold execution, result-adaptive ordering and validation behavior
-remain unchanged until their dedicated decisions/cycles.
+rendering. `_31` now selects each next graph node from live PASS/FAIL evidence, pins all
+candidate/replay comparisons to one recorded Stage-40 endpoint epoch, targets two to
+three winners and persists phase timing. Cold execution and current timeout/validation
+behavior remain unchanged until their dedicated decisions/cycles.
 
 Approved direction:
 
@@ -130,10 +132,10 @@ Experiment/measurement authority:
 `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
 Implementation sequence: `_28` hard-gate removal is source/CI/FreeBSD and owner-live
-qualified; `_29` CandidateSpec/ResourceInventory and active-adapter cleanup are
-source-qualified; `_30` native search graph/resources/golden corpus/range preservation
-is source-qualified. Next are `_31` adaptive planner/endpoint pinning/telemetry, `_32`
-timeout model and `_33` discovery/stability/deep validation.
+qualified; `_29` CandidateSpec/ResourceInventory and active-adapter cleanup, `_30` native
+search graph/resources/golden corpus/range preservation and `_31` live planner/fixed
+endpoint epoch/winner defaults/timing telemetry are source-qualified. Next are `_32`
+timeout containment and `_33` discovery/stability/deep validation.
 
 ==================================================
 LATEST OWNER LIVE RESULT — `_28`
@@ -334,6 +336,7 @@ gate on `discord.com`: Stage 50 accepted no family, Stage 60 still attempted all
 catalog candidates, and Stage 90 restored the initial RUNNING service without temporary
 IPFW residue. The full regression matrix remains open under risk-based selection. `_29`
 added the canonical CandidateSpec/ResourceInventory boundary and removed active
-shell-adapter policy. `_30` advances the unpublished source candidate to `0.4.0_4` with
-the native search graph, golden corpus, semantic resource branches and exact variable-
-range output. `_31` is now the next source cycle.
+shell-adapter policy. `_30` added the native search graph, golden corpus, semantic
+resource branches and exact variable-range output. `_31` advances the unpublished source
+candidate to `0.4.0_5` with live-evidence ordering, a fixed endpoint epoch,
+three-winner defaults and timing telemetry. `_32` is now the next source cycle.

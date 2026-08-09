@@ -13,8 +13,11 @@ PATCH5_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-candidate-family.sh"
 PATCH6_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-search-extended.sh"
 PATCH29_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-candidate-spec.sh"
 PATCH30_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-search-graph.sh"
+PATCH31_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-adaptive-planner.sh"
 REQUEST_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py"
 PROBE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py"
+ENDPOINT_EPOCH_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/endpoint_epoch.py"
+TELEMETRY_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/telemetry.py"
 RESOURCES_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/resources.py"
 CANDIDATE_SPEC_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate_spec.py"
 CANDIDATE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate.py"
@@ -31,8 +34,8 @@ fail()
 }
 
 for file in "${CI}" "${RELEASE}" "${MATRIX}" "${INTEGRATION}" "${VERSION_FILE}" "${MAKEFILE}" \
-    "${PATCH4_TEST}" "${PATCH5_TEST}" "${PATCH6_TEST}" "${PATCH29_TEST}" "${PATCH30_TEST}" \
-    "${REQUEST_PY}" "${PROBE_PY}" "${RESOURCES_PY}" "${CANDIDATE_SPEC_PY}" \
+    "${PATCH4_TEST}" "${PATCH5_TEST}" "${PATCH6_TEST}" "${PATCH29_TEST}" "${PATCH30_TEST}" "${PATCH31_TEST}" \
+    "${REQUEST_PY}" "${PROBE_PY}" "${ENDPOINT_EPOCH_PY}" "${TELEMETRY_PY}" "${RESOURCES_PY}" "${CANDIDATE_SPEC_PY}" \
     "${CANDIDATE_PY}" "${FAMILY_PY}" "${SEARCH_GRAPH_PY}" "${SEARCH_PY}" "${EXTENDED_PY}" "${CANDIDATE_ADAPTER}"
 do
     [ -s "${file}" ] || fail "required file is missing: ${file}"
@@ -40,6 +43,7 @@ done
 [ -x "${PATCH4_TEST}" ] || fail 'Python request/probe focused test is not executable'
 [ -x "${PATCH29_TEST}" ] || fail 'Python CandidateSpec/ResourceInventory focused test is not executable'
 [ -x "${PATCH30_TEST}" ] || fail 'Python native search-graph focused test is not executable'
+[ -x "${PATCH31_TEST}" ] || fail 'Python adaptive planner/search-epoch/telemetry focused test is not executable'
 
 version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(awk -F= '
@@ -91,6 +95,8 @@ grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-str
     fail 'FreeBSD 15 package job does not execute the Python CandidateSpec/ResourceInventory regression'
 grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-search-graph.sh' "${CI}" ||
     fail 'FreeBSD 15 package job does not execute the native search-graph regression'
+grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-adaptive-planner.sh' "${CI}" ||
+    fail 'FreeBSD 15 package job does not execute the adaptive planner/search-epoch/telemetry regression'
 grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-search-extended.sh' "${CI}" ||
     fail 'FreeBSD 15 package job does not execute the Python search/extended regression'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/state.py' "${CI}" ||
@@ -101,6 +107,10 @@ grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py'
     fail 'package inspection does not require the Python finite request module'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py' "${CI}" ||
     fail 'package inspection does not require the Python network/baseline probe module'
+grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/endpoint_epoch.py' "${CI}" ||
+    fail 'package inspection does not require the fixed search-epoch module'
+grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/telemetry.py' "${CI}" ||
+    fail 'package inspection does not require the timing telemetry module'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/resources.py' "${CI}" ||
     fail 'package inspection does not require the Python resource inventory module'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate_spec.py' "${CI}" ||
@@ -197,4 +207,4 @@ if grep -Fq 'Current corrective candidate: `os-zapret2-restyle-0.3.2_46.pkg`' "$
 fi
 
 sh -n "$0"
-echo "PASS: GitHub package builds stay on FreeBSD 15, Python 3.13 persistence/orchestration/request-probe/candidate-family/native-search-graph/search-extended layers are qualified, and live-candidate selection respects the active live gate for ${candidate}"
+echo "PASS: GitHub package builds stay on FreeBSD 15, Python 3.13 persistence/orchestration/request-probe/candidate-family/native-search-graph/adaptive-planner/search-extended layers are qualified, and live-candidate selection respects the active live gate for ${candidate}"

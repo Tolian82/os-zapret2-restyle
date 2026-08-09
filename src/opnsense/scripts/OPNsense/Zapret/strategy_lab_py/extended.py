@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import search
+from . import endpoint_epoch, search
 
 EX_OK = 0
 EX_USAGE = 64
@@ -34,6 +34,15 @@ def job_dir(job_id: str) -> Path:
     if not JOB_RE.fullmatch(job_id):
         raise ValueError("invalid Strategy Lab job id")
     return jobs_dir() / job_id
+
+
+def _search_epoch(job_id: str, endpoints: Path) -> endpoint_epoch.SearchEpoch:
+    endpoint_values = [
+        line.strip()
+        for line in endpoints.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    return endpoint_epoch.load(job_dir(job_id), endpoint_values)
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -121,7 +130,10 @@ def _candidate(
         str(runner), job_id, str(endpoints), str(candidate_path), candidate_id,
         family, str(strategy_path), use_hostlist,
     ]
-    status, timed_out = search._run_candidate(command, timeout, job_id, extra_env=env)
+    epoch = _search_epoch(job_id, endpoints)
+    status, timed_out, runner_ms = search._run_candidate(
+        command, timeout, job_id, extra_env=env
+    )
     if status == EX_CANCEL:
         return EX_CANCEL
     if timed_out:
@@ -136,13 +148,20 @@ def _candidate(
             port=int(port),
             l7=None if l7 == "-" else l7,
             target_binding=use_hostlist == "1",
+            epoch=epoch,
+            runner_ms=runner_ms,
         )
         value["protocol"] = protocol
         _atomic_json(candidate_path, value)
         return value
     if status != 0:
         raise RuntimeError(f"Strategy Lab {protocol} candidate runner failed for {candidate_id} with status {status}")
-    return search._read_candidate(candidate_path, candidate_id)
+    value = search._read_candidate(candidate_path, candidate_id)
+    if value.get("search_epoch_id") != epoch.epoch_id:
+        raise RuntimeError(f"Strategy Lab {protocol} candidate changed search epoch: {candidate_id}")
+    value["runner_duration_ms"] = runner_ms
+    _atomic_json(candidate_path, value)
+    return value
 
 
 def tcp(job_id: str, endpoints_file: str, result_file: str) -> int:
@@ -152,6 +171,7 @@ def tcp(job_id: str, endpoints_file: str, result_file: str) -> int:
     if not endpoints.is_file():
         return EX_USAGE
     output = Path(result_file)
+    epoch = _search_epoch(job_id, endpoints)
     catalog_path = Path(os.environ.get("STRATEGY_LAB_EXTENDED_CATALOG", str(module_dir() / "catalog/extended-tcp.tsv")))
     args_dir = Path(os.environ.get("STRATEGY_LAB_EXTENDED_ARGS_DIR", str(module_dir() / "catalog/extended-tcp")))
     rows = _catalog(catalog_path, 7)
@@ -160,6 +180,7 @@ def tcp(job_id: str, endpoints_file: str, result_file: str) -> int:
     work = job_dir(job_id) / "extended-tcp"
     work.mkdir(parents=True, exist_ok=True)
     result: dict[str, Any] = {
+        "search_epoch_id": epoch.epoch_id,
         "protocols": {
             "tls12": {"tested": [], "working": None},
             "http": {"tested": [], "working": None},
@@ -200,10 +221,17 @@ def quic(job_id: str, endpoints_file: str, network_file: str, result_file: str) 
     if not endpoints.is_file() or not network_path.is_file():
         return EX_USAGE
     output = Path(result_file)
+    epoch = _search_epoch(job_id, endpoints)
     capability = _load_json(network_path).get("quic_ipv4", "unknown")
     if not isinstance(capability, str):
         raise RuntimeError("Strategy Lab QUIC capability is invalid")
-    result: dict[str, Any] = {"capability": capability, "status": "pending", "tested": [], "working": None}
+    result: dict[str, Any] = {
+        "search_epoch_id": epoch.epoch_id,
+        "capability": capability,
+        "status": "pending",
+        "tested": [],
+        "working": None,
+    }
     _atomic_json(output, result)
     if capability != "available":
         result["status"] = "skipped"
@@ -290,7 +318,14 @@ def udp(job_id: str, endpoints_file: str, result_file: str) -> int:
     if not endpoints.is_file():
         return EX_USAGE
     output = Path(result_file)
-    result: dict[str, Any] = {"status": "pending", "port": None, "tested": [], "working": None}
+    epoch = _search_epoch(job_id, endpoints)
+    result: dict[str, Any] = {
+        "search_epoch_id": epoch.epoch_id,
+        "status": "pending",
+        "port": None,
+        "tested": [],
+        "working": None,
+    }
     _atomic_json(output, result)
     port, payload, reason = _udp_input(job_id)
     if reason is not None:

@@ -44,13 +44,15 @@ case "${MOCK_FAMILY_MODE:-all}" in
         ;;
 esac
 if [ "${all_pass}" = true ]; then endpoint_status=PASS; else endpoint_status=FAIL; fi
+epoch=$(jq -r .epoch_id "${STRATEGY_LAB_JOBS_DIR}/${1}/search-epoch.json")
 jq -n \
     --arg id "${candidate_id}" \
     --arg family "${family}" \
     --rawfile strategy "${strategy_file}" \
     --arg endpoint_status "${endpoint_status}" \
+    --arg epoch "${epoch}" \
     --argjson all_pass "${all_pass}" \
-    '{id:$id,family:$family,strategy:$strategy,endpoints:[{endpoint:"telegram.org",status:$endpoint_status}],all_pass:$all_pass}' \
+    '{id:$id,family:$family,strategy:$strategy,search_epoch_id:$epoch,endpoints:[{endpoint:"telegram.org",selected_ip:"203.0.113.10",status:$endpoint_status}],all_pass:$all_pass}' \
     > "${result_file}"
 MOCK
 chmod +x "${TMP_ROOT}/bin/candidate"
@@ -67,6 +69,19 @@ export STRATEGY_LAB_PYTHON_BIN="${STRATEGY_LAB_TEST_PYTHON:-python3.13}"
 export STRATEGY_LAB_LUA_DIR="${TMP_ROOT}/lua"
 export MOCK_FAMILY_LOCK="${TMP_ROOT}/family.lock"
 export MOCK_FAMILY_ORDER="${TMP_ROOT}/order.txt"
+
+PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_EPOCH_JOB_DIR="${TMP_ROOT}/run/jobs/job.test" \
+STRATEGY_LAB_EPOCH_ENDPOINTS="${TMP_ROOT}/endpoints.txt" "${STRATEGY_LAB_PYTHON_BIN}" - <<'PY'
+import os
+from pathlib import Path
+
+from strategy_lab_py.endpoint_epoch import create
+
+job = Path(os.environ["STRATEGY_LAB_EPOCH_JOB_DIR"])
+endpoints = Path(os.environ["STRATEGY_LAB_EPOCH_ENDPOINTS"]).read_text().splitlines()
+evidence = [{"endpoint": value, "dns_a": {"classification": "pass", "answers": ["203.0.113.10"]}} for value in endpoints]
+create(job, "telegram.org", "domain", endpoints, evidence)
+PY
 
 run_screen()
 {

@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import candidate_spec, request, resources
+from . import candidate_spec, endpoint_epoch, request, resources, telemetry
 
 EX_OK = 0
 EX_USAGE = 64
@@ -264,29 +264,36 @@ def _is_ipv4(value: str) -> bool:
         return False
 
 
-def _resolve_endpoints(job_id: str, endpoints: list[str]) -> list[dict[str, Any]]:
+def _pinned_endpoints(
+    job_id: str,
+    endpoints: list[str],
+) -> tuple[list[dict[str, Any]], endpoint_epoch.SearchEpoch]:
     work = runtime_dir(job_id)
     work.mkdir(parents=True, exist_ok=True)
     rule_base = _positive_int("STRATEGY_LAB_RULE_BASE", 19100)
     rule_max = _positive_int("STRATEGY_LAB_RULE_MAX", 19131)
     unique: list[str] = []
     bindings: list[dict[str, Any]] = []
+    epoch = endpoint_epoch.load(job_dir(job_id), endpoints)
 
-    for index, endpoint in enumerate(endpoints, 1):
-        if _is_ipv4(endpoint):
-            selected = str(ipaddress.ip_address(endpoint))
-        else:
-            dns = request.dns_request(endpoint, "A")
-            _write_text(work / f"candidate-{index}.a.log", request.combined_log(dns.execution))
-            if not dns.ok or not dns.answers:
-                raise RuntimeError(f"candidate DNS resolution failed for {endpoint}: {dns.classification}")
-            selected = dns.answers[0]
+    for item in epoch.bindings:
+        index = int(item["index"])
+        endpoint = str(item["endpoint"])
+        selected = str(item["selected_ip"])
         if selected not in unique:
             unique.append(selected)
         rule = rule_base + unique.index(selected)
         if rule > rule_max:
             raise RuntimeError("candidate endpoint set exceeds reserved firewall rule range")
-        bindings.append({"index": index, "endpoint": endpoint, "selected_ip": selected, "rule": rule})
+        bindings.append(
+            {
+                "index": index,
+                "endpoint": endpoint,
+                "addresses": list(item["addresses"]),
+                "selected_ip": selected,
+                "rule": rule,
+            }
+        )
 
     _write_text(work / "addresses-ipv4.txt", "".join(f"{address}\n" for address in unique))
     _write_text(
@@ -296,7 +303,7 @@ def _resolve_endpoints(job_id: str, endpoints: list[str]) -> list[dict[str, Any]
             for item in bindings
         ),
     )
-    return bindings
+    return bindings, epoch
 
 
 def _runtime_snapshot(job_id: str) -> dict[str, Any]:
@@ -492,6 +499,7 @@ def _error_result(
     description: candidate_spec.CandidateSpec | None = None,
     inventory: resources.ResourceInventory | None = None,
     runtime_arguments: tuple[str, ...] = (),
+    epoch: endpoint_epoch.SearchEpoch | None = None,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "id": candidate_id,
@@ -510,6 +518,10 @@ def _error_result(
         result["resource_inventory_id"] = inventory.inventory_id
     if runtime_arguments:
         result["runtime_arguments"] = list(runtime_arguments)
+    if epoch is not None:
+        result["search_epoch_id"] = epoch.epoch_id
+        result["search_epoch_generation"] = epoch.generation
+        result["endpoint_bindings"] = list(epoch.bindings)
     return result
 
 
@@ -537,20 +549,45 @@ def run_candidate(
     description: candidate_spec.CandidateSpec | None = None
     inventory: resources.ResourceInventory | None = None
     runtime_arguments: tuple[str, ...] = ()
+    epoch: endpoint_epoch.SearchEpoch | None = None
     cleanup_error = ""
+    total_started = time.monotonic()
+    timings: dict[str, Any] = {
+        "pre_cleanup_ms": 0,
+        "endpoint_binding_ms": 0,
+        "candidate_prepare_ms": 0,
+        "resource_render_ms": 0,
+        "firewall_install_ms": 0,
+        "launch_ms": 0,
+        "readiness_ms": 0,
+        "probe_ms": 0,
+        "cleanup_ms": 0,
+        "resource_init_ms": None,
+        "resource_init_scope": "included_in_launch_and_readiness",
+        "total_ms": 0,
+    }
 
     try:
         protocol = _protocol_spec()
         endpoints = _read_endpoints(endpoints_path)
         work = runtime_dir(job_id)
         work.mkdir(parents=True, exist_ok=True)
+        phase_started = time.monotonic()
         _require_adapter("cleanup", job_id)
-        bindings = _resolve_endpoints(job_id, endpoints)
+        timings["pre_cleanup_ms"] = telemetry.elapsed_ms(phase_started)
+        phase_started = time.monotonic()
+        bindings, epoch = _pinned_endpoints(job_id, endpoints)
+        timings["endpoint_binding_ms"] = telemetry.elapsed_ms(phase_started)
+        phase_started = time.monotonic()
         inventory = resources.ensure_job_inventory(job_dir(job_id))
         description = _candidate_description(
             candidate_id, family, protocol, strategy, use_hostlist, spec_file
         )
+        timings["candidate_prepare_ms"] = telemetry.elapsed_ms(phase_started)
+        phase_started = time.monotonic()
         runtime_arguments = _prepare_runtime_files(job_id, endpoints, description, inventory)
+        timings["resource_render_ms"] = telemetry.elapsed_ms(phase_started)
+        phase_started = time.monotonic()
         wan = _require_adapter("wan").strip()
         if not wan:
             raise RuntimeError("candidate WAN interface could not be resolved")
@@ -560,12 +597,19 @@ def run_candidate(
         )
         if use_hostlist == "1":
             _require_adapter("allow-access", job_id)
+        timings["firewall_install_ms"] = telemetry.elapsed_ms(phase_started)
+        phase_started = time.monotonic()
         _require_adapter("launch", job_id)
+        timings["launch_ms"] = telemetry.elapsed_ms(phase_started)
+        phase_started = time.monotonic()
         runtime_evidence = _readiness(job_id)
+        timings["readiness_ms"] = telemetry.elapsed_ms(phase_started)
         if not runtime_evidence.get("ready"):
             reason = runtime_evidence.get("fatal_reason") or "candidate runtime did not become ready"
             raise RuntimeError(str(reason))
+        phase_started = time.monotonic()
         endpoint_results = [_probe_endpoint(binding, protocol) for binding in bindings]
+        timings["probe_ms"] = telemetry.elapsed_ms(phase_started)
         result = {
             "id": candidate_id,
             "family": family,
@@ -573,6 +617,9 @@ def run_candidate(
             "candidate_spec": description.to_dict(),
             "resource_inventory_id": inventory.inventory_id,
             "runtime_arguments": list(runtime_arguments),
+            "search_epoch_id": epoch.epoch_id,
+            "search_epoch_generation": epoch.generation,
+            "endpoint_bindings": bindings,
             "endpoints": endpoint_results,
             "all_pass": bool(endpoint_results) and all(item["status"] == "PASS" for item in endpoint_results),
             "runtime": runtime_evidence,
@@ -581,7 +628,13 @@ def run_candidate(
             result["protocol"] = protocol.protocol
         _atomic_json(result_path, result)
         return EX_OK
-    except (OSError, ValueError, RuntimeError, request.RequestError) as exc:
+    except (
+        OSError,
+        ValueError,
+        RuntimeError,
+        request.RequestError,
+        endpoint_epoch.EndpointEpochError,
+    ) as exc:
         if runtime_evidence is None:
             readiness_path = runtime_dir(job_id) / "readiness.json"
             if readiness_path.is_file():
@@ -600,21 +653,49 @@ def run_candidate(
                 description,
                 inventory,
                 runtime_arguments,
+                epoch,
             ),
         )
         return EX_OK
     finally:
+        cleanup_started = time.monotonic()
         try:
             completed = _adapter("cleanup", job_id, timeout=15)
             if completed.returncode != 0:
                 cleanup_error = (completed.stderr or completed.stdout).strip() or "candidate cleanup failed"
         except RuntimeError as exc:
             cleanup_error = str(exc)
-        if cleanup_error and result_path.is_file():
+        timings["cleanup_ms"] = telemetry.elapsed_ms(cleanup_started)
+        timings["total_ms"] = telemetry.elapsed_ms(total_started)
+        if result_path.is_file():
             try:
                 current = json.loads(result_path.read_text(encoding="utf-8"))
-                current["cleanup_error"] = cleanup_error
-                current["all_pass"] = False
+                current["timing"] = timings
+                if cleanup_error:
+                    current["cleanup_error"] = cleanup_error
+                    current["all_pass"] = False
+                outcome = (
+                    "pass"
+                    if current.get("all_pass") is True
+                    else ("error" if current.get("error") is True else "fail")
+                )
+                try:
+                    telemetry.record(
+                        job_dir(job_id),
+                        "candidate_runtime",
+                        int(timings["total_ms"]),
+                        candidate_id=candidate_id,
+                        protocol=(description.protocol if description is not None else ""),
+                        outcome=outcome,
+                        details={
+                            "search_epoch_id": "" if epoch is None else epoch.epoch_id,
+                            "phases": timings,
+                        },
+                    )
+                except telemetry.TelemetryError as exc:
+                    current["telemetry_error"] = str(exc)
+                    current["error"] = True
+                    current["all_pass"] = False
                 _atomic_json(result_path, current)
             except (OSError, json.JSONDecodeError):
                 pass

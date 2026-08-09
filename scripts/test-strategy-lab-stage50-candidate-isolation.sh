@@ -40,22 +40,36 @@ set -eu
 output="$3"
 id="$4"
 family="$5"
+epoch=$(jq -r .epoch_id "${STRATEGY_LAB_JOBS_DIR}/${1}/search-epoch.json")
 case "${id}" in
     01-multisplit)
-        printf '{"id":"%s","family":"%s","strategy":"","endpoints":[],"all_pass":true}\n' "${id}" "${family}" > "${output}"
+        jq -n --arg id "${id}" --arg family "${family}" --arg epoch "${epoch}" '{id:$id,family:$family,strategy:"",search_epoch_id:$epoch,endpoints:[],all_pass:true}' > "${output}"
         exit 0
         ;;
     02-multidisorder)
-        printf '{"id":"%s","family":"%s","strategy":"","endpoints":[],"all_pass":false,"error":true,"message":"candidate runtime rejected itself"}\n' "${id}" "${family}" > "${output}"
+        jq -n --arg id "${id}" --arg family "${family}" --arg epoch "${epoch}" '{id:$id,family:$family,strategy:"",search_epoch_id:$epoch,endpoints:[],all_pass:false,error:true,message:"candidate runtime rejected itself"}' > "${output}"
         exit 1
         ;;
     *)
-        printf '{"id":"%s","family":"%s","strategy":"","endpoints":[],"all_pass":false}\n' "${id}" "${family}" > "${output}"
+        jq -n --arg id "${id}" --arg family "${family}" --arg epoch "${epoch}" '{id:$id,family:$family,strategy:"",search_epoch_id:$epoch,endpoints:[],all_pass:false}' > "${output}"
         exit 0
         ;;
 esac
 EOF
 chmod 0755 "${RUNNER}"
+
+PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_EPOCH_JOB_DIR="${JOB_DIR}" \
+STRATEGY_LAB_EPOCH_ENDPOINTS="${ENDPOINTS}" "${PYTHON}" - <<'PY'
+import os
+from pathlib import Path
+
+from strategy_lab_py.endpoint_epoch import create
+
+job = Path(os.environ["STRATEGY_LAB_EPOCH_JOB_DIR"])
+endpoints = Path(os.environ["STRATEGY_LAB_EPOCH_ENDPOINTS"]).read_text().splitlines()
+evidence = [{"endpoint": value, "dns_a": {"classification": "pass", "answers": ["203.0.113.10"]}} for value in endpoints]
+create(job, "example.test", "domain", endpoints, evidence)
+PY
 
 STRATEGY_LAB_JOBS_DIR="${JOBS}" \
 STRATEGY_LAB_LUA_DIR="${TMP}/lua" \

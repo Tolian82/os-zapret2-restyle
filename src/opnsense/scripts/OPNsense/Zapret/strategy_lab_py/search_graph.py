@@ -10,7 +10,8 @@ from typing import Any, Iterable
 from .candidate_spec import CandidateSpec
 from .resources import BUILTIN_BLOBS, ResourceInventory, ResourceInventoryError
 
-SEARCH_GRAPH_SCHEMA = 1
+SEARCH_GRAPH_SCHEMA = 2
+ADAPTIVE_PLANNER_SCHEMA = 1
 GOLDEN_BUILTIN_ID = "golden-fake-default-tls"
 GOLDEN_EXTERNAL_ID = "golden-owner-multisplit-fake-tls-7"
 
@@ -58,6 +59,8 @@ class SearchPlan:
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema": SEARCH_GRAPH_SCHEMA,
+            "planner_schema": ADAPTIVE_PLANNER_SCHEMA,
+            "ordering": "live-evidence",
             "graph_id": self.graph_id,
             "stage": self.stage,
             "accepted_families": list(self.accepted_families),
@@ -65,6 +68,26 @@ class SearchPlan:
             "golden_ids": list(self.golden_ids),
             "scheduled": [node.to_dict() for node in self.scheduled],
             "skipped": list(self.skipped),
+        }
+
+
+@dataclass(frozen=True)
+class SearchDecision:
+    node: SearchNode
+    reason: str
+    evidence_source: str
+    evidence_outcome: str
+    priority: tuple[int, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "candidate_id": self.node.candidate_id,
+            "family": self.node.spec.family,
+            "reason": self.reason,
+            "evidence_source": self.evidence_source,
+            "evidence_outcome": self.evidence_outcome,
+            "priority": list(self.priority),
+            "candidate_spec_id": self.node.spec.spec_id,
         }
 
 
@@ -219,6 +242,169 @@ class NativeSearchGraph:
             ),
             scheduled=tuple(scheduled),
             skipped=tuple(skipped),
+        )
+
+    def next_expansion(
+        self,
+        plan: SearchPlan,
+        reconnaissance: Iterable[dict[str, Any]],
+        observations: Iterable[dict[str, Any]],
+    ) -> SearchDecision | None:
+        """Select the next ready node from current-job PASS/FAIL evidence."""
+        if plan.stage != "expansion" or plan.graph_id != self.graph_id:
+            raise SearchGraphError("adaptive planner received the wrong search plan")
+        scheduled = {node.candidate_id: node for node in plan.scheduled}
+        all_expansion = {
+            node.candidate_id: node for node in self.stage_nodes("expansion")
+        }
+        skipped = {
+            str(item.get("candidate_id", ""))
+            for item in plan.skipped
+            if isinstance(item, dict)
+        }
+        recon_values = tuple(reconnaissance)
+        observation_values = tuple(observations)
+        recon_by_id: dict[str, dict[str, Any]] = {}
+        for item in recon_values:
+            if not isinstance(item, dict):
+                raise SearchGraphError("adaptive reconnaissance evidence is invalid")
+            candidate_id = item.get("id")
+            family = item.get("family")
+            outcome = item.get("all_pass")
+            if (
+                not isinstance(candidate_id, str)
+                or not candidate_id
+                or not isinstance(family, str)
+                or not isinstance(outcome, bool)
+            ):
+                raise SearchGraphError("adaptive reconnaissance evidence is invalid")
+            recon_by_id[candidate_id] = item
+
+        observed: dict[str, dict[str, Any]] = {}
+        ordered_observed: list[dict[str, Any]] = []
+        for item in observation_values:
+            if not isinstance(item, dict):
+                raise SearchGraphError("adaptive candidate evidence is invalid")
+            candidate_id = item.get("candidate_id")
+            outcome = item.get("all_pass")
+            if (
+                not isinstance(candidate_id, str)
+                or candidate_id not in scheduled
+                or candidate_id in observed
+                or not isinstance(outcome, bool)
+            ):
+                raise SearchGraphError("adaptive candidate evidence is invalid")
+            observed[candidate_id] = item
+            ordered_observed.append(item)
+
+        resolved = set(observed) | skipped
+        ready: list[SearchNode] = []
+        for candidate_id, node in scheduled.items():
+            if candidate_id in observed:
+                continue
+            expansion_parents = [
+                parent_id for parent_id in node.parent_ids if parent_id in all_expansion
+            ]
+            if all(parent_id in resolved for parent_id in expansion_parents):
+                ready.append(node)
+        if not ready:
+            if len(observed) == len(scheduled):
+                return None
+            raise SearchGraphError("adaptive planner has no reachable frontier")
+
+        graph_order = {
+            node.candidate_id: index for index, node in enumerate(self.nodes)
+        }
+        last_observed_id = (
+            str(ordered_observed[-1]["candidate_id"]) if ordered_observed else ""
+        )
+
+        def evidence(node: SearchNode) -> tuple[int, int, bool | None, str, str]:
+            if last_observed_id and last_observed_id in node.parent_ids:
+                outcome = bool(observed[last_observed_id]["all_pass"])
+                return (
+                    0,
+                    graph_order[last_observed_id],
+                    outcome,
+                    last_observed_id,
+                    "parent_pass_neighbor" if outcome else "parent_fail_stronger_neighbor",
+                )
+            for item in reversed(ordered_observed):
+                parent_id = str(item["candidate_id"])
+                if parent_id in node.parent_ids:
+                    outcome = bool(item["all_pass"])
+                    return (
+                        1,
+                        graph_order[parent_id],
+                        outcome,
+                        parent_id,
+                        "observed_parent_pass" if outcome else "observed_parent_fail",
+                    )
+            for parent_id in node.parent_ids:
+                item = recon_by_id.get(parent_id)
+                if item is not None:
+                    outcome = bool(item["all_pass"])
+                    return (
+                        2 if outcome else 3,
+                        graph_order[parent_id],
+                        outcome,
+                        parent_id,
+                        "stage50_pass_priority" if outcome else "stage50_fail_branch",
+                    )
+            family_values = [
+                item for item in recon_values if item.get("family") == node.spec.family
+            ]
+            if family_values:
+                outcome = any(item.get("all_pass") is True for item in family_values)
+                first_id = str(family_values[0].get("id", ""))
+                return (
+                    4 if outcome else 5,
+                    graph_order.get(first_id, len(self.nodes)),
+                    outcome,
+                    first_id,
+                    "family_pass_priority" if outcome else "family_fail_reachable",
+                )
+            return (6, len(self.nodes), None, "", "graph_frontier")
+
+        ranked: list[tuple[tuple[int, ...], SearchNode, str, str, str]] = []
+        for node in ready:
+            tier, branch_order, outcome, source, reason = evidence(node)
+            line_count = len(node.spec.strategy_lines)
+            if outcome is True:
+                strength = (
+                    node.spec.complexity,
+                    node.spec.search_cost,
+                    line_count,
+                )
+                outcome_name = "pass"
+            elif outcome is False:
+                strength = (
+                    -node.spec.complexity,
+                    -node.spec.search_cost,
+                    -line_count,
+                )
+                outcome_name = "fail"
+            else:
+                strength = (
+                    node.spec.search_cost,
+                    node.spec.complexity,
+                    line_count,
+                )
+                outcome_name = "none"
+            priority = (
+                tier,
+                branch_order,
+                *strength,
+                graph_order[node.candidate_id],
+            )
+            ranked.append((priority, node, reason, source, outcome_name))
+        priority, node, reason, source, outcome_name = min(ranked, key=lambda item: item[0])
+        return SearchDecision(
+            node=node,
+            reason=reason,
+            evidence_source=source,
+            evidence_outcome=outcome_name,
+            priority=priority,
         )
 
 

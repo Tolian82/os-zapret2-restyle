@@ -118,7 +118,7 @@ STRATEGY LAB TRANSACTION
 
 An automated job owns the shared Zapret2 lifecycle lock from initial snapshot through
 mandatory restoration. The normal service is stopped only after its exact initial
-state is recorded. The current `_30` implementation starts and fully removes one cold
+state is recorded. The current `_31` implementation starts and fully removes one cold
 temporary dvtws2 candidate between probes. Whether a later search implementation keeps
 multiple isolated workers or a compatible candidate bucket warm is deliberately open
 under `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
@@ -131,8 +131,8 @@ Stages are persisted atomically:
 20 normal service stop
 30 network capability precheck
 40 clean baseline
-50 TLS 1.3 reconnaissance (current `_30`: seven low-cost native graph seeds)
-60 native graph expansion (current `_30`: accepted evidence changes priority; all resource-eligible nodes remain reachable)
+50 TLS 1.3 reconnaissance (current `_31`: seven low-cost native graph seeds on one endpoint epoch)
+60 native graph expansion (current `_31`: each PASS/FAIL selects the next reachable neighbor)
 70 three-of-three stability confirmation
 80 extended protocol branches
 85 shortlist
@@ -140,14 +140,14 @@ Stages are persisted atomically:
 99 final report
 ```
 
-The current `_30` implementation runs different strategies strictly sequentially.
+The current `_31` implementation runs different strategies strictly sequentially.
 Screening may probe two different endpoints of the same service concurrently with one
 strategy. Stability confirmation uses fresh sequential connections and requires every
 required endpoint to pass three of three attempts. The approved target keeps 3/3 but
 makes it fail-fast and does not assume that cold process startup is permanently required
 for discovery.
 
-In the current `_30` source, Standard mode searches TLS 1.3 and Extended mode adds TLS
+In the current `_31` source, Standard mode searches TLS 1.3 and Extended mode adds TLS
 1.2, plain HTTP, capability-gated QUIC, and configured request-response UDP. The approved
 next search architecture removes the QUIC candidate-search branch while retaining the
 fixed IPv4 UDP/443 capability/precheck; IPv4/TCP/TLS receives the primary search budget
@@ -168,7 +168,8 @@ that ownership; adaptive-search `_28` changes Python-owned Stage-60 catalog
 reachability/prioritization, and `_29` adds normalized candidate/resource evidence and
 exact Python-owned runtime rendering. `_30` replaces active Stage-50/60 flat-catalog
 policy with the native DAG, golden corpus, semantic resource branches and exact variable
-ranges.
+ranges. `_31` adds live frontier decisions, fixed Stage-40 endpoint identity,
+two-to-three-winner defaults and durable phase timing.
 
 The active implementation boundary is:
 
@@ -213,15 +214,17 @@ Decision authority:
 APPROVED ADAPTIVE SEARCH TARGET
 ==================================================
 
-The current `_30` search implements the first three adaptive-search slices: Stage-50
+The current `_31` search implements the first four adaptive-search slices: Stage-50
 acceptance can prioritize a family but cannot gate other Stage-60 graph branches, and
 each candidate now has an immutable Python `CandidateSpec` bound to one job-scoped
 installed `ResourceInventory`. Python renders exact runtime arguments; active shell
 adapters perform only lifecycle/IPFW/dvtws2 system actions. Active Stage 50/60 use a
 validated seven-seed/sixteen-node native DAG with exact golden candidates; semantic
-resource eligibility and optional candidate ranges are persisted and preserved. Search
-result-adaptive ordering, endpoint epochs, telemetry and validation are not yet the final
-target. The approved post-migration architecture is defined in
+resource eligibility and optional candidate ranges are persisted and preserved. Every
+next Stage-60 node now follows live PASS/FAIL evidence, all comparisons use one recorded
+endpoint epoch, the normal result target is two to three and phase timing is durable.
+Timeout containment and later validation are not yet the final target. The approved
+post-migration architecture is defined in
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and
 `docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md`.
 
@@ -236,12 +239,16 @@ Key target properties:
 - golden native/owner working strategies prove representability and graph reachability;
 - the preceding three properties and deterministic native DAG are **implemented in
   `_30`**;
-- adaptive cost/evidence-based graph exploration with historical hits affecting order,
+- adaptive cost/evidence-based graph exploration with current-job hits affecting order,
   never reachability;
 - pinned endpoint/search-epoch comparison;
 - inexpensive discovery followed by fail-fast 3/3 and cold finalist long-GET validation;
 - normal early stop after two to three strong stable winners;
 - telemetry-driven timeout containment.
+
+Live graph ordering, endpoint pinning, the normal winner bound and timing collection are
+**implemented in `_31`**. Telemetry-driven deadline changes remain `_32`; lightweight
+discovery and finalist validation remain `_33`.
 
 Cold A, multiple-warm-worker B and warm-bucket/dispatcher C are experimental execution
 models. The architecture does not select one until the dedicated OPNsense experiment plan
@@ -251,11 +258,10 @@ proves result equivalence, deterministic routing, no state leakage and exact cle
 SHORTLIST AND CIRCULAR VALIDATION
 ==================================================
 
-The current `_30` result contract may expose three to five stable candidates, ordered
-with recommendation number one first. The adaptive-search target changes the normal
-search/validation early-stop goal to two to three strong candidates; source/result-schema
-behavior changes only in its dedicated implementation patch. Strategy Lab never writes a
-candidate to the saved Traffic Strategy.
+The current `_31` result contract publishes at most three replay-verified finalists,
+ordered with recommendation number one first. The normal target is two to three; a
+truthful one-candidate result remains valid when no second winner survives. Strategy Lab
+never writes a candidate to the saved Traffic Strategy.
 
 Temporary circular validation is a separate bounded lifecycle transaction:
 

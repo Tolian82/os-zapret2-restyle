@@ -9,10 +9,11 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import candidate_spec, resources, search_graph
+from . import candidate_spec, endpoint_epoch, resources, search_graph, telemetry
 
 EX_OK = 0
 EX_USAGE = 64
@@ -98,7 +99,8 @@ def _terminate(process: subprocess.Popen[str]) -> None:
     process.wait(timeout=1)
 
 
-def _run_candidate(command: list[str], timeout: float, job_id: str) -> tuple[int, bool]:
+def _run_candidate(command: list[str], timeout: float, job_id: str) -> tuple[int, bool, int]:
+    started = time.monotonic()
     try:
         process = subprocess.Popen(
             command,
@@ -116,20 +118,22 @@ def _run_candidate(command: list[str], timeout: float, job_id: str) -> tuple[int
     while process.poll() is None:
         if _cancel_requested(job_id):
             _terminate(process)
-            return EX_CANCEL, False
+            return EX_CANCEL, False, telemetry.elapsed_ms(started)
         if elapsed >= timeout:
             _terminate(process)
-            return EX_TIMEOUT, True
+            return EX_TIMEOUT, True, telemetry.elapsed_ms(started)
         try:
             process.wait(timeout=poll)
         except subprocess.TimeoutExpired:
             elapsed += poll
-    return int(process.returncode or 0), False
+    return int(process.returncode or 0), False, telemetry.elapsed_ms(started)
 
 
 def _timeout_result(
     job_id: str,
     description: candidate_spec.CandidateSpec,
+    epoch: endpoint_epoch.SearchEpoch,
+    runner_ms: int,
 ) -> dict[str, Any]:
     job = jobs_dir() / job_id
     inventory = resources.ensure_job_inventory(job)
@@ -147,9 +151,13 @@ def _timeout_result(
         "candidate_spec": description.to_dict(),
         "resource_inventory_id": inventory.inventory_id,
         "runtime_arguments": list(runtime_arguments),
+        "search_epoch_id": epoch.epoch_id,
+        "search_epoch_generation": epoch.generation,
+        "endpoint_bindings": list(epoch.bindings),
         "endpoints": [],
         "all_pass": False,
         "timeout": True,
+        "runner_duration_ms": runner_ms,
     }
 
 
@@ -172,10 +180,14 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
     if not endpoints.is_file():
         return EX_USAGE
     output = Path(result_file)
+    endpoint_values = [line.strip() for line in endpoints.read_text(encoding="utf-8").splitlines() if line.strip()]
+    epoch = endpoint_epoch.load(jobs_dir() / job_id, endpoint_values)
     graph = search_graph.native_tls13_graph()
     inventory = resources.ensure_job_inventory(jobs_dir() / job_id)
     plan = graph.plan("reconnaissance", (), inventory)
-    _atomic_json(jobs_dir() / job_id / "family-search-graph.json", plan.to_dict())
+    plan_evidence = plan.to_dict()
+    plan_evidence["search_epoch_id"] = epoch.epoch_id
+    _atomic_json(jobs_dir() / job_id / "family-search-graph.json", plan_evidence)
     runner = _candidate_runner()
     if not runner.is_file():
         raise RuntimeError(f"Strategy Lab candidate runner is unavailable: {runner}")
@@ -184,6 +196,7 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
     work.mkdir(parents=True, exist_ok=True)
     result: dict[str, Any] = {
         "search_graph_id": plan.graph_id,
+        "search_epoch_id": epoch.epoch_id,
         "total_graph_nodes": plan.total_graph_nodes,
         "total": len(plan.scheduled),
         "completed": 0,
@@ -216,11 +229,11 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
             str(runner), job_id, str(endpoints), str(candidate_path), candidate_id,
             family, str(strategy_path), hostlist, str(spec_path),
         ]
-        status, timed_out = _run_candidate(command, timeout, job_id)
+        status, timed_out, runner_ms = _run_candidate(command, timeout, job_id)
         if status == EX_CANCEL:
             return EX_CANCEL
         if timed_out:
-            candidate = _timeout_result(job_id, description)
+            candidate = _timeout_result(job_id, description, epoch, runner_ms)
             _atomic_json(candidate_path, candidate)
         else:
             candidate = _candidate_result(candidate_path, candidate_id)
@@ -232,11 +245,26 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
                     )
                 candidate["runner_status"] = status
                 _atomic_json(candidate_path, candidate)
+        if candidate.get("search_epoch_id") != epoch.epoch_id:
+            raise RuntimeError(
+                f"Strategy Lab candidate search epoch changed for {candidate_id}"
+            )
         candidate["strategy"] = description.strategy
         candidate["candidate_spec"] = description.to_dict()
         candidate["resource_inventory_id"] = inventory.inventory_id
         candidate["graph_node"] = node.to_dict()
+        candidate["runner_duration_ms"] = runner_ms
         _atomic_json(candidate_path, candidate)
+        telemetry.record(
+            jobs_dir() / job_id,
+            "reconnaissance_candidate",
+            runner_ms,
+            stage="50",
+            candidate_id=candidate_id,
+            protocol="tls13",
+            outcome="pass" if candidate.get("all_pass") is True else "fail",
+            details={"search_epoch_id": epoch.epoch_id},
+        )
         result["families"].append(candidate)
         result["completed"] = len(result["families"])
         result["accepted"] = [item.get("family", "") for item in result["families"] if item.get("all_pass") is True]

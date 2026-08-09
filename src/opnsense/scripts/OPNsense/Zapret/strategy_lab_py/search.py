@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import candidate_spec, resources, search_graph
+from . import candidate_spec, endpoint_epoch, resources, search_graph, telemetry
 
 EX_OK = 0
 EX_USAGE = 64
@@ -151,7 +151,8 @@ def _run_candidate(
     job_id: str,
     *,
     extra_env: dict[str, str] | None = None,
-) -> tuple[int, bool]:
+) -> tuple[int, bool, int]:
+    started = time.monotonic()
     env = os.environ.copy()
     if extra_env:
         env.update(extra_env)
@@ -173,16 +174,16 @@ def _run_candidate(
         if _cancel_requested(job_id):
             _terminate(process)
             _cleanup_after_forced_stop(job_id)
-            return EX_CANCEL, False
+            return EX_CANCEL, False, telemetry.elapsed_ms(started)
         if time.monotonic() >= deadline:
             _terminate(process)
             _cleanup_after_forced_stop(job_id)
-            return EX_TIMEOUT, True
+            return EX_TIMEOUT, True, telemetry.elapsed_ms(started)
         try:
             process.wait(timeout=min(0.1, max(0.01, deadline - time.monotonic())))
         except subprocess.TimeoutExpired:
             pass
-    return int(process.returncode or 0), False
+    return int(process.returncode or 0), False, telemetry.elapsed_ms(started)
 
 
 def _read_candidate(path: Path, candidate_id: str) -> dict[str, Any]:
@@ -205,6 +206,8 @@ def _timeout_result(
     target_binding: bool = True,
     attempt: int | None = None,
     description: candidate_spec.CandidateSpec | None = None,
+    epoch: endpoint_epoch.SearchEpoch | None = None,
+    runner_ms: int | None = None,
 ) -> dict[str, Any]:
     if description is None:
         description = candidate_spec.CandidateSpec.from_strategy(
@@ -246,6 +249,12 @@ def _timeout_result(
         )
     if attempt is not None:
         result["attempt"] = attempt
+    if epoch is not None:
+        result["search_epoch_id"] = epoch.epoch_id
+        result["search_epoch_generation"] = epoch.generation
+        result["endpoint_bindings"] = list(epoch.bindings)
+    if runner_ms is not None:
+        result["runner_duration_ms"] = runner_ms
     return result
 
 
@@ -257,23 +266,41 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
     if not endpoints.is_file() or not family_path.is_file():
         return EX_USAGE
     output = Path(result_file)
+    endpoint_values = [
+        line.strip()
+        for line in endpoints.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    epoch = endpoint_epoch.load(job_dir(job_id), endpoint_values)
     family_result = _load_json(family_path)
     accepted_raw = family_result.get("accepted", [])
     if not isinstance(accepted_raw, list) or not all(isinstance(item, str) for item in accepted_raw):
         raise RuntimeError("Strategy Lab Stage-50 family evidence is invalid")
+    reconnaissance = family_result.get("families", [])
+    if not isinstance(reconnaissance, list):
+        raise RuntimeError("Strategy Lab Stage-50 candidate evidence is invalid")
+    if family_result.get("search_epoch_id") != epoch.epoch_id:
+        raise RuntimeError("Strategy Lab Stage-50 evidence belongs to another search epoch")
     inventory = resources.ensure_job_inventory(job_dir(job_id))
     graph = search_graph.native_tls13_graph()
     plan = graph.plan("expansion", accepted_raw, inventory)
-    _atomic_json(job_dir(job_id) / "search-graph.json", plan.to_dict())
+    plan_evidence = plan.to_dict()
+    plan_evidence["search_epoch_id"] = epoch.epoch_id
+    _atomic_json(job_dir(job_id) / "search-graph.json", plan_evidence)
     runner = _candidate_runner("STRATEGY_LAB_EXPANSION_CANDIDATE_RUNNER")
     if not runner.is_file() or not os.access(runner, os.X_OK):
         raise RuntimeError(f"Strategy Lab expansion candidate runner is unavailable: {runner}")
     timeout = _positive_float("STRATEGY_LAB_EXPANSION_CANDIDATE_TIMEOUT", 5)
-    target = _positive_int("STRATEGY_LAB_EXPANSION_TARGET", 5)
+    target = _positive_int("STRATEGY_LAB_EXPANSION_TARGET", 3)
+    minimum = _positive_int("STRATEGY_LAB_EXPANSION_MIN_WINNERS", min(2, target))
+    if minimum > target:
+        raise ValueError("STRATEGY_LAB_EXPANSION_MIN_WINNERS cannot exceed the winner target")
     work = job_dir(job_id) / "parameter-expansion"
     work.mkdir(parents=True, exist_ok=True)
     result: dict[str, Any] = {
         "search_graph_id": plan.graph_id,
+        "search_epoch_id": epoch.epoch_id,
+        "planner_schema": search_graph.ADAPTIVE_PLANNER_SCHEMA,
         "total_graph_nodes": plan.total_graph_nodes,
         "total_available": len(plan.scheduled),
         "completed": 0,
@@ -282,6 +309,9 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
         "failed": [],
         "golden_ids": list(plan.golden_ids),
         "skipped": list(plan.skipped),
+        "schedule": [],
+        "winner_band": {"minimum": minimum, "target": target},
+        "early_stop": {"triggered": False, "winner_count": 0},
         "stopped_reason": "",
     }
     _atomic_json(output, result)
@@ -290,7 +320,12 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
         _atomic_json(output, result)
         return EX_OK
 
-    for node in plan.scheduled:
+    observations: list[dict[str, Any]] = []
+    while True:
+        decision = graph.next_expansion(plan, reconnaissance, observations)
+        if decision is None:
+            break
+        node = decision.node
         if _cancel_requested(job_id):
             return EX_CANCEL
         description = node.spec
@@ -312,7 +347,7 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
             str(runner), job_id, str(endpoints), str(candidate_path), candidate_id,
             family, str(strategy_path), hostlist, str(spec_path),
         ]
-        status, timed_out = _run_candidate(command, timeout, job_id)
+        status, timed_out, runner_ms = _run_candidate(command, timeout, job_id)
         if status == EX_CANCEL:
             return EX_CANCEL
         if timed_out:
@@ -322,28 +357,63 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
                 strategy,
                 job_id=job_id,
                 description=description,
+                epoch=epoch,
+                runner_ms=runner_ms,
             )
             _atomic_json(candidate_path, candidate)
         elif status != 0:
             raise RuntimeError(f"Strategy Lab expansion candidate runner failed for {candidate_id} with status {status}")
         else:
             candidate = _read_candidate(candidate_path, candidate_id)
+        if candidate.get("search_epoch_id") != epoch.epoch_id:
+            raise RuntimeError(
+                f"Strategy Lab expansion candidate changed search epoch: {candidate_id}"
+            )
         candidate["strategy"] = description.strategy
         candidate["candidate_spec"] = description.to_dict()
         candidate["resource_inventory_id"] = inventory.inventory_id
         candidate["graph_node"] = node.to_dict()
+        candidate["runner_duration_ms"] = runner_ms
         _atomic_json(candidate_path, candidate)
+        passed = candidate.get("all_pass") is True
+        observations.append({"candidate_id": candidate_id, "all_pass": passed})
+        schedule_item = decision.to_dict()
+        schedule_item.update(
+            sequence=len(observations),
+            outcome="pass" if passed else "fail",
+            duration_ms=runner_ms,
+        )
+        result["schedule"].append(schedule_item)
         result["candidates"].append(candidate)
         result["completed"] = len(result["candidates"])
         result["working"] = [str(item.get("id", "")) for item in result["candidates"] if item.get("all_pass") is True]
         result["failed"] = [str(item.get("id", "")) for item in result["candidates"] if item.get("all_pass") is not True]
+        result["early_stop"]["winner_count"] = len(result["working"])
         _atomic_json(output, result)
+        telemetry.record(
+            job_dir(job_id),
+            "adaptive_candidate",
+            runner_ms,
+            stage="60",
+            candidate_id=candidate_id,
+            protocol="tls13",
+            outcome="pass" if passed else "fail",
+            details={
+                "search_epoch_id": epoch.epoch_id,
+                "decision": schedule_item,
+            },
+        )
         if len(result["working"]) >= target:
             result["stopped_reason"] = "enough_candidates"
+            result["early_stop"]["triggered"] = True
             _atomic_json(output, result)
             return EX_OK
 
     result["stopped_reason"] = "graph_exhausted"
+    result["early_stop"]["winner_count"] = len(result["working"])
+    result["early_stop"]["within_normal_band"] = (
+        minimum <= len(result["working"]) <= target
+    )
     _atomic_json(output, result)
     return EX_OK
 
@@ -414,10 +484,25 @@ def stabilize(
     if not endpoints.is_file() or not expansion_path.is_file() or not family_path.is_file():
         return EX_USAGE
     output = Path(result_file)
-    sources = _stability_sources(_load_json(expansion_path), _load_json(family_path))
+    endpoint_values = [
+        line.strip()
+        for line in endpoints.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    epoch = endpoint_epoch.load(job_dir(job_id), endpoint_values)
+    expansion_result = _load_json(expansion_path)
+    family_result = _load_json(family_path)
+    if expansion_result.get("search_epoch_id") != epoch.epoch_id:
+        raise RuntimeError("Strategy Lab Stage-60 evidence belongs to another search epoch")
+    if family_result.get("search_epoch_id") != epoch.epoch_id:
+        raise RuntimeError("Strategy Lab Stage-50 evidence belongs to another search epoch")
+    sources = _stability_sources(expansion_result, family_result)
     attempts = _positive_int("STRATEGY_LAB_STABILITY_ATTEMPTS", 3)
     max_candidates = _positive_int("STRATEGY_LAB_STABILITY_MAX_CANDIDATES", 5)
     target = _positive_int("STRATEGY_LAB_STABILITY_TARGET", 3)
+    minimum = _positive_int("STRATEGY_LAB_STABILITY_MIN_WINNERS", min(2, target))
+    if minimum > target:
+        raise ValueError("STRATEGY_LAB_STABILITY_MIN_WINNERS cannot exceed the winner target")
     timeout = _positive_float("STRATEGY_LAB_STABILITY_ATTEMPT_TIMEOUT", 5)
     runner = _candidate_runner("STRATEGY_LAB_STABILITY_CANDIDATE_RUNNER")
     if not runner.is_file() or not os.access(runner, os.X_OK):
@@ -426,11 +511,14 @@ def stabilize(
     work.mkdir(parents=True, exist_ok=True)
     _atomic_json(work / "sources.json", sources)
     result: dict[str, Any] = {
+        "search_epoch_id": epoch.epoch_id,
         "total_candidates": len(sources),
         "completed": 0,
         "candidates": [],
         "stable": [],
         "unstable": [],
+        "winner_band": {"minimum": minimum, "target": target},
+        "early_stop": {"triggered": False, "winner_count": 0},
         "stopped_reason": "",
     }
     _atomic_json(output, result)
@@ -469,7 +557,7 @@ def stabilize(
                 family, str(strategy_path),
                 "1" if description.target_binding else "0", str(spec_path),
             ]
-            status, timed_out = _run_candidate(
+            status, timed_out, runner_ms = _run_candidate(
                 command, timeout, job_id,
                 extra_env={"STRATEGY_LAB_ENDPOINT_PROBE_MODE": "sequential"},
             )
@@ -483,19 +571,45 @@ def stabilize(
                     job_id=job_id,
                     attempt=attempt,
                     description=description,
+                    epoch=epoch,
+                    runner_ms=runner_ms,
                 )
                 _atomic_json(attempt_path, candidate)
             elif status != 0:
                 raise RuntimeError(f"Strategy Lab stability candidate runner failed for {candidate_id} with status {status}")
             else:
                 candidate = _read_candidate(attempt_path, candidate_id)
+            if candidate.get("search_epoch_id") != epoch.epoch_id:
+                raise RuntimeError(
+                    f"Strategy Lab stability candidate changed search epoch: {candidate_id}"
+                )
+            candidate["runner_duration_ms"] = runner_ms
+            candidate["attempt"] = attempt
+            _atomic_json(attempt_path, candidate)
             attempt_results.append(candidate)
+            telemetry.record(
+                job_dir(job_id),
+                "stability_attempt",
+                runner_ms,
+                stage="70",
+                candidate_id=candidate_id,
+                protocol="tls13",
+                outcome="pass" if candidate.get("all_pass") is True else "fail",
+                details={
+                    "attempt": attempt,
+                    "search_epoch_id": epoch.epoch_id,
+                    "timed_out": timed_out,
+                },
+            )
         stable = len(attempt_results) == attempts and all(item.get("all_pass") is True for item in attempt_results)
         candidate_result = {
             "id": candidate_id,
             "family": family,
             "strategy": description.strategy,
             "candidate_spec": description.to_dict(),
+            "search_epoch_id": epoch.epoch_id,
+            "search_epoch_generation": epoch.generation,
+            "endpoint_bindings": list(epoch.bindings),
             "attempts": attempt_results,
             "stable": stable,
             "pass_count": len([item for item in attempt_results if item.get("all_pass") is True]),
@@ -510,13 +624,19 @@ def stabilize(
         result["completed"] = len(result["candidates"])
         result["stable"] = [str(item.get("id", "")) for item in result["candidates"] if item.get("stable") is True]
         result["unstable"] = [str(item.get("id", "")) for item in result["candidates"] if item.get("stable") is not True]
+        result["early_stop"]["winner_count"] = len(result["stable"])
         _atomic_json(output, result)
         if len(result["stable"]) >= target:
             result["stopped_reason"] = "enough_stable_candidates"
+            result["early_stop"]["triggered"] = True
             _atomic_json(output, result)
             return EX_OK
 
     result["stopped_reason"] = "candidates_exhausted"
+    result["early_stop"]["winner_count"] = len(result["stable"])
+    result["early_stop"]["within_normal_band"] = (
+        minimum <= len(result["stable"]) <= target
+    )
     _atomic_json(output, result)
     return EX_OK
 

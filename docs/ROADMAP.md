@@ -28,9 +28,9 @@ release-selected Standard Scenario 1, including Stages 40/50, continued search a
 Stage-90 restoration.
 
 Current objective:
-**start adaptive-search `_31`: use live candidate evidence for neighbor ordering, pin the
-search-epoch endpoint set, adopt the approved two-to-three-winner early stop and persist
-per-phase timing telemetry on top of the qualified `_30` native graph.**
+**start adaptive-search `_32`: use the durable `_31` timing corpus to review and enforce
+the operation/candidate/stage/job deadline hierarchy without folding `_33` discovery or
+validation changes into the same source cycle.**
 
 Adaptive-search `_28` is complete: source/CI/FreeBSD qualification and the focused
 owner-assisted `accepted=[]` Stage-60 reachability/restoration check passed on
@@ -106,7 +106,7 @@ Planned source cycles:
   remove candidate resource/search policy from the shell adapter;
 - [x] `_30` — native-Zapret2 adaptive search graph, golden/reference corpus,
   BLOB-free/built-in/inline/external resource paths, and candidate-defined output range;
-- [ ] `_31` — adaptive neighbor ordering, fixed search-epoch endpoint binding, two-to-three
+- [x] `_31` — adaptive neighbor ordering, fixed search-epoch endpoint binding, two-to-three
   winner early stop, and per-phase timing telemetry;
 - [ ] `_32` — review every operation/candidate/stage/job deadline from measured telemetry
   and enforce deadline containment;
@@ -194,6 +194,8 @@ checks passed, immutable tag `v0.4.0` points to the verified release commit, Rel
 owner-tested `v0.4.0_2` candidate: an all-rejected Stage 50 still executed all 14 current
 Stage-60 catalog candidates and Stage 90 restored the initial RUNNING service without
 temporary IPFW residue. `_29` added `CandidateSpec`/`ResourceInventory` and removed
-active shell-adapter policy. `_30` is source-qualified as unpublished `0.4.0_4`; it adds
-the native search DAG, golden corpus, semantic resource eligibility and exact variable-
-range profiles without claiming new appliance evidence. `_31` is the next source cycle.
+active shell-adapter policy. `_30` added the native search DAG, golden corpus, semantic
+resource eligibility and exact variable-range profiles. `_31` is source-qualified as
+unpublished `0.4.0_5`; it adds live ordering, fixed endpoint identity, three-winner
+defaults and durable timing without claiming new appliance evidence. `_32` is the next
+source cycle.

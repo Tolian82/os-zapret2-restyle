@@ -12,6 +12,8 @@ command -v "${PYTHON}" >/dev/null 2>&1 || fail "Python 3.13 test interpreter is 
 [ -x "${JQ}" ] || fail 'jq is unavailable'
 
 "${PYTHON}" -m py_compile \
+    "${SCRIPT_DIR}/strategy_lab_py/telemetry.py" \
+    "${SCRIPT_DIR}/strategy_lab_py/endpoint_epoch.py" \
     "${SCRIPT_DIR}/strategy_lab_py/resources.py" \
     "${SCRIPT_DIR}/strategy_lab_py/candidate_spec.py" \
     "${SCRIPT_DIR}/strategy_lab_py/candidate.py" \
@@ -51,6 +53,25 @@ printf '%s\n' example.test > "${ENDPOINTS}"
 printf '%s\n' '--out-range=-d10' '--lua-desync=multisplit:pos=1' > "${STRATEGY}"
 printf '%s\n' 0 > "${COUNTER_STATE}"
 : > "${ACTIONS}"
+
+PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_EPOCH_JOB_DIR="${JOB_DIR}" \
+STRATEGY_LAB_EPOCH_ENDPOINTS="${ENDPOINTS}" "${PYTHON}" - <<'PY'
+import os
+from pathlib import Path
+
+from strategy_lab_py.endpoint_epoch import create
+
+job = Path(os.environ["STRATEGY_LAB_EPOCH_JOB_DIR"])
+endpoints = Path(os.environ["STRATEGY_LAB_EPOCH_ENDPOINTS"]).read_text().splitlines()
+evidence = [
+    {
+        "endpoint": endpoint,
+        "dns_a": {"classification": "pass", "answers": ["203.0.113.10"]},
+    }
+    for endpoint in endpoints
+]
+create(job, "example.test", "domain", endpoints, evidence)
+PY
 
 cat > "${DRILL}" <<'EOF'
 #!/bin/sh
@@ -123,6 +144,7 @@ run_candidate()
 run_candidate 0
 "${JQ}" -e '
   .id=="c1" and .family=="multisplit" and .all_pass==true and
+  (.search_epoch_id|startswith("se1-")) and
   (.candidate_spec.spec_id|startswith("cs1-")) and
   .candidate_spec.lua_instances[0].function=="multisplit" and
   .candidate_spec.ranges.out=="-d10" and
@@ -169,7 +191,11 @@ output="$3"; id="$4"; family="$5"
 if [ "${MOCK_TIMEOUT_ID:-}" = "${id}" ]; then sleep 2; fi
 all=false
 [ "${id}" != 02-multidisorder ] || all=true
-printf '{"id":"%s","family":"%s","strategy":"","endpoints":[],"all_pass":%s}\n' "${id}" "${family}" "${all}" > "${output}"
+epoch=$(jq -r .epoch_id "${STRATEGY_LAB_JOBS_DIR}/${1}/search-epoch.json")
+jq -n --arg id "${id}" --arg family "${family}" --arg epoch "${epoch}" \
+  --argjson all "${all}" \
+  '{id:$id,family:$family,strategy:"",search_epoch_id:$epoch,endpoints:[],all_pass:$all}' \
+  > "${output}"
 EOF
 chmod 0755 "${FAKE_CANDIDATE}"
 
@@ -182,6 +208,7 @@ STRATEGY_LAB_PYTHON_BIN="${PYTHON}" \
 sh "${LAUNCHER}" family screen "${JOB}" "${ENDPOINTS}" "${FAMILY_RESULT}"
 "${JQ}" -e '
   .total==7 and .completed==7 and (.families|length)==7 and
+  (.search_epoch_id|startswith("se1-")) and
   [.families[].id]==["01-multisplit","02-multidisorder","03-seqovl","04-fake","05-fake-split","06-syndata","07-hostfakesplit"] and
   .accepted==["multidisorder"] and (.rejected|length)==6 and .all_pass==true and
   (.search_graph_id|startswith("sg1-")) and .total_graph_nodes==7 and (.skipped|length)==0
@@ -211,5 +238,12 @@ rc=$?
 set -e
 [ "${rc}" -eq 125 ] || fail "pre-existing family cancellation returned ${rc}, expected 125"
 rm -f "${CANCEL}"
+
+"${JQ}" -e '
+  .schema==1 and
+  ([.events[].phase]|index("candidate_runtime"))!=null and
+  ([.events[].phase]|index("reconnaissance_candidate"))!=null
+' "${JOB_DIR}/timing-telemetry.json" >/dev/null ||
+  fail 'candidate/family timing telemetry is missing'
 
 echo 'PASS: Python 3.13 owns Strategy Lab candidate runtime/readiness/interception and ordered Stage-50 family screening'

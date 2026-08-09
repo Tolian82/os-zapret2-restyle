@@ -5,6 +5,8 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 ZAPRET_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
 REQUEST_PY="${ZAPRET_DIR}/strategy_lab_py/request.py"
 PROBE_PY="${ZAPRET_DIR}/strategy_lab_py/probe.py"
+EPOCH_PY="${ZAPRET_DIR}/strategy_lab_py/endpoint_epoch.py"
+TELEMETRY_PY="${ZAPRET_DIR}/strategy_lab_py/telemetry.py"
 COMPAT_PY="${ZAPRET_DIR}/strategy_lab_py/compat.py"
 RUNNER="${ZAPRET_DIR}/strategy_lab_probe_runner.sh"
 REQUEST_SH="${ZAPRET_DIR}/strategy_lab/request.sh"
@@ -20,7 +22,7 @@ fail()
 
 "${PYTHON}" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)' ||
     fail 'Python 3.13 is unavailable'
-"${PYTHON}" -m py_compile "${REQUEST_PY}" "${PROBE_PY}" "${COMPAT_PY}" ||
+"${PYTHON}" -m py_compile "${REQUEST_PY}" "${PROBE_PY}" "${EPOCH_PY}" "${TELEMETRY_PY}" "${COMPAT_PY}" ||
     fail 'Python request/probe modules do not compile'
 
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-python-probes.XXXXXX")
@@ -194,12 +196,41 @@ jq -e '.target=="probe.example" and .target_type=="domain" and .dns_a=="PASS" an
     fail 'Python baseline changed target/type or public DNS contract'
 jq -e '.endpoints[0].dns_a.classification=="pass" and .endpoints[0].dns_a.execution.returncode==0' "${WORK}/baseline-evidence.json" >/dev/null ||
     fail 'valid DNS execution evidence is missing'
+jq -e '
+  (.search_epoch_id|startswith("se1-")) and
+  (.endpoints[0].tls_ipv4.command|index("--resolve"))!=null and
+  (.endpoints[0].tls_ipv4.command|index("probe.example:443:203.0.113.10"))!=null
+' "${WORK}/baseline-evidence.json" >/dev/null ||
+    fail 'Stage 40 did not bind TLS evidence to the resolved search epoch'
+jq -e '.generation==1 and .bindings[0].selected_ip=="203.0.113.10"' "${WORK}/search-epoch.json" >/dev/null ||
+    fail 'Stage 40 search-epoch evidence is invalid'
 
 slow_file=$(baseline_case slow 0)
 jq -e '.dns_a=="PASS"' "${slow_file}" >/dev/null ||
     fail 'slow successful DNS response was rejected by the Stage 40 deadline'
 jq -e '.endpoints[0].dns_a.classification=="pass" and .endpoints[0].dns_a.execution.duration_ms>=2500 and .endpoints[0].dns_a.execution.timed_out==false' "${WORK}/baseline-evidence.json" >/dev/null ||
     fail 'slow successful DNS execution evidence is missing'
+jq -e '.generation==2 and (.epoch_id|startswith("se1-"))' "${WORK}/search-epoch.json" >/dev/null ||
+    fail 'deliberate Stage-40 rerun did not record a new search epoch'
+
+cp "${WORK}/search-epoch.json" "${WORK}/search-epoch.saved.json"
+printf '%s\n' '{invalid' > "${WORK}/search-epoch.json"
+MOCK_DNS_MODE=valid
+MOCK_CURL_MODE=baseline-fail
+export MOCK_DNS_MODE MOCK_CURL_MODE
+set +e
+run_probe baseline probe.example domain "${WORK}/endpoints.txt" "${WORK}/baseline-network.json" \
+    "${WORK}" "${WORK}/baseline-invalid-epoch.json" \
+    >"${WORK}/invalid-epoch.out" 2>"${WORK}/invalid-epoch.err"
+invalid_epoch_status=$?
+set -e
+[ "${invalid_epoch_status}" -eq 70 ] ||
+    fail "invalid prior search epoch returned ${invalid_epoch_status}, expected 70"
+grep -Fq 'ERROR: Strategy Lab search epoch is unreadable' "${WORK}/invalid-epoch.err" ||
+    fail 'invalid prior search epoch did not produce a structured software error'
+! grep -Fq 'Traceback' "${WORK}/invalid-epoch.err" ||
+    fail 'invalid prior search epoch escaped the compatibility error boundary'
+mv "${WORK}/search-epoch.saved.json" "${WORK}/search-epoch.json"
 
 parser_file=$(baseline_case parser 2)
 jq -e '.target_type=="domain" and .dns_a=="FAIL" and .endpoints[0].transport=="dns-a"' "${parser_file}" >/dev/null ||
@@ -216,6 +247,8 @@ timeout_file=$(baseline_case timeout 2)
 jq -e '.dns_a=="FAIL"' "${timeout_file}" >/dev/null || fail 'DNS timeout did not fail public DNS A state'
 jq -e '.endpoints[0].dns_a.classification=="timeout" and .endpoints[0].dns_a.execution.returncode==null and .endpoints[0].dns_a.execution.timed_out==true and .endpoints[0].dns_a.execution.termination=="timeout"' "${WORK}/baseline-evidence.json" >/dev/null ||
     fail 'DNS timeout was flattened into command or parser failure'
+jq -e '.schema==1 and ([.events[].phase]|index("clean_baseline"))!=null' "${WORK}/timing-telemetry.json" >/dev/null ||
+    fail 'probe timing telemetry is missing'
 
 grep -Fq 'exec "${PYTHON_LAUNCHER}" probe "$@"' "${RUNNER}" ||
     fail 'production probe runner does not delegate to Python'
