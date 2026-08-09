@@ -48,7 +48,11 @@ Current primary Strategy Lab authorities:
 - `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
 Current GitHub delivery authority:
-`docs/GITHUB_PUBLICATION.md` plus the active dated GitHub decisions referenced there.
+
+- `docs/GITHUB_PUBLICATION.md`;
+- `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
+- `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
+- `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
 
 Current live-gate authority:
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
