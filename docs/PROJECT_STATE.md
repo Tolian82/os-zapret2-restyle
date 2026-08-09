@@ -28,14 +28,14 @@ QUICK CONTEXT
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_1.pkg`
-Latest published testing prerelease: `v0.3.3_27` / `os-zapret2-restyle-0.3.3_27.pkg`
-Latest owner-tested testing candidate: `v0.3.3_27` / `os-zapret2-restyle-0.3.3_27.pkg`
+Latest published testing prerelease: `v0.4.0_2` / `os-zapret2-restyle-0.4.0_2.pkg`
+Latest owner-tested testing candidate: `v0.4.0_2` / `os-zapret2-restyle-0.4.0_2.pkg`
 Current source line: `VERSION=0.4.0`
 Current package revision: `PLUGIN_REVISION=2`
-Current source candidate: `os-zapret2-restyle-0.4.0_2.pkg` (source only; not yet published)
+Current source candidate: `os-zapret2-restyle-0.4.0_2.pkg` (published and owner-tested)
 Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **adaptive-search `_28` source candidate; focused OPNsense verification remains pending**
+Current phase: **adaptive-search `_28` qualified; `_29` CandidateSpec/ResourceInventory is next**
 v0.4.0 release gate: **COMPLETE — published and installed by the owner**
 
 Current primary Strategy Lab authority:
@@ -60,7 +60,7 @@ Current live-gate authority:
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
 Current live evidence:
-`docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md`.
+`docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md`.
 
 Current live-release-gate decision:
 `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
@@ -125,11 +125,34 @@ Detailed target architecture:
 Experiment/measurement authority:
 `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
-Implementation sequence: `_28` hard-gate removal is the current source candidate; `_29`
-CandidateSpec/ResourceInventory follows after `_28` qualification, then `_30` native
+Implementation sequence: `_28` hard-gate removal is source/CI/FreeBSD and owner-live
+qualified; `_29` CandidateSpec/ResourceInventory is the next source cycle, then `_30` native
 search graph/resources/golden corpus,
 `_31` adaptive planner/endpoint pinning/telemetry, `_32` timeout model, `_33`
 discovery/stability/deep validation.
+
+==================================================
+LATEST OWNER LIVE RESULT — `_28`
+==================================================
+
+Owner-assisted Standard Strategy Lab test:
+
+- candidate: `v0.4.0_2` / `os-zapret2-restyle-0.4.0_2.pkg`;
+- target: `discord.com`;
+- diagnostic job: `job.2HVQqr`;
+- Stage 50 PASS with `accepted=[]`, seven of seven family representatives rejected;
+- Stage 60 PASS with `total_available=14` and `completed=14`, proving every current
+  catalog row remained reachable despite the empty Stage-50 acceptance set;
+- Stage-60 stop reason: `catalog_exhausted`, not `no_accepted_family`;
+- Stage 90 PASS and `configctl zapret status` confirmed the initially RUNNING service was
+  running after the job;
+- no temporary IPFW rule from `19100–19131` remained; only normal rule `19000` was shown;
+- Stage 99 truthfully reported `NO_CANDIDATE` rather than an internal search error.
+
+This is the focused qualification required for `_28`. It proves search reachability and
+restoration, not that the pre-`_29` fixed catalog must find a strategy for every blocked
+target. Exact owner evidence is preserved in
+`docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md`.
 
 ==================================================
 LATEST OWNER LIVE RESULT — `_26`
@@ -301,9 +324,9 @@ release commit `5e2f98c503a94413be76d7fd6b7f5721fc436f56`; Release workflow run 
 published the package/checksum plus the Pages/pkg repository. The owner subsequently
 installed `0.4.0_1` on OPNsense.
 
-Adaptive-search `_28` advances only the source candidate to `0.4.0_2`. Its focused live
-verification is intentionally narrower than the full regression matrix: after a
-separately authorized testing-prerelease publication, a blocked target whose Stage 50
-accepts no family must still enter real Stage-60 candidate testing, preserve bounded
-cleanup, and pass Stage-90 restoration. `_27` remains the latest owner-tested evidence
-until that run exists. `_29` remains the next source cycle after `_28` qualification.
+Adaptive-search `_28` advanced the candidate to `0.4.0_2`, passed source/CI/FreeBSD
+qualification, was published as a testing prerelease and passed the focused owner-live
+gate on `discord.com`: Stage 50 accepted no family, Stage 60 still attempted all 14
+catalog candidates, and Stage 90 restored the initial RUNNING service without temporary
+IPFW residue. The full regression matrix remains open under risk-based selection. `_29`
+is now the next source cycle; it has not started in this documentation closeout.

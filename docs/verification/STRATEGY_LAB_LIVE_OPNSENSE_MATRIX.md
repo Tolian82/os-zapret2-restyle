@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; FULL REGRESSION MATRIX OPEN**
+Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; FULL REGRESSION MATRIX OPEN**
 
 This matrix is the canonical live-appliance regression inventory for Strategy Lab.
 Source tests, GitHub CI, and FreeBSD package builds cannot substitute for a live PASS when
@@ -15,22 +15,24 @@ TEST RECORD
 ==================================================
 
 - Tester: repository owner
-- Latest test date/time: `2026-08-08`
+- Latest test date/time: `2026-08-09`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.3.3_27.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.3.3_27.pkg`
-- Current corrective source candidate: `os-zapret2-restyle-0.3.3_27.pkg`
-- Current migration source candidate: `os-zapret2-restyle-0.3.3_27.pkg`
-- Latest owner-tested diagnostic job: not captured in the supplied `_27` transcript
+- Latest published testing candidate: `os-zapret2-restyle-0.4.0_2.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_2.pkg`
+- Current adaptive-search candidate: `os-zapret2-restyle-0.4.0_2.pkg`
+- Latest owner-tested diagnostic job: `job.2HVQqr`
 - WAN interface: `vtnet1`
-- Blocked-domain target: `rutracker.org`
+- Latest blocked-domain target: `discord.com`
 - Generic UDP target/port: `PENDING OWNER`
 
 Architecture / ABI baseline evidence:
 `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`.
 
 Latest live evidence:
+`docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md`.
+
+v0.4.0 release-selected evidence:
 `docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md`.
 
 Previous migration-handoff evidence:
@@ -61,6 +63,9 @@ Key live progression:
 - `_27` widened the DNS/stage deadline envelope; owner retesting passed Stage 40, passed
   Stage 50, continued through Stages 60/70 and ended truthfully as `NO_CANDIDATE` with
   Stage-90 cleanup/restoration PASS.
+- `_28` removed Stage-50 acceptance as a Stage-60 hard gate; owner testing on
+  `v0.4.0_2` produced `accepted=[]`, still attempted all 14 Stage-60 catalog candidates,
+  and passed exact Stage-90 cleanup/restoration.
 
 Historical `_17`, job `job.w0nXxQ`, ended with Stage 50 ERROR and Stage 90 PASS. Its
 candidate-runtime bundle was not collected, so the exact `_17` Stage-50 root cause remains
@@ -200,6 +205,29 @@ Owner-assisted `_27` Standard run against `rutracker.org`:
 This closes the `_26` Stage-50 and `_27` Stage-40 corrective live boundary. Exact supplied
 evidence is preserved in
 `docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md`.
+
+==================================================
+ADAPTIVE-SEARCH OWNER TEST — `_28`
+==================================================
+
+Owner-assisted `v0.4.0_2` Standard job `job.2HVQqr` against `discord.com`:
+
+- package version/ABI: `0.4.0_2`, `FreeBSD:15:amd64`;
+- Stages 00–40 PASS and direct TLS 1.3 baseline remains inaccessible;
+- Stage 50 PASS with `total=7`, `completed=7`, `accepted=[]` and all families rejected;
+- Stage 60 PASS with `total_available=14`, `completed=14`, all catalog candidates failed,
+  and `stopped_reason=catalog_exhausted`;
+- the obsolete `no_accepted_family` hard gate did not terminate or skip Stage 60;
+- Stage 70 PASS with zero stability candidates, as expected after no Stage-60 winner;
+- Stage 80 SKIPPED in Standard mode;
+- Stage 90 PASS and the initially RUNNING service was restored healthy;
+- post-job service status was RUNNING and the IPFW excerpt contained only normal rule
+  `19000`, with no temporary rule in `19100–19131`;
+- Stage 99 truthfully reported `NO_CANDIDATE` rather than an internal error.
+
+This is the change-specific focused PASS required before `_29`. It does not mark unrelated
+pending matrix rows as PASS. Exact evidence is preserved in
+`docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md`.
 
 ==================================================
 PYTHON MIGRATION OWNERSHIP
@@ -344,4 +372,6 @@ selected remain regression backlog and are not blockers merely because they are 
 
 For `v0.4.0`, Scenario 1 is the selected mandatory post-migration row and is PASS on
 `v0.3.3_27`. No known critical restoration/runtime defect remains from the `_26`/`_27`
-corrective cycle. Rows 2–18 remain open regression coverage without a claimed PASS.
+corrective cycle. Adaptive-search `_28` additionally has its focused change-specific
+owner PASS on `v0.4.0_2`. Rows 2–18 remain open regression coverage without a claimed
+PASS.
