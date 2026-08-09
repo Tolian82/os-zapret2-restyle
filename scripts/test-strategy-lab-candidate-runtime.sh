@@ -6,7 +6,12 @@ SCRIPT_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
 MODULE_DIR="${SCRIPT_DIR}/strategy_lab"
 TMP=$(mktemp -d /tmp/strategy-lab-candidate-test.XXXXXX)
 trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
-mkdir -p "${TMP}/bin" "${TMP}/run/jobs/job.test" "${TMP}/log" "${TMP}/lua"
+mkdir -p "${TMP}/bin" "${TMP}/run/jobs/job.test" "${TMP}/log" "${TMP}/lua" "${TMP}/fake"
+for lua in zapret-lib.lua zapret-antidpi.lua zapret-auto.lua unrelated.lua
+do
+    printf '%s\n' '-- fixture' > "${TMP}/lua/${lua}"
+done
+printf '%s\n' fake > "${TMP}/fake/unused.bin"
 # Production job directories are created with mktemp -d and start private. The temporary
 # dvtws2 runtime later drops to nobody, so this fixture must preserve that boundary.
 chmod 0700 "${TMP}/run/jobs/job.test"
@@ -187,6 +192,7 @@ export STRATEGY_LAB_DAEMON_BIN="${TMP}/bin/daemon"
 export STRATEGY_LAB_SOCKSTAT_BIN="${TMP}/bin/sockstat"
 export STRATEGY_LAB_NETSTAT_BIN=/nonexistent
 export STRATEGY_LAB_LUA_DIR="${TMP}/lua"
+export STRATEGY_LAB_FAKE_DIR="${TMP}/fake"
 export STRATEGY_LAB_WAN_DEVICE=mock0
 export MOCK_IPFW_STATE="${TMP}/ipfw.state"
 export MOCK_IPFW_LOG="${TMP}/ipfw.log"
@@ -217,6 +223,12 @@ if [ "${candidate_status}" -ne 0 ]; then
 fi
 /usr/bin/jq -e '
     .all_pass == true and (.endpoints|length)==2 and
+    (.candidate_spec.spec_id|startswith("cs1-")) and
+    .candidate_spec.ranges.out=="-d10" and
+    (.resource_inventory_id|startswith("ri1-")) and
+    ([.runtime_arguments[]|select(startswith("--lua-init="))]|length)==2 and
+    ([.runtime_arguments[]|select(contains("zapret-auto.lua"))]|length)==0 and
+    ([.runtime_arguments[]|select(contains("unrelated.lua"))]|length)==0 and
     all(.endpoints[];
         .selected_ip=="203.0.113.10" and
         .remote_ip=="203.0.113.10" and
@@ -226,6 +238,16 @@ fi
         .firewall.packets_after > .firewall.packets_before
     )
 ' "${TMP}/result.json" >/dev/null
+[ "$(grep -c '^--lua-init=' "${TMP}/run/jobs/job.test/candidate-runtime/dvtws.args")" -eq 2 ]
+! grep -Fq zapret-auto.lua "${TMP}/run/jobs/job.test/candidate-runtime/dvtws.args"
+! grep -Fq unrelated.lua "${TMP}/run/jobs/job.test/candidate-runtime/dvtws.args"
+grep -Fxq -- '--out-range=-d10' "${TMP}/run/jobs/job.test/candidate-runtime/dvtws.args"
+/usr/bin/jq -e '
+    .schema==1 and (.inventory_id|startswith("ri1-")) and
+    [.lua[].name]==["unrelated.lua","zapret-antidpi.lua","zapret-auto.lua","zapret-lib.lua"] and
+    [.external_blobs[].name]==["unused.bin"] and
+    .resource_classes==["blob-free","builtin","inline","external"]
+' "${TMP}/run/jobs/job.test/resource-inventory.json" >/dev/null
 [ ! -s "${TMP}/ipfw.state" ]
 [ ! -e "${MOCK_DVTWS_PIDFILE}" ]
 ! pgrep -f "${TMP}/bin/dvtws2" >/dev/null 2>&1

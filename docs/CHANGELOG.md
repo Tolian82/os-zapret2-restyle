@@ -8,6 +8,15 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+### Added
+
+- Added immutable normalized Python `CandidateSpec` evidence for every automated
+  candidate attempt, including stable identity, ordered Lua actions and arguments,
+  protocol/L3/L7/payload/range data, resource classes, provenance, cost/complexity and
+  exact rendered runtime arguments.
+- Added one job-scoped `ResourceInventory` snapshot of installed Zapret2 Lua and fake-file
+  resources, built-in BLOBs and inline capability at job initialization.
+
 ### Changed
 
 - Began the adaptive-search implementation with `_28`: Stage-50 `accepted` evidence now
@@ -15,6 +24,10 @@ The project starts its own version history at `0.1.0`.
   families. An all-rejected Stage-50 result therefore still enters bounded Stage-60
   candidate testing instead of reporting zero candidates solely because no family was
   accepted.
+- Continued the adaptive-search implementation with `_29`: Python now selects only the
+  candidate's declared Lua/resources/ranges and renders the exact dvtws2 argument file;
+  active shell candidate adapters retain FreeBSD/IPFW/dvtws2 lifecycle mutations but no
+  longer choose Lua, BLOB, range or search policy.
 
 ### Verification
 
@@ -23,6 +36,9 @@ The project starts its own version history at `0.1.0`.
   Stage-60 catalog candidates, and passed Stage-90 restoration with no temporary IPFW
   rule from `19100–19131`. Truthful `NO_CANDIDATE` does not invalidate the `_28`
   reachability/restoration PASS.
+- `_29` adds focused CandidateSpec/ResourceInventory, adapter-boundary and package-content
+  regressions. It makes no new owner-live PASS claim; `v0.4.0_2` remains the latest
+  published and owner-tested testing candidate.
 
 ## [0.4.0] - 2026-08-09
 

@@ -46,56 +46,6 @@ cleanup_candidate()
     return "${status}"
 }
 
-prepare_protocol()
-{
-    job="$1"
-    endpoints="$2"
-    strategy="$3"
-    use_hostlist="$4"
-    transport="$5"
-    port="$6"
-    l7="$7"
-
-    strategy_lab_job_id_valid "${job}" || return 1
-    [ "${transport}" = tcp ] || [ "${transport}" = udp ] || return 1
-    valid_port "${port}" || return 1
-    [ "${use_hostlist}" = 0 ] || [ "${use_hostlist}" = 1 ] || return 1
-    [ -r "${endpoints}" ] && [ -s "${endpoints}" ] && [ -r "${strategy}" ] || return 1
-
-    runtime=$(strategy_lab_candidate_runtime_dir "${job}")
-    args=$(strategy_lab_candidate_args_file "${job}")
-    hostlist=$(strategy_lab_candidate_hostlist_file "${job}")
-    tmp="${args}.tmp.$$"
-    mkdir -p "${runtime}" || return 1
-
-    if [ "${use_hostlist}" = 1 ]; then
-        cp "${endpoints}" "${hostlist}" || return 1
-        chmod 0644 "${hostlist}" || return 1
-    else
-        rm -f "${hostlist}"
-    fi
-
-    : > "${tmp}" || return 1
-    printf '%s\n' "--port=${STRATEGY_LAB_DIVERT_PORT}" >> "${tmp}"
-    if [ -d "${STRATEGY_LAB_LUA_DIR}" ]; then
-        find "${STRATEGY_LAB_LUA_DIR}" -maxdepth 1 -type f -name '*.lua' -print 2>/dev/null |
-            sort | while IFS= read -r lua
-            do
-                printf '%s\n' "--lua-init=@${lua}"
-            done >> "${tmp}"
-    fi
-    printf '%s\n' "--filter-${transport}=${port}" >> "${tmp}"
-    [ "${l7}" = '-' ] || printf '%s\n' "--filter-l7=${l7}" >> "${tmp}"
-    [ "${use_hostlist}" != 1 ] || printf '%s\n' "--hostlist=${hostlist}" >> "${tmp}"
-    printf '%s\n' '--out-range=-d10' >> "${tmp}"
-    cat "${strategy}" >> "${tmp}" || {
-        rm -f "${tmp}"
-        return 1
-    }
-    mv -f "${tmp}" "${args}"
-    chmod 0644 "${args}"
-}
-
 firewall_install_protocol()
 {
     addresses="$1"
@@ -195,23 +145,10 @@ case "${action}" in
         [ "$#" -eq 0 ] || exit 64
         strategy_lab_candidate_resolve_wan
         ;;
-    prepare)
-        [ "$#" -eq 4 ] || exit 64
-        strategy_lab_job_id_valid "$1" || exit 64
-        strategy_lab_candidate_prepare_files "$1" "$2" "$3" "$4"
-        ;;
-    prepare-protocol)
-        [ "$#" -eq 7 ] || exit 64
-        prepare_protocol "$1" "$2" "$3" "$4" "$5" "$6" "$7"
-        ;;
     cleanup)
         [ "$#" -eq 1 ] || exit 64
         strategy_lab_job_id_valid "$1" || exit 64
         cleanup_candidate "$1"
-        ;;
-    firewall-install)
-        [ "$#" -eq 2 ] || exit 64
-        strategy_lab_firewall_install_ipv4_rules "$1" "$2"
         ;;
     firewall-install-protocol)
         [ "$#" -eq 4 ] || exit 64

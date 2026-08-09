@@ -312,13 +312,14 @@ Active product baseline:
 
 - project version line: `0.4.x`;
 - current stable release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_1.pkg`;
-- current source candidate: `0.4.0_2`, adaptive-search `_28`; latest owner live evidence
-  remains the published `_27` Scenario-1 PASS until `_28` is separately published/tested;
+- current source candidate: `0.4.0_3`, adaptive-search `_29`; latest published and
+  owner-tested testing candidate remains `v0.4.0_2`;
 - asynchronous Strategy Lab is the only strategy-finding path;
 - the initial delivery, corrective series and Python migration through Patch 8 are source
   complete; corrective `_27` is merged and has replacement owner live evidence;
 - the adaptive-search design is approved and partially implemented: `_28` removes the
-  Stage-50 family hard gate while `_29`–`_33` remain pending;
+  Stage-50 family hard gate and `_29` adds immutable normalized candidate/resource
+  evidence plus exact Python-owned runtime rendering; `_30`–`_33` remain pending;
 - complete mock-driven API/configd-to-worker regression coverage is mandatory in CI;
 - release-selected owner-assisted OPNsense verification is required before stable release;
   the full live matrix remains regression inventory rather than an unconditional all-row

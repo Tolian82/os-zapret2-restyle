@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import request
+from . import candidate_spec, request, resources
 
 EX_OK = 0
 EX_USAGE = 64
@@ -170,6 +170,59 @@ def _write_text(path: Path, text: str) -> None:
             tmp.unlink()
         except FileNotFoundError:
             pass
+
+
+def _candidate_description(
+    candidate_id: str,
+    family: str,
+    protocol: ProtocolSpec,
+    strategy: str,
+    use_hostlist: str,
+) -> candidate_spec.CandidateSpec:
+    exact_profile = os.environ.get("STRATEGY_LAB_PROFILE_REPLAY_EXACT", "") == "1"
+    selector = os.environ.get("STRATEGY_LAB_PROFILE_REPLAY_SELECTOR", "") if exact_profile else None
+    return candidate_spec.CandidateSpec.from_strategy(
+        candidate_id=candidate_id,
+        family=family,
+        protocol=protocol.protocol,
+        transport=protocol.transport,
+        port=protocol.port,
+        l7=None if protocol.l7 == "-" else protocol.l7,
+        strategy=strategy,
+        target_binding=use_hostlist == "1",
+        # `_29` represents the pre-redesign fixed range as candidate data. Search
+        # selection of other ranges remains the separate `_30` responsibility.
+        out_range=None if exact_profile else "-d10",
+        render_mode="profile" if exact_profile else "fragment",
+        target_selector=selector,
+        provenance="profile-replay" if exact_profile else "legacy-catalog",
+    )
+
+
+def _prepare_runtime_files(
+    job_id: str,
+    endpoints: list[str],
+    description: candidate_spec.CandidateSpec,
+    inventory: resources.ResourceInventory,
+) -> tuple[str, ...]:
+    work = runtime_dir(job_id)
+    work.mkdir(parents=True, exist_ok=True)
+    hostlist = work / "hostlist.txt"
+    if description.target_binding:
+        _write_text(hostlist, "".join(f"{endpoint}\n" for endpoint in endpoints))
+    else:
+        try:
+            hostlist.unlink()
+        except FileNotFoundError:
+            pass
+    divert_port = _port(os.environ.get("STRATEGY_LAB_DIVERT_PORT", "9989"), "candidate divert port")
+    arguments = description.render_runtime_arguments(
+        inventory,
+        divert_port=divert_port,
+        hostlist_path=hostlist if description.target_binding else None,
+    )
+    _write_text(work / "dvtws.args", "".join(f"{argument}\n" for argument in arguments))
+    return arguments
 
 
 def _read_endpoints(path: Path) -> list[str]:
@@ -407,7 +460,16 @@ def _probe_endpoint(binding: dict[str, Any], spec: ProtocolSpec | None = None) -
     }
 
 
-def _error_result(candidate_id: str, family: str, strategy: str, runtime: dict[str, Any] | None, message: str) -> dict[str, Any]:
+def _error_result(
+    candidate_id: str,
+    family: str,
+    strategy: str,
+    runtime: dict[str, Any] | None,
+    message: str,
+    description: candidate_spec.CandidateSpec | None = None,
+    inventory: resources.ResourceInventory | None = None,
+    runtime_arguments: tuple[str, ...] = (),
+) -> dict[str, Any]:
     result: dict[str, Any] = {
         "id": candidate_id,
         "family": family,
@@ -419,6 +481,12 @@ def _error_result(candidate_id: str, family: str, strategy: str, runtime: dict[s
     }
     if runtime is not None:
         result["runtime"] = runtime
+    if description is not None:
+        result["candidate_spec"] = description.to_dict()
+    if inventory is not None:
+        result["resource_inventory_id"] = inventory.inventory_id
+    if runtime_arguments:
+        result["runtime_arguments"] = list(runtime_arguments)
     return result
 
 
@@ -442,30 +510,30 @@ def run_candidate(
         return EX_USAGE
     strategy = strategy_path.read_text(encoding="utf-8")
     runtime_evidence: dict[str, Any] | None = None
+    description: candidate_spec.CandidateSpec | None = None
+    inventory: resources.ResourceInventory | None = None
+    runtime_arguments: tuple[str, ...] = ()
     cleanup_error = ""
 
     try:
-        spec = _protocol_spec()
+        protocol = _protocol_spec()
         endpoints = _read_endpoints(endpoints_path)
         work = runtime_dir(job_id)
         work.mkdir(parents=True, exist_ok=True)
         _require_adapter("cleanup", job_id)
         bindings = _resolve_endpoints(job_id, endpoints)
+        inventory = resources.ensure_job_inventory(job_dir(job_id))
+        description = _candidate_description(
+            candidate_id, family, protocol, strategy, use_hostlist
+        )
+        runtime_arguments = _prepare_runtime_files(job_id, endpoints, description, inventory)
         wan = _require_adapter("wan").strip()
         if not wan:
             raise RuntimeError("candidate WAN interface could not be resolved")
-        if spec.protocol == "tls13" and spec.port == 443 and spec.l7 == "tls":
-            _require_adapter("prepare", job_id, str(endpoints_path), str(strategy_path), use_hostlist)
-            _require_adapter("firewall-install", str(work / "addresses-ipv4.txt"), wan)
-        else:
-            _require_adapter(
-                "prepare-protocol", job_id, str(endpoints_path), str(strategy_path), use_hostlist,
-                spec.transport, str(spec.port), spec.l7 or "-",
-            )
-            _require_adapter(
-                "firewall-install-protocol", str(work / "addresses-ipv4.txt"), wan,
-                spec.transport, str(spec.port),
-            )
+        _require_adapter(
+            "firewall-install-protocol", str(work / "addresses-ipv4.txt"), wan,
+            protocol.transport, str(protocol.port),
+        )
         if use_hostlist == "1":
             _require_adapter("allow-access", job_id)
         _require_adapter("launch", job_id)
@@ -473,17 +541,20 @@ def run_candidate(
         if not runtime_evidence.get("ready"):
             reason = runtime_evidence.get("fatal_reason") or "candidate runtime did not become ready"
             raise RuntimeError(str(reason))
-        endpoint_results = [_probe_endpoint(binding, spec) for binding in bindings]
+        endpoint_results = [_probe_endpoint(binding, protocol) for binding in bindings]
         result = {
             "id": candidate_id,
             "family": family,
             "strategy": strategy,
+            "candidate_spec": description.to_dict(),
+            "resource_inventory_id": inventory.inventory_id,
+            "runtime_arguments": list(runtime_arguments),
             "endpoints": endpoint_results,
             "all_pass": bool(endpoint_results) and all(item["status"] == "PASS" for item in endpoint_results),
             "runtime": runtime_evidence,
         }
-        if spec.protocol != "tls13":
-            result["protocol"] = spec.protocol
+        if protocol.protocol != "tls13":
+            result["protocol"] = protocol.protocol
         _atomic_json(result_path, result)
         return EX_OK
     except (OSError, ValueError, RuntimeError, request.RequestError) as exc:
@@ -494,7 +565,19 @@ def run_candidate(
                     runtime_evidence = json.loads(readiness_path.read_text(encoding="utf-8"))
                 except (OSError, json.JSONDecodeError):
                     runtime_evidence = None
-        _atomic_json(result_path, _error_result(candidate_id, family, strategy, runtime_evidence, str(exc)))
+        _atomic_json(
+            result_path,
+            _error_result(
+                candidate_id,
+                family,
+                strategy,
+                runtime_evidence,
+                str(exc),
+                description,
+                inventory,
+                runtime_arguments,
+            ),
+        )
         return EX_OK
     finally:
         try:

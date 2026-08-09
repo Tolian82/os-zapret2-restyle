@@ -125,7 +125,18 @@ def _candidate(
     if status == EX_CANCEL:
         return EX_CANCEL
     if timed_out:
-        value = search._timeout_result(candidate_id, family, strategy_path.read_text(encoding="utf-8"))
+        transport = "udp" if protocol in {"quic", "udp"} else "tcp"
+        value = search._timeout_result(
+            candidate_id,
+            family,
+            strategy_path.read_text(encoding="utf-8"),
+            job_id=job_id,
+            protocol=protocol,
+            transport=transport,
+            port=int(port),
+            l7=None if l7 == "-" else l7,
+            target_binding=use_hostlist == "1",
+        )
         value["protocol"] = protocol
         _atomic_json(candidate_path, value)
         return value

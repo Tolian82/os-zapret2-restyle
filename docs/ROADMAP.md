@@ -28,8 +28,9 @@ release-selected Standard Scenario 1, including Stages 40/50, continued search a
 Stage-90 restoration.
 
 Current objective:
-**start adaptive-search `_29`: add Python `CandidateSpec` and job-scoped installed
-`ResourceInventory`, keeping candidate resource/search policy out of the shell adapter.**
+**start adaptive-search `_30`: introduce the native-Zapret2 search graph, golden/reference
+corpus, semantic resource branches and candidate-defined output ranges on top of the
+qualified `_29` candidate/resource boundary.**
 
 Adaptive-search `_28` is complete: source/CI/FreeBSD qualification and the focused
 owner-assisted `accepted=[]` Stage-60 reachability/restoration check passed on
@@ -101,7 +102,7 @@ Planned source cycles:
   reachability while keeping accepted families first as evidence-based priority;
 - [x] `_28` live — on an explicitly published testing candidate, prove an all-rejected
   Stage-50 result still executes Stage-60 candidates and preserves Stage-90 restoration;
-- [ ] `_29` — add Python `CandidateSpec` and job-scoped installed `ResourceInventory`;
+- [x] `_29` — add Python `CandidateSpec` and job-scoped installed `ResourceInventory`;
   remove candidate resource/search policy from the shell adapter;
 - [ ] `_30` — native-Zapret2 adaptive search graph, golden/reference corpus,
   BLOB-free/built-in/inline/external resource paths, and candidate-defined output range;
@@ -192,4 +193,6 @@ checks passed, immutable tag `v0.4.0` points to the verified release commit, Rel
 `0.4.0_1` on OPNsense. Adaptive-search `_28` is complete on the published and
 owner-tested `v0.4.0_2` candidate: an all-rejected Stage 50 still executed all 14 current
 Stage-60 catalog candidates and Stage 90 restored the initial RUNNING service without
-temporary IPFW residue. `_29` is the next source cycle.
+temporary IPFW residue. `_29` is source-qualified as unpublished `0.4.0_3`; it adds
+`CandidateSpec`/`ResourceInventory` and removes active shell-adapter policy without
+claiming new appliance evidence. `_30` is the next source cycle.

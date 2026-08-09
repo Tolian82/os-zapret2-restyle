@@ -5,6 +5,7 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 SCRIPT_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
 PYTHON=${STRATEGY_LAB_TEST_PYTHON:-python3.13}
 RESULT="${SCRIPT_DIR}/strategy_lab_py/result.py"
+CANDIDATE_SPEC="${SCRIPT_DIR}/strategy_lab_py/candidate_spec.py"
 WORKER="${SCRIPT_DIR}/strategy_lab_worker.sh"
 PY_STAGE_ADAPTER="${SCRIPT_DIR}/strategy_lab_python_stage_adapter.sh"
 RESULT_RUNNER="${SCRIPT_DIR}/strategy_lab_result_runner.sh"
@@ -61,14 +62,16 @@ grep -Fq 'result "$@"' "${RESULT_RUNNER}" ||
     fail 'final result runner is not a thin Python launcher'
 grep -Fq 'STRATEGY_LAB_CANDIDATE_SYSTEM_ADAPTER="${PROFILE_ADAPTER}"' "${RESULT_RUNNER}" ||
     fail 'exact profile replay does not use the narrow profile system adapter'
-grep -Fq '"${line}" = "${selector}"' "${PROFILE_ADAPTER}" ||
-    fail 'profile system adapter does not replace only the validated static selector'
+grep -Fq 'body.append(f"--hostlist={hostlist_path}")' "${CANDIDATE_SPEC}" ||
+    fail 'Python CandidateSpec does not replace the validated static selector for exact replay'
+grep -Fq 'STRATEGY_LAB_PROFILE_REPLAY_SELECTOR' "${PROFILE_ADAPTER}" &&
+    fail 'profile system adapter still owns exact-selector replacement policy'
 grep -Fq 'exec /bin/sh "${BASE_ADAPTER}" "$@"' "${PROFILE_ADAPTER}" ||
     fail 'profile system adapter does not delegate remaining candidate system actions'
 [ ! -e "${LEGACY_REPLAY}" ] ||
     fail 'retired shell profile replay owner is still packaged'
 
-"${PYTHON}" -m py_compile "${RESULT}"
+"${PYTHON}" -m py_compile "${RESULT}" "${CANDIDATE_SPEC}"
 sh -n "${PY_STAGE_ADAPTER}"
 sh -n "${RESULT_RUNNER}"
 sh -n "${PROFILE_ADAPTER}"
