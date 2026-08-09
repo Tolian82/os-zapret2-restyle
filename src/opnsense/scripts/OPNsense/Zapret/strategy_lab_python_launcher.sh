@@ -6,11 +6,13 @@ PYTHON_BIN=${STRATEGY_LAB_PYTHON_BIN:-/usr/local/bin/python3}
 PYTHON_ENTRY="${SCRIPT_DIR}/strategy_lab_python.py"
 EXPECTED_PYTHON=3.13
 
-# Telemetry-derived containment defaults for Strategy Lab 0.4.0_7.
-# Keep the 150/270-second search budgets unchanged, retain an 8-second cold
-# candidate lifecycle, and let Stage 60 use the remaining Standard search
-# budget. Python candidate admission prevents a new child from starting unless
-# its full execution/termination/cleanup envelope fits before the parent limit.
+# Telemetry-derived containment defaults for Strategy Lab 0.4.0_8.
+# Keep the 150/270-second search budgets unchanged and retain the eight-second
+# cold candidate lifecycle. Stage 60 keeps its verified admission model; Stages
+# 70/80 now apply the same execution/termination/cleanup admission rule. Stage
+# 85 is explicitly bounded by the remaining search budget, while mandatory
+# Stage-90 restoration has a separate parent envelope large enough to contain
+# the existing bounded lifecycle transaction.
 : "${STRATEGY_LAB_SINGLE_CANDIDATE_TIMEOUT:=8}"
 : "${STRATEGY_LAB_EXPANSION_CANDIDATE_TIMEOUT:=8}"
 : "${STRATEGY_LAB_STABILITY_ATTEMPT_TIMEOUT:=8}"
@@ -19,13 +21,19 @@ EXPECTED_PYTHON=3.13
 : "${STRATEGY_LAB_UDP_CANDIDATE_TIMEOUT:=8}"
 : "${STRATEGY_LAB_CANDIDATE_TIMEOUT:=60}"
 : "${STRATEGY_LAB_STAGE60_TIMEOUT:=120}"
+: "${STRATEGY_LAB_STAGE70_TIMEOUT:=60}"
+: "${STRATEGY_LAB_STAGE80_TIMEOUT:=120}"
+: "${STRATEGY_LAB_STAGE85_TIMEOUT:=120}"
+: "${STRATEGY_LAB_RESTORE_PARENT_TIMEOUT:=180}"
 export STRATEGY_LAB_SINGLE_CANDIDATE_TIMEOUT \
     STRATEGY_LAB_EXPANSION_CANDIDATE_TIMEOUT \
     STRATEGY_LAB_STABILITY_ATTEMPT_TIMEOUT \
     STRATEGY_LAB_EXTENDED_CANDIDATE_TIMEOUT \
     STRATEGY_LAB_QUIC_CANDIDATE_TIMEOUT \
     STRATEGY_LAB_UDP_CANDIDATE_TIMEOUT \
-    STRATEGY_LAB_CANDIDATE_TIMEOUT STRATEGY_LAB_STAGE60_TIMEOUT
+    STRATEGY_LAB_CANDIDATE_TIMEOUT STRATEGY_LAB_STAGE60_TIMEOUT \
+    STRATEGY_LAB_STAGE70_TIMEOUT STRATEGY_LAB_STAGE80_TIMEOUT \
+    STRATEGY_LAB_STAGE85_TIMEOUT STRATEGY_LAB_RESTORE_PARENT_TIMEOUT
 
 runtime_error()
 {
