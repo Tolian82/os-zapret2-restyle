@@ -80,10 +80,19 @@ MOCK
 
 cat > "${MOCK_BIN}/candidate" <<'MOCK'
 #!/bin/sh
+job_id="$1"
 result_file="$3"
-cat > "${result_file}" <<'JSON'
-{"id":"mock-candidate","strategy":"--lua-desync=multisplit:pos=1","endpoints":[],"all_pass":false}
-JSON
+epoch_file="${STRATEGY_LAB_JOBS_DIR}/${job_id}/search-epoch.json"
+epoch_id=$("${STRATEGY_LAB_JQ}" -er '.epoch_id' "${epoch_file}")
+"${STRATEGY_LAB_JQ}" -nc --arg epoch_id "${epoch_id}" '
+    {
+        id:"mock-candidate",
+        strategy:"--lua-desync=multisplit:pos=1",
+        endpoints:[],
+        all_pass:false,
+        search_epoch_id:$epoch_id
+    }
+' > "${result_file}"
 exit 0
 MOCK
 
