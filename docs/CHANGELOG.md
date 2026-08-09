@@ -16,6 +16,14 @@ The project starts its own version history at `0.1.0`.
   candidate testing instead of reporting zero candidates solely because no family was
   accepted.
 
+### Verification
+
+- Published and owner-tested `v0.4.0_2` on OPNsense. Standard job `job.2HVQqr` against
+  `discord.com` produced `accepted=[]` at Stage 50, still attempted all 14 current
+  Stage-60 catalog candidates, and passed Stage-90 restoration with no temporary IPFW
+  rule from `19100–19131`. Truthful `NO_CANDIDATE` does not invalidate the `_28`
+  reachability/restoration PASS.
+
 ## [0.4.0] - 2026-08-09
 
 ### Added

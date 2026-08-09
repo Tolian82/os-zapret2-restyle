@@ -22,7 +22,8 @@ For current Strategy Lab post-migration/adaptive-search work, read these first:
 - `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — A/B/C cold/warm runtime, dispatcher, preload, discovery-probe and timeout-telemetry verification plan;
 - `docs/devlog/2026-08-08-strategy-lab-adaptive-search-design.md` — documentation-only design handoff into the planned `_28`–`_33` implementation series;
 - `docs/patches/v0.4.0_2.md` — `_28` source contract: Stage-50 evidence changes Stage-60 priority but never catalog-family reachability;
-- `docs/devlog/2026-08-09-v0.4.0_2-stage60-family-reachability.md` — `_28` implementation, regression and focused live handoff;
+- `docs/devlog/2026-08-09-v0.4.0_2-stage60-family-reachability.md` — `_28` implementation, regression, publication and owner-tested closeout;
+- `docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md` — `_28` focused live PASS: `accepted=[]`, all 14 Stage-60 catalog candidates attempted, Stage-90 restoration PASS and no temporary IPFW residue;
 - `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md` — active release-specific live-selection policy; preserves the full regression matrix without making every pending row an unconditional release blocker;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical owner-assisted live regression inventory; v0.4.0-selected Scenario 1 is PASS on `_27`;
 - `docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md` — current `_27` live evidence: Stages 40/50/60/70/90 PASS and truthful `NO_CANDIDATE`;
@@ -68,7 +69,8 @@ Python DNS deadline and enclosing Stage-40 operation envelope using new owner ev
 
 The 2026-08-08 adaptive-search decision is the active target architecture. `_28`
 implements its first slice in the current source: Stage-50 acceptance is priority
-evidence only and no longer gates Stage-60 catalog reachability. Cold execution, current
+evidence only and no longer gates Stage-60 catalog reachability. The published
+`v0.4.0_2` candidate has source/CI/FreeBSD and focused owner-live qualification. Cold execution, current
 candidate representation/resources/range, QUIC branch, ordering/telemetry, timeout and
 validation changes remain assigned to `_29`–`_33` as documented.
 The A/B/C warm-runtime choice remains evidence-gated by the experiment plan.
@@ -101,7 +103,8 @@ weaken product behavior.
 - `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — earlier hardening finding-to-patch traceability;
 - `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — shell-era source/CI closure; live matrix remains the product gate;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical live regression inventory with release-specific mandatory-row selection;
-- `docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md` — latest owner evidence and v0.4.0 live-gate PASS;
+- `docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md` — latest owner evidence and adaptive-search `_28` focused live PASS;
+- `docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md` — v0.4.0 release-selected Scenario-1 live-gate PASS;
 - `docs/verification/evidence/2026-08-08-v0.3.3_25-scenario-01-stage50-candidate-isolation.md` — prior post-migration Stage-50 evidence;
 - `docs/verification/evidence/2026-08-07-v0.3.3_16-scenario-01-stage50-hostlist-access.md` — `_16` post-drop hostlist traversal evidence;
 - `docs/verification/evidence/2026-08-07-v0.3.3_15-scenario-01-stage50-freebsd-daemon-supervisor.md` — `_15` resident FreeBSD daemon startup evidence;
