@@ -27,7 +27,9 @@ Stage-50/60 hard-gate removal in the published/owner-tested `0.4.0_2` candidate.
 implements `CandidateSpec`, job-scoped `ResourceInventory`, exact Python rendering and
 active shell-adapter policy cleanup in `0.4.0_3`; `_30` implements the native graph,
 golden corpus, semantic resource branches and candidate-defined ranges in the `0.4.0_4`
-source candidate. `_31`–`_33` remain planned. Documentation must continue to distinguish each implemented slice from the
+source candidate. `_31` implements live-evidence ordering, fixed endpoint epochs,
+two-to-three-winner defaults and timing telemetry in `0.4.0_5`; `_32`–`_33` remain
+planned. Documentation must continue to distinguish each implemented slice from the
 remaining approved target architecture.
 
 ==================================================
@@ -257,13 +259,14 @@ package revisions:
 - `_30` — implemented in `0.4.0_4` source: introduce the native-Zapret2 search graph,
   golden corpus, BLOB-free/builtin/inline/file-resource branches and candidate-defined
   output ranges;
-- `_31` — adaptive ordering, endpoint pinning, early-stop policy and timing telemetry;
+- `_31` — implemented in `0.4.0_5` source: adaptive ordering, fixed endpoint epoch,
+  early-stop policy and timing telemetry;
 - `_32` — telemetry-driven operation/candidate/stage/job timeout model;
 - `_33` — lightweight discovery, fail-fast 3/3 stability and finalist long-GET/16-KiB
   validation.
 
-The A/B/C runtime experiment may inform `_31` or a later dedicated source patch. It is
-not silently folded into `_28`–`_30` before its equivalence and safety gates pass.
+The A/B/C runtime experiment may inform a later dedicated source patch. It is not
+silently folded into `_28`–`_31` before its equivalence and safety gates pass.
 
 ==================================================
 AFFECTED DOCUMENTS

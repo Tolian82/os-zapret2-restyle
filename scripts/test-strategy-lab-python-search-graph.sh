@@ -12,6 +12,8 @@ command -v "${PYTHON}" >/dev/null 2>&1 || fail "Python test interpreter is unava
 [ -x "${JQ}" ] || fail 'jq is unavailable'
 
 "${PYTHON}" -m py_compile \
+    "${SCRIPT_DIR}/strategy_lab_py/telemetry.py" \
+    "${SCRIPT_DIR}/strategy_lab_py/endpoint_epoch.py" \
     "${SCRIPT_DIR}/strategy_lab_py/resources.py" \
     "${SCRIPT_DIR}/strategy_lab_py/candidate_spec.py" \
     "${SCRIPT_DIR}/strategy_lab_py/search_graph.py" \
@@ -37,7 +39,29 @@ done
 printf '%s\n' fake > "${FAKE_DIR}/fake_tls_7.bin"
 printf '%s\n' unrelated > "${FAKE_DIR}/wireguard_initiation.bin"
 printf '%s\n' example.test > "${TMP}/endpoints.txt"
-printf '%s\n' '{"accepted":["fake"]}' > "${TMP}/family.json"
+
+PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_GRAPH_JOB_DIR="${JOB_DIR}" \
+STRATEGY_LAB_GRAPH_ENDPOINTS="${TMP}/endpoints.txt" "${PYTHON}" - <<'PY'
+import os
+from pathlib import Path
+
+from strategy_lab_py.endpoint_epoch import create
+
+job = Path(os.environ["STRATEGY_LAB_GRAPH_JOB_DIR"])
+endpoints = Path(os.environ["STRATEGY_LAB_GRAPH_ENDPOINTS"]).read_text().splitlines()
+evidence = [
+    {
+        "endpoint": endpoint,
+        "dns_a": {"classification": "pass", "answers": ["203.0.113.10"]},
+    }
+    for endpoint in endpoints
+]
+create(job, "example.test", "domain", endpoints, evidence)
+PY
+EPOCH_ID=$("${JQ}" -r .epoch_id "${JOB_DIR}/search-epoch.json")
+"${JQ}" -n --arg epoch "${EPOCH_ID}" \
+  '{accepted:["fake"],families:[{id:"04-fake",family:"fake",all_pass:true}],search_epoch_id:$epoch}' \
+  > "${TMP}/family.json"
 
 PYTHONPATH="${SCRIPT_DIR}" \
 STRATEGY_LAB_GRAPH_LUA_DIR="${LUA_DIR}" \
@@ -110,6 +134,21 @@ assert fake_priority.scheduled[0].candidate_id == "fake-repeat2"
 assert {node.candidate_id for node in fake_priority.scheduled} == {
     node.candidate_id for node in expansion
 }
+pass_recon = [{"id": "04-fake", "family": "fake", "all_pass": True}]
+fail_recon = [{"id": "04-fake", "family": "fake", "all_pass": False}]
+assert graph.next_expansion(fake_priority, pass_recon, []).node.candidate_id == GOLDEN_BUILTIN_ID
+assert graph.next_expansion(fake_priority, fail_recon, []).node.candidate_id == "fake-repeat2"
+after_failure = graph.next_expansion(
+    fake_priority,
+    pass_recon,
+    [
+        {"candidate_id": GOLDEN_BUILTIN_ID, "all_pass": False},
+        {"candidate_id": "fake-repeat2", "all_pass": False},
+    ],
+)
+assert after_failure is not None
+assert after_failure.node.candidate_id == "fake-rnd"
+assert after_failure.reason == "parent_fail_stronger_neighbor"
 
 without_owner = root / "fake-without-owner"
 without_owner.mkdir()
@@ -168,8 +207,10 @@ jq -e --arg id "${id}" --arg family "${family}" \
     '.candidate_id==$id and .family==$family and (.spec_id|startswith("cs1-"))' \
     "${spec}" >/dev/null
 printf '%s\n' "${id}" >> "${MOCK_LOG}"
-jq -n --arg id "${id}" --arg family "${family}" --rawfile strategy "${strategy}" \
-    '{id:$id,family:$family,strategy:$strategy,endpoints:[],all_pass:false}' > "${result}"
+epoch=$(jq -r .epoch_id "${STRATEGY_LAB_JOBS_DIR}/${1}/search-epoch.json")
+jq -n --arg id "${id}" --arg family "${family}" --arg epoch "${epoch}" \
+    --rawfile strategy "${strategy}" \
+    '{id:$id,family:$family,strategy:$strategy,search_epoch_id:$epoch,endpoints:[],all_pass:false}' > "${result}"
 MOCK
 chmod 0755 "${RUNNER}"
 
@@ -186,6 +227,7 @@ sh "${LAUNCHER}" search expand \
 "${JQ}" -e '
   (.search_graph_id|startswith("sg1-")) and
   .total_graph_nodes==16 and .total_available==16 and .completed==16 and
+  .planner_schema==1 and (.schedule|length)==16 and
   (.working|length)==0 and (.failed|length)==16 and
   .golden_ids==["golden-owner-multisplit-fake-tls-7","golden-fake-default-tls"] and
   (.skipped|length)==0 and .stopped_reason=="graph_exhausted" and
@@ -195,7 +237,8 @@ sh "${LAUNCHER}" search expand \
     cat "${TMP}/expansion.json" >&2
     fail 'native graph Stage-60 execution evidence is invalid'
 }
-[ "$(sed -n '1p' "${LOG}")" = 'fake-repeat2' ] || fail 'accepted family did not affect graph priority'
+[ "$(sed -n '1,3p' "${LOG}" | paste -sd, -)" = 'golden-fake-default-tls,fake-repeat2,fake-rnd' ] ||
+  fail 'live PASS/FAIL evidence did not adapt native-graph neighbor order'
 "${JQ}" -e '.stage=="expansion" and .total_graph_nodes==16 and (.scheduled|length)==16' \
     "${JOB_DIR}/search-graph.json" >/dev/null || fail 'job search graph evidence is missing'
 

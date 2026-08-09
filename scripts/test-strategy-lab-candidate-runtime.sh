@@ -65,14 +65,8 @@ esac
 SH
 cat > "${TMP}/bin/drill" <<'SH'
 #!/bin/sh
-host=$1
-type=${2:-A}
-printf '%s\n' ';; QUESTION SECTION:'
-printf '%s. 60 IN %s 198.51.100.99\n' "$host" "$type"
-printf '%s\n' ';; ANSWER SECTION:'
-printf '%s. 60 IN A 203.0.113.%s\n' "$host" "${MOCK_DRILL_OCTET:-10}"
-printf '%s\n' ';; AUTHORITY SECTION:'
-printf '%s. 60 IN A 198.51.100.98\n' "$host"
+printf '%s\n' called >> "${MOCK_DRILL_LOG:?}"
+exit 99
 SH
 cat > "${TMP}/bin/curl" <<'SH'
 #!/bin/sh
@@ -173,6 +167,7 @@ chmod +x "${TMP}/bin/"*
 : > "${TMP}/ipfw.state"
 : > "${TMP}/ipfw.log"
 printf '%s\n' 0 > "${TMP}/ipfw.counter"
+: > "${TMP}/drill.log"
 printf '%s\n' telegram.org web.telegram.org > "${TMP}/endpoints.txt"
 
 export SCRIPT_DIR MODULE_DIR
@@ -197,10 +192,31 @@ export STRATEGY_LAB_WAN_DEVICE=mock0
 export MOCK_IPFW_STATE="${TMP}/ipfw.state"
 export MOCK_IPFW_LOG="${TMP}/ipfw.log"
 export MOCK_IPFW_COUNTER="${TMP}/ipfw.counter"
+export MOCK_DRILL_LOG="${TMP}/drill.log"
 export MOCK_DVTWS_PIDFILE="${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.pid"
 export MOCK_DVTWS_JOBDIR="${TMP}/run/jobs/job.test"
 export MOCK_DVTWS_RUNTIME_DIR="${TMP}/run/jobs/job.test/candidate-runtime"
 export MOCK_DVTWS_HOSTLIST="${TMP}/run/jobs/job.test/candidate-runtime/hostlist.txt"
+
+PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_EPOCH_JOB_DIR="${TMP}/run/jobs/job.test" \
+STRATEGY_LAB_EPOCH_ENDPOINTS="${TMP}/endpoints.txt" \
+"${STRATEGY_LAB_PYTHON_BIN:-python3.13}" - <<'PY'
+import os
+from pathlib import Path
+
+from strategy_lab_py.endpoint_epoch import create
+
+job = Path(os.environ["STRATEGY_LAB_EPOCH_JOB_DIR"])
+endpoints = Path(os.environ["STRATEGY_LAB_EPOCH_ENDPOINTS"]).read_text().splitlines()
+evidence = [
+    {
+        "endpoint": endpoint,
+        "dns_a": {"classification": "pass", "answers": ["203.0.113.10"]},
+    }
+    for endpoint in endpoints
+]
+create(job, "telegram.org", "domain", endpoints, evidence)
+PY
 
 set +e
 /usr/bin/timeout 15 "${SCRIPT_DIR}/strategy_lab_candidate_runner.sh" job.test "${TMP}/endpoints.txt" "${TMP}/result.json"
@@ -208,6 +224,10 @@ candidate_status=$?
 set -e
 if [ "${candidate_status}" -ne 0 ]; then
     echo "candidate runtime regression failed or timed out: rc=${candidate_status}" >&2
+    [ ! -r "${TMP}/result.json" ] || {
+        echo 'candidate result:' >&2
+        cat "${TMP}/result.json" >&2 || true
+    }
     ps ax -o pid= -o ppid= -o stat= -o command= | grep -F "${TMP}" >&2 || true
     if [ -r "${MOCK_DVTWS_PIDFILE}" ]; then
         printf 'candidate pidfile: ' >&2
@@ -223,6 +243,7 @@ if [ "${candidate_status}" -ne 0 ]; then
 fi
 /usr/bin/jq -e '
     .all_pass == true and (.endpoints|length)==2 and
+    (.search_epoch_id|startswith("se1-")) and
     (.candidate_spec.spec_id|startswith("cs1-")) and
     .candidate_spec.ranges.out=="-d10" and
     (.resource_inventory_id|startswith("ri1-")) and
@@ -252,10 +273,11 @@ grep -Fxq -- '--out-range=-d10' "${TMP}/run/jobs/job.test/candidate-runtime/dvtw
 [ ! -e "${MOCK_DVTWS_PIDFILE}" ]
 ! pgrep -f "${TMP}/bin/dvtws2" >/dev/null 2>&1
 [ "$(stat -c '%a' "${TMP}/run/jobs/job.test")" = 700 ]
+[ ! -s "${TMP}/drill.log" ]
 
 grep -q 'add 19100 divert 9989 tcp from me to 203.0.113.10 443' "${TMP}/ipfw.log"
 
-echo 'Strategy Lab candidate runtime success contract passed with Python answer-section DNS binding, post-drop hostlist access, and private cleanup.'
+echo 'Strategy Lab candidate runtime success contract passed with fixed search-epoch binding, post-drop hostlist access, and private cleanup.'
 
 : > "${TMP}/ipfw.state"
 : > "${TMP}/ipfw.log"

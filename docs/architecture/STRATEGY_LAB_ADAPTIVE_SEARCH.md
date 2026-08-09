@@ -33,12 +33,14 @@ STATUS AND IMPLEMENTATION BOUNDARY
 ==================================================
 
 Status:
-Approved target architecture; `_28` through `_30` implement the representation,
-reachability and native-graph slices while `_31`–`_33` remain pending.
+Approved target architecture; `_28` through `_31` implement representation,
+reachability, the native graph, live ordering, endpoint identity, winner bounds and
+timing telemetry while `_32`–`_33` remain pending.
 
-The current `0.4.0_4` source removes the Stage-50 family hard gate, establishes the
-candidate/resource boundary and makes the native graph executable while deliberately
-keeping later adaptive ordering/telemetry/validation behavior unchanged.
+The current `0.4.0_5` source removes the Stage-50 family hard gate, establishes the
+candidate/resource boundary, makes the native graph executable and adds result-adaptive
+ordering plus one fixed endpoint epoch while deliberately keeping timeout and later
+validation behavior unchanged.
 In particular:
 
 - `strategy_lab_py/search_graph.py` validates a deterministic DAG with seven Stage-50
@@ -63,6 +65,16 @@ In particular:
   `search-graph.json` planning evidence;
 - graph ranges include `-d8`, `-d10` and absence; `strategy_lab_py/result.py` preserves
   zero or one candidate-defined input/output range without injecting a default;
+- Stage 40 writes a validated `search-epoch.json`; its own TLS baseline and every later
+  candidate/stability/extended/final replay retain the hostname/SNI contract while using
+  the recorded selected IPv4 address, and candidate execution performs no DNS lookup;
+- Stage 60 chooses one reachable frontier node after each PASS/FAIL and persists the
+  evidence source, outcome, reason and priority for every decision;
+- normal discovery/final publication targets at most three winners and records the
+  two-to-three band while preserving truthful smaller output;
+- `timing-telemetry.json` durably records DNS/stage/runner/job timing and candidate
+  preparation, rendering, firewall, launch, readiness, probe and cleanup phases for the
+  later timeout review;
 - compatibility and non-graph extended catalogs carry their unchanged `-d10` choice
   explicitly;
 - Stage 80 still contains a capability-gated QUIC candidate branch;
@@ -435,7 +447,7 @@ Production selection of A, B, C or a hybrid is governed by
 TIMEOUT MODEL
 ==================================================
 
-Current `_30` timeout values remain the executable source baseline until a later patch
+Current `_31` timeout values remain the executable source baseline until a later patch
 changes them. They are not copied into the target design as unexplained constants.
 
 The redesign first records timing for:
@@ -498,7 +510,8 @@ The architecture is intentionally split into the following source cycles:
   policy cleanup;
 - `_30`: **implemented in `0.4.0_4` source** — native search graph, semantic resource
   branches, golden corpus and variable range;
-- `_31`: adaptive ordering, endpoint pinning, early stop, timing telemetry;
+- `_31`: **implemented in `0.4.0_5` source** — adaptive ordering, fixed endpoint epoch,
+  two-to-three-winner defaults and timing telemetry;
 - `_32`: timeout hierarchy derived from telemetry;
 - `_33`: lightweight discovery plus fail-fast 3/3 and finalist deep validation.
 

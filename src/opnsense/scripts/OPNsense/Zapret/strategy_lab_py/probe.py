@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import request
+from . import endpoint_epoch, request, telemetry
 
 EX_OK = 0
 EX_PREREQUISITE = 2
@@ -48,6 +49,7 @@ def _read_endpoints(path: Path) -> list[str]:
 
 
 def _network(workdir: Path, result_path: Path) -> int:
+    started = time.monotonic()
     for name in ("curl", "netstat", "openssl"):
         request.binary(name)
     route_available, route_result = request.ipv6_default_route()
@@ -83,6 +85,19 @@ def _network(workdir: Path, result_path: Path) -> int:
         "ipv6": ipv6_result.evidence() if ipv6_result is not None else None,
         "quic_ipv4": quic_result.evidence(),
     })
+    telemetry.record(
+        workdir,
+        "network_precheck",
+        telemetry.elapsed_ms(started),
+        stage="30",
+        outcome="pass" if ipv4 == "available" else "prerequisite",
+        details={
+            "ipv4_ms": ipv4_result.duration_ms,
+            "ipv6_route_ms": route_result.duration_ms,
+            "ipv6_ms": None if ipv6_result is None else ipv6_result.duration_ms,
+            "quic_ipv4_ms": quic_result.duration_ms,
+        },
+    )
     return EX_OK if ipv4 == "available" else EX_PREREQUISITE
 
 
@@ -131,24 +146,50 @@ def _ip_public(endpoint: str, result: request.CommandResult) -> dict[str, Any]:
 
 
 def _domain_endpoint(endpoint: str, index: int, workdir: Path, ipv6_enabled: bool) -> tuple[dict[str, Any], dict[str, Any], bool, bool]:
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         dns_a_future = pool.submit(request.dns_request, endpoint, "A")
         dns_aaaa_future = pool.submit(request.dns_request, endpoint, "AAAA") if ipv6_enabled else None
-        tls4_future = pool.submit(request.curl_request, endpoint, scheme="https", family="ipv4", tls_version="1.3")
-        tls6_future = (
-            pool.submit(request.curl_request, endpoint, scheme="https", family="ipv6", tls_version="1.3")
-            if ipv6_enabled else None
-        )
         dns_a = dns_a_future.result()
         dns_aaaa = dns_aaaa_future.result() if dns_aaaa_future is not None else None
-        tls4 = tls4_future.result()
+
+    tls4: request.CommandResult | None = None
+    tls6: request.CommandResult | None = None
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        tls4_future = (
+            pool.submit(
+                request.curl_request,
+                endpoint,
+                scheme="https",
+                family="ipv4",
+                tls_version="1.3",
+                bound_ip=dns_a.answers[0],
+            )
+            if dns_a.ok and dns_a.answers
+            else None
+        )
+        tls6_future = (
+            pool.submit(
+                request.curl_request,
+                endpoint,
+                scheme="https",
+                family="ipv6",
+                tls_version="1.3",
+                bound_ip=dns_aaaa.answers[0],
+            )
+            if ipv6_enabled and dns_aaaa is not None and dns_aaaa.ok and dns_aaaa.answers
+            else None
+        )
+        tls4 = tls4_future.result() if tls4_future is not None else None
         tls6 = tls6_future.result() if tls6_future is not None else None
 
     dns_a_log = request.combined_log(dns_a.execution)
     request.write_text(workdir / f"endpoint-{index}.a.log", dns_a_log)
     if dns_aaaa is not None:
         request.write_text(workdir / f"endpoint-{index}.aaaa.log", request.combined_log(dns_aaaa.execution))
-    request.write_text(workdir / f"endpoint-{index}.tls-ipv4.log", request.combined_log(tls4))
+    request.write_text(
+        workdir / f"endpoint-{index}.tls-ipv4.log",
+        request.combined_log(tls4) if tls4 is not None else "",
+    )
     if tls6 is not None:
         request.write_text(workdir / f"endpoint-{index}.tls-ipv6.log", request.combined_log(tls6))
 
@@ -156,10 +197,13 @@ def _domain_endpoint(endpoint: str, index: int, workdir: Path, ipv6_enabled: boo
         "endpoint": endpoint,
         "dns_a": dns_a.evidence(),
         "dns_aaaa": dns_aaaa.evidence() if dns_aaaa is not None else None,
-        "tls_ipv4": tls4.evidence(),
+        "tls_ipv4": tls4.evidence() if tls4 is not None else None,
         "tls_ipv6": tls6.evidence() if tls6 is not None else None,
     }
-    public = _dns_failure_public(endpoint, dns_a_log) if not dns_a.ok else _domain_public(endpoint, tls4, tls6)
+    if not dns_a.ok or tls4 is None:
+        public = _dns_failure_public(endpoint, dns_a_log)
+    else:
+        public = _domain_public(endpoint, tls4, tls6)
     return public, evidence, not dns_a.ok, dns_aaaa is not None and not dns_aaaa.ok
 
 
@@ -170,6 +214,7 @@ def _ip_endpoint(endpoint: str, index: int, workdir: Path) -> tuple[dict[str, An
 
 
 def _baseline(target: str, target_type: str, endpoints_path: Path, network_path: Path, workdir: Path, result_path: Path) -> int:
+    started = time.monotonic()
     if target_type not in {"domain", "ip"}:
         raise UsageError("invalid Strategy Lab target type")
     endpoints = _read_endpoints(endpoints_path)
@@ -219,20 +264,68 @@ def _baseline(target: str, target_type: str, endpoints_path: Path, network_path:
             evidence_results.append(evidence)
             _write_json(results_dir / f"{index}.json", public)
 
+    epoch: endpoint_epoch.SearchEpoch | None = None
+    if not dns_failed:
+        epoch = endpoint_epoch.create(
+            workdir,
+            target,
+            target_type,
+            endpoints,
+            evidence_results,
+        )
+
+    endpoint_timings: list[dict[str, Any]] = []
+    for evidence in evidence_results:
+        dns_a = evidence.get("dns_a")
+        dns_aaaa = evidence.get("dns_aaaa")
+        tls4 = evidence.get("tls_ipv4")
+        tls6 = evidence.get("tls_ipv6")
+        tcp = evidence.get("tcp_443")
+        endpoint_timings.append(
+            {
+                "endpoint": evidence.get("endpoint", ""),
+                "dns_a_ms": (
+                    dns_a.get("execution", {}).get("duration_ms")
+                    if isinstance(dns_a, dict)
+                    else None
+                ),
+                "dns_aaaa_ms": (
+                    dns_aaaa.get("execution", {}).get("duration_ms")
+                    if isinstance(dns_aaaa, dict)
+                    else None
+                ),
+                "tls_ipv4_ms": tls4.get("duration_ms") if isinstance(tls4, dict) else None,
+                "tls_ipv6_ms": tls6.get("duration_ms") if isinstance(tls6, dict) else None,
+                "tcp_443_ms": tcp.get("duration_ms") if isinstance(tcp, dict) else None,
+            }
+        )
+
+    search_epoch_id = "" if epoch is None else epoch.epoch_id
     _write_json(workdir / "baseline-endpoints.json", public_results)
     _write_json(result_path, {
         "target": target,
         "target_type": target_type,
         "dns_a": dns_a_status,
         "dns_aaaa": dns_aaaa_status,
+        "search_epoch_id": search_epoch_id,
         "endpoints": public_results,
         "all_accessible": bool(public_results) and all(item.get("status") == "PASS" for item in public_results),
     })
     _write_json(workdir / "baseline-evidence.json", {
         "target": target,
         "target_type": target_type,
+        "search_epoch_id": search_epoch_id,
         "endpoints": evidence_results,
+        "timing": {"duration_ms": telemetry.elapsed_ms(started), "endpoints": endpoint_timings},
     })
+    telemetry.record(
+        workdir,
+        "clean_baseline",
+        telemetry.elapsed_ms(started),
+        stage="40",
+        outcome="prerequisite" if dns_failed else "pass",
+        details={"search_epoch_id": search_epoch_id, "endpoints": endpoint_timings},
+    )
     return EX_PREREQUISITE if dns_failed else EX_OK
 
 

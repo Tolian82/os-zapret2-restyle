@@ -2416,8 +2416,9 @@ Status:
 Active design decision; `_28` hard-gate removal is published and owner-tested in
 `v0.4.0_2`, while `_29` CandidateSpec/ResourceInventory and active-adapter policy cleanup
 are implemented in `0.4.0_3` source and `_30` native graph/golden/resource/range behavior
-is implemented in the `0.4.0_4` source candidate. `_31`–`_33` and the evidence-gated
-runtime experiments remain pending.
+is implemented in `0.4.0_4`. `_31` live ordering/fixed endpoint epoch/winner bounds/
+timing telemetry is implemented in the `0.4.0_5` source candidate. `_32`–`_33` and the
+evidence-gated runtime experiments remain pending.
 
 ==================================================
 2026-08-09 — RISK-BASED LIVE RELEASE GATES

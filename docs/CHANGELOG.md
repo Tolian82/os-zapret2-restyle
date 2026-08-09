@@ -18,6 +18,9 @@ The project starts its own version history at `0.1.0`.
   resources, built-in BLOBs and inline capability at job initialization.
 - Added a validated native Zapret2 TLS 1.3 DAG with seven reconnaissance seeds, sixteen
   expansion nodes, stable graph evidence and exact built-in/external golden candidates.
+- Added validated job-scoped search-epoch evidence and locked atomic timing telemetry for
+  DNS, stages, candidates, stability attempts and job execution through mandatory
+  restoration.
 
 ### Changed
 
@@ -34,6 +37,10 @@ The project starts its own version history at `0.1.0`.
   from the native DAG instead of flat TSV policy, semantically skips only candidates with
   missing declared resources, and preserves candidate-defined `-d8`, `-d10` or absent
   ranges through runtime, stability and final profile output.
+- Continued the adaptive-search implementation with `_31`: every Stage-60 PASS/FAIL now
+  selects the next reachable graph neighbor, Stage 40 pins one endpoint set for all
+  candidate/final replay, and normal discovery/publication stops at three winners while
+  preserving truthful smaller results.
 
 ### Verification
 
@@ -48,6 +55,10 @@ The project starts its own version history at `0.1.0`.
 - `_30` adds focused graph/golden/resource/range coverage on Linux and FreeBSD 15 plus
   package inspection for `search_graph.py`. It makes no new publication or owner-live
   claim; `v0.4.0_2` remains the latest published and owner-tested testing candidate.
+- `_31` adds focused live-planner/search-epoch/three-winner/timing coverage, verifies
+  candidate DNS removal and bound Stage-40 requests, and inspects both new modules in the
+  FreeBSD package. It changes no timeout or owner-live claim; `v0.4.0_2` remains the
+  latest published and owner-tested testing candidate.
 
 ## [0.4.0] - 2026-08-09
 

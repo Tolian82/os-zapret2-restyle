@@ -38,12 +38,15 @@ candidate-family reachability. `_29` adds `candidate_spec.py` and `resources.py`
 snapshots installed resources at job initialization, normalizes every candidate and
 renders exact runtime arguments before invoking the narrow system adapter. `_30` adds
 `search_graph.py`: Python validates and plans the native TLS 1.3 DAG, persists graph
-evidence and carries the exact node spec through stability and profile rendering. Its remaining target contract is
+evidence and carries the exact node spec through stability and profile rendering. `_31`
+adds `endpoint_epoch.py` and `telemetry.py`: Stage 40 fixes endpoint identity, Stage 60
+selects each next graph node from live evidence, finalist defaults shrink to three and
+all Python owners contribute durable timing. Its remaining target contract is
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`; runtime-model hypotheses are gated by
 `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
 The latest published and owner-tested testing candidate is `v0.4.0_2`; focused `_28`
-reachability/restoration passes. The current `0.4.0_4` `_30` source candidate has no new
+reachability/restoration passes. The current `0.4.0_5` `_31` source candidate has no new
 owner live evidence. Candidate/package publication state remains governed separately by
 `docs/GITHUB_PUBLICATION.md`.
 
@@ -164,9 +167,9 @@ longer obtains policy from flat TSV catalogs.
 
 Patch 6 — `strategy_lab_py/search.py` and `extended.py`
 
-- current `_30` Stage-60 graph exploration keeps Stage-50 accepted families first as
-  evidence-based priority and then keeps every other resource-eligible graph node
-  reachable;
+- current `_31` Stage-60 graph exploration chooses one reachable node after every live
+  PASS/FAIL while Stage-50 evidence remains priority rather than a reachability gate;
+- every candidate and extended path verifies the fixed Stage-40 search-epoch identity;
 - Stage-70 source de-duplication/ranking/three-attempt stability replay;
 - Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP orchestration;
 - one generalized candidate lifecycle across supported protocols;
@@ -281,11 +284,11 @@ Supported final protocol profiles:
 - TLS 1.3 — TCP/443, TLS L7;
 - TLS 1.2 — TCP/443, TLS L7;
 - HTTP — TCP/80, HTTP L7;
-- QUIC — UDP/443, QUIC L7 in the current `_30` implementation only; the approved
+- QUIC — UDP/443, QUIC L7 in the current `_31` implementation only; the approved
   adaptive-search target removes QUIC candidate search and retains only the fixed precheck;
 - generic UDP — validated configured port, no L7 filter, validated job-local payload.
 
-In the current `_30` implementation each published profile contains one transport filter,
+In the current `_31` implementation each published profile contains one transport filter,
 optional protocol L7 filter, one validated target selector, the candidate's optional
 input/output range data, and the candidate desynchronization fragment. `-d8`, `-d10` and
 absence are preserved exactly rather than inserted by shell. Runtime-only arguments,
@@ -388,9 +391,12 @@ MIGRATION PATCH SERIES
   **COMPLETE / `0.4.0_3` SOURCE**.
 - Adaptive-search `_30` — native Zapret2 DAG, golden corpus, semantic resource branches
   and candidate-defined range preservation:
-  **CURRENT `0.4.0_4` SOURCE CANDIDATE / LIVE NOT CLAIMED**.
+  **COMPLETE / `0.4.0_4` SOURCE**.
+- Adaptive-search `_31` — live-evidence ordering, fixed endpoint epoch, two-to-three
+  winners and timing telemetry:
+  **CURRENT `0.4.0_5` SOURCE CANDIDATE / LIVE NOT CLAIMED**.
 
-The remaining approved search-quality source sequence is `_31`–`_33` in
+The remaining approved search-quality source sequence is `_32`–`_33` in
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and `docs/ROADMAP.md`.
 
 ==================================================

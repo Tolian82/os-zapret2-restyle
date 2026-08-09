@@ -27,6 +27,8 @@ For current Strategy Lab post-migration/adaptive-search work, read these first:
 - `docs/devlog/2026-08-09-v0.4.0_3-candidate-spec-resource-inventory.md` — `_29` implementation, resource-dependency review, regression boundary and `_30` handoff;
 - `docs/patches/v0.4.0_4.md` — `_30` source contract: native Zapret2 DAG, golden/reference corpus, semantic resource branches and candidate-defined output ranges;
 - `docs/devlog/2026-08-09-v0.4.0_4-native-search-graph.md` — `_30` graph implementation, exact-spec handoff, regressions and `_31` handoff;
+- `docs/patches/v0.4.0_5.md` — `_31` source contract: live-evidence graph ordering, fixed search-epoch endpoint binding, two-to-three-winner defaults and durable phase timing;
+- `docs/devlog/2026-08-09-v0.4.0_5-adaptive-search-planner.md` — `_31` implementation, regressions, unchanged timeout/runtime boundary and `_32` handoff;
 - `docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md` — `_28` focused live PASS: `accepted=[]`, all 14 Stage-60 catalog candidates attempted, Stage-90 restoration PASS and no temporary IPFW residue;
 - `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md` — active release-specific live-selection policy; preserves the full regression matrix without making every pending row an unconditional release blocker;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical owner-assisted live regression inventory; v0.4.0-selected Scenario 1 is PASS on `_27`;
@@ -74,10 +76,10 @@ Python DNS deadline and enclosing Stage-40 operation envelope using new owner ev
 The 2026-08-08 adaptive-search decision is the active target architecture. `_28` makes
 Stage-50 acceptance priority evidence only and no longer gates Stage-60 catalog
 reachability; published `v0.4.0_2` has source/CI/FreeBSD and focused owner-live
-qualification. Current source `_30` adds the native Zapret2 DAG, golden/reference
-corpus, semantic resource eligibility and candidate-defined range preservation on top of
-the `_29` candidate/resource boundary. Result-adaptive ordering/endpoint pinning/
-telemetry, timeouts and validation remain assigned to `_31`–`_33`.
+qualification. Current source `_31` adds live-evidence graph decisions, one fixed
+Stage-40 endpoint epoch, a two-to-three-winner default and durable timing telemetry on
+top of the `_30` native graph. Timeout containment and discovery/stability/finalist
+validation remain assigned to `_32`–`_33`.
 The A/B/C warm-runtime choice remains evidence-gated by the experiment plan.
 
 ## Existing Strategy Lab product authorities

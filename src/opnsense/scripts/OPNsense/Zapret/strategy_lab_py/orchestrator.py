@@ -6,13 +6,14 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from . import resources, state as state_persistence
+from . import resources, state as state_persistence, telemetry
 
 EX_OK = 0
 EX_USAGE = 64
@@ -249,6 +250,7 @@ def terminal_message(language: str, mode: str, outcome: str, canceled: bool, cou
 
 class Orchestrator:
     def __init__(self, job_id: str) -> None:
+        self.run_started = time.monotonic()
         self.job_id = job_id
         run_dir = Path(os.environ.get("STRATEGY_LAB_RUN_DIR", "/var/run/zapret2-restyle/strategy-lab"))
         jobs_dir = Path(os.environ.get("STRATEGY_LAB_JOBS_DIR", str(run_dir / "jobs")))
@@ -338,6 +340,49 @@ class Orchestrator:
             pass
 
     def _run_adapter(
+        self,
+        action: str,
+        *,
+        operation_timeout: int | None = None,
+        cancel_interruptible: bool = True,
+        extra_env: dict[str, str] | None = None,
+    ) -> AdapterResult:
+        started = time.monotonic()
+        outcome = "error"
+        try:
+            result = self._run_adapter_process(
+                action,
+                operation_timeout=operation_timeout,
+                cancel_interruptible=cancel_interruptible,
+                extra_env=extra_env,
+            )
+            outcome = result.kind
+            return result
+        except CancellationRequested:
+            outcome = "cancel"
+            raise
+        except StageTimedOut:
+            outcome = "timeout"
+            raise
+        finally:
+            active_error = sys.exc_info()[0] is not None
+            try:
+                telemetry.record(
+                    self.job_dir,
+                    "stage_adapter",
+                    telemetry.elapsed_ms(started),
+                    stage=self.current_stage,
+                    outcome=outcome,
+                    details={
+                        "action": action,
+                        "operation_timeout_seconds": operation_timeout,
+                    },
+                )
+            except Exception:
+                if not active_error:
+                    raise
+
+    def _run_adapter_process(
         self,
         action: str,
         *,
@@ -509,6 +554,22 @@ class Orchestrator:
                 outcome = "ERROR"
                 final_state = terminal_state(outcome)
                 report_status = terminal_report_status(outcome)
+        try:
+            telemetry.record(
+                self.job_dir,
+                "job_total",
+                telemetry.elapsed_ms(self.run_started),
+                stage="99",
+                outcome=outcome.lower(),
+                details={
+                    "canceled": canceled,
+                    "scope": "job-start-through-mandatory-restoration",
+                },
+            )
+        except Exception:
+            outcome = "ERROR"
+            final_state = terminal_state(outcome)
+            report_status = terminal_report_status(outcome)
         message = terminal_message(self.language, self.mode, outcome, canceled, count)
         self.current_stage = "99"
         self._update_stage("99", report_status, message)
@@ -555,7 +616,24 @@ class Orchestrator:
         try:
             self.budget.record_initial()
             state_persistence.update_job(self.job_id, str(self.state_path), "running", "", "00", False, "")
-            resources.ensure_job_inventory(self.job_dir)
+            inventory_started = time.monotonic()
+            inventory_outcome = "error"
+            try:
+                inventory = resources.ensure_job_inventory(self.job_dir)
+                inventory_outcome = "pass"
+            finally:
+                telemetry.record(
+                    self.job_dir,
+                    "resource_inventory_snapshot",
+                    telemetry.elapsed_ms(inventory_started),
+                    stage="00",
+                    outcome=inventory_outcome,
+                    details={
+                        "resource_inventory_id": (
+                            inventory.inventory_id if inventory_outcome == "pass" else ""
+                        )
+                    },
+                )
             for stage in ("00", "10", "20", "30", "40", "50", "60", "70"):
                 self.check_cancel()
                 outcome = self._run_regular_stage(stage)

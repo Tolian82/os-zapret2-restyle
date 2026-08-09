@@ -13,6 +13,8 @@ command -v "${PYTHON}" >/dev/null 2>&1 || fail "Python 3.13 test interpreter is 
 
 "${PYTHON}" -m py_compile \
     "${SCRIPT_DIR}/strategy_lab_py/request.py" \
+    "${SCRIPT_DIR}/strategy_lab_py/telemetry.py" \
+    "${SCRIPT_DIR}/strategy_lab_py/endpoint_epoch.py" \
     "${SCRIPT_DIR}/strategy_lab_py/resources.py" \
     "${SCRIPT_DIR}/strategy_lab_py/candidate_spec.py" \
     "${SCRIPT_DIR}/strategy_lab_py/candidate.py" \
@@ -43,6 +45,26 @@ printf '%s\n' fake > "${TMP}/fake/fake_tls_7.bin"
 printf '%s\n' example.test > "${TMP}/endpoints.txt"
 printf '%s\n' 'payload' > "${TMP}/payload.bin"
 
+PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_EPOCH_JOB_DIR="${JOB_DIR}" \
+STRATEGY_LAB_EPOCH_ENDPOINTS="${TMP}/endpoints.txt" "${PYTHON}" - <<'PY'
+import os
+from pathlib import Path
+
+from strategy_lab_py.endpoint_epoch import create
+
+job = Path(os.environ["STRATEGY_LAB_EPOCH_JOB_DIR"])
+endpoints = Path(os.environ["STRATEGY_LAB_EPOCH_ENDPOINTS"]).read_text().splitlines()
+evidence = [
+    {
+        "endpoint": endpoint,
+        "dns_a": {"classification": "pass", "answers": ["203.0.113.10"]},
+    }
+    for endpoint in endpoints
+]
+create(job, "example.test", "domain", endpoints, evidence)
+PY
+EPOCH_ID=$("${JQ}" -r .epoch_id "${JOB_DIR}/search-epoch.json")
+
 FAKE="${TMP}/bin/candidate"
 LOG="${TMP}/candidate.log"
 cat > "${FAKE}" <<'MOCK'
@@ -50,22 +72,32 @@ cat > "${FAKE}" <<'MOCK'
 set -eu
 result="$3"; id="$4"; family="$5"; strategy="$6"
 protocol="${STRATEGY_LAB_CANDIDATE_PROTOCOL:-tls13}"
+epoch=$(jq -r .epoch_id "${STRATEGY_LAB_JOBS_DIR}/${1}/search-epoch.json")
 printf '%s|%s|%s|%s|%s\n' "${protocol}" "${id}" "${STRATEGY_LAB_ENDPOINT_PROBE_MODE:-}" "${STRATEGY_LAB_UDP_PORT:-}" "${STRATEGY_LAB_UDP_PAYLOAD_FILE:-}" >> "${MOCK_LOG}"
 case "${id}" in
   multisplit-midsld|fbase|tls12-fake|http-multidisorder|quic-fake-2|udp-ipfrag-16) pass=true ;;
   *) pass=false ;;
 esac
-jq -n --arg id "${id}" --arg family "${family}" --rawfile strategy "${strategy}" --arg protocol "${protocol}" --argjson pass "${pass}" \
-  '{id:$id,family:$family,strategy:$strategy,protocol:$protocol,endpoints:[{endpoint:"example.test",status:(if $pass then "PASS" else "FAIL" end)}],all_pass:$pass}' > "${result}"
+jq -n --arg id "${id}" --arg family "${family}" --arg epoch "${epoch}" \
+  --rawfile strategy "${strategy}" --arg protocol "${protocol}" --argjson pass "${pass}" \
+  '{id:$id,family:$family,strategy:$strategy,protocol:$protocol,search_epoch_id:$epoch,endpoints:[{endpoint:"example.test",selected_ip:"203.0.113.10",status:(if $pass then "PASS" else "FAIL" end)}],all_pass:$pass}' > "${result}"
 MOCK
 chmod 0755 "${FAKE}"
 
-cat > "${TMP}/family.json" <<'JSON'
-{"total":2,"completed":2,"families":[{"id":"fbase1","family":"multisplit","strategy":"--out-range=-d10\n--lua-desync=multisplit:pos=2\n","endpoints":[],"all_pass":true},{"id":"fbase2","family":"fake","strategy":"--out-range=-d10\n--lua-desync=fake:blob=fake_default_tls\n","endpoints":[],"all_pass":false}],"accepted":["multisplit"],"rejected":["fake"],"all_pass":true}
-JSON
-cat > "${TMP}/family-none.json" <<'JSON'
-{"total":2,"completed":2,"families":[{"id":"fbase1","family":"multisplit","strategy":"--out-range=-d10\n--lua-desync=multisplit:pos=2\n","endpoints":[],"all_pass":false},{"id":"fbase2","family":"fake","strategy":"--out-range=-d10\n--lua-desync=fake:blob=fake_default_tls\n","endpoints":[],"all_pass":false}],"accepted":[],"rejected":["multisplit","fake"],"all_pass":false}
-JSON
+"${JQ}" -n --arg epoch "${EPOCH_ID}" '{
+  total:2,completed:2,search_epoch_id:$epoch,
+  families:[
+    {id:"fbase1",family:"multisplit",strategy:"--out-range=-d10\n--lua-desync=multisplit:pos=2\n",search_epoch_id:$epoch,endpoints:[],all_pass:true},
+    {id:"fbase2",family:"fake",strategy:"--out-range=-d10\n--lua-desync=fake:blob=fake_default_tls\n",search_epoch_id:$epoch,endpoints:[],all_pass:false}
+  ],accepted:["multisplit"],rejected:["fake"],all_pass:true
+}' > "${TMP}/family.json"
+"${JQ}" -n --arg epoch "${EPOCH_ID}" '{
+  total:2,completed:2,search_epoch_id:$epoch,
+  families:[
+    {id:"fbase1",family:"multisplit",strategy:"--out-range=-d10\n--lua-desync=multisplit:pos=2\n",search_epoch_id:$epoch,endpoints:[],all_pass:false},
+    {id:"fbase2",family:"fake",strategy:"--out-range=-d10\n--lua-desync=fake:blob=fake_default_tls\n",search_epoch_id:$epoch,endpoints:[],all_pass:false}
+  ],accepted:[],rejected:["multisplit","fake"],all_pass:false
+}' > "${TMP}/family-none.json"
 
 COMMON_ENV="STRATEGY_LAB_JOBS_DIR=${JOBS} STRATEGY_LAB_PYTHON_BIN=${PYTHON} STRATEGY_LAB_LUA_DIR=${TMP}/lua STRATEGY_LAB_FAKE_DIR=${TMP}/fake MOCK_LOG=${LOG}"
 
@@ -73,7 +105,7 @@ env ${COMMON_ENV} \
   STRATEGY_LAB_EXPANSION_CANDIDATE_RUNNER="${FAKE}" \
   STRATEGY_LAB_EXPANSION_TARGET=99 \
   sh "${LAUNCHER}" search expand "${JOB}" "${TMP}/endpoints.txt" "${TMP}/family.json" "${TMP}/expansion.json"
-"${JQ}" -e '.total_graph_nodes==16 and .total_available==16 and .completed==16 and .working==["multisplit-midsld"] and (.failed|length)==15 and .stopped_reason=="graph_exhausted"' "${TMP}/expansion.json" >/dev/null || fail 'Stage-50 evidence priority/reachability contract failed'
+"${JQ}" -e '.total_graph_nodes==16 and .total_available==16 and .completed==16 and .working==["multisplit-midsld"] and (.failed|length)==15 and .stopped_reason=="graph_exhausted" and (.search_epoch_id|startswith("se1-"))' "${TMP}/expansion.json" >/dev/null || fail 'Stage-50 evidence priority/reachability contract failed'
 [ "$(sed -n '1,2p' "${LOG}" | cut -d '|' -f 2 | paste -sd, -)" = 'multisplit-host,multisplit-midsld' ] || fail 'accepted Stage-50 evidence did not affect graph priority without gating other families'
 
 : > "${LOG}"
@@ -89,7 +121,7 @@ env ${COMMON_ENV} \
   STRATEGY_LAB_STABILITY_ATTEMPTS=3 \
   STRATEGY_LAB_STABILITY_TARGET=1 \
   sh "${LAUNCHER}" search stabilize "${JOB}" "${TMP}/endpoints.txt" "${TMP}/expansion.json" "${TMP}/family-none.json" "${TMP}/stability.json"
-"${JQ}" -e '.completed==1 and (.stable|length)==1 and .candidates[0].stable==true and (.candidates[0].attempts|length)==3 and .stopped_reason=="enough_stable_candidates"' "${TMP}/stability.json" >/dev/null || fail 'Python stability contract failed'
+"${JQ}" -e '.completed==1 and (.stable|length)==1 and .candidates[0].stable==true and (.candidates[0].attempts|length)==3 and .stopped_reason=="enough_stable_candidates" and .early_stop.triggered==true' "${TMP}/stability.json" >/dev/null || fail 'Python stability contract failed'
 [ "$(grep -c '|sequential|' "${LOG}")" -eq 3 ] || fail 'stability attempts were not forced to sequential fresh-connection mode'
 
 # Existing extended TCP catalog: first candidate per protocol fails, second succeeds.

@@ -30,6 +30,10 @@ STATUS
 
 Approved experiment plan; experiments not yet executed.
 
+`0.4.0_5` `_31` now persists the cold-reference phase timing source required by this
+plan. That instrumentation is not an executed appliance experiment and does not approve
+new deadlines or a warm runtime model.
+
 No A/B/C result, source-port dispatcher, warm-worker preload policy or revised timeout is
 considered production-approved merely because it is technically possible. Every selected
 optimization must first preserve the cold reference result and Strategy Lab lifecycle

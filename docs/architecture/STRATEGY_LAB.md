@@ -33,7 +33,7 @@ amended on 2026-08-08 by
 
 This document remains the base product/lifecycle/stage authority. The current Python
 ownership is defined by `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`; the approved
-adaptive-search target, partially implemented through `_30`, is defined by
+adaptive-search target, partially implemented through `_31`, is defined by
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`.
 
 The synchronous Blockcheck path has already been replaced. Historical initial-delivery
@@ -918,7 +918,7 @@ The following 13-patch plan is retained only to explain how the original asynchr
 Strategy Lab was delivered. It is complete and is **not** the current implementation
 roadmap. Its family-first, QUIC-search, serial-delivery and one-cold-candidate assumptions
 do not override the 2026-08-08 adaptive-search decision or current GitHub delivery
-authority. Current next source work is `_31`–`_33` in `docs/ROADMAP.md`.
+authority. Current next source work is `_32`–`_33` in `docs/ROADMAP.md`.
 
 Patch 1 — Documentation and approved architecture
 

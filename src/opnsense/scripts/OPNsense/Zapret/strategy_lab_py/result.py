@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterator, Sequence
 
-from . import candidate, state as state_persistence
+from . import candidate, endpoint_epoch, state as state_persistence
 
 EX_OK = 0
 JOB_RE = re.compile(r"^job\.[A-Za-z0-9]+$")
@@ -265,7 +265,7 @@ def collect_sources(job: Path, stability: dict[str, Any], mode: str) -> list[dic
         raise ResultError("Strategy Lab stability candidates are invalid")
     stable = [item for item in candidates if isinstance(item, dict) and item.get("stable") is True]
     stable.sort(key=lambda item: (int(item.get("line_count", 10**9)), int(item.get("character_count", 10**9)), str(item.get("id", ""))))
-    sources = [_decorate(item, CONTRACTS["tls13"]) for item in stable[:5]]
+    sources = [_decorate(item, CONTRACTS["tls13"]) for item in stable[:3]]
     if mode == "extended":
         extended_path = job / "extended-tcp.json"
         if extended_path.is_file():
@@ -429,6 +429,19 @@ def build_shortlist(job_id: str, stability_path: Path | None = None, shortlist_p
     if not isinstance(target, str) or not isinstance(target_type, str) or mode not in {"standard", "extended"}:
         raise ResultError("Strategy Lab job identity is invalid")
     selector_for(target, target_type, "tls13", "")
+    endpoint_values = [
+        line.strip()
+        for line in endpoints_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    try:
+        epoch = endpoint_epoch.load(job, endpoint_values)
+    except endpoint_epoch.EndpointEpochError as exc:
+        raise ResultError(str(exc)) from exc
+    if epoch.target != target or epoch.target_type != target_type:
+        raise ResultError("Strategy Lab job target changed after the search epoch was created")
+    if stability.get("search_epoch_id") != epoch.epoch_id:
+        raise ResultError("Strategy Lab stability evidence belongs to another search epoch")
     work = job / "profile-replay"
     if work.exists():
         shutil.rmtree(work)
@@ -441,6 +454,8 @@ def build_shortlist(job_id: str, stability_path: Path | None = None, shortlist_p
             cancel_check()
         protocol = str(source["protocol"])
         port = int(source["port"])
+        if source.get("search_epoch_id") != epoch.epoch_id:
+            raise ResultError("Strategy Lab shortlist source belongs to another search epoch")
         addresses = str(source.get("selector_addresses", ""))
         if protocol == "udp" and target_type == "domain":
             try:
@@ -458,6 +473,9 @@ def build_shortlist(job_id: str, stability_path: Path | None = None, shortlist_p
             for attempt in range(1, PROFILE_REPLAY_ATTEMPTS + 1)
         ]
         pass_count = sum(1 for item in attempts if item.get("all_pass") is True and item.get("profile_exact") is True)
+        endpoint_consistent = all(
+            item.get("search_epoch_id") == epoch.epoch_id for item in attempts
+        )
         resolved = sorted({
             str(endpoint.get("selected_ip"))
             for replay in attempts if isinstance(replay, dict)
@@ -466,10 +484,17 @@ def build_shortlist(job_id: str, stability_path: Path | None = None, shortlist_p
         })
         published = dict(source)
         published.update(
-            target=target, target_type=target_type, profile=profile, resolved_addresses=resolved,
+            target=target, target_type=target_type, profile=profile,
+            search_epoch_id=epoch.epoch_id, resolved_addresses=resolved,
             profile_replay={
                 "attempt_count": len(attempts), "pass_count": pass_count,
-                "verified": len(attempts) == PROFILE_REPLAY_ATTEMPTS and pass_count == PROFILE_REPLAY_ATTEMPTS,
+                "search_epoch_id": epoch.epoch_id,
+                "endpoint_consistent": endpoint_consistent,
+                "verified": (
+                    len(attempts) == PROFILE_REPLAY_ATTEMPTS
+                    and pass_count == PROFILE_REPLAY_ATTEMPTS
+                    and endpoint_consistent
+                ),
                 "results": attempts,
             },
             circular_eligible=protocol == "tls13",
@@ -478,7 +503,7 @@ def build_shortlist(job_id: str, stability_path: Path | None = None, shortlist_p
     verified = [item for item in items if item["profile_replay"]["verified"] is True]
     verified.sort(key=lambda item: (int(item["protocol_rank"]), int(item["line_count"]), int(item["character_count"]), str(item.get("id", ""))))
     try:
-        limit = int(os.environ.get("STRATEGY_LAB_SHORTLIST_LIMIT", "5"))
+        limit = int(os.environ.get("STRATEGY_LAB_SHORTLIST_LIMIT", "3"))
     except ValueError as exc:
         raise ResultError("invalid Strategy Lab shortlist limit") from exc
     if limit <= 0:
@@ -492,6 +517,7 @@ def build_shortlist(job_id: str, stability_path: Path | None = None, shortlist_p
     else:
         selected = tls13
     shortlist = {
+        "search_epoch_id": epoch.epoch_id,
         "count": len(selected), "items": selected,
         "recommendation": selected[0] if selected else None,
         "circular_count": len(tls13), "circular_items": tls13,

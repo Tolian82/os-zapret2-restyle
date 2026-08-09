@@ -254,7 +254,8 @@ def _curl_command(
         command.extend(["--location", "--max-redirs", "2"])
     else:
         port = 443 if scheme == "https" else 80
-        command.extend(["--max-redirs", "0", "--resolve", f"{host}:{port}:{bound_ip}"])
+        resolve_ip = f"[{bound_ip}]" if ":" in bound_ip else bound_ip
+        command.extend(["--max-redirs", "0", "--resolve", f"{host}:{port}:{resolve_ip}"])
     command.extend([
         "--connect-timeout", "2",
         "--max-time", "3",

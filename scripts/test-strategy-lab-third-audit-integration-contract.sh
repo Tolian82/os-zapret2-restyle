@@ -74,11 +74,12 @@ grep -Fq 'must contain the 180-second circular stale-recovery envelope' "${CIRCU
 grep -Fq 'private const BACKEND_TIMEOUT_SECONDS = 190;' "${CIRCULAR_CONTRACT}"
 grep -Fq 'timeout:200000' "${CIRCULAR_CONTRACT}"
 
-# SL3-003: Python publishes the multi-protocol final result while circular consumes only
-# the frozen replay-verified TLS 1.3 subset.
-grep -Fq 'assert shortlist["count"] == 5' "${FINAL_RESULTS}"
+# SL3-003: Python verifies every multi-protocol finalist while publishing the
+# normal three-winner cap; circular consumes only the frozen TLS 1.3 subset.
+grep -Fq 'assert shortlist["count"] == 3' "${FINAL_RESULTS}"
 grep -Fq 'assert shortlist["circular_count"] == 3' "${FINAL_RESULTS}"
-grep -Fq '["tls13","tls12","http","quic","udp"]' "${FINAL_RESULTS}"
+grep -Fq '["tls13","tls12","http"]' "${FINAL_RESULTS}"
+grep -Fq 'assert len(calls) == 21' "${FINAL_RESULTS}"
 grep -Fq 'strategy_lab_circular_session_create job.test' "${SHORTLIST}"
 grep -Fq 'strategy_lab_circular_build_profile "${CIRCULAR_SESSION_ID}"' "${SHORTLIST}"
 grep -Fq 'private circular consumer mutated the parent Python-published shortlist' "${SHORTLIST}"

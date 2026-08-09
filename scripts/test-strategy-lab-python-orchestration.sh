@@ -8,6 +8,7 @@ PYTHON_BIN=${STRATEGY_LAB_TEST_PYTHON:-python3.13}
 PYTHON_LAUNCHER="${ZAPRET_DIR}/strategy_lab_python_launcher.sh"
 ORCHESTRATOR="${ZAPRET_DIR}/strategy_lab_py/orchestrator.py"
 RESOURCES="${ZAPRET_DIR}/strategy_lab_py/resources.py"
+TELEMETRY="${ZAPRET_DIR}/strategy_lab_py/telemetry.py"
 WORKER="${ZAPRET_DIR}/strategy_lab_worker.sh"
 ADAPTER="${ZAPRET_DIR}/strategy_lab_stage_adapter.sh"
 COMMON="${ZAPRET_DIR}/strategy_lab/common.sh"
@@ -23,7 +24,7 @@ fail()
 command -v "${PYTHON_BIN}" >/dev/null 2>&1 || fail "Python 3.13 test runtime is unavailable"
 "${PYTHON_BIN}" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)' ||
     fail "Python test runtime is not 3.13"
-"${PYTHON_BIN}" -m py_compile "${ORCHESTRATOR}" "${RESOURCES}"
+"${PYTHON_BIN}" -m py_compile "${ORCHESTRATOR}" "${RESOURCES}" "${TELEMETRY}"
 sh -n "${ADAPTER}"
 sh -n "${WORKER}"
 
@@ -273,6 +274,14 @@ SUCCESS_STATUS="${JOBS_DIR}/job.SUCCESS/status.json"
     .builtin_blobs==["fake_default_tls","fake_default_http","fake_default_quic"]
 ' "${JOBS_DIR}/job.SUCCESS/resource-inventory.json" >/dev/null ||
     fail 'Python orchestrator did not persist the job-scoped installed resource inventory'
+"$(command -v jq)" -e '
+    .schema==1 and
+    ([.events[].phase]|index("resource_inventory_snapshot"))!=null and
+    ([.events[]|select(.phase=="stage_adapter")|.details.action]|index("60"))!=null and
+    ([.events[].phase]|index("job_total"))!=null and
+    all(.events[]; (.duration_ms|type)=="number" and .duration_ms>=0)
+' "${JOBS_DIR}/job.SUCCESS/timing-telemetry.json" >/dev/null ||
+    fail 'Python orchestrator did not persist stage/job timing telemetry'
 cat > "${TEST_ROOT}/expected-order" <<'EXPECTED'
 00
 10

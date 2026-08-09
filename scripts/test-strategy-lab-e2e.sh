@@ -148,40 +148,40 @@ cat > "${BIN_DIR}/candidate" <<'MOCK'
 #!/bin/sh
 [ "${MOCK_SCENARIO:-}" != internal_error ] || exit 7
 output="$3"
-cat > "${output}" <<'JSON'
-{"all_pass":true,"accepted":["multisplit"],"rejected":[],"families":[{"id":"f1","family":"multisplit","strategy":"--lua-desync=multisplit:pos=1\n","all_pass":true}]}
-JSON
+epoch=$(jq -r .epoch_id "${STRATEGY_LAB_JOBS_DIR}/${1}/search-epoch.json")
+jq -n --arg epoch "${epoch}" '{
+  search_epoch_id:$epoch,all_pass:true,accepted:["multisplit"],rejected:[],
+  families:[{id:"f1",family:"multisplit",strategy:"--lua-desync=multisplit:pos=1\n",search_epoch_id:$epoch,all_pass:true}]
+}' > "${output}"
 MOCK
 
 cat > "${BIN_DIR}/expansion" <<'MOCK'
 #!/bin/sh
 output="$4"
+epoch=$(jq -r .epoch_id "${STRATEGY_LAB_JOBS_DIR}/${1}/search-epoch.json")
 if [ "${MOCK_SCENARIO:-}" = no_candidate ]; then
-    printf '%s\n' '{"completed":0,"working":[],"candidates":[]}' > "${output}"
+    jq -n --arg epoch "${epoch}" '{search_epoch_id:$epoch,completed:0,working:[],candidates:[]}' > "${output}"
 else
-    cat > "${output}" <<'JSON'
-{"completed":3,"working":["c1","c2","c3"],"candidates":[
- {"id":"c1","family":"multisplit","strategy":"--lua-desync=multisplit:pos=1\n","all_pass":true},
- {"id":"c2","family":"fake","strategy":"--lua-desync=fake:blob=fake_default_tls\n","all_pass":true},
- {"id":"c3","family":"hostfakesplit","strategy":"--lua-desync=hostfakesplit:midhost=midsld\n","all_pass":true}
-]}
-JSON
+    jq -n --arg epoch "${epoch}" '{search_epoch_id:$epoch,completed:3,working:["c1","c2","c3"],candidates:[
+      {id:"c1",family:"multisplit",strategy:"--lua-desync=multisplit:pos=1\n",search_epoch_id:$epoch,all_pass:true},
+      {id:"c2",family:"fake",strategy:"--lua-desync=fake:blob=fake_default_tls\n",search_epoch_id:$epoch,all_pass:true},
+      {id:"c3",family:"hostfakesplit",strategy:"--lua-desync=hostfakesplit:midhost=midsld\n",search_epoch_id:$epoch,all_pass:true}
+    ]}' > "${output}"
 fi
 MOCK
 
 cat > "${BIN_DIR}/stability" <<'MOCK'
 #!/bin/sh
 output="$5"
+epoch=$(jq -r .epoch_id "${STRATEGY_LAB_JOBS_DIR}/${1}/search-epoch.json")
 if [ "${MOCK_SCENARIO:-}" = no_candidate ]; then
-    printf '%s\n' '{"completed":0,"stable":[],"unstable":[],"candidates":[],"stopped_reason":"no_working_candidate"}' > "${output}"
+    jq -n --arg epoch "${epoch}" '{search_epoch_id:$epoch,completed:0,stable:[],unstable:[],candidates:[],stopped_reason:"no_working_candidate"}' > "${output}"
 else
-    cat > "${output}" <<'JSON'
-{"completed":3,"stable":["c1","c2","c3"],"unstable":[],"stopped_reason":"enough_stable_candidates","candidates":[
- {"id":"c1","family":"multisplit","strategy":"--lua-desync=multisplit:pos=1\n","stable":true,"line_count":1,"character_count":35},
- {"id":"c2","family":"fake","strategy":"--lua-desync=fake:blob=fake_default_tls\n","stable":true,"line_count":1,"character_count":45},
- {"id":"c3","family":"hostfakesplit","strategy":"--lua-desync=hostfakesplit:midhost=midsld\n","stable":true,"line_count":1,"character_count":50}
-]}
-JSON
+    jq -n --arg epoch "${epoch}" '{search_epoch_id:$epoch,completed:3,stable:["c1","c2","c3"],unstable:[],stopped_reason:"enough_stable_candidates",candidates:[
+      {id:"c1",family:"multisplit",strategy:"--lua-desync=multisplit:pos=1\n",search_epoch_id:$epoch,stable:true,line_count:1,character_count:35},
+      {id:"c2",family:"fake",strategy:"--lua-desync=fake:blob=fake_default_tls\n",search_epoch_id:$epoch,stable:true,line_count:1,character_count:45},
+      {id:"c3",family:"hostfakesplit",strategy:"--lua-desync=hostfakesplit:midhost=midsld\n",search_epoch_id:$epoch,stable:true,line_count:1,character_count:50}
+    ]}' > "${output}"
 fi
 MOCK
 
@@ -205,9 +205,10 @@ family="$5"
 profile="$6"
 target="$7"
 target_type="$8"
+epoch=$(jq -r .epoch_id "${STRATEGY_LAB_JOBS_DIR}/${1}/search-epoch.json")
 jq -nc \
     --arg id "${id}" --arg family "${family}" --rawfile profile "${profile}" \
-    --arg target "${target}" --arg target_type "${target_type}" '
+    --arg target "${target}" --arg target_type "${target_type}" --arg epoch "${epoch}" '
     {
       id:$id,
       family:$family,
@@ -215,6 +216,7 @@ jq -nc \
       profile:$profile,
       target:$target,
       target_type:$target_type,
+      search_epoch_id:$epoch,
       profile_exact:true,
       endpoints:[{
         endpoint:$target,

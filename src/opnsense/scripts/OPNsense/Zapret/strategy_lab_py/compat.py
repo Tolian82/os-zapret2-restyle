@@ -86,6 +86,8 @@ def _run_probe(args: Sequence[str]) -> int:
         _error(str(exc)); return EX_SOFTWARE
     except request_execution.RequestError as exc:
         _error(str(exc)); return EX_SOFTWARE
+    except RuntimeError as exc:
+        _error(str(exc)); return EX_SOFTWARE
     except OSError as exc:
         _error(f"Strategy Lab probe execution failed: {exc}"); return EX_SOFTWARE
 
