@@ -103,7 +103,8 @@ awk -F '\t' '
 
 # Bound finite requests remain Python-owned. Redirects cannot escape the exact
 # selected endpoint, and Patch 6 adds bound QUIC plus generic UDP request/response.
-grep -Fq 'command.extend(["--max-redirs", "0", "--resolve", f"{host}:{port}:{bound_ip}"])' "${REQUEST_PY}"
+grep -Fq 'resolve_ip = f"[{bound_ip}]" if ":" in bound_ip else bound_ip' "${REQUEST_PY}"
+grep -Fq 'command.extend(["--max-redirs", "0", "--resolve", f"{host}:{port}:{resolve_ip}"])' "${REQUEST_PY}"
 grep -Fq 'if bound_ip is None:' "${REQUEST_PY}"
 grep -Fq 'def quic_target_request(host: str, address: str)' "${REQUEST_PY}"
 grep -Fq 'def udp_response_request(host: str, port: int, payload_path: Path)' "${REQUEST_PY}"
