@@ -18,19 +18,19 @@ TEST RECORD
 - Latest test date/time: `2026-08-09`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.4.0_2.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_2.pkg`
-- Current adaptive-search source candidate: `os-zapret2-restyle-0.4.0_6.pkg`
-- Latest owner-tested diagnostic job: `job.2HVQqr`
+- Latest published testing candidate: `os-zapret2-restyle-0.4.0_6.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_6.pkg`
+- Current adaptive-search source candidate: `os-zapret2-restyle-0.4.0_7.pkg`
+- Latest owner-tested diagnostic job: `job.Y8bR9M`
 - WAN interface: `vtnet1`
-- Latest blocked-domain target: `discord.com`
+- Latest blocked-domain target: `telegram.org`
 - Generic UDP target/port: `PENDING OWNER`
 
 Architecture / ABI baseline evidence:
 `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`.
 
 Latest live evidence:
-`docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md`.
+`docs/verification/evidence/2026-08-09-v0.4.0_6-stage60-timeout.md`.
 
 v0.4.0 release-selected evidence:
 `docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md`.
@@ -66,6 +66,13 @@ Key live progression:
 - `_28` removed Stage-50 acceptance as a Stage-60 hard gate; owner testing on
   `v0.4.0_2` produced `accepted=[]`, still attempted all 14 Stage-60 catalog candidates,
   and passed exact Stage-90 cleanup/restoration.
+- `v0.4.0_6` owner retesting against `telegram.org` proved the Stage-50 containment
+  correction: all seven reconnaissance families completed in about 39 seconds. Both
+  Standard and Extended runs then exposed the next `_32` boundary when the fixed 70-second
+  Stage-60 parent limit terminated expansion after 12 of 16 candidates. Stage 90 restored
+  the initially RUNNING service and no temporary IPFW rule remained.
+- `v0.4.0_7` is the current source correction for that Stage-60 parent/child deadline
+  mismatch; owner-live verification remains pending.
 
 Historical `_17`, job `job.w0nXxQ`, ended with Stage 50 ERROR and Stage 90 PASS. Its
 candidate-runtime bundle was not collected, so the exact `_17` Stage-50 root cause remains
@@ -230,6 +237,31 @@ pending matrix rows as PASS. Exact evidence is preserved in
 `docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md`.
 
 ==================================================
+TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_6`
+==================================================
+
+Owner-assisted Standard job `job.3Vh6rW` and Extended job `job.Y8bR9M` against
+`telegram.org`:
+
+- package version/ABI: `0.4.0_6`, `FreeBSD:15:amd64`;
+- both runs passed Stages 00–50;
+- Stage 50 completed all seven reconnaissance families in about 39 seconds and no working
+  TLS 1.3 family was found;
+- both Stage-60 runs reached the fixed 70-second local parent limit after 12 of 16
+  expansion candidates;
+- the thirteenth candidate was prepared but did not produce a result JSON before the
+  parent terminated Stage 60;
+- the Standard run still had about 33 seconds of its 150-second search budget available;
+- the Extended run still had about 154 seconds of its 270-second overall budget available;
+- both runs restored the initially RUNNING Zapret2 service successfully;
+- post-run IPFW evidence contained normal rule `19000` and no temporary rule in
+  `19100–19131`.
+
+This proves the immediate `v0.4.0_6` Stage-50 containment boundary and selects Stage-60
+parent/child deadline admission as the next `_32` correction. Exact evidence is preserved
+in `docs/verification/evidence/2026-08-09-v0.4.0_6-stage60-timeout.md`.
+
+==================================================
 PYTHON MIGRATION OWNERSHIP
 ==================================================
 
@@ -324,6 +356,10 @@ CONFIRMED DEFECTS / LIVE RECHECKS
 - **Stage 40 DNS timeout on `_26`.** Closed by `_27` owner live Scenario 1 PASS.
 - **Stage 50 aggregate abort on `_25`.** Closed by `_27` owner live Scenario 1 reaching
   Stage 50 PASS and continuing through Stages 60/70.
+- **Stage 50 parent-timeout boundary on `v0.4.0_5`.** Closed for the observed live target
+  by `v0.4.0_6`: Stage 50 completed all seven families and published PASS.
+- **Stage 60 fixed 70-second parent timeout on `v0.4.0_6`.** Confirmed in both Standard
+  and Extended owner runs; corrective `v0.4.0_7` source candidate pending live retest.
 - **Immediate stale/new-job GUI error.** Not reproduced on `_26`, but retain as open until
   a complete Scenario-1 run confirms behavior.
 - **Active `Strategy Lab returned no output.` message.** Patch-8 source correction exists;
@@ -374,4 +410,5 @@ For `v0.4.0`, Scenario 1 is the selected mandatory post-migration row and is PAS
 `v0.3.3_27`. No known critical restoration/runtime defect remains from the `_26`/`_27`
 corrective cycle. Adaptive-search `_28` additionally has its focused change-specific
 owner PASS on `v0.4.0_2`. Rows 2–18 remain open regression coverage without a claimed
-PASS.
+PASS. The newer `v0.4.0_6` timeout-hierarchy finding is tracked as `_32` corrective work
+and does not retroactively invalidate the release-selected `_27` or focused `_28` evidence.
