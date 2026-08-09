@@ -168,4 +168,4 @@ grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}" ||
     fail 'live matrix does not require the FreeBSD 15 ABI'
 
 sh -n "$0"
-echo "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, `_32` late-stage containment, and current live-candidate selection are qualified for ${candidate}"
+printf '%s\n' "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, _32 late-stage containment, and current live-candidate selection are qualified for ${candidate}"
