@@ -18,8 +18,8 @@ grep -Fq '85)' "${STAGE_ADAPTER}" || fail 'Python stage adapter does not own Sta
 grep -Fq 'result "$@"' "${RESULT_RUNNER}" || fail 'result runner is not a thin Python launcher'
 grep -Fq 'STRATEGY_LAB_CANDIDATE_SYSTEM_ADAPTER="${PROFILE_ADAPTER}"' "${RESULT_RUNNER}" || fail 'profile replay does not select the exact-profile system adapter'
 grep -Fq 'prepare-profile' "${PROFILE_ADAPTER}" && fail 'profile adapter unexpectedly created a second candidate command surface'
-grep -Fq 'prepare)' "${PROFILE_ADAPTER}" || fail 'profile adapter does not intercept standard candidate preparation'
-grep -Fq 'prepare-protocol)' "${PROFILE_ADAPTER}" || fail 'profile adapter does not intercept protocol candidate preparation'
+grep -Fq 'prepare)' "${PROFILE_ADAPTER}" && fail 'profile adapter still owns standard candidate preparation policy'
+grep -Fq 'prepare-protocol)' "${PROFILE_ADAPTER}" && fail 'profile adapter still owns protocol candidate preparation policy'
 grep -Fq 'exec /bin/sh "${BASE_ADAPTER}" "$@"' "${PROFILE_ADAPTER}" || fail 'profile adapter does not delegate lifecycle/readiness/firewall actions to the unified candidate adapter'
 
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-final-results.XXXXXX")

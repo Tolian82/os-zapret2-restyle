@@ -12,6 +12,8 @@ command -v "${PYTHON}" >/dev/null 2>&1 || fail "Python 3.13 test interpreter is 
 [ -x "${JQ}" ] || fail 'jq is unavailable'
 
 "${PYTHON}" -m py_compile \
+    "${SCRIPT_DIR}/strategy_lab_py/resources.py" \
+    "${SCRIPT_DIR}/strategy_lab_py/candidate_spec.py" \
     "${SCRIPT_DIR}/strategy_lab_py/candidate.py" \
     "${SCRIPT_DIR}/strategy_lab_py/family.py" \
     "${SCRIPT_DIR}/strategy_lab_py/compat.py"
@@ -36,7 +38,14 @@ DRILL="${TMP}/drill"
 CURL="${TMP}/curl"
 COUNTER_STATE="${TMP}/counter"
 ACTIONS="${TMP}/actions"
-mkdir -p "${JOB_DIR}"
+LUA_DIR="${TMP}/lua"
+FAKE_DIR="${TMP}/fake"
+mkdir -p "${JOB_DIR}" "${LUA_DIR}" "${FAKE_DIR}"
+for lua in zapret-lib.lua zapret-antidpi.lua zapret-auto.lua unrelated.lua
+do
+  printf '%s\n' '-- fixture' > "${LUA_DIR}/${lua}"
+done
+printf '%s\n' fake > "${FAKE_DIR}/unused.bin"
 printf '%s\n' example.test > "${ENDPOINTS}"
 printf '%s\n' '--lua-desync=multisplit:pos=1' > "${STRATEGY}"
 printf '%s\n' 0 > "${COUNTER_STATE}"
@@ -67,7 +76,7 @@ set -eu
 action="$1"; shift
 printf '%s\n' "${action}" >> "${MOCK_ACTIONS}"
 case "${action}" in
-  cleanup|prepare|firewall-install|allow-access) exit 0 ;;
+  cleanup|firewall-install-protocol|allow-access) exit 0 ;;
   wan) printf '%s\n' vtnet1 ;;
   launch)
     mkdir -p "${MOCK_RUNTIME}"
@@ -100,6 +109,8 @@ run_candidate()
   MOCK_ACTIONS="${ACTIONS}" MOCK_RUNTIME="${RUNTIME}" MOCK_COUNTER="${COUNTER_STATE}" MOCK_FATAL="${1:-0}" \
   STRATEGY_LAB_JOBS_DIR="${JOBS}" \
   STRATEGY_LAB_CANDIDATE_SYSTEM_ADAPTER="${ADAPTER}" \
+  STRATEGY_LAB_LUA_DIR="${LUA_DIR}" \
+  STRATEGY_LAB_FAKE_DIR="${FAKE_DIR}" \
   STRATEGY_LAB_DRILL_BIN="${DRILL}" \
   STRATEGY_LAB_CURL_BIN="${CURL}" \
   STRATEGY_LAB_RUNTIME_START_TIMEOUT=3 \
@@ -111,6 +122,13 @@ run_candidate()
 run_candidate 0
 "${JQ}" -e '
   .id=="c1" and .family=="multisplit" and .all_pass==true and
+  (.candidate_spec.spec_id|startswith("cs1-")) and
+  .candidate_spec.lua_instances[0].function=="multisplit" and
+  .candidate_spec.ranges.out=="-d10" and
+  (.resource_inventory_id|startswith("ri1-")) and
+  ([.runtime_arguments[]|select(startswith("--lua-init="))]|length)==2 and
+  ([.runtime_arguments[]|select(contains("zapret-auto.lua"))]|length)==0 and
+  ([.runtime_arguments[]|select(contains("unrelated.lua"))]|length)==0 and
   .runtime.ready==true and .runtime.stable_checks==2 and
   (.endpoints|length)==1 and
   .endpoints[0].selected_ip=="203.0.113.10" and

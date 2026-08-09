@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from . import state as state_persistence
+from . import resources, state as state_persistence
 
 EX_OK = 0
 EX_USAGE = 64
@@ -555,6 +555,7 @@ class Orchestrator:
         try:
             self.budget.record_initial()
             state_persistence.update_job(self.job_id, str(self.state_path), "running", "", "00", False, "")
+            resources.ensure_job_inventory(self.job_dir)
             for stage in ("00", "10", "20", "30", "40", "50", "60", "70"):
                 self.check_cancel()
                 outcome = self._run_regular_stage(stage)

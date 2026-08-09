@@ -2413,8 +2413,10 @@ Affected documents:
 - `docs/devlog/2026-08-08-strategy-lab-adaptive-search-design.md`
 
 Status:
-Active design decision; `_28` hard-gate removal is implemented in the `0.4.0_2` source
-candidate, while `_29`–`_33` and the evidence-gated runtime experiments remain pending.
+Active design decision; `_28` hard-gate removal is published and owner-tested in
+`v0.4.0_2`, while `_29` CandidateSpec/ResourceInventory and active-adapter policy cleanup
+are implemented in the `0.4.0_3` source candidate. `_30`–`_33` and the evidence-gated
+runtime experiments remain pending.
 
 ==================================================
 2026-08-09 — RISK-BASED LIVE RELEASE GATES

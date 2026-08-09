@@ -33,14 +33,17 @@ state, stage orchestration, requests/probes, candidate/search policy and final r
 assembly. Patch 8 must not move those responsibilities back into PHP, JavaScript or shell.
 
 The 2026-08-08 adaptive-search decision changes Python search policy without changing
-this ownership boundary. `_28` is its first source slice: Stage-50 acceptance now affects
-Stage-60 priority but not candidate-family reachability. Its remaining target contract is
+this ownership boundary. `_28` makes Stage-50 acceptance affect priority but not
+candidate-family reachability. `_29` adds `candidate_spec.py` and `resources.py`: Python
+snapshots installed resources at job initialization, normalizes every candidate and
+renders exact runtime arguments before invoking the narrow system adapter. Its remaining target contract is
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`; runtime-model hypotheses are gated by
 `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
-The latest owner-tested live candidate is published `_27`; Scenario 1 passes. The current
-`0.4.0_2` `_28` source candidate has no owner live evidence yet. Candidate/package
-publication state remains governed separately by `docs/GITHUB_PUBLICATION.md`.
+The latest published and owner-tested testing candidate is `v0.4.0_2`; focused `_28`
+reachability/restoration passes. The current `0.4.0_3` `_29` source candidate has no new
+owner live evidence. Candidate/package publication state remains governed separately by
+`docs/GITHUB_PUBLICATION.md`.
 
 ==================================================
 OBJECTIVE
@@ -84,7 +87,7 @@ strategy_lab_worker.sh
 Python strategy_lab_py/orchestrator.py
         ├─ state.py
         ├─ request.py / probe.py
-        ├─ candidate.py / family.py
+        ├─ candidate.py / candidate_spec.py / resources.py / family.py
         ├─ search.py / extended.py
         └─ result.py
              ↓
@@ -147,9 +150,14 @@ Patch 5 — `strategy_lab_py/candidate.py` and `family.py`
 - exact remote-IP and IPFW counter-growth evidence;
 - ordered Stage-50 TLS 1.3 family screening and per-candidate timeout/cancellation.
 
+Adaptive-search `_29` extends this owner with `strategy_lab_py/candidate_spec.py` and
+`resources.py`: immutable normalized candidate evidence, one job-scoped installed
+resource snapshot, exact candidate-minimal Lua/BLOB/range rendering and persisted
+resource/spec identity. It does not change the fixed catalog or search graph.
+
 Patch 6 — `strategy_lab_py/search.py` and `extended.py`
 
-- current `_28` Stage-60 catalog expansion keeps Stage-50 accepted families first as
+- current `_29` Stage-60 catalog expansion (introduced by `_28`) keeps Stage-50 accepted families first as
   evidence-based priority and then keeps every remaining catalog family reachable;
 - Stage-70 source de-duplication/ranking/three-attempt stability replay;
 - Stage-80 TLS 1.2/HTTP/QUIC/generic-UDP orchestration;
@@ -185,9 +193,9 @@ Shell remains authoritative only for deliberate boundaries such as:
 - private circular-session ownership/state and immutable-parent consumption.
 
 The replay-specific `strategy_lab_profile_candidate_adapter.sh` is a system adapter, not a
-result/search owner. It receives an already validated profile, replaces only the static
-domain selector with the temporary runtime hostlist when needed, and delegates all other
-candidate system actions to the canonical candidate adapter.
+result/search owner. Python replaces the validated static selector with the temporary
+runtime hostlist and writes the exact argument file; the profile adapter only delegates
+system actions to the canonical candidate adapter.
 
 Patch 7 physically retired these competing automated owners:
 
@@ -265,13 +273,15 @@ Supported final protocol profiles:
 - TLS 1.3 — TCP/443, TLS L7;
 - TLS 1.2 — TCP/443, TLS L7;
 - HTTP — TCP/80, HTTP L7;
-- QUIC — UDP/443, QUIC L7 in the current `_28` implementation only; the approved
+- QUIC — UDP/443, QUIC L7 in the current `_29` implementation only; the approved
   adaptive-search target removes QUIC candidate search and retains only the fixed precheck;
 - generic UDP — validated configured port, no L7 filter, validated job-local payload.
 
-In the current `_28` implementation each published profile contains one transport filter,
+In the current `_29` implementation each published profile contains one transport filter,
 optional protocol L7 filter, one validated target selector, `--out-range=-d10`, and the
-candidate desynchronization fragment. Runtime-only arguments, nested selectors/filters,
+candidate desynchronization fragment. The fixed `-d10` value is now carried through
+`CandidateSpec` candidate data rather than inserted by shell. Runtime-only arguments,
+nested selectors/filters,
 placeholders and `--new` are rejected.
 
 The adaptive-search target explicitly supersedes fixed `-d10`: `out-range` becomes
@@ -364,9 +374,12 @@ MIGRATION PATCH SERIES
 - Corrective `_27` — Stage-40 DNS/stage deadline correction: **COMPLETE / owner Scenario 1
   live PASS; promoted into v0.4.0**.
 - Adaptive-search `_28` — remove Stage-50 accepted-family hard gating while preserving
-  accepted-first evidence priority: **CURRENT `0.4.0_2` SOURCE CANDIDATE / LIVE PENDING**.
+  accepted-first evidence priority: **COMPLETE / PUBLISHED AND OWNER-TESTED `v0.4.0_2`**.
+- Adaptive-search `_29` — immutable normalized `CandidateSpec`, job-scoped installed
+  `ResourceInventory`, exact Python rendering and active shell-adapter policy cleanup:
+  **CURRENT `0.4.0_3` SOURCE CANDIDATE / LIVE NOT CLAIMED**.
 
-The remaining approved search-quality source sequence is `_29`–`_33` in
+The remaining approved search-quality source sequence is `_30`–`_33` in
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and `docs/ROADMAP.md`.
 
 ==================================================

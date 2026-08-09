@@ -11,8 +11,11 @@ MAKEFILE="${ROOT_DIR}/Makefile"
 PATCH4_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-probes.sh"
 PATCH5_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-candidate-family.sh"
 PATCH6_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-search-extended.sh"
+PATCH29_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-candidate-spec.sh"
 REQUEST_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py"
 PROBE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py"
+RESOURCES_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/resources.py"
+CANDIDATE_SPEC_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate_spec.py"
 CANDIDATE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate.py"
 FAMILY_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/family.py"
 SEARCH_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/search.py"
@@ -26,12 +29,14 @@ fail()
 }
 
 for file in "${CI}" "${RELEASE}" "${MATRIX}" "${INTEGRATION}" "${VERSION_FILE}" "${MAKEFILE}" \
-    "${PATCH4_TEST}" "${PATCH5_TEST}" "${PATCH6_TEST}" \
-    "${REQUEST_PY}" "${PROBE_PY}" "${CANDIDATE_PY}" "${FAMILY_PY}" "${SEARCH_PY}" "${EXTENDED_PY}" "${CANDIDATE_ADAPTER}"
+    "${PATCH4_TEST}" "${PATCH5_TEST}" "${PATCH6_TEST}" "${PATCH29_TEST}" \
+    "${REQUEST_PY}" "${PROBE_PY}" "${RESOURCES_PY}" "${CANDIDATE_SPEC_PY}" \
+    "${CANDIDATE_PY}" "${FAMILY_PY}" "${SEARCH_PY}" "${EXTENDED_PY}" "${CANDIDATE_ADAPTER}"
 do
     [ -s "${file}" ] || fail "required file is missing: ${file}"
 done
 [ -x "${PATCH4_TEST}" ] || fail 'Python request/probe focused test is not executable'
+[ -x "${PATCH29_TEST}" ] || fail 'Python CandidateSpec/ResourceInventory focused test is not executable'
 
 version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(awk -F= '
@@ -79,6 +84,8 @@ grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-str
     fail 'FreeBSD 15 package job does not execute the Python request/probe regression'
 grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-candidate-family.sh' "${CI}" ||
     fail 'FreeBSD 15 package job does not execute the Python candidate/family regression'
+grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-candidate-spec.sh' "${CI}" ||
+    fail 'FreeBSD 15 package job does not execute the Python CandidateSpec/ResourceInventory regression'
 grep -Fq 'STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-search-extended.sh' "${CI}" ||
     fail 'FreeBSD 15 package job does not execute the Python search/extended regression'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/state.py' "${CI}" ||
@@ -89,6 +96,10 @@ grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py'
     fail 'package inspection does not require the Python finite request module'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py' "${CI}" ||
     fail 'package inspection does not require the Python network/baseline probe module'
+grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/resources.py' "${CI}" ||
+    fail 'package inspection does not require the Python resource inventory module'
+grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate_spec.py' "${CI}" ||
+    fail 'package inspection does not require the Python CandidateSpec module'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate.py' "${CI}" ||
     fail 'package inspection does not require the Python candidate runtime module'
 grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/family.py' "${CI}" ||
@@ -120,10 +131,12 @@ if grep -Fq 'Overall status: **PAUSED — THIRD-AUDIT CORRECTIVE SERIES IN PROGR
     grep -Fq 'Current corrective candidate: **NOT DESIGNATED — PATCH 8 REQUIRED**' "${MATRIX}" ||
         fail 'paused third-audit matrix must not designate a live candidate before Patch 8'
 elif grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"; then
-    grep -Fq "Latest published testing candidate: \`${candidate}\`" "${MATRIX}" ||
-        fail 'adaptive live matrix does not select the current published candidate'
-    grep -Fq "Latest owner-tested candidate: \`${candidate}\`" "${MATRIX}" ||
-        fail 'adaptive live matrix does not select the current owner-tested candidate'
+    grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_2.pkg`' "${MATRIX}" ||
+        fail 'adaptive live matrix does not preserve the published _28 candidate'
+    grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_2.pkg`' "${MATRIX}" ||
+        fail 'adaptive live matrix does not preserve the owner-tested _28 candidate'
+    grep -Fq "Current adaptive-search source candidate: \`${candidate}\`" "${MATRIX}" ||
+        fail 'adaptive live matrix does not select the current source candidate'
     grep -Fq '**PASS ON `_27` — v0.4.0 mandatory row**' "${MATRIX}" ||
         fail 'release-selected live matrix does not record the v0.4.0 mandatory Scenario 1 PASS'
     grep -Fq 'ADAPTIVE-SEARCH OWNER TEST — `_28`' "${MATRIX}" ||

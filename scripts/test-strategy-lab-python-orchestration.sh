@@ -7,6 +7,7 @@ ZAPRET_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
 PYTHON_BIN=${STRATEGY_LAB_TEST_PYTHON:-python3.13}
 PYTHON_LAUNCHER="${ZAPRET_DIR}/strategy_lab_python_launcher.sh"
 ORCHESTRATOR="${ZAPRET_DIR}/strategy_lab_py/orchestrator.py"
+RESOURCES="${ZAPRET_DIR}/strategy_lab_py/resources.py"
 WORKER="${ZAPRET_DIR}/strategy_lab_worker.sh"
 ADAPTER="${ZAPRET_DIR}/strategy_lab_stage_adapter.sh"
 COMMON="${ZAPRET_DIR}/strategy_lab/common.sh"
@@ -22,7 +23,7 @@ fail()
 command -v "${PYTHON_BIN}" >/dev/null 2>&1 || fail "Python 3.13 test runtime is unavailable"
 "${PYTHON_BIN}" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 1)' ||
     fail "Python test runtime is not 3.13"
-"${PYTHON_BIN}" -m py_compile "${ORCHESTRATOR}"
+"${PYTHON_BIN}" -m py_compile "${ORCHESTRATOR}" "${RESOURCES}"
 sh -n "${ADAPTER}"
 sh -n "${WORKER}"
 
@@ -47,7 +48,14 @@ RUN_DIR="${TEST_ROOT}/run"
 JOBS_DIR="${RUN_DIR}/jobs"
 ACTIVE_FILE="${RUN_DIR}/active.job"
 CLOCK_FILE="${TEST_ROOT}/clock"
-mkdir -p "${JOBS_DIR}"
+LUA_DIR="${TEST_ROOT}/lua"
+FAKE_DIR="${TEST_ROOT}/fake"
+mkdir -p "${JOBS_DIR}" "${LUA_DIR}" "${FAKE_DIR}"
+for lua in zapret-lib.lua zapret-antidpi.lua zapret-auto.lua inventory-only.lua
+do
+    printf '%s\n' '-- fixture' > "${LUA_DIR}/${lua}"
+done
+printf '%s\n' fake > "${FAKE_DIR}/inventory.bin"
 
 budget_case()
 {
@@ -241,6 +249,8 @@ run_job()
     STRATEGY_LAB_JOBS_DIR="${JOBS_DIR}" \
     STRATEGY_LAB_ACTIVE_FILE="${ACTIVE_FILE}" \
     STRATEGY_LAB_STAGE_ADAPTER="${FAKE_ADAPTER}" \
+    STRATEGY_LAB_LUA_DIR="${LUA_DIR}" \
+    STRATEGY_LAB_FAKE_DIR="${FAKE_DIR}" \
     STRATEGY_LAB_PYTHON_LAUNCHER="${PYTHON_LAUNCHER}" \
     STRATEGY_LAB_PYTHON_BIN="${PYTHON_BIN}" \
     PYTHONPATH="${ZAPRET_DIR}" \
@@ -256,6 +266,13 @@ SUCCESS_STATUS="${JOBS_DIR}/job.SUCCESS/status.json"
     ([.stages[].number]==["00","10","20","30","40","50","60","70","80","85","90","99"]) and
     ([.stages[].status]==["PASS","PASS","PASS","PASS","PASS","PASS","PASS","PASS","SKIPPED","PASS","PASS","PASS"])
 ' "${SUCCESS_STATUS}" >/dev/null || fail 'Python standard stage machine or terminal result is invalid'
+"$(command -v jq)" -e '
+    .schema==1 and (.inventory_id|startswith("ri1-")) and
+    [.lua[].name]==["inventory-only.lua","zapret-antidpi.lua","zapret-auto.lua","zapret-lib.lua"] and
+    [.external_blobs[].name]==["inventory.bin"] and
+    .builtin_blobs==["fake_default_tls","fake_default_http","fake_default_quic"]
+' "${JOBS_DIR}/job.SUCCESS/resource-inventory.json" >/dev/null ||
+    fail 'Python orchestrator did not persist the job-scoped installed resource inventory'
 cat > "${TEST_ROOT}/expected-order" <<'EXPECTED'
 00
 10

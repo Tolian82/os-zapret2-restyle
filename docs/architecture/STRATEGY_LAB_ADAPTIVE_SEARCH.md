@@ -33,16 +33,25 @@ STATUS AND IMPLEMENTATION BOUNDARY
 ==================================================
 
 Status:
-Approved target architecture; `_28` implements the first source slice while `_29`–`_33`
-remain pending.
+Approved target architecture; `_28` and `_29` implement the first two source slices while
+`_30`–`_33` remain pending.
 
-The current `0.4.0_2` source removes the Stage-50 family hard gate but deliberately keeps
-the remaining pre-redesign mechanisms. In particular:
+The current `0.4.0_3` source removes the Stage-50 family hard gate and establishes the
+candidate/resource boundary while deliberately keeping later search behavior unchanged.
+In particular:
 
 - `strategy_lab_py/search.py` treats Stage-50 `accepted` as priority evidence: accepted
   families retain priority, then every other Stage-60 catalog row remains reachable;
-- `strategy_lab_candidate_adapter.sh` initializes every `*.lua` in the configured Lua
-  directory and injects `--out-range=-d10` for every candidate;
+- `strategy_lab_py/resources.py` records one immutable job-scoped snapshot of every
+  installed `*.lua` and fake `*.bin`, the supported built-ins and inline capability;
+- `strategy_lab_py/candidate_spec.py` normalizes stable identity, ordered Lua actions,
+  filters/ranges/resources/dependencies/provenance/cost and exact runtime rendering;
+- static candidates declare only functional `zapret-lib.lua` and `zapret-antidpi.lua`
+  startup dependencies; unrelated installed Lua remains inventory evidence rather than
+  an automatically loaded candidate dependency;
+- active candidate/profile shell adapters receive exact Python-rendered arguments and no
+  longer select Lua files, BLOB resources or a fixed range;
+- the pre-`_30` catalogs still carry `--out-range=-d10`, now as explicit candidate data;
 - `strategy_lab_py/result.py` generates and validates exactly `--out-range=-d10`;
 - Stage 80 still contains a capability-gated QUIC candidate branch;
 - candidate execution is cold and serial: prepare/start/ready/probe/stop/cleanup for
@@ -414,7 +423,7 @@ Production selection of A, B, C or a hybrid is governed by
 TIMEOUT MODEL
 ==================================================
 
-Current `_28` timeout values remain the executable source baseline until a later patch
+Current `_29` timeout values remain the executable source baseline until a later patch
 changes them. They are not copied into the target design as unexplained constants.
 
 The redesign first records timing for:
@@ -472,7 +481,9 @@ The architecture is intentionally split into the following source cycles:
 
 - `_28`: **implemented in `0.4.0_2` source** — remove accepted-family hard gating while
   retaining Stage-50 evidence as accepted-first priority;
-- `_29`: `CandidateSpec`, `ResourceInventory`, adapter policy cleanup;
+- `_29`: **implemented in `0.4.0_3` source** — immutable normalized `CandidateSpec`,
+  job-scoped installed `ResourceInventory`, exact Python rendering and active-adapter
+  policy cleanup;
 - `_30`: native search graph, semantic resource branches, golden corpus, variable range;
 - `_31`: adaptive ordering, endpoint pinning, early stop, timing telemetry;
 - `_32`: timeout hierarchy derived from telemetry;

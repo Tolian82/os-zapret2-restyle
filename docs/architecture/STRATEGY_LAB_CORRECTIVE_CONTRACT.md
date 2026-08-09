@@ -21,8 +21,9 @@ Search-policy amendment:
 `docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md` supersedes this document
 only where it describes family hard gating, QUIC candidate search, fixed candidate count,
 fixed output range or one-cold-process search as a permanent policy. State, cancellation,
-restoration and lifecycle safety remain authoritative. The `_27` executable path retains
-its current behavior until the corresponding `_28`–`_33` source patch changes it.
+restoration and lifecycle safety remain authoritative. `_28` and `_29` implement their
+dedicated slices; remaining behavior stays unchanged until the corresponding `_30`–`_33`
+source patch changes it.
 
 Approved by the project owner on 2026-08-05 and extended by the `_6` corrective series.
 
@@ -195,7 +196,7 @@ the minimum of:
 - the overall remaining search budget.
 
 Stage 80 has one shared 120-second implementation baseline. TLS 1.2/HTTP and configured
-UDP do not each receive a fresh independent 120-second timeout. The current `_27` QUIC
+UDP do not each receive a fresh independent 120-second timeout. The current `_29` QUIC
 branch shares that same bound until removed by the adaptive-search implementation.
 
 The 2026-08-08 timeout redesign reopens all numeric search limits for telemetry-driven

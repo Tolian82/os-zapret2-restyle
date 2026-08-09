@@ -20,7 +20,7 @@ TEST RECORD
 - Required package ABI: `FreeBSD:15:amd64`
 - Latest published testing candidate: `os-zapret2-restyle-0.4.0_2.pkg`
 - Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_2.pkg`
-- Current adaptive-search candidate: `os-zapret2-restyle-0.4.0_2.pkg`
+- Current adaptive-search source candidate: `os-zapret2-restyle-0.4.0_3.pkg`
 - Latest owner-tested diagnostic job: `job.2HVQqr`
 - WAN interface: `vtnet1`
 - Latest blocked-domain target: `discord.com`
@@ -225,7 +225,7 @@ Owner-assisted `v0.4.0_2` Standard job `job.2HVQqr` against `discord.com`:
   `19000`, with no temporary rule in `19100–19131`;
 - Stage 99 truthfully reported `NO_CANDIDATE` rather than an internal error.
 
-This is the change-specific focused PASS required before `_29`. It does not mark unrelated
+This is the change-specific focused PASS that was required before `_29`. It does not mark unrelated
 pending matrix rows as PASS. Exact evidence is preserved in
 `docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md`.
 

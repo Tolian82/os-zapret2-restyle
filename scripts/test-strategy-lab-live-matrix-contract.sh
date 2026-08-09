@@ -46,8 +46,9 @@ if grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIV
     do
         [ -s "${file}" ] || { echo "FAIL: current release live-gate record is missing: ${file}" >&2; exit 1; }
     done
-    grep -Fq "Latest published testing candidate: \`${candidate}\`" "${MATRIX}"
-    grep -Fq "Latest owner-tested candidate: \`${candidate}\`" "${MATRIX}"
+    grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_2.pkg`' "${MATRIX}"
+    grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_2.pkg`' "${MATRIX}"
+    grep -Fq "Current adaptive-search source candidate: \`${candidate}\`" "${MATRIX}"
     grep -Fq 'Latest owner-tested diagnostic job: `job.2HVQqr`' "${MATRIX}"
     scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /PASS ON `_27` — v0.4.0 mandatory row/ {n++} END {print n+0}' "${MATRIX}")
     [ "${scenario_one}" -eq 1 ] || { echo 'FAIL: v0.4.0 mandatory Scenario 1 PASS row mismatch' >&2; exit 1; }

@@ -23,7 +23,9 @@ Experimental verification plan:
 
 Status:
 Active design decision with incremental source implementation. `_28` implements the
-Stage-50/60 hard-gate removal in the `0.4.0_2` source candidate; `_29`–`_33` remain
+Stage-50/60 hard-gate removal in the published/owner-tested `0.4.0_2` candidate. `_29`
+implements `CandidateSpec`, job-scoped `ResourceInventory`, exact Python rendering and
+active shell-adapter policy cleanup in the `0.4.0_3` source candidate; `_30`–`_33` remain
 planned. Documentation must continue to distinguish each implemented slice from the
 remaining approved target architecture.
 
@@ -248,8 +250,9 @@ package revisions:
 
 - `_28` — implemented in `0.4.0_2` source: remove Stage-50 accepted-family hard gating
   while preserving accepted-first evidence priority;
-- `_29` — introduce Python `CandidateSpec` and job-scoped `ResourceInventory`, and move
-  candidate resource/search decisions out of the shell adapter;
+- `_29` — implemented in `0.4.0_3` source: introduce Python `CandidateSpec` and
+  job-scoped `ResourceInventory`, and move candidate resource/search decisions out of
+  the active shell adapters;
 - `_30` — introduce the native-Zapret2 search graph, golden corpus, BLOB-free/builtin/
   inline/file-resource branches and candidate-defined output ranges;
 - `_31` — adaptive ordering, endpoint pinning, early-stop policy and timing telemetry;

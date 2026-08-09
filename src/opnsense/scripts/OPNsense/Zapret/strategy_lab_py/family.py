@@ -12,6 +12,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
+from . import candidate_spec, resources
+
 EX_OK = 0
 EX_USAGE = 64
 EX_SOFTWARE = 70
@@ -146,11 +148,38 @@ def _run_candidate(command: list[str], timeout: float, job_id: str) -> tuple[int
     return int(process.returncode or 0), False
 
 
-def _timeout_result(candidate_id: str, family: str, strategy: str) -> dict[str, Any]:
+def _timeout_result(
+    job_id: str,
+    candidate_id: str,
+    family: str,
+    strategy: str,
+    target_binding: bool,
+) -> dict[str, Any]:
+    description = candidate_spec.CandidateSpec.from_strategy(
+        candidate_id=candidate_id,
+        family=family,
+        protocol="tls13",
+        transport="tcp",
+        port=443,
+        l7="tls",
+        strategy=strategy,
+        target_binding=target_binding,
+        out_range="-d10",
+    )
+    job = jobs_dir() / job_id
+    inventory = resources.ensure_job_inventory(job)
+    runtime_arguments = description.render_runtime_arguments(
+        inventory,
+        divert_port=int(os.environ.get("STRATEGY_LAB_DIVERT_PORT", "9989")),
+        hostlist_path=job / "candidate-runtime/hostlist.txt" if target_binding else None,
+    )
     return {
         "id": candidate_id,
         "family": family,
         "strategy": strategy,
+        "candidate_spec": description.to_dict(),
+        "resource_inventory_id": inventory.inventory_id,
+        "runtime_arguments": list(runtime_arguments),
         "endpoints": [],
         "all_pass": False,
         "timeout": True,
@@ -213,7 +242,13 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
         if status == EX_CANCEL:
             return EX_CANCEL
         if timed_out:
-            candidate = _timeout_result(candidate_id, family, strategy_path.read_text(encoding="utf-8"))
+            candidate = _timeout_result(
+                job_id,
+                candidate_id,
+                family,
+                strategy_path.read_text(encoding="utf-8"),
+                hostlist == "1",
+            )
             _atomic_json(candidate_path, candidate)
         else:
             candidate = _candidate_result(candidate_path, candidate_id)

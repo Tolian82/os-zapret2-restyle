@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
+from . import candidate_spec, resources
+
 EX_OK = 0
 EX_USAGE = 64
 EX_SOFTWARE = 70
@@ -208,15 +210,52 @@ def _read_candidate(path: Path, candidate_id: str) -> dict[str, Any]:
     return value
 
 
-def _timeout_result(candidate_id: str, family: str, strategy: str, *, attempt: int | None = None) -> dict[str, Any]:
+def _timeout_result(
+    candidate_id: str,
+    family: str,
+    strategy: str,
+    *,
+    job_id: str | None = None,
+    protocol: str = "tls13",
+    transport: str = "tcp",
+    port: int = 443,
+    l7: str | None = "tls",
+    target_binding: bool = True,
+    attempt: int | None = None,
+) -> dict[str, Any]:
+    description = candidate_spec.CandidateSpec.from_strategy(
+        candidate_id=candidate_id,
+        family=family,
+        protocol=protocol,
+        transport=transport,
+        port=port,
+        l7=l7,
+        strategy=strategy,
+        target_binding=target_binding,
+        out_range="-d10",
+    )
     result: dict[str, Any] = {
         "id": candidate_id,
         "family": family,
         "strategy": strategy,
+        "candidate_spec": description.to_dict(),
         "endpoints": [],
         "all_pass": False,
         "timeout": True,
     }
+    if job_id is not None:
+        job = job_dir(job_id)
+        inventory = resources.ensure_job_inventory(job)
+        result["resource_inventory_id"] = inventory.inventory_id
+        result["runtime_arguments"] = list(
+            description.render_runtime_arguments(
+                inventory,
+                divert_port=int(os.environ.get("STRATEGY_LAB_DIVERT_PORT", "9989")),
+                hostlist_path=(
+                    job / "candidate-runtime/hostlist.txt" if target_binding else None
+                ),
+            )
+        )
     if attempt is not None:
         result["attempt"] = attempt
     return result
@@ -282,7 +321,13 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
         if status == EX_CANCEL:
             return EX_CANCEL
         if timed_out:
-            candidate = _timeout_result(candidate_id, family, strategy)
+            candidate = _timeout_result(
+                candidate_id,
+                family,
+                strategy,
+                job_id=job_id,
+                target_binding=hostlist == "1",
+            )
             _atomic_json(candidate_path, candidate)
         elif status != 0:
             raise RuntimeError(f"Strategy Lab expansion candidate runner failed for {candidate_id} with status {status}")
@@ -399,7 +444,13 @@ def stabilize(
             if status == EX_CANCEL:
                 return EX_CANCEL
             if timed_out:
-                candidate = _timeout_result(candidate_id, family, strategy, attempt=attempt)
+                candidate = _timeout_result(
+                    candidate_id,
+                    family,
+                    strategy,
+                    job_id=job_id,
+                    attempt=attempt,
+                )
                 _atomic_json(attempt_path, candidate)
             elif status != 0:
                 raise RuntimeError(f"Strategy Lab stability candidate runner failed for {candidate_id} with status {status}")

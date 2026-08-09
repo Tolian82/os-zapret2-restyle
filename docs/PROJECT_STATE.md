@@ -31,11 +31,11 @@ Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_
 Latest published testing prerelease: `v0.4.0_2` / `os-zapret2-restyle-0.4.0_2.pkg`
 Latest owner-tested testing candidate: `v0.4.0_2` / `os-zapret2-restyle-0.4.0_2.pkg`
 Current source line: `VERSION=0.4.0`
-Current package revision: `PLUGIN_REVISION=2`
-Current source candidate: `os-zapret2-restyle-0.4.0_2.pkg` (published and owner-tested)
+Current package revision: `PLUGIN_REVISION=3`
+Current source candidate: `os-zapret2-restyle-0.4.0_3.pkg` (source-qualified; not published or owner-tested)
 Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **adaptive-search `_28` qualified; `_29` CandidateSpec/ResourceInventory is next**
+Current phase: **adaptive-search `_29` source-qualified; `_30` native search graph is next**
 v0.4.0 release gate: **COMPLETE — published and installed by the owner**
 
 Current primary Strategy Lab authority:
@@ -89,10 +89,13 @@ APPROVED POST-MIGRATION SEARCH REDESIGN
 ==================================================
 
 The owner approved the next Strategy Lab search architecture on 2026-08-08. `_28`
-implements its first source slice: Stage-50 `accepted` remains evidence/prioritization
-input but no longer removes other Stage-60 catalog families from reachability. The
-remaining cold runtime, fixed catalog, fixed `-d10`, QUIC search and validation behavior
-stay on the pre-redesign implementation until their later dedicated patches.
+removed Stage-50 family hard gating. `_29` now adds the normalized immutable Python
+candidate/resource boundary without changing the catalog or search graph: every job
+snapshots installed Lua/fake resources once, every executed candidate carries a
+`CandidateSpec`, and active shell adapters receive exact rendered arguments instead of
+selecting Lua, BLOB or range policy. The fixed catalog, current `-d10` values, QUIC search
+and validation behavior stay on the pre-redesign implementation until their later
+dedicated patches.
 
 Approved direction:
 
@@ -126,8 +129,8 @@ Experiment/measurement authority:
 `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
 Implementation sequence: `_28` hard-gate removal is source/CI/FreeBSD and owner-live
-qualified; `_29` CandidateSpec/ResourceInventory is the next source cycle, then `_30` native
-search graph/resources/golden corpus,
+qualified; `_29` CandidateSpec/ResourceInventory and active-adapter cleanup are
+source-qualified, then `_30` native search graph/resources/golden corpus,
 `_31` adaptive planner/endpoint pinning/telemetry, `_32` timeout model, `_33`
 discovery/stability/deep validation.
 
@@ -329,4 +332,6 @@ qualification, was published as a testing prerelease and passed the focused owne
 gate on `discord.com`: Stage 50 accepted no family, Stage 60 still attempted all 14
 catalog candidates, and Stage 90 restored the initial RUNNING service without temporary
 IPFW residue. The full regression matrix remains open under risk-based selection. `_29`
-is now the next source cycle; it has not started in this documentation closeout.
+advanced the unpublished source candidate to `0.4.0_3`, added the canonical
+CandidateSpec/ResourceInventory boundary and removed active shell-adapter policy. `_30`
+is now the next source cycle.
