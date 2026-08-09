@@ -1,2 +1,3 @@
+--out-range=-d10
 --payload=tls_client_hello
 --lua-desync=multidisorder:pos=host

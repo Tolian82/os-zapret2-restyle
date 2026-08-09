@@ -20,7 +20,7 @@ TEST RECORD
 - Required package ABI: `FreeBSD:15:amd64`
 - Latest published testing candidate: `os-zapret2-restyle-0.4.0_2.pkg`
 - Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_2.pkg`
-- Current adaptive-search source candidate: `os-zapret2-restyle-0.4.0_3.pkg`
+- Current adaptive-search source candidate: `os-zapret2-restyle-0.4.0_4.pkg`
 - Latest owner-tested diagnostic job: `job.2HVQqr`
 - WAN interface: `vtnet1`
 - Latest blocked-domain target: `discord.com`

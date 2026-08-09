@@ -96,4 +96,4 @@ grep -Fxq -- '--lua-desync=multisplit:pos=1' "${MODULE_DIR}/catalog/tls13/05-fak
 grep -Fxq -- '--lua-desync=syndata' "${MODULE_DIR}/catalog/tls13/06-syndata.args"
 grep -Fxq -- '--lua-desync=hostfakesplit' "${MODULE_DIR}/catalog/tls13/07-hostfakesplit.args"
 
-echo 'PASS: Python Strategy Lab TLS 1.3 family screening preserves order, isolation, timeout, catalog, and classification'
+echo 'PASS: Python Strategy Lab TLS 1.3 family screening preserves native-graph order, isolation, timeout, compatibility fixtures, and classification'

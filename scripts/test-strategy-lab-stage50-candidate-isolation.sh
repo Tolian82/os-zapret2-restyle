@@ -21,7 +21,11 @@ CATALOG="${TMP}/families.tsv"
 ARGS_DIR="${TMP}/args"
 RESULT="${TMP}/family.json"
 RUNNER="${TMP}/candidate.sh"
-mkdir -p "${JOB_DIR}" "${ARGS_DIR}"
+mkdir -p "${JOB_DIR}" "${ARGS_DIR}" "${TMP}/lua"
+for lua in zapret-lib.lua zapret-antidpi.lua
+do
+    printf '%s\n' '-- fixture' > "${TMP}/lua/${lua}"
+done
 printf '%s\n' example.test > "${ENDPOINTS}"
 
 for id in f1 f2 f3
@@ -37,24 +41,24 @@ output="$3"
 id="$4"
 family="$5"
 case "${id}" in
-    f1)
+    01-multisplit)
         printf '{"id":"%s","family":"%s","strategy":"","endpoints":[],"all_pass":true}\n' "${id}" "${family}" > "${output}"
         exit 0
         ;;
-    f2)
+    02-multidisorder)
         printf '{"id":"%s","family":"%s","strategy":"","endpoints":[],"all_pass":false,"error":true,"message":"candidate runtime rejected itself"}\n' "${id}" "${family}" > "${output}"
         exit 1
         ;;
-    f3)
+    *)
         printf '{"id":"%s","family":"%s","strategy":"","endpoints":[],"all_pass":false}\n' "${id}" "${family}" > "${output}"
         exit 0
         ;;
-    *) exit 64 ;;
 esac
 EOF
 chmod 0755 "${RUNNER}"
 
 STRATEGY_LAB_JOBS_DIR="${JOBS}" \
+STRATEGY_LAB_LUA_DIR="${TMP}/lua" \
 STRATEGY_LAB_FAMILY_CATALOG="${CATALOG}" \
 STRATEGY_LAB_FAMILY_ARGS_DIR="${ARGS_DIR}" \
 STRATEGY_LAB_SINGLE_CANDIDATE_RUNNER="${RUNNER}" \
@@ -63,10 +67,10 @@ STRATEGY_LAB_PYTHON_BIN="${PYTHON}" \
 sh "${LAUNCHER}" family screen "${JOB}" "${ENDPOINTS}" "${RESULT}"
 
 "${JQ}" -e '
-  .total==3 and .completed==3 and
-  [.families[].id]==["f1","f2","f3"] and
-  .accepted==["family-f1"] and
-  .rejected==["family-f2","family-f3"] and
+  .total==7 and .completed==7 and
+  [.families[].id]==["01-multisplit","02-multidisorder","03-seqovl","04-fake","05-fake-split","06-syndata","07-hostfakesplit"] and
+  .accepted==["multisplit"] and
+  .rejected==["multidisorder","seqovl","fake","fake+split","syndata","hostfakesplit"] and
   .all_pass==true and
   .families[1].error==true and
   .families[1].runner_status==1 and

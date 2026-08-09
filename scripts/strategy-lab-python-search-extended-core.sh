@@ -13,7 +13,10 @@ command -v "${PYTHON}" >/dev/null 2>&1 || fail "Python 3.13 test interpreter is 
 
 "${PYTHON}" -m py_compile \
     "${SCRIPT_DIR}/strategy_lab_py/request.py" \
+    "${SCRIPT_DIR}/strategy_lab_py/resources.py" \
+    "${SCRIPT_DIR}/strategy_lab_py/candidate_spec.py" \
     "${SCRIPT_DIR}/strategy_lab_py/candidate.py" \
+    "${SCRIPT_DIR}/strategy_lab_py/search_graph.py" \
     "${SCRIPT_DIR}/strategy_lab_py/search.py" \
     "${SCRIPT_DIR}/strategy_lab_py/extended.py" \
     "${SCRIPT_DIR}/strategy_lab_py/compat.py"
@@ -31,7 +34,12 @@ trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
 JOBS="${TMP}/jobs"
 JOB="job.test"
 JOB_DIR="${JOBS}/${JOB}"
-mkdir -p "${JOB_DIR}" "${TMP}/args" "${TMP}/bin"
+mkdir -p "${JOB_DIR}" "${TMP}/bin" "${TMP}/lua" "${TMP}/fake"
+for lua in zapret-lib.lua zapret-antidpi.lua
+do
+  printf '%s\n' '-- fixture' > "${TMP}/lua/${lua}"
+done
+printf '%s\n' fake > "${TMP}/fake/fake_tls_7.bin"
 printf '%s\n' example.test > "${TMP}/endpoints.txt"
 printf '%s\n' 'payload' > "${TMP}/payload.bin"
 
@@ -44,7 +52,7 @@ result="$3"; id="$4"; family="$5"; strategy="$6"
 protocol="${STRATEGY_LAB_CANDIDATE_PROTOCOL:-tls13}"
 printf '%s|%s|%s|%s|%s\n' "${protocol}" "${id}" "${STRATEGY_LAB_ENDPOINT_PROBE_MODE:-}" "${STRATEGY_LAB_UDP_PORT:-}" "${STRATEGY_LAB_UDP_PAYLOAD_FILE:-}" >> "${MOCK_LOG}"
 case "${id}" in
-  e2|fbase|tls12-fake|http-multidisorder|quic-fake-2|udp-ipfrag-16) pass=true ;;
+  multisplit-midsld|fbase|tls12-fake|http-multidisorder|quic-fake-2|udp-ipfrag-16) pass=true ;;
   *) pass=false ;;
 esac
 jq -n --arg id "${id}" --arg family "${family}" --rawfile strategy "${strategy}" --arg protocol "${protocol}" --argjson pass "${pass}" \
@@ -52,41 +60,29 @@ jq -n --arg id "${id}" --arg family "${family}" --rawfile strategy "${strategy}"
 MOCK
 chmod 0755 "${FAKE}"
 
-EXP_CATALOG="${TMP}/expansion.tsv"
-printf '%s\n' \
-  'f2	e1	1	e1.args' \
-  'f1	e2	1	e2.args' \
-  'f2	e3	1	e3.args' > "${EXP_CATALOG}"
-printf '%s\n' '--lua-desync=fake:blob=fake_default_tls' > "${TMP}/args/e1.args"
-printf '%s\n' '--lua-desync=multisplit:pos=1' > "${TMP}/args/e2.args"
-printf '%s\n' '--lua-desync=syndata' > "${TMP}/args/e3.args"
 cat > "${TMP}/family.json" <<'JSON'
-{"total":2,"completed":2,"families":[{"id":"fbase1","family":"f1","strategy":"--lua-desync=multisplit:pos=2\n","endpoints":[],"all_pass":true},{"id":"fbase2","family":"f2","strategy":"--lua-desync=fake:blob=fake_default_tls\n","endpoints":[],"all_pass":false}],"accepted":["f1"],"rejected":["f2"],"all_pass":true}
+{"total":2,"completed":2,"families":[{"id":"fbase1","family":"multisplit","strategy":"--out-range=-d10\n--lua-desync=multisplit:pos=2\n","endpoints":[],"all_pass":true},{"id":"fbase2","family":"fake","strategy":"--out-range=-d10\n--lua-desync=fake:blob=fake_default_tls\n","endpoints":[],"all_pass":false}],"accepted":["multisplit"],"rejected":["fake"],"all_pass":true}
 JSON
 cat > "${TMP}/family-none.json" <<'JSON'
-{"total":2,"completed":2,"families":[{"id":"fbase1","family":"f1","strategy":"--lua-desync=multisplit:pos=2\n","endpoints":[],"all_pass":false},{"id":"fbase2","family":"f2","strategy":"--lua-desync=fake:blob=fake_default_tls\n","endpoints":[],"all_pass":false}],"accepted":[],"rejected":["f1","f2"],"all_pass":false}
+{"total":2,"completed":2,"families":[{"id":"fbase1","family":"multisplit","strategy":"--out-range=-d10\n--lua-desync=multisplit:pos=2\n","endpoints":[],"all_pass":false},{"id":"fbase2","family":"fake","strategy":"--out-range=-d10\n--lua-desync=fake:blob=fake_default_tls\n","endpoints":[],"all_pass":false}],"accepted":[],"rejected":["multisplit","fake"],"all_pass":false}
 JSON
 
-COMMON_ENV="STRATEGY_LAB_JOBS_DIR=${JOBS} STRATEGY_LAB_PYTHON_BIN=${PYTHON} MOCK_LOG=${LOG}"
+COMMON_ENV="STRATEGY_LAB_JOBS_DIR=${JOBS} STRATEGY_LAB_PYTHON_BIN=${PYTHON} STRATEGY_LAB_LUA_DIR=${TMP}/lua STRATEGY_LAB_FAKE_DIR=${TMP}/fake MOCK_LOG=${LOG}"
 
 env ${COMMON_ENV} \
-  STRATEGY_LAB_EXPANSION_CATALOG="${EXP_CATALOG}" \
-  STRATEGY_LAB_EXPANSION_ARGS_DIR="${TMP}/args" \
   STRATEGY_LAB_EXPANSION_CANDIDATE_RUNNER="${FAKE}" \
   STRATEGY_LAB_EXPANSION_TARGET=99 \
   sh "${LAUNCHER}" search expand "${JOB}" "${TMP}/endpoints.txt" "${TMP}/family.json" "${TMP}/expansion.json"
-"${JQ}" -e '.total_available==3 and .completed==3 and .working==["e2"] and .failed==["e1","e3"] and .stopped_reason=="catalog_exhausted"' "${TMP}/expansion.json" >/dev/null || fail 'Stage-50 evidence priority/reachability contract failed'
-[ "$(sed -n '1,3p' "${LOG}" | cut -d '|' -f 2 | paste -sd, -)" = 'e2,e1,e3' ] || fail 'accepted Stage-50 evidence did not affect priority without gating rejected families'
+"${JQ}" -e '.total_graph_nodes==16 and .total_available==16 and .completed==16 and .working==["multisplit-midsld"] and (.failed|length)==15 and .stopped_reason=="graph_exhausted"' "${TMP}/expansion.json" >/dev/null || fail 'Stage-50 evidence priority/reachability contract failed'
+[ "$(sed -n '1,2p' "${LOG}" | cut -d '|' -f 2 | paste -sd, -)" = 'multisplit-host,multisplit-midsld' ] || fail 'accepted Stage-50 evidence did not affect graph priority without gating other families'
 
 : > "${LOG}"
 env ${COMMON_ENV} \
-  STRATEGY_LAB_EXPANSION_CATALOG="${EXP_CATALOG}" \
-  STRATEGY_LAB_EXPANSION_ARGS_DIR="${TMP}/args" \
   STRATEGY_LAB_EXPANSION_CANDIDATE_RUNNER="${FAKE}" \
   STRATEGY_LAB_EXPANSION_TARGET=1 \
   sh "${LAUNCHER}" search expand "${JOB}" "${TMP}/endpoints.txt" "${TMP}/family-none.json" "${TMP}/expansion.json"
-"${JQ}" -e '.total_available==3 and .completed==2 and .working==["e2"] and .failed==["e1"] and .stopped_reason=="enough_candidates"' "${TMP}/expansion.json" >/dev/null || fail 'all-rejected Stage-50 evidence still gated Stage-60 reachability'
-[ "$(sed -n '1,2p' "${LOG}" | cut -d '|' -f 2 | paste -sd, -)" = 'e1,e2' ] || fail 'all-rejected Stage-50 evidence did not retain catalog reachability/order'
+"${JQ}" -e '.total_available==16 and .completed==2 and .working==["multisplit-midsld"] and .failed==["multisplit-host"] and .stopped_reason=="enough_candidates"' "${TMP}/expansion.json" >/dev/null || fail 'all-rejected Stage-50 evidence still gated Stage-60 reachability'
+[ "$(sed -n '1,2p' "${LOG}" | cut -d '|' -f 2 | paste -sd, -)" = 'multisplit-host,multisplit-midsld' ] || fail 'all-rejected Stage-50 evidence did not retain graph reachability/order'
 
 env ${COMMON_ENV} \
   STRATEGY_LAB_STABILITY_CANDIDATE_RUNNER="${FAKE}" \
@@ -133,4 +129,4 @@ PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_CANDIDATE_PROTOCOL=http "${PYTHON}" -c '
 PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_CANDIDATE_PROTOCOL=quic "${PYTHON}" -c 'from strategy_lab_py.candidate import _protocol_spec; s=_protocol_spec(); assert (s.protocol,s.transport,s.port,s.l7)==("quic","udp",443,"quic")'
 PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_CANDIDATE_PROTOCOL=udp STRATEGY_LAB_UDP_PORT=3478 STRATEGY_LAB_UDP_PAYLOAD_FILE="${TMP}/payload.bin" "${PYTHON}" -c 'from strategy_lab_py.candidate import _protocol_spec; s=_protocol_spec(); assert (s.protocol,s.transport,s.port)==("udp","udp",3478)'
 
-echo 'PASS: Python 3.13 keeps Stage-50 evidence as priority without gating Stage-60 reachability and preserves stability/extended contracts'
+echo 'PASS: Python 3.13 keeps Stage-50 evidence as native-graph priority without gating Stage-60 reachability and preserves stability/extended contracts'

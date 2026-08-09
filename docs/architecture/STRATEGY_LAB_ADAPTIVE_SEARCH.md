@@ -33,15 +33,19 @@ STATUS AND IMPLEMENTATION BOUNDARY
 ==================================================
 
 Status:
-Approved target architecture; `_28` and `_29` implement the first two source slices while
-`_30`–`_33` remain pending.
+Approved target architecture; `_28` through `_30` implement the representation,
+reachability and native-graph slices while `_31`–`_33` remain pending.
 
-The current `0.4.0_3` source removes the Stage-50 family hard gate and establishes the
-candidate/resource boundary while deliberately keeping later search behavior unchanged.
+The current `0.4.0_4` source removes the Stage-50 family hard gate, establishes the
+candidate/resource boundary and makes the native graph executable while deliberately
+keeping later adaptive ordering/telemetry/validation behavior unchanged.
 In particular:
 
-- `strategy_lab_py/search.py` treats Stage-50 `accepted` as priority evidence: accepted
-  families retain priority, then every other Stage-60 catalog row remains reachable;
+- `strategy_lab_py/search_graph.py` validates a deterministic DAG with seven Stage-50
+  reconnaissance seeds and sixteen Stage-60 nodes; accepted families affect priority but
+  never graph membership;
+- both agreed golden strategies are exact graph nodes and remain reachable after empty or
+  unrelated Stage-50 evidence;
 - `strategy_lab_py/resources.py` records one immutable job-scoped snapshot of every
   installed `*.lua` and fake `*.bin`, the supported built-ins and inline capability;
 - `strategy_lab_py/candidate_spec.py` normalizes stable identity, ordered Lua actions,
@@ -51,8 +55,16 @@ In particular:
   an automatically loaded candidate dependency;
 - active candidate/profile shell adapters receive exact Python-rendered arguments and no
   longer select Lua files, BLOB resources or a fixed range;
-- the pre-`_30` catalogs still carry `--out-range=-d10`, now as explicit candidate data;
-- `strategy_lab_py/result.py` generates and validates exactly `--out-range=-d10`;
+- graph planning schedules BLOB-free, built-in and inline nodes independently and skips
+  only the external golden node when `fake_tls_7.bin` is unavailable; unrelated installed
+  resources do not generate Cartesian candidates;
+- each graph node's serialized `CandidateSpec` is verified by the candidate runtime and
+  preserved through stability; jobs persist `family-search-graph.json` and
+  `search-graph.json` planning evidence;
+- graph ranges include `-d8`, `-d10` and absence; `strategy_lab_py/result.py` preserves
+  zero or one candidate-defined input/output range without injecting a default;
+- compatibility and non-graph extended catalogs carry their unchanged `-d10` choice
+  explicitly;
 - Stage 80 still contains a capability-gated QUIC candidate branch;
 - candidate execution is cold and serial: prepare/start/ready/probe/stop/cleanup for
   each candidate.
@@ -423,7 +435,7 @@ Production selection of A, B, C or a hybrid is governed by
 TIMEOUT MODEL
 ==================================================
 
-Current `_29` timeout values remain the executable source baseline until a later patch
+Current `_30` timeout values remain the executable source baseline until a later patch
 changes them. They are not copied into the target design as unexplained constants.
 
 The redesign first records timing for:
@@ -484,7 +496,8 @@ The architecture is intentionally split into the following source cycles:
 - `_29`: **implemented in `0.4.0_3` source** — immutable normalized `CandidateSpec`,
   job-scoped installed `ResourceInventory`, exact Python rendering and active-adapter
   policy cleanup;
-- `_30`: native search graph, semantic resource branches, golden corpus, variable range;
+- `_30`: **implemented in `0.4.0_4` source** — native search graph, semantic resource
+  branches, golden corpus and variable range;
 - `_31`: adaptive ordering, endpoint pinning, early stop, timing telemetry;
 - `_32`: timeout hierarchy derived from telemetry;
 - `_33`: lightweight discovery plus fail-fast 3/3 and finalist deep validation.

@@ -7,7 +7,7 @@ Migration Patch 7 makes `strategy_lab_py/result.py` the authoritative automated 
 publisher.
 
 The 2026-08-08 adaptive-search decision amends search selection without changing Python
-ownership. The current `_29` source still contains the original QUIC/five-item-compatible
+ownership. The current `_30` source still contains the original QUIC/five-item-compatible
 logic; `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` defines the approved target.
 
 Standard mode considers stable TLS 1.3 candidates. Extended mode additionally considers

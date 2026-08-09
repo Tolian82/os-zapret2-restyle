@@ -122,6 +122,15 @@ assert f"--blob=fake_tls_7:@{Path(os.environ['STRATEGY_LAB_FAKE_DIR']).resolve()
 assert [item.function for item in external.lua_instances] == ["fake", "multisplit"]
 assert [item.resource_class for item in external.blob_requirements] == ["external", "builtin"]
 assert external.spec_id.startswith("cs1-")
+assert CandidateSpec.from_dict(external.to_dict()) == external
+tampered = external.to_dict()
+tampered["ranges"]["out"] = "-d10"
+try:
+    CandidateSpec.from_dict(tampered)
+except CandidateSpecError:
+    pass
+else:
+    raise AssertionError("tampered serialized CandidateSpec was accepted")
 
 inline_alias = CandidateSpec.from_strategy(
     candidate_id="inline-alias",

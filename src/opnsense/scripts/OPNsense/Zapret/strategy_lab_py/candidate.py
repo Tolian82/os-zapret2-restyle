@@ -178,7 +178,33 @@ def _candidate_description(
     protocol: ProtocolSpec,
     strategy: str,
     use_hostlist: str,
+    spec_file: str = "",
 ) -> candidate_spec.CandidateSpec:
+    if spec_file:
+        try:
+            value = json.loads(Path(spec_file).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise candidate_spec.CandidateSpecError(
+                f"candidate spec is unreadable: {spec_file}"
+            ) from exc
+        description = candidate_spec.CandidateSpec.from_dict(value)
+        expected_l7 = None if protocol.l7 == "-" else protocol.l7
+        strategy_lines = tuple(line for line in strategy.splitlines() if line)
+        if (
+            description.candidate_id != candidate_id
+            or description.family != family
+            or description.protocol != protocol.protocol
+            or description.transport != protocol.transport
+            or description.port != protocol.port
+            or description.l7 != expected_l7
+            or description.target_binding != (use_hostlist == "1")
+            or description.strategy_lines != strategy_lines
+            or description.render_mode != "fragment"
+        ):
+            raise candidate_spec.CandidateSpecError(
+                "candidate spec does not match its runner invocation"
+            )
+        return description
     exact_profile = os.environ.get("STRATEGY_LAB_PROFILE_REPLAY_EXACT", "") == "1"
     selector = os.environ.get("STRATEGY_LAB_PROFILE_REPLAY_SELECTOR", "") if exact_profile else None
     return candidate_spec.CandidateSpec.from_strategy(
@@ -190,9 +216,6 @@ def _candidate_description(
         l7=None if protocol.l7 == "-" else protocol.l7,
         strategy=strategy,
         target_binding=use_hostlist == "1",
-        # `_29` represents the pre-redesign fixed range as candidate data. Search
-        # selection of other ranges remains the separate `_30` responsibility.
-        out_range=None if exact_profile else "-d10",
         render_mode="profile" if exact_profile else "fragment",
         target_selector=selector,
         provenance="profile-replay" if exact_profile else "legacy-catalog",
@@ -498,6 +521,7 @@ def run_candidate(
     family: str,
     strategy_file: str,
     use_hostlist: str,
+    spec_file: str = "",
 ) -> int:
     if not JOB_RE.fullmatch(job_id):
         return EX_USAGE
@@ -524,7 +548,7 @@ def run_candidate(
         bindings = _resolve_endpoints(job_id, endpoints)
         inventory = resources.ensure_job_inventory(job_dir(job_id))
         description = _candidate_description(
-            candidate_id, family, protocol, strategy, use_hostlist
+            candidate_id, family, protocol, strategy, use_hostlist, spec_file
         )
         runtime_arguments = _prepare_runtime_files(job_id, endpoints, description, inventory)
         wan = _require_adapter("wan").strip()
@@ -598,6 +622,9 @@ def run_candidate(
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    if len(args) != 8 or args[0] != "run":
-        raise ValueError("candidate requires: run JOB ENDPOINTS RESULT ID FAMILY STRATEGY USE_HOSTLIST")
+    if len(args) not in {8, 9} or args[0] != "run":
+        raise ValueError(
+            "candidate requires: run JOB ENDPOINTS RESULT ID FAMILY STRATEGY "
+            "USE_HOSTLIST [SPEC]"
+        )
     return run_candidate(*args[1:])

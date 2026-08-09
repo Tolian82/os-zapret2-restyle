@@ -23,7 +23,11 @@ ENDPOINTS="${TMP}/endpoints.txt"
 RESULT="${TMP}/result.json"
 FAKE_RUNNER="${TMP}/candidate.sh"
 
-mkdir -p "${JOB_DIR}" "${ARGS_DIR}"
+mkdir -p "${JOB_DIR}" "${ARGS_DIR}" "${TMP}/lua"
+for lua in zapret-lib.lua zapret-antidpi.lua
+do
+    printf '%s\n' '-- fixture' > "${TMP}/lua/${lua}"
+done
 printf '%s\n' 'rutracker.org' > "${ENDPOINTS}"
 : > "${CATALOG}"
 
@@ -52,10 +56,12 @@ env -u STRATEGY_LAB_TIMEOUT_BIN \
     MODULE_DIR="${MODULE_DIR}" \
     STRATEGY_LAB_JQ="${STRATEGY_LAB_JQ}" \
     STRATEGY_LAB_JOBS_DIR="${JOBS}" \
+    STRATEGY_LAB_LUA_DIR="${TMP}/lua" \
     STRATEGY_LAB_FAMILY_CATALOG="${CATALOG}" \
     STRATEGY_LAB_FAMILY_ARGS_DIR="${ARGS_DIR}" \
     STRATEGY_LAB_SINGLE_CANDIDATE_RUNNER="${FAKE_RUNNER}" \
     STRATEGY_LAB_SINGLE_CANDIDATE_TIMEOUT=2 \
+    STRATEGY_LAB_PYTHON_BIN="${STRATEGY_LAB_TEST_PYTHON:-python3.13}" \
     sh "${RUNNER}" "${JOB}" "${ENDPOINTS}" "${RESULT}"
 
 "${STRATEGY_LAB_JQ}" -e '
@@ -70,4 +76,4 @@ env -u STRATEGY_LAB_TIMEOUT_BIN \
     exit 1
 }
 
-echo 'PASS: Strategy Lab family runner owns its timeout default under set -u'
+echo 'PASS: native-graph Strategy Lab family runner owns its timeout default under set -u'

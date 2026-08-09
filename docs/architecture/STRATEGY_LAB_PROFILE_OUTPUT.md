@@ -6,10 +6,10 @@ Define the user-ready Traffic Strategy profile emitted by Strategy Lab and the p
 
 Search-policy authority:
 `docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md` and
-`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`. The current `_29` implementation
-represents the existing fixed `-d10` as candidate data but still retains fixed
-catalog/QUIC compatibility behavior until later source patches replace it; the rules
-below define the approved target output contract.
+`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`. The current `_30` implementation
+preserves an optional candidate-defined range, including `-d8`, `-d10` or absence, while
+retaining fixed extended/QUIC compatibility behavior until later source patches replace
+it; the rules below define the approved target output contract.
 
 ## User-ready profile
 

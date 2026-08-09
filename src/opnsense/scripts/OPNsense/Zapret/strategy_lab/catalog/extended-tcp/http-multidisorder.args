@@ -1,2 +1,3 @@
+--out-range=-d10
 --payload=http_req
 --lua-desync=multidisorder:pos=host

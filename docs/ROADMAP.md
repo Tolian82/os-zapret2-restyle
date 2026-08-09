@@ -28,9 +28,9 @@ release-selected Standard Scenario 1, including Stages 40/50, continued search a
 Stage-90 restoration.
 
 Current objective:
-**start adaptive-search `_30`: introduce the native-Zapret2 search graph, golden/reference
-corpus, semantic resource branches and candidate-defined output ranges on top of the
-qualified `_29` candidate/resource boundary.**
+**start adaptive-search `_31`: use live candidate evidence for neighbor ordering, pin the
+search-epoch endpoint set, adopt the approved two-to-three-winner early stop and persist
+per-phase timing telemetry on top of the qualified `_30` native graph.**
 
 Adaptive-search `_28` is complete: source/CI/FreeBSD qualification and the focused
 owner-assisted `accepted=[]` Stage-60 reachability/restoration check passed on
@@ -104,7 +104,7 @@ Planned source cycles:
   Stage-50 result still executes Stage-60 candidates and preserves Stage-90 restoration;
 - [x] `_29` — add Python `CandidateSpec` and job-scoped installed `ResourceInventory`;
   remove candidate resource/search policy from the shell adapter;
-- [ ] `_30` — native-Zapret2 adaptive search graph, golden/reference corpus,
+- [x] `_30` — native-Zapret2 adaptive search graph, golden/reference corpus,
   BLOB-free/built-in/inline/external resource paths, and candidate-defined output range;
 - [ ] `_31` — adaptive neighbor ordering, fixed search-epoch endpoint binding, two-to-three
   winner early stop, and per-phase timing telemetry;
@@ -193,6 +193,7 @@ checks passed, immutable tag `v0.4.0` points to the verified release commit, Rel
 `0.4.0_1` on OPNsense. Adaptive-search `_28` is complete on the published and
 owner-tested `v0.4.0_2` candidate: an all-rejected Stage 50 still executed all 14 current
 Stage-60 catalog candidates and Stage 90 restored the initial RUNNING service without
-temporary IPFW residue. `_29` is source-qualified as unpublished `0.4.0_3`; it adds
-`CandidateSpec`/`ResourceInventory` and removes active shell-adapter policy without
-claiming new appliance evidence. `_30` is the next source cycle.
+temporary IPFW residue. `_29` added `CandidateSpec`/`ResourceInventory` and removed
+active shell-adapter policy. `_30` is source-qualified as unpublished `0.4.0_4`; it adds
+the native search DAG, golden corpus, semantic resource eligibility and exact variable-
+range profiles without claiming new appliance evidence. `_31` is the next source cycle.

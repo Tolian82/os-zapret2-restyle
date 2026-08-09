@@ -47,12 +47,12 @@ status = {
 (job / "endpoints.txt").write_text("example.com\n", encoding="utf-8")
 (job / "udp-payload.bin").write_bytes(b"ping")
 (job / "stability.json").write_text(json.dumps({"candidates":[
-    {"id":"t1","family":"multisplit","strategy":"--lua-desync=multisplit:pos=1\n","stable":True,"line_count":1,"character_count":30},
+    {"id":"t1","family":"multisplit","strategy":"--out-range=-d8\n--lua-desync=multisplit:pos=1\n","stable":True,"line_count":2,"character_count":47},
     {"id":"t2","family":"multidisorder","strategy":"--lua-desync=multidisorder:pos=1\n","stable":True,"line_count":1,"character_count":35},
-    {"id":"t3","family":"fake","strategy":"--lua-desync=fake:blob=fake_default_tls\n","stable":True,"line_count":1,"character_count":40},
+    {"id":"t3","family":"fake","strategy":"--out-range=-d10\n--lua-desync=fake:blob=fake_default_tls\n","stable":True,"line_count":2,"character_count":58},
 ]})+"\n", encoding="utf-8")
 (job / "extended-tcp.json").write_text(json.dumps({"protocols":{
-    "tls12":{"working":{"id":"x12","family":"multisplit","strategy":"--lua-desync=multisplit:pos=2\n","endpoints":[{"selected_ip":"203.0.113.10"}],"all_pass":True}},
+    "tls12":{"working":{"id":"x12","family":"multisplit","strategy":"--out-range=-d10\n--lua-desync=multisplit:pos=2\n","endpoints":[{"selected_ip":"203.0.113.10"}],"all_pass":True}},
     "http":{"working":{"id":"xh","family":"multidisorder","strategy":"--lua-desync=multidisorder:pos=2\n","endpoints":[{"selected_ip":"203.0.113.10"}],"all_pass":True}},
 }})+"\n", encoding="utf-8")
 (job / "quic.json").write_text(json.dumps({"working":{"id":"xq","family":"fake","strategy":"--lua-desync=fake:blob=fake_quic\n","endpoints":[{"selected_ip":"203.0.113.10"}],"all_pass":True}})+"\n", encoding="utf-8")
@@ -81,6 +81,10 @@ assert all(item["profile_replay"]["verified"] for item in shortlist["items"])
 assert all(item["profile_replay"]["attempt_count"] == 3 for item in shortlist["items"])
 assert all(item["profile_replay"]["pass_count"] == 3 for item in shortlist["items"])
 assert "--hostlist-domains=example.com" in shortlist["recommendation"]["profile"]
+assert any(candidate_id == "t1" and "--out-range=-d8" in profile for candidate_id, _, profile, _ in calls)
+assert any(candidate_id == "t2" and "--out-range=" not in profile for candidate_id, _, profile, _ in calls)
+assert any(candidate_id == "t3" and "--out-range=-d10" in profile for candidate_id, _, profile, _ in calls)
+assert any(protocol == "http" and "--out-range=" not in profile for _, protocol, profile, _ in calls)
 udp = next(item for item in shortlist["items"] if item["protocol"] == "udp")
 assert "--filter-udp=5555" in udp["profile"]
 assert "--ipset-ip=203.0.113.53" in udp["profile"]

@@ -51,13 +51,13 @@ cat > "${JOB_DIR}/status.json" <<'JSON'
 JSON
 cat > "${JOB_DIR}/shortlist.json" <<'JSON'
 {"count":3,"items":[
- {"id":"t1","family":"multisplit","protocol":"tls13","port":443,"strategy":"--lua-desync=multisplit:pos=1\n","profile":"--filter-tcp=443\n--filter-l7=tls\n--hostlist-domains=example.com\n--out-range=-d10\n--lua-desync=multisplit:pos=1\n","circular_eligible":true},
- {"id":"t2","family":"multidisorder","protocol":"tls13","port":443,"strategy":"--lua-desync=multidisorder:pos=1\n","profile":"--filter-tcp=443\n--filter-l7=tls\n--hostlist-domains=example.com\n--out-range=-d10\n--lua-desync=multidisorder:pos=1\n","circular_eligible":true},
- {"id":"t3","family":"fake","protocol":"tls13","port":443,"strategy":"--lua-desync=fake:blob=fake_default_tls\n","profile":"--filter-tcp=443\n--filter-l7=tls\n--hostlist-domains=example.com\n--out-range=-d10\n--lua-desync=fake:blob=fake_default_tls\n","circular_eligible":true}
+ {"id":"t1","family":"multisplit","protocol":"tls13","port":443,"strategy":"--out-range=-d8\n--lua-desync=multisplit:pos=1\n","profile":"--filter-tcp=443\n--filter-l7=tls\n--hostlist-domains=example.com\n--out-range=-d8\n--lua-desync=multisplit:pos=1\n","circular_eligible":true},
+ {"id":"t2","family":"multidisorder","protocol":"tls13","port":443,"strategy":"--lua-desync=multidisorder:pos=1\n","profile":"--filter-tcp=443\n--filter-l7=tls\n--hostlist-domains=example.com\n--lua-desync=multidisorder:pos=1\n","circular_eligible":true},
+ {"id":"t3","family":"fake","protocol":"tls13","port":443,"strategy":"--out-range=-d10\n--lua-desync=fake:blob=fake_default_tls\n","profile":"--filter-tcp=443\n--filter-l7=tls\n--hostlist-domains=example.com\n--out-range=-d10\n--lua-desync=fake:blob=fake_default_tls\n","circular_eligible":true}
 ],"recommendation":{"id":"t1","protocol":"tls13"},"circular_count":3,"circular_items":[
- {"id":"t1","family":"multisplit","protocol":"tls13","strategy":"--lua-desync=multisplit:pos=1\n","circular_eligible":true},
+ {"id":"t1","family":"multisplit","protocol":"tls13","strategy":"--out-range=-d8\n--lua-desync=multisplit:pos=1\n","circular_eligible":true},
  {"id":"t2","family":"multidisorder","protocol":"tls13","strategy":"--lua-desync=multidisorder:pos=1\n","circular_eligible":true},
- {"id":"t3","family":"fake","protocol":"tls13","strategy":"--lua-desync=fake:blob=fake_default_tls\n","circular_eligible":true}
+ {"id":"t3","family":"fake","protocol":"tls13","strategy":"--out-range=-d10\n--lua-desync=fake:blob=fake_default_tls\n","circular_eligible":true}
 ]}
 JSON
 cp "${JOB_DIR}/shortlist.json" "${TMP}/parent-before.json"

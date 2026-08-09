@@ -16,6 +16,8 @@ The project starts its own version history at `0.1.0`.
   exact rendered runtime arguments.
 - Added one job-scoped `ResourceInventory` snapshot of installed Zapret2 Lua and fake-file
   resources, built-in BLOBs and inline capability at job initialization.
+- Added a validated native Zapret2 TLS 1.3 DAG with seven reconnaissance seeds, sixteen
+  expansion nodes, stable graph evidence and exact built-in/external golden candidates.
 
 ### Changed
 
@@ -28,6 +30,10 @@ The project starts its own version history at `0.1.0`.
   candidate's declared Lua/resources/ranges and renders the exact dvtws2 argument file;
   active shell candidate adapters retain FreeBSD/IPFW/dvtws2 lifecycle mutations but no
   longer choose Lua, BLOB, range or search policy.
+- Continued the adaptive-search implementation with `_30`: active Stage 50/60 now plans
+  from the native DAG instead of flat TSV policy, semantically skips only candidates with
+  missing declared resources, and preserves candidate-defined `-d8`, `-d10` or absent
+  ranges through runtime, stability and final profile output.
 
 ### Verification
 
@@ -39,6 +45,9 @@ The project starts its own version history at `0.1.0`.
 - `_29` adds focused CandidateSpec/ResourceInventory, adapter-boundary and package-content
   regressions. It makes no new owner-live PASS claim; `v0.4.0_2` remains the latest
   published and owner-tested testing candidate.
+- `_30` adds focused graph/golden/resource/range coverage on Linux and FreeBSD 15 plus
+  package inspection for `search_graph.py`. It makes no new publication or owner-live
+  claim; `v0.4.0_2` remains the latest published and owner-tested testing candidate.
 
 ## [0.4.0] - 2026-08-09
 

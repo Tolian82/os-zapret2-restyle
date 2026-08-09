@@ -118,7 +118,7 @@ STRATEGY LAB TRANSACTION
 
 An automated job owns the shared Zapret2 lifecycle lock from initial snapshot through
 mandatory restoration. The normal service is stopped only after its exact initial
-state is recorded. The current `_29` implementation starts and fully removes one cold
+state is recorded. The current `_30` implementation starts and fully removes one cold
 temporary dvtws2 candidate between probes. Whether a later search implementation keeps
 multiple isolated workers or a compatible candidate bucket warm is deliberately open
 under `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
@@ -131,8 +131,8 @@ Stages are persisted atomically:
 20 normal service stop
 30 network capability precheck
 40 clean baseline
-50 TLS 1.3 reconnaissance (current `_29` fixed family-screening implementation)
-60 catalog expansion (current `_29`: accepted evidence gets priority; every catalog family remains reachable)
+50 TLS 1.3 reconnaissance (current `_30`: seven low-cost native graph seeds)
+60 native graph expansion (current `_30`: accepted evidence changes priority; all resource-eligible nodes remain reachable)
 70 three-of-three stability confirmation
 80 extended protocol branches
 85 shortlist
@@ -140,14 +140,14 @@ Stages are persisted atomically:
 99 final report
 ```
 
-The current `_29` implementation runs different strategies strictly sequentially.
+The current `_30` implementation runs different strategies strictly sequentially.
 Screening may probe two different endpoints of the same service concurrently with one
 strategy. Stability confirmation uses fresh sequential connections and requires every
 required endpoint to pass three of three attempts. The approved target keeps 3/3 but
 makes it fail-fast and does not assume that cold process startup is permanently required
 for discovery.
 
-In the current `_29` source, Standard mode searches TLS 1.3 and Extended mode adds TLS
+In the current `_30` source, Standard mode searches TLS 1.3 and Extended mode adds TLS
 1.2, plain HTTP, capability-gated QUIC, and configured request-response UDP. The approved
 next search architecture removes the QUIC candidate-search branch while retaining the
 fixed IPv4 UDP/443 capability/precheck; IPv4/TCP/TLS receives the primary search budget
@@ -166,7 +166,9 @@ The `v0.3.3_17` live boundary was the final shell-era handoff. Migration Patches
 and reconciled Diagnostics/status presentation. Correctives `_26` and `_27` preserve
 that ownership; adaptive-search `_28` changes Python-owned Stage-60 catalog
 reachability/prioritization, and `_29` adds normalized candidate/resource evidence and
-exact Python-owned runtime rendering.
+exact Python-owned runtime rendering. `_30` replaces active Stage-50/60 flat-catalog
+policy with the native DAG, golden corpus, semantic resource branches and exact variable
+ranges.
 
 The active implementation boundary is:
 
@@ -211,13 +213,15 @@ Decision authority:
 APPROVED ADAPTIVE SEARCH TARGET
 ==================================================
 
-The current `_29` search implements the first two adaptive-search slices: Stage-50
-acceptance can prioritize a family but cannot gate other Stage-60 catalog families, and
+The current `_30` search implements the first three adaptive-search slices: Stage-50
+acceptance can prioritize a family but cannot gate other Stage-60 graph branches, and
 each candidate now has an immutable Python `CandidateSpec` bound to one job-scoped
 installed `ResourceInventory`. Python renders exact runtime arguments; active shell
-adapters perform only lifecycle/IPFW/dvtws2 system actions. The fixed catalog and current
-range values remain until `_30`, so this is not yet the final Strategy Lab search
-architecture. The approved post-migration target is defined in
+adapters perform only lifecycle/IPFW/dvtws2 system actions. Active Stage 50/60 use a
+validated seven-seed/sixteen-node native DAG with exact golden candidates; semantic
+resource eligibility and optional candidate ranges are persisted and preserved. Search
+result-adaptive ordering, endpoint epochs, telemetry and validation are not yet the final
+target. The approved post-migration architecture is defined in
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and
 `docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md`.
 
@@ -230,6 +234,8 @@ Key target properties:
 - semantic BLOB-free/built-in/inline/external resource selection;
 - candidate-owned optional output range instead of global `-d10`;
 - golden native/owner working strategies prove representability and graph reachability;
+- the preceding three properties and deterministic native DAG are **implemented in
+  `_30`**;
 - adaptive cost/evidence-based graph exploration with historical hits affecting order,
   never reachability;
 - pinned endpoint/search-epoch comparison;
@@ -245,7 +251,7 @@ proves result equivalence, deterministic routing, no state leakage and exact cle
 SHORTLIST AND CIRCULAR VALIDATION
 ==================================================
 
-The current `_29` result contract may expose three to five stable candidates, ordered
+The current `_30` result contract may expose three to five stable candidates, ordered
 with recommendation number one first. The adaptive-search target changes the normal
 search/validation early-stop goal to two to three strong candidates; source/result-schema
 behavior changes only in its dedicated implementation patch. Strategy Lab never writes a
