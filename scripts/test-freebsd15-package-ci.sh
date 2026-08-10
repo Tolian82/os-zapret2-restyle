@@ -154,12 +154,10 @@ grep -Fq "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy
     "${ROOT_DIR}/scripts/test-strategy-lab-corrective-matrix.sh" ||
     fail 'canonical Strategy Lab matrix no longer discovers focused regressions'
 
-# Preserve the canonical historical live matrix while using PROJECT_STATE for the current
-# already-observed `_8` live boundary and in-flight `_9` source candidate. The matrix is
-# expanded with the next owner evidence bundle rather than being used as a source-build
-# identity file.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
-    fail 'unexpected Strategy Lab live-matrix baseline'
+# Current live/source selection must agree across the canonical live matrix and project
+# state while retaining historical release-selected/focused evidence.
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
+    fail 'unexpected Strategy Lab live-matrix state'
 grep -Fq '**PASS ON `_27` — v0.4.0 mandatory row**' "${MATRIX}" ||
     fail 'release-selected live matrix does not retain the v0.4.0 mandatory Scenario 1 PASS'
 grep -Fq 'ADAPTIVE-SEARCH OWNER TEST — `_28`' "${MATRIX}" ||
@@ -168,6 +166,14 @@ grep -Fq 'TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_6`' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_6 timeout-hierarchy evidence'
 grep -Fq 'TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_7`' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_7 timeout-hierarchy evidence'
+grep -Fq 'TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_8`' "${MATRIX}" ||
+    fail 'live matrix does not retain the v0.4.0_8 timeout-containment closeout'
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_8.pkg`' "${MATRIX}" ||
+    fail 'live matrix does not preserve the published _8 candidate'
+grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_8.pkg`' "${MATRIX}" ||
+    fail 'live matrix does not preserve the owner-tested _8 candidate'
+grep -Fq "Current adaptive-search source candidate: \`${candidate}\`" "${MATRIX}" ||
+    fail 'live matrix does not select the current source candidate'
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}" ||
     fail 'live matrix does not require the FreeBSD 15 ABI'
 
@@ -181,4 +187,4 @@ grep -Fq '`_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**
     fail 'project state does not close the owner-live _32 boundary'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, _32 containment, _33 adaptive validation, and current project-state selection are qualified for ${candidate}"
+printf '%s\n' "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, _32 containment, _33 adaptive validation, and current live/source selection are qualified for ${candidate}"
