@@ -6,13 +6,12 @@ PYTHON_BIN=${STRATEGY_LAB_PYTHON_BIN:-/usr/local/bin/python3}
 PYTHON_ENTRY="${SCRIPT_DIR}/strategy_lab_python.py"
 EXPECTED_PYTHON=3.13
 
-# Telemetry-derived containment defaults for Strategy Lab 0.4.0_8.
-# Keep the 150/270-second search budgets unchanged and retain the eight-second
-# cold candidate lifecycle. Stage 60 keeps its verified admission model; Stages
-# 70/80 now apply the same execution/termination/cleanup admission rule. Stage
-# 85 is explicitly bounded by the remaining search budget, while mandatory
-# Stage-90 restoration has a separate parent envelope large enough to contain
-# the existing bounded lifecycle transaction.
+# Telemetry-derived containment defaults retained from Strategy Lab 0.4.0_8.
+# `_33` keeps the 150/270-second search budgets and the bounded cold lifecycle,
+# uses a small bounded GET for discovery/stability, stops 3/3 stability as soon
+# as one failure makes success impossible, and reserves a larger bounded GET for
+# the final two-to-three publication finalists. Warm/parallel runtime models stay
+# behind the separate A/B/C experiment gate.
 : "${STRATEGY_LAB_SINGLE_CANDIDATE_TIMEOUT:=8}"
 : "${STRATEGY_LAB_EXPANSION_CANDIDATE_TIMEOUT:=8}"
 : "${STRATEGY_LAB_STABILITY_ATTEMPT_TIMEOUT:=8}"
@@ -25,6 +24,12 @@ EXPECTED_PYTHON=3.13
 : "${STRATEGY_LAB_STAGE80_TIMEOUT:=120}"
 : "${STRATEGY_LAB_STAGE85_TIMEOUT:=120}"
 : "${STRATEGY_LAB_RESTORE_PARENT_TIMEOUT:=180}"
+: "${STRATEGY_LAB_DISCOVERY_RANGE_BYTES:=4096}"
+: "${STRATEGY_LAB_DISCOVERY_MAX_TIME:=3}"
+: "${STRATEGY_LAB_FINALIST_TARGET_BYTES:=16384}"
+: "${STRATEGY_LAB_FINALIST_RANGE_BYTES:=65536}"
+: "${STRATEGY_LAB_FINALIST_MAX_TIME:=6}"
+: "${STRATEGY_LAB_FINALIST_CANDIDATE_TIMEOUT:=15}"
 export STRATEGY_LAB_SINGLE_CANDIDATE_TIMEOUT \
     STRATEGY_LAB_EXPANSION_CANDIDATE_TIMEOUT \
     STRATEGY_LAB_STABILITY_ATTEMPT_TIMEOUT \
@@ -33,7 +38,10 @@ export STRATEGY_LAB_SINGLE_CANDIDATE_TIMEOUT \
     STRATEGY_LAB_UDP_CANDIDATE_TIMEOUT \
     STRATEGY_LAB_CANDIDATE_TIMEOUT STRATEGY_LAB_STAGE60_TIMEOUT \
     STRATEGY_LAB_STAGE70_TIMEOUT STRATEGY_LAB_STAGE80_TIMEOUT \
-    STRATEGY_LAB_STAGE85_TIMEOUT STRATEGY_LAB_RESTORE_PARENT_TIMEOUT
+    STRATEGY_LAB_STAGE85_TIMEOUT STRATEGY_LAB_RESTORE_PARENT_TIMEOUT \
+    STRATEGY_LAB_DISCOVERY_RANGE_BYTES STRATEGY_LAB_DISCOVERY_MAX_TIME \
+    STRATEGY_LAB_FINALIST_TARGET_BYTES STRATEGY_LAB_FINALIST_RANGE_BYTES \
+    STRATEGY_LAB_FINALIST_MAX_TIME STRATEGY_LAB_FINALIST_CANDIDATE_TIMEOUT
 
 runtime_error()
 {
