@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; FULL REGRESSION MATRIX OPEN**
+Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_12` SOURCE EXPERIMENT PENDING LIVE; FULL REGRESSION MATRIX OPEN**
 
 This matrix is the canonical live-appliance regression inventory for Strategy Lab. Source
 tests, GitHub CI, and FreeBSD package builds cannot substitute for a live PASS when a row
@@ -23,8 +23,8 @@ TEST RECORD
 - Required package ABI: `FreeBSD:15:amd64`
 - Latest published testing candidate: `os-zapret2-restyle-0.4.0_11.pkg`
 - Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_11.pkg`
-- Current source candidate: `os-zapret2-restyle-0.4.0_11.pkg`
-- Current source purpose: Model A cold reference collected; Model B coexistence experiment next
+- Current source candidate: `os-zapret2-restyle-0.4.0_12.pkg`
+- Current source purpose: experiment-only Model B warm-worker coexistence harness; owner-live experiment pending
 - Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)
 - Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)
 - Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)
@@ -35,8 +35,11 @@ TEST RECORD
 Architecture / ABI baseline evidence:
 `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`.
 
-Latest live evidence:
+Latest accepted live experiment evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`.
+
+Current source experiment contract:
+`docs/patches/v0.4.0_12.md`.
 
 Adaptive `_33` evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`.
@@ -103,6 +106,10 @@ VERIFIED PROGRESSION
 - `_11` restoration records initial RUNNING -> final RUNNING,
   `strategy_unchanged=true`, `temporary_runtime_clean=true`. Model A is therefore accepted
   as the cold correctness/performance reference; no Model B/C production claim is made.
+- `v0.4.0_12` is the current source-only Model B experiment harness. It starts three exact
+  reference candidates on distinct warm ports `9990–9992`, routes probes sequentially via
+  only one selected dedicated rule `19128–19130` at a time, measures RSS/latency and tests
+  independent stop plus controlled worker death. It is not owner-live accepted yet.
 
 ==================================================
 MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`
@@ -146,19 +153,34 @@ Exact accepted evidence:
 Previous `_10` gap evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md`.
 
-Next experiment boundary:
+==================================================
+MODEL B `_12` SOURCE EXPERIMENT — LIVE PENDING
+==================================================
 
-- Model B may now be implemented only as an experiment for several compatible warm
-  `dvtws2` workers with unique validated process/runtime/divert ownership;
-- candidate probes remain sequential during the coexistence experiment;
-- each Model B result must agree with its exact Model A candidate/spec and pinned endpoint;
-- only the selected worker may show interception/counter movement for the selected probe;
-- stopping one worker must not disturb the others;
-- cancellation, multi-worker cleanup and one controlled worker-death cleanup path must be
-  measured;
-- any result mismatch, ambiguous attribution or residue rejects Model B;
-- Model C, source-port dispatch, preload-policy changes and true parallel candidate probes
-  remain out of scope.
+The `_12` harness is deliberately separate from normal Strategy Lab execution. It consumes
+`job.TtZeaH` as the cold reference, requires an identical current `ResourceInventory`, and
+selects a repeated blob-free PASS, a builtin FAIL and an external `-d8` FAIL from the exact
+retained `CandidateSpec` evidence.
+
+Machine-checkable source/live acceptance requires:
+
+- three unique warm worker PIDs and divert ports;
+- numeric per-worker and aggregate RSS;
+- strict sequential probe execution (`parallel_probes=false`);
+- only the selected worker's dedicated rule present for each probe;
+- selected-rule packet-counter growth and pinned-endpoint evidence;
+- PASS/FAIL equivalence with Model A for A/B/C/A;
+- repeated A unchanged while the other two workers coexist;
+- remaining workers healthy after one worker is stopped;
+- remaining PASS worker unchanged after controlled death/cleanup of another worker;
+- exact removal of rules `19128–19130` and ports/processes `9990–9992`;
+- semantic restoration of initial service state, config hash, runtime-argument hash and
+  normal-firewall hash.
+
+Even `conclusion=accept` is an **experiment result only**. `_12` explicitly retains
+`experiment_only=true`, `parallel_probes=false` and `production_approved=false`. Model B
+cannot become production architecture until owner live evidence is reviewed and the
+adaptive-search decision is updated separately.
 
 ==================================================
 PYTHON MIGRATION OWNERSHIP
@@ -248,7 +270,9 @@ CONFIRMED DEFECTS / LIVE RECHECKS
   fail-fast rejection remains source-regression-only because all live finalists passed 3/3.
 - **Model A measurement.** The `_10` RSS-only gap is closed on `v0.4.0_11`; owner
   `job.TtZeaH` returned `reference_collected` with all 25 samples carrying numeric RSS and
-  every coverage check true. Model B/C remain experimental and unapproved.
+  every coverage check true.
+- **Model B coexistence.** `_12` source harness exists, but no owner-live result is recorded
+  yet. Model B/C remain experimental and unapproved.
 - **Immediate stale/new-job GUI error.** Retain as open until dedicated presentation
   regression coverage.
 - **Active `Strategy Lab returned no output.` message.** Dedicated live recheck pending.
@@ -293,6 +317,7 @@ For `v0.4.0`, Scenario 1 remains the selected mandatory post-migration row and i
 `v0.3.3_27`. Adaptive `_28` has its focused owner PASS on `v0.4.0_2`; `_32` timeout
 containment is owner-live passed through `v0.4.0_8`; `_33` adaptive validation has its
 change-specific owner-live PASS on `v0.4.0_9`. Rows 2–18 remain open regression coverage
-without a formal row PASS. `v0.4.0_11` now supplies the accepted Model A cold reference
-for later A/B/C experiments; that experiment status does not retroactively change the
-stable v0.4.0 release-gate result and does not approve a warm runtime model.
+without a formal row PASS. `v0.4.0_11` supplies the accepted Model A cold reference.
+`v0.4.0_12` is only the current source candidate for the next Model B coexistence
+experiment; it does not alter the stable v0.4.0 release-gate result and does not approve a
+warm runtime model.
