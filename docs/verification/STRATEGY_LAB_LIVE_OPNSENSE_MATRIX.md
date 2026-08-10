@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; FULL REGRESSION MATRIX OPEN**
+Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; FULL REGRESSION MATRIX OPEN**
 
 This matrix is the canonical live-appliance regression inventory for Strategy Lab.
 Source tests, GitHub CI, and FreeBSD package builds cannot substitute for a live PASS when
@@ -18,11 +18,11 @@ TEST RECORD
 - Latest test date/time: `2026-08-10`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.4.0_7.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_7.pkg`
-- Current adaptive-search source candidate: `os-zapret2-restyle-0.4.0_8.pkg`
-- Latest owner-tested Standard job: `job.RFVs75`
-- Latest owner-tested diagnostic job: `job.QbUuYO`
+- Latest published testing candidate: `os-zapret2-restyle-0.4.0_8.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_8.pkg`
+- Current adaptive-search source candidate: `os-zapret2-restyle-0.4.0_9.pkg`
+- Latest owner-tested Standard job: `job.FgjRCR`
+- Latest owner-tested diagnostic job: `job.pv2Q09`
 - WAN interface: `vtnet1`
 - Latest blocked-domain target: `telegram.org`
 - Generic UDP target/port: `PENDING OWNER`
@@ -31,6 +31,9 @@ Architecture / ABI baseline evidence:
 `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`.
 
 Latest live evidence:
+`docs/verification/evidence/2026-08-10-v0.4.0_8-timeout-containment-pass.md`.
+
+Previous late-stage timing evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_7-late-stage-pass.md`.
 
 Previous timeout evidence:
@@ -79,9 +82,11 @@ Key live progression:
   runs completed all 16 expansion candidates, continued through Stage 70/80/85 as
   applicable, ended truthfully as `NO_CANDIDATE`, and restored the initially RUNNING
   service without temporary IPFW residue.
-- `v0.4.0_8` is the current `_32` source correction for the remaining late-stage
-  containment gaps: Stage-70/80 candidate admission plus explicit Stage-85 and Stage-90
-  parent bounds. Owner-live verification remains pending.
+- `v0.4.0_8` owner retesting closed the remaining observed `_32` late-stage containment
+  boundary: both Standard and Extended reached Stage 85 and Stage 90 without a late-stage
+  timeout, ended truthfully as `NO_CANDIDATE`, and reported successful restoration.
+- `v0.4.0_9` is the current `_33` adaptive-validation source candidate: bounded lightweight
+  discovery, fail-fast strict 3/3 stability, and cold finalist depth validation.
 
 Historical `_17`, job `job.w0nXxQ`, ended with Stage 50 ERROR and Stage 90 PASS. Its
 candidate-runtime bundle was not collected, so the exact `_17` Stage-50 root cause remains
@@ -298,6 +303,32 @@ late-stage containment work for `v0.4.0_8`. Exact evidence is preserved in
 `docs/verification/evidence/2026-08-10-v0.4.0_7-late-stage-pass.md`.
 
 ==================================================
+TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_8`
+==================================================
+
+Owner-assisted Standard job `job.FgjRCR` and Extended job `job.pv2Q09` against
+`telegram.org`:
+
+- package version: `0.4.0_8` testing prerelease;
+- both runs reached Stage 60 PASS after checking all 16 graph candidates and finding no
+  working candidate;
+- Stage 70 completed normally with zero stability candidates because Stage 60 found no
+  winner;
+- Standard Stage 80 was correctly skipped by mode;
+- Extended Stage 80 passed with QUIC and configured UDP explicitly skipped by the observed
+  capability/input state;
+- Stage 85 passed and formed an empty final shortlist in both modes;
+- Stage 90 passed in both modes and the UI reported temporary process/rule cleanup plus
+  healthy restoration of the initially running Zapret2 service;
+- both jobs reached Stage 99 and ended truthfully as `NO_CANDIDATE` rather than TIMEOUT or
+  internal ERROR.
+
+The screenshots do not provide precise stage durations, so no new timing claim is made.
+This closes the change-specific `_32` late-stage containment boundary exercised by `_8`.
+Exact evidence is preserved in
+`docs/verification/evidence/2026-08-10-v0.4.0_8-timeout-containment-pass.md`.
+
+==================================================
 PYTHON MIGRATION OWNERSHIP
 ==================================================
 
@@ -396,9 +427,11 @@ CONFIRMED DEFECTS / LIVE RECHECKS
   by `v0.4.0_6`: Stage 50 completed all seven families and published PASS.
 - **Stage 60 fixed 70-second parent timeout on `v0.4.0_6`.** Closed by `v0.4.0_7` in both
   Standard and Extended owner runs; all 16 Stage-60 candidates completed.
-- **Late-stage containment after Stage 60.** `v0.4.0_7` proved the normal no-winner
-  Stage-70/80/85/90 path and exposed missing Stage-70/80 admission plus unbounded Python
-  parent calls for Stage 85/90; corrective `v0.4.0_8` is source-qualified/live-pending.
+- **Late-stage containment after Stage 60.** Closed for the observed normal no-winner
+  Standard and Extended paths by `v0.4.0_8`: Stage 70/80/85/90 reached their normal
+  terminal states without a late timeout and restoration passed.
+- **Adaptive validation depth.** `v0.4.0_9` is the current `_33` source candidate; live
+  validation remains pending after source/FreeBSD qualification and publication.
 - **Immediate stale/new-job GUI error.** Not reproduced on `_26`, but retain as open until
   a complete Scenario-1 run confirms behavior.
 - **Active `Strategy Lab returned no output.` message.** Patch-8 source correction exists;
@@ -449,6 +482,6 @@ For `v0.4.0`, Scenario 1 is the selected mandatory post-migration row and is PAS
 `v0.3.3_27`. No known critical restoration/runtime defect remains from the `_26`/`_27`
 corrective cycle. Adaptive-search `_28` additionally has its focused change-specific
 owner PASS on `v0.4.0_2`. Rows 2–18 remain open regression coverage without a claimed
-PASS. The newer `v0.4.0_7` live evidence closes the observed Stage-60 timeout and selects
-`v0.4.0_8` for the remaining `_32` late-stage containment work; it does not retroactively
-invalidate the release-selected `_27` or focused `_28` evidence.
+PASS. The newer `v0.4.0_8` live evidence closes the observed `_32` late-stage timeout
+containment path and selects `v0.4.0_9` for `_33` adaptive validation; it does not
+retroactively invalidate the release-selected `_27` or focused `_28` evidence.
