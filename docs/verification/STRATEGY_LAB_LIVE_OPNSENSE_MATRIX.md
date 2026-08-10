@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_16` OWNER-LIVE COEXISTENCE ACCEPT (EXPERIMENT ONLY); FAILED-READINESS FAIL-FAST CORRECTIVE NEXT; FULL REGRESSION MATRIX OPEN**
+Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_16` OWNER-LIVE COEXISTENCE ACCEPT (EXPERIMENT ONLY); `_17` FAILED-READINESS FAIL-FAST SOURCE CORRECTIVE; FULL REGRESSION MATRIX OPEN**
 
 This matrix is the canonical live-appliance regression inventory for Strategy Lab. Source
 tests, GitHub CI, and FreeBSD package builds cannot substitute for a live PASS when a row
@@ -23,9 +23,9 @@ TEST RECORD
 - Required package ABI: `FreeBSD:15:amd64`
 - Latest published testing candidate: `os-zapret2-restyle-0.4.0_16.pkg`
 - Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_16.pkg`
-- Current source candidate: `os-zapret2-restyle-0.4.0_16.pkg`
-- Current source purpose: accepted Model B coexistence baseline; failed-readiness fail-fast corrective next
-- Current source overlay: bounded post-drop hostlist traversal plus FreeBSD `process_query.sh` selector normalization proven owner-live
+- Current source candidate: `os-zapret2-restyle-0.4.0_17.pkg`
+- Current source purpose: `_17` failed-readiness fail-fast corrective; CI/publication pending
+- Current source overlay: preserve accepted `_16` ready-pool behavior; after any failed worker readiness, skip route/probe/stop/death and proceed directly to bounded cleanup/restoration
 - Revision note: `_15` remains intentionally unclaimed by this source line; no `_15` package/release or live result is recorded here
 - Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)
 - Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)
@@ -53,7 +53,7 @@ Model B access corrective contract:
 `docs/patches/v0.4.0_14.md`.
 
 Current corrective source contract:
-`docs/patches/v0.4.0_16.md`.
+`docs/patches/v0.4.0_17.md`.
 
 Adaptive `_33` evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`.
@@ -158,6 +158,11 @@ VERIFIED PROGRESSION
   roughly 600 ms/candidate for Model B, about 62% lower. This is promising but not yet a
   production performance decision because the Model B report lacks a directly comparable
   repeated full-run wall-clock distribution.
+- `v0.4.0_17` source-corrects the separate failed-readiness control defect proven on `_13`.
+  Once any pool snapshot remains non-ready, Model B records the failed slots and
+  `downstream_actions_skipped=true`, returns a truthful reject, and does not enter route,
+  probe, independent-stop or controlled-death work. The common cleanup/restoration path is
+  unchanged. `_17` does not alter the accepted `_16` ready-pool coexistence sequence.
 
 ==================================================
 MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`
@@ -267,9 +272,9 @@ Previous reject evidence:
 
 This `accept` is an **experiment result only**. The Model B report retains
 `experiment_only=true`, `parallel_probes=false` and `production_approved=false`.
-Model B cannot become production architecture until the separate failed-readiness fail-fast
-defect is resolved and repeated comparable performance measurements support an explicit
-architecture decision.
+`v0.4.0_17` source-corrects the failed-readiness continuation while preserving the accepted
+ready-pool path, but Model B still requires qualified `_17` delivery, repeated comparable
+performance measurements and an explicit architecture decision before any production use.
 
 ==================================================
 PYTHON MIGRATION OWNERSHIP
@@ -368,10 +373,11 @@ CONFIRMED DEFECTS / LIVE RECHECKS
   The `_16` owner rerun now returns `conclusion=accept` with all worker readiness, identity,
   RSS, attribution, coexistence, stop/death and restoration checks true. This blocker is
   closed for the intended experiment path.
-- **Model B failed-readiness continuation.** `_13` proves the harness continues into probes
-  and controlled stop/death after `all_workers_ready=false`. The successful `_16` run does
-  not exercise that negative branch; keep it separate and unresolved before production
-  approval.
+- **Model B failed-readiness continuation.** `_13` proves the harness continued into probes
+  and controlled stop/death after `all_workers_ready=false`. `_17` source-corrects that
+  exact boundary: failed slots are recorded, downstream actions are skipped, and common
+  cleanup/restoration remains mandatory. Focused regression is included; CI/FreeBSD 15
+  qualification and testing-prerelease publication are pending.
 - **Immediate stale/new-job GUI error.** Retain as open until dedicated presentation
   regression coverage.
 - **Active `Strategy Lab returned no output.` message.** Dedicated live recheck pending.
@@ -417,8 +423,8 @@ For `v0.4.0`, Scenario 1 remains the selected mandatory post-migration row and i
 containment is owner-live passed through `v0.4.0_8`; `_33` adaptive validation has its
 change-specific owner-live PASS on `v0.4.0_9`. Rows 2–18 remain open regression coverage
 without a formal row PASS. `v0.4.0_11` supplies the accepted Model A cold reference.
-`v0.4.0_16` is now the latest published and owner-tested testing candidate; its Model B
+`v0.4.0_16` remains the latest published and owner-tested testing candidate; its Model B
 coexistence report returns `accept` with complete restoration, but remains explicitly
-experiment-only with `production_approved=false`. The separate failed-readiness fail-fast
-corrective is next and must not be conflated with production approval or broader warm-runtime
-architecture changes.
+experiment-only with `production_approved=false`. `_17` is the current source candidate for
+the failed-readiness control correction; it is not yet a published or owner-tested package
+and does not imply production approval or broader warm-runtime architecture changes.

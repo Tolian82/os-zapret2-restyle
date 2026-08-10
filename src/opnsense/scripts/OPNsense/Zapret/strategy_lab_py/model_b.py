@@ -503,6 +503,16 @@ def run(reference_job_id: str, output: str) -> int:
         report["checks"]["all_workers_ready"] = all_ready
         report["checks"]["unique_worker_identity"] = unique_identity
         report["checks"]["rss_observed"] = bool(report["pool"]["rss"]["all_numeric"])
+        if not all_ready:
+            report["failed_readiness"] = {
+                "failed_slots": [
+                    slot.name
+                    for slot in SLOTS
+                    if pool.get(slot.name, {}).get("ready") is not True
+                ],
+                "downstream_actions_skipped": True,
+            }
+            raise ModelBExperimentError("Model B worker pool did not reach readiness")
 
         probes: list[dict[str, Any]] = []
         sequence = (SLOTS[0], SLOTS[1], SLOTS[2], SLOTS[0])
