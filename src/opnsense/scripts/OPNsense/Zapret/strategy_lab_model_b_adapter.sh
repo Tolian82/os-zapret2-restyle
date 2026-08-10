@@ -206,6 +206,10 @@ preflight()
     do
         port_in_use "${_mb_port}" && return 1
     done
+    # The last successful availability check is intentionally a negative predicate:
+    # port_in_use returns 1 when the port is free. Do not leak that expected status as
+    # the function result after the loop.
+    return 0
 }
 
 launch_worker()
