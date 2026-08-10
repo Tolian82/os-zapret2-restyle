@@ -176,14 +176,24 @@ def _run_model_a(args: Sequence[str]) -> int:
 
 
 def _run_model_b(args: Sequence[str]) -> int:
+    # Model B compares warm workers against the exact `_33` discovery signal used by the
+    # accepted cold reference. Keep that probe policy local to this CLI invocation and
+    # restore the request module afterwards so the experiment cannot leak policy state.
+    original_curl_request = request_execution.curl_request
     try:
-        return model_b_experiment.main(args)
+        with adaptive_validation.probe_tier("discovery"):
+            adaptive_validation.install_candidate_probe_policy()
+            return model_b_experiment.main(args)
     except ValueError as exc:
         _error(str(exc)); return EX_USAGE
     except model_b_experiment.ModelBExperimentError as exc:
         _error(str(exc)); return EX_SOFTWARE
+    except request_execution.RequestError as exc:
+        _error(str(exc)); return EX_SOFTWARE
     except OSError as exc:
         _error(f"Strategy Lab Model B experiment failed: {exc}"); return EX_SOFTWARE
+    finally:
+        request_execution.curl_request = original_curl_request
 
 
 def main(argv: Sequence[str] | None = None) -> int:
