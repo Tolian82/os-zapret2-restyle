@@ -30,12 +30,21 @@ ONE_PID_FILE="${TEST_ROOT}/one.pid"
 cat > "${MOCK_PS}" <<'MOCK'
 #!/bin/sh
 has_xww=false
+has_all=false
+has_legacy_ax=false
 for arg in "$@"
 do
     [ "${arg}" = '-xww' ] && has_xww=true
+    [ "${arg}" = '-A' ] && has_all=true
+    [ "${arg}" = 'ax' ] && has_legacy_ax=true
 done
 case "${MOCK_PS_MODE:-freebsd}" in
-    freebsd) [ "${has_xww}" = true ] || exit 0 ;;
+    freebsd) [ "${has_xww}" = true ] || exit 70 ;;
+    freebsd-all)
+        [ "${has_xww}" = true ] || exit 70
+        [ "${has_all}" = true ] || exit 71
+        [ "${has_legacy_ax}" = false ] || exit 72
+        ;;
     portable) [ "${has_xww}" = false ] || exit 70 ;;
     *) exit 64 ;;
 esac
@@ -94,6 +103,17 @@ export MOCK_PS_COMMAND
 common_process_matches "${TEST_PID}" /usr/local/etc/zapret2/binaries/my/dvtws2 ||
     fail 'daemon child command was not detected through FreeBSD ps -xww'
 
+# Strategy Lab full-process scans pass the historical leading BSD shorthand `ax` through
+# the shared wrapper. FreeBSD rejects a mixed `-xww ax` invocation, so the wrapper must
+# normalize that selector to the dashed all-process form while preserving all output args.
+MOCK_PS_MODE=freebsd-all
+MOCK_PS_COMMAND='normalized-all-process-selection'
+export MOCK_PS_MODE MOCK_PS_COMMAND
+[ "$("${WRAPPER}" ax -o pid= -o command=)" = normalized-all-process-selection ] ||
+    fail 'FreeBSD process wrapper did not normalize legacy Strategy Lab ax selection'
+MOCK_PS_MODE=freebsd
+export MOCK_PS_MODE
+
 . "${STRATEGY_COMMON}"
 MOCK_PS_COMMAND="/bin/sh ${SCRIPT_DIR}/strategy_lab_worker.sh job.DAEMON"
 export MOCK_PS_COMMAND
@@ -119,7 +139,18 @@ export ZAPRET_PROCESS_QUERY_SYSTEM MOCK_PS_MODE MOCK_PS_COMMAND
 [ "$("${WRAPPER}" -p "${TEST_PID}" -o command=)" = portable-pid-selection ] ||
     fail 'non-FreeBSD process query unexpectedly injected BSD selection flags'
 
-grep -Fq 'FreeBSD) exec "${ZAPRET_NATIVE_PS_BIN}" -xww "$@"' "${WRAPPER}" ||
+ZAPRET_PROCESS_QUERY_SYSTEM=Linux
+MOCK_PS_MODE=portable
+MOCK_PS_COMMAND='portable-legacy-selection'
+export ZAPRET_PROCESS_QUERY_SYSTEM MOCK_PS_MODE MOCK_PS_COMMAND
+[ "$("${WRAPPER}" ax -o pid= -o command=)" = portable-legacy-selection ] ||
+    fail 'non-FreeBSD process query unexpectedly rewrote caller selection'
+
+grep -Fq 'if [ "${1:-}" = ax ]; then' "${WRAPPER}" ||
+    fail 'FreeBSD process wrapper does not recognize the Strategy Lab legacy all-process selector'
+grep -Fq 'set -- -A "$@"' "${WRAPPER}" ||
+    fail 'FreeBSD process wrapper does not normalize legacy ax to dashed all-process selection'
+grep -Fq 'exec "${ZAPRET_NATIVE_PS_BIN}" -xww "$@"' "${WRAPPER}" ||
     fail 'FreeBSD process wrapper does not force no-TTY and untruncated output'
 grep -Fq '*) exec "${ZAPRET_NATIVE_PS_BIN}" "$@"' "${WRAPPER}" ||
     fail 'non-FreeBSD process wrapper does not preserve caller PID selection'
@@ -148,4 +179,4 @@ sh -n "${STRATEGY_COMMON}"
 sh -n "${CIRCULAR_OWNER}"
 sh -n "${SERVICE_SOURCE}"
 
-echo 'PASS: one shared reader handles newline and EOF PID files while rejecting malformed and unsafe values'
+echo 'PASS: one shared reader handles newline/EOF PID files and the FreeBSD process wrapper safely normalizes Strategy Lab all-process selection'

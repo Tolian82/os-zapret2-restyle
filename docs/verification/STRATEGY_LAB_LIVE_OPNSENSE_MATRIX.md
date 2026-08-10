@@ -23,8 +23,9 @@ TEST RECORD
 - Required package ABI: `FreeBSD:15:amd64`
 - Latest published testing candidate: `os-zapret2-restyle-0.4.0_13.pkg`
 - Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_13.pkg`
-- Current source candidate: `os-zapret2-restyle-0.4.0_14.pkg`
+- Current source candidate: `os-zapret2-restyle-0.4.0_15.pkg`
 - Current source purpose: bounded Model B post-drop hostlist traversal lease; owner-live experiment rerun pending
+- Current source overlay: FreeBSD `process_query.sh` legacy `ax` selector normalization before the same live rerun
 - Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)
 - Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)
 - Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)
@@ -44,8 +45,11 @@ Latest Model B live evidence:
 Model B experiment contract:
 `docs/patches/v0.4.0_12.md`.
 
-Current corrective source contract:
+Model B access corrective contract:
 `docs/patches/v0.4.0_14.md`.
+
+Current corrective source contract:
+`docs/patches/v0.4.0_15.md`.
 
 Adaptive `_33` evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`.
@@ -129,9 +133,12 @@ VERIFIED PROGRESSION
   access failure from `v0.3.3_16`: the new Model B root and session ancestors were `0700`
   while hostlist-backed dvtws2 workers run as `nobody` and must reopen/check their hostlist
   after privilege drop.
-- `v0.4.0_14` is the bounded-access corrective source candidate. The active Model B root
+- `v0.4.0_14` is the bounded-access corrective source baseline. The active Model B root
   and session are non-listable but searchable (`0711`) only while the workers are alive;
   cleanup restores the retained root/session to `0700` before removing the run tree.
+- `v0.4.0_15` retains that access correction and fixes the shared FreeBSD process-query
+  boundary found during the same investigation: a leading Strategy Lab `ax` selector is
+  normalized to `-A` before native `ps` receives the existing `-xww` flags.
 
 ==================================================
 MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`
@@ -214,6 +221,12 @@ than mixed into `_14`.
 `_14` changes only the live-proven post-drop traversal boundary. The two active session
 ancestors become `0711` for the lifetime of the workers, remain non-listable, and return to
 private `0700` during cleanup. The hostlist remains read-only.
+
+`_15` keeps that access correction intact and closes the FreeBSD process-query interface
+blocker before the same live rerun. Production `backend/common.sh` routes Strategy Lab
+process inspection through `process_query.sh`; the full-process scans pass historical `ax`.
+The platform adapter now translates only that leading selector to `-A`, yielding compatible
+FreeBSD `-xww -A ...` while the non-FreeBSD path remains transparent.
 
 Exact `_13` evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_13-model-b-worker-access-reject.md`.
@@ -318,10 +331,11 @@ CONFIRMED DEFECTS / LIVE RECHECKS
 - **Model B warm-worker post-drop hostlist access.** `_13` reached worker startup but all
   three workers disappeared before readiness. Source/live correlation with the previously
   owner-proven dvtws2 privilege-drop contract identifies private `0700` session ancestors;
-  `_14` applies the bounded `0711` traversal lease and awaits the same owner rerun.
+  `_14` applies the bounded `0711` traversal lease. `_15` retains that correction and also
+  fixes the FreeBSD process-query selector interface discovered before the same owner rerun.
 - **Model B failed-readiness continuation.** `_13` also proves the harness continues into
   probes and controlled stop/death after `all_workers_ready=false`; keep this separate from
-  `_14` and unresolved before production approval.
+  `_15` and unresolved before production approval.
 - **Immediate stale/new-job GUI error.** Retain as open until dedicated presentation
   regression coverage.
 - **Active `Strategy Lab returned no output.` message.** Dedicated live recheck pending.
@@ -368,6 +382,8 @@ containment is owner-live passed through `v0.4.0_8`; `_33` adaptive validation h
 change-specific owner-live PASS on `v0.4.0_9`. Rows 2–18 remain open regression coverage
 without a formal row PASS. `v0.4.0_11` supplies the accepted Model A cold reference.
 `v0.4.0_13` is the latest published/owner-tested Model B experiment candidate and records
-a worker-startup `reject` with complete restoration. `v0.4.0_14` is the bounded post-drop
-access corrective source candidate for repeating that same experiment. Neither candidate
-alters the stable v0.4.0 release-gate result or approves a production warm runtime model.
+a worker-startup `reject` with complete restoration. `v0.4.0_15` is the current source
+candidate: it retains the `_14` bounded post-drop access corrective and adds the narrow
+FreeBSD process-query selector normalization before repeating that same experiment. Neither
+candidate alters the stable v0.4.0 release-gate result or approves a production warm runtime
+model.
