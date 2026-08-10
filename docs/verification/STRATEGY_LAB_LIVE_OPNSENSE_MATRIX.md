@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_12` OWNER-LIVE BLOCKED AT CLEAN PREFLIGHT; `_13` CORRECTIVE PENDING LIVE; FULL REGRESSION MATRIX OPEN**
+Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_13` OWNER-LIVE REJECT AT WORKER STARTUP; `_14` ACCESS CORRECTIVE PENDING LIVE; FULL REGRESSION MATRIX OPEN**
 
 This matrix is the canonical live-appliance regression inventory for Strategy Lab. Source
 tests, GitHub CI, and FreeBSD package builds cannot substitute for a live PASS when a row
@@ -21,10 +21,10 @@ TEST RECORD
 - Latest test date/time: `2026-08-10`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.4.0_12.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_12.pkg`
-- Current source candidate: `os-zapret2-restyle-0.4.0_13.pkg`
-- Current source purpose: corrective Model B clean-preflight status fix; owner-live experiment rerun pending
+- Latest published testing candidate: `os-zapret2-restyle-0.4.0_13.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_13.pkg`
+- Current source candidate: `os-zapret2-restyle-0.4.0_14.pkg`
+- Current source purpose: bounded Model B post-drop hostlist traversal lease; owner-live experiment rerun pending
 - Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)
 - Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)
 - Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)
@@ -38,11 +38,14 @@ Architecture / ABI baseline evidence:
 Latest accepted live experiment evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`.
 
+Latest Model B live evidence:
+`docs/verification/evidence/2026-08-10-v0.4.0_13-model-b-worker-access-reject.md`.
+
 Model B experiment contract:
 `docs/patches/v0.4.0_12.md`.
 
 Current corrective source contract:
-`docs/patches/v0.4.0_13.md`.
+`docs/patches/v0.4.0_14.md`.
 
 Adaptive `_33` evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`.
@@ -118,10 +121,17 @@ VERIFIED PROGRESSION
   `preflight()` had no explicit success return after the loop, that expected status leaked
   out as the function result. No Model B warm worker was launched, so `_12` provides no
   coexistence acceptance evidence.
-- `v0.4.0_13` is the corrective source candidate: `preflight()` explicitly returns 0 after
-  all rule/port checks remain clean, while occupied rule/port and missing prerequisite
-  failures stay unchanged. A real-shell regression exercises the adapter clean path and
-  both conflict paths.
+- `v0.4.0_13` corrected the clean-preflight path and the owner rerun advanced into worker
+  startup. The resulting report is a real `reject`: all three worker snapshots had no PID,
+  no process identity, no divert socket and no RSS. IPFW counters moved while curl requests
+  timed out with no remote endpoint, and final semantic restoration remained verified.
+- `_13` source/live correlation matches the previously owner-proven post-drop hostlist
+  access failure from `v0.3.3_16`: the new Model B root and session ancestors were `0700`
+  while hostlist-backed dvtws2 workers run as `nobody` and must reopen/check their hostlist
+  after privilege drop.
+- `v0.4.0_14` is the bounded-access corrective source candidate. The active Model B root
+  and session are non-listable but searchable (`0711`) only while the workers are alive;
+  cleanup restores the retained root/session to `0700` before removing the run tree.
 
 ==================================================
 MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`
@@ -166,7 +176,7 @@ Previous `_10` gap evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md`.
 
 ==================================================
-MODEL B `_12` EXPERIMENT — `_13` PREFLIGHT CORRECTIVE PENDING LIVE
+MODEL B `_13` WORKER-STARTUP REJECT — `_14` ACCESS CORRECTIVE PENDING LIVE
 ==================================================
 
 The Model B harness remains deliberately separate from normal Strategy Lab execution. It
@@ -189,14 +199,30 @@ Machine-checkable source/live acceptance still requires:
 - semantic restoration of initial service state, config hash, runtime-argument hash and
   normal-firewall hash.
 
-The `_12` owner attempt is recorded as **BLOCKED BEFORE WORKER LAUNCH**, not as a Model B
-reject: the experiment itself was never executed. `_13` changes only the false clean-path
-preflight return status and must repeat the same experiment after publication/install.
+The `_13` owner report proves the preflight correction but rejects the worker-startup
+phase. Pool startup took 3223 ms, yet all three snapshots had `pid=null`,
+`process_identity=false`, `socket_ready=false`, `rss_kb=null`. The selected IPFW rules did
+intercept traffic, but with no qualifying listeners the requests timed out and the known
+pass candidate could not match Model A. Restoration still passed completely.
+
+The later `Model B system adapter kill-owned failed` error is downstream: a controlled-death
+step cannot kill an owned external worker when no worker PID survived startup. `_13` also
+therefore confirms a separate fail-fast/control defect: Model B continues probing after
+`all_workers_ready=false`. That defect is retained for its own logical correction rather
+than mixed into `_14`.
+
+`_14` changes only the live-proven post-drop traversal boundary. The two active session
+ancestors become `0711` for the lifetime of the workers, remain non-listable, and return to
+private `0700` during cleanup. The hostlist remains read-only.
+
+Exact `_13` evidence:
+`docs/verification/evidence/2026-08-10-v0.4.0_13-model-b-worker-access-reject.md`.
 
 Even a future `conclusion=accept` is an **experiment result only**. The Model B report
 retains `experiment_only=true`, `parallel_probes=false` and `production_approved=false`.
-Model B cannot become production architecture until owner live evidence is reviewed and
-the adaptive-search decision is updated separately.
+Model B cannot become production architecture until owner live evidence is reviewed, the
+separate failed-readiness fail-fast defect is resolved, and the adaptive-search decision is
+updated separately.
 
 ==================================================
 PYTHON MIGRATION OWNERSHIP
@@ -287,9 +313,15 @@ CONFIRMED DEFECTS / LIVE RECHECKS
 - **Model A measurement.** The `_10` RSS-only gap is closed on `v0.4.0_11`; owner
   `job.TtZeaH` returned `reference_collected` with all 25 samples carrying numeric RSS and
   every coverage check true.
-- **Model B coexistence preflight.** First `_12` owner attempt was blocked before worker
-  launch by a false clean-path status leak in `preflight()`. `_13` corrects that defect and
-  awaits the same owner experiment rerun; no coexistence result exists yet.
+- **Model B coexistence preflight.** `_12` was blocked before worker launch by the false
+  clean-path status leak. `_13` owner live advanced past preflight, so this defect is closed.
+- **Model B warm-worker post-drop hostlist access.** `_13` reached worker startup but all
+  three workers disappeared before readiness. Source/live correlation with the previously
+  owner-proven dvtws2 privilege-drop contract identifies private `0700` session ancestors;
+  `_14` applies the bounded `0711` traversal lease and awaits the same owner rerun.
+- **Model B failed-readiness continuation.** `_13` also proves the harness continues into
+  probes and controlled stop/death after `all_workers_ready=false`; keep this separate from
+  `_14` and unresolved before production approval.
 - **Immediate stale/new-job GUI error.** Retain as open until dedicated presentation
   regression coverage.
 - **Active `Strategy Lab returned no output.` message.** Dedicated live recheck pending.
@@ -335,7 +367,7 @@ For `v0.4.0`, Scenario 1 remains the selected mandatory post-migration row and i
 containment is owner-live passed through `v0.4.0_8`; `_33` adaptive validation has its
 change-specific owner-live PASS on `v0.4.0_9`. Rows 2–18 remain open regression coverage
 without a formal row PASS. `v0.4.0_11` supplies the accepted Model A cold reference.
-`v0.4.0_12` is the published Model B experiment candidate whose first owner run was
-blocked before worker launch by the clean-preflight defect. `v0.4.0_13` is the corrective
-source candidate for repeating that same experiment; neither candidate alters the stable
-v0.4.0 release-gate result or approves a production warm runtime model.
+`v0.4.0_13` is the latest published/owner-tested Model B experiment candidate and records
+a worker-startup `reject` with complete restoration. `v0.4.0_14` is the bounded post-drop
+access corrective source candidate for repeating that same experiment. Neither candidate
+alters the stable v0.4.0 release-gate result or approves a production warm runtime model.
