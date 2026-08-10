@@ -25,14 +25,14 @@ QUICK CONTEXT
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_1.pkg`
-Latest published testing prerelease: `v0.4.0_9` / `os-zapret2-restyle-0.4.0_9.pkg`
-Latest owner-tested testing candidate: `v0.4.0_9` / `os-zapret2-restyle-0.4.0_9.pkg`
+Latest published testing prerelease: `v0.4.0_10` / `os-zapret2-restyle-0.4.0_10.pkg`
+Latest owner-tested testing candidate: `v0.4.0_10` / `os-zapret2-restyle-0.4.0_10.pkg`
 Current source line: `VERSION=0.4.0`
-Current package revision: `PLUGIN_REVISION=10`
-Current source candidate: `os-zapret2-restyle-0.4.0_10.pkg`
+Current package revision: `PLUGIN_REVISION=11`
+Current source candidate: `os-zapret2-restyle-0.4.0_11.pkg`
 Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **post-`_33` Model A cold-reference measurement experiment**
+Current phase: **Model A cold-reference RSS propagation correction and recheck**
 v0.4.0 release gate: **COMPLETE — published and installed by the owner**
 `_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**
 `_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**
@@ -56,10 +56,10 @@ Current live-gate authority:
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
 Latest change-specific live evidence:
-`docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`.
+`docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md`.
 
-Current Model A patch/source contract:
-`docs/patches/v0.4.0_10.md`.
+Current Model A corrective patch/source contract:
+`docs/patches/v0.4.0_11.md`.
 
 Current live-release-gate decision:
 `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
@@ -100,8 +100,11 @@ Approved and implemented progression:
 - `_33` / `0.4.0_9` — bounded lightweight discovery, fail-fast strict 3/3 stability and
   cold finalist depth validation, change-specific owner-live passed on winner and
   no-winner paths;
-- `0.4.0_10` — current post-`_33` experiment slice: read-only Model A cold-reference
-  measurement summarizer plus candidate readiness RSS evidence.
+- `0.4.0_10` — read-only Model A cold-reference measurement summarizer plus candidate RSS
+  collection at the FreeBSD snapshot boundary; first appliance report exposed a Python
+  readiness propagation gap;
+- `0.4.0_11` — current corrective slice: preserve snapshot `rss_kb` in persisted Python
+  readiness/candidate evidence without changing Model A coverage rules or runtime policy.
 
 Warm runtime selection remains evidence-gated by the A/B/C experiment plan. No Model B/C
 worker, dispatcher, warm preload or parallel candidate probing is production-approved.
@@ -133,41 +136,49 @@ Exact record:
 `docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`.
 
 ==================================================
-MODEL A — CURRENT `0.4.0_10` SLICE
+MODEL A — `_10` APPLIANCE RESULT / `_11` CORRECTION
 ==================================================
 
-The next approved step is measurement before warm-runtime architecture selection.
-`v0.4.0_10` has one logical purpose: turn retained cold candidate evidence into a
-reproducible Model A baseline.
+Owner Standard `rutracker.org` job `job.Oeq7Rc` on `v0.4.0_10` completed `SUCCESS` and
+produced 25 cold candidate samples. The Model A summarizer worked and returned
+`inconclusive` for exactly one missing coverage check: `rss_observed=false`.
 
-Current source contract:
+The report already proved:
 
-- packaged command:
-  `model-a summarize OUTPUT JOB_ID [JOB_ID ...]`;
-- read-only operation over retained completed Strategy Lab jobs;
-- no lifecycle lock acquisition, candidate launch, service stop/start, job mutation or
-  evidence deletion;
-- samples come from Stage 50, Stage 60, Stage 70 attempt files and Stage 85 cold deep
-  replay files;
-- report retains immutable candidate/spec identity, endpoint/interception identity,
-  resource class/range, search epoch and resource inventory identity;
-- per-phase and per-candidate distributions record count, median, nearest-rank p90 and max;
-- readiness snapshots add `rss_kb` using the already validated candidate PID;
-- machine-checkable experiment coverage includes observed PASS/FAIL, repeated candidate,
-  required resource classes, `-d8`, overlapping TLS/443 specs, RSS and verified clean
-  restoration for all input jobs;
-- missing coverage yields `inconclusive`; only complete currently observable coverage
-  yields `reference_collected`;
-- current `cleanup_ms` is named `stop_cleanup_ms` because stop and remaining cleanup are
-  not yet independently measured;
-- `resource_init_ms` remains null where initialization is included in launch/readiness;
-- no warm-runtime mechanism is enabled by this patch.
+- known PASS and known FAIL candidates;
+- repeated candidate execution;
+- required `blob-free`, `builtin`, and `external` resource classes;
+- `-d8` output range coverage;
+- 16 unique overlapping TLS/443 specs;
+- verified clean restoration for the job.
 
-Focused regression:
-`scripts/test-strategy-lab-model-a-measurement.sh`.
+Measured cold distributions across the 25 samples were:
+
+- total candidate median 1556 ms, p90 3403 ms;
+- readiness median 1046 ms, p90 1054 ms;
+- combined prepare median 140 ms, p90 155 ms;
+- launch median 17 ms, p90 20 ms;
+- probe median 208 ms, p90 2056 ms;
+- stop + cleanup median 78 ms, p90 85 ms.
+
+Diagnosis: the FreeBSD shell adapter already measured and emitted numeric `rss_kb`, but
+Python `_readiness()` reconstructed the persisted runtime object without copying that
+field. All candidate results therefore contained `rss_kb=null` and the summarizer
+correctly refused `reference_collected`.
+
+`v0.4.0_11` fixes only this propagation defect. The no-snapshot fallback remains
+`rss_kb=null`; no RSS value is fabricated. Model A scoring/coverage rules, search policy,
+timeouts, lifecycle ownership and restoration are unchanged.
+
+Exact `_10` appliance record:
+`docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md`.
+
+Focused corrective regression:
+`scripts/test-strategy-lab-python-candidate-family.sh` now requires a mock snapshot RSS
+value to survive into persisted candidate evidence.
 
 Implementation/devlog:
-`docs/devlog/2026-08-10-v0.4.0_10-model-a-measurement.md`.
+`docs/devlog/2026-08-10-v0.4.0_11-model-a-rss-propagation.md`.
 
 ==================================================
 CONFIRMED DEFECT / REGRESSION BACKLOG
@@ -180,6 +191,10 @@ Closed by the adaptive timeout/search series:
 3. Stage-70/80/85/90 normal-path containment — closed by `_8` owner evidence.
 4. `_33` winner/no-winner adaptive validation boundary — closed change-specifically by
    `_9` owner evidence, with fail-fast rejection still source-regression-only.
+
+Current Model A corrective item:
+
+- `_10` RSS propagation gap — source-corrected in `_11`; owner recheck pending.
 
 Other product/regression observations remain separate backlog unless selected by the
 risk-based live gate:
@@ -203,26 +218,26 @@ DELIVERY AND LIVE-GATE BOUNDARY
 
 The stable `v0.4.0 / 0.4.0_1` release cycle remains complete. The mandatory v0.4.0
 post-migration live row remains PASS on `_27`, `_28` retains its focused adaptive owner
-PASS, `_32` retains its timeout-containment owner PASS through `_8`, and `_33` now has its
+PASS, `_32` retains its timeout-containment owner PASS through `_8`, and `_33` retains its
 change-specific owner-live PASS on `_9`.
 
-`v0.4.0_9` is the latest published and owner-tested testing prerelease. `v0.4.0_10` is the
-current Model A measurement source candidate. Source/CI/FreeBSD qualification must
-complete before merge/publication. Owner authorization covers the resulting installable
-testing prerelease for this cycle; no Pages/pkg-repository promotion is implied.
+`v0.4.0_10` is the latest published and owner-tested testing prerelease. `v0.4.0_11` is
+the current Model A RSS corrective source candidate. Owner installable-package shorthand
+authorizes the resulting `v0.4.0_11` testing prerelease after source/CI/FreeBSD
+qualification; no Pages/pkg-repository promotion is implied.
 
 ==================================================
 NEXT ACTION
 ==================================================
 
-1. Complete latest-head CI and FreeBSD 15 package qualification for `v0.4.0_10`.
-2. Squash merge the verified Model A PR with the exact candidate prefix.
-3. Publish the authorized `v0.4.0_10` testing prerelease with exactly one FreeBSD 15
+1. Complete latest-head CI and FreeBSD 15 package qualification for `v0.4.0_11`.
+2. Squash merge the verified RSS correction with exact subject prefix `v0.4.0_11:`.
+3. Publish the authorized `v0.4.0_11` testing prerelease with exactly one FreeBSD 15
    `.pkg`.
-4. On OPNsense, collect several comparable normal Strategy Lab jobs under the same target
-   and runtime conditions, then run `model-a summarize` over those job IDs.
-5. Preserve the first appliance Model A report under `docs/verification/evidence/` and use
-   its measured coverage/tails to decide whether finer cold instrumentation is required or
-   whether the project can proceed to the Model B coexistence experiment.
+4. On OPNsense, run one comparable Standard `rutracker.org` job and summarize it with the
+   existing `model-a summarize` command.
+5. Require numeric candidate RSS and `coverage.checks.rss_observed=true`; if all other
+   already-exercised coverage is present, accept `conclusion=reference_collected` and use
+   that corrected cold reference to decide whether to begin Model B coexistence work.
 6. Keep Model B/C, source-port dispatch and true parallel probing experimental until their
    explicit equivalence/safety gates are satisfied.
