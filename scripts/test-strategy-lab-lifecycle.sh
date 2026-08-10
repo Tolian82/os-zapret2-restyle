@@ -69,11 +69,30 @@ wait_for_state()
     attempts=0
     while [ "${attempts}" -lt 40 ]
     do
-        state=$(launcher status "${job_id}" | jq -r '.state // ""')
+        status=$(launcher status "${job_id}")
+        state=$(printf '%s\n' "${status}" | jq -r '.state // ""')
         [ "${state}" != "${expected}" ] || return 0
+        case "${state}" in
+            completed|error)
+                printf '%s\n' "${status}" >&2
+                log_file="${LOG_DIR}/${job_id}.log"
+                if [ -r "${log_file}" ]; then
+                    echo "--- ${log_file} ---" >&2
+                    cat "${log_file}" >&2
+                fi
+                fail "job ${job_id} reached unexpected terminal state ${state}; expected ${expected}"
+                ;;
+        esac
         sleep 1
         attempts=$((attempts + 1))
     done
+    status=$(launcher status "${job_id}" || true)
+    printf '%s\n' "${status}" >&2
+    log_file="${LOG_DIR}/${job_id}.log"
+    if [ -r "${log_file}" ]; then
+        echo "--- ${log_file} ---" >&2
+        cat "${log_file}" >&2
+    fi
     fail "job ${job_id} did not reach ${expected}"
 }
 
