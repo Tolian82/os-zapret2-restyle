@@ -28,11 +28,13 @@ Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_
 Latest published testing prerelease: `v0.4.0_13` / `os-zapret2-restyle-0.4.0_13.pkg`
 Latest owner-tested testing candidate: `v0.4.0_13` / `os-zapret2-restyle-0.4.0_13.pkg`
 Current source line: `VERSION=0.4.0`
-Current package revision: `PLUGIN_REVISION=14`
-Current source candidate: `os-zapret2-restyle-0.4.0_14.pkg`
+Current package revision: `PLUGIN_REVISION=16`
+Current source candidate: `os-zapret2-restyle-0.4.0_16.pkg`
 Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
 Current phase: **Model B `_13` reached worker startup and rejected with no resident workers; `_14` post-drop hostlist traversal corrective pending CI/publication/live rerun**
+Current source overlay: **`_16` fixes the FreeBSD `process_query.sh`/legacy `ax` selector interface before that same Model B live rerun**
+Revision note: **`_15` is intentionally not claimed by this source line because a concurrent `_15` branch already exists; no `_15` package or live result is recorded here**
 v0.4.0 release gate: **COMPLETE — published and installed by the owner**
 `_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**
 `_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**
@@ -66,8 +68,11 @@ Latest Model B live evidence:
 Model B experiment contract:
 `docs/patches/v0.4.0_12.md`.
 
-Current Model B corrective contract:
+Current Model B access corrective contract:
 `docs/patches/v0.4.0_14.md`.
+
+Current source corrective contract:
+`docs/patches/v0.4.0_16.md`.
 
 Current live-release-gate decision:
 `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
@@ -124,7 +129,11 @@ Approved and implemented progression:
   `reject` with complete semantic restoration;
 - `0.4.0_14` — reuses the previously owner-proven bounded post-drop hostlist access lease:
   active Model B session ancestors are `0711` while warm workers run and the retained root
-  returns to private `0700` during cleanup.
+  returns to private `0700` during cleanup;
+- `0.4.0_16` — normalizes the Strategy Lab legacy `ax` all-process selector at the shared
+  FreeBSD process-query boundary so native `ps` receives compatible `-xww -A ...` flags;
+  non-FreeBSD process queries remain transparent. Revision `15` is intentionally skipped
+  by this source line and is not claimed as a package or live result here.
 
 Warm runtime selection remains evidence-gated by the A/B/C experiment plan. Model B is a
 measurement harness only. No Model B/C worker, dispatcher, warm preload or parallel
@@ -218,6 +227,12 @@ while the lifecycle-owned experiment runs. The tree remains non-listable. Cleanu
 the retained Model B root to private `0700` before deleting the per-run session. This is the
 same bounded access pattern already accepted for normal Strategy Lab candidate runtime.
 
+Before that access correction can be rechecked live, `v0.4.0_16` also closes a separate
+FreeBSD process-query interface defect found in the same Model B investigation: production
+routes `STRATEGY_LAB_PS_BIN` through `process_query.sh`, while full-process scans pass the
+legacy selector `ax`. The adapter now normalizes only that leading selector to `-A`, so
+FreeBSD native `ps` receives the compatible `-xww -A ...` form.
+
 Exact `_13` evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_13-model-b-worker-access-reject.md`.
 
@@ -244,7 +259,8 @@ Closed by the adaptive timeout/search series:
 Current experiment blocker:
 
 7. `_13` Model B post-drop hostlist traversal failure — owner evidence shows no resident
-   workers/readiness; source-corrected by `_14`; live rerun pending.
+   workers/readiness; source-corrected by `_14`; `_16` additionally closes the FreeBSD
+   process-query selector incompatibility found before the same live rerun; live rerun pending.
 
 Separate confirmed Model B control defect:
 
@@ -279,23 +295,24 @@ change-specific owner-live PASS on `_9`.
 
 `v0.4.0_11` remains the accepted Model A cold reference. `v0.4.0_13` is the latest
 published and owner-tested testing prerelease. Its Model B run is a real `reject` at worker
-startup, not a preflight block, and restoration passed. `v0.4.0_14` is the current bounded
-post-drop access corrective source candidate. None of `_12`–`_14` is a production
-warm-worker architecture.
+startup, not a preflight block, and restoration passed. `v0.4.0_16` is the current source
+candidate: it retains the `_14` bounded post-drop access corrective and adds the narrow
+FreeBSD process-query selector normalization. None of `_12`–`_16` is a production
+warm-worker architecture; `_15` is intentionally not claimed by this source line.
 
 ==================================================
 NEXT ACTION
 ==================================================
 
-1. Qualify `os-zapret2-restyle-0.4.0_14.pkg` through the focused Model B regression,
-   canonical CI and FreeBSD 15 package inspection.
-2. After testing-prerelease publication, install `_14` on the owner appliance while
+1. Qualify `os-zapret2-restyle-0.4.0_16.pkg` through the focused FreeBSD process-query and
+   Model B regressions, canonical CI and FreeBSD 15 package inspection.
+2. After testing-prerelease publication, install `_16` on the owner appliance while
    retaining `job.TtZeaH`.
 3. Repeat the same experiment-only launcher against `job.TtZeaH` and preserve its JSON
    report.
 4. Verify that all three workers now have unique PIDs, listening divert ports and numeric
    RSS before interpreting any A/B/C/A result.
-5. Keep the separately confirmed failed-readiness fail-fast defect out of `_14`; correct it
+5. Keep the separately confirmed failed-readiness fail-fast defect out of `_16`; correct it
    in its own logical cycle before any production Model B decision.
 6. Keep Model C, source-port dispatch, preload-policy changes and true parallel candidate
    probing out of scope.
