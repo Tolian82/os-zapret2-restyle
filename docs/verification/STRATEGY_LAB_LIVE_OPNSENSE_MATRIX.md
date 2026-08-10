@@ -21,10 +21,11 @@ TEST RECORD
 - Latest test date/time: `2026-08-10`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.4.0_9.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_9.pkg`
-- Current source candidate: `os-zapret2-restyle-0.4.0_10.pkg`
-- Current source purpose: Model A cold-reference measurement harness
+- Latest published testing candidate: `os-zapret2-restyle-0.4.0_10.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_10.pkg`
+- Current source candidate: `os-zapret2-restyle-0.4.0_11.pkg`
+- Current source purpose: Model A RSS propagation correction
+- Latest owner-tested Model A job: `job.Oeq7Rc` (`rutracker.org`)
 - Latest owner-tested Standard winner job: `job.UPRDlc` (`rutracker.org`)
 - Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)
 - Latest owner-tested Extended no-winner job: `job.hsP8Ro` (`telegram.org`)
@@ -35,6 +36,9 @@ Architecture / ABI baseline evidence:
 `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`.
 
 Latest live evidence:
+`docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md`.
+
+Adaptive `_33` evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`.
 
 Previous timeout-containment evidence:
@@ -82,32 +86,54 @@ VERIFIED PROGRESSION
   only normal IPFW rule `19000` in the inspected Strategy Lab range.
 - The `_9` live winner set was stable 3/3, so the fail-fast rejection branch remains
   automated-regression evidence rather than owner-live evidence. No broader claim is made.
+- `v0.4.0_10` completed the first Model A appliance measurement on Standard
+  `rutracker.org` job `job.Oeq7Rc`: 25 cold samples covered PASS/FAIL, repeated candidates,
+  all required resource classes, `-d8`, 16 overlapping TLS/443 specs and verified clean
+  restoration. The report remained `inconclusive` only because RSS was missing.
+- `_10` timing evidence measured total candidate median 1556 ms / p90 3403 ms, readiness
+  median 1046 ms / p90 1054 ms, probe median 208 ms / p90 2056 ms and stop+cleanup median
+  78 ms / p90 85 ms. This is retained as the first cold timing baseline.
+- `v0.4.0_11` corrects the diagnosed snapshot-to-readiness `rss_kb` propagation gap only.
+  Its live RSS/reference recheck remains pending; no Model B/C claim is made.
 
 ==================================================
-CURRENT MODEL A HANDOFF — `v0.4.0_10`
+CURRENT MODEL A RSS CORRECTION — `v0.4.0_11`
 ==================================================
 
-`v0.4.0_10` is an instrumentation/experiment source candidate, not a warm-runtime
-promotion. Its live purpose is to collect a reproducible cold Model A reference from normal
-completed jobs.
+The first `v0.4.0_10` Model A measurement experiment ran successfully on the owner
+appliance but returned `conclusion=inconclusive` because
+`coverage.checks.rss_observed=false`. Every other machine-checkable Model A coverage
+condition was satisfied by `job.Oeq7Rc`.
+
+The diagnosed boundary is narrow: the FreeBSD candidate adapter measured and emitted
+`rss_kb`, while Python `_readiness()` reconstructed persisted runtime evidence without
+copying that field. `v0.4.0_11` preserves the measured value in readiness/candidate
+evidence and keeps `rss_kb=null` when no snapshot exists.
 
 Required live handoff after package qualification/publication:
 
-- run several comparable Strategy Lab jobs under the same appliance/runtime/target
-  conditions;
+- run one comparable Standard `rutracker.org` Strategy Lab job;
 - summarize retained Stage 50/60/70/85 cold candidate evidence with
   `model-a summarize OUTPUT JOB_ID [JOB_ID ...]`;
+- require at least one numeric candidate RSS and
+  `coverage.checks.rss_observed=true`;
 - preserve raw samples plus median/p90/max phase distributions, immutable candidate/spec
-  identity, endpoint/interception identity, resource/range coverage, RSS when available,
-  and restoration evidence;
+  identity, endpoint/interception identity, resource/range coverage and restoration
+  evidence;
 - keep `resource_init_ms` explicitly unavailable while it is inseparable from
   launch/readiness;
 - keep current teardown evidence explicitly named `stop_cleanup_ms` while stop and the
   remaining cleanup are not independently measured;
-- conclude `reference_collected` only when the machine-checkable Model A coverage is
-  complete; otherwise preserve `inconclusive` and the missing checks;
+- conclude `reference_collected` only when the complete machine-checkable Model A coverage
+  is present; otherwise preserve `inconclusive` and the missing checks;
 - do not approve Model B/C, source-port dispatch or true parallel probing from source/CI
   evidence alone.
+
+Exact `_10` appliance evidence:
+`docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md`.
+
+Current corrective source contract:
+`docs/patches/v0.4.0_11.md`.
 
 ==================================================
 PYTHON MIGRATION OWNERSHIP
@@ -195,8 +221,10 @@ CONFIRMED DEFECTS / LIVE RECHECKS
   and Extended paths by `v0.4.0_8`.
 - **Adaptive validation depth / winner path.** Change-specific live PASS on `v0.4.0_9`;
   fail-fast rejection remains source-regression-only because all live finalists passed 3/3.
-- **Model A measurement.** Source/FreeBSD qualification and owner-appliance evidence are
-  pending on `v0.4.0_10`; no warm-model claim exists yet.
+- **Model A measurement.** First owner-appliance measurement completed on `v0.4.0_10` with
+  25 samples and every coverage check except RSS. The diagnosed RSS propagation defect is
+  source-corrected by `v0.4.0_11`; owner recheck remains pending. No warm-model claim
+  exists yet.
 - **Immediate stale/new-job GUI error.** Retain as open until dedicated presentation
   regression coverage.
 - **Active `Strategy Lab returned no output.` message.** Dedicated live recheck pending.
@@ -241,5 +269,6 @@ For `v0.4.0`, Scenario 1 remains the selected mandatory post-migration row and i
 `v0.3.3_27`. Adaptive `_28` has its focused owner PASS on `v0.4.0_2`; `_32` timeout
 containment is owner-live passed through `v0.4.0_8`; `_33` adaptive validation has its
 change-specific owner-live PASS on `v0.4.0_9`. Rows 2–18 remain open regression coverage
-without a formal row PASS. `v0.4.0_10` begins the separate Model A measurement experiment
-and does not retroactively change those release-gate results.
+without a formal row PASS. `v0.4.0_10` established the first Model A measurement
+experiment baseline, and `v0.4.0_11` is its narrow RSS propagation correction; neither
+retroactively changes those release-gate results.
