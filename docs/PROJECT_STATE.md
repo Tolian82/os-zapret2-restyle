@@ -28,15 +28,16 @@ Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_
 Latest published testing prerelease: `v0.4.0_11` / `os-zapret2-restyle-0.4.0_11.pkg`
 Latest owner-tested testing candidate: `v0.4.0_11` / `os-zapret2-restyle-0.4.0_11.pkg`
 Current source line: `VERSION=0.4.0`
-Current package revision: `PLUGIN_REVISION=11`
-Current source candidate: `os-zapret2-restyle-0.4.0_11.pkg`
+Current package revision: `PLUGIN_REVISION=12`
+Current source candidate: `os-zapret2-restyle-0.4.0_12.pkg`
 Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Model A cold reference collected; Model B warm-worker coexistence experiment is next**
+Current phase: **Model B warm-worker coexistence harness implemented in source; CI/live experiment pending**
 v0.4.0 release gate: **COMPLETE — published and installed by the owner**
 `_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**
 `_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**
 Model A experiment gate: **REFERENCE COLLECTED on `v0.4.0_11` / `job.TtZeaH`**
+Model B experiment gate: **SOURCE HARNESS ONLY on `v0.4.0_12`; NOT YET OWNER-LIVE ACCEPTED**
 
 Current primary Strategy Lab authorities:
 
@@ -56,11 +57,11 @@ Current GitHub delivery authority:
 Current live-gate authority:
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
-Latest change-specific live evidence:
+Latest accepted live experiment evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`.
 
-Current Model A corrective patch/source contract:
-`docs/patches/v0.4.0_11.md`.
+Current Model B source contract:
+`docs/patches/v0.4.0_12.md`.
 
 Current live-release-gate decision:
 `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
@@ -105,10 +106,15 @@ Approved and implemented progression:
   collection at the FreeBSD snapshot boundary; first appliance report exposed a Python
   readiness propagation gap;
 - `0.4.0_11` — preserved snapshot `rss_kb` in persisted Python readiness/candidate
-  evidence and owner recheck collected the complete Model A cold reference.
+  evidence and owner recheck collected the complete Model A cold reference;
+- `0.4.0_12` — experiment-only Model B coexistence harness for three exact Model-A
+  reference candidates on distinct warm `dvtws2` processes/divert ports with strictly
+  sequential rule-selected probes, independent-stop/death checks and mandatory semantic
+  restoration.
 
-Warm runtime selection remains evidence-gated by the A/B/C experiment plan. No Model B/C
-worker, dispatcher, warm preload or parallel candidate probing is production-approved.
+Warm runtime selection remains evidence-gated by the A/B/C experiment plan. `_12` is a
+measurement harness only. No Model B/C worker, dispatcher, warm preload or parallel
+candidate probing is production-approved.
 
 ==================================================
 LATEST OWNER LIVE RESULT — `v0.4.0_9`
@@ -141,45 +147,57 @@ MODEL A — COLD REFERENCE COLLECTED ON `_11`
 ==================================================
 
 Owner Standard `rutracker.org` job `job.TtZeaH` on `v0.4.0_11` completed `SUCCESS` and
-produced 25 cold candidate samples. The existing read-only `model-a summarize` command
-returned `conclusion=reference_collected` with every machine-checkable coverage item true.
+produced 25 cold candidate samples. The read-only `model-a summarize` command returned
+`conclusion=reference_collected` with every machine-checkable coverage item true.
 
-The accepted report proves:
+The accepted report proves known PASS/FAIL candidates, repeated execution, required
+`blob-free`/`builtin`/`external` resources, `-d8`/`-d10`, 16 unique overlapping TLS/443
+specs, numeric candidate RSS on all samples and verified clean restoration.
 
-- known PASS and known FAIL candidates;
-- repeated candidate execution;
-- required `blob-free`, `builtin`, and `external` resource classes;
-- `-d8` and `-d10` output-range coverage;
-- 16 unique overlapping TLS/443 specs;
-- numeric candidate RSS on all 25 samples;
-- verified clean restoration for the job.
-
-Measured cold distributions across the 25 `_11` samples were:
+Measured cold distributions across the 25 `_11` samples:
 
 - total candidate median 1580 ms, p90 3411 ms, max 3463 ms;
 - readiness median 1046 ms, p90 1052 ms, max 1138 ms;
 - combined prepare median 140 ms, p90 160 ms, max 165 ms;
 - launch median 17 ms, p90 20 ms, max 21 ms;
 - probe median 220 ms, p90 2045 ms, max 2055 ms;
-- stop + cleanup median 81 ms, p90 102 ms, max 109 ms.
-
-Candidate-process RSS after readiness was tightly clustered:
-
-- minimum 4316 KiB;
-- median 4332 KiB;
-- p90 4348 KiB;
-- maximum 4356 KiB.
-
-The `_10` timing baseline is retained as prior evidence, but `_11` is the accepted cold
-reference because it closes the only missing RSS gate without changing search/runtime
-policy. `resource_init_ms` remains inseparable from launch/readiness and teardown remains
-combined as `stop_cleanup_ms`; those limitations are explicit and do not block Model A.
+- stop + cleanup median 81 ms, p90 102 ms, max 109 ms;
+- RSS minimum 4316 KiB, median 4332 KiB, p90 4348 KiB, maximum 4356 KiB.
 
 Exact accepted evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`.
 
 Previous `_10` gap evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md`.
+
+==================================================
+MODEL B — `_12` SOURCE EXPERIMENT BOUNDARY
+==================================================
+
+`v0.4.0_12` does not alter normal Strategy Lab search. It adds an explicit laboratory
+entry point that acquires the same Zapret2 lifecycle lock and consumes the retained Model A
+reference job.
+
+The first coexistence corpus is exactly three compatible TLS 1.3/TCP/443 reference specs:
+
+- repeated known PASS / `blob-free`;
+- known FAIL / `builtin`;
+- known FAIL / `external` with `-d8`.
+
+They run on dedicated warm ports `9990–9992` and dedicated temporary rules
+`19128–19130`. Only the selected worker's rule is present for each probe; the other warm
+workers remain alive but unrouted. The sequence is strictly sequential and includes
+A/B/C/A repetition, independent stop of one worker and controlled death/cleanup of a
+second worker.
+
+Source acceptance requires exact Model-A classification equivalence, selected-rule counter
+movement, inactive-rule absence, unique PID/divert identity, numeric per-worker/aggregate
+RSS, survivor correctness after stop/death, dedicated residue cleanup, and final semantic
+restoration of service state/config/runtime arguments/normal firewall.
+
+Even a live `conclusion=accept` means only that the coexistence experiment passed. The
+report hardcodes `experiment_only=true`, `parallel_probes=false`, and
+`production_approved=false`.
 
 ==================================================
 CONFIRMED DEFECT / REGRESSION BACKLOG
@@ -220,26 +238,24 @@ post-migration live row remains PASS on `_27`, `_28` retains its focused adaptiv
 PASS, `_32` retains its timeout-containment owner PASS through `_8`, and `_33` retains its
 change-specific owner-live PASS on `_9`.
 
-`v0.4.0_11` is the latest published and owner-tested testing prerelease and is the accepted
-Model A cold reference. This documentation closeout changes no package metadata and does
-not authorize or publish a new candidate.
+`v0.4.0_11` remains the latest published and owner-tested testing prerelease and the
+accepted Model A cold reference. `v0.4.0_12` is the current source candidate for the
+experiment-only Model B coexistence harness. It is not considered owner-live accepted and
+must not be described as a production warm-worker architecture.
 
 ==================================================
 NEXT ACTION
 ==================================================
 
-1. Preserve `job.TtZeaH` / `_11` as the accepted Model A cold correctness/performance
-   reference.
-2. Begin a separate Model B **experiment-only** source cycle: several compatible warm
-   `dvtws2` workers, each with unique validated PID/runtime/divert ownership, while probes
-   remain strictly sequential.
-3. Compare Model B candidates against the exact Model A candidate/spec and pinned-endpoint
-   reference; require only the intended worker's interception evidence/counter to move.
-4. Measure initial warm-pool startup cost, per-worker and aggregate RSS, sequential
-   dispatch/probe time, independent worker stop behavior, multi-worker cleanup and one
-   controlled worker-death cleanup path.
-5. Reject Model B on any result mismatch, ambiguous traffic attribution, worker/rule/socket
-   residue, cancellation failure or restoration regression.
-6. Keep Model C, source-port dispatch, preload policy changes and true parallel candidate
-   probing out of scope until Model B coexistence is measured and explicitly accepted or
-   rejected.
+1. Qualify `os-zapret2-restyle-0.4.0_12.pkg` through focused regressions, canonical CI and
+   FreeBSD 15 package inspection.
+2. After an explicitly authorized testing-prerelease publication, install `_12` on the
+   owner appliance while retaining `job.TtZeaH`.
+3. Run the experiment-only launcher against `job.TtZeaH` and preserve its JSON report.
+4. Accept Model B coexistence only if result equivalence, traffic attribution, worker
+   identity/RSS, independent stop, controlled death cleanup and semantic restoration all
+   pass on the appliance.
+5. If accepted, update the adaptive-search decision before considering any production
+   warm-worker use. If rejected, keep Model A cold execution authoritative.
+6. Keep Model C, source-port dispatch, preload-policy changes and true parallel candidate
+   probing out of scope.
