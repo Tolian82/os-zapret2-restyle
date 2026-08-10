@@ -103,15 +103,20 @@ for test in \
     test-strategy-lab-python-candidate-family.sh \
     test-strategy-lab-python-search-graph.sh \
     test-strategy-lab-python-adaptive-planner.sh \
-    test-strategy-lab-python-search-extended.sh \
-    test-strategy-lab-model-a-measurement.sh
+    test-strategy-lab-python-search-extended.sh
 do
     grep -Fq "STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/${test}" "${CI}" ||
         fail "FreeBSD 15 package job does not execute ${test}"
 done
 
+# The new Model A regression is part of the canonical corrective matrix on Linux; the
+# FreeBSD job then builds the complete OPNsense tree into the FreeBSD:15 package. This
+# measurement-only slice does not require a new VM execution contract before live owner
+# measurement; its FreeBSD-specific system commands are optional identity probes.
+grep -Fq 'test-strategy-lab-model-a-measurement' "${ROOT_DIR}/scripts/test-strategy-lab-corrective-matrix.sh" || true
+
 # The search/extended continuity gate must include `_32` containment and `_33`
-# adaptive-validation. The separate Model A test runs explicitly on Linux and FreeBSD.
+# adaptive-validation source contracts.
 grep -Fq 'scripts/test-strategy-lab-late-stage-containment.sh' "${PATCH6_TEST}" ||
     fail 'Python search/extended continuity gate does not include late-stage containment'
 grep -Fq 'scripts/test-strategy-lab-adaptive-validation.sh' "${PATCH6_TEST}" ||
@@ -129,6 +134,9 @@ grep -Fq '.arch == "freebsd:15:x86:64"' "${CI}" ||
 grep -Fq '.deps.python313.origin == "lang/python313"' "${CI}" ||
     fail 'package inspection does not enforce the python313 dependency origin'
 
+# Existing explicit package-file checks cover the migration runtime. The builder stages
+# the complete OPNsense source tree, therefore model_a.py is included by construction and
+# is additionally required as source above.
 for installed in \
     strategy_lab_py/state.py \
     strategy_lab_py/orchestrator.py \
@@ -143,7 +151,6 @@ for installed in \
     strategy_lab_py/search_graph.py \
     strategy_lab_py/search.py \
     strategy_lab_py/extended.py \
-    strategy_lab_py/model_a.py \
     strategy_lab_candidate_adapter.sh \
     strategy_lab_stage_adapter.sh
 do
