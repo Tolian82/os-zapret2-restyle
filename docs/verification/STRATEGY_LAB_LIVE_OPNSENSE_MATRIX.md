@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; FULL REGRESSION MATRIX OPEN**
+Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; FULL REGRESSION MATRIX OPEN**
 
 This matrix is the canonical live-appliance regression inventory for Strategy Lab. Source
 tests, GitHub CI, and FreeBSD package builds cannot substitute for a live PASS when a row
@@ -21,12 +21,12 @@ TEST RECORD
 - Latest test date/time: `2026-08-10`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.4.0_10.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_10.pkg`
+- Latest published testing candidate: `os-zapret2-restyle-0.4.0_11.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_11.pkg`
 - Current source candidate: `os-zapret2-restyle-0.4.0_11.pkg`
-- Current source purpose: Model A RSS propagation correction
-- Latest owner-tested Model A job: `job.Oeq7Rc` (`rutracker.org`)
-- Latest owner-tested Standard winner job: `job.UPRDlc` (`rutracker.org`)
+- Current source purpose: Model A cold reference collected; Model B coexistence experiment next
+- Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)
+- Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)
 - Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)
 - Latest owner-tested Extended no-winner job: `job.hsP8Ro` (`telegram.org`)
 - WAN interface: `vtnet1`
@@ -36,7 +36,7 @@ Architecture / ABI baseline evidence:
 `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`.
 
 Latest live evidence:
-`docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md`.
+`docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`.
 
 Adaptive `_33` evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`.
@@ -93,47 +93,72 @@ VERIFIED PROGRESSION
 - `_10` timing evidence measured total candidate median 1556 ms / p90 3403 ms, readiness
   median 1046 ms / p90 1054 ms, probe median 208 ms / p90 2056 ms and stop+cleanup median
   78 ms / p90 85 ms. This is retained as the first cold timing baseline.
-- `v0.4.0_11` corrects the diagnosed snapshot-to-readiness `rss_kb` propagation gap only.
-  Its live RSS/reference recheck remains pending; no Model B/C claim is made.
+- `v0.4.0_11` corrected the snapshot-to-readiness `rss_kb` propagation gap. Standard
+  `rutracker.org` job `job.TtZeaH` produced 25 cold samples with every Model A coverage
+  check true and `conclusion=reference_collected`.
+- `_11` measured total candidate median 1580 ms / p90 3411 ms, readiness median 1046 ms /
+  p90 1052 ms, probe median 220 ms / p90 2045 ms and stop+cleanup median 81 ms / p90
+  102 ms. Candidate RSS was numeric on all 25 samples with median 4332 KiB, p90 4348 KiB
+  and max 4356 KiB.
+- `_11` restoration records initial RUNNING -> final RUNNING,
+  `strategy_unchanged=true`, `temporary_runtime_clean=true`. Model A is therefore accepted
+  as the cold correctness/performance reference; no Model B/C production claim is made.
 
 ==================================================
-CURRENT MODEL A RSS CORRECTION — `v0.4.0_11`
+MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`
 ==================================================
 
-The first `v0.4.0_10` Model A measurement experiment ran successfully on the owner
-appliance but returned `conclusion=inconclusive` because
-`coverage.checks.rss_observed=false`. Every other machine-checkable Model A coverage
-condition was satisfied by `job.Oeq7Rc`.
+The first `v0.4.0_10` Model A measurement returned `conclusion=inconclusive` only because
+`coverage.checks.rss_observed=false`. The FreeBSD candidate adapter was already measuring
+RSS; `v0.4.0_11` preserved that measured field through Python readiness/candidate evidence.
 
-The diagnosed boundary is narrow: the FreeBSD candidate adapter measured and emitted
-`rss_kb`, while Python `_readiness()` reconstructed persisted runtime evidence without
-copying that field. `v0.4.0_11` preserves the measured value in readiness/candidate
-evidence and keeps `rss_kb=null` when no snapshot exists.
+Owner Standard `rutracker.org` job `job.TtZeaH` on `_11` now satisfies the complete
+machine-checkable Model A contract:
 
-Required live handoff after package qualification/publication:
+- 25 cold Stage 50/60/70/85 candidate samples;
+- known PASS and known FAIL candidates;
+- repeated candidate execution;
+- `blob-free`, `builtin`, and `external` resource classes;
+- `-d8` and `-d10` output-range coverage;
+- 16 unique overlapping TLS/443 candidate specs;
+- numeric RSS on all 25 samples;
+- verified restoration and temporary-runtime cleanup;
+- `coverage.complete=true`, `coverage.missing=[]`;
+- `conclusion=reference_collected`.
 
-- run one comparable Standard `rutracker.org` Strategy Lab job;
-- summarize retained Stage 50/60/70/85 cold candidate evidence with
-  `model-a summarize OUTPUT JOB_ID [JOB_ID ...]`;
-- require at least one numeric candidate RSS and
-  `coverage.checks.rss_observed=true`;
-- preserve raw samples plus median/p90/max phase distributions, immutable candidate/spec
-  identity, endpoint/interception identity, resource/range coverage and restoration
-  evidence;
-- keep `resource_init_ms` explicitly unavailable while it is inseparable from
-  launch/readiness;
-- keep current teardown evidence explicitly named `stop_cleanup_ms` while stop and the
-  remaining cleanup are not independently measured;
-- conclude `reference_collected` only when the complete machine-checkable Model A coverage
-  is present; otherwise preserve `inconclusive` and the missing checks;
-- do not approve Model B/C, source-port dispatch or true parallel probing from source/CI
-  evidence alone.
+Accepted cold distributions:
 
-Exact `_10` appliance evidence:
+- prepare median/p90/max: 140 / 160 / 165 ms;
+- launch median/p90/max: 17 / 20 / 21 ms;
+- readiness median/p90/max: 1046 / 1052 / 1138 ms;
+- probe median/p90/max: 220 / 2045 / 2055 ms;
+- stop+cleanup median/p90/max: 81 / 102 / 109 ms;
+- total candidate median/p90/max: 1580 / 3411 / 3463 ms;
+- RSS minimum/median/p90/max: 4316 / 4332 / 4348 / 4356 KiB.
+
+`resource_init_ms` remains explicitly unavailable while inseparable from launch/readiness,
+and teardown remains combined as `stop_cleanup_ms`. Those limitations remain recorded and
+do not block the cold reference.
+
+Exact accepted evidence:
+`docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`.
+
+Previous `_10` gap evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md`.
 
-Current corrective source contract:
-`docs/patches/v0.4.0_11.md`.
+Next experiment boundary:
+
+- Model B may now be implemented only as an experiment for several compatible warm
+  `dvtws2` workers with unique validated process/runtime/divert ownership;
+- candidate probes remain sequential during the coexistence experiment;
+- each Model B result must agree with its exact Model A candidate/spec and pinned endpoint;
+- only the selected worker may show interception/counter movement for the selected probe;
+- stopping one worker must not disturb the others;
+- cancellation, multi-worker cleanup and one controlled worker-death cleanup path must be
+  measured;
+- any result mismatch, ambiguous attribution or residue rejects Model B;
+- Model C, source-port dispatch, preload-policy changes and true parallel candidate probes
+  remain out of scope.
 
 ==================================================
 PYTHON MIGRATION OWNERSHIP
@@ -221,10 +246,9 @@ CONFIRMED DEFECTS / LIVE RECHECKS
   and Extended paths by `v0.4.0_8`.
 - **Adaptive validation depth / winner path.** Change-specific live PASS on `v0.4.0_9`;
   fail-fast rejection remains source-regression-only because all live finalists passed 3/3.
-- **Model A measurement.** First owner-appliance measurement completed on `v0.4.0_10` with
-  25 samples and every coverage check except RSS. The diagnosed RSS propagation defect is
-  source-corrected by `v0.4.0_11`; owner recheck remains pending. No warm-model claim
-  exists yet.
+- **Model A measurement.** The `_10` RSS-only gap is closed on `v0.4.0_11`; owner
+  `job.TtZeaH` returned `reference_collected` with all 25 samples carrying numeric RSS and
+  every coverage check true. Model B/C remain experimental and unapproved.
 - **Immediate stale/new-job GUI error.** Retain as open until dedicated presentation
   regression coverage.
 - **Active `Strategy Lab returned no output.` message.** Dedicated live recheck pending.
@@ -269,6 +293,6 @@ For `v0.4.0`, Scenario 1 remains the selected mandatory post-migration row and i
 `v0.3.3_27`. Adaptive `_28` has its focused owner PASS on `v0.4.0_2`; `_32` timeout
 containment is owner-live passed through `v0.4.0_8`; `_33` adaptive validation has its
 change-specific owner-live PASS on `v0.4.0_9`. Rows 2–18 remain open regression coverage
-without a formal row PASS. `v0.4.0_10` established the first Model A measurement
-experiment baseline, and `v0.4.0_11` is its narrow RSS propagation correction; neither
-retroactively changes those release-gate results.
+without a formal row PASS. `v0.4.0_11` now supplies the accepted Model A cold reference
+for later A/B/C experiments; that experiment status does not retroactively change the
+stable v0.4.0 release-gate result and does not approve a warm runtime model.
