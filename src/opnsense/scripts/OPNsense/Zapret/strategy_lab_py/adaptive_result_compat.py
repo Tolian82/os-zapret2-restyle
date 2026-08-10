@@ -40,6 +40,7 @@ def _backfill_circular(job_id: str) -> None:
     candidates = stability.get("candidates")
     if not isinstance(candidates, list):
         candidates = []
+    tls13_contract = final_result.CONTRACTS["tls13"]
     for source in candidates:
         if len(circular) >= limit:
             break
@@ -57,7 +58,7 @@ def _backfill_circular(job_id: str) -> None:
         item.update(
             protocol="tls13",
             port=443,
-            protocol_rank=final_result.protocol_rank("tls13"),
+            protocol_rank=tls13_contract.protocol_rank,
             target=target,
             target_type=target_type,
             profile=profile,
