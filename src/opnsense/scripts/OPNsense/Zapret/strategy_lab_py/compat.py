@@ -8,6 +8,7 @@ import sys
 from collections.abc import Sequence
 
 from . import FOUNDATION_REVISION, SUPPORTED_PYTHON
+from . import adaptive_validation
 from . import candidate as candidate_screening
 from . import extended as extended_orchestration
 from . import family as family_screening
@@ -106,6 +107,7 @@ def _run_request(args: Sequence[str]) -> int:
 
 def _run_candidate(args: Sequence[str]) -> int:
     try:
+        adaptive_validation.install_candidate_probe_policy()
         return candidate_screening.main(args)
     except ValueError as exc:
         _error(str(exc)); return EX_USAGE
@@ -117,7 +119,7 @@ def _run_candidate(args: Sequence[str]) -> int:
 
 def _run_family(args: Sequence[str]) -> int:
     try:
-        return family_screening.main(args)
+        return adaptive_validation.run_family(args)
     except ValueError as exc:
         _error(str(exc)); return EX_USAGE
     except RuntimeError as exc:
@@ -128,7 +130,7 @@ def _run_family(args: Sequence[str]) -> int:
 
 def _run_search(args: Sequence[str]) -> int:
     try:
-        return late_containment.run_search(args)
+        return adaptive_validation.run_search(args)
     except ValueError as exc:
         _error(str(exc)); return EX_USAGE
     except RuntimeError as exc:
@@ -139,7 +141,7 @@ def _run_search(args: Sequence[str]) -> int:
 
 def _run_extended(args: Sequence[str]) -> int:
     try:
-        return late_containment.run_extended(args)
+        return adaptive_validation.run_extended(args)
     except ValueError as exc:
         _error(str(exc)); return EX_USAGE
     except RuntimeError as exc:
@@ -150,7 +152,7 @@ def _run_extended(args: Sequence[str]) -> int:
 
 def _run_result(args: Sequence[str]) -> int:
     try:
-        return final_result.main(args)
+        return adaptive_validation.run_result(args)
     except final_result.ResultError as exc:
         _error(str(exc)); return EX_SOFTWARE
     except (RuntimeError, ValueError, request_execution.RequestError) as exc:
