@@ -577,7 +577,7 @@ def run(reference_job_id: str, output: str) -> int:
         report["checks"]["sequential_probe_contract"] = True
 
         dispatch_values = [item["dispatch_ms"] for item in probes] + [independent_probe["dispatch_ms"], death_probe["dispatch_ms"]]
-        probe_values = [item["probe_ms"] for item in probes] + [independent_probe["probe_ms"] for independent_probe in [independent_probe]] + [death_probe["probe_ms"]]
+        probe_values = [item["probe_ms"] for item in probes] + [independent_probe["probe_ms"], death_probe["probe_ms"]]
         report["timing"] = {
             "pool_startup_ms": pool_startup_ms,
             "dispatch_median_ms": round(statistics.median(dispatch_values), 3),
