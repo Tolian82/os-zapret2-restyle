@@ -29,6 +29,16 @@ grep -Fq 'STRATEGY_LAB_LIFECYCLE_OWNER=1' "${LAUNCHER}" || fail 'Model B launche
 grep -Fq 'parallel_probes": False' "${MODEL_B}" || fail 'Model B experiment no longer declares sequential probing'
 grep -Fq 'production_approved": False' "${MODEL_B}" || fail 'Model B experiment accidentally claims production approval'
 
+# Hostlist-backed dvtws2 workers drop to nobody and must retain search-only traversal of
+# both Model-B session ancestors for their complete lifetime.  The retained root must
+# return to private mode on every exit path.
+grep -Fq 'chmod 0711 "${SESSION_ROOT}" "${SESSION_DIR}"' "${WORKER}" ||
+    fail 'Model B worker session does not grant bounded post-drop traversal'
+grep -Fq 'chmod 0700 "${SESSION_ROOT}" "${SESSION_DIR}"' "${WORKER}" ||
+    fail 'Model B worker session does not restore private mode during cleanup'
+grep -Fq 'os.chmod(hostlist, 0o644)' "${MODEL_B}" ||
+    fail 'Model B job-owned hostlist is not readable after privilege drop'
+
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-model-b.XXXXXX")
 trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
 export MODEL_B_TEST_ROOT="${ROOT_DIR}"
@@ -132,6 +142,7 @@ for index in range(1, 4):
 
 session = tmp / "session"
 session.mkdir()
+session.chmod(0o711)
 report = tmp / "model-b.json"
 os.environ["STRATEGY_LAB_JOBS_DIR"] = str(jobs)
 os.environ["STRATEGY_LAB_MODEL_B_SESSION_DIR"] = str(session)
@@ -236,6 +247,12 @@ assert value["independent_stop"]["survivors_ready"] is True
 assert value["controlled_worker_death"]["dead_worker_absent"] is True
 assert value["controlled_worker_death"]["survivor_ready"] is True
 
+for slot in model_b.SLOTS:
+    worker_root = session / "workers" / slot.name
+    assert worker_root.stat().st_mode & 0o005 == 0o005
+    hostlist = worker_root / "hostlist.txt"
+    assert hostlist.stat().st_mode & 0o004 == 0o004
+
 initial = tmp / "initial.json"
 final = tmp / "final.json"
 evidence = {
@@ -266,4 +283,4 @@ assert value["checks"]["restoration_verified"] is False
 PY
 
 sh -n "$0"
-echo 'PASS: Model B experiment keeps three warm workers isolated, probes sequentially, matches Model A outcomes, measures RSS, survives independent stop/death, and requires semantic restoration'
+echo 'PASS: Model B experiment keeps three warm workers isolated, preserves bounded post-drop hostlist access, matches Model A outcomes, measures RSS, survives independent stop/death, and requires semantic restoration'
