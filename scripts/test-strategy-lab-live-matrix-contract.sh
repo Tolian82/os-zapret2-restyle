@@ -23,6 +23,7 @@ MODEL_B_PREFLIGHT_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_13.md"
 MODEL_B_PREFLIGHT_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-preflight.sh"
 MODEL_B_WORKER_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_13-model-b-worker-access-reject.md"
 MODEL_B_ACCESS_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_14.md"
+MODEL_B_ACCEPT_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md"
 LIVE_GATE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
@@ -35,8 +36,8 @@ for file in \
     "${MODEL_A_REFERENCE_EVIDENCE}" "${MODEL_A_PATCH}" "${MODEL_A_TEST}" \
     "${MODEL_B_PATCH}" "${MODEL_B_TEST}" "${MODEL_B_PREFLIGHT_PATCH}" \
     "${MODEL_B_PREFLIGHT_TEST}" "${MODEL_B_WORKER_EVIDENCE}" \
-    "${MODEL_B_ACCESS_PATCH}" "${LIVE_GATE_DECISION}" \
-    "${VERSION_FILE}" "${MAKEFILE}"
+    "${MODEL_B_ACCESS_PATCH}" "${MODEL_B_ACCEPT_EVIDENCE}" \
+    "${LIVE_GATE_DECISION}" "${VERSION_FILE}" "${MAKEFILE}"
 do
     [ -s "${file}" ] || {
         echo "FAIL: missing Strategy Lab live-gate record: ${file}" >&2
@@ -51,29 +52,32 @@ case "${revision}" in
 esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 
-# The live matrix records the accepted Model A reference, the `_13` worker-startup reject,
-# and the current `_14` access corrective without converting unrelated rows into PASS.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_13` OWNER-LIVE REJECT AT WORKER STARTUP; `_14` ACCESS CORRECTIVE PENDING LIVE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
+# The canonical ledger must retain historical Model A/_13 evidence while selecting the
+# published and owner-tested `_16` Model B coexistence accept as the current live boundary.
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_16` OWNER-LIVE COEXISTENCE ACCEPT (EXPERIMENT ONLY); FAILED-READINESS FAIL-FAST CORRECTIVE NEXT; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
 grep -Fq 'AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md' "${MATRIX}"
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_13.pkg`' "${MATRIX}"
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_13.pkg`' "${MATRIX}"
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_16.pkg`' "${MATRIX}"
+grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_16.pkg`' "${MATRIX}"
 grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}"
-grep -Fq 'Current source purpose: bounded Model B post-drop hostlist traversal lease; owner-live experiment rerun pending' "${MATRIX}"
+grep -Fq 'Current source purpose: accepted Model B coexistence baseline; failed-readiness fail-fast corrective next' "${MATRIX}"
 grep -Fq 'Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Extended no-winner job: `job.hsP8Ro` (`telegram.org`)' "${MATRIX}"
 grep -Fq 'docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md' "${MATRIX}"
+grep -Fq 'docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md' "${MATRIX}"
 grep -Fq 'MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`' "${MATRIX}"
 grep -Fq '`conclusion=reference_collected`' "${MATRIX}"
 grep -Fq 'numeric RSS on all 25 samples' "${MATRIX}"
-grep -Fq 'MODEL B `_13` WORKER-STARTUP REJECT — `_14` ACCESS CORRECTIVE PENDING LIVE' "${MATRIX}"
-grep -Fq '`pid=null`' "${MATRIX}"
-grep -Fq '`process_identity=false`' "${MATRIX}"
-grep -Fq '`socket_ready=false`' "${MATRIX}"
-grep -Fq '`rss_kb=null`' "${MATRIX}"
-grep -Fq 'failed-readiness fail-fast defect' "${MATRIX}"
+grep -Fq 'MODEL B `_16` OWNER-LIVE COEXISTENCE ACCEPT — EXPERIMENT ONLY' "${MATRIX}"
+grep -Fq '`all_workers_ready=true`' "${MATRIX}"
+grep -Fq '`unique_worker_identity=true`' "${MATRIX}"
+grep -Fq '`rss_observed=true`' "${MATRIX}"
+grep -Fq '`restoration_verified=true`' "${MATRIX}"
+grep -Fq 'Aggregate warm RSS is 12964 KiB' "${MATRIX}"
+grep -Fq 'pool startup is 1162 ms' "${MATRIX}"
+grep -Fq 'failed-readiness fail-fast' "${MATRIX}"
 grep -Fq '`experiment_only=true`, `parallel_probes=false` and `production_approved=false`' "${MATRIX}"
 
 scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /PASS ON `_27` — v0.4.0 mandatory row/ {n++} END {print n+0}' "${MATRIX}")
@@ -137,8 +141,8 @@ grep -Fq '`rss_kb=12345`' "${MODEL_A_PATCH}"
 grep -Fq 'still does not approve Model B/C' "${MODEL_A_PATCH}"
 grep -Fq 'model-a summarize' "${MODEL_A_TEST}"
 
-# Model B stays experimental. `_13` proves preflight is fixed but worker startup is not;
-# `_14` applies only the bounded post-drop traversal correction.
+# Model B remains experimental. Historical reject/corrective evidence is retained and the
+# `_16` owner-live accept is now the canonical current experiment result.
 grep -Fq 'Model B warm-worker coexistence experiment harness' "${MODEL_B_PATCH}"
 grep -Fq '9990' "${MODEL_B_PATCH}"
 grep -Fq '19128' "${MODEL_B_PATCH}"
@@ -155,8 +159,18 @@ grep -Fq 'bounded-access design' "${MODEL_B_WORKER_EVIDENCE}"
 grep -Fq 'Model B post-drop worker access corrective' "${MODEL_B_ACCESS_PATCH}"
 grep -Fq '`0711`' "${MODEL_B_ACCESS_PATCH}"
 grep -Fq 'restore the retained Model B root to private `0700`' "${MODEL_B_ACCESS_PATCH}"
-grep -Fq 'Model B experiment gate: **`v0.4.0_13` OWNER-LIVE REJECT AT WORKER STARTUP; `v0.4.0_14` ACCESS CORRECTIVE PENDING LIVE**' "${STATE}"
-grep -Fq 'Current phase: **Model B `_13` reached worker startup and rejected with no resident workers; `_14` post-drop hostlist traversal corrective pending CI/publication/live rerun**' "${STATE}"
+
+grep -Fq 'Candidate: `os-zapret2-restyle-0.4.0_16.pkg`' "${MODEL_B_ACCEPT_EVIDENCE}"
+grep -Fq 'This is the first owner-live Model B `accept` result.' "${MODEL_B_ACCEPT_EVIDENCE}"
+grep -Fq 'aggregate RSS: `12964 KiB`' "${MODEL_B_ACCEPT_EVIDENCE}"
+grep -Fq 'pool startup: `1162 ms`' "${MODEL_B_ACCEPT_EVIDENCE}"
+grep -Fq '`conclusion=accept`' "${MODEL_B_ACCEPT_EVIDENCE}"
+grep -Fq '`production_approved=false`' "${MODEL_B_ACCEPT_EVIDENCE}"
+
+grep -Fq 'Model B experiment gate: **`v0.4.0_16` OWNER-LIVE COEXISTENCE ACCEPT; EXPERIMENT ONLY; `production_approved=false`**' "${STATE}"
+grep -Fq 'Current phase: **Model B `_16` owner-live coexistence ACCEPT; failed-readiness fail-fast corrective is the next separate logical cycle**' "${STATE}"
+grep -Fq 'Latest published testing prerelease: `v0.4.0_16` / `os-zapret2-restyle-0.4.0_16.pkg`' "${STATE}"
+grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_16` / `os-zapret2-restyle-0.4.0_16.pkg`' "${STATE}"
 
 grep -Fq 'It is not an' "${LIVE_GATE_DECISION}"
 grep -Fq 'all-or-nothing release checklist.' "${LIVE_GATE_DECISION}"
@@ -169,9 +183,9 @@ fi
     echo "FAIL: unexpected active Strategy Lab source version ${version}" >&2
     exit 1
 }
-[ "${revision}" -ge 14 ] || {
-    echo 'FAIL: Model B worker-access corrective revision must be at least 14' >&2
+[ "${revision}" -ge 16 ] || {
+    echo 'FAIL: Model B owner-live accepted source revision must be at least 16' >&2
     exit 1
 }
 
-echo "PASS: _27/_28/_32/_33 evidence is retained, Model A remains accepted on _11, _13 worker-startup reject is recorded, ${candidate} is the bounded-access corrective source candidate, and rows 2-18 remain regression backlog"
+echo "PASS: _27/_28/_32/_33 evidence is retained, Model A remains accepted on _11, historical _13 reject is retained, ${candidate} is published/owner-tested with Model B coexistence accept, and rows 2-18 remain regression backlog"
