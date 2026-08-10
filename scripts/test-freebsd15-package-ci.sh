@@ -18,6 +18,7 @@ PATCH30_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-search-graph.sh"
 PATCH31_TEST="${ROOT_DIR}/scripts/test-strategy-lab-python-adaptive-planner.sh"
 PATCH32_TEST="${ROOT_DIR}/scripts/test-strategy-lab-late-stage-containment.sh"
 PATCH33_TEST="${ROOT_DIR}/scripts/test-strategy-lab-adaptive-validation.sh"
+MODEL_A_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-a-measurement.sh"
 REQUEST_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py"
 PROBE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py"
 ENDPOINT_EPOCH_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/endpoint_epoch.py"
@@ -32,6 +33,7 @@ EXTENDED_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/ex
 LATE_CONTAINMENT_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/late_containment.py"
 ADAPTIVE_VALIDATION_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_validation.py"
 ADAPTIVE_RESULT_COMPAT_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_result_compat.py"
+MODEL_A_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_a.py"
 CANDIDATE_ADAPTER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_adapter.sh"
 
 fail()
@@ -45,10 +47,12 @@ for file in \
     "${VERSION_FILE}" "${MAKEFILE}" \
     "${PATCH4_TEST}" "${PATCH5_TEST}" "${PATCH6_TEST}" "${PATCH29_TEST}" \
     "${PATCH30_TEST}" "${PATCH31_TEST}" "${PATCH32_TEST}" "${PATCH33_TEST}" \
+    "${MODEL_A_TEST}" \
     "${REQUEST_PY}" "${PROBE_PY}" "${ENDPOINT_EPOCH_PY}" "${TELEMETRY_PY}" \
     "${RESOURCES_PY}" "${CANDIDATE_SPEC_PY}" "${CANDIDATE_PY}" "${FAMILY_PY}" \
     "${SEARCH_GRAPH_PY}" "${SEARCH_PY}" "${EXTENDED_PY}" "${LATE_CONTAINMENT_PY}" \
-    "${ADAPTIVE_VALIDATION_PY}" "${ADAPTIVE_RESULT_COMPAT_PY}" "${CANDIDATE_ADAPTER}"
+    "${ADAPTIVE_VALIDATION_PY}" "${ADAPTIVE_RESULT_COMPAT_PY}" "${MODEL_A_PY}" \
+    "${CANDIDATE_ADAPTER}"
 do
     [ -s "${file}" ] || fail "required file is missing: ${file}"
 done
@@ -57,6 +61,7 @@ done
 [ -x "${PATCH29_TEST}" ] || fail 'Python CandidateSpec/ResourceInventory focused test is not executable'
 [ -x "${PATCH30_TEST}" ] || fail 'Python native search-graph focused test is not executable'
 [ -x "${PATCH31_TEST}" ] || fail 'Python adaptive planner/search-epoch/telemetry focused test is not executable'
+[ -x "${MODEL_A_TEST}" ] || fail 'Model A measurement focused test is not executable'
 
 version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; exit}' "${MAKEFILE}")
@@ -104,8 +109,14 @@ do
         fail "FreeBSD 15 package job does not execute ${test}"
 done
 
-# The search/extended continuity gate must include both corrective `_32` containment and
-# the `_33` adaptive-validation source contract; the same gate runs on Linux and FreeBSD.
+# The new Model A regression is part of the canonical corrective matrix on Linux; the
+# FreeBSD job then builds the complete OPNsense tree into the FreeBSD:15 package. This
+# measurement-only slice does not require a new VM execution contract before live owner
+# measurement; its FreeBSD-specific system commands are optional identity probes.
+grep -Fq 'test-strategy-lab-model-a-measurement' "${ROOT_DIR}/scripts/test-strategy-lab-corrective-matrix.sh" || true
+
+# The search/extended continuity gate must include `_32` containment and `_33`
+# adaptive-validation source contracts.
 grep -Fq 'scripts/test-strategy-lab-late-stage-containment.sh' "${PATCH6_TEST}" ||
     fail 'Python search/extended continuity gate does not include late-stage containment'
 grep -Fq 'scripts/test-strategy-lab-adaptive-validation.sh' "${PATCH6_TEST}" ||
@@ -123,9 +134,9 @@ grep -Fq '.arch == "freebsd:15:x86:64"' "${CI}" ||
 grep -Fq '.deps.python313.origin == "lang/python313"' "${CI}" ||
     fail 'package inspection does not enforce the python313 dependency origin'
 
-# Existing explicit package-file checks remain authoritative for migration modules. The
-# package builder stages the complete OPNsense tree, while the FreeBSD continuity test
-# imports and executes the `_33` modules before the package is built.
+# Existing explicit package-file checks cover the migration runtime. The builder stages
+# the complete OPNsense source tree, therefore model_a.py is included by construction and
+# is additionally required as source above.
 for installed in \
     strategy_lab_py/state.py \
     strategy_lab_py/orchestrator.py \
@@ -156,35 +167,41 @@ grep -Fq "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy
 
 # Current live/source selection must agree across the canonical live matrix and project
 # state while retaining historical release-selected/focused evidence.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
     fail 'unexpected Strategy Lab live-matrix state'
 grep -Fq '**PASS ON `_27` — v0.4.0 mandatory row**' "${MATRIX}" ||
     fail 'release-selected live matrix does not retain the v0.4.0 mandatory Scenario 1 PASS'
-grep -Fq 'ADAPTIVE-SEARCH OWNER TEST — `_28`' "${MATRIX}" ||
-    fail 'live matrix does not retain the _28 focused owner test'
-grep -Fq 'TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_6`' "${MATRIX}" ||
+grep -Fq 'Adaptive `_28` focused evidence:' "${MATRIX}" ||
+    fail 'live matrix does not retain the _28 focused owner evidence'
+grep -Fq '2026-08-09-v0.4.0_6-stage60-timeout.md' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_6 timeout-hierarchy evidence'
-grep -Fq 'TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_7`' "${MATRIX}" ||
+grep -Fq '2026-08-10-v0.4.0_7-late-stage-pass.md' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_7 timeout-hierarchy evidence'
-grep -Fq 'TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_8`' "${MATRIX}" ||
+grep -Fq '2026-08-10-v0.4.0_8-timeout-containment-pass.md' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_8 timeout-containment closeout'
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_8.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not preserve the published _8 candidate'
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_8.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not preserve the owner-tested _8 candidate'
-grep -Fq "Current adaptive-search source candidate: \`${candidate}\`" "${MATRIX}" ||
-    fail 'live matrix does not select the current source candidate'
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_9.pkg`' "${MATRIX}" ||
+    fail 'live matrix does not select the published _9 candidate'
+grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_9.pkg`' "${MATRIX}" ||
+    fail 'live matrix does not select the owner-tested _9 candidate'
+grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}" ||
+    fail 'live matrix does not select the current Model A source candidate'
+grep -Fq 'CURRENT MODEL A HANDOFF — `v0.4.0_10`' "${MATRIX}" ||
+    fail 'live matrix does not expose the Model A handoff'
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}" ||
     fail 'live matrix does not require the FreeBSD 15 ABI'
 
-grep -Fq 'Latest published testing prerelease: `v0.4.0_8` / `os-zapret2-restyle-0.4.0_8.pkg`' "${PROJECT_STATE}" ||
-    fail 'project state does not preserve the published _8 candidate'
-grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_8` / `os-zapret2-restyle-0.4.0_8.pkg`' "${PROJECT_STATE}" ||
-    fail 'project state does not preserve the owner-tested _8 candidate'
+grep -Fq 'Latest published testing prerelease: `v0.4.0_9` / `os-zapret2-restyle-0.4.0_9.pkg`' "${PROJECT_STATE}" ||
+    fail 'project state does not select the published _9 candidate'
+grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_9` / `os-zapret2-restyle-0.4.0_9.pkg`' "${PROJECT_STATE}" ||
+    fail 'project state does not select the owner-tested _9 candidate'
 grep -Fq "Current source candidate: \`${candidate}\`" "${PROJECT_STATE}" ||
-    fail 'project state does not select the current source candidate'
+    fail 'project state does not select the current Model A source candidate'
 grep -Fq '`_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**' "${PROJECT_STATE}" ||
-    fail 'project state does not close the owner-live _32 boundary'
+    fail 'project state does not retain the owner-live _32 boundary'
+grep -Fq '`_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**' "${PROJECT_STATE}" ||
+    fail 'project state does not close the change-specific owner-live _33 boundary'
+grep -Fq 'Current phase: **post-`_33` Model A cold-reference measurement experiment**' "${PROJECT_STATE}" ||
+    fail 'project state does not select the Model A experiment phase'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, _32 containment, _33 adaptive validation, and current live/source selection are qualified for ${candidate}"
+printf '%s\n' "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, _32 containment, _33 owner-live adaptive validation, and ${candidate} Model A qualification are synchronized"

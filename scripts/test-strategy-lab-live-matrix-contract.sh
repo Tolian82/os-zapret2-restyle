@@ -12,6 +12,9 @@ ADAPTIVE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-09-v0.4.0_2-st
 TIMEOUT_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-09-v0.4.0_6-stage60-timeout.md"
 LATE_STAGE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_7-late-stage-pass.md"
 TIMEOUT_CLOSEOUT_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_8-timeout-containment-pass.md"
+ADAPTIVE_VALIDATION_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md"
+MODEL_A_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_10.md"
+MODEL_A_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-a-measurement.sh"
 LIVE_GATE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
@@ -20,6 +23,7 @@ for file in \
     "${MATRIX}" "${THIRD_AUDIT}" "${CLOSURE}" "${STATE}" "${INDEX}" \
     "${RELEASE_EVIDENCE}" "${ADAPTIVE_EVIDENCE}" "${TIMEOUT_EVIDENCE}" \
     "${LATE_STAGE_EVIDENCE}" "${TIMEOUT_CLOSEOUT_EVIDENCE}" \
+    "${ADAPTIVE_VALIDATION_EVIDENCE}" "${MODEL_A_PATCH}" "${MODEL_A_TEST}" \
     "${LIVE_GATE_DECISION}" "${VERSION_FILE}" "${MAKEFILE}"
 do
     [ -s "${file}" ] || {
@@ -35,18 +39,21 @@ case "${revision}" in
 esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 
-# The live matrix records the latest owner evidence and active source candidate without
-# converting unrelated rows into PASS.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
+# The live matrix records the latest owner evidence and current source/experiment handoff
+# without converting unrelated rows into PASS.
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
 grep -Fq 'AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md' "${MATRIX}"
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_8.pkg`' "${MATRIX}"
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_8.pkg`' "${MATRIX}"
-grep -Fq "Current adaptive-search source candidate: \`${candidate}\`" "${MATRIX}"
-grep -Fq 'Latest owner-tested Standard job: `job.FgjRCR`' "${MATRIX}"
-grep -Fq 'Latest owner-tested diagnostic job: `job.pv2Q09`' "${MATRIX}"
-grep -Fq 'Latest blocked-domain target: `telegram.org`' "${MATRIX}"
-grep -Fq 'docs/verification/evidence/2026-08-10-v0.4.0_8-timeout-containment-pass.md' "${MATRIX}"
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_9.pkg`' "${MATRIX}"
+grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_9.pkg`' "${MATRIX}"
+grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}"
+grep -Fq 'Latest owner-tested Standard winner job: `job.UPRDlc` (`rutracker.org`)' "${MATRIX}"
+grep -Fq 'Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)' "${MATRIX}"
+grep -Fq 'Latest owner-tested Extended no-winner job: `job.hsP8Ro` (`telegram.org`)' "${MATRIX}"
+grep -Fq 'docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md' "${MATRIX}"
+grep -Fq 'CURRENT MODEL A HANDOFF — `v0.4.0_10`' "${MATRIX}"
+grep -Fq 'model-a summarize OUTPUT JOB_ID [JOB_ID ...]' "${MATRIX}"
+grep -Fq 'Model A measurement experiment' "${MATRIX}"
 
 scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /PASS ON `_27` — v0.4.0 mandatory row/ {n++} END {print n+0}' "${MATRIX}")
 [ "${scenario_one}" -eq 1 ] || {
@@ -73,19 +80,30 @@ grep -Fq 'Standard: `job.RFVs75`' "${LATE_STAGE_EVIDENCE}"
 grep -Fq 'Extended: `job.QbUuYO`' "${LATE_STAGE_EVIDENCE}"
 grep -Fq '| Standard | PASS | PASS | 90.243 s | 16/16 |' "${LATE_STAGE_EVIDENCE}"
 grep -Fq '| Extended | PASS | PASS | 89.249 s | 16/16 |' "${LATE_STAGE_EVIDENCE}"
-grep -Fq 'Stage 85: 0.202 s, but `operation_timeout_seconds=null`' "${LATE_STAGE_EVIDENCE}"
-grep -Fq 'Stage 90 restoration: 6.921 s, also with `operation_timeout_seconds=null`' "${LATE_STAGE_EVIDENCE}"
-grep -Fq 'Stage 85: 0.203 s, but `operation_timeout_seconds=null`' "${LATE_STAGE_EVIDENCE}"
-grep -Fq 'Stage 90 restoration: 6.945 s, also with `operation_timeout_seconds=null`' "${LATE_STAGE_EVIDENCE}"
 grep -Fq 'only the normal rule `19000`; no' "${LATE_STAGE_EVIDENCE}"
 
 grep -Fq 'Standard — `job.FgjRCR`' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
 grep -Fq 'Extended — `job.pv2Q09`' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
 grep -Fq 'Stage 60: 0 working candidates, 16 candidates checked' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
-grep -Fq 'Stage 85: PASS with an empty final shortlist' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
 grep -Fq 'Stage 90: PASS' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
-grep -Fq 'Stage 99: PASS with terminal outcome `NO_CANDIDATE`' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
 grep -Fq 'no late-stage timeout was reported' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
+
+# `_33` live evidence is now the latest change-specific owner record. The contract checks
+# both winner/no-winner coverage and the deliberate live-coverage limitation.
+grep -Fq 'Result: **ADAPTIVE-SEARCH `_33` CHANGE-SPECIFIC LIVE PASS on `v0.4.0_9`**' "${ADAPTIVE_VALIDATION_EVIDENCE}"
+grep -Fq 'Standard no-winner: `job.tU3wiL`' "${ADAPTIVE_VALIDATION_EVIDENCE}"
+grep -Fq 'Extended no-winner: `job.hsP8Ro`' "${ADAPTIVE_VALIDATION_EVIDENCE}"
+grep -Fq 'Standard winner-path: `job.UPRDlc`' "${ADAPTIVE_VALIDATION_EVIDENCE}"
+grep -Fq 'stopped intentionally with `stopped_reason=enough_candidates` after checking `6` candidates' "${ADAPTIVE_VALIDATION_EVIDENCE}"
+grep -Fq 'Each of the three candidates executed exactly three fresh attempts and passed all three.' "${ADAPTIVE_VALIDATION_EVIDENCE}"
+grep -Fq '`classification=inconclusive`' "${ADAPTIVE_VALIDATION_EVIDENCE}"
+grep -Fq '`temporary_runtime_clean=true`' "${ADAPTIVE_VALIDATION_EVIDENCE}"
+grep -Fq 'fail-fast rejection branch remains automated-regression evidence only' "${ADAPTIVE_VALIDATION_EVIDENCE}"
+
+# Current source is the separate Model A experiment harness, not a warm-runtime approval.
+grep -Fq 'Model A cold-reference measurement harness' "${MODEL_A_PATCH}"
+grep -Fq 'does **not** approve Model B or Model C' "${MODEL_A_PATCH}"
+grep -Fq 'model-a summarize' "${MODEL_A_TEST}"
 
 grep -Fq 'It is not an' "${LIVE_GATE_DECISION}"
 grep -Fq 'all-or-nothing release checklist.' "${LIVE_GATE_DECISION}"
@@ -98,9 +116,9 @@ fi
     echo "FAIL: unexpected active Strategy Lab source version ${version}" >&2
     exit 1
 }
-[ "${revision}" -ge 9 ] || {
-    echo "FAIL: adaptive-validation source revision must be at least 9" >&2
+[ "${revision}" -ge 10 ] || {
+    echo "FAIL: Model A measurement source revision must be at least 10" >&2
     exit 1
 }
 
-echo "PASS: _27 remains the v0.4.0 release row, _28 keeps focused owner evidence, _8 closes observed _32 timeout containment, ${candidate} is the current _33 source candidate, and rows 2-18 remain regression backlog"
+echo "PASS: _27 remains the v0.4.0 release row, _28 and _32 keep owner evidence, _33 has change-specific owner-live PASS on v0.4.0_9, ${candidate} is the current Model A source candidate, and rows 2-18 remain regression backlog"

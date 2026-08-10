@@ -1,12 +1,15 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; FULL REGRESSION MATRIX OPEN**
+Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; FULL REGRESSION MATRIX OPEN**
 
-This matrix is the canonical live-appliance regression inventory for Strategy Lab.
-Source tests, GitHub CI, and FreeBSD package builds cannot substitute for a live PASS when
-a row is selected as mandatory for a release. Not every pending row is automatically a
-release blocker; selection follows
+This matrix is the canonical live-appliance regression inventory for Strategy Lab. Source
+tests, GitHub CI, and FreeBSD package builds cannot substitute for a live PASS when a row
+is selected as mandatory for a release. Not every pending row is automatically a release
+blocker; selection follows
 `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
+
+Detailed historical logs remain under `docs/verification/evidence/`; this matrix keeps the
+current inventory and the verified progression needed to select the next live work.
 
 Only FreeBSD 15 amd64 packages are valid.
 
@@ -18,315 +21,93 @@ TEST RECORD
 - Latest test date/time: `2026-08-10`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.4.0_8.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_8.pkg`
-- Current adaptive-search source candidate: `os-zapret2-restyle-0.4.0_9.pkg`
-- Latest owner-tested Standard job: `job.FgjRCR`
-- Latest owner-tested diagnostic job: `job.pv2Q09`
+- Latest published testing candidate: `os-zapret2-restyle-0.4.0_9.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_9.pkg`
+- Current source candidate: `os-zapret2-restyle-0.4.0_10.pkg`
+- Current source purpose: Model A cold-reference measurement harness
+- Latest owner-tested Standard winner job: `job.UPRDlc` (`rutracker.org`)
+- Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)
+- Latest owner-tested Extended no-winner job: `job.hsP8Ro` (`telegram.org`)
 - WAN interface: `vtnet1`
-- Latest blocked-domain target: `telegram.org`
 - Generic UDP target/port: `PENDING OWNER`
 
 Architecture / ABI baseline evidence:
 `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`.
 
 Latest live evidence:
-`docs/verification/evidence/2026-08-10-v0.4.0_8-timeout-containment-pass.md`.
+`docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`.
 
-Previous late-stage timing evidence:
-`docs/verification/evidence/2026-08-10-v0.4.0_7-late-stage-pass.md`.
+Previous timeout-containment evidence:
 
-Previous timeout evidence:
-`docs/verification/evidence/2026-08-09-v0.4.0_6-stage60-timeout.md`.
+- `docs/verification/evidence/2026-08-10-v0.4.0_8-timeout-containment-pass.md`;
+- `docs/verification/evidence/2026-08-10-v0.4.0_7-late-stage-pass.md`;
+- `docs/verification/evidence/2026-08-09-v0.4.0_6-stage60-timeout.md`.
 
 v0.4.0 release-selected evidence:
 `docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md`.
 
-Previous migration-handoff evidence:
-`docs/verification/evidence/2026-08-07-v0.3.3_17-scenario-01-python-handoff.md`.
-
-==================================================
-SCENARIO 1 HISTORY
-==================================================
-
-The early failed attempts and their exact evidence remain preserved under
-`docs/verification/evidence/`. The third-audit source record is
-`docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
-
-Key live progression:
-
-- `_12` exposed Stage-50 failure plus Stage-90 FreeBSD timeout reaping of restored daemon descendants.
-- `_13` corrected restoration timeout semantics; owner testing proved Stage 90 PASS.
-- `_14` corrected FreeBSD DNS foreground timeout; owner testing proved Stage 40 PASS with `DNS: OK`.
-- `_15` corrected unset family-runner timeout ownership but Stage 50 still failed.
-- `_16` corrected resident FreeBSD daemon startup blocking and reached real candidate dvtws2 startup/bind/privilege-drop; it then failed post-drop hostlist traversal through a private job directory.
-- `_17` corrected that hostlist traversal permission boundary and became the frozen shell-era handoff to the Python migration.
-- `_18` through `_24` completed the automated Python migration.
-- `_25` reconciled GUI/status transport behavior, was published as a testing prerelease and was installed for post-migration owner testing.
-- `_26` corrected Stage-50 candidate-local failure isolation, passed CI/package
-  qualification, was published as a testing prerelease and was installed for live retest.
-- `_26` live retesting exposed an earlier Stage-40 blocker: the Python DNS subprocess
-  deadline is shorter than intermittent valid local-Unbound response time.
-- `_27` widened the DNS/stage deadline envelope; owner retesting passed Stage 40, passed
-  Stage 50, continued through Stages 60/70 and ended truthfully as `NO_CANDIDATE` with
-  Stage-90 cleanup/restoration PASS.
-- `_28` removed Stage-50 acceptance as a Stage-60 hard gate; owner testing on
-  `v0.4.0_2` produced `accepted=[]`, still attempted all 14 Stage-60 catalog candidates,
-  and passed exact Stage-90 cleanup/restoration.
-- `v0.4.0_6` owner retesting against `telegram.org` proved the Stage-50 containment
-  correction: all seven reconnaissance families completed in about 39 seconds. Both
-  Standard and Extended runs then exposed the next `_32` boundary when the fixed 70-second
-  Stage-60 parent limit terminated expansion after 12 of 16 candidates. Stage 90 restored
-  the initially RUNNING service and no temporary IPFW rule remained.
-- `v0.4.0_7` owner retesting closed that Stage-60 boundary: both Standard and Extended
-  runs completed all 16 expansion candidates, continued through Stage 70/80/85 as
-  applicable, ended truthfully as `NO_CANDIDATE`, and restored the initially RUNNING
-  service without temporary IPFW residue.
-- `v0.4.0_8` owner retesting closed the remaining observed `_32` late-stage containment
-  boundary: both Standard and Extended reached Stage 85 and Stage 90 without a late-stage
-  timeout, ended truthfully as `NO_CANDIDATE`, and reported successful restoration.
-- `v0.4.0_9` is the current `_33` adaptive-validation source candidate: bounded lightweight
-  discovery, fail-fast strict 3/3 stability, and cold finalist depth validation.
-
-Historical `_17`, job `job.w0nXxQ`, ended with Stage 50 ERROR and Stage 90 PASS. Its
-candidate-runtime bundle was not collected, so the exact `_17` Stage-50 root cause remains
-unclaimed historical context.
-
-==================================================
-POST-MIGRATION OWNER TEST — `_25`
-==================================================
-
-Owner-assisted `_25`, job `job.c0oydv`:
-
-- 00 PASS;
-- 10 PASS — initial Zapret2 RUNNING;
-- 20 PASS — normal service stopped;
-- 30 PASS — IPv4 available; IPv6 unavailable; QUIC/IPv4 closed;
-- 40 PASS — `DNS: OK`; direct TLS 1.3 connection not established;
-- 50 ERROR — visible message `Temporary candidate runtime failed internally.`;
-- 60–85 SKIPPED;
-- 90 PASS — temporary state removed and initial RUNNING Zapret2 restored healthy;
-- 99 ERROR.
-
-GUI behavior on `_25`:
-
-- the owner still observed a brief immediate `Статус: ОШИБКА` after pressing Run;
-- a later active screenshot correctly showed `Статус: ВЫПОЛНЯЕТСЯ`;
-- persisted progress was visible at 36% / Stage 40 instead of remaining at 0% until terminal;
-- no unsupported closure is claimed for active no-output or reload behavior that was not
-  explicitly exercised during this run.
-
-The preserved Stage-50 evidence proves the temporary candidate runtime itself was capable
-of running correctly and that a working family was already found before Stage 50 aborted:
-
-- `candidate-smoke.json`: `total=7`, `completed=4`, `accepted=["seqovl"]`, `all_pass=true`;
-- `multisplit`: normal candidate FAIL, curl exit 28;
-- `multidisorder`: normal candidate FAIL, curl exit 28;
-- `seqovl`: **candidate PASS**;
-- `fake`: normal candidate FAIL, curl exit 35;
-- the `seqovl` candidate used selected IP `172.67.182.196`;
-- curl returned exit 0, HTTP/1.1 301 and matching remote IP;
-- IPFW rule 19100 counters increased and `intercepted=true`;
-- runtime evidence recorded `process_identity=true`, `socket_ready=true`, `log_clean=true`,
-  `stable=true`, `ready=true` after two stable checks;
-- dvtws2 bound the divert socket, dropped to UID/GID 65534 and shut down cleanly.
-
-Therefore `_25` Stage 50 did **not** fail because every temporary runtime was broken. The
-aggregate stage failed after four catalog entries despite already having a working family.
-
-==================================================
-CORRECTIVE `_26` SOURCE DIAGNOSIS
-==================================================
-
-`strategy_lab_py/candidate.py` writes a structured JSON result for candidate-local errors.
-The compatibility `strategy_lab_candidate_runner.sh` intentionally returns status 1 when
-that JSON contains `"error":true`.
-
-Before corrective `_26`, `strategy_lab_py/family.py` treated every nonzero candidate-runner
-status as a fatal Stage-50 exception before reading the candidate JSON. A candidate-local
-error could therefore abort the entire catalog, discard continuation after an already
-accepted family and produce the misleading generic Stage-50 internal-error message.
-
-Correct `_26` contract:
-
-- timeout remains a rejected candidate and screening continues;
-- nonzero runner status plus a fresh valid structured candidate result with `error:true`
-  remains a rejected candidate and screening continues;
-- already accepted candidates remain preserved;
-- missing/invalid structured evidence or nonzero runner status without a structured
-  candidate error remains a true screening failure;
-- stale candidate JSON is removed before each launch and cannot be reused.
-
-Focused regression:
-`scripts/test-strategy-lab-stage50-candidate-isolation.sh`.
-
-==================================================
-POST-MIGRATION OWNER TEST — `_26`
-==================================================
-
-Owner-assisted `_26`, diagnostic job `job.Cs5ryG`, against `rutracker.org`:
-
-- Stage 40 ERROR — required A resolution failed;
-- `baseline-evidence.json` records `/usr/bin/drill rutracker.org A` as `timeout`;
-- subprocess duration was `2024 ms`, with `returncode:null`, `timed_out:true` and no
-  stdout/stderr before termination;
-- Stage 50–85 did not run because Stage 40 is a prerequisite gate;
-- Stage 99 completed as `PARTIAL`, preserving completed diagnostic results;
-- five additional Strategy Lab attempts stopped at the same Stage-40 prerequisite.
-
-Manual owner testing of `/usr/bin/drill rutracker.org A` against resolver `127.0.0.1`
-shows the same query can return immediately (captured at 33 ms) or intermittently take
-about 8–10 seconds before returning valid A answers.
-
-The `_26` change did not touch `request.py`/`probe.py`, so this is not loss of the `_21`
-ANSWER-section parsing correction. It is a newly proven deadline mismatch.
-
-The `_26` Stage-50 correction remains live-unverified because these runs do not reach
-Stage 50.
-
-==================================================
-CORRECTIVE `_27` SOURCE DIAGNOSIS
-==================================================
-
-`strategy_lab_py/request.py` gives DNS subprocesses 2 seconds. The Python orchestrator
-also gives the entire Stage-40 adapter only 5 seconds. A valid 8–10-second local-resolver
-response therefore cannot complete reliably under either current limit.
-
-Correct `_27` contract:
-
-- keep `/usr/bin/drill` and local OPNsense resolver semantics;
-- DNS subprocess deadline: 15 seconds;
-- enclosing Stage-40 operation limit: 20 seconds;
-- Standard overall job budget remains 150 seconds;
-- `timeout`, `command_error` and `parser_rejected` evidence remain distinct;
-- ANSWER-section-only A/AAAA parsing remains unchanged;
-- a delayed valid answer beyond the old two-second cutoff must pass;
-- an over-deadline subprocess must still terminate as timeout.
-
-The `PARTIAL` summary wording observed after the early `_26` stop is a separate logical
-presentation issue and is not part of `_27`.
-
-==================================================
-POST-MIGRATION OWNER TEST — `_27`
-==================================================
-
-Owner-assisted `_27` Standard run against `rutracker.org`:
-
-- Stages 00, 10, 20, 30 and 40 PASS;
-- Stage 40 reports `DNS: OK` and no direct TLS 1.3 connection;
-- Stage 50 PASS and finds at least one working TLS 1.3 family;
-- Stage 60 PASS: two working candidates from two tested;
-- Stage 70 PASS: three stable candidates from three tested;
-- Stage 80 SKIPPED as expected in Standard mode;
-- Stage 85 PASS and forms the final result;
-- Stage 90 PASS: temporary processes/rules removed and initial RUNNING Zapret2 restored
-  healthy;
-- Stage 99: `NO_CANDIDATE`, which is a valid terminal outcome rather than internal error.
-
-This closes the `_26` Stage-50 and `_27` Stage-40 corrective live boundary. Exact supplied
-evidence is preserved in
-`docs/verification/evidence/2026-08-08-v0.3.3_27-scenario-01-pass.md`.
-
-==================================================
-ADAPTIVE-SEARCH OWNER TEST — `_28`
-==================================================
-
-Owner-assisted `v0.4.0_2` Standard job `job.2HVQqr` against `discord.com`:
-
-- package version/ABI: `0.4.0_2`, `FreeBSD:15:amd64`;
-- Stages 00–40 PASS and direct TLS 1.3 baseline remains inaccessible;
-- Stage 50 PASS with `total=7`, `completed=7`, `accepted=[]` and all families rejected;
-- Stage 60 PASS with `total_available=14`, `completed=14`, all catalog candidates failed,
-  and `stopped_reason=catalog_exhausted`;
-- the obsolete `no_accepted_family` hard gate did not terminate or skip Stage 60;
-- Stage 70 PASS with zero stability candidates, as expected after no Stage-60 winner;
-- Stage 80 SKIPPED in Standard mode;
-- Stage 90 PASS and the initially RUNNING service was restored healthy;
-- post-job service status was RUNNING and the IPFW excerpt contained only normal rule
-  `19000`, with no temporary rule in `19100–19131`;
-- Stage 99 truthfully reported `NO_CANDIDATE` rather than an internal error.
-
-This is the change-specific focused PASS that was required before `_29`. It does not mark unrelated
-pending matrix rows as PASS. Exact evidence is preserved in
+Adaptive `_28` focused evidence:
 `docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md`.
 
-==================================================
-TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_6`
-==================================================
-
-Owner-assisted Standard job `job.3Vh6rW` and Extended job `job.Y8bR9M` against
-`telegram.org`:
-
-- package version/ABI: `0.4.0_6`, `FreeBSD:15:amd64`;
-- both runs passed Stages 00–50;
-- Stage 50 completed all seven reconnaissance families in about 39 seconds and no working
-  TLS 1.3 family was found;
-- both Stage-60 runs reached the fixed 70-second local parent limit after 12 of 16
-  expansion candidates;
-- the thirteenth candidate was prepared but did not produce a result JSON before the
-  parent terminated Stage 60;
-- the Standard run still had about 33 seconds of its 150-second search budget available;
-- the Extended run still had about 154 seconds of its 270-second overall budget available;
-- both runs restored the initially RUNNING Zapret2 service successfully;
-- post-run IPFW evidence contained normal rule `19000` and no temporary rule in
-  `19100–19131`.
-
-This proves the immediate `v0.4.0_6` Stage-50 containment boundary and selects Stage-60
-parent/child deadline admission as the next `_32` correction. Exact evidence is preserved
-in `docs/verification/evidence/2026-08-09-v0.4.0_6-stage60-timeout.md`.
+Third-audit source record:
+`docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`.
 
 ==================================================
-TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_7`
+VERIFIED PROGRESSION
 ==================================================
 
-Owner-assisted Standard job `job.RFVs75` and Extended job `job.QbUuYO` against
-`telegram.org`:
-
-- package version/ABI: `0.4.0_7`, `FreeBSD:15:amd64`;
-- both runs passed Stage 50 and Stage 60;
-- Standard Stage 60 completed all 16 candidates in about 90.243 seconds;
-- Extended Stage 60 completed all 16 candidates in about 89.249 seconds;
-- Stage 70 completed normally with no stability candidates because Stage 60 found no
-  working candidate; its measured parent allowance was only 13–14 seconds;
-- Standard Stage 80 was skipped by mode; Extended Stage 80 completed, with QUIC and
-  configured UDP explicitly skipped by capability/input state;
-- Stage 85 completed in about 0.2 seconds in both runs but had no Python parent operation
-  timeout in telemetry;
-- Stage 90 restoration completed in about 6.9 seconds in both runs and likewise had no
-  Python parent operation timeout;
-- both jobs ended truthfully as `NO_CANDIDATE`;
-- the post-run snapshot showed Zapret2 running and only normal IPFW rule `19000`, with no
-  temporary Strategy Lab rule in `19100–19131`.
-
-This closes the observed Stage-60 timeout defect and selects the remaining `_32`
-late-stage containment work for `v0.4.0_8`. Exact evidence is preserved in
-`docs/verification/evidence/2026-08-10-v0.4.0_7-late-stage-pass.md`.
+- `_27` widened the DNS/stage deadline envelope and owner retesting passed Stage 40,
+  Stage 50, Stages 60/70, Stage 90 restoration and a truthful terminal result. This
+  remains the selected mandatory v0.4.0 post-migration row.
+- `_28` removed Stage-50 acceptance as a Stage-60 hard gate. Owner testing on
+  `v0.4.0_2` produced `accepted=[]`, still attempted all 14 then-current Stage-60 catalog
+  candidates and restored the initially running service without temporary IPFW residue.
+- `v0.4.0_6` proved the Stage-50 parent containment correction but exposed the old fixed
+  Stage-60 70-second parent limit after 12 of 16 candidates.
+- `v0.4.0_7` closed that Stage-60 boundary: Standard and Extended both completed all
+  16 expansion candidates and restored Zapret2 cleanly.
+- `v0.4.0_8` closed the observed late-stage `_32` containment boundary: Stage 70/80/85/90
+  reached their normal terminal states on Standard/Extended no-winner paths without a late
+  timeout.
+- `v0.4.0_9` closed the change-specific `_33` owner-live boundary. Standard and Extended
+  `telegram.org` runs retained truthful `NO_CANDIDATE`; Standard `rutracker.org`
+  `job.UPRDlc` stopped Stage 60 after 6 tested candidates when 3 working candidates were
+  available, proved all three strict fresh-connection 3/3 in Stage 70, and executed one
+  cold exact-profile finalist replay for each in Stage 85.
+- The three `_9` finalist responses were successful HTTP 301 responses of 162 bytes. The
+  16-KiB depth criterion was therefore correctly `inconclusive` rather than a false PASS or
+  network failure. Separate 3/3 connectivity/stability evidence remained valid.
+- `_9` post-run restoration evidence records initial RUNNING -> final RUNNING,
+  `strategy_unchanged=true`, `temporary_runtime_clean=true`; the appliance snapshot showed
+  only normal IPFW rule `19000` in the inspected Strategy Lab range.
+- The `_9` live winner set was stable 3/3, so the fail-fast rejection branch remains
+  automated-regression evidence rather than owner-live evidence. No broader claim is made.
 
 ==================================================
-TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_8`
+CURRENT MODEL A HANDOFF — `v0.4.0_10`
 ==================================================
 
-Owner-assisted Standard job `job.FgjRCR` and Extended job `job.pv2Q09` against
-`telegram.org`:
+`v0.4.0_10` is an instrumentation/experiment source candidate, not a warm-runtime
+promotion. Its live purpose is to collect a reproducible cold Model A reference from normal
+completed jobs.
 
-- package version: `0.4.0_8` testing prerelease;
-- both runs reached Stage 60 PASS after checking all 16 graph candidates and finding no
-  working candidate;
-- Stage 70 completed normally with zero stability candidates because Stage 60 found no
-  winner;
-- Standard Stage 80 was correctly skipped by mode;
-- Extended Stage 80 passed with QUIC and configured UDP explicitly skipped by the observed
-  capability/input state;
-- Stage 85 passed and formed an empty final shortlist in both modes;
-- Stage 90 passed in both modes and the UI reported temporary process/rule cleanup plus
-  healthy restoration of the initially running Zapret2 service;
-- both jobs reached Stage 99 and ended truthfully as `NO_CANDIDATE` rather than TIMEOUT or
-  internal ERROR.
+Required live handoff after package qualification/publication:
 
-The screenshots do not provide precise stage durations, so no new timing claim is made.
-This closes the change-specific `_32` late-stage containment boundary exercised by `_8`.
-Exact evidence is preserved in
-`docs/verification/evidence/2026-08-10-v0.4.0_8-timeout-containment-pass.md`.
+- run several comparable Strategy Lab jobs under the same appliance/runtime/target
+  conditions;
+- summarize retained Stage 50/60/70/85 cold candidate evidence with
+  `model-a summarize OUTPUT JOB_ID [JOB_ID ...]`;
+- preserve raw samples plus median/p90/max phase distributions, immutable candidate/spec
+  identity, endpoint/interception identity, resource/range coverage, RSS when available,
+  and restoration evidence;
+- keep `resource_init_ms` explicitly unavailable while it is inseparable from
+  launch/readiness;
+- keep current teardown evidence explicitly named `stop_cleanup_ms` while stop and the
+  remaining cleanup are not independently measured;
+- conclude `reference_collected` only when the machine-checkable Model A coverage is
+  complete; otherwise preserve `inconclusive` and the missing checks;
+- do not approve Model B/C, source-port dispatch or true parallel probing from source/CI
+  evidence alone.
 
 ==================================================
 PYTHON MIGRATION OWNERSHIP
@@ -338,18 +119,11 @@ Authoritative migration plan:
 Decision:
 `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
 
-Migration Patch 1 (`_18`) established the packaged Python 3.13 platform and compatibility
-boundary. Patch 2 (`_19`) moved automated-job state/progress/event persistence to Python.
-Patch 3 (`_20`) moved numbered stage order, budgets, cancellation, timeout and terminal
-restoration/finalization policy to Python. Patch 4 (`_21`) moved finite network requests and
-Stage-30/40 parsing. Patch 5 (`_22`) moved candidate runtime/readiness/interception and
-Stage-50 family screening. Patch 6 (`_23`) moved Stage-60 expansion, Stage-70 stability and
-Stage-80 extended protocols. Patch 7 (`_24`) completed final profile/exact replay/shortlist
-ownership. Patch 8 (`_25`) reconciled GUI/status polling with persisted Python state.
-
-Audited FreeBSD system mutations remain behind narrow shell adapters; private circular
-sessions remain shell-owned by design. Corrective `_26` does not change those ownership
-boundaries.
+The automated Strategy Lab Python migration is complete. Python owns automated state,
+stage orchestration, finite requests/probes, candidate runtime evidence, search/stability,
+extended orchestration, final profile/replay/shortlist processing and active Diagnostics
+status/reload presentation. Audited FreeBSD mutations and private circular state remain
+narrow shell boundaries.
 
 ==================================================
 REQUIRED EVIDENCE BUNDLE
@@ -358,21 +132,11 @@ REQUIRED EVIDENCE BUNDLE
 For each mandatory release-selected scenario preserve at minimum:
 
 - exact installed candidate/version and supported ABI;
-- the terminal stage/result report for the exercised behavior;
+- terminal stage/result report for the exercised behavior;
 - restoration/cleanup outcome when the scenario owns the Zapret2 lifecycle.
 
-When available, preserve the deeper diagnostic bundle below. It is required when needed
-to diagnose a failure, resolve ambiguous behavior, or prove a safety property that the
-terminal report does not itself establish; absence of an unrelated diagnostic artifact
-does not invalidate an otherwise unambiguous successful release-selected row:
-
-- screenshot of Diagnostics result and progress display;
-- final automated `status.json` or circular `state.json`;
-- initial and final `configctl zapret status` output;
-- initial and final `pgrep -af 'dvtws2|zapret.*supervisor'` output;
-- initial and final `ipfw show` excerpt for rules `19000` and `19100–19131`;
-- generated temporary runtime log when a failure is investigated;
-- exact scenario result and tester notes in this matrix.
+When needed to diagnose failure or prove safety, additionally retain status/state JSON,
+process/runtime logs, lifecycle state, and IPFW/process residue snapshots.
 
 Recommended appliance identity evidence:
 
@@ -403,7 +167,7 @@ SCENARIO MATRIX
 | 4 | Extended QUIC | QUIC result endpoint-bound and replay-verified when capability exists; otherwise explicit skip reason | `PENDING OWNER` | **PENDING REGRESSION** |
 | 5 | Generic UDP port and payload | Port/payload pair accepted only in Extended mode; result identifies selected IP and complete profile; payload removed after terminal cleanup | `PENDING OWNER` | **PENDING REGRESSION** |
 | 6 | Target already accessible | Outcome `TARGET_ACCESSIBLE`; strategy search skipped; service state remains exact | `PENDING OWNER` | **PENDING REGRESSION** |
-| 7 | No working candidate | Outcome `NO_CANDIDATE`; shortlist empty; not reported as internal error | `_27` Scenario 1 also terminates `NO_CANDIDATE`, but this dedicated row remains unexecuted | **PENDING REGRESSION** |
+| 7 | No working candidate | Outcome `NO_CANDIDATE`; shortlist empty; not reported as internal error | `_9` owner evidence includes Standard and Extended no-winner paths, but this dedicated row remains unselected/unexecuted as a formal matrix row | **PENDING REGRESSION** |
 | 8 | User cancellation after service stop | Cancel requested; unfinished stages skipped; stages 90 and 99 run; original service restored | `PENDING OWNER` | **PENDING REGRESSION** |
 | 9 | Hard whole-worker timeout | Outcome `TIMEOUT`; available results persist; Stage 90 restoration verified; no residue | `PENDING OWNER` | **PENDING REGRESSION** |
 | 10 | Controlled internal failure | Outcome `ERROR`; failure stage truthful; original service restored and verified | `PENDING OWNER` | **PENDING REGRESSION** |
@@ -421,31 +185,25 @@ CONFIRMED DEFECTS / LIVE RECHECKS
 ==================================================
 
 - **Stage 40 DNS timeout on `_26`.** Closed by `_27` owner live Scenario 1 PASS.
-- **Stage 50 aggregate abort on `_25`.** Closed by `_27` owner live Scenario 1 reaching
-  Stage 50 PASS and continuing through Stages 60/70.
+- **Stage 50 aggregate abort on `_25`.** Closed by `_27` reaching Stage 50 PASS and
+  continuing through Stages 60/70.
 - **Stage 50 parent-timeout boundary on `v0.4.0_5`.** Closed for the observed live target
-  by `v0.4.0_6`: Stage 50 completed all seven families and published PASS.
-- **Stage 60 fixed 70-second parent timeout on `v0.4.0_6`.** Closed by `v0.4.0_7` in both
-  Standard and Extended owner runs; all 16 Stage-60 candidates completed.
-- **Late-stage containment after Stage 60.** Closed for the observed normal no-winner
-  Standard and Extended paths by `v0.4.0_8`: Stage 70/80/85/90 reached their normal
-  terminal states without a late timeout and restoration passed.
-- **Adaptive validation depth.** `v0.4.0_9` is the current `_33` source candidate; live
-  validation remains pending after source/FreeBSD qualification and publication.
-- **Immediate stale/new-job GUI error.** Not reproduced on `_26`, but retain as open until
-  a complete Scenario-1 run confirms behavior.
-- **Active `Strategy Lab returned no output.` message.** Patch-8 source correction exists;
-  `_25` live run did not explicitly reproduce or close it.
-- **Visible 0%-until-terminal progress.** `_25` showed live persisted progress at 36%; treat
-  as improved evidence but do not close the whole presentation row until Scenario 1 runs
-  through later stages.
-- **Terminal reload/state presentation.** Live recheck pending.
-- **PARTIAL summary wording.** `_26` preserves diagnostics but reports that available
-  results were saved even though search never ran and no strategies exist; separate
-  presentation correction pending outside `_27`.
-- **Patch-4 target/DNS corrections.** Parser/classification source regressions pass; `_27`
-  changes deadlines only and matrix closure remains pending.
-- **Patch-5 candidate fatal-log classification.** Source regressions pass; matrix closure pending.
+  by `v0.4.0_6`.
+- **Stage 60 fixed 70-second parent timeout on `v0.4.0_6`.** Closed by `v0.4.0_7` in
+  Standard and Extended owner runs.
+- **Late-stage containment after Stage 60.** Closed for observed normal no-winner Standard
+  and Extended paths by `v0.4.0_8`.
+- **Adaptive validation depth / winner path.** Change-specific live PASS on `v0.4.0_9`;
+  fail-fast rejection remains source-regression-only because all live finalists passed 3/3.
+- **Model A measurement.** Source/FreeBSD qualification and owner-appliance evidence are
+  pending on `v0.4.0_10`; no warm-model claim exists yet.
+- **Immediate stale/new-job GUI error.** Retain as open until dedicated presentation
+  regression coverage.
+- **Active `Strategy Lab returned no output.` message.** Dedicated live recheck pending.
+- **Terminal reload/state presentation.** Live recheck pending; issue #155 separately
+  tracks idle-state presentation/localization without changing the internal `state: idle`
+  contract.
+- **PARTIAL summary wording.** Separate presentation correction remains pending.
 
 ==================================================
 FAILURE HANDLING
@@ -457,31 +215,31 @@ or is a known critical condition in the candidate:
 - candidate ABI/architecture is not exactly FreeBSD 15 amd64;
 - `RESTORE_FAILED` or unverified restoration;
 - unexpected change to saved Traffic Strategy;
-- lingering Strategy Lab worker, temporary dvtws2 process, divert socket, PID file, or rules `19100–19131`;
+- lingering Strategy Lab worker, temporary dvtws2 process, divert socket, PID file, or
+  rules `19100–19131`;
 - parent-result mutation by circular validation;
 - Settings Apply succeeding while lifecycle ownership is active;
 - active work not resumed after reload;
-- completed/error result automatically resurrected as the state of a newly opened Diagnostics page;
+- completed/error result automatically resurrected as a newly opened Diagnostics state;
 - reload deleting retained terminal evidence;
-- missing evidence required for the release-selected behavior or for an observed failure.
+- missing evidence required for the release-selected behavior or an observed failure.
 
 A failed live row requires source correction when a source defect is identified, complete
-CI/FreeBSD 15 package verification, and repetition of the affected live row plus required
-independent rows. CI alone never marks a live row PASS.
+CI/FreeBSD 15 package verification, and repetition of the affected selected row. CI alone
+never marks a live row PASS.
 
 ==================================================
 RELEASE GATE
 ==================================================
 
 Stable release preparation uses the risk-based selection policy in
-`docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`. Every row selected as
-mandatory for the release must have owner evidence and PASS. Pending rows that are not
-selected remain regression backlog and are not blockers merely because they are pending.
+`docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`. It is not an
+all-or-nothing release checklist. Every row selected as mandatory for a release must have
+owner evidence and PASS; pending unselected rows remain regression backlog.
 
-For `v0.4.0`, Scenario 1 is the selected mandatory post-migration row and is PASS on
-`v0.3.3_27`. No known critical restoration/runtime defect remains from the `_26`/`_27`
-corrective cycle. Adaptive-search `_28` additionally has its focused change-specific
-owner PASS on `v0.4.0_2`. Rows 2–18 remain open regression coverage without a claimed
-PASS. The newer `v0.4.0_8` live evidence closes the observed `_32` late-stage timeout
-containment path and selects `v0.4.0_9` for `_33` adaptive validation; it does not
-retroactively invalidate the release-selected `_27` or focused `_28` evidence.
+For `v0.4.0`, Scenario 1 remains the selected mandatory post-migration row and is PASS on
+`v0.3.3_27`. Adaptive `_28` has its focused owner PASS on `v0.4.0_2`; `_32` timeout
+containment is owner-live passed through `v0.4.0_8`; `_33` adaptive validation has its
+change-specific owner-live PASS on `v0.4.0_9`. Rows 2–18 remain open regression coverage
+without a formal row PASS. `v0.4.0_10` begins the separate Model A measurement experiment
+and does not retroactively change those release-gate results.
