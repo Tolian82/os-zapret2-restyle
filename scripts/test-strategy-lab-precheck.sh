@@ -276,12 +276,18 @@ MOCK_CURL_SLEEP=2
 STRATEGY_LAB_STAGE30_TIMEOUT=1
 export MOCK_CURL_SLEEP STRATEGY_LAB_STAGE30_TIMEOUT
 result=$(run_job timeout.example en)
-printf '%s\n' "${result}" | jq -e '.outcome=="TIMEOUT"' >/dev/null ||
+printf '%s\n' "${result}" | jq -e '.outcome=="TIMEOUT"' >/dev/null || {
+    printf '%s\n' "${result}" >&2
     fail "stage timeout did not produce TIMEOUT outcome"
-printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="30" and .status=="TIMEOUT")' >/dev/null ||
+}
+printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="30" and .status=="TIMEOUT")' >/dev/null || {
+    printf '%s\n' "${result}" >&2
     fail "stage 30 timeout was not recorded"
-printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="90" and .status=="PASS")' >/dev/null ||
+}
+printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="90" and .status=="PASS")' >/dev/null || {
+    printf '%s\n' "${result}" >&2
     fail "stage timeout did not restore service state"
+}
 unset MOCK_CURL_SLEEP STRATEGY_LAB_STAGE30_TIMEOUT
 
 set +e
