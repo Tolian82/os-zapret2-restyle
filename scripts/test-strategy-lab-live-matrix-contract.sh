@@ -14,6 +14,7 @@ LATE_STAGE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_7-
 TIMEOUT_CLOSEOUT_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_8-timeout-containment-pass.md"
 ADAPTIVE_VALIDATION_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md"
 MODEL_A_GAP_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md"
+MODEL_A_REFERENCE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md"
 MODEL_A_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_11.md"
 MODEL_A_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-a-measurement.sh"
 LIVE_GATE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md"
@@ -25,8 +26,8 @@ for file in \
     "${RELEASE_EVIDENCE}" "${ADAPTIVE_EVIDENCE}" "${TIMEOUT_EVIDENCE}" \
     "${LATE_STAGE_EVIDENCE}" "${TIMEOUT_CLOSEOUT_EVIDENCE}" \
     "${ADAPTIVE_VALIDATION_EVIDENCE}" "${MODEL_A_GAP_EVIDENCE}" \
-    "${MODEL_A_PATCH}" "${MODEL_A_TEST}" "${LIVE_GATE_DECISION}" \
-    "${VERSION_FILE}" "${MAKEFILE}"
+    "${MODEL_A_REFERENCE_EVIDENCE}" "${MODEL_A_PATCH}" "${MODEL_A_TEST}" \
+    "${LIVE_GATE_DECISION}" "${VERSION_FILE}" "${MAKEFILE}"
 do
     [ -s "${file}" ] || {
         echo "FAIL: missing Strategy Lab live-gate record: ${file}" >&2
@@ -41,24 +42,24 @@ case "${revision}" in
 esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 
-# The live matrix records the latest owner evidence and current source/experiment handoff
-# without converting unrelated rows into PASS.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
+# The live matrix records the latest owner evidence and current experiment handoff without
+# converting unrelated rows into PASS.
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
 grep -Fq 'AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md' "${MATRIX}"
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_10.pkg`' "${MATRIX}"
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_10.pkg`' "${MATRIX}"
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_11.pkg`' "${MATRIX}"
+grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_11.pkg`' "${MATRIX}"
 grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}"
-grep -Fq 'Current source purpose: Model A RSS propagation correction' "${MATRIX}"
-grep -Fq 'Latest owner-tested Model A job: `job.Oeq7Rc` (`rutracker.org`)' "${MATRIX}"
-grep -Fq 'Latest owner-tested Standard winner job: `job.UPRDlc` (`rutracker.org`)' "${MATRIX}"
+grep -Fq 'Current source purpose: Model A cold reference collected; Model B coexistence experiment next' "${MATRIX}"
+grep -Fq 'Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}"
+grep -Fq 'Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Extended no-winner job: `job.hsP8Ro` (`telegram.org`)' "${MATRIX}"
-grep -Fq 'docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md' "${MATRIX}"
-grep -Fq 'CURRENT MODEL A RSS CORRECTION — `v0.4.0_11`' "${MATRIX}"
-grep -Fq 'model-a summarize OUTPUT JOB_ID [JOB_ID ...]' "${MATRIX}"
-grep -Fq 'coverage.checks.rss_observed=false' "${MATRIX}"
-grep -Fq 'Model A measurement experiment' "${MATRIX}"
+grep -Fq 'docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md' "${MATRIX}"
+grep -Fq 'MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`' "${MATRIX}"
+grep -Fq '`conclusion=reference_collected`' "${MATRIX}"
+grep -Fq 'numeric RSS on all 25 samples' "${MATRIX}"
+grep -Fq 'Model B may now be implemented only as an experiment' "${MATRIX}"
 
 scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /PASS ON `_27` — v0.4.0 mandatory row/ {n++} END {print n+0}' "${MATRIX}")
 [ "${scenario_one}" -eq 1 ] || {
@@ -93,8 +94,8 @@ grep -Fq 'Stage 60: 0 working candidates, 16 candidates checked' "${TIMEOUT_CLOS
 grep -Fq 'Stage 90: PASS' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
 grep -Fq 'no late-stage timeout was reported' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
 
-# `_33` live evidence remains the latest adaptive-search owner record. The contract checks
-# both winner/no-winner coverage and the deliberate live-coverage limitation.
+# `_33` live evidence remains the adaptive-search owner record. The contract checks both
+# winner/no-winner coverage and the deliberate live-coverage limitation.
 grep -Fq 'Result: **ADAPTIVE-SEARCH `_33` CHANGE-SPECIFIC LIVE PASS on `v0.4.0_9`**' "${ADAPTIVE_VALIDATION_EVIDENCE}"
 grep -Fq 'Standard no-winner: `job.tU3wiL`' "${ADAPTIVE_VALIDATION_EVIDENCE}"
 grep -Fq 'Extended no-winner: `job.hsP8Ro`' "${ADAPTIVE_VALIDATION_EVIDENCE}"
@@ -105,13 +106,20 @@ grep -Fq '`classification=inconclusive`' "${ADAPTIVE_VALIDATION_EVIDENCE}"
 grep -Fq '`temporary_runtime_clean=true`' "${ADAPTIVE_VALIDATION_EVIDENCE}"
 grep -Fq 'fail-fast rejection branch remains automated-regression evidence only' "${ADAPTIVE_VALIDATION_EVIDENCE}"
 
-# `_10` is the first owner appliance Model A baseline and `_11` is its narrow RSS
-# propagation correction. Neither source/CI evidence approves a warm runtime model.
+# `_10` remains the first appliance baseline/gap record. `_11` is the accepted cold
+# reference. Neither result approves a warm runtime model.
 grep -Fq 'Candidate: `os-zapret2-restyle-0.4.0_10.pkg`' "${MODEL_A_GAP_EVIDENCE}"
 grep -Fq 'Job: `job.Oeq7Rc`' "${MODEL_A_GAP_EVIDENCE}"
 grep -Fq 'It collected 25 cold candidate samples.' "${MODEL_A_GAP_EVIDENCE}"
 grep -Fq 'RSS observed: false.' "${MODEL_A_GAP_EVIDENCE}"
 grep -Fq '| readiness | 1046 ms | 1054 ms | 1178 ms |' "${MODEL_A_GAP_EVIDENCE}"
+
+grep -Fq 'Job: `job.TtZeaH`' "${MODEL_A_REFERENCE_EVIDENCE}"
+grep -Fq 'Model A conclusion: `reference_collected`' "${MODEL_A_REFERENCE_EVIDENCE}"
+grep -Fq 'numeric `rss_kb`' "${MODEL_A_REFERENCE_EVIDENCE}"
+grep -Fq 'median: 4332 KiB' "${MODEL_A_REFERENCE_EVIDENCE}"
+grep -Fq 'Model B coexistence' "${MODEL_A_REFERENCE_EVIDENCE}"
+
 grep -Fq 'propagate candidate RSS into Model A evidence' "${MODEL_A_PATCH}"
 grep -Fq '`rss_kb=12345`' "${MODEL_A_PATCH}"
 grep -Fq 'still does not approve Model B/C' "${MODEL_A_PATCH}"
@@ -129,8 +137,8 @@ fi
     exit 1
 }
 [ "${revision}" -ge 11 ] || {
-    echo "FAIL: Model A RSS corrective source revision must be at least 11" >&2
+    echo "FAIL: Model A accepted reference source revision must be at least 11" >&2
     exit 1
 }
 
-echo "PASS: _27 remains the v0.4.0 release row, _28 and _32 keep owner evidence, _33 keeps change-specific owner-live PASS on v0.4.0_9, _10 supplies the first Model A appliance baseline, ${candidate} corrects RSS propagation, and rows 2-18 remain regression backlog"
+echo "PASS: _27 remains the v0.4.0 release row, _28 and _32 keep owner evidence, _33 keeps change-specific owner-live PASS on v0.4.0_9, ${candidate} supplies the accepted Model A cold reference, and rows 2-18 remain regression backlog"
