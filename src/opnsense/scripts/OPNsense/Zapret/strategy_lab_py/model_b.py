@@ -503,6 +503,16 @@ def run(reference_job_id: str, output: str) -> int:
         report["checks"]["all_workers_ready"] = all_ready
         report["checks"]["unique_worker_identity"] = unique_identity
         report["checks"]["rss_observed"] = bool(report["pool"]["rss"]["all_numeric"])
+        if not all_ready:
+            report["failed_readiness"] = {
+                "failed_slots": [
+                    slot.name
+                    for slot in SLOTS
+                    if pool.get(slot.name, {}).get("ready") is not True
+                ],
+                "downstream_actions_skipped": True,
+            }
+            raise ModelBExperimentError("Model B worker pool did not reach readiness")
 
         probes: list[dict[str, Any]] = []
         sequence = (SLOTS[0], SLOTS[1], SLOTS[2], SLOTS[0])
@@ -567,7 +577,7 @@ def run(reference_job_id: str, output: str) -> int:
         report["checks"]["sequential_probe_contract"] = True
 
         dispatch_values = [item["dispatch_ms"] for item in probes] + [independent_probe["dispatch_ms"], death_probe["dispatch_ms"]]
-        probe_values = [item["probe_ms"] for item in probes] + [independent_probe["probe_ms"], death_probe["probe_ms"]]
+        probe_values = [item["probe_ms"] for item in probes] + [independent_probe["probe_ms"] for independent_probe in [independent_probe]] + [death_probe["probe_ms"]]
         report["timing"] = {
             "pool_startup_ms": pool_startup_ms,
             "dispatch_median_ms": round(statistics.median(dispatch_values), 3),
