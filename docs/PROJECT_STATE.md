@@ -25,19 +25,19 @@ QUICK CONTEXT
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_1.pkg`
-Latest published testing prerelease: `v0.4.0_12` / `os-zapret2-restyle-0.4.0_12.pkg`
-Latest owner-tested testing candidate: `v0.4.0_12` / `os-zapret2-restyle-0.4.0_12.pkg`
+Latest published testing prerelease: `v0.4.0_13` / `os-zapret2-restyle-0.4.0_13.pkg`
+Latest owner-tested testing candidate: `v0.4.0_13` / `os-zapret2-restyle-0.4.0_13.pkg`
 Current source line: `VERSION=0.4.0`
-Current package revision: `PLUGIN_REVISION=13`
-Current source candidate: `os-zapret2-restyle-0.4.0_13.pkg`
+Current package revision: `PLUGIN_REVISION=14`
+Current source candidate: `os-zapret2-restyle-0.4.0_14.pkg`
 Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Model B `_12` owner-live preflight defect identified; `_13` corrective source candidate pending CI/publication/live rerun**
+Current phase: **Model B `_13` reached worker startup and rejected with no resident workers; `_14` post-drop hostlist traversal corrective pending CI/publication/live rerun**
 v0.4.0 release gate: **COMPLETE — published and installed by the owner**
 `_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**
 `_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**
 Model A experiment gate: **REFERENCE COLLECTED on `v0.4.0_11` / `job.TtZeaH`**
-Model B experiment gate: **`v0.4.0_12` OWNER-LIVE BLOCKED BEFORE WORKER LAUNCH; `v0.4.0_13` CORRECTIVE PENDING LIVE**
+Model B experiment gate: **`v0.4.0_13` OWNER-LIVE REJECT AT WORKER STARTUP; `v0.4.0_14` ACCESS CORRECTIVE PENDING LIVE**
 
 Current primary Strategy Lab authorities:
 
@@ -60,11 +60,14 @@ Current live-gate authority:
 Latest accepted live experiment evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`.
 
+Latest Model B live evidence:
+`docs/verification/evidence/2026-08-10-v0.4.0_13-model-b-worker-access-reject.md`.
+
 Model B experiment contract:
 `docs/patches/v0.4.0_12.md`.
 
 Current Model B corrective contract:
-`docs/patches/v0.4.0_13.md`.
+`docs/patches/v0.4.0_14.md`.
 
 Current live-release-gate decision:
 `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
@@ -115,9 +118,13 @@ Approved and implemented progression:
   sequential rule-selected probes, independent-stop/death checks and mandatory semantic
   restoration; first owner launch was blocked before worker startup by a false clean
   preflight status;
-- `0.4.0_13` — corrective clean-preflight return contract: a fully free dedicated
-  rule/port set now returns success while actual occupied rule/port and prerequisite
-  failures remain rejection paths; focused real-shell regression added.
+- `0.4.0_13` — corrected clean preflight and reached the worker/probe path on the owner
+  appliance; all three workers disappeared before readiness, probes were diverted to the
+  dedicated ports without qualifying listeners, and the experiment truthfully ended
+  `reject` with complete semantic restoration;
+- `0.4.0_14` — reuses the previously owner-proven bounded post-drop hostlist access lease:
+  active Model B session ancestors are `0711` while warm workers run and the retained root
+  returns to private `0700` during cleanup.
 
 Warm runtime selection remains evidence-gated by the A/B/C experiment plan. Model B is a
 measurement harness only. No Model B/C worker, dispatcher, warm preload or parallel
@@ -178,45 +185,41 @@ Previous `_10` gap evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md`.
 
 ==================================================
-MODEL B — `_12` EXPERIMENT / `_13` PREFLIGHT CORRECTIVE
+MODEL B — `_13` WORKER-STARTUP REJECT / `_14` ACCESS CORRECTIVE
 ==================================================
 
-`v0.4.0_12` does not alter normal Strategy Lab search. It adds an explicit laboratory
-entry point that acquires the same Zapret2 lifecycle lock and consumes the retained Model A
-reference job.
+The Model B harness remains separate from normal Strategy Lab search and consumes retained
+Model A job `job.TtZeaH`. The corpus remains exactly three compatible TLS 1.3/TCP/443
+reference specs: repeated blob-free PASS, builtin FAIL, and external `-d8` FAIL.
 
-The first coexistence corpus is exactly three compatible TLS 1.3/TCP/443 reference specs:
+`v0.4.0_13` proved that the `_12` clean-preflight bug is closed. The owner run advanced
+past preflight and created the full Model B report. It also exposed the next FreeBSD worker
+startup blocker:
 
-- repeated known PASS / `blob-free`;
-- known FAIL / `builtin`;
-- known FAIL / `external` with `-d8`.
+- all three pool snapshots: `pid=null`, `process_identity=false`, `socket_ready=false`,
+  `rss_kb=null`;
+- `all_workers_ready=false` and `unique_worker_identity=false`;
+- selected IPFW rule counters moved for every attempted probe;
+- all curls timed out with no remote endpoint because no qualifying worker remained on the
+  selected divert port;
+- the known-pass slot therefore classified `fail`;
+- later controlled-death handling produced `Model B system adapter kill-owned failed`
+  because there was no owned external-worker PID;
+- final semantic restoration remained fully verified: RUNNING -> RUNNING, normal firewall
+  unchanged, strategy/runtime arguments unchanged, temporary runtime clean.
 
-They are designed to run on dedicated warm ports `9990–9992` and dedicated temporary
-rules `19128–19130`. Only the selected worker's rule is present for each probe; the other
-warm workers remain alive but unrouted. The sequence is strictly sequential and includes
-A/B/C/A repetition, independent stop of one worker and controlled death/cleanup of a
-second worker.
+The deterministic source condition matches the previously owner-proven normal Strategy Lab
+`v0.3.3_16` hostlist failure: dvtws2 loads a hostlist, drops to `nobody`, then checks/reopens
+that hostlist. `_13` made the Model B root and session directory `0700`, so a mode-0644
+hostlist nested below them cannot be traversed after the privilege drop.
 
-Source/live acceptance requires exact Model-A classification equivalence, selected-rule
-counter movement, inactive-rule absence, unique PID/divert identity, numeric
-per-worker/aggregate RSS, survivor correctness after stop/death, dedicated residue cleanup,
-and final semantic restoration of service state/config/runtime arguments/normal firewall.
+`v0.4.0_14` grants only search permission (`0711`) to those two active session ancestors
+while the lifecycle-owned experiment runs. The tree remains non-listable. Cleanup restores
+the retained Model B root to private `0700` before deleting the per-run session. This is the
+same bounded access pattern already accepted for normal Strategy Lab candidate runtime.
 
-The first `_12` owner invocation did not execute that experiment. Appliance diagnostics
-showed `ipfw` and `ipdivert` loaded, `net.inet.ip.fw.enable=1`, executable `dvtws2` and
-`daemon(8)`, absent rules `19128–19130`, and no listeners/divert sockets on ports
-`9990–9992`. A direct `sh -x` adapter trace showed all checks passing and then
-`preflight()` returning status 1 after the final free-port check.
-
-Root cause: `port_in_use` intentionally returns status 1 for a free port. The final
-`port_in_use "9992" && return 1` list therefore had status 1, and because `preflight()` had
-no explicit successful return after the loop, POSIX shell propagated that expected
-negative-predicate status as the whole function result.
-
-`v0.4.0_13` adds an explicit `return 0` after all dedicated rule/port checks complete
-without conflict and adds a real-shell regression proving clean success plus occupied-rule
-and occupied-port rejection. No worker topology, routing, classification, timeout,
-restoration or production approval behavior changes.
+Exact `_13` evidence:
+`docs/verification/evidence/2026-08-10-v0.4.0_13-model-b-worker-access-reject.md`.
 
 Even a future live `conclusion=accept` means only that the coexistence experiment passed.
 The report retains `experiment_only=true`, `parallel_probes=false`, and
@@ -235,11 +238,19 @@ Closed by the adaptive timeout/search series:
    `_9` owner evidence, with fail-fast rejection still source-regression-only.
 5. `_10` Model A RSS propagation gap — source-corrected and owner-live closed by `_11`;
    Model A now returns `reference_collected`.
+6. `_12` Model B false clean-preflight failure — source-corrected by `_13` and owner-live
+   closed when `_13` advanced into worker startup.
 
 Current experiment blocker:
 
-6. `_12` Model B clean preflight false failure — root cause localized by owner `sh -x`
-   trace; source-corrected by `_13`; live rerun pending.
+7. `_13` Model B post-drop hostlist traversal failure — owner evidence shows no resident
+   workers/readiness; source-corrected by `_14`; live rerun pending.
+
+Separate confirmed Model B control defect:
+
+8. `_13` continues route/probe/stop/death work after `all_workers_ready=false`, causing
+   avoidable timeouts and allowing downstream `kill-owned` to obscure the first readiness
+   failure. Keep this as a separate logical corrective before any production approval.
 
 Other product/regression observations remain separate backlog unless selected by the
 risk-based live gate:
@@ -266,26 +277,25 @@ post-migration live row remains PASS on `_27`, `_28` retains its focused adaptiv
 PASS, `_32` retains its timeout-containment owner PASS through `_8`, and `_33` retains its
 change-specific owner-live PASS on `_9`.
 
-`v0.4.0_11` remains the accepted Model A cold reference. `v0.4.0_12` is the latest
-published and owner-tested testing prerelease, but its Model B experiment did not pass or
-reject: it was blocked before worker launch by the clean-preflight source defect.
-`v0.4.0_13` is the current corrective source candidate. Neither `_12` nor `_13` is a
-production warm-worker architecture.
+`v0.4.0_11` remains the accepted Model A cold reference. `v0.4.0_13` is the latest
+published and owner-tested testing prerelease. Its Model B run is a real `reject` at worker
+startup, not a preflight block, and restoration passed. `v0.4.0_14` is the current bounded
+post-drop access corrective source candidate. None of `_12`–`_14` is a production
+warm-worker architecture.
 
 ==================================================
 NEXT ACTION
 ==================================================
 
-1. Qualify `os-zapret2-restyle-0.4.0_13.pkg` through focused regressions, canonical CI and
-   FreeBSD 15 package inspection.
-2. After testing-prerelease publication, install `_13` on the owner appliance while
+1. Qualify `os-zapret2-restyle-0.4.0_14.pkg` through the focused Model B regression,
+   canonical CI and FreeBSD 15 package inspection.
+2. After testing-prerelease publication, install `_14` on the owner appliance while
    retaining `job.TtZeaH`.
 3. Repeat the same experiment-only launcher against `job.TtZeaH` and preserve its JSON
    report.
-4. Accept Model B coexistence only if result equivalence, traffic attribution, worker
-   identity/RSS, independent stop, controlled death cleanup and semantic restoration all
-   pass on the appliance.
-5. If accepted, update the adaptive-search decision before considering any production
-   warm-worker use. If rejected, keep Model A cold execution authoritative.
+4. Verify that all three workers now have unique PIDs, listening divert ports and numeric
+   RSS before interpreting any A/B/C/A result.
+5. Keep the separately confirmed failed-readiness fail-fast defect out of `_14`; correct it
+   in its own logical cycle before any production Model B decision.
 6. Keep Model C, source-port dispatch, preload-policy changes and true parallel candidate
    probing out of scope.
