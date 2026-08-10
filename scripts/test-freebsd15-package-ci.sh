@@ -20,6 +20,7 @@ PATCH32_TEST="${ROOT_DIR}/scripts/test-strategy-lab-late-stage-containment.sh"
 PATCH33_TEST="${ROOT_DIR}/scripts/test-strategy-lab-adaptive-validation.sh"
 MODEL_A_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-a-measurement.sh"
 MODEL_B_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-experiment.sh"
+MODEL_B_PREFLIGHT_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-preflight.sh"
 REQUEST_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py"
 PROBE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py"
 ENDPOINT_EPOCH_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/endpoint_epoch.py"
@@ -52,7 +53,7 @@ for file in \
     "${VERSION_FILE}" "${MAKEFILE}" \
     "${PATCH4_TEST}" "${PATCH5_TEST}" "${PATCH6_TEST}" "${PATCH29_TEST}" \
     "${PATCH30_TEST}" "${PATCH31_TEST}" "${PATCH32_TEST}" "${PATCH33_TEST}" \
-    "${MODEL_A_TEST}" "${MODEL_B_TEST}" \
+    "${MODEL_A_TEST}" "${MODEL_B_TEST}" "${MODEL_B_PREFLIGHT_TEST}" \
     "${REQUEST_PY}" "${PROBE_PY}" "${ENDPOINT_EPOCH_PY}" "${TELEMETRY_PY}" \
     "${RESOURCES_PY}" "${CANDIDATE_SPEC_PY}" "${CANDIDATE_PY}" "${FAMILY_PY}" \
     "${SEARCH_GRAPH_PY}" "${SEARCH_PY}" "${EXTENDED_PY}" "${LATE_CONTAINMENT_PY}" \
@@ -121,10 +122,13 @@ done
 
 # Model A and Model B focused experiments are discovered by the canonical Linux corrective
 # matrix. The FreeBSD job then builds the complete OPNsense source tree, preserving the
-# executable experimental adapters/launchers in the FreeBSD:15 package.
+# experimental adapters/launchers in the FreeBSD:15 package.
 grep -Fq "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy-lab-*.sh'" \
     "${ROOT_DIR}/scripts/test-strategy-lab-corrective-matrix.sh" ||
     fail 'canonical Strategy Lab matrix no longer discovers focused regressions'
+grep -Fq 'PASS: Model B preflight returns success when all dedicated rules/ports are free' \
+    "${MODEL_B_PREFLIGHT_TEST}" ||
+    fail 'Model B clean-preflight corrective regression is unavailable'
 
 # The search/extended continuity gate must include `_32` containment and `_33`
 # adaptive-validation source contracts.
@@ -172,7 +176,7 @@ grep -Fq 'scripts/test-freebsd15-package-ci' "${CI}" ||
 
 # Current live/source selection must agree across the canonical live matrix and project
 # state while retaining historical release-selected/focused evidence.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_12` SOURCE EXPERIMENT PENDING LIVE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_12` OWNER-LIVE BLOCKED AT CLEAN PREFLIGHT; `_13` CORRECTIVE PENDING LIVE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
     fail 'unexpected Strategy Lab live-matrix state'
 grep -Fq '**PASS ON `_27` — v0.4.0 mandatory row**' "${MATRIX}" ||
     fail 'release-selected live matrix does not retain the v0.4.0 mandatory Scenario 1 PASS'
@@ -184,37 +188,37 @@ grep -Fq '2026-08-10-v0.4.0_7-late-stage-pass.md' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_7 timeout-hierarchy evidence'
 grep -Fq '2026-08-10-v0.4.0_8-timeout-containment-pass.md' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_8 timeout-containment closeout'
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_11.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not select the published _11 candidate'
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_11.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not select the owner-tested _11 candidate'
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_12.pkg`' "${MATRIX}" ||
+    fail 'live matrix does not retain the published _12 candidate'
+grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_12.pkg`' "${MATRIX}" ||
+    fail 'live matrix does not retain the owner-tested _12 candidate'
 grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}" ||
-    fail 'live matrix does not select the Model B source candidate'
+    fail 'live matrix does not select the Model B corrective source candidate'
 grep -Fq 'MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`' "${MATRIX}" ||
     fail 'live matrix does not expose the accepted Model A cold reference'
-grep -Fq 'MODEL B `_12` SOURCE EXPERIMENT — LIVE PENDING' "${MATRIX}" ||
-    fail 'live matrix does not expose the pending Model B source experiment'
+grep -Fq 'MODEL B `_12` EXPERIMENT — `_13` PREFLIGHT CORRECTIVE PENDING LIVE' "${MATRIX}" ||
+    fail 'live matrix does not expose the blocked Model B experiment and corrective'
 grep -Fq 'Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}" ||
     fail 'live matrix does not retain the accepted Model A appliance job'
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}" ||
     fail 'live matrix does not require the FreeBSD 15 ABI'
 
-grep -Fq 'Latest published testing prerelease: `v0.4.0_11` / `os-zapret2-restyle-0.4.0_11.pkg`' "${PROJECT_STATE}" ||
-    fail 'project state does not retain the published _11 candidate'
-grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_11` / `os-zapret2-restyle-0.4.0_11.pkg`' "${PROJECT_STATE}" ||
-    fail 'project state does not retain the owner-tested _11 candidate'
+grep -Fq 'Latest published testing prerelease: `v0.4.0_12` / `os-zapret2-restyle-0.4.0_12.pkg`' "${PROJECT_STATE}" ||
+    fail 'project state does not retain the published _12 candidate'
+grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_12` / `os-zapret2-restyle-0.4.0_12.pkg`' "${PROJECT_STATE}" ||
+    fail 'project state does not retain the owner-tested _12 candidate'
 grep -Fq "Current source candidate: \`${candidate}\`" "${PROJECT_STATE}" ||
-    fail 'project state does not select the Model B source candidate'
+    fail 'project state does not select the Model B corrective source candidate'
 grep -Fq '`_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**' "${PROJECT_STATE}" ||
     fail 'project state does not retain the owner-live _32 boundary'
 grep -Fq '`_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**' "${PROJECT_STATE}" ||
     fail 'project state does not close the change-specific owner-live _33 boundary'
 grep -Fq 'Model A experiment gate: **REFERENCE COLLECTED on `v0.4.0_11` / `job.TtZeaH`**' "${PROJECT_STATE}" ||
     fail 'project state does not retain the accepted Model A reference gate'
-grep -Fq 'Model B experiment gate: **SOURCE HARNESS ONLY on `v0.4.0_12`; NOT YET OWNER-LIVE ACCEPTED**' "${PROJECT_STATE}" ||
-    fail 'project state does not keep Model B source-only'
-grep -Fq 'Current phase: **Model B warm-worker coexistence harness implemented in source; CI/live experiment pending**' "${PROJECT_STATE}" ||
-    fail 'project state does not select the Model B source experiment phase'
+grep -Fq 'Model B experiment gate: **`v0.4.0_12` OWNER-LIVE BLOCKED BEFORE WORKER LAUNCH; `v0.4.0_13` CORRECTIVE PENDING LIVE**' "${PROJECT_STATE}" ||
+    fail 'project state does not record the Model B preflight blocker/corrective'
+grep -Fq 'Current phase: **Model B `_12` owner-live preflight defect identified; `_13` corrective source candidate pending CI/publication/live rerun**' "${PROJECT_STATE}" ||
+    fail 'project state does not select the Model B preflight corrective phase'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, accepted Model A _11 evidence, and ${candidate} source-only Model B experiment are synchronized"
+printf '%s\n' "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, accepted Model A _11 evidence, blocked Model B _12 live preflight, and ${candidate} corrective source candidate are synchronized"
