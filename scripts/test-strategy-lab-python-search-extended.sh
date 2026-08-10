@@ -6,6 +6,7 @@ PYTHON=${STRATEGY_LAB_TEST_PYTHON:-python3.13}
 
 STRATEGY_LAB_TEST_PYTHON="${PYTHON}" sh "${ROOT_DIR}/scripts/strategy-lab-python-search-extended-core.sh"
 STRATEGY_LAB_TEST_PYTHON="${PYTHON}" sh "${ROOT_DIR}/scripts/test-strategy-lab-late-stage-containment.sh"
+STRATEGY_LAB_TEST_PYTHON="${PYTHON}" sh "${ROOT_DIR}/scripts/test-strategy-lab-adaptive-validation.sh"
 STRATEGY_LAB_TEST_PYTHON="${PYTHON}" sh "${ROOT_DIR}/scripts/test-strategy-lab-python-final-results.sh"
 
-echo 'PASS: Python 3.13 migration continuity gate covers search/extended orchestration, late-stage containment, and final-result ownership'
+echo 'PASS: Python 3.13 migration continuity gate covers search/extended orchestration, late-stage containment, adaptive validation, and final-result ownership'
