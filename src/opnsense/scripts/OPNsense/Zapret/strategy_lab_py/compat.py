@@ -14,6 +14,7 @@ from . import candidate as candidate_screening
 from . import extended as extended_orchestration
 from . import family as family_screening
 from . import late_containment
+from . import model_a as model_a_measurement
 from . import orchestrator as stage_orchestrator
 from . import probe as probe_execution
 from . import request as request_execution
@@ -162,6 +163,17 @@ def _run_result(args: Sequence[str]) -> int:
         _error(f"Strategy Lab final result processing failed: {exc}"); return EX_SOFTWARE
 
 
+def _run_model_a(args: Sequence[str]) -> int:
+    try:
+        return model_a_measurement.main(args)
+    except ValueError as exc:
+        _error(str(exc)); return EX_USAGE
+    except model_a_measurement.ModelAMeasurementError as exc:
+        _error(str(exc)); return EX_SOFTWARE
+    except OSError as exc:
+        _error(f"Strategy Lab Model A measurement failed: {exc}"); return EX_SOFTWARE
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not _runtime_supported():
@@ -181,11 +193,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args[:1] == ["search"]: return _run_search(args[1:])
     if args[:1] == ["extended"]: return _run_extended(args[1:])
     if args[:1] == ["result"]: return _run_result(args[1:])
+    if args[:1] == ["model-a"]: return _run_model_a(args[1:])
     if len(args) != 1:
         _error(
             "usage: strategy_lab_python.py job_id | --self-test | state OPERATION ... | "
             "orchestrate JOB_ID | probe OPERATION ... | request OPERATION ... | candidate run ... | "
-            "family screen ... | search OPERATION ... | extended OPERATION ... | result OPERATION ..."
+            "family screen ... | search OPERATION ... | extended OPERATION ... | result OPERATION ... | "
+            "model-a summarize OUTPUT JOB_ID [JOB_ID ...]"
         )
         return EX_USAGE
     return _delegate_shell(args[0])
