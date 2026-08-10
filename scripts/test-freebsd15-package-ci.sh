@@ -110,9 +110,8 @@ do
 done
 
 # The Model A regression is part of the canonical corrective matrix on Linux; the
-# FreeBSD job then builds the complete OPNsense tree into the FreeBSD:15 package. This
-# measurement/correction slice does not require a separate VM execution contract before
-# live owner measurement; its FreeBSD-specific system commands are optional identity probes.
+# FreeBSD job then builds the complete OPNsense tree into the FreeBSD:15 package. The
+# accepted appliance reference is documented separately and does not change packaging.
 grep -Fq 'test-strategy-lab-model-a-measurement' "${ROOT_DIR}/scripts/test-strategy-lab-corrective-matrix.sh" || true
 
 # The search/extended continuity gate must include `_32` containment and `_33`
@@ -167,7 +166,7 @@ grep -Fq "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy
 
 # Current live/source selection must agree across the canonical live matrix and project
 # state while retaining historical release-selected/focused evidence.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
     fail 'unexpected Strategy Lab live-matrix state'
 grep -Fq '**PASS ON `_27` — v0.4.0 mandatory row**' "${MATRIX}" ||
     fail 'release-selected live matrix does not retain the v0.4.0 mandatory Scenario 1 PASS'
@@ -179,31 +178,33 @@ grep -Fq '2026-08-10-v0.4.0_7-late-stage-pass.md' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_7 timeout-hierarchy evidence'
 grep -Fq '2026-08-10-v0.4.0_8-timeout-containment-pass.md' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_8 timeout-containment closeout'
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_10.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not select the published _10 candidate'
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_10.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not select the owner-tested _10 candidate'
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_11.pkg`' "${MATRIX}" ||
+    fail 'live matrix does not select the published _11 candidate'
+grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_11.pkg`' "${MATRIX}" ||
+    fail 'live matrix does not select the owner-tested _11 candidate'
 grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}" ||
-    fail 'live matrix does not select the current Model A RSS corrective source candidate'
-grep -Fq 'CURRENT MODEL A RSS CORRECTION — `v0.4.0_11`' "${MATRIX}" ||
-    fail 'live matrix does not expose the Model A RSS correction handoff'
-grep -Fq 'Latest owner-tested Model A job: `job.Oeq7Rc` (`rutracker.org`)' "${MATRIX}" ||
-    fail 'live matrix does not retain the first Model A appliance job'
+    fail 'live matrix does not select the accepted Model A source candidate'
+grep -Fq 'MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`' "${MATRIX}" ||
+    fail 'live matrix does not expose the accepted Model A cold reference'
+grep -Fq 'Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}" ||
+    fail 'live matrix does not select the accepted Model A appliance job'
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}" ||
     fail 'live matrix does not require the FreeBSD 15 ABI'
 
-grep -Fq 'Latest published testing prerelease: `v0.4.0_10` / `os-zapret2-restyle-0.4.0_10.pkg`' "${PROJECT_STATE}" ||
-    fail 'project state does not select the published _10 candidate'
-grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_10` / `os-zapret2-restyle-0.4.0_10.pkg`' "${PROJECT_STATE}" ||
-    fail 'project state does not select the owner-tested _10 candidate'
+grep -Fq 'Latest published testing prerelease: `v0.4.0_11` / `os-zapret2-restyle-0.4.0_11.pkg`' "${PROJECT_STATE}" ||
+    fail 'project state does not select the published _11 candidate'
+grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_11` / `os-zapret2-restyle-0.4.0_11.pkg`' "${PROJECT_STATE}" ||
+    fail 'project state does not select the owner-tested _11 candidate'
 grep -Fq "Current source candidate: \`${candidate}\`" "${PROJECT_STATE}" ||
-    fail 'project state does not select the current Model A RSS corrective source candidate'
+    fail 'project state does not select the accepted Model A source candidate'
 grep -Fq '`_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**' "${PROJECT_STATE}" ||
     fail 'project state does not retain the owner-live _32 boundary'
 grep -Fq '`_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**' "${PROJECT_STATE}" ||
     fail 'project state does not close the change-specific owner-live _33 boundary'
-grep -Fq 'Current phase: **Model A cold-reference RSS propagation correction and recheck**' "${PROJECT_STATE}" ||
-    fail 'project state does not select the Model A RSS corrective phase'
+grep -Fq 'Model A experiment gate: **REFERENCE COLLECTED on `v0.4.0_11` / `job.TtZeaH`**' "${PROJECT_STATE}" ||
+    fail 'project state does not close the Model A reference gate'
+grep -Fq 'Current phase: **Model A cold reference collected; Model B warm-worker coexistence experiment is next**' "${PROJECT_STATE}" ||
+    fail 'project state does not select the Model B experiment handoff'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, _32 containment, _33 owner-live adaptive validation, _10 Model A baseline, and ${candidate} RSS correction qualification are synchronized"
+printf '%s\n' "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, _32 containment, _33 owner-live adaptive validation, and ${candidate} accepted Model A cold reference are synchronized"

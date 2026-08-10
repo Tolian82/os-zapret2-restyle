@@ -28,16 +28,24 @@ when the experiment is actually executed.
 STATUS
 ==================================================
 
-Approved experiment plan; experiments not yet executed.
+Approved experiment plan. **Model A has now been executed and accepted as the cold
+reference.** Model B coexistence is the next experiment; Model C, source-port dispatch,
+warm preload policy and true parallel candidate probing remain unexecuted/unapproved.
 
-`0.4.0_5` `_31` now persists the cold-reference phase timing source required by this
-plan. That instrumentation is not an executed appliance experiment and does not approve
-new deadlines or a warm runtime model.
+Owner Standard `rutracker.org` job `job.TtZeaH` on `v0.4.0_11` produced 25 cold samples
+and `conclusion=reference_collected`. Every machine-checkable Model A coverage gate passed,
+including PASS/FAIL candidates, repetitions, `blob-free`/`builtin`/`external` resources,
+`-d8`, overlapping TLS/443 candidates, numeric RSS and verified clean restoration.
 
-No A/B/C result, source-port dispatcher, warm-worker preload policy or revised timeout is
-considered production-approved merely because it is technically possible. Every selected
-optimization must first preserve the cold reference result and Strategy Lab lifecycle
-safety.
+Accepted `_11` reference medians are total candidate 1580 ms, readiness 1046 ms, prepare
+140 ms, launch 17 ms, probe 220 ms and stop+cleanup 81 ms. Candidate-process RSS after
+readiness is tightly clustered around 4332 KiB median, 4348 KiB p90 and 4356 KiB max.
+
+Exact accepted evidence:
+`docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`.
+
+No warm-runtime model is production-approved by this result. Every selected optimization
+must preserve the accepted cold reference result and Strategy Lab lifecycle safety.
 
 ==================================================
 QUESTIONS TO ANSWER
@@ -103,6 +111,17 @@ completely before the next candidate.
 
 Purpose:
 Provide the correctness reference and a complete timing breakdown.
+
+Executed reference:
+
+- package/job: `v0.4.0_11` / `job.TtZeaH` / Standard `rutracker.org`;
+- 25 retained cold candidate samples;
+- `conclusion=reference_collected` with no missing coverage checks;
+- total candidate median/p90/max: 1580 / 3411 / 3463 ms;
+- readiness median/p90/max: 1046 / 1052 / 1138 ms;
+- RSS minimum/median/p90/max: 4316 / 4332 / 4348 / 4356 KiB;
+- initial/final service: RUNNING -> RUNNING;
+- restoration verified, strategy unchanged, temporary runtime clean.
 
 Measure per candidate:
 
