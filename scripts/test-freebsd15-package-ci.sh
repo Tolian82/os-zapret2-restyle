@@ -178,7 +178,7 @@ grep -Fq 'scripts/test-freebsd15-package-ci' "${CI}" ||
 
 # Current live/source selection must agree across the canonical live matrix and project
 # state while retaining historical release-selected/focused evidence.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_13` OWNER-LIVE REJECT AT WORKER STARTUP; `_14` ACCESS CORRECTIVE PENDING LIVE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_16` OWNER-LIVE COEXISTENCE ACCEPT (EXPERIMENT ONLY); FAILED-READINESS FAIL-FAST CORRECTIVE NEXT; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
     fail 'unexpected Strategy Lab live-matrix state'
 grep -Fq '**PASS ON `_27` — v0.4.0 mandatory row**' "${MATRIX}" ||
     fail 'release-selected live matrix does not retain the v0.4.0 mandatory Scenario 1 PASS'
@@ -190,37 +190,37 @@ grep -Fq '2026-08-10-v0.4.0_7-late-stage-pass.md' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_7 timeout-hierarchy evidence'
 grep -Fq '2026-08-10-v0.4.0_8-timeout-containment-pass.md' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_8 timeout-containment closeout'
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_13.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not retain the published _13 candidate'
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_13.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not retain the owner-tested _13 candidate'
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_16.pkg`' "${MATRIX}" ||
+    fail 'live matrix does not select the published _16 candidate'
+grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_16.pkg`' "${MATRIX}" ||
+    fail 'live matrix does not select the owner-tested _16 candidate'
 grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}" ||
-    fail 'live matrix does not select the Model B access-corrective source candidate'
+    fail 'live matrix does not select the current source candidate'
 grep -Fq 'MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`' "${MATRIX}" ||
     fail 'live matrix does not expose the accepted Model A cold reference'
-grep -Fq 'MODEL B `_13` WORKER-STARTUP REJECT — `_14` ACCESS CORRECTIVE PENDING LIVE' "${MATRIX}" ||
-    fail 'live matrix does not expose the Model B worker-startup reject and corrective'
+grep -Fq 'MODEL B `_16` OWNER-LIVE COEXISTENCE ACCEPT — EXPERIMENT ONLY' "${MATRIX}" ||
+    fail 'live matrix does not expose the accepted Model B coexistence result'
 grep -Fq 'Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}" ||
     fail 'live matrix does not retain the accepted Model A appliance job'
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}" ||
     fail 'live matrix does not require the FreeBSD 15 ABI'
 
-grep -Fq 'Latest published testing prerelease: `v0.4.0_13` / `os-zapret2-restyle-0.4.0_13.pkg`' "${PROJECT_STATE}" ||
-    fail 'project state does not retain the published _13 candidate'
-grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_13` / `os-zapret2-restyle-0.4.0_13.pkg`' "${PROJECT_STATE}" ||
-    fail 'project state does not retain the owner-tested _13 candidate'
+grep -Fq 'Latest published testing prerelease: `v0.4.0_16` / `os-zapret2-restyle-0.4.0_16.pkg`' "${PROJECT_STATE}" ||
+    fail 'project state does not select the published _16 candidate'
+grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_16` / `os-zapret2-restyle-0.4.0_16.pkg`' "${PROJECT_STATE}" ||
+    fail 'project state does not select the owner-tested _16 candidate'
 grep -Fq "Current source candidate: \`${candidate}\`" "${PROJECT_STATE}" ||
-    fail 'project state does not select the Model B access-corrective source candidate'
+    fail 'project state does not select the current source candidate'
 grep -Fq '`_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**' "${PROJECT_STATE}" ||
     fail 'project state does not retain the owner-live _32 boundary'
 grep -Fq '`_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**' "${PROJECT_STATE}" ||
     fail 'project state does not close the change-specific owner-live _33 boundary'
 grep -Fq 'Model A experiment gate: **REFERENCE COLLECTED on `v0.4.0_11` / `job.TtZeaH`**' "${PROJECT_STATE}" ||
     fail 'project state does not retain the accepted Model A reference gate'
-grep -Fq 'Model B experiment gate: **`v0.4.0_13` OWNER-LIVE REJECT AT WORKER STARTUP; `v0.4.0_14` ACCESS CORRECTIVE PENDING LIVE**' "${PROJECT_STATE}" ||
-    fail 'project state does not record the Model B worker-startup reject/corrective'
-grep -Fq 'Current phase: **Model B `_13` reached worker startup and rejected with no resident workers; `_14` post-drop hostlist traversal corrective pending CI/publication/live rerun**' "${PROJECT_STATE}" ||
-    fail 'project state does not select the Model B worker-access corrective phase'
+grep -Fq 'Model B experiment gate: **`v0.4.0_16` OWNER-LIVE COEXISTENCE ACCEPT; EXPERIMENT ONLY; `production_approved=false`**' "${PROJECT_STATE}" ||
+    fail 'project state does not record the Model B owner-live accept gate'
+grep -Fq 'Current phase: **Model B `_16` owner-live coexistence ACCEPT; failed-readiness fail-fast corrective is the next separate logical cycle**' "${PROJECT_STATE}" ||
+    fail 'project state does not select the failed-readiness corrective as next phase'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, accepted Model A _11 evidence, Model B _13 worker-startup reject, and ${candidate} bounded-access corrective are synchronized"
+printf '%s\n' "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, accepted Model A _11 evidence, and published/owner-tested Model B _16 coexistence accept are synchronized for ${candidate}"
