@@ -33,7 +33,10 @@ STRATEGY_LAB_MODEL_B_SESSION_DIR="${SESSION_DIR}"
 export STRATEGY_LAB_MODEL_B_SESSION_DIR STRATEGY_LAB_MODEL_B_SYSTEM_ADAPTER
 
 mkdir -p "${SESSION_DIR}/workers" || exit 70
-chmod 0700 "${SESSION_ROOT}" "${SESSION_DIR}" 2>/dev/null || true
+# dvtws2 drops to nobody and performs a post-drop reopen/access check of hostlist-backed
+# resources.  Keep the session non-listable but searchable while the workers are alive,
+# exactly like the bounded candidate-runtime access lease used by normal Strategy Lab.
+chmod 0711 "${SESSION_ROOT}" "${SESSION_DIR}" 2>/dev/null || exit 70
 
 initial_state=''
 service_changed=0
@@ -98,6 +101,9 @@ on_exit()
     restore_service || _mb_status=70
     capture_evidence "${FINAL_EVIDENCE}" || _mb_status=70
     finalize_report
+    # End the access lease before removing the per-run tree.  SESSION_ROOT is retained for
+    # future experiments, so restore its private mode even after a failed run.
+    chmod 0700 "${SESSION_ROOT}" "${SESSION_DIR}" 2>/dev/null || true
     rm -rf "${SESSION_DIR}" 2>/dev/null || true
     exit "${_mb_status}"
 }
