@@ -79,6 +79,28 @@ Before any GitHub mutation, inspect through the GitHub plugin the exact current:
 Do not create a new mechanism until the inventory proves that no existing mechanism
 safely covers the operation.
 
+### Pinned recursive-tree index for broad investigations
+
+For a repository-wide investigation, cross-cutting defect trace, or any task that would
+otherwise require repeated blind code searches, first pin the authoritative `main` SHA
+and fetch its complete recursive Git tree once through the GitHub plugin. Treat that tree
+as an immutable path index for the investigation cycle, then fetch only the relevant
+files or blobs by that exact pinned SHA.
+
+- Prefer the pinned recursive tree over repeatedly rediscovering paths with independent
+  code-search calls when the scope is broad or the failing call chain is not yet known.
+- The recursive tree is an index, not a working copy and not a replacement for the
+  pre-mutation inventory. It does not authorize writes against stale state.
+- Keep all source reads for the investigation pinned to the same SHA so that call-chain
+  evidence cannot silently mix revisions.
+- If authoritative `main` changes before mutation, merge, or publication, refresh the
+  authoritative state and re-pin/re-fetch the tree as required before proceeding.
+- Narrow code search remains appropriate for a known symbol or path; the recursive-tree
+  index is the preferred accelerator when discovery itself is the expensive part.
+
+This method preserves plugin-first authority while reducing redundant connector calls
+and makes repository-wide diagnosis closer to working from a local immutable checkout.
+
 ### Ordinary code and governance delivery
 
 - One logical scope uses one task branch and one pull request.
