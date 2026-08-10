@@ -109,7 +109,7 @@ case "${action}" in
     fi
     ;;
   snapshot)
-    printf '%s\n' '{"pid":4242,"executable":"/mock/dvtws2","command":"/mock/dvtws2 --port=9989","divert_port":9989,"process_identity":true,"socket_ready":true}'
+    printf '%s\n' '{"pid":4242,"executable":"/mock/dvtws2","command":"/mock/dvtws2 --port=9989","divert_port":9989,"process_identity":true,"socket_ready":true,"rss_kb":12345}'
     ;;
   counter)
     value=$(cat "${MOCK_COUNTER}")
@@ -152,7 +152,7 @@ run_candidate 0
   ([.runtime_arguments[]|select(startswith("--lua-init="))]|length)==2 and
   ([.runtime_arguments[]|select(contains("zapret-auto.lua"))]|length)==0 and
   ([.runtime_arguments[]|select(contains("unrelated.lua"))]|length)==0 and
-  .runtime.ready==true and .runtime.stable_checks==2 and
+  .runtime.ready==true and .runtime.stable_checks==2 and .runtime.rss_kb==12345 and
   (.endpoints|length)==1 and
   .endpoints[0].selected_ip=="203.0.113.10" and
   .endpoints[0].remote_ip=="203.0.113.10" and
