@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_12` SOURCE EXPERIMENT PENDING LIVE; FULL REGRESSION MATRIX OPEN**
+Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_12` OWNER-LIVE BLOCKED AT CLEAN PREFLIGHT; `_13` CORRECTIVE PENDING LIVE; FULL REGRESSION MATRIX OPEN**
 
 This matrix is the canonical live-appliance regression inventory for Strategy Lab. Source
 tests, GitHub CI, and FreeBSD package builds cannot substitute for a live PASS when a row
@@ -21,10 +21,10 @@ TEST RECORD
 - Latest test date/time: `2026-08-10`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.4.0_11.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_11.pkg`
-- Current source candidate: `os-zapret2-restyle-0.4.0_12.pkg`
-- Current source purpose: experiment-only Model B warm-worker coexistence harness; owner-live experiment pending
+- Latest published testing candidate: `os-zapret2-restyle-0.4.0_12.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_12.pkg`
+- Current source candidate: `os-zapret2-restyle-0.4.0_13.pkg`
+- Current source purpose: corrective Model B clean-preflight status fix; owner-live experiment rerun pending
 - Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)
 - Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)
 - Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)
@@ -38,8 +38,11 @@ Architecture / ABI baseline evidence:
 Latest accepted live experiment evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`.
 
-Current source experiment contract:
+Model B experiment contract:
 `docs/patches/v0.4.0_12.md`.
+
+Current corrective source contract:
+`docs/patches/v0.4.0_13.md`.
 
 Adaptive `_33` evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`.
@@ -106,10 +109,19 @@ VERIFIED PROGRESSION
 - `_11` restoration records initial RUNNING -> final RUNNING,
   `strategy_unchanged=true`, `temporary_runtime_clean=true`. Model A is therefore accepted
   as the cold correctness/performance reference; no Model B/C production claim is made.
-- `v0.4.0_12` is the current source-only Model B experiment harness. It starts three exact
-  reference candidates on distinct warm ports `9990–9992`, routes probes sequentially via
-  only one selected dedicated rule `19128–19130` at a time, measures RSS/latency and tests
-  independent stop plus controlled worker death. It is not owner-live accepted yet.
+- `v0.4.0_12` published the experiment-only Model B harness. The first owner launch did
+  not reach worker startup: the appliance had healthy `ipfw`/`ipdivert`, enabled IPFW,
+  executable runtime binaries, absent rules `19128–19130` and free ports `9990–9992`, yet
+  adapter `preflight()` returned status 1.
+- Owner `sh -x` evidence localized the `_12` blocker to the clean final port check. The
+  negative predicate `port_in_use` correctly returned 1 for free port `9992`, and because
+  `preflight()` had no explicit success return after the loop, that expected status leaked
+  out as the function result. No Model B warm worker was launched, so `_12` provides no
+  coexistence acceptance evidence.
+- `v0.4.0_13` is the corrective source candidate: `preflight()` explicitly returns 0 after
+  all rule/port checks remain clean, while occupied rule/port and missing prerequisite
+  failures stay unchanged. A real-shell regression exercises the adapter clean path and
+  both conflict paths.
 
 ==================================================
 MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`
@@ -154,15 +166,15 @@ Previous `_10` gap evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md`.
 
 ==================================================
-MODEL B `_12` SOURCE EXPERIMENT — LIVE PENDING
+MODEL B `_12` EXPERIMENT — `_13` PREFLIGHT CORRECTIVE PENDING LIVE
 ==================================================
 
-The `_12` harness is deliberately separate from normal Strategy Lab execution. It consumes
-`job.TtZeaH` as the cold reference, requires an identical current `ResourceInventory`, and
-selects a repeated blob-free PASS, a builtin FAIL and an external `-d8` FAIL from the exact
-retained `CandidateSpec` evidence.
+The Model B harness remains deliberately separate from normal Strategy Lab execution. It
+consumes `job.TtZeaH` as the cold reference, requires an identical current
+`ResourceInventory`, and selects a repeated blob-free PASS, a builtin FAIL and an external
+`-d8` FAIL from the exact retained `CandidateSpec` evidence.
 
-Machine-checkable source/live acceptance requires:
+Machine-checkable source/live acceptance still requires:
 
 - three unique warm worker PIDs and divert ports;
 - numeric per-worker and aggregate RSS;
@@ -177,10 +189,14 @@ Machine-checkable source/live acceptance requires:
 - semantic restoration of initial service state, config hash, runtime-argument hash and
   normal-firewall hash.
 
-Even `conclusion=accept` is an **experiment result only**. `_12` explicitly retains
-`experiment_only=true`, `parallel_probes=false` and `production_approved=false`. Model B
-cannot become production architecture until owner live evidence is reviewed and the
-adaptive-search decision is updated separately.
+The `_12` owner attempt is recorded as **BLOCKED BEFORE WORKER LAUNCH**, not as a Model B
+reject: the experiment itself was never executed. `_13` changes only the false clean-path
+preflight return status and must repeat the same experiment after publication/install.
+
+Even a future `conclusion=accept` is an **experiment result only**. The Model B report
+retains `experiment_only=true`, `parallel_probes=false` and `production_approved=false`.
+Model B cannot become production architecture until owner live evidence is reviewed and
+the adaptive-search decision is updated separately.
 
 ==================================================
 PYTHON MIGRATION OWNERSHIP
@@ -271,8 +287,9 @@ CONFIRMED DEFECTS / LIVE RECHECKS
 - **Model A measurement.** The `_10` RSS-only gap is closed on `v0.4.0_11`; owner
   `job.TtZeaH` returned `reference_collected` with all 25 samples carrying numeric RSS and
   every coverage check true.
-- **Model B coexistence.** `_12` source harness exists, but no owner-live result is recorded
-  yet. Model B/C remain experimental and unapproved.
+- **Model B coexistence preflight.** First `_12` owner attempt was blocked before worker
+  launch by a false clean-path status leak in `preflight()`. `_13` corrects that defect and
+  awaits the same owner experiment rerun; no coexistence result exists yet.
 - **Immediate stale/new-job GUI error.** Retain as open until dedicated presentation
   regression coverage.
 - **Active `Strategy Lab returned no output.` message.** Dedicated live recheck pending.
@@ -318,6 +335,7 @@ For `v0.4.0`, Scenario 1 remains the selected mandatory post-migration row and i
 containment is owner-live passed through `v0.4.0_8`; `_33` adaptive validation has its
 change-specific owner-live PASS on `v0.4.0_9`. Rows 2–18 remain open regression coverage
 without a formal row PASS. `v0.4.0_11` supplies the accepted Model A cold reference.
-`v0.4.0_12` is only the current source candidate for the next Model B coexistence
-experiment; it does not alter the stable v0.4.0 release-gate result and does not approve a
-warm runtime model.
+`v0.4.0_12` is the published Model B experiment candidate whose first owner run was
+blocked before worker launch by the clean-preflight defect. `v0.4.0_13` is the corrective
+source candidate for repeating that same experiment; neither candidate alters the stable
+v0.4.0 release-gate result or approves a production warm runtime model.
