@@ -27,7 +27,16 @@ case "${ACTION}" in
     85)
         [ -f "${RESULT_RUNNER}" ] || exit 70
         [ -x "${PYTHON_LAUNCHER}" ] || exit 70
-        /bin/sh "${RESULT_RUNNER}" shortlist "${JOB_ID}" || exit 70
+        set +e
+        /bin/sh "${RESULT_RUNNER}" shortlist "${JOB_ID}"
+        result_status=$?
+        set -e
+        case "${result_status}" in
+            0) ;;
+            124) exit 124 ;;
+            125) exit 125 ;;
+            *) exit 70 ;;
+        esac
         job_dir="${JOBS_DIR}/${JOB_ID}"
         stability="${job_dir}/stability.json"
         shortlist="${job_dir}/shortlist.json"

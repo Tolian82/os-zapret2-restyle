@@ -11,6 +11,7 @@ RELEASE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-08-v0.3.3_27-sc
 ADAPTIVE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md"
 TIMEOUT_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-09-v0.4.0_6-stage60-timeout.md"
 LATE_STAGE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_7-late-stage-pass.md"
+TIMEOUT_CLOSEOUT_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_8-timeout-containment-pass.md"
 LIVE_GATE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
@@ -18,7 +19,8 @@ MAKEFILE="${ROOT_DIR}/Makefile"
 for file in \
     "${MATRIX}" "${THIRD_AUDIT}" "${CLOSURE}" "${STATE}" "${INDEX}" \
     "${RELEASE_EVIDENCE}" "${ADAPTIVE_EVIDENCE}" "${TIMEOUT_EVIDENCE}" \
-    "${LATE_STAGE_EVIDENCE}" "${LIVE_GATE_DECISION}" "${VERSION_FILE}" "${MAKEFILE}"
+    "${LATE_STAGE_EVIDENCE}" "${TIMEOUT_CLOSEOUT_EVIDENCE}" \
+    "${LIVE_GATE_DECISION}" "${VERSION_FILE}" "${MAKEFILE}"
 do
     [ -s "${file}" ] || {
         echo "FAIL: missing Strategy Lab live-gate record: ${file}" >&2
@@ -33,19 +35,18 @@ case "${revision}" in
 esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 
-# The active current-source contract belongs to the current branch. Historical source
-# revisions retain their own immutable copy of this script, so current CI does not need
-# alternate branches for every superseded live-state fixture.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
+# The live matrix records the latest owner evidence and active source candidate without
+# converting unrelated rows into PASS.
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
 grep -Fq 'AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md' "${MATRIX}"
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_7.pkg`' "${MATRIX}"
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_7.pkg`' "${MATRIX}"
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_8.pkg`' "${MATRIX}"
+grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_8.pkg`' "${MATRIX}"
 grep -Fq "Current adaptive-search source candidate: \`${candidate}\`" "${MATRIX}"
-grep -Fq 'Latest owner-tested Standard job: `job.RFVs75`' "${MATRIX}"
-grep -Fq 'Latest owner-tested diagnostic job: `job.QbUuYO`' "${MATRIX}"
+grep -Fq 'Latest owner-tested Standard job: `job.FgjRCR`' "${MATRIX}"
+grep -Fq 'Latest owner-tested diagnostic job: `job.pv2Q09`' "${MATRIX}"
 grep -Fq 'Latest blocked-domain target: `telegram.org`' "${MATRIX}"
-grep -Fq 'docs/verification/evidence/2026-08-10-v0.4.0_7-late-stage-pass.md' "${MATRIX}"
+grep -Fq 'docs/verification/evidence/2026-08-10-v0.4.0_8-timeout-containment-pass.md' "${MATRIX}"
 
 scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /PASS ON `_27` — v0.4.0 mandatory row/ {n++} END {print n+0}' "${MATRIX}")
 [ "${scenario_one}" -eq 1 ] || {
@@ -78,6 +79,14 @@ grep -Fq 'Stage 85: 0.203 s, but `operation_timeout_seconds=null`' "${LATE_STAGE
 grep -Fq 'Stage 90 restoration: 6.945 s, also with `operation_timeout_seconds=null`' "${LATE_STAGE_EVIDENCE}"
 grep -Fq 'only the normal rule `19000`; no' "${LATE_STAGE_EVIDENCE}"
 
+grep -Fq 'Standard — `job.FgjRCR`' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
+grep -Fq 'Extended — `job.pv2Q09`' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
+grep -Fq 'Stage 60: 0 working candidates, 16 candidates checked' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
+grep -Fq 'Stage 85: PASS with an empty final shortlist' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
+grep -Fq 'Stage 90: PASS' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
+grep -Fq 'Stage 99: PASS with terminal outcome `NO_CANDIDATE`' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
+grep -Fq 'no late-stage timeout was reported' "${TIMEOUT_CLOSEOUT_EVIDENCE}"
+
 grep -Fq 'It is not an' "${LIVE_GATE_DECISION}"
 grep -Fq 'all-or-nothing release checklist.' "${LIVE_GATE_DECISION}"
 if grep -Fq 'Stable release preparation and pkg-repository promotion remain blocked until every' "${MATRIX}"; then
@@ -85,16 +94,13 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
     exit 1
 fi
 
-# Current source must point forward from the latest owner-tested candidate. This check is
-# intentionally metadata-driven so the next package revision cannot silently leave the
-# canonical matrix behind.
 [ "${version}" = '0.4.0' ] || {
     echo "FAIL: unexpected active Strategy Lab source version ${version}" >&2
     exit 1
 }
-[ "${revision}" -ge 8 ] || {
-    echo "FAIL: late-stage containment source revision must be at least 8" >&2
+[ "${revision}" -ge 9 ] || {
+    echo "FAIL: adaptive-validation source revision must be at least 9" >&2
     exit 1
 }
 
-echo "PASS: _27 remains the v0.4.0 release row, _28 keeps focused owner evidence, _7 closes the observed Stage-60 timeout, ${candidate} is the current late-stage source candidate, and rows 2-18 remain regression backlog"
+echo "PASS: _27 remains the v0.4.0 release row, _28 keeps focused owner evidence, _8 closes observed _32 timeout containment, ${candidate} is the current _33 source candidate, and rows 2-18 remain regression backlog"
