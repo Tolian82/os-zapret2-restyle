@@ -182,8 +182,8 @@ grep -Fq 'scripts/test-freebsd15-package-ci' "${CI}" ||
     fail 'integration-only package verification no longer forces the FreeBSD 15 PR build'
 
 # Current live/source selection must agree across the canonical live matrix and project
-# state while retaining `_16` as the accepted published/owner-tested experiment baseline.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_16` OWNER-LIVE COEXISTENCE ACCEPT (EXPERIMENT ONLY); `_17` FAILED-READINESS FAIL-FAST SOURCE CORRECTIVE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
+# state: `_17` is published while `_16` remains the latest owner-tested experiment baseline.
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_16` OWNER-LIVE COEXISTENCE ACCEPT (EXPERIMENT ONLY); `_17` FAILED-READINESS FAIL-FAST PUBLISHED; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
     fail 'unexpected Strategy Lab live-matrix state'
 grep -Fq '**PASS ON `_27` — v0.4.0 mandatory row**' "${MATRIX}" ||
     fail 'release-selected live matrix does not retain the v0.4.0 mandatory Scenario 1 PASS'
@@ -195,14 +195,14 @@ grep -Fq '2026-08-10-v0.4.0_7-late-stage-pass.md' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_7 timeout-hierarchy evidence'
 grep -Fq '2026-08-10-v0.4.0_8-timeout-containment-pass.md' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_8 timeout-containment closeout'
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_16.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not retain published _16'
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_17.pkg`' "${MATRIX}" ||
+    fail 'live matrix does not select published _17'
 grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_16.pkg`' "${MATRIX}" ||
     fail 'live matrix does not retain owner-tested _16'
 grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}" ||
     fail 'live matrix does not select the current source candidate'
-grep -Fq 'Current source purpose: `_17` failed-readiness fail-fast corrective; CI/publication pending' "${MATRIX}" ||
-    fail 'live matrix does not describe the _17 source corrective'
+grep -Fq 'Current source purpose: `_17` failed-readiness fail-fast corrective; published testing prerelease, owner installation pending' "${MATRIX}" ||
+    fail 'live matrix does not describe the published _17 corrective'
 grep -Fq 'MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`' "${MATRIX}" ||
     fail 'live matrix does not expose the accepted Model A cold reference'
 grep -Fq 'MODEL B `_16` OWNER-LIVE COEXISTENCE ACCEPT — EXPERIMENT ONLY' "${MATRIX}" ||
@@ -212,8 +212,8 @@ grep -Fq 'Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)' "${MA
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}" ||
     fail 'live matrix does not require the FreeBSD 15 ABI'
 
-grep -Fq 'Latest published testing prerelease: `v0.4.0_16` / `os-zapret2-restyle-0.4.0_16.pkg`' "${PROJECT_STATE}" ||
-    fail 'project state does not retain published _16'
+grep -Fq 'Latest published testing prerelease: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`' "${PROJECT_STATE}" ||
+    fail 'project state does not select published _17'
 grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_16` / `os-zapret2-restyle-0.4.0_16.pkg`' "${PROJECT_STATE}" ||
     fail 'project state does not retain owner-tested _16'
 grep -Fq "Current source candidate: \`${candidate}\`" "${PROJECT_STATE}" ||
@@ -226,8 +226,8 @@ grep -Fq 'Model A experiment gate: **REFERENCE COLLECTED on `v0.4.0_11` / `job.T
     fail 'project state does not retain the accepted Model A reference gate'
 grep -Fq 'Model B experiment gate: **`v0.4.0_16` OWNER-LIVE COEXISTENCE ACCEPT; EXPERIMENT ONLY; `production_approved=false`**' "${PROJECT_STATE}" ||
     fail 'project state does not retain the Model B owner-live accept gate'
-grep -Fq 'Current phase: **Model B `_16` owner-live coexistence ACCEPT; `_17` failed-readiness fail-fast corrective implemented in source and pending CI/publication**' "${PROJECT_STATE}" ||
-    fail 'project state does not select the _17 failed-readiness source corrective'
+grep -Fq 'Current phase: **Model B `_16` owner-live coexistence ACCEPT; `_17` failed-readiness fail-fast corrective qualified and published as testing prerelease; owner installation pending**' "${PROJECT_STATE}" ||
+    fail 'project state does not record the published _17 phase'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI and Python 3.13 Strategy Lab contracts retain the accepted Model A/_16 live baseline while ${candidate} is the separate failed-readiness source corrective"
+printf '%s\n' "PASS: FreeBSD 15 package CI and Python 3.13 Strategy Lab contracts retain the accepted Model A/_16 live baseline while ${candidate} is the published failed-readiness corrective awaiting owner installation"

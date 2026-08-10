@@ -55,15 +55,15 @@ case "${revision}" in
 esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 
-# The canonical ledger retains the accepted `_16` owner-live baseline while selecting the
-# current source candidate independently until `_17` is qualified and published.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_16` OWNER-LIVE COEXISTENCE ACCEPT (EXPERIMENT ONLY); `_17` FAILED-READINESS FAIL-FAST SOURCE CORRECTIVE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
+# The canonical ledger retains the accepted `_16` owner-live baseline while `_17` is now
+# the qualified and published testing candidate awaiting owner installation.
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_16` OWNER-LIVE COEXISTENCE ACCEPT (EXPERIMENT ONLY); `_17` FAILED-READINESS FAIL-FAST PUBLISHED; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
 grep -Fq 'AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md' "${MATRIX}"
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_16.pkg`' "${MATRIX}"
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_17.pkg`' "${MATRIX}"
 grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_16.pkg`' "${MATRIX}"
 grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}"
-grep -Fq 'Current source purpose: `_17` failed-readiness fail-fast corrective; CI/publication pending' "${MATRIX}"
+grep -Fq 'Current source purpose: `_17` failed-readiness fail-fast corrective; published testing prerelease, owner installation pending' "${MATRIX}"
 grep -Fq 'Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)' "${MATRIX}"
@@ -146,7 +146,7 @@ grep -Fq 'still does not approve Model B/C' "${MODEL_A_PATCH}"
 grep -Fq 'model-a summarize' "${MODEL_A_TEST}"
 
 # Model B remains experimental. Historical reject/corrective evidence and the accepted
-# `_16` live baseline are retained while `_17` is qualified as a distinct source corrective.
+# `_16` live baseline are retained while `_17` is the qualified published corrective.
 grep -Fq 'Model B warm-worker coexistence experiment harness' "${MODEL_B_PATCH}"
 grep -Fq '9990' "${MODEL_B_PATCH}"
 grep -Fq '19128' "${MODEL_B_PATCH}"
@@ -177,8 +177,8 @@ grep -Fq 'no route-add, probe, independent-stop, survivor check, controlled-deat
 grep -Fq 'PASS: Model B failed pool readiness rejects immediately, skips probes/stop/death, and still requests bounded cleanup' "${MODEL_B_FAILFAST_TEST}"
 
 grep -Fq 'Model B experiment gate: **`v0.4.0_16` OWNER-LIVE COEXISTENCE ACCEPT; EXPERIMENT ONLY; `production_approved=false`**' "${STATE}"
-grep -Fq 'Current phase: **Model B `_16` owner-live coexistence ACCEPT; `_17` failed-readiness fail-fast corrective implemented in source and pending CI/publication**' "${STATE}"
-grep -Fq 'Latest published testing prerelease: `v0.4.0_16` / `os-zapret2-restyle-0.4.0_16.pkg`' "${STATE}"
+grep -Fq 'Current phase: **Model B `_16` owner-live coexistence ACCEPT; `_17` failed-readiness fail-fast corrective qualified and published as testing prerelease; owner installation pending**' "${STATE}"
+grep -Fq 'Latest published testing prerelease: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`' "${STATE}"
 grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_16` / `os-zapret2-restyle-0.4.0_16.pkg`' "${STATE}"
 grep -Fq "Current source candidate: \`${candidate}\`" "${STATE}"
 
@@ -198,4 +198,4 @@ fi
     exit 1
 }
 
-echo "PASS: _27/_28/_32/_33 and Model A/_16 live evidence remain retained, _16 stays published/owner-tested, ${candidate} is the separate failed-readiness source corrective, and rows 2-18 remain regression backlog"
+echo "PASS: _27/_28/_32/_33 and Model A/_16 live evidence remain retained, _17 is published, _16 remains owner-tested, ${candidate} is the failed-readiness corrective, and rows 2-18 remain regression backlog"

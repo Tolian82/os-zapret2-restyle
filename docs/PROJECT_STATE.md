@@ -25,14 +25,14 @@ QUICK CONTEXT
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_1.pkg`
-Latest published testing prerelease: `v0.4.0_16` / `os-zapret2-restyle-0.4.0_16.pkg`
+Latest published testing prerelease: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`
 Latest owner-tested testing candidate: `v0.4.0_16` / `os-zapret2-restyle-0.4.0_16.pkg`
 Current source line: `VERSION=0.4.0`
 Current package revision: `PLUGIN_REVISION=17`
 Current source candidate: `os-zapret2-restyle-0.4.0_17.pkg`
 Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Model B `_16` owner-live coexistence ACCEPT; `_17` failed-readiness fail-fast corrective implemented in source and pending CI/publication**
+Current phase: **Model B `_16` owner-live coexistence ACCEPT; `_17` failed-readiness fail-fast corrective qualified and published as testing prerelease; owner installation pending**
 Current source overlay: **`_17` preserves the accepted `_16` ready-pool path and rejects immediately after `all_workers_ready=false`, before any route/probe/stop/death work, while retaining bounded cleanup/restoration**
 Revision note: **`_15` remains intentionally unclaimed by this source line because a stale concurrent `_15` branch exists; no `_15` package/release or live result is recorded here**
 v0.4.0 release gate: **COMPLETE — published and installed by the owner**
@@ -140,7 +140,8 @@ Approved and implemented progression:
 - `0.4.0_17` — closes the separate failed-readiness control defect proven by `_13`: once
   the warm pool reports any non-ready worker, Model B records the failed slots and rejects
   before route/probe/independent-stop/controlled-death work. Existing cleanup and semantic
-  restoration ownership remain unchanged.
+  restoration ownership remain unchanged. Canonical CI, FreeBSD 15 package inspection and
+  testing-prerelease publication are complete.
 
 Warm runtime selection remains evidence-gated by the A/B/C experiment plan. Model B is a
 measurement harness only. No Model B/C worker, dispatcher, warm preload or parallel
@@ -291,7 +292,8 @@ Current Model B control corrective:
    stop/death work, causing avoidable timeouts and allowing downstream `kill-owned` failure
    to obscure the first readiness failure. `_17` source-corrects that exact branch with an
    immediate reject plus common cleanup; focused regression proves the downstream actions
-   are skipped. CI/FreeBSD 15 qualification and testing-prerelease publication are pending.
+   are skipped. CI/FreeBSD 15 qualification and testing-prerelease publication are complete;
+   owner installation is pending.
 
 Other product/regression observations remain separate backlog unless selected by the
 risk-based live gate:
@@ -318,26 +320,25 @@ post-migration live row remains PASS on `_27`, `_28` retains its focused adaptiv
 PASS, `_32` retains its timeout-containment owner PASS through `_8`, and `_33` retains its
 change-specific owner-live PASS on `_9`.
 
-`v0.4.0_11` remains the accepted Model A cold reference. `v0.4.0_16` remains the latest
-published and owner-tested testing prerelease and its experiment-only Model B rerun returns
-`accept` with complete restoration. Current source candidate is `_17`, limited to the
-failed-readiness control boundary. Model B still explicitly records
-`production_approved=false`; no warm-worker production architecture is approved. Revision
-`_15` remains unclaimed by this source line.
+`v0.4.0_11` remains the accepted Model A cold reference. `v0.4.0_17` is the latest
+published testing prerelease. `v0.4.0_16` remains the latest owner-tested candidate and its
+experiment-only Model B rerun returns `accept` with complete restoration. Current source
+candidate is `_17`, limited to the failed-readiness control boundary. Model B still
+explicitly records `production_approved=false`; no warm-worker production architecture is
+approved. Revision `_15` remains unclaimed by this source line.
 
 ==================================================
 NEXT ACTION
 ==================================================
 
-1. Qualify `os-zapret2-restyle-0.4.0_17.pkg` through canonical CI and FreeBSD 15 package
-   inspection, including the new focused failed-readiness regression.
-2. Publish `_17` as the next testing prerelease only after the exact package candidate is
-   green and merged.
-3. Preserve `_16` as the accepted ready-pool coexistence baseline; for `_17`, the direct
-   change-specific gate is the negative-path regression proving no downstream probe/control
-   action after failed readiness while cleanup/restoration remain intact.
-4. Keep Model B experiment-only and sequential; do not add production warm reuse, Model C,
+1. Install `os-zapret2-restyle-0.4.0_17.pkg` on the owner OPNsense appliance and verify the
+   installed package identity plus normal Zapret2 service state.
+2. Preserve `_16` as the accepted ready-pool coexistence baseline. The direct `_17`
+   change-specific gate is already covered by the focused negative-path regression proving
+   no downstream probe/control action after failed readiness while cleanup/restoration
+   remain intact; do not induce an unsafe worker failure solely to manufacture live proof.
+3. Keep Model B experiment-only and sequential; do not add production warm reuse, Model C,
    source-port dispatch, preload-policy changes or true parallel candidate probing in this
    corrective.
-5. After the control defect is qualified, continue the measurement plan with repeated
-   comparable wall-clock runs before any architecture-selection decision.
+4. Continue the measurement plan with repeated comparable wall-clock runs before any
+   architecture-selection decision.
