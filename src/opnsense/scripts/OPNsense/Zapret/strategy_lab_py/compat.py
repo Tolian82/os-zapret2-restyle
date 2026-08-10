@@ -8,6 +8,7 @@ import sys
 from collections.abc import Sequence
 
 from . import FOUNDATION_REVISION, SUPPORTED_PYTHON
+from . import adaptive_result_compat
 from . import adaptive_validation
 from . import candidate as candidate_screening
 from . import extended as extended_orchestration
@@ -152,7 +153,7 @@ def _run_extended(args: Sequence[str]) -> int:
 
 def _run_result(args: Sequence[str]) -> int:
     try:
-        return adaptive_validation.run_result(args)
+        return adaptive_result_compat.run_result(args)
     except final_result.ResultError as exc:
         _error(str(exc)); return EX_SOFTWARE
     except (RuntimeError, ValueError, request_execution.RequestError) as exc:
