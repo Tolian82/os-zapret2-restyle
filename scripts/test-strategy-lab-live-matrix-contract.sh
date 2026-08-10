@@ -19,8 +19,10 @@ MODEL_A_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_11.md"
 MODEL_A_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-a-measurement.sh"
 MODEL_B_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_12.md"
 MODEL_B_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-experiment.sh"
-MODEL_B_CORRECTIVE_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_13.md"
+MODEL_B_PREFLIGHT_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_13.md"
 MODEL_B_PREFLIGHT_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-preflight.sh"
+MODEL_B_WORKER_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_13-model-b-worker-access-reject.md"
+MODEL_B_ACCESS_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_14.md"
 LIVE_GATE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
@@ -31,8 +33,9 @@ for file in \
     "${LATE_STAGE_EVIDENCE}" "${TIMEOUT_CLOSEOUT_EVIDENCE}" \
     "${ADAPTIVE_VALIDATION_EVIDENCE}" "${MODEL_A_GAP_EVIDENCE}" \
     "${MODEL_A_REFERENCE_EVIDENCE}" "${MODEL_A_PATCH}" "${MODEL_A_TEST}" \
-    "${MODEL_B_PATCH}" "${MODEL_B_TEST}" "${MODEL_B_CORRECTIVE_PATCH}" \
-    "${MODEL_B_PREFLIGHT_TEST}" "${LIVE_GATE_DECISION}" \
+    "${MODEL_B_PATCH}" "${MODEL_B_TEST}" "${MODEL_B_PREFLIGHT_PATCH}" \
+    "${MODEL_B_PREFLIGHT_TEST}" "${MODEL_B_WORKER_EVIDENCE}" \
+    "${MODEL_B_ACCESS_PATCH}" "${LIVE_GATE_DECISION}" \
     "${VERSION_FILE}" "${MAKEFILE}"
 do
     [ -s "${file}" ] || {
@@ -48,16 +51,15 @@ case "${revision}" in
 esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 
-# The live matrix records the accepted Model A reference, the published-but-blocked Model B
-# owner attempt, and the current corrective source candidate without converting unrelated
-# rows into PASS.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_12` OWNER-LIVE BLOCKED AT CLEAN PREFLIGHT; `_13` CORRECTIVE PENDING LIVE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
+# The live matrix records the accepted Model A reference, the `_13` worker-startup reject,
+# and the current `_14` access corrective without converting unrelated rows into PASS.
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_13` OWNER-LIVE REJECT AT WORKER STARTUP; `_14` ACCESS CORRECTIVE PENDING LIVE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
 grep -Fq 'AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md' "${MATRIX}"
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_12.pkg`' "${MATRIX}"
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_12.pkg`' "${MATRIX}"
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_13.pkg`' "${MATRIX}"
+grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_13.pkg`' "${MATRIX}"
 grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}"
-grep -Fq 'Current source purpose: corrective Model B clean-preflight status fix; owner-live experiment rerun pending' "${MATRIX}"
+grep -Fq 'Current source purpose: bounded Model B post-drop hostlist traversal lease; owner-live experiment rerun pending' "${MATRIX}"
 grep -Fq 'Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)' "${MATRIX}"
@@ -66,8 +68,9 @@ grep -Fq 'docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-coll
 grep -Fq 'MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`' "${MATRIX}"
 grep -Fq '`conclusion=reference_collected`' "${MATRIX}"
 grep -Fq 'numeric RSS on all 25 samples' "${MATRIX}"
-grep -Fq 'MODEL B `_12` EXPERIMENT — `_13` PREFLIGHT CORRECTIVE PENDING LIVE' "${MATRIX}"
-grep -Fq 'BLOCKED BEFORE WORKER LAUNCH' "${MATRIX}"
+grep -Fq 'MODEL B `_13` WORKER-STARTUP REJECT — `_14` ACCESS CORRECTIVE PENDING LIVE' "${MATRIX}"
+grep -Fq '`pid=null`, `process_identity=false`, `socket_ready=false`, `rss_kb=null`' "${MATRIX}"
+grep -Fq 'failed-readiness fail-fast defect' "${MATRIX}"
 grep -Fq '`experiment_only=true`, `parallel_probes=false` and `production_approved=false`' "${MATRIX}"
 
 scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /PASS ON `_27` — v0.4.0 mandatory row/ {n++} END {print n+0}' "${MATRIX}")
@@ -131,18 +134,26 @@ grep -Fq '`rss_kb=12345`' "${MODEL_A_PATCH}"
 grep -Fq 'still does not approve Model B/C' "${MODEL_A_PATCH}"
 grep -Fq 'model-a summarize' "${MODEL_A_TEST}"
 
-# Model B stays experimental: `_12` reached owner live preflight only; `_13` corrects that
-# source defect and must repeat the same owner experiment before any coexistence decision.
+# Model B stays experimental. `_13` proves preflight is fixed but worker startup is not;
+# `_14` applies only the bounded post-drop traversal correction.
 grep -Fq 'Model B warm-worker coexistence experiment harness' "${MODEL_B_PATCH}"
 grep -Fq '9990' "${MODEL_B_PATCH}"
 grep -Fq '19128' "${MODEL_B_PATCH}"
 grep -Fq '`production_approved=false`' "${MODEL_B_PATCH}"
 grep -Fq 'PASS: Model B experiment keeps three warm workers isolated' "${MODEL_B_TEST}"
-grep -Fq 'Model B clean-preflight corrective' "${MODEL_B_CORRECTIVE_PATCH}"
-grep -Fq 'explicit `return 0`' "${MODEL_B_CORRECTIVE_PATCH}"
+grep -Fq 'Model B clean-preflight corrective' "${MODEL_B_PREFLIGHT_PATCH}"
+grep -Fq 'explicit `return 0`' "${MODEL_B_PREFLIGHT_PATCH}"
 grep -Fq 'PASS: Model B preflight returns success when all dedicated rules/ports are free' "${MODEL_B_PREFLIGHT_TEST}"
-grep -Fq 'Model B experiment gate: **`v0.4.0_12` OWNER-LIVE BLOCKED BEFORE WORKER LAUNCH; `v0.4.0_13` CORRECTIVE PENDING LIVE**' "${STATE}"
-grep -Fq 'Current phase: **Model B `_12` owner-live preflight defect identified; `_13` corrective source candidate pending CI/publication/live rerun**' "${STATE}"
+grep -Fq 'Candidate: `os-zapret2-restyle-0.4.0_13.pkg`' "${MODEL_B_WORKER_EVIDENCE}"
+grep -Fq '`all_workers_ready=false`' "${MODEL_B_WORKER_EVIDENCE}"
+grep -Fq '`Model B system adapter kill-owned failed`' "${MODEL_B_WORKER_EVIDENCE}"
+grep -Fq '`restoration.verified=true`' "${MODEL_B_WORKER_EVIDENCE}"
+grep -Fq 'bounded-access design' "${MODEL_B_WORKER_EVIDENCE}"
+grep -Fq 'Model B post-drop worker access corrective' "${MODEL_B_ACCESS_PATCH}"
+grep -Fq '`0711`' "${MODEL_B_ACCESS_PATCH}"
+grep -Fq 'restore the retained Model B root to private `0700`' "${MODEL_B_ACCESS_PATCH}"
+grep -Fq 'Model B experiment gate: **`v0.4.0_13` OWNER-LIVE REJECT AT WORKER STARTUP; `v0.4.0_14` ACCESS CORRECTIVE PENDING LIVE**' "${STATE}"
+grep -Fq 'Current phase: **Model B `_13` reached worker startup and rejected with no resident workers; `_14` post-drop hostlist traversal corrective pending CI/publication/live rerun**' "${STATE}"
 
 grep -Fq 'It is not an' "${LIVE_GATE_DECISION}"
 grep -Fq 'all-or-nothing release checklist.' "${LIVE_GATE_DECISION}"
@@ -155,9 +166,9 @@ fi
     echo "FAIL: unexpected active Strategy Lab source version ${version}" >&2
     exit 1
 }
-[ "${revision}" -ge 13 ] || {
-    echo 'FAIL: Model B clean-preflight corrective revision must be at least 13' >&2
+[ "${revision}" -ge 14 ] || {
+    echo 'FAIL: Model B worker-access corrective revision must be at least 14' >&2
     exit 1
 }
 
-echo "PASS: _27/_28/_32/_33 evidence is retained, Model A remains accepted on _11, _12 owner-live preflight is truthfully blocked, ${candidate} is the corrective source candidate, and rows 2-18 remain regression backlog"
+echo "PASS: _27/_28/_32/_33 evidence is retained, Model A remains accepted on _11, _13 worker-startup reject is recorded, ${candidate} is the bounded-access corrective source candidate, and rows 2-18 remain regression backlog"
