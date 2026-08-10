@@ -5,6 +5,7 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 CI="${ROOT_DIR}/.github/workflows/ci.yml"
 RELEASE="${ROOT_DIR}/.github/workflows/release.yml"
 MATRIX="${ROOT_DIR}/docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md"
+PROJECT_STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 BUILD_PKG="${ROOT_DIR}/scripts/build-pkg.sh"
 INTEGRATION="${ROOT_DIR}/scripts/test-strategy-lab-third-audit-integration-contract.sh"
 VERSION_FILE="${ROOT_DIR}/VERSION"
@@ -30,6 +31,7 @@ SEARCH_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/sear
 EXTENDED_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/extended.py"
 LATE_CONTAINMENT_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/late_containment.py"
 ADAPTIVE_VALIDATION_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_validation.py"
+ADAPTIVE_RESULT_COMPAT_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_result_compat.py"
 CANDIDATE_ADAPTER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_adapter.sh"
 
 fail()
@@ -39,14 +41,14 @@ fail()
 }
 
 for file in \
-    "${CI}" "${RELEASE}" "${MATRIX}" "${BUILD_PKG}" "${INTEGRATION}" \
+    "${CI}" "${RELEASE}" "${MATRIX}" "${PROJECT_STATE}" "${BUILD_PKG}" "${INTEGRATION}" \
     "${VERSION_FILE}" "${MAKEFILE}" \
     "${PATCH4_TEST}" "${PATCH5_TEST}" "${PATCH6_TEST}" "${PATCH29_TEST}" \
     "${PATCH30_TEST}" "${PATCH31_TEST}" "${PATCH32_TEST}" "${PATCH33_TEST}" \
     "${REQUEST_PY}" "${PROBE_PY}" "${ENDPOINT_EPOCH_PY}" "${TELEMETRY_PY}" \
     "${RESOURCES_PY}" "${CANDIDATE_SPEC_PY}" "${CANDIDATE_PY}" "${FAMILY_PY}" \
     "${SEARCH_GRAPH_PY}" "${SEARCH_PY}" "${EXTENDED_PY}" "${LATE_CONTAINMENT_PY}" \
-    "${ADAPTIVE_VALIDATION_PY}" "${CANDIDATE_ADAPTER}"
+    "${ADAPTIVE_VALIDATION_PY}" "${ADAPTIVE_RESULT_COMPAT_PY}" "${CANDIDATE_ADAPTER}"
 do
     [ -s "${file}" ] || fail "required file is missing: ${file}"
 done
@@ -121,8 +123,9 @@ grep -Fq '.arch == "freebsd:15:x86:64"' "${CI}" ||
 grep -Fq '.deps.python313.origin == "lang/python313"' "${CI}" ||
     fail 'package inspection does not enforce the python313 dependency origin'
 
-# Existing explicit package-file checks remain authoritative for the migration modules;
-# `_32`/`_33` additionally rely on the package builder's complete-tree staging invariant.
+# Existing explicit package-file checks remain authoritative for migration modules. The
+# package builder stages the complete OPNsense tree, while the FreeBSD continuity test
+# imports and executes the `_33` modules before the package is built.
 for installed in \
     strategy_lab_py/state.py \
     strategy_lab_py/orchestrator.py \
@@ -151,16 +154,12 @@ grep -Fq "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy
     "${ROOT_DIR}/scripts/test-strategy-lab-corrective-matrix.sh" ||
     fail 'canonical Strategy Lab matrix no longer discovers focused regressions'
 
-# Current live/source selection. Historical revisions validate against immutable source
-# copies; current CI tracks the latest owner-tested and current source candidates.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
-    fail 'unexpected current Strategy Lab live-matrix state'
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_8.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not preserve the latest published _8 candidate'
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_8.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not preserve the latest owner-tested _8 candidate'
-grep -Fq "Current adaptive-search source candidate: \`${candidate}\`" "${MATRIX}" ||
-    fail 'live matrix does not select the current source candidate'
+# Preserve the canonical historical live matrix while using PROJECT_STATE for the current
+# already-observed `_8` live boundary and in-flight `_9` source candidate. The matrix is
+# expanded with the next owner evidence bundle rather than being used as a source-build
+# identity file.
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
+    fail 'unexpected Strategy Lab live-matrix baseline'
 grep -Fq '**PASS ON `_27` — v0.4.0 mandatory row**' "${MATRIX}" ||
     fail 'release-selected live matrix does not retain the v0.4.0 mandatory Scenario 1 PASS'
 grep -Fq 'ADAPTIVE-SEARCH OWNER TEST — `_28`' "${MATRIX}" ||
@@ -168,11 +167,18 @@ grep -Fq 'ADAPTIVE-SEARCH OWNER TEST — `_28`' "${MATRIX}" ||
 grep -Fq 'TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_6`' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_6 timeout-hierarchy evidence'
 grep -Fq 'TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_7`' "${MATRIX}" ||
-    fail 'live matrix does not record the v0.4.0_7 Stage-60 completion evidence'
-grep -Fq 'TIMEOUT-HIERARCHY OWNER TEST — `v0.4.0_8`' "${MATRIX}" ||
-    fail 'live matrix does not record the v0.4.0_8 late-stage completion evidence'
+    fail 'live matrix does not retain the v0.4.0_7 timeout-hierarchy evidence'
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}" ||
     fail 'live matrix does not require the FreeBSD 15 ABI'
 
+grep -Fq 'Latest published testing prerelease: `v0.4.0_8` / `os-zapret2-restyle-0.4.0_8.pkg`' "${PROJECT_STATE}" ||
+    fail 'project state does not preserve the published _8 candidate'
+grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_8` / `os-zapret2-restyle-0.4.0_8.pkg`' "${PROJECT_STATE}" ||
+    fail 'project state does not preserve the owner-tested _8 candidate'
+grep -Fq "Current source candidate: \`${candidate}\`" "${PROJECT_STATE}" ||
+    fail 'project state does not select the current source candidate'
+grep -Fq '`_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**' "${PROJECT_STATE}" ||
+    fail 'project state does not close the owner-live _32 boundary'
+
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, _32 containment, _33 adaptive validation, and current live-candidate selection are qualified for ${candidate}"
+printf '%s\n' "PASS: FreeBSD 15 package CI, Python 3.13 Strategy Lab layers, _32 containment, _33 adaptive validation, and current project-state selection are qualified for ${candidate}"
