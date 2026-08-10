@@ -113,9 +113,12 @@ runtime_snapshot()
     identity=false
     socket=false
     command=''
+    rss_kb=''
     if [ -n "${pid}" ] && strategy_lab_candidate_pid_identity "${pid}"; then
         identity=true
         command=$(strategy_lab_candidate_command "${pid}")
+        rss_kb=$("${STRATEGY_LAB_PS_BIN}" -p "${pid}" -o rss= 2>/dev/null | awk 'NF { print $1; exit }' || true)
+        case "${rss_kb}" in ''|*[!0-9]*) rss_kb='' ;; esac
     fi
     strategy_lab_candidate_divert_port_in_use && socket=true
     strategy_lab_require_jq
@@ -123,6 +126,7 @@ runtime_snapshot()
         --arg pid "${pid}" \
         --arg executable "${STRATEGY_LAB_DVTWS_BIN}" \
         --arg command "${command}" \
+        --arg rss_kb "${rss_kb}" \
         --argjson divert_port "${STRATEGY_LAB_DIVERT_PORT}" \
         --argjson process_identity "${identity}" \
         --argjson socket_ready "${socket}" '
@@ -132,7 +136,8 @@ runtime_snapshot()
           command:$command,
           divert_port:$divert_port,
           process_identity:$process_identity,
-          socket_ready:$socket_ready
+          socket_ready:$socket_ready,
+          rss_kb:(if $rss_kb=="" then null else ($rss_kb|tonumber) end)
         }'
 }
 
