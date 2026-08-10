@@ -28,12 +28,12 @@ Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_
 Latest published testing prerelease: `v0.4.0_16` / `os-zapret2-restyle-0.4.0_16.pkg`
 Latest owner-tested testing candidate: `v0.4.0_16` / `os-zapret2-restyle-0.4.0_16.pkg`
 Current source line: `VERSION=0.4.0`
-Current package revision: `PLUGIN_REVISION=16`
-Current source candidate: `os-zapret2-restyle-0.4.0_16.pkg`
+Current package revision: `PLUGIN_REVISION=17`
+Current source candidate: `os-zapret2-restyle-0.4.0_17.pkg`
 Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Model B `_16` owner-live coexistence ACCEPT; failed-readiness fail-fast corrective is the next separate logical cycle**
-Current source overlay: **`_16` retains the bounded post-drop hostlist traversal correction and FreeBSD process-query normalization proven by the accepted owner-live Model B rerun**
+Current phase: **Model B `_16` owner-live coexistence ACCEPT; `_17` failed-readiness fail-fast corrective implemented in source and pending CI/publication**
+Current source overlay: **`_17` preserves the accepted `_16` ready-pool path and rejects immediately after `all_workers_ready=false`, before any route/probe/stop/death work, while retaining bounded cleanup/restoration**
 Revision note: **`_15` remains intentionally unclaimed by this source line because a stale concurrent `_15` branch exists; no `_15` package/release or live result is recorded here**
 v0.4.0 release gate: **COMPLETE — published and installed by the owner**
 `_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**
@@ -75,7 +75,7 @@ Model B access corrective contract:
 `docs/patches/v0.4.0_14.md`.
 
 Current source corrective contract:
-`docs/patches/v0.4.0_16.md`.
+`docs/patches/v0.4.0_17.md`.
 
 Current live-release-gate decision:
 `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
@@ -136,7 +136,11 @@ Approved and implemented progression:
 - `0.4.0_16` — retained the `_14` access lease and normalized the Strategy Lab legacy `ax`
   all-process selector at the shared FreeBSD process-query boundary so native `ps` receives
   compatible `-xww -A ...` flags. The owner-live rerun then reached final
-  `conclusion=accept` with all required Model B checks and restoration true.
+  `conclusion=accept` with all required Model B checks and restoration true;
+- `0.4.0_17` — closes the separate failed-readiness control defect proven by `_13`: once
+  the warm pool reports any non-ready worker, Model B records the failed slots and rejects
+  before route/probe/independent-stop/controlled-death work. Existing cleanup and semantic
+  restoration ownership remain unchanged.
 
 Warm runtime selection remains evidence-gated by the A/B/C experiment plan. Model B is a
 measurement harness only. No Model B/C worker, dispatcher, warm preload or parallel
@@ -256,6 +260,12 @@ Previous `_13` reject evidence:
 The owner-live `accept` closes the `_14` access and `_16` process-query live rerun gate. It
 does **not** approve Model B for production Strategy Lab use.
 
+`v0.4.0_17` leaves this accepted ready-pool path unchanged. It changes only the negative
+boundary proven by `_13`: after readiness evidence is persisted, a non-ready pool now
+records `failed_readiness.failed_slots`, marks `downstream_actions_skipped=true`, returns a
+truthful experiment reject, requests common cleanup, and never reaches route/probe/stop/
+controlled-death actions. Exact source contract: `docs/patches/v0.4.0_17.md`.
+
 ==================================================
 CONFIRMED DEFECT / REGRESSION BACKLOG
 ==================================================
@@ -275,13 +285,13 @@ Closed by the adaptive timeout/search and measurement series:
    by `_16` owner-live `conclusion=accept` with all worker readiness, identity, RSS,
    attribution, coexistence, stop/death and restoration checks true.
 
-Current separate Model B control defect:
+Current Model B control corrective:
 
-8. `_13` proves that when `all_workers_ready=false` the harness continues into
-   route/probe/stop/death work, causing avoidable timeouts and allowing downstream
-   `kill-owned` failure to obscure the first readiness failure. The successful `_16` path
-   does not exercise that negative branch. Correct it as the next separate logical patch
-   before any production approval.
+8. `_13` proves that when `all_workers_ready=false` the harness continued into route/probe/
+   stop/death work, causing avoidable timeouts and allowing downstream `kill-owned` failure
+   to obscure the first readiness failure. `_17` source-corrects that exact branch with an
+   immediate reject plus common cleanup; focused regression proves the downstream actions
+   are skipped. CI/FreeBSD 15 qualification and testing-prerelease publication are pending.
 
 Other product/regression observations remain separate backlog unless selected by the
 risk-based live gate:
@@ -308,9 +318,10 @@ post-migration live row remains PASS on `_27`, `_28` retains its focused adaptiv
 PASS, `_32` retains its timeout-containment owner PASS through `_8`, and `_33` retains its
 change-specific owner-live PASS on `_9`.
 
-`v0.4.0_11` remains the accepted Model A cold reference. `v0.4.0_16` is now the latest
+`v0.4.0_11` remains the accepted Model A cold reference. `v0.4.0_16` remains the latest
 published and owner-tested testing prerelease and its experiment-only Model B rerun returns
-`accept` with complete restoration. Model B still explicitly records
+`accept` with complete restoration. Current source candidate is `_17`, limited to the
+failed-readiness control boundary. Model B still explicitly records
 `production_approved=false`; no warm-worker production architecture is approved. Revision
 `_15` remains unclaimed by this source line.
 
@@ -318,14 +329,15 @@ published and owner-tested testing prerelease and its experiment-only Model B re
 NEXT ACTION
 ==================================================
 
-1. Implement the separate Model B failed-readiness fail-fast corrective: after the warm
-   pool fails `all_workers_ready`, perform no route-add/probe/independent-stop/controlled-
-   death work and proceed directly to bounded cleanup/restoration with a truthful reject.
-2. Add focused regression evidence proving no downstream probe/control action occurs after
-   failed pool readiness while the accepted `_16` success path remains unchanged.
-3. Qualify that package corrective through canonical CI and FreeBSD 15 package inspection.
+1. Qualify `os-zapret2-restyle-0.4.0_17.pkg` through canonical CI and FreeBSD 15 package
+   inspection, including the new focused failed-readiness regression.
+2. Publish `_17` as the next testing prerelease only after the exact package candidate is
+   green and merged.
+3. Preserve `_16` as the accepted ready-pool coexistence baseline; for `_17`, the direct
+   change-specific gate is the negative-path regression proving no downstream probe/control
+   action after failed readiness while cleanup/restoration remain intact.
 4. Keep Model B experiment-only and sequential; do not add production warm reuse, Model C,
-   source-port dispatch, preload-policy changes or true parallel candidate probing in the
-   fail-fast patch.
-5. After the control defect is closed, continue the measurement plan with repeated
+   source-port dispatch, preload-policy changes or true parallel candidate probing in this
+   corrective.
+5. After the control defect is qualified, continue the measurement plan with repeated
    comparable wall-clock runs before any architecture-selection decision.
