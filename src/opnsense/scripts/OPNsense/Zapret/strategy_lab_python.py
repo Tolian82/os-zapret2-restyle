@@ -8,6 +8,7 @@ from strategy_lab_py.compat import main as compat_main
 from strategy_lab_py import adaptive_validation
 from strategy_lab_py import model_b_parallel_attribution as model_b_parallel
 from strategy_lab_py import stage60_model_c as stage60_parallel
+from strategy_lab_py import stage60_source_port_lease
 
 
 def main() -> int:
@@ -22,9 +23,11 @@ def main() -> int:
         try:
             # Keep the established Stage-60 compatibility command while routing normal
             # production execution through Model C. Model B and cold Model A remain
-            # explicit/fail-closed fallbacks inside the Model-C owner.
+            # explicit/fail-closed fallbacks inside the Model-C owner. `_25` leases exact
+            # free controlled source ports independently for Model C and Model B.
             with adaptive_validation.probe_tier("discovery"):
-                return stage60_parallel.main(args[1:])
+                with stage60_source_port_lease.install():
+                    return stage60_parallel.main(args[1:])
         except ValueError as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 64
