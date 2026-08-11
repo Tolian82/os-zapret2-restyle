@@ -20,6 +20,7 @@ grep -Fq 'parallel_probes": False' "${MODULE}" || fail 'exhaustive benchmark mus
 grep -Fq 'production_approved": False' "${MODULE}" || fail 'exhaustive benchmark accidentally claims production approval'
 grep -Fq 'range(0, len(records), len(BATCH_SLOTS))' "${MODULE}" || fail 'exhaustive benchmark no longer batches the complete corpus'
 grep -Fq 'observed_ids == expected_ids' "${MODULE}" || fail 'exhaustive benchmark no longer proves exact corpus order'
+grep -Fq 'all_reference_endpoints_replayed' "${MODULE}" || fail 'exhaustive benchmark no longer proves complete endpoint replay'
 
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-model-b-exhaustive.XXXXXX")
 trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
@@ -52,11 +53,15 @@ lua.mkdir(); fake.mkdir()
 (lua / "zapret-antidpi.lua").write_text("-- antidpi\n", encoding="utf-8")
 inventory = resources.snapshot_inventory(lua, fake)
 (job / "resource-inventory.json").write_text(json.dumps(inventory.to_dict()), encoding="utf-8")
+bindings = [
+    {"index": 1, "endpoint": "blocked.test", "addresses": ["203.0.113.20"], "selected_ip": "203.0.113.20"},
+    {"index": 2, "endpoint": "web.blocked.test", "addresses": ["203.0.113.21"], "selected_ip": "203.0.113.21"},
+]
 (job / "search-epoch.json").write_text(json.dumps({
     "schema": 1,
     "epoch_id": "se1-exhaustive",
     "generation": 1,
-    "bindings": [{"index": 1, "endpoint": "blocked.test", "addresses": ["203.0.113.20"], "selected_ip": "203.0.113.20"}],
+    "bindings": bindings,
 }), encoding="utf-8")
 (job / "status.json").write_text(json.dumps({
     "job_id": job_id,
@@ -123,6 +128,8 @@ ports = {slot.name: slot.port for slot in model_b_exhaustive.BATCH_SLOTS}
 pids = {slot.name: 7000 + index for index, slot in enumerate(model_b_exhaustive.BATCH_SLOTS)}
 cleanup_calls = 0
 launch_count = 0
+route_addresses: list[str] = []
+curl_endpoints: list[str] = []
 
 def fake_adapter(action: str, *args: str, timeout: int = 15):
     global cleanup_calls, launch_count
@@ -153,8 +160,10 @@ def fake_adapter(action: str, *args: str, timeout: int = 15):
             "rss_kb": 4300 + (int(port) - 9990) * 10 if alive else None,
         }))
     if action == "route-add":
-        rule, port, _address, _wan, transport, dport = args
+        rule, port, address, _wan, transport, dport = args
         assert transport == "tcp" and dport == "443"
+        assert address in {"203.0.113.20", "203.0.113.21"}
+        route_addresses.append(address)
         active_rules[int(rule)] = int(port); counter_calls[int(rule)] = 0
         return FakeCompleted()
     if action == "route-del":
@@ -167,7 +176,9 @@ def fake_adapter(action: str, *args: str, timeout: int = 15):
     raise AssertionError((action, args))
 
 def fake_curl(endpoint: str, **kwargs):
-    assert endpoint == "blocked.test"
+    expected_ip = "203.0.113.20" if endpoint == "blocked.test" else "203.0.113.21"
+    assert kwargs.get("bound_ip") == expected_ip
+    curl_endpoints.append(endpoint)
     return request.CommandResult(
         command=["curl"], returncode=28, stdout="", stderr="timeout",
         timed_out=False, termination="completed", signal=None, duration_ms=10,
@@ -185,21 +196,35 @@ assert value["batch_size"] == 3
 assert value["experiment_only"] is True
 assert value["parallel_probes"] is False
 assert value["production_approved"] is False
+assert value["reference"]["endpoint_count"] == 2
+assert [item["endpoint"] for item in value["reference"]["bindings"]] == ["blocked.test", "web.blocked.test"]
 assert value["preliminary_accept"] is True, value
 assert value["conclusion"] == "pending_restoration"
 assert len(value["batches"]) == 2
 assert [len(batch["probes"]) for batch in value["batches"]] == [3, 2]
 assert [probe["candidate_id"] for probe in value["probes"]] == [f"candidate-{index}" for index in range(1, 6)]
+assert all(probe["endpoint_count"] == 2 for probe in value["probes"])
+assert all([item["endpoint"] for item in probe["endpoint_probes"]] == ["blocked.test", "web.blocked.test"] for probe in value["probes"])
 assert all(probe["classification"] == "fail" for probe in value["probes"])
 assert all(probe["equivalent_to_cold_search"] is True for probe in value["probes"])
+assert value["checks"]["reference_endpoint_bindings"] is True
+assert value["checks"]["all_reference_endpoints_replayed"] is True
 assert value["checks"]["corpus_complete"] is True
 assert value["checks"]["route_attribution"] is True
 assert value["checks"]["cleanup_between_batches"] is True
+assert value["timing"]["endpoint_probe_count"] == 10
 assert value["timing"]["cold_candidate_runtime_ms"] == sum(1400 + index * 10 for index in range(1, 6))
 assert value["timing"]["cold_job_total_ms"] == 12000
 assert value["comparison"]["projection_is_measured_full_job"] is False
 assert launch_count == 5
 assert cleanup_calls >= 4
+assert route_addresses.count("203.0.113.20") == 5
+assert route_addresses.count("203.0.113.21") == 5
+assert curl_endpoints == ["blocked.test", "web.blocked.test"] * 5
+for slot in model_b_exhaustive.BATCH_SLOTS:
+    hostlist = session / "workers" / slot.name / "hostlist.txt"
+    if hostlist.is_file():
+        assert hostlist.read_text(encoding="utf-8").splitlines() == ["blocked.test", "web.blocked.test"]
 
 initial = tmp / "initial.json"; final = tmp / "final.json"
 evidence = {"state": "RUNNING", "effective_config_hash": "cfg", "runtime_args_hash": "args", "normal_firewall_hash": "fw"}
@@ -213,4 +238,4 @@ assert value["production_approved"] is False
 PY
 
 sh -n "$0"
-echo 'PASS: exhaustive Model B benchmark replays a complete graph-exhausted corpus in exact order with three-worker warm batches, sequential attribution, between-batch cleanup, timing/RSS comparison, and semantic restoration'
+echo 'PASS: exhaustive Model B benchmark replays a complete graph-exhausted multi-endpoint corpus in exact order with three-worker warm batches, sequential attribution, between-batch cleanup, timing/RSS comparison, and semantic restoration'
