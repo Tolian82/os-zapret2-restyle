@@ -137,6 +137,7 @@ def _probe_endpoint(
         str(local_port),
     )
     dispatch_ms = round((time.monotonic() - dispatch_started) * 1000)
+    result: dict[str, Any] | None = None
     route_cleanup_ok = False
     try:
         before_packets, before_bytes = model_b._counter(slot.rule)
@@ -149,13 +150,13 @@ def _probe_endpoint(
         observed_local_port = int(observed_local_port_raw) if observed_local_port_raw else None
         intercepted = after_packets > before_packets
         endpoint_match = remote_ip == selected_ip
-        local_port_match = observed_local_port in {None, local_port}
+        local_port_match = observed_local_port == local_port
         classification = (
             "pass"
             if request.curl_exit(execution) == 0 and endpoint_match and intercepted and local_port_match
             else "fail"
         )
-        return {
+        result = {
             "slot": slot.name,
             "rule": slot.rule,
             "port": slot.port,
@@ -177,10 +178,18 @@ def _probe_endpoint(
         }
     finally:
         route_cleanup_ok = model_b._try_adapter("route-del", str(slot.rule))
-        # A failed route delete is surfaced through the endpoint result where possible and
-        # is also caught by the mandatory batch cleanup/final restoration path.
-        if "execution" not in locals() and not route_cleanup_ok:
-            raise ModelBParallelError("Model B parallel route cleanup failed")
+
+    if result is None:
+        raise ModelBParallelError("Model B parallel endpoint probe produced no result")
+    result["route_cleanup_ok"] = route_cleanup_ok
+    result["attribution_ok"] = bool(
+        result["source_port_selector"]
+        and result["local_port_match"]
+        and result["endpoint_match"]
+        and result["intercepted"]
+        and route_cleanup_ok
+    )
+    return result
 
 
 def _probe_candidate(
@@ -210,6 +219,8 @@ def _probe_candidate(
     ended = time.monotonic()
 
     classification = "pass" if all(item.get("classification") == "pass" for item in endpoint_probes) else "fail"
+    route_absent = model_b._try_adapter("rule-present", str(slot.rule)) is False
+    attribution_ok = all(bool(item.get("attribution_ok")) for item in endpoint_probes) and route_absent
     return {
         "slot": slot.name,
         "rule": slot.rule,
@@ -227,7 +238,8 @@ def _probe_candidate(
         "dispatch_ms": sum(int(item.get("dispatch_ms", 0)) for item in endpoint_probes),
         "probe_ms": sum(int(item.get("probe_ms", 0)) for item in endpoint_probes),
         "intercepted": all(bool(item.get("intercepted")) for item in endpoint_probes),
-        "route_cleanup_ok": all(model_b._try_adapter("rule-present", str(slot.rule)) is False for _ in [0]),
+        "route_cleanup_ok": route_absent and all(bool(item.get("route_cleanup_ok")) for item in endpoint_probes),
+        "attribution_ok": attribution_ok,
         "endpoints_sequential": True,
         "all_workers_still_ready": model_b._all_survivors_ready(slots),
         "_started": started,
@@ -391,7 +403,7 @@ def run(reference_job_id: str, output: str) -> int:
                 for endpoint_probe in probe["endpoint_probes"]:
                     endpoint_probe_values.append(int(endpoint_probe["probe_ms"]))
                 all_equivalent = all_equivalent and bool(probe["equivalent_to_cold_search"])
-                all_attributed = all_attributed and bool(probe["intercepted"]) and bool(probe["route_cleanup_ok"])
+                all_attributed = all_attributed and bool(probe["attribution_ok"])
                 all_stable = all_stable and bool(probe["all_workers_still_ready"])
                 all_endpoints_sequential = all_endpoints_sequential and bool(probe["endpoints_sequential"])
 
