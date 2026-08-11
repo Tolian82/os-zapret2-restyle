@@ -23,179 +23,167 @@ Detailed rationale, current live logs, or completed implementation internals.
 CURRENT PRIORITY
 ==================================================
 
-Strategy Lab migration is source-complete. Owner-assisted `_27` testing passes the
-release-selected Standard Scenario 1, including Stages 40/50, continued search and exact
-Stage-90 restoration.
+Strategy Lab Python migration, adaptive-search `_28`-`_33`, Model A measurement and the
+accepted Model B warm/parallel series are complete through the owner-tested production
+`v0.4.0_22` baseline.
 
 Current objective:
-**start adaptive-search `_32`: use the durable `_31` timing corpus to review and enforce
-the operation/candidate/stage/job deadline hierarchy without folding `_33` discovery or
-validation changes into the same source cycle.**
+**qualify and publish `v0.4.0_23`, which moves normal Stage 60 to one warm Model C bucket
+with deterministic source-port Lua dispatch while retaining accepted Model B and cold
+Model A as fail-closed fallbacks; then perform owner-live Model-C verification.**
 
-Adaptive-search `_28` is complete: source/CI/FreeBSD qualification and the focused
-owner-assisted `accepted=[]` Stage-60 reachability/restoration check passed on
-`v0.4.0_2`.
+Current state authority:
+`docs/PROJECT_STATE.md`.
 
-Primary plan:
-`docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
+Current patch:
+`docs/patches/v0.4.0_23.md`.
 
-Decision:
-`docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
+Current decision:
+`docs/decisions/DEC-2026-08-11-strategy-lab-model-c-production-switch.md`.
 
-Approved post-migration search redesign:
-`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and
-`docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md`.
+Primary architecture:
+`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`.
 
-Runtime/search experiment plan:
+Runtime/search verification plan:
 `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
 ==================================================
 COMPLETED STRATEGY LAB FOUNDATION
 ==================================================
 
-- [x] Initial asynchronous Strategy Lab delivery: architecture, lifecycle, network precheck, candidate runtime, family search, expansion, stability, extended protocols, circular validation, and Diagnostics activation.
-- [x] Corrective source/CI series: cancellation, stage machine, terminal truthfulness, budgets, semantic restoration, circular eligibility, target contract, integration harness, repository hygiene, third-audit corrective matrix, and subsequent FreeBSD live corrections through `_17`.
-- [x] Live stage-40 FreeBSD DNS correction verified.
-- [x] Live stage-90 restoration correction verified repeatedly.
-- [x] Final shell-era handoff recorded from owner-tested `_17` job `job.w0nXxQ`.
-- [x] Python/PHP/shell migration responsibility boundary approved and documented.
+- [x] Initial Strategy Lab architecture, lifecycle, network precheck, candidate runtime,
+  family search, expansion, stability, extended protocols, circular validation and GUI.
+- [x] Shell-era corrective series and semantic restoration hardening.
+- [x] Python 3.13 migration of state, stage ownership, request/probe parsing, candidates,
+  Stage 50/60/70/80/85 and final results.
+- [x] Live Stage-40 DNS and Stage-90 restoration corrections.
+- [x] Risk-based owner-live release-gate policy.
 
 ==================================================
-PYTHON MIGRATION SERIES
+COMPLETED ADAPTIVE-SEARCH SERIES
 ==================================================
 
-- [x] Patch 0 — documentation and handoff; freeze `_17` live boundary and confirmed defect backlog.
-- [x] Patch 1 (`_18`) — Python 3.13 packaged foundation and compatibility launcher.
-- [x] Patch 2 (`_19`) — Python job state, progress, events, and structured persistence.
-- [x] Patch 3 (`_20`) — Python stage machine, budgets, cancellation, and finalization.
-- [x] Patch 4 (`_21`) — Python finite request/probe execution and Stage-30/40 parsing.
-- [x] Patch 5 (`_22`) — Python candidate runtime and Stage-50 family screening.
-- [x] Patch 6 (`_23`) — Python expansion, stability, and extended protocols.
-- [x] Patch 7 (`_24`) — Python final result/shortlist ownership and obsolete automated-shell retirement.
-- [x] Patch 8 (`_25`) — GUI/status reconciliation and post-migration live-gate handoff.
-- [x] Corrective `_26` — Stage-50 candidate-local failure isolation; source/CI/package
-  qualified and published, live verification still pending because `_26` now stops at Stage 40.
-- [x] Corrective `_27` — widen DNS deadline to 15 seconds and enclosing Stage-40 envelope
-  to 20 seconds; source/CI merged and owner Scenario 1 live PASS.
+The post-migration adaptive-search redesign is complete. Historical cycle names `_28`-`_33`
+refer to engineering work items and must not be confused with current package revision
+suffixes.
 
-If a listed patch exceeds one logical change, split it. Do not compress the migration into a monolithic rewrite.
+- [x] `_28` — Stage-50 family acceptance no longer gates Stage-60 reachability.
+- [x] `_29` — immutable Python `CandidateSpec` and job-scoped `ResourceInventory`.
+- [x] `_30` — deterministic native Zapret2 graph with golden/resource/range coverage.
+- [x] `_31` — adaptive neighbor ordering, fixed endpoint epoch and timing telemetry.
+- [x] `_32` — deadline/budget containment corrected from measured live evidence through
+  package revisions `0.4.0_7` / `_8`.
+- [x] `_33` — lightweight discovery, fail-fast 3/3 stability and finalist cold/deep
+  validation completed through `0.4.0_9` and its owner-live evidence.
 
-Every packaged migration patch must pass applicable focused tests, normal CI, and the FreeBSD 15 package build. Testing-prerelease publication follows the owner's standing installable-patch authority without another routine confirmation.
+The old ROADMAP statement that `_32` was the next source cycle is superseded by the actual
+merged implementation/evidence chain and must not be used for current planning.
 
 ==================================================
-APPROVED ADAPTIVE-SEARCH SERIES
+COMPLETED RUNTIME MODEL SERIES
 ==================================================
 
-The 2026-08-08 design review approved a second, post-migration search-quality series.
-This does not erase the `_27` live boundary above: existing corrective findings remain
-open until replacement OPNsense evidence closes them.
+### Model A — cold reference
 
-Target authority:
-`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`.
+- [x] `v0.4.0_11` / `job.TtZeaH` accepted as the cold correctness/performance reference.
+- [x] 25 candidate samples retained with timing/RSS/restoration evidence.
 
-Experimental authority:
-`docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
+### Model B — multiple warm workers
 
-Planned source cycles:
+- [x] coexistence accepted on `_16`;
+- [x] reproducibility repeated 5/5 on `_17`;
+- [x] sequential exhaustive benchmark accepted 5/5 on `_19`;
+- [x] controlled parallel attribution corrected and accepted on `_21`;
+- [x] width-three controlled-parallel Model B integrated into real Stage 60 on `_22`;
+- [x] `_22` owner-live no-candidate, working-candidate, fallback and restoration paths
+  recorded.
 
-- [x] `_28` source — remove Stage-50 `accepted` as a hard gate for Stage-60 candidate
-  reachability while keeping accepted families first as evidence-based priority;
-- [x] `_28` live — on an explicitly published testing candidate, prove an all-rejected
-  Stage-50 result still executes Stage-60 candidates and preserves Stage-90 restoration;
-- [x] `_29` — add Python `CandidateSpec` and job-scoped installed `ResourceInventory`;
-  remove candidate resource/search policy from the shell adapter;
-- [x] `_30` — native-Zapret2 adaptive search graph, golden/reference corpus,
-  BLOB-free/built-in/inline/external resource paths, and candidate-defined output range;
-- [x] `_31` — adaptive neighbor ordering, fixed search-epoch endpoint binding, two-to-three
-  winner early stop, and per-phase timing telemetry;
-- [ ] `_32` — review every operation/candidate/stage/job deadline from measured telemetry
-  and enforce deadline containment;
-- [ ] `_33` — lightweight discovery, fail-fast 3/3 stability, and finalist cold long-GET/
-  16-KiB validation.
-
-Warm runtime is deliberately not preselected as one of these implementation facts.
-Before a warm design becomes production, compare:
-
-- A — cold one-candidate/one-process reference;
-- B — multiple isolated warm dvtws2 workers, initially with sequential probes;
-- C — one compatible warm candidate bucket with deterministic dispatcher.
-
-Required measurements include cold-result equivalence, candidate attribution,
-false PASS/FAIL, startup/readiness/probe/cleanup time, total search wall time, RSS,
-state leakage, cancellation, IPFW/divert isolation and exact restoration. Controlled
-source-port dispatch, common Lua preload, lazy buckets and true simultaneous candidate
-testing remain separate hypotheses until their individual evidence passes.
-
-QUIC is not an adaptive-search work item: retain only the existing fixed IPv4 UDP/443
-capability/precheck. The target search budget is concentrated on IPv4/TCP/TLS; IPv6
-remains capability-gated and lower priority.
+Model B remains an accepted fallback/reference after the `_23` Model C switch. Do not
+repeat the old Model B architecture benchmark unless a later change invalidates its
+assumptions.
 
 ==================================================
-CONFIRMED DEFECTS CARRIED INTO MIGRATION
+ACTIVE MODEL C CYCLE — `v0.4.0_23`
 ==================================================
 
-Closed corrective items and remaining regression/presentation backlog:
+Owner instruction selects a direct production-candidate switch rather than another
+side-by-side experiment harness.
 
-- [x] `_26` Stage-40 DNS deadline mismatch — closed by `_27` Scenario 1 live PASS.
-- [x] `_25` Stage-50 aggregate abort — closed by `_27` Stage-50 PASS and continuation
-  through Stages 60/70.
-- [ ] Fresh-job immediate `ERROR` was not reproduced on `_26`; retain until a complete
-  Scenario-1 run confirms behavior.
-- [ ] `Strategy Lab returned no output.` can appear during active work.
-- [ ] Visible GUI progress improved on `_25` but needs complete-run confirmation.
-- [ ] Patch-4 target-type/parser/failure-class corrections pass source regressions but
-  still require final live closure.
-- [ ] Terminal reload/state presentation can resurrect retained terminal work incorrectly.
-- [ ] Candidate readiness fatal-log classification can miss fatal runtime text.
-- [ ] `_26` `PARTIAL` summary wording can imply usable saved strategies when Stage 40
-  prevented the search from running; handle as a separate presentation patch.
+Source/CI tasks:
 
-Migration may remove the implementation mechanism behind an item, but the item is closed only by focused regression and required live/UI verification.
+- [x] make Model C the normal Stage-60 packaged owner;
+- [x] render up to three currently-ready `CandidateSpec` chains into one physical warm
+  `dvtws2` bucket;
+- [x] preserve exact candidate payload/range/Lua/BLOB semantics inside the shared profile;
+- [x] use `zapret-auto.lua` `condition` plus packaged client-source-port selector;
+- [x] retain three exact source-port-qualified IPFW routes to the one bucket worker;
+- [x] retain candidate parallel width <=3 and sequential endpoints inside a candidate;
+- [x] fail closed Model C -> accepted Model B -> cold Model A;
+- [x] keep Stage-60 budget/cancel/progress/planner semantics and Stage-70/80/85 ownership
+  unchanged;
+- [x] add focused Model-C regression while retaining Model-B fallback regression;
+- [ ] pass complete CI and FreeBSD 15 package qualification on the final PR head;
+- [ ] squash merge and publish the authorized `v0.4.0_23` testing prerelease.
+
+Owner-live gate after publication:
+
+- [ ] prove normal Stage 60 actually executes `C-warm-bucket-source-port-dispatch`;
+- [ ] observe one physical worker servicing a multi-candidate batch;
+- [ ] verify exact selector source-port sets and route attribution;
+- [ ] Standard no-candidate / graph-exhaustion path;
+- [ ] Standard working-candidate path and unchanged Stage-70/85 handoff;
+- [ ] Model-C -> Model-B fallback if naturally or deliberately exercised;
+- [ ] cancellation/cleanup/restoration and absence of `19128-19130` residue.
+
+Owner-live PASS promotes `_23` from source/CI-qualified production candidate to the current
+accepted Model-C baseline. A correctness/attribution/restoration failure returns the
+production recommendation to accepted Model B instead of weakening the safety contract.
 
 ==================================================
-POST-MIGRATION OWNER-ASSISTED VERIFICATION GATE
+FOLLOW-UP OPTIMIZATION BACKLOG
 ==================================================
 
-The matrix remains the canonical live regression inventory. Scenario 1 is PASS on `_27`.
-Rows below are selected for future live execution by release/change risk; they are not
-all unconditional blockers for every stable release.
+Only after `_23` owner-live correctness is established consider independent optimizations:
 
-Then verify:
+- common Lua preload versus candidate-minimal initialization;
+- BLOB loading/startup/RSS tradeoffs;
+- lazy bucket creation versus eager bucket creation;
+- width greater than three;
+- endpoint-level parallelism;
+- broader dispatcher/bucket grouping beyond the current one adaptive frontier batch.
 
-- [x] Standard blocked domain with initial Zapret2 RUNNING (`_27`, v0.4.0 mandatory row).
-- [ ] Standard blocked domain with initial Zapret2 STOPPED.
-- [ ] Extended TLS 1.2 and HTTP.
-- [ ] Extended QUIC when capability exists.
-- [ ] Generic UDP request-response path.
-- [ ] Already-accessible target.
-- [ ] No-candidate outcome.
-- [ ] Cancellation during active stages.
-- [ ] Whole-worker/stage timeout and retained partial evidence.
-- [ ] Controlled internal failure with exact restoration.
-- [ ] Circular start/stop/TTL and stale recovery.
-- [ ] Settings Apply lifecycle guards.
-- [ ] Active and terminal Diagnostics reload behavior.
-- [ ] Russian/English progress and result presentation.
-- [ ] Retention behavior.
-- [ ] Reboot/residue checks.
+Every item above is a separate experiment/patch. None is implied by `_23` acceptance.
+
+QUIC remains capability/precheck scope rather than an adaptive Stage-60 search priority.
+IPv6 remains capability-gated and lower priority.
+
+==================================================
+BROADER OWNER-ASSISTED REGRESSION BACKLOG
+==================================================
+
+The canonical matrix remains `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
+Rows are selected per change/release risk; they are not all unconditional blockers.
+
+Retained backlog includes:
+
+- initial Zapret2 STOPPED;
+- Extended TLS 1.2/HTTP and capability-gated QUIC;
+- Generic UDP;
+- already-accessible target;
+- cancellation and controlled internal failure;
+- circular start/stop/TTL/stale recovery;
+- Settings Apply guards;
+- active/terminal Diagnostics reload behavior;
+- Russian/English presentation;
+- retention and reboot/residue checks.
 
 ==================================================
 RELEASE BOUNDARY
 ==================================================
 
-Stable release preparation requires all release-selected live rows to PASS and no known
-critical lifecycle/restoration defect. It does not require every unrelated regression
-row to be manually executed. `v0.4.0` has its selected Scenario-1 live gate PASS on `_27`.
+The stable `v0.4.0 / 0.4.0_1` release cycle is complete. Current `_22` and `_23` work is a
+forward testing-candidate line and does not rewrite the immutable semantic `v0.4.0` tag.
 
-The `v0.4.0 / 0.4.0_1` release cycle is complete: release-preparation and FreeBSD 15
-checks passed, immutable tag `v0.4.0` points to the verified release commit, Release run
-17 published the package/checksum and Pages/pkg repository, and the owner installed
-`0.4.0_1` on OPNsense. Adaptive-search `_28` is complete on the published and
-owner-tested `v0.4.0_2` candidate: an all-rejected Stage 50 still executed all 14 current
-Stage-60 catalog candidates and Stage 90 restored the initial RUNNING service without
-temporary IPFW residue. `_29` added `CandidateSpec`/`ResourceInventory` and removed
-active shell-adapter policy. `_30` added the native search DAG, golden corpus, semantic
-resource eligibility and exact variable-range profiles. `_31` is source-qualified as
-unpublished `0.4.0_5`; it adds live ordering, fixed endpoint identity, three-winner
-defaults and durable timing without claiming new appliance evidence. `_32` is the next
-source cycle.
+A later stable release requires its own exact VERSION authorization, release-selected live
+gates, revision reset to `1`, release-preparation PR and full Release/Pages/pkg-repository
+pipeline. Testing prerelease `v0.4.0_23` publishes only the verified FreeBSD 15 `.pkg` asset.
