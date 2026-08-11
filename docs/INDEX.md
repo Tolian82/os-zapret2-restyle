@@ -19,19 +19,25 @@ evidence remains preserved for comparison but does not override later source/liv
 
 Read these first for current Strategy Lab work:
 
-- `docs/PROJECT_STATE.md` — current package candidate, runtime ownership, verified live
-  baseline, watch items and next action;
-- `docs/patches/v0.4.0_23.md` — current `_23` Model-C production-candidate contract;
+- `docs/PROJECT_STATE.md` — current package candidate, publication state, runtime ownership,
+  verified live baseline, watch items and next action;
+- `docs/patches/v0.4.0_23.md` — current published `_23` Model-C production-candidate contract;
 - `docs/decisions/DEC-2026-08-11-strategy-lab-model-c-production-switch.md` — owner's direct
   Model-C switch decision and Model C -> Model B -> Model A fail-closed boundary;
+- `docs/architecture/STRATEGY_LAB_MODEL_C.md` — current Model-C dispatcher/bucket runtime
+  architecture;
+- `docs/verification/evidence/2026-08-11-v0.4.0_23-publication.md` — exact `_23` main/tag,
+  package, workflow and digest publication evidence; owner-live acceptance remains pending;
+- PR #177 conversation — implementation and publication closeout for `_23`;
 - `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md` — latest
   completed owner-live baseline until `_23` appliance testing is supplied;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical owner-assisted live
   regression inventory and `_23` change-specific pending gate;
-- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — accepted A/B evidence,
-  current Model-C candidate and future optimization boundaries;
-- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — native Zapret2 graph,
-  `CandidateSpec`, `ResourceInventory`, search epoch, validation and runtime architecture;
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — stable native Zapret2 graph,
+  `CandidateSpec`, `ResourceInventory`, search epoch and validation architecture;
+- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — historical A/B experiment
+  methodology/evidence and future optimization questions; it does not override the current
+  Model-C patch/decision/architecture above;
 - `docs/architecture/STRATEGY_LAB.md` — base product/stage/lifecycle contract;
 - `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — completed Python ownership;
 - `docs/decisions/DEC-2026-08-11-strategy-lab-parallel-model-b-selection.md` — accepted
@@ -41,15 +47,20 @@ Read these first for current Strategy Lab work:
 
 ### Current `_23` boundary
 
-`v0.4.0_23` moves normal Stage 60 to `C-warm-bucket-source-port-dispatch`: up to three
-currently-ready candidates share one warm physical `dvtws2` bucket and are selected by
-exact controlled client source ports through packaged Lua orchestration. Candidate-specific
+`v0.4.0_23` is **published** from exact main commit
+`77b1beec471d161fb80584bf884e98970d4c75b3`. The verified asset is
+`os-zapret2-restyle-0.4.0_23.pkg`, size `177429` bytes, digest
+`sha256:f735f88e62fc82e5e856123f0d7c3dc26bd550b3ec0d5ab0e72bb2277dabe364`.
+Publication workflow run `31520848437` passed and deleted the temporary publication branch.
+
+Normal Stage 60 now prefers `C-warm-bucket-source-port-dispatch`: up to three currently-ready
+candidates share one warm physical `dvtws2` bucket and are selected by exact controlled
+client source ports through packaged Lua orchestration. Candidate-specific
 payload/range/Lua/BLOB semantics remain exact. Accepted `_22` Model B is the immediate
 runtime fallback/reference and cold Model A remains the final fail-closed fallback.
 
-`_23` source/CI qualification and prerelease publication do not themselves constitute
-owner-live acceptance. The latest completed appliance baseline remains `_22` until the
-owner tests the published `_23` package.
+Publication does not constitute owner-live acceptance. The latest completed appliance
+baseline remains `_22` until the owner tests the published `_23` package.
 
 ### Latest accepted `_22` live baseline
 
@@ -109,7 +120,10 @@ Key comparison points:
   `docs/verification/evidence/2026-08-11-v0.4.0_21-model-b-parallel-reproducibility.md`;
 - Model B production integration and owner-live closeout:
   `docs/patches/v0.4.0_22.md` and
-  `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`.
+  `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`;
+- Model C production-candidate publication:
+  `docs/patches/v0.4.0_23.md` and
+  `docs/verification/evidence/2026-08-11-v0.4.0_23-publication.md`.
 
 Historical evidence explains progression; it must not be treated as current package
 behavior without checking the later patch/PR/live records above.
