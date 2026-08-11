@@ -31,6 +31,12 @@ Latest owner-tested testing candidate: `v0.4.0_22`
 Required package ABI: `FreeBSD:15:amd64`
 Current `_22` merge commit: `cfb3c86a2dfafefa0f3fffb002fad9fa4278da71`
 
+Active Strategy Lab ownership authority:
+`docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
+
+Active GitHub delivery authority:
+`docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
+
 Current Strategy Lab production Stage-60 engine:
 `B-warm-worker-parallel-batched`, fixed candidate width at most 3, no CPU-count gate.
 
