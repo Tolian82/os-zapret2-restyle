@@ -28,9 +28,13 @@ accepted Model B warm/parallel series are complete through the owner-tested prod
 `v0.4.0_22` baseline.
 
 Current objective:
-**qualify and publish `v0.4.0_23`, which moves normal Stage 60 to one warm Model C bucket
-with deterministic source-port Lua dispatch while retaining accepted Model B and cold
-Model A as fail-closed fallbacks; then perform owner-live Model-C verification.**
+**owner-live verify the already published `v0.4.0_23`, which moves normal Stage 60 to one
+warm Model C bucket with deterministic source-port Lua dispatch while retaining accepted
+Model B and cold Model A as fail-closed fallbacks.**
+
+`v0.4.0_23` is published from main commit
+`77b1beec471d161fb80584bf884e98970d4c75b3`. Publication evidence:
+`docs/verification/evidence/2026-08-11-v0.4.0_23-publication.md`.
 
 Current state authority:
 `docs/PROJECT_STATE.md`.
@@ -41,10 +45,13 @@ Current patch:
 Current decision:
 `docs/decisions/DEC-2026-08-11-strategy-lab-model-c-production-switch.md`.
 
-Primary architecture:
+Current Model-C architecture:
+`docs/architecture/STRATEGY_LAB_MODEL_C.md`.
+
+Primary adaptive-search architecture:
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`.
 
-Runtime/search verification plan:
+Runtime/search verification history and methodology:
 `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
 ==================================================
@@ -106,10 +113,10 @@ assumptions.
 ACTIVE MODEL C CYCLE — `v0.4.0_23`
 ==================================================
 
-Owner instruction selects a direct production-candidate switch rather than another
+Owner instruction selected a direct production-candidate switch rather than another
 side-by-side experiment harness.
 
-Source/CI tasks:
+Source/CI/publication tasks:
 
 - [x] make Model C the normal Stage-60 packaged owner;
 - [x] render up to three currently-ready `CandidateSpec` chains into one physical warm
@@ -122,8 +129,17 @@ Source/CI tasks:
 - [x] keep Stage-60 budget/cancel/progress/planner semantics and Stage-70/80/85 ownership
   unchanged;
 - [x] add focused Model-C regression while retaining Model-B fallback regression;
-- [ ] pass complete CI and FreeBSD 15 package qualification on the final PR head;
-- [ ] squash merge and publish the authorized `v0.4.0_23` testing prerelease.
+- [x] pass complete CI and FreeBSD 15 package qualification on the final PR head;
+- [x] squash merge PR #177 and publish `v0.4.0_23` as a verified testing prerelease;
+- [x] verify tag/release/asset and automatic deletion of `publish/v0.4.0_23`.
+
+Publication identity:
+
+- main/tag target: `77b1beec471d161fb80584bf884e98970d4c75b3`;
+- package: `os-zapret2-restyle-0.4.0_23.pkg`;
+- size: `177429` bytes;
+- digest: `sha256:f735f88e62fc82e5e856123f0d7c3dc26bd550b3ec0d5ab0e72bb2277dabe364`;
+- publication workflow run: `31520848437`, success.
 
 Owner-live gate after publication:
 
@@ -135,8 +151,8 @@ Owner-live gate after publication:
 - [ ] Model-C -> Model-B fallback if naturally or deliberately exercised;
 - [ ] cancellation/cleanup/restoration and absence of `19128-19130` residue.
 
-Owner-live PASS promotes `_23` from source/CI-qualified production candidate to the current
-accepted Model-C baseline. A correctness/attribution/restoration failure returns the
+Owner-live PASS promotes `_23` from published production candidate to the current accepted
+Model-C appliance baseline. A correctness/attribution/restoration failure returns the
 production recommendation to accepted Model B instead of weakening the safety contract.
 
 ==================================================
