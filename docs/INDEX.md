@@ -19,42 +19,49 @@ evidence remains preserved for comparison but does not override later source/liv
 
 Read these first for current Strategy Lab work:
 
-- `docs/PROJECT_STATE.md` — current candidate, production architecture, current live boundary,
-  watch items and next action;
-- `docs/patches/v0.4.0_22.md` — current production Stage-60 controlled-parallel Model B contract
-  and owner-live closeout;
-- `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md` — current `_22`
-  owner-live production evidence;
-- PR #175 conversation — current `_22` owner-live summary attached to the implementing PR;
+- `docs/PROJECT_STATE.md` — current package candidate, runtime ownership, verified live
+  baseline, watch items and next action;
+- `docs/patches/v0.4.0_23.md` — current `_23` Model-C production-candidate contract;
+- `docs/decisions/DEC-2026-08-11-strategy-lab-model-c-production-switch.md` — owner's direct
+  Model-C switch decision and Model C -> Model B -> Model A fail-closed boundary;
+- `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md` — latest
+  completed owner-live baseline until `_23` appliance testing is supplied;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical owner-assisted live
-  regression inventory and current `_22` change-specific boundary;
-- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — accepted A/B evidence chain
-  and boundary for any future runtime experiment;
-- `docs/decisions/DEC-2026-08-11-strategy-lab-parallel-model-b-selection.md` — decision selecting
-  the width-three controlled-parallel Model B architecture for production integration;
-- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — native Zapret2 search graph,
-  `CandidateSpec`, `ResourceInventory`, search-epoch and validation architecture;
+  regression inventory and `_23` change-specific pending gate;
+- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — accepted A/B evidence,
+  current Model-C candidate and future optimization boundaries;
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — native Zapret2 graph,
+  `CandidateSpec`, `ResourceInventory`, search epoch, validation and runtime architecture;
 - `docs/architecture/STRATEGY_LAB.md` — base product/stage/lifecycle contract;
-- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — completed automated Python ownership;
-- `docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md` — Python/shell ownership
-  rationale and compatibility invariants;
+- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — completed Python ownership;
+- `docs/decisions/DEC-2026-08-11-strategy-lab-parallel-model-b-selection.md` — accepted
+  width-three Model B decision retained as `_23` fallback/reference authority;
 - `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md` — release-specific live
   selection policy.
 
-### Current `_22` live summary
+### Current `_23` boundary
 
-- Standard `telegram.org` `job.KpLHgb`: production Model B, 16/16 graph exhaustion, zero
-  winners, width-three overlap, no fallback, `NO_CANDIDATE`, clean restoration;
-- Standard `rutracker.org` `job.GK0X66`: production Model B, 16/16, two Stage-60 winners,
-  successful Stage 70/85, `SUCCESS`, clean restoration;
-- Extended `rutracker.org` `job.d5XV82`: one controlled-source-port conflict triggered the
-  designed fail-closed cold Model A fallback; the job still completed `SUCCESS` with clean
-  restoration.
+`v0.4.0_23` moves normal Stage 60 to `C-warm-bucket-source-port-dispatch`: up to three
+currently-ready candidates share one warm physical `dvtws2` bucket and are selected by
+exact controlled client source ports through packaged Lua orchestration. Candidate-specific
+payload/range/Lua/BLOB semantics remain exact. Accepted `_22` Model B is the immediate
+runtime fallback/reference and cold Model A remains the final fail-closed fallback.
 
-The current 16/16 Standard `rutracker.org` result is not the historical fixed Stage-60
-parent-timeout defect. `_7` already closed that defect. The supplied `_22` run found two
-Stage-60 winners, below the target of three, so graph exhaustion is truthful current
-behavior.
+`_23` source/CI qualification and prerelease publication do not themselves constitute
+owner-live acceptance. The latest completed appliance baseline remains `_22` until the
+owner tests the published `_23` package.
+
+### Latest accepted `_22` live baseline
+
+- Standard `telegram.org` `job.KpLHgb`: Model B 16/16 graph exhaustion, zero winners,
+  width-three overlap, no fallback, `NO_CANDIDATE`, clean restoration;
+- Standard `rutracker.org` `job.GK0X66`: Model B 16/16, two Stage-60 winners, successful
+  Stage 70/85, clean restoration;
+- Extended `rutracker.org` `job.d5XV82`: one controlled-source-port conflict activated the
+  designed cold Model-A fallback; the job still completed `SUCCESS` with clean restoration.
+
+The current 16/16 behavior is not the historical Stage-60 fixed-parent-timeout defect;
+that boundary was closed by `_7`/`_8`.
 
 ## Current implementation authorities
 
@@ -76,26 +83,18 @@ behavior.
 - `docs/architecture/STRATEGY_LAB_RETENTION.md`
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_MATRIX.md`
 
-### Strategy Lab historical corrective/evidence chain
+### Historical corrective/evidence chain
 
-Historical records are retained under:
+Historical records are retained under `docs/patches/`, `docs/devlog/`,
+`docs/verification/evidence/`, and `docs/audit/`.
 
-- `docs/patches/`
-- `docs/devlog/`
-- `docs/verification/evidence/`
-- `docs/audit/`
+Key comparison points:
 
-Key active historical comparison points:
-
-- `_28` family-reachability evidence:
+- `_28` family reachability:
   `docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md`;
-- `_32` Stage-60 timeout correction:
-  `docs/patches/v0.4.0_7.md` and
-  `docs/verification/evidence/2026-08-10-v0.4.0_7-late-stage-pass.md`;
-- `_32` late-stage containment closeout:
-  `docs/patches/v0.4.0_8.md` and
-  `docs/verification/evidence/2026-08-10-v0.4.0_8-timeout-containment-pass.md`;
-- `_33` adaptive-validation historical live evidence:
+- `_32` Stage-60 timeout correction and late-stage containment:
+  `docs/patches/v0.4.0_7.md`, `docs/patches/v0.4.0_8.md`;
+- `_33` adaptive validation:
   `docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`;
 - Model A cold reference:
   `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`;
@@ -107,18 +106,20 @@ Key active historical comparison points:
 - Model B controlled parallel reject/corrective/accept:
   `docs/verification/evidence/2026-08-11-v0.4.0_20-model-b-parallel-attribution-reject.md`,
   `docs/patches/v0.4.0_21.md`, and
-  `docs/verification/evidence/2026-08-11-v0.4.0_21-model-b-parallel-reproducibility.md`.
+  `docs/verification/evidence/2026-08-11-v0.4.0_21-model-b-parallel-reproducibility.md`;
+- Model B production integration and owner-live closeout:
+  `docs/patches/v0.4.0_22.md` and
+  `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`.
 
-Historical evidence should be used to understand progression and retained correctness
-boundaries. It must not be treated as the current package behavior without checking later
-patch/PR/live records.
+Historical evidence explains progression; it must not be treated as current package
+behavior without checking the later patch/PR/live records above.
 
 ## Audit authorities
 
-- `docs/AUDIT.md` — consolidated audit register;
-- `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md` — third Strategy Lab audit;
-- `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md` — earlier hardening audit;
-- `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md` — shell-era source/CI closure.
+- `docs/AUDIT.md`
+- `docs/audit/AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md`
+- `docs/audit/AUDIT-2026-08-05-STRATEGY-LAB-HARDENING.md`
+- `docs/audit/STRATEGY_LAB_HARDENING_CLOSURE.md`
 
 ## Product/project authorities
 
@@ -134,9 +135,6 @@ patch/PR/live records.
 - `docs/patches/`
 - `docs/releases/`
 
-Stable-release preparation records remain under `docs/releases/` and the corresponding dated
-`docs/devlog/` entries.
-
 ## GitHub delivery authority
 
 For GitHub work, read in this order:
@@ -150,20 +148,11 @@ For GitHub work, read in this order:
 7. current focused delivery decisions when applicable;
 8. `docs/GITHUB_WORKFLOW.md`.
 
-Key rules:
-
-- use the connected GitHub plugin first;
-- fix the exact current `main` SHA before mutation;
-- one logical task branch and Ready PR;
-- same-scope repair stays in that PR;
-- required checks must pass on the latest head;
-- every PR title, every PR-branch commit subject, and final squash subject use the universal versioned title contract;
-- squash merge with expected head SHA;
-- verify `main` and cleanup;
-- candidate publication is separate from the code PR;
-- do not mutate source in response to external infrastructure failure;
-- read exact failed-job evidence before repairing CI;
-- `main` and published tags are never force-updated.
+Key rules: connected GitHub plugin first; exact `main` SHA before mutation; one logical task
+branch and Ready PR; same-scope repairs in that PR; latest head must pass required checks;
+universal versioned titles for every task commit/PR/squash; squash with expected head SHA;
+verify `main` and cleanup; candidate publication is separate; never rewrite `main` or a
+published tag.
 
 ## OPNsense command authority
 
