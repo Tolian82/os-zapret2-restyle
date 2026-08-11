@@ -26,9 +26,18 @@ assert stage60_parallel.WIDTH == 3
 
 with tempfile.TemporaryDirectory() as raw:
     root = Path(raw)
-    inventory = resources.snapshot_inventory(root / "lua", root / "fake")
+    lua_root = root / "lua"
+    fake_root = root / "fake"
+    lua_root.mkdir()
+    fake_root.mkdir()
+    for name in ("zapret-lib.lua", "zapret-antidpi.lua"):
+        (lua_root / name).write_text("-- fixture\n", encoding="utf-8")
+    (fake_root / "fake_tls_7.bin").write_bytes(b"fixture")
+
+    inventory = resources.snapshot_inventory(lua_root, fake_root)
     graph = search_graph.native_tls13_graph()
     plan = graph.plan("expansion", (), inventory)
+    assert len(plan.scheduled) == 16
     reconnaissance = [
         {"id": node.candidate_id, "family": node.spec.family, "all_pass": False}
         for node in graph.stage_nodes("reconnaissance")
