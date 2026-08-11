@@ -2,6 +2,8 @@
 
 Status: **IMPLEMENTED IN `v0.4.0_22`; PRODUCTION-ACTIVE WITH COLD MODEL A FALLBACK; OWNER-LIVE PRODUCTION EVIDENCE RECORDED**
 
+Previous status before `_22` implementation: **APPROVED FOR IMPLEMENTATION; NOT YET PRODUCTION-ACTIVE**. This line is retained only as historical transition evidence; it is not the current status.
+
 ## Context
 
 Strategy Lab originally used cold Model A in production: each candidate owned a fresh
