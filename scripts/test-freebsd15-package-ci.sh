@@ -193,11 +193,8 @@ for installed in \
     strategy_lab_py/search_graph.py \
     strategy_lab_py/search.py \
     strategy_lab_py/extended.py \
-    strategy_lab_py/model_b_exhaustive.py \
     strategy_lab_candidate_adapter.sh \
-    strategy_lab_stage_adapter.sh \
-    strategy_lab_model_b_exhaustive.sh \
-    strategy_lab_model_b_exhaustive_worker.sh
+    strategy_lab_stage_adapter.sh
 do
     grep -Fq "usr/local/opnsense/scripts/OPNsense/Zapret/${installed}" "${CI}" ||
         fail "package inspection no longer requires ${installed}"
