@@ -28,10 +28,11 @@ when the experiment is actually executed.
 STATUS
 ==================================================
 
-Approved experiment plan. **Model A is accepted as the cold reference and Model B
-three-worker coexistence is owner-live accepted/reproducible.** Model B exhaustive
-no-candidate wall-clock measurement is now the selected next experiment; Model C,
-source-port dispatch, warm preload policy and true parallel candidate probing remain
+Approved experiment plan. **Model A is accepted as the cold correctness/performance
+reference. Model B three-worker coexistence is owner-live accepted/reproducible, and the
+complete sequential no-candidate exhaustive Model B replay is owner-live ACCEPT 5/5 on
+`v0.4.0_19`. Controlled parallel candidate probing is now the selected experiment on
+`v0.4.0_20`.** Model C, warm-bucket selection and production warm-runtime adoption remain
 unexecuted/unapproved.
 
 Owner Standard `rutracker.org` job `job.TtZeaH` on `v0.4.0_11` produced 25 cold samples
@@ -43,20 +44,32 @@ Accepted `_11` reference medians are total candidate 1580 ms, readiness 1046 ms,
 140 ms, launch 17 ms, probe 220 ms and stop+cleanup 81 ms. Candidate-process RSS after
 readiness is tightly clustered around 4332 KiB median, 4348 KiB p90 and 4356 KiB max.
 
-The first complete owner-live Model B coexistence accept was collected on `_16`. The owner
-installed `_17` and repeated the unchanged accepted ready-pool experiment five times;
-all five runs returned `conclusion=accept` with restoration verified. Mean pool startup was
-1163.6 ms, mean dispatch median 12.4 ms and mean probe median 200.3 ms. The already-warm
-mean `dispatch+probe` path of about 212.7 ms is roughly 86.5% below the Model A cold
-candidate median; amortizing one three-worker startup over three probes gives about
-600.6 ms/candidate, roughly 62.0% below the cold median. These are mechanism-level
-coexistence estimates, not full-search speedups.
+The first complete owner-live Model B coexistence accept was collected on `_16`; `_17`
+repeated the unchanged accepted ready-pool experiment five times. Those runs gave the
+mechanism-level estimates of about 86.5% lower already-warm dispatch+probe cost and about
+62.0% lower startup-amortized three-candidate cost versus the Model A 1580 ms cold median.
+Those figures are not full-search speedups.
+
+The complete sequential exhaustive comparison is now available from `_19`. Reference
+`job.tMYnFA` is Standard `telegram.org`, `NO_CANDIDATE`, 16/16 Stage-60
+`graph_exhausted`, with two pinned endpoints. Five unchanged `_19` warm replays all
+returned `conclusion=accept` with verified restoration. Warm exhaustive search times were
+74886, 74692, 75083, 74780 and 74600 ms: mean 74808.2 ms, median 74780 ms, total min/max
+spread 483 ms. Against the retained 89012 ms cold Stage-60 candidate runtime this is about
+15.96% mean measured candidate-runtime improvement. The full-job value remains explicitly
+a projection rather than measured Model B full-job wall time.
+
+Owner CPU context for that series was two logical CPUs on a Westmere-class virtual CPU.
+That is evidence context only. **No experiment or candidate width is accepted/rejected by
+CPU count.** The architecture must remain meaningful on other OPNsense systems, including
+4/6/8+ logical-CPU appliances.
 
 Exact accepted/repeated evidence:
 
 - `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`;
 - `docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md`;
-- `docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md`.
+- `docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md`;
+- `docs/verification/evidence/2026-08-11-v0.4.0_19-model-b-exhaustive-reproducibility.md`.
 
 No warm-runtime model is production-approved by these results. Every selected optimization
 must preserve the accepted cold reference result and Strategy Lab lifecycle safety.
@@ -67,8 +80,7 @@ QUESTIONS TO ANSWER
 
 1. How much wall-clock time is currently spent in candidate preparation, Lua/BLOB
    initialization, dvtws2 startup/readiness and cleanup compared with the network probe?
-2. Does keeping dvtws2 warm materially reduce time-to-result on the owner's OPNsense
-   hardware?
+2. Does keeping dvtws2 warm materially reduce time-to-result on OPNsense hardware?
 3. Can several warm dvtws2 processes coexist on isolated divert ownership without
    capturing or changing one another's probe traffic?
 4. Can one warm dvtws2 contain several compatible candidate chains and select exactly one
@@ -80,7 +92,7 @@ QUESTIONS TO ANSWER
 7. Do external BLOB count/size and candidate count materially affect startup time or RSS?
 8. Does lazy warm-bucket creation reduce work without harming search responsiveness?
 9. Is any benefit gained by truly simultaneous candidate probes after warm coexistence is
-   proven, or do network contention and diagnostic ambiguity outweigh it?
+   proven, or do WAN/CPU contention and diagnostic ambiguity outweigh it?
 10. Which lightweight discovery probe gives the best agreement with finalist deep GET at
     the lowest cost?
 11. Which current operation/stage timeouts are too small, too large or internally
@@ -92,14 +104,18 @@ REFERENCE CONDITIONS
 
 Every comparison uses the same job-level controls:
 
-- same OPNsense appliance and WAN path for a comparison set;
+- same OPNsense appliance and WAN path for one comparison set;
 - same installed Zapret2 release and recorded `ResourceInventory`;
 - same target hostname/SNI;
 - same pinned endpoint/search epoch;
 - same candidate corpus and order unless order itself is the tested variable;
 - same normal-service initial state;
-- same probe implementation for A/B/C equivalence measurement;
+- same probe semantics for A/B/C equivalence measurement;
 - clean restoration before and after the experiment set.
+
+CPU count, CPU model and observed load are measurement metadata. They are retained to make
+cross-appliance comparisons interpretable, but they do not silently change candidate
+semantics, worker identity or acceptance criteria.
 
 The candidate corpus must contain at least:
 
@@ -115,12 +131,11 @@ The candidate corpus must contain at least:
 All comparisons retain the same target/interception evidence. A faster result that cannot
 prove which candidate handled the traffic is invalid.
 
-For maximum search-time comparison, successful early-stop targets are insufficient. The
-owner `_9` evidence shows Standard `telegram.org` `job.tU3wiL` exhausting all 16 Stage-60
-candidates and completing through restoration in about 144.125 s, while Standard
-`rutracker.org` `job.UPRDlc` stopped Stage 60 after six candidates when three winners were
-found and completed in about 71.023 s. Exhaustive timing therefore uses a fresh
-`NO_CANDIDATE / graph_exhausted` reference collected on the same package/provider path.
+For maximum search-time comparison, successful early-stop targets are insufficient. Owner
+`_9` evidence shows Standard `telegram.org` exhausting all 16 Stage-60 candidates and
+completing through restoration in about 144.125 s, while Standard `rutracker.org` stopped
+Stage 60 after six candidates when three winners were found and completed in about 71.023
+s. Exhaustive timing therefore uses a `NO_CANDIDATE / graph_exhausted` reference.
 
 ==================================================
 MODEL A — COLD REFERENCE
@@ -147,7 +162,7 @@ Executed reference:
 Measure per candidate:
 
 - `prepare_ms`;
-- `resource_init_ms` when it can be separated from launch;
+- `resource_init_ms` when separable from launch;
 - `launch_ms`;
 - `ready_ms`;
 - `probe_ms`;
@@ -173,19 +188,16 @@ Start several compatible candidate workers ahead of their probes. Each worker ow
 distinct temporary runtime identity and divert ownership. Candidate probes are initially
 executed sequentially.
 
-The first experiment proves coexistence only. It does not test simultaneous different
-strategies.
-
-Required evidence:
+Required coexistence evidence:
 
 - each worker has a unique validated PID/process identity;
 - each worker is bound to its intended divert endpoint;
 - IPFW rules send the selected probe to exactly the intended worker;
-- only the intended worker's interception counter changes for that probe;
+- the intended worker's interception counter proves traffic ownership;
 - a probe result matches Model A for the same candidate;
 - stopping one worker does not disturb the others;
 - cancellation can remove all job-owned workers;
-- Stage-90 restoration observes no candidate residue;
+- Stage-90-equivalent restoration observes no candidate residue;
 - repeated candidate selection does not change because another warm worker exists.
 
 Measure:
@@ -202,49 +214,50 @@ Reject Model B if worker identity, traffic ownership, cleanup or cold-equivalenc
 deterministic. A performance improvement cannot compensate for a false PASS/FAIL or leaked
 interception state.
 
-The coexistence portion of this contract is now owner-live accepted. `_16` produced the
-first complete accept and `_17` repeated it five times with verified restoration. That
-closes the small-corpus coexistence/reproducibility question but not `total search wall time
-for the same corpus`, which is the purpose of `_18`.
+The coexistence portion is owner-live accepted: `_16` produced the first complete accept
+and `_17` repeated it five times with verified restoration.
 
 ==================================================
-MODEL B EXHAUSTIVE NO-CANDIDATE BENCHMARK — `_18`
+MODEL B SEQUENTIAL EXHAUSTIVE NO-CANDIDATE BENCHMARK — `_18` / `_19`
 ==================================================
 
-The current benchmark consumes one fresh completed Standard domain reference whose Stage
-60 ended `NO_CANDIDATE / graph_exhausted`. The reference must contain zero working Stage-60
+The benchmark consumes a completed Standard domain reference whose Stage 60 ended
+`NO_CANDIDATE / graph_exhausted`. The reference must contain zero working Stage-60
 candidates, a complete persisted candidate/schedule corpus, verified restoration and the
 same current `ResourceInventory`.
 
 The exact persisted Stage-60 candidate corpus/order is replayed in **warm batches of at
-most three workers**. This retains the already owner-proven Model B coexistence width rather
-than introducing a new 16-resident-worker experiment.
+most three workers**. This retains the owner-proven Model B coexistence width instead of
+introducing 16 resident workers.
 
-For each batch:
+For each sequential batch:
 
 - verify dedicated Model B ports/rules are free;
-- render the exact retained CandidateSpecs into the three physical worker slots;
+- render the exact retained CandidateSpecs into the physical worker slots;
 - start the whole batch before candidate probes;
 - require stable readiness, unique PID/divert identity and numeric RSS;
 - probe candidates sequentially in original Stage-60 order;
-- keep exactly one selected temporary IPFW route during each probe;
-- require interception attribution and no inactive Model B route;
+- replay every pinned endpoint sequentially for every candidate;
+- keep one selected temporary IPFW route during one endpoint probe;
+- require interception attribution;
 - require every cold no-candidate replay to remain non-PASS;
 - require workers to remain healthy during the batch;
 - clean the entire batch before starting the next batch.
 
-Measure:
+`_18` produced the full cold reference `job.tMYnFA` but exposed a single-endpoint harness
+assumption. `_19` corrected multi-endpoint replay and is owner-live ACCEPT 5/5.
 
-- measured warm exhaustive candidate-runtime wall time;
-- per-batch and total startup time;
-- per-batch cleanup time;
-- dispatch/probe medians;
-- peak aggregate batch RSS;
-- exact candidate-order completeness;
-- result equivalence and route attribution;
-- final semantic restoration.
+Measured `_19` sequential exhaustive result:
 
-The report separates two comparisons:
+- cold candidate corpus runtime: 89012 ms;
+- warm run values: 74886 / 74692 / 75083 / 74780 / 74600 ms;
+- mean: 74808.2 ms;
+- median: 74780 ms;
+- mean measured candidate-runtime improvement: about 15.96%;
+- peak aggregate three-worker RSS: 12976–12992 KiB;
+- all five runs: result equivalence PASS and restoration verified.
+
+The report separates:
 
 - `candidate_runtime_speedup_percent` — measured warm exhaustive runtime versus the sum of
   the same persisted cold Stage-60 candidate durations;
@@ -253,12 +266,82 @@ The report separates two comparisons:
 
 The second value is explicitly not a measured Model B full Strategy Lab run.
 
-Any failed readiness or ambiguous worker-identity gate skips downstream probes for that
-batch and falls through to common cleanup/restoration. The benchmark remains
-`experiment_only=true`, `parallel_probes=false` and `production_approved=false`.
+Exact contracts:
+
+- `docs/patches/v0.4.0_18.md`;
+- `docs/patches/v0.4.0_19.md`.
+
+==================================================
+MODEL B CONTROLLED PARALLEL CANDIDATE-PROBE EXPERIMENT — `_20`
+==================================================
+
+True parallel testing is deliberately last and is now selected because Model B proved
+both deterministic coexistence and reproducible complete sequential exhaustive replay.
+
+`_20` changes only the experiment harness:
+
+- the exact persisted `job.tMYnFA` corpus/order remains authoritative;
+- at most three already-isolated warm dvtws2 workers exist in one batch;
+- up to three **candidate tasks** execute concurrently;
+- pinned endpoints **inside one candidate remain sequential**;
+- production Strategy Lab remains Model A;
+- `production_approved=false`.
+
+The `_19` single-active-route assumption cannot be used when three candidate probes are in
+flight. Multiple rules matching only `from me -> selected_ip:443` would be ambiguous. `_20`
+therefore assigns one unique controlled TCP source port to every candidate/endpoint probe.
+Each temporary IPFW rule must match:
+
+- the dedicated Model B rule/divert identity;
+- TCP;
+- the exact requested local source port;
+- the exact pinned destination IP;
+- destination port 443;
+- outbound WAN identity.
+
+The requested source port must be free before the probe. The complete source-port plan must
+be unique and bounded. Selected-rule counter growth, fixed endpoint identity and the source
+port selector are retained as attribution evidence. All temporary rules must disappear by
+batch cleanup.
+
+Required `_20` acceptance:
+
+- same current `ResourceInventory` and exact persisted corpus/order;
+- all warm batches ready with unique worker PID/divert identity and numeric RSS;
+- unique/free source-port plan;
+- at most three candidate tasks concurrently;
+- actual candidate overlap observed in each multi-worker batch;
+- pinned endpoints sequential within each candidate;
+- every endpoint uses its fixed selected IP and dedicated source-port-qualified route;
+- no cold no-candidate result becomes PASS;
+- workers remain healthy through each batch;
+- batch cleanup succeeds and no Model B rule/listener residue remains;
+- final semantic restoration is verified.
+
+Measure and retain:
+
+- `logical_cpu_count` and appliance CPU identity as context only;
+- candidate parallel width and maximum observed overlap;
+- per-batch parallel probe wall time;
+- complete parallel exhaustive search wall time;
+- endpoint-probe and candidate elapsed distributions;
+- pool startup and cleanup cost;
+- per-worker/aggregate RSS;
+- source-port plan and route attribution;
+- result equivalence;
+- restoration.
+
+Compare `_20` directly with the accepted `_19` sequential exhaustive distribution, not
+with the earlier three-candidate mechanism-level estimate. A 2-core owner appliance is a
+valid low-resource live test, not an architecture limit; other OPNsense systems may expose
+more or less benefit.
+
+Reject parallel probing if it introduces ambiguous attribution, changes pass/fail results,
+violates the concurrency bound, prevents cleanup/restoration, or saves too little wall time
+to justify lifecycle/debugging complexity.
 
 Exact source contract:
-`docs/patches/v0.4.0_18.md`.
+`docs/patches/v0.4.0_20.md`.
 
 ==================================================
 MODEL C — ONE WARM DVTWS2 WITH CANDIDATE BUCKET
@@ -269,7 +352,7 @@ A compatible bucket is initialized once in one dvtws2 process. A minimal laborat
 dispatcher selects exactly one preloaded candidate chain for the current probe flow.
 
 Plain `--new` is insufficient because Zapret2 selects the first matching profile. Model C
-therefore does not pass until the selection mechanism proves exact chain identity.
+does not pass until the selection mechanism proves exact chain identity.
 
 Required dispatcher evidence:
 
@@ -278,45 +361,35 @@ Required dispatcher evidence:
 - selection is stable for the complete connection;
 - concurrent unrelated traffic cannot accidentally select a laboratory candidate;
 - a candidate cannot inherit another candidate's per-flow state;
-- repeated selection of A -> B -> A produces the same result as cold A, cold B, cold A;
-- dispatcher failure fails closed instead of falling through to an unintended candidate;
+- repeated A -> B -> A matches cold A, cold B, cold A;
+- dispatcher failure fails closed instead of falling through to another candidate;
 - cleanup removes all dispatcher/bucket state.
 
 Only after that contract is proven compare performance with Models A and B.
 
-Measure:
-
-- bucket initialization time by candidate count;
-- bucket initialization time by Lua/BLOB bundle size;
-- steady-state candidate-switch overhead;
-- total search wall time;
-- RSS and state growth after repeated probes;
-- result agreement with cold reference;
-- cleanup/restoration cost.
+Measure bucket initialization, switch overhead, total search wall time, RSS/state growth,
+result agreement and cleanup/restoration cost.
 
 ==================================================
 CONTROLLED SOURCE-PORT SELECTOR HYPOTHESIS
 ==================================================
 
-One proposed Model-C selector encodes candidate identity in a controlled client source
-port and lets the laboratory dispatcher map that flow to a candidate.
+A controlled source port can encode or qualify laboratory flow identity. `_20` uses the
+source port only to make **three separate IPFW divert rules deterministic**; this does not
+by itself approve source-port selection for Model C.
 
-This is a hypothesis, not an approved dependency.
-
-Verify in order:
+For any future Model-C dispatcher use, still verify in order:
 
 1. the chosen probe client can reserve/request the intended local source-port range;
 2. dvtws2/Lua receives enough packet/flow context to observe the selector unambiguously;
-3. NAT on the tested OPNsense path does not rewrite the selector before the relevant
-   interception point, or the dispatcher deliberately uses the observed translated value;
-4. IPFW/divert routing does not cause a selector collision or bypass;
-5. the same connection retains its candidate identity bidirectionally for the required
-   flow lifetime;
+3. NAT does not rewrite the selector before the relevant interception point, or the
+   dispatcher deliberately uses the observed translated value;
+4. IPFW/divert routing cannot cause a selector collision or bypass;
+5. the connection retains its candidate identity bidirectionally for its flow lifetime;
 6. connection retries cannot silently choose a different candidate;
-7. two adjacent candidate IDs cannot cross-select under repeated trials.
+7. adjacent candidate IDs cannot cross-select under repeated trials.
 
-Failure at any step rejects source-port dispatch without rejecting Model C as a whole; a
-different deterministic selector may still be investigated separately.
+Failure rejects that dispatcher hypothesis without rejecting Model C as a whole.
 
 ==================================================
 LUA PRELOAD EXPERIMENT
@@ -328,16 +401,11 @@ Compare at least:
 - the current broad/all-available Lua initialization baseline;
 - a proven common warm-bucket bundle if Model C reaches that stage.
 
-For each, measure:
+Measure startup/readiness time, RSS, fatal/startup log differences, candidate result
+equivalence and state retained across repeated flows.
 
-- startup/readiness time;
-- RSS;
-- fatal/startup log differences;
-- candidate result equivalence;
-- state retained across repeated flows.
-
-`CandidateSpec` continues to record only functional dependencies regardless of which
-preload policy is faster. Preloading is not allowed to redefine a candidate.
+`CandidateSpec` continues to record only functional dependencies regardless of preload
+policy. Preloading is not allowed to redefine a candidate.
 
 ==================================================
 BLOB LOADING EXPERIMENT
@@ -351,11 +419,8 @@ Measure startup/readiness and RSS with controlled resource sets:
 - one representative external `.bin`;
 - several semantically compatible external `.bin` resources.
 
-Do not include unrelated protocol BLOBs simply to increase count. The objective is to
-learn the cost of realistic preload strategies.
-
-Record missing-resource behavior explicitly. A missing required file rejects the
-candidate before runtime launch; it is not silently substituted with another BLOB.
+Do not include unrelated protocol BLOBs simply to increase count. Missing required files
+reject the candidate before runtime launch; they are not silently substituted.
 
 ==================================================
 BUCKET COMPATIBILITY AND LAZY STARTUP
@@ -372,73 +437,36 @@ If warm buckets remain viable, test compatibility grouping by:
 - stateful/orchestrator requirements;
 - firewall/divert ownership.
 
-Test two schedules:
-
-- eager: initialize all predicted buckets before search;
-- lazy: initialize a bucket only when adaptive search reaches its first candidate.
-
-Measure time-to-first-result, total wall time, RSS and unused initialization work. Prefer
-lazy startup unless measurements show a repeatable user-visible disadvantage that
-justifies eager cost.
-
-==================================================
-PARALLEL CANDIDATE-PROBE EXPERIMENT
-==================================================
-
-True parallel testing is deliberately last.
-
-It may be attempted only after Model B or C proves deterministic coexistence under
-sequential probes.
-
-Compare sequential versus simultaneous candidate probes for:
-
-- result equivalence;
-- IPFW/divert counter isolation;
-- WAN contention;
-- DNS/endpoint identity;
-- CPU/RSS;
-- total wall time;
-- log/evidence attribution;
-- cancellation and cleanup behavior.
-
-Reject parallel probing if it introduces ambiguous attribution, changes pass/fail results
-or saves too little wall time to justify the added lifecycle/debugging complexity.
+Compare eager initialization with lazy initialization on first use. Measure time-to-first
+result, total wall time, RSS and unused initialization work. Prefer lazy startup unless
+measurements show a repeatable user-visible disadvantage that justifies eager cost.
 
 ==================================================
 DISCOVERY PROBE EXPERIMENT
 ==================================================
 
-The target architecture separates inexpensive discovery from finalist deep validation,
-but does not hardcode the cheapest probe before measurement.
+The target architecture separates inexpensive discovery from finalist deep validation but
+does not hardcode the cheapest probe before measurement.
 
-Compare candidate discovery signals such as a bounded TLS/HTTP connection check and a
-minimal response probe against the final GET reference.
+Compare bounded TLS/HTTP connection checks and minimal response probes against finalist GET
+reference. Record duration, agreement, false PASS/FAIL, timeout/inconclusive counts and
+endpoint/interception evidence quality.
 
-For each method record:
-
-- duration;
-- agreement with finalist deep validation;
-- false PASS count;
-- false FAIL count;
-- timeout/inconclusive count;
-- endpoint and interception evidence quality.
-
-The selected discovery probe must minimize cost without producing a false confidence
-signal that materially degrades final winner selection.
+The selected discovery probe must minimize cost without creating false confidence that
+materially degrades winner selection.
 
 ==================================================
 3/3 FAIL-FAST EXPERIMENT
 ==================================================
 
-Confirm that strict stability semantics and fail-fast execution are equivalent:
+Confirm strict stability semantics and fail-fast execution are equivalent:
 
 - PASS/PASS/PASS -> accepted 3/3;
-- any failure -> rejected for the 3/3 criterion immediately after that failure;
+- any failure -> rejected immediately after that failure;
 - skipped later attempts are recorded as unnecessary, not PASS;
-- cancellation/timeout remains distinguishable from a network FAIL.
+- cancellation/timeout remains distinguishable from network FAIL.
 
-Measure saved probe time on unstable candidates and verify that no candidate rejected by
-fail-fast could have satisfied the required 3/3 result.
+Measure saved probe time and verify no fail-fast rejection could have satisfied 3/3.
 
 ==================================================
 LONG-GET / 16-KIB VALIDATION EXPERIMENT
@@ -457,55 +485,37 @@ Classification:
 
 - `pass` — required connection/protocol evidence passes and at least 16 KiB is received;
 - `fail` — a required network/protocol condition fails;
-- `inconclusive` for the 16-KiB depth criterion — the otherwise valid selected resource
-  completes successfully but cannot provide 16 KiB.
+- `inconclusive` — an otherwise valid selected resource completes successfully but cannot
+  provide 16 KiB.
 
-The last case must not be rewritten as a 16-KiB PASS. It also must not erase separately
-proven connectivity/stability evidence.
+The last case must not become a false 16-KiB PASS or erase separately proven connectivity.
 
 ==================================================
 TIMEOUT TELEMETRY EXPERIMENT
 ==================================================
 
-Instrument and collect distributions for:
+Instrument and collect distributions for DNS, candidate/resource preparation, dvtws2
+launch/readiness, discovery, stability, final GET, stop/TERM/KILL, firewall/runtime cleanup
+and normal-service restoration.
 
-- DNS A/AAAA operation;
-- candidate argument/resource preparation;
-- dvtws2 launch;
-- readiness checks;
-- discovery probe;
-- stability probe;
-- final long GET;
-- stop/TERM grace/KILL fallback;
-- firewall and runtime cleanup;
-- normal-service restoration.
-
-Review every current constant after data exists. For each deadline record:
-
-- measured normal range and tail;
-- failure/timeout range;
-- required cleanup allowance;
-- parent deadline that contains it;
-- remaining-budget admission rule.
+For each deadline record measured normal/tail range, failure/timeout range, cleanup
+allowance, containing parent deadline and remaining-budget admission rule.
 
 The accepted model must satisfy:
 
 `operation deadline <= candidate deadline <= stage deadline <= job deadline`.
 
-An operation may receive less than its nominal limit only when the remaining parent/job
-budget is explicitly too small and the operation is not started. The parent must not
-start a child with a nominal 15-second allowance and then kill it after five seconds.
+A child must not be started when the remaining parent/job budget cannot contain its
+required execution and cleanup envelope.
 
-Do not derive new production stage limits from the small Model B coexistence harness. The
-exhaustive no-candidate benchmark is the appropriate Model B input for maximum Stage-60
-runtime analysis, but any timeout change still requires review of complete lifecycle and
-restoration evidence.
+Do not derive production stage limits from a small coexistence or parallel harness. Any
+timeout change requires complete lifecycle/restoration review.
 
 ==================================================
 EVALUATION MATRIX
 ==================================================
 
-Every A/B/C or hybrid proposal is scored on the same dimensions:
+Every A/B/C or hybrid proposal is scored on:
 
 - result agreement with Model A;
 - false PASS/FAIL count;
@@ -516,6 +526,7 @@ Every A/B/C or hybrid proposal is scored on the same dimensions:
 - startup/readiness overhead;
 - RSS and process/rule/socket footprint;
 - state leakage across candidates;
+- WAN/CPU contention where concurrency is tested;
 - cancellation behavior;
 - cleanup/restoration correctness;
 - implementation/debugging complexity.
@@ -538,7 +549,7 @@ EVIDENCE AND DECISION OUTPUT
 Each experiment produces a dated evidence record with:
 
 - exact plugin/main and Zapret2 runtime identities;
-- appliance/OS identity relevant to timing;
+- appliance/OS/CPU identity relevant to timing;
 - resource inventory;
 - candidate corpus;
 - commands or automated fixture used;

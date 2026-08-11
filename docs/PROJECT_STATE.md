@@ -25,21 +25,21 @@ QUICK CONTEXT
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_1.pkg`
-Latest published testing prerelease: `v0.4.0_18` / `os-zapret2-restyle-0.4.0_18.pkg`
-Latest owner-tested testing candidate: `v0.4.0_18` / `os-zapret2-restyle-0.4.0_18.pkg`
+Latest published testing prerelease: `v0.4.0_19` / `os-zapret2-restyle-0.4.0_19.pkg`
+Latest owner-tested testing candidate: `v0.4.0_19` / `os-zapret2-restyle-0.4.0_19.pkg`
 Current source line: `VERSION=0.4.0`
-Current package revision: `PLUGIN_REVISION=19`
-Current source candidate: `os-zapret2-restyle-0.4.0_19.pkg`
+Current package revision: `PLUGIN_REVISION=20`
+Current source candidate: `os-zapret2-restyle-0.4.0_20.pkg`
 Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **`_18` exhaustive owner-live input-contract REJECT on multi-endpoint `telegram.org` with restoration PASS; `_19` narrow multi-endpoint exhaustive corrective in source, CI/publication pending**
-Current source overlay: **`_19` preserves production Model A and the accepted `_17` Model B safety/coexistence path; exhaustive Model B now replays every pinned endpoint from the exact reference search epoch sequentially for every retained Stage-60 candidate while keeping at most three warm workers per batch**
+Current phase: **`_19` sequential exhaustive Model B ACCEPT 5/5 on the complete `telegram.org` no-candidate corpus; `_20` controlled three-worker parallel candidate-probe experiment in source/CI**
+Current source overlay: **`_20` preserves production Model A and the accepted `_19` sequential warm path; up to three already-isolated Model B candidates are probed concurrently with unique TCP source-port-qualified IPFW ownership while pinned endpoints inside each candidate remain sequential**
 Revision note: **`_15` remains intentionally unclaimed by this source line because a stale concurrent `_15` branch exists; no `_15` package/release or live result is recorded here**
 v0.4.0 release gate: **COMPLETE — published and installed by the owner**
 `_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**
 `_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**
 Model A experiment gate: **REFERENCE COLLECTED on `v0.4.0_11` / `job.TtZeaH`**
-Model B experiment gate: **first owner-live coexistence ACCEPT on `v0.4.0_16`; repeated ACCEPT 5/5 on `v0.4.0_17`; `_18` exhaustive input-contract REJECT before warm batches; EXPERIMENT ONLY; `production_approved=false`**
+Model B experiment gate: **first owner-live coexistence ACCEPT on `v0.4.0_16`; repeated coexistence ACCEPT 5/5 on `v0.4.0_17`; sequential exhaustive ACCEPT 5/5 on `v0.4.0_19`; `_20` controlled parallel candidate probes selected; EXPERIMENT ONLY; `production_approved=false`**
 
 Current primary Strategy Lab authorities:
 
@@ -60,10 +60,10 @@ Current live-gate authority:
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
 Latest accepted live experiment evidence:
-`docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md`.
+`docs/verification/evidence/2026-08-11-v0.4.0_19-model-b-exhaustive-reproducibility.md`.
 
 Latest live exhaustive corrective evidence:
-`docs/verification/evidence/2026-08-11-v0.4.0_18-model-b-exhaustive-multi-endpoint-gap.md`.
+`docs/verification/evidence/2026-08-11-v0.4.0_19-model-b-exhaustive-reproducibility.md`.
 
 First accepted Model B coexistence evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md`.
@@ -80,8 +80,8 @@ Model B experiment contract:
 Model B access corrective contract:
 `docs/patches/v0.4.0_14.md`.
 
-Current source corrective contract:
-`docs/patches/v0.4.0_19.md`.
+Current source experiment contract:
+`docs/patches/v0.4.0_20.md`.
 
 Current live-release-gate decision:
 `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
@@ -156,11 +156,18 @@ Approved and implemented progression:
   exhaustive attempt then rejected before any warm batch because `_18` incorrectly
   required exactly one pinned endpoint while `telegram.org` has multiple required pinned
   endpoints;
-- `0.4.0_19` — current narrow corrective: accept all pinned reference endpoints, place all
-  endpoint names in target-bound warm-worker hostlists, replay every endpoint sequentially
-  against its fixed selected IP for every candidate, preserve endpoint-level attribution,
-  and require complete multi-endpoint replay. Production Model A, normal budgets, worker
-  width and sequential-probe policy remain unchanged.
+- `0.4.0_19` — accepted all pinned reference endpoints and completed the exact retained
+  16-candidate/two-endpoint `telegram.org` corpus. Five sequential exhaustive runs all
+  returned `conclusion=accept` with restoration verified. Warm exhaustive wall time was
+  74.600–75.083 s (mean 74.8082 s) versus 89.012 s cold Stage-60 candidate runtime, for a
+  mean measured candidate-runtime speedup of about 15.96%. Peak three-worker RSS stayed
+  around 12.98 MiB. The projected full-job improvement remains a projection, not a measured
+  Model B full Strategy Lab run;
+- `0.4.0_20` — current experiment-only source candidate: reuse the same three isolated warm
+  workers but execute up to three candidate probes concurrently. Each candidate/endpoint
+  probe owns a unique controlled TCP source port and an exact source-port-qualified IPFW
+  rule, while endpoints within one candidate remain sequential. Logical CPU count is
+  recorded as measurement metadata only; it does not gate width or architecture.
 
 Warm runtime selection remains evidence-gated by the A/B/C experiment plan. Model B is a
 measurement harness only. No Model B/C worker, dispatcher, warm preload or parallel
@@ -317,27 +324,31 @@ semantic restoration were nevertheless fully verified. This result identifies on
 harness input-contract gap: the real `telegram.org` epoch contains multiple required
 pinned endpoints while `_18`'s synthetic regression covered one.
 
-`_19` corrects that boundary. The exact persisted Stage-60 candidate corpus/order remains
-batched at at most three warm workers. Every target-bound worker receives all pinned
-endpoint names in its hostlist. For every candidate, every pinned endpoint is probed
-sequentially against its own fixed selected IP. Candidate PASS requires all endpoint probes
-to pass; a no-candidate replay therefore remains equivalent when it stays non-PASS.
-Endpoint-level route/interception evidence is retained, as are worker identity/readiness,
-numeric RSS, exact corpus order, cleanup between batches and semantic restoration.
+`_19` corrected that boundary. The exact persisted Stage-60 candidate corpus/order remained
+batched at at most three warm workers. Every target-bound worker received all pinned
+endpoint names in its hostlist. For every candidate, every pinned endpoint was probed
+sequentially against its own fixed selected IP. Candidate PASS required all endpoint probes
+to pass; every no-candidate replay remained non-PASS. Endpoint-level route/interception
+evidence, worker identity/readiness, numeric RSS, exact corpus order, cleanup between
+batches and semantic restoration all passed.
 
-Measured fields include warm exhaustive search wall time, batch startup/cleanup,
-candidate-level and endpoint-level dispatch/probe medians, peak aggregate batch RSS, exact
-corpus/endpoint completeness and final semantic restoration.
-`candidate_runtime_speedup_percent` compares the measured warm exhaustive runtime with the
-sum of the same persisted cold Stage-60 candidate durations. A projected full-job value
-uses `cold_job_total - cold_stage60_candidate_runtime + warm_exhaustive_search` and is
-explicitly marked as a projection rather than a measured Model B full job.
+The owner repeated the corrected `_19` exhaustive run five times on `job.tMYnFA`. All five
+returned `conclusion=accept` with restoration verified. Warm exhaustive search times were
+74886, 74692, 75083, 74780 and 74600 ms: mean 74808.2 ms, median 74780 ms and only 483 ms
+min/max spread. Mean measured Stage-60 candidate-runtime speedup versus the retained
+89012 ms cold corpus was about 15.96%. Peak aggregate three-worker RSS stayed between
+12976 and 12992 KiB. The report's full-job value remains explicitly projected rather than
+a measured Model B full Strategy Lab run.
 
 Exact contracts/evidence:
 
 - `docs/patches/v0.4.0_18.md`;
 - `docs/patches/v0.4.0_19.md`;
-- `docs/verification/evidence/2026-08-11-v0.4.0_18-model-b-exhaustive-multi-endpoint-gap.md`.
+- `docs/verification/evidence/2026-08-11-v0.4.0_18-model-b-exhaustive-multi-endpoint-gap.md`;
+- `docs/verification/evidence/2026-08-11-v0.4.0_19-model-b-exhaustive-reproducibility.md`.
+
+The next selected experiment is `_20` controlled parallel candidate probing. Production
+Strategy Lab remains Model A until a separate architecture decision is justified.
 
 ==================================================
 CONFIRMED DEFECT / REGRESSION BACKLOG
@@ -361,14 +372,16 @@ Closed by the adaptive timeout/search and measurement series:
    plus common cleanup. Owner installation is complete and five ready-pool repeats all
    accept, confirming no regression of the accepted coexistence path; the intentionally
    broken negative path remains regression evidence only.
+9. `_18` single-endpoint exhaustive input assumption — corrected by `_19`; five owner-live
+   full-corpus sequential exhaustive runs all accept with stable timing and restoration.
 
 Current measurement gap:
 
-9. `_18` established the complete fresh no-candidate cold reference but its exhaustive
-   warm harness rejected before batch startup because it required exactly one pinned
-   endpoint. `_19` is the narrow multi-endpoint corrective; owner-live exhaustive timing
-   remains pending until `_19` is qualified, published and rerun against `job.tMYnFA` (or
-   a fresh equivalent reference if the resource inventory no longer matches).
+10. `_20` controlled parallel candidate probing is not yet owner-live measured. It must
+    prove simultaneous candidate overlap, exact source-port-qualified route attribution,
+    unchanged no-candidate results, worker health, bounded width, cleanup and semantic
+    restoration before any performance conclusion. CPU count is measurement metadata, not
+    an acceptance gate.
 
 Other product/regression observations remain separate backlog unless selected by the
 risk-based live gate:
