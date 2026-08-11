@@ -1,18 +1,18 @@
 # DEC-2026-08-11 — Select controlled-parallel Model B for Strategy Lab production integration
 
-Status: **APPROVED FOR IMPLEMENTATION; NOT YET PRODUCTION-ACTIVE**
+Status: **IMPLEMENTED IN `v0.4.0_22`; PRODUCTION-ACTIVE WITH COLD MODEL A FALLBACK; OWNER-LIVE PRODUCTION EVIDENCE RECORDED**
 
 ## Context
 
-Strategy Lab currently uses cold Model A in production: each candidate owns a fresh
-candidate runtime and fresh dvtws2 process and is fully torn down before the next
+Strategy Lab originally used cold Model A in production: each candidate owned a fresh
+candidate runtime and fresh dvtws2 process and was fully torn down before the next
 candidate.
 
 The adaptive-search experiment plan required warm-worker coexistence, exact traffic
 attribution, result equivalence, bounded cleanup, complete no-candidate replay and repeated
 live evidence before any warm architecture could be selected.
 
-That evidence now exists:
+That evidence chain is now complete:
 
 - Model A cold reference accepted on `v0.4.0_11`;
 - Model B coexistence accepted on `_16` and repeated 5/5 on `_17`;
@@ -21,7 +21,10 @@ That evidence now exists:
 - `_20` first live run proved actual three-way overlap and performance but exposed a
   failed-probe attribution false reject;
 - `_21` corrected only that attribution contract while keeping PASS socket identity strict;
-- `_21` then produced an owner-live ACCEPT followed by five unchanged ACCEPT repeats.
+- `_21` then produced an owner-live ACCEPT followed by five unchanged ACCEPT repeats;
+- `_22` integrated the selected semantics into the real production Stage 60 and has owner-
+  live production evidence for Standard no-candidate, Standard working-candidate and
+  fail-closed Extended cold-fallback paths.
 
 The `_21` repeat series used the retained Standard `telegram.org` no-candidate reference
 `job.tMYnFA`: 16 Stage-60 candidates, two pinned endpoints and 32 endpoint probes.
@@ -39,15 +42,14 @@ Measured repeat-series mean:
   concurrency, cleanup and semantic restoration.
 
 The owner appliance has two logical CPUs. CPU count is retained only as measurement
-metadata. Width is not selected from this appliance topology and the architecture must
-remain valid on other OPNsense systems.
+metadata. Width is not selected from this appliance topology and the architecture remains
+valid on other OPNsense systems.
 
 ## Decision
 
-**Controlled-parallel Model B is selected as the target architecture for the next
-production Strategy Lab integration patch.**
+**Controlled-parallel Model B is the production Stage-60 architecture from `v0.4.0_22`.**
 
-The selected production design must preserve these proven boundaries:
+The production design preserves these proven boundaries:
 
 1. At most three candidate workers are resident in one batch.
 2. Candidate tasks may execute concurrently up to that width.
@@ -62,53 +64,77 @@ The selected production design must preserve these proven boundaries:
 9. Worker identity/readiness and aggregate RSS remain observable.
 10. Batch cleanup is mandatory before the next batch.
 11. Final Strategy Lab lifecycle restoration remains semantic and mandatory.
-12. The existing cold Model A path remains the correctness/fallback reference during the
-    production migration and rollback boundary.
+12. Cold Model A remains the correctness/runtime fallback and rollback reference.
 
-## Production transition boundary
+## Production implementation
 
-This decision **does not set `production_approved=true` on the current experiment harness**
-and does not silently switch normal Strategy Lab jobs to Model B.
+`v0.4.0_22` integrates the selected behavior into the real Stage-60 search owner with normal
+job budgets, cancellation, progress/state persistence, deterministic planner/frontier
+ordering, budget admission, partial containment and Stage-90 restoration. It does not call
+the laboratory exhaustive harness as the production implementation.
 
-The next logical patch must integrate the selected behavior into the real Stage-60 search
-owner with normal job budgets, cancellation, progress/state persistence, winner early-stop,
-partial/budget containment and Stage-90 restoration. It must not merely call the laboratory
-exhaustive harness from production.
-
-The integration must include automated coverage for at least:
+The implementation includes automated coverage for:
 
 - complete no-candidate graph exhaustion;
-- winner early-stop with concurrent in-flight candidates resolved deterministically;
+- deterministic winner-band handling with concurrent in-flight candidates;
 - Stage-60 deadline/budget admission under batched parallel execution;
 - cancellation while a multi-worker batch is active;
-- one-worker readiness/start failure with fail-closed cleanup;
-- one probe failure/timeout while sibling candidate probes continue safely;
+- worker readiness/start failure with fail-closed cleanup;
+- probe failure/timeout containment while sibling candidate probes remain safe;
 - exact per-flow source-port/IPFW attribution;
 - no dedicated-rule/listener/runtime residue;
 - unchanged Stage 70/80/85 ownership and inputs;
 - semantic service/configuration restoration.
 
-After source/CI/FreeBSD package acceptance, owner-live verification must include both a
-no-candidate graph-exhausted path and a winner/early-stop path before the production Model B
-migration is declared complete.
+Explicit rollback/testing selector:
+`STRATEGY_LAB_STAGE60_MODEL=cold`.
 
-## Rejected alternatives at this point
+## Owner-live production closeout
+
+Canonical record:
+`docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`.
+
+Observed `_22` production paths:
+
+- Standard `telegram.org` `job.KpLHgb`: real production Model B, 16/16
+  `graph_exhausted`, zero winners, width-three overlap, no fallback, Stage 60 `34227 ms`,
+  terminal `NO_CANDIDATE`, restoration PASS;
+- Standard `rutracker.org` `job.GK0X66`: real production Model B, 16/16, two Stage-60
+  winners, no fallback, Stage 60 `28151 ms`, downstream Stage 70/85 success, terminal
+  `SUCCESS`, restoration PASS;
+- Extended `rutracker.org` `job.d5XV82`: first warm batch detected
+  `controlled source port is already in use: 42003`; the designed fail-closed Model A
+  fallback completed all 16 candidates, Stage 80 and restoration successfully.
+
+The Standard `rutracker.org` 16/16 result is not a recurrence of the historical fixed
+Stage-60 parent-timeout defect. That defect was closed by `_7`/`_8`. The `_22` run found two
+Stage-60 winners, below the target of three, so graph exhaustion was truthful current
+behavior.
+
+The supplied `_22` owner-live set did not reach `early_stop.triggered=true` because no run
+reached three Stage-60 winners. This remains a precise coverage note, not a defect claim.
+The single observed `42003` source-port collision is likewise not declared fixed; the
+fallback/cleanup boundary is verified and the collision should be investigated only if it
+recurs or becomes reproducible.
+
+## Rejected alternatives at selection time
 
 - **Keep sequential warm Model B as the production target:** safe and reproducible, but the
-  complete exhaustive live series shows only about 15.96% Stage-60 candidate-runtime
+  complete exhaustive live series showed only about 15.96% Stage-60 candidate-runtime
   improvement versus cold Model A, substantially below the controlled-parallel result.
 - **Scale width directly from CPU count:** rejected. CPU topology is measurement context,
-  not a correctness selector; a fixed proven width of three is the current evidence-backed
-  boundary.
-- **Move directly to Model C / one-process candidate bucket:** rejected for now. It has not
-  yet proven exact dispatcher identity, per-flow state isolation or cleanup, while Model B
-  already has a strong live evidence chain.
+  not a correctness selector; fixed width three remains the evidence-backed boundary.
+- **Move directly to Model C / one-process candidate bucket:** rejected. Exact dispatcher
+  identity, per-flow state isolation and cleanup have not been proven to the same standard.
 - **Run more than three workers concurrently:** not selected. There is no owner-live
   coexistence/attribution evidence beyond width three.
 
 ## Evidence
 
-Primary acceptance record:
+Primary production record:
+`docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`.
+
+Selection evidence:
 `docs/verification/evidence/2026-08-11-v0.4.0_21-model-b-parallel-reproducibility.md`.
 
 Supporting records:
@@ -116,11 +142,15 @@ Supporting records:
 - `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`;
 - `docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md`;
 - `docs/verification/evidence/2026-08-11-v0.4.0_19-model-b-exhaustive-reproducibility.md`;
-- `docs/verification/evidence/2026-08-11-v0.4.0_20-model-b-parallel-live-reject.md`;
-- `docs/patches/v0.4.0_21.md`.
+- `docs/verification/evidence/2026-08-11-v0.4.0_20-model-b-parallel-attribution-reject.md`;
+- `docs/patches/v0.4.0_21.md`;
+- `docs/patches/v0.4.0_22.md`;
+- PR #175 owner-live evidence comment.
 
 ## Next action
 
-Implement one separate production-integration patch using the proven width-three
-controlled-parallel Model B semantics, keeping cold Model A as a fallback/reference until
-owner-live production-path verification passes.
+Treat width-three controlled-parallel Model B as the active production Stage-60 baseline.
+Do not reopen the architecture-selection question from older evidence. If the observed
+controlled-source-port collision recurs, collect exact live socket/process/rule evidence and
+handle it as a separate corrective scope. Any Model C, endpoint-parallel or width-greater-
+than-three work remains a separate evidence-gated experiment.
