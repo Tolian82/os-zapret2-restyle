@@ -100,8 +100,8 @@ VERIFIED PROGRESSION — CURRENT INTERPRETATION
 ==================================================
 
 - `_27` produced the selected v0.4.0 Scenario 1 live PASS.
-- Adaptive `_28` focused evidence is retained in
-  `docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md`.
+- Adaptive `_28` focused evidence:
+  `docs/verification/evidence/2026-08-09-v0.4.0_2-stage60-family-reachability-pass.md` is retained as historical focused evidence.
 - `v0.4.0_6` exposed the fixed Stage-60 parent boundary after only part of the graph;
   evidence: `2026-08-09-v0.4.0_6-stage60-timeout.md`.
 - `v0.4.0_7` closed that Stage-60 boundary: Standard and Extended both completed 16/16;
