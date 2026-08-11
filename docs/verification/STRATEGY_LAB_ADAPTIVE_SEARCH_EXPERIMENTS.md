@@ -28,51 +28,45 @@ when the experiment is actually executed.
 STATUS
 ==================================================
 
-Approved experiment plan. **Model A is accepted as the cold correctness/performance
-reference. Model B three-worker coexistence is owner-live accepted/reproducible, and the
-complete sequential no-candidate exhaustive Model B replay is owner-live ACCEPT 5/5 on
-`v0.4.0_19`. Controlled parallel candidate probing is now the selected experiment on
-`v0.4.0_20`.** Model C, warm-bucket selection and production warm-runtime adoption remain
-unexecuted/unapproved.
+The Model B architecture-selection experiment is **complete and production-integrated on
+`v0.4.0_22`**. Model A remains the accepted cold correctness/performance reference and
+runtime fallback. The selected production Stage-60 engine is
+`B-warm-worker-parallel-batched`, fixed at maximum candidate width three with no CPU-count
+gate and sequential pinned endpoints inside each candidate.
 
-Owner Standard `rutracker.org` job `job.TtZeaH` on `v0.4.0_11` produced 25 cold samples
-and `conclusion=reference_collected`. Every machine-checkable Model A coverage gate passed,
-including PASS/FAIL candidates, repetitions, `blob-free`/`builtin`/`external` resources,
-`-d8`, overlapping TLS/443 candidates, numeric RSS and verified clean restoration.
+Accepted evidence chain:
 
-Accepted `_11` reference medians are total candidate 1580 ms, readiness 1046 ms, prepare
-140 ms, launch 17 ms, probe 220 ms and stop+cleanup 81 ms. Candidate-process RSS after
-readiness is tightly clustered around 4332 KiB median, 4348 KiB p90 and 4356 KiB max.
+- Model A cold reference: `v0.4.0_11` / `job.TtZeaH`, 25 samples,
+  `conclusion=reference_collected`;
+- Model B coexistence: first owner-live ACCEPT on `_16`, repeated 5/5 on `_17`;
+- Model B sequential exhaustive: owner-live ACCEPT 5/5 on `_19`, mean `74808.2 ms`, about
+  `15.96%` measured candidate-runtime improvement versus the retained cold reference;
+- Model B controlled parallel: `_21` produced six accepted runs including five unchanged
+  repeats, mean `33025.6 ms`, about `62.90%` reduction versus cold Model A and about
+  `55.85%` versus sequential warm Model B, with roughly 13 MiB aggregate RSS;
+- production integration: `_22` owner-live Standard `telegram.org` `job.KpLHgb` completed
+  real width-three warm 16/16 graph exhaustion in `34227 ms` with no fallback; Standard
+  `rutracker.org` `job.GK0X66` completed real warm production Stage 60 in `28151 ms` with
+  two Stage-60 winners and successful downstream validation; Extended `job.d5XV82`
+  exercised the designed fail-closed Model A fallback after one controlled-source-port
+  conflict and still restored cleanly.
 
-The first complete owner-live Model B coexistence accept was collected on `_16`; `_17`
-repeated the unchanged accepted ready-pool experiment five times. Those runs gave the
-mechanism-level estimates of about 86.5% lower already-warm dispatch+probe cost and about
-62.0% lower startup-amortized three-candidate cost versus the Model A 1580 ms cold median.
-Those figures are not full-search speedups.
+Current production evidence:
+`docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`.
 
-The complete sequential exhaustive comparison is now available from `_19`. Reference
-`job.tMYnFA` is Standard `telegram.org`, `NO_CANDIDATE`, 16/16 Stage-60
-`graph_exhausted`, with two pinned endpoints. Five unchanged `_19` warm replays all
-returned `conclusion=accept` with verified restoration. Warm exhaustive search times were
-74886, 74692, 75083, 74780 and 74600 ms: mean 74808.2 ms, median 74780 ms, total min/max
-spread 483 ms. Against the retained 89012 ms cold Stage-60 candidate runtime this is about
-15.96% mean measured candidate-runtime improvement. The full-job value remains explicitly
-a projection rather than measured Model B full-job wall time.
+The explicit `_22` `early_stop.triggered=true` branch was not reached by this supplied live
+set because no `_22` run reached three Stage-60 winners. This is a coverage statement, not
+evidence that the historical Stage-60 timeout/partial-completion defect returned. That old
+fixed-parent boundary was already closed by `_7` and `_8`.
 
-Owner CPU context for that series was two logical CPUs on a Westmere-class virtual CPU.
-That is evidence context only. **No experiment or candidate width is accepted/rejected by
-CPU count.** The architecture must remain meaningful on other OPNsense systems, including
-4/6/8+ logical-CPU appliances.
+Owner CPU context for the accepted Model B series was two logical CPUs on a Westmere-class
+virtual CPU. That is evidence context only. **No experiment or candidate width is
+accepted/rejected by CPU count.**
 
-Exact accepted/repeated evidence:
-
-- `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`;
-- `docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md`;
-- `docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md`;
-- `docs/verification/evidence/2026-08-11-v0.4.0_19-model-b-exhaustive-reproducibility.md`.
-
-No warm-runtime model is production-approved by these results. Every selected optimization
-must preserve the accepted cold reference result and Strategy Lab lifecycle safety.
+Future Model C, width greater than three, endpoint-parallel, dispatcher/bucket or other
+runtime optimization remains experimental until it independently satisfies the evidence
+and decision rules below. Current `_22` production behavior must not be diagnosed from an
+older evidence file without first reading the current patch/PR/live record.
 
 ==================================================
 QUESTIONS TO ANSWER
@@ -97,6 +91,11 @@ QUESTIONS TO ANSWER
     the lowest cost?
 11. Which current operation/stage timeouts are too small, too large or internally
     inconsistent?
+
+Questions 1-3 and the selected bounded candidate-parallel form of question 9 are answered by
+the accepted Model A/Model B evidence chain and `_22` production integration. Questions
+that concern Model C, broader preload/bucket policy, endpoint-level parallelism or new
+runtime widths remain future experiment questions.
 
 ==================================================
 REFERENCE CONDITIONS
@@ -131,11 +130,13 @@ The candidate corpus must contain at least:
 All comparisons retain the same target/interception evidence. A faster result that cannot
 prove which candidate handled the traffic is invalid.
 
-For maximum search-time comparison, successful early-stop targets are insufficient. Owner
-`_9` evidence shows Standard `telegram.org` exhausting all 16 Stage-60 candidates and
-completing through restoration in about 144.125 s, while Standard `rutracker.org` stopped
-Stage 60 after six candidates when three winners were found and completed in about 71.023
-s. Exhaustive timing therefore uses a `NO_CANDIDATE / graph_exhausted` reference.
+For maximum search-time comparison, successful early-stop targets are insufficient. The
+historical `_9` evidence showed Standard `telegram.org` exhausting all 16 Stage-60
+candidates and completing through restoration in about 144.125 s, while the historical
+Standard `rutracker.org` run happened to find three winners and stopped Stage 60 after six
+candidates in about 71.023 s total. Exhaustive timing therefore uses a
+`NO_CANDIDATE / graph_exhausted` reference. These historical values are comparison inputs,
+not the current `_22` completion rule.
 
 ==================================================
 MODEL A — COLD REFERENCE
@@ -177,7 +178,8 @@ Measure per candidate:
 Repeat enough times to distinguish normal variance from a stable startup cost. Record
 median and a useful tail measure rather than relying on one best run.
 
-Model A remains the final verification fallback even if another discovery model wins.
+Model A remains the final verification fallback even though Model B is now the normal `_22`
+Stage-60 production engine.
 
 ==================================================
 MODEL B — MULTIPLE WARM DVTWS2 WORKERS
@@ -185,8 +187,9 @@ MODEL B — MULTIPLE WARM DVTWS2 WORKERS
 
 Definition:
 Start several compatible candidate workers ahead of their probes. Each worker owns
-distinct temporary runtime identity and divert ownership. Candidate probes are initially
-executed sequentially.
+distinct temporary runtime identity and divert ownership. Candidate probes were initially
+executed sequentially; the accepted later architecture permits bounded candidate-level
+parallelism while retaining sequential endpoints inside each candidate.
 
 Required coexistence evidence:
 
@@ -272,25 +275,24 @@ Exact contracts:
 - `docs/patches/v0.4.0_19.md`.
 
 ==================================================
-MODEL B CONTROLLED PARALLEL CANDIDATE-PROBE EXPERIMENT — `_20`
+MODEL B CONTROLLED PARALLEL CANDIDATE-PROBE EXPERIMENT — `_20` / `_21`
 ==================================================
 
-True parallel testing is deliberately last and is now selected because Model B proved
-both deterministic coexistence and reproducible complete sequential exhaustive replay.
+True candidate parallelism was deliberately tested after Model B proved deterministic
+coexistence and reproducible complete sequential exhaustive replay.
 
-`_20` changes only the experiment harness:
+The experiment retained:
 
-- the exact persisted `job.tMYnFA` corpus/order remains authoritative;
-- at most three already-isolated warm dvtws2 workers exist in one batch;
-- up to three **candidate tasks** execute concurrently;
+- the exact persisted `job.tMYnFA` corpus/order;
+- at most three already-isolated warm dvtws2 workers in one batch;
+- up to three concurrent **candidate tasks**;
 - pinned endpoints **inside one candidate remain sequential**;
-- production Strategy Lab remains Model A;
-- `production_approved=false`.
+- exact result equivalence and restoration requirements.
 
 The `_19` single-active-route assumption cannot be used when three candidate probes are in
-flight. Multiple rules matching only `from me -> selected_ip:443` would be ambiguous. `_20`
-therefore assigns one unique controlled TCP source port to every candidate/endpoint probe.
-Each temporary IPFW rule must match:
+flight. Multiple rules matching only `from me -> selected_ip:443` would be ambiguous. The
+parallel experiment therefore assigns one unique controlled TCP source port to every
+candidate/endpoint probe. Each temporary IPFW rule must match:
 
 - the dedicated Model B rule/divert identity;
 - TCP;
@@ -304,7 +306,7 @@ be unique and bounded. Selected-rule counter growth, fixed endpoint identity and
 port selector are retained as attribution evidence. All temporary rules must disappear by
 batch cleanup.
 
-Required `_20` acceptance:
+Required acceptance:
 
 - same current `ResourceInventory` and exact persisted corpus/order;
 - all warm batches ready with unique worker PID/divert identity and numeric RSS;
@@ -331,17 +333,23 @@ Measure and retain:
 - result equivalence;
 - restoration.
 
-Compare `_20` directly with the accepted `_19` sequential exhaustive distribution, not
-with the earlier three-candidate mechanism-level estimate. A 2-core owner appliance is a
-valid low-resource live test, not an architecture limit; other OPNsense systems may expose
-more or less benefit.
+`_20` proved actual overlap/performance but false-rejected blocked probes because failed
+probe attribution incorrectly depended on connected-socket evidence. `_21` corrected that
+one boundary: PASS still requires connected-socket identity; failed-probe ownership uses the
+exact requested source port, exact pinned `--resolve` binding, exact matching IPFW counter
+growth and successful route cleanup.
 
-Reject parallel probing if it introduces ambiguous attribution, changes pass/fail results,
-violates the concurrency bound, prevents cleanup/restoration, or saves too little wall time
-to justify lifecycle/debugging complexity.
+The `_21` result is owner-live accepted and reproducible. It selected the width-three
+controlled-parallel Model B architecture subsequently integrated in production by `_22`.
 
-Exact source contract:
-`docs/patches/v0.4.0_20.md`.
+Exact contracts/evidence:
+
+- `docs/patches/v0.4.0_20.md`;
+- `docs/patches/v0.4.0_21.md`;
+- `docs/verification/evidence/2026-08-11-v0.4.0_20-model-b-parallel-attribution-reject.md`;
+- `docs/verification/evidence/2026-08-11-v0.4.0_21-model-b-parallel-reproducibility.md`;
+- `docs/decisions/DEC-2026-08-11-strategy-lab-parallel-model-b-selection.md`;
+- `docs/patches/v0.4.0_22.md`.
 
 ==================================================
 MODEL C — ONE WARM DVTWS2 WITH CANDIDATE BUCKET
@@ -374,9 +382,9 @@ result agreement and cleanup/restoration cost.
 CONTROLLED SOURCE-PORT SELECTOR HYPOTHESIS
 ==================================================
 
-A controlled source port can encode or qualify laboratory flow identity. `_20` uses the
-source port only to make **three separate IPFW divert rules deterministic**; this does not
-by itself approve source-port selection for Model C.
+A controlled source port can encode or qualify laboratory flow identity. `_20`/`_21` and
+production `_22` use the source port to make **separate IPFW divert rules deterministic**;
+this does not by itself approve source-port selection for Model C.
 
 For any future Model-C dispatcher use, still verify in order:
 
@@ -390,6 +398,11 @@ For any future Model-C dispatcher use, still verify in order:
 7. adjacent candidate IDs cannot cross-select under repeated trials.
 
 Failure rejects that dispatcher hypothesis without rejecting Model C as a whole.
+
+The `_22` Extended `job.d5XV82` observation `controlled source port is already in use:
+42003` is a production watch item. The fail-closed fallback and cleanup passed; the
+collision itself is not considered fixed or a reason to redesign the selector until it
+recurs or can be reproduced with exact socket/process evidence.
 
 ==================================================
 LUA PRELOAD EXPERIMENT
@@ -560,4 +573,7 @@ Each experiment produces a dated evidence record with:
 - follow-up decision/document links.
 
 Only an `accept` result followed by an updated decision may convert an experimental
-mechanism into the production Strategy Lab architecture.
+mechanism into the production Strategy Lab architecture. `_21` satisfied that requirement
+for controlled-parallel Model B, the dated selection decision approved production
+integration, and `_22` then supplied the separate production integration plus owner-live
+verification record.
