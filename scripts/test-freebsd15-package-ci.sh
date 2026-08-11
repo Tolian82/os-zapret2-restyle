@@ -77,9 +77,12 @@ done
 [ -x "${PATCH31_TEST}" ] || fail 'Python adaptive planner/search-epoch/telemetry focused test is not executable'
 [ -x "${MODEL_A_TEST}" ] || fail 'Model A measurement focused test is not executable'
 [ -x "${MODEL_B_TEST}" ] || fail 'Model B experiment focused test is not executable'
+[ -x "${MODEL_B_EXHAUSTIVE_TEST}" ] || fail 'Model B exhaustive focused test is not executable'
 [ -x "${MODEL_B_ADAPTER}" ] || fail 'Model B FreeBSD adapter is not executable'
 [ -x "${MODEL_B_WORKER}" ] || fail 'Model B lifecycle worker is not executable'
 [ -x "${MODEL_B_LAUNCHER}" ] || fail 'Model B lifecycle launcher is not executable'
+[ -x "${MODEL_B_EXHAUSTIVE_WORKER}" ] || fail 'Model B exhaustive lifecycle worker is not executable'
+[ -x "${MODEL_B_EXHAUSTIVE_LAUNCHER}" ] || fail 'Model B exhaustive launcher is not executable'
 
 version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; exit}' "${MAKEFILE}")
@@ -141,11 +144,17 @@ grep -Fq 'preserves bounded post-drop hostlist access' "${MODEL_B_TEST}" ||
 grep -Fq 'PASS: Model B failed pool readiness rejects immediately, skips probes/stop/death, and still requests bounded cleanup' \
     "${MODEL_B_FAILFAST_TEST}" ||
     fail 'Model B failed-readiness fail-fast regression is unavailable'
-grep -Fq 'PASS: exhaustive Model B benchmark replays a complete graph-exhausted corpus' \
+grep -Fq 'PASS: exhaustive Model B benchmark replays a complete graph-exhausted multi-endpoint corpus' \
     "${MODEL_B_EXHAUSTIVE_TEST}" ||
-    fail 'Model B exhaustive no-candidate regression is unavailable'
+    fail 'Model B exhaustive multi-endpoint regression is unavailable'
 grep -Fq 'B-warm-worker-exhaustive-batched' "${MODEL_B_EXHAUSTIVE_PY}" ||
     fail 'Model B exhaustive Python module is unavailable'
+grep -Fq 'reference_endpoint_bindings' "${MODEL_B_EXHAUSTIVE_PY}" ||
+    fail 'Model B exhaustive module does not validate reference endpoint bindings'
+grep -Fq 'all_reference_endpoints_replayed' "${MODEL_B_EXHAUSTIVE_PY}" ||
+    fail 'Model B exhaustive module does not require complete endpoint replay'
+grep -Fq 'endpoint_probes' "${MODEL_B_EXHAUSTIVE_PY}" ||
+    fail 'Model B exhaustive module does not retain endpoint-level evidence'
 grep -Fq 'model-b-exhaustive run' "${MODEL_B_EXHAUSTIVE_WORKER}" ||
     fail 'Model B exhaustive lifecycle worker is unavailable'
 grep -Fq '9>"${LIFECYCLE_LOCK_FILE}"' "${MODEL_B_EXHAUSTIVE_LAUNCHER}" ||
@@ -184,8 +193,11 @@ for installed in \
     strategy_lab_py/search_graph.py \
     strategy_lab_py/search.py \
     strategy_lab_py/extended.py \
+    strategy_lab_py/model_b_exhaustive.py \
     strategy_lab_candidate_adapter.sh \
-    strategy_lab_stage_adapter.sh
+    strategy_lab_stage_adapter.sh \
+    strategy_lab_model_b_exhaustive.sh \
+    strategy_lab_model_b_exhaustive_worker.sh
 do
     grep -Fq "usr/local/opnsense/scripts/OPNsense/Zapret/${installed}" "${CI}" ||
         fail "package inspection no longer requires ${installed}"
@@ -197,7 +209,7 @@ grep -Fq 'scripts/test-freebsd15-package-ci' "${CI}" ||
 
 # Current live/source selection must agree across the canonical live matrix and project
 # state while retaining all historical release/search evidence.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_17` REPEATED COEXISTENCE ACCEPT 5/5 (EXPERIMENT ONLY); `_18` EXHAUSTIVE NO-CANDIDATE BENCHMARK SOURCE CANDIDATE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_17` REPEATED COEXISTENCE ACCEPT 5/5 (EXPERIMENT ONLY); `_18` EXHAUSTIVE INPUT-CONTRACT REJECT WITH RESTORATION PASS; `_19` MULTI-ENDPOINT EXHAUSTIVE CORRECTIVE SOURCE CANDIDATE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
     fail 'unexpected Strategy Lab live-matrix state'
 grep -Fq '**PASS ON `_27` — v0.4.0 mandatory row**' "${MATRIX}" ||
     fail 'release-selected live matrix does not retain the v0.4.0 mandatory Scenario 1 PASS'
@@ -209,27 +221,31 @@ grep -Fq '2026-08-10-v0.4.0_7-late-stage-pass.md' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_7 timeout-hierarchy evidence'
 grep -Fq '2026-08-10-v0.4.0_8-timeout-containment-pass.md' "${MATRIX}" ||
     fail 'live matrix does not retain the v0.4.0_8 timeout-containment closeout'
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_17.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not retain published _17'
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_17.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not retain owner-tested _17'
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_18.pkg`' "${MATRIX}" ||
+    fail 'live matrix does not retain published _18'
+grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_18.pkg`' "${MATRIX}" ||
+    fail 'live matrix does not retain owner-tested _18'
 grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}" ||
     fail 'live matrix does not select the current source candidate'
-grep -Fq 'Current source purpose: `_18` experiment-only batched exhaustive Model B benchmark for Standard `NO_CANDIDATE / graph_exhausted`; CI/publication pending' "${MATRIX}" ||
-    fail 'live matrix does not describe the _18 source benchmark'
+grep -Fq 'Current source purpose: `_19` narrow multi-endpoint corrective for the experiment-only Model B exhaustive `NO_CANDIDATE / graph_exhausted` benchmark; CI/publication pending' "${MATRIX}" ||
+    fail 'live matrix does not describe the _19 corrective'
 grep -Fq 'MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`' "${MATRIX}" ||
     fail 'live matrix does not expose the accepted Model A cold reference'
 grep -Fq 'MODEL B `_17` REPEATED OWNER-LIVE COEXISTENCE ACCEPT — EXPERIMENT ONLY' "${MATRIX}" ||
     fail 'live matrix does not expose repeated Model B coexistence acceptance'
+grep -Fq 'MODEL B `_18` / `_19` EXHAUSTIVE NO-CANDIDATE BENCHMARK — CORRECTIVE GATE' "${MATRIX}" ||
+    fail 'live matrix does not expose the exhaustive multi-endpoint corrective gate'
 grep -Fq 'Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}" ||
     fail 'live matrix does not retain the accepted Model A appliance job'
+grep -Fq 'job.tMYnFA' "${MATRIX}" ||
+    fail 'live matrix does not retain the fresh complete exhaustive cold reference'
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}" ||
     fail 'live matrix does not require the FreeBSD 15 ABI'
 
-grep -Fq 'Latest published testing prerelease: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`' "${PROJECT_STATE}" ||
-    fail 'project state does not retain published _17'
-grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`' "${PROJECT_STATE}" ||
-    fail 'project state does not retain owner-tested _17'
+grep -Fq 'Latest published testing prerelease: `v0.4.0_18` / `os-zapret2-restyle-0.4.0_18.pkg`' "${PROJECT_STATE}" ||
+    fail 'project state does not retain published _18'
+grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_18` / `os-zapret2-restyle-0.4.0_18.pkg`' "${PROJECT_STATE}" ||
+    fail 'project state does not retain owner-tested _18'
 grep -Fq "Current source candidate: \`${candidate}\`" "${PROJECT_STATE}" ||
     fail 'project state does not select the current source candidate'
 grep -Fq '`_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**' "${PROJECT_STATE}" ||
@@ -238,10 +254,10 @@ grep -Fq '`_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `
     fail 'project state does not close the change-specific owner-live _33 boundary'
 grep -Fq 'Model A experiment gate: **REFERENCE COLLECTED on `v0.4.0_11` / `job.TtZeaH`**' "${PROJECT_STATE}" ||
     fail 'project state does not retain the accepted Model A reference gate'
-grep -Fq 'Model B experiment gate: **first owner-live coexistence ACCEPT on `v0.4.0_16`; repeated ACCEPT 5/5 on `v0.4.0_17`; EXPERIMENT ONLY; `production_approved=false`**' "${PROJECT_STATE}" ||
-    fail 'project state does not retain the Model B owner-live/reproducibility gate'
-grep -Fq 'Current phase: **Model B `_17` owner-installed and repeated coexistence ACCEPT 5/5; `_18` experiment-only exhaustive no-candidate benchmark implemented in source and pending CI/publication**' "${PROJECT_STATE}" ||
-    fail 'project state does not select the _18 exhaustive measurement phase'
+grep -Fq 'Model B experiment gate: **first owner-live coexistence ACCEPT on `v0.4.0_16`; repeated ACCEPT 5/5 on `v0.4.0_17`; `_18` exhaustive input-contract REJECT before warm batches; EXPERIMENT ONLY; `production_approved=false`**' "${PROJECT_STATE}" ||
+    fail 'project state does not retain the current Model B experiment gate'
+grep -Fq 'Current phase: **`_18` exhaustive owner-live input-contract REJECT on multi-endpoint `telegram.org` with restoration PASS; `_19` narrow multi-endpoint exhaustive corrective in source, CI/publication pending**' "${PROJECT_STATE}" ||
+    fail 'project state does not select the _19 corrective phase'
 
 grep -Fq 'projection_is_measured_full_job' "${MODEL_B_EXHAUSTIVE_PY}" ||
     fail 'exhaustive benchmark does not distinguish projected full-job timing'
@@ -249,6 +265,8 @@ grep -Fq 'unique_worker_identity' "${MODEL_B_EXHAUSTIVE_PY}" ||
     fail 'exhaustive benchmark lost unique worker identity gate'
 grep -Fq 'observed_ids == expected_ids' "${MODEL_B_EXHAUSTIVE_PY}" ||
     fail 'exhaustive benchmark lost exact corpus-order gate'
+grep -Fq 'all_reference_endpoints_replayed' "${MODEL_B_EXHAUSTIVE_PY}" ||
+    fail 'exhaustive benchmark lost complete reference endpoint replay gate'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI and Python 3.13 Strategy Lab contracts retain historical validation while ${candidate} adds only the exhaustive no-candidate Model B benchmark"
+printf '%s\n' "PASS: FreeBSD 15 package CI and Python 3.13 Strategy Lab contracts retain historical validation while ${candidate} narrowly fixes multi-endpoint exhaustive Model B replay"
