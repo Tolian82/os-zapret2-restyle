@@ -28,6 +28,8 @@ MODEL_B_FAILFAST_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_17.md"
 MODEL_B_FAILFAST_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-failed-readiness.sh"
 MODEL_B_REPRO_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md"
 MODEL_B_EXHAUSTIVE_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_18.md"
+MODEL_B_EXHAUSTIVE_GAP_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_18-model-b-exhaustive-multi-endpoint-gap.md"
+MODEL_B_MULTI_ENDPOINT_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_19.md"
 MODEL_B_EXHAUSTIVE_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-exhaustive.sh"
 MODEL_B_EXHAUSTIVE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b_exhaustive.py"
 MODEL_B_EXHAUSTIVE_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_exhaustive.sh"
@@ -47,6 +49,7 @@ for file in \
     "${MODEL_B_ACCESS_PATCH}" "${MODEL_B_ACCEPT_EVIDENCE}" \
     "${MODEL_B_FAILFAST_PATCH}" "${MODEL_B_FAILFAST_TEST}" \
     "${MODEL_B_REPRO_EVIDENCE}" "${MODEL_B_EXHAUSTIVE_PATCH}" \
+    "${MODEL_B_EXHAUSTIVE_GAP_EVIDENCE}" "${MODEL_B_MULTI_ENDPOINT_PATCH}" \
     "${MODEL_B_EXHAUSTIVE_TEST}" "${MODEL_B_EXHAUSTIVE_PY}" \
     "${MODEL_B_EXHAUSTIVE_LAUNCHER}" "${MODEL_B_EXHAUSTIVE_WORKER}" \
     "${LIVE_GATE_DECISION}" "${VERSION_FILE}" "${MAKEFILE}"
@@ -64,23 +67,24 @@ case "${revision}" in
 esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 
-# The canonical ledger keeps all accepted historical gates while selecting `_18` only as
-# an experiment-only exhaustive no-candidate source candidate.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_17` REPEATED COEXISTENCE ACCEPT 5/5 (EXPERIMENT ONLY); `_18` EXHAUSTIVE NO-CANDIDATE BENCHMARK SOURCE CANDIDATE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
+# The canonical ledger retains all accepted historical gates, records the `_18` owner-live
+# exhaustive input-contract reject, and selects `_19` only as its narrow corrective.
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_17` REPEATED COEXISTENCE ACCEPT 5/5 (EXPERIMENT ONLY); `_18` EXHAUSTIVE INPUT-CONTRACT REJECT WITH RESTORATION PASS; `_19` MULTI-ENDPOINT EXHAUSTIVE CORRECTIVE SOURCE CANDIDATE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
 grep -Fq 'AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md' "${MATRIX}"
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_17.pkg`' "${MATRIX}"
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_17.pkg`' "${MATRIX}"
+grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_18.pkg`' "${MATRIX}"
+grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_18.pkg`' "${MATRIX}"
 grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}"
-grep -Fq 'Current source purpose: `_18` experiment-only batched exhaustive Model B benchmark for Standard `NO_CANDIDATE / graph_exhausted`; CI/publication pending' "${MATRIX}"
+grep -Fq 'Current source purpose: `_19` narrow multi-endpoint corrective for the experiment-only Model B exhaustive `NO_CANDIDATE / graph_exhausted` benchmark; CI/publication pending' "${MATRIX}"
 grep -Fq 'Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}"
-grep -Fq 'Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)' "${MATRIX}"
+grep -Fq 'Latest owner-tested Standard no-winner job: `job.tMYnFA` (`telegram.org`, 16/16 `graph_exhausted`, measurement-only 210-second Standard budget override)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Extended no-winner job: `job.hsP8Ro` (`telegram.org`)' "${MATRIX}"
 grep -Fq 'docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md' "${MATRIX}"
 grep -Fq 'docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md' "${MATRIX}"
 grep -Fq 'docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md' "${MATRIX}"
-grep -Fq 'docs/patches/v0.4.0_18.md' "${MATRIX}"
+grep -Fq 'docs/verification/evidence/2026-08-11-v0.4.0_18-model-b-exhaustive-multi-endpoint-gap.md' "${MATRIX}"
+grep -Fq 'docs/patches/v0.4.0_19.md' "${MATRIX}"
 grep -Fq 'MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`' "${MATRIX}"
 grep -Fq '`conclusion=reference_collected`' "${MATRIX}"
 grep -Fq 'numeric RSS on all 25 samples' "${MATRIX}"
@@ -99,6 +103,9 @@ grep -Fq 'about 144.125 s' "${MATRIX}"
 grep -Fq 'about 71.023 s' "${MATRIX}"
 grep -Fq 'about 86.5%' "${MATRIX}"
 grep -Fq 'roughly 62.0%' "${MATRIX}"
+grep -Fq 'error="exhaustive Model B requires one pinned endpoint"' "${MATRIX}"
+grep -Fq 'job.tMYnFA' "${MATRIX}"
+grep -Fq 'web.telegram.org' "${MATRIX}"
 
 scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /PASS ON `_27` — v0.4.0 mandatory row/ {n++} END {print n+0}' "${MATRIX}")
 [ "${scenario_one}" -eq 1 ] || {
@@ -191,7 +198,7 @@ grep -Fq '`downstream_actions_skipped=true`' "${MODEL_B_FAILFAST_PATCH}"
 grep -Fq 'no route-add, probe, independent-stop, survivor check, controlled-death or `kill-owned` action is attempted' "${MODEL_B_FAILFAST_PATCH}"
 grep -Fq 'PASS: Model B failed pool readiness rejects immediately, skips probes/stop/death, and still requests bounded cleanup' "${MODEL_B_FAILFAST_TEST}"
 
-# `_17` reproducibility and `_18` exhaustive measurement extend rather than replace the
+# `_17` reproducibility, `_18` live gap, and `_19` corrective extend rather than replace the
 # accepted Model B contract.
 grep -Fq 'acceptance: `5/5`' "${MODEL_B_REPRO_EVIDENCE}"
 grep -Fq 'mean pool startup: `1163.6 ms`' "${MODEL_B_REPRO_EVIDENCE}"
@@ -199,19 +206,30 @@ grep -Fq '`86.5%` reduction' "${MODEL_B_REPRO_EVIDENCE}"
 grep -Fq '`62.0%` reduction' "${MODEL_B_REPRO_EVIDENCE}"
 grep -Fq 'Model B exhaustive no-candidate benchmark' "${MODEL_B_EXHAUSTIVE_PATCH}"
 grep -Fq 'at most three warm dvtws2 workers at once' "${MODEL_B_EXHAUSTIVE_PATCH}"
+grep -Fq 'job.tMYnFA' "${MODEL_B_EXHAUSTIVE_GAP_EVIDENCE}"
+grep -Fq '`completed=16`' "${MODEL_B_EXHAUSTIVE_GAP_EVIDENCE}"
+grep -Fq '`stopped_reason=graph_exhausted`' "${MODEL_B_EXHAUSTIVE_GAP_EVIDENCE}"
+grep -Fq '`error="exhaustive Model B requires one pinned endpoint"`' "${MODEL_B_EXHAUSTIVE_GAP_EVIDENCE}"
+grep -Fq '`restoration.verified=true`' "${MODEL_B_EXHAUSTIVE_GAP_EVIDENCE}"
+grep -Fq 'Model B exhaustive multi-endpoint reference corrective' "${MODEL_B_MULTI_ENDPOINT_PATCH}"
+grep -Fq 'all pinned reference endpoint names' "${MODEL_B_MULTI_ENDPOINT_PATCH}"
+grep -Fq 'all_reference_endpoints_replayed=true' "${MODEL_B_MULTI_ENDPOINT_PATCH}"
 grep -Fq 'projection_is_measured_full_job' "${MODEL_B_EXHAUSTIVE_PY}"
 grep -Fq 'unique_worker_identity' "${MODEL_B_EXHAUSTIVE_PY}"
 grep -Fq 'observed_ids == expected_ids' "${MODEL_B_EXHAUSTIVE_PY}"
-grep -Fq 'PASS: exhaustive Model B benchmark replays a complete graph-exhausted corpus' "${MODEL_B_EXHAUSTIVE_TEST}"
+grep -Fq 'reference_endpoint_bindings' "${MODEL_B_EXHAUSTIVE_PY}"
+grep -Fq 'all_reference_endpoints_replayed' "${MODEL_B_EXHAUSTIVE_PY}"
+grep -Fq 'endpoint_probes' "${MODEL_B_EXHAUSTIVE_PY}"
+grep -Fq 'PASS: exhaustive Model B benchmark replays a complete graph-exhausted multi-endpoint corpus' "${MODEL_B_EXHAUSTIVE_TEST}"
 grep -Fq '9>"${LIFECYCLE_LOCK_FILE}"' "${MODEL_B_EXHAUSTIVE_LAUNCHER}"
 grep -Fq 'model-b-exhaustive finalize' "${MODEL_B_EXHAUSTIVE_WORKER}"
 
-grep -Fq 'Model B experiment gate: **first owner-live coexistence ACCEPT on `v0.4.0_16`; repeated ACCEPT 5/5 on `v0.4.0_17`; EXPERIMENT ONLY; `production_approved=false`**' "${STATE}"
-grep -Fq 'Current phase: **Model B `_17` owner-installed and repeated coexistence ACCEPT 5/5; `_18` experiment-only exhaustive no-candidate benchmark implemented in source and pending CI/publication**' "${STATE}"
-grep -Fq 'Latest published testing prerelease: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`' "${STATE}"
-grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`' "${STATE}"
+grep -Fq 'Model B experiment gate: **first owner-live coexistence ACCEPT on `v0.4.0_16`; repeated ACCEPT 5/5 on `v0.4.0_17`; `_18` exhaustive input-contract REJECT before warm batches; EXPERIMENT ONLY; `production_approved=false`**' "${STATE}"
+grep -Fq 'Current phase: **`_18` exhaustive owner-live input-contract REJECT on multi-endpoint `telegram.org` with restoration PASS; `_19` narrow multi-endpoint exhaustive corrective in source, CI/publication pending**' "${STATE}"
+grep -Fq 'Latest published testing prerelease: `v0.4.0_18` / `os-zapret2-restyle-0.4.0_18.pkg`' "${STATE}"
+grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_18` / `os-zapret2-restyle-0.4.0_18.pkg`' "${STATE}"
 grep -Fq "Current source candidate: \`${candidate}\`" "${STATE}"
-grep -Fq 'MODEL B EXHAUSTIVE NO-CANDIDATE BENCHMARK — `_18`' "${STATE}"
+grep -Fq 'MODEL B EXHAUSTIVE NO-CANDIDATE BENCHMARK — `_18` / `_19`' "${STATE}"
 
 grep -Fq 'It is not an' "${LIVE_GATE_DECISION}"
 grep -Fq 'all-or-nothing release checklist.' "${LIVE_GATE_DECISION}"
@@ -224,9 +242,9 @@ fi
     echo "FAIL: unexpected active Strategy Lab source version ${version}" >&2
     exit 1
 }
-[ "${revision}" -eq 18 ] || {
-    echo 'FAIL: exhaustive Model B benchmark source revision must be exactly 18' >&2
+[ "${revision}" -eq 19 ] || {
+    echo 'FAIL: exhaustive multi-endpoint corrective revision must be exactly 19' >&2
     exit 1
 }
 
-echo "PASS: historical Strategy Lab live/Model A/Model B safety evidence remains retained, _17 reproducibility is recorded, ${candidate} is the exhaustive no-candidate measurement candidate, and rows 2-18 remain regression backlog"
+echo "PASS: historical Strategy Lab live/Model A/Model B safety evidence remains retained, _18 exhaustive input-contract gap is recorded, ${candidate} is the multi-endpoint corrective, and rows 2-18 remain regression backlog"
