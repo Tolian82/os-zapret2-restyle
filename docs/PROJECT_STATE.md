@@ -26,9 +26,11 @@ Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current source line: `VERSION=0.4.0`, `PLUGIN_REVISION=23`
 Current source candidate: `os-zapret2-restyle-0.4.0_23.pkg`
-Latest published testing prerelease before this cycle: `v0.4.0_22`
+Latest published testing prerelease: `v0.4.0_23`
 Latest owner-tested testing candidate: `v0.4.0_22`
 Required package ABI: `FreeBSD:15:amd64`
+Current `_23` merge commit: `77b1beec471d161fb80584bf884e98970d4c75b3`
+Published `_23` asset digest: `sha256:f735f88e62fc82e5e856123f0d7c3dc26bd550b3ec0d5ab0e72bb2277dabe364`
 
 Active Strategy Lab ownership authority:
 `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
@@ -37,8 +39,11 @@ Active GitHub delivery authority:
 `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
 
 Current `_23` change authority:
-`docs/decisions/DEC-2026-08-11-strategy-lab-model-c-production-switch.md` and
-`docs/patches/v0.4.0_23.md`.
+`docs/decisions/DEC-2026-08-11-strategy-lab-model-c-production-switch.md`,
+`docs/architecture/STRATEGY_LAB_MODEL_C.md`, and `docs/patches/v0.4.0_23.md`.
+
+Publication evidence:
+`docs/verification/evidence/2026-08-11-v0.4.0_23-publication.md`.
 
 Current Strategy Lab Stage-60 production candidate:
 `C-warm-bucket-source-port-dispatch`.
@@ -55,7 +60,7 @@ AUTHORITATIVE OWNER-LIVE BASELINE
 Latest completed owner-live evidence remains:
 `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`.
 
-The `_22` baseline is retained unchanged while `_23` is built and published:
+The `_22` baseline remains authoritative until `_23` appliance results are supplied:
 
 - Standard `telegram.org` `job.KpLHgb`: production Model B, 16/16 graph exhaustion,
   zero winners, width-three overlap, no fallback, `NO_CANDIDATE`, Stage 60 `34227 ms`,
@@ -87,14 +92,14 @@ For each currently admitted Stage-60 frontier batch, Model C renders up to three
 - one physical worker uses the existing first dedicated divert port;
 - up to three exact IPFW routes (`19128-19130`) can concurrently divert candidate flows
   to that one worker;
-- every route is qualified by the already accepted controlled TCP source port, pinned
-  destination IPv4 and TCP/443;
+- every route is qualified by the accepted controlled TCP source port, pinned destination
+  IPv4 and TCP/443;
 - `zapret-auto.lua` `condition` orchestrates each candidate action chain;
 - packaged `strategy_lab_model_c.lua` selects the chain by the client source port and
   fails closed when selector/packet metadata is invalid;
 - candidate-specific payload, `in-range`/`out-range`, ordered Lua actions and BLOB
-  resources are reset/rendered per chain, so the existing `-d8` golden regression and
-  `-d10` candidates are not collapsed into one hidden bucket-wide range;
+  resources are reset/rendered per chain, preserving the existing `-d8` and `-d10`
+  semantics;
 - endpoints inside one candidate remain sequential while independent candidate tasks may
   overlap up to the existing width-three limit.
 
@@ -104,9 +109,9 @@ matching IPFW counter growth + successful route cleanup attribution.
 
 If Model C cannot prove compatible rendering, selector availability, worker readiness,
 route attribution, required overlap or cleanup, it is disabled and the same planned work
-falls back to accepted production Model B. If Model B warm infrastructure also fails, the
-existing cold Model A fallback applies. Ordinary network FAIL/timeout remains candidate
-evidence rather than an infrastructure fallback trigger.
+falls back to accepted Model B. If Model B warm infrastructure also fails, the existing
+cold Model A fallback applies. Ordinary network FAIL/timeout remains candidate evidence
+rather than an infrastructure fallback trigger.
 
 Stage 70/80/85 ownership is unchanged. Stage-90 semantic restoration remains mandatory on
 every terminal path.
@@ -115,13 +120,18 @@ every terminal path.
 CURRENT VERIFICATION BOUNDARY
 ==================================================
 
-`_23` is an owner-authorized production **candidate**. It must pass source regressions,
-normal CI and the FreeBSD 15 package gate before the authorized `v0.4.0_23` testing
-prerelease is published.
+`v0.4.0_23` is **published and ready for owner-live testing**. PR #177 passed the complete
+project validation, Strategy Lab corrective matrix and FreeBSD 15 package build/inspection.
+Publication workflow run `31520848437` built, verified and published the exact prerelease,
+then deleted `publish/v0.4.0_23`.
 
-Owner-live Model-C acceptance intentionally happens after package publication. Until those
-runs are supplied, do not rewrite the `_22` accepted live evidence as if it were `_23`
-evidence.
+GitHub Release `v0.4.0_23` is `draft=false`, `prerelease=true`, targets exact main commit
+`77b1beec471d161fb80584bf884e98970d4c75b3`, and contains one package asset:
+`os-zapret2-restyle-0.4.0_23.pkg`, 177429 bytes, digest
+`sha256:f735f88e62fc82e5e856123f0d7c3dc26bd550b3ec0d5ab0e72bb2277dabe364`.
+
+This proves source/CI/FreeBSD/package publication only. **Model C has not yet been
+owner-live accepted.** Do not rewrite the `_22` accepted live evidence as `_23` evidence.
 
 Initial `_23` owner-live checks should establish:
 
@@ -157,8 +167,8 @@ patch/PR/live record when diagnosing the installed package.
 CURRENT WATCH ITEMS
 ==================================================
 
-1. `_23` Model C has not yet been owner-live tested. Source/CI qualification must not be
-   described as appliance acceptance.
+1. `_23` Model C has not yet been owner-live tested. Publication/CI qualification must not
+   be described as appliance acceptance.
 2. `_22` `job.d5XV82` observed one source-port collision on `42003`. `_23` retains the
    existing source-port ownership rules and fail-closed chain; if the collision recurs,
    capture exact socket/process/batch evidence rather than weakening attribution.
@@ -174,15 +184,16 @@ DOCUMENT / EVIDENCE PRECEDENCE
 For current diagnosis read, in order:
 
 1. this `PROJECT_STATE.md`;
-2. `docs/patches/v0.4.0_23.md` for the current source candidate;
-3. current `_23` PR discussion/checks and later owner-live comments when available;
-4. the latest dated `_23` evidence after owner testing;
+2. `docs/patches/v0.4.0_23.md`;
+3. PR #177 implementation/publication comments and later owner-live comments;
+4. `docs/verification/evidence/2026-08-11-v0.4.0_23-publication.md` and the later dated
+   `_23` owner-live evidence when created;
 5. `_22` and older records only as retained baselines/comparisons.
 
 ==================================================
 NEXT ACTION
 ==================================================
 
-Complete `_23` CI and FreeBSD 15 qualification, publish the already-authorized
-`v0.4.0_23` testing prerelease, then run the focused owner-live Model-C checks above.
-Do not spend another cycle re-proving the accepted `_22` parallel Model B architecture.
+Install the published `v0.4.0_23` package and run the focused owner-live Model-C checks
+above. Do not spend another cycle re-proving the accepted `_22` parallel Model B
+architecture unless `_23` evidence specifically implicates the fallback boundary.
