@@ -24,8 +24,10 @@ MODEL_B_PREFLIGHT_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-preflight.
 MODEL_B_FAILFAST_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-failed-readiness.sh"
 MODEL_B_EXHAUSTIVE_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-exhaustive.sh"
 MODEL_B_PARALLEL_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-parallel.sh"
+MODEL_B_PARALLEL_ATTRIBUTION_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-parallel-attribution.sh"
 MODEL_B_EXHAUSTIVE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b_exhaustive.py"
 MODEL_B_PARALLEL_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b_parallel.py"
+MODEL_B_PARALLEL_ATTRIBUTION_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b_parallel_attribution.py"
 MODEL_B_ADAPTER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_adapter.sh"
 MODEL_B_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_worker.sh"
 MODEL_B_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b.sh"
@@ -34,6 +36,8 @@ MODEL_B_EXHAUSTIVE_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/st
 MODEL_B_PARALLEL_ADAPTER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_parallel_adapter.sh"
 MODEL_B_PARALLEL_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_parallel_worker.sh"
 MODEL_B_PARALLEL_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_parallel.sh"
+MODEL_B_PARALLEL_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_21.md"
+MODEL_B_PARALLEL_REJECT_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_20-model-b-parallel-attribution-reject.md"
 PYTHON_ENTRY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_python.py"
 
 fail(){ echo "FAIL: $*" >&2; exit 1; }
@@ -44,11 +48,12 @@ for file in \
     "${VERSION_FILE}" "${MAKEFILE}" "${PATCH4_TEST}" "${PATCH5_TEST}" "${PATCH6_TEST}" \
     "${PATCH29_TEST}" "${PATCH30_TEST}" "${PATCH31_TEST}" "${PATCH32_TEST}" "${PATCH33_TEST}" \
     "${MODEL_A_TEST}" "${MODEL_B_TEST}" "${MODEL_B_PREFLIGHT_TEST}" "${MODEL_B_FAILFAST_TEST}" \
-    "${MODEL_B_EXHAUSTIVE_TEST}" "${MODEL_B_PARALLEL_TEST}" "${MODEL_B_EXHAUSTIVE_PY}" \
-    "${MODEL_B_PARALLEL_PY}" "${MODEL_B_ADAPTER}" "${MODEL_B_WORKER}" "${MODEL_B_LAUNCHER}" \
+    "${MODEL_B_EXHAUSTIVE_TEST}" "${MODEL_B_PARALLEL_TEST}" "${MODEL_B_PARALLEL_ATTRIBUTION_TEST}" \
+    "${MODEL_B_EXHAUSTIVE_PY}" "${MODEL_B_PARALLEL_PY}" "${MODEL_B_PARALLEL_ATTRIBUTION_PY}" \
+    "${MODEL_B_ADAPTER}" "${MODEL_B_WORKER}" "${MODEL_B_LAUNCHER}" \
     "${MODEL_B_EXHAUSTIVE_WORKER}" "${MODEL_B_EXHAUSTIVE_LAUNCHER}" \
     "${MODEL_B_PARALLEL_ADAPTER}" "${MODEL_B_PARALLEL_WORKER}" "${MODEL_B_PARALLEL_LAUNCHER}" \
-    "${PYTHON_ENTRY}"
+    "${MODEL_B_PARALLEL_PATCH}" "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" "${PYTHON_ENTRY}"
 do
     [ -s "${file}" ] || fail "required file is missing: ${file}"
 done
@@ -68,7 +73,7 @@ revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; 
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 if [ "${revision}" -gt 0 ]; then candidate="os-zapret2-restyle-${version}_${revision}.pkg"; else candidate="os-zapret2-restyle-${version}.pkg"; fi
 [ "${version}" = '0.4.0' ] || fail "unexpected project version ${version}"
-[ "${revision}" -eq 20 ] || fail 'parallel Model B experiment revision must be exactly 20'
+[ "${revision}" -eq 21 ] || fail 'parallel Model B attribution corrective revision must be exactly 21'
 
 # Package construction and ABI/runtime requirements remain unchanged.
 grep -Eq '^PLUGIN_DEPENDS=[[:space:]]+python313([[:space:]]|$)' "${MAKEFILE}" || fail 'python313 dependency is missing'
@@ -109,6 +114,7 @@ require "${MODEL_B_TEST}" 'preserves bounded post-drop hostlist access'
 require "${MODEL_B_FAILFAST_TEST}" 'PASS: Model B failed pool readiness rejects immediately, skips probes/stop/death, and still requests bounded cleanup'
 require "${MODEL_B_EXHAUSTIVE_TEST}" 'PASS: exhaustive Model B benchmark replays a complete graph-exhausted multi-endpoint corpus'
 require "${MODEL_B_PARALLEL_TEST}" 'PASS: controlled parallel Model B uses three isolated warm workers with unique source-port routing'
+require "${MODEL_B_PARALLEL_ATTRIBUTION_TEST}" 'PASS: parallel Model B attributes blocked probes by exact command binding plus exact IPFW counter growth'
 
 # Sequential exhaustive surfaces stay packaged and unchanged.
 require "${MODEL_B_EXHAUSTIVE_PY}" 'B-warm-worker-exhaustive-batched'
@@ -118,21 +124,24 @@ require "${MODEL_B_EXHAUSTIVE_PY}" 'endpoint_probes'
 require "${MODEL_B_EXHAUSTIVE_WORKER}" 'model-b-exhaustive run'
 require "${MODEL_B_EXHAUSTIVE_LAUNCHER}" '9>"${LIFECYCLE_LOCK_FILE}"'
 
-# `_20` adds only experiment-only parallel surfaces. The normal Model B adapter and
-# production Strategy Lab remain untouched.
+# `_21` changes only failed-probe attribution semantics. `_20` parallel scheduling, the
+# accepted Model-B worker boundary and production Strategy Lab remain untouched.
 require "${MODEL_B_PARALLEL_PY}" 'B-warm-worker-parallel-batched'
 require "${MODEL_B_PARALLEL_PY}" 'ThreadPoolExecutor(max_workers=len(slots)'
 require "${MODEL_B_PARALLEL_PY}" 'source_port_plan_unique'
 require "${MODEL_B_PARALLEL_PY}" 'candidate_parallelism_observed'
 require "${MODEL_B_PARALLEL_PY}" 'endpoints_sequential_per_candidate'
 require "${MODEL_B_PARALLEL_PY}" 'measurement_only_no_cpu_gating'
+require "${MODEL_B_PARALLEL_ATTRIBUTION_PY}" 'command_source_port_match'
+require "${MODEL_B_PARALLEL_ATTRIBUTION_PY}" 'command_endpoint_match'
+require "${MODEL_B_PARALLEL_ATTRIBUTION_PY}" 'result["intercepted"]'
 require "${MODEL_B_PARALLEL_ADAPTER}" 'source-port-free'
 require "${MODEL_B_PARALLEL_ADAPTER}" 'route-add-source'
 require "${MODEL_B_PARALLEL_ADAPTER}" 'from me "${_mb_source_port}" to "${_mb_address}"'
 require "${MODEL_B_PARALLEL_WORKER}" 'model-b-parallel run'
 require "${MODEL_B_PARALLEL_WORKER}" 'model-b-parallel finalize'
 require "${MODEL_B_PARALLEL_LAUNCHER}" '9>"${LIFECYCLE_LOCK_FILE}"'
-require "${PYTHON_ENTRY}" 'model-b-parallel'
+require "${PYTHON_ENTRY}" 'model_b_parallel_attribution as model_b_parallel'
 
 # Existing migration continuity remains mandatory.
 require "${PATCH6_TEST}" 'scripts/test-strategy-lab-late-stage-containment.sh'
@@ -157,6 +166,7 @@ for installed in \
     strategy_lab_py/extended.py \
     strategy_lab_py/model_b_exhaustive.py \
     strategy_lab_py/model_b_parallel.py \
+    strategy_lab_py/model_b_parallel_attribution.py \
     strategy_lab_candidate_adapter.sh \
     strategy_lab_model_b_parallel_adapter.sh \
     strategy_lab_model_b_parallel_worker.sh \
@@ -166,12 +176,8 @@ do
     [ -e "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/${installed}" ] || fail "packaged source path is missing: ${installed}"
 done
 
-# Current live/source selection is synchronized and historical evidence remains retained.
-require "${MATRIX}" '`_19` SEQUENTIAL EXHAUSTIVE ACCEPT 5/5; `_20` CONTROLLED PARALLEL-PROBE SOURCE CANDIDATE'
-require "${MATRIX}" 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_19.pkg`'
-require "${MATRIX}" 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_19.pkg`'
-require "${MATRIX}" "Current source candidate: \`${candidate}\`"
-require "${MATRIX}" 'MODEL B `_20` CONTROLLED PARALLEL CANDIDATE-PROBE EXPERIMENT — SOURCE CANDIDATE'
+# Historical live evidence remains retained. `_20` is explicitly a safe owner-live REJECT;
+# `_21` is the package candidate that corrects only the attribution criterion.
 require "${MATRIX}" 'mean 74.8082 s'
 require "${MATRIX}" 'about 15.96%'
 require "${MATRIX}" '**PASS ON `_27` — v0.4.0 mandatory row**'
@@ -183,15 +189,16 @@ require "${MATRIX}" 'MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`'
 require "${MATRIX}" 'MODEL B `_17` REPEATED OWNER-LIVE COEXISTENCE ACCEPT — EXPERIMENT ONLY'
 require "${MATRIX}" 'job.tMYnFA'
 require "${MATRIX}" 'Required package ABI: `FreeBSD:15:amd64`'
+require "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" '`route_attribution=false`'
+require "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" 'parallel exhaustive search: `32977 ms`'
+require "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" '`62.952%` faster'
+require "${MODEL_B_PARALLEL_PATCH}" 'For route attribution of a failed/blocked probe'
+require "${MODEL_B_PARALLEL_PATCH}" '`production_approved=false` remains mandatory'
 
-require "${PROJECT_STATE}" 'Latest published testing prerelease: `v0.4.0_19` / `os-zapret2-restyle-0.4.0_19.pkg`'
-require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.0_19` / `os-zapret2-restyle-0.4.0_19.pkg`'
-require "${PROJECT_STATE}" "Current source candidate: \`${candidate}\`"
 require "${PROJECT_STATE}" '`_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**'
 require "${PROJECT_STATE}" '`_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**'
 require "${PROJECT_STATE}" 'Model A experiment gate: **REFERENCE COLLECTED on `v0.4.0_11` / `job.TtZeaH`**'
 require "${PROJECT_STATE}" 'sequential exhaustive ACCEPT 5/5 on `v0.4.0_19`'
-require "${PROJECT_STATE}" '`_20` controlled parallel candidate probes selected'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI and Python 3.13 contracts preserve the accepted Strategy Lab history while ${candidate} packages the isolated controlled-parallel Model B experiment"
+printf '%s\n' "PASS: FreeBSD 15 package CI preserves accepted Strategy Lab history while ${candidate} packages only the controlled-parallel failed-probe attribution corrective"
