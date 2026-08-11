@@ -28,9 +28,11 @@ when the experiment is actually executed.
 STATUS
 ==================================================
 
-Approved experiment plan. **Model A has now been executed and accepted as the cold
-reference.** Model B coexistence is the next experiment; Model C, source-port dispatch,
-warm preload policy and true parallel candidate probing remain unexecuted/unapproved.
+Approved experiment plan. **Model A is accepted as the cold reference and Model B
+three-worker coexistence is owner-live accepted/reproducible.** Model B exhaustive
+no-candidate wall-clock measurement is now the selected next experiment; Model C,
+source-port dispatch, warm preload policy and true parallel candidate probing remain
+unexecuted/unapproved.
 
 Owner Standard `rutracker.org` job `job.TtZeaH` on `v0.4.0_11` produced 25 cold samples
 and `conclusion=reference_collected`. Every machine-checkable Model A coverage gate passed,
@@ -41,10 +43,22 @@ Accepted `_11` reference medians are total candidate 1580 ms, readiness 1046 ms,
 140 ms, launch 17 ms, probe 220 ms and stop+cleanup 81 ms. Candidate-process RSS after
 readiness is tightly clustered around 4332 KiB median, 4348 KiB p90 and 4356 KiB max.
 
-Exact accepted evidence:
-`docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`.
+The first complete owner-live Model B coexistence accept was collected on `_16`. The owner
+installed `_17` and repeated the unchanged accepted ready-pool experiment five times;
+all five runs returned `conclusion=accept` with restoration verified. Mean pool startup was
+1163.6 ms, mean dispatch median 12.4 ms and mean probe median 200.3 ms. The already-warm
+mean `dispatch+probe` path of about 212.7 ms is roughly 86.5% below the Model A cold
+candidate median; amortizing one three-worker startup over three probes gives about
+600.6 ms/candidate, roughly 62.0% below the cold median. These are mechanism-level
+coexistence estimates, not full-search speedups.
 
-No warm-runtime model is production-approved by this result. Every selected optimization
+Exact accepted/repeated evidence:
+
+- `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`;
+- `docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md`;
+- `docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md`.
+
+No warm-runtime model is production-approved by these results. Every selected optimization
 must preserve the accepted cold reference result and Strategy Lab lifecycle safety.
 
 ==================================================
@@ -100,6 +114,13 @@ The candidate corpus must contain at least:
 
 All comparisons retain the same target/interception evidence. A faster result that cannot
 prove which candidate handled the traffic is invalid.
+
+For maximum search-time comparison, successful early-stop targets are insufficient. The
+owner `_9` evidence shows Standard `telegram.org` `job.tU3wiL` exhausting all 16 Stage-60
+candidates and completing through restoration in about 144.125 s, while Standard
+`rutracker.org` `job.UPRDlc` stopped Stage 60 after six candidates when three winners were
+found and completed in about 71.023 s. Exhaustive timing therefore uses a fresh
+`NO_CANDIDATE / graph_exhausted` reference collected on the same package/provider path.
 
 ==================================================
 MODEL A — COLD REFERENCE
@@ -180,6 +201,64 @@ Measure:
 Reject Model B if worker identity, traffic ownership, cleanup or cold-equivalence is not
 deterministic. A performance improvement cannot compensate for a false PASS/FAIL or leaked
 interception state.
+
+The coexistence portion of this contract is now owner-live accepted. `_16` produced the
+first complete accept and `_17` repeated it five times with verified restoration. That
+closes the small-corpus coexistence/reproducibility question but not `total search wall time
+for the same corpus`, which is the purpose of `_18`.
+
+==================================================
+MODEL B EXHAUSTIVE NO-CANDIDATE BENCHMARK — `_18`
+==================================================
+
+The current benchmark consumes one fresh completed Standard domain reference whose Stage
+60 ended `NO_CANDIDATE / graph_exhausted`. The reference must contain zero working Stage-60
+candidates, a complete persisted candidate/schedule corpus, verified restoration and the
+same current `ResourceInventory`.
+
+The exact persisted Stage-60 candidate corpus/order is replayed in **warm batches of at
+most three workers**. This retains the already owner-proven Model B coexistence width rather
+than introducing a new 16-resident-worker experiment.
+
+For each batch:
+
+- verify dedicated Model B ports/rules are free;
+- render the exact retained CandidateSpecs into the three physical worker slots;
+- start the whole batch before candidate probes;
+- require stable readiness, unique PID/divert identity and numeric RSS;
+- probe candidates sequentially in original Stage-60 order;
+- keep exactly one selected temporary IPFW route during each probe;
+- require interception attribution and no inactive Model B route;
+- require every cold no-candidate replay to remain non-PASS;
+- require workers to remain healthy during the batch;
+- clean the entire batch before starting the next batch.
+
+Measure:
+
+- measured warm exhaustive candidate-runtime wall time;
+- per-batch and total startup time;
+- per-batch cleanup time;
+- dispatch/probe medians;
+- peak aggregate batch RSS;
+- exact candidate-order completeness;
+- result equivalence and route attribution;
+- final semantic restoration.
+
+The report separates two comparisons:
+
+- `candidate_runtime_speedup_percent` — measured warm exhaustive runtime versus the sum of
+  the same persisted cold Stage-60 candidate durations;
+- `projected_full_job_speedup_percent` — projection using
+  `cold_job_total - cold_stage60_candidate_runtime + warm_exhaustive_search`.
+
+The second value is explicitly not a measured Model B full Strategy Lab run.
+
+Any failed readiness or ambiguous worker-identity gate skips downstream probes for that
+batch and falls through to common cleanup/restoration. The benchmark remains
+`experiment_only=true`, `parallel_probes=false` and `production_approved=false`.
+
+Exact source contract:
+`docs/patches/v0.4.0_18.md`.
 
 ==================================================
 MODEL C — ONE WARM DVTWS2 WITH CANDIDATE BUCKET
@@ -416,6 +495,11 @@ The accepted model must satisfy:
 An operation may receive less than its nominal limit only when the remaining parent/job
 budget is explicitly too small and the operation is not started. The parent must not
 start a child with a nominal 15-second allowance and then kill it after five seconds.
+
+Do not derive new production stage limits from the small Model B coexistence harness. The
+exhaustive no-candidate benchmark is the appropriate Model B input for maximum Stage-60
+runtime analysis, but any timeout change still requires review of complete lifecycle and
+restoration evidence.
 
 ==================================================
 EVALUATION MATRIX

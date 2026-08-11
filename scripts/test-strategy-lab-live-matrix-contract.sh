@@ -26,6 +26,12 @@ MODEL_B_ACCESS_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_14.md"
 MODEL_B_ACCEPT_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md"
 MODEL_B_FAILFAST_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_17.md"
 MODEL_B_FAILFAST_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-failed-readiness.sh"
+MODEL_B_REPRO_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md"
+MODEL_B_EXHAUSTIVE_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_18.md"
+MODEL_B_EXHAUSTIVE_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-exhaustive.sh"
+MODEL_B_EXHAUSTIVE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b_exhaustive.py"
+MODEL_B_EXHAUSTIVE_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_exhaustive.sh"
+MODEL_B_EXHAUSTIVE_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_exhaustive_worker.sh"
 LIVE_GATE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
@@ -40,6 +46,9 @@ for file in \
     "${MODEL_B_PREFLIGHT_TEST}" "${MODEL_B_WORKER_EVIDENCE}" \
     "${MODEL_B_ACCESS_PATCH}" "${MODEL_B_ACCEPT_EVIDENCE}" \
     "${MODEL_B_FAILFAST_PATCH}" "${MODEL_B_FAILFAST_TEST}" \
+    "${MODEL_B_REPRO_EVIDENCE}" "${MODEL_B_EXHAUSTIVE_PATCH}" \
+    "${MODEL_B_EXHAUSTIVE_TEST}" "${MODEL_B_EXHAUSTIVE_PY}" \
+    "${MODEL_B_EXHAUSTIVE_LAUNCHER}" "${MODEL_B_EXHAUSTIVE_WORKER}" \
     "${LIVE_GATE_DECISION}" "${VERSION_FILE}" "${MAKEFILE}"
 do
     [ -s "${file}" ] || {
@@ -55,26 +64,27 @@ case "${revision}" in
 esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 
-# The canonical ledger retains the accepted `_16` owner-live baseline while `_17` is now
-# the qualified and published testing candidate awaiting owner installation.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_16` OWNER-LIVE COEXISTENCE ACCEPT (EXPERIMENT ONLY); `_17` FAILED-READINESS FAIL-FAST PUBLISHED; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
+# The canonical ledger keeps all accepted historical gates while selecting `_18` only as
+# an experiment-only exhaustive no-candidate source candidate.
+grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_17` REPEATED COEXISTENCE ACCEPT 5/5 (EXPERIMENT ONLY); `_18` EXHAUSTIVE NO-CANDIDATE BENCHMARK SOURCE CANDIDATE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}"
 grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}"
 grep -Fq 'AUDIT-2026-08-07-STRATEGY-LAB-THIRD-AUDIT.md' "${MATRIX}"
 grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_17.pkg`' "${MATRIX}"
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_16.pkg`' "${MATRIX}"
+grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_17.pkg`' "${MATRIX}"
 grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}"
-grep -Fq 'Current source purpose: `_17` failed-readiness fail-fast corrective; published testing prerelease, owner installation pending' "${MATRIX}"
+grep -Fq 'Current source purpose: `_18` experiment-only batched exhaustive Model B benchmark for Standard `NO_CANDIDATE / graph_exhausted`; CI/publication pending' "${MATRIX}"
 grep -Fq 'Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)' "${MATRIX}"
 grep -Fq 'Latest owner-tested Extended no-winner job: `job.hsP8Ro` (`telegram.org`)' "${MATRIX}"
 grep -Fq 'docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md' "${MATRIX}"
 grep -Fq 'docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md' "${MATRIX}"
-grep -Fq 'docs/patches/v0.4.0_17.md' "${MATRIX}"
+grep -Fq 'docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md' "${MATRIX}"
+grep -Fq 'docs/patches/v0.4.0_18.md' "${MATRIX}"
 grep -Fq 'MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`' "${MATRIX}"
 grep -Fq '`conclusion=reference_collected`' "${MATRIX}"
 grep -Fq 'numeric RSS on all 25 samples' "${MATRIX}"
-grep -Fq 'MODEL B `_16` OWNER-LIVE COEXISTENCE ACCEPT — EXPERIMENT ONLY' "${MATRIX}"
+grep -Fq 'MODEL B `_17` REPEATED OWNER-LIVE COEXISTENCE ACCEPT — EXPERIMENT ONLY' "${MATRIX}"
 grep -Fq '`all_workers_ready=true`' "${MATRIX}"
 grep -Fq '`unique_worker_identity=true`' "${MATRIX}"
 grep -Fq '`rss_observed=true`' "${MATRIX}"
@@ -82,7 +92,13 @@ grep -Fq '`restoration_verified=true`' "${MATRIX}"
 grep -Fq 'Aggregate warm RSS is 12964 KiB' "${MATRIX}"
 grep -Fq 'pool startup is 1162 ms' "${MATRIX}"
 grep -Fq '`downstream_actions_skipped=true`' "${MATRIX}"
-grep -Fq '`experiment_only=true`, `parallel_probes=false` and `production_approved=false`' "${MATRIX}"
+grep -Fq '`experiment_only=true`' "${MATRIX}"
+grep -Fq '`parallel_probes=false`' "${MATRIX}"
+grep -Fq '`production_approved=false`' "${MATRIX}"
+grep -Fq 'about 144.125 s' "${MATRIX}"
+grep -Fq 'about 71.023 s' "${MATRIX}"
+grep -Fq 'about 86.5%' "${MATRIX}"
+grep -Fq 'roughly 62.0%' "${MATRIX}"
 
 scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /PASS ON `_27` — v0.4.0 mandatory row/ {n++} END {print n+0}' "${MATRIX}")
 [ "${scenario_one}" -eq 1 ] || {
@@ -145,8 +161,7 @@ grep -Fq '`rss_kb=12345`' "${MODEL_A_PATCH}"
 grep -Fq 'still does not approve Model B/C' "${MODEL_A_PATCH}"
 grep -Fq 'model-a summarize' "${MODEL_A_TEST}"
 
-# Model B remains experimental. Historical reject/corrective evidence and the accepted
-# `_16` live baseline are retained while `_17` is the qualified published corrective.
+# Model B historical safety/equivalence checks remain retained.
 grep -Fq 'Model B warm-worker coexistence experiment harness' "${MODEL_B_PATCH}"
 grep -Fq '9990' "${MODEL_B_PATCH}"
 grep -Fq '19128' "${MODEL_B_PATCH}"
@@ -176,11 +191,27 @@ grep -Fq '`downstream_actions_skipped=true`' "${MODEL_B_FAILFAST_PATCH}"
 grep -Fq 'no route-add, probe, independent-stop, survivor check, controlled-death or `kill-owned` action is attempted' "${MODEL_B_FAILFAST_PATCH}"
 grep -Fq 'PASS: Model B failed pool readiness rejects immediately, skips probes/stop/death, and still requests bounded cleanup' "${MODEL_B_FAILFAST_TEST}"
 
-grep -Fq 'Model B experiment gate: **`v0.4.0_16` OWNER-LIVE COEXISTENCE ACCEPT; EXPERIMENT ONLY; `production_approved=false`**' "${STATE}"
-grep -Fq 'Current phase: **Model B `_16` owner-live coexistence ACCEPT; `_17` failed-readiness fail-fast corrective qualified and published as testing prerelease; owner installation pending**' "${STATE}"
+# `_17` reproducibility and `_18` exhaustive measurement extend rather than replace the
+# accepted Model B contract.
+grep -Fq 'acceptance: `5/5`' "${MODEL_B_REPRO_EVIDENCE}"
+grep -Fq 'mean pool startup: `1163.6 ms`' "${MODEL_B_REPRO_EVIDENCE}"
+grep -Fq '`86.5%` reduction' "${MODEL_B_REPRO_EVIDENCE}"
+grep -Fq '`62.0%` reduction' "${MODEL_B_REPRO_EVIDENCE}"
+grep -Fq 'Model B exhaustive no-candidate benchmark' "${MODEL_B_EXHAUSTIVE_PATCH}"
+grep -Fq 'at most three warm dvtws2 workers at once' "${MODEL_B_EXHAUSTIVE_PATCH}"
+grep -Fq 'projection_is_measured_full_job' "${MODEL_B_EXHAUSTIVE_PY}"
+grep -Fq 'unique_worker_identity' "${MODEL_B_EXHAUSTIVE_PY}"
+grep -Fq 'observed_ids == expected_ids' "${MODEL_B_EXHAUSTIVE_PY}"
+grep -Fq 'PASS: exhaustive Model B benchmark replays a complete graph-exhausted corpus' "${MODEL_B_EXHAUSTIVE_TEST}"
+grep -Fq '9>"${LIFECYCLE_LOCK_FILE}"' "${MODEL_B_EXHAUSTIVE_LAUNCHER}"
+grep -Fq 'model-b-exhaustive finalize' "${MODEL_B_EXHAUSTIVE_WORKER}"
+
+grep -Fq 'Model B experiment gate: **first owner-live coexistence ACCEPT on `v0.4.0_16`; repeated ACCEPT 5/5 on `v0.4.0_17`; EXPERIMENT ONLY; `production_approved=false`**' "${STATE}"
+grep -Fq 'Current phase: **Model B `_17` owner-installed and repeated coexistence ACCEPT 5/5; `_18` experiment-only exhaustive no-candidate benchmark implemented in source and pending CI/publication**' "${STATE}"
 grep -Fq 'Latest published testing prerelease: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`' "${STATE}"
-grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_16` / `os-zapret2-restyle-0.4.0_16.pkg`' "${STATE}"
+grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`' "${STATE}"
 grep -Fq "Current source candidate: \`${candidate}\`" "${STATE}"
+grep -Fq 'MODEL B EXHAUSTIVE NO-CANDIDATE BENCHMARK — `_18`' "${STATE}"
 
 grep -Fq 'It is not an' "${LIVE_GATE_DECISION}"
 grep -Fq 'all-or-nothing release checklist.' "${LIVE_GATE_DECISION}"
@@ -193,9 +224,9 @@ fi
     echo "FAIL: unexpected active Strategy Lab source version ${version}" >&2
     exit 1
 }
-[ "${revision}" -ge 17 ] || {
-    echo 'FAIL: Model B failed-readiness source corrective revision must be at least 17' >&2
+[ "${revision}" -eq 18 ] || {
+    echo 'FAIL: exhaustive Model B benchmark source revision must be exactly 18' >&2
     exit 1
 }
 
-echo "PASS: _27/_28/_32/_33 and Model A/_16 live evidence remain retained, _17 is published, _16 remains owner-tested, ${candidate} is the failed-readiness corrective, and rows 2-18 remain regression backlog"
+echo "PASS: historical Strategy Lab live/Model A/Model B safety evidence remains retained, _17 reproducibility is recorded, ${candidate} is the exhaustive no-candidate measurement candidate, and rows 2-18 remain regression backlog"
