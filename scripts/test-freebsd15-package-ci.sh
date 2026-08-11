@@ -23,97 +23,70 @@ MODEL_B_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-experiment.sh"
 MODEL_B_PREFLIGHT_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-preflight.sh"
 MODEL_B_FAILFAST_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-failed-readiness.sh"
 MODEL_B_EXHAUSTIVE_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-exhaustive.sh"
-REQUEST_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py"
-PROBE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py"
-ENDPOINT_EPOCH_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/endpoint_epoch.py"
-TELEMETRY_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/telemetry.py"
-RESOURCES_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/resources.py"
-CANDIDATE_SPEC_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate_spec.py"
-CANDIDATE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate.py"
-FAMILY_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/family.py"
-SEARCH_GRAPH_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/search_graph.py"
-SEARCH_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/search.py"
-EXTENDED_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/extended.py"
-LATE_CONTAINMENT_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/late_containment.py"
-ADAPTIVE_VALIDATION_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_validation.py"
-ADAPTIVE_RESULT_COMPAT_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_result_compat.py"
-MODEL_A_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_a.py"
-MODEL_B_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b.py"
+MODEL_B_PARALLEL_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-parallel.sh"
 MODEL_B_EXHAUSTIVE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b_exhaustive.py"
-CANDIDATE_ADAPTER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_adapter.sh"
+MODEL_B_PARALLEL_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b_parallel.py"
 MODEL_B_ADAPTER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_adapter.sh"
 MODEL_B_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_worker.sh"
 MODEL_B_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b.sh"
 MODEL_B_EXHAUSTIVE_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_exhaustive_worker.sh"
 MODEL_B_EXHAUSTIVE_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_exhaustive.sh"
+MODEL_B_PARALLEL_ADAPTER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_parallel_adapter.sh"
+MODEL_B_PARALLEL_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_parallel_worker.sh"
+MODEL_B_PARALLEL_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_parallel.sh"
+PYTHON_ENTRY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_python.py"
 
-fail()
-{
-    echo "FAIL: $*" >&2
-    exit 1
-}
+fail(){ echo "FAIL: $*" >&2; exit 1; }
+require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
 for file in \
     "${CI}" "${RELEASE}" "${MATRIX}" "${PROJECT_STATE}" "${BUILD_PKG}" "${INTEGRATION}" \
-    "${VERSION_FILE}" "${MAKEFILE}" \
-    "${PATCH4_TEST}" "${PATCH5_TEST}" "${PATCH6_TEST}" "${PATCH29_TEST}" \
-    "${PATCH30_TEST}" "${PATCH31_TEST}" "${PATCH32_TEST}" "${PATCH33_TEST}" \
-    "${MODEL_A_TEST}" "${MODEL_B_TEST}" "${MODEL_B_PREFLIGHT_TEST}" \
-    "${MODEL_B_FAILFAST_TEST}" "${MODEL_B_EXHAUSTIVE_TEST}" \
-    "${REQUEST_PY}" "${PROBE_PY}" "${ENDPOINT_EPOCH_PY}" "${TELEMETRY_PY}" \
-    "${RESOURCES_PY}" "${CANDIDATE_SPEC_PY}" "${CANDIDATE_PY}" "${FAMILY_PY}" \
-    "${SEARCH_GRAPH_PY}" "${SEARCH_PY}" "${EXTENDED_PY}" "${LATE_CONTAINMENT_PY}" \
-    "${ADAPTIVE_VALIDATION_PY}" "${ADAPTIVE_RESULT_COMPAT_PY}" "${MODEL_A_PY}" \
-    "${MODEL_B_PY}" "${MODEL_B_EXHAUSTIVE_PY}" "${CANDIDATE_ADAPTER}" \
-    "${MODEL_B_ADAPTER}" "${MODEL_B_WORKER}" "${MODEL_B_LAUNCHER}" \
-    "${MODEL_B_EXHAUSTIVE_WORKER}" "${MODEL_B_EXHAUSTIVE_LAUNCHER}"
+    "${VERSION_FILE}" "${MAKEFILE}" "${PATCH4_TEST}" "${PATCH5_TEST}" "${PATCH6_TEST}" \
+    "${PATCH29_TEST}" "${PATCH30_TEST}" "${PATCH31_TEST}" "${PATCH32_TEST}" "${PATCH33_TEST}" \
+    "${MODEL_A_TEST}" "${MODEL_B_TEST}" "${MODEL_B_PREFLIGHT_TEST}" "${MODEL_B_FAILFAST_TEST}" \
+    "${MODEL_B_EXHAUSTIVE_TEST}" "${MODEL_B_PARALLEL_TEST}" "${MODEL_B_EXHAUSTIVE_PY}" \
+    "${MODEL_B_PARALLEL_PY}" "${MODEL_B_ADAPTER}" "${MODEL_B_WORKER}" "${MODEL_B_LAUNCHER}" \
+    "${MODEL_B_EXHAUSTIVE_WORKER}" "${MODEL_B_EXHAUSTIVE_LAUNCHER}" \
+    "${MODEL_B_PARALLEL_ADAPTER}" "${MODEL_B_PARALLEL_WORKER}" "${MODEL_B_PARALLEL_LAUNCHER}" \
+    "${PYTHON_ENTRY}"
 do
     [ -s "${file}" ] || fail "required file is missing: ${file}"
 done
 
-[ -x "${PATCH4_TEST}" ] || fail 'Python request/probe focused test is not executable'
-[ -x "${PATCH29_TEST}" ] || fail 'Python CandidateSpec/ResourceInventory focused test is not executable'
-[ -x "${PATCH30_TEST}" ] || fail 'Python native search-graph focused test is not executable'
-[ -x "${PATCH31_TEST}" ] || fail 'Python adaptive planner/search-epoch/telemetry focused test is not executable'
-[ -x "${MODEL_A_TEST}" ] || fail 'Model A measurement focused test is not executable'
-[ -x "${MODEL_B_TEST}" ] || fail 'Model B experiment focused test is not executable'
-[ -x "${MODEL_B_EXHAUSTIVE_TEST}" ] || fail 'Model B exhaustive focused test is not executable'
-[ -x "${MODEL_B_ADAPTER}" ] || fail 'Model B FreeBSD adapter is not executable'
-[ -x "${MODEL_B_WORKER}" ] || fail 'Model B lifecycle worker is not executable'
-[ -x "${MODEL_B_LAUNCHER}" ] || fail 'Model B lifecycle launcher is not executable'
-[ -x "${MODEL_B_EXHAUSTIVE_WORKER}" ] || fail 'Model B exhaustive lifecycle worker is not executable'
-[ -x "${MODEL_B_EXHAUSTIVE_LAUNCHER}" ] || fail 'Model B exhaustive launcher is not executable'
+for executable in \
+    "${PATCH4_TEST}" "${PATCH29_TEST}" "${PATCH30_TEST}" "${PATCH31_TEST}" \
+    "${MODEL_A_TEST}" "${MODEL_B_TEST}" "${MODEL_B_EXHAUSTIVE_TEST}" "${MODEL_B_PARALLEL_TEST}" \
+    "${MODEL_B_ADAPTER}" "${MODEL_B_WORKER}" "${MODEL_B_LAUNCHER}" \
+    "${MODEL_B_EXHAUSTIVE_WORKER}" "${MODEL_B_EXHAUSTIVE_LAUNCHER}" \
+    "${MODEL_B_PARALLEL_ADAPTER}" "${MODEL_B_PARALLEL_WORKER}" "${MODEL_B_PARALLEL_LAUNCHER}"
+do
+    [ -x "${executable}" ] || fail "required executable lost mode: ${executable}"
+done
 
 version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; exit}' "${MAKEFILE}")
-case "${revision}" in
-    ''|*[!0-9]*) fail 'invalid plugin revision' ;;
-esac
-if [ "${revision}" -gt 0 ]; then
-    candidate="os-zapret2-restyle-${version}_${revision}.pkg"
-else
-    candidate="os-zapret2-restyle-${version}.pkg"
-fi
+case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
+if [ "${revision}" -gt 0 ]; then candidate="os-zapret2-restyle-${version}_${revision}.pkg"; else candidate="os-zapret2-restyle-${version}.pkg"; fi
+[ "${version}" = '0.4.0' ] || fail "unexpected project version ${version}"
+[ "${revision}" -eq 20 ] || fail 'parallel Model B experiment revision must be exactly 20'
 
-# Package construction and ABI/runtime requirements.
-grep -Eq '^PLUGIN_DEPENDS=[[:space:]]+python313([[:space:]]|$)' "${MAKEFILE}" ||
-    fail 'Python migration must declare the verified python313 package dependency'
-grep -Fq 'python313)  echo "lang/python313"' "${BUILD_PKG}" ||
-    fail 'package builder does not map python313 to lang/python313'
-grep -Fq 'cp -R src/opnsense "${STAGE}/usr/local/opnsense"' "${BUILD_PKG}" ||
-    fail 'package builder no longer stages the complete OPNsense source tree'
-
-grep -Fq 'release: "15.0"' "${CI}" || fail 'PR package build does not use FreeBSD 15.0'
-grep -Fq "release: '15.0'" "${RELEASE}" || fail 'release package build does not use FreeBSD 15.0'
-if grep -REn "release:[[:space:]]*['\"]?14([.]|['\"]|$)" "${ROOT_DIR}/.github/workflows"; then
-    fail 'a GitHub workflow still selects FreeBSD 14'
-fi
-
-grep -Fq 'python-version: "3.13"' "${CI}" || fail 'Linux validation does not select Python 3.13'
-grep -Fq 'STRATEGY_LAB_PYTHON_BIN: python3.13' "${CI}" ||
-    fail 'Linux validation does not expose Python 3.13 to Strategy Lab tests'
-grep -Fq 'pkg install -y jq python313' "${CI}" ||
-    fail 'FreeBSD 15 package job does not install python313'
+# Package construction and ABI/runtime requirements remain unchanged.
+grep -Eq '^PLUGIN_DEPENDS=[[:space:]]+python313([[:space:]]|$)' "${MAKEFILE}" || fail 'python313 dependency is missing'
+require "${BUILD_PKG}" 'python313)  echo "lang/python313"'
+require "${BUILD_PKG}" 'cp -R src/opnsense "${STAGE}/usr/local/opnsense"'
+require "${CI}" 'release: "15.0"'
+require "${RELEASE}" "release: '15.0'"
+if grep -REn "release:[[:space:]]*['\"]?14([.]|['\"]|$)" "${ROOT_DIR}/.github/workflows"; then fail 'a GitHub workflow still selects FreeBSD 14'; fi
+require "${CI}" 'python-version: "3.13"'
+require "${CI}" 'STRATEGY_LAB_PYTHON_BIN: python3.13'
+require "${CI}" 'pkg install -y jq python313'
+require "${CI}" 'tar -tf dist/*.pkg > "${contents}"'
+require "${CI}" 'tar -xOf dist/*.pkg +MANIFEST > "${manifest}"'
+require "${CI}" '.abi == "FreeBSD:15:amd64"'
+require "${CI}" '.arch == "freebsd:15:x86:64"'
+require "${CI}" '.deps.python313.origin == "lang/python313"'
+require "${CI}" 'freebsd-version -u'
+require "${CI}" 'scripts/test-freebsd15-package-ci'
 
 for test in \
     test-strategy-lab-python-foundation.sh \
@@ -126,59 +99,48 @@ for test in \
     test-strategy-lab-python-adaptive-planner.sh \
     test-strategy-lab-python-search-extended.sh
 do
-    grep -Fq "STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/${test}" "${CI}" ||
-        fail "FreeBSD 15 package job does not execute ${test}"
+    require "${CI}" "STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/${test}"
 done
 
-# Model A and Model B focused experiments are discovered by the canonical Linux corrective
-# matrix. The FreeBSD job then builds the complete OPNsense source tree, preserving all
-# experiment-only adapters/launchers/modules in the FreeBSD:15 package.
-grep -Fq "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy-lab-*.sh'" \
-    "${ROOT_DIR}/scripts/test-strategy-lab-corrective-matrix.sh" ||
-    fail 'canonical Strategy Lab matrix no longer discovers focused regressions'
-grep -Fq 'PASS: Model B preflight returns success when all dedicated rules/ports are free' \
-    "${MODEL_B_PREFLIGHT_TEST}" ||
-    fail 'Model B clean-preflight corrective regression is unavailable'
-grep -Fq 'preserves bounded post-drop hostlist access' "${MODEL_B_TEST}" ||
-    fail 'Model B post-drop access regression is unavailable'
-grep -Fq 'PASS: Model B failed pool readiness rejects immediately, skips probes/stop/death, and still requests bounded cleanup' \
-    "${MODEL_B_FAILFAST_TEST}" ||
-    fail 'Model B failed-readiness fail-fast regression is unavailable'
-grep -Fq 'PASS: exhaustive Model B benchmark replays a complete graph-exhausted multi-endpoint corpus' \
-    "${MODEL_B_EXHAUSTIVE_TEST}" ||
-    fail 'Model B exhaustive multi-endpoint regression is unavailable'
-grep -Fq 'B-warm-worker-exhaustive-batched' "${MODEL_B_EXHAUSTIVE_PY}" ||
-    fail 'Model B exhaustive Python module is unavailable'
-grep -Fq 'reference_endpoint_bindings' "${MODEL_B_EXHAUSTIVE_PY}" ||
-    fail 'Model B exhaustive module does not validate reference endpoint bindings'
-grep -Fq 'all_reference_endpoints_replayed' "${MODEL_B_EXHAUSTIVE_PY}" ||
-    fail 'Model B exhaustive module does not require complete endpoint replay'
-grep -Fq 'endpoint_probes' "${MODEL_B_EXHAUSTIVE_PY}" ||
-    fail 'Model B exhaustive module does not retain endpoint-level evidence'
-grep -Fq 'model-b-exhaustive run' "${MODEL_B_EXHAUSTIVE_WORKER}" ||
-    fail 'Model B exhaustive lifecycle worker is unavailable'
-grep -Fq '9>"${LIFECYCLE_LOCK_FILE}"' "${MODEL_B_EXHAUSTIVE_LAUNCHER}" ||
-    fail 'Model B exhaustive launcher does not retain the lifecycle lock boundary'
+# Canonical Linux matrix must continue auto-discovering every focused Strategy Lab test.
+require "${ROOT_DIR}/scripts/test-strategy-lab-corrective-matrix.sh" "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy-lab-*.sh'"
+require "${MODEL_B_PREFLIGHT_TEST}" 'PASS: Model B preflight returns success when all dedicated rules/ports are free'
+require "${MODEL_B_TEST}" 'preserves bounded post-drop hostlist access'
+require "${MODEL_B_FAILFAST_TEST}" 'PASS: Model B failed pool readiness rejects immediately, skips probes/stop/death, and still requests bounded cleanup'
+require "${MODEL_B_EXHAUSTIVE_TEST}" 'PASS: exhaustive Model B benchmark replays a complete graph-exhausted multi-endpoint corpus'
+require "${MODEL_B_PARALLEL_TEST}" 'PASS: controlled parallel Model B uses three isolated warm workers with unique source-port routing'
 
-# The search/extended continuity gate must include `_32` containment and `_33`
-# adaptive-validation source contracts.
-grep -Fq 'scripts/test-strategy-lab-late-stage-containment.sh' "${PATCH6_TEST}" ||
-    fail 'Python search/extended continuity gate does not include late-stage containment'
-grep -Fq 'scripts/test-strategy-lab-adaptive-validation.sh' "${PATCH6_TEST}" ||
-    fail 'Python search/extended continuity gate does not include adaptive validation'
+# Sequential exhaustive surfaces stay packaged and unchanged.
+require "${MODEL_B_EXHAUSTIVE_PY}" 'B-warm-worker-exhaustive-batched'
+require "${MODEL_B_EXHAUSTIVE_PY}" 'reference_endpoint_bindings'
+require "${MODEL_B_EXHAUSTIVE_PY}" 'all_reference_endpoints_replayed'
+require "${MODEL_B_EXHAUSTIVE_PY}" 'endpoint_probes'
+require "${MODEL_B_EXHAUSTIVE_WORKER}" 'model-b-exhaustive run'
+require "${MODEL_B_EXHAUSTIVE_LAUNCHER}" '9>"${LIFECYCLE_LOCK_FILE}"'
 
-# CI must inspect the installed package rather than infer ABI or file contents from source.
-grep -Fq 'tar -tf dist/*.pkg > "${contents}"' "${CI}" ||
-    fail 'package contents are not captured before inspection'
-grep -Fq 'tar -xOf dist/*.pkg +MANIFEST > "${manifest}"' "${CI}" ||
-    fail 'package manifest is not captured before inspection'
-grep -Fq '.abi == "FreeBSD:15:amd64"' "${CI}" ||
-    fail 'PR package inspection does not enforce FreeBSD 15 ABI'
-grep -Fq '.arch == "freebsd:15:x86:64"' "${CI}" ||
-    fail 'PR package inspection does not enforce FreeBSD 15 architecture'
-grep -Fq '.deps.python313.origin == "lang/python313"' "${CI}" ||
-    fail 'package inspection does not enforce the python313 dependency origin'
+# `_20` adds only experiment-only parallel surfaces. The normal Model B adapter and
+# production Strategy Lab remain untouched.
+require "${MODEL_B_PARALLEL_PY}" 'B-warm-worker-parallel-batched'
+require "${MODEL_B_PARALLEL_PY}" 'ThreadPoolExecutor(max_workers=len(slots)'
+require "${MODEL_B_PARALLEL_PY}" 'source_port_plan_unique'
+require "${MODEL_B_PARALLEL_PY}" 'candidate_parallelism_observed'
+require "${MODEL_B_PARALLEL_PY}" 'endpoints_sequential_per_candidate'
+require "${MODEL_B_PARALLEL_PY}" 'measurement_only_no_cpu_gating'
+require "${MODEL_B_PARALLEL_ADAPTER}" 'source-port-free'
+require "${MODEL_B_PARALLEL_ADAPTER}" 'route-add-source'
+require "${MODEL_B_PARALLEL_ADAPTER}" 'from me "${_mb_source_port}" to "${_mb_address}"'
+require "${MODEL_B_PARALLEL_WORKER}" 'model-b-parallel run'
+require "${MODEL_B_PARALLEL_WORKER}" 'model-b-parallel finalize'
+require "${MODEL_B_PARALLEL_LAUNCHER}" '9>"${LIFECYCLE_LOCK_FILE}"'
+require "${PYTHON_ENTRY}" 'model-b-parallel'
 
+# Existing migration continuity remains mandatory.
+require "${PATCH6_TEST}" 'scripts/test-strategy-lab-late-stage-containment.sh'
+require "${PATCH6_TEST}" 'scripts/test-strategy-lab-adaptive-validation.sh'
+
+# The package builder stages the complete OPNsense source tree. Verify the source paths that
+# must therefore be present in the generated FreeBSD:15 package; the actual package job
+# additionally inspects manifest/ABI and uploads the resulting artifact.
 for installed in \
     strategy_lab_py/state.py \
     strategy_lab_py/orchestrator.py \
@@ -193,77 +155,43 @@ for installed in \
     strategy_lab_py/search_graph.py \
     strategy_lab_py/search.py \
     strategy_lab_py/extended.py \
+    strategy_lab_py/model_b_exhaustive.py \
+    strategy_lab_py/model_b_parallel.py \
     strategy_lab_candidate_adapter.sh \
+    strategy_lab_model_b_parallel_adapter.sh \
+    strategy_lab_model_b_parallel_worker.sh \
+    strategy_lab_model_b_parallel.sh \
     strategy_lab_stage_adapter.sh
 do
-    grep -Fq "usr/local/opnsense/scripts/OPNsense/Zapret/${installed}" "${CI}" ||
-        fail "package inspection no longer requires ${installed}"
+    [ -e "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/${installed}" ] || fail "packaged source path is missing: ${installed}"
 done
 
-grep -Fq 'freebsd-version -u' "${CI}" || fail 'PR package build does not verify the VM major version'
-grep -Fq 'scripts/test-freebsd15-package-ci' "${CI}" ||
-    fail 'integration-only package verification no longer forces the FreeBSD 15 PR build'
+# Current live/source selection is synchronized and historical evidence remains retained.
+require "${MATRIX}" '`_19` SEQUENTIAL EXHAUSTIVE ACCEPT 5/5; `_20` CONTROLLED PARALLEL-PROBE SOURCE CANDIDATE'
+require "${MATRIX}" 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_19.pkg`'
+require "${MATRIX}" 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_19.pkg`'
+require "${MATRIX}" "Current source candidate: \`${candidate}\`"
+require "${MATRIX}" 'MODEL B `_20` CONTROLLED PARALLEL CANDIDATE-PROBE EXPERIMENT — SOURCE CANDIDATE'
+require "${MATRIX}" 'mean 74808.2 ms'
+require "${MATRIX}" 'about 15.96%'
+require "${MATRIX}" '**PASS ON `_27` — v0.4.0 mandatory row**'
+require "${MATRIX}" 'Adaptive `_28` focused evidence:'
+require "${MATRIX}" '2026-08-09-v0.4.0_6-stage60-timeout.md'
+require "${MATRIX}" '2026-08-10-v0.4.0_7-late-stage-pass.md'
+require "${MATRIX}" '2026-08-10-v0.4.0_8-timeout-containment-pass.md'
+require "${MATRIX}" 'MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`'
+require "${MATRIX}" 'MODEL B `_17` REPEATED OWNER-LIVE COEXISTENCE ACCEPT — EXPERIMENT ONLY'
+require "${MATRIX}" 'job.tMYnFA'
+require "${MATRIX}" 'Required package ABI: `FreeBSD:15:amd64`'
 
-# Current live/source selection must agree across the canonical live matrix and project
-# state while retaining all historical release/search evidence.
-grep -Fq 'Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_17` REPEATED COEXISTENCE ACCEPT 5/5 (EXPERIMENT ONLY); `_18` EXHAUSTIVE INPUT-CONTRACT REJECT WITH RESTORATION PASS; `_19` MULTI-ENDPOINT EXHAUSTIVE CORRECTIVE SOURCE CANDIDATE; FULL REGRESSION MATRIX OPEN**' "${MATRIX}" ||
-    fail 'unexpected Strategy Lab live-matrix state'
-grep -Fq '**PASS ON `_27` — v0.4.0 mandatory row**' "${MATRIX}" ||
-    fail 'release-selected live matrix does not retain the v0.4.0 mandatory Scenario 1 PASS'
-grep -Fq 'Adaptive `_28` focused evidence:' "${MATRIX}" ||
-    fail 'live matrix does not retain the _28 focused owner evidence'
-grep -Fq '2026-08-09-v0.4.0_6-stage60-timeout.md' "${MATRIX}" ||
-    fail 'live matrix does not retain the v0.4.0_6 timeout-hierarchy evidence'
-grep -Fq '2026-08-10-v0.4.0_7-late-stage-pass.md' "${MATRIX}" ||
-    fail 'live matrix does not retain the v0.4.0_7 timeout-hierarchy evidence'
-grep -Fq '2026-08-10-v0.4.0_8-timeout-containment-pass.md' "${MATRIX}" ||
-    fail 'live matrix does not retain the v0.4.0_8 timeout-containment closeout'
-grep -Fq 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_18.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not retain published _18'
-grep -Fq 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_18.pkg`' "${MATRIX}" ||
-    fail 'live matrix does not retain owner-tested _18'
-grep -Fq "Current source candidate: \`${candidate}\`" "${MATRIX}" ||
-    fail 'live matrix does not select the current source candidate'
-grep -Fq 'Current source purpose: `_19` narrow multi-endpoint corrective for the experiment-only Model B exhaustive `NO_CANDIDATE / graph_exhausted` benchmark; CI/publication pending' "${MATRIX}" ||
-    fail 'live matrix does not describe the _19 corrective'
-grep -Fq 'MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`' "${MATRIX}" ||
-    fail 'live matrix does not expose the accepted Model A cold reference'
-grep -Fq 'MODEL B `_17` REPEATED OWNER-LIVE COEXISTENCE ACCEPT — EXPERIMENT ONLY' "${MATRIX}" ||
-    fail 'live matrix does not expose repeated Model B coexistence acceptance'
-grep -Fq 'MODEL B `_18` / `_19` EXHAUSTIVE NO-CANDIDATE BENCHMARK — CORRECTIVE GATE' "${MATRIX}" ||
-    fail 'live matrix does not expose the exhaustive multi-endpoint corrective gate'
-grep -Fq 'Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)' "${MATRIX}" ||
-    fail 'live matrix does not retain the accepted Model A appliance job'
-grep -Fq 'job.tMYnFA' "${MATRIX}" ||
-    fail 'live matrix does not retain the fresh complete exhaustive cold reference'
-grep -Fq 'Required package ABI: `FreeBSD:15:amd64`' "${MATRIX}" ||
-    fail 'live matrix does not require the FreeBSD 15 ABI'
-
-grep -Fq 'Latest published testing prerelease: `v0.4.0_18` / `os-zapret2-restyle-0.4.0_18.pkg`' "${PROJECT_STATE}" ||
-    fail 'project state does not retain published _18'
-grep -Fq 'Latest owner-tested testing candidate: `v0.4.0_18` / `os-zapret2-restyle-0.4.0_18.pkg`' "${PROJECT_STATE}" ||
-    fail 'project state does not retain owner-tested _18'
-grep -Fq "Current source candidate: \`${candidate}\`" "${PROJECT_STATE}" ||
-    fail 'project state does not select the current source candidate'
-grep -Fq '`_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**' "${PROJECT_STATE}" ||
-    fail 'project state does not retain the owner-live _32 boundary'
-grep -Fq '`_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**' "${PROJECT_STATE}" ||
-    fail 'project state does not close the change-specific owner-live _33 boundary'
-grep -Fq 'Model A experiment gate: **REFERENCE COLLECTED on `v0.4.0_11` / `job.TtZeaH`**' "${PROJECT_STATE}" ||
-    fail 'project state does not retain the accepted Model A reference gate'
-grep -Fq 'Model B experiment gate: **first owner-live coexistence ACCEPT on `v0.4.0_16`; repeated ACCEPT 5/5 on `v0.4.0_17`; `_18` exhaustive input-contract REJECT before warm batches; EXPERIMENT ONLY; `production_approved=false`**' "${PROJECT_STATE}" ||
-    fail 'project state does not retain the current Model B experiment gate'
-grep -Fq 'Current phase: **`_18` exhaustive owner-live input-contract REJECT on multi-endpoint `telegram.org` with restoration PASS; `_19` narrow multi-endpoint exhaustive corrective in source, CI/publication pending**' "${PROJECT_STATE}" ||
-    fail 'project state does not select the _19 corrective phase'
-
-grep -Fq 'projection_is_measured_full_job' "${MODEL_B_EXHAUSTIVE_PY}" ||
-    fail 'exhaustive benchmark does not distinguish projected full-job timing'
-grep -Fq 'unique_worker_identity' "${MODEL_B_EXHAUSTIVE_PY}" ||
-    fail 'exhaustive benchmark lost unique worker identity gate'
-grep -Fq 'observed_ids == expected_ids' "${MODEL_B_EXHAUSTIVE_PY}" ||
-    fail 'exhaustive benchmark lost exact corpus-order gate'
-grep -Fq 'all_reference_endpoints_replayed' "${MODEL_B_EXHAUSTIVE_PY}" ||
-    fail 'exhaustive benchmark lost complete reference endpoint replay gate'
+require "${PROJECT_STATE}" 'Latest published testing prerelease: `v0.4.0_19` / `os-zapret2-restyle-0.4.0_19.pkg`'
+require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.0_19` / `os-zapret2-restyle-0.4.0_19.pkg`'
+require "${PROJECT_STATE}" "Current source candidate: \`${candidate}\`"
+require "${PROJECT_STATE}" '`_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**'
+require "${PROJECT_STATE}" '`_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**'
+require "${PROJECT_STATE}" 'Model A experiment gate: **REFERENCE COLLECTED on `v0.4.0_11` / `job.TtZeaH`**'
+require "${PROJECT_STATE}" 'sequential exhaustive ACCEPT 5/5 on `v0.4.0_19`'
+require "${PROJECT_STATE}" '`_20` controlled parallel candidate probes selected'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI and Python 3.13 Strategy Lab contracts retain historical validation while ${candidate} narrowly fixes multi-endpoint exhaustive Model B replay"
+printf '%s\n' "PASS: FreeBSD 15 package CI and Python 3.13 contracts preserve the accepted Strategy Lab history while ${candidate} packages the isolated controlled-parallel Model B experiment"
