@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_17` REPEATED COEXISTENCE ACCEPT 5/5 (EXPERIMENT ONLY); `_18` EXHAUSTIVE NO-CANDIDATE BENCHMARK SOURCE CANDIDATE; FULL REGRESSION MATRIX OPEN**
+Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_17` REPEATED COEXISTENCE ACCEPT 5/5 (EXPERIMENT ONLY); `_18` EXHAUSTIVE INPUT-CONTRACT REJECT WITH RESTORATION PASS; `_19` MULTI-ENDPOINT EXHAUSTIVE CORRECTIVE SOURCE CANDIDATE; FULL REGRESSION MATRIX OPEN**
 
 This matrix is the canonical live-appliance regression inventory for Strategy Lab. Source
 tests, GitHub CI, and FreeBSD package builds cannot substitute for a live PASS when a row
@@ -21,15 +21,15 @@ TEST RECORD
 - Latest test date/time: `2026-08-11`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.4.0_17.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_17.pkg`
-- Current source candidate: `os-zapret2-restyle-0.4.0_18.pkg`
-- Current source purpose: `_18` experiment-only batched exhaustive Model B benchmark for Standard `NO_CANDIDATE / graph_exhausted`; CI/publication pending
-- Current source overlay: exact persisted Stage-60 corpus/order; at most three warm workers per batch; sequential deterministic probes and between-batch cleanup; production Strategy Lab remains Model A
+- Latest published testing candidate: `os-zapret2-restyle-0.4.0_18.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_18.pkg`
+- Current source candidate: `os-zapret2-restyle-0.4.0_19.pkg`
+- Current source purpose: `_19` narrow multi-endpoint corrective for the experiment-only Model B exhaustive `NO_CANDIDATE / graph_exhausted` benchmark; CI/publication pending
+- Current source overlay: exact persisted Stage-60 corpus/order plus every pinned reference endpoint; at most three warm workers per batch; all endpoint probes sequential; production Strategy Lab remains Model A
 - Revision note: `_15` remains intentionally unclaimed by this source line; no `_15` package/release or live result is recorded here
 - Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)
 - Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)
-- Latest owner-tested Standard no-winner job: `job.tU3wiL` (`telegram.org`)
+- Latest owner-tested Standard no-winner job: `job.tMYnFA` (`telegram.org`, 16/16 `graph_exhausted`, measurement-only 210-second Standard budget override)
 - Latest owner-tested Extended no-winner job: `job.hsP8Ro` (`telegram.org`)
 - WAN interface: `vtnet1`
 - Generic UDP target/port: `PENDING OWNER`
@@ -39,6 +39,9 @@ Architecture / ABI baseline evidence:
 
 Latest accepted live experiment evidence:
 `docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md`.
+
+Latest exhaustive corrective evidence:
+`docs/verification/evidence/2026-08-11-v0.4.0_18-model-b-exhaustive-multi-endpoint-gap.md`.
 
 First accepted Model B coexistence evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md`.
@@ -55,8 +58,8 @@ Model B experiment contract:
 Model B access corrective contract:
 `docs/patches/v0.4.0_14.md`.
 
-Current experiment source contract:
-`docs/patches/v0.4.0_18.md`.
+Current experiment corrective contract:
+`docs/patches/v0.4.0_19.md`.
 
 Adaptive `_33` evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`.
@@ -106,8 +109,8 @@ VERIFIED PROGRESSION
   only normal IPFW rule `19000` in the inspected Strategy Lab range.
 - The `_9` live winner set was stable 3/3, so the fail-fast rejection branch remains
   automated-regression evidence rather than owner-live evidence. No broader claim is made.
-- The same `_9` set defines the current worst-case timing boundary: Standard
-  `telegram.org` `job.tU3wiL` checked all 16 Stage-60 candidates with
+- The same `_9` set defines the historical current-architecture worst-case timing boundary:
+  Standard `telegram.org` `job.tU3wiL` checked all 16 Stage-60 candidates with
   `stopped_reason=graph_exhausted`, Stage 60 about 89.247 s and total through restoration
   about 144.125 s; Extended `telegram.org` took about 169.262 s. By contrast Standard
   `rutracker.org` stopped after six Stage-60 candidates and completed in about 71.023 s.
@@ -179,10 +182,18 @@ VERIFIED PROGRESSION
   already-warm dispatch+probe path is about 86.5% below Model A's 1580 ms cold-candidate
   median; startup-amortized three-candidate cost is about 600.6 ms/candidate, roughly 62.0%
   lower. These are mechanism-level estimates, not full-search speedups.
-- `v0.4.0_18` adds the missing full-corpus measurement without switching production search:
-  a fresh Standard `NO_CANDIDATE / graph_exhausted` Stage-60 corpus is replayed in exact
-  order with sequential batches of at most three warm workers, deterministic route
-  attribution, between-batch cleanup, wall-clock timing and RSS measurement.
+- `v0.4.0_18` was published and owner-tested. Normal-budget `telegram.org` job `job.qtLmTY`
+  safely stopped Stage 60 after 15 candidates with `insufficient_stage_budget` and verified
+  restoration. Measurement-only reference `job.tMYnFA` used a 210-second Standard budget
+  override and completed `NO_CANDIDATE`, 16/16 `graph_exhausted`, `partial=false`, with
+  verified restoration. The first exhaustive warm attempt then rejected before any batch
+  or probe because `_18` required exactly one pinned endpoint; its report retained verified
+  cleanup/restoration.
+- `v0.4.0_19` is the narrow source corrective selected by that live evidence. It accepts
+  all pinned reference endpoints, writes all endpoint names to target-bound warm-worker
+  hostlists, replays every endpoint sequentially against its fixed selected IP for every
+  candidate, and preserves endpoint-level attribution plus candidate-level non-PASS
+  equivalence. Worker width remains three and production Model A is unchanged.
 
 ==================================================
 MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`
@@ -301,12 +312,12 @@ Previous reject evidence:
 This evidence is **experiment-only**. Model B retains `experiment_only=true`,
 `parallel_probes=false` and `production_approved=false`.
 
-`v0.4.0_18` preserves these accepted/safety paths and adds only the exhaustive no-candidate
-measurement. Model B still requires same-corpus exhaustive evidence and an explicit
+`v0.4.0_19` preserves these accepted/safety paths and corrects only exhaustive reference
+endpoint replay. Model B still requires same-corpus exhaustive evidence and an explicit
 architecture decision before any production use.
 
 ==================================================
-MODEL B `_18` EXHAUSTIVE NO-CANDIDATE BENCHMARK — SOURCE GATE
+MODEL B `_18` / `_19` EXHAUSTIVE NO-CANDIDATE BENCHMARK — CORRECTIVE GATE
 ==================================================
 
 The benchmark reference must be a fresh completed Standard domain job with:
@@ -316,25 +327,39 @@ The benchmark reference must be a fresh completed Standard domain job with:
 - zero working Stage-60 candidates;
 - complete persisted `candidates` and adaptive `schedule` arrays;
 - verified restoration and clean temporary runtime;
-- current `ResourceInventory` identical to the reference.
+- current `ResourceInventory` identical to the reference;
+- one or more valid pinned endpoint bindings retained from the fixed search epoch.
 
-The exact persisted Stage-60 corpus/order is replayed in batches of at most three warm
-workers. Every batch requires stable readiness, unique PID/divert identity and numeric RSS
-before any probe. Probes remain sequential with exactly one selected temporary route; every
-cold no-candidate replay must remain non-PASS; interception must be attributed; workers must
+Owner reference `job.tMYnFA` satisfies the full Stage-60 cold corpus contract: 16/16
+candidates, zero winners, `graph_exhausted`, `partial=false`, verified restoration. Its
+live target presentation includes `telegram.org` and `web.telegram.org`.
+
+The `_18` exhaustive attempt rejected before any warm batch because the harness required
+exactly one binding. That result has no warm timing/equivalence payload and does not reject
+Model B; it does prove final cleanup/restoration on this failure path.
+
+`_19` replays the exact persisted Stage-60 corpus/order in batches of at most three warm
+workers and replays every pinned endpoint sequentially for every candidate. Every
+endpoint uses its own fixed selected IP; all endpoint names are present in target-bound
+worker hostlists; candidate PASS requires all endpoint probes to pass. Every cold
+no-candidate replay must remain non-PASS; interception must be attributed; workers must
 remain healthy; and the batch must clean fully before the next batch starts.
 
-The report measures warm exhaustive search wall time, batch startup/cleanup, dispatch/probe
-medians and peak batch RSS. It compares measured warm exhaustive runtime with the sum of
-the same cold Stage-60 candidate-runner durations. A projected full-job speedup uses
+The report measures warm exhaustive search wall time, batch startup/cleanup,
+candidate-level and endpoint-level dispatch/probe medians, endpoint-probe count and peak
+batch RSS. It compares measured warm exhaustive runtime with the sum of the same cold
+Stage-60 candidate-runner durations. A projected full-job speedup uses
 `cold_job_total - cold_stage60_candidate_runtime + warm_exhaustive_search` and is explicitly
 marked as a projection rather than a measured Model B full job.
 
-Final accept additionally requires the existing semantic lifecycle restoration contract.
-Production Strategy Lab remains Model A.
+Final accept additionally requires complete corpus order, complete endpoint replay and the
+existing semantic lifecycle restoration contract. Production Strategy Lab remains Model A.
 
-Exact source contract:
-`docs/patches/v0.4.0_18.md`.
+Exact contracts/evidence:
+
+- `docs/patches/v0.4.0_18.md`;
+- `docs/patches/v0.4.0_19.md`;
+- `docs/verification/evidence/2026-08-11-v0.4.0_18-model-b-exhaustive-multi-endpoint-gap.md`.
 
 ==================================================
 PYTHON MIGRATION OWNERSHIP
@@ -421,7 +446,7 @@ CONFIRMED DEFECTS / LIVE RECHECKS
 - **Model B coexistence preflight.** `_12` was blocked before worker launch by the false clean-path status leak. `_13` owner live advanced past preflight, so this defect is closed.
 - **Model B warm-worker post-drop hostlist/process-query boundary.** `_13` reached worker startup but all three workers disappeared before readiness. `_14` applied the bounded `0711` traversal lease and `_16` added the FreeBSD process-query selector normalization. The `_16` owner rerun returns `conclusion=accept` with all readiness, identity, RSS, attribution, coexistence, stop/death and restoration checks true.
 - **Model B failed-readiness continuation.** `_17` source-corrects the `_13` continuation after `all_workers_ready=false`; focused regression, canonical CI, FreeBSD 15 qualification and publication are complete. The owner installed `_17`; five repeats of the unchanged accepted ready-pool path all returned `accept` with restoration verified. No intentionally broken owner-live readiness run is required.
-- **Model B worst-case search timing.** Existing coexistence runs are not a full exhaustive search benchmark. `_18` source adds the exact-corpus no-candidate measurement; owner-live timing remains pending after `_18` publication/installation.
+- **Model B worst-case search timing / multi-endpoint reference.** `_18` produced complete cold reference `job.tMYnFA`, but the exhaustive harness rejected before batch startup because it required one pinned endpoint. Cleanup/restoration passed. `_19` corrects only multi-endpoint exhaustive replay; owner-live warm timing remains pending after `_19` publication/installation.
 - **Immediate stale/new-job GUI error.** Retain as open until dedicated presentation regression coverage.
 - **Active `Strategy Lab returned no output.` message.** Dedicated live recheck pending.
 - **Terminal reload/state presentation.** Live recheck pending; issue #155 separately tracks idle-state presentation/localization without changing the internal `state: idle` contract.
@@ -463,8 +488,8 @@ For `v0.4.0`, Scenario 1 remains the selected mandatory post-migration row and i
 containment is owner-live passed through `v0.4.0_8`; `_33` adaptive validation has its
 change-specific owner-live PASS on `v0.4.0_9`. Rows 2–18 remain open regression coverage
 without a formal row PASS. `v0.4.0_11` supplies the accepted Model A cold reference.
-`v0.4.0_17` is the latest published and owner-tested testing candidate; five repeated
-Model B coexistence runs return `accept` with complete restoration, but remain explicitly
-experiment-only with `production_approved=false`. `_18` is the current source candidate
-only for the exhaustive no-candidate measurement and does not imply production approval or
-broader warm-runtime architecture changes.
+`v0.4.0_18` is the latest published and owner-tested testing candidate. Its exhaustive
+measurement rejected before warm batch startup on a now-confirmed one-endpoint input
+assumption while cleanup/restoration passed. `_19` is the current narrow source corrective
+for multi-endpoint exhaustive replay only. Model B remains explicitly experiment-only with
+`production_approved=false`; no production warm-runtime architecture change is implied.
