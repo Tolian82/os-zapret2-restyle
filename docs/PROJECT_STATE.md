@@ -14,8 +14,9 @@ blockers, active architectural direction, and next action.
 Read after:
 `AGENTS.md` and `docs/INDEX.md`.
 
-Detailed chronological history belongs in `docs/devlog/`, `docs/patches/`, and
-`docs/verification/evidence/` rather than this current-state ledger.
+Do not store here:
+Full chronological history, detailed implementation design, or complete test logs.
+Those belong in `docs/devlog/`, `docs/patches/`, and `docs/verification/evidence/`.
 
 ==================================================
 QUICK CONTEXT
@@ -25,21 +26,20 @@ Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_1.pkg`
 Latest published testing prerelease: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`
-Latest owner-installed testing candidate: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`
-Latest owner-tested Model B candidate: `v0.4.0_17` / five repeated coexistence accepts
+Latest owner-tested testing candidate: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`
 Current source line: `VERSION=0.4.0`
 Current package revision: `PLUGIN_REVISION=18`
 Current source candidate: `os-zapret2-restyle-0.4.0_18.pkg`
 Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Model B `_17` repeated owner-live coexistence ACCEPT 5/5; `_18` batched exhaustive no-candidate benchmark implemented in source and pending CI/publication**
-Current source overlay: **`_18` replays an exact persisted Standard `NO_CANDIDATE / graph_exhausted` Stage-60 corpus in original order using at most three warm Model B workers per batch, sequential probes, deterministic attribution and cleanup between batches; production Strategy Lab remains cold Model A**
+Current phase: **Model B `_17` owner-installed and repeated coexistence ACCEPT 5/5; `_18` experiment-only exhaustive no-candidate benchmark implemented in source and pending CI/publication**
+Current source overlay: **`_18` preserves production Model A and the accepted `_17` Model B safety/coexistence path; it replays an exact persisted Standard `NO_CANDIDATE / graph_exhausted` Stage-60 corpus in original order using sequential warm batches of at most three workers with cleanup between batches**
 Revision note: **`_15` remains intentionally unclaimed by this source line because a stale concurrent `_15` branch exists; no `_15` package/release or live result is recorded here**
 v0.4.0 release gate: **COMPLETE — published and installed by the owner**
 `_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**
 `_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**
 Model A experiment gate: **REFERENCE COLLECTED on `v0.4.0_11` / `job.TtZeaH`**
-Model B coexistence gate: **first ACCEPT on `_16`; repeated ACCEPT 5/5 on `_17`; EXPERIMENT ONLY; `production_approved=false`**
+Model B experiment gate: **first owner-live coexistence ACCEPT on `v0.4.0_16`; repeated ACCEPT 5/5 on `v0.4.0_17`; EXPERIMENT ONLY; `production_approved=false`**
 
 Current primary Strategy Lab authorities:
 
@@ -49,10 +49,17 @@ Current primary Strategy Lab authorities:
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
 - `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
 
+Current GitHub delivery authority:
+
+- `docs/GITHUB_PUBLICATION.md`;
+- `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
+- `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
+- `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
+
 Current live-gate authority:
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
-Latest Model B reproducibility evidence:
+Latest accepted live experiment evidence:
 `docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md`.
 
 First accepted Model B coexistence evidence:
@@ -63,6 +70,12 @@ Accepted Model A reference evidence:
 
 Previous Model B reject evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_13-model-b-worker-access-reject.md`.
+
+Model B experiment contract:
+`docs/patches/v0.4.0_12.md`.
+
+Model B access corrective contract:
+`docs/patches/v0.4.0_14.md`.
 
 Current source experiment contract:
 `docs/patches/v0.4.0_18.md`.
@@ -85,54 +98,112 @@ The automated Strategy Lab Python migration is complete. Python is authoritative
 - active Diagnostics status/reload presentation state.
 
 The shared lifecycle lock, audited FreeBSD system mutations, and private circular-session
-state remain deliberate shell boundaries. Experimental work must not move those boundaries
-without a new architectural decision.
+state remain deliberate shell boundaries. Corrective/adaptive/experimental work must not
+move those boundaries without a new architectural decision.
 
 ==================================================
 ADAPTIVE SEARCH IMPLEMENTATION STATE
 ==================================================
 
-Current progression relevant to the active measurement cycle:
+Approved and implemented progression:
 
-- `_28` / `0.4.0_2` — Stage-50 family acceptance stopped being a Stage-60 hard gate;
-- `_29` / `0.4.0_3` — canonical immutable `CandidateSpec` and job-scoped `ResourceInventory`;
-- `_30` / `0.4.0_4` — native Zapret2 search DAG and semantic resource branches;
-- `_31` / `0.4.0_5` — adaptive ordering, fixed search epoch and durable timing telemetry;
-- `_32` / `0.4.0_6`–`0.4.0_8` — telemetry-driven timeout containment, owner-live passed on Standard and Extended no-winner paths;
-- `_33` / `0.4.0_9` — bounded discovery, strict fail-fast 3/3 stability and finalist depth validation; winner and no-winner paths passed change-specifically;
-- `0.4.0_11` — complete accepted Model A cold reference with numeric candidate RSS;
-- `0.4.0_12`–`0.4.0_16` — Model B coexistence harness, preflight/access/process-query corrections and first owner-live `conclusion=accept`;
-- `0.4.0_17` — failed-readiness fail-fast correction. The owner installed `_17`; five sequential repeats of the unchanged ready-pool coexistence path all returned `accept` with restoration verified;
-- `0.4.0_18` — experiment-only batched exhaustive Model B benchmark for an exact no-candidate `graph_exhausted` Stage-60 corpus. It keeps the proven coexistence width at no more than three warm workers and cleans each batch before starting the next.
+- `_28` / `0.4.0_2` — removed Stage-50 accepted-family hard gating;
+- `_29` / `0.4.0_3` — canonical immutable `CandidateSpec` and job-scoped
+  `ResourceInventory`;
+- `_30` / `0.4.0_4` — native Zapret2 search DAG, golden corpus, semantic resource branches
+  and candidate-defined ranges;
+- `_31` / `0.4.0_5` — live-evidence adaptive ordering, fixed search epoch, two-to-three
+  winner defaults and durable timing telemetry;
+- `_32` / `0.4.0_6`–`0.4.0_8` — telemetry-driven timeout containment, owner-live passed on
+  the observed Standard and Extended no-winner paths;
+- `_33` / `0.4.0_9` — bounded lightweight discovery, fail-fast strict 3/3 stability and
+  cold finalist depth validation, change-specific owner-live passed on winner and
+  no-winner paths;
+- `0.4.0_10` — read-only Model A cold-reference measurement summarizer plus candidate RSS
+  collection at the FreeBSD snapshot boundary; first appliance report exposed a Python
+  readiness propagation gap;
+- `0.4.0_11` — preserved snapshot `rss_kb` in persisted Python readiness/candidate
+  evidence and owner recheck collected the complete Model A cold reference;
+- `0.4.0_12` — experiment-only Model B coexistence harness for three exact Model-A
+  reference candidates on distinct warm `dvtws2` processes/divert ports with strictly
+  sequential rule-selected probes, independent-stop/death checks and mandatory semantic
+  restoration; first owner launch was blocked before worker startup by a false clean
+  preflight status;
+- `0.4.0_13` — corrected clean preflight and reached the worker/probe path on the owner
+  appliance; all three workers disappeared before readiness, probes were diverted to the
+  dedicated ports without qualifying listeners, and the experiment truthfully ended
+  `reject` with complete semantic restoration;
+- `0.4.0_14` — reused the previously owner-proven bounded post-drop hostlist access lease:
+  active Model B session ancestors are `0711` while warm workers run and the retained root
+  returns to private `0700` during cleanup;
+- `0.4.0_16` — retained the `_14` access lease and normalized the Strategy Lab legacy `ax`
+  all-process selector at the shared FreeBSD process-query boundary so native `ps` receives
+  compatible `-xww -A ...` flags. The owner-live rerun then reached final
+  `conclusion=accept` with all required Model B checks and restoration true;
+- `0.4.0_17` — closes the separate failed-readiness control defect proven by `_13`: once
+  the warm pool reports any non-ready worker, Model B records the failed slots and rejects
+  before route/probe/independent-stop/controlled-death work. Existing cleanup and semantic
+  restoration ownership remain unchanged. Canonical CI, FreeBSD 15 package inspection and
+  testing-prerelease publication are complete. The owner installed `_17` and then repeated
+  the unchanged ready-pool coexistence experiment five times; all five runs returned
+  `conclusion=accept` with restoration verified;
+- `0.4.0_18` — adds an experiment-only exhaustive no-candidate benchmark. A fresh Standard
+  `NO_CANDIDATE / graph_exhausted` Stage-60 corpus is replayed in exact order using warm
+  batches of at most three workers, sequential deterministic routing, between-batch cleanup
+  and measured wall-clock/RSS evidence. Production Strategy Lab remains Model A.
 
-Warm runtime selection remains evidence-gated by the A/B/C experiment plan. No Model B/C
-worker, dispatcher, warm preload or parallel candidate probing is production-approved.
+Warm runtime selection remains evidence-gated by the A/B/C experiment plan. Model B is a
+measurement harness only. No Model B/C worker, dispatcher, warm preload or parallel
+candidate probing is production-approved.
 
 ==================================================
-LATEST AUTOMATED SEARCH OWNER RESULTS — `v0.4.0_9`
+LATEST AUTOMATED SEARCH OWNER RESULT — `v0.4.0_9`
 ==================================================
 
-The most useful cold full-search comparison remains the `_9` owner evidence:
+Owner evidence contains three complete automated Strategy Lab jobs on
+`os-zapret2-restyle-0.4.0_9`:
 
-- Standard `telegram.org` `job.tU3wiL` — `NO_CANDIDATE`, all 16 Stage-60 graph candidates checked, `stopped_reason=graph_exhausted`, Stage 60 about 89.247 s, total through mandatory restoration about 144.125 s;
-- Extended `telegram.org` `job.hsP8Ro` — `NO_CANDIDATE`, all 16 Stage-60 graph candidates checked, total through mandatory restoration about 169.262 s;
-- Standard `rutracker.org` `job.UPRDlc` — `SUCCESS`, Stage 60 stopped after six candidates when three working candidates were found, total through mandatory restoration about 71.023 s.
+- Standard `telegram.org` `job.tU3wiL` — truthful `NO_CANDIDATE`, all 16 expansion nodes
+  exhausted, mandatory restoration verified;
+- Extended `telegram.org` `job.hsP8Ro` — truthful `NO_CANDIDATE`, Extended Stage 80 passed
+  with unavailable/configured branches explicitly skipped, mandatory restoration verified;
+- Standard `rutracker.org` `job.UPRDlc` — `SUCCESS`, Stage 60 stopped after six tested
+  candidates when three working candidates were found, Stage 70 proved all three strict
+  3/3, and Stage 85 executed one cold exact-profile replay per finalist.
 
-This distinction is now part of the measurement contract: successful targets can stop the
-adaptive search early and therefore do not represent worst-case user wait time. Exhaustive
-search timing must use a no-candidate graph-exhausted workload.
+The no-winner/winner timing distinction is material for the active benchmark. Standard
+`telegram.org` checked all 16 Stage-60 candidates with `stopped_reason=graph_exhausted`,
+Stage 60 about 89.247 s and total through mandatory restoration about 144.125 s. Extended
+`telegram.org` took about 169.262 s. Standard `rutracker.org` stopped after six Stage-60
+candidates and completed in about 71.023 s. Maximum search timing must therefore use a
+no-candidate graph-exhausted target rather than a successful early-stop target.
+
+The three finalist responses on the winner run were successful HTTP 301 responses of 162
+bytes, so the 16-KiB depth criterion was truthfully classified `inconclusive` rather than
+false PASS or network FAIL. The separate 3/3 connectivity/stability evidence remained
+valid.
+
+Post-run evidence showed the initially RUNNING Zapret2 service restored, strategy
+unchanged, temporary runtime clean, and no reserved Strategy Lab IPFW rule residue. The
+live set did not contain an unstable finalist, so fail-fast rejection remains automated
+regression evidence rather than owner-live evidence.
 
 Exact record:
 `docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`.
 
 ==================================================
-MODEL A — ACCEPTED COLD REFERENCE
+MODEL A — COLD REFERENCE COLLECTED ON `_11`
 ==================================================
 
-Owner Standard `rutracker.org` job `job.TtZeaH` on `v0.4.0_11` produced 25 cold candidate
-samples and `conclusion=reference_collected` with every coverage check true.
+Owner Standard `rutracker.org` job `job.TtZeaH` on `v0.4.0_11` completed `SUCCESS` and
+produced 25 cold candidate samples. The read-only `model-a summarize` command returned
+`conclusion=reference_collected` with every machine-checkable coverage item true.
 
-Measured cold distributions:
+The accepted report proves known PASS/FAIL candidates, repeated execution, required
+`blob-free`/`builtin`/`external` resources, `-d8`/`-d10`, 16 unique overlapping TLS/443
+specs, numeric candidate RSS on all samples and verified clean restoration.
+
+Measured cold distributions across the 25 `_11` samples:
 
 - total candidate median 1580 ms, p90 3411 ms, max 3463 ms;
 - readiness median 1046 ms, p90 1052 ms, max 1138 ms;
@@ -145,67 +216,100 @@ Measured cold distributions:
 Exact accepted evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`.
 
-==================================================
-MODEL B — COEXISTENCE AND REPRODUCIBILITY
-==================================================
-
-The first owner-live Model B coexistence accept occurred on `_16`. Three warm workers had
-unique process/divert identity, aggregate RSS 12964 KiB, pool startup 1162 ms, dispatch
-median 12.0 ms and probe median 200.5 ms. Result equivalence, route attribution,
-coexistence, independent stop/death and semantic restoration all passed.
-
-`v0.4.0_17` preserved that accepted ready-pool path and corrected only the separate
-failed-readiness branch. The owner installed `_17` and executed the coexistence harness five
-more times sequentially against `job.TtZeaH`:
-
-- acceptance: 5/5;
-- restoration verified: 5/5;
-- external harness real time: 14.90–15.03 s, mean about 14.972 s;
-- pool startup mean 1163.6 ms;
-- dispatch-median mean 12.4 ms;
-- probe-median mean 200.3 ms;
-- no dedicated rules 19128–19130 remained after the series;
-- the normal Zapret2 service was running after the series.
-
-Relative to Model A's 1580 ms cold candidate median, the already-warm mean
-`dispatch+probe` value of about 212.7 ms is roughly 86.5% lower. Amortizing one measured
-three-worker startup over three probes gives about 600.6 ms/candidate, roughly 62.0% lower.
-These are mechanism-level coexistence estimates, not full-search speedups.
-
-Exact repeated evidence:
-`docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md`.
-
-Model B remains `experiment_only=true`, `parallel_probes=false`, and
-`production_approved=false`.
+Previous `_10` gap evidence:
+`docs/verification/evidence/2026-08-10-v0.4.0_10-model-a-rss-gap.md`.
 
 ==================================================
-MODEL B EXHAUSTIVE BENCHMARK — `_18` SOURCE CANDIDATE
+MODEL B — OWNER-LIVE COEXISTENCE ACCEPT AND `_17` REPRODUCIBILITY
 ==================================================
 
-`v0.4.0_18` adds a dedicated measurement path without changing production search:
+The Model B harness remains separate from normal Strategy Lab search and consumes retained
+Model A job `job.TtZeaH`. The initial coexistence corpus remains exactly three compatible
+TLS 1.3/TCP/443 reference specs: repeated blob-free PASS, builtin FAIL, and external `-d8`
+FAIL.
 
-`strategy_lab_model_b_exhaustive.sh REFERENCE_JOB OUTPUT`
+Historical progression:
 
-The reference must be a completed Standard domain job with:
+- `_12` was blocked before worker startup by a false clean-preflight status leak;
+- `_13` fixed preflight but all three workers disappeared before readiness because the
+  private Model B session ancestors prevented post-drop hostlist traversal;
+- `_14` applied the bounded `0711` traversal lease already proven by normal Strategy Lab;
+- `_16` retained that lease and fixed the FreeBSD `process_query.sh` legacy `ax` selector
+  interface before repeating the same owner-live experiment.
 
-- `outcome=NO_CANDIDATE`;
-- Stage 60 `stopped_reason=graph_exhausted`;
-- zero working Stage-60 candidates;
-- a complete persisted Stage-60 candidate/schedule corpus;
-- verified restoration and clean temporary runtime;
-- the same current `ResourceInventory`.
+The `_16` owner report is a real `accept`:
 
-The benchmark replays that exact corpus in original order in batches of at most three warm
-workers. Every batch requires stable worker readiness, unique PID/divert identity, numeric
-RSS, sequential single-rule route attribution, no false PASS, worker health throughout the
-batch and complete cleanup before the next batch. A failed readiness or identity gate skips
-all downstream probes for that batch and flows to common cleanup/restoration.
+- `preliminary_accept=true`;
+- `conclusion=accept`;
+- all required checks are true;
+- semantic restoration is verified;
+- `experiment_only=true`;
+- `parallel_probes=false`;
+- `production_approved=false`.
 
-The report measures warm exhaustive search wall time, batch startup/cleanup, dispatch,
-probe timing and peak batch RSS. It compares measured warm exhaustive runtime with the sum
-of the same cold Stage-60 candidate-runner durations. A full-job number is also projected as
-`cold_job_total - cold_stage60_candidate_runtime + warm_exhaustive_search`; that projection
-is explicitly marked as not a measured Model B full job.
+Warm pool evidence:
+
+- `pass`: PID 11486, divert 9990, RSS 4324 KiB, ready;
+- `builtin`: PID 25203, divert 9991, RSS 4320 KiB, ready;
+- `external`: PID 40825, divert 9992, RSS 4320 KiB, ready;
+- aggregate pool RSS 12964 KiB;
+- pool startup 1162 ms.
+
+All A/B/C/A sequential probe classifications matched Model A. Selected IPFW rules moved,
+inactive rules stayed absent, all workers remained ready during coexistence, repeated PASS
+selection stayed PASS, independent stop preserved survivor correctness, and controlled
+worker death left the remaining PASS worker healthy and equivalent to Model A.
+
+Measured `_16` Model B medians were dispatch 12.0 ms and probe 200.5 ms. The accepted
+Model A cold total-candidate median is 1580 ms. A narrow three-candidate amortization using
+only metrics retained by both reports estimates about 600 ms/candidate for Model B versus
+1580 ms/candidate cold, roughly 62% lower.
+
+The owner-installed `_17` repeated set strengthens reproducibility without changing the
+architecture claim: five sequential runs all returned `accept` with restoration verified.
+External harness wall time ranged 14.90–15.03 s; mean pool startup was 1163.6 ms, mean
+dispatch median 12.4 ms and mean probe median 200.3 ms. The already-warm mean
+dispatch+probe path of about 212.7 ms is roughly 86.5% below the 1580 ms cold-candidate
+median, while startup-amortized three-candidate cost is about 600.6 ms/candidate, roughly
+62.0% lower. Neither percentage is a full-search result.
+
+After the five `_17` runs the normal Zapret2 service was running and dedicated Model B
+rules `19128–19130` were absent.
+
+Exact evidence:
+
+- `docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md`;
+- `docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md`.
+
+Previous `_13` reject evidence:
+`docs/verification/evidence/2026-08-10-v0.4.0_13-model-b-worker-access-reject.md`.
+
+Model B remains experiment-only and does **not** have production approval.
+
+==================================================
+MODEL B EXHAUSTIVE NO-CANDIDATE BENCHMARK — `_18`
+==================================================
+
+The `_18` benchmark requires a completed fresh Standard domain reference with
+`outcome=NO_CANDIDATE`, Stage-60 `stopped_reason=graph_exhausted`, zero working Stage-60
+candidates, complete persisted `candidates`/`schedule`, verified restoration and the same
+current `ResourceInventory`.
+
+The exact persisted Stage-60 candidate corpus/order is replayed in batches of at most three
+warm workers. Each batch must reach stable readiness with unique PID/divert identity and
+numeric RSS before any probe. Candidate probes remain sequential with exactly one selected
+rule; every cold no-candidate replay must remain non-PASS; interception must be attributed;
+workers must remain healthy; and complete cleanup is required before the next batch.
+
+Measured fields include warm exhaustive search wall time, batch startup/cleanup, dispatch
+and probe medians, peak aggregate batch RSS, exact corpus completeness and final semantic
+restoration. `candidate_runtime_speedup_percent` compares the measured warm exhaustive
+runtime with the sum of the same persisted cold Stage-60 candidate durations. A projected
+full-job value uses `cold_job_total - cold_stage60_candidate_runtime + warm_exhaustive_search`
+and is explicitly marked as a projection rather than a measured Model B full job.
+
+A failed readiness or ambiguous worker-identity gate skips downstream probes for that batch
+and falls through to the existing cleanup/restoration boundary.
 
 Exact source contract:
 `docs/patches/v0.4.0_18.md`.
@@ -214,42 +318,71 @@ Exact source contract:
 CONFIRMED DEFECT / REGRESSION BACKLOG
 ==================================================
 
-Closed measurement/corrective boundaries:
+Closed by the adaptive timeout/search and measurement series:
 
 1. Stage-50 parent timeout on `0.4.0_5` — closed by `_6` owner evidence.
-2. Stage-60 fixed parent timeout — closed by `_7` owner evidence.
+2. Stage-60 fixed 70-second parent timeout on `0.4.0_6` — closed by `_7` owner evidence.
 3. Stage-70/80/85/90 normal-path containment — closed by `_8` owner evidence.
-4. `_33` winner/no-winner adaptive validation — closed change-specifically by `_9`.
-5. Model A RSS propagation — closed by `_11`.
-6. Model B false clean preflight — closed by `_13`.
-7. Model B post-drop hostlist traversal and FreeBSD process-query selection — closed by `_16` owner-live accept.
-8. Model B failed-readiness continuation — source-corrected by `_17`; negative path remains focused regression evidence, while `_17` owner installation and 5/5 ready-pool repeats confirm no regression of the accepted path.
+4. `_33` winner/no-winner adaptive validation boundary — closed change-specifically by
+   `_9` owner evidence, with fail-fast rejection still source-regression-only.
+5. `_10` Model A RSS propagation gap — source-corrected and owner-live closed by `_11`;
+   Model A returns `reference_collected`.
+6. `_12` Model B false clean-preflight failure — source-corrected by `_13` and owner-live
+   closed when `_13` advanced into worker startup.
+7. `_13` Model B post-drop hostlist traversal / `_16` process-query rerun boundary — closed
+   by `_16` owner-live `conclusion=accept` with all worker readiness, identity, RSS,
+   attribution, coexistence, stop/death and restoration checks true.
+8. `_13` failed-readiness continuation — source-corrected by `_17` with immediate reject
+   plus common cleanup. Owner installation is complete and five ready-pool repeats all
+   accept, confirming no regression of the accepted coexistence path; the intentionally
+   broken negative path remains regression evidence only.
+
+Current measurement gap:
+
+9. Existing Model B coexistence evidence does not measure maximum full-search wait time.
+   `_18` adds an exact-corpus no-candidate graph-exhausted benchmark; owner-live exhaustive
+   timing remains pending until `_18` is qualified, published and installed.
 
 Other product/regression observations remain separate backlog unless selected by the
-risk-based live gate, including issue #155 presentation/localization, STOPPED restoration,
-cancellation/hard-timeout/internal-failure rows, extended TLS/HTTP/QUIC/configured UDP,
-circular/settings/retention/reboot coverage and presentation rechecks.
+risk-based live gate:
 
-See `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
+- issue #155: idle-state presentation/localization (`Status` / `ready`, `Статус` / `готов`)
+  without changing the internal `state: idle` contract;
+- immediate stale/new-job GUI error recheck;
+- active GUI no-output message recheck;
+- complete progress/reload presentation recheck;
+- PARTIAL summary wording;
+- dedicated STOPPED-state restoration row;
+- cancellation, hard timeout and controlled internal failure rows;
+- live extended TLS/HTTP, QUIC and configured generic UDP rows;
+- circular/settings/retention/reboot regression rows.
+
+See `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` for the canonical inventory.
 
 ==================================================
 DELIVERY AND LIVE-GATE BOUNDARY
 ==================================================
 
-The stable `v0.4.0 / 0.4.0_1` release cycle remains complete. `_32` and `_33` retain their
-owner-live pass evidence. `v0.4.0_11` remains the accepted Model A cold reference.
-`v0.4.0_17` is the latest published and owner-installed testing prerelease; its five
-repeated Model B coexistence runs all accept with verified restoration. Current source
-candidate `_18` only adds the exhaustive no-candidate benchmark. Model B remains explicitly
-non-production and sequential. Revision `_15` remains unclaimed by this source line.
+The stable `v0.4.0 / 0.4.0_1` release cycle remains complete. The mandatory v0.4.0
+post-migration live row remains PASS on `_27`, `_28` retains its focused adaptive owner
+PASS, `_32` retains its timeout-containment owner PASS through `_8`, and `_33` retains its
+change-specific owner-live PASS on `_9`.
+
+`v0.4.0_11` remains the accepted Model A cold reference. `v0.4.0_17` is the latest
+published and owner-tested testing prerelease; five repeated experiment-only Model B
+coexistence runs return `accept` with complete restoration. Current source candidate `_18`
+adds only the exhaustive no-candidate measurement path. Model B still explicitly records
+`production_approved=false`; no warm-worker production architecture is approved. Revision
+`_15` remains unclaimed by this source line.
 
 ==================================================
 NEXT ACTION
 ==================================================
 
-1. Qualify `os-zapret2-restyle-0.4.0_18.pkg` through canonical CI and FreeBSD 15 package inspection, including the exhaustive benchmark regression and package-content contract.
-2. Publish `_18` as the next testing prerelease only after the exact candidate is green and merged.
+1. Qualify `os-zapret2-restyle-0.4.0_18.pkg` through canonical CI and FreeBSD 15 package inspection, including the new exhaustive benchmark regression.
+2. Publish `_18` as the next testing prerelease only after the exact package candidate is green and merged.
 3. Install `_18` on the owner OPNsense appliance.
-4. Run a fresh Standard `telegram.org` Strategy Lab job on `_18` and require a truthful `NO_CANDIDATE`, Stage-60 `graph_exhausted`, full candidate corpus and verified restoration. This fresh cold run is the contemporaneous reference for the benchmark.
-5. Run the `_18` exhaustive Model B harness against that fresh job and compare measured warm exhaustive candidate-runtime wall time, RSS and attribution with the exact cold corpus. Treat the full-job speedup field as a projection only.
-6. Keep production Strategy Lab on Model A until repeated exhaustive evidence and an explicit architecture decision justify any change.
+4. Run a fresh Standard `telegram.org` Strategy Lab job on `_18`; require truthful `NO_CANDIDATE`, Stage-60 `graph_exhausted`, complete candidate corpus and verified restoration.
+5. Run `strategy_lab_model_b_exhaustive.sh` against that exact fresh job and preserve its report plus post-run service/IPFW residue evidence.
+6. Compare measured warm exhaustive candidate-runtime wall time/RSS with the exact cold corpus. Treat the report's full-job speedup as a projection only until a production-integrated warm runtime is explicitly approved and measured.
+7. Keep Model B experiment-only and sequential; do not add production warm reuse, Model C, source-port dispatch, preload-policy changes or true parallel candidate probing in this measurement cycle.
