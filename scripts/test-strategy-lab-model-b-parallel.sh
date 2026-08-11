@@ -137,6 +137,7 @@ def fake_adapter(action,*args,timeout=15):
     raise AssertionError((action,args))
 
 def fake_parallel_curl(endpoint,selected_ip,local_port):
+    # Deliberate real delay: the synthetic gate must prove overlapping candidate windows.
     time.sleep(0.04)
     return request.CommandResult(command=["curl","--local-port",str(local_port)], returncode=28,
         stdout=f"exit=28 remote_ip={selected_ip} http=1.1 code=000 bytes=0 local_port={local_port}\n",
@@ -144,8 +145,7 @@ def fake_parallel_curl(endpoint,selected_ip,local_port):
 
 with mock.patch.object(model_b,"_adapter",side_effect=fake_adapter), \
      mock.patch.object(model_b.resources,"snapshot_inventory",return_value=inventory), \
-     mock.patch.object(model_b_parallel,"_parallel_curl_request",side_effect=fake_parallel_curl), \
-     mock.patch.object(model_b.time,"sleep",return_value=None):
+     mock.patch.object(model_b_parallel,"_parallel_curl_request",side_effect=fake_parallel_curl):
     assert model_b_parallel.run(job_id,str(report))==0
 
 value=json.loads(report.read_text(encoding="utf-8"))
