@@ -172,7 +172,7 @@ require "${MATRIX}" 'Latest published testing candidate: `os-zapret2-restyle-0.4
 require "${MATRIX}" 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_19.pkg`'
 require "${MATRIX}" "Current source candidate: \`${candidate}\`"
 require "${MATRIX}" 'MODEL B `_20` CONTROLLED PARALLEL CANDIDATE-PROBE EXPERIMENT — SOURCE CANDIDATE'
-require "${MATRIX}" 'mean 74808.2 ms'
+require "${MATRIX}" 'mean 74.8082 s'
 require "${MATRIX}" 'about 15.96%'
 require "${MATRIX}" '**PASS ON `_27` — v0.4.0 mandatory row**'
 require "${MATRIX}" 'Adaptive `_28` focused evidence:'
