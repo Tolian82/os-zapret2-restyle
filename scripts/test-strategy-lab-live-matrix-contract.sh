@@ -103,7 +103,7 @@ grep -Fq 'about 144.125 s' "${MATRIX}"
 grep -Fq 'about 71.023 s' "${MATRIX}"
 grep -Fq 'about 86.5%' "${MATRIX}"
 grep -Fq 'roughly 62.0%' "${MATRIX}"
-grep -Fq 'error="exhaustive Model B requires one pinned endpoint"' "${MATRIX}"
+grep -Fq 'required exactly one pinned endpoint' "${MATRIX}"
 grep -Fq 'job.tMYnFA' "${MATRIX}"
 grep -Fq 'web.telegram.org' "${MATRIX}"
 
