@@ -12,7 +12,7 @@ PREFLIGHT="${MODULE_ROOT}/strategy_lab/preflight.sh"
 
 fail(){ echo "FAIL: $*" >&2; exit 1; }
 for file in "${MODULE}" "${ENTRY}" "${EXPANSION_RUNNER}" "${OWNER_RUNNER}" "${PREFLIGHT}"; do
-    [ -s "${file}" ] || fail "missing Stage-60 production parallel surface: ${file}"
+    [ -s "${file}" ] || fail "missing Stage-60 production parallel/fallback surface: ${file}"
 done
 
 PYTHONPATH="${MODULE_ROOT}" "${PYTHON_BIN}" - <<'PY'
@@ -96,22 +96,22 @@ assert failed["command_source_port_match"] is True
 assert failed["command_endpoint_match"] is True
 PY
 
-grep -Fq 'stage60-parallel expand' "${OWNER_RUNNER}" || fail 'production Stage-60 owner does not invoke stage60-parallel'
-grep -Fq 'strategy_lab_stage60_parallel_runner.sh' "${EXPANSION_RUNNER}" || fail 'Stage-60 expansion runner is not routed to the production parallel owner'
-grep -Fq 'from strategy_lab_py import stage60_parallel' "${ENTRY}" || fail 'Python entry point does not package the production Stage-60 owner'
+grep -Fq 'stage60-parallel expand' "${OWNER_RUNNER}" || fail 'production Stage-60 compatibility owner does not invoke stage60-parallel'
+grep -Fq 'strategy_lab_stage60_parallel_runner.sh' "${EXPANSION_RUNNER}" || fail 'Stage-60 expansion runner is not routed to the compatibility owner'
+grep -Fq 'from strategy_lab_py import stage60_model_c as stage60_parallel' "${ENTRY}" || fail 'Python entry point does not route production Stage 60 through Model C'
 grep -Fq 'return search.expand(job_id, endpoints_file, family_result_file, result_file)' "${MODULE}" || fail 'explicit cold Model A override/fallback reference is missing'
-grep -Fq 'warm_enabled = False' "${MODULE}" || fail 'warm infrastructure failure does not disable the warm path'
+grep -Fq 'warm_enabled = False' "${MODULE}" || fail 'Model B infrastructure failure does not disable the warm fallback path'
 grep -Fq 'A-cold-fallback' "${MODULE}" || fail 'cold fallback evidence is missing'
 grep -Fq '_candidate_admission' "${MODULE}" || fail 'production Stage-60 batch/cold budget admission is missing'
 grep -Fq '_cancel_requested' "${MODULE}" || fail 'production Stage-60 cancellation checks are missing'
 grep -Fq 'remaining_winners = max(1, target - len(result["working"]))' "${MODULE}" || fail 'winner-band batch width reduction is missing'
-grep -Fq 'ThreadPoolExecutor(max_workers=len(slots)' "${MODULE}" || fail 'candidate parallel execution is missing'
-grep -Fq 'model_b_parallel_attribution._probe_endpoint' "${MODULE}" || fail '_21 attribution contract is not reused by production Stage 60'
+grep -Fq 'ThreadPoolExecutor(max_workers=len(slots)' "${MODULE}" || fail 'Model B fallback candidate parallel execution is missing'
+grep -Fq 'model_b_parallel_attribution._probe_endpoint' "${MODULE}" || fail '_21 attribution contract is not retained by Model B fallback'
 grep -Fq 'cleanup-all' "${OWNER_RUNNER}" || fail 'Stage-60 owner has no unconditional dedicated cleanup'
 grep -Fq 'trap on_signal HUP INT TERM' "${OWNER_RUNNER}" || fail 'Stage-60 owner has no cancellation/termination cleanup trap'
-grep -Fq 'strategy_lab_parallel_residue_cleanup' "${PREFLIGHT}" || fail 'next-job preflight does not remove killed warm-worker residue'
+grep -Fq 'strategy_lab_parallel_residue_cleanup' "${PREFLIGHT}" || fail 'next-job preflight does not remove warm-worker residue'
 
 sh -n "${OWNER_RUNNER}"
 sh -n "${EXPANSION_RUNNER}"
 
-echo 'PASS: production Stage 60 uses bounded width-three controlled-parallel warm batches, resolved-frontier scheduling, exact _21 attribution, cold Model A fallback, budget/cancel containment, and stale-residue cleanup'
+echo 'PASS: accepted width-three Model B remains a production fallback/reference with resolved-frontier scheduling, exact _21 attribution, cold Model A fallback, budget/cancel containment, and stale-residue cleanup'
