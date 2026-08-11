@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_17` REPEATED COEXISTENCE ACCEPT 5/5 (EXPERIMENT ONLY); `_18` EXHAUSTIVE INPUT-CONTRACT REJECT WITH RESTORATION PASS; `_19` MULTI-ENDPOINT EXHAUSTIVE CORRECTIVE SOURCE CANDIDATE; FULL REGRESSION MATRIX OPEN**
+Overall status: **RELEASE-SELECTED LIVE GATE PASS ON `_27`; ADAPTIVE `_28` FOCUSED PASS; `_32` TIMEOUT-CONTAINMENT LIVE PASS; `_33` ADAPTIVE-VALIDATION CHANGE-SPECIFIC LIVE PASS; MODEL A COLD REFERENCE COLLECTED ON `_11`; MODEL B `_17` REPEATED COEXISTENCE ACCEPT 5/5 (EXPERIMENT ONLY); `_18` EXHAUSTIVE INPUT-CONTRACT REJECT WITH RESTORATION PASS; `_19` SEQUENTIAL EXHAUSTIVE ACCEPT 5/5; `_20` CONTROLLED PARALLEL-PROBE SOURCE CANDIDATE; FULL REGRESSION MATRIX OPEN**
 
 This matrix is the canonical live-appliance regression inventory for Strategy Lab. Source
 tests, GitHub CI, and FreeBSD package builds cannot substitute for a live PASS when a row
@@ -21,11 +21,11 @@ TEST RECORD
 - Latest test date/time: `2026-08-11`
 - OPNsense version: `26.7.1_1`; kernel evidence: `15.1-RELEASE-p1 stable/26.7`
 - Required package ABI: `FreeBSD:15:amd64`
-- Latest published testing candidate: `os-zapret2-restyle-0.4.0_18.pkg`
-- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_18.pkg`
-- Current source candidate: `os-zapret2-restyle-0.4.0_19.pkg`
-- Current source purpose: `_19` narrow multi-endpoint corrective for the experiment-only Model B exhaustive `NO_CANDIDATE / graph_exhausted` benchmark; CI/publication pending
-- Current source overlay: exact persisted Stage-60 corpus/order plus every pinned reference endpoint; at most three warm workers per batch; all endpoint probes sequential; production Strategy Lab remains Model A
+- Latest published testing candidate: `os-zapret2-restyle-0.4.0_19.pkg`
+- Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_19.pkg`
+- Current source candidate: `os-zapret2-restyle-0.4.0_20.pkg`
+- Current source purpose: `_20` experiment-only controlled parallel probing of up to three already-isolated warm Model B candidates; production Strategy Lab remains Model A
+- Current source overlay: exact persisted Stage-60 corpus/order; at most three warm workers per batch; candidate probes concurrent; pinned endpoints sequential inside each candidate; unique TCP source-port-qualified IPFW ownership; CPU count measurement-only
 - Revision note: `_15` remains intentionally unclaimed by this source line; no `_15` package/release or live result is recorded here
 - Latest owner-tested Model A job: `job.TtZeaH` (`rutracker.org`)
 - Latest owner-tested Standard winner job: `job.TtZeaH` (`rutracker.org`)
@@ -38,10 +38,10 @@ Architecture / ABI baseline evidence:
 `docs/verification/evidence/2026-08-06-v0.3.3_1-installation.md`.
 
 Latest accepted live experiment evidence:
-`docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md`.
+`docs/verification/evidence/2026-08-11-v0.4.0_19-model-b-exhaustive-reproducibility.md`.
 
 Latest exhaustive corrective evidence:
-`docs/verification/evidence/2026-08-11-v0.4.0_18-model-b-exhaustive-multi-endpoint-gap.md`.
+`docs/verification/evidence/2026-08-11-v0.4.0_19-model-b-exhaustive-reproducibility.md`.
 
 First accepted Model B coexistence evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md`.
@@ -58,8 +58,8 @@ Model B experiment contract:
 Model B access corrective contract:
 `docs/patches/v0.4.0_14.md`.
 
-Current experiment corrective contract:
-`docs/patches/v0.4.0_19.md`.
+Current experiment contract:
+`docs/patches/v0.4.0_20.md`.
 
 Adaptive `_33` evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`.
@@ -189,11 +189,18 @@ VERIFIED PROGRESSION
   verified restoration. The first exhaustive warm attempt then rejected before any batch
   or probe because `_18` required exactly one pinned endpoint; its report retained verified
   cleanup/restoration.
-- `v0.4.0_19` is the narrow source corrective selected by that live evidence. It accepts
-  all pinned reference endpoints, writes all endpoint names to target-bound warm-worker
-  hostlists, replays every endpoint sequentially against its fixed selected IP for every
-  candidate, and preserves endpoint-level attribution plus candidate-level non-PASS
-  equivalence. Worker width remains three and production Model A is unchanged.
+- `v0.4.0_19` corrected multi-endpoint replay and was published/owner-tested. The owner ran
+  the complete 16-candidate/two-endpoint `job.tMYnFA` exhaustive warm corpus five times.
+  All five returned `conclusion=accept` with every required check and restoration true.
+  Warm exhaustive wall time was 74.600–75.083 s (mean 74.8082 s) versus 89.012 s cold
+  Stage-60 candidate runtime: mean measured candidate-runtime speedup about 15.96%. Peak
+  aggregate three-worker RSS stayed 12976–12992 KiB. The full-job comparison remains a
+  projection rather than a measured Model B full Strategy Lab run.
+- `v0.4.0_20` is the current controlled-parallel source experiment. It preserves the same
+  three warm worker identities but runs up to three candidate probes concurrently. Each
+  candidate/endpoint probe receives a unique controlled TCP source port and exact
+  source-port-qualified IPFW rule; endpoints remain sequential inside a candidate. CPU
+  count is measurement metadata only and does not gate the experiment width.
 
 ==================================================
 MODEL A COLD REFERENCE — PASS ON `v0.4.0_11`
@@ -310,14 +317,10 @@ Previous reject evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_13-model-b-worker-access-reject.md`.
 
 This evidence is **experiment-only**. Model B retains `experiment_only=true`,
-`parallel_probes=false` and `production_approved=false`.
-
-`v0.4.0_19` preserves these accepted/safety paths and corrects only exhaustive reference
-endpoint replay. Model B still requires same-corpus exhaustive evidence and an explicit
-architecture decision before any production use.
+`parallel_probes=false` and `production_approved=false` on the accepted sequential path.
 
 ==================================================
-MODEL B `_18` / `_19` EXHAUSTIVE NO-CANDIDATE BENCHMARK — CORRECTIVE GATE
+MODEL B `_18` / `_19` EXHAUSTIVE NO-CANDIDATE BENCHMARK — OWNER-LIVE ACCEPT
 ==================================================
 
 The benchmark reference must be a fresh completed Standard domain job with:
@@ -339,27 +342,52 @@ exactly one binding. That result has no warm timing/equivalence payload and does
 Model B; it does prove final cleanup/restoration on this failure path.
 
 `_19` replays the exact persisted Stage-60 corpus/order in batches of at most three warm
-workers and replays every pinned endpoint sequentially for every candidate. Every
-endpoint uses its own fixed selected IP; all endpoint names are present in target-bound
-worker hostlists; candidate PASS requires all endpoint probes to pass. Every cold
-no-candidate replay must remain non-PASS; interception must be attributed; workers must
-remain healthy; and the batch must clean fully before the next batch starts.
+workers and every pinned endpoint sequentially for every candidate. Every endpoint uses its
+own fixed selected IP; all endpoint names are present in target-bound worker hostlists;
+candidate PASS requires all endpoint probes to pass. Every cold no-candidate replay stayed
+non-PASS; interception was attributed; workers remained healthy; and each batch cleaned
+fully before the next batch.
 
-The report measures warm exhaustive search wall time, batch startup/cleanup,
-candidate-level and endpoint-level dispatch/probe medians, endpoint-probe count and peak
-batch RSS. It compares measured warm exhaustive runtime with the sum of the same cold
-Stage-60 candidate-runner durations. A projected full-job speedup uses
-`cold_job_total - cold_stage60_candidate_runtime + warm_exhaustive_search` and is explicitly
-marked as a projection rather than a measured Model B full job.
-
-Final accept additionally requires complete corpus order, complete endpoint replay and the
-existing semantic lifecycle restoration contract. Production Strategy Lab remains Model A.
+Five owner-live `_19` repetitions all accepted. Measured warm exhaustive wall times were
+74886, 74692, 75083, 74780 and 74600 ms. Mean 74808.2 ms versus the retained 89012 ms cold
+Stage-60 candidate runtime gives about 15.96% mean measured candidate-runtime speedup. The
+full-job comparison is still explicitly projected, not a measured Model B full-job wall
+clock. Peak aggregate three-worker RSS was 12976–12992 KiB.
 
 Exact contracts/evidence:
 
 - `docs/patches/v0.4.0_18.md`;
 - `docs/patches/v0.4.0_19.md`;
-- `docs/verification/evidence/2026-08-11-v0.4.0_18-model-b-exhaustive-multi-endpoint-gap.md`.
+- `docs/verification/evidence/2026-08-11-v0.4.0_18-model-b-exhaustive-multi-endpoint-gap.md`;
+- `docs/verification/evidence/2026-08-11-v0.4.0_19-model-b-exhaustive-reproducibility.md`.
+
+==================================================
+MODEL B `_20` CONTROLLED PARALLEL CANDIDATE-PROBE EXPERIMENT — SOURCE CANDIDATE
+==================================================
+
+True candidate parallelism is the final Model B optimization experiment selected by the
+approved experiment plan after sequential coexistence and exhaustive replay became
+reproducible.
+
+`_20` retains the exact `job.tMYnFA` corpus and the already-proven maximum of three warm
+workers per batch. Up to three candidate tasks start together. Pinned endpoints inside one
+candidate remain sequential, so the experiment changes candidate-level concurrency only.
+
+Parallel traffic cannot use the `_19` single-active-route assumption. `_20` therefore gives
+every candidate/endpoint probe a unique controlled TCP source port. Each temporary IPFW
+rule matches the exact source port and exact pinned destination before diverting to that
+candidate's dedicated worker. The requested source port must be free, source-port plans
+must be unique, selected-rule counters must grow and all routes must disappear during batch
+cleanup.
+
+Required acceptance includes exact corpus order, result equivalence, worker identity/RSS,
+source-port-qualified route attribution, observed candidate overlap, maximum width <= 3,
+sequential endpoints inside each candidate, cleanup between batches and final semantic
+restoration. `logical_cpu_count` is recorded for cross-appliance comparison but is not an
+acceptance or width gate.
+
+Contract:
+`docs/patches/v0.4.0_20.md`.
 
 ==================================================
 PYTHON MIGRATION OWNERSHIP
@@ -446,7 +474,8 @@ CONFIRMED DEFECTS / LIVE RECHECKS
 - **Model B coexistence preflight.** `_12` was blocked before worker launch by the false clean-path status leak. `_13` owner live advanced past preflight, so this defect is closed.
 - **Model B warm-worker post-drop hostlist/process-query boundary.** `_13` reached worker startup but all three workers disappeared before readiness. `_14` applied the bounded `0711` traversal lease and `_16` added the FreeBSD process-query selector normalization. The `_16` owner rerun returns `conclusion=accept` with all readiness, identity, RSS, attribution, coexistence, stop/death and restoration checks true.
 - **Model B failed-readiness continuation.** `_17` source-corrects the `_13` continuation after `all_workers_ready=false`; focused regression, canonical CI, FreeBSD 15 qualification and publication are complete. The owner installed `_17`; five repeats of the unchanged accepted ready-pool path all returned `accept` with restoration verified. No intentionally broken owner-live readiness run is required.
-- **Model B worst-case search timing / multi-endpoint reference.** `_18` produced complete cold reference `job.tMYnFA`, but the exhaustive harness rejected before batch startup because it required one pinned endpoint. Cleanup/restoration passed. `_19` corrects only multi-endpoint exhaustive replay; owner-live warm timing remains pending after `_19` publication/installation.
+- **Model B worst-case search timing / multi-endpoint reference.** `_18` produced complete cold reference `job.tMYnFA`, but the exhaustive harness rejected before batch startup because it required one pinned endpoint. Cleanup/restoration passed. `_19` corrected that boundary and five complete sequential exhaustive owner runs all accepted with stable ~74.8 s warm search time versus 89.012 s cold candidate runtime.
+- **Model B controlled parallel probing.** `_20` is the selected experiment-only source candidate; owner-live correctness, attribution and timing are pending package qualification/publication.
 - **Immediate stale/new-job GUI error.** Retain as open until dedicated presentation regression coverage.
 - **Active `Strategy Lab returned no output.` message.** Dedicated live recheck pending.
 - **Terminal reload/state presentation.** Live recheck pending; issue #155 separately tracks idle-state presentation/localization without changing the internal `state: idle` contract.
@@ -488,8 +517,7 @@ For `v0.4.0`, Scenario 1 remains the selected mandatory post-migration row and i
 containment is owner-live passed through `v0.4.0_8`; `_33` adaptive validation has its
 change-specific owner-live PASS on `v0.4.0_9`. Rows 2–18 remain open regression coverage
 without a formal row PASS. `v0.4.0_11` supplies the accepted Model A cold reference.
-`v0.4.0_18` is the latest published and owner-tested testing candidate. Its exhaustive
-measurement rejected before warm batch startup on a now-confirmed one-endpoint input
-assumption while cleanup/restoration passed. `_19` is the current narrow source corrective
-for multi-endpoint exhaustive replay only. Model B remains explicitly experiment-only with
+`v0.4.0_19` is the latest published and owner-tested testing candidate and supplies five
+accepted sequential exhaustive Model B no-candidate runs. `_20` is the current
+experiment-only controlled parallel-probe source candidate. Model B remains explicitly
 `production_approved=false`; no production warm-runtime architecture change is implied.
