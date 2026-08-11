@@ -145,8 +145,9 @@ For GitHub work, read in this order:
 2. repository-root `AGENTS.md`;
 3. `docs/GITHUB_PUBLICATION.md`;
 4. `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
-5. current focused delivery decisions when applicable;
-6. `docs/GITHUB_WORKFLOW.md`.
+5. `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
+6. current focused delivery decisions when applicable;
+7. `docs/GITHUB_WORKFLOW.md`.
 
 Key rules:
 
@@ -155,6 +156,7 @@ Key rules:
 - one logical task branch and Ready PR;
 - same-scope repair stays in that PR;
 - required checks must pass on the latest head;
+- every PR title, every PR-branch commit subject, and final squash subject use the universal versioned title contract;
 - squash merge with expected head SHA;
 - verify `main` and cleanup;
 - candidate publication is separate from the code PR;
