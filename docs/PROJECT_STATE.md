@@ -18,9 +18,19 @@ Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current source line: `VERSION=0.4.0`, `PLUGIN_REVISION=25`
 Current source candidate: `os-zapret2-restyle-0.4.0_25.pkg`
-Latest published testing prerelease before `_25` publication: `v0.4.0_23`
+Latest published testing prerelease: `v0.4.0_25`
 Latest owner-tested testing candidate: `v0.4.0_23` (Model C proven live, source-port corrective required)
 Required package ABI: `FreeBSD:15:amd64`
+
+Published `_25` runtime commit:
+`a5ecfbfd57820e30e5f2be450e510b96c00267e3`.
+
+Published `_25` asset:
+`os-zapret2-restyle-0.4.0_25.pkg`, `178783` bytes,
+`sha256:1355b5000c0a9acc7e6717ddc7bd78248626abd21d826dd82cb8f15fcc4fdf91`.
+
+Publication evidence:
+`docs/verification/evidence/2026-08-11-v0.4.0_25-publication.md`.
 
 Active Strategy Lab ownership authority:
 `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
@@ -29,8 +39,9 @@ Active GitHub delivery authority:
 `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
 
 Current `_25` change authority:
-`docs/patches/v0.4.0_25.md` and
-`docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md`.
+`docs/patches/v0.4.0_25.md`,
+`docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md`, and
+`docs/verification/evidence/2026-08-11-v0.4.0_25-publication.md`.
 
 Model-C architecture authority:
 `docs/architecture/STRATEGY_LAB_MODEL_C.md` and
@@ -101,6 +112,11 @@ are unchanged.
 
 No Strategy Lab timeout is increased by `_25`.
 
+`v0.4.0_25` is now published as a testing prerelease from exact runtime commit
+`a5ecfbfd57820e30e5f2be450e510b96c00267e3`. Publication workflow `31534534435` passed
+FreeBSD 15 build, manifest verification, release publication, published-contract verification
+and temporary publication-branch cleanup.
+
 ==================================================
 FOLLOW-UP: ADAPTIVE BUDGET
 ==================================================
@@ -121,14 +137,14 @@ This requirement is documented now but intentionally not implemented in `_25`.
 VERIFICATION / NEXT ACTION
 ==================================================
 
-Source/CI qualification for `_25` must include the complete Strategy Lab corrective matrix,
-FreeBSD 15 package build/inspection and the focused source-port lease contract. Publication
-then produces `os-zapret2-restyle-0.4.0_25.pkg` for owner-live testing.
+Source/CI qualification for `_25` passed the complete Strategy Lab corrective matrix, focused
+source-port lease contract and FreeBSD 15 package build/inspection. Testing prerelease
+`v0.4.0_25` is published; owner-live verification is now the active gate.
 
-First owner-live recheck after publication: Extended `telegram.org`. Expected boundary:
-Model C should skip an occupied preferred `420xx` port by leasing an alternate instead of
-forcing Model C and Model B through the same collision into cold Model A. Evidence must show
-actual selector lease ports and clean Stage-90 restoration/no `19128-19130` residue.
+First owner-live recheck: Extended `telegram.org`. Expected boundary: Model C should skip an
+occupied preferred `420xx` port by leasing an alternate instead of forcing Model C and Model B
+through the same collision into cold Model A. Evidence must show actual selector lease ports
+and clean Stage-90 restoration/no `19128-19130` residue.
 
 Broader IPv6/QUIC/Generic-UDP timing work follows only after this collision corrective is
 measured, so adaptive-budget design is based on real workload rather than accidental
