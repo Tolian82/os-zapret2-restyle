@@ -3,12 +3,14 @@
 The benchmark consumes one completed Standard no-candidate Strategy Lab job whose Stage 60
 ended with graph exhaustion. It replays the exact persisted Stage-60 candidate corpus in
 its original order using the already owner-proven three-worker Model-B coexistence boundary.
-Candidates are executed sequentially in warm batches of at most three workers. The module
-never changes production Strategy Lab selection or runtime architecture.
+Candidates and all pinned reference endpoints are executed sequentially in warm batches of
+at most three workers. The module never changes production Strategy Lab selection or runtime
+architecture.
 """
 
 from __future__ import annotations
 
+import os
 import statistics
 import time
 from datetime import datetime, timezone
@@ -53,10 +55,37 @@ def _job_total_ms(job: Path) -> int | None:
     return numeric[-1] if numeric else None
 
 
+def _reference_bindings(epoch: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = epoch.get("bindings")
+    if not isinstance(raw, list) or not raw:
+        raise ModelBExhaustiveError("exhaustive Model B requires at least one pinned endpoint")
+    bindings: list[dict[str, Any]] = []
+    endpoints: set[str] = set()
+    for index, item in enumerate(raw, 1):
+        if not isinstance(item, dict):
+            raise ModelBExhaustiveError("reference endpoint binding is invalid")
+        endpoint = item.get("endpoint")
+        selected_ip = item.get("selected_ip")
+        if not isinstance(endpoint, str) or not endpoint or not isinstance(selected_ip, str) or not selected_ip:
+            raise ModelBExhaustiveError("reference endpoint binding is invalid")
+        if endpoint in endpoints:
+            raise ModelBExhaustiveError("reference endpoint binding is duplicated")
+        endpoints.add(endpoint)
+        bindings.append(
+            {
+                "index": item.get("index", index),
+                "endpoint": endpoint,
+                "selected_ip": selected_ip,
+                "epoch_id": epoch.get("epoch_id"),
+            }
+        )
+    return bindings
+
+
 def _reference_contract(reference_job_id: str) -> tuple[
     dict[str, Any],
     resources.ResourceInventory,
-    dict[str, Any],
+    list[dict[str, Any]],
     list[dict[str, Any]],
     dict[str, Any],
 ]:
@@ -76,13 +105,7 @@ def _reference_contract(reference_job_id: str) -> tuple[
 
     inventory = resources.load_inventory(job / "resource-inventory.json")
     epoch = model_b._load_json(job / "search-epoch.json")
-    bindings = epoch.get("bindings")
-    if not isinstance(bindings, list) or len(bindings) != 1 or not isinstance(bindings[0], dict):
-        raise ModelBExhaustiveError("exhaustive Model B requires one pinned endpoint")
-    endpoint = bindings[0].get("endpoint")
-    selected_ip = bindings[0].get("selected_ip")
-    if not isinstance(endpoint, str) or not endpoint or not isinstance(selected_ip, str) or not selected_ip:
-        raise ModelBExhaustiveError("reference endpoint binding is invalid")
+    bindings = _reference_bindings(epoch)
 
     expansion = model_b._load_json(job / "parameter-expansion.json")
     candidates = expansion.get("candidates")
@@ -147,12 +170,92 @@ def _reference_contract(reference_job_id: str) -> tuple[
         "resource_inventory_id": inventory.inventory_id,
         "initial_service_state": restoration.get("initial_state"),
         "candidate_count": completed,
+        "endpoint_count": len(bindings),
+        "bindings": bindings,
         "cold_candidate_runtime_ms": cold_candidate_runtime_ms,
         "cold_job_total_ms": _job_total_ms(job),
         "stopped_reason": expansion.get("stopped_reason"),
     }
-    binding = {"endpoint": endpoint, "selected_ip": selected_ip, "epoch_id": epoch.get("epoch_id")}
-    return status, inventory, binding, records, reference
+    return status, inventory, bindings, records, reference
+
+
+def _write_worker_runtime(
+    slot: model_b.Slot,
+    record: dict[str, Any],
+    inventory: resources.ResourceInventory,
+    bindings: Sequence[dict[str, Any]],
+) -> dict[str, Any]:
+    root = model_b.session_dir() / "workers" / slot.name
+    root.mkdir(parents=True, exist_ok=True)
+    spec = candidate_spec.CandidateSpec.from_dict(record["spec"])
+    hostlist: Path | None = None
+    endpoints = [str(binding["endpoint"]) for binding in bindings]
+    if spec.target_binding:
+        hostlist = root / "hostlist.txt"
+        hostlist.write_text("".join(f"{endpoint}\n" for endpoint in endpoints), encoding="utf-8")
+        os.chmod(hostlist, 0o644)
+    arguments = spec.render_runtime_arguments(inventory, divert_port=slot.port, hostlist_path=hostlist)
+    args_path = root / "dvtws.args"
+    args_path.write_text("".join(f"{item}\n" for item in arguments), encoding="utf-8")
+    os.chmod(args_path, 0o644)
+    return {
+        "slot": slot.name,
+        "role": slot.role,
+        "port": slot.port,
+        "rule": slot.rule,
+        "candidate_id": spec.candidate_id,
+        "spec_id": spec.spec_id,
+        "family": spec.family,
+        "expected_classification": record["classification"],
+        "resource_classes": list(record["spec"].get("resource_classes", [])),
+        "out_range": (record["spec"].get("ranges") or {}).get("out"),
+        "reference_path": record["path"],
+        "target_endpoints": endpoints,
+        "runtime_arguments": list(arguments),
+    }
+
+
+def _probe_candidate(
+    slot: model_b.Slot,
+    slots: Sequence[model_b.Slot],
+    record: dict[str, Any],
+    bindings: Sequence[dict[str, Any]],
+    wan: str,
+) -> dict[str, Any]:
+    endpoint_probes: list[dict[str, Any]] = []
+    for binding in bindings:
+        endpoint_probes.append(
+            model_b._probe(
+                slot,
+                slots,
+                str(binding["endpoint"]),
+                str(binding["selected_ip"]),
+                wan,
+            )
+        )
+    classification = "pass" if all(item.get("classification") == "pass" for item in endpoint_probes) else "fail"
+    dispatch_ms = sum(int(item.get("dispatch_ms", 0)) for item in endpoint_probes)
+    probe_ms = sum(int(item.get("probe_ms", 0)) for item in endpoint_probes)
+    probe: dict[str, Any] = {
+        "slot": slot.name,
+        "rule": slot.rule,
+        "port": slot.port,
+        "corpus_index": record["corpus_index"],
+        "candidate_id": record["spec"].get("candidate_id"),
+        "spec_id": record["spec_id"],
+        "cold_classification": record["classification"],
+        "expected_search_classification": "non-pass",
+        "classification": classification,
+        "equivalent_to_cold_search": classification != "pass",
+        "endpoint_count": len(endpoint_probes),
+        "endpoint_probes": endpoint_probes,
+        "dispatch_ms": dispatch_ms,
+        "probe_ms": probe_ms,
+        "intercepted": all(bool(item.get("intercepted")) for item in endpoint_probes),
+        "inactive_rules_absent": all(bool(item.get("inactive_rules_absent")) for item in endpoint_probes),
+    }
+    probe["all_workers_still_ready"] = model_b._all_survivors_ready(slots)
+    return probe
 
 
 def _projection(cold_job_total_ms: int | None, cold_candidate_runtime_ms: int, warm_search_ms: int) -> dict[str, Any]:
@@ -192,11 +295,12 @@ def run(reference_job_id: str, output: str) -> int:
         "conclusion": "inconclusive",
     }
     try:
-        _status, reference_inventory, binding, records, reference = _reference_contract(reference_job_id)
+        _status, reference_inventory, bindings, records, reference = _reference_contract(reference_job_id)
         current_inventory = model_b._current_inventory(reference_inventory)
         report["reference"] = reference
         report["checks"]["reference_inventory_match"] = True
         report["checks"]["reference_graph_exhausted"] = True
+        report["checks"]["reference_endpoint_bindings"] = True
         model_b.session_dir().mkdir(parents=True, exist_ok=True)
         wan = model_b._require_adapter("wan").strip()
         if not wan:
@@ -218,6 +322,8 @@ def run(reference_job_id: str, output: str) -> int:
         cleanup_values: list[int] = []
         dispatch_values: list[int] = []
         probe_values: list[int] = []
+        endpoint_dispatch_values: list[int] = []
+        endpoint_probe_values: list[int] = []
         aggregate_rss_values: list[int] = []
 
         for batch_number, offset in enumerate(range(0, len(records), len(BATCH_SLOTS)), 1):
@@ -228,13 +334,11 @@ def run(reference_job_id: str, output: str) -> int:
             workers: dict[str, dict[str, Any]] = {}
             by_slot: dict[str, dict[str, Any]] = {}
             for slot, record in zip(slots, batch_records):
-                worker = model_b._write_worker_runtime(
-                    slot, record, current_inventory, str(binding["endpoint"])
-                )
+                worker = _write_worker_runtime(slot, record, current_inventory, bindings)
                 worker["corpus_index"] = record["corpus_index"]
                 worker["cold_duration_ms"] = record["cold_duration_ms"]
                 worker["cold_classification"] = record["classification"]
-                worker["expected_search_classification"] = "fail"
+                worker["expected_search_classification"] = "non-pass"
                 workers[slot.name] = worker
                 by_slot[slot.name] = record
 
@@ -292,21 +396,15 @@ def run(reference_job_id: str, output: str) -> int:
 
             for slot in slots:
                 record = by_slot[slot.name]
-                probe = model_b._probe(
-                    slot, slots, str(binding["endpoint"]), str(binding["selected_ip"]), wan
-                )
-                probe["corpus_index"] = record["corpus_index"]
-                probe["candidate_id"] = record["spec"].get("candidate_id")
-                probe["spec_id"] = record["spec_id"]
-                probe["cold_classification"] = record["classification"]
-                probe["expected_search_classification"] = "fail"
-                probe["equivalent_to_cold_search"] = probe["classification"] == "fail"
-                probe["all_workers_still_ready"] = model_b._all_survivors_ready(slots)
+                probe = _probe_candidate(slot, slots, record, bindings, wan)
                 batch["probes"].append(probe)
                 report["probes"].append(probe)
                 observed_ids.append(str(probe["candidate_id"]))
                 dispatch_values.append(int(probe["dispatch_ms"]))
                 probe_values.append(int(probe["probe_ms"]))
+                for endpoint_probe in probe["endpoint_probes"]:
+                    endpoint_dispatch_values.append(int(endpoint_probe["dispatch_ms"]))
+                    endpoint_probe_values.append(int(endpoint_probe["probe_ms"]))
                 all_equivalent = all_equivalent and bool(probe["equivalent_to_cold_search"])
                 all_attributed = all_attributed and bool(probe["intercepted"]) and bool(probe["inactive_rules_absent"])
                 all_stable = all_stable and bool(probe["all_workers_still_ready"])
@@ -336,6 +434,9 @@ def run(reference_job_id: str, output: str) -> int:
             coexistence_stable=all_stable,
             cleanup_between_batches=all_cleanup,
             sequential_probe_contract=True,
+            all_reference_endpoints_replayed=all(
+                probe.get("endpoint_count") == len(bindings) for probe in report["probes"]
+            ),
         )
         report["timing"] = {
             "warm_exhaustive_search_ms": warm_search_ms,
@@ -343,8 +444,11 @@ def run(reference_job_id: str, output: str) -> int:
             "batch_startup_median_ms": _median(startup_values),
             "batch_cleanup_total_ms": sum(cleanup_values),
             "batch_cleanup_median_ms": _median(cleanup_values),
-            "dispatch_median_ms": _median(dispatch_values),
-            "probe_median_ms": _median(probe_values),
+            "candidate_dispatch_median_ms": _median(dispatch_values),
+            "candidate_probe_median_ms": _median(probe_values),
+            "dispatch_median_ms": _median(endpoint_dispatch_values),
+            "probe_median_ms": _median(endpoint_probe_values),
+            "endpoint_probe_count": len(endpoint_probe_values),
             "peak_batch_rss_kb": max(aggregate_rss_values) if aggregate_rss_values else None,
             "cold_candidate_runtime_ms": reference["cold_candidate_runtime_ms"],
             "cold_job_total_ms": reference["cold_job_total_ms"],
@@ -357,6 +461,7 @@ def run(reference_job_id: str, output: str) -> int:
         required = (
             "reference_inventory_match",
             "reference_graph_exhausted",
+            "reference_endpoint_bindings",
             "corpus_complete",
             "all_batches_ready",
             "unique_worker_identity",
@@ -366,6 +471,7 @@ def run(reference_job_id: str, output: str) -> int:
             "coexistence_stable",
             "cleanup_between_batches",
             "sequential_probe_contract",
+            "all_reference_endpoints_replayed",
         )
         report["required_checks"] = list(required)
         report["preliminary_accept"] = all(report["checks"].get(name) is True for name in required)

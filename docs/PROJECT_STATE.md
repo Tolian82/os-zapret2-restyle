@@ -25,21 +25,21 @@ QUICK CONTEXT
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current published project release/package: `v0.4.0` / `os-zapret2-restyle-0.4.0_1.pkg`
-Latest published testing prerelease: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`
-Latest owner-tested testing candidate: `v0.4.0_17` / `os-zapret2-restyle-0.4.0_17.pkg`
+Latest published testing prerelease: `v0.4.0_18` / `os-zapret2-restyle-0.4.0_18.pkg`
+Latest owner-tested testing candidate: `v0.4.0_18` / `os-zapret2-restyle-0.4.0_18.pkg`
 Current source line: `VERSION=0.4.0`
-Current package revision: `PLUGIN_REVISION=18`
-Current source candidate: `os-zapret2-restyle-0.4.0_18.pkg`
+Current package revision: `PLUGIN_REVISION=19`
+Current source candidate: `os-zapret2-restyle-0.4.0_19.pkg`
 Current released package: `os-zapret2-restyle-0.4.0_1.pkg`
 Target ABI: **FreeBSD:15:amd64 only**
-Current phase: **Model B `_17` owner-installed and repeated coexistence ACCEPT 5/5; `_18` experiment-only exhaustive no-candidate benchmark implemented in source and pending CI/publication**
-Current source overlay: **`_18` preserves production Model A and the accepted `_17` Model B safety/coexistence path; it replays an exact persisted Standard `NO_CANDIDATE / graph_exhausted` Stage-60 corpus in original order using sequential warm batches of at most three workers with cleanup between batches**
+Current phase: **`_18` exhaustive owner-live input-contract REJECT on multi-endpoint `telegram.org` with restoration PASS; `_19` narrow multi-endpoint exhaustive corrective in source, CI/publication pending**
+Current source overlay: **`_19` preserves production Model A and the accepted `_17` Model B safety/coexistence path; exhaustive Model B now replays every pinned endpoint from the exact reference search epoch sequentially for every retained Stage-60 candidate while keeping at most three warm workers per batch**
 Revision note: **`_15` remains intentionally unclaimed by this source line because a stale concurrent `_15` branch exists; no `_15` package/release or live result is recorded here**
 v0.4.0 release gate: **COMPLETE — published and installed by the owner**
 `_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**
 `_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**
 Model A experiment gate: **REFERENCE COLLECTED on `v0.4.0_11` / `job.TtZeaH`**
-Model B experiment gate: **first owner-live coexistence ACCEPT on `v0.4.0_16`; repeated ACCEPT 5/5 on `v0.4.0_17`; EXPERIMENT ONLY; `production_approved=false`**
+Model B experiment gate: **first owner-live coexistence ACCEPT on `v0.4.0_16`; repeated ACCEPT 5/5 on `v0.4.0_17`; `_18` exhaustive input-contract REJECT before warm batches; EXPERIMENT ONLY; `production_approved=false`**
 
 Current primary Strategy Lab authorities:
 
@@ -62,6 +62,9 @@ Current live-gate authority:
 Latest accepted live experiment evidence:
 `docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md`.
 
+Latest live exhaustive corrective evidence:
+`docs/verification/evidence/2026-08-11-v0.4.0_18-model-b-exhaustive-multi-endpoint-gap.md`.
+
 First accepted Model B coexistence evidence:
 `docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md`.
 
@@ -77,8 +80,8 @@ Model B experiment contract:
 Model B access corrective contract:
 `docs/patches/v0.4.0_14.md`.
 
-Current source experiment contract:
-`docs/patches/v0.4.0_18.md`.
+Current source corrective contract:
+`docs/patches/v0.4.0_19.md`.
 
 Current live-release-gate decision:
 `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
@@ -147,10 +150,17 @@ Approved and implemented progression:
   testing-prerelease publication are complete. The owner installed `_17` and then repeated
   the unchanged ready-pool coexistence experiment five times; all five runs returned
   `conclusion=accept` with restoration verified;
-- `0.4.0_18` — adds an experiment-only exhaustive no-candidate benchmark. A fresh Standard
-  `NO_CANDIDATE / graph_exhausted` Stage-60 corpus is replayed in exact order using warm
-  batches of at most three workers, sequential deterministic routing, between-batch cleanup
-  and measured wall-clock/RSS evidence. Production Strategy Lab remains Model A.
+- `0.4.0_18` — added the experiment-only exhaustive no-candidate benchmark and was
+  published. Owner reference `job.tMYnFA` reached truthful Standard `NO_CANDIDATE`, 16/16
+  Stage-60 `graph_exhausted`, `partial=false`, with verified restoration. The first
+  exhaustive attempt then rejected before any warm batch because `_18` incorrectly
+  required exactly one pinned endpoint while `telegram.org` has multiple required pinned
+  endpoints;
+- `0.4.0_19` — current narrow corrective: accept all pinned reference endpoints, place all
+  endpoint names in target-bound warm-worker hostlists, replay every endpoint sequentially
+  against its fixed selected IP for every candidate, preserve endpoint-level attribution,
+  and require complete multi-endpoint replay. Production Model A, normal budgets, worker
+  width and sequential-probe policy remain unchanged.
 
 Warm runtime selection remains evidence-gated by the A/B/C experiment plan. Model B is a
 measurement harness only. No Model B/C worker, dispatcher, warm preload or parallel
@@ -287,32 +297,47 @@ Previous `_13` reject evidence:
 Model B remains experiment-only and does **not** have production approval.
 
 ==================================================
-MODEL B EXHAUSTIVE NO-CANDIDATE BENCHMARK — `_18`
+MODEL B EXHAUSTIVE NO-CANDIDATE BENCHMARK — `_18` / `_19`
 ==================================================
 
-The `_18` benchmark requires a completed fresh Standard domain reference with
+The exhaustive benchmark requires a completed fresh Standard domain reference with
 `outcome=NO_CANDIDATE`, Stage-60 `stopped_reason=graph_exhausted`, zero working Stage-60
 candidates, complete persisted `candidates`/`schedule`, verified restoration and the same
 current `ResourceInventory`.
 
-The exact persisted Stage-60 candidate corpus/order is replayed in batches of at most three
-warm workers. Each batch must reach stable readiness with unique PID/divert identity and
-numeric RSS before any probe. Candidate probes remain sequential with exactly one selected
-rule; every cold no-candidate replay must remain non-PASS; interception must be attributed;
-workers must remain healthy; and complete cleanup is required before the next batch.
+The owner created complete `_18` reference `job.tMYnFA` on `telegram.org` with a
+measurement-only 210-second Standard budget override. The job completed all 16 Stage-60
+candidates with `graph_exhausted`, `partial=false`, and verified RUNNING -> RUNNING
+restoration. This is the selected cold exhaustive reference.
 
-Measured fields include warm exhaustive search wall time, batch startup/cleanup, dispatch
-and probe medians, peak aggregate batch RSS, exact corpus completeness and final semantic
-restoration. `candidate_runtime_speedup_percent` compares the measured warm exhaustive
-runtime with the sum of the same persisted cold Stage-60 candidate durations. A projected
-full-job value uses `cold_job_total - cold_stage60_candidate_runtime + warm_exhaustive_search`
-and is explicitly marked as a projection rather than a measured Model B full job.
+The first `_18` warm exhaustive attempt did not reach any batch. The report returned
+`error="exhaustive Model B requires one pinned endpoint"`, `reference=null`, no timing or
+comparison payload, `preliminary_accept=false` and final `conclusion=reject`. Cleanup and
+semantic restoration were nevertheless fully verified. This result identifies only a
+harness input-contract gap: the real `telegram.org` epoch contains multiple required
+pinned endpoints while `_18`'s synthetic regression covered one.
 
-A failed readiness or ambiguous worker-identity gate skips downstream probes for that batch
-and falls through to the existing cleanup/restoration boundary.
+`_19` corrects that boundary. The exact persisted Stage-60 candidate corpus/order remains
+batched at at most three warm workers. Every target-bound worker receives all pinned
+endpoint names in its hostlist. For every candidate, every pinned endpoint is probed
+sequentially against its own fixed selected IP. Candidate PASS requires all endpoint probes
+to pass; a no-candidate replay therefore remains equivalent when it stays non-PASS.
+Endpoint-level route/interception evidence is retained, as are worker identity/readiness,
+numeric RSS, exact corpus order, cleanup between batches and semantic restoration.
 
-Exact source contract:
-`docs/patches/v0.4.0_18.md`.
+Measured fields include warm exhaustive search wall time, batch startup/cleanup,
+candidate-level and endpoint-level dispatch/probe medians, peak aggregate batch RSS, exact
+corpus/endpoint completeness and final semantic restoration.
+`candidate_runtime_speedup_percent` compares the measured warm exhaustive runtime with the
+sum of the same persisted cold Stage-60 candidate durations. A projected full-job value
+uses `cold_job_total - cold_stage60_candidate_runtime + warm_exhaustive_search` and is
+explicitly marked as a projection rather than a measured Model B full job.
+
+Exact contracts/evidence:
+
+- `docs/patches/v0.4.0_18.md`;
+- `docs/patches/v0.4.0_19.md`;
+- `docs/verification/evidence/2026-08-11-v0.4.0_18-model-b-exhaustive-multi-endpoint-gap.md`.
 
 ==================================================
 CONFIRMED DEFECT / REGRESSION BACKLOG
@@ -339,9 +364,11 @@ Closed by the adaptive timeout/search and measurement series:
 
 Current measurement gap:
 
-9. Existing Model B coexistence evidence does not measure maximum full-search wait time.
-   `_18` adds an exact-corpus no-candidate graph-exhausted benchmark; owner-live exhaustive
-   timing remains pending until `_18` is qualified, published and installed.
+9. `_18` established the complete fresh no-candidate cold reference but its exhaustive
+   warm harness rejected before batch startup because it required exactly one pinned
+   endpoint. `_19` is the narrow multi-endpoint corrective; owner-live exhaustive timing
+   remains pending until `_19` is qualified, published and rerun against `job.tMYnFA` (or
+   a fresh equivalent reference if the resource inventory no longer matches).
 
 Other product/regression observations remain separate backlog unless selected by the
 risk-based live gate:
@@ -358,31 +385,3 @@ risk-based live gate:
 - circular/settings/retention/reboot regression rows.
 
 See `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` for the canonical inventory.
-
-==================================================
-DELIVERY AND LIVE-GATE BOUNDARY
-==================================================
-
-The stable `v0.4.0 / 0.4.0_1` release cycle remains complete. The mandatory v0.4.0
-post-migration live row remains PASS on `_27`, `_28` retains its focused adaptive owner
-PASS, `_32` retains its timeout-containment owner PASS through `_8`, and `_33` retains its
-change-specific owner-live PASS on `_9`.
-
-`v0.4.0_11` remains the accepted Model A cold reference. `v0.4.0_17` is the latest
-published and owner-tested testing prerelease; five repeated experiment-only Model B
-coexistence runs return `accept` with complete restoration. Current source candidate `_18`
-adds only the exhaustive no-candidate measurement path. Model B still explicitly records
-`production_approved=false`; no warm-worker production architecture is approved. Revision
-`_15` remains unclaimed by this source line.
-
-==================================================
-NEXT ACTION
-==================================================
-
-1. Qualify `os-zapret2-restyle-0.4.0_18.pkg` through canonical CI and FreeBSD 15 package inspection, including the new exhaustive benchmark regression.
-2. Publish `_18` as the next testing prerelease only after the exact package candidate is green and merged.
-3. Install `_18` on the owner OPNsense appliance.
-4. Run a fresh Standard `telegram.org` Strategy Lab job on `_18`; require truthful `NO_CANDIDATE`, Stage-60 `graph_exhausted`, complete candidate corpus and verified restoration.
-5. Run `strategy_lab_model_b_exhaustive.sh` against that exact fresh job and preserve its report plus post-run service/IPFW residue evidence.
-6. Compare measured warm exhaustive candidate-runtime wall time/RSS with the exact cold corpus. Treat the report's full-job speedup as a projection only until a production-integrated warm runtime is explicitly approved and measured.
-7. Keep Model B experiment-only and sequential; do not add production warm reuse, Model C, source-port dispatch, preload-policy changes or true parallel candidate probing in this measurement cycle.
