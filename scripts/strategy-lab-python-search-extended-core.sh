@@ -23,7 +23,8 @@ command -v "${PYTHON}" >/dev/null 2>&1 || fail "Python 3.13 test interpreter is 
     "${SCRIPT_DIR}/strategy_lab_py/extended.py" \
     "${SCRIPT_DIR}/strategy_lab_py/compat.py"
 
-grep -Fq 'search expand' "${SCRIPT_DIR}/strategy_lab_expansion_runner.sh" || fail 'expansion runner is not Python-owned'
+grep -Fq 'strategy_lab_stage60_parallel_runner.sh' "${SCRIPT_DIR}/strategy_lab_expansion_runner.sh" || fail 'expansion runner is not routed to the Python-owned Stage-60 parallel owner'
+grep -Fq 'stage60-parallel expand' "${SCRIPT_DIR}/strategy_lab_stage60_parallel_runner.sh" || fail 'Stage-60 parallel owner is not Python-owned'
 grep -Fq 'search stabilize' "${SCRIPT_DIR}/strategy_lab_stability_runner.sh" || fail 'stability runner is not Python-owned'
 grep -Fq 'extended tcp' "${SCRIPT_DIR}/strategy_lab_extended_runner.sh" || fail 'extended TCP runner is not Python-owned'
 grep -Fq 'extended quic' "${SCRIPT_DIR}/strategy_lab_quic_runner.sh" || fail 'QUIC runner is not Python-owned'
