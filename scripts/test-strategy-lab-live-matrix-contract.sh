@@ -17,13 +17,18 @@ MODEL_B_ACCEPT_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-10-v0.4.
 MODEL_B_REPRO_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md"
 MODEL_B_EXHAUSTIVE_GAP_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_18-model-b-exhaustive-multi-endpoint-gap.md"
 MODEL_B_EXHAUSTIVE_REPRO_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_19-model-b-exhaustive-reproducibility.md"
+MODEL_B_PARALLEL_REJECT_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_20-model-b-parallel-attribution-reject.md"
 MODEL_B_EXHAUSTIVE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b_exhaustive.py"
 MODEL_B_PARALLEL_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_20.md"
+MODEL_B_PARALLEL_CORRECTIVE_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_21.md"
 MODEL_B_PARALLEL_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-parallel.sh"
+MODEL_B_PARALLEL_ATTRIBUTION_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-parallel-attribution.sh"
 MODEL_B_PARALLEL_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b_parallel.py"
+MODEL_B_PARALLEL_ATTRIBUTION_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b_parallel_attribution.py"
 MODEL_B_PARALLEL_ADAPTER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_parallel_adapter.sh"
 MODEL_B_PARALLEL_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_parallel.sh"
 MODEL_B_PARALLEL_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_parallel_worker.sh"
+PYTHON_ENTRY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_python.py"
 LIVE_GATE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md"
 
 fail(){ echo "FAIL: $*" >&2; exit 1; }
@@ -36,10 +41,12 @@ for file in \
     "${ADAPTIVE_VALIDATION_EVIDENCE}" "${MODEL_A_REFERENCE_EVIDENCE}" \
     "${MODEL_B_ACCEPT_EVIDENCE}" "${MODEL_B_REPRO_EVIDENCE}" \
     "${MODEL_B_EXHAUSTIVE_GAP_EVIDENCE}" "${MODEL_B_EXHAUSTIVE_REPRO_EVIDENCE}" \
-    "${MODEL_B_EXHAUSTIVE_PY}" "${MODEL_B_PARALLEL_PATCH}" \
-    "${MODEL_B_PARALLEL_TEST}" "${MODEL_B_PARALLEL_PY}" \
+    "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" "${MODEL_B_EXHAUSTIVE_PY}" \
+    "${MODEL_B_PARALLEL_PATCH}" "${MODEL_B_PARALLEL_CORRECTIVE_PATCH}" \
+    "${MODEL_B_PARALLEL_TEST}" "${MODEL_B_PARALLEL_ATTRIBUTION_TEST}" \
+    "${MODEL_B_PARALLEL_PY}" "${MODEL_B_PARALLEL_ATTRIBUTION_PY}" \
     "${MODEL_B_PARALLEL_ADAPTER}" "${MODEL_B_PARALLEL_LAUNCHER}" \
-    "${MODEL_B_PARALLEL_WORKER}" "${LIVE_GATE_DECISION}"
+    "${MODEL_B_PARALLEL_WORKER}" "${PYTHON_ENTRY}" "${LIVE_GATE_DECISION}"
 do
     [ -s "${file}" ] || fail "missing Strategy Lab live-gate record: ${file}"
 done
@@ -49,18 +56,10 @@ revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; 
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${version}" = '0.4.0' ] || fail "unexpected active Strategy Lab version ${version}"
-[ "${revision}" -eq 20 ] || fail 'controlled parallel Model B experiment revision must be exactly 20'
+[ "${revision}" -eq 21 ] || fail 'parallel Model B attribution corrective revision must be exactly 21'
 
-# Current source/live boundary.
-require "${MATRIX}" '`_19` SEQUENTIAL EXHAUSTIVE ACCEPT 5/5; `_20` CONTROLLED PARALLEL-PROBE SOURCE CANDIDATE'
+# Historical live boundary and accepted baselines remain intact.
 require "${MATRIX}" 'Required package ABI: `FreeBSD:15:amd64`'
-require "${MATRIX}" 'Latest published testing candidate: `os-zapret2-restyle-0.4.0_19.pkg`'
-require "${MATRIX}" 'Latest owner-tested candidate: `os-zapret2-restyle-0.4.0_19.pkg`'
-require "${MATRIX}" "Current source candidate: \`${candidate}\`"
-require "${MATRIX}" 'Current source purpose: `_20` experiment-only controlled parallel probing of up to three already-isolated warm Model B candidates; production Strategy Lab remains Model A'
-require "${MATRIX}" 'MODEL B `_20` CONTROLLED PARALLEL CANDIDATE-PROBE EXPERIMENT — SOURCE CANDIDATE'
-require "${MATRIX}" 'unique controlled TCP source port'
-require "${MATRIX}" 'measurement metadata only and does not gate the experiment width'
 require "${MATRIX}" 'job.tMYnFA'
 require "${MATRIX}" 'web.telegram.org'
 require "${MATRIX}" 'mean 74.8082 s'
@@ -101,28 +100,39 @@ require "${MODEL_B_EXHAUSTIVE_REPRO_EVIDENCE}" '`15.957%`'
 require "${MODEL_B_EXHAUSTIVE_PY}" 'projection_is_measured_full_job'
 require "${MODEL_B_EXHAUSTIVE_PY}" 'all_reference_endpoints_replayed'
 
-# `_20` is a measurement-only parallel harness with deterministic traffic ownership.
+# `_20` owner-live run is retained as a safe reject with valid performance/concurrency
+# evidence. `_21` corrects only the failed-probe attribution criterion.
+require "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" '`route_attribution=false`'
+require "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" 'parallel exhaustive search: `32977 ms`'
+require "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" '`62.952%` faster'
+require "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" '`38.642%`'
+require "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" 'Batches 1–5 each requested width'
 require "${MODEL_B_PARALLEL_PATCH}" 'Controlled parallel Model B candidate probes'
 require "${MODEL_B_PARALLEL_PATCH}" 'unique controlled TCP source port'
 require "${MODEL_B_PARALLEL_PATCH}" 'No CPU-count gate is used.'
+require "${MODEL_B_PARALLEL_CORRECTIVE_PATCH}" 'For route attribution of a failed/blocked probe'
+require "${MODEL_B_PARALLEL_CORRECTIVE_PATCH}" '`production_approved=false` remains mandatory'
 require "${MODEL_B_PARALLEL_PY}" 'B-warm-worker-parallel-batched'
 require "${MODEL_B_PARALLEL_PY}" 'ThreadPoolExecutor(max_workers=len(slots)'
 require "${MODEL_B_PARALLEL_PY}" 'source_port_plan_unique'
 require "${MODEL_B_PARALLEL_PY}" 'candidate_parallelism_observed'
 require "${MODEL_B_PARALLEL_PY}" 'endpoints_sequential_per_candidate'
 require "${MODEL_B_PARALLEL_PY}" 'measurement_only_no_cpu_gating'
+require "${MODEL_B_PARALLEL_ATTRIBUTION_PY}" 'command_source_port_match'
+require "${MODEL_B_PARALLEL_ATTRIBUTION_PY}" 'command_endpoint_match'
+require "${MODEL_B_PARALLEL_ATTRIBUTION_PY}" 'result["intercepted"]'
 require "${MODEL_B_PARALLEL_ADAPTER}" 'route-add-source'
 require "${MODEL_B_PARALLEL_ADAPTER}" 'from me "${_mb_source_port}" to "${_mb_address}"'
 require "${MODEL_B_PARALLEL_TEST}" 'PASS: controlled parallel Model B uses three isolated warm workers with unique source-port routing'
+require "${MODEL_B_PARALLEL_ATTRIBUTION_TEST}" 'PASS: parallel Model B attributes blocked probes by exact command binding plus exact IPFW counter growth'
 require "${MODEL_B_PARALLEL_LAUNCHER}" '9>"${LIFECYCLE_LOCK_FILE}"'
 require "${MODEL_B_PARALLEL_WORKER}" 'model-b-parallel finalize'
+require "${PYTHON_ENTRY}" 'model_b_parallel_attribution as model_b_parallel'
 
-# Project recovery state must select the same published/live/source boundary.
-require "${STATE}" 'Latest published testing prerelease: `v0.4.0_19` / `os-zapret2-restyle-0.4.0_19.pkg`'
-require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.0_19` / `os-zapret2-restyle-0.4.0_19.pkg`'
-require "${STATE}" "Current source candidate: \`${candidate}\`"
+# Project recovery state still preserves the accepted historical baselines. Canonical
+# source/live summary will be closed after the `_21` owner rerun rather than pretending the
+# `_20` reject was accepted.
 require "${STATE}" 'sequential exhaustive ACCEPT 5/5 on `v0.4.0_19`'
-require "${STATE}" '`_20` controlled parallel candidate probes selected'
 require "${STATE}" 'mean measured candidate-runtime speedup of about 15.96%'
 
 require "${LIVE_GATE_DECISION}" 'all-or-nothing release checklist.'
@@ -131,4 +141,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: live matrix retains historical Strategy Lab evidence, closes _19 sequential exhaustive reproducibility, and selects ${candidate} only for controlled parallel measurement"
+echo "PASS: live matrix retains accepted history while ${candidate} corrects only the owner-live _20 failed-probe attribution false reject"
