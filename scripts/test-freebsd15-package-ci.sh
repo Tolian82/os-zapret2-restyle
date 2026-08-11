@@ -25,9 +25,11 @@ MODEL_B_FAILFAST_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-failed-read
 MODEL_B_EXHAUSTIVE_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-exhaustive.sh"
 MODEL_B_PARALLEL_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-parallel.sh"
 MODEL_B_PARALLEL_ATTRIBUTION_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-b-parallel-attribution.sh"
+STAGE60_PRODUCTION_TEST="${ROOT_DIR}/scripts/test-strategy-lab-stage60-parallel-production.sh"
 MODEL_B_EXHAUSTIVE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b_exhaustive.py"
 MODEL_B_PARALLEL_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b_parallel.py"
 MODEL_B_PARALLEL_ATTRIBUTION_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_b_parallel_attribution.py"
+STAGE60_PRODUCTION_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_parallel.py"
 MODEL_B_ADAPTER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_adapter.sh"
 MODEL_B_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_worker.sh"
 MODEL_B_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b.sh"
@@ -36,8 +38,13 @@ MODEL_B_EXHAUSTIVE_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/st
 MODEL_B_PARALLEL_ADAPTER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_parallel_adapter.sh"
 MODEL_B_PARALLEL_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_parallel_worker.sh"
 MODEL_B_PARALLEL_LAUNCHER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_parallel.sh"
+STAGE60_PRODUCTION_RUNNER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_stage60_parallel_runner.sh"
+EXPANSION_RUNNER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_expansion_runner.sh"
 MODEL_B_PARALLEL_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_21.md"
+STAGE60_PRODUCTION_PATCH="${ROOT_DIR}/docs/patches/v0.4.0_22.md"
 MODEL_B_PARALLEL_REJECT_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_20-model-b-parallel-attribution-reject.md"
+MODEL_B_PARALLEL_ACCEPT_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_21-model-b-parallel-reproducibility.md"
+MODEL_B_SELECTION_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-11-strategy-lab-parallel-model-b-selection.md"
 PYTHON_ENTRY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_python.py"
 
 fail(){ echo "FAIL: $*" >&2; exit 1; }
@@ -49,11 +56,14 @@ for file in \
     "${PATCH29_TEST}" "${PATCH30_TEST}" "${PATCH31_TEST}" "${PATCH32_TEST}" "${PATCH33_TEST}" \
     "${MODEL_A_TEST}" "${MODEL_B_TEST}" "${MODEL_B_PREFLIGHT_TEST}" "${MODEL_B_FAILFAST_TEST}" \
     "${MODEL_B_EXHAUSTIVE_TEST}" "${MODEL_B_PARALLEL_TEST}" "${MODEL_B_PARALLEL_ATTRIBUTION_TEST}" \
-    "${MODEL_B_EXHAUSTIVE_PY}" "${MODEL_B_PARALLEL_PY}" "${MODEL_B_PARALLEL_ATTRIBUTION_PY}" \
+    "${STAGE60_PRODUCTION_TEST}" "${MODEL_B_EXHAUSTIVE_PY}" "${MODEL_B_PARALLEL_PY}" \
+    "${MODEL_B_PARALLEL_ATTRIBUTION_PY}" "${STAGE60_PRODUCTION_PY}" \
     "${MODEL_B_ADAPTER}" "${MODEL_B_WORKER}" "${MODEL_B_LAUNCHER}" \
     "${MODEL_B_EXHAUSTIVE_WORKER}" "${MODEL_B_EXHAUSTIVE_LAUNCHER}" \
     "${MODEL_B_PARALLEL_ADAPTER}" "${MODEL_B_PARALLEL_WORKER}" "${MODEL_B_PARALLEL_LAUNCHER}" \
-    "${MODEL_B_PARALLEL_PATCH}" "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" "${PYTHON_ENTRY}"
+    "${STAGE60_PRODUCTION_RUNNER}" "${EXPANSION_RUNNER}" "${MODEL_B_PARALLEL_PATCH}" \
+    "${STAGE60_PRODUCTION_PATCH}" "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" \
+    "${MODEL_B_PARALLEL_ACCEPT_EVIDENCE}" "${MODEL_B_SELECTION_DECISION}" "${PYTHON_ENTRY}"
 do
     [ -s "${file}" ] || fail "required file is missing: ${file}"
 done
@@ -61,9 +71,10 @@ done
 for executable in \
     "${PATCH4_TEST}" "${PATCH29_TEST}" "${PATCH30_TEST}" "${PATCH31_TEST}" \
     "${MODEL_A_TEST}" "${MODEL_B_TEST}" "${MODEL_B_EXHAUSTIVE_TEST}" "${MODEL_B_PARALLEL_TEST}" \
-    "${MODEL_B_ADAPTER}" "${MODEL_B_WORKER}" "${MODEL_B_LAUNCHER}" \
+    "${STAGE60_PRODUCTION_TEST}" "${MODEL_B_ADAPTER}" "${MODEL_B_WORKER}" "${MODEL_B_LAUNCHER}" \
     "${MODEL_B_EXHAUSTIVE_WORKER}" "${MODEL_B_EXHAUSTIVE_LAUNCHER}" \
-    "${MODEL_B_PARALLEL_ADAPTER}" "${MODEL_B_PARALLEL_WORKER}" "${MODEL_B_PARALLEL_LAUNCHER}"
+    "${MODEL_B_PARALLEL_ADAPTER}" "${MODEL_B_PARALLEL_WORKER}" "${MODEL_B_PARALLEL_LAUNCHER}" \
+    "${STAGE60_PRODUCTION_RUNNER}" "${EXPANSION_RUNNER}"
 do
     [ -x "${executable}" ] || fail "required executable lost mode: ${executable}"
 done
@@ -73,7 +84,7 @@ revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; 
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 if [ "${revision}" -gt 0 ]; then candidate="os-zapret2-restyle-${version}_${revision}.pkg"; else candidate="os-zapret2-restyle-${version}.pkg"; fi
 [ "${version}" = '0.4.0' ] || fail "unexpected project version ${version}"
-[ "${revision}" -eq 21 ] || fail 'parallel Model B attribution corrective revision must be exactly 21'
+[ "${revision}" -eq 22 ] || fail 'production Stage-60 parallel integration revision must be exactly 22'
 
 # Package construction and ABI/runtime requirements remain unchanged.
 grep -Eq '^PLUGIN_DEPENDS=[[:space:]]+python313([[:space:]]|$)' "${MAKEFILE}" || fail 'python313 dependency is missing'
@@ -107,7 +118,7 @@ do
     require "${CI}" "STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/${test}"
 done
 
-# Canonical Linux matrix must continue auto-discovering every focused Strategy Lab test.
+# Canonical Linux matrix continues auto-discovering every focused Strategy Lab test.
 require "${ROOT_DIR}/scripts/test-strategy-lab-corrective-matrix.sh" "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy-lab-*.sh'"
 require "${MODEL_B_PREFLIGHT_TEST}" 'PASS: Model B preflight returns success when all dedicated rules/ports are free'
 require "${MODEL_B_TEST}" 'preserves bounded post-drop hostlist access'
@@ -115,17 +126,15 @@ require "${MODEL_B_FAILFAST_TEST}" 'PASS: Model B failed pool readiness rejects 
 require "${MODEL_B_EXHAUSTIVE_TEST}" 'PASS: exhaustive Model B benchmark replays a complete graph-exhausted multi-endpoint corpus'
 require "${MODEL_B_PARALLEL_TEST}" 'PASS: controlled parallel Model B uses three isolated warm workers with unique source-port routing'
 require "${MODEL_B_PARALLEL_ATTRIBUTION_TEST}" 'PASS: parallel Model B attributes blocked probes by exact command binding plus exact IPFW counter growth'
+require "${STAGE60_PRODUCTION_TEST}" 'PASS: production Stage 60 uses bounded width-three controlled-parallel warm batches'
 
-# Sequential exhaustive surfaces stay packaged and unchanged.
+# Historical experiment surfaces remain packaged as reproducibility evidence.
 require "${MODEL_B_EXHAUSTIVE_PY}" 'B-warm-worker-exhaustive-batched'
 require "${MODEL_B_EXHAUSTIVE_PY}" 'reference_endpoint_bindings'
 require "${MODEL_B_EXHAUSTIVE_PY}" 'all_reference_endpoints_replayed'
 require "${MODEL_B_EXHAUSTIVE_PY}" 'endpoint_probes'
 require "${MODEL_B_EXHAUSTIVE_WORKER}" 'model-b-exhaustive run'
 require "${MODEL_B_EXHAUSTIVE_LAUNCHER}" '9>"${LIFECYCLE_LOCK_FILE}"'
-
-# `_21` changes only failed-probe attribution semantics. `_20` parallel scheduling, the
-# accepted Model-B worker boundary and production Strategy Lab remain untouched.
 require "${MODEL_B_PARALLEL_PY}" 'B-warm-worker-parallel-batched'
 require "${MODEL_B_PARALLEL_PY}" 'ThreadPoolExecutor(max_workers=len(slots)'
 require "${MODEL_B_PARALLEL_PY}" 'source_port_plan_unique'
@@ -141,7 +150,21 @@ require "${MODEL_B_PARALLEL_ADAPTER}" 'from me "${_mb_source_port}" to "${_mb_ad
 require "${MODEL_B_PARALLEL_WORKER}" 'model-b-parallel run'
 require "${MODEL_B_PARALLEL_WORKER}" 'model-b-parallel finalize'
 require "${MODEL_B_PARALLEL_LAUNCHER}" '9>"${LIFECYCLE_LOCK_FILE}"'
-require "${PYTHON_ENTRY}" 'model_b_parallel_attribution as model_b_parallel'
+
+# `_22` promotes the proven width-three execution boundary into real Stage 60 while keeping
+# the old cold implementation as rollback/fallback.
+require "${STAGE60_PRODUCTION_PY}" 'MODEL = "B-warm-worker-parallel-batched"'
+require "${STAGE60_PRODUCTION_PY}" 'WIDTH = 3'
+require "${STAGE60_PRODUCTION_PY}" 'ThreadPoolExecutor(max_workers=len(slots)'
+require "${STAGE60_PRODUCTION_PY}" 'model_b_parallel_attribution._probe_endpoint'
+require "${STAGE60_PRODUCTION_PY}" 'return search.expand(job_id, endpoints_file, family_result_file, result_file)'
+require "${STAGE60_PRODUCTION_PY}" 'A-cold-fallback'
+require "${STAGE60_PRODUCTION_PY}" '_candidate_admission'
+require "${STAGE60_PRODUCTION_PY}" 'no_cpu_gating'
+require "${STAGE60_PRODUCTION_RUNNER}" 'stage60-parallel expand'
+require "${STAGE60_PRODUCTION_RUNNER}" 'trap on_signal HUP INT TERM'
+require "${EXPANSION_RUNNER}" 'strategy_lab_stage60_parallel_runner.sh'
+require "${PYTHON_ENTRY}" 'from strategy_lab_py import stage60_parallel'
 
 # Existing migration continuity remains mandatory.
 require "${PATCH6_TEST}" 'scripts/test-strategy-lab-late-stage-containment.sh'
@@ -167,17 +190,18 @@ for installed in \
     strategy_lab_py/model_b_exhaustive.py \
     strategy_lab_py/model_b_parallel.py \
     strategy_lab_py/model_b_parallel_attribution.py \
+    strategy_lab_py/stage60_parallel.py \
     strategy_lab_candidate_adapter.sh \
     strategy_lab_model_b_parallel_adapter.sh \
-    strategy_lab_model_b_parallel_worker.sh \
-    strategy_lab_model_b_parallel.sh \
+    strategy_lab_stage60_parallel_runner.sh \
+    strategy_lab_expansion_runner.sh \
     strategy_lab_stage_adapter.sh
 do
     [ -e "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/${installed}" ] || fail "packaged source path is missing: ${installed}"
 done
 
-# Historical live evidence remains retained. `_20` is explicitly a safe owner-live REJECT;
-# `_21` is the package candidate that corrects only the attribution criterion.
+# Historical live evidence remains retained and the accepted `_21` architecture-selection
+# evidence is now the production-integration input, not silently rewritten as `_22` live PASS.
 require "${MATRIX}" 'mean 74.8082 s'
 require "${MATRIX}" 'about 15.96%'
 require "${MATRIX}" '**PASS ON `_27` — v0.4.0 mandatory row**'
@@ -193,7 +217,11 @@ require "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" '`route_attribution=false`'
 require "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" 'parallel exhaustive search: `32977 ms`'
 require "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" '`62.952%` faster'
 require "${MODEL_B_PARALLEL_PATCH}" 'For route attribution of a failed/blocked probe'
-require "${MODEL_B_PARALLEL_PATCH}" '`production_approved=false` remains mandatory'
+require "${MODEL_B_PARALLEL_ACCEPT_EVIDENCE}" 'six accepted controlled-parallel'
+require "${MODEL_B_PARALLEL_ACCEPT_EVIDENCE}" '33025.6 ms'
+require "${MODEL_B_SELECTION_DECISION}" 'APPROVED FOR IMPLEMENTATION; NOT YET PRODUCTION-ACTIVE'
+require "${STAGE60_PRODUCTION_PATCH}" 'This patch changes **Stage 60 only**.'
+require "${STAGE60_PRODUCTION_PATCH}" 'STRATEGY_LAB_STAGE60_MODEL=cold'
 
 require "${PROJECT_STATE}" '`_32` timeout-containment gate: **OWNER-LIVE PASS through `v0.4.0_8`**'
 require "${PROJECT_STATE}" '`_33` adaptive validation gate: **CHANGE-SPECIFIC OWNER-LIVE PASS on `v0.4.0_9`**'
@@ -201,4 +229,4 @@ require "${PROJECT_STATE}" 'Model A experiment gate: **REFERENCE COLLECTED on `v
 require "${PROJECT_STATE}" 'sequential exhaustive ACCEPT 5/5 on `v0.4.0_19`'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI preserves accepted Strategy Lab history while ${candidate} packages only the controlled-parallel failed-probe attribution corrective"
+printf '%s\n' "PASS: FreeBSD 15 package CI preserves accepted Strategy Lab history while ${candidate} packages the width-three Stage-60 production integration with cold fallback"
