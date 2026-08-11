@@ -59,7 +59,7 @@ require "${MODEL_B_EXHAUSTIVE_REPRO_EVIDENCE}" '`74808.2 ms`'
 require "${MODEL_B_PARALLEL_REJECT_EVIDENCE}" '`route_attribution=false`'
 require "${MODEL_B_PARALLEL_ACCEPT_EVIDENCE}" 'six accepted controlled-parallel'
 require "${MODEL_B_PARALLEL_ACCEPT_EVIDENCE}" '33025.6 ms'
-require "${MODEL_B_SELECTION_DECISION}" 'APPROVED FOR IMPLEMENTATION; NOT YET PRODUCTION-ACTIVE'
+require "${MODEL_B_SELECTION_DECISION}" 'IMPLEMENTED IN `v0.4.0_22`; PRODUCTION-ACTIVE WITH COLD MODEL A FALLBACK'
 
 # Current `_22` documents and live evidence must be synchronized. Historical `_9` behavior
 # is explicitly retained as comparison evidence, not as the current Stage-60 completion rule.
