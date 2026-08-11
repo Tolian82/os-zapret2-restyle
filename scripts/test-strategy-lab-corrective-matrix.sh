@@ -50,10 +50,7 @@ find "${ROOT_DIR}/scripts" -maxdepth 1 -type f -name 'test-strategy-lab-*.sh' |
         fi
         test_name=$(basename "${test_script}" .sh)
         printf 'MATRIX: %s\n' "${test_name#test-strategy-lab-}"
-        case "${test_name}" in
-            test-strategy-lab-live-matrix-contract) sh -x "${test_script}" ;;
-            *) sh "${test_script}" ;;
-        esac
+        sh "${test_script}"
     done
 
 echo 'PASS: final Strategy Lab corrective matrix completed without duplicate orchestration'
