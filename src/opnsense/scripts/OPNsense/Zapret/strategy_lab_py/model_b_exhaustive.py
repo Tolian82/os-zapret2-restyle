@@ -1,9 +1,9 @@
 """Experiment-only batched exhaustive Model-B benchmark.
 
 The benchmark consumes one completed Standard no-candidate Strategy Lab job whose Stage 60
-ended with graph exhaustion.  It replays the exact persisted Stage-60 candidate corpus in
+ended with graph exhaustion. It replays the exact persisted Stage-60 candidate corpus in
 its original order using the already owner-proven three-worker Model-B coexistence boundary.
-Candidates are executed sequentially in warm batches of at most three workers.  The module
+Candidates are executed sequentially in warm batches of at most three workers. The module
 never changes production Strategy Lab selection or runtime architecture.
 """
 
@@ -28,12 +28,6 @@ BATCH_SLOTS = tuple(
 
 class ModelBExhaustiveError(model_b.ModelBExperimentError):
     """The exhaustive benchmark input or runtime evidence is invalid."""
-
-
-def _nonnegative_number(value: Any) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-        return None
-    return float(value)
 
 
 def _median(values: Sequence[int | float]) -> float | None:
@@ -213,6 +207,7 @@ def run(reference_job_id: str, output: str) -> int:
 
         search_started = time.monotonic()
         all_ready = True
+        all_unique = True
         all_rss = True
         all_equivalent = True
         all_attributed = True
@@ -253,15 +248,30 @@ def run(reference_job_id: str, output: str) -> int:
             if isinstance(rss.get("aggregate_kb"), int):
                 aggregate_rss_values.append(int(rss["aggregate_kb"]))
             batch_ready = all(pool.get(slot.name, {}).get("ready") is True for slot in slots)
+            pids = [pool.get(slot.name, {}).get("pid") for slot in slots]
+            ports = [pool.get(slot.name, {}).get("divert_port") for slot in slots]
+            batch_unique = (
+                batch_ready
+                and None not in pids
+                and len(set(pids)) == len(slots)
+                and len(set(ports)) == len(slots)
+                and set(ports) == {slot.port for slot in slots}
+            )
             batch_rss = bool(rss.get("all_numeric"))
             all_ready = all_ready and batch_ready
+            all_unique = all_unique and batch_unique
             all_rss = all_rss and batch_rss
             batch: dict[str, Any] = {
                 "batch": batch_number,
                 "corpus_start": offset + 1,
                 "corpus_end": offset + len(batch_records),
                 "workers": workers,
-                "pool": {"startup_ms": pool_startup_ms, "snapshots": pool, "rss": rss},
+                "pool": {
+                    "startup_ms": pool_startup_ms,
+                    "snapshots": pool,
+                    "rss": rss,
+                    "unique_worker_identity": batch_unique,
+                },
                 "probes": [],
             }
             if not batch_ready:
@@ -274,6 +284,11 @@ def run(reference_job_id: str, output: str) -> int:
                 report["batches"].append(batch)
                 report["failed_readiness"] = {"batch": batch_number, **batch["failed_readiness"]}
                 raise ModelBExhaustiveError("Model B exhaustive batch did not reach readiness")
+            if not batch_unique:
+                batch["failed_identity"] = {"downstream_actions_skipped": True}
+                report["batches"].append(batch)
+                report["failed_identity"] = {"batch": batch_number, "downstream_actions_skipped": True}
+                raise ModelBExhaustiveError("Model B exhaustive batch worker identity is ambiguous")
 
             for slot in slots:
                 record = by_slot[slot.name]
@@ -314,6 +329,7 @@ def run(reference_job_id: str, output: str) -> int:
         report["checks"].update(
             corpus_complete=corpus_complete,
             all_batches_ready=all_ready,
+            unique_worker_identity=all_unique,
             rss_observed=all_rss,
             result_equivalence=all_equivalent,
             route_attribution=all_attributed,
@@ -343,6 +359,7 @@ def run(reference_job_id: str, output: str) -> int:
             "reference_graph_exhausted",
             "corpus_complete",
             "all_batches_ready",
+            "unique_worker_identity",
             "rss_observed",
             "result_equivalence",
             "route_attribution",
