@@ -17,6 +17,9 @@ records.
 Read these first for current Strategy Lab or release work:
 
 - `docs/PROJECT_STATE.md` — current source/published candidates, accepted runtime basis and next boundary;
+- `docs/patches/v0.4.1_5.md` — current measurement-only discovery-probe agreement/cost package candidate;
+- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — experiment selection and acceptance authority, including discovery-vs-deep question 10;
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — production discovery/stability/deep validation architecture;
 - `docs/patches/v0.4.1_4.md` — accepted measurement-only BLOB common-set scaling candidate;
 - `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md` — accepted `_3` and `_4` BLOB measurements and closed negative optimization result;
 - `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md` — accepted `_4` owner-live common-set startup/readiness/RSS evidence;
@@ -32,22 +35,29 @@ Read these first for current Strategy Lab or release work:
 - `docs/patches/v0.4.0_26.md` — accepted workload-derived adaptive-budget patch;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md` — adaptive-budget contract;
 - `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md` — detailed production owner-live runtime basis;
-- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — search/validation architecture;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md` — preferred one-worker source-port dispatcher architecture;
-- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — experiment selection/acceptance authority;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical live regression inventory;
 - `docs/architecture/STRATEGY_LAB.md` — base product/stage/lifecycle contract;
 - `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — completed Python ownership.
 
 ### Current v0.4.1 boundary
 
-`VERSION=0.4.1`, `PLUGIN_REVISION=4`; current source candidate and latest published testing
-prerelease are `os-zapret2-restyle-0.4.1_4.pkg` / `v0.4.1_4`.
+`VERSION=0.4.1`, `PLUGIN_REVISION=5`; current source candidate is
+`os-zapret2-restyle-0.4.1_5.pkg`, a measurement-only discovery-probe package whose CI artifact is
+pending. No `_5` tag/Release/prerelease/Pages/pkg-repository publication is authorized by the
+current package request.
 
-Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`. Latest owner-tested testing
-candidate is now `_4`; its bounded width-three BLOB common-set startup/readiness/RSS measurement is
-accepted. Detailed production Strategy Lab evidence remains `_26` because `_2`, `_3`, and `_4` are
-measurement-only.
+Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`; latest published testing
+prerelease and latest owner-tested testing candidate remain `_4`. Detailed production Strategy Lab
+evidence remains `_26` because `_2`, `_3`, `_4`, and `_5` do not change production behavior.
+
+`_5` measures adaptive-search question 10: agreement and cost for `HEAD`, one-byte GET and the
+current 4 KiB discovery GET against the existing cold deep-GET finalist reference. It reuses the
+same reference job, pinned endpoint epoch, native TLS 1.3 candidate specifications and candidate
+interception attribution. The lifecycle wrapper owns the shared Zapret2 lock, temporarily stops
+normal Zapret2 for cold candidate replays, cleans residue and restores semantic lifecycle evidence.
+Production discovery remains the bounded 4 KiB GET until owner-live evidence demonstrates zero
+false PASS and a material reproducible cost advantage.
 
 The `_3` accepted owner run completed 27 starts, 9 per variant. Median stable readiness was
 `63.061 / 62.652 / 62.566 ms` for BLOB-free / built-in / external respectively, while median
@@ -119,7 +129,8 @@ and `docs/audit/`. Key retained comparison points:
 - v0.4.1 stable release: `docs/releases/v0.4.1.md`, `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`;
 - Lua measurement: `docs/patches/v0.4.1_2.md`, `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`;
 - accepted single-BLOB measurement: `docs/patches/v0.4.1_3.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
-- accepted common-set scaling measurement: `docs/patches/v0.4.1_4.md`, `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`.
+- accepted common-set scaling measurement: `docs/patches/v0.4.1_4.md`, `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`;
+- current discovery-probe measurement: `docs/patches/v0.4.1_5.md`.
 
 Historical evidence explains progression; it never overrides a later current record.
 
