@@ -16,7 +16,7 @@ LUA_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_2.md"
 LUA_TEST="${ROOT_DIR}/scripts/test-strategy-lab-lua-initialization-measurement.sh"
 LUA_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/lua_initialization_measurement.py"
 BLOB_DOC="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_BLOB_LOADING.md"
-BLOB_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_3.md"
+BLOB_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_4.md"
 BLOB_TEST="${ROOT_DIR}/scripts/test-strategy-lab-blob-startup-measurement.sh"
 BLOB_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/blob_startup_measurement.py"
 MODEL_B_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md"
@@ -47,11 +47,11 @@ revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; 
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${version}" = '0.4.1' ] || fail 'BLOB measurement must remain on VERSION=0.4.1'
-[ "${revision}" -eq 3 ] || fail 'BLOB measurement must use PLUGIN_REVISION=3'
-[ "${candidate}" = 'os-zapret2-restyle-0.4.1_3.pkg' ] || fail 'unexpected BLOB measurement package identity'
+[ "${revision}" -eq 4 ] || fail 'BLOB common-set measurement must use PLUGIN_REVISION=4'
+[ "${candidate}" = 'os-zapret2-restyle-0.4.1_4.pkg' ] || fail 'unexpected BLOB common-set package identity'
 
-require "${STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=3`'
-require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_3.pkg`'
+require "${STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=4`'
+require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_4.pkg`'
 require "${STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${STATE}" 'Latest published testing prerelease: `v0.4.1_3` / `os-zapret2-restyle-0.4.1_3.pkg`'
 require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_3` — BLOB startup/readiness/RSS measurement PASS'
@@ -59,12 +59,12 @@ require "${STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — 
 require "${STATE}" 'job.xhdgCU'
 require "${STATE}" 'Stage 60 duration `34209 ms`'
 require "${STATE}" 'total job duration `114644 ms`'
-require "${STATE}" 'Policy `blob-startup-rss-v1`'
+require "${STATE}" 'Policy: `blob-common-set-scaling-v1`, schema `2`.'
 require "${STATE}" 'production_change_recommended=false'
-require "${STATE}" 'conclusion=measurement_accepted'
+require "${STATE}" 'V0.4.1_4 BLOB COMMON-SET SCALING — SOURCE / CI PASS'
 
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
-require "${INDEX}" 'docs/patches/v0.4.1_3.md'
+require "${INDEX}" 'docs/patches/v0.4.1_4.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md'
@@ -113,12 +113,16 @@ require "${LUA_PY}" 'POLICY = "lua-init-set-equivalence-v1"'
 require "${LUA_PY}" 'resources.configured_lua_root()'
 require "${LUA_LIVE}" 'Status: **PASS**'
 require "${LUA_LIVE}" 'conclusion=equivalent_init_set'
-require "${BLOB_PY}" 'POLICY = "blob-startup-rss-v1"'
-require "${BLOB_PY}" 'CACHE_POLICY = "natural-cache-no-drop"'
+require "${BLOB_PY}" 'SCHEMA = 2'
+require "${BLOB_PY}" 'POLICY = "blob-common-set-scaling-v1"'
+require "${BLOB_PY}" 'WORKER = "external"'
+require "${BLOB_PY}" 'DIVERT_PORT = 9992'
+require "${BLOB_PY}" 'EXTERNAL_COMMON = ('
+require "${BLOB_PY}" 'PRODUCTION_CANDIDATE_WIDTH = 3'
 require "${BLOB_PY}" 'production_change_recommended'
-require "${BLOB_TEST}" 'PASS: BLOB startup/RSS measurement is isolated, balanced, lifecycle-safe'
-require "${BLOB_DOC}" 'MEASUREMENT ACCEPTED / PRODUCTION MODEL C UNCHANGED'
-require "${BLOB_PATCH}" 'SOURCE / CI / PUBLICATION / OWNER-LIVE PASS'
+require "${BLOB_TEST}" 'PASS: BLOB common-set scaling measurement is single-worker, balanced, lifecycle-safe'
+require "${BLOB_DOC}" '_3 ACCEPTED / _4 COMMON-SET MEASUREMENT IN SOURCE / PRODUCTION MODEL C UNCHANGED'
+require "${BLOB_PATCH}" 'SOURCE / CI / FREEBSD15 PACKAGE PASS / PUBLICATION PENDING / OWNER-LIVE PENDING'
 
 require "${LIVE_GATE_DECISION}" 'all-or-nothing release checklist.'
 if grep -Fq 'Stable release preparation and pkg-repository promotion remain blocked until every' "${MATRIX}"; then
@@ -126,4 +130,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} owner-live BLOB measurement is accepted while detailed production live truth remains unchanged"
+echo "PASS: ${candidate} common-set measurement source is CI-qualified while published/owner-tested truth remains _3 and production live truth remains _26"

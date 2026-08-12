@@ -1,9 +1,10 @@
-"""Measurement-only BLOB loading/startup/RSS experiment for Strategy Lab Model C.
+"""Measurement-only BLOB common-set startup/RSS experiment for Strategy Lab Model C.
 
-The experiment never installs IPFW routes and never stops or reconfigures the normal Zapret2
-service.  It reuses the isolated Model-B adapter only to launch one temporary dvtws2 worker at
-a time on dedicated divert ports, holding Lua/action structure constant while comparing
-BLOB-free, built-in fake and external-file BLOB resource variants.
+The experiment never installs IPFW routes and never stops or reconfigures normal Zapret2.
+It reuses one isolated Model-B adapter slot and one divert port for every controlled variant,
+so worker identity/port cannot confound the comparison. The active Lua/action shape stays
+constant while resource declarations scale from none to inline, one external BLOB, and a
+bounded production-width common set of three semantically compatible external TLS BLOBs.
 """
 
 from __future__ import annotations
@@ -21,19 +22,25 @@ from typing import Any, Sequence
 
 from . import resources, stage60_model_c
 
-SCHEMA = 1
-POLICY = "blob-startup-rss-v1"
+SCHEMA = 2
+POLICY = "blob-common-set-scaling-v1"
 CACHE_POLICY = "natural-cache-no-drop"
 SELECTOR_LUA = "strategy_lab_model_c.lua"
 COMMON_LUA = ("zapret-lib.lua", "zapret-antidpi.lua", "zapret-auto.lua")
-VARIANTS = (
-    ("blob-free", "pass", 9990),
-    ("builtin", "builtin", 9991),
-    ("external", "external", 9992),
+WORKER = "external"
+DIVERT_PORT = 9992
+VARIANTS = ("blob-free", "inline-small", "external-single", "external-common-3")
+EXTERNAL_SINGLE = "fake_tls_7"
+EXTERNAL_COMMON = (
+    "fake_tls_7",
+    "tls_clienthello_rutracker_org_kyber",
+    "tls_clienthello_vk_com_kyber",
 )
-DEFAULT_TRIALS = 9
-MIN_TRIALS = 3
-MAX_TRIALS = 15
+INLINE_PATTERN = "0x1603"
+PRODUCTION_CANDIDATE_WIDTH = 3
+DEFAULT_TRIALS = 12
+MIN_TRIALS = 4
+MAX_TRIALS = 16
 READY_TIMEOUT_SECONDS = 4.0
 POLL_SECONDS = 0.025
 SETTLE_SECONDS = 0.2
@@ -91,25 +98,65 @@ def _adapter(action: str, *args: object, expect_json: bool = False) -> Any:
     return value
 
 
-def _worker_dir(session: Path, worker: str) -> Path:
-    path = session / "workers" / worker
+def _worker_dir(session: Path) -> Path:
+    path = session / "workers" / WORKER
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
-def _write_args(
-    session: Path,
+def _external_entry(inventory: resources.ResourceInventory, name: str) -> dict[str, Any]:
+    path = Path(inventory.external_blob_path(name))
+    stat = path.stat()
+    return {"name": name, "path": str(path), "size": stat.st_size}
+
+
+def _resource_sets(inventory: resources.ResourceInventory) -> dict[str, Any]:
+    single = [_external_entry(inventory, EXTERNAL_SINGLE)]
+    common = [_external_entry(inventory, name) for name in EXTERNAL_COMMON]
+    return {
+        "blob-free": {
+            "resource_class": "blob-free",
+            "declaration_count": 0,
+            "declared_bytes": 0,
+            "active_pattern": None,
+            "resources": [],
+        },
+        "inline-small": {
+            "resource_class": "inline",
+            "declaration_count": 0,
+            "declared_bytes": 2,
+            "active_pattern": INLINE_PATTERN,
+            "resources": [{"name": "inline-0x1603", "size": 2}],
+        },
+        "external-single": {
+            "resource_class": "external",
+            "declaration_count": 1,
+            "declared_bytes": sum(item["size"] for item in single),
+            "active_pattern": EXTERNAL_SINGLE,
+            "resources": single,
+        },
+        "external-common-3": {
+            "resource_class": "external-common-set",
+            "declaration_count": len(common),
+            "declared_bytes": sum(item["size"] for item in common),
+            "active_pattern": EXTERNAL_SINGLE,
+            "resources": common,
+            "unused_eager_declarations": [name for name in EXTERNAL_COMMON if name != EXTERNAL_SINGLE],
+            "synthetic_scope": "bounded-production-width-common-set-upper-bound",
+        },
+    }
+
+
+def _arguments_for(
     inventory: resources.ResourceInventory,
     selector: Path,
     variant: str,
-    worker: str,
-    port: int,
 ) -> list[str]:
     lua_paths = [inventory.lua_path(name) for name in COMMON_LUA]
     if not selector.is_file() or selector.stat().st_size <= 0:
         raise MeasurementError(f"Model C selector Lua is unavailable: {selector}")
 
-    arguments = [f"--port={port}"]
+    arguments = [f"--port={DIVERT_PORT}"]
     arguments.extend(f"--lua-init=@{path}" for path in lua_paths)
     arguments.append(f"--lua-init=@{selector}")
     arguments.extend(
@@ -122,29 +169,36 @@ def _write_args(
         )
     )
     action = "--lua-desync=multisplit:pos=2,midsld-2:seqovl=1"
-    if variant == "builtin":
-        action += ":seqovl_pattern=fake_default_tls"
-    elif variant == "external":
-        external = inventory.external_blob_path("fake_tls_7")
-        arguments.append(f"--blob=fake_tls_7:@{external}")
-        action += ":seqovl_pattern=fake_tls_7"
+    if variant == "inline-small":
+        action += f":seqovl_pattern={INLINE_PATTERN}"
+    elif variant == "external-single":
+        path = inventory.external_blob_path(EXTERNAL_SINGLE)
+        arguments.append(f"--blob={EXTERNAL_SINGLE}:@{path}")
+        action += f":seqovl_pattern={EXTERNAL_SINGLE}"
+    elif variant == "external-common-3":
+        for name in EXTERNAL_COMMON:
+            path = inventory.external_blob_path(name)
+            arguments.append(f"--blob={name}:@{path}")
+        action += f":seqovl_pattern={EXTERNAL_SINGLE}"
     elif variant != "blob-free":
         raise MeasurementError(f"unknown BLOB variant: {variant}")
     arguments.append(action)
-
-    path = _worker_dir(session, worker) / "dvtws.args"
-    path.write_text("".join(f"{value}\n" for value in arguments), encoding="utf-8")
-    os.chmod(path, 0o644)
     return arguments
 
 
-def _ready_snapshot(worker: str, port: int) -> tuple[float, float, dict[str, Any]]:
+def _write_args(session: Path, arguments: Sequence[str]) -> None:
+    path = _worker_dir(session) / "dvtws.args"
+    path.write_text("".join(f"{value}\n" for value in arguments), encoding="utf-8")
+    os.chmod(path, 0o644)
+
+
+def _ready_snapshot() -> tuple[float, float, dict[str, Any]]:
     started = time.monotonic()
     first_ready_ms: float | None = None
     consecutive = 0
     last: dict[str, Any] | None = None
     while time.monotonic() - started < READY_TIMEOUT_SECONDS:
-        snapshot = _adapter("snapshot", worker, port, expect_json=True)
+        snapshot = _adapter("snapshot", WORKER, DIVERT_PORT, expect_json=True)
         last = snapshot
         rss = snapshot.get("rss_kb")
         qualified = (
@@ -166,24 +220,25 @@ def _ready_snapshot(worker: str, port: int) -> tuple[float, float, dict[str, Any
             consecutive = 0
             first_ready_ms = None
         time.sleep(POLL_SECONDS)
-    raise MeasurementError(f"worker {worker} did not become stably ready: {last}")
+    raise MeasurementError(f"worker {WORKER} did not become stably ready: {last}")
 
 
-def _sample(variant: str, worker: str, port: int, trial: int) -> dict[str, Any]:
+def _sample(session: Path, variant: str, arguments: Sequence[str], trial: int) -> dict[str, Any]:
+    _write_args(session, arguments)
     launch_started = time.monotonic()
-    _adapter("launch", worker, port)
+    _adapter("launch", WORKER, DIVERT_PORT)
     try:
-        first_ready_ms, stable_ready_ms, ready = _ready_snapshot(worker, port)
+        first_ready_ms, stable_ready_ms, ready = _ready_snapshot()
         time.sleep(SETTLE_SECONDS)
-        settled = _adapter("snapshot", worker, port, expect_json=True)
+        settled = _adapter("snapshot", WORKER, DIVERT_PORT, expect_json=True)
         settled_rss = settled.get("rss_kb")
         if not isinstance(settled_rss, int) or isinstance(settled_rss, bool) or settled_rss <= 0:
-            raise MeasurementError(f"worker {worker} settled RSS is unavailable")
+            raise MeasurementError(f"worker {WORKER} settled RSS is unavailable")
         return {
             "trial": trial,
             "variant": variant,
-            "worker": worker,
-            "divert_port": port,
+            "worker": WORKER,
+            "divert_port": DIVERT_PORT,
             "first_ready_ms": round(first_ready_ms, 3),
             "stable_ready_ms": round(stable_ready_ms, 3),
             "launch_to_sample_ms": round((time.monotonic() - launch_started) * 1000.0, 3),
@@ -194,7 +249,7 @@ def _sample(variant: str, worker: str, port: int, trial: int) -> dict[str, Any]:
             "log_clean": settled.get("log_clean") is True,
         }
     finally:
-        _adapter("stop", worker, port)
+        _adapter("stop", WORKER, DIVERT_PORT)
 
 
 def _p90(values: Sequence[float]) -> float:
@@ -209,7 +264,9 @@ def _metric(values: Sequence[float]) -> dict[str, float | int]:
     return {
         "count": len(values),
         "min": round(min(values), 3),
+        "mean": round(float(statistics.mean(values)), 3),
         "median": round(float(statistics.median(values)), 3),
+        "stdev": round(float(statistics.stdev(values)), 3) if len(values) > 1 else 0.0,
         "p90": round(_p90(values), 3),
         "max": round(max(values), 3),
     }
@@ -217,7 +274,7 @@ def _metric(values: Sequence[float]) -> dict[str, float | int]:
 
 def _summaries(samples: Sequence[dict[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
-    for variant, _worker, _port in VARIANTS:
+    for variant in VARIANTS:
         selected = [sample for sample in samples if sample["variant"] == variant]
         result[variant] = {
             "sample_count": len(selected),
@@ -238,9 +295,10 @@ def _delta(left: dict[str, Any], right: dict[str, Any], metric: str) -> dict[str
 
 def _comparisons(summaries: dict[str, Any]) -> dict[str, Any]:
     pairs = (
-        ("builtin_vs_blob_free", "builtin", "blob-free"),
-        ("external_vs_blob_free", "external", "blob-free"),
-        ("external_vs_builtin", "external", "builtin"),
+        ("inline_small_vs_blob_free", "inline-small", "blob-free"),
+        ("external_single_vs_blob_free", "external-single", "blob-free"),
+        ("external_common_3_vs_external_single", "external-common-3", "external-single"),
+        ("external_common_3_vs_blob_free", "external-common-3", "blob-free"),
     )
     result: dict[str, Any] = {}
     for label, left_name, right_name in pairs:
@@ -254,28 +312,29 @@ def _comparisons(summaries: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _rotations() -> tuple[tuple[str, ...], ...]:
+    return tuple(tuple(VARIANTS[offset:] + VARIANTS[:offset]) for offset in range(len(VARIANTS)))
+
+
 def run_measurement(output: Path, trials: int) -> dict[str, Any]:
-    if trials < MIN_TRIALS or trials > MAX_TRIALS:
-        raise MeasurementError(f"trials must be between {MIN_TRIALS} and {MAX_TRIALS}")
+    if trials < MIN_TRIALS or trials > MAX_TRIALS or trials % len(VARIANTS) != 0:
+        raise MeasurementError(
+            f"trials must be a multiple of {len(VARIANTS)} between {MIN_TRIALS} and {MAX_TRIALS}"
+        )
     session = _session_dir()
     inventory = resources.snapshot_inventory(resources.configured_lua_root(), resources.configured_fake_root())
     selector = _selector_path()
-    arguments: dict[str, list[str]] = {}
-    for variant, worker, port in VARIANTS:
-        arguments[variant] = _write_args(session, inventory, selector, variant, worker, port)
+    resource_sets = _resource_sets(inventory)
+    arguments = {variant: _arguments_for(inventory, selector, variant) for variant in VARIANTS}
 
     _adapter("cleanup-all")
     _adapter("preflight")
     samples: list[dict[str, Any]] = []
-    rotations = (
-        VARIANTS,
-        (VARIANTS[1], VARIANTS[2], VARIANTS[0]),
-        (VARIANTS[2], VARIANTS[0], VARIANTS[1]),
-    )
+    rotations = _rotations()
     try:
         for trial in range(1, trials + 1):
-            for variant, worker, port in rotations[(trial - 1) % len(rotations)]:
-                samples.append(_sample(variant, worker, port, trial))
+            for variant in rotations[(trial - 1) % len(rotations)]:
+                samples.append(_sample(session, variant, arguments[variant], trial))
     finally:
         _adapter("cleanup-all")
     _adapter("preflight")
@@ -288,11 +347,16 @@ def run_measurement(output: Path, trials: int) -> dict[str, Any]:
         "experiment_only": True,
         "production_model_changed": False,
         "production_model": stage60_model_c.MODEL,
+        "production_candidate_width": PRODUCTION_CANDIDATE_WIDTH,
         "cache_policy": CACHE_POLICY,
-        "measurement_design": "balanced-interleaved-three-variant-startup",
+        "measurement_design": "balanced-interleaved-four-variant-common-set-startup",
+        "worker_identity_policy": "single-worker-single-port-all-variants",
+        "worker": WORKER,
+        "divert_port": DIVERT_PORT,
         "trials_per_variant": trials,
         "sample_count": len(samples),
         "resource_inventory": inventory.to_dict(),
+        "variant_resource_sets": resource_sets,
         "selector_lua": str(selector),
         "variant_arguments": arguments,
         "samples": samples,
@@ -301,6 +365,10 @@ def run_measurement(output: Path, trials: int) -> dict[str, Any]:
         "checks": {
             "adapter_preflight": True,
             "expected_sample_count": len(samples) == trials * len(VARIANTS),
+            "balanced_trial_count": trials % len(VARIANTS) == 0,
+            "single_worker_identity": all(
+                sample["worker"] == WORKER and sample["divert_port"] == DIVERT_PORT for sample in samples
+            ),
             "all_samples_ready": all(
                 sample["process_identity"] and sample["socket_ready"] and sample["log_clean"]
                 for sample in samples
@@ -358,6 +426,8 @@ def finalize(output: Path, initial_path: Path, final_path: Path, cleanup_ok: boo
         for name in (
             "adapter_preflight",
             "expected_sample_count",
+            "balanced_trial_count",
+            "single_worker_identity",
             "all_samples_ready",
             "temporary_workers_clean",
             "lifecycle_restored",
@@ -367,7 +437,7 @@ def finalize(output: Path, initial_path: Path, final_path: Path, cleanup_ok: boo
     report["production_change_recommended"] = False
     report["conclusion"] = "measurement_accepted" if accepted else "measurement_invalid"
     report["next_step"] = (
-        "evaluate_reproducibility_before_any_production_blob_change"
+        "evaluate_common_set_scaling_reproducibility_before_any_production_blob_change"
         if accepted
         else "repair_measurement_evidence_before_drawing_blob_conclusions"
     )
@@ -380,7 +450,7 @@ def _emit(value: dict[str, Any]) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Measure Model-C BLOB startup/readiness/RSS tradeoffs")
+    parser = argparse.ArgumentParser(description="Measure Model-C BLOB common-set startup/readiness/RSS scaling")
     sub = parser.add_subparsers(dest="action", required=True)
     run_parser = sub.add_parser("run")
     run_parser.add_argument("output")

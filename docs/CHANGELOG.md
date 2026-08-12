@@ -8,7 +8,20 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
-No unreleased changes.
+### Added
+
+- Added measurement-only `blob-common-set-scaling-v1` coverage for BLOB-free, small-inline,
+  one-external and three-external common-set startup/readiness/RSS using one physical worker and
+  one divert port across all variants.
+- Added balanced four-order sampling and mean/stdev telemetry so common-set deltas can be judged
+  against normal run-to-run jitter.
+
+### Changed
+
+- Advanced the source package candidate from `0.4.1_3` to `0.4.1_4` for the common-set scaling
+  experiment while keeping production Model C/B/A unchanged.
+- Kept `v0.4.1_3` as the latest published and owner-tested testing prerelease until `_4` receives
+  separate publication authorization and owner-live evidence.
 
 ## [0.4.1] - 2026-08-12
 
@@ -344,7 +357,7 @@ No unreleased changes.
 
 ### Distribution
 
-- Published tag `v0.2.0` and package `0.2.0_1`.
+- Published tag `v0.2.0` and package `0.2.0_1.pkg`.
 
 ## [0.1.0] - 2026-07-28
 
