@@ -17,6 +17,7 @@ TEST RECORD
 - Tester: repository owner
 - Latest completed test date: `2026-08-12`
 - OPNsense: `26.7.1_1`; FreeBSD 15 amd64
+- Current source candidate: `os-zapret2-restyle-0.4.0_25.pkg`
 - Current published/owner-tested package: `os-zapret2-restyle-0.4.0_25.pkg`
 - Preferred Stage-60 model: `C-warm-bucket-source-port-dispatch`
 - Immediate fallback/reference: `B-warm-worker-parallel-batched`
