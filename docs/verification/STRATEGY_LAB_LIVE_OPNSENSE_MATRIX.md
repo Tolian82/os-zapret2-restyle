@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.0_26` ADAPTIVE-BUDGET SOURCE/CI/PUBLICATION PASS; OWNER-LIVE PENDING; `_25` REMAINS THE LATEST OWNER-TESTED MODEL-C BASELINE; `_22` REMAINS THE ACCEPTED MODEL-B FALLBACK BASELINE.**
+Overall status: **`v0.4.0_26` ADAPTIVE-BUDGET SOURCE/CI/PUBLICATION/OWNER-LIVE PASS; `_26` IS THE LATEST OWNER-TESTED MODEL-C BASELINE; `_22` REMAINS THE ACCEPTED MODEL-B FALLBACK BASELINE.**
 
 This matrix is the canonical live-appliance regression inventory. Source tests, GitHub CI
 and FreeBSD package builds do not substitute for selected owner-live evidence. Detailed
@@ -19,7 +19,7 @@ TEST RECORD
 - OPNsense: `26.7.1_1`; FreeBSD 15 amd64
 - Current source candidate: `os-zapret2-restyle-0.4.0_26.pkg`
 - Current published package: `os-zapret2-restyle-0.4.0_26.pkg`
-- Latest owner-tested package: `os-zapret2-restyle-0.4.0_25.pkg`
+- Latest owner-tested package: `os-zapret2-restyle-0.4.0_26.pkg`
 - `_26` runtime commit: `8ada9cba28916fff506f19b34f5ef3de16e2008e`
 - `_26` published asset digest: `sha256:f5466c21c014bf594afcc80aac49b948db45513b33fe46d4857eded75bc8af8c`
 - Preferred Stage-60 model: `C-warm-bucket-source-port-dispatch`
@@ -33,50 +33,73 @@ Current change authority:
 - `docs/patches/v0.4.0_26.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`;
+- `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`;
 - `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_budget.py`;
 - `scripts/test-strategy-lab-adaptive-budget.sh`.
 
 ==================================================
-`_26` ADAPTIVE-BUDGET OWNER-LIVE GATE — PENDING
+`_26` ADAPTIVE-BUDGET OWNER-LIVE GATE — PASS
 ==================================================
 
-Source, full PR CI, FreeBSD 15 package build and the `v0.4.0_26` testing-prerelease
-publication are complete. Publication workflow run `31584348303` targeted exact main
-`8ada9cba28916fff506f19b34f5ef3de16e2008e`; durable publication evidence is
-`docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`.
+### Extended telegram.org — `job.xhdgCU`
 
-The current packaged source implements `policy=eligible-work-v1`. After Stage-30 PASS it
-must persist `adaptive-budget.json` from the actual eligible work matrix:
+Published package `os-zapret2-restyle-0.4.0_26` completed the selected production-wiring
+gate.
 
-`number of endpoints × IPv4/IPv6 × TLS/QUIC × Generic UDP × Standard/Extended mode`.
+`adaptive-budget.json` recorded `policy=eligible-work-v1` with the actual work matrix:
 
-The calibrated floor remains Standard `150 s`, Extended `120 s`, Stage 80 `120 s` for the
-current two-endpoint reference topology. `_26` adds only bounded measured-work headroom:
+- mode Extended;
+- endpoint count `2`;
+- IPv4 true;
+- IPv6 false;
+- TLS 1.3 true;
+- Extended TCP true;
+- QUIC/IPv4 false;
+- Generic UDP false.
 
-- endpoint count above two: `+30 s` Standard and `+15 s` Extended per endpoint;
-- IPv6 available: `+5 s` per endpoint to Standard;
-- Extended QUIC available: `+20 s`;
-- Extended Generic UDP configured: `+15 s`.
+The independent public state matched the same capabilities: IPv4 available, IPv6 unavailable,
+QUIC/IPv4 closed, QUIC/IPv6 skipped and UDP request unconfigured.
 
-For the exact `_25` Telegram capability topology — two endpoints, IPv4 available, IPv6
-unavailable, QUIC closed, Generic UDP inactive — `_26` must remain exactly `150 + 120 = 270 s`
-with Stage 80 `120 s`. With two endpoints and IPv6/QUIC/Generic UDP all eligible, the source
-contract requires `160 + 155 = 315 s`, Stage 80 `155 s`.
+Because no optional branch was eligible, all additions were zero. Effective budgets were
+exactly:
 
-Selected owner-live gate: one normal Extended `telegram.org` run on the published `_26`
-package must prove:
+- Standard `150 s`;
+- Extended `120 s`;
+- search/job parent `270 s`;
+- Stage 80 `120 s`.
 
-- `adaptive-budget.json` exists and records `policy=eligible-work-v1`;
-- its work matrix matches the actual appliance capabilities/input;
-- its effective seconds match the deterministic calculation;
-- `timing-telemetry.json` contains `phase=budget_adaptation`, `stage=30`, `outcome=pass`;
-- Stage 60 uses the normal Model-C path without an unexpected fallback;
-- no new stage/whole-job timeout occurs;
-- Stage 90 restores the original service state and rules `19128-19130` leave no residue.
+`status.json` persisted the same `150/120/270/120` values and deadlines anchored to the
+original job start. `timing-telemetry.json` recorded `phase=budget_adaptation`, `stage=30`,
+`outcome=pass`, with the same matrix and plan.
 
-The owner appliance does not need to fabricate IPv6, QUIC or Generic UDP. Those optional
-increments are deterministic focused source contracts; live verification proves production
-Stage-30 wiring and the actually measured topology.
+Stage 60:
+
+- `execution_model=C-warm-bucket-source-port-dispatch`;
+- 16/16 candidates completed;
+- zero winners;
+- `stopped_reason=graph_exhausted`;
+- `.parallel.fallbacks=[]`;
+- Stage 60 duration `34209 ms`.
+
+The `_25` lease wrapper remained active with `policy=preferred-free-else-alternate` and
+`foreign_port_action=skip-only`; no occupied preferred port occurred in this run, so no
+replacement was needed.
+
+Final result:
+
+- Stage 80 PASS, QUIC/UDP correctly skipped by capability/input;
+- Stage 90 `6924 ms`, PASS;
+- total job `114644 ms`;
+- Stage 99 `NO_CANDIDATE`;
+- post-job `configctl zapret status` RUNNING, pid `78016` at observation time;
+- post-job rules `19128-19130` absent.
+
+This closes the selected `_26` owner-live gate. Optional IPv6/QUIC/Generic-UDP increments are
+not falsely claimed as live-exercised; their deterministic arithmetic remains covered by the
+focused `_26` source contract.
+
+Durable evidence:
+`docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`.
 
 ==================================================
 `_25` OWNER-LIVE SOURCE-PORT CORRECTIVE PASS
@@ -201,8 +224,9 @@ RETAINED PROGRESSION
   shared static source-port collision amplification.
 - `_25` corrected source-port leasing; owner-live `job.5yGde5` completed Model C 16/16 with
   no fallback and clean restoration. `_24` was intentionally skipped by owner instruction.
-- `_26` source/CI/FreeBSD publication is complete; only the selected adaptive-budget
-  production-wiring owner-live gate remains pending.
+- `_26` implemented workload-derived finite parent budgets; owner-live `job.xhdgCU` proved
+  production Stage-30 wiring, exact measured budget persistence, Model-C no-fallback execution
+  and clean restoration.
 
 ==================================================
 SCENARIO MATRIX
@@ -210,13 +234,13 @@ SCENARIO MATRIX
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result truthful; Stage 90 restores RUNNING; no temporary residue | `2026-08-08-v0.3.3_27-scenario-01-pass.md`; later `_22/_23/_25` also exercise RUNNING restoration | **PASS ON `_27` — v0.4.0 mandatory row** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result truthful; Stage 90 restores RUNNING; no temporary residue | `2026-08-08-v0.3.3_27-scenario-01-pass.md`; later `_22/_23/_25/_26` also exercise RUNNING restoration | **PASS ON `_27` — v0.4.0 mandatory row** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Final service remains STOPPED; restoration verified | `PENDING OWNER` | **PENDING REGRESSION** |
 | 3 | Extended TLS 1.2 and HTTP | Available successes replay-verified; unavailable protocols explicitly skipped | `_23` Extended working path observed; dedicated formal row unselected | **PENDING REGRESSION** |
-| 4 | Extended QUIC | Endpoint-bound/replay-verified when available; otherwise explicit skip | `_25 job.5yGde5` exercised explicit skip; available-QUIC row remains unselected | **PENDING REGRESSION** |
+| 4 | Extended QUIC | Endpoint-bound/replay-verified when available; otherwise explicit skip | `_25/_26` exercised explicit skip; available-QUIC row remains unselected | **PENDING REGRESSION** |
 | 5 | Generic UDP port and payload | Accepted only in Extended mode; complete profile and cleanup | `PENDING OWNER` | **PENDING REGRESSION** |
 | 6 | Target already accessible | `TARGET_ACCESSIBLE`; search skipped; service state exact | `PENDING OWNER` | **PENDING REGRESSION** |
-| 7 | No working candidate | `NO_CANDIDATE`; shortlist empty; restoration verified | `_22` accepted baseline; `_25 job.5yGde5` Model-C 16/16 no-fallback live pass; `_26` repeats this path for adaptive-budget wiring | **PASS ON `_25` — `_26` CHANGE GATE PENDING** |
+| 7 | No working candidate | `NO_CANDIDATE`; shortlist empty; restoration verified | `_22` accepted baseline; `_25 job.5yGde5`; `_26 job.xhdgCU` adaptive-budget production-wiring PASS | **PASS ON `_26`** |
 | 8 | User cancellation after service stop | Unfinished stages skipped; 90/99 run; original service restored | `PENDING OWNER` | **PENDING REGRESSION** |
 | 9 | Hard whole-worker timeout | `TIMEOUT`; results persist; restoration verified | `_23 job.G0wC5l` observed Stage-60 timeout with exact restoration; dedicated formal row unselected | **PENDING REGRESSION** |
 | 10 | Controlled internal failure | `ERROR`; truthful stage; restoration verified | `PENDING OWNER` | **PENDING REGRESSION** |
