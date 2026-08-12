@@ -16,7 +16,7 @@ QUICK CONTEXT
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=5`
-Current source candidate: `os-zapret2-restyle-0.4.1_5.pkg` — source/CI candidate, package artifact pending
+Current source candidate: `os-zapret2-restyle-0.4.1_5.pkg` — CI package artifact READY / owner-live pending
 Current published release tag: `v0.4.1`
 Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`
 Latest published testing prerelease: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`
@@ -73,11 +73,24 @@ Published and owner-tested `_4` testing identity:
 `_4` is accepted for the remaining bounded common-set scaling scope. Because `_2`, `_3`, and `_4`
 are measurement-only, detailed production behavior still uses the accepted `_26` runtime evidence.
 
-Current `_5` source candidate is a new measurement-only discovery-probe experiment. It compares
+Current `_5` source candidate is the measurement-only discovery-probe experiment. It compares
 `HEAD`, one-byte GET and the existing 4 KiB discovery GET with the current finalist deep-GET
-reference on the same pinned endpoint epoch and native candidate corpus. `_5` has no tag/Release
-publication authority in this task; the requested test package is the normal FreeBSD-15 CI build
-artifact. Exact artifact identity is recorded after the source merge when that identity exists.
+reference on the same pinned endpoint epoch and native candidate corpus.
+
+`_5` package artifact identity:
+
+- source PR #197 final head `a7504d95b2b5f0fe3c0b0bccea359e8f22148181`;
+- exact-head squash merge/main `3f85d34f415d49c2b9a3ae25bd8bdebdad2f84dd`;
+- identical final source tree on both commits: `3498b759161b14369921e9a47787e82ddbace6a2`;
+- latest-head CI run `31645083105` / #785 — SUCCESS;
+- artifact ID `9160582106`, name `os-zapret2-restyle-0.4.1_5`;
+- package `os-zapret2-restyle-0.4.1_5.pkg`, `410452` bytes;
+- package digest `sha256:d2a8de95bb128739bcf59325433f97b6c28eb819124131c867f0f3cea9d67b4e`;
+- post-merge main CI run `31645659351` / #786 — SUCCESS (`Verify main integrity` PASS);
+- evidence: `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`.
+
+`_5` has no tag/Release publication authority in this task. No `_5` tag, Release/prerelease,
+Pages update, or pkg-repository promotion was performed.
 
 ==================================================
 CURRENT AUTHORITIES
@@ -93,6 +106,7 @@ Current Strategy Lab authorities:
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
 - `docs/patches/v0.4.1_5.md`;
+- `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`;
 - `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`;
 - `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`;
 - `docs/patches/v0.4.1_4.md`;
@@ -222,9 +236,12 @@ false PASS/false FAIL/agreement, pinned endpoint match, firewall interception an
 identity. The wrapper owns the shared lifecycle lock, stops normal Zapret2 only for the experiment,
 cleans candidate residue and must restore byte-for-byte equivalent semantic lifecycle evidence.
 
+Package artifact is READY from latest-head CI #785 and is bound to the exact merged-main tree by
+`docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`.
+
 `production_model_changed=false`, `production_discovery_policy_changed=false`, and
-`production_change_recommended=false`. The requested `_5` test package is a GitHub Actions build
-artifact only; no `_5` tag/Release/prerelease/Pages/pkg-repository publication is part of this task.
+`production_change_recommended=false`. The `_5` test package is a GitHub Actions build artifact
+only; no `_5` tag/Release/prerelease/Pages/pkg-repository publication is part of this task.
 
 Patch contract: `docs/patches/v0.4.1_5.md`.
 
@@ -233,9 +250,10 @@ CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
 The Model-C Lua initialization and BLOB startup/RSS optimization questions remain closed by
-owner-live evidence without production changes. `_5` now measures discovery-probe agreement/cost;
-no production discovery change is authorized before owner-live evidence demonstrates zero false
-PASS against the deep reference and a material reproducible cost benefit.
+owner-live evidence without production changes. `_5` package artifact is ready for owner-live
+discovery-probe agreement/cost measurement; no production discovery change is authorized before
+owner-live evidence demonstrates zero false PASS against the deep reference and a material
+reproducible cost benefit.
 
 Production behavior remains
 `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
