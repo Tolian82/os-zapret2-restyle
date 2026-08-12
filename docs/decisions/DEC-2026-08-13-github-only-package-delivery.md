@@ -79,7 +79,13 @@ An owner instruction explicitly requesting **build/CI evidence only and no packa
 
 This decision broadens and supersedes the narrow phrase-matching boundary in `DEC-2026-08-07-installable-patch-shorthand.md`. That older decision remains valid for the mechanics of deterministic testing-package publication and one-command OPNsense installation.
 
-It also supersedes any active wording that describes an Actions artifact or local/sandbox copy as sufficient owner delivery of a requested package.
+For package-delivery authorization and completion, this decision explicitly supersedes conflicting lower-priority wording in:
+
+- `docs/WORKING_CONVENTIONS.md`, including wording that an ordinary request never authorizes package publication when the owner has in fact asked for the package itself;
+- `docs/DEVELOPMENT_GUIDE.md`, including the request-scope list that only names an explicit `publish candidate` command;
+- any current patch/state/evidence document that describes an Actions artifact or local/sandbox copy as sufficient owner delivery.
+
+The compatible part remains unchanged: an ordinary `fix/add/change/implement` request that does **not** ask for package bytes does not implicitly publish a testing package. The additional publication authority begins when the owner asks for the package/patch itself for testing, installation, or delivery.
 
 ## Affected controls
 
@@ -89,4 +95,5 @@ It also supersedes any active wording that describes an Actions artifact or loca
 - `docs/GITHUB_PUBLICATION.md`;
 - `docs/GITHUB_WORKFLOW.md`;
 - `docs/decisions/DEC-2026-08-07-installable-patch-shorthand.md`;
+- `docs/WORKING_CONVENTIONS.md` and `docs/DEVELOPMENT_GUIDE.md` package-delivery clauses are superseded where they conflict;
 - current package/verification records that incorrectly describe an Actions artifact as owner-ready delivery.
