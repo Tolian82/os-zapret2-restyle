@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-from . import search_graph, stage60_model_c
+from . import resources, search_graph, stage60_model_c
 
 SCHEMA = 1
 POLICY = "lua-init-set-equivalence-v1"
@@ -66,10 +66,11 @@ def _file_evidence(lua_dir: Path, selector_lua: Path, names: Sequence[str]) -> l
 def build_report(
     *,
     graph: search_graph.NativeSearchGraph | None = None,
-    lua_dir: Path = Path("/usr/local/share/zapret2/lua"),
+    lua_dir: Path | None = None,
     selector_lua: Path | None = None,
 ) -> dict[str, Any]:
     native = graph or search_graph.native_tls13_graph()
+    effective_lua_dir = lua_dir or resources.configured_lua_root()
     selector = selector_lua or (Path(__file__).resolve().parent.parent / SELECTOR_LUA)
     nodes = native.stage_nodes("expansion")
     width = stage60_model_c.WIDTH
@@ -115,14 +116,12 @@ def build_report(
             }
         )
 
-    dependency_signatures = {
-        tuple(node.spec.lua_dependencies) for node in nodes
-    }
+    dependency_signatures = {tuple(node.spec.lua_dependencies) for node in nodes}
     all_candidates_same_dependencies = len(dependency_signatures) == 1
     effective = _ordered_unique(
         value for batch in batches for value in batch["current_model_c_init_set"]
     )
-    file_evidence = _file_evidence(lua_dir, selector, effective)
+    file_evidence = _file_evidence(effective_lua_dir, selector, effective)
     runtime_comparison_required = not all_batches_equivalent
 
     return {
@@ -164,12 +163,13 @@ def build_report(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Measure Model-C Lua initialization set equivalence")
     parser.add_argument("--output", default="", help="optional JSON output path; stdout is always emitted")
-    parser.add_argument("--lua-dir", default="/usr/local/share/zapret2/lua")
+    parser.add_argument("--lua-dir", default="", help="override canonical Strategy Lab Lua root")
     parser.add_argument("--selector-lua", default="")
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     selector = Path(args.selector_lua) if args.selector_lua else None
-    report = build_report(lua_dir=Path(args.lua_dir), selector_lua=selector)
+    lua_dir = Path(args.lua_dir) if args.lua_dir else resources.configured_lua_root()
+    report = build_report(lua_dir=lua_dir, selector_lua=selector)
     encoded = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     if args.output:
         output = Path(args.output)
