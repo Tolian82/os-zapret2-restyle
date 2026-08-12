@@ -15,8 +15,8 @@ QUICK CONTEXT
 
 Project: `os-zapret2-restyle`
 Primary branch: `main`
-Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=4`
-Current source candidate: `os-zapret2-restyle-0.4.1_4.pkg`
+Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=5`
+Current source candidate: `os-zapret2-restyle-0.4.1_5.pkg` — source/CI candidate, package artifact pending
 Current published release tag: `v0.4.1`
 Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`
 Latest published testing prerelease: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`
@@ -73,6 +73,12 @@ Published and owner-tested `_4` testing identity:
 `_4` is accepted for the remaining bounded common-set scaling scope. Because `_2`, `_3`, and `_4`
 are measurement-only, detailed production behavior still uses the accepted `_26` runtime evidence.
 
+Current `_5` source candidate is a new measurement-only discovery-probe experiment. It compares
+`HEAD`, one-byte GET and the existing 4 KiB discovery GET with the current finalist deep-GET
+reference on the same pinned endpoint epoch and native candidate corpus. `_5` has no tag/Release
+publication authority in this task; the requested test package is the normal FreeBSD-15 CI build
+artifact. Exact artifact identity is recorded after the source merge when that identity exists.
+
 ==================================================
 CURRENT AUTHORITIES
 ==================================================
@@ -83,8 +89,10 @@ Current Strategy Lab authorities:
 
 - `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
+- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
+- `docs/patches/v0.4.1_5.md`;
 - `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`;
 - `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`;
 - `docs/patches/v0.4.1_4.md`;
@@ -199,14 +207,35 @@ Owner-live evidence:
 `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`.
 
 ==================================================
+V0.4.1_5 DISCOVERY PROBE AGREEMENT — SOURCE CANDIDATE
+==================================================
+
+Policy: `discovery-probe-agreement-v1`, schema `1`.
+
+The experiment measures adaptive-search question 10 without changing the production search path.
+For each selected eligible native TLS 1.3 candidate it performs four cold replays in balanced
+cyclic order: `HEAD`, `GET Range 0-0`, the current discovery `GET Range 0-4095`, and the existing
+deep finalist GET reference requiring `16384` bytes when the resource is long enough.
+
+The report records probe/total duration, response bytes/status, deep/cheap classification,
+false PASS/false FAIL/agreement, pinned endpoint match, firewall interception and search-epoch
+identity. The wrapper owns the shared lifecycle lock, stops normal Zapret2 only for the experiment,
+cleans candidate residue and must restore byte-for-byte equivalent semantic lifecycle evidence.
+
+`production_model_changed=false`, `production_discovery_policy_changed=false`, and
+`production_change_recommended=false`. The requested `_5` test package is a GitHub Actions build
+artifact only; no `_5` tag/Release/prerelease/Pages/pkg-repository publication is part of this task.
+
+Patch contract: `docs/patches/v0.4.1_5.md`.
+
+==================================================
 CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
-The Model-C Lua initialization and BLOB startup/RSS optimization questions are both closed by
-owner-live evidence without production changes. Do not create another package revision solely for
-Lua/BLOB loading optimization.
+The Model-C Lua initialization and BLOB startup/RSS optimization questions remain closed by
+owner-live evidence without production changes. `_5` now measures discovery-probe agreement/cost;
+no production discovery change is authorized before owner-live evidence demonstrates zero false
+PASS against the deep reference and a material reproducible cost benefit.
 
-The next Strategy Lab optimization must be selected from the remaining adaptive-search experiment
-questions and measured separately. Production behavior remains
-`C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback` until a
-new experiment independently justifies a change.
+Production behavior remains
+`C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
