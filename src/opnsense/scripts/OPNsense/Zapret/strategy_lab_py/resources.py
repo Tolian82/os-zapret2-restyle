@@ -14,6 +14,8 @@ from typing import Any
 INVENTORY_SCHEMA = 1
 BUILTIN_BLOBS = ("fake_default_tls", "fake_default_http", "fake_default_quic")
 RESOURCE_CLASSES = ("blob-free", "builtin", "inline", "external")
+DEFAULT_LUA_ROOT = Path("/usr/local/etc/zapret2/lua")
+DEFAULT_FAKE_ROOT = Path("/usr/local/etc/zapret2/files/fake")
 
 
 class ResourceInventoryError(RuntimeError):
@@ -162,6 +164,14 @@ class ResourceInventory:
         return inventory
 
 
+def configured_lua_root() -> Path:
+    return Path(os.environ.get("STRATEGY_LAB_LUA_DIR", str(DEFAULT_LUA_ROOT))).resolve(strict=False)
+
+
+def configured_fake_root() -> Path:
+    return Path(os.environ.get("STRATEGY_LAB_FAKE_DIR", str(DEFAULT_FAKE_ROOT))).resolve(strict=False)
+
+
 def _installed_files(root: Path, suffix: str) -> tuple[bool, tuple[InstalledResource, ...]]:
     if not root.is_dir():
         return False, ()
@@ -246,8 +256,6 @@ def ensure_job_inventory(job: Path) -> ResourceInventory:
     path = job / "resource-inventory.json"
     if path.is_file():
         return load_inventory(path)
-    lua_root = Path(os.environ.get("STRATEGY_LAB_LUA_DIR", "/usr/local/etc/zapret2/lua"))
-    fake_root = Path(os.environ.get("STRATEGY_LAB_FAKE_DIR", "/usr/local/etc/zapret2/files/fake"))
-    inventory = snapshot_inventory(lua_root, fake_root)
+    inventory = snapshot_inventory(configured_lua_root(), configured_fake_root())
     _atomic_json(path, inventory.to_dict())
     return inventory
