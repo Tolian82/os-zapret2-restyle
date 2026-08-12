@@ -6,6 +6,7 @@ import sys
 
 from strategy_lab_py.compat import main as compat_main
 from strategy_lab_py import adaptive_validation
+from strategy_lab_py import blob_startup_measurement
 from strategy_lab_py import lua_initialization_measurement
 from strategy_lab_py import model_b_parallel_attribution as model_b_parallel
 from strategy_lab_py import stage60_model_c as stage60_parallel
@@ -16,6 +17,8 @@ def main() -> int:
     args = list(sys.argv[1:])
     if args[:1] == ["lua-init-measure"]:
         return lua_initialization_measurement.main(args[1:])
+    if args[:1] == ["blob-startup-measure"]:
+        return blob_startup_measurement.main(args[1:])
     if args[:1] == ["model-b-parallel"]:
         try:
             return model_b_parallel.main(args[1:])

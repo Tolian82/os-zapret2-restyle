@@ -16,8 +16,8 @@ QUICK CONTEXT
 
 Project: `os-zapret2-restyle`
 Primary branch: `main`
-Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=2`
-Current source candidate: `os-zapret2-restyle-0.4.1_2.pkg`
+Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=3`
+Current source candidate: `os-zapret2-restyle-0.4.1_3.pkg`
 Current published release tag: `v0.4.1`
 Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`
 Latest published testing prerelease: `v0.4.1_2` / `os-zapret2-restyle-0.4.1_2.pkg`
@@ -34,23 +34,19 @@ Stable v0.4.1 identity:
 - digest `sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e`;
 - stable publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`.
 
-Testing `_2` publication identity:
+Accepted `_2` identity/evidence:
 
 - runtime/source merge `462c55b291ac737eb368ee9ec5e4f139bd239665`;
-- merge tree `94a879ff5bcb94713f9dfba9e1d7e06e08a77a9a`;
-- PR #187 — SOURCE/CI/FreeBSD 15 PASS;
 - publication workflow run `31605249326` — SUCCESS;
 - tag `v0.4.1_2` targeting exact runtime/source merge;
-- GitHub Release ID `369290077`, prerelease=true;
 - package `os-zapret2-restyle-0.4.1_2.pkg`, size `181696` bytes;
 - digest `sha256:09d0edacd0527230a2657128c80099e6436f41b14621f5573586b4cc6fed9063`;
 - publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-publication.md`;
 - owner-live evidence: `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`.
 
-The owner upgraded the OPNsense appliance to stable `0.4.1_1` and reported successful
-upgrade and normal operation. The owner then installed `_2`; its non-destructive Lua
-measurement is accepted as PASS. Detailed production Strategy Lab behavioral evidence
-remains the unchanged `_26` runtime basis because `_2` did not change production Model C.
+The owner-installed `_2` Lua measurement is PASS. Detailed production Strategy Lab behavioral
+evidence remains the unchanged `_26` runtime basis because `_2` and `_3` are measurement-only
+and do not change production Model C.
 
 Active GitHub delivery authority:
 `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
@@ -64,8 +60,8 @@ Current Strategy Lab authorities:
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
 - `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`;
-- `docs/patches/v0.4.1_2.md`;
-- `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-publication.md`;
+- `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`;
+- `docs/patches/v0.4.1_3.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`.
 
@@ -76,7 +72,7 @@ Candidate width remains at most 3; pinned endpoints inside one candidate remain 
 there is no CPU-count gate.
 
 ==================================================
-ACCEPTED OWNER-LIVE RUNTIME BASIS
+ACCEPTED OWNER-LIVE PRODUCTION RUNTIME BASIS
 ==================================================
 
 Detailed production Strategy Lab live basis remains Extended `telegram.org`, `job.xhdgCU`:
@@ -92,13 +88,7 @@ Detailed production Strategy Lab live basis remains Extended `telegram.org`, `jo
 V0.4.1_2 LUA INITIALIZATION MEASUREMENT — ACCEPTED
 ==================================================
 
-`v0.4.1_2` is measurement-only. Production Model C is intentionally unchanged.
-
-Every one of the 16 native Stage-60 expansion candidates declares the same Lua dependencies:
-`zapret-lib.lua` and `zapret-antidpi.lua`. Model C already initializes their batch union plus
-mandatory `zapret-auto.lua` and `strategy_lab_model_c.lua`.
-
-The corrected owner-installed measurement using the canonical installed Lua root reported:
+The corrected owner-installed `_2` measurement reported:
 
 - `candidate_count=16`;
 - all six current batches `equivalent_init_set=true`;
@@ -107,25 +97,51 @@ The corrected owner-installed measurement using the canonical installed Lua root
 - `runtime_comparison_required=false`;
 - `conclusion=equivalent_init_set`.
 
-Therefore current Model-C initialization and the candidate-minimal union are the same
-four-file set for every current native batch. No timing/RSS speedup claim is valid or needed,
-and production Model C must not change for Lua initialization.
+Therefore current Model-C initialization already equals the candidate-minimal four-file union.
+Lua initialization optimization is closed with no production runtime change.
 
-The `_2` measurement command itself used the wrong default Lua root
-`/usr/local/share/zapret2/lua`; canonical ResourceInventory uses
-`/usr/local/etc/zapret2/lua`. This affected measurement file-presence reporting only. The
-next packaged measurement patch must remove that duplicate/default-path mismatch.
+`_3` removes the `_2` measurement-only duplicate path by deriving the default Lua root from
+canonical `ResourceInventory`, whose installed roots are `/usr/local/etc/zapret2/lua` and
+`/usr/local/etc/zapret2/files/fake` unless explicitly overridden by Strategy Lab environment.
+
+==================================================
+V0.4.1_3 BLOB STARTUP / RSS MEASUREMENT
+==================================================
+
+`v0.4.1_3` is measurement-only. Production Model C/B/A remains unchanged.
+
+Policy `blob-startup-rss-v1` compares three isolated variants while keeping common Model-C
+Lua/action shape fixed:
+
+- BLOB-free;
+- built-in `fake_default_tls`;
+- external `fake_tls_7.bin` mapped through canonical ResourceInventory.
+
+The lifecycle-locked harness launches one temporary `dvtws2` at a time through the accepted
+narrow adapter on dedicated ports `9990..9992`. It never calls `route-add`, never stops or
+reconfigures normal Zapret2, and does not drop OS caches. Default measurement is 9 trials per
+variant with balanced/interleaved ordering. Readiness requires two consecutive qualified
+snapshots; raw readiness and RSS samples plus pairwise median deltas are persisted.
+
+Acceptance requires initial/final semantic service state/config/runtime/firewall evidence to
+match and dedicated workers/rules to be clean. `_3` always reports
+`production_change_recommended=false`; one accepted measurement is evidence for
+reproducibility review, not permission to alter production BLOB loading.
 
 ==================================================
 CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
-`v0.4.1_2` source, CI, FreeBSD 15 build, testing-prerelease publication and owner-live
-measurement are PASS. Lua initialization optimization is closed without a production runtime
-change.
+Current logical change: `v0.4.1_3` BLOB loading / startup / RSS measurement.
 
-Next logical change: measurement-only BLOB loading / startup / RSS tradeoff analysis. It must
-first correct the `_2` measurement default-path mismatch, preserve production Model C/B/A,
-CandidateSpec resource identity, source-port attribution, deadlines, cleanup and restoration,
-and establish measured startup/readiness/RSS evidence before any BLOB-loading optimization is
-considered.
+Required gates:
+
+- focused measurement regression and canonical corrective matrix PASS;
+- canonical resource-root correction PASS;
+- production Model C/B/A, leasing and adaptive budgets unchanged;
+- FreeBSD 15 package PASS;
+- testing prerelease publication;
+- owner-installed measurement with `conclusion=measurement_accepted`, complete samples,
+  lifecycle restoration and cleanup PASS.
+
+Only reproducible evidence may justify a separate future production BLOB-loading patch.
