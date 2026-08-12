@@ -1,6 +1,6 @@
 # Strategy Lab Lua initialization measurement
 
-Status: **MEASUREMENT-ONLY / PRODUCTION MODEL C UNCHANGED**
+Status: **MEASUREMENT COMPLETE / PRODUCTION MODEL C UNCHANGED**
 
 ## Question
 
@@ -53,10 +53,27 @@ The packaged `lua-init-measure` command reports `policy=lua-init-set-equivalence
 - never starts/stops Zapret2, adds IPFW rules, allocates source ports, or changes production
   Stage-60 routing.
 
-## Acceptance / next decision
+The `_2` measurement implementation defaulted to `/usr/local/share/zapret2/lua`; the
+canonical ResourceInventory root is `/usr/local/etc/zapret2/lua`. That mismatch affected
+only installed-file evidence. The corrected owner invocation selected the canonical root;
+the next packaged measurement patch must eliminate the duplicate default-path definition.
 
-If the owner-installed `_2` package reports `conclusion=equivalent_init_set` with all required
-files present, close this optimization. Do not modify production Model C for Lua loading.
+## Accepted owner-live result
+
+The owner-installed `_2` package reported, using the canonical installed Lua root:
+
+- `candidate_count=16`;
+- all six batches `equivalent_init_set=true`;
+- `checks.all_required_files_present=true`;
+- `checks.production_model_unchanged=true`;
+- `runtime_comparison_required=false`;
+- `conclusion=equivalent_init_set`.
+
+Evidence: `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`.
+
+## Decision / next work
+
+Lua initialization optimization is closed. Do not modify production Model C for Lua loading.
 
 The next independent optimization is BLOB loading/startup/RSS measurement. That work must
 separately establish whether eager/common BLOB declarations have measurable startup or RSS
