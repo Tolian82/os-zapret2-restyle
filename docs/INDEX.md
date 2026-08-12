@@ -20,12 +20,13 @@ state.
 
 Read these first for current Strategy Lab work:
 
-- `docs/PROJECT_STATE.md` — current source/published candidate, verified live boundary and next action;
-- `docs/patches/v0.4.0_26.md` — current workload-derived finite adaptive-budget patch;
+- `docs/PROJECT_STATE.md` — current source/published/owner-tested candidate and next boundary;
+- `docs/patches/v0.4.0_26.md` — accepted workload-derived finite adaptive-budget patch;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md` — current parent-budget calculation, deadline and evidence contract;
+- `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md` — current `_26` owner-live PASS and measured production budget evidence;
 - `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md` — exact `_26` source/CI/prerelease identity;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — adaptive candidate/search and validation architecture;
-- `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md` — latest owner-live PASS and clean timing floor;
+- `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md` — preceding Model-C/source-port live baseline;
 - `docs/patches/v0.4.0_25.md` — accepted controlled-source-port lease corrective;
 - `docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md` — prior Model-C proof and shared-42004 defect input;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md` — Model-C one-worker bucket/source-port dispatcher architecture;
@@ -38,36 +39,43 @@ Read these first for current Strategy Lab work:
 
 ### Current `_26` boundary
 
-`VERSION=0.4.0`, `PLUGIN_REVISION=26`; source and published testing candidate:
-`os-zapret2-restyle-0.4.0_26.pkg`.
+`VERSION=0.4.0`, `PLUGIN_REVISION=26`; current source, published and owner-tested testing
+candidate: `os-zapret2-restyle-0.4.0_26.pkg`.
 
-Latest published testing prerelease: `v0.4.0_26`, exact runtime commit
-`8ada9cba28916fff506f19b34f5ef3de16e2008e`. Durable record:
+Testing prerelease `v0.4.0_26` targets exact runtime commit
+`8ada9cba28916fff506f19b34f5ef3de16e2008e`. Publication record:
 `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`.
 
-Latest owner-tested package remains `_25` until the `_26` selected live gate passes. The
-accepted `_25` Extended `telegram.org` `job.5yGde5` baseline remains Model C 16/16,
-`graph_exhausted`, `.parallel.fallbacks=[]`, Stage 60 `34198 ms`, total `114759 ms`, clean
-Stage-90 restoration.
+Owner-live Extended `telegram.org`, `job.xhdgCU`, closed the selected `_26` gate:
 
-`_26` routes production orchestration through `strategy_lab_py/adaptive_budget.py`. After
-Stage-30 PASS it calculates `policy=eligible-work-v1` from:
+- `policy=eligible-work-v1` persisted after Stage 30;
+- measured matrix was 2 endpoints, IPv4 only, QUIC closed, Generic UDP inactive;
+- effective budget was exactly Standard `150 s`, Extended `120 s`, search `270 s`, Stage 80
+  `120 s`;
+- Stage 60 Model C completed 16/16, `graph_exhausted`, `.parallel.fallbacks=[]`;
+- Stage 60 `34209 ms`, total `114644 ms`;
+- final `NO_CANDIDATE` and clean Stage-90 restoration;
+- post-job Zapret2 RUNNING and no `19128-19130` residue.
+
+Durable owner-live record:
+`docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`.
+
+`_26` derives finite parent budgets from:
 
 `number of endpoints × IPv4/IPv6 × TLS/QUIC × Generic UDP × Standard/Extended mode`.
 
-The existing `150 s` Standard, `120 s` Extended and `120 s` Stage-80 budgets remain the
-calibrated floor. Only eligible measured work adds bounded headroom: future endpoints beyond
-two, IPv6 baseline work, available Extended QUIC and configured Extended Generic UDP.
-Deadlines stay anchored to the original job start epoch.
+The calibrated floor remains Standard `150 s`, Extended `120 s`, Stage 80 `120 s` for up to
+two endpoints. Eligible extra endpoints, IPv6 baseline work, Extended QUIC and configured
+Generic UDP add bounded deterministic headroom. Deadlines remain anchored to the original job
+start epoch.
 
-For the accepted `_25` two-endpoint IPv4-only/QUIC-closed/no-UDP topology, `_26` remains
-exactly `150 + 120 = 270 s`. With two endpoints plus IPv6, QUIC and Generic UDP all eligible,
-the deterministic plan is `160 + 155 = 315 s`, with Stage 80 `155 s`.
+With two endpoints plus IPv6, QUIC and Generic UDP all eligible, the deterministic source
+contract remains `160 + 155 = 315 s`, with Stage 80 `155 s`. Those optional increments were
+not fabricated in owner-live and remain source-tested.
 
-The plan is persisted as `adaptive-budget.json`; effective deadline numbers remain in
-`status.json`; timing telemetry records `phase=budget_adaptation` at Stage 30. Stage 60 remains
-`C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback` and
-`_25` free-port leasing is unchanged.
+Stage 60 remains
+`C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`; `_25`
+free-port leasing remains active.
 
 ## Current implementation authorities
 
@@ -108,7 +116,7 @@ Key retained comparison points:
 - Model B production integration: `docs/patches/v0.4.0_22.md` and `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`;
 - Model C production-candidate publication/live evidence: `docs/patches/v0.4.0_23.md`, `docs/verification/evidence/2026-08-11-v0.4.0_23-publication.md`, `docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md`;
 - Model C source-port corrective acceptance: `docs/patches/v0.4.0_25.md`, `docs/verification/evidence/2026-08-11-v0.4.0_25-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
-- Adaptive workload budget: `docs/patches/v0.4.0_26.md`, `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`, `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`.
+- Adaptive workload budget acceptance: `docs/patches/v0.4.0_26.md`, `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`, `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`.
 
 Historical evidence explains progression; it never overrides a later patch/PR/live record.
 

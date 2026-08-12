@@ -19,7 +19,7 @@ Primary branch: `main`
 Current source line: `VERSION=0.4.0`, `PLUGIN_REVISION=26`
 Current source candidate: `os-zapret2-restyle-0.4.0_26.pkg`
 Latest published testing prerelease: `v0.4.0_26`
-Latest owner-tested testing candidate: `v0.4.0_25` — source-port lease corrective owner-live PASS
+Latest owner-tested testing candidate: `v0.4.0_26` — adaptive-budget owner-live PASS
 Required package ABI: `FreeBSD:15:amd64`
 
 Published `_26` identity:
@@ -32,14 +32,15 @@ Published `_26` identity:
 - publication workflow run `31584348303` — SUCCESS;
 - publication evidence: `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`.
 
-Latest accepted owner-live evidence remains:
-`docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`.
+Latest accepted owner-live evidence:
+`docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`.
 
 Current `_26` authority:
 
 - `docs/patches/v0.4.0_26.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
+- `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`;
 - `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_budget.py`;
 - `scripts/test-strategy-lab-adaptive-budget.sh`.
 
@@ -56,29 +57,39 @@ Candidate width remains at most 3; pinned endpoints inside one candidate remain 
 there is no CPU-count gate. `_26` does not change this architecture.
 
 ==================================================
-ACCEPTED `_25` OWNER-LIVE BASELINE
+ACCEPTED `_26` OWNER-LIVE BASELINE
 ==================================================
 
-Extended `telegram.org`, `job.5yGde5`:
+Extended `telegram.org`, `job.xhdgCU`:
 
+- `adaptive-budget.json` persisted `policy=eligible-work-v1`;
+- measured matrix: Extended, 2 endpoints, IPv4 available, IPv6 unavailable, QUIC/IPv4 closed,
+  Generic UDP unconfigured;
+- all adaptive additions were zero for that measured topology;
+- effective budgets were exactly Standard `150 s`, Extended `120 s`, search `270 s`,
+  Stage 80 `120 s`;
+- `status.json` persisted the same numeric budgets and deadlines anchored to the original
+  `started_at`;
+- telemetry recorded `phase=budget_adaptation`, `stage=30`, `outcome=pass` with the same plan;
 - Stage 60 genuinely used `C-warm-bucket-source-port-dispatch`;
 - `stopped_reason=graph_exhausted`;
 - 16/16 candidates completed, zero winners;
 - `.parallel.fallbacks=[]` — no Model-B or cold-Model-A fallback;
-- Stage 60 duration `34198 ms`;
-- total job duration `114759 ms`;
+- Stage 60 duration `34209 ms`;
+- total job duration `114644 ms`;
 - final outcome `NO_CANDIDATE`;
-- all six batches persisted `_25` lease evidence with
-  `policy=preferred-free-else-alternate` and `foreign_port_action=skip-only`;
-- this run encountered no occupied preferred port, so `collisions=[]` and
-  `replacement_count=0` in every batch;
+- `_25` lease wrapper remained active with `policy=preferred-free-else-alternate` and
+  `foreign_port_action=skip-only`;
 - Stage 90 restoration succeeded;
-- post-job Zapret2 remained RUNNING;
+- post-job Zapret2 remained RUNNING, pid `78016` at observation time;
 - rules `19128-19130` left no residue.
 
-This remains the clean no-fallback timing floor for `_26`. The prior `_23` shared-`42004`
-collision defect is closed. Model B fallback still takes a fresh independent lease and the
-focused `_25` lease test still covers alternate selection under a foreign occupied port.
+This closes the selected `_26` production-wiring gate. Optional IPv6/QUIC/Generic-UDP
+increments were correctly not charged because those branches were not eligible on this run;
+their deterministic arithmetic remains covered by the focused `_26` source contract.
+
+The accepted `_25` owner-live record remains the immediately preceding no-fallback timing
+baseline at `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`.
 
 ==================================================
 CURRENT `_26` CHANGE
@@ -108,10 +119,10 @@ Measured optional work adds only bounded branch-specific headroom:
 - available Extended QUIC: `+20 s` from four candidates × the existing `5 s` envelope;
 - configured Extended Generic UDP: `+15 s` from three candidates × the existing `5 s` envelope.
 
-For the accepted `_25` two-endpoint IPv4-only/QUIC-closed/no-UDP topology, `_26` therefore
-keeps the exact existing `150 + 120 = 270 s` total and `120 s` Stage-80 parent. A two-endpoint
-Extended job with IPv6, QUIC and Generic UDP all eligible receives `160 + 155 = 315 s`, with
-Stage 80 `155 s`.
+For the accepted two-endpoint IPv4-only/QUIC-closed/no-UDP topology, `_26` keeps exactly
+`150 + 120 = 270 s` total and `120 s` Stage-80 parent; owner-live `job.xhdgCU` confirmed this
+production behavior. A two-endpoint Extended job with IPv6, QUIC and Generic UDP all eligible
+receives `160 + 155 = 315 s`, with Stage 80 `155 s` by deterministic source contract.
 
 The adaptive plan is applied only after Stage-30 PASS. Deadlines remain anchored to the
 original job start epoch; Stage 30 never resets the clock. The plan is persisted as
@@ -126,20 +137,18 @@ unchanged.
 CURRENT VERIFICATION BOUNDARY
 ==================================================
 
-Source and publication gates for `_26` are complete:
+All selected `_26` gates are complete:
 
 - focused adaptive-budget contract — PASS;
 - canonical Strategy Lab corrective matrix — PASS;
 - Python orchestration/migration continuity — PASS;
 - FreeBSD 15 package contract/build — PASS;
 - PR #182 squash merge — PASS;
-- testing prerelease `v0.4.0_26` — PUBLISHED and verified.
+- testing prerelease `v0.4.0_26` — PUBLISHED and verified;
+- owner-live Extended `telegram.org`, `job.xhdgCU` — PASS;
+- adaptive matrix/budget persistence — PASS;
+- production Model C no-fallback path — PASS;
+- Stage-90 restoration and temporary-rule cleanup — PASS.
 
-Owner-live is the remaining `_26` gate. Run one Extended `telegram.org` job on the published
-package and verify that the production Stage-30 measurement activates `eligible-work-v1`,
-persists a work matrix matching actual capabilities, produces the exact effective budget,
-finishes without a new timeout/unexpected fallback, and restores Zapret2 cleanly.
-
-The appliance does not need to fabricate IPv6, QUIC or Generic UDP. Optional branch increments
-are source-tested deterministically; live evidence verifies production wiring and the actual
-measured topology.
+`v0.4.0_26` is therefore the current published and owner-tested Strategy Lab candidate.
+No new package revision is justified by this docs-only acceptance closeout.

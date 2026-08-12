@@ -11,6 +11,7 @@ MODEL_B_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_22-pr
 MODEL_C_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md"
 MODEL_C_CORRECTIVE_PASS="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md"
 PUBLICATION26="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md"
+LIVE26="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md"
 PATCH25="${ROOT_DIR}/docs/patches/v0.4.0_25.md"
 PATCH26="${ROOT_DIR}/docs/patches/v0.4.0_26.md"
 BUDGET_DOC="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md"
@@ -28,7 +29,7 @@ require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
 for file in "${MATRIX}" "${STATE}" "${INDEX}" "${VERSION_FILE}" "${MAKEFILE}" \
     "${MODEL_B_EVIDENCE}" "${MODEL_C_LIVE}" "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" \
-    "${PATCH25}" "${PATCH26}" "${BUDGET_DOC}" "${BUDGET_TEST}" "${BUDGET_PY}" \
+    "${LIVE26}" "${PATCH25}" "${PATCH26}" "${BUDGET_DOC}" "${BUDGET_TEST}" "${BUDGET_PY}" \
     "${COMPAT_PY}" "${LEASE_TEST}" "${LEASE_PY}" "${MODEL_C_PY}" "${MODEL_B_PY}" \
     "${LIVE_GATE_DECISION}"
 do
@@ -42,42 +43,47 @@ candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${version}" = '0.4.0' ] || fail "unexpected active Strategy Lab version ${version}"
 [ "${revision}" -eq 26 ] || fail 'adaptive-budget revision must be exactly 26'
 
-# Engineering Memory distinguishes the published `_26` candidate from the latest
-# owner-tested `_25` candidate until the selected `_26` live gate passes.
+# Engineering Memory must now identify published `_26` as the latest owner-tested candidate.
 require "${STATE}" 'Current source line: `VERSION=0.4.0`, `PLUGIN_REVISION=26`'
 require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.0_26.pkg`'
 require "${STATE}" 'Latest published testing prerelease: `v0.4.0_26`'
-require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.0_25`'
+require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.0_26` — adaptive-budget owner-live PASS'
 require "${STATE}" '8ada9cba28916fff506f19b34f5ef3de16e2008e'
 require "${STATE}" 'sha256:f5466c21c014bf594afcc80aac49b948db45513b33fe46d4857eded75bc8af8c'
 require "${STATE}" '2026-08-12-v0.4.0_26-publication.md'
+require "${STATE}" '2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md'
 require "${STATE}" '`eligible-work-v1`'
 require "${STATE}" 'adaptive-budget.json'
 require "${STATE}" 'budget_adaptation'
 require "${STATE}" 'number of endpoints × IPv4/IPv6 × TLS/QUIC × Generic UDP × Standard/Extended mode'
-require "${STATE}" 'Stage 60 duration `34198 ms`'
-require "${STATE}" 'total job duration `114759 ms`'
+require "${STATE}" 'job.xhdgCU'
+require "${STATE}" 'Stage 60 duration `34209 ms`'
+require "${STATE}" 'total job duration `114644 ms`'
 
 require "${INDEX}" 'For a current diagnosis, **do not start from an old evidence file**.'
 require "${INDEX}" 'docs/patches/v0.4.0_26.md'
 require "${INDEX}" 'STRATEGY_LAB_ADAPTIVE_BUDGET.md'
 require "${INDEX}" '2026-08-12-v0.4.0_26-publication.md'
+require "${INDEX}" '2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md'
 require "${INDEX}" '2026-08-12-v0.4.0_25-source-port-live-pass.md'
 
 require "${MATRIX}" 'Current source candidate: `os-zapret2-restyle-0.4.0_26.pkg`'
 require "${MATRIX}" 'Current published package: `os-zapret2-restyle-0.4.0_26.pkg`'
-require "${MATRIX}" 'Latest owner-tested package: `os-zapret2-restyle-0.4.0_25.pkg`'
-require "${MATRIX}" '`_26` ADAPTIVE-BUDGET OWNER-LIVE GATE — PENDING'
-require "${MATRIX}" 'SOURCE/CI/PUBLICATION PASS; OWNER-LIVE PENDING'
+require "${MATRIX}" 'Latest owner-tested package: `os-zapret2-restyle-0.4.0_26.pkg`'
+require "${MATRIX}" '`_26` ADAPTIVE-BUDGET OWNER-LIVE GATE — PASS'
+require "${MATRIX}" 'SOURCE/CI/PUBLICATION/OWNER-LIVE PASS'
 require "${MATRIX}" '2026-08-12-v0.4.0_26-publication.md'
+require "${MATRIX}" '2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md'
 require "${MATRIX}" 'policy=eligible-work-v1'
 require "${MATRIX}" 'phase=budget_adaptation'
-require "${MATRIX}" '`150 + 120 = 270 s`'
-require "${MATRIX}" '`160 + 155 = 315 s`'
+require "${MATRIX}" 'job.xhdgCU'
+require "${MATRIX}" 'Stage 60 duration `34209 ms`'
+require "${MATRIX}" 'total job `114644 ms`'
+require "${MATRIX}" '`150 s`'
+require "${MATRIX}" '`120 s`'
+require "${MATRIX}" '`270 s`'
 require "${MATRIX}" 'job.5yGde5'
 require "${MATRIX}" '.parallel.fallbacks=[]'
-require "${MATRIX}" 'Stage 60 duration `34198 ms`'
-require "${MATRIX}" 'total job duration `114759 ms`'
 require "${MATRIX}" 'policy=preferred-free-else-alternate'
 require "${MATRIX}" 'foreign_port_action=skip-only'
 require "${MATRIX}" 'job.FaLtIk'
@@ -90,12 +96,12 @@ require "${MATRIX}" 'about 15.96%'
 
 scenario_one=$(awk -F'|' '$2 ~ /^[[:space:]]*1[[:space:]]*$/ && $6 ~ /PASS ON `_27` — v0.4.0 mandatory row/ {n++} END {print n+0}' "${MATRIX}")
 [ "${scenario_one}" -eq 1 ] || fail 'v0.4.0 mandatory Scenario 1 PASS row mismatch'
-scenario_seven=$(awk -F'|' '$2 ~ /^[[:space:]]*7[[:space:]]*$/ && $6 ~ /PASS ON `_25` — `_26` CHANGE GATE PENDING/ {n++} END {print n+0}' "${MATRIX}")
-[ "${scenario_seven}" -eq 1 ] || fail 'Scenario 7 must retain _25 PASS while _26 live gate remains pending'
+scenario_seven=$(awk -F'|' '$2 ~ /^[[:space:]]*7[[:space:]]*$/ && $6 ~ /PASS ON `_26`/ {n++} END {print n+0}' "${MATRIX}")
+[ "${scenario_seven}" -eq 1 ] || fail 'Scenario 7 must record _26 adaptive-budget owner-live PASS'
 pending_count=$(awk -F'|' '$2 ~ /^[[:space:]]*([2-6]|[8-9]|1[0-8])[[:space:]]*$/ && $6 ~ /PENDING REGRESSION/ {n++} END {print n+0}' "${MATRIX}")
 [ "${pending_count}" -eq 16 ] || fail 'rows 2-6 and 8-18 must remain honest pending regression coverage'
 
-# Exact `_26` publication evidence is immutable while the owner-live status is still pending.
+# Publication evidence remains the immutable snapshot captured before owner-live acceptance.
 require "${PUBLICATION26}" 'Status: **PUBLISHED; OWNER-LIVE VERIFICATION PENDING**'
 require "${PUBLICATION26}" '8ada9cba28916fff506f19b34f5ef3de16e2008e'
 require "${PUBLICATION26}" '31583257998'
@@ -105,6 +111,20 @@ require "${PUBLICATION26}" '369135019'
 require "${PUBLICATION26}" '511384034'
 require "${PUBLICATION26}" '180306'
 require "${PUBLICATION26}" 'sha256:f5466c21c014bf594afcc80aac49b948db45513b33fe46d4857eded75bc8af8c'
+
+# `_26` live evidence is the current acceptance authority.
+require "${LIVE26}" 'Status: **PASS**'
+require "${LIVE26}" 'job.xhdgCU'
+require "${LIVE26}" 'policy=eligible-work-v1'
+require "${LIVE26}" 'Standard `150 s`'
+require "${LIVE26}" 'Extended increment `120 s`'
+require "${LIVE26}" 'search/job parent `270 s`'
+require "${LIVE26}" 'Stage 80 `120 s`'
+require "${LIVE26}" 'C-warm-bucket-source-port-dispatch'
+require "${LIVE26}" '.parallel.fallbacks=[]'
+require "${LIVE26}" '34209 ms'
+require "${LIVE26}" '114644 ms'
+require "${LIVE26}" 'pid `78016`'
 
 # Historical evidence remains immutable input rather than being copied into current prose.
 require "${MODEL_C_LIVE}" 'job.FaLtIk'
@@ -119,9 +139,10 @@ require "${MODEL_B_EVIDENCE}" 'PRODUCTION STAGE-60 MODEL B OWNER-LIVE PASS'
 
 # `_26` source contract: measured workload extends finite parents without altering search.
 require "${PATCH26}" 'This packaged patch changes **Strategy Lab parent-budget calculation only**.'
-require "${PATCH26}" 'SOURCE/CI/PUBLICATION PASS; OWNER-LIVE PENDING'
+require "${PATCH26}" 'SOURCE/CI/PUBLICATION/OWNER-LIVE PASS'
 require "${PATCH26}" 'policy=eligible-work-v1'
 require "${PATCH26}" 'adaptive-budget.json'
+require "${PATCH26}" 'job.xhdgCU'
 require "${BUDGET_DOC}" 'bounded child operation <= stage parent <= finite job parent'
 require "${BUDGET_DOC}" 'Stage-30 PASS'
 require "${BUDGET_TEST}" 'PASS: Strategy Lab derives finite parent budgets from measured endpoint/capability/protocol work'
@@ -143,4 +164,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: live matrix records published ${candidate} with owner-live pending while retaining _25 and _22 accepted live baselines"
+echo "PASS: live matrix records published ${candidate} as adaptive-budget owner-live PASS while retaining _25 and _22 historical baselines"
