@@ -10,6 +10,7 @@ RELEASE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1-relea
 BLOB_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md"
 BLOB_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md"
 BLOB4_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md"
+BLOB4_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 LUA_DOC="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md"
@@ -35,7 +36,7 @@ fail(){ echo "FAIL: $*" >&2; exit 1; }
 require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
 for file in "${MATRIX}" "${STATE}" "${INDEX}" "${RELEASE_DOC}" "${RELEASE_EVIDENCE}" \
-    "${BLOB_PUBLICATION}" "${BLOB_LIVE}" "${BLOB4_PUBLICATION}" "${VERSION_FILE}" "${MAKEFILE}" \
+    "${BLOB_PUBLICATION}" "${BLOB_LIVE}" "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${VERSION_FILE}" "${MAKEFILE}" \
     "${LUA_DOC}" "${LUA_PATCH}" "${LUA_TEST}" "${LUA_PY}" "${BLOB_DOC}" "${BLOB_PATCH}" \
     "${BLOB_TEST}" "${BLOB_PY}" "${LUA_LIVE}" "${MODEL_B_EVIDENCE}" \
     "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" "${LIVE26}" "${BUDGET_PY}" \
@@ -56,7 +57,7 @@ require "${STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=4`'
 require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_4.pkg`'
 require "${STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${STATE}" 'Latest published testing prerelease: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`'
-require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_3` — BLOB startup/readiness/RSS measurement PASS'
+require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_4` — BLOB common-set scaling measurement PASS'
 require "${STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
 require "${STATE}" 'job.xhdgCU'
 require "${STATE}" 'Stage 60 duration `34209 ms`'
@@ -64,10 +65,12 @@ require "${STATE}" 'total job duration `114644 ms`'
 require "${STATE}" 'Policy: `blob-common-set-scaling-v1`, schema `2`.'
 require "${STATE}" 'production_change_recommended=false'
 require "${STATE}" 'publication workflow run `31633335688` — SUCCESS'
+require "${STATE}" 'V0.4.1_4 BLOB COMMON-SET SCALING — ACCEPTED / OPTIMIZATION CLOSED'
 
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
 require "${INDEX}" 'docs/patches/v0.4.1_4.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md'
+require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md'
@@ -91,6 +94,12 @@ require "${BLOB4_PUBLICATION}" '31633335688'
 require "${BLOB4_PUBLICATION}" '369482221'
 require "${BLOB4_PUBLICATION}" 'os-zapret2-restyle-0.4.1_4.pkg'
 require "${BLOB4_PUBLICATION}" 'sha256:934fdd3a73117b3d914c9823f29eb7f2ca47196d97c30d94e3066a38159edbc9'
+require "${BLOB4_LIVE}" 'Status: **PASS**'
+require "${BLOB4_LIVE}" 'Final report conclusion: `measurement_accepted`.'
+require "${BLOB4_LIVE}" '`48` planned starts'
+require "${BLOB4_LIVE}" '`+0.234 ms` / `+0.375%`'
+require "${BLOB4_LIVE}" '`+2 KiB` / `+0.046%`'
+require "${BLOB4_LIVE}" 'close the BLOB-loading startup/RSS optimization as a negative result for current width three'
 
 require "${MATRIX}" 'Current published release package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${MATRIX}" 'Latest owner-tested runtime package: `os-zapret2-restyle-0.4.0_26.pkg`'
@@ -130,8 +139,8 @@ require "${BLOB_PY}" 'EXTERNAL_COMMON = ('
 require "${BLOB_PY}" 'PRODUCTION_CANDIDATE_WIDTH = 3'
 require "${BLOB_PY}" 'production_change_recommended'
 require "${BLOB_TEST}" 'PASS: BLOB common-set scaling measurement is single-worker, balanced, lifecycle-safe'
-require "${BLOB_DOC}" '_3 ACCEPTED / _4 PUBLISHED — OWNER-LIVE PENDING / PRODUCTION MODEL C UNCHANGED'
-require "${BLOB_PATCH}" 'SOURCE / CI / FREEBSD15 PACKAGE / PUBLICATION PASS / OWNER-LIVE PENDING'
+require "${BLOB_DOC}" '_3 ACCEPTED / _4 ACCEPTED / BLOB-LOADING OPTIMIZATION CLOSED / PRODUCTION MODEL C UNCHANGED'
+require "${BLOB_PATCH}" 'SOURCE / CI / FREEBSD15 PACKAGE / PUBLICATION / OWNER-LIVE PASS'
 
 require "${LIVE_GATE_DECISION}" 'all-or-nothing release checklist.'
 if grep -Fq 'Stable release preparation and pkg-repository promotion remain blocked until every' "${MATRIX}"; then
@@ -139,4 +148,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} is published for owner common-set measurement while owner-tested truth remains _3 and production live truth remains _26"
+echo "PASS: ${candidate} owner common-set measurement is accepted, BLOB-loading optimization is closed, and production live truth remains _26"
