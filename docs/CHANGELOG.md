@@ -20,8 +20,8 @@ The project starts its own version history at `0.1.0`.
 
 - Advanced the source package candidate from `0.4.1_3` to `0.4.1_4` for the common-set scaling
   experiment while keeping production Model C/B/A unchanged.
-- Kept `v0.4.1_3` as the latest published and owner-tested testing prerelease until `_4` receives
-  separate publication authorization and owner-live evidence.
+- Published `v0.4.1_4` as the latest testing prerelease for owner common-set measurement while
+  `v0.4.1_3` remains the latest owner-tested testing candidate until `_4` live evidence is accepted.
 
 ## [0.4.1] - 2026-08-12
 
