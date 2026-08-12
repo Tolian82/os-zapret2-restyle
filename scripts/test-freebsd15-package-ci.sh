@@ -36,6 +36,7 @@ MODEL_B_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_22-produc
 MODEL_C_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md"
 MODEL_C_CORRECTIVE_PASS="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md"
 PUBLICATION26="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md"
+LIVE26="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md"
 MODEL_C_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-11-strategy-lab-model-c-production-switch.md"
 MODEL_B_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-11-strategy-lab-parallel-model-b-selection.md"
 
@@ -52,7 +53,7 @@ for file in \
     "${MODEL_B_PARALLEL_PY}" "${MODEL_B_PARALLEL_ATTRIBUTION_PY}" "${MODEL_B_PARALLEL_ADAPTER}" \
     "${MODEL_C_SELECTOR}" "${STAGE60_RUNNER}" "${EXPANSION_RUNNER}" "${PYTHON_ENTRY}" \
     "${MODEL_B_PATCH}" "${MODEL_C_PATCH}" "${SOURCE_PORT_PATCH}" "${MODEL_B_LIVE}" \
-    "${MODEL_C_LIVE}" "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" \
+    "${MODEL_C_LIVE}" "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" "${LIVE26}" \
     "${MODEL_C_DECISION}" "${MODEL_B_DECISION}"
 do
     [ -s "${file}" ] || fail "required file is missing: ${file}"
@@ -123,7 +124,7 @@ require "${ADAPTIVE_BUDGET_PY}" 'return AdaptiveBudgetOrchestrator(job_id).run()
 require "${COMPAT_PY}" 'return adaptive_budget.orchestrator_main(args)'
 require "${ADAPTIVE_BUDGET_DOC}" 'bounded child operation <= stage parent <= finite job parent'
 require "${ADAPTIVE_BUDGET_PATCH}" 'This packaged patch changes **Strategy Lab parent-budget calculation only**.'
-require "${ADAPTIVE_BUDGET_PATCH}" 'SOURCE/CI/PUBLICATION PASS; OWNER-LIVE PENDING'
+require "${ADAPTIVE_BUDGET_PATCH}" 'SOURCE/CI/PUBLICATION/OWNER-LIVE PASS'
 
 # Accepted Stage-60 architecture remains C -> B -> cold A; `_25` source-port ownership stays intact.
 require "${MODEL_C_PRODUCTION_TEST}" 'PASS: production Stage 60 defaults to one warm Model C bucket'
@@ -183,21 +184,23 @@ do
     [ -e "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/${installed}" ] || fail "packaged source path is missing: ${installed}"
 done
 
-# Current source/publication/live boundary is truthful: `_26` is published, `_25` is the
-# latest owner-tested package until the selected `_26` live gate passes.
+# Current source/publication/live boundary is truthful: `_26` is published and owner-tested.
 require "${MATRIX}" 'Current source candidate: `os-zapret2-restyle-0.4.0_26.pkg`'
 require "${MATRIX}" 'Current published package: `os-zapret2-restyle-0.4.0_26.pkg`'
-require "${MATRIX}" 'Latest owner-tested package: `os-zapret2-restyle-0.4.0_25.pkg`'
-require "${MATRIX}" '`_26` ADAPTIVE-BUDGET OWNER-LIVE GATE — PENDING'
+require "${MATRIX}" 'Latest owner-tested package: `os-zapret2-restyle-0.4.0_26.pkg`'
+require "${MATRIX}" '`_26` ADAPTIVE-BUDGET OWNER-LIVE GATE — PASS'
 require "${MATRIX}" 'policy=eligible-work-v1'
+require "${MATRIX}" 'job.xhdgCU'
 require "${PROJECT_STATE}" 'Current source line: `VERSION=0.4.0`, `PLUGIN_REVISION=26`'
 require "${PROJECT_STATE}" 'Latest published testing prerelease: `v0.4.0_26`'
-require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.0_25`'
+require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.0_26` — adaptive-budget owner-live PASS'
 require "${PROJECT_STATE}" '2026-08-12-v0.4.0_26-publication.md'
+require "${PROJECT_STATE}" '2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md'
 require "${PROJECT_STATE}" 'adaptive-budget.json'
 require "${INDEX}" 'docs/patches/v0.4.0_26.md'
 require "${INDEX}" 'STRATEGY_LAB_ADAPTIVE_BUDGET.md'
 require "${INDEX}" '2026-08-12-v0.4.0_26-publication.md'
+require "${INDEX}" '2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md'
 
 # Exact published candidate identity is durable and must not drift during docs-only closeout.
 require "${PUBLICATION26}" 'Status: **PUBLISHED; OWNER-LIVE VERIFICATION PENDING**'
@@ -210,6 +213,19 @@ require "${PUBLICATION26}" '369135019'
 require "${PUBLICATION26}" '511384034'
 require "${PUBLICATION26}" '180306'
 require "${PUBLICATION26}" 'sha256:f5466c21c014bf594afcc80aac49b948db45513b33fe46d4857eded75bc8af8c'
+
+# Current owner-live acceptance is independently evidenced.
+require "${LIVE26}" 'Status: **PASS**'
+require "${LIVE26}" 'job.xhdgCU'
+require "${LIVE26}" 'policy=eligible-work-v1'
+require "${LIVE26}" 'Standard `150 s`'
+require "${LIVE26}" 'Extended increment `120 s`'
+require "${LIVE26}" 'search/job parent `270 s`'
+require "${LIVE26}" 'Stage 80 `120 s`'
+require "${LIVE26}" 'C-warm-bucket-source-port-dispatch'
+require "${LIVE26}" '.parallel.fallbacks=[]'
+require "${LIVE26}" '34209 ms'
+require "${LIVE26}" '114644 ms'
 
 # Accepted history remains intact and independently evidenced.
 require "${MODEL_B_LIVE}" 'PRODUCTION STAGE-60 MODEL B OWNER-LIVE PASS'
@@ -225,4 +241,4 @@ require "${MODEL_C_DECISION}" 'OWNER-AUTHORIZED FOR PRODUCTION CANDIDATE `_23`; 
 require "${MODEL_B_DECISION}" 'APPROVED FOR IMPLEMENTATION; NOT YET PRODUCTION-ACTIVE'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI records published ${candidate} with adaptive finite budgets while owner-live remains on _25"
+printf '%s\n' "PASS: FreeBSD 15 package CI records published ${candidate} with adaptive finite budgets and owner-live _26 acceptance"
