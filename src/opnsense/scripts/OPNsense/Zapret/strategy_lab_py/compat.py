@@ -8,12 +8,12 @@ import sys
 from collections.abc import Sequence
 
 from . import FOUNDATION_REVISION, SUPPORTED_PYTHON
+from . import adaptive_budget
 from . import adaptive_result_compat
 from . import adaptive_validation
 from . import candidate as candidate_screening
 from . import extended as extended_orchestration
 from . import family as family_screening
-from . import late_containment
 from . import model_a as model_a_measurement
 from . import model_b as model_b_experiment
 from . import model_b_exhaustive as model_b_exhaustive_experiment
@@ -74,7 +74,7 @@ def _run_state(args: Sequence[str]) -> int:
 
 def _run_orchestrator(args: Sequence[str]) -> int:
     try:
-        return late_containment.orchestrator_main(args)
+        return adaptive_budget.orchestrator_main(args)
     except stage_orchestrator.UsageError as exc:
         _error(str(exc)); return EX_USAGE
     except stage_orchestrator.OrchestrationError as exc:
