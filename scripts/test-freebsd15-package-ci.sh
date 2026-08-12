@@ -8,7 +8,7 @@ MATRIX="${ROOT_DIR}/docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md"
 PROJECT_STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
 RELEASE_DOC="${ROOT_DIR}/docs/releases/v0.4.1.md"
-RELEASE_DEVLOG="${ROOT_DIR}/docs/devlog/2026-08-12-release-v0.4.1.md"
+RELEASE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md"
 BUILD_PKG="${ROOT_DIR}/scripts/build-pkg.sh"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
@@ -42,7 +42,7 @@ require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
 for file in \
     "${CI}" "${RELEASE}" "${MATRIX}" "${PROJECT_STATE}" "${INDEX}" "${RELEASE_DOC}" \
-    "${RELEASE_DEVLOG}" "${BUILD_PKG}" "${VERSION_FILE}" "${MAKEFILE}" "${CORRECTIVE_MATRIX}" \
+    "${RELEASE_EVIDENCE}" "${BUILD_PKG}" "${VERSION_FILE}" "${MAKEFILE}" "${CORRECTIVE_MATRIX}" \
     "${ADAPTIVE_BUDGET_TEST}" "${ADAPTIVE_BUDGET_PY}" "${ADAPTIVE_BUDGET_DOC}" \
     "${ADAPTIVE_BUDGET_PATCH}" "${COMPAT_PY}" "${MODEL_B_PRODUCTION_TEST}" \
     "${MODEL_C_PRODUCTION_TEST}" "${SOURCE_PORT_LEASE_TEST}" "${MODEL_B_PRODUCTION_PY}" \
@@ -65,11 +65,11 @@ version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; exit}' "${MAKEFILE}")
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
-[ "${version}" = '0.4.1' ] || fail "v0.4.1 release preparation must use VERSION=0.4.1"
-[ "${revision}" -eq 1 ] || fail 'v0.4.1 release preparation must reset PLUGIN_REVISION=1'
-[ "${candidate}" = 'os-zapret2-restyle-0.4.1_1.pkg' ] || fail 'unexpected release package identity'
+[ "${version}" = '0.4.1' ] || fail "published source must use VERSION=0.4.1"
+[ "${revision}" -eq 1 ] || fail 'published v0.4.1 must retain PLUGIN_REVISION=1'
+[ "${candidate}" = 'os-zapret2-restyle-0.4.1_1.pkg' ] || fail 'unexpected published package identity'
 
-# Package construction and ABI/runtime requirements remain unchanged by the version bump.
+# Package construction and ABI/runtime requirements.
 grep -Eq '^PLUGIN_DEPENDS=[[:space:]]+python313([[:space:]]|$)' "${MAKEFILE}" || fail 'python313 dependency is missing'
 require "${BUILD_PKG}" 'python313)  echo "lang/python313"'
 require "${BUILD_PKG}" 'cp -R src/opnsense "${STAGE}/usr/local/opnsense"'
@@ -89,8 +89,8 @@ require "${CI}" '.deps.python313.origin == "lang/python313"'
 require "${CI}" 'freebsd-version -u'
 require "${CI}" 'scripts/test-freebsd15-package-ci'
 
-# Full stable release workflow still derives package identity from VERSION/PLUGIN_REVISION
-# and publishes the FreeBSD 15 package, checksum, release assets and Pages repository.
+# Full release workflow still derives identity from VERSION/PLUGIN_REVISION and publishes
+# the FreeBSD 15 package, checksum, GitHub Release assets and Pages repository.
 require "${RELEASE}" 'VERSION_VALUE=$(tr -d '\''[:space:]'\'' < VERSION)'
 require "${RELEASE}" 'REVISION=$(sed -n '\''s/^PLUGIN_REVISION=[[:space:]]*//p'\'' Makefile | head -1)'
 require "${RELEASE}" 'PACKAGE_VERSION="${VERSION_VALUE}_${REVISION}"'
@@ -116,7 +116,7 @@ do
     require "${CI}" "STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/${test}"
 done
 
-# Canonical corrective matrix and current runtime source contracts remain mandatory.
+# Canonical corrective matrix and accepted runtime source contracts remain mandatory.
 require "${CORRECTIVE_MATRIX}" "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy-lab-*.sh'"
 require "${ADAPTIVE_BUDGET_TEST}" 'PASS: Strategy Lab derives finite parent budgets from measured endpoint/capability/protocol work'
 require "${ADAPTIVE_BUDGET_PY}" 'POLICY = "eligible-work-v1"'
@@ -188,22 +188,32 @@ do
     [ -e "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/${installed}" ] || fail "packaged source path is missing: ${installed}"
 done
 
-# Release-preparation identity and selected live basis must both remain truthful.
-require "${PROJECT_STATE}" 'Current release-preparation source line: `VERSION=0.4.1`, `PLUGIN_REVISION=1`'
-require "${PROJECT_STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_1.pkg`'
-require "${PROJECT_STATE}" 'Latest published testing prerelease: `v0.4.0_26`'
-require "${PROJECT_STATE}" 'Latest owner-tested runtime candidate: `v0.4.0_26` — adaptive-budget owner-live PASS'
-require "${PROJECT_STATE}" 'job.xhdgCU'
+# Current published package/release boundary and exact publication evidence.
+require "${PROJECT_STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=1`'
+require "${PROJECT_STATE}" 'Current published release tag: `v0.4.1`'
+require "${PROJECT_STATE}" 'Current published package: `os-zapret2-restyle-0.4.1_1.pkg`'
+require "${PROJECT_STATE}" 'Latest owner-tested runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
+require "${PROJECT_STATE}" 'c53e1c1656517fa764f97a175bb82eea02dbc374'
+require "${PROJECT_STATE}" '31596979559'
+require "${PROJECT_STATE}" 'sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e'
+require "${PROJECT_STATE}" '2026-08-12-v0.4.1-release-publication.md'
 require "${INDEX}" 'docs/releases/v0.4.1.md'
-require "${INDEX}" 'docs/devlog/2026-08-12-release-v0.4.1.md'
+require "${INDEX}" '2026-08-12-v0.4.1-release-publication.md'
 require "${RELEASE_DOC}" '`v0.4.1_1: Prepare release v0.4.1`'
-require "${RELEASE_DEVLOG}" '`VERSION`: `0.4.1`'
-require "${RELEASE_DEVLOG}" '`PLUGIN_REVISION`: `1`'
-require "${MATRIX}" 'Current release-preparation source candidate: `os-zapret2-restyle-0.4.1_1.pkg`'
+require "${MATRIX}" 'Current published release package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${MATRIX}" 'Latest owner-tested runtime package: `os-zapret2-restyle-0.4.0_26.pkg`'
 require "${MATRIX}" '`v0.4.1` RELEASE-SELECTED LIVE BASIS — PASS ON `_26`'
 
-# Immutable `_26` evidence remains the exact accepted runtime input to this metadata-only release.
+require "${RELEASE_EVIDENCE}" 'Status: **PUBLISHED**'
+require "${RELEASE_EVIDENCE}" 'c53e1c1656517fa764f97a175bb82eea02dbc374'
+require "${RELEASE_EVIDENCE}" '31596967737'
+require "${RELEASE_EVIDENCE}" '31596979559'
+require "${RELEASE_EVIDENCE}" 'os-zapret2-restyle-0.4.1_1.pkg'
+require "${RELEASE_EVIDENCE}" '180305'
+require "${RELEASE_EVIDENCE}" 'sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e'
+require "${RELEASE_EVIDENCE}" '5869308071'
+
+# Immutable `_26` evidence remains the exact accepted runtime input to the version-only promotion.
 require "${PUBLICATION26}" '8ada9cba28916fff506f19b34f5ef3de16e2008e'
 require "${PUBLICATION26}" 'sha256:f5466c21c014bf594afcc80aac49b948db45513b33fe46d4857eded75bc8af8c'
 require "${LIVE26}" 'Status: **PASS**'
@@ -215,4 +225,4 @@ require "${MODEL_C_LIVE}" 'job.FaLtIk'
 require "${MODEL_B_LIVE}" 'PRODUCTION STAGE-60 MODEL B OWNER-LIVE PASS'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI qualifies ${candidate} release preparation on accepted _26 runtime contracts"
+printf '%s\n' "PASS: FreeBSD 15 package CI records published ${candidate} with exact release and _26 runtime evidence"

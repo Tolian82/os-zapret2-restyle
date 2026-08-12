@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1 / 0.4.1_1` RELEASE PREPARATION PROMOTES THE OWNER-TESTED `v0.4.0_26` MODEL-C/ADAPTIVE-BUDGET RUNTIME; `_26` OWNER-LIVE PASS REMAINS THE SELECTED LIVE RELEASE BASIS; `_22` REMAINS THE ACCEPTED MODEL-B FALLBACK BASELINE.**
+Overall status: **`v0.4.1 / 0.4.1_1` PUBLISHED; `_26` OWNER-LIVE PASS REMAINS THE SELECTED UNCHANGED RUNTIME BASIS; `_22` REMAINS THE ACCEPTED MODEL-B FALLBACK BASELINE.**
 
 This matrix is the canonical live-appliance regression inventory. Source tests, GitHub CI
 and FreeBSD package builds do not substitute for selected owner-live evidence. Detailed
@@ -17,11 +17,12 @@ TEST / RELEASE RECORD
 - Tester: repository owner
 - Latest completed live test date: `2026-08-12`
 - OPNsense: `26.7.1_1`; FreeBSD 15 amd64
-- Current release-preparation source candidate: `os-zapret2-restyle-0.4.1_1.pkg`
-- Current published testing package: `os-zapret2-restyle-0.4.0_26.pkg`
+- Current published release package: `os-zapret2-restyle-0.4.1_1.pkg`
+- Current published release tag: `v0.4.1`
 - Latest owner-tested runtime package: `os-zapret2-restyle-0.4.0_26.pkg`
+- v0.4.1 release merge: `c53e1c1656517fa764f97a175bb82eea02dbc374`
+- v0.4.1 package digest: `sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e`
 - `_26` runtime commit: `8ada9cba28916fff506f19b34f5ef3de16e2008e`
-- `_26` published asset digest: `sha256:f5466c21c014bf594afcc80aac49b948db45513b33fe46d4857eded75bc8af8c`
 - Preferred Stage-60 model: `C-warm-bucket-source-port-dispatch`
 - Immediate fallback/reference: `B-warm-worker-parallel-batched`
 - Final fallback: cold Model A
@@ -31,7 +32,7 @@ TEST / RELEASE RECORD
 Current release authority:
 
 - `docs/releases/v0.4.1.md`;
-- `docs/devlog/2026-08-12-release-v0.4.1.md`;
+- `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`;
 - `docs/PROJECT_STATE.md`;
 - `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
 
@@ -44,20 +45,19 @@ Current runtime evidence authority:
 - `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
 - `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`.
 
+The published `0.4.1_1` package has not yet been separately claimed as installed on the
+owner appliance. The release-preparation patch changed version/release metadata and
+version-aware contracts, not Strategy Lab runtime semantics, so the accepted `_26` appliance
+run remains the truthful selected live basis.
+
 ==================================================
 `v0.4.1` RELEASE-SELECTED LIVE BASIS — PASS ON `_26`
 ==================================================
 
-The v0.4.1 release-preparation change modifies VERSION/revision, release documentation and
-version-aware verification contracts only. It does not modify Strategy Lab runtime source.
-Under the active risk-based release policy, the already accepted `_26` owner-live evidence
-is therefore the selected live basis for the full release; unrelated pending rows remain
-regression backlog and are not fabricated as PASS.
-
 ### Extended telegram.org — `job.xhdgCU`
 
-Published package `os-zapret2-restyle-0.4.0_26` completed the selected production-wiring
-gate.
+Published testing package `os-zapret2-restyle-0.4.0_26` completed the selected production-
+wiring gate inherited by v0.4.1.
 
 `adaptive-budget.json` recorded `policy=eligible-work-v1` with the actual work matrix:
 
@@ -163,6 +163,8 @@ RETAINED PROGRESSION
 - `_25` corrected source-port leasing and fallback ownership (`_24` intentionally skipped).
 - `_26` implemented workload-derived finite parent budgets and passed owner-live
   production-wiring verification.
+- v0.4.1 promoted the accepted testing line through exact release-preparation, semantic tag,
+  FreeBSD 15 package/checksum, GitHub Release and Pages/pkg repository publication.
 
 ==================================================
 SCENARIO MATRIX
@@ -197,9 +199,7 @@ A selected live path fails if restoration is unverified, saved strategy changes
 unexpectedly, temporary workers/rules remain, lifecycle ownership is violated, a result is
 falsely classified, or an adaptive plan does not match measured capabilities.
 
-For v0.4.1 the release-preparation patch introduces no new runtime behavior and therefore
-uses the accepted `_26` owner-live record as its selected live basis. The release is still
-blocked by a failed release-preparation CI/FreeBSD build, invalid tag placement, failed
-Release/Pages publication, or any newly discovered critical runtime/restoration defect.
-Broader pending rows remain risk-selected regression backlog, not an all-or-nothing release
-checklist.
+For v0.4.1, publication gates are complete. The unchanged runtime used accepted `_26`
+owner-live evidence as its selected live basis. Broader pending rows remain risk-selected
+regression backlog, not an all-or-nothing release checklist. Any later runtime-affecting
+change must select and execute its own appropriate live gate.

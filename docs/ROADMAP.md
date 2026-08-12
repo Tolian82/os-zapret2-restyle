@@ -23,28 +23,20 @@ Detailed rationale, current live logs, or completed implementation internals.
 CURRENT PRIORITY
 ==================================================
 
+Stable project publication `v0.4.1` / package `os-zapret2-restyle-0.4.1_1.pkg` is complete.
 The Strategy Lab Python migration, adaptive-search redesign, Model-A measurement,
 controlled-parallel Model B, preferred Model C, source-port lease correction and adaptive
-workload budget are complete through the published and owner-tested `v0.4.0_26` runtime.
-
-Current objective:
-**complete the owner-authorized full `v0.4.1 / 0.4.1_1` release cycle from that accepted
-runtime without changing Strategy Lab behavior in the release-preparation patch.**
+workload budget are all retained as the current accepted architecture.
 
 Current state authority:
 `docs/PROJECT_STATE.md`.
 
-Release authority:
+Current release evidence:
+`docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`.
 
-- `docs/releases/v0.4.1.md`;
-- `docs/devlog/2026-08-12-release-v0.4.1.md`;
-- `docs/GITHUB_PUBLICATION.md`;
-- `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
-
-The release cycle is complete only after the release-preparation PR passes, exact squash
-merge is verified, immutable semantic tag `v0.4.1` is created at that merge, and the full
-Release workflow publishes package `os-zapret2-restyle-0.4.1_1.pkg`, checksum and matching
-`FreeBSD:15:amd64` Pages/pkg repository.
+The next engineering cycle may proceed from `main`. New work must be selected as one
+independent logical change with its own risk-based verification rather than reopening the
+completed v0.4.1 publication cycle.
 
 ==================================================
 COMPLETED STRATEGY LAB FOUNDATION
@@ -125,36 +117,35 @@ COMPLETED ADAPTIVE BUDGET CYCLE — `_26`
 - [x] owner-live Extended `telegram.org`, `job.xhdgCU`, proved production wiring, Model-C
   16/16 no-fallback execution, exact measured budget persistence and clean restoration.
 
-`v0.4.0_26` is therefore the accepted runtime basis being promoted to v0.4.1.
-
 ==================================================
-CURRENT RELEASE CYCLE — `v0.4.1 / 0.4.1_1`
+COMPLETED RELEASE CYCLE — `v0.4.1 / 0.4.1_1`
 ==================================================
-
-Release preparation:
 
 - [x] owner authorization received for v0.4.1 package revision 1;
 - [x] set `VERSION=0.4.1`;
 - [x] reset `PLUGIN_REVISION=1`;
 - [x] synchronize README, changelog, current state, Engineering Memory, release record,
   live-release boundary and version-aware CI contracts;
-- [ ] pass the complete applicable PR CI and FreeBSD 15 package build;
-- [ ] squash merge with exact subject `v0.4.1_1: Prepare release v0.4.1`;
-- [ ] verify immutable semantic tag `v0.4.1` at the exact merge commit;
-- [ ] verify full Release workflow success;
-- [ ] verify package `os-zapret2-restyle-0.4.1_1.pkg` and checksum;
-- [ ] verify matching Pages/pkg repository publication;
-- [ ] record durable release-publication evidence and current-state closeout.
+- [x] complete applicable PR CI and FreeBSD 15 package build;
+- [x] squash merge PR #185 with exact subject `v0.4.1_1: Prepare release v0.4.1`;
+- [x] verify semantic tag `v0.4.1` at exact merge `c53e1c1656517fa764f97a175bb82eea02dbc374`;
+- [x] verify Release trigger run `31596967737` SUCCESS;
+- [x] verify full Release workflow run `31596979559` SUCCESS;
+- [x] verify package `os-zapret2-restyle-0.4.1_1.pkg`, size `180305` bytes and digest
+  `sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e`;
+- [x] verify matching `SHA256SUMS`;
+- [x] verify GitHub Release ID `369226460` publication;
+- [x] verify Pages/pkg repository deployment `5869308071` SUCCESS;
+- [x] record durable release-publication evidence and current-state closeout.
 
-The release-preparation change itself adds no new runtime behavior, so accepted `_26`
-owner-live evidence is the risk-selected live basis. Pending unrelated matrix rows are not
-converted to false PASS claims.
+The workflow-created GitHub Release is currently marked prerelease by the existing release
+workflow. No v0.4.1 publication task remains pending.
 
 ==================================================
 FOLLOW-UP OPTIMIZATION BACKLOG
 ==================================================
 
-After v0.4.1 publication, independent optimization ideas remain separate work items:
+Independent optimization ideas remain separate work items:
 
 - common Lua preload versus candidate-minimal initialization;
 - BLOB loading/startup/RSS tradeoffs;
@@ -193,9 +184,8 @@ Retained backlog includes:
 RELEASE BOUNDARY
 ==================================================
 
-Stable `v0.4.0` remains immutable. The current release-preparation source line is v0.4.1
-revision 1. By project protocol the stable Git tag is semantic `v0.4.1`; `_1` belongs to
-the package identity `os-zapret2-restyle-0.4.1_1.pkg`.
+Published semantic tag `v0.4.1` and its release assets are immutable project history. The
+current package identity is `os-zapret2-restyle-0.4.1_1.pkg` for `FreeBSD:15:amd64`.
 
 Future stable releases require their own exact VERSION authorization, risk-selected live
 basis, revision reset to `1`, release-preparation PR and full Release/Pages/pkg-repository

@@ -16,33 +16,46 @@ QUICK CONTEXT
 
 Project: `os-zapret2-restyle`
 Primary branch: `main`
-Current release-preparation source line: `VERSION=0.4.1`, `PLUGIN_REVISION=1`
-Current source candidate: `os-zapret2-restyle-0.4.1_1.pkg`
-Previous stable release: `v0.4.0`
-Latest published testing prerelease: `v0.4.0_26`
-Latest owner-tested runtime candidate: `v0.4.0_26` — adaptive-budget owner-live PASS
+Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=1`
+Current published release tag: `v0.4.1`
+Current published package: `os-zapret2-restyle-0.4.1_1.pkg`
+Latest owner-tested runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS
 Required package ABI: `FreeBSD:15:amd64`
 
-The owner has authorized the full `v0.4.1 / 0.4.1_1` release cycle. Release preparation
-promotes the already accepted `_26` runtime without adding new runtime behavior.
+Published v0.4.1 identity:
 
-Release-preparation authority:
+- release-preparation merge `c53e1c1656517fa764f97a175bb82eea02dbc374`;
+- merge tree `74e3a67cb25c0e80bc0c00f7214e8c00c3daa7b9`;
+- semantic tag `v0.4.1`;
+- annotated tag object `8c860a01def48a3b84943a43ba0c5a30d9f37055` targeting the exact merge;
+- Release workflow run `31596979559` — SUCCESS;
+- GitHub Release ID `369226460`;
+- package `os-zapret2-restyle-0.4.1_1.pkg`;
+- package size `180305` bytes;
+- package digest `sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e`;
+- GitHub Pages deployment `5869308071` — SUCCESS;
+- publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`.
 
-- `docs/releases/v0.4.1.md`;
-- `docs/devlog/2026-08-12-release-v0.4.1.md`;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`;
-- `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`;
-- `docs/GITHUB_PUBLICATION.md`.
+The workflow-created GitHub Release currently has `prerelease=true`; this is the existing
+release-workflow behavior and does not change the semantic tag/package identity above.
+
+The `0.4.1_1` package has been built, checksum-verified, attached to the GitHub Release and
+published to the project `FreeBSD:15:amd64` Pages/pkg repository. It has not yet been
+claimed as separately installed on the owner appliance in the durable evidence record.
 
 Active GitHub delivery authority:
 `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
 
-Active Strategy Lab implementation authority remains:
+Active Strategy Lab ownership authority:
+`docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
+
+Current Strategy Lab authorities:
 
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
-- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
+- `docs/patches/v0.4.0_26.md`;
+- `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`.
 
 Current Stage-60 preferred model: `C-warm-bucket-source-port-dispatch`.
 Immediate fallback/reference: `B-warm-worker-parallel-batched`.
@@ -51,22 +64,11 @@ Candidate width remains at most 3; pinned endpoints inside one candidate remain 
 there is no CPU-count gate.
 
 ==================================================
-ACCEPTED RELEASE RUNTIME BASIS — `v0.4.0_26`
+ACCEPTED OWNER-LIVE RUNTIME BASIS
 ==================================================
 
-Published `_26` identity:
-
-- runtime commit `8ada9cba28916fff506f19b34f5ef3de16e2008e`;
-- runtime tree `170c54cb8b8a354e4052898ea5db8b1e36a1bb61`;
-- package `os-zapret2-restyle-0.4.0_26.pkg`;
-- size `180306` bytes;
-- digest `sha256:f5466c21c014bf594afcc80aac49b948db45513b33fe46d4857eded75bc8af8c`;
-- publication workflow run `31584348303` — SUCCESS;
-- publication evidence: `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`.
-
-Latest accepted owner-live evidence:
-`docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`.
-
+The v0.4.1 release-preparation change did not alter Strategy Lab runtime behavior beyond the
+published and owner-tested `v0.4.0_26` testing line. The selected live basis remains
 Extended `telegram.org`, `job.xhdgCU`:
 
 - `adaptive-budget.json` persisted `policy=eligible-work-v1`;
@@ -85,62 +87,45 @@ Extended `telegram.org`, `job.xhdgCU`:
 - post-job Zapret2 remained RUNNING;
 - rules `19128-19130` left no residue.
 
-This closes the current adaptive-budget production-wiring risk and supplies the selected
-live release basis for v0.4.1. Earlier accepted evidence retains the Model-C working path,
-source-port collision correction and Model-B fallback/reference behavior.
+Earlier accepted evidence retains the Model-C working-candidate path, source-port collision
+correction and Model-B fallback/reference behavior.
 
 ==================================================
-RELEASE CONTENT SINCE `v0.4.0`
+V0.4.1 CONTENT SINCE V0.4.0
 ==================================================
 
-The 0.4.0 testing line completed the previously approved adaptive-search and runtime-model
-work rather than leaving it experimental:
+The v0.4.1 line promotes the completed adaptive-search/runtime work from the v0.4.0 testing
+series:
 
-- Python `CandidateSpec` and job-scoped `ResourceInventory` became immutable candidate
-  evidence;
-- Stage 50 became prioritization evidence rather than a Stage-60 reachability hard gate;
-- Stage 60 moved to a deterministic native Zapret2 graph with candidate-defined resources,
-  ranges and fixed endpoint epoch;
-- deadline containment, stability/finalist validation and timing telemetry were completed;
-- cold Model A was measured and retained as correctness fallback/reference;
-- warm Model B was proven, corrected for failed-probe attribution, parallelized at width
-  three and integrated as the immediate fallback/reference;
-- Model C became the preferred one-worker bucket/source-port dispatcher;
-- controlled source-port leasing now uses `preferred-free-else-alternate` and a fresh lease
-  for fallback models;
-- `eligible-work-v1` derives finite parent budgets after Stage 30 from measured eligible
-  work rather than blindly enlarging one timeout.
-
-No package/runtime source is intentionally changed by the v0.4.1 release-preparation patch
-itself; only version/release metadata, release documentation and version-aware verification
-contracts change.
+- immutable Python `CandidateSpec` and job-scoped `ResourceInventory` evidence;
+- deterministic native Zapret2 Stage-60 graph with candidate-defined resources/ranges and
+  fixed endpoint epoch;
+- Stage-50 priority evidence without a Stage-60 family reachability hard gate;
+- bounded deadline containment, stability/finalist validation and timing telemetry;
+- measured cold Model A correctness/reference;
+- accepted width-three warm Model B fallback/reference with corrected failed-probe
+  attribution;
+- preferred one-worker Model C dispatcher;
+- `preferred-free-else-alternate` controlled source-port leasing with fresh fallback lease;
+- `eligible-work-v1` finite parent budgets derived after Stage 30 from measured eligible
+  work.
 
 ==================================================
-CURRENT VERIFICATION / RELEASE BOUNDARY
+CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
-All selected runtime gates inherited by v0.4.1 are complete on `_26`:
+The v0.4.1 release cycle is complete:
 
-- focused adaptive-budget contract — PASS;
-- canonical Strategy Lab corrective matrix — PASS;
-- Python orchestration/migration continuity — PASS;
-- FreeBSD 15 package contract/build — PASS;
-- testing prerelease `v0.4.0_26` — PUBLISHED and verified;
-- owner-live Extended `telegram.org`, `job.xhdgCU` — PASS;
-- production Model C no-fallback path — PASS;
-- Stage-90 restoration and temporary-rule cleanup — PASS.
+- release-preparation PR #185 — MERGED;
+- required PR title/CI/FreeBSD 15 build — PASS;
+- exact merge commit — VERIFIED;
+- semantic tag `v0.4.1` — VERIFIED at exact merge;
+- Release trigger run `31596967737` — SUCCESS;
+- Release workflow run `31596979559` — SUCCESS;
+- package/checksum publication — VERIFIED;
+- GitHub Release publication — VERIFIED;
+- Pages/pkg repository deployment — VERIFIED.
 
-The release-preparation PR must now pass its current CI/FreeBSD 15 package checks and be
-squash-merged with exact subject:
-
-`v0.4.1_1: Prepare release v0.4.1`
-
-After that merge, the repository release trigger must create immutable semantic tag
-`v0.4.1` at the merge commit and the Release workflow must publish and verify:
-
-- package `os-zapret2-restyle-0.4.1_1.pkg`;
-- matching `SHA256SUMS`;
-- GitHub Release assets;
-- matching `FreeBSD:15:amd64` Pages/pkg repository.
-
-The semantic release tag is `v0.4.1`; `_1` is the package revision suffix.
+No further v0.4.1 publication work is pending. The next engineering cycle can proceed from
+`main` while retaining the broader owner-assisted Strategy Lab scenario matrix as
+risk-selected regression backlog rather than an all-or-nothing release blocker.
