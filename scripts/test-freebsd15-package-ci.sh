@@ -25,6 +25,10 @@ BLOB_WRAPPER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_blob
 BLOB_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_blob_measurement_worker.sh"
 BLOB_DOC="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_BLOB_LOADING.md"
 BLOB_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_4.md"
+DISCOVERY_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/discovery_probe_measurement.py"
+DISCOVERY_WRAPPER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_discovery_probe_measurement.sh"
+DISCOVERY_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_discovery_probe_measurement_worker.sh"
+DISCOVERY_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_5.md"
 RESOURCES_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/resources.py"
 ADAPTIVE_BUDGET_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_budget.py"
 MODEL_C_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_model_c.py"
@@ -44,8 +48,8 @@ for file in \
     "${RELEASE_EVIDENCE}" "${LUA_PUBLICATION}" "${LUA_LIVE}" "${BLOB_PUBLICATION}" "${BLOB_LIVE}" \
     "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${BUILD_PKG}" "${VERSION_FILE}" "${MAKEFILE}" "${CORRECTIVE_MATRIX}" \
     "${LUA_PY}" "${BLOB_TEST}" "${BLOB_PY}" "${BLOB_WRAPPER}" "${BLOB_WORKER}" \
-    "${BLOB_DOC}" "${BLOB_PATCH}" "${RESOURCES_PY}" "${ADAPTIVE_BUDGET_PY}" \
-    "${MODEL_C_PY}" "${MODEL_B_PY}" "${LEASE_PY}" "${PYTHON_ENTRY}" \
+    "${BLOB_DOC}" "${BLOB_PATCH}" "${DISCOVERY_PY}" "${DISCOVERY_WRAPPER}" "${DISCOVERY_WORKER}" "${DISCOVERY_PATCH}" \
+    "${RESOURCES_PY}" "${ADAPTIVE_BUDGET_PY}" "${MODEL_C_PY}" "${MODEL_B_PY}" "${LEASE_PY}" "${PYTHON_ENTRY}" \
     "${PUBLICATION26}" "${LIVE26}" "${MODEL_C_CORRECTIVE_PASS}" "${MODEL_B_LIVE}"
 do
     [ -s "${file}" ] || fail "required file is missing: ${file}"
@@ -56,8 +60,8 @@ revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; 
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${version}" = '0.4.1' ] || fail 'measurement line must retain VERSION=0.4.1'
-[ "${revision}" -eq 4 ] || fail 'BLOB common-set package must use PLUGIN_REVISION=4'
-[ "${candidate}" = 'os-zapret2-restyle-0.4.1_4.pkg' ] || fail 'unexpected common-set package identity'
+[ "${revision}" -eq 5 ] || fail 'discovery measurement package must use PLUGIN_REVISION=5'
+[ "${candidate}" = 'os-zapret2-restyle-0.4.1_5.pkg' ] || fail 'unexpected discovery measurement package identity'
 
 grep -Eq '^PLUGIN_DEPENDS=[[:space:]]+python313([[:space:]]|$)' "${MAKEFILE}" || fail 'python313 dependency is missing'
 require "${BUILD_PKG}" 'python313)  echo "lang/python313"'
@@ -119,10 +123,22 @@ require "${BLOB_WRAPPER}" 'zapret2-lifecycle.lock'
 require "${BLOB_WRAPPER}" 'TRIALS="${2:-12}"'
 require "${BLOB_WORKER}" 'strategy-lab-evidence'
 if grep -Fq 'route-add' "${BLOB_WORKER}" || grep -Fq 'strategy-lab-stop' "${BLOB_WORKER}"; then
-    fail 'measurement worker must not route traffic or stop production Zapret'
+    fail 'BLOB measurement worker must not route traffic or stop production Zapret'
 fi
 require "${PYTHON_ENTRY}" 'from strategy_lab_py import blob_startup_measurement'
 require "${PYTHON_ENTRY}" 'blob-startup-measure'
+
+require "${DISCOVERY_PY}" 'POLICY = "discovery-probe-agreement-v1"'
+require "${DISCOVERY_PY}" 'VARIANTS = ("head", "get-1", "get-4k", "deep-16k")'
+require "${DISCOVERY_PY}" 'production_discovery_policy_changed": False'
+require "${DISCOVERY_PY}" 'production_change_recommended": False'
+require "${DISCOVERY_WRAPPER}" 'zapret2-lifecycle.lock'
+require "${DISCOVERY_WORKER}" 'strategy-lab-evidence'
+require "${DISCOVERY_WORKER}" 'strategy-lab-stop'
+require "${PYTHON_ENTRY}" 'from strategy_lab_py import discovery_probe_measurement'
+require "${PYTHON_ENTRY}" 'discovery-probe-measure'
+require "${DISCOVERY_PATCH}" 'GitHub Actions FreeBSD-15 build artifact'
+require "${DISCOVERY_PATCH}" 'not** a tag, GitHub Release, prerelease, Pages update, or package-repository publication'
 
 require "${ADAPTIVE_BUDGET_PY}" 'POLICY = "eligible-work-v1"'
 require "${MODEL_C_PY}" 'MODEL = "C-warm-bucket-source-port-dispatch"'
@@ -150,21 +166,25 @@ for installed in \
     strategy_lab_py/stage60_source_port_lease.py \
     strategy_lab_py/lua_initialization_measurement.py \
     strategy_lab_py/blob_startup_measurement.py \
+    strategy_lab_py/discovery_probe_measurement.py \
     strategy_lab_model_c.lua \
     strategy_lab_blob_measurement.sh \
     strategy_lab_blob_measurement_worker.sh \
+    strategy_lab_discovery_probe_measurement.sh \
+    strategy_lab_discovery_probe_measurement_worker.sh \
     strategy_lab_python.py
 do
     [ -e "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/${installed}" ] || fail "packaged source path is missing: ${installed}"
 done
 
-require "${PROJECT_STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=4`'
-require "${PROJECT_STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_4.pkg`'
+require "${PROJECT_STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=5`'
+require "${PROJECT_STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_5.pkg`'
 require "${PROJECT_STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${PROJECT_STATE}" 'Latest published testing prerelease: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`'
 require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.1_4` — BLOB common-set scaling measurement PASS'
 require "${PROJECT_STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
-require "${PROJECT_STATE}" 'V0.4.1_4 BLOB COMMON-SET SCALING — ACCEPTED / OPTIMIZATION CLOSED'
+require "${PROJECT_STATE}" 'V0.4.1_5 DISCOVERY PROBE AGREEMENT — SOURCE CANDIDATE'
+require "${PROJECT_STATE}" 'no `_5` tag/Release/prerelease/Pages/pkg-repository publication is part of this task'
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
 require "${INDEX}" 'docs/patches/v0.4.1_4.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md'
@@ -210,4 +230,4 @@ require "${MODEL_C_CORRECTIVE_PASS}" 'job.5yGde5'
 require "${MODEL_B_LIVE}" 'PRODUCTION STAGE-60 MODEL B OWNER-LIVE PASS'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI accepts published ${candidate} common-set owner-live evidence while production runtime truth remains v0.4.0_26"
+printf '%s\n' "PASS: FreeBSD 15 package CI accepts measurement-only ${candidate} while published/runtime truth remains unchanged"
