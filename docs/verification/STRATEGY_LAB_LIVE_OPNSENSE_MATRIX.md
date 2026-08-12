@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.0_25` SOURCE-PORT CORRECTIVE PENDING OWNER-LIVE VERIFICATION; `_23` PROVED MODEL C LIVE AND EXPOSED THE SHARED `42004` COLLISION; `_22` REMAINS THE ACCEPTED MODEL-B FALLBACK BASELINE.**
+Overall status: **`v0.4.0_25` SOURCE-PORT CORRECTIVE OWNER-LIVE PASS; MODEL C 16/16 NO-FALLBACK TELEGRAM PATH VERIFIED; `_22` REMAINS THE ACCEPTED MODEL-B FALLBACK BASELINE.**
 
 This matrix is the canonical live-appliance regression inventory. Source tests, GitHub CI
 and FreeBSD package builds do not substitute for selected owner-live evidence. Detailed
@@ -15,10 +15,10 @@ TEST RECORD
 ==================================================
 
 - Tester: repository owner
-- Latest completed test date: `2026-08-11`
+- Latest completed test date: `2026-08-12`
 - OPNsense: `26.7.1_1`; FreeBSD 15 amd64
 - Current source candidate: `os-zapret2-restyle-0.4.0_25.pkg`
-- Latest published/owner-tested package before `_25`: `os-zapret2-restyle-0.4.0_23.pkg`
+- Current published/owner-tested package: `os-zapret2-restyle-0.4.0_25.pkg`
 - Preferred Stage-60 model: `C-warm-bucket-source-port-dispatch`
 - Immediate fallback/reference: `B-warm-worker-parallel-batched`
 - Final fallback: cold Model A
@@ -28,8 +28,49 @@ TEST RECORD
 Current change authority:
 
 - `docs/patches/v0.4.0_25.md`;
+- `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
 - `docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md`;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`.
+
+==================================================
+`_25` OWNER-LIVE SOURCE-PORT CORRECTIVE PASS
+==================================================
+
+### Extended telegram.org — `job.5yGde5`
+
+- installed package `os-zapret2-restyle-0.4.0_25`;
+- pre-test Zapret2 RUNNING; rules `19128-19130` absent;
+- IPv4 available; IPv6 unavailable; QUIC/IPv4 closed; Generic UDP inactive;
+- Stage 60 genuinely used `C-warm-bucket-source-port-dispatch`;
+- 16/16 candidates completed, zero winners, `stopped_reason=graph_exhausted`;
+- `.parallel.fallbacks=[]` — no Model-B or cold-Model-A fallback;
+- Stage 60 duration `34198 ms`;
+- total job duration `114759 ms`;
+- Stage 80 completed with QUIC/UDP skipped by current capability/input;
+- Stage 90 restoration PASS;
+- Stage 99 `NO_CANDIDATE`;
+- post-job `configctl zapret status` RUNNING, pid `87046` at observation time;
+- post-job rules `19128-19130` absent.
+
+All six Stage-60 batches persisted `_25` source-port lease evidence:
+
+- `policy=preferred-free-else-alternate`;
+- `foreign_port_action=skip-only`;
+- exact preferred and leased ports persisted for every candidate/endpoint;
+- no preferred port happened to be occupied in this run, therefore all batches recorded
+  `collisions=[]`, `replacement_count=0`, `alternate_scan_count=0`.
+
+The `_25` fallback contract is unchanged: if Model C becomes unavailable, Model B obtains a
+**fresh lease** rather than inheriting Model C's failed concrete source-port allocation.
+
+This closes the selected `_25` live gate. It proves production Model C uses the lease wrapper
+and that the previous `_23` Extended Telegram failure path no longer falls C -> B -> cold A
+and times out. This run does not fabricate a foreign-port collision; alternate replacement
+under an intentionally occupied preferred port remains covered by the focused automated
+`_25` source-port lease contract.
+
+Durable evidence:
+`docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`.
 
 ==================================================
 `_23` OWNER-LIVE MODEL-C EVIDENCE
@@ -47,7 +88,7 @@ Current change authority:
 - Stage 70/80/85 succeeded;
 - semantic Stage-90 restoration succeeded.
 
-This run proves that the one-worker Model-C dispatcher is viable on the owner appliance.
+This run proved that the one-worker Model-C dispatcher is viable on the owner appliance.
 
 ### Extended telegram.org — `job.G0wC5l`
 
@@ -60,39 +101,15 @@ This run proves that the one-worker Model-C dispatcher is viable on the owner ap
 - restoration was exact RUNNING -> RUNNING with identical runtime/config/firewall hashes and
   `temporary_runtime_clean=true`.
 
-This is a source-port ownership/fallback amplification defect, not the historical `_7`/`_8`
-fixed-parent-timeout defect and not a lifecycle-restoration failure.
-
-==================================================
-CURRENT `_25` CHANGE-SPECIFIC LIVE GATE
-==================================================
-
-`_25` keeps deterministic `42000+` values as preferred ports but leases exact free concrete
-ports per admitted warm batch. Foreign occupied ports are skipped without destructive
-action. Model B fallback performs a fresh lease rather than inheriting Model C's failed
-concrete port. Exact IPFW/curl/endpoint attribution remains unchanged.
-
-Required first live recheck after publication:
-
-1. Extended `telegram.org` completes through normal Model C unless another genuine
-   infrastructure failure occurs.
-2. If preferred `42004` (or another preferred port) is occupied, Stage-60 evidence records a
-   lease replacement rather than a shared Model-C/Model-B collision.
-3. Model-C `selector_ports` use the actual leased ports.
-4. Successful probes retain connected endpoint/local-port identity; failed probes retain
-   exact command source-port + pinned `--resolve` + exact IPFW counter growth + cleanup.
-5. Stage 90 restores the original semantic service state and rules `19128-19130` leave no
-   residue.
-
-Timeout values are intentionally unchanged in `_25` so the source-port correction is
-measured without hiding accidental cold fallback behind a larger limit.
+This source-port ownership/fallback amplification defect is corrected and owner-live closed
+by `_25`. It was not the historical `_7`/`_8` fixed-parent-timeout defect and was not a
+lifecycle-restoration failure.
 
 ==================================================
 FOLLOW-UP TIMING DESIGN — ADAPTIVE BUDGET
 ==================================================
 
-After `_25` is measured, Strategy Lab budget must be derived from the actual eligible work
-matrix:
+The next Strategy Lab timing work must derive budget from the actual eligible work matrix:
 
 `number of endpoints × IPv4/IPv6 × TLS/QUIC × Generic UDP × Standard/Extended mode`.
 
@@ -100,6 +117,11 @@ Available/selected IPv6, QUIC and Generic UDP work should automatically add a fi
 reasonable budget proportional to the real work. Do not replace this with one guessed
 oversized static timeout. Admission, stage/overall deadlines, cancellation and telemetry
 remain finite and observable.
+
+The clean `_25` no-fallback baseline for Extended `telegram.org` is Stage 60 `34198 ms` and
+total job `114759 ms` with IPv4 available, IPv6/QUIC excluded and Generic UDP inactive.
+Future adaptive-budget measurement should build from this clean Model-C baseline rather than
+from accidental fallback cost.
 
 ==================================================
 ACCEPTED `_22` MODEL-B COMPARISON BASELINE
@@ -151,8 +173,8 @@ RETAINED PROGRESSION
   working-candidate, fallback and restoration boundaries.
 - `_23` integrated Model C; owner-live `job.FaLtIk` proved it works and `job.G0wC5l` exposed
   shared static source-port collision amplification.
-- `_25` is the corrective source-port lease candidate; `_24` is intentionally skipped by
-  owner instruction.
+- `_25` corrected source-port leasing; owner-live `job.5yGde5` completed Model C 16/16 with
+  no fallback and clean restoration. `_24` was intentionally skipped by owner instruction.
 
 ==================================================
 SCENARIO MATRIX
@@ -160,13 +182,13 @@ SCENARIO MATRIX
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result truthful; Stage 90 restores RUNNING; no temporary residue | `2026-08-08-v0.3.3_27-scenario-01-pass.md`; later `_22/_23` also exercise RUNNING restoration | **PASS ON `_27` — v0.4.0 mandatory row** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result truthful; Stage 90 restores RUNNING; no temporary residue | `2026-08-08-v0.3.3_27-scenario-01-pass.md`; later `_22/_23/_25` also exercise RUNNING restoration | **PASS ON `_27` — v0.4.0 mandatory row** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Final service remains STOPPED; restoration verified | `PENDING OWNER` | **PENDING REGRESSION** |
 | 3 | Extended TLS 1.2 and HTTP | Available successes replay-verified; unavailable protocols explicitly skipped | `_23` Extended working path observed; dedicated formal row unselected | **PENDING REGRESSION** |
-| 4 | Extended QUIC | Endpoint-bound/replay-verified when available; otherwise explicit skip | `PENDING OWNER` | **PENDING REGRESSION** |
+| 4 | Extended QUIC | Endpoint-bound/replay-verified when available; otherwise explicit skip | `_25 job.5yGde5` exercised explicit skip; available-QUIC row remains unselected | **PENDING REGRESSION** |
 | 5 | Generic UDP port and payload | Accepted only in Extended mode; complete profile and cleanup | `PENDING OWNER` | **PENDING REGRESSION** |
 | 6 | Target already accessible | `TARGET_ACCESSIBLE`; search skipped; service state exact | `PENDING OWNER` | **PENDING REGRESSION** |
-| 7 | No working candidate | `NO_CANDIDATE`; shortlist empty; restoration verified | `_22` accepted baseline; `_25` change-specific recheck selected | **PENDING REGRESSION** |
+| 7 | No working candidate | `NO_CANDIDATE`; shortlist empty; restoration verified | `_22` accepted baseline; `_25 job.5yGde5` Model-C 16/16 no-fallback live pass | **PASS ON `_25` FOR CURRENT CHANGE** |
 | 8 | User cancellation after service stop | Unfinished stages skipped; 90/99 run; original service restored | `PENDING OWNER` | **PENDING REGRESSION** |
 | 9 | Hard whole-worker timeout | `TIMEOUT`; results persist; restoration verified | `_23 job.G0wC5l` observed Stage-60 timeout with exact restoration; dedicated formal row unselected | **PENDING REGRESSION** |
 | 10 | Controlled internal failure | `ERROR`; truthful stage; restoration verified | `PENDING OWNER` | **PENDING REGRESSION** |
