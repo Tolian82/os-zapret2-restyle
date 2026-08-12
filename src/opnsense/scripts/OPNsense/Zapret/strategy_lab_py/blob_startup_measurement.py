@@ -2,7 +2,7 @@
 
 The experiment never installs IPFW routes and never stops or reconfigures normal Zapret2.
 It reuses one isolated Model-B adapter slot and one divert port for every controlled variant,
-so worker identity/port cannot confound the comparison.  The active Lua/action shape stays
+so worker identity/port cannot confound the comparison. The active Lua/action shape stays
 constant while resource declarations scale from none to inline, one external BLOB, and a
 bounded production-width common set of three semantically compatible external TLS BLOBs.
 """
@@ -105,7 +105,7 @@ def _worker_dir(session: Path) -> Path:
 
 
 def _external_entry(inventory: resources.ResourceInventory, name: str) -> dict[str, Any]:
-    path = inventory.external_blob_path(name)
+    path = Path(inventory.external_blob_path(name))
     stat = path.stat()
     return {"name": name, "path": str(path), "size": stat.st_size}
 
