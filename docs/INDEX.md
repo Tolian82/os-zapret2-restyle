@@ -12,21 +12,22 @@ full-context recovery. Focused work uses the risk-based specialist reading defin
 `AGENTS.md`.
 
 For a current diagnosis, **do not start from an old evidence file**. Read the current state,
-installed/current patch, current PR/live comments and latest dated evidence first.
-Historical evidence remains preserved for comparison but does not override later source/live
+current release/patch, current PR/live comments and latest dated evidence first. Historical
+evidence remains preserved for comparison but does not override later source/live/release
 state.
 
 ## Current release / Strategy Lab authorities
 
 Read these first for current Strategy Lab or release work:
 
-- `docs/PROJECT_STATE.md` — current release-preparation source, accepted runtime basis and next boundary;
-- `docs/releases/v0.4.1.md` — current full-release record;
-- `docs/devlog/2026-08-12-release-v0.4.1.md` — exact v0.4.1 release-preparation basis/protocol;
+- `docs/PROJECT_STATE.md` — current published release, accepted runtime basis and next boundary;
+- `docs/releases/v0.4.1.md` — v0.4.1 release content/protocol record;
+- `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md` — exact v0.4.1 merge/tag/workflow/package/Pages publication evidence;
+- `docs/devlog/2026-08-12-release-v0.4.1.md` — v0.4.1 release-preparation basis;
 - `docs/patches/v0.4.0_26.md` — accepted workload-derived finite adaptive-budget patch;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md` — current parent-budget calculation, deadline and evidence contract;
-- `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md` — current owner-live PASS and measured production budget evidence;
-- `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md` — exact `_26` source/CI/prerelease identity;
+- `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md` — current owner-live runtime basis;
+- `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md` — exact `_26` testing-prerelease identity;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — adaptive candidate/search and validation architecture;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md` — preferred one-worker bucket/source-port dispatcher architecture;
 - `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md` — source-port lease corrective live baseline;
@@ -39,37 +40,42 @@ Read these first for current Strategy Lab or release work:
 - `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md` — accepted Model-B owner-live comparison baseline;
 - `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md` — release-specific live selection policy.
 
-### Current v0.4.1 release boundary
+### Current v0.4.1 boundary
 
-Release-preparation source is `VERSION=0.4.1`, `PLUGIN_REVISION=1`; current source
-candidate is `os-zapret2-restyle-0.4.1_1.pkg`.
+`VERSION=0.4.1`, `PLUGIN_REVISION=1`; current published package:
+`os-zapret2-restyle-0.4.1_1.pkg`.
 
-The current published and owner-tested runtime basis remains testing prerelease
-`v0.4.0_26`, exact runtime commit
-`8ada9cba28916fff506f19b34f5ef3de16e2008e`, until the v0.4.1 full Release workflow has
-built and published the new package from the verified release-preparation merge.
+Published release identity:
 
-Owner-live Extended `telegram.org`, `job.xhdgCU`, closed the selected runtime gate:
+- merge `c53e1c1656517fa764f97a175bb82eea02dbc374`;
+- tree `74e3a67cb25c0e80bc0c00f7214e8c00c3daa7b9`;
+- semantic tag `v0.4.1`;
+- Release workflow `31596979559` — SUCCESS;
+- package size `180305` bytes;
+- package digest `sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e`;
+- Pages deployment `5869308071` — SUCCESS.
+
+Durable release record:
+`docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`.
+
+The current workflow-created GitHub Release is marked prerelease by the existing release
+workflow. The semantic tag/package/Pages publication is complete. The `0.4.1_1` package has
+not yet been separately claimed as installed on the owner appliance; the selected runtime
+basis remains owner-live `_26` because release preparation did not change Strategy Lab
+runtime semantics.
+
+Owner-live Extended `telegram.org`, `job.xhdgCU`:
 
 - `policy=eligible-work-v1` persisted after Stage 30;
-- measured matrix was two endpoints, IPv4 only, QUIC closed, Generic UDP inactive;
-- effective budget was exactly Standard `150 s`, Extended `120 s`, search `270 s`, Stage 80 `120 s`;
-- Stage 60 Model C completed 16/16, `graph_exhausted`, `.parallel.fallbacks=[]`;
+- measured matrix: two endpoints, IPv4 only, QUIC closed, Generic UDP inactive;
+- effective budget exactly Standard `150 s`, Extended `120 s`, search `270 s`, Stage 80 `120 s`;
+- Stage 60 Model C 16/16, `graph_exhausted`, `.parallel.fallbacks=[]`;
 - Stage 60 `34209 ms`, total `114644 ms`;
-- final `NO_CANDIDATE` and clean Stage-90 restoration;
-- post-job Zapret2 RUNNING and no `19128-19130` residue.
-
-Durable owner-live record:
-`docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`.
+- truthful `NO_CANDIDATE`, clean Stage-90 restoration and no `19128-19130` residue.
 
 Stage 60 remains
 `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`;
 `preferred-free-else-alternate` source-port leasing remains active.
-
-The release-preparation PR introduces no new Strategy Lab runtime behavior. Its required
-squash subject is `v0.4.1_1: Prepare release v0.4.1`; after merge the repository must create
-semantic tag `v0.4.1` and publish package `os-zapret2-restyle-0.4.1_1.pkg`, checksum and the
-matching `FreeBSD:15:amd64` Pages/pkg repository.
 
 ## Current implementation authorities
 
@@ -111,7 +117,7 @@ Key retained comparison points:
 - Model C production-candidate publication/live evidence: `docs/patches/v0.4.0_23.md`, `docs/verification/evidence/2026-08-11-v0.4.0_23-publication.md`, `docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md`;
 - Model C source-port corrective acceptance: `docs/patches/v0.4.0_25.md`, `docs/verification/evidence/2026-08-11-v0.4.0_25-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
 - Adaptive workload budget acceptance: `docs/patches/v0.4.0_26.md`, `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`, `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`;
-- v0.4.1 release preparation: `docs/releases/v0.4.1.md` and `docs/devlog/2026-08-12-release-v0.4.1.md`.
+- v0.4.1 release: `docs/releases/v0.4.1.md`, `docs/devlog/2026-08-12-release-v0.4.1.md`, `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`.
 
 Historical evidence explains progression; it never overrides a later patch/PR/live/release record.
 
