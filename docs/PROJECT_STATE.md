@@ -59,8 +59,12 @@ and `_3` are measurement-only, detailed production behavior still uses the accep
 runtime evidence.
 
 ==================================================
-CURRENT STRATEGY LAB AUTHORITIES
+CURRENT AUTHORITIES
 ==================================================
+
+Current GitHub delivery authority: `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
+
+Current Strategy Lab authorities:
 
 - `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
