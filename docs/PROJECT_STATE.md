@@ -18,20 +18,27 @@ Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current source line: `VERSION=0.4.0`, `PLUGIN_REVISION=26`
 Current source candidate: `os-zapret2-restyle-0.4.0_26.pkg`
-Latest published testing prerelease: `v0.4.0_25`
+Latest published testing prerelease: `v0.4.0_26`
 Latest owner-tested testing candidate: `v0.4.0_25` — source-port lease corrective owner-live PASS
 Required package ABI: `FreeBSD:15:amd64`
 
-Latest published/owner-live evidence:
+Published `_26` identity:
 
-- `_25` runtime commit `a5ecfbfd57820e30e5f2be450e510b96c00267e3`;
-- `_25` package `os-zapret2-restyle-0.4.0_25.pkg`;
-- publication: `docs/verification/evidence/2026-08-11-v0.4.0_25-publication.md`;
-- owner-live PASS: `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`.
+- runtime commit `8ada9cba28916fff506f19b34f5ef3de16e2008e`;
+- runtime tree `170c54cb8b8a354e4052898ea5db8b1e36a1bb61`;
+- package `os-zapret2-restyle-0.4.0_26.pkg`;
+- size `180306` bytes;
+- digest `sha256:f5466c21c014bf594afcc80aac49b948db45513b33fe46d4857eded75bc8af8c`;
+- publication workflow run `31584348303` — SUCCESS;
+- publication evidence: `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`.
+
+Latest accepted owner-live evidence remains:
+`docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`.
 
 Current `_26` authority:
 
 - `docs/patches/v0.4.0_26.md`;
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
 - `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_budget.py`;
 - `scripts/test-strategy-lab-adaptive-budget.sh`.
@@ -119,18 +126,19 @@ unchanged.
 CURRENT VERIFICATION BOUNDARY
 ==================================================
 
-Source/CI target for `_26`:
+Source and publication gates for `_26` are complete:
 
-- focused `scripts/test-strategy-lab-adaptive-budget.sh`;
-- canonical Strategy Lab corrective matrix;
-- Python orchestration/migration continuity;
-- FreeBSD 15 package contract and package build.
+- focused adaptive-budget contract — PASS;
+- canonical Strategy Lab corrective matrix — PASS;
+- Python orchestration/migration continuity — PASS;
+- FreeBSD 15 package contract/build — PASS;
+- PR #182 squash merge — PASS;
+- testing prerelease `v0.4.0_26` — PUBLISHED and verified.
 
-Owner-live remains pending until `_26` is published. The selected live gate is one Extended
-`telegram.org` run that proves the production Stage-30 measurement really activates
-`eligible-work-v1`, persists a work matrix matching actual capabilities, produces the exact
-effective budget, finishes without a new timeout/unexpected fallback, and restores Zapret2
-cleanly.
+Owner-live is the remaining `_26` gate. Run one Extended `telegram.org` job on the published
+package and verify that the production Stage-30 measurement activates `eligible-work-v1`,
+persists a work matrix matching actual capabilities, produces the exact effective budget,
+finishes without a new timeout/unexpected fallback, and restores Zapret2 cleanly.
 
 The appliance does not need to fabricate IPv6, QUIC or Generic UDP. Optional branch increments
 are source-tested deterministically; live evidence verifies production wiring and the actual
