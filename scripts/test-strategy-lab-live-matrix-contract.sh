@@ -21,6 +21,8 @@ BLOB_DOC="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_BLOB_LOADING.md"
 BLOB_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_4.md"
 BLOB_TEST="${ROOT_DIR}/scripts/test-strategy-lab-blob-startup-measurement.sh"
 BLOB_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/blob_startup_measurement.py"
+DISCOVERY_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_5.md"
+DISCOVERY_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/discovery_probe_measurement.py"
 MODEL_B_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md"
 MODEL_C_CORRECTIVE_PASS="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md"
 PUBLICATION26="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md"
@@ -38,7 +40,7 @@ require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 for file in "${MATRIX}" "${STATE}" "${INDEX}" "${RELEASE_DOC}" "${RELEASE_EVIDENCE}" \
     "${BLOB_PUBLICATION}" "${BLOB_LIVE}" "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${VERSION_FILE}" "${MAKEFILE}" \
     "${LUA_DOC}" "${LUA_PATCH}" "${LUA_TEST}" "${LUA_PY}" "${BLOB_DOC}" "${BLOB_PATCH}" \
-    "${BLOB_TEST}" "${BLOB_PY}" "${LUA_LIVE}" "${MODEL_B_EVIDENCE}" \
+    "${BLOB_TEST}" "${BLOB_PY}" "${DISCOVERY_PATCH}" "${DISCOVERY_PY}" "${LUA_LIVE}" "${MODEL_B_EVIDENCE}" \
     "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" "${LIVE26}" "${BUDGET_PY}" \
     "${LEASE_PY}" "${MODEL_C_PY}" "${MODEL_B_PY}" "${LIVE_GATE_DECISION}"
 do
@@ -49,12 +51,12 @@ version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; exit}' "${MAKEFILE}")
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
-[ "${version}" = '0.4.1' ] || fail 'BLOB measurement must remain on VERSION=0.4.1'
-[ "${revision}" -eq 4 ] || fail 'BLOB common-set measurement must use PLUGIN_REVISION=4'
-[ "${candidate}" = 'os-zapret2-restyle-0.4.1_4.pkg' ] || fail 'unexpected BLOB common-set package identity'
+[ "${version}" = '0.4.1' ] || fail 'measurement line must remain on VERSION=0.4.1'
+[ "${revision}" -eq 5 ] || fail 'current discovery measurement must use PLUGIN_REVISION=5'
+[ "${candidate}" = 'os-zapret2-restyle-0.4.1_5.pkg' ] || fail 'unexpected current discovery measurement package identity'
 
-require "${STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=4`'
-require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_4.pkg`'
+require "${STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=5`'
+require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_5.pkg`'
 require "${STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${STATE}" 'Latest published testing prerelease: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`'
 require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_4` — BLOB common-set scaling measurement PASS'
@@ -66,7 +68,11 @@ require "${STATE}" 'Policy: `blob-common-set-scaling-v1`, schema `2`.'
 require "${STATE}" 'production_change_recommended=false'
 require "${STATE}" 'publication workflow run `31633335688` — SUCCESS'
 require "${STATE}" 'V0.4.1_4 BLOB COMMON-SET SCALING — ACCEPTED / OPTIMIZATION CLOSED'
+require "${STATE}" 'V0.4.1_5 DISCOVERY PROBE AGREEMENT — SOURCE CANDIDATE'
+require "${STATE}" 'no `_5` tag/Release/prerelease/Pages/pkg-repository publication is part of this task'
 
+require "${INDEX}" 'docs/patches/v0.4.1_5.md'
+require "${INDEX}" 'docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md'
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
 require "${INDEX}" 'docs/patches/v0.4.1_4.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md'
@@ -100,6 +106,12 @@ require "${BLOB4_LIVE}" '`48` planned starts'
 require "${BLOB4_LIVE}" '`+0.234 ms` / `+0.375%`'
 require "${BLOB4_LIVE}" '`+2 KiB` / `+0.046%`'
 require "${BLOB4_LIVE}" 'close the BLOB-loading startup/RSS optimization as a negative result for current width three'
+
+require "${DISCOVERY_PY}" 'POLICY = "discovery-probe-agreement-v1"'
+require "${DISCOVERY_PY}" 'VARIANTS = ("head", "get-1", "get-4k", "deep-16k")'
+require "${DISCOVERY_PY}" 'production_discovery_policy_changed": False'
+require "${DISCOVERY_PATCH}" 'GitHub Actions FreeBSD-15 build artifact'
+require "${DISCOVERY_PATCH}" 'not** a tag, GitHub Release, prerelease, Pages update, or package-repository publication'
 
 require "${MATRIX}" 'Current published release package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${MATRIX}" 'Latest owner-tested runtime package: `os-zapret2-restyle-0.4.0_26.pkg`'
@@ -148,4 +160,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} owner common-set measurement is accepted, BLOB-loading optimization is closed, and production live truth remains _26"
+echo "PASS: ${candidate} discovery measurement is current, accepted BLOB history is preserved, and production live truth remains _26"
