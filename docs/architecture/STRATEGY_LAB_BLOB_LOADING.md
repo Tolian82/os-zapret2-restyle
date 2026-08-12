@@ -1,6 +1,6 @@
 # Strategy Lab BLOB loading / startup / RSS measurement
 
-Status: **MEASUREMENT-ONLY / PRODUCTION MODEL C UNCHANGED**
+Status: **MEASUREMENT ACCEPTED / PRODUCTION MODEL C UNCHANGED**
 
 ## Question
 
@@ -83,15 +83,49 @@ It also reports median delta and percentage for:
 - external vs BLOB-free;
 - external vs builtin.
 
+## Accepted owner-live result
+
+The owner-installed `_3` measurement completed 9 trials per variant, 27 worker starts total,
+and reported:
+
+- `adapter_preflight=true`;
+- `all_samples_ready=true`;
+- `expected_sample_count=true`;
+- `temporary_workers_clean=true`;
+- `cleanup_ok=true`;
+- `lifecycle_restored=true`;
+- `conclusion=measurement_accepted`.
+
+Median stable readiness:
+
+- BLOB-free: `63.061 ms`;
+- built-in: `62.652 ms`;
+- external: `62.566 ms`.
+
+Median ready and settled RSS was `4360 KiB` for all three variants. Pairwise median RSS deltas
+were exactly zero. Built-in and external median readiness differed from BLOB-free by only
+`-0.409 ms` (`-0.649%`) and `-0.495 ms` (`-0.785%`) respectively. Those differences are
+smaller than the within-variant spread/tails and do not establish a BLOB startup penalty.
+
+Initial/final normal Zapret2 evidence matched exactly and remained RUNNING. The accepted run
+used `cache_policy=natural-cache-no-drop`; it is not a cold-cache claim.
+
+Evidence:
+`docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`.
+
 ## Decision boundary
 
-One valid run is measurement evidence, not automatic production authorization.
-`production_change_recommended` remains `false` in `_3`.
+The accepted `_3` run is valid owner-live evidence, not production-change authorization.
+`production_change_recommended` remains `false`.
 
-If lifecycle/cleanup and sample integrity pass, the report conclusion is
-`measurement_accepted` and next step is
-`evaluate_reproducibility_before_any_production_blob_change`.
+Do not change production Model C BLOB loading from this result. The representative single
+external `fake_tls_7.bin` case shows no material startup/readiness or RSS cost.
 
-A production BLOB-loading change requires reproducible evidence and a separate packaged patch.
-No optimization may alter CandidateSpec resource identity, source-port attribution, deadline,
-cleanup, or restoration guarantees.
+This three-variant result does not prove that arbitrary BLOB count/size has zero cost. The
+broader experiment plan still requires small-inline and several semantically compatible
+external-resource coverage. If that investigation continues, the next measurement should
+address scaling/common eager-set cost rather than changing production first.
+
+Any future production BLOB-loading change still requires reproducible evidence and a separate
+packaged patch. No optimization may alter CandidateSpec resource identity, source-port
+attribution, deadline, cleanup, or restoration guarantees.
