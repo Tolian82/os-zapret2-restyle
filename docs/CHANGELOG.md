@@ -43,7 +43,7 @@ The project starts its own version history at `0.1.0`.
   reachability gate.
 - Moved Stage 60 from flat/cold candidate execution to the accepted runtime chain
   `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
-- Kept candidate concurrency at width three while pinned endpoints inside one candidate
+- Kept candidate concurrency at width three while pinned endpoints inside each candidate
   remain sequential and CPU count remains observational rather than a gate.
 - Preserved candidate-defined Lua/resources/output ranges through runtime rendering,
   stability validation and final profile output.
