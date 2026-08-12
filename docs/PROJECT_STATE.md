@@ -21,7 +21,7 @@ Current published release tag: `v0.4.1`
 Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`
 Latest published testing prerelease: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`
 Latest owner-tested stable package: `os-zapret2-restyle-0.4.1_1.pkg` — upgrade/install smoke PASS
-Latest owner-tested testing candidate: `v0.4.1_3` — BLOB startup/readiness/RSS measurement PASS
+Latest owner-tested testing candidate: `v0.4.1_4` — BLOB common-set scaling measurement PASS
 Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS
 Required package ABI: `FreeBSD:15:amd64`
 
@@ -55,7 +55,7 @@ Published and owner-tested `_3` identity:
 - publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`;
 - owner-live evidence: `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`.
 
-Published `_4` testing identity:
+Published and owner-tested `_4` testing identity:
 
 - runtime/source merge `461fe2d045b131f3400f285a9cb59808b5f33ce2`;
 - merge tree `844d9992dcab35f630ee6acd3bf2ab5bbaf4c248`;
@@ -67,12 +67,11 @@ Published `_4` testing identity:
 - package `os-zapret2-restyle-0.4.1_4.pkg`, `186024` bytes;
 - digest `sha256:934fdd3a73117b3d914c9823f29eb7f2ca47196d97c30d94e3066a38159edbc9`;
 - publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`;
-- owner-live common-set measurement: pending.
+- owner-live evidence: `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`.
 
 `_3` is accepted for its BLOB-free / built-in / representative single-external-file scope.
-`_4` is published for the remaining bounded common-set scaling measurement but is not yet
-owner-tested. Because `_2`, `_3`, and `_4` are measurement-only, detailed production behavior
-still uses the accepted `_26` runtime evidence.
+`_4` is accepted for the remaining bounded common-set scaling scope. Because `_2`, `_3`, and `_4`
+are measurement-only, detailed production behavior still uses the accepted `_26` runtime evidence.
 
 ==================================================
 CURRENT AUTHORITIES
@@ -90,6 +89,7 @@ Current Strategy Lab authorities:
 - `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`;
 - `docs/patches/v0.4.1_4.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`;
+- `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`;
 - `docs/patches/v0.4.1_3.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
@@ -156,48 +156,57 @@ remained RUNNING. The run used `cache_policy=natural-cache-no-drop` and is not a
 claim. Production Model C remained unchanged and `production_change_recommended=false`.
 
 ==================================================
-V0.4.1_4 BLOB COMMON-SET SCALING — PUBLISHED / OWNER-LIVE PENDING
+V0.4.1_4 BLOB COMMON-SET SCALING — ACCEPTED / OPTIMIZATION CLOSED
 ==================================================
-
-`_4` answers the remaining bounded question: does the eager common external declaration set used
-by Model C cost measurable startup/readiness or RSS when it scales from one to the current
-production candidate width of three?
 
 Policy: `blob-common-set-scaling-v1`, schema `2`.
 
-All variants use one physical adapter worker `external` on divert port `9992`; arguments are
-rewritten immediately before each launch. Controlled variants are:
+The owner-installed run completed all `48` planned starts, `12` per variant, with every acceptance
+check true: adapter preflight, all samples ready, balanced trial count, expected sample count,
+single worker identity, temporary worker cleanup, cleanup, and lifecycle restoration.
+Final conclusion: `measurement_accepted`.
 
-- `blob-free`;
-- `inline-small` with `seqovl_pattern=0x1603`;
-- `external-single` with canonical `fake_tls_7`;
-- `external-common-3` with canonical `fake_tls_7`,
-  `tls_clienthello_rutracker_org_kyber`, and `tls_clienthello_vk_com_kyber`, while only
-  `fake_tls_7` is active and the other two are intentionally eager/unused declarations.
+All variants used one physical adapter worker `external` on divert port `9992`. Controlled variants
+were BLOB-free, inline `0x1603`, one external `fake_tls_7`, and a three-external TLS common set in
+which only `fake_tls_7` was active while the other two declarations were intentionally eager/unused.
+The common set scaled from `226` declared bytes to `3825` bytes while retaining the current maximum
+production candidate width of three.
 
-The common set is a bounded synthetic production-width upper bound, not a claim about one exact
-current graph bucket. The resources are semantically compatible TLS ClientHello files rather than
-unrelated BLOBs chosen only to inflate count.
+Primary `external-common-3` vs `external-single` result:
 
-Default run: 12 trials per variant / 48 starts, balanced over all four cyclic orders,
-`cache_policy=natural-cache-no-drop`. Summaries retain mean/stdev in addition to
-min/median/p90/max so a common-set delta can be judged against normal jitter.
+- median stable readiness `62.566` vs `62.332 ms`: `+0.234 ms` / `+0.375%`;
+- readiness stdev `2.276` vs `5.502 ms`;
+- readiness mean `63.610` vs `65.055 ms`;
+- readiness p90 `66.033` vs `72.535 ms`;
+- median ready/settled RSS `4362` vs `4360 KiB`: `+2 KiB` / `+0.046%`.
 
-Focused regression, complete Strategy Lab corrective matrix, lifecycle/production contracts and
-FreeBSD 15 package build/inspection passed before merge. Testing prerelease `v0.4.1_4` is now
-published from exact merge `461fe2d045b131f3400f285a9cb59808b5f33ce2`; Release asset digest is
-`sha256:934fdd3a73117b3d914c9823f29eb7f2ca47196d97c30d94e3066a38159edbc9`.
+The median readiness/RSS deltas are substantially below measured run-to-run spread and the
+mean/p90 direction does not show a common-set penalty. Supporting BLOB-free and inline comparisons
+are likewise sub-percent and below jitter.
 
-`production_change_recommended=false` remains hard-coded. `_4` has no owner-live result yet.
+Initial and final normal-service evidence matched exactly and remained RUNNING:
+
+- effective-config hash `e63f62a3ec541d4c3c2bd4e4c5d2efdc69c1cda18cd844b2d7069213156ac8d7`;
+- runtime-args hash `b4f5d08dd3f6c6e53f3ad970fc3c9cfbfbb004fee54ec1241c668ddd7bcdffc4`;
+- normal-firewall hash `8b6952782a6862a5c86fcc688438c746a57948d1b98c927c5ba1fe8bbf3ee0dd`.
+
+Combined with `_3`, the current width-three architecture has no measured material BLOB
+startup/readiness or RSS cost. Production Model C remains unchanged, lazy BLOB loading is not
+justified, and the BLOB-loading startup/RSS optimization is closed as a negative result for the
+present architecture. `production_change_recommended=false` remains correct.
+
+Owner-live evidence:
+`docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`.
 
 ==================================================
 CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
-Install the published `v0.4.1_4` package on the owner OPNsense appliance and collect the 12x4
-common-set startup/readiness/RSS measurement under the documented lifecycle lock and csh command
-rules.
+The Model-C Lua initialization and BLOB startup/RSS optimization questions are both closed by
+owner-live evidence without production changes. Do not create another package revision solely for
+Lua/BLOB loading optimization.
 
-A material `external-common-3` vs `external-single` cost must be reproduced before any production
-change. If no material cost appears above jitter at the current width-three bound, close BLOB
-loading as a negative optimization result for the present architecture.
+The next Strategy Lab optimization must be selected from the remaining adaptive-search experiment
+questions and measured separately. Production behavior remains
+`C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback` until a
+new experiment independently justifies a change.
