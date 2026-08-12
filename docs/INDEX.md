@@ -18,6 +18,7 @@ Read these first for current Strategy Lab or release work:
 
 - `docs/PROJECT_STATE.md` — current source/published candidates, accepted runtime basis and next boundary;
 - `docs/patches/v0.4.1_5.md` — current measurement-only discovery-probe agreement/cost package candidate;
+- `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md` — exact `_5` CI package artifact, source-tree and no-release evidence;
 - `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — experiment selection and acceptance authority, including discovery-vs-deep question 10;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — production discovery/stability/deep validation architecture;
 - `docs/patches/v0.4.1_4.md` — accepted measurement-only BLOB common-set scaling candidate;
@@ -43,9 +44,20 @@ Read these first for current Strategy Lab or release work:
 ### Current v0.4.1 boundary
 
 `VERSION=0.4.1`, `PLUGIN_REVISION=5`; current source candidate is
-`os-zapret2-restyle-0.4.1_5.pkg`, a measurement-only discovery-probe package whose CI artifact is
-pending. No `_5` tag/Release/prerelease/Pages/pkg-repository publication is authorized by the
-current package request.
+`os-zapret2-restyle-0.4.1_5.pkg`, and its FreeBSD-15 GitHub Actions package artifact is READY for
+owner-live testing. No `_5` tag/Release/prerelease/Pages/pkg-repository publication was requested
+or performed.
+
+Exact `_5` package identity:
+
+- source PR #197 final head `a7504d95b2b5f0fe3c0b0bccea359e8f22148181`;
+- merged `main` `3f85d34f415d49c2b9a3ae25bd8bdebdad2f84dd`;
+- identical tree on both: `3498b759161b14369921e9a47787e82ddbace6a2`;
+- latest-head CI `31645083105` / #785 — SUCCESS;
+- artifact ID `9160582106`, name `os-zapret2-restyle-0.4.1_5`;
+- package `os-zapret2-restyle-0.4.1_5.pkg`, `410452` bytes;
+- SHA-256 `d2a8de95bb128739bcf59325433f97b6c28eb819124131c867f0f3cea9d67b4e`;
+- post-merge main CI `31645659351` / #786 — SUCCESS (`Verify main integrity` PASS).
 
 Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`; latest published testing
 prerelease and latest owner-tested testing candidate remain `_4`. Detailed production Strategy Lab
@@ -130,7 +142,7 @@ and `docs/audit/`. Key retained comparison points:
 - Lua measurement: `docs/patches/v0.4.1_2.md`, `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`;
 - accepted single-BLOB measurement: `docs/patches/v0.4.1_3.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
 - accepted common-set scaling measurement: `docs/patches/v0.4.1_4.md`, `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`;
-- current discovery-probe measurement: `docs/patches/v0.4.1_5.md`.
+- discovery-probe package artifact: `docs/patches/v0.4.1_5.md`, `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`.
 
 Historical evidence explains progression; it never overrides a later current record.
 
