@@ -140,7 +140,7 @@ remained RUNNING. The run used `cache_policy=natural-cache-no-drop` and is not a
 claim. Production Model C remained unchanged and `production_change_recommended=false`.
 
 ==================================================
-V0.4.1_4 BLOB COMMON-SET SCALING — SOURCE MEASUREMENT
+V0.4.1_4 BLOB COMMON-SET SCALING — SOURCE / CI PASS
 ==================================================
 
 `_4` is the next measurement-only source candidate. It answers the remaining bounded question:
@@ -167,16 +167,18 @@ Default run: 12 trials per variant / 48 starts, balanced over all four cyclic or
 `cache_policy=natural-cache-no-drop`. Summaries now retain mean/stdev in addition to
 min/median/p90/max so a common-set delta can be judged against normal jitter.
 
-`production_change_recommended=false` remains hard-coded. Source/CI/package/live gates are still
-pending; `_4` is not yet a published testing prerelease.
+`production_change_recommended=false` remains hard-coded. Focused regression, the complete
+Strategy Lab corrective matrix, lifecycle/production contracts, and FreeBSD 15 package
+build/inspection for `os-zapret2-restyle-0.4.1_4.pkg` are PASS. `_4` is not yet a published
+testing prerelease and has no owner-live result.
 
 ==================================================
 CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
-Complete `_4` focused/corrective/FreeBSD 15 CI and merge the source candidate without changing
-production Model C/B/A. Testing-prerelease publication is a separate operation and requires the
-existing owner authorization rule.
+Merge the CI-qualified `_4` source candidate without changing production Model C/B/A.
+Testing-prerelease publication remains a separate operation and requires the existing owner
+authorization rule.
 
 After an authorized `_4` package is installed, collect the common-set owner measurement. A
 material `external-common-3` vs `external-single` cost must be reproduced before any production
