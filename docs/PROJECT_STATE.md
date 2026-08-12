@@ -20,31 +20,33 @@ Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=2`
 Current source candidate: `os-zapret2-restyle-0.4.1_2.pkg`
 Current published release tag: `v0.4.1`
 Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`
+Latest published testing prerelease: `v0.4.1_2` / `os-zapret2-restyle-0.4.1_2.pkg`
 Latest owner-tested stable package: `os-zapret2-restyle-0.4.1_1.pkg` — upgrade/install smoke PASS
 Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS
 Required package ABI: `FreeBSD:15:amd64`
 
-Published v0.4.1 identity:
+Stable v0.4.1 identity:
 
-- release-preparation merge `c53e1c1656517fa764f97a175bb82eea02dbc374`;
-- merge tree `74e3a67cb25c0e80bc0c00f7214e8c00c3daa7b9`;
+- merge `c53e1c1656517fa764f97a175bb82eea02dbc374`;
 - semantic tag `v0.4.1`;
-- annotated tag object `8c860a01def48a3b84943a43ba0c5a30d9f37055` targeting the exact merge;
-- Release workflow run `31596979559` — SUCCESS;
-- GitHub Release ID `369226460`;
 - package `os-zapret2-restyle-0.4.1_1.pkg`;
-- package size `180305` bytes;
-- package digest `sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e`;
-- GitHub Pages deployment `5869308071` — SUCCESS;
-- publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`.
+- digest `sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e`;
+- stable publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`.
 
-The workflow-created GitHub Release currently has `prerelease=true`; this is the existing
-release-workflow behavior and does not change the semantic tag/package identity above.
+Testing `_2` publication identity:
 
-The owner subsequently upgraded the OPNsense appliance to `0.4.1_1` and reported that the
-upgrade completed successfully and normal plugin/service operation remained correct. This
-is a package-upgrade smoke record, not a replacement for the detailed `_26` Strategy Lab
-runtime evidence.
+- runtime/source merge `462c55b291ac737eb368ee9ec5e4f139bd239665`;
+- merge tree `94a879ff5bcb94713f9dfba9e1d7e06e08a77a9a`;
+- PR #187 — SOURCE/CI/FreeBSD 15 PASS;
+- publication workflow run `31605249326` — SUCCESS;
+- tag `v0.4.1_2` targeting exact runtime/source merge;
+- GitHub Release ID `369290077`, prerelease=true;
+- package `os-zapret2-restyle-0.4.1_2.pkg`, size `181696` bytes;
+- digest `sha256:09d0edacd0527230a2657128c80099e6436f41b14621f5573586b4cc6fed9063`;
+- publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-publication.md`.
+
+The owner upgraded the OPNsense appliance to stable `0.4.1_1` and reported successful
+upgrade and normal operation. `_2` remains owner-measurement pending.
 
 Active GitHub delivery authority:
 `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
@@ -59,6 +61,7 @@ Current Strategy Lab authorities:
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
 - `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`;
 - `docs/patches/v0.4.1_2.md`;
+- `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-publication.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`.
 
 Current Stage-60 preferred model: `C-warm-bucket-source-port-dispatch`.
@@ -71,17 +74,13 @@ there is no CPU-count gate.
 ACCEPTED OWNER-LIVE RUNTIME BASIS
 ==================================================
 
-The detailed selected Strategy Lab live basis remains Extended `telegram.org`, `job.xhdgCU`:
+Detailed Strategy Lab live basis remains Extended `telegram.org`, `job.xhdgCU`:
 
-- `adaptive-budget.json` persisted `policy=eligible-work-v1`;
-- measured matrix: Extended, 2 endpoints, IPv4 available, IPv6 unavailable, QUIC/IPv4
-  closed, Generic UDP unconfigured;
-- effective budgets: Standard `150 s`, Extended `120 s`, search `270 s`, Stage 80 `120 s`;
-- Stage 60 genuinely used `C-warm-bucket-source-port-dispatch`;
-- `stopped_reason=graph_exhausted`, 16/16 candidates completed, zero winners;
+- `policy=eligible-work-v1`, effective budgets `150/120/270/120`;
+- Stage 60 `C-warm-bucket-source-port-dispatch`, 16/16, graph exhausted, zero winners;
 - `.parallel.fallbacks=[]`;
 - Stage 60 duration `34209 ms`; total job duration `114644 ms`;
-- Stage 90 restoration succeeded; post-job Zapret2 remained RUNNING;
+- Stage 90 restoration succeeded; Zapret2 remained RUNNING;
 - rules `19128-19130` left no residue.
 
 ==================================================
@@ -90,40 +89,23 @@ V0.4.1_2 LUA INITIALIZATION MEASUREMENT
 
 `v0.4.1_2` is measurement-only. Production Model C is intentionally unchanged.
 
-Source inspection established that every one of the 16 native Stage-60 expansion candidates
-currently declares exactly the same two Lua dependencies: `zapret-lib.lua` and
-`zapret-antidpi.lua`. Model C already initializes the union of candidate-declared dependencies
-for the active width-three batch and additionally requires `zapret-auto.lua` plus
-`strategy_lab_model_c.lua` for the shared dispatcher.
+Every one of the 16 native Stage-60 expansion candidates currently declares the same Lua
+dependencies: `zapret-lib.lua` and `zapret-antidpi.lua`. Model C already initializes their
+batch union plus mandatory `zapret-auto.lua` and `strategy_lab_model_c.lua`.
 
-Therefore the current Model-C initialization set and the candidate-minimal set are identical
-for every current native batch:
-
-- `zapret-lib.lua`;
-- `zapret-antidpi.lua`;
-- `zapret-auto.lua`;
-- `strategy_lab_model_c.lua`.
-
-The packaged command `strategy_lab_python.py lua-init-measure` persists/reports this fact as
-`policy=lua-init-set-equivalence-v1`. When the sets are identical it MUST emit
-`equivalent_init_set`, `runtime_comparison_required=false`, and MUST NOT invent timing/RSS
-speedup claims. The next optimization candidate is BLOB loading/startup/RSS measurement.
+Thus current Model-C initialization and the candidate-minimal union are the same four-file
+set for every current native batch. The packaged `lua-init-measure` command reports
+`policy=lua-init-set-equivalence-v1`. When equivalent it MUST emit
+`runtime_comparison_required=false`, `conclusion=equivalent_init_set`, and no timing/RSS
+speedup claim.
 
 ==================================================
 CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
-The stable `v0.4.1 / 0.4.1_1` release cycle is complete and owner upgrade smoke passed.
+`v0.4.1_2` source, CI, FreeBSD 15 build and testing-prerelease publication are PASS.
+Remaining gate: owner installs `_2` and runs the non-destructive packaged Lua measurement.
 
-Current logical change: `v0.4.1_2` Lua initialization measurement. Acceptance requires:
-
-- source/CI/FreeBSD package PASS;
-- production Model C remains unchanged;
-- all 16 current native expansion candidates are represented;
-- every current width-three batch proves current Model-C Lua init equals candidate-minimal
-  Lua init;
-- no runtime speedup/RSS claim is made when the sets are identical;
-- testing prerelease publication for owner-visible evidence.
-
-If `_2` confirms `equivalent_init_set`, close this optimization without a production runtime
-change and proceed to the independent BLOB loading/startup/RSS tradeoff measurement.
+If the installed report confirms all required files present and `equivalent_init_set`, close
+Lua initialization optimization without a production runtime change and proceed to the
+independent BLOB loading/startup/RSS measurement.

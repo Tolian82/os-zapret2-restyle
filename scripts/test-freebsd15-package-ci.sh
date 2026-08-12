@@ -9,6 +9,7 @@ PROJECT_STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
 RELEASE_DOC="${ROOT_DIR}/docs/releases/v0.4.1.md"
 RELEASE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md"
+LUA_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-publication.md"
 BUILD_PKG="${ROOT_DIR}/scripts/build-pkg.sh"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
@@ -32,7 +33,7 @@ require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
 for file in \
     "${CI}" "${RELEASE}" "${MATRIX}" "${PROJECT_STATE}" "${INDEX}" "${RELEASE_DOC}" \
-    "${RELEASE_EVIDENCE}" "${BUILD_PKG}" "${VERSION_FILE}" "${MAKEFILE}" "${CORRECTIVE_MATRIX}" \
+    "${RELEASE_EVIDENCE}" "${LUA_PUBLICATION}" "${BUILD_PKG}" "${VERSION_FILE}" "${MAKEFILE}" "${CORRECTIVE_MATRIX}" \
     "${LUA_TEST}" "${LUA_PY}" "${LUA_DOC}" "${LUA_PATCH}" "${ADAPTIVE_BUDGET_PY}" \
     "${MODEL_C_PY}" "${MODEL_B_PY}" "${LEASE_PY}" "${PYTHON_ENTRY}" \
     "${PUBLICATION26}" "${LIVE26}" "${MODEL_C_CORRECTIVE_PASS}" "${MODEL_B_LIVE}"
@@ -48,7 +49,6 @@ candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${revision}" -eq 2 ] || fail 'Lua measurement package must use PLUGIN_REVISION=2'
 [ "${candidate}" = 'os-zapret2-restyle-0.4.1_2.pkg' ] || fail 'unexpected measurement package identity'
 
-# Package construction and ABI/runtime requirements remain unchanged.
 grep -Eq '^PLUGIN_DEPENDS=[[:space:]]+python313([[:space:]]|$)' "${MAKEFILE}" || fail 'python313 dependency is missing'
 require "${BUILD_PKG}" 'python313)  echo "lang/python313"'
 require "${BUILD_PKG}" 'cp -R src/opnsense "${STAGE}/usr/local/opnsense"'
@@ -68,7 +68,6 @@ require "${CI}" '.deps.python313.origin == "lang/python313"'
 require "${CI}" 'freebsd-version -u'
 require "${CI}" 'scripts/test-freebsd15-package-ci'
 
-# Stable release workflow remains version/revision-derived; `_2` must not rewrite v0.4.1 history.
 require "${RELEASE}" 'VERSION_VALUE=$(tr -d '\''[:space:]'\'' < VERSION)'
 require "${RELEASE}" 'REVISION=$(sed -n '\''s/^PLUGIN_REVISION=[[:space:]]*//p'\'' Makefile | head -1)'
 require "${RELEASE}" 'PACKAGE_VERSION="${VERSION_VALUE}_${REVISION}"'
@@ -94,18 +93,16 @@ do
     require "${CI}" "STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/${test}"
 done
 
-# Canonical matrix and new measurement contract.
 require "${CORRECTIVE_MATRIX}" "find \"\${ROOT_DIR}/scripts\" -maxdepth 1 -type f -name 'test-strategy-lab-*.sh'"
 require "${LUA_TEST}" 'PASS: Model C already uses the candidate-minimal Lua union'
 require "${LUA_PY}" 'POLICY = "lua-init-set-equivalence-v1"'
 require "${LUA_PY}" 'runtime_comparison_required = not all_batches_equivalent'
 require "${LUA_PY}" 'not_applicable_equivalent_init_set'
 require "${LUA_DOC}" 'MEASUREMENT-ONLY / PRODUCTION MODEL C UNCHANGED'
-require "${LUA_PATCH}" 'SOURCE CANDIDATE / OWNER-LIVE PENDING'
+require "${LUA_PATCH}" 'SOURCE / CI / PUBLICATION PASS; OWNER-LIVE PENDING'
 require "${PYTHON_ENTRY}" 'from strategy_lab_py import lua_initialization_measurement'
 require "${PYTHON_ENTRY}" 'lua-init-measure'
 
-# Accepted production runtime must stay intact.
 require "${ADAPTIVE_BUDGET_PY}" 'POLICY = "eligible-work-v1"'
 require "${MODEL_C_PY}" 'MODEL = "C-warm-bucket-source-port-dispatch"'
 require "${MODEL_C_PY}" 'for name in spec.lua_dependencies'
@@ -137,11 +134,11 @@ do
     [ -e "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/${installed}" ] || fail "packaged source path is missing: ${installed}"
 done
 
-# Current `_2` source boundary plus immutable stable publication/runtime evidence.
 require "${PROJECT_STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=2`'
 require "${PROJECT_STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_2.pkg`'
 require "${PROJECT_STATE}" 'Current published release tag: `v0.4.1`'
 require "${PROJECT_STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
+require "${PROJECT_STATE}" 'Latest published testing prerelease: `v0.4.1_2` / `os-zapret2-restyle-0.4.1_2.pkg`'
 require "${PROJECT_STATE}" 'Latest owner-tested stable package: `os-zapret2-restyle-0.4.1_1.pkg` — upgrade/install smoke PASS'
 require "${PROJECT_STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md'
@@ -152,6 +149,11 @@ require "${RELEASE_EVIDENCE}" 'Status: **PUBLISHED**'
 require "${RELEASE_EVIDENCE}" 'c53e1c1656517fa764f97a175bb82eea02dbc374'
 require "${RELEASE_EVIDENCE}" 'os-zapret2-restyle-0.4.1_1.pkg'
 require "${RELEASE_EVIDENCE}" 'sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e'
+require "${LUA_PUBLICATION}" 'Status: **PUBLISHED / OWNER-LIVE PENDING**'
+require "${LUA_PUBLICATION}" '462c55b291ac737eb368ee9ec5e4f139bd239665'
+require "${LUA_PUBLICATION}" '31605249326'
+require "${LUA_PUBLICATION}" 'os-zapret2-restyle-0.4.1_2.pkg'
+require "${LUA_PUBLICATION}" 'sha256:09d0edacd0527230a2657128c80099e6436f41b14621f5573586b4cc6fed9063'
 require "${PUBLICATION26}" '8ada9cba28916fff506f19b34f5ef3de16e2008e'
 require "${LIVE26}" 'Status: **PASS**'
 require "${LIVE26}" 'job.xhdgCU'
@@ -161,4 +163,4 @@ require "${MODEL_C_CORRECTIVE_PASS}" 'job.5yGde5'
 require "${MODEL_B_LIVE}" 'PRODUCTION STAGE-60 MODEL B OWNER-LIVE PASS'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI qualifies ${candidate} while preserving stable v0.4.1 and _26 runtime evidence"
+printf '%s\n' "PASS: FreeBSD 15 package CI qualifies published ${candidate} while preserving stable v0.4.1 and _26 runtime evidence"
