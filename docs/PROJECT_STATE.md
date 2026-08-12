@@ -21,7 +21,7 @@ Current published release tag: `v0.4.1`
 Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`
 Latest published testing prerelease: `v0.4.1_3` / `os-zapret2-restyle-0.4.1_3.pkg`
 Latest owner-tested stable package: `os-zapret2-restyle-0.4.1_1.pkg` — upgrade/install smoke PASS
-Latest owner-tested testing candidate: `v0.4.1_2` — Lua initialization measurement PASS
+Latest owner-tested testing candidate: `v0.4.1_3` — BLOB startup/readiness/RSS measurement PASS
 Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS
 Required package ABI: `FreeBSD:15:amd64`
 
@@ -52,11 +52,12 @@ Published `_3` testing identity:
 - GitHub Release ID `369373181`, prerelease=true;
 - package `os-zapret2-restyle-0.4.1_3.pkg`, `185310` bytes;
 - digest `sha256:6efdb8e844bdec5cbe2fddffd77c1234cc53b939520c4648ed68da3126e7989b`;
-- evidence: `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`.
+- publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`;
+- owner-live evidence: `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`.
 
-`_3` is published for owner-assisted measurement and remains owner-live pending. Because `_2`
-and `_3` are measurement-only, detailed production behavior still uses the accepted `_26`
-runtime evidence.
+`_3` owner-live measurement is accepted for its defined BLOB-free / built-in / representative
+external-file scope. Because `_2` and `_3` are measurement-only, detailed production behavior
+still uses the accepted `_26` runtime evidence.
 
 ==================================================
 CURRENT AUTHORITIES
@@ -74,6 +75,7 @@ Current Strategy Lab authorities:
 - `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`;
 - `docs/patches/v0.4.1_3.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`;
+- `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`.
 
@@ -110,29 +112,47 @@ deriving the Lua default from canonical ResourceInventory (`/usr/local/etc/zapre
 root `/usr/local/etc/zapret2/files/fake`).
 
 ==================================================
-V0.4.1_3 BLOB STARTUP / RSS MEASUREMENT
+V0.4.1_3 BLOB STARTUP / RSS MEASUREMENT — ACCEPTED
 ==================================================
 
 Policy `blob-startup-rss-v1` compares BLOB-free, built-in `fake_default_tls`, and external
 `fake_tls_7.bin` variants with the common Model-C Lua/action shape held constant.
 
-The lifecycle-locked harness launches one temporary `dvtws2` at a time on `9990..9992`, never
-calls `route-add`, never stops/reconfigures normal Zapret2, and uses
-`cache_policy=natural-cache-no-drop`. Default is 9 balanced/interleaved trials per variant.
-It persists raw readiness/RSS samples, summaries and pairwise median deltas.
+The owner-installed run completed all 27 planned startups, 9 per variant, with
+`adapter_preflight=true`, `all_samples_ready=true`, `expected_sample_count=true`,
+`temporary_workers_clean=true`, `cleanup_ok=true`, `lifecycle_restored=true`, and
+`conclusion=measurement_accepted`.
 
-Acceptance requires matching initial/final semantic service/config/runtime/firewall evidence
-plus clean temporary workers/rules. `_3` keeps `production_change_recommended=false`; one run
-cannot authorize a production BLOB-loading change.
+Median stable readiness:
+
+- BLOB-free `63.061 ms`;
+- built-in `62.652 ms`;
+- external `62.566 ms`.
+
+Median ready and settled RSS was exactly `4360 KiB` for every variant. Built-in vs BLOB-free
+median readiness delta was `-0.409 ms` (`-0.649%`); external vs BLOB-free was `-0.495 ms`
+(`-0.785%`). These sub-1% differences are smaller than the observed within-variant spread and
+do not show a material BLOB startup penalty.
+
+Initial/final normal service, config, runtime-args and firewall evidence matched exactly and
+remained RUNNING. The run used `cache_policy=natural-cache-no-drop` and is not a cold-cache
+claim.
+
+Production Model C remains unchanged and `production_change_recommended=false`.
 
 ==================================================
 CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
-`v0.4.1_3` source, CI, FreeBSD 15 build and testing-prerelease publication are PASS.
-Remaining gate: owner installs `_3` and runs the isolated BLOB startup/readiness/RSS
-measurement.
+`v0.4.1_3` source, CI, FreeBSD 15 build, testing-prerelease publication and owner-live
+three-variant measurement are PASS.
 
-Owner-live acceptance requires `conclusion=measurement_accepted`, complete samples,
-lifecycle restoration and cleanup PASS. Only reproducible evidence may justify a separate
-future production BLOB-loading patch.
+No production BLOB-loading change is justified by the `_3` evidence. The broader adaptive
+search experiment plan still calls for small-inline and several semantically compatible
+external-resource coverage, so the unresolved BLOB question is scaling/common eager-set cost,
+not a production rewrite.
+
+If BLOB-loading optimization continues, the next packaged measurement should extend controlled
+resource-set coverage while preserving production Model C/B/A, CandidateSpec resource identity,
+source-port attribution, deadlines, cleanup and restoration. Any future production change
+still requires reproducible evidence and a separate packaged patch.
