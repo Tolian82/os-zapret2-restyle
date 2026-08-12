@@ -22,7 +22,8 @@ Read these first for current Strategy Lab work:
 
 - `docs/PROJECT_STATE.md` — current source candidate, verified live boundary and next action;
 - `docs/patches/v0.4.0_26.md` — current workload-derived finite adaptive-budget patch;
-- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — adaptive search, deadline and validation architecture;
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md` — current parent-budget calculation, deadline and evidence contract;
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — adaptive candidate/search and validation architecture;
 - `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md` — latest owner-live PASS and clean timing floor;
 - `docs/patches/v0.4.0_25.md` — accepted controlled-source-port lease corrective;
 - `docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md` — prior Model-C proof and shared-42004 defect input;
@@ -69,6 +70,7 @@ The plan is persisted as `adaptive-budget.json`; effective deadline numbers rema
 
 - `docs/architecture/STRATEGY_LAB.md`
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`
 - `docs/architecture/STRATEGY_LAB_ACTIVATION.md`
@@ -101,7 +103,7 @@ Key retained comparison points:
 - Model B production integration: `docs/patches/v0.4.0_22.md` and `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`;
 - Model C production-candidate publication/live evidence: `docs/patches/v0.4.0_23.md`, `docs/verification/evidence/2026-08-11-v0.4.0_23-publication.md`, `docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md`;
 - Model C source-port corrective acceptance: `docs/patches/v0.4.0_25.md`, `docs/verification/evidence/2026-08-11-v0.4.0_25-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
-- Adaptive workload budget implementation: `docs/patches/v0.4.0_26.md`.
+- Adaptive workload budget implementation: `docs/patches/v0.4.0_26.md` and `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`.
 
 Historical evidence explains progression; it never overrides a later patch/PR/live record.
 
