@@ -17,8 +17,9 @@ records.
 Read these first for current Strategy Lab or release work:
 
 - `docs/PROJECT_STATE.md` — current source/published candidates, accepted runtime basis and next boundary;
-- `docs/patches/v0.4.1_4.md` — current measurement-only BLOB common-set scaling source candidate;
+- `docs/patches/v0.4.1_4.md` — current measurement-only BLOB common-set scaling candidate;
 - `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md` — accepted `_3` result plus current `_4` scaling/isolation/decision contract;
+- `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md` — exact `_4` testing publication evidence;
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md` — accepted owner-installed single-BLOB startup/readiness/RSS evidence;
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md` — exact `_3` testing publication evidence;
 - `docs/patches/v0.4.1_3.md` — accepted `_3` measurement patch history;
@@ -39,15 +40,13 @@ Read these first for current Strategy Lab or release work:
 
 ### Current v0.4.1 boundary
 
-`VERSION=0.4.1`, `PLUGIN_REVISION=4`; current source candidate is
-`os-zapret2-restyle-0.4.1_4.pkg`.
+`VERSION=0.4.1`, `PLUGIN_REVISION=4`; current source candidate and latest published testing
+prerelease are `os-zapret2-restyle-0.4.1_4.pkg` / `v0.4.1_4`.
 
-Latest published testing prerelease remains `v0.4.1_3` /
-`os-zapret2-restyle-0.4.1_3.pkg`; `_4` has not been published. Stable published package remains
-`os-zapret2-restyle-0.4.1_1.pkg`. Latest owner-tested testing candidate is `_3`; its BLOB-free /
-built-in / representative-single-external startup/readiness/RSS measurement is accepted.
-Detailed production Strategy Lab evidence remains `_26` because `_2`, `_3`, and `_4` are
-measurement-only.
+Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`. Latest owner-tested testing
+candidate remains `_3`; its BLOB-free / built-in / representative-single-external
+startup/readiness/RSS measurement is accepted. Detailed production Strategy Lab evidence remains
+`_26` because `_2`, `_3`, and `_4` are measurement-only.
 
 The `_3` accepted owner run completed 27 starts, 9 per variant. Median stable readiness was
 `63.061 / 62.652 / 62.566 ms` for BLOB-free / built-in / external respectively, while median
@@ -64,6 +63,11 @@ balance and mean/stdev retained alongside median/tails.
 The common-set size equals the current maximum candidate width of three and is explicitly a
 bounded synthetic production-width upper bound. Production Model C remains unchanged and
 `production_change_recommended=false`.
+
+`v0.4.1_4` was published from exact merge `461fe2d045b131f3400f285a9cb59808b5f33ce2` by workflow
+`31633335688`. Release asset `os-zapret2-restyle-0.4.1_4.pkg` is `186024` bytes with digest
+`sha256:934fdd3a73117b3d914c9823f29eb7f2ca47196d97c30d94e3066a38159edbc9`. Owner-live `_4`
+measurement is still pending.
 
 Owner-live Extended `telegram.org`, `job.xhdgCU`, remains the detailed production baseline:
 Model C 16/16, no fallback, adaptive budget `150/120/270/120`, clean restoration and no
@@ -110,7 +114,7 @@ and `docs/audit/`. Key retained comparison points:
 - v0.4.1 stable release: `docs/releases/v0.4.1.md`, `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`;
 - Lua measurement: `docs/patches/v0.4.1_2.md`, `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`;
 - accepted single-BLOB measurement: `docs/patches/v0.4.1_3.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
-- current common-set scaling measurement: `docs/patches/v0.4.1_4.md`, `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`.
+- current common-set scaling measurement: `docs/patches/v0.4.1_4.md`, `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`.
 
 Historical evidence explains progression; it never overrides a later current record.
 
