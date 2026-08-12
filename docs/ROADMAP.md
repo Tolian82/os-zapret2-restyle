@@ -23,139 +23,96 @@ Detailed rationale, current live logs, or completed implementation internals.
 CURRENT PRIORITY
 ==================================================
 
-Stable project publication `v0.4.1` / package `os-zapret2-restyle-0.4.1_1.pkg` is complete.
-The Strategy Lab Python migration, adaptive-search redesign, Model-A measurement,
-controlled-parallel Model B, preferred Model C, source-port lease correction and adaptive
-workload budget are all retained as the current accepted architecture.
+Stable project publication `v0.4.1` / package `os-zapret2-restyle-0.4.1_1.pkg` is complete
+and the owner reports successful upgrade/normal operation.
 
-Current state authority:
-`docs/PROJECT_STATE.md`.
+Current independent logical change: `v0.4.1_2` — measure common/current Model-C Lua
+initialization against the candidate-minimal union without changing production Stage 60.
 
-Current release evidence:
-`docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`.
+Source analysis already shows that all 16 native Stage-60 expansion candidates declare the
+same `zapret-lib.lua` + `zapret-antidpi.lua` dependencies. Because the shared Model-C bucket
+also necessarily loads `zapret-auto.lua` and `strategy_lab_model_c.lua`, current and
+candidate-minimal initialization are expected to be the same four-file set.
 
-The next engineering cycle may proceed from `main`. New work must be selected as one
-independent logical change with its own risk-based verification rather than reopening the
-completed v0.4.1 publication cycle.
+Acceptance therefore requires truthful negative evidence: if the packaged measurement
+reports `equivalent_init_set`, no timing/RSS speedup may be claimed and production Model C
+must remain unchanged. Then advance directly to BLOB loading/startup/RSS measurement.
+
+Current state authority: `docs/PROJECT_STATE.md`.
+Lua measurement authority: `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`.
 
 ==================================================
 COMPLETED STRATEGY LAB FOUNDATION
 ==================================================
 
-- [x] Initial asynchronous Strategy Lab architecture, lifecycle, network precheck,
-  candidate runtime, family search, expansion, stability, extended protocols, circular
-  validation and GUI.
-- [x] Shell-era corrective series and semantic restoration hardening.
-- [x] Python 3.13 migration of state, stage ownership, request/probe parsing, candidates,
-  Stage 50/60/70/80/85 and final results.
-- [x] Live Stage-40 DNS and Stage-90 restoration corrections.
-- [x] Risk-based owner-live release-gate policy.
+- [x] asynchronous Strategy Lab architecture, lifecycle, network precheck, candidate
+  runtime/search/stability/extended/circular/GUI;
+- [x] shell-era corrective series and semantic restoration hardening;
+- [x] Python 3.13 state/stage/request/probe/candidate/search/result ownership;
+- [x] live DNS/restoration corrections and risk-based owner-live policy.
 
 ==================================================
-COMPLETED ADAPTIVE-SEARCH SERIES
+COMPLETED ADAPTIVE-SEARCH / RUNTIME SERIES
 ==================================================
 
-Historical engineering labels `_28`-`_33` are completed work-item names and must not be
-confused with package revision suffixes.
+Historical engineering labels `_28`-`_33` are completed work-item names, not package
+revision suffixes.
 
-- [x] `_28` — Stage-50 family acceptance no longer gates Stage-60 reachability.
-- [x] `_29` — immutable Python `CandidateSpec` and job-scoped `ResourceInventory`.
-- [x] `_30` — deterministic native Zapret2 graph with golden/resource/range coverage.
-- [x] `_31` — adaptive neighbor ordering, fixed endpoint epoch and timing telemetry.
-- [x] `_32` — measured operation/stage/job deadline containment and late-stage correction.
-- [x] `_33` — lightweight discovery, fail-fast 3/3 stability and finalist cold/deep
-  validation.
+- [x] Stage-50 evidence is priority only, not Stage-60 reachability gating;
+- [x] immutable CandidateSpec + ResourceInventory;
+- [x] deterministic native Zapret2 graph, fixed endpoint epoch and adaptive planner;
+- [x] measured deadline containment and finalist validation;
+- [x] cold Model A correctness/reference;
+- [x] controlled width-three Model B fallback/reference with corrected failed attribution;
+- [x] preferred one-worker Model C dispatcher;
+- [x] `preferred-free-else-alternate` source-port leasing and fresh Model-B fallback lease;
+- [x] `eligible-work-v1` adaptive finite budgets after Stage 30;
+- [x] `_26` owner-live Extended `telegram.org`, `job.xhdgCU`, Model-C 16/16 no-fallback
+  execution with exact budget persistence and clean restoration.
 
-==================================================
-COMPLETED RUNTIME MODEL SERIES
-==================================================
-
-### Model A — cold correctness/reference
-
-- [x] `v0.4.0_11` / `job.TtZeaH` retained as the cold correctness/performance reference.
-- [x] 25 candidate samples retained with timing/RSS/restoration evidence.
-
-### Model B — controlled warm workers
-
-- [x] coexistence accepted on `_16`;
-- [x] reproducibility repeated 5/5 on `_17`;
-- [x] sequential exhaustive benchmark accepted on `_19`;
-- [x] failed-probe attribution corrected and controlled parallel accepted on `_21`;
-- [x] width-three Model B integrated into real Stage 60 on `_22`;
-- [x] `_22` owner-live no-candidate, working-candidate, fallback and restoration evidence
-  recorded.
-
-Model B remains the accepted immediate fallback/reference. Do not repeat the old Model-B
-architecture benchmark unless a later change invalidates its assumptions.
-
-### Model C — preferred one-worker bucket
-
-- [x] Model C became the normal Stage-60 owner on `_23`;
-- [x] one physical warm bucket services up to three candidate source-port selectors;
-- [x] exact candidate Lua/BLOB/range semantics and endpoint/source-port attribution are
-  preserved;
-- [x] working-candidate and graph-exhausted owner-live behavior were observed;
-- [x] `_23` exposed shared preferred-port collision amplification rather than hiding it;
-- [x] `_25` corrected ownership with `preferred-free-else-alternate` leasing;
-- [x] fallback Model B obtains a fresh independent lease;
-- [x] `_25` owner-live proved 16/16 Model-C completion without fallback and with clean
-  restoration.
-
-==================================================
-COMPLETED ADAPTIVE BUDGET CYCLE — `_26`
-==================================================
-
-- [x] derive finite parent budgets only after Stage-30 capability measurement;
-- [x] persist `policy=eligible-work-v1`, measured work matrix, explicit additions and
-  effective budgets in `adaptive-budget.json`;
-- [x] keep deadlines anchored to the original job start epoch;
-- [x] preserve the calibrated two-endpoint floor `150/120/270/120` when optional work is
-  not eligible;
-- [x] add bounded source-tested headroom for extra endpoints, IPv6 baseline work,
-  Extended QUIC and configured Generic UDP;
-- [x] pass source, corrective-matrix, FreeBSD 15 package and testing-prerelease gates;
-- [x] owner-live Extended `telegram.org`, `job.xhdgCU`, proved production wiring, Model-C
-  16/16 no-fallback execution, exact measured budget persistence and clean restoration.
+Do not repeat old Model-B architecture benchmarks unless later work invalidates their
+assumptions.
 
 ==================================================
 COMPLETED RELEASE CYCLE — `v0.4.1 / 0.4.1_1`
 ==================================================
 
-- [x] owner authorization received for v0.4.1 package revision 1;
-- [x] set `VERSION=0.4.1`;
-- [x] reset `PLUGIN_REVISION=1`;
-- [x] synchronize README, changelog, current state, Engineering Memory, release record,
-  live-release boundary and version-aware CI contracts;
-- [x] complete applicable PR CI and FreeBSD 15 package build;
-- [x] squash merge PR #185 with exact subject `v0.4.1_1: Prepare release v0.4.1`;
-- [x] verify semantic tag `v0.4.1` at exact merge `c53e1c1656517fa764f97a175bb82eea02dbc374`;
-- [x] verify Release trigger run `31596967737` SUCCESS;
-- [x] verify full Release workflow run `31596979559` SUCCESS;
-- [x] verify package `os-zapret2-restyle-0.4.1_1.pkg`, size `180305` bytes and digest
-  `sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e`;
-- [x] verify matching `SHA256SUMS`;
-- [x] verify GitHub Release ID `369226460` publication;
-- [x] verify Pages/pkg repository deployment `5869308071` SUCCESS;
-- [x] record durable release-publication evidence and current-state closeout.
+- [x] VERSION `0.4.1`, revision reset to `1`;
+- [x] PR/CI/FreeBSD 15 qualification;
+- [x] semantic tag/Release/package/checksum/Pages/pkg repository publication;
+- [x] durable publication evidence;
+- [x] owner upgrade/install smoke: PASS, normal operation reported correct.
 
-The workflow-created GitHub Release is currently marked prerelease by the existing release
-workflow. No v0.4.1 publication task remains pending.
+Published semantic tag `v0.4.1` remains immutable release history.
 
 ==================================================
-FOLLOW-UP OPTIMIZATION BACKLOG
+OPTIMIZATION SEQUENCE
 ==================================================
 
-Independent optimization ideas remain separate work items:
+### 1. Lua initialization — current `_2`
 
-- common Lua preload versus candidate-minimal initialization;
-- BLOB loading/startup/RSS tradeoffs;
+- [x] establish exact current CandidateSpec Lua dependencies;
+- [x] establish Model-C shared requirements (`zapret-auto.lua`, dispatcher Lua);
+- [ ] package deterministic equivalence report;
+- [ ] CI/FreeBSD 15 qualification and testing prerelease;
+- [ ] owner-installed report;
+- [ ] if equivalent, close with no production change.
+
+### 2. BLOB loading/startup/RSS — next if Lua sets are equivalent
+
+Measure candidate/BLOB declaration loading cost independently. Compare startup/readiness and
+RSS only where the rendered resource sets are genuinely distinct. Preserve exact BLOB
+identity/class, attribution, deadlines and cleanup.
+
+### 3. Later independent ideas
+
 - lazy bucket creation versus eager bucket creation;
 - candidate width greater than three;
 - endpoint-level parallelism;
 - broader dispatcher/bucket grouping beyond one adaptive frontier batch.
 
-Every item above requires its own evidence and must not silently weaken candidate
-attribution, finite deadlines, cleanup or semantic restoration.
+Every item requires its own evidence and must not silently weaken candidate attribution,
+finite deadlines, cleanup or semantic restoration.
 
 QUIC remains capability/precheck scope rather than an adaptive Stage-60 search priority.
 IPv6 remains capability-gated and lower priority.
@@ -167,26 +124,15 @@ BROADER OWNER-ASSISTED REGRESSION BACKLOG
 The canonical matrix remains `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 Rows are selected per change/release risk; they are not all unconditional blockers.
 
-Retained backlog includes:
-
-- initial Zapret2 STOPPED;
-- Extended TLS 1.2/HTTP and capability-gated QUIC;
-- Generic UDP;
-- already-accessible target;
-- cancellation and controlled internal failure;
-- circular start/stop/TTL/stale recovery;
-- Settings Apply guards;
-- active/terminal Diagnostics reload behavior;
-- Russian/English presentation;
-- retention and reboot/residue checks.
+Retained backlog includes initial Zapret2 STOPPED; Extended TLS1.2/HTTP and capability-gated
+QUIC; Generic UDP; already-accessible target; cancellation/internal failure; circular
+start/stop/TTL/stale recovery; Settings Apply guards; Diagnostics reload behavior;
+RU/EN presentation; retention and reboot/residue checks.
 
 ==================================================
 RELEASE BOUNDARY
 ==================================================
 
-Published semantic tag `v0.4.1` and its release assets are immutable project history. The
-current package identity is `os-zapret2-restyle-0.4.1_1.pkg` for `FreeBSD:15:amd64`.
-
-Future stable releases require their own exact VERSION authorization, risk-selected live
-basis, revision reset to `1`, release-preparation PR and full Release/Pages/pkg-repository
-pipeline.
+Stable `v0.4.1` remains the published semantic release. `v0.4.1_2` is an independent testing
+package revision for measurement and must not mutate the semantic `v0.4.1` tag/asset history.
+Future stable releases require their own exact VERSION authorization and release pipeline.
