@@ -17,15 +17,16 @@ records.
 Read these first for current Strategy Lab or release work:
 
 - `docs/PROJECT_STATE.md` — current source/published candidates, accepted runtime basis and next boundary;
-- `docs/patches/v0.4.1_4.md` — current measurement-only BLOB common-set scaling candidate;
-- `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md` — accepted `_3` result plus current `_4` scaling/isolation/decision contract;
+- `docs/patches/v0.4.1_4.md` — accepted measurement-only BLOB common-set scaling candidate;
+- `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md` — accepted `_3` and `_4` BLOB measurements and closed negative optimization result;
+- `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md` — accepted `_4` owner-live common-set startup/readiness/RSS evidence;
 - `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md` — exact `_4` testing publication evidence;
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md` — accepted owner-installed single-BLOB startup/readiness/RSS evidence;
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md` — exact `_3` testing publication evidence;
 - `docs/patches/v0.4.1_3.md` — accepted `_3` measurement patch history;
 - `docs/patches/v0.4.1_2.md` — accepted measurement-only Lua initialization patch;
 - `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md` — accepted Lua measurement/decision contract;
-- `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md` — accepted owner-installed Lua equivalence evidence;
+- `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md` — accepted Lua equivalence evidence;
 - `docs/releases/v0.4.1.md` — stable v0.4.1 release record;
 - `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md` — stable publication evidence;
 - `docs/patches/v0.4.0_26.md` — accepted workload-derived adaptive-budget patch;
@@ -44,9 +45,9 @@ Read these first for current Strategy Lab or release work:
 prerelease are `os-zapret2-restyle-0.4.1_4.pkg` / `v0.4.1_4`.
 
 Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`. Latest owner-tested testing
-candidate remains `_3`; its BLOB-free / built-in / representative-single-external
-startup/readiness/RSS measurement is accepted. Detailed production Strategy Lab evidence remains
-`_26` because `_2`, `_3`, and `_4` are measurement-only.
+candidate is now `_4`; its bounded width-three BLOB common-set startup/readiness/RSS measurement is
+accepted. Detailed production Strategy Lab evidence remains `_26` because `_2`, `_3`, and `_4` are
+measurement-only.
 
 The `_3` accepted owner run completed 27 starts, 9 per variant. Median stable readiness was
 `63.061 / 62.652 / 62.566 ms` for BLOB-free / built-in / external respectively, while median
@@ -54,20 +55,24 @@ ready and settled RSS was exactly `4360 KiB` for all variants. Lifecycle restora
 passed. The observed sub-1% readiness differences did not establish a BLOB startup penalty and do
 not justify a production Model-C change.
 
-`_4` addresses the remaining scaling/common eager-set question. All variants use the same adapter
-worker `external` and divert port `9992`: BLOB-free, inline `0x1603`, one external `fake_tls_7`,
-and a three-external TLS common set in which two declarations are intentionally unused by the
-active chain. Default measurement is 12 trials per variant / 48 starts with full four-order
-balance and mean/stdev retained alongside median/tails.
+The `_4` accepted owner run completed 48 starts, 12 per variant, using the same `external` worker
+and divert port `9992` across BLOB-free, inline `0x1603`, one external `fake_tls_7`, and a
+three-external TLS common set with two intentionally eager/unused declarations. All sample,
+cleanup, worker-identity and lifecycle-restoration checks passed.
 
-The common-set size equals the current maximum candidate width of three and is explicitly a
-bounded synthetic production-width upper bound. Production Model C remains unchanged and
+Primary `external-common-3` versus `external-single` median stable-readiness delta was only
+`+0.234 ms` / `+0.375%`; median ready/settled RSS delta was `+2 KiB` / `+0.046%`. Readiness
+stdev was `2.276 ms` for common-3 and `5.502 ms` for single, so the measured delta is below normal
+jitter. The common-set mean/p90 were also not worse. No material BLOB common-set startup/RSS cost
+was established at the current production width-three bound.
+
+The Model-C Lua initialization and BLOB startup/RSS optimization questions are therefore closed
+without production changes. Production Model C remains unchanged and
 `production_change_recommended=false`.
 
 `v0.4.1_4` was published from exact merge `461fe2d045b131f3400f285a9cb59808b5f33ce2` by workflow
 `31633335688`. Release asset `os-zapret2-restyle-0.4.1_4.pkg` is `186024` bytes with digest
-`sha256:934fdd3a73117b3d914c9823f29eb7f2ca47196d97c30d94e3066a38159edbc9`. Owner-live `_4`
-measurement is still pending.
+`sha256:934fdd3a73117b3d914c9823f29eb7f2ca47196d97c30d94e3066a38159edbc9`.
 
 Owner-live Extended `telegram.org`, `job.xhdgCU`, remains the detailed production baseline:
 Model C 16/16, no fallback, adaptive budget `150/120/270/120`, clean restoration and no
@@ -114,7 +119,7 @@ and `docs/audit/`. Key retained comparison points:
 - v0.4.1 stable release: `docs/releases/v0.4.1.md`, `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`;
 - Lua measurement: `docs/patches/v0.4.1_2.md`, `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`;
 - accepted single-BLOB measurement: `docs/patches/v0.4.1_3.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
-- current common-set scaling measurement: `docs/patches/v0.4.1_4.md`, `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`.
+- accepted common-set scaling measurement: `docs/patches/v0.4.1_4.md`, `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`.
 
 Historical evidence explains progression; it never overrides a later current record.
 

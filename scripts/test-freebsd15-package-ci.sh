@@ -13,6 +13,7 @@ LUA_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-li
 BLOB_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md"
 BLOB_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md"
 BLOB4_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md"
+BLOB4_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md"
 BUILD_PKG="${ROOT_DIR}/scripts/build-pkg.sh"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
@@ -41,7 +42,7 @@ require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 for file in \
     "${CI}" "${RELEASE}" "${PROJECT_STATE}" "${INDEX}" "${RELEASE_DOC}" \
     "${RELEASE_EVIDENCE}" "${LUA_PUBLICATION}" "${LUA_LIVE}" "${BLOB_PUBLICATION}" "${BLOB_LIVE}" \
-    "${BLOB4_PUBLICATION}" "${BUILD_PKG}" "${VERSION_FILE}" "${MAKEFILE}" "${CORRECTIVE_MATRIX}" \
+    "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${BUILD_PKG}" "${VERSION_FILE}" "${MAKEFILE}" "${CORRECTIVE_MATRIX}" \
     "${LUA_PY}" "${BLOB_TEST}" "${BLOB_PY}" "${BLOB_WRAPPER}" "${BLOB_WORKER}" \
     "${BLOB_DOC}" "${BLOB_PATCH}" "${RESOURCES_PY}" "${ADAPTIVE_BUDGET_PY}" \
     "${MODEL_C_PY}" "${MODEL_B_PY}" "${LEASE_PY}" "${PYTHON_ENTRY}" \
@@ -112,8 +113,8 @@ require "${BLOB_PY}" 'DIVERT_PORT = 9992'
 require "${BLOB_PY}" 'PRODUCTION_CANDIDATE_WIDTH = 3'
 require "${BLOB_PY}" 'production_change_recommended'
 require "${BLOB_TEST}" 'PASS: BLOB common-set scaling measurement is single-worker, balanced, lifecycle-safe'
-require "${BLOB_DOC}" '_3 ACCEPTED / _4 PUBLISHED — OWNER-LIVE PENDING / PRODUCTION MODEL C UNCHANGED'
-require "${BLOB_PATCH}" 'SOURCE / CI / FREEBSD15 PACKAGE / PUBLICATION PASS / OWNER-LIVE PENDING'
+require "${BLOB_DOC}" '_3 ACCEPTED / _4 ACCEPTED / BLOB-LOADING OPTIMIZATION CLOSED / PRODUCTION MODEL C UNCHANGED'
+require "${BLOB_PATCH}" 'SOURCE / CI / FREEBSD15 PACKAGE / PUBLICATION / OWNER-LIVE PASS'
 require "${BLOB_WRAPPER}" 'zapret2-lifecycle.lock'
 require "${BLOB_WRAPPER}" 'TRIALS="${2:-12}"'
 require "${BLOB_WORKER}" 'strategy-lab-evidence'
@@ -161,12 +162,13 @@ require "${PROJECT_STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISI
 require "${PROJECT_STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_4.pkg`'
 require "${PROJECT_STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${PROJECT_STATE}" 'Latest published testing prerelease: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`'
-require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.1_3` — BLOB startup/readiness/RSS measurement PASS'
+require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.1_4` — BLOB common-set scaling measurement PASS'
 require "${PROJECT_STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
-require "${PROJECT_STATE}" 'V0.4.1_4 BLOB COMMON-SET SCALING — PUBLISHED / OWNER-LIVE PENDING'
+require "${PROJECT_STATE}" 'V0.4.1_4 BLOB COMMON-SET SCALING — ACCEPTED / OPTIMIZATION CLOSED'
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
 require "${INDEX}" 'docs/patches/v0.4.1_4.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md'
+require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md'
 require "${RELEASE_DOC}" '`v0.4.1_1: Prepare release v0.4.1`'
@@ -194,6 +196,12 @@ require "${BLOB4_PUBLICATION}" '31633335688'
 require "${BLOB4_PUBLICATION}" '369482221'
 require "${BLOB4_PUBLICATION}" 'os-zapret2-restyle-0.4.1_4.pkg'
 require "${BLOB4_PUBLICATION}" 'sha256:934fdd3a73117b3d914c9823f29eb7f2ca47196d97c30d94e3066a38159edbc9'
+require "${BLOB4_LIVE}" 'Status: **PASS**'
+require "${BLOB4_LIVE}" 'Final report conclusion: `measurement_accepted`.'
+require "${BLOB4_LIVE}" '`48` planned starts'
+require "${BLOB4_LIVE}" '`+0.234 ms` / `+0.375%`'
+require "${BLOB4_LIVE}" '`+2 KiB` / `+0.046%`'
+require "${BLOB4_LIVE}" 'close the BLOB-loading startup/RSS optimization as a negative result for current width three'
 require "${PUBLICATION26}" '8ada9cba28916fff506f19b34f5ef3de16e2008e'
 require "${LIVE26}" 'Status: **PASS**'
 require "${LIVE26}" 'job.xhdgCU'
@@ -202,4 +210,4 @@ require "${MODEL_C_CORRECTIVE_PASS}" 'job.5yGde5'
 require "${MODEL_B_LIVE}" 'PRODUCTION STAGE-60 MODEL B OWNER-LIVE PASS'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI accepts published ${candidate} common-set measurement identity while owner-live evidence remains bound to v0.4.1_3"
+printf '%s\n' "PASS: FreeBSD 15 package CI accepts published ${candidate} common-set owner-live evidence while production runtime truth remains v0.4.0_26"

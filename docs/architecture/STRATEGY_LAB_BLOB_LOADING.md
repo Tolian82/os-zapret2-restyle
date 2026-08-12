@@ -1,6 +1,6 @@
 # Strategy Lab BLOB loading / startup / RSS measurement
 
-Status: **_3 ACCEPTED / _4 PUBLISHED — OWNER-LIVE PENDING / PRODUCTION MODEL C UNCHANGED**
+Status: **_3 ACCEPTED / _4 ACCEPTED / BLOB-LOADING OPTIMIZATION CLOSED / PRODUCTION MODEL C UNCHANGED**
 
 ## Question
 
@@ -8,7 +8,8 @@ Does BLOB declaration/loading impose measurable warm-worker startup/readiness or
 does that cost grow when Model C eagerly declares a common external-resource set for several
 compatible candidates?
 
-This remains an evidence question. Neither `_3` nor `_4` changes the accepted
+For the current candidate-width-three architecture, this evidence question is now closed. Neither
+`_3` nor `_4` changes the accepted
 `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`
 production chain.
 
@@ -19,7 +20,7 @@ declarations required by candidates in that bucket are deduplicated and emitted 
 worker argument set before candidate-specific selector/action chains.
 
 That is correctness-safe, but it means a candidate can cause a BLOB to be loaded even while a
-different chain is the one selected for the current probe. The remaining performance question is
+different chain is the one selected for the current probe. The remaining performance question was
 therefore not whether one small BLOB works, but whether the **eager common declaration set** has a
 measurable startup/readiness or RSS price at the current bounded candidate width.
 
@@ -64,29 +65,31 @@ Initial/final normal Zapret2 evidence matched exactly and remained RUNNING. `_3`
 Evidence:
 `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`.
 
-## `_4` common-set scaling measurement
+## `_4` common-set scaling measurement — accepted
 
 Policy: `blob-common-set-scaling-v1`, report schema `2`.
 
-`_4` addresses the coverage still required by the adaptive-search experiment authority:
-small-inline plus several semantically compatible external resources. It also removes worker/port
+`_4` addressed the remaining coverage required by the adaptive-search experiment authority:
+small-inline plus several semantically compatible external resources. It also removed worker/port
 identity as a comparison variable.
 
-Testing prerelease `v0.4.1_4` is published from exact source merge
-`461fe2d045b131f3400f285a9cb59808b5f33ce2`; owner-live measurement is still pending. Publication
+Testing prerelease `v0.4.1_4` was published from exact source merge
+`461fe2d045b131f3400f285a9cb59808b5f33ce2`. The owner-live measurement is accepted. Publication
 evidence is recorded in
-`docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`.
+`docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`; owner-live evidence
+is recorded in
+`docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`.
 
 ### Fixed worker identity
 
-Every variant uses:
+Every variant used:
 
 - adapter worker: `external`;
 - divert port: `9992`;
 - the same common Lua/filter/action shape.
 
-The active `dvtws.args` is rewritten immediately before each launch. No four different worker
-identities or ports are compared.
+The active `dvtws.args` was rewritten immediately before each launch. No four different worker
+identities or ports were compared.
 
 ### Controlled variants
 
@@ -101,7 +104,8 @@ identities or ports are compared.
 
 3. **external-single**
    - declare canonical `fake_tls_7` from ResourceInventory;
-   - use `fake_tls_7` in the active action.
+   - use `fake_tls_7` in the active action;
+   - `226` declared bytes.
 
 4. **external-common-3**
    - declare canonical `fake_tls_7`;
@@ -109,7 +113,8 @@ identities or ports are compared.
    - declare canonical `tls_clienthello_vk_com_kyber`;
    - use only `fake_tls_7` in the active action;
    - retain the other two as intentionally unused eager declarations that stand in for resources
-     belonging to other compatible candidates in the same common worker.
+     belonging to other compatible candidates in the same common worker;
+   - `3825` declared bytes total.
 
 The three external files are TLS ClientHello resources. They are not unrelated protocol files
 added merely to increase count.
@@ -118,47 +123,55 @@ The set size equals the current maximum production candidate width of three and 
 **bounded synthetic production-width common-set upper bound**. It does not claim that the current
 search graph always produces those exact three resources in one bucket.
 
-The report records canonical resource paths, declaration count and total declared bytes from the
-same immutable ResourceInventory contract used by Strategy Lab.
+### Accepted owner-live result
+
+The final report completed `48` starts, `12` per variant, with all acceptance checks true and
+`conclusion=measurement_accepted`.
+
+Stable-readiness summary:
+
+| Variant | mean ms | median ms | stdev ms | p90 ms |
+|---|---:|---:|---:|---:|
+| BLOB-free | 63.494 | 62.478 | 1.903 | 66.100 |
+| inline-small | 62.674 | 62.398 | 1.286 | 64.520 |
+| external-single | 65.055 | 62.332 | 5.502 | 72.535 |
+| external-common-3 | 63.610 | 62.566 | 2.276 | 66.033 |
+
+Primary `external-common-3` versus `external-single` median readiness delta was only
+`+0.234 ms` / `+0.375%`. That delta is far below the observed stdev in either external variant.
+The common-set mean and p90 were lower, not higher, so the distribution does not show a consistent
+startup penalty.
+
+Median ready and settled RSS was `4360 KiB` for `external-single` and `4362 KiB` for
+`external-common-3`: `+2 KiB` / `+0.046%`. The difference is below observed RSS spread. Common-3
+versus BLOB-free was only `+4 KiB` / `+0.092%`.
+
+Initial and final normal-service state matched exactly and remained RUNNING. Cleanup passed and no
+temporary worker state remained.
 
 ### Trial design
 
-Default: 12 trials per variant, 48 worker starts total.
+The accepted owner run used 12 trials per variant, 48 worker starts total, with the complete
+four-order balance and `cache_policy=natural-cache-no-drop`.
 
-Accepted trial counts are 4, 8, 12 or 16. This guarantees complete four-order rotations rather
-than accepting a partially balanced run.
+For every launch the measurement:
 
-The measurement intentionally does not drop OS caches and reports
-`cache_policy=natural-cache-no-drop`.
-
-For every launch:
-
-1. write that variant's arguments into the same worker slot;
-2. launch the same worker/port identity;
-3. poll approximately every 25 ms for at most 4 s;
-4. require two consecutive snapshots with exact process identity, divert socket readiness, clean
+1. wrote that variant's arguments into the same worker slot;
+2. launched the same worker/port identity;
+3. polled approximately every 25 ms for at most 4 s;
+4. required two consecutive snapshots with exact process identity, divert socket readiness, clean
    log and positive RSS;
-5. record first-ready and stable-ready latency;
-6. wait 200 ms and record settled RSS;
-7. stop the worker before the next variant.
+5. recorded first-ready and stable-ready latency;
+6. waited 200 ms and recorded settled RSS;
+7. stopped the worker before the next variant.
 
-Per variant the report retains min/mean/median/stdev/p90/max for stable readiness, ready RSS and
+Per variant the report retained min/mean/median/stdev/p90/max for stable readiness, ready RSS and
 settled RSS.
-
-Primary comparison:
-
-- `external-common-3` vs `external-single`.
-
-Supporting comparisons:
-
-- `inline-small` vs `blob-free`;
-- `external-single` vs `blob-free`;
-- `external-common-3` vs `blob-free`.
 
 ## Isolation / lifecycle ownership
 
-The experiment retains the lifecycle-locked `_3` wrapper and the audited narrow Model-B adapter.
-It MUST NOT:
+The experiment retained the lifecycle-locked `_3` wrapper and the audited narrow Model-B adapter.
+It did not:
 
 - call `route-add` or install experiment traffic routes;
 - stop/start/reconfigure normal Zapret2;
@@ -167,22 +180,25 @@ It MUST NOT:
 - change production Model C/B/A behavior;
 - leave temporary worker/rule/socket state.
 
-The wrapper owns `/var/run/zapret2-lifecycle.lock`. Initial and final semantic service evidence is
-collected with `zapret_service.sh strategy-lab-evidence`; acceptance requires identical service
-state, child/supervisor booleans, runtime-args hash, effective-config hash and normal-firewall hash.
+The wrapper owned `/var/run/zapret2-lifecycle.lock`. Initial and final semantic service evidence
+collected with `zapret_service.sh strategy-lab-evidence` matched exactly for service state,
+child/supervisor booleans, runtime-args hash, effective-config hash and normal-firewall hash.
 
-## Decision boundary
+## Decision — closed negative optimization result
 
-`production_change_recommended=false` is hard-coded for `_4`.
+`production_change_recommended=false` remains correct.
 
-A valid `_4` run is measurement evidence, not production-change authorization.
+The accepted `_3` and `_4` owner measurements together provide no evidence of a material BLOB
+startup/readiness or RSS penalty for the present architecture: neither one representative external
+BLOB nor the bounded eager common set at candidate width three produced an effect above normal
+jitter.
 
-- If `external-common-3` shows a material readiness/RSS cost above measured jitter relative to
-  `external-single`, reproduce that effect before considering a separate production patch.
-- If no material cost appears for the current width-three common-set upper bound, close the
-  BLOB-loading optimization as a negative result for the present architecture instead of adding
-  lazy-loading complexity without evidence.
+Therefore:
 
-Any future production BLOB-loading change remains a separate packaged patch and may not alter
-CandidateSpec resource identity, source-port attribution, deadlines, cleanup or restoration
-semantics.
+- production Model C BLOB loading remains unchanged;
+- lazy BLOB loading is not added;
+- no package revision is created solely for this optimization;
+- the BLOB-loading startup/RSS optimization is closed as a negative result for current width three.
+
+This closure is intentionally bounded. A future architecture that materially increases candidate
+width, BLOB count, or resource size must collect new evidence instead of extrapolating this result.
