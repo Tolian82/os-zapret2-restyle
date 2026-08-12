@@ -20,9 +20,10 @@ state.
 
 Read these first for current Strategy Lab work:
 
-- `docs/PROJECT_STATE.md` — current source candidate, verified live boundary and next action;
+- `docs/PROJECT_STATE.md` — current source/published candidate, verified live boundary and next action;
 - `docs/patches/v0.4.0_26.md` — current workload-derived finite adaptive-budget patch;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md` — current parent-budget calculation, deadline and evidence contract;
+- `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md` — exact `_26` source/CI/prerelease identity;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — adaptive candidate/search and validation architecture;
 - `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md` — latest owner-live PASS and clean timing floor;
 - `docs/patches/v0.4.0_25.md` — accepted controlled-source-port lease corrective;
@@ -37,11 +38,15 @@ Read these first for current Strategy Lab work:
 
 ### Current `_26` boundary
 
-`VERSION=0.4.0`, `PLUGIN_REVISION=26`; source candidate:
+`VERSION=0.4.0`, `PLUGIN_REVISION=26`; source and published testing candidate:
 `os-zapret2-restyle-0.4.0_26.pkg`.
 
-Latest published and owner-tested package remains `_25` until the `_26` delivery/live cycle.
-The accepted `_25` Extended `telegram.org` `job.5yGde5` baseline remains Model C 16/16,
+Latest published testing prerelease: `v0.4.0_26`, exact runtime commit
+`8ada9cba28916fff506f19b34f5ef3de16e2008e`. Durable record:
+`docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`.
+
+Latest owner-tested package remains `_25` until the `_26` selected live gate passes. The
+accepted `_25` Extended `telegram.org` `job.5yGde5` baseline remains Model C 16/16,
 `graph_exhausted`, `.parallel.fallbacks=[]`, Stage 60 `34198 ms`, total `114759 ms`, clean
 Stage-90 restoration.
 
@@ -103,7 +108,7 @@ Key retained comparison points:
 - Model B production integration: `docs/patches/v0.4.0_22.md` and `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`;
 - Model C production-candidate publication/live evidence: `docs/patches/v0.4.0_23.md`, `docs/verification/evidence/2026-08-11-v0.4.0_23-publication.md`, `docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md`;
 - Model C source-port corrective acceptance: `docs/patches/v0.4.0_25.md`, `docs/verification/evidence/2026-08-11-v0.4.0_25-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
-- Adaptive workload budget implementation: `docs/patches/v0.4.0_26.md` and `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`.
+- Adaptive workload budget: `docs/patches/v0.4.0_26.md`, `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`, `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`.
 
 Historical evidence explains progression; it never overrides a later patch/PR/live record.
 
