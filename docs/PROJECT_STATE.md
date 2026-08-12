@@ -62,6 +62,7 @@ runtime evidence.
 CURRENT STRATEGY LAB AUTHORITIES
 ==================================================
 
+- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
