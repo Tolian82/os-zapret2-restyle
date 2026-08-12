@@ -23,43 +23,36 @@ Detailed rationale, current live logs, or completed implementation internals.
 CURRENT PRIORITY
 ==================================================
 
-Strategy Lab Python migration, adaptive-search `_28`-`_33`, Model A measurement and the
-accepted Model B warm/parallel series are complete through the owner-tested production
-`v0.4.0_22` baseline.
+The Strategy Lab Python migration, adaptive-search redesign, Model-A measurement,
+controlled-parallel Model B, preferred Model C, source-port lease correction and adaptive
+workload budget are complete through the published and owner-tested `v0.4.0_26` runtime.
 
 Current objective:
-**owner-live verify the already published `v0.4.0_23`, which moves normal Stage 60 to one
-warm Model C bucket with deterministic source-port Lua dispatch while retaining accepted
-Model B and cold Model A as fail-closed fallbacks.**
-
-`v0.4.0_23` is published from main commit
-`77b1beec471d161fb80584bf884e98970d4c75b3`. Publication evidence:
-`docs/verification/evidence/2026-08-11-v0.4.0_23-publication.md`.
+**complete the owner-authorized full `v0.4.1 / 0.4.1_1` release cycle from that accepted
+runtime without changing Strategy Lab behavior in the release-preparation patch.**
 
 Current state authority:
 `docs/PROJECT_STATE.md`.
 
-Current patch:
-`docs/patches/v0.4.0_23.md`.
+Release authority:
 
-Current decision:
-`docs/decisions/DEC-2026-08-11-strategy-lab-model-c-production-switch.md`.
+- `docs/releases/v0.4.1.md`;
+- `docs/devlog/2026-08-12-release-v0.4.1.md`;
+- `docs/GITHUB_PUBLICATION.md`;
+- `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
 
-Current Model-C architecture:
-`docs/architecture/STRATEGY_LAB_MODEL_C.md`.
-
-Primary adaptive-search architecture:
-`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`.
-
-Runtime/search verification history and methodology:
-`docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
+The release cycle is complete only after the release-preparation PR passes, exact squash
+merge is verified, immutable semantic tag `v0.4.1` is created at that merge, and the full
+Release workflow publishes package `os-zapret2-restyle-0.4.1_1.pkg`, checksum and matching
+`FreeBSD:15:amd64` Pages/pkg repository.
 
 ==================================================
 COMPLETED STRATEGY LAB FOUNDATION
 ==================================================
 
-- [x] Initial Strategy Lab architecture, lifecycle, network precheck, candidate runtime,
-  family search, expansion, stability, extended protocols, circular validation and GUI.
+- [x] Initial asynchronous Strategy Lab architecture, lifecycle, network precheck,
+  candidate runtime, family search, expansion, stability, extended protocols, circular
+  validation and GUI.
 - [x] Shell-era corrective series and semantic restoration hardening.
 - [x] Python 3.13 migration of state, stage ownership, request/probe parsing, candidates,
   Stage 50/60/70/80/85 and final results.
@@ -70,105 +63,108 @@ COMPLETED STRATEGY LAB FOUNDATION
 COMPLETED ADAPTIVE-SEARCH SERIES
 ==================================================
 
-The post-migration adaptive-search redesign is complete. Historical cycle names `_28`-`_33`
-refer to engineering work items and must not be confused with current package revision
-suffixes.
+Historical engineering labels `_28`-`_33` are completed work-item names and must not be
+confused with package revision suffixes.
 
 - [x] `_28` — Stage-50 family acceptance no longer gates Stage-60 reachability.
 - [x] `_29` — immutable Python `CandidateSpec` and job-scoped `ResourceInventory`.
 - [x] `_30` — deterministic native Zapret2 graph with golden/resource/range coverage.
 - [x] `_31` — adaptive neighbor ordering, fixed endpoint epoch and timing telemetry.
-- [x] `_32` — deadline/budget containment corrected from measured live evidence through
-  package revisions `0.4.0_7` / `_8`.
+- [x] `_32` — measured operation/stage/job deadline containment and late-stage correction.
 - [x] `_33` — lightweight discovery, fail-fast 3/3 stability and finalist cold/deep
-  validation completed through `0.4.0_9` and its owner-live evidence.
-
-The old ROADMAP statement that `_32` was the next source cycle is superseded by the actual
-merged implementation/evidence chain and must not be used for current planning.
+  validation.
 
 ==================================================
 COMPLETED RUNTIME MODEL SERIES
 ==================================================
 
-### Model A — cold reference
+### Model A — cold correctness/reference
 
-- [x] `v0.4.0_11` / `job.TtZeaH` accepted as the cold correctness/performance reference.
+- [x] `v0.4.0_11` / `job.TtZeaH` retained as the cold correctness/performance reference.
 - [x] 25 candidate samples retained with timing/RSS/restoration evidence.
 
-### Model B — multiple warm workers
+### Model B — controlled warm workers
 
 - [x] coexistence accepted on `_16`;
 - [x] reproducibility repeated 5/5 on `_17`;
-- [x] sequential exhaustive benchmark accepted 5/5 on `_19`;
-- [x] controlled parallel attribution corrected and accepted on `_21`;
-- [x] width-three controlled-parallel Model B integrated into real Stage 60 on `_22`;
-- [x] `_22` owner-live no-candidate, working-candidate, fallback and restoration paths
+- [x] sequential exhaustive benchmark accepted on `_19`;
+- [x] failed-probe attribution corrected and controlled parallel accepted on `_21`;
+- [x] width-three Model B integrated into real Stage 60 on `_22`;
+- [x] `_22` owner-live no-candidate, working-candidate, fallback and restoration evidence
   recorded.
 
-Model B remains an accepted fallback/reference after the `_23` Model C switch. Do not
-repeat the old Model B architecture benchmark unless a later change invalidates its
-assumptions.
+Model B remains the accepted immediate fallback/reference. Do not repeat the old Model-B
+architecture benchmark unless a later change invalidates its assumptions.
+
+### Model C — preferred one-worker bucket
+
+- [x] Model C became the normal Stage-60 owner on `_23`;
+- [x] one physical warm bucket services up to three candidate source-port selectors;
+- [x] exact candidate Lua/BLOB/range semantics and endpoint/source-port attribution are
+  preserved;
+- [x] working-candidate and graph-exhausted owner-live behavior were observed;
+- [x] `_23` exposed shared preferred-port collision amplification rather than hiding it;
+- [x] `_25` corrected ownership with `preferred-free-else-alternate` leasing;
+- [x] fallback Model B obtains a fresh independent lease;
+- [x] `_25` owner-live proved 16/16 Model-C completion without fallback and with clean
+  restoration.
 
 ==================================================
-ACTIVE MODEL C CYCLE — `v0.4.0_23`
+COMPLETED ADAPTIVE BUDGET CYCLE — `_26`
 ==================================================
 
-Owner instruction selected a direct production-candidate switch rather than another
-side-by-side experiment harness.
+- [x] derive finite parent budgets only after Stage-30 capability measurement;
+- [x] persist `policy=eligible-work-v1`, measured work matrix, explicit additions and
+  effective budgets in `adaptive-budget.json`;
+- [x] keep deadlines anchored to the original job start epoch;
+- [x] preserve the calibrated two-endpoint floor `150/120/270/120` when optional work is
+  not eligible;
+- [x] add bounded source-tested headroom for extra endpoints, IPv6 baseline work,
+  Extended QUIC and configured Generic UDP;
+- [x] pass source, corrective-matrix, FreeBSD 15 package and testing-prerelease gates;
+- [x] owner-live Extended `telegram.org`, `job.xhdgCU`, proved production wiring, Model-C
+  16/16 no-fallback execution, exact measured budget persistence and clean restoration.
 
-Source/CI/publication tasks:
+`v0.4.0_26` is therefore the accepted runtime basis being promoted to v0.4.1.
 
-- [x] make Model C the normal Stage-60 packaged owner;
-- [x] render up to three currently-ready `CandidateSpec` chains into one physical warm
-  `dvtws2` bucket;
-- [x] preserve exact candidate payload/range/Lua/BLOB semantics inside the shared profile;
-- [x] use `zapret-auto.lua` `condition` plus packaged client-source-port selector;
-- [x] retain three exact source-port-qualified IPFW routes to the one bucket worker;
-- [x] retain candidate parallel width <=3 and sequential endpoints inside a candidate;
-- [x] fail closed Model C -> accepted Model B -> cold Model A;
-- [x] keep Stage-60 budget/cancel/progress/planner semantics and Stage-70/80/85 ownership
-  unchanged;
-- [x] add focused Model-C regression while retaining Model-B fallback regression;
-- [x] pass complete CI and FreeBSD 15 package qualification on the final PR head;
-- [x] squash merge PR #177 and publish `v0.4.0_23` as a verified testing prerelease;
-- [x] verify tag/release/asset and automatic deletion of `publish/v0.4.0_23`.
+==================================================
+CURRENT RELEASE CYCLE — `v0.4.1 / 0.4.1_1`
+==================================================
 
-Publication identity:
+Release preparation:
 
-- main/tag target: `77b1beec471d161fb80584bf884e98970d4c75b3`;
-- package: `os-zapret2-restyle-0.4.0_23.pkg`;
-- size: `177429` bytes;
-- digest: `sha256:f735f88e62fc82e5e856123f0d7c3dc26bd550b3ec0d5ab0e72bb2277dabe364`;
-- publication workflow run: `31520848437`, success.
+- [x] owner authorization received for v0.4.1 package revision 1;
+- [x] set `VERSION=0.4.1`;
+- [x] reset `PLUGIN_REVISION=1`;
+- [x] synchronize README, changelog, current state, Engineering Memory, release record,
+  live-release boundary and version-aware CI contracts;
+- [ ] pass the complete applicable PR CI and FreeBSD 15 package build;
+- [ ] squash merge with exact subject `v0.4.1_1: Prepare release v0.4.1`;
+- [ ] verify immutable semantic tag `v0.4.1` at the exact merge commit;
+- [ ] verify full Release workflow success;
+- [ ] verify package `os-zapret2-restyle-0.4.1_1.pkg` and checksum;
+- [ ] verify matching Pages/pkg repository publication;
+- [ ] record durable release-publication evidence and current-state closeout.
 
-Owner-live gate after publication:
-
-- [ ] prove normal Stage 60 actually executes `C-warm-bucket-source-port-dispatch`;
-- [ ] observe one physical worker servicing a multi-candidate batch;
-- [ ] verify exact selector source-port sets and route attribution;
-- [ ] Standard no-candidate / graph-exhaustion path;
-- [ ] Standard working-candidate path and unchanged Stage-70/85 handoff;
-- [ ] Model-C -> Model-B fallback if naturally or deliberately exercised;
-- [ ] cancellation/cleanup/restoration and absence of `19128-19130` residue.
-
-Owner-live PASS promotes `_23` from published production candidate to the current accepted
-Model-C appliance baseline. A correctness/attribution/restoration failure returns the
-production recommendation to accepted Model B instead of weakening the safety contract.
+The release-preparation change itself adds no new runtime behavior, so accepted `_26`
+owner-live evidence is the risk-selected live basis. Pending unrelated matrix rows are not
+converted to false PASS claims.
 
 ==================================================
 FOLLOW-UP OPTIMIZATION BACKLOG
 ==================================================
 
-Only after `_23` owner-live correctness is established consider independent optimizations:
+After v0.4.1 publication, independent optimization ideas remain separate work items:
 
 - common Lua preload versus candidate-minimal initialization;
 - BLOB loading/startup/RSS tradeoffs;
 - lazy bucket creation versus eager bucket creation;
-- width greater than three;
+- candidate width greater than three;
 - endpoint-level parallelism;
-- broader dispatcher/bucket grouping beyond the current one adaptive frontier batch.
+- broader dispatcher/bucket grouping beyond one adaptive frontier batch.
 
-Every item above is a separate experiment/patch. None is implied by `_23` acceptance.
+Every item above requires its own evidence and must not silently weaken candidate
+attribution, finite deadlines, cleanup or semantic restoration.
 
 QUIC remains capability/precheck scope rather than an adaptive Stage-60 search priority.
 IPv6 remains capability-gated and lower priority.
@@ -197,9 +193,10 @@ Retained backlog includes:
 RELEASE BOUNDARY
 ==================================================
 
-The stable `v0.4.0 / 0.4.0_1` release cycle is complete. Current `_22` and `_23` work is a
-forward testing-candidate line and does not rewrite the immutable semantic `v0.4.0` tag.
+Stable `v0.4.0` remains immutable. The current release-preparation source line is v0.4.1
+revision 1. By project protocol the stable Git tag is semantic `v0.4.1`; `_1` belongs to
+the package identity `os-zapret2-restyle-0.4.1_1.pkg`.
 
-A later stable release requires its own exact VERSION authorization, release-selected live
-gates, revision reset to `1`, release-preparation PR and full Release/Pages/pkg-repository
-pipeline. Testing prerelease `v0.4.0_23` publishes only the verified FreeBSD 15 `.pkg` asset.
+Future stable releases require their own exact VERSION authorization, risk-selected live
+basis, revision reset to `1`, release-preparation PR and full Release/Pages/pkg-repository
+pipeline.

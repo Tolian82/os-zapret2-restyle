@@ -8,57 +8,69 @@ The project starts its own version history at `0.1.0`.
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [0.4.1] - 2026-08-12
+
 ### Added
 
 - Added immutable normalized Python `CandidateSpec` evidence for every automated
-  candidate attempt, including stable identity, ordered Lua actions and arguments,
-  protocol/L3/L7/payload/range data, resource classes, provenance, cost/complexity and
-  exact rendered runtime arguments.
-- Added one job-scoped `ResourceInventory` snapshot of installed Zapret2 Lua and fake-file
-  resources, built-in BLOBs and inline capability at job initialization.
-- Added a validated native Zapret2 TLS 1.3 DAG with seven reconnaissance seeds, sixteen
-  expansion nodes, stable graph evidence and exact built-in/external golden candidates.
-- Added validated job-scoped search-epoch evidence and locked atomic timing telemetry for
-  DNS, stages, candidates, stability attempts and job execution through mandatory
-  restoration.
+  candidate attempt and one job-scoped `ResourceInventory` snapshot of installed Lua,
+  fake-file, built-in BLOB and inline capabilities.
+- Added a deterministic native Zapret2 TLS 1.3 search graph with explicit resource/range
+  ownership, fixed job search endpoints and atomic timing telemetry.
+- Added measured cold Model-A, warm Model-B and one-bucket Model-C execution evidence,
+  including deterministic source-port attribution and cleanup/restoration telemetry.
+- Added `eligible-work-v1` adaptive parent-budget evidence persisted after Stage 30 from
+  the actual endpoint/network/protocol work matrix.
 
 ### Changed
 
-- Began the adaptive-search implementation with `_28`: Stage-50 `accepted` evidence now
-  prioritizes matching Stage-60 catalog families but no longer excludes the remaining
-  families. An all-rejected Stage-50 result therefore still enters bounded Stage-60
-  candidate testing instead of reporting zero candidates solely because no family was
-  accepted.
-- Continued the adaptive-search implementation with `_29`: Python now selects only the
-  candidate's declared Lua/resources/ranges and renders the exact dvtws2 argument file;
-  active shell candidate adapters retain FreeBSD/IPFW/dvtws2 lifecycle mutations but no
-  longer choose Lua, BLOB, range or search policy.
-- Continued the adaptive-search implementation with `_30`: active Stage 50/60 now plans
-  from the native DAG instead of flat TSV policy, semantically skips only candidates with
-  missing declared resources, and preserves candidate-defined `-d8`, `-d10` or absent
-  ranges through runtime, stability and final profile output.
-- Continued the adaptive-search implementation with `_31`: every Stage-60 PASS/FAIL now
-  selects the next reachable graph neighbor, Stage 40 pins one endpoint set for all
-  candidate/final replay, and normal discovery/publication stops at three winners while
-  preserving truthful smaller results.
+- Made Stage-50 family results search-priority evidence instead of a Stage-60 hard
+  reachability gate.
+- Moved Stage 60 from flat/cold candidate execution to the accepted runtime chain
+  `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
+- Kept candidate concurrency at width three while pinned endpoints inside each candidate
+  remain sequential and CPU count remains observational rather than a gate.
+- Preserved candidate-defined Lua/resources/output ranges through runtime rendering,
+  stability validation and final profile output.
+- Derived finite parent budgets from measured eligible work rather than increasing one
+  global Strategy Lab timeout blindly.
+
+### Fixed
+
+- Corrected Stage-60 failed-probe attribution so a blocked probe is owned by its exact
+  local port, pinned endpoint, IPFW counter growth and successful route cleanup rather
+  than requiring a connected curl socket that does not exist on failure.
+- Corrected Model-C source-port collision amplification with
+  `preferred-free-else-alternate` leasing and a fresh independent lease for fallback
+  models.
+- Closed the measured Stage-60/late-stage parent-budget boundary while retaining finite
+  operation <= stage <= job containment.
 
 ### Verification
 
-- Published and owner-tested `v0.4.0_2` on OPNsense. Standard job `job.2HVQqr` against
-  `discord.com` produced `accepted=[]` at Stage 50, still attempted all 14 current
-  Stage-60 catalog candidates, and passed Stage-90 restoration with no temporary IPFW
-  rule from `19100–19131`. Truthful `NO_CANDIDATE` does not invalidate the `_28`
-  reachability/restoration PASS.
-- `_29` adds focused CandidateSpec/ResourceInventory, adapter-boundary and package-content
-  regressions. It makes no new owner-live PASS claim; `v0.4.0_2` remains the latest
-  published and owner-tested testing candidate.
-- `_30` adds focused graph/golden/resource/range coverage on Linux and FreeBSD 15 plus
-  package inspection for `search_graph.py`. It makes no new publication or owner-live
-  claim; `v0.4.0_2` remains the latest published and owner-tested testing candidate.
-- `_31` adds focused live-planner/search-epoch/three-winner/timing coverage, verifies
-  candidate DNS removal and bound Stage-40 requests, and inspects both new modules in the
-  FreeBSD package. It changes no timeout or owner-live claim; `v0.4.0_2` remains the
-  latest published and owner-tested testing candidate.
+- Model A cold reference, Model B coexistence/reproducibility/exhaustive/controlled-
+  parallel evidence and Model-C production evidence are retained under
+  `docs/verification/evidence/`.
+- Published `v0.4.0_26` passed source, corrective-matrix, FreeBSD 15 package and
+  publication gates.
+- Owner-live Extended `telegram.org`, `job.xhdgCU`, proved `eligible-work-v1` on the
+  actual appliance topology with exact `150/120/270/120` effective budgets.
+- The same job completed Stage 60 on Model C 16/16 with `graph_exhausted`, zero winners,
+  `.parallel.fallbacks=[]`, Stage 60 `34209 ms`, total `114644 ms`, truthful
+  `NO_CANDIDATE`, exact Stage-90 restoration and no `19128-19130` residue.
+- Earlier accepted live evidence retains the Model-C working-candidate path and Model-B
+  fallback/reference behavior; unrelated pending live-matrix rows remain regression
+  backlog rather than being falsely marked PASS.
+
+### Distribution
+
+- Advanced `VERSION` from `0.4.0` to `0.4.1` and reset `PLUGIN_REVISION` from `26` to `1`.
+- Release-preparation subject: `v0.4.1_1: Prepare release v0.4.1`.
+- Expected immutable semantic release tag: `v0.4.1`.
+- Expected package: `os-zapret2-restyle-0.4.1_1.pkg` for `FreeBSD:15:amd64`, with matching
+  checksum and Pages/pkg repository produced by the full release workflow.
 
 ## [0.4.0] - 2026-08-09
 
