@@ -22,7 +22,7 @@ BLOB_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/blob_s
 BLOB_WRAPPER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_blob_measurement.sh"
 BLOB_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_blob_measurement_worker.sh"
 BLOB_DOC="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_BLOB_LOADING.md"
-BLOB_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_3.md"
+BLOB_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_4.md"
 RESOURCES_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/resources.py"
 ADAPTIVE_BUDGET_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_budget.py"
 MODEL_C_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_model_c.py"
@@ -54,8 +54,8 @@ revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; 
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${version}" = '0.4.1' ] || fail 'measurement line must retain VERSION=0.4.1'
-[ "${revision}" -eq 3 ] || fail 'BLOB measurement package must use PLUGIN_REVISION=3'
-[ "${candidate}" = 'os-zapret2-restyle-0.4.1_3.pkg' ] || fail 'unexpected measurement package identity'
+[ "${revision}" -eq 4 ] || fail 'BLOB common-set package must use PLUGIN_REVISION=4'
+[ "${candidate}" = 'os-zapret2-restyle-0.4.1_4.pkg' ] || fail 'unexpected common-set package identity'
 
 grep -Eq '^PLUGIN_DEPENDS=[[:space:]]+python313([[:space:]]|$)' "${MAKEFILE}" || fail 'python313 dependency is missing'
 require "${BUILD_PKG}" 'python313)  echo "lang/python313"'
@@ -103,13 +103,18 @@ require "${RESOURCES_PY}" 'DEFAULT_LUA_ROOT = Path("/usr/local/etc/zapret2/lua")
 require "${RESOURCES_PY}" 'DEFAULT_FAKE_ROOT = Path("/usr/local/etc/zapret2/files/fake")'
 require "${RESOURCES_PY}" 'def configured_lua_root()'
 require "${LUA_PY}" 'resources.configured_lua_root()'
-require "${BLOB_PY}" 'POLICY = "blob-startup-rss-v1"'
+require "${BLOB_PY}" 'SCHEMA = 2'
+require "${BLOB_PY}" 'POLICY = "blob-common-set-scaling-v1"'
 require "${BLOB_PY}" 'CACHE_POLICY = "natural-cache-no-drop"'
+require "${BLOB_PY}" 'WORKER = "external"'
+require "${BLOB_PY}" 'DIVERT_PORT = 9992'
+require "${BLOB_PY}" 'PRODUCTION_CANDIDATE_WIDTH = 3'
 require "${BLOB_PY}" 'production_change_recommended'
-require "${BLOB_TEST}" 'PASS: BLOB startup/RSS measurement is isolated, balanced, lifecycle-safe'
-require "${BLOB_DOC}" 'MEASUREMENT ACCEPTED / PRODUCTION MODEL C UNCHANGED'
-require "${BLOB_PATCH}" 'SOURCE / CI / PUBLICATION / OWNER-LIVE PASS'
+require "${BLOB_TEST}" 'PASS: BLOB common-set scaling measurement is single-worker, balanced, lifecycle-safe'
+require "${BLOB_DOC}" '_3 ACCEPTED / _4 COMMON-SET MEASUREMENT IN SOURCE / PRODUCTION MODEL C UNCHANGED'
+require "${BLOB_PATCH}" 'SOURCE MEASUREMENT / CI PENDING / OWNER-LIVE PENDING'
 require "${BLOB_WRAPPER}" 'zapret2-lifecycle.lock'
+require "${BLOB_WRAPPER}" 'TRIALS="${2:-12}"'
 require "${BLOB_WORKER}" 'strategy-lab-evidence'
 if grep -Fq 'route-add' "${BLOB_WORKER}" || grep -Fq 'strategy-lab-stop' "${BLOB_WORKER}"; then
     fail 'measurement worker must not route traffic or stop production Zapret'
@@ -151,14 +156,14 @@ do
     [ -e "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/${installed}" ] || fail "packaged source path is missing: ${installed}"
 done
 
-require "${PROJECT_STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=3`'
-require "${PROJECT_STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_3.pkg`'
+require "${PROJECT_STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=4`'
+require "${PROJECT_STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_4.pkg`'
 require "${PROJECT_STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${PROJECT_STATE}" 'Latest published testing prerelease: `v0.4.1_3` / `os-zapret2-restyle-0.4.1_3.pkg`'
 require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.1_3` — BLOB startup/readiness/RSS measurement PASS'
 require "${PROJECT_STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
-require "${INDEX}" 'docs/patches/v0.4.1_3.md'
+require "${INDEX}" 'docs/patches/v0.4.1_4.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md'
 require "${RELEASE_DOC}" '`v0.4.1_1: Prepare release v0.4.1`'
@@ -188,4 +193,4 @@ require "${MODEL_C_CORRECTIVE_PASS}" 'job.5yGde5'
 require "${MODEL_B_LIVE}" 'PRODUCTION STAGE-60 MODEL B OWNER-LIVE PASS'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI preserves published ${candidate} identity and accepts its owner-live BLOB startup/RSS evidence while production runtime remains unchanged"
+printf '%s\n' "PASS: FreeBSD 15 package CI accepts ${candidate} common-set measurement source while published owner evidence remains bound to v0.4.1_3"
