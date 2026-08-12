@@ -20,8 +20,8 @@ The project starts its own version history at `0.1.0`.
 
 - Advanced the source package candidate from `0.4.1_3` to `0.4.1_4` for the common-set scaling
   experiment while keeping production Model C/B/A unchanged.
-- Kept `v0.4.1_3` as the latest published and owner-tested testing prerelease until `_4` receives
-  separate publication authorization and owner-live evidence.
+- Published `v0.4.1_4` as the latest testing prerelease for owner common-set measurement while
+  `v0.4.1_3` remains the latest owner-tested testing candidate until `_4` live evidence is accepted.
 
 ## [0.4.1] - 2026-08-12
 
@@ -43,7 +43,7 @@ The project starts its own version history at `0.1.0`.
   reachability gate.
 - Moved Stage 60 from flat/cold candidate execution to the accepted runtime chain
   `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
-- Kept candidate concurrency at width three while pinned endpoints inside each candidate
+- Kept candidate concurrency at width three while pinned endpoints inside one candidate
   remain sequential and CPU count remains observational rather than a gate.
 - Preserved candidate-defined Lua/resources/output ranges through runtime rendering,
   stability validation and final profile output.
@@ -357,7 +357,7 @@ The project starts its own version history at `0.1.0`.
 
 ### Distribution
 
-- Published tag `v0.2.0` and package `0.2.0_1.pkg`.
+- Published tag `v0.2.0` and package `os-zapret2-restyle-0.2.0_1.pkg`.
 
 ## [0.1.0] - 2026-07-28
 
