@@ -112,7 +112,7 @@ require "${BLOB_PY}" 'PRODUCTION_CANDIDATE_WIDTH = 3'
 require "${BLOB_PY}" 'production_change_recommended'
 require "${BLOB_TEST}" 'PASS: BLOB common-set scaling measurement is single-worker, balanced, lifecycle-safe'
 require "${BLOB_DOC}" '_3 ACCEPTED / _4 COMMON-SET MEASUREMENT IN SOURCE / PRODUCTION MODEL C UNCHANGED'
-require "${BLOB_PATCH}" 'SOURCE MEASUREMENT / CI PENDING / OWNER-LIVE PENDING'
+require "${BLOB_PATCH}" 'SOURCE / CI / FREEBSD15 PACKAGE PASS / PUBLICATION PENDING / OWNER-LIVE PENDING'
 require "${BLOB_WRAPPER}" 'zapret2-lifecycle.lock'
 require "${BLOB_WRAPPER}" 'TRIALS="${2:-12}"'
 require "${BLOB_WORKER}" 'strategy-lab-evidence'
@@ -162,6 +162,7 @@ require "${PROJECT_STATE}" 'Current published stable package: `os-zapret2-restyl
 require "${PROJECT_STATE}" 'Latest published testing prerelease: `v0.4.1_3` / `os-zapret2-restyle-0.4.1_3.pkg`'
 require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.1_3` — BLOB startup/readiness/RSS measurement PASS'
 require "${PROJECT_STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
+require "${PROJECT_STATE}" 'V0.4.1_4 BLOB COMMON-SET SCALING — SOURCE / CI PASS'
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
 require "${INDEX}" 'docs/patches/v0.4.1_4.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md'
@@ -193,4 +194,4 @@ require "${MODEL_C_CORRECTIVE_PASS}" 'job.5yGde5'
 require "${MODEL_B_LIVE}" 'PRODUCTION STAGE-60 MODEL B OWNER-LIVE PASS'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI accepts ${candidate} common-set measurement source while published owner evidence remains bound to v0.4.1_3"
+printf '%s\n' "PASS: FreeBSD 15 package CI accepts CI-qualified ${candidate} common-set measurement source while published owner evidence remains bound to v0.4.1_3"
