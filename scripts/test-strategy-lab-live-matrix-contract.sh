@@ -47,15 +47,18 @@ require "${STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=2`'
 require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_2.pkg`'
 require "${STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${STATE}" 'Latest owner-tested stable package: `os-zapret2-restyle-0.4.1_1.pkg` — upgrade/install smoke PASS'
+require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_2` — Lua initialization measurement PASS'
 require "${STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
 require "${STATE}" 'job.xhdgCU'
 require "${STATE}" 'Stage 60 duration `34209 ms`'
 require "${STATE}" 'total job duration `114644 ms`'
+require "${STATE}" 'checks.all_required_files_present=true'
 require "${STATE}" 'runtime_comparison_required=false'
-require "${STATE}" 'BLOB loading/startup/RSS measurement'
+require "${STATE}" 'conclusion=equivalent_init_set'
 
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md'
 require "${INDEX}" 'docs/patches/v0.4.1_2.md'
+require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md'
 require "${INDEX}" 'C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback'
 
 # Stable release evidence remains immutable.
@@ -107,4 +110,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} keeps stable v0.4.1 and _26 live truth while measuring Lua init equivalence"
+echo "PASS: ${candidate} keeps stable v0.4.1 and _26 live truth while recording accepted Lua init equivalence"

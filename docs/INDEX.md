@@ -21,8 +21,9 @@ state.
 Read these first for current Strategy Lab or release work:
 
 - `docs/PROJECT_STATE.md` — current package/source candidate, accepted runtime basis and next boundary;
-- `docs/patches/v0.4.1_2.md` — current measurement-only Lua initialization patch;
-- `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md` — current Lua initialization measurement/decision contract;
+- `docs/patches/v0.4.1_2.md` — accepted measurement-only Lua initialization patch;
+- `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md` — Lua initialization measurement/decision contract;
+- `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md` — accepted owner-installed Lua equivalence evidence;
 - `docs/releases/v0.4.1.md` — stable v0.4.1 release content/protocol record;
 - `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md` — exact v0.4.1 merge/tag/workflow/package/Pages publication evidence;
 - `docs/devlog/2026-08-12-release-v0.4.1.md` — v0.4.1 release-preparation basis;
@@ -42,10 +43,10 @@ Read these first for current Strategy Lab or release work:
 `VERSION=0.4.1`, `PLUGIN_REVISION=2`; current source candidate:
 `os-zapret2-restyle-0.4.1_2.pkg`.
 
-Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`. The owner has now
-installed/upgraded to that stable package and reported successful upgrade and normal
-operation. Detailed Strategy Lab behavioral evidence remains the unchanged `_26` owner-live
-basis because `_1` was a release promotion rather than a runtime behavior change.
+Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`; stable upgrade smoke is
+PASS. Testing prerelease `v0.4.1_2` is now owner-tested for its measurement-only scope.
+Detailed production Strategy Lab behavioral evidence remains the unchanged `_26` owner-live
+basis because `_2` did not change production Model C.
 
 Published stable release identity:
 
@@ -56,16 +57,21 @@ Published stable release identity:
 - package digest `sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e`;
 - Pages deployment `5869308071` — SUCCESS.
 
-`v0.4.1_2` is measurement-only: it exposes `lua-init-measure` and does not change production
-Model C. Current native Stage-60 expansion candidates all declare `zapret-lib.lua` and
-`zapret-antidpi.lua`; together with mandatory `zapret-auto.lua` and
-`strategy_lab_model_c.lua`, the current Model-C batch initialization already equals the
-candidate-minimal union. The report must say `equivalent_init_set` and suppress timing/RSS
-claims when that equality holds.
+`v0.4.1_2` measurement conclusion is accepted: all 16 native Stage-60 expansion candidates
+use the same candidate-declared Lua dependency pair; with mandatory `zapret-auto.lua` and
+`strategy_lab_model_c.lua`, every Model-C batch current init set equals the candidate-minimal
+union. Corrected installed-path evidence reports all required files present,
+`runtime_comparison_required=false`, and `conclusion=equivalent_init_set`. No production Lua
+loading change is justified.
 
-Owner-live Extended `telegram.org`, `job.xhdgCU`, remains the detailed runtime baseline:
-Model C 16/16, no fallback, adaptive budget `150/120/270/120`, clean restoration and no
-`19128-19130` residue.
+The `_2` measurement-only default path `/usr/local/share/zapret2/lua` differed from canonical
+ResourceInventory `/usr/local/etc/zapret2/lua`; this is queued for correction in the next
+packaged measurement patch. The next independent optimization is BLOB loading / startup / RSS
+measurement.
+
+Owner-live Extended `telegram.org`, `job.xhdgCU`, remains the detailed production runtime
+baseline: Model C 16/16, no fallback, adaptive budget `150/120/270/120`, clean restoration
+and no `19128-19130` residue.
 
 Stage 60 remains
 `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`;
@@ -109,7 +115,7 @@ Key retained comparison points:
 - Model C source-port corrective acceptance: `docs/patches/v0.4.0_25.md`, `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
 - Adaptive workload budget acceptance: `docs/patches/v0.4.0_26.md`, `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`, `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`;
 - v0.4.1 release: `docs/releases/v0.4.1.md`, `docs/devlog/2026-08-12-release-v0.4.1.md`, `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`;
-- current Lua initialization measurement: `docs/patches/v0.4.1_2.md` and `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`.
+- Lua initialization measurement: `docs/patches/v0.4.1_2.md`, `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`, `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`.
 
 Historical evidence explains progression; it never overrides a later patch/PR/live/release record.
 
