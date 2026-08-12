@@ -15,8 +15,8 @@ QUICK CONTEXT
 
 Project: `os-zapret2-restyle`
 Primary branch: `main`
-Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=3`
-Current source candidate: `os-zapret2-restyle-0.4.1_3.pkg`
+Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=4`
+Current source candidate: `os-zapret2-restyle-0.4.1_4.pkg`
 Current published release tag: `v0.4.1`
 Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`
 Latest published testing prerelease: `v0.4.1_3` / `os-zapret2-restyle-0.4.1_3.pkg`
@@ -41,7 +41,7 @@ Accepted `_2` evidence:
 - digest `sha256:09d0edacd0527230a2657128c80099e6436f41b14621f5573586b4cc6fed9063`;
 - owner-live: `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`.
 
-Published `_3` testing identity:
+Published and owner-tested `_3` identity:
 
 - runtime/source merge `da427cd061df1f3cbc01ba11a14a6417f2e406b3`;
 - merge tree `fec062533bb971450cf197a3365de3ef2e1f3c60`;
@@ -55,9 +55,9 @@ Published `_3` testing identity:
 - publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`;
 - owner-live evidence: `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`.
 
-`_3` owner-live measurement is accepted for its defined BLOB-free / built-in / representative
-external-file scope. Because `_2` and `_3` are measurement-only, detailed production behavior
-still uses the accepted `_26` runtime evidence.
+`_3` is accepted for its BLOB-free / built-in / representative single-external-file scope.
+Because `_2`, `_3`, and current `_4` are measurement-only, detailed production behavior still
+uses the accepted `_26` runtime evidence.
 
 ==================================================
 CURRENT AUTHORITIES
@@ -73,6 +73,7 @@ Current Strategy Lab authorities:
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
 - `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`;
 - `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`;
+- `docs/patches/v0.4.1_4.md`;
 - `docs/patches/v0.4.1_3.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
@@ -107,7 +108,7 @@ Corrected owner-installed `_2` measurement: `candidate_count=16`, all six batche
 `conclusion=equivalent_init_set`.
 
 Current Model-C Lua initialization already equals the candidate-minimal union, so this
-optimization is closed without a production change. `_3` also fixes `_2` resource discovery by
+optimization is closed without a production change. `_3` fixed `_2` resource discovery by
 deriving the Lua default from canonical ResourceInventory (`/usr/local/etc/zapret2/lua`; fake
 root `/usr/local/etc/zapret2/files/fake`).
 
@@ -115,7 +116,7 @@ root `/usr/local/etc/zapret2/files/fake`).
 V0.4.1_3 BLOB STARTUP / RSS MEASUREMENT — ACCEPTED
 ==================================================
 
-Policy `blob-startup-rss-v1` compares BLOB-free, built-in `fake_default_tls`, and external
+Policy `blob-startup-rss-v1` compared BLOB-free, built-in `fake_default_tls`, and external
 `fake_tls_7.bin` variants with the common Model-C Lua/action shape held constant.
 
 The owner-installed run completed all 27 planned startups, 9 per variant, with
@@ -131,28 +132,53 @@ Median stable readiness:
 
 Median ready and settled RSS was exactly `4360 KiB` for every variant. Built-in vs BLOB-free
 median readiness delta was `-0.409 ms` (`-0.649%`); external vs BLOB-free was `-0.495 ms`
-(`-0.785%`). These sub-1% differences are smaller than the observed within-variant spread and
-do not show a material BLOB startup penalty.
+(`-0.785%`). These sub-1% differences were below observed within-variant jitter/tails and did
+not show a material BLOB startup penalty.
 
 Initial/final normal service, config, runtime-args and firewall evidence matched exactly and
 remained RUNNING. The run used `cache_policy=natural-cache-no-drop` and is not a cold-cache
-claim.
+claim. Production Model C remained unchanged and `production_change_recommended=false`.
 
-Production Model C remains unchanged and `production_change_recommended=false`.
+==================================================
+V0.4.1_4 BLOB COMMON-SET SCALING — SOURCE MEASUREMENT
+==================================================
+
+`_4` is the next measurement-only source candidate. It answers the remaining bounded question:
+does the eager common external declaration set used by Model C cost measurable startup/readiness
+or RSS when it scales from one to the current production candidate width of three?
+
+Policy: `blob-common-set-scaling-v1`, schema `2`.
+
+All variants use one physical adapter worker `external` on divert port `9992`; arguments are
+rewritten immediately before each launch. Controlled variants are:
+
+- `blob-free`;
+- `inline-small` with `seqovl_pattern=0x1603`;
+- `external-single` with canonical `fake_tls_7`;
+- `external-common-3` with canonical `fake_tls_7`,
+  `tls_clienthello_rutracker_org_kyber`, and `tls_clienthello_vk_com_kyber`, while only
+  `fake_tls_7` is active and the other two are intentionally eager/unused declarations.
+
+The common set is a bounded synthetic production-width upper bound, not a claim about one exact
+current graph bucket. The resources are semantically compatible TLS ClientHello files rather than
+unrelated BLOBs chosen only to inflate count.
+
+Default run: 12 trials per variant / 48 starts, balanced over all four cyclic orders,
+`cache_policy=natural-cache-no-drop`. Summaries now retain mean/stdev in addition to
+min/median/p90/max so a common-set delta can be judged against normal jitter.
+
+`production_change_recommended=false` remains hard-coded. Source/CI/package/live gates are still
+pending; `_4` is not yet a published testing prerelease.
 
 ==================================================
 CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
-`v0.4.1_3` source, CI, FreeBSD 15 build, testing-prerelease publication and owner-live
-three-variant measurement are PASS.
+Complete `_4` focused/corrective/FreeBSD 15 CI and merge the source candidate without changing
+production Model C/B/A. Testing-prerelease publication is a separate operation and requires the
+existing owner authorization rule.
 
-No production BLOB-loading change is justified by the `_3` evidence. The broader adaptive
-search experiment plan still calls for small-inline and several semantically compatible
-external-resource coverage, so the unresolved BLOB question is scaling/common eager-set cost,
-not a production rewrite.
-
-If BLOB-loading optimization continues, the next packaged measurement should extend controlled
-resource-set coverage while preserving production Model C/B/A, CandidateSpec resource identity,
-source-port attribution, deadlines, cleanup and restoration. Any future production change
-still requires reproducible evidence and a separate packaged patch.
+After an authorized `_4` package is installed, collect the common-set owner measurement. A
+material `external-common-3` vs `external-single` cost must be reproduced before any production
+change. If no material cost appears above jitter at the current width-three bound, close BLOB
+loading as a negative optimization result for the present architecture.
