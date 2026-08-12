@@ -89,14 +89,18 @@ require "${CI}" '.deps.python313.origin == "lang/python313"'
 require "${CI}" 'freebsd-version -u'
 require "${CI}" 'scripts/test-freebsd15-package-ci'
 
-# Full stable release workflow still builds from VERSION/PLUGIN_REVISION and publishes
-# package/repository artifacts on FreeBSD 15.
-require "${RELEASE}" 'VERSION="$(cat VERSION)"'
-require "${RELEASE}" 'PLUGIN_REVISION'
-require "${RELEASE}" 'scripts/build-pkg.sh'
-require "${RELEASE}" 'scripts/build-repo.sh'
+# Full stable release workflow still derives package identity from VERSION/PLUGIN_REVISION
+# and publishes the FreeBSD 15 package, checksum, release assets and Pages repository.
+require "${RELEASE}" 'VERSION_VALUE=$(tr -d '\''[:space:]'\'' < VERSION)'
+require "${RELEASE}" 'REVISION=$(sed -n '\''s/^PLUGIN_REVISION=[[:space:]]*//p'\'' Makefile | head -1)'
+require "${RELEASE}" 'PACKAGE_VERSION="${VERSION_VALUE}_${REVISION}"'
+require "${RELEASE}" 'sh scripts/build-pkg.sh'
+require "${RELEASE}" 'sh scripts/verify-release-package.sh'
+require "${RELEASE}" 'sh scripts/build-pkg-repository.sh'
+require "${RELEASE}" 'pages/FreeBSD:15:amd64/'
 require "${RELEASE}" 'SHA256SUMS'
-require "${RELEASE}" 'FreeBSD:15:amd64'
+require "${RELEASE}" 'softprops/action-gh-release@v3'
+require "${RELEASE}" 'actions/deploy-pages@v5'
 
 for test in \
     test-strategy-lab-python-foundation.sh \
