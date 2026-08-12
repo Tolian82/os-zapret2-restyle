@@ -1,6 +1,6 @@
 # Strategy Lab BLOB loading / startup / RSS measurement
 
-Status: **_3 ACCEPTED / _4 COMMON-SET MEASUREMENT IN SOURCE / PRODUCTION MODEL C UNCHANGED**
+Status: **_3 ACCEPTED / _4 PUBLISHED — OWNER-LIVE PENDING / PRODUCTION MODEL C UNCHANGED**
 
 ## Question
 
@@ -71,6 +71,11 @@ Policy: `blob-common-set-scaling-v1`, report schema `2`.
 `_4` addresses the coverage still required by the adaptive-search experiment authority:
 small-inline plus several semantically compatible external resources. It also removes worker/port
 identity as a comparison variable.
+
+Testing prerelease `v0.4.1_4` is published from exact source merge
+`461fe2d045b131f3400f285a9cb59808b5f33ce2`; owner-live measurement is still pending. Publication
+evidence is recorded in
+`docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`.
 
 ### Fixed worker identity
 

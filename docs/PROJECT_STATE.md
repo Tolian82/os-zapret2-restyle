@@ -19,7 +19,7 @@ Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=4`
 Current source candidate: `os-zapret2-restyle-0.4.1_4.pkg`
 Current published release tag: `v0.4.1`
 Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`
-Latest published testing prerelease: `v0.4.1_3` / `os-zapret2-restyle-0.4.1_3.pkg`
+Latest published testing prerelease: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`
 Latest owner-tested stable package: `os-zapret2-restyle-0.4.1_1.pkg` — upgrade/install smoke PASS
 Latest owner-tested testing candidate: `v0.4.1_3` — BLOB startup/readiness/RSS measurement PASS
 Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS
@@ -55,9 +55,24 @@ Published and owner-tested `_3` identity:
 - publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`;
 - owner-live evidence: `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`.
 
+Published `_4` testing identity:
+
+- runtime/source merge `461fe2d045b131f3400f285a9cb59808b5f33ce2`;
+- merge tree `844d9992dcab35f630ee6acd3bf2ab5bbaf4c248`;
+- PR #193 final latest-head CI run `31628622306` — SUCCESS;
+- post-merge main CI run `31629464779` — SUCCESS;
+- publication workflow run `31633335688` — SUCCESS;
+- tag `v0.4.1_4` targets exact runtime/source merge;
+- GitHub Release ID `369482221`, draft=false, prerelease=true;
+- package `os-zapret2-restyle-0.4.1_4.pkg`, `186024` bytes;
+- digest `sha256:934fdd3a73117b3d914c9823f29eb7f2ca47196d97c30d94e3066a38159edbc9`;
+- publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`;
+- owner-live common-set measurement: pending.
+
 `_3` is accepted for its BLOB-free / built-in / representative single-external-file scope.
-Because `_2`, `_3`, and current `_4` are measurement-only, detailed production behavior still
-uses the accepted `_26` runtime evidence.
+`_4` is published for the remaining bounded common-set scaling measurement but is not yet
+owner-tested. Because `_2`, `_3`, and `_4` are measurement-only, detailed production behavior
+still uses the accepted `_26` runtime evidence.
 
 ==================================================
 CURRENT AUTHORITIES
@@ -74,6 +89,7 @@ Current Strategy Lab authorities:
 - `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`;
 - `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`;
 - `docs/patches/v0.4.1_4.md`;
+- `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`;
 - `docs/patches/v0.4.1_3.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
@@ -140,12 +156,12 @@ remained RUNNING. The run used `cache_policy=natural-cache-no-drop` and is not a
 claim. Production Model C remained unchanged and `production_change_recommended=false`.
 
 ==================================================
-V0.4.1_4 BLOB COMMON-SET SCALING — SOURCE / CI PASS
+V0.4.1_4 BLOB COMMON-SET SCALING — PUBLISHED / OWNER-LIVE PENDING
 ==================================================
 
-`_4` is the next measurement-only source candidate. It answers the remaining bounded question:
-does the eager common external declaration set used by Model C cost measurable startup/readiness
-or RSS when it scales from one to the current production candidate width of three?
+`_4` answers the remaining bounded question: does the eager common external declaration set used
+by Model C cost measurable startup/readiness or RSS when it scales from one to the current
+production candidate width of three?
 
 Policy: `blob-common-set-scaling-v1`, schema `2`.
 
@@ -164,23 +180,24 @@ current graph bucket. The resources are semantically compatible TLS ClientHello 
 unrelated BLOBs chosen only to inflate count.
 
 Default run: 12 trials per variant / 48 starts, balanced over all four cyclic orders,
-`cache_policy=natural-cache-no-drop`. Summaries now retain mean/stdev in addition to
+`cache_policy=natural-cache-no-drop`. Summaries retain mean/stdev in addition to
 min/median/p90/max so a common-set delta can be judged against normal jitter.
 
-`production_change_recommended=false` remains hard-coded. Focused regression, the complete
-Strategy Lab corrective matrix, lifecycle/production contracts, and FreeBSD 15 package
-build/inspection for `os-zapret2-restyle-0.4.1_4.pkg` are PASS. `_4` is not yet a published
-testing prerelease and has no owner-live result.
+Focused regression, complete Strategy Lab corrective matrix, lifecycle/production contracts and
+FreeBSD 15 package build/inspection passed before merge. Testing prerelease `v0.4.1_4` is now
+published from exact merge `461fe2d045b131f3400f285a9cb59808b5f33ce2`; Release asset digest is
+`sha256:934fdd3a73117b3d914c9823f29eb7f2ca47196d97c30d94e3066a38159edbc9`.
+
+`production_change_recommended=false` remains hard-coded. `_4` has no owner-live result yet.
 
 ==================================================
 CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
-Merge the CI-qualified `_4` source candidate without changing production Model C/B/A.
-Testing-prerelease publication remains a separate operation and requires the existing owner
-authorization rule.
+Install the published `v0.4.1_4` package on the owner OPNsense appliance and collect the 12x4
+common-set startup/readiness/RSS measurement under the documented lifecycle lock and csh command
+rules.
 
-After an authorized `_4` package is installed, collect the common-set owner measurement. A
-material `external-common-3` vs `external-single` cost must be reproduced before any production
+A material `external-common-3` vs `external-single` cost must be reproduced before any production
 change. If no material cost appears above jitter at the current width-three bound, close BLOB
 loading as a negative optimization result for the present architecture.
