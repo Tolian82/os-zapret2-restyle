@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.0_26` ADAPTIVE-BUDGET SOURCE CANDIDATE PENDING CI/PUBLICATION/OWNER-LIVE; `_25` REMAINS THE LATEST OWNER-LIVE MODEL-C BASELINE; `_22` REMAINS THE ACCEPTED MODEL-B FALLBACK BASELINE.**
+Overall status: **`v0.4.0_26` ADAPTIVE-BUDGET SOURCE/CI/PUBLICATION PASS; OWNER-LIVE PENDING; `_25` REMAINS THE LATEST OWNER-TESTED MODEL-C BASELINE; `_22` REMAINS THE ACCEPTED MODEL-B FALLBACK BASELINE.**
 
 This matrix is the canonical live-appliance regression inventory. Source tests, GitHub CI
 and FreeBSD package builds do not substitute for selected owner-live evidence. Detailed
@@ -18,7 +18,10 @@ TEST RECORD
 - Latest completed test date: `2026-08-12`
 - OPNsense: `26.7.1_1`; FreeBSD 15 amd64
 - Current source candidate: `os-zapret2-restyle-0.4.0_26.pkg`
-- Current published/owner-tested package: `os-zapret2-restyle-0.4.0_25.pkg`
+- Current published package: `os-zapret2-restyle-0.4.0_26.pkg`
+- Latest owner-tested package: `os-zapret2-restyle-0.4.0_25.pkg`
+- `_26` runtime commit: `8ada9cba28916fff506f19b34f5ef3de16e2008e`
+- `_26` published asset digest: `sha256:f5466c21c014bf594afcc80aac49b948db45513b33fe46d4857eded75bc8af8c`
 - Preferred Stage-60 model: `C-warm-bucket-source-port-dispatch`
 - Immediate fallback/reference: `B-warm-worker-parallel-batched`
 - Final fallback: cold Model A
@@ -29,12 +32,18 @@ Current change authority:
 
 - `docs/patches/v0.4.0_26.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`;
+- `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`;
 - `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_budget.py`;
 - `scripts/test-strategy-lab-adaptive-budget.sh`.
 
 ==================================================
 `_26` ADAPTIVE-BUDGET OWNER-LIVE GATE — PENDING
 ==================================================
+
+Source, full PR CI, FreeBSD 15 package build and the `v0.4.0_26` testing-prerelease
+publication are complete. Publication workflow run `31584348303` targeted exact main
+`8ada9cba28916fff506f19b34f5ef3de16e2008e`; durable publication evidence is
+`docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`.
 
 The current packaged source implements `policy=eligible-work-v1`. After Stage-30 PASS it
 must persist `adaptive-budget.json` from the actual eligible work matrix:
@@ -54,7 +63,8 @@ unavailable, QUIC closed, Generic UDP inactive — `_26` must remain exactly `15
 with Stage 80 `120 s`. With two endpoints and IPv6/QUIC/Generic UDP all eligible, the source
 contract requires `160 + 155 = 315 s`, Stage 80 `155 s`.
 
-Selected owner-live gate after publication: one normal Extended `telegram.org` run must prove:
+Selected owner-live gate: one normal Extended `telegram.org` run on the published `_26`
+package must prove:
 
 - `adaptive-budget.json` exists and records `policy=eligible-work-v1`;
 - its work matrix matches the actual appliance capabilities/input;
@@ -191,8 +201,8 @@ RETAINED PROGRESSION
   shared static source-port collision amplification.
 - `_25` corrected source-port leasing; owner-live `job.5yGde5` completed Model C 16/16 with
   no fallback and clean restoration. `_24` was intentionally skipped by owner instruction.
-- `_26` derives finite parent budgets from measured eligible work and is pending its selected
-  owner-live production-wiring gate.
+- `_26` source/CI/FreeBSD publication is complete; only the selected adaptive-budget
+  production-wiring owner-live gate remains pending.
 
 ==================================================
 SCENARIO MATRIX
