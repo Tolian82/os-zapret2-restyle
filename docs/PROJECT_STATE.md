@@ -34,6 +34,9 @@ Release-preparation authority:
 - `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`;
 - `docs/GITHUB_PUBLICATION.md`.
 
+Active GitHub delivery authority:
+`docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
+
 Active Strategy Lab implementation authority remains:
 
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
