@@ -99,7 +99,7 @@ require "${LUA_TEST}" 'PASS: Model C already uses the candidate-minimal Lua unio
 require "${LUA_PY}" 'POLICY = "lua-init-set-equivalence-v1"'
 require "${LUA_PY}" 'runtime_comparison_required = not all_batches_equivalent'
 require "${LUA_PY}" 'not_applicable_equivalent_init_set'
-require "${LUA_DOC}" 'MEASUREMENT-ONLY / PRODUCTION MODEL C UNCHANGED'
+require "${LUA_DOC}" 'MEASUREMENT COMPLETE / PRODUCTION MODEL C UNCHANGED'
 require "${LUA_PATCH}" 'SOURCE / CI / PUBLICATION / OWNER-LIVE PASS'
 require "${PYTHON_ENTRY}" 'from strategy_lab_py import lua_initialization_measurement'
 require "${PYTHON_ENTRY}" 'lua-init-measure'
