@@ -52,7 +52,7 @@ require "${STATE}" 'job.xhdgCU'
 require "${STATE}" 'Stage 60 duration `34209 ms`'
 require "${STATE}" 'total job duration `114644 ms`'
 require "${STATE}" 'runtime_comparison_required=false'
-require "${STATE}" 'close this optimization without a production runtime change'
+require "${STATE}" 'BLOB loading/startup/RSS measurement'
 
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md'
 require "${INDEX}" 'docs/patches/v0.4.1_2.md'
