@@ -20,62 +20,56 @@ state.
 
 Read these first for current Strategy Lab work:
 
-- `docs/PROJECT_STATE.md` — current package candidate, verified live boundary and next action;
-- `docs/patches/v0.4.0_25.md` — `_25` controlled-source-port lease corrective and adaptive-budget follow-up;
-- `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md` — current owner-live PASS for `_25` Extended `telegram.org` Model-C no-fallback path;
-- `docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md` — prior `_23` live evidence that proved Model C and exposed the shared `42004` source-port collision;
+- `docs/PROJECT_STATE.md` — current source candidate, verified live boundary and next action;
+- `docs/patches/v0.4.0_26.md` — current workload-derived finite adaptive-budget patch;
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — adaptive search, deadline and validation architecture;
+- `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md` — latest owner-live PASS and clean timing floor;
+- `docs/patches/v0.4.0_25.md` — accepted controlled-source-port lease corrective;
+- `docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md` — prior Model-C proof and shared-42004 defect input;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md` — Model-C one-worker bucket/source-port dispatcher architecture;
-- `docs/decisions/DEC-2026-08-11-strategy-lab-model-c-production-switch.md` — owner-authorized Model-C production direction;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical owner-assisted live regression inventory;
-- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — stable native Zapret2 graph, `CandidateSpec`, `ResourceInventory`, search epoch and validation architecture;
 - `docs/architecture/STRATEGY_LAB.md` — base product/stage/lifecycle contract;
 - `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — completed Python ownership;
 - `docs/decisions/DEC-2026-08-11-strategy-lab-parallel-model-b-selection.md` — accepted width-three Model B fallback/reference authority;
 - `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md` — accepted Model-B owner-live comparison baseline;
 - `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md` — release-specific live selection policy.
 
-### Current `_25` boundary
+### Current `_26` boundary
 
-`VERSION=0.4.0`, `PLUGIN_REVISION=25`; published testing prerelease:
-`os-zapret2-restyle-0.4.0_25.pkg` from runtime commit
-`a5ecfbfd57820e30e5f2be450e510b96c00267e3`.
+`VERSION=0.4.0`, `PLUGIN_REVISION=26`; source candidate:
+`os-zapret2-restyle-0.4.0_26.pkg`.
 
-Normal Stage 60 prefers `C-warm-bucket-source-port-dispatch`, then accepted
-`B-warm-worker-parallel-batched`, then cold Model A. `_25` keeps deterministic `42000+`
-values as preferred identity ports but leases exact free concrete ports per admitted warm
-batch. A foreign occupied port is skipped non-destructively; Model B fallback takes a fresh
-lease rather than inheriting Model C's failed concrete port.
+Latest published and owner-tested package remains `_25` until the `_26` delivery/live cycle.
+The accepted `_25` Extended `telegram.org` `job.5yGde5` baseline remains Model C 16/16,
+`graph_exhausted`, `.parallel.fallbacks=[]`, Stage 60 `34198 ms`, total `114759 ms`, clean
+Stage-90 restoration.
 
-Owner-live `_25` Extended `telegram.org`, `job.5yGde5`:
-
-- Model C production path;
-- 16/16 candidates, zero winners, `graph_exhausted`;
-- `.parallel.fallbacks=[]`;
-- Stage 60 `34198 ms`;
-- total job `114759 ms`;
-- all six batches persisted lease evidence with `preferred-free-else-alternate` / `skip-only`;
-- no real collision occurred in this run, so replacements remained zero;
-- final `NO_CANDIDATE`, Stage-90 restoration PASS, service RUNNING, no `19128-19130` residue.
-
-This closes the selected `_25` owner-live gate. The live run proves the lease wrapper is
-active and the prior `_23` Telegram timeout/fallback path no longer occurs; automated focused
-coverage remains the proof for alternate-port selection under an intentionally occupied port.
-
-### Next Strategy Lab timing work
-
-Adaptive budget must be derived from the actual eligible matrix:
+`_26` routes production orchestration through `strategy_lab_py/adaptive_budget.py`. After
+Stage-30 PASS it calculates `policy=eligible-work-v1` from:
 
 `number of endpoints × IPv4/IPv6 × TLS/QUIC × Generic UDP × Standard/Extended mode`.
 
-Available IPv6, QUIC and Generic UDP work should add finite proportional budget
-automatically. Do not replace this with one guessed oversized static timeout. Use the clean
-`_25` no-fallback timing baseline above for the next design.
+The existing `150 s` Standard, `120 s` Extended and `120 s` Stage-80 budgets remain the
+calibrated floor. Only eligible measured work adds bounded headroom: future endpoints beyond
+two, IPv6 baseline work, available Extended QUIC and configured Extended Generic UDP.
+Deadlines stay anchored to the original job start epoch.
+
+For the accepted `_25` two-endpoint IPv4-only/QUIC-closed/no-UDP topology, `_26` remains
+exactly `150 + 120 = 270 s`. With two endpoints plus IPv6, QUIC and Generic UDP all eligible,
+the deterministic plan is `160 + 155 = 315 s`, with Stage 80 `155 s`.
+
+The plan is persisted as `adaptive-budget.json`; effective deadline numbers remain in
+`status.json`; timing telemetry records `phase=budget_adaptation` at Stage 30. Stage 60 remains
+`C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback` and
+`_25` free-port leasing is unchanged.
 
 ## Current implementation authorities
 
 ### Strategy Lab core
 
 - `docs/architecture/STRATEGY_LAB.md`
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`
+- `docs/architecture/STRATEGY_LAB_MODEL_C.md`
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`
 - `docs/architecture/STRATEGY_LAB_ACTIVATION.md`
 - `docs/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md`
@@ -106,7 +100,8 @@ Key retained comparison points:
 - Model B controlled parallel: `docs/verification/evidence/2026-08-11-v0.4.0_20-model-b-parallel-attribution-reject.md`, `docs/patches/v0.4.0_21.md`, and `docs/verification/evidence/2026-08-11-v0.4.0_21-model-b-parallel-reproducibility.md`;
 - Model B production integration: `docs/patches/v0.4.0_22.md` and `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`;
 - Model C production-candidate publication/live evidence: `docs/patches/v0.4.0_23.md`, `docs/verification/evidence/2026-08-11-v0.4.0_23-publication.md`, `docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md`;
-- Model C source-port corrective acceptance: `docs/patches/v0.4.0_25.md`, `docs/verification/evidence/2026-08-11-v0.4.0_25-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`.
+- Model C source-port corrective acceptance: `docs/patches/v0.4.0_25.md`, `docs/verification/evidence/2026-08-11-v0.4.0_25-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
+- Adaptive workload budget implementation: `docs/patches/v0.4.0_26.md`.
 
 Historical evidence explains progression; it never overrides a later patch/PR/live record.
 
