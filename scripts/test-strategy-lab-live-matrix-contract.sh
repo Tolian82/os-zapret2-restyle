@@ -34,8 +34,9 @@ candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${version}" = '0.4.0' ] || fail "unexpected active Strategy Lab version ${version}"
 [ "${revision}" -eq 25 ] || fail 'Stage-60 source-port corrective revision must be exactly 25'
 
-# Current `_25` Engineering Memory must record the accepted owner-live corrective while
-# retaining `_23` as the exact historical defect input.
+# Current `_25` Engineering Memory must record the accepted owner-live corrective. Historical
+# `_23` job literals are validated in their immutable evidence record below, not duplicated as
+# exact prose requirements in the current-state handoff.
 require "${STATE}" 'Current source line: `VERSION=0.4.0`, `PLUGIN_REVISION=25`'
 require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.0_25.pkg`'
 require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.0_25`'
@@ -44,9 +45,6 @@ require "${STATE}" 'job.5yGde5'
 require "${STATE}" '.parallel.fallbacks=[]'
 require "${STATE}" 'Stage 60 duration `34198 ms`'
 require "${STATE}" 'total job duration `114759 ms`'
-require "${STATE}" 'job.FaLtIk'
-require "${STATE}" 'job.G0wC5l'
-require "${STATE}" 'controlled source port is already in use: 42004'
 require "${STATE}" 'fresh independent lease'
 require "${STATE}" 'number of endpoints × IPv4/IPv6 × TLS/QUIC × Generic UDP × Standard/Extended mode'
 
