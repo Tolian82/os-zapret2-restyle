@@ -357,7 +357,7 @@ The project starts its own version history at `0.1.0`.
 
 ### Distribution
 
-- Published tag `v0.2.0` and package `os-zapret2-restyle-0.2.0_1.pkg`.
+- Published tag `v0.2.0` and package `0.2.0_1.pkg`.
 
 ## [0.1.0] - 2026-07-28
 
