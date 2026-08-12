@@ -60,6 +60,9 @@ All six Stage-60 batches persisted `_25` source-port lease evidence:
 - no preferred port happened to be occupied in this run, therefore all batches recorded
   `collisions=[]`, `replacement_count=0`, `alternate_scan_count=0`.
 
+The `_25` fallback contract is unchanged: if Model C becomes unavailable, Model B obtains a
+**fresh lease** rather than inheriting Model C's failed concrete source-port allocation.
+
 This closes the selected `_25` live gate. It proves production Model C uses the lease wrapper
 and that the previous `_23` Extended Telegram failure path no longer falls C -> B -> cold A
 and times out. This run does not fabricate a foreign-port collision; alternate replacement
