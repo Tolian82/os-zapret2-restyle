@@ -22,16 +22,20 @@ DOCUMENT ROLE
 ==================================================
 
 Question answered:
-How are code changes, testing prereleases, and full releases delivered through GitHub?
+How are code changes, owner testing packages, testing-package publications, and full
+project releases delivered through GitHub?
 
 Purpose:
-Define the authoritative preflight, branch, PR, CI, failure, merge, candidate-publication,
+Define the authoritative preflight, branch, PR, CI, failure, merge, package-delivery,
 release, verification, and cleanup procedure.
 
-Read immediately before any GitHub mutation.
+Read this document **completely through EOF** immediately before any GitHub mutation.
+If a tool response is truncated, paginated, clamped, or range-limited, continue reading
+remaining ranges until EOF before acting.
 
 Active decisions:
 
+- `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md`;
 - `docs/decisions/DEC-2026-08-07-installable-patch-shorthand.md`;
 - `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
 - `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
@@ -61,10 +65,28 @@ or general web search when the connected plugin can read the authoritative repos
 object directly.
 
 ==================================================
+REQUIRED-DOCUMENT COMPLETION
+==================================================
+
+Opening a required file is not enough. Before action, every file required by `AGENTS.md`,
+`docs/INDEX.md`, or the specialist scope must be consumed from first line through EOF.
+
+- If the connector/tool returns only a prefix, continue with explicit line ranges.
+- If the response is paginated or clamped, continue until no unread content remains.
+- Do not infer unread rules from chat memory or previous summaries.
+- If a required authority cannot be read completely, stop before mutation or package
+  delivery and report the boundary.
+
+This requirement is about completing the selected required reading set. It does not
+restore the obsolete rule that every historical project document must be reread for each
+small task.
+
+==================================================
 PRE-MUTATION INVENTORY
 ==================================================
 
-Before creating or changing any branch, PR, workflow, tag, release, or asset, record:
+Before creating or changing any branch, PR, workflow, tag, testing-package publication,
+release, or asset, record:
 
 - exact current `main` SHA;
 - current `VERSION`, `PLUGIN_REVISION`, and required title prefix;
@@ -102,7 +124,8 @@ ORDINARY DEVELOPMENT FLOW
 ==================================================
 
 1. Resolve the exact owner instruction and stopping boundary.
-2. Complete the risk-based context preflight from `AGENTS.md` and `docs/INDEX.md`.
+2. Complete the risk-based context preflight from `AGENTS.md` and `docs/INDEX.md`, reading
+   every required document through EOF.
 3. Perform the GitHub-plugin-first capability check and pre-mutation inventory above.
 4. Record exact base SHA, logical scope, affected documents, and verification plan.
 5. Prepare one reviewable logical change.
@@ -154,21 +177,73 @@ A second unchanged infrastructure failure stops the operation for diagnosis. It 
 not authorize another retry or redesign.
 
 ==================================================
+GITHUB-ONLY OWNER PACKAGE DELIVERY
+==================================================
+
+For this project, **every owner-facing package is delivered persistently from GitHub**.
+This rule is broader than the older installable-patch phrase list.
+
+Any owner instruction that asks to build, make, give, publish, install, or test a package
+or patch — including obvious Russian wording such as:
+
+- `пакет`;
+- `пакет для тестирования`;
+- `тестовый пакет`;
+- `дай пакет`;
+- `собери пакет`;
+- `патч`;
+- `патч для установки`;
+- `дай ссылку/команду для установки`;
+
+means: complete the deterministic testing-package publication and provide a persistent
+direct GitHub `.pkg` URL or OPNsense installation command.
+
+The package request itself is publication authority for that deterministic testing
+candidate. Do **not** ask for an additional confirmation solely because GitHub's storage
+mechanism uses a prerelease/tag object.
+
+### What does not count as package delivery
+
+The following are build evidence or temporary transport, not completion:
+
+- a GitHub Actions artifact ZIP;
+- an Actions artifact download procedure or token workflow;
+- a local/container/sandbox `.pkg` link;
+- any temporary file that is not persistently hosted by this GitHub repository.
+
+Actions artifacts may be used as verified inputs to publication. Bind them by exact run
+ID, artifact ID/name, digest and manifest. They are never the final package handed to the
+owner unless the owner explicitly asks for **build/CI evidence only and no package
+delivery**.
+
+If CI has built a package but it has not yet been persistently published, document the
+state as:
+
+`BUILD ARTIFACT READY / GITHUB PACKAGE PUBLICATION PENDING`
+
+Do not call that state `PACKAGE READY FOR OWNER TESTING`.
+
+### “Not a release, a package”
+
+Owner wording such as `не релиз, а пакет` means no stable/full project release:
+
+- keep semantic `VERSION` unless the package change itself requires otherwise;
+- do not run the stable release pipeline;
+- do not publish GitHub Pages;
+- do not promote the pkg repository.
+
+It **does not** mean stop at an Actions artifact. Persist the requested testing `.pkg` on
+GitHub. The technical GitHub prerelease/tag used as the package container is a testing
+package publication mechanism, not a semantic/full project release.
+
+==================================================
 INSTALLABLE PATCH SHORTHAND
 ==================================================
 
-The owner uses the following phrases, and obvious Russian-language equivalents, as an
-explicit request for an installable GitHub package rather than an Actions artifact:
-
-- `дай мне патч для установки`;
-- `дай мне ссылку для установки патча`;
-- `дай мне команду для установки патча`;
-- `собери патч для установки`;
-- `собери патч на репозитории и дай команду для установки`.
-
-When one of these instructions is given, it constitutes explicit owner authorization to
-complete the entire testing-prerelease publication cycle for the package candidate that
-must be installed next. Do not ask for another publication confirmation.
+`DEC-2026-08-07-installable-patch-shorthand.md` remains the mechanical one-command
+installation rule, but `DEC-2026-08-13-github-only-package-delivery.md` broadens its
+trigger. It is no longer necessary for the owner to use one of a small exact phrase set.
+Any package-delivery request covered above triggers the same publication behavior.
 
 Candidate selection is deterministic:
 
@@ -178,22 +253,20 @@ Candidate selection is deterministic:
 3. If additional packaged changes are required, increment `PLUGIN_REVISION` once through
    the normal PR/CI/squash path and publish the resulting candidate.
 4. A documentation/governance-only clarification does not itself force another package
-   revision; publication must still target the latest complete `main` tree.
+   revision; publication must still target the latest complete package tree.
 
-The shorthand authorizes exactly:
+The package request authorizes exactly:
 
-- the testing-prerelease tag `v<VERSION>_<REVISION>` derived by the rule above;
+- the testing-package tag `v<VERSION>_<REVISION>` derived by the rule above;
 - one verified asset `os-zapret2-restyle-<VERSION>_<REVISION>.pkg`;
-- the repository-owned FreeBSD 15 build-and-publish workflow;
-- verification of the resulting Release and direct asset URL.
+- the repository-owned FreeBSD 15 build-and-publish mechanism as needed;
+- verification of the resulting GitHub package asset and direct URL.
 
 It does not authorize a stable release, a semantic `VERSION` change, GitHub Pages,
 pkg-repository promotion, unrelated source changes, or rewriting an existing published
 candidate.
 
-The user-facing result of this shorthand is the direct OPNsense install/update command,
-not an Actions ZIP, artifact-download procedure, GitHub token workflow, or extraction
-instructions. Default final form:
+Normal user-facing result:
 
 `pkg add -f https://github.com/Tolian82/os-zapret2-restyle/releases/download/v<VERSION>_<REVISION>/os-zapret2-restyle-<VERSION>_<REVISION>.pkg`
 
@@ -201,17 +274,16 @@ Only add extra installation detail when it is materially required by an observed
 or the owner explicitly requests it.
 
 ==================================================
-TESTING PRERELEASE PUBLICATION
+TESTING PACKAGE PUBLICATION
 ==================================================
 
-A testing prerelease exposes one already approved package candidate for live validation.
-It is not a stable project release and is not an ordinary code PR.
+A testing package publication exposes one already approved package candidate for owner
+live validation. It is not a stable/full project release and is not an ordinary code PR.
 
 Required authority:
 
-- explicit owner authorization for the exact tag `v<VERSION>_<REVISION>` and asset; or
-- an installable-patch shorthand instruction defined above, which is itself explicit
-  authorization for the deterministically derived exact tag and `.pkg` asset;
+- any owner package-delivery request covered by the GitHub-only package rule above; or
+- an explicit instruction for the exact testing candidate/tag and asset;
 - no implied permission to publish GitHub Pages or the pkg repository.
 
 Preferred path when verified package bytes already exist:
@@ -223,27 +295,30 @@ Preferred path when verified package bytes already exist:
    - exact package version;
    - `abi: FreeBSD:15:amd64`;
    - `arch: freebsd:15:x86:64`;
-5. create the prerelease directly through the plugin when supported, otherwise use the
-   narrow Release API/UI/`gh` fallback for the missing release-asset write;
+5. create the GitHub testing-package prerelease directly through the plugin when
+   supported, otherwise use the narrow Release API/UI/`gh` fallback for the missing
+   release-asset write;
 6. attach only the verified `.pkg` asset;
 7. verify target SHA, tag, `draft=false`, `prerelease=true`, asset name, state, digest or
-   size, and direct download URL through the GitHub plugin.
+   size, and direct download URL through the GitHub plugin;
+8. record the source/build/publication identity in project documentation.
 
 Do not create a PR merely to attach an existing package asset.
 
 When a repository-owned build-and-publish operation is actually required, create only
 the exact temporary branch `publish/v<VERSION>_<REVISION>`. The single generic
 `.github/workflows/publish-prerelease.yml` validates branch identity, builds on FreeBSD
-15, checks `+MANIFEST`, creates only a prerelease, verifies it, and deletes the temporary
-branch. Only one active run is permitted for the candidate.
+15, checks `+MANIFEST`, creates only the testing package prerelease, verifies it, and
+deletes the temporary branch. Only one active run is permitted for the candidate.
 
-A testing prerelease never deploys GitHub Pages or pkg-repository metadata.
+A testing package publication never deploys GitHub Pages or pkg-repository metadata.
 
 ==================================================
 FULL PROJECT RELEASE
 ==================================================
 
-A full release is separate from an ordinary patch and a testing prerelease.
+A full project release is separate from an ordinary patch and a testing package
+publication.
 
 Required conditions:
 
@@ -267,7 +342,7 @@ Transport order is mandatory while the GitHub plugin is available:
 1. connected GitHub plugin for every supported read and write;
 2. authenticated ordinary Git for local editing or ref operations that the plugin does
    not support;
-3. `gh` for Actions or release operations not covered by the plugin;
+3. `gh` for Actions or package/release operations not covered by the plugin;
 4. Git data API for an atomic multi-file commit only when no checkout-based transport is
    available;
 5. GitHub web UI only for a narrow operation that the authenticated tools cannot perform,
@@ -295,43 +370,43 @@ Use squash merge once. Never force-update `main`.
 Temporary task and publication branches are deleted after successful verification.
 `recovery/base` and pre-existing owner branches are not removed without separate
 evidence and authority. Cleanup failure is a repository-hygiene defect, not evidence
-that a verified merge or release failed.
+that a verified merge or package publication failed.
 
 ==================================================
-PATCH VERSUS PUBLICATION
+PATCH VERSUS PACKAGE PUBLICATION VERSUS RELEASE
 ==================================================
 
-Ordinary packaged patch:
+Ordinary packaged source patch:
 
 - keep `VERSION`;
 - increment `PLUGIN_REVISION` once;
 - merge through the normal PR path;
-- create no tag, Release, asset, Pages deployment, or pkg-repository publication without
-  separate authority.
+- if the owner requested the package itself for testing/installation/delivery, continue
+  through GitHub testing-package publication; do not stop at the Actions artifact.
 
-Installable patch shorthand:
+Package requested by owner:
 
-- means a testing prerelease is required, not an Actions artifact;
+- means a persistent GitHub `.pkg`, not an Actions artifact or sandbox file;
 - uses the current unpublished complete package candidate when one already exists;
 - otherwise creates the next package revision through the normal PR/CI/squash path;
-- publishes one direct `.pkg` Release asset;
-- returns the `pkg add -f https://github.com/...pkg` command without ZIP/token steps.
+- publishes one direct `.pkg` GitHub asset;
+- returns the direct GitHub URL or csh-safe `pkg add -f` command.
 
 Governance/documentation/CI-only patch:
 
 - change neither version value;
 - use the unchanged candidate prefix;
 - run path-applicable CI;
-- do not imply package publication unless the owner simultaneously invokes the
-  installable-patch shorthand above.
+- does not itself publish package bytes unless the owner also asks for a package.
 
-Testing prerelease:
+Testing package publication:
 
-- explicit authority for exact `v<VERSION>_<REVISION>` or installable-patch shorthand;
-- publish one verified package asset only;
-- no Pages/pkg repository.
+- authorized by the owner package request or exact candidate-publication instruction;
+- publishes one verified package asset only;
+- no Pages/pkg repository;
+- is not a semantic/full project release.
 
-Full release:
+Full project release:
 
 - exact new `VERSION` authority;
 - revision reset to `1`;
@@ -343,20 +418,24 @@ SUPERSESSION
 ==================================================
 
 This document and the active decisions listed at the top supersede conflicting wording
-that requires:
+that requires or permits:
 
 - using chat history, generic web search, local state, or another transport before the
   connected GitHub plugin for an operation the plugin supports;
 - continuing GitHub work through another transport when the plugin itself is unavailable;
+- treating a required-document open/fetch as a completed read when content was truncated;
 - mandatory Draft PRs;
 - exactly one commit in a PR branch;
 - exactly one historical workflow run;
 - closing a valid PR after an ordinary same-scope failure;
 - stopping independent analysis while CI runs;
-- full-document rereading for every small operation;
+- full-repository rereading for every small operation;
 - unversioned governance or release-preparation subjects;
 - version-specific prerelease workflows in `main`;
 - source/workflow/runner changes in response to an external infrastructure failure;
 - publication PRs for already verified assets;
-- asking for an additional prerelease confirmation after the owner has invoked the
-  installable-patch shorthand defined above.
+- treating only a narrow phrase list as authorization for owner package delivery;
+- presenting an Actions artifact, ZIP, or sandbox/local file as completion of an owner
+  package request;
+- asking for an additional testing-package confirmation after the owner has requested
+  the package.

@@ -25,13 +25,27 @@ Before project work:
 2. Read the specialist documents relevant to the requested scope.
 3. Read `docs/GITHUB_PUBLICATION.md` immediately before any GitHub mutation.
 4. For GitHub work, also read
-   `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`.
+   `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md` and
+   `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md`.
 5. Treat the project owner's current instruction as the highest scope boundary.
 6. Use current repository and GitHub state; chat history is supporting context only.
 
+MANDATORY DOCUMENT-COMPLETION RULE:
+
+- Every document required by this file, `docs/INDEX.md`, or the current specialist scope
+  must be read from its first line through EOF before project action begins.
+- A successful file-open/fetch call is not proof of a complete read.
+- If a tool response is truncated, paginated, clamped, or range-limited, continue with
+  the remaining ranges until EOF. Do not act from only the visible first chunk.
+- If a required document cannot be read completely, stop before mutation, package
+  delivery, OPNsense commands, or source changes and report the boundary instead of
+  filling the missing rules from memory.
+
 A complete read of every audit, decision, devlog, architecture, roadmap, and requirement
 file is required only for a repository-wide audit or genuine full-context recovery. It is
-not a blocking prerequisite for every diagnosis, command, or small change.
+not a blocking prerequisite for every diagnosis, command, or small change. The documents
+that are required for the chosen scope, however, must always be read completely through
+EOF.
 
 ==================================================
 GITHUB DELIVERY AUTHORITY
@@ -42,10 +56,11 @@ Authority order for GitHub work:
 1. current owner instruction;
 2. this file;
 3. `docs/GITHUB_PUBLICATION.md`;
-4. `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
-5. `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
-6. `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`;
-7. `docs/GITHUB_WORKFLOW.md`.
+4. `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md`;
+5. `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
+6. `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
+7. `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`;
+8. `docs/GITHUB_WORKFLOW.md`.
 
 The connected GitHub plugin is the mandatory first transport for repository discovery,
 state inspection, pull requests, branches, commits, reviews, checks, merges, and every
@@ -109,12 +124,36 @@ Rules:
 - Never force-update `main`, move a published tag, or rewrite published history.
 
 ==================================================
+OWNER PACKAGE DELIVERY RULE
+==================================================
+
+Any owner request for a package/patch deliverable — including `пакет`, `пакет для
+тестирования`, `тестовый пакет`, `патч`, `патч для установки`, `дай пакет`, `собери
+пакет`, and obvious equivalents — means a persistent GitHub-hosted `.pkg`, unless the
+owner explicitly asks for build/CI evidence only and no package delivery.
+
+- GitHub Actions artifacts are intermediate build evidence, not final owner delivery.
+- Local/container/sandbox file links are never the final project package.
+- A package request itself authorizes deterministic testing-package publication on
+  GitHub; do not ask for a second publication confirmation.
+- The phrase `не релиз, а пакет` means no stable/full project release, no semantic
+  `VERSION` promotion, no Pages and no pkg-repository promotion. It does not mean stop
+  at an Actions artifact. Persist the testing `.pkg` on GitHub using the established
+  testing-package publication mechanism.
+- The technical GitHub prerelease/tag used to host a testing `.pkg` is a storage and
+  delivery mechanism, not a stable/full project release.
+- Final owner-facing output is a direct GitHub `.pkg` URL or a csh-safe OPNsense
+  installation command, never an Actions ZIP or sandbox link.
+
+==================================================
 PRERELEASE PUBLICATION RULES
 ==================================================
 
-Publishing an already verified candidate is a release operation, not a code PR.
+Publishing an already verified candidate as a testing package is a package-delivery
+operation, not a code PR and not a full semantic project release.
 
-- Exact owner authorization is required for the candidate tag and asset.
+- Owner authorization is supplied either by an exact candidate-publication instruction
+  or by any package-delivery request covered by the rule above.
 - Prefer direct Release API/UI/`gh` upload when verified package bytes already exist and
   the GitHub plugin does not expose the required release-asset write operation.
 - Reuse an Actions artifact only by exact run ID, artifact ID/name, and digest, and
@@ -123,7 +162,7 @@ Publishing an already verified candidate is a release operation, not a code PR.
   publication automation is needed.
 - Permit only one active publication run per candidate.
 - A temporary `publish/v<VERSION>_<REVISION>` branch does not receive a PR.
-- A testing prerelease publishes neither GitHub Pages nor the pkg repository.
+- A testing package publication publishes neither GitHub Pages nor the pkg repository.
 - Verify target SHA, tag, draft/prerelease flags, asset name, and direct URL.
 - Delete the temporary publication branch after success.
 
@@ -152,28 +191,33 @@ REQUEST SCOPE AND AUTHORIZATION
 - patch only, branch only, PR only: stop at the named boundary;
 - fix, add, change, implement, complete: perform the ordinary branch → Ready PR →
   checks → squash merge → verification cycle;
-- publish candidate `vX.Y.Z_N`: publish only that authorized testing prerelease and
-  asset, without Pages/pkg-repository promotion;
+- package, test package, package for testing, installable patch: complete the ordinary
+  packaged cycle as needed, then persistently publish the deterministic `.pkg` on GitHub
+  and return its direct GitHub URL/installation command;
+- publish candidate `vX.Y.Z_N`: publish only that authorized testing package asset,
+  without Pages/pkg-repository promotion;
 - release version `X.Y.Z`: perform the authorized full stable release pipeline for that
   exact version and its existing product gates.
 
 Do not ask for routine branch names, commit wording, PR text, CI inspection, same-scope
-repair, squash merge, or cleanup after the owner has authorized the ordinary cycle.
-Stop for owner input only on material product ambiguity, relevant unpublished owner
-state, unavailable credentials/protected authority, destructive changes to user data or
-pre-existing remote objects, history rewriting/direct-main publication, an unresolvable
-required-check failure, GitHub-plugin unavailability, or mandatory live OPNsense evidence
-available only from the owner.
+repair, squash merge, cleanup, or a second testing-package publication confirmation after
+the owner has requested the package. Stop for owner input only on material product
+ambiguity, relevant unpublished owner state, unavailable credentials/protected authority,
+destructive changes to user data or pre-existing remote objects, history rewriting/direct-
+main publication, an unresolvable required-check failure, GitHub-plugin unavailability,
+or mandatory live OPNsense evidence available only from the owner.
 
 ==================================================
 PATCH AND RELEASE BOUNDARY
 ==================================================
 
-- Ordinary packaged change: keep `VERSION`, increment `PLUGIN_REVISION` once, no tag or
-  publication unless separately authorized.
+- Ordinary packaged source change: keep `VERSION`, increment `PLUGIN_REVISION` once.
+- If the owner requests the resulting package for testing, installation, or delivery,
+  publish that exact testing `.pkg` persistently on GitHub after verification. Do not
+  stop at the Actions artifact.
 - Governance/documentation/CI-only change: change neither value.
-- Testing prerelease: explicit authorization for exact `v<VERSION>_<REVISION>`; no
-  GitHub Pages or pkg repository.
+- Testing package publication: no semantic `VERSION` change, no GitHub Pages and no pkg
+  repository; the technical GitHub prerelease/tag is only the persistent package host.
 - Full project release: change `VERSION`, reset revision to `1`, and use the versioned
   release-preparation subject `vX.Y.Z_1: Prepare release vX.Y.Z`.
 - Published tags, releases, assets, and versions are immutable and forward-only.

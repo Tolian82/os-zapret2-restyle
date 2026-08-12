@@ -7,6 +7,8 @@
 3. `docs/PROJECT_STATE.md`;
 4. specialist documents for the requested scope.
 
+**Completion is mandatory:** every selected required document must be read from its first line through EOF before project action. If a tool truncates, clamps, paginates, or range-limits the response, continue fetching the remaining ranges until EOF. Opening/fetching a file is not by itself a completed read.
+
 A full repository-wide reading is required only for a repository-wide audit or genuine
 full-context recovery. Focused work uses the risk-based specialist reading defined in
 `AGENTS.md`. For current diagnosis, later patch/live/release evidence outranks historical
@@ -14,11 +16,12 @@ records.
 
 ## Current release / Strategy Lab authorities
 
-Read these first for current Strategy Lab or release work:
+Read these first for current Strategy Lab or release/package work:
 
 - `docs/PROJECT_STATE.md` — current source/published candidates, accepted runtime basis and next boundary;
+- `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md` — every owner-facing package is persistently delivered from GitHub; Actions/sandbox files are not final delivery; required documents must be read through EOF;
 - `docs/patches/v0.4.1_5.md` — current measurement-only discovery-probe agreement/cost package candidate;
-- `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md` — exact `_5` CI package artifact, source-tree and no-release evidence;
+- `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md` — exact `_5` CI build artifact evidence; persistent GitHub package publication is still pending;
 - `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — experiment selection and acceptance authority, including discovery-vs-deep question 10;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — production discovery/stability/deep validation architecture;
 - `docs/patches/v0.4.1_4.md` — accepted measurement-only BLOB common-set scaling candidate;
@@ -44,24 +47,20 @@ Read these first for current Strategy Lab or release work:
 ### Current v0.4.1 boundary
 
 `VERSION=0.4.1`, `PLUGIN_REVISION=5`; current source candidate is
-`os-zapret2-restyle-0.4.1_5.pkg`, and its FreeBSD-15 GitHub Actions package artifact is READY for
-owner-live testing. No `_5` tag/Release/prerelease/Pages/pkg-repository publication was requested
-or performed.
+`os-zapret2-restyle-0.4.1_5.pkg`. Its FreeBSD-15 GitHub Actions **build artifact** is READY, but persistent GitHub package publication is PENDING. Under the active GitHub-only package-delivery rule, the Actions artifact is build evidence and must not be presented as the final owner testing package.
 
-Exact `_5` package identity:
+Exact `_5` build-artifact identity:
 
 - source PR #197 final head `a7504d95b2b5f0fe3c0b0bccea359e8f22148181`;
 - merged `main` `3f85d34f415d49c2b9a3ae25bd8bdebdad2f84dd`;
 - identical tree on both: `3498b759161b14369921e9a47787e82ddbace6a2`;
 - latest-head CI `31645083105` / #785 — SUCCESS;
 - artifact ID `9160582106`, name `os-zapret2-restyle-0.4.1_5`;
-- package `os-zapret2-restyle-0.4.1_5.pkg`, `410452` bytes;
+- package inside the artifact `os-zapret2-restyle-0.4.1_5.pkg`, `410452` bytes;
 - SHA-256 `d2a8de95bb128739bcf59325433f97b6c28eb819124131c867f0f3cea9d67b4e`;
 - post-merge main CI `31645659351` / #786 — SUCCESS (`Verify main integrity` PASS).
 
-Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`; latest published testing
-prerelease and latest owner-tested testing candidate remain `_4`. Detailed production Strategy Lab
-evidence remains `_26` because `_2`, `_3`, `_4`, and `_5` do not change production behavior.
+No `_5` persistent testing-package publication has yet been completed. Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`; latest persistently published testing package and latest owner-tested testing candidate remain `_4`. Detailed production Strategy Lab evidence remains `_26` because `_2`, `_3`, `_4`, and `_5` do not change production behavior.
 
 `_5` measures adaptive-search question 10: agreement and cost for `HEAD`, one-byte GET and the
 current 4 KiB discovery GET against the existing cold deep-GET finalist reference. It reuses the
@@ -142,7 +141,7 @@ and `docs/audit/`. Key retained comparison points:
 - Lua measurement: `docs/patches/v0.4.1_2.md`, `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`;
 - accepted single-BLOB measurement: `docs/patches/v0.4.1_3.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
 - accepted common-set scaling measurement: `docs/patches/v0.4.1_4.md`, `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`;
-- discovery-probe package artifact: `docs/patches/v0.4.1_5.md`, `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`.
+- discovery-probe build artifact: `docs/patches/v0.4.1_5.md`, `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`.
 
 Historical evidence explains progression; it never overrides a later current record.
 
@@ -169,19 +168,18 @@ Historical evidence explains progression; it never overrides a later current rec
 
 ## GitHub delivery authority
 
-For GitHub work, read in this order:
+For GitHub work, read in this order **through EOF**:
 
 1. current owner instruction;
 2. repository-root `AGENTS.md`;
 3. `docs/GITHUB_PUBLICATION.md`;
-4. `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
-5. `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
-6. `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`;
-7. `docs/GITHUB_WORKFLOW.md`.
+4. `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md`;
+5. `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
+6. `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
+7. `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`;
+8. `docs/GITHUB_WORKFLOW.md`.
 
-Key rules: GitHub plugin first, exact main SHA before mutation, one logical Ready PR,
-same-scope repairs in that PR, latest head green, exact-head squash merge, verify main and
-cleanup, candidate publication separate, never rewrite main or published tags.
+Key rules: GitHub plugin first, read required authorities completely through EOF, exact main SHA before mutation, one logical Ready PR, same-scope repairs in that PR, latest head green, exact-head squash merge, verify main and cleanup. Every owner package request means a persistent GitHub `.pkg`; Actions artifacts and sandbox/local files are build evidence only, never final package delivery. Candidate package publication is separate from a full semantic project release; never rewrite main or published tags.
 
 ## OPNsense command authority
 

@@ -6,8 +6,7 @@ DOCUMENT ROLE
 
 Question answered: Where is the project now?
 
-Read after `AGENTS.md` and `docs/INDEX.md`. Later current patch/live/release records override
-historical implementation evidence for current state.
+Read after `AGENTS.md` and `docs/INDEX.md`. Read this document completely through EOF before acting. Later current patch/live/release records override historical implementation evidence for current state.
 
 ==================================================
 QUICK CONTEXT
@@ -16,14 +15,22 @@ QUICK CONTEXT
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=5`
-Current source candidate: `os-zapret2-restyle-0.4.1_5.pkg` — CI package artifact READY / owner-live pending
+Current source candidate: `os-zapret2-restyle-0.4.1_5.pkg` — FreeBSD-15 BUILD ARTIFACT READY / PERSISTENT GITHUB PACKAGE PUBLICATION PENDING / owner-live pending
 Current published release tag: `v0.4.1`
 Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`
-Latest published testing prerelease: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`
+Latest persistently published testing package: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`
 Latest owner-tested stable package: `os-zapret2-restyle-0.4.1_1.pkg` — upgrade/install smoke PASS
 Latest owner-tested testing candidate: `v0.4.1_4` — BLOB common-set scaling measurement PASS
 Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS
 Required package ABI: `FreeBSD:15:amd64`
+
+Active package-delivery rule:
+
+- every owner-facing package/patch requested for testing, installation or delivery must be persistently hosted on GitHub;
+- a GitHub Actions artifact is build evidence only and is not final owner delivery;
+- a local/container/sandbox file is never the final project package;
+- `не релиз, а пакет` means no stable/full project release, but still requires persistent GitHub publication of the testing `.pkg`;
+- authority: `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md`.
 
 Stable v0.4.1 identity:
 
@@ -77,26 +84,30 @@ Current `_5` source candidate is the measurement-only discovery-probe experiment
 `HEAD`, one-byte GET and the existing 4 KiB discovery GET with the current finalist deep-GET
 reference on the same pinned endpoint epoch and native candidate corpus.
 
-`_5` package artifact identity:
+`_5` build-artifact identity:
 
 - source PR #197 final head `a7504d95b2b5f0fe3c0b0bccea359e8f22148181`;
 - exact-head squash merge/main `3f85d34f415d49c2b9a3ae25bd8bdebdad2f84dd`;
 - identical final source tree on both commits: `3498b759161b14369921e9a47787e82ddbace6a2`;
 - latest-head CI run `31645083105` / #785 — SUCCESS;
 - artifact ID `9160582106`, name `os-zapret2-restyle-0.4.1_5`;
-- package `os-zapret2-restyle-0.4.1_5.pkg`, `410452` bytes;
+- package inside artifact `os-zapret2-restyle-0.4.1_5.pkg`, `410452` bytes;
 - package digest `sha256:d2a8de95bb128739bcf59325433f97b6c28eb819124131c867f0f3cea9d67b4e`;
 - post-merge main CI run `31645659351` / #786 — SUCCESS (`Verify main integrity` PASS);
 - evidence: `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`.
 
-`_5` has no tag/Release publication authority in this task. No `_5` tag, Release/prerelease,
-Pages update, or pkg-repository promotion was performed.
+This proves `_5` was built and inspected. It does **not** satisfy owner package delivery under the current GitHub-only rule because no persistent `_5` GitHub package publication exists yet. The prior Actions/sandbox delivery interpretation is explicitly rejected by the active governance decision.
 
 ==================================================
 CURRENT AUTHORITIES
 ==================================================
 
-Current GitHub delivery authority: `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
+Current GitHub delivery authorities:
+
+- `docs/GITHUB_PUBLICATION.md`;
+- `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md`;
+- `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
+- `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
 
 Current Strategy Lab authorities:
 
@@ -236,12 +247,10 @@ false PASS/false FAIL/agreement, pinned endpoint match, firewall interception an
 identity. The wrapper owns the shared lifecycle lock, stops normal Zapret2 only for the experiment,
 cleans candidate residue and must restore byte-for-byte equivalent semantic lifecycle evidence.
 
-Package artifact is READY from latest-head CI #785 and is bound to the exact merged-main tree by
-`docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`.
+FreeBSD-15 **build artifact** is ready from latest-head CI #785 and is bound to the exact merged-main tree by `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`. Persistent GitHub testing-package publication remains pending, so `_5` must not yet be described as delivered/ready for owner installation or live testing.
 
 `production_model_changed=false`, `production_discovery_policy_changed=false`, and
-`production_change_recommended=false`. The `_5` test package is a GitHub Actions build artifact
-only; no `_5` tag/Release/prerelease/Pages/pkg-repository publication is part of this task.
+`production_change_recommended=false`.
 
 Patch contract: `docs/patches/v0.4.1_5.md`.
 
@@ -250,10 +259,9 @@ CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
 The Model-C Lua initialization and BLOB startup/RSS optimization questions remain closed by
-owner-live evidence without production changes. `_5` package artifact is ready for owner-live
-discovery-probe agreement/cost measurement; no production discovery change is authorized before
-owner-live evidence demonstrates zero false PASS against the deep reference and a material
-reproducible cost benefit.
+owner-live evidence without production changes. `_5` source and build evidence are ready, but persistent GitHub package publication is still pending under the active owner package-delivery rule. Owner-live discovery-probe agreement/cost measurement begins only after the requested `.pkg` is persistently published on GitHub and its direct package identity is documented.
+
+No production discovery change is authorized before owner-live evidence demonstrates zero false PASS against the deep reference and a material reproducible cost benefit.
 
 Production behavior remains
 `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
