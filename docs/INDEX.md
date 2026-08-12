@@ -20,58 +20,52 @@ state.
 
 Read these first for current Strategy Lab or release work:
 
-- `docs/PROJECT_STATE.md` — current published release, accepted runtime basis and next boundary;
-- `docs/releases/v0.4.1.md` — v0.4.1 release content/protocol record;
+- `docs/PROJECT_STATE.md` — current package/source candidate, accepted runtime basis and next boundary;
+- `docs/patches/v0.4.1_2.md` — current measurement-only Lua initialization patch;
+- `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md` — current Lua initialization measurement/decision contract;
+- `docs/releases/v0.4.1.md` — stable v0.4.1 release content/protocol record;
 - `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md` — exact v0.4.1 merge/tag/workflow/package/Pages publication evidence;
 - `docs/devlog/2026-08-12-release-v0.4.1.md` — v0.4.1 release-preparation basis;
 - `docs/patches/v0.4.0_26.md` — accepted workload-derived finite adaptive-budget patch;
-- `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md` — current parent-budget calculation, deadline and evidence contract;
-- `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md` — current owner-live runtime basis;
-- `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md` — exact `_26` testing-prerelease identity;
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md` — parent-budget calculation/deadline/evidence contract;
+- `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md` — detailed owner-live runtime basis;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — adaptive candidate/search and validation architecture;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md` — preferred one-worker bucket/source-port dispatcher architecture;
-- `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md` — source-port lease corrective live baseline;
-- `docs/patches/v0.4.0_25.md` — accepted controlled-source-port lease corrective;
-- `docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md` — prior Model-C proof and shared-port defect input;
 - `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — canonical owner-assisted live regression inventory;
 - `docs/architecture/STRATEGY_LAB.md` — base product/stage/lifecycle contract;
 - `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — completed Python ownership;
-- `docs/decisions/DEC-2026-08-11-strategy-lab-parallel-model-b-selection.md` — accepted width-three Model B fallback/reference authority;
-- `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md` — accepted Model-B owner-live comparison baseline;
+- `docs/decisions/DEC-2026-08-11-strategy-lab-parallel-model-b-selection.md` — accepted Model-B fallback/reference authority;
 - `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md` — release-specific live selection policy.
 
 ### Current v0.4.1 boundary
 
-`VERSION=0.4.1`, `PLUGIN_REVISION=1`; current published package:
-`os-zapret2-restyle-0.4.1_1.pkg`.
+`VERSION=0.4.1`, `PLUGIN_REVISION=2`; current source candidate:
+`os-zapret2-restyle-0.4.1_2.pkg`.
 
-Published release identity:
+Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`. The owner has now
+installed/upgraded to that stable package and reported successful upgrade and normal
+operation. Detailed Strategy Lab behavioral evidence remains the unchanged `_26` owner-live
+basis because `_1` was a release promotion rather than a runtime behavior change.
+
+Published stable release identity:
 
 - merge `c53e1c1656517fa764f97a175bb82eea02dbc374`;
-- tree `74e3a67cb25c0e80bc0c00f7214e8c00c3daa7b9`;
 - semantic tag `v0.4.1`;
 - Release workflow `31596979559` — SUCCESS;
 - package size `180305` bytes;
 - package digest `sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e`;
 - Pages deployment `5869308071` — SUCCESS.
 
-Durable release record:
-`docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`.
+`v0.4.1_2` is measurement-only: it exposes `lua-init-measure` and does not change production
+Model C. Current native Stage-60 expansion candidates all declare `zapret-lib.lua` and
+`zapret-antidpi.lua`; together with mandatory `zapret-auto.lua` and
+`strategy_lab_model_c.lua`, the current Model-C batch initialization already equals the
+candidate-minimal union. The report must say `equivalent_init_set` and suppress timing/RSS
+claims when that equality holds.
 
-The current workflow-created GitHub Release is marked prerelease by the existing release
-workflow. The semantic tag/package/Pages publication is complete. The `0.4.1_1` package has
-not yet been separately claimed as installed on the owner appliance; the selected runtime
-basis remains owner-live `_26` because release preparation did not change Strategy Lab
-runtime semantics.
-
-Owner-live Extended `telegram.org`, `job.xhdgCU`:
-
-- `policy=eligible-work-v1` persisted after Stage 30;
-- measured matrix: two endpoints, IPv4 only, QUIC closed, Generic UDP inactive;
-- effective budget exactly Standard `150 s`, Extended `120 s`, search `270 s`, Stage 80 `120 s`;
-- Stage 60 Model C 16/16, `graph_exhausted`, `.parallel.fallbacks=[]`;
-- Stage 60 `34209 ms`, total `114644 ms`;
-- truthful `NO_CANDIDATE`, clean Stage-90 restoration and no `19128-19130` residue.
+Owner-live Extended `telegram.org`, `job.xhdgCU`, remains the detailed runtime baseline:
+Model C 16/16, no fallback, adaptive budget `150/120/270/120`, clean restoration and no
+`19128-19130` residue.
 
 Stage 60 remains
 `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`;
@@ -85,6 +79,7 @@ Stage 60 remains
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`
+- `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`
 - `docs/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md`
 - `docs/architecture/STRATEGY_LAB_ACTIVATION.md`
 - `docs/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md`
@@ -110,14 +105,11 @@ Key retained comparison points:
 - `_32` Stage-60 timeout correction and late-stage containment: `docs/patches/v0.4.0_7.md`, `docs/patches/v0.4.0_8.md`;
 - `_33` adaptive validation: `docs/verification/evidence/2026-08-10-v0.4.0_9-adaptive-validation-pass.md`;
 - Model A cold reference: `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`;
-- Model B coexistence/reproducibility: `docs/verification/evidence/2026-08-10-v0.4.0_16-model-b-live-accept.md` and `docs/verification/evidence/2026-08-11-v0.4.0_17-model-b-reproducibility.md`;
-- Model B sequential exhaustive: `docs/verification/evidence/2026-08-11-v0.4.0_19-model-b-exhaustive-reproducibility.md`;
-- Model B controlled parallel: `docs/verification/evidence/2026-08-11-v0.4.0_20-model-b-parallel-attribution-reject.md`, `docs/patches/v0.4.0_21.md`, and `docs/verification/evidence/2026-08-11-v0.4.0_21-model-b-parallel-reproducibility.md`;
 - Model B production integration: `docs/patches/v0.4.0_22.md` and `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`;
-- Model C production-candidate publication/live evidence: `docs/patches/v0.4.0_23.md`, `docs/verification/evidence/2026-08-11-v0.4.0_23-publication.md`, `docs/verification/evidence/2026-08-11-v0.4.0_23-model-c-live-hold.md`;
-- Model C source-port corrective acceptance: `docs/patches/v0.4.0_25.md`, `docs/verification/evidence/2026-08-11-v0.4.0_25-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
-- Adaptive workload budget acceptance: `docs/patches/v0.4.0_26.md`, `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`, `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`;
-- v0.4.1 release: `docs/releases/v0.4.1.md`, `docs/devlog/2026-08-12-release-v0.4.1.md`, `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`.
+- Model C source-port corrective acceptance: `docs/patches/v0.4.0_25.md`, `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
+- Adaptive workload budget acceptance: `docs/patches/v0.4.0_26.md`, `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`, `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`;
+- v0.4.1 release: `docs/releases/v0.4.1.md`, `docs/devlog/2026-08-12-release-v0.4.1.md`, `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`;
+- current Lua initialization measurement: `docs/patches/v0.4.1_2.md` and `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`.
 
 Historical evidence explains progression; it never overrides a later patch/PR/live/release record.
 
