@@ -61,6 +61,7 @@ require "${STATE}" 'Stage 60 duration `34209 ms`'
 require "${STATE}" 'total job duration `114644 ms`'
 require "${STATE}" 'Policy: `blob-common-set-scaling-v1`, schema `2`.'
 require "${STATE}" 'production_change_recommended=false'
+require "${STATE}" 'V0.4.1_4 BLOB COMMON-SET SCALING — SOURCE / CI PASS'
 
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
 require "${INDEX}" 'docs/patches/v0.4.1_4.md'
@@ -121,7 +122,7 @@ require "${BLOB_PY}" 'PRODUCTION_CANDIDATE_WIDTH = 3'
 require "${BLOB_PY}" 'production_change_recommended'
 require "${BLOB_TEST}" 'PASS: BLOB common-set scaling measurement is single-worker, balanced, lifecycle-safe'
 require "${BLOB_DOC}" '_3 ACCEPTED / _4 COMMON-SET MEASUREMENT IN SOURCE / PRODUCTION MODEL C UNCHANGED'
-require "${BLOB_PATCH}" 'SOURCE MEASUREMENT / CI PENDING / OWNER-LIVE PENDING'
+require "${BLOB_PATCH}" 'SOURCE / CI / FREEBSD15 PACKAGE PASS / PUBLICATION PENDING / OWNER-LIVE PENDING'
 
 require "${LIVE_GATE_DECISION}" 'all-or-nothing release checklist.'
 if grep -Fq 'Stable release preparation and pkg-repository promotion remain blocked until every' "${MATRIX}"; then
@@ -129,4 +130,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} common-set measurement source is current while published/owner-tested truth remains _3 and production live truth remains _26"
+echo "PASS: ${candidate} common-set measurement source is CI-qualified while published/owner-tested truth remains _3 and production live truth remains _26"
