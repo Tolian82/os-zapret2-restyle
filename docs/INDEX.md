@@ -17,8 +17,9 @@ records.
 Read these first for current Strategy Lab or release work:
 
 - `docs/PROJECT_STATE.md` — current source/published candidates, accepted runtime basis and next boundary;
-- `docs/patches/v0.4.1_3.md` — current measurement-only BLOB startup/readiness/RSS patch;
-- `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md` — BLOB measurement/isolation/decision contract;
+- `docs/patches/v0.4.1_3.md` — accepted measurement-only BLOB startup/readiness/RSS patch;
+- `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md` — accepted BLOB measurement/isolation/decision contract;
+- `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md` — accepted owner-installed BLOB startup/readiness/RSS evidence;
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md` — exact `_3` testing publication evidence;
 - `docs/patches/v0.4.1_2.md` — accepted measurement-only Lua initialization patch;
 - `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md` — accepted Lua measurement/decision contract;
@@ -40,15 +41,20 @@ Read these first for current Strategy Lab or release work:
 prerelease are `os-zapret2-restyle-0.4.1_3.pkg` / `v0.4.1_3`.
 
 Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`; stable upgrade smoke is
-PASS. Latest owner-tested testing candidate remains `_2` until `_3` owner measurement passes.
-`_2` Lua initialization measurement is accepted and closed as a valid negative optimization
-result. Detailed production Strategy Lab evidence remains `_26` because `_2` and `_3` are
-measurement-only.
+PASS. Latest owner-tested testing candidate is `_3`; its BLOB-free / built-in /
+representative-external startup/readiness/RSS measurement is accepted. `_2` Lua initialization
+measurement is also accepted and closed as a valid negative optimization result. Detailed
+production Strategy Lab evidence remains `_26` because `_2` and `_3` are measurement-only.
 
-`_3` centralizes canonical resource roots and measures BLOB-free vs built-in fake vs external
-fake-file startup/readiness/RSS using an isolated lifecycle-locked harness. It installs no
-experiment traffic routes and does not mutate normal Zapret2 state. One `_3` run cannot
-authorize a production BLOB-loading change.
+The `_3` accepted owner run completed 27 startups, 9 per variant. Median stable readiness was
+`63.061 / 62.652 / 62.566 ms` for BLOB-free / built-in / external respectively, while median
+ready and settled RSS was exactly `4360 KiB` for all variants. Lifecycle restoration and
+cleanup passed. The observed sub-1% readiness differences do not establish a BLOB startup
+penalty and do not justify a production Model-C change.
+
+The broader adaptive-search experiment authority still includes small-inline and several
+semantically compatible external-resource coverage. Therefore the remaining BLOB question is
+scaling/common eager-set cost, not a production rewrite.
 
 Owner-live Extended `telegram.org`, `job.xhdgCU`, remains the detailed production baseline:
 Model C 16/16, no fallback, adaptive budget `150/120/270/120`, clean restoration and no
@@ -94,7 +100,7 @@ and `docs/audit/`. Key retained comparison points:
 - adaptive budget: `docs/patches/v0.4.0_26.md`, `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`;
 - v0.4.1 stable release: `docs/releases/v0.4.1.md`, `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`;
 - Lua measurement: `docs/patches/v0.4.1_2.md`, `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`;
-- current BLOB measurement: `docs/patches/v0.4.1_3.md`, `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`.
+- current BLOB measurement: `docs/patches/v0.4.1_3.md`, `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`.
 
 Historical evidence explains progression; it never overrides a later current record.
 
