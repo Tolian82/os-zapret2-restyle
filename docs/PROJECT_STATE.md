@@ -6,9 +6,8 @@ DOCUMENT ROLE
 
 Question answered: Where is the project now?
 
-Read after `AGENTS.md` and `docs/INDEX.md`. Historical implementation detail belongs in
-`docs/patches/`, `docs/devlog/` and `docs/verification/evidence/` and must not override a
-later current patch/live/release record.
+Read after `AGENTS.md` and `docs/INDEX.md`. Later current patch/live/release records override
+historical implementation evidence for current state.
 
 ==================================================
 QUICK CONTEXT
@@ -20,7 +19,7 @@ Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=3`
 Current source candidate: `os-zapret2-restyle-0.4.1_3.pkg`
 Current published release tag: `v0.4.1`
 Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`
-Latest published testing prerelease: `v0.4.1_2` / `os-zapret2-restyle-0.4.1_2.pkg`
+Latest published testing prerelease: `v0.4.1_3` / `os-zapret2-restyle-0.4.1_3.pkg`
 Latest owner-tested stable package: `os-zapret2-restyle-0.4.1_1.pkg` — upgrade/install smoke PASS
 Latest owner-tested testing candidate: `v0.4.1_2` — Lua initialization measurement PASS
 Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS
@@ -32,50 +31,62 @@ Stable v0.4.1 identity:
 - semantic tag `v0.4.1`;
 - package `os-zapret2-restyle-0.4.1_1.pkg`;
 - digest `sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e`;
-- stable publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`.
+- evidence: `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`.
 
-Accepted `_2` identity/evidence:
+Accepted `_2` evidence:
 
 - runtime/source merge `462c55b291ac737eb368ee9ec5e4f139bd239665`;
-- publication workflow run `31605249326` — SUCCESS;
-- tag `v0.4.1_2` targeting exact runtime/source merge;
-- package `os-zapret2-restyle-0.4.1_2.pkg`, size `181696` bytes;
+- tag `v0.4.1_2`, workflow `31605249326` — SUCCESS;
+- package `os-zapret2-restyle-0.4.1_2.pkg`, `181696` bytes;
 - digest `sha256:09d0edacd0527230a2657128c80099e6436f41b14621f5573586b4cc6fed9063`;
-- publication evidence: `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-publication.md`;
-- owner-live evidence: `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`.
+- owner-live: `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`.
 
-The owner-installed `_2` Lua measurement is PASS. Detailed production Strategy Lab behavioral
-evidence remains the unchanged `_26` runtime basis because `_2` and `_3` are measurement-only
-and do not change production Model C.
+Published `_3` testing identity:
 
-Active GitHub delivery authority:
-`docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
+- runtime/source merge `da427cd061df1f3cbc01ba11a14a6417f2e406b3`;
+- merge tree `fec062533bb971450cf197a3365de3ef2e1f3c60`;
+- PR #190 and CI run `31615648930` — SUCCESS;
+- post-merge main CI run `31616335987` — SUCCESS;
+- publication workflow run `31616501996` — SUCCESS;
+- tag `v0.4.1_3` targets exact runtime/source merge;
+- GitHub Release ID `369373181`, prerelease=true;
+- package `os-zapret2-restyle-0.4.1_3.pkg`, `185310` bytes;
+- digest `sha256:6efdb8e844bdec5cbe2fddffd77c1234cc53b939520c4648ed68da3126e7989b`;
+- evidence: `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`.
 
-Active Strategy Lab ownership authority:
-`docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
+`_3` is published for owner-assisted measurement and remains owner-live pending. Because `_2`
+and `_3` are measurement-only, detailed production behavior still uses the accepted `_26`
+runtime evidence.
+
+==================================================
+CURRENT AUTHORITIES
+==================================================
+
+Current GitHub delivery authority: `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`.
 
 Current Strategy Lab authorities:
 
+- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
 - `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`;
 - `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`;
 - `docs/patches/v0.4.1_3.md`;
+- `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`;
 - `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`.
 
-Current Stage-60 preferred model: `C-warm-bucket-source-port-dispatch`.
-Immediate fallback/reference: `B-warm-worker-parallel-batched`.
-Final fail-closed fallback: cold Model A.
-Candidate width remains at most 3; pinned endpoints inside one candidate remain sequential;
-there is no CPU-count gate.
+Current Stage-60 chain remains
+`C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
+Candidate width remains at most 3, pinned endpoints inside one candidate remain sequential,
+and source-port leasing remains `preferred-free-else-alternate`.
 
 ==================================================
 ACCEPTED OWNER-LIVE PRODUCTION RUNTIME BASIS
 ==================================================
 
-Detailed production Strategy Lab live basis remains Extended `telegram.org`, `job.xhdgCU`:
+Extended `telegram.org`, `job.xhdgCU`:
 
 - `policy=eligible-work-v1`, effective budgets `150/120/270/120`;
 - Stage 60 `C-warm-bucket-source-port-dispatch`, 16/16, graph exhausted, zero winners;
@@ -85,63 +96,43 @@ Detailed production Strategy Lab live basis remains Extended `telegram.org`, `jo
 - rules `19128-19130` left no residue.
 
 ==================================================
-V0.4.1_2 LUA INITIALIZATION MEASUREMENT — ACCEPTED
+V0.4.1_2 LUA INITIALIZATION — ACCEPTED
 ==================================================
 
-The corrected owner-installed `_2` measurement reported:
+Corrected owner-installed `_2` measurement: `candidate_count=16`, all six batches
+`equivalent_init_set=true`, `checks.all_required_files_present=true`,
+`checks.production_model_unchanged=true`, `runtime_comparison_required=false`,
+`conclusion=equivalent_init_set`.
 
-- `candidate_count=16`;
-- all six current batches `equivalent_init_set=true`;
-- `checks.all_required_files_present=true`;
-- `checks.production_model_unchanged=true`;
-- `runtime_comparison_required=false`;
-- `conclusion=equivalent_init_set`.
-
-Therefore current Model-C initialization already equals the candidate-minimal four-file union.
-Lua initialization optimization is closed with no production runtime change.
-
-`_3` removes the `_2` measurement-only duplicate path by deriving the default Lua root from
-canonical `ResourceInventory`, whose installed roots are `/usr/local/etc/zapret2/lua` and
-`/usr/local/etc/zapret2/files/fake` unless explicitly overridden by Strategy Lab environment.
+Current Model-C Lua initialization already equals the candidate-minimal union, so this
+optimization is closed without a production change. `_3` also fixes `_2` resource discovery by
+deriving the Lua default from canonical ResourceInventory (`/usr/local/etc/zapret2/lua`; fake
+root `/usr/local/etc/zapret2/files/fake`).
 
 ==================================================
 V0.4.1_3 BLOB STARTUP / RSS MEASUREMENT
 ==================================================
 
-`v0.4.1_3` is measurement-only. Production Model C/B/A remains unchanged.
+Policy `blob-startup-rss-v1` compares BLOB-free, built-in `fake_default_tls`, and external
+`fake_tls_7.bin` variants with the common Model-C Lua/action shape held constant.
 
-Policy `blob-startup-rss-v1` compares three isolated variants while keeping common Model-C
-Lua/action shape fixed:
+The lifecycle-locked harness launches one temporary `dvtws2` at a time on `9990..9992`, never
+calls `route-add`, never stops/reconfigures normal Zapret2, and uses
+`cache_policy=natural-cache-no-drop`. Default is 9 balanced/interleaved trials per variant.
+It persists raw readiness/RSS samples, summaries and pairwise median deltas.
 
-- BLOB-free;
-- built-in `fake_default_tls`;
-- external `fake_tls_7.bin` mapped through canonical ResourceInventory.
-
-The lifecycle-locked harness launches one temporary `dvtws2` at a time through the accepted
-narrow adapter on dedicated ports `9990..9992`. It never calls `route-add`, never stops or
-reconfigures normal Zapret2, and does not drop OS caches. Default measurement is 9 trials per
-variant with balanced/interleaved ordering. Readiness requires two consecutive qualified
-snapshots; raw readiness and RSS samples plus pairwise median deltas are persisted.
-
-Acceptance requires initial/final semantic service state/config/runtime/firewall evidence to
-match and dedicated workers/rules to be clean. `_3` always reports
-`production_change_recommended=false`; one accepted measurement is evidence for
-reproducibility review, not permission to alter production BLOB loading.
+Acceptance requires matching initial/final semantic service/config/runtime/firewall evidence
+plus clean temporary workers/rules. `_3` keeps `production_change_recommended=false`; one run
+cannot authorize a production BLOB-loading change.
 
 ==================================================
 CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
-Current logical change: `v0.4.1_3` BLOB loading / startup / RSS measurement.
+`v0.4.1_3` source, CI, FreeBSD 15 build and testing-prerelease publication are PASS.
+Remaining gate: owner installs `_3` and runs the isolated BLOB startup/readiness/RSS
+measurement.
 
-Required gates:
-
-- focused measurement regression and canonical corrective matrix PASS;
-- canonical resource-root correction PASS;
-- production Model C/B/A, leasing and adaptive budgets unchanged;
-- FreeBSD 15 package PASS;
-- testing prerelease publication;
-- owner-installed measurement with `conclusion=measurement_accepted`, complete samples,
-  lifecycle restoration and cleanup PASS.
-
-Only reproducible evidence may justify a separate future production BLOB-loading patch.
+Owner-live acceptance requires `conclusion=measurement_accepted`, complete samples,
+lifecycle restoration and cleanup PASS. Only reproducible evidence may justify a separate
+future production BLOB-loading patch.

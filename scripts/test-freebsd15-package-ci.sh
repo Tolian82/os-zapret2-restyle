@@ -10,6 +10,7 @@ RELEASE_DOC="${ROOT_DIR}/docs/releases/v0.4.1.md"
 RELEASE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md"
 LUA_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-publication.md"
 LUA_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md"
+BLOB_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md"
 BUILD_PKG="${ROOT_DIR}/scripts/build-pkg.sh"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
@@ -37,9 +38,11 @@ require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
 for file in \
     "${CI}" "${RELEASE}" "${PROJECT_STATE}" "${INDEX}" "${RELEASE_DOC}" \
-    "${RELEASE_EVIDENCE}" "${LUA_PUBLICATION}" "${LUA_LIVE}" "${BUILD_PKG}" "${VERSION_FILE}" "${MAKEFILE}" "${CORRECTIVE_MATRIX}" \
-    "${LUA_PY}" "${BLOB_TEST}" "${BLOB_PY}" "${BLOB_WRAPPER}" "${BLOB_WORKER}" "${BLOB_DOC}" "${BLOB_PATCH}" "${RESOURCES_PY}" \
-    "${ADAPTIVE_BUDGET_PY}" "${MODEL_C_PY}" "${MODEL_B_PY}" "${LEASE_PY}" "${PYTHON_ENTRY}" \
+    "${RELEASE_EVIDENCE}" "${LUA_PUBLICATION}" "${LUA_LIVE}" "${BLOB_PUBLICATION}" \
+    "${BUILD_PKG}" "${VERSION_FILE}" "${MAKEFILE}" "${CORRECTIVE_MATRIX}" \
+    "${LUA_PY}" "${BLOB_TEST}" "${BLOB_PY}" "${BLOB_WRAPPER}" "${BLOB_WORKER}" \
+    "${BLOB_DOC}" "${BLOB_PATCH}" "${RESOURCES_PY}" "${ADAPTIVE_BUDGET_PY}" \
+    "${MODEL_C_PY}" "${MODEL_B_PY}" "${LEASE_PY}" "${PYTHON_ENTRY}" \
     "${PUBLICATION26}" "${LIVE26}" "${MODEL_C_CORRECTIVE_PASS}" "${MODEL_B_LIVE}"
 do
     [ -s "${file}" ] || fail "required file is missing: ${file}"
@@ -104,7 +107,7 @@ require "${BLOB_PY}" 'CACHE_POLICY = "natural-cache-no-drop"'
 require "${BLOB_PY}" 'production_change_recommended'
 require "${BLOB_TEST}" 'PASS: BLOB startup/RSS measurement is isolated, balanced, lifecycle-safe'
 require "${BLOB_DOC}" 'MEASUREMENT-ONLY / PRODUCTION MODEL C UNCHANGED'
-require "${BLOB_PATCH}" 'SOURCE CANDIDATE / OWNER-LIVE PENDING'
+require "${BLOB_PATCH}" 'SOURCE / CI / PUBLICATION PASS; OWNER-LIVE PENDING'
 require "${BLOB_WRAPPER}" 'zapret2-lifecycle.lock'
 require "${BLOB_WORKER}" 'strategy-lab-evidence'
 if grep -Fq 'route-add' "${BLOB_WORKER}" || grep -Fq 'strategy-lab-stop' "${BLOB_WORKER}"; then
@@ -150,11 +153,12 @@ done
 require "${PROJECT_STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=3`'
 require "${PROJECT_STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_3.pkg`'
 require "${PROJECT_STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
-require "${PROJECT_STATE}" 'Latest published testing prerelease: `v0.4.1_2` / `os-zapret2-restyle-0.4.1_2.pkg`'
+require "${PROJECT_STATE}" 'Latest published testing prerelease: `v0.4.1_3` / `os-zapret2-restyle-0.4.1_3.pkg`'
 require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.1_2` — Lua initialization measurement PASS'
 require "${PROJECT_STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
 require "${INDEX}" 'docs/patches/v0.4.1_3.md'
+require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md'
 require "${RELEASE_DOC}" '`v0.4.1_1: Prepare release v0.4.1`'
 
 require "${RELEASE_EVIDENCE}" 'Status: **PUBLISHED**'
@@ -164,6 +168,12 @@ require "${LUA_PUBLICATION}" 'os-zapret2-restyle-0.4.1_2.pkg'
 require "${LUA_LIVE}" 'Status: **PASS**'
 require "${LUA_LIVE}" 'checks.all_required_files_present=true'
 require "${LUA_LIVE}" 'conclusion=equivalent_init_set'
+require "${BLOB_PUBLICATION}" 'Status: **PUBLISHED / OWNER-LIVE PENDING**'
+require "${BLOB_PUBLICATION}" 'da427cd061df1f3cbc01ba11a14a6417f2e406b3'
+require "${BLOB_PUBLICATION}" '31616501996'
+require "${BLOB_PUBLICATION}" '369373181'
+require "${BLOB_PUBLICATION}" 'os-zapret2-restyle-0.4.1_3.pkg'
+require "${BLOB_PUBLICATION}" 'sha256:6efdb8e844bdec5cbe2fddffd77c1234cc53b939520c4648ed68da3126e7989b'
 require "${PUBLICATION26}" '8ada9cba28916fff506f19b34f5ef3de16e2008e'
 require "${LIVE26}" 'Status: **PASS**'
 require "${LIVE26}" 'job.xhdgCU'
@@ -172,4 +182,4 @@ require "${MODEL_C_CORRECTIVE_PASS}" 'job.5yGde5'
 require "${MODEL_B_LIVE}" 'PRODUCTION STAGE-60 MODEL B OWNER-LIVE PASS'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI qualifies ${candidate} as isolated BLOB startup/RSS measurement while preserving accepted production runtime evidence"
+printf '%s\n' "PASS: FreeBSD 15 package CI qualifies published ${candidate} as owner-pending BLOB startup/RSS measurement while preserving accepted production runtime evidence"

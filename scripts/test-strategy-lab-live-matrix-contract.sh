@@ -7,6 +7,7 @@ STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
 RELEASE_DOC="${ROOT_DIR}/docs/releases/v0.4.1.md"
 RELEASE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md"
+BLOB_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 LUA_DOC="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md"
@@ -32,10 +33,10 @@ fail(){ echo "FAIL: $*" >&2; exit 1; }
 require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
 for file in "${MATRIX}" "${STATE}" "${INDEX}" "${RELEASE_DOC}" "${RELEASE_EVIDENCE}" \
-    "${VERSION_FILE}" "${MAKEFILE}" "${LUA_DOC}" "${LUA_PATCH}" "${LUA_TEST}" "${LUA_PY}" \
-    "${BLOB_DOC}" "${BLOB_PATCH}" "${BLOB_TEST}" "${BLOB_PY}" "${LUA_LIVE}" \
-    "${MODEL_B_EVIDENCE}" "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" "${LIVE26}" \
-    "${BUDGET_PY}" "${LEASE_PY}" "${MODEL_C_PY}" "${MODEL_B_PY}" "${LIVE_GATE_DECISION}"
+    "${BLOB_PUBLICATION}" "${VERSION_FILE}" "${MAKEFILE}" "${LUA_DOC}" "${LUA_PATCH}" \
+    "${LUA_TEST}" "${LUA_PY}" "${BLOB_DOC}" "${BLOB_PATCH}" "${BLOB_TEST}" "${BLOB_PY}" \
+    "${LUA_LIVE}" "${MODEL_B_EVIDENCE}" "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" \
+    "${LIVE26}" "${BUDGET_PY}" "${LEASE_PY}" "${MODEL_C_PY}" "${MODEL_B_PY}" "${LIVE_GATE_DECISION}"
 do
     [ -s "${file}" ] || fail "missing Strategy Lab/release record: ${file}"
 done
@@ -51,7 +52,7 @@ candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 require "${STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=3`'
 require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_3.pkg`'
 require "${STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
-require "${STATE}" 'Latest published testing prerelease: `v0.4.1_2` / `os-zapret2-restyle-0.4.1_2.pkg`'
+require "${STATE}" 'Latest published testing prerelease: `v0.4.1_3` / `os-zapret2-restyle-0.4.1_3.pkg`'
 require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_2` — Lua initialization measurement PASS'
 require "${STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
 require "${STATE}" 'job.xhdgCU'
@@ -62,15 +63,18 @@ require "${STATE}" 'production_change_recommended=false'
 
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
 require "${INDEX}" 'docs/patches/v0.4.1_3.md'
+require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md'
 require "${INDEX}" 'C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback'
 
 require "${RELEASE_DOC}" '# os-zapret2-restyle v0.4.1'
 require "${RELEASE_DOC}" '`os-zapret2-restyle-0.4.1_1.pkg`'
 require "${RELEASE_EVIDENCE}" 'Status: **PUBLISHED**'
-require "${RELEASE_EVIDENCE}" 'c53e1c1656517fa764f97a175bb82eea02dbc374'
 require "${RELEASE_EVIDENCE}" 'os-zapret2-restyle-0.4.1_1.pkg'
-require "${RELEASE_EVIDENCE}" 'sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e'
+require "${BLOB_PUBLICATION}" 'Status: **PUBLISHED / OWNER-LIVE PENDING**'
+require "${BLOB_PUBLICATION}" 'da427cd061df1f3cbc01ba11a14a6417f2e406b3'
+require "${BLOB_PUBLICATION}" '31616501996'
+require "${BLOB_PUBLICATION}" 'sha256:6efdb8e844bdec5cbe2fddffd77c1234cc53b939520c4648ed68da3126e7989b'
 
 require "${MATRIX}" 'Current published release package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${MATRIX}" 'Latest owner-tested runtime package: `os-zapret2-restyle-0.4.0_26.pkg`'
@@ -107,7 +111,7 @@ require "${BLOB_PY}" 'CACHE_POLICY = "natural-cache-no-drop"'
 require "${BLOB_PY}" 'production_change_recommended'
 require "${BLOB_TEST}" 'PASS: BLOB startup/RSS measurement is isolated, balanced, lifecycle-safe'
 require "${BLOB_DOC}" 'MEASUREMENT-ONLY / PRODUCTION MODEL C UNCHANGED'
-require "${BLOB_PATCH}" 'SOURCE CANDIDATE / OWNER-LIVE PENDING'
+require "${BLOB_PATCH}" 'SOURCE / CI / PUBLICATION PASS; OWNER-LIVE PENDING'
 
 require "${LIVE_GATE_DECISION}" 'all-or-nothing release checklist.'
 if grep -Fq 'Stable release preparation and pkg-repository promotion remain blocked until every' "${MATRIX}"; then
@@ -115,4 +119,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} preserves accepted live truth while adding measurement-only BLOB startup/RSS evidence"
+echo "PASS: ${candidate} is published owner-pending BLOB measurement while accepted production live truth remains unchanged"
