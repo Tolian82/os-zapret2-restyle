@@ -121,11 +121,19 @@ Historical evidence explains progression; it never overrides a later current rec
 
 ## GitHub delivery authority
 
-For GitHub work, read current owner instruction, `AGENTS.md`, `docs/GITHUB_PUBLICATION.md`,
-then active evidence-first/version-title/delivery decisions. Key rules: GitHub plugin first,
-exact main SHA before mutation, one logical Ready PR, same-scope repairs in that PR, latest
-head green, exact-head squash merge, verify main and cleanup, candidate publication separate,
-never rewrite main or published tags.
+For GitHub work, read in this order:
+
+1. current owner instruction;
+2. repository-root `AGENTS.md`;
+3. `docs/GITHUB_PUBLICATION.md`;
+4. `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
+5. `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
+6. `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`;
+7. `docs/GITHUB_WORKFLOW.md`.
+
+Key rules: GitHub plugin first, exact main SHA before mutation, one logical Ready PR,
+same-scope repairs in that PR, latest head green, exact-head squash merge, verify main and
+cleanup, candidate publication separate, never rewrite main or published tags.
 
 ## OPNsense command authority
 
