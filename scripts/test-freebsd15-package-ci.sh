@@ -6,6 +6,7 @@ CI="${ROOT_DIR}/.github/workflows/ci.yml"
 RELEASE="${ROOT_DIR}/.github/workflows/release.yml"
 PROJECT_STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
+GITHUB_ONLY_PACKAGE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-13-github-only-package-delivery.md"
 RELEASE_DOC="${ROOT_DIR}/docs/releases/v0.4.1.md"
 RELEASE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md"
 LUA_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-publication.md"
@@ -44,7 +45,7 @@ fail(){ echo "FAIL: $*" >&2; exit 1; }
 require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
 for file in \
-    "${CI}" "${RELEASE}" "${PROJECT_STATE}" "${INDEX}" "${RELEASE_DOC}" \
+    "${CI}" "${RELEASE}" "${PROJECT_STATE}" "${INDEX}" "${GITHUB_ONLY_PACKAGE_DECISION}" "${RELEASE_DOC}" \
     "${RELEASE_EVIDENCE}" "${LUA_PUBLICATION}" "${LUA_LIVE}" "${BLOB_PUBLICATION}" "${BLOB_LIVE}" \
     "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${BUILD_PKG}" "${VERSION_FILE}" "${MAKEFILE}" "${CORRECTIVE_MATRIX}" \
     "${LUA_PY}" "${BLOB_TEST}" "${BLOB_PY}" "${BLOB_WRAPPER}" "${BLOB_WORKER}" \
@@ -180,11 +181,14 @@ done
 require "${PROJECT_STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=5`'
 require "${PROJECT_STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_5.pkg`'
 require "${PROJECT_STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
-require "${PROJECT_STATE}" 'Latest published testing prerelease: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`'
+require "${PROJECT_STATE}" 'Latest persistently published testing package: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`'
 require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.1_4` — BLOB common-set scaling measurement PASS'
 require "${PROJECT_STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
 require "${PROJECT_STATE}" 'V0.4.1_5 DISCOVERY PROBE AGREEMENT — SOURCE CANDIDATE'
-require "${PROJECT_STATE}" 'no `_5` tag/Release/prerelease/Pages/pkg-repository publication is part of this task'
+require "${PROJECT_STATE}" 'does **not** satisfy owner package delivery under the current GitHub-only rule'
+require "${GITHUB_ONLY_PACKAGE_DECISION}" 'Actions artifacts are build evidence, never final delivery'
+require "${GITHUB_ONLY_PACKAGE_DECISION}" 'Every owner-facing package is delivered from GitHub'
+require "${INDEX}" 'docs/decisions/DEC-2026-08-13-github-only-package-delivery.md'
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
 require "${INDEX}" 'docs/patches/v0.4.1_4.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md'
@@ -230,4 +234,4 @@ require "${MODEL_C_CORRECTIVE_PASS}" 'job.5yGde5'
 require "${MODEL_B_LIVE}" 'PRODUCTION STAGE-60 MODEL B OWNER-LIVE PASS'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI accepts measurement-only ${candidate} while published/runtime truth remains unchanged"
+printf '%s\n' "PASS: FreeBSD 15 package CI accepts measurement-only ${candidate}; Actions is build evidence, persistent GitHub package publication is owner delivery, and production runtime truth remains unchanged"
