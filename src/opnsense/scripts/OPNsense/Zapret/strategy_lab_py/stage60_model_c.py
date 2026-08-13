@@ -86,6 +86,24 @@ def _candidate_payload(spec: candidate_spec.CandidateSpec) -> str:
     return payloads[0] if payloads else "all"
 
 
+def _bucket_profile_key(spec: candidate_spec.CandidateSpec) -> tuple[str, str, int, str | None, bool]:
+    return (spec.l3, spec.transport, spec.port, spec.l7, spec.target_binding)
+
+
+def _compatible_batch_prefix(
+    decisions: Sequence[search_graph.SearchDecision],
+) -> list[search_graph.SearchDecision]:
+    if not decisions:
+        return []
+    profile = _bucket_profile_key(decisions[0].node.spec)
+    compatible: list[search_graph.SearchDecision] = []
+    for decision in decisions:
+        if _bucket_profile_key(decision.node.spec) != profile:
+            break
+        compatible.append(decision)
+    return compatible
+
+
 def _validate_bucket_spec(spec: candidate_spec.CandidateSpec) -> None:
     if (
         spec.render_mode != "fragment"
@@ -121,9 +139,7 @@ def _render_bucket_arguments(
     for spec in specs:
         _validate_bucket_spec(spec)
 
-    compatibility = {
-        (spec.l3, spec.transport, spec.port, spec.l7, spec.target_binding) for spec in specs
-    }
+    compatibility = {_bucket_profile_key(spec) for spec in specs}
     if len(compatibility) != 1:
         raise ModelCInfrastructureError("Model C bucket candidates are not profile-compatible")
     if specs[0].target_binding and hostlist_path is None:
@@ -448,11 +464,22 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
         return _run_existing_model("parallel", job_id, endpoints_file, family_result_file, result_file)
 
     original_batch = stage60_parallel._warm_batch
+    original_batch_decisions = stage60_parallel._batch_decisions
     original_model = stage60_parallel.MODEL
     previous_env = os.environ.get("STRATEGY_LAB_STAGE60_MODEL")
     had_previous_env = "STRATEGY_LAB_STAGE60_MODEL" in os.environ
     model_c_enabled = True
     disable_reason = ""
+
+    def production_batch_decisions(
+        planner: search_graph.AdaptiveSearchPlanner,
+        outcomes: dict[str, str],
+        width: int,
+    ) -> list[search_graph.SearchDecision]:
+        decisions = original_batch_decisions(planner, outcomes, width)
+        if not model_c_enabled:
+            return decisions
+        return _compatible_batch_prefix(decisions)
 
     def production_batch(*batch_args: Any, **batch_kwargs: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         nonlocal model_c_enabled, disable_reason
@@ -488,10 +515,12 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
 
     os.environ["STRATEGY_LAB_STAGE60_MODEL"] = "parallel"
     stage60_parallel.MODEL = MODEL
+    stage60_parallel._batch_decisions = production_batch_decisions
     stage60_parallel._warm_batch = production_batch
     try:
         return stage60_parallel.expand(job_id, endpoints_file, family_result_file, result_file)
     finally:
+        stage60_parallel._batch_decisions = original_batch_decisions
         stage60_parallel._warm_batch = original_batch
         stage60_parallel.MODEL = original_model
         if had_previous_env:
