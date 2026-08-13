@@ -15,10 +15,10 @@ QUICK CONTEXT
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=5`
-Current source candidate: `os-zapret2-restyle-0.4.1_5.pkg` — FreeBSD-15 BUILD ARTIFACT READY / PERSISTENT GITHUB PACKAGE PUBLICATION PENDING / owner-live pending
+Current source candidate: `os-zapret2-restyle-0.4.1_5.pkg` — PERSISTENT GITHUB PACKAGE PUBLISHED / owner-live pending
 Current published release tag: `v0.4.1`
 Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`
-Latest persistently published testing package: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`
+Latest persistently published testing package: `v0.4.1_5` / `os-zapret2-restyle-0.4.1_5.pkg`
 Latest owner-tested stable package: `os-zapret2-restyle-0.4.1_1.pkg` — upgrade/install smoke PASS
 Latest owner-tested testing candidate: `v0.4.1_4` — BLOB common-set scaling measurement PASS
 Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS
@@ -96,7 +96,20 @@ reference on the same pinned endpoint epoch and native candidate corpus.
 - post-merge main CI run `31645659351` / #786 — SUCCESS (`Verify main integrity` PASS);
 - evidence: `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`.
 
-This proves `_5` was built and inspected. It does **not** satisfy owner package delivery under the current GitHub-only rule because no persistent `_5` GitHub package publication exists yet. The prior Actions/sandbox delivery interpretation is explicitly rejected by the active governance decision.
+The Actions artifact above proves `_5` was built and inspected, but it did not by itself satisfy owner package delivery under the GitHub-only rule. That delivery gate is now closed by the persistent GitHub publication below.
+
+Published `_5` testing-package identity:
+
+- publication workflow run `31652568754` / #42 — SUCCESS;
+- tag `v0.4.1_5` targets exact runtime/source merge `3f85d34f415d49c2b9a3ae25bd8bdebdad2f84dd`;
+- GitHub Release ID `369590644`, `draft=false`, `prerelease=true`;
+- package asset ID `512227845`;
+- package `os-zapret2-restyle-0.4.1_5.pkg`, `188854` bytes;
+- package digest `sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce`;
+- direct URL `https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.4.1_5/os-zapret2-restyle-0.4.1_5.pkg`;
+- publication branch `publish/v0.4.1_5` was deleted by the successful workflow;
+- publication performed no Pages or pkg-repository promotion;
+- evidence: `docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md`.
 
 ==================================================
 CURRENT AUTHORITIES
@@ -118,6 +131,7 @@ Current Strategy Lab authorities:
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
 - `docs/patches/v0.4.1_5.md`;
 - `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`;
+- `docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md`;
 - `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`;
 - `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`;
 - `docs/patches/v0.4.1_4.md`;
@@ -232,7 +246,7 @@ Owner-live evidence:
 `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`.
 
 ==================================================
-V0.4.1_5 DISCOVERY PROBE AGREEMENT — SOURCE CANDIDATE
+V0.4.1_5 DISCOVERY PROBE AGREEMENT — PUBLISHED / OWNER-LIVE PENDING
 ==================================================
 
 Policy: `discovery-probe-agreement-v1`, schema `1`.
@@ -247,7 +261,7 @@ false PASS/false FAIL/agreement, pinned endpoint match, firewall interception an
 identity. The wrapper owns the shared lifecycle lock, stops normal Zapret2 only for the experiment,
 cleans candidate residue and must restore byte-for-byte equivalent semantic lifecycle evidence.
 
-FreeBSD-15 **build artifact** is ready from latest-head CI #785 and is bound to the exact merged-main tree by `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`. Persistent GitHub testing-package publication remains pending, so `_5` must not yet be described as delivered/ready for owner installation or live testing.
+Historical FreeBSD-15 build evidence from latest-head CI #785 remains bound to the exact merged-main tree by `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`. Persistent GitHub testing package `v0.4.1_5` is now published from the exact source commit by workflow `31652568754`; the published asset is `os-zapret2-restyle-0.4.1_5.pkg`, `188854` bytes, `sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce`. Publication evidence: `docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md`.
 
 `production_model_changed=false`, `production_discovery_policy_changed=false`, and
 `production_change_recommended=false`.
@@ -259,7 +273,7 @@ CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
 The Model-C Lua initialization and BLOB startup/RSS optimization questions remain closed by
-owner-live evidence without production changes. `_5` source and build evidence are ready, but persistent GitHub package publication is still pending under the active owner package-delivery rule. Owner-live discovery-probe agreement/cost measurement begins only after the requested `.pkg` is persistently published on GitHub and its direct package identity is documented.
+owner-live evidence without production changes. `_5` source, CI and persistent GitHub package publication are complete; owner-live discovery-probe agreement/cost measurement is the next gate.
 
 No production discovery change is authorized before owner-live evidence demonstrates zero false PASS against the deep reference and a material reproducible cost benefit.
 
