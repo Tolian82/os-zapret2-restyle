@@ -33,6 +33,11 @@ DISCOVERY_WRAPPER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab
 DISCOVERY_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_discovery_probe_measurement_worker.sh"
 DISCOVERY5_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_5.md"
 DISCOVERY6_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_6.md"
+LIFECYCLE7_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_7.md"
+LIFECYCLE7_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-c-lifecycle-measurement.sh"
+LIFECYCLE7_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_c_lifecycle_measurement.py"
+LIFECYCLE7_WRAPPER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_c_lifecycle_measurement.sh"
+LIFECYCLE7_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_c_lifecycle_measurement_worker.sh"
 RESOURCES_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/resources.py"
 ADAPTIVE_BUDGET_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_budget.py"
 MODEL_C_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_model_c.py"
@@ -53,6 +58,7 @@ for file in \
     "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${DISCOVERY_PUBLICATION}" "${DISCOVERY6_LIVE}" "${BUILD_PKG}" "${VERSION_FILE}" "${MAKEFILE}" "${CORRECTIVE_MATRIX}" \
     "${LUA_PY}" "${BLOB_TEST}" "${BLOB_PY}" "${BLOB_WRAPPER}" "${BLOB_WORKER}" \
     "${BLOB_DOC}" "${BLOB_PATCH}" "${DISCOVERY_PY}" "${DISCOVERY_WRAPPER}" "${DISCOVERY_WORKER}" "${DISCOVERY5_PATCH}" "${DISCOVERY6_PATCH}" \
+    "${LIFECYCLE7_PATCH}" "${LIFECYCLE7_TEST}" "${LIFECYCLE7_PY}" "${LIFECYCLE7_WRAPPER}" "${LIFECYCLE7_WORKER}" \
     "${RESOURCES_PY}" "${ADAPTIVE_BUDGET_PY}" "${MODEL_C_PY}" "${MODEL_B_PY}" "${LEASE_PY}" "${PYTHON_ENTRY}" \
     "${PUBLICATION26}" "${LIVE26}" "${MODEL_C_CORRECTIVE_PASS}" "${MODEL_B_LIVE}"
 do
@@ -64,8 +70,8 @@ revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; 
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${version}" = '0.4.1' ] || fail 'measurement line must retain VERSION=0.4.1'
-[ "${revision}" -eq 6 ] || fail 'discovery cleanup corrective package must use PLUGIN_REVISION=6'
-[ "${candidate}" = 'os-zapret2-restyle-0.4.1_6.pkg' ] || fail 'unexpected discovery cleanup corrective package identity'
+[ "${revision}" -eq 7 ] || fail 'Model-C lifecycle measurement package must use PLUGIN_REVISION=7'
+[ "${candidate}" = 'os-zapret2-restyle-0.4.1_7.pkg' ] || fail 'unexpected Model-C lifecycle measurement package identity'
 
 grep -Eq '^PLUGIN_DEPENDS=[[:space:]]+python313([[:space:]]|$)' "${MAKEFILE}" || fail 'python313 dependency is missing'
 require "${BUILD_PKG}" 'python313)  echo "lang/python313"'
@@ -149,6 +155,22 @@ require "${DISCOVERY6_PATCH}" 'Discovery measurement cleanup finalizer correctio
 require "${DISCOVERY6_PATCH}" 'Production discovery remains the bounded 4 KiB GET'
 require "${DISCOVERY6_PATCH}" 'Status: **ACCEPTED / OWNER-LIVE PASS / PRODUCTION BEHAVIOR UNCHANGED**'
 
+require "${LIFECYCLE7_PATCH}" '# v0.4.1_7 — Measure Model-C per-batch lifecycle amortization'
+require "${LIFECYCLE7_PATCH}" 'amortizable_upper_bound'
+require "${LIFECYCLE7_PY}" 'POLICY = "model-c-batch-lifecycle-amortization-v1"'
+require "${LIFECYCLE7_PY}" 'with stage60_source_port_lease.install():'
+require "${LIFECYCLE7_PY}" 'stage60_model_c.expand('
+require "${LIFECYCLE7_PY}" '"production_model_changed": False'
+require "${LIFECYCLE7_PY}" '"production_search_semantics_changed": False'
+require "${LIFECYCLE7_PY}" '"production_dispatch_width_changed": False'
+require "${LIFECYCLE7_PY}" '"production_change_recommended": False'
+require "${LIFECYCLE7_WRAPPER}" 'zapret2-lifecycle.lock'
+require "${LIFECYCLE7_WORKER}" 'strategy-lab-evidence'
+require "${LIFECYCLE7_WORKER}" 'cleanup-all'
+require "${LIFECYCLE7_TEST}" 'PASS: Model-C lifecycle measurement is isolated, production-path faithful, lifecycle-owned, cleanup-gated, and production-neutral'
+require "${PYTHON_ENTRY}" 'from strategy_lab_py import model_c_lifecycle_measurement'
+require "${PYTHON_ENTRY}" 'model-c-lifecycle-measure'
+
 require "${ADAPTIVE_BUDGET_PY}" 'POLICY = "eligible-work-v1"'
 require "${MODEL_C_PY}" 'MODEL = "C-warm-bucket-source-port-dispatch"'
 require "${MODEL_C_PY}" 'for name in spec.lua_dependencies'
@@ -176,18 +198,20 @@ for installed in \
     strategy_lab_py/lua_initialization_measurement.py \
     strategy_lab_py/blob_startup_measurement.py \
     strategy_lab_py/discovery_probe_measurement.py \
+    strategy_lab_py/model_c_lifecycle_measurement.py \
     strategy_lab_model_c.lua \
     strategy_lab_blob_measurement.sh \
     strategy_lab_blob_measurement_worker.sh \
     strategy_lab_discovery_probe_measurement.sh \
     strategy_lab_discovery_probe_measurement_worker.sh \
+    strategy_lab_model_c_lifecycle_measurement.sh \
+    strategy_lab_model_c_lifecycle_measurement_worker.sh \
     strategy_lab_python.py
 do
     [ -e "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/${installed}" ] || fail "packaged source path is missing: ${installed}"
 done
 
-require "${PROJECT_STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=6`'
-require "${PROJECT_STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_6.pkg`'
+# PROJECT_STATE remains publication/owner-live truth until `_7` is persistently published.
 require "${PROJECT_STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${PROJECT_STATE}" 'Latest persistently published testing package: `v0.4.1_6` / `os-zapret2-restyle-0.4.1_6.pkg`'
 require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.1_6` — discovery cleanup-finalizer corrective ACCEPTED / measurement_accepted'
@@ -262,4 +286,4 @@ require "${MODEL_C_CORRECTIVE_PASS}" 'job.5yGde5'
 require "${MODEL_B_LIVE}" 'PRODUCTION STAGE-60 MODEL B OWNER-LIVE PASS'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI accepts current ${candidate}; _6 is the persistent owner-facing testing package, and production runtime/discovery behavior is unchanged"
+printf '%s\n' "PASS: FreeBSD 15 package CI accepts current ${candidate}; published/owner-tested testing history remains _6, and production runtime/discovery behavior is unchanged"
