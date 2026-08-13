@@ -11,6 +11,7 @@ BLOB_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_3-blo
 BLOB_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md"
 BLOB4_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md"
 BLOB4_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md"
+DISCOVERY_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 LUA_DOC="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md"
@@ -38,7 +39,7 @@ fail(){ echo "FAIL: $*" >&2; exit 1; }
 require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
 for file in "${MATRIX}" "${STATE}" "${INDEX}" "${RELEASE_DOC}" "${RELEASE_EVIDENCE}" \
-    "${BLOB_PUBLICATION}" "${BLOB_LIVE}" "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${VERSION_FILE}" "${MAKEFILE}" \
+    "${BLOB_PUBLICATION}" "${BLOB_LIVE}" "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${DISCOVERY_PUBLICATION}" "${VERSION_FILE}" "${MAKEFILE}" \
     "${LUA_DOC}" "${LUA_PATCH}" "${LUA_TEST}" "${LUA_PY}" "${BLOB_DOC}" "${BLOB_PATCH}" \
     "${BLOB_TEST}" "${BLOB_PY}" "${DISCOVERY_PATCH}" "${DISCOVERY_PY}" "${LUA_LIVE}" "${MODEL_B_EVIDENCE}" \
     "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" "${LIVE26}" "${BUDGET_PY}" \
@@ -58,7 +59,7 @@ candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 require "${STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=5`'
 require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_5.pkg`'
 require "${STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
-require "${STATE}" 'Latest persistently published testing package: `v0.4.1_4` / `os-zapret2-restyle-0.4.1_4.pkg`'
+require "${STATE}" 'Latest persistently published testing package: `v0.4.1_5` / `os-zapret2-restyle-0.4.1_5.pkg`'
 require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_4` — BLOB common-set scaling measurement PASS'
 require "${STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
 require "${STATE}" 'job.xhdgCU'
@@ -68,10 +69,12 @@ require "${STATE}" 'Policy: `blob-common-set-scaling-v1`, schema `2`.'
 require "${STATE}" 'production_change_recommended=false'
 require "${STATE}" 'publication workflow run `31633335688` — SUCCESS'
 require "${STATE}" 'V0.4.1_4 BLOB COMMON-SET SCALING — ACCEPTED / OPTIMIZATION CLOSED'
-require "${STATE}" 'V0.4.1_5 DISCOVERY PROBE AGREEMENT — SOURCE CANDIDATE'
-require "${STATE}" 'does **not** satisfy owner package delivery under the current GitHub-only rule'
+require "${STATE}" 'V0.4.1_5 DISCOVERY PROBE AGREEMENT — PUBLISHED / OWNER-LIVE PENDING'
+require "${STATE}" 'publication workflow run `31652568754` / #42 — SUCCESS'
+require "${STATE}" 'sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce'
 
 require "${INDEX}" 'docs/patches/v0.4.1_5.md'
+require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md'
 require "${INDEX}" 'docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md'
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
 require "${INDEX}" 'docs/patches/v0.4.1_4.md'
@@ -111,7 +114,12 @@ require "${DISCOVERY_PY}" 'POLICY = "discovery-probe-agreement-v1"'
 require "${DISCOVERY_PY}" 'VARIANTS = ("head", "get-1", "get-4k", "deep-16k")'
 require "${DISCOVERY_PY}" 'production_discovery_policy_changed": False'
 require "${DISCOVERY_PATCH}" 'latest-head GitHub Actions FreeBSD-15 job'
-require "${DISCOVERY_PATCH}" 'Persistent GitHub publication of `_5` is still pending'
+require "${DISCOVERY_PATCH}" 'Persistent GitHub test package publication'
+require "${DISCOVERY_PUBLICATION}" 'Status: **PUBLISHED / OWNER-LIVE PENDING**'
+require "${DISCOVERY_PUBLICATION}" '31652568754'
+require "${DISCOVERY_PUBLICATION}" '369590644'
+require "${DISCOVERY_PUBLICATION}" '512227845'
+require "${DISCOVERY_PUBLICATION}" 'sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce'
 
 require "${MATRIX}" 'Current published release package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${MATRIX}" 'Latest owner-tested runtime package: `os-zapret2-restyle-0.4.0_26.pkg`'
@@ -160,4 +168,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} discovery measurement is current, accepted BLOB history is preserved, and production live truth remains _26"
+echo "PASS: ${candidate} discovery measurement is persistently published, accepted BLOB history is preserved, and production live truth remains _26"
