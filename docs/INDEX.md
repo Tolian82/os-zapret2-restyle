@@ -20,7 +20,8 @@ Read these first for current Strategy Lab or release/package work:
 
 - `docs/PROJECT_STATE.md` — current source/published candidates, accepted runtime basis and next boundary;
 - `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md` — every owner-facing package is persistently delivered from GitHub; Actions/sandbox files are not final delivery; required documents must be read through EOF;
-- `docs/patches/v0.4.1_6.md` — current discovery cleanup-finalizer source corrective; production Model C and GET-4K unchanged;
+- `docs/patches/v0.4.1_6.md` — accepted discovery cleanup-finalizer corrective; production Model C and GET-4K unchanged;
+- `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md` — exact `_6` persistent testing-package publication and corrected owner-live `measurement_accepted` evidence;
 - `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-input.md` — preserved owner-live Rutracker/YouTube Stage-60 and PASS-path inputs for the corrective;
 - `docs/verification/evidence/2026-08-13-v0.4.1_6-source-verification-plan.md` — `_6` source/CI/live verification contract;
 - `docs/patches/v0.4.1_5.md` — published measurement-only discovery-probe agreement/cost package and collected multidomain result;
@@ -36,7 +37,7 @@ Read these first for current Strategy Lab or release/package work:
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md` — accepted owner-installed single-BLOB startup/readiness/RSS evidence;
 - `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md` — exact `_3` testing publication evidence;
 - `docs/patches/v0.4.1_3.md` — accepted `_3` measurement patch history;
-- `docs/patches/v0.4.1_2.md` — accepted measurement-only Lua initialization patch;
+- `docs/patches/v0.4.1_2.md` — accepted `_2` measurement patch history;
 - `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md` — accepted Lua measurement/decision contract;
 - `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md` — accepted Lua equivalence evidence;
 - `docs/releases/v0.4.1.md` — stable v0.4.1 release record;
@@ -52,7 +53,7 @@ Read these first for current Strategy Lab or release/package work:
 ### Current v0.4.1 boundary
 
 `VERSION=0.4.1`, `PLUGIN_REVISION=6`; current source candidate is
-`os-zapret2-restyle-0.4.1_6.pkg`. `_6` is the discovery cleanup-finalizer corrective and is not yet an owner-live accepted package. The latest persistently published testing package remains `_5`; its earlier FreeBSD-15 GitHub Actions artifact is historical build evidence only and is not the owner-facing package.
+`os-zapret2-restyle-0.4.1_6.pkg`. `_6` is persistently published and owner-live accepted for the discovery cleanup-finalizer corrective. The latest persistently published testing package and latest owner-tested testing candidate are both `_6`.
 
 Exact `_5` historical build-artifact identity:
 
@@ -77,13 +78,32 @@ Exact `_5` persistent GitHub testing-package identity:
 - publication branch `publish/v0.4.1_5` was deleted by the successful workflow;
 - no GitHub Pages or pkg-repository promotion occurred.
 
-Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`; latest persistently published testing package is `_5`. `_5` is now owner-tested: multidomain discovery data was collected and its formal rejection was localized to the cleanup-finalizer boolean defect. Detailed accepted production Strategy Lab evidence remains `_26` because `_2` through `_6` do not change production behavior.
+Exact `_6` persistent GitHub testing-package and live identity:
+
+- exact source/squash merge `9a76551d17289fa6a125c10fabedf87241d1a490`;
+- source tree `36019521fb74c1736a9c6da822780133df639820`;
+- latest-head packaged CI `31687601966` / #808 — SUCCESS;
+- post-merge main CI `31688215371` / #809 — SUCCESS;
+- publication workflow run `31689302668` / #43 — SUCCESS;
+- testing tag `v0.4.1_6` targets exact source commit `9a76551d17289fa6a125c10fabedf87241d1a490`;
+- GitHub Release ID `369818027`, `draft=false`, `prerelease=true`;
+- package asset ID `512818044`;
+- package `os-zapret2-restyle-0.4.1_6.pkg`, `188907` bytes;
+- package SHA-256 `e708d2ac0eb13d41d1d79da96e2b5f1f6e9d4fc9e138366fd4e72e30b96a02b7`;
+- direct URL `https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.4.1_6/os-zapret2-restyle-0.4.1_6.pkg`;
+- publication branch `publish/v0.4.1_6` was deleted by the successful workflow;
+- no GitHub Pages or pkg-repository promotion occurred;
+- corrected owner-live `rutracker.org` measurement on retained `job.lWLjqL` concluded `measurement_accepted`;
+- immediate cleanup checks showed no IPFW `19100-19131` residue, no candidate process/socket on `9989`, and normal Zapret2 restored running;
+- evidence: `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md`.
+
+Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`; latest persistently published and owner-tested testing package is `_6`. Detailed accepted production Strategy Lab evidence remains `_26` because `_2` through `_6` do not change production behavior.
 
 The `_5` multidomain set covered Telegram zero-winner exhaustive, Rutracker two-winner exhaustive and YouTube three-winner early-stop Model-C execution without fallback. Rutracker Stage 60 completed in `24204 ms`; YouTube Stage 60 completed in `9151 ms`. Each cheap probe recorded 29/29 agreement on comparable pairs across the three corpora with zero false PASS and zero false FAIL, plus one expected Rutracker deep-inconclusive short-resource pair.
 
 Pooled equal-sample mean total times were approximately `3452.97 ms` for HEAD, `3442.37 ms` for GET-1 and `3439.70 ms` for current GET-4K. No material latency benefit for HEAD or GET-1 was established, so production discovery remains bounded GET-4K.
 
-`_6` corrects only the `_5` finalizer interface: shell numeric cleanup values `1`/`0` are decoded together with textual `true`/`false`, and unknown values fail closed. Regression coverage proves successful cleanup can produce `measurement_accepted` when every other gate passes, while failed cleanup remains rejected. One corrected owner-live repeat is required after `_6` becomes package-available to verify `cleanup_ok=true`, lifecycle restoration, attribution and zero residue.
+`_6` corrected only the `_5` finalizer interface: shell numeric cleanup values `1`/`0` are decoded together with textual `true`/`false`, and unknown values fail closed. Regression coverage proved successful cleanup can produce `measurement_accepted`, and the owner-live corrected Rutracker repeat now produced exactly that accepted conclusion with clean residue/lifecycle checks. The finalizer corrective and discovery-probe optimization question are closed without a production change.
 
 The `_3` accepted owner run completed 27 starts, 9 per variant. Median stable readiness was
 `63.061 / 62.652 / 62.566 ms` for BLOB-free / built-in / external respectively, while median
@@ -102,9 +122,7 @@ stdev was `2.276 ms` for common-3 and `5.502 ms` for single, so the measured del
 jitter. The common-set mean/p90 were also not worse. No material BLOB common-set startup/RSS cost
 was established at the current production width-three bound.
 
-The Model-C Lua initialization and BLOB startup/RSS optimization questions are therefore closed
-without production changes. Production Model C remains unchanged and
-`production_change_recommended=false`.
+The Model-C Lua initialization, BLOB startup/RSS and discovery-probe optimization questions are therefore closed without production changes. Production Model C and GET-4K remain unchanged and `production_change_recommended=false`.
 
 `v0.4.1_4` was published from exact merge `461fe2d045b131f3400f285a9cb59808b5f33ce2` by workflow
 `31633335688`. Release asset `os-zapret2-restyle-0.4.1_4.pkg` is `186024` bytes with digest
@@ -157,7 +175,7 @@ and `docs/audit/`. Key retained comparison points:
 - accepted single-BLOB measurement: `docs/patches/v0.4.1_3.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
 - accepted common-set scaling measurement: `docs/patches/v0.4.1_4.md`, `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`;
 - discovery-probe measurement: `docs/patches/v0.4.1_5.md`, historical build evidence `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`, persistent package publication `docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md`, root cause `docs/verification/evidence/2026-08-13-v0.4.1_5-cleanup-finalizer-root-cause.md`;
-- discovery cleanup finalizer corrective: `docs/patches/v0.4.1_6.md`, preserved live input `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-input.md`.
+- accepted discovery cleanup finalizer corrective: `docs/patches/v0.4.1_6.md`, preserved live input `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-input.md`, accepted publication/live evidence `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md`.
 
 Historical evidence explains progression; it never overrides a later current record.
 

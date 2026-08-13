@@ -15,12 +15,12 @@ QUICK CONTEXT
 Project: `os-zapret2-restyle`
 Primary branch: `main`
 Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=6`
-Current source candidate: `os-zapret2-restyle-0.4.1_6.pkg` — DISCOVERY CLEANUP FINALIZER CORRECTIVE / owner-live not yet verified
+Current source candidate: `os-zapret2-restyle-0.4.1_6.pkg` — DISCOVERY CLEANUP FINALIZER CORRECTIVE / OWNER-LIVE PASS
 Current published release tag: `v0.4.1`
 Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`
-Latest persistently published testing package: `v0.4.1_5` / `os-zapret2-restyle-0.4.1_5.pkg`
+Latest persistently published testing package: `v0.4.1_6` / `os-zapret2-restyle-0.4.1_6.pkg`
 Latest owner-tested stable package: `os-zapret2-restyle-0.4.1_1.pkg` — upgrade/install smoke PASS
-Latest owner-tested testing candidate: `v0.4.1_5` — multidomain discovery data collected / cleanup-finalizer defect confirmed
+Latest owner-tested testing candidate: `v0.4.1_6` — discovery cleanup-finalizer corrective ACCEPTED / measurement_accepted
 Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS
 Required package ABI: `FreeBSD:15:amd64`
 
@@ -111,7 +111,26 @@ Published `_5` testing-package identity:
 - publication performed no Pages or pkg-repository promotion;
 - evidence: `docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md`.
 
-Current `_6` source corrective fixes only the `_5` measurement finalizer boolean boundary. The shell worker passes cleanup success/failure as `1`/`0`; `_5` decoded only literal `true`, making successful cleanup persist as false. `_6` accepts canonical numeric/text booleans, rejects unknown values, and regression-tests both accepted and rejected finalization paths. Production Model C and production GET-4K are unchanged.
+Accepted `_6` testing-package identity and corrective live evidence:
+
+- exact source/squash merge: `9a76551d17289fa6a125c10fabedf87241d1a490`;
+- source tree: `36019521fb74c1736a9c6da822780133df639820`;
+- latest-head packaged source CI run `31687601966` / #808 — SUCCESS;
+- post-merge main CI run `31688215371` / #809 — SUCCESS;
+- publication workflow run `31689302668` / #43 — SUCCESS;
+- tag `v0.4.1_6` targets exact source commit `9a76551d17289fa6a125c10fabedf87241d1a490`;
+- GitHub Release ID `369818027`, `draft=false`, `prerelease=true`;
+- package asset ID `512818044`;
+- package `os-zapret2-restyle-0.4.1_6.pkg`, `188907` bytes;
+- package digest `sha256:e708d2ac0eb13d41d1d79da96e2b5f1f6e9d4fc9e138366fd4e72e30b96a02b7`;
+- direct URL `https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.4.1_6/os-zapret2-restyle-0.4.1_6.pkg`;
+- publication branch `publish/v0.4.1_6` was deleted by the successful workflow;
+- no GitHub Pages or pkg-repository promotion occurred;
+- corrected owner-live Rutracker measurement concluded `measurement_accepted`;
+- post-run IPFW range `19100-19131`, candidate process/socket `9989` were empty and normal Zapret2 was restored running;
+- evidence: `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md`.
+
+`_6` fixes only the `_5` measurement finalizer boolean boundary. The shell worker passes cleanup success/failure as `1`/`0`; `_5` decoded only literal `true`, making successful cleanup persist as false. `_6` accepts canonical numeric/text booleans, rejects unknown values, and regression-tests both accepted and rejected finalization paths. The corrected owner-live run now proves the successful path on the appliance. Production Model C and production GET-4K are unchanged.
 
 ==================================================
 CURRENT AUTHORITIES
@@ -134,6 +153,7 @@ Current Strategy Lab authorities:
 - `docs/patches/v0.4.1_6.md`;
 - `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-input.md`;
 - `docs/verification/evidence/2026-08-13-v0.4.1_6-source-verification-plan.md`;
+- `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md`;
 - `docs/patches/v0.4.1_5.md`;
 - `docs/verification/evidence/2026-08-13-v0.4.1_5-cleanup-finalizer-root-cause.md`;
 - `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`;
@@ -276,13 +296,16 @@ Historical FreeBSD-15 build evidence from latest-head CI #785 remains bound to t
 Patch contract: `docs/patches/v0.4.1_5.md`.
 
 ==================================================
-V0.4.1_6 DISCOVERY CLEANUP FINALIZER — CURRENT SOURCE CORRECTIVE
+V0.4.1_6 DISCOVERY CLEANUP FINALIZER — ACCEPTED / OWNER-LIVE PASS
 ==================================================
 
 `_6` fixes only the experiment cleanup boolean boundary. Numeric shell values `1`/`0` and textual `true`/`false` are decoded canonically; unknown values fail closed. Regression coverage proves successful cleanup can satisfy the finalizer and failed cleanup still rejects the measurement.
 
 Patch contract: `docs/patches/v0.4.1_6.md`.
 Preserved corrective input: `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-input.md`.
+Accepted publication/live evidence: `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md`.
+
+The persistent `_6` package is published at tag `v0.4.1_6`. The corrected Rutracker measurement concluded `measurement_accepted`; immediate post-run checks showed no reserved IPFW rules, no candidate worker/listener on port `9989`, and normal Zapret2 restored running.
 
 Production Stage 60 and discovery policy are unchanged. `_6` does not promote HEAD or GET-1 and does not modify Model C, Model B, Model A, source-port dispatch, the native search graph or candidate semantics.
 
@@ -290,11 +313,11 @@ Production Stage 60 and discovery policy are unchanged. `_6` does not promote HE
 CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
-The Model-C Lua initialization and BLOB startup/RSS optimization questions remain closed by owner-live evidence without production changes. `_5` multidomain discovery data is retained and the formal rejection was localized to the cleanup-finalizer interface. `_6` is the current source corrective for that defect.
+The Model-C Lua initialization, BLOB startup/RSS questions and discovery-probe agreement/cost question are closed by owner-live evidence without production changes. `_5` established the multidomain agreement/cost result; `_6` corrected the measurement finalizer and is now owner-live accepted.
 
-After `_6` is package-available, one corrected owner-live discovery measurement should verify `cleanup_ok=true`, lifecycle restoration, attribution and zero residue. That repeat is a harness verification only.
+No further discovery-probe corrective repeat is required unless a new regression appears. The current multidomain data did not demonstrate a material reproducible cost benefit for HEAD or GET-1 over GET-4K, so production discovery remains bounded GET-4K.
 
-No production discovery change is authorized: the current multidomain data did not demonstrate a material reproducible cost benefit over GET-4K.
+Detailed accepted production runtime behavior remains based on `_26`; `_2` through `_6` did not change production behavior.
 
 Production behavior remains
 `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
