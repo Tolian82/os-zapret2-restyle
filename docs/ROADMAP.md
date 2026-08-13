@@ -40,16 +40,24 @@ Current production remains:
 
 `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
 
-Next independent logical change: prepare a measurement-only `v0.4.1_7` experiment for
-**Model-C bucket creation timing**. Compare the current production lifecycle with explicit
-lazy-versus-eager bucket-start variants and measure whether avoiding creation of buckets
-for search branches that are never reached produces a reproducible benefit.
+Source review also confirms that current Model C is already **lazy at the adaptive-batch
+boundary**: a bucket is rendered/launched only after the planner has admitted a currently
+reachable frontier batch, and that physical bucket is cleaned after the batch. Model C
+does not eagerly start dormant buckets for unresolved search branches.
 
-The experiment must measure at least first-result latency, total Stage-60 wall time,
-startup/readiness, ready/settled RSS, created/used/unused bucket counts, candidate
-attribution, cleanup and semantic restoration. Production Model C must remain unchanged
-until owner-live evidence demonstrates a material reproducible advantage outside normal
-jitter with equivalent results and clean lifecycle behavior.
+Next independent logical change: prepare a measurement-only `v0.4.1_7` experiment for
+**Model-C per-batch bucket lifecycle amortization**. Measure the real cost of repeatedly
+launching, reaching readiness and cleaning the current one-bucket runtime across successive
+actually reached Stage-60 batches, and calculate the maximum plausible saving available to
+any future cross-batch keep-warm/reuse design.
+
+The experiment must not synthesize an eager dormant-bucket fleet and must not alter
+production Model C, dispatcher width, candidate scheduling or search semantics. It must
+measure at least first-result latency, total Stage-60 wall time, per-batch startup/readiness,
+per-batch cleanup/lifecycle overhead, ready/settled RSS, reached batch count, candidate
+attribution and semantic restoration. A broader cross-batch bucket/reuse design is justified
+only if this evidence first shows material reproducible lifecycle headroom outside normal
+jitter.
 
 Current state authority: `docs/PROJECT_STATE.md`.
 Adaptive-search experiment authority: `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
@@ -132,30 +140,42 @@ accepted `_3`/`_4` assumptions.
 - [x] verify clean cleanup/restoration;
 - [x] keep production GET-4K because the cheaper probes do not provide a material timing benefit.
 
-### 4. Model-C bucket creation timing — next independent experiment
+### 4. Model-C per-batch bucket lifecycle amortization — next independent experiment
 
 Prepare measurement-only `_7` without changing production search behavior.
 
-Compare the current lifecycle with explicit lazy/eager bucket-start variants and record:
+Current source behavior is the baseline: planner admission first, then one physical Model-C
+bucket is rendered/launched for that reached batch, probed, and cleaned before a later batch
+is admitted. There is no current eager fleet of dormant branch buckets to optimize away.
+
+Record:
 
 - first-result latency;
 - total Stage-60 wall time;
-- bucket startup/readiness timing;
+- number and width of actually reached Model-C batches;
+- bucket launch and stable-readiness timing per batch;
+- bucket cleanup/lifecycle timing per batch;
 - ready and settled RSS;
-- created, used and unused bucket counts;
-- exact candidate/result equivalence;
-- candidate attribution;
+- measured lifecycle share of Stage-60 wall time;
+- an explicit upper bound for savings if repeated lifecycle cost were completely amortized;
+- exact candidate/result equivalence and attribution;
 - deadline containment;
 - cleanup and semantic restoration.
 
-A production change is allowed only after separate accepted evidence shows a reproducible
-material advantage beyond normal jitter and all correctness/lifecycle gates remain PASS.
+If repeated lifecycle cost is not material, close the optimization with no production
+change. If it is material, only then open a separate design/measurement change for
+cross-batch keep-warm or broader dispatcher/bucket grouping. Such reuse is not equivalent
+to merely delaying startup because the current bucket runtime arguments and selector set
+are rendered from the admitted candidates; extending the bucket across different batches
+therefore intersects candidate/profile grouping and must retain the width-three and exact
+attribution safety properties unless separately re-qualified.
 
 ### 5. Later independent ideas
 
+- cross-batch keep-warm / broader dispatcher-bucket grouping, only if `_7` shows material
+  amortizable lifecycle cost;
 - candidate width greater than three;
-- endpoint-level parallelism;
-- broader dispatcher/bucket grouping beyond one adaptive frontier batch.
+- endpoint-level parallelism.
 
 Every item requires its own evidence and must not silently weaken candidate attribution,
 finite deadlines, cleanup or semantic restoration.
