@@ -30,6 +30,9 @@ SCHEMA = 1
 MODEL = "B-warm-worker-coexistence"
 JOB_RE = re.compile(r"^job\.[A-Za-z0-9]{6,64}$")
 REMOTE_IP_RE = re.compile(r"(?:^|\s)remote_ip=([^\s]+)")
+READY_TIMEOUT_SECONDS = 4.0
+READY_POLL_SECONDS = 0.025
+READY_STABLE_CHECKS = 2
 
 
 class ModelBExperimentError(RuntimeError):
@@ -321,7 +324,8 @@ def _snapshot(slot: Slot) -> dict[str, Any]:
 def _wait_pool_ready(slots: Sequence[Slot]) -> dict[str, dict[str, Any]]:
     stable = {slot.name: 0 for slot in slots}
     latest: dict[str, dict[str, Any]] = {}
-    for attempt in range(1, 5):
+    deadline = time.monotonic() + READY_TIMEOUT_SECONDS
+    while True:
         all_ready = True
         for slot in slots:
             snap = _snapshot(slot)
@@ -329,14 +333,15 @@ def _wait_pool_ready(slots: Sequence[Slot]) -> dict[str, dict[str, Any]]:
             good = bool(snap.get("process_identity")) and bool(snap.get("socket_ready")) and bool(snap.get("log_clean"))
             stable[slot.name] = stable[slot.name] + 1 if good else 0
             snap["stable_checks"] = stable[slot.name]
-            snap["ready"] = stable[slot.name] >= 2
+            snap["ready"] = stable[slot.name] >= READY_STABLE_CHECKS
             if not snap["ready"]:
                 all_ready = False
         if all_ready:
             return latest
-        if attempt < 4:
-            time.sleep(1)
-    return latest
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return latest
+        time.sleep(min(READY_POLL_SECONDS, remaining))
 
 
 def _remote_ip(stdout: str) -> str:
