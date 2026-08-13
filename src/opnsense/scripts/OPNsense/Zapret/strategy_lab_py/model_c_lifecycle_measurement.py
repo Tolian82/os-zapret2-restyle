@@ -1,7 +1,7 @@
 """Experiment-only Model-C per-batch lifecycle amortization measurement.
 
 This module runs the unchanged production Stage-60 Model C against an isolated copy of a
-completed reference job.  It instruments the leased production bucket call from outside,
+completed reference job. It instruments the leased production bucket call from outside,
 so every sample includes the same planner, source-port lease, dispatcher, readiness,
 probe, and cleanup boundaries used by normal Stage 60 while leaving production code and
 the reference job untouched.
@@ -40,10 +40,8 @@ MIN_REPEATS = 3
 MAX_REPEATS = 12
 DEFAULT_JOBS_DIR = "/var/run/zapret2-restyle/strategy-lab/jobs"
 
-
 class ModelCLifecycleMeasurementError(RuntimeError):
     """The lifecycle measurement input or live evidence is invalid."""
-
 
 def _atomic_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -63,7 +61,6 @@ def _atomic_json(path: Path, value: Any) -> None:
         except FileNotFoundError:
             pass
 
-
 def _load_json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -72,7 +69,6 @@ def _load_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ModelCLifecycleMeasurementError(f"measurement JSON root is invalid: {path}")
     return value
-
 
 def _positive_repeats(raw: str) -> int:
     try:
@@ -83,7 +79,6 @@ def _positive_repeats(raw: str) -> int:
         raise ValueError(f"repeat count must be between {MIN_REPEATS} and {MAX_REPEATS}")
     return value
 
-
 def _bool_arg(raw: str, name: str) -> bool:
     value = raw.strip().lower()
     if value in {"1", "true"}:
@@ -92,19 +87,10 @@ def _bool_arg(raw: str, name: str) -> bool:
         return False
     raise ValueError(f"{name} must be true/false or 1/0")
 
-
 def _stats(values: Sequence[float | int]) -> dict[str, float | int | None]:
     numeric = [float(value) for value in values]
     if not numeric:
-        return {
-            "count": 0,
-            "min": None,
-            "mean": None,
-            "median": None,
-            "stdev": None,
-            "p90": None,
-            "max": None,
-        }
+        return {"count": 0, "min": None, "mean": None, "median": None, "stdev": None, "p90": None, "max": None}
     ordered = sorted(numeric)
     p90_index = max(0, math.ceil(len(ordered) * 0.90) - 1)
     return {
@@ -117,22 +103,14 @@ def _stats(values: Sequence[float | int]) -> dict[str, float | int | None]:
         "max": round(ordered[-1], 3),
     }
 
-
 def _reference_jobs_dir() -> Path:
-    return Path(
-        os.environ.get(
-            "STRATEGY_LAB_REFERENCE_JOBS_DIR",
-            os.environ.get("STRATEGY_LAB_JOBS_DIR", DEFAULT_JOBS_DIR),
-        )
-    )
-
+    return Path(os.environ.get("STRATEGY_LAB_REFERENCE_JOBS_DIR", os.environ.get("STRATEGY_LAB_JOBS_DIR", DEFAULT_JOBS_DIR)))
 
 def _measurement_dir() -> Path:
     raw = os.environ.get("STRATEGY_LAB_MODEL_C_LIFECYCLE_MEASUREMENT_DIR", "").strip()
     if not raw:
         raise ModelCLifecycleMeasurementError("Model-C lifecycle measurement directory is unavailable")
     return Path(raw)
-
 
 def _result_signature(value: dict[str, Any]) -> dict[str, Any]:
     raw_candidates = value.get("candidates")
@@ -148,14 +126,7 @@ def _result_signature(value: dict[str, Any]) -> dict[str, Any]:
         raise ModelCLifecycleMeasurementError("Stage-60 working set is invalid")
     if not isinstance(failed, list) or not all(isinstance(item, str) for item in failed):
         raise ModelCLifecycleMeasurementError("Stage-60 failed set is invalid")
-    return {
-        "outcomes": outcomes,
-        "working": list(working),
-        "failed": list(failed),
-        "stopped_reason": value.get("stopped_reason"),
-        "partial": value.get("partial") is True,
-    }
-
+    return {"outcomes": outcomes, "working": list(working), "failed": list(failed), "stopped_reason": value.get("stopped_reason"), "partial": value.get("partial") is True}
 
 def _batch_list(value: dict[str, Any]) -> list[dict[str, Any]]:
     parallel = value.get("parallel")
@@ -163,7 +134,6 @@ def _batch_list(value: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(batches, list) or not all(isinstance(item, dict) for item in batches):
         raise ModelCLifecycleMeasurementError("Stage-60 batch evidence is invalid")
     return list(batches)
-
 
 def _model_c_only(value: dict[str, Any]) -> bool:
     parallel = value.get("parallel")
@@ -175,13 +145,32 @@ def _model_c_only(value: dict[str, Any]) -> bool:
     batches = parallel.get("batches")
     if not isinstance(batches, list) or not batches:
         return False
-    return all(
-        isinstance(item, dict)
-        and item.get("outcome") == "warm"
-        and item.get("execution_model") == PRODUCTION_MODEL
-        for item in batches
-    )
+    return all(isinstance(item, dict) and item.get("outcome") == "warm" and item.get("execution_model") == PRODUCTION_MODEL for item in batches)
 
+def _fallback_evidence(batches: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    fallbacks: list[dict[str, Any]] = []
+    for index, batch in enumerate(batches, 1):
+        candidate_ids = batch.get("candidate_ids")
+        candidates = list(candidate_ids) if isinstance(candidate_ids, list) and all(isinstance(item, str) for item in candidate_ids) else []
+        model_c = batch.get("model_c") if isinstance(batch.get("model_c"), dict) else {}
+        reason = model_c.get("fallback_reason")
+        if not isinstance(reason, str) or not reason:
+            warm_error = batch.get("warm_error")
+            reason = warm_error if isinstance(warm_error, str) and warm_error else ""
+        execution_model = batch.get("execution_model")
+        fallback_model = batch.get("fallback_execution_model")
+        if not isinstance(fallback_model, str) or not fallback_model:
+            fallback_model = execution_model if execution_model != PRODUCTION_MODEL else ""
+        detected = bool(reason) or model_c.get("enabled") is False or execution_model != PRODUCTION_MODEL
+        if detected:
+            fallbacks.append({"batch": int(batch.get("batch", index)), "candidate_ids": candidates, "execution_model": execution_model, "fallback_model": fallback_model, "reason": reason or "persisted batch did not use production Model C"})
+    return fallbacks
+
+def _batch_comparison(samples: Sequence[dict[str, Any]], result_batches: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    instrumented = [list(item.get("candidate_ids", [])) for item in samples]
+    persisted = [list(item.get("candidate_ids", [])) for item in result_batches]
+    count_match = len(samples) == len(result_batches)
+    return {"instrumented_batch_count": len(samples), "persisted_batch_count": len(result_batches), "instrumented_batch_count_match": count_match, "instrumented_sequence": instrumented, "persisted_sequence": persisted, "batch_sequence_persisted": count_match and instrumented == persisted}
 
 def _reference_contract(reference_job: str) -> tuple[Path, dict[str, Any], dict[str, Any], resources.ResourceInventory]:
     if not search.JOB_RE.fullmatch(reference_job):
@@ -190,7 +179,6 @@ def _reference_contract(reference_job: str) -> tuple[Path, dict[str, Any], dict[
     status = _load_json(job / "status.json")
     if status.get("state") != "completed":
         raise ModelCLifecycleMeasurementError("reference Strategy Lab job is not completed")
-
     family = status.get("family_screening")
     expansion = status.get("parameter_expansion")
     if not isinstance(family, dict) or not isinstance(expansion, dict):
@@ -203,19 +191,14 @@ def _reference_contract(reference_job: str) -> tuple[Path, dict[str, Any], dict[
         raise ModelCLifecycleMeasurementError("reference Stage 60 is not a no-fallback production Model-C run")
     if len(_batch_list(expansion)) < 2:
         raise ModelCLifecycleMeasurementError("reference Stage 60 must contain at least two reached Model-C batches")
-
     for name in ("endpoints.txt", "search-epoch.json", "resource-inventory.json"):
         if not (job / name).is_file():
             raise ModelCLifecycleMeasurementError(f"reference job input is unavailable: {name}")
-
     reference_inventory = resources.load_inventory(job / "resource-inventory.json")
-    current_inventory = resources.snapshot_inventory(
-        Path(reference_inventory.lua_root), Path(reference_inventory.fake_root)
-    )
+    current_inventory = resources.snapshot_inventory(Path(reference_inventory.lua_root), Path(reference_inventory.fake_root))
     if current_inventory.inventory_id != reference_inventory.inventory_id:
         raise ModelCLifecycleMeasurementError("installed Zapret2 resources differ from the reference inventory")
     return job, family, expansion, reference_inventory
-
 
 def _prepare_isolated_job(reference: Path, family: dict[str, Any], run_root: Path) -> tuple[Path, Path, Path]:
     jobs = run_root / "jobs"
@@ -227,7 +210,6 @@ def _prepare_isolated_job(reference: Path, family: dict[str, Any], run_root: Pat
     _atomic_json(family_path, family)
     output = job / "parameter-expansion-measurement.json"
     return jobs, family_path, output
-
 
 @contextmanager
 def _environment(values: dict[str, str]) -> Iterator[None]:
@@ -244,11 +226,9 @@ def _environment(values: dict[str, str]) -> Iterator[None]:
             else:
                 os.environ.pop(name, None)
 
-
 @contextmanager
 def _instrument_batches(samples: list[dict[str, Any]], stage_started: float) -> Iterator[None]:
     original = stage60_model_c._bucket_batch
-
     def measured(*args: Any, **kwargs: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         started = time.monotonic()
         candidates, evidence = original(*args, **kwargs)
@@ -265,33 +245,13 @@ def _instrument_batches(samples: list[dict[str, Any]], stage_started: float) -> 
         candidate_ids = evidence.get("candidate_ids")
         if not isinstance(candidate_ids, list) or not all(isinstance(item, str) for item in candidate_ids):
             raise ModelCLifecycleMeasurementError("Model-C batch candidate attribution is invalid")
-        samples.append(
-            {
-                "batch": len(samples) + 1,
-                "candidate_ids": list(candidate_ids),
-                "width": int(evidence.get("width", len(candidate_ids))),
-                "execution_model": evidence.get("execution_model"),
-                "outer_batch_ms": outer_ms,
-                "reported_batch_total_ms": reported_ms,
-                "pool_startup_ms": startup_ms,
-                "parallel_probe_wall_ms": probe_ms,
-                "cleanup_tail_ms": cleanup_tail_ms,
-                "setup_bookkeeping_ms": setup_bookkeeping_ms,
-                "non_probe_upper_bound_ms": non_probe_ms,
-                "result_ready_from_stage_start_ms": max(0, round((completed - stage_started) * 1000)),
-                "rss_aggregate_kb": rss.get("aggregate_kb"),
-                "rss_all_numeric": rss.get("all_numeric") is True,
-                "source_port_replacement_count": lease.get("replacement_count", 0),
-            }
-        )
+        samples.append({"batch": len(samples) + 1, "candidate_ids": list(candidate_ids), "width": int(evidence.get("width", len(candidate_ids))), "execution_model": evidence.get("execution_model"), "outer_batch_ms": outer_ms, "reported_batch_total_ms": reported_ms, "pool_startup_ms": startup_ms, "parallel_probe_wall_ms": probe_ms, "cleanup_tail_ms": cleanup_tail_ms, "setup_bookkeeping_ms": setup_bookkeeping_ms, "non_probe_upper_bound_ms": non_probe_ms, "result_ready_from_stage_start_ms": max(0, round((completed - stage_started) * 1000)), "rss_aggregate_kb": rss.get("aggregate_kb"), "rss_all_numeric": rss.get("all_numeric") is True, "source_port_replacement_count": lease.get("replacement_count", 0)})
         return candidates, evidence
-
     stage60_model_c._bucket_batch = measured
     try:
         yield
     finally:
         stage60_model_c._bucket_batch = original
-
 
 def _run_once(reference: Path, family: dict[str, Any], reference_signature: dict[str, Any], repeat: int) -> dict[str, Any]:
     run_root = _measurement_dir() / f"repeat-{repeat:02d}"
@@ -301,120 +261,65 @@ def _run_once(reference: Path, family: dict[str, Any], reference_signature: dict
     endpoints = jobs / reference.name / "endpoints.txt"
     runtime_root = run_root / "runtime"
     runtime_root.mkdir(parents=True, exist_ok=True)
-
     samples: list[dict[str, Any]] = []
     stage_started = time.monotonic()
-    with _environment(
-        {
-            "STRATEGY_LAB_JOBS_DIR": str(jobs),
-            "STRATEGY_LAB_MODEL_B_SESSION_DIR": str(runtime_root),
-        }
-    ):
+    with _environment({"STRATEGY_LAB_JOBS_DIR": str(jobs), "STRATEGY_LAB_MODEL_B_SESSION_DIR": str(runtime_root)}):
         with adaptive_validation.probe_tier("discovery"):
             with stage60_source_port_lease.install():
                 with _instrument_batches(samples, stage_started):
-                    status = stage60_model_c.expand(
-                        reference.name,
-                        str(endpoints),
-                        str(family_path),
-                        str(output),
-                    )
+                    status = stage60_model_c.expand(reference.name, str(endpoints), str(family_path), str(output))
     stage60_wall_ms = max(0, round((time.monotonic() - stage_started) * 1000))
     if status != EX_OK or not output.is_file():
         raise ModelCLifecycleMeasurementError(f"isolated Stage-60 repeat {repeat} failed with status {status}")
     result = _load_json(output)
     signature = _result_signature(result)
     result_batches = _batch_list(result)
-    if len(samples) != len(result_batches):
-        raise ModelCLifecycleMeasurementError("instrumented and persisted Model-C batch counts differ")
-
-    sequence = [list(item["candidate_ids"]) for item in samples]
-    persisted_sequence = [list(item.get("candidate_ids", [])) for item in result_batches]
-    rss_complete = all(item.get("rss_all_numeric") is True and isinstance(item.get("rss_aggregate_kb"), int) for item in samples)
+    comparison = _batch_comparison(samples, result_batches)
+    fallbacks = _fallback_evidence(result_batches)
+    sequence = comparison["instrumented_sequence"]
+    model_c_only = _model_c_only(result) and all(item.get("execution_model") == PRODUCTION_MODEL for item in samples)
+    rss_complete = bool(samples) and comparison["instrumented_batch_count_match"] is True and all(item.get("rss_all_numeric") is True and isinstance(item.get("rss_aggregate_kb"), int) for item in samples)
+    lifecycle_metrics_complete = model_c_only and not fallbacks and comparison["instrumented_batch_count_match"] is True and comparison["batch_sequence_persisted"] is True and rss_complete
     non_probe_total = sum(int(item["non_probe_upper_bound_ms"]) for item in samples)
     amortizable_upper_bound = sum(int(item["non_probe_upper_bound_ms"]) for item in samples[1:])
     upper_share = 0.0 if stage60_wall_ms <= 0 else round(amortizable_upper_bound * 100.0 / stage60_wall_ms, 3)
     lifecycle_share = 0.0 if stage60_wall_ms <= 0 else round(non_probe_total * 100.0 / stage60_wall_ms, 3)
-    return {
-        "repeat": repeat,
-        "status": status,
-        "stage60_wall_ms": stage60_wall_ms,
-        "first_result_latency_ms": samples[0]["result_ready_from_stage_start_ms"] if samples else None,
-        "batch_count": len(samples),
-        "batch_sequence": sequence,
-        "batches": samples,
-        "result_signature": signature,
-        "result_equivalent": signature == reference_signature,
-        "batch_sequence_persisted": sequence == persisted_sequence,
-        "model_c_only": _model_c_only(result) and all(item.get("execution_model") == PRODUCTION_MODEL for item in samples),
-        "rss_complete": rss_complete,
-        "non_probe_total_ms": non_probe_total,
-        "lifecycle_share_of_stage60_pct": lifecycle_share,
-        "amortizable_upper_bound_ms": amortizable_upper_bound,
-        "amortizable_upper_bound_share_pct": upper_share,
-    }
-
+    return {"repeat": repeat, "status": status, "stage60_wall_ms": stage60_wall_ms, "first_result_latency_ms": samples[0]["result_ready_from_stage_start_ms"] if samples else None, "batch_count": len(samples), "instrumented_batch_count": comparison["instrumented_batch_count"], "persisted_batch_count": comparison["persisted_batch_count"], "instrumented_batch_count_match": comparison["instrumented_batch_count_match"], "batch_sequence": sequence, "persisted_batch_sequence": comparison["persisted_sequence"], "batches": samples, "fallback_detected": bool(fallbacks), "fallbacks": fallbacks, "result_signature": signature, "result_equivalent": signature == reference_signature, "batch_sequence_persisted": comparison["batch_sequence_persisted"], "model_c_only": model_c_only, "rss_complete": rss_complete, "lifecycle_metrics_complete": lifecycle_metrics_complete, "non_probe_total_ms": non_probe_total, "lifecycle_share_of_stage60_pct": lifecycle_share, "amortizable_upper_bound_ms": amortizable_upper_bound, "amortizable_upper_bound_share_pct": upper_share}
 
 def _summaries(repeats: list[dict[str, Any]]) -> dict[str, Any]:
-    batches = [batch for repeat in repeats for batch in repeat.get("batches", []) if isinstance(batch, dict)]
-    return {
-        "stage60_wall_ms": _stats([item["stage60_wall_ms"] for item in repeats]),
-        "first_result_latency_ms": _stats([item["first_result_latency_ms"] for item in repeats if item.get("first_result_latency_ms") is not None]),
-        "batch_count": _stats([item["batch_count"] for item in repeats]),
-        "pool_startup_ms": _stats([item["pool_startup_ms"] for item in batches]),
-        "cleanup_tail_ms": _stats([item["cleanup_tail_ms"] for item in batches]),
-        "setup_bookkeeping_ms": _stats([item["setup_bookkeeping_ms"] for item in batches]),
-        "non_probe_upper_bound_ms": _stats([item["non_probe_upper_bound_ms"] for item in batches]),
-        "rss_aggregate_kb": _stats([item["rss_aggregate_kb"] for item in batches if isinstance(item.get("rss_aggregate_kb"), int)]),
-        "lifecycle_share_of_stage60_pct": _stats([item["lifecycle_share_of_stage60_pct"] for item in repeats]),
-        "amortizable_upper_bound_ms": _stats([item["amortizable_upper_bound_ms"] for item in repeats]),
-        "amortizable_upper_bound_share_pct": _stats([item["amortizable_upper_bound_share_pct"] for item in repeats]),
-    }
-
+    eligible = [item for item in repeats if item.get("lifecycle_metrics_complete") is True]
+    batches = [batch for repeat in eligible for batch in repeat.get("batches", []) if isinstance(batch, dict)]
+    return {"eligible_repeat_count": len(eligible), "stage60_wall_ms": _stats([item["stage60_wall_ms"] for item in eligible]), "first_result_latency_ms": _stats([item["first_result_latency_ms"] for item in eligible if item.get("first_result_latency_ms") is not None]), "batch_count": _stats([item["batch_count"] for item in eligible]), "pool_startup_ms": _stats([item["pool_startup_ms"] for item in batches]), "cleanup_tail_ms": _stats([item["cleanup_tail_ms"] for item in batches]), "setup_bookkeeping_ms": _stats([item["setup_bookkeeping_ms"] for item in batches]), "non_probe_upper_bound_ms": _stats([item["non_probe_upper_bound_ms"] for item in batches]), "rss_aggregate_kb": _stats([item["rss_aggregate_kb"] for item in batches if isinstance(item.get("rss_aggregate_kb"), int)]), "lifecycle_share_of_stage60_pct": _stats([item["lifecycle_share_of_stage60_pct"] for item in eligible]), "amortizable_upper_bound_ms": _stats([item["amortizable_upper_bound_ms"] for item in eligible]), "amortizable_upper_bound_share_pct": _stats([item["amortizable_upper_bound_share_pct"] for item in eligible])}
 
 def run(reference_job: str, output: Path, repeats: int) -> int:
     reference, family, expansion, inventory = _reference_contract(reference_job)
     reference_signature = _result_signature(expansion)
     reference_batches = _batch_list(expansion)
-    repeat_values = [_run_once(reference, family, reference_signature, index) for index in range(1, repeats + 1)]
+    repeat_values: list[dict[str, Any]] = []
+    for index in range(1, repeats + 1):
+        repeat = _run_once(reference, family, reference_signature, index)
+        repeat_values.append(repeat)
+        if repeat.get("lifecycle_metrics_complete") is not True:
+            break
     first_sequence = repeat_values[0]["batch_sequence"] if repeat_values else []
+    fallbacks = [dict(fallback, repeat=int(repeat["repeat"])) for repeat in repeat_values for fallback in repeat.get("fallbacks", []) if isinstance(fallback, dict)]
+    first_invalid = next((int(item["repeat"]) for item in repeat_values if item.get("lifecycle_metrics_complete") is not True), None)
     checks = {
         "reference_model_c_only": _model_c_only(expansion),
         "multi_batch_reference": len(reference_batches) >= 2,
         "reference_inventory_match": True,
         "repeat_count_complete": len(repeat_values) == repeats,
-        "model_c_only": all(item.get("model_c_only") is True for item in repeat_values),
-        "result_equivalent": all(item.get("result_equivalent") is True for item in repeat_values),
-        "batch_sequence_equivalent": all(item.get("batch_sequence") == first_sequence and item.get("batch_sequence_persisted") is True for item in repeat_values),
-        "rss_complete": all(item.get("rss_complete") is True for item in repeat_values),
+        "instrumented_batch_count_match": bool(repeat_values) and all(item.get("instrumented_batch_count_match") is True for item in repeat_values),
+        "model_c_only": bool(repeat_values) and all(item.get("model_c_only") is True for item in repeat_values),
+        "result_equivalent": bool(repeat_values) and all(item.get("result_equivalent") is True for item in repeat_values),
+        "batch_sequence_equivalent": bool(repeat_values) and all(item.get("batch_sequence") == first_sequence and item.get("batch_sequence_persisted") is True for item in repeat_values),
+        "rss_complete": bool(repeat_values) and all(item.get("rss_complete") is True for item in repeat_values),
         "lifecycle_restored": False,
         "cleanup_ok": False,
     }
-    report = {
-        "schema": SCHEMA,
-        "policy": POLICY,
-        "experiment_only": True,
-        "production_model": PRODUCTION_MODEL,
-        "production_model_changed": False,
-        "production_search_semantics_changed": False,
-        "production_dispatch_width_changed": False,
-        "production_change_recommended": False,
-        "reference_job": reference_job,
-        "reference_search_epoch_id": expansion.get("search_epoch_id"),
-        "reference_resource_inventory_id": inventory.inventory_id,
-        "reference_batch_count": len(reference_batches),
-        "reference_result_signature": reference_signature,
-        "repeat_count": repeats,
-        "repeats": repeat_values,
-        "summaries": _summaries(repeat_values),
-        "checks": checks,
-        "lifecycle": {},
-        "conclusion": "measurement_collected",
-        "next_step": "analyze_owner_live_amortizable_upper_bound_before_any_separate_cross_batch_reuse_design",
-    }
+    report = {"schema": SCHEMA, "policy": POLICY, "experiment_only": True, "production_model": PRODUCTION_MODEL, "production_model_changed": False, "production_search_semantics_changed": False, "production_dispatch_width_changed": False, "production_change_recommended": False, "reference_job": reference_job, "reference_search_epoch_id": expansion.get("search_epoch_id"), "reference_resource_inventory_id": inventory.inventory_id, "reference_batch_count": len(reference_batches), "reference_result_signature": reference_signature, "repeat_count": repeats, "completed_repeat_count": len(repeat_values), "repeats": repeat_values, "summaries": _summaries(repeat_values), "diagnostics": {"fallback_detected": bool(fallbacks), "fallbacks": fallbacks, "first_invalid_repeat": first_invalid, "fail_fast": first_invalid is not None}, "checks": checks, "lifecycle": {}, "conclusion": "measurement_collected", "next_step": "inspect_model_c_fallback_reason_before_any_lifecycle_cost_or_reuse_decision" if first_invalid is not None else "analyze_owner_live_amortizable_upper_bound_before_any_separate_cross_batch_reuse_design"}
     _atomic_json(output, report)
     return EX_OK
-
 
 def finalize(output: Path, initial_path: Path, final_path: Path, cleanup_ok: bool) -> int:
     report = _load_json(output)
@@ -425,23 +330,11 @@ def finalize(output: Path, initial_path: Path, final_path: Path, cleanup_ok: boo
     checks = report.setdefault("checks", {})
     checks["lifecycle_restored"] = lifecycle_restored
     checks["cleanup_ok"] = cleanup_ok
-    required = (
-        "reference_model_c_only",
-        "multi_batch_reference",
-        "reference_inventory_match",
-        "repeat_count_complete",
-        "model_c_only",
-        "result_equivalent",
-        "batch_sequence_equivalent",
-        "rss_complete",
-        "lifecycle_restored",
-        "cleanup_ok",
-    )
+    required = ("reference_model_c_only", "multi_batch_reference", "reference_inventory_match", "repeat_count_complete", "instrumented_batch_count_match", "model_c_only", "result_equivalent", "batch_sequence_equivalent", "rss_complete", "lifecycle_restored", "cleanup_ok")
     accepted = all(bool(checks.get(name)) for name in required)
     report["conclusion"] = "measurement_accepted" if accepted else "measurement_rejected"
     _atomic_json(output, report)
     return EX_OK if accepted else EX_SOFTWARE
-
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)

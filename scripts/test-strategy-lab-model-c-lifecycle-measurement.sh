@@ -68,6 +68,26 @@ with_fallback = json.loads(json.dumps(model_c))
 with_fallback["parallel"]["fallbacks"] = [{"batch": 1}]
 assert m._model_c_only(with_fallback) is False
 
+persisted_batches = [
+    {"batch": 1, "outcome": "warm", "execution_model": m.PRODUCTION_MODEL, "candidate_ids": ["c1"]},
+    {
+        "batch": 2,
+        "outcome": "warm",
+        "execution_model": "B-warm-worker-parallel-batched",
+        "candidate_ids": ["c2"],
+        "fallback_execution_model": "B-warm-worker-parallel-batched",
+        "model_c": {"attempted": True, "enabled": False, "fallback_reason": "synthetic Model-C readiness failure"},
+    },
+]
+instrumented = [{"candidate_ids": ["c1"]}]
+comparison = m._batch_comparison(instrumented, persisted_batches)
+assert comparison["instrumented_batch_count"] == 1
+assert comparison["persisted_batch_count"] == 2
+assert comparison["instrumented_batch_count_match"] is False
+assert comparison["batch_sequence_persisted"] is False
+fallbacks = m._fallback_evidence(persisted_batches)
+assert fallbacks == [{"batch": 2, "candidate_ids": ["c2"], "execution_model": "B-warm-worker-parallel-batched", "fallback_model": "B-warm-worker-parallel-batched", "reason": "synthetic Model-C readiness failure"}]
+
 real_bucket = stage60_model_c._bucket_batch
 
 def fake_bucket(*args, **kwargs):
@@ -101,9 +121,6 @@ try:
 finally:
     stage60_model_c._bucket_batch = real_bucket
 
-# `_7` created these three ancestors as 0700 even though the launched dvtws2 workers
-# drop privileges to nobody. The `_8` entry boundary must make only the expected replay
-# ancestors execute-traversable (0711) before any Model-C/Model-B/cold runtime starts.
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp) / "model-c-lifecycle-measurement"
     session = root / "session.12345"
@@ -164,12 +181,12 @@ with tempfile.TemporaryDirectory() as tmp:
     lifecycle = {"schema": 1, "source": "zapret_service", "state": "RUNNING", "marker": "same"}
     initial.write_text(json.dumps(lifecycle), encoding="utf-8")
     final.write_text(json.dumps(lifecycle), encoding="utf-8")
-
     checks = {
         "reference_model_c_only": True,
         "multi_batch_reference": True,
         "reference_inventory_match": True,
         "repeat_count_complete": True,
+        "instrumented_batch_count_match": True,
         "model_c_only": True,
         "result_equivalent": True,
         "batch_sequence_equivalent": True,
@@ -184,6 +201,13 @@ with tempfile.TemporaryDirectory() as tmp:
     assert accepted["conclusion"] == "measurement_accepted"
     assert accepted["checks"]["lifecycle_restored"] is True
     assert accepted["checks"]["cleanup_ok"] is True
+
+    rejected_base = json.loads(json.dumps(base))
+    rejected_base["checks"]["instrumented_batch_count_match"] = False
+    output.write_text(json.dumps(rejected_base), encoding="utf-8")
+    assert m.finalize(output, initial, final, True) == 70
+    rejected = json.loads(output.read_text(encoding="utf-8"))
+    assert rejected["conclusion"] == "measurement_rejected"
 
     output.write_text(json.dumps(base), encoding="utf-8")
     assert m.finalize(output, initial, final, False) == 70
@@ -202,6 +226,8 @@ grep -Fq 'cleanup-all' "${WORKER}" || fail 'reserved Model-C runtime cleanup mis
 grep -Fq 'chmod 0600 "${_output}"' "${WORKER}" || fail 'lifecycle evidence privacy boundary missing'
 grep -Fq 'stage60_source_port_lease.install()' "${MODULE}" || fail 'production source-port lease path is not measured'
 grep -Fq 'stage60_model_c.expand(' "${MODULE}" || fail 'production Model-C expansion path is not measured'
+grep -Fq 'def _fallback_evidence' "${MODULE}" || fail 'Model-C fallback evidence helper missing'
+grep -Fq '"instrumented_batch_count_match"' "${MODULE}" || fail 'instrumented/persisted batch count gate missing'
 grep -Fq '"production_model_changed": False' "${MODULE}" || fail 'production Model-C immutability gate missing'
 grep -Fq '"production_search_semantics_changed": False' "${MODULE}" || fail 'production search immutability gate missing'
 grep -Fq '"production_dispatch_width_changed": False' "${MODULE}" || fail 'production width immutability gate missing'
