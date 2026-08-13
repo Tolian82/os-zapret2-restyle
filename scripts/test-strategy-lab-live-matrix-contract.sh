@@ -15,6 +15,7 @@ DISCOVERY_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_
 DISCOVERY_ROOT_CAUSE="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_5-cleanup-finalizer-root-cause.md"
 DISCOVERY6_INPUT="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-input.md"
 DISCOVERY6_PLAN="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_6-source-verification-plan.md"
+DISCOVERY6_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 LUA_DOC="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md"
@@ -44,7 +45,7 @@ require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
 for file in "${MATRIX}" "${STATE}" "${INDEX}" "${RELEASE_DOC}" "${RELEASE_EVIDENCE}" \
     "${BLOB_PUBLICATION}" "${BLOB_LIVE}" "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${DISCOVERY_PUBLICATION}" \
-    "${DISCOVERY_ROOT_CAUSE}" "${DISCOVERY6_INPUT}" "${DISCOVERY6_PLAN}" "${VERSION_FILE}" "${MAKEFILE}" \
+    "${DISCOVERY_ROOT_CAUSE}" "${DISCOVERY6_INPUT}" "${DISCOVERY6_PLAN}" "${DISCOVERY6_LIVE}" "${VERSION_FILE}" "${MAKEFILE}" \
     "${LUA_DOC}" "${LUA_PATCH}" "${LUA_TEST}" "${LUA_PY}" "${BLOB_DOC}" "${BLOB_PATCH}" \
     "${BLOB_TEST}" "${BLOB_PY}" "${DISCOVERY5_PATCH}" "${DISCOVERY6_PATCH}" "${DISCOVERY_PY}" "${LUA_LIVE}" "${MODEL_B_EVIDENCE}" \
     "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" "${LIVE26}" "${BUDGET_PY}" \
@@ -64,8 +65,8 @@ candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 require "${STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=6`'
 require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_6.pkg`'
 require "${STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
-require "${STATE}" 'Latest persistently published testing package: `v0.4.1_5` / `os-zapret2-restyle-0.4.1_5.pkg`'
-require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_5` — multidomain discovery data collected / cleanup-finalizer defect confirmed'
+require "${STATE}" 'Latest persistently published testing package: `v0.4.1_6` / `os-zapret2-restyle-0.4.1_6.pkg`'
+require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_6` — discovery cleanup-finalizer corrective ACCEPTED / measurement_accepted'
 require "${STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
 require "${STATE}" 'job.xhdgCU'
 require "${STATE}" 'Stage 60 duration `34209 ms`'
@@ -75,15 +76,19 @@ require "${STATE}" 'production_change_recommended=false'
 require "${STATE}" 'publication workflow run `31633335688` — SUCCESS'
 require "${STATE}" 'V0.4.1_4 BLOB COMMON-SET SCALING — ACCEPTED / OPTIMIZATION CLOSED'
 require "${STATE}" 'V0.4.1_5 DISCOVERY PROBE AGREEMENT — OWNER-LIVE DATA COLLECTED / FINALIZER DEFECT CONFIRMED'
-require "${STATE}" 'V0.4.1_6 DISCOVERY CLEANUP FINALIZER — CURRENT SOURCE CORRECTIVE'
+require "${STATE}" 'V0.4.1_6 DISCOVERY CLEANUP FINALIZER — ACCEPTED / OWNER-LIVE PASS'
 require "${STATE}" 'Rutracker Stage 60 completed in `24204 ms`'
 require "${STATE}" 'YouTube Stage 60 completed in `9151 ms`'
 require "${STATE}" 'publication workflow run `31652568754` / #42 — SUCCESS'
 require "${STATE}" 'sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce'
+require "${STATE}" 'publication workflow run `31689302668` / #43 — SUCCESS'
+require "${STATE}" 'sha256:e708d2ac0eb13d41d1d79da96e2b5f1f6e9d4fc9e138366fd4e72e30b96a02b7'
+require "${STATE}" 'corrected owner-live Rutracker measurement concluded `measurement_accepted`'
 
 require "${INDEX}" 'docs/patches/v0.4.1_6.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-input.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_6-source-verification-plan.md'
+require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_5-cleanup-finalizer-root-cause.md'
 require "${INDEX}" 'docs/patches/v0.4.1_5.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md'
@@ -131,10 +136,17 @@ require "${DISCOVERY5_PATCH}" 'latest-head GitHub Actions FreeBSD-15 job'
 require "${DISCOVERY5_PATCH}" 'Persistent GitHub test package publication'
 require "${DISCOVERY6_PATCH}" 'Discovery measurement cleanup finalizer correction'
 require "${DISCOVERY6_PATCH}" 'Production discovery remains the bounded 4 KiB GET'
+require "${DISCOVERY6_PATCH}" 'Status: **ACCEPTED / OWNER-LIVE PASS / PRODUCTION BEHAVIOR UNCHANGED**'
 require "${DISCOVERY_ROOT_CAUSE}" 'finalizer receives literal `1` after successful cleanup and literal `0` after failed cleanup.'
 require "${DISCOVERY6_INPUT}" 'Stage-60 adapter wall time: `24204 ms`'
 require "${DISCOVERY6_INPUT}" 'Stage-60 adapter wall time: `9151 ms`'
 require "${DISCOVERY6_PLAN}" 'numeric cleanup success `1` and failure `0`'
+require "${DISCOVERY6_LIVE}" 'Status: **ACCEPTED / OWNER-LIVE PASS**'
+require "${DISCOVERY6_LIVE}" '31689302668'
+require "${DISCOVERY6_LIVE}" '369818027'
+require "${DISCOVERY6_LIVE}" '512818044'
+require "${DISCOVERY6_LIVE}" 'sha256:e708d2ac0eb13d41d1d79da96e2b5f1f6e9d4fc9e138366fd4e72e30b96a02b7'
+require "${DISCOVERY6_LIVE}" 'Discovery probe measurement conclusion: measurement_accepted'
 require "${DISCOVERY_PUBLICATION}" 'Status: **PUBLISHED / OWNER-LIVE PENDING**'
 require "${DISCOVERY_PUBLICATION}" '31652568754'
 require "${DISCOVERY_PUBLICATION}" '369590644'
@@ -188,4 +200,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} discovery cleanup finalizer corrective is current, _5 remains the latest persistent testing package, accepted BLOB history is preserved, and production live truth remains _26"
+echo "PASS: ${candidate} discovery cleanup finalizer corrective is published and owner-live accepted, accepted BLOB history is preserved, and production live truth remains _26"
