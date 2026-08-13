@@ -11,7 +11,7 @@
 
 A full repository-wide reading is required only for a repository-wide audit or genuine
 full-context recovery. Focused work uses the risk-based specialist reading defined in
-`AGENTS.md`. For current diagnosis, later patch/live/release evidence outranks historical
+`AGENTS.md`. For current diagnosis, later patch/live/release records outrank historical
 records.
 
 ## Current release / Strategy Lab authorities
@@ -21,7 +21,8 @@ Read these first for current Strategy Lab or release/package work:
 - `docs/PROJECT_STATE.md` — current source/published candidates, accepted runtime basis and next boundary;
 - `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md` — every owner-facing package is persistently delivered from GitHub; Actions/sandbox files are not final delivery; required documents must be read through EOF;
 - `docs/patches/v0.4.1_5.md` — current measurement-only discovery-probe agreement/cost package candidate;
-- `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md` — exact `_5` CI build artifact evidence; persistent GitHub package publication is still pending;
+- `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md` — exact `_5` CI build artifact evidence; historical build evidence only after persistent publication;
+- `docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md` — exact `_5` persistent GitHub testing-package publication; owner-live discovery measurement pending;
 - `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — experiment selection and acceptance authority, including discovery-vs-deep question 10;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — production discovery/stability/deep validation architecture;
 - `docs/patches/v0.4.1_4.md` — accepted measurement-only BLOB common-set scaling candidate;
@@ -47,12 +48,12 @@ Read these first for current Strategy Lab or release/package work:
 ### Current v0.4.1 boundary
 
 `VERSION=0.4.1`, `PLUGIN_REVISION=5`; current source candidate is
-`os-zapret2-restyle-0.4.1_5.pkg`. Its FreeBSD-15 GitHub Actions **build artifact** is READY, but persistent GitHub package publication is PENDING. Under the active GitHub-only package-delivery rule, the Actions artifact is build evidence and must not be presented as the final owner testing package.
+`os-zapret2-restyle-0.4.1_5.pkg`. Persistent GitHub testing-package publication is **PUBLISHED / OWNER-LIVE PENDING**. The earlier FreeBSD-15 GitHub Actions artifact remains historical build evidence only and is not the owner-facing package.
 
-Exact `_5` build-artifact identity:
+Exact `_5` historical build-artifact identity:
 
 - source PR #197 final head `a7504d95b2b5f0fe3c0b0bccea359e8f22148181`;
-- merged `main` `3f85d34f415d49c2b9a3ae25bd8bdebdad2f84dd`;
+- merged source commit `3f85d34f415d49c2b9a3ae25bd8bdebdad2f84dd`;
 - identical tree on both: `3498b759161b14369921e9a47787e82ddbace6a2`;
 - latest-head CI `31645083105` / #785 — SUCCESS;
 - artifact ID `9160582106`, name `os-zapret2-restyle-0.4.1_5`;
@@ -60,7 +61,19 @@ Exact `_5` build-artifact identity:
 - SHA-256 `d2a8de95bb128739bcf59325433f97b6c28eb819124131c867f0f3cea9d67b4e`;
 - post-merge main CI `31645659351` / #786 — SUCCESS (`Verify main integrity` PASS).
 
-No `_5` persistent testing-package publication has yet been completed. Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`; latest persistently published testing package and latest owner-tested testing candidate remain `_4`. Detailed production Strategy Lab evidence remains `_26` because `_2`, `_3`, `_4`, and `_5` do not change production behavior.
+Exact `_5` persistent GitHub testing-package identity:
+
+- publication workflow run `31652568754` / #42 — SUCCESS;
+- testing tag `v0.4.1_5` targets exact source commit `3f85d34f415d49c2b9a3ae25bd8bdebdad2f84dd`;
+- GitHub Release ID `369590644`, `draft=false`, `prerelease=true`;
+- package asset ID `512227845`;
+- package `os-zapret2-restyle-0.4.1_5.pkg`, `188854` bytes;
+- package SHA-256 `f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce`;
+- direct URL `https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.4.1_5/os-zapret2-restyle-0.4.1_5.pkg`;
+- publication branch `publish/v0.4.1_5` was deleted by the successful workflow;
+- no GitHub Pages or pkg-repository promotion occurred.
+
+Stable published package remains `os-zapret2-restyle-0.4.1_1.pkg`; latest persistently published testing package is now `_5`, while latest owner-tested testing candidate remains `_4`. Detailed production Strategy Lab evidence remains `_26` because `_2`, `_3`, `_4`, and `_5` do not change production behavior.
 
 `_5` measures adaptive-search question 10: agreement and cost for `HEAD`, one-byte GET and the
 current 4 KiB discovery GET against the existing cold deep-GET finalist reference. It reuses the
@@ -141,7 +154,7 @@ and `docs/audit/`. Key retained comparison points:
 - Lua measurement: `docs/patches/v0.4.1_2.md`, `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`;
 - accepted single-BLOB measurement: `docs/patches/v0.4.1_3.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
 - accepted common-set scaling measurement: `docs/patches/v0.4.1_4.md`, `docs/architecture/STRATEGY_LAB_BLOB_LOADING.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md`, `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`;
-- discovery-probe build artifact: `docs/patches/v0.4.1_5.md`, `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`.
+- discovery-probe measurement: `docs/patches/v0.4.1_5.md`, historical build evidence `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`, persistent package publication `docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md`; owner-live measurement remains pending.
 
 Historical evidence explains progression; it never overrides a later current record.
 
