@@ -65,8 +65,8 @@ revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; 
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${version}" = '0.4.1' ] || fail 'measurement line must remain on VERSION=0.4.1'
-[ "${revision}" -eq 9 ] || fail 'current Model-C lifecycle diagnostic corrective must use PLUGIN_REVISION=9'
-[ "${candidate}" = 'os-zapret2-restyle-0.4.1_9.pkg' ] || fail 'unexpected current Model-C lifecycle diagnostic package identity'
+[ "${revision}" -eq 10 ] || fail 'current Model-C lifecycle production-adapter corrective must use PLUGIN_REVISION=10'
+[ "${candidate}" = 'os-zapret2-restyle-0.4.1_10.pkg' ] || fail 'unexpected current Model-C lifecycle production-adapter package identity'
 
 require "${STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${STATE}" 'Latest persistently published testing package: `v0.4.1_6` / `os-zapret2-restyle-0.4.1_6.pkg`'
@@ -167,10 +167,11 @@ require "${LIFECYCLE7_PY}" '"production_model_changed": False'
 require "${LIFECYCLE7_PY}" '"production_search_semantics_changed": False'
 require "${LIFECYCLE7_PY}" '"production_dispatch_width_changed": False'
 require "${LIFECYCLE7_PY}" '"production_change_recommended": False'
-require "${LIFECYCLE7_TEST}" 'PASS: Model-C lifecycle measurement is isolated, production-path faithful, lifecycle-owned, cleanup-gated, and production-neutral'
+require "${LIFECYCLE7_TEST}" 'PASS: Model-C lifecycle measurement is isolated, production-adapter faithful, lifecycle-owned, cleanup-gated, and production-neutral'
 require "${LIFECYCLE7_WRAPPER}" 'zapret2-lifecycle.lock'
 require "${LIFECYCLE7_WORKER}" 'cleanup-all'
 require "${LIFECYCLE7_WORKER}" 'strategy-lab-evidence'
+require "${LIFECYCLE7_WORKER}" 'strategy_lab_model_b_parallel_adapter.sh'
 
 require "${MATRIX}" 'Current published release package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${MATRIX}" 'Latest owner-tested runtime package: `os-zapret2-restyle-0.4.0_26.pkg`'
@@ -219,4 +220,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} is the current lifecycle diagnostic source candidate, owner-tested history remains _6, and production live truth remains _26"
+echo "PASS: ${candidate} is the current lifecycle production-adapter source candidate, owner-tested history remains _6, and production live truth remains _26"
