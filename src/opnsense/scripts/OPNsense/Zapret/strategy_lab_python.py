@@ -9,6 +9,7 @@ from strategy_lab_py import adaptive_validation
 from strategy_lab_py import blob_startup_measurement
 from strategy_lab_py import discovery_probe_measurement
 from strategy_lab_py import lua_initialization_measurement
+from strategy_lab_py import model_c_lifecycle_measurement
 from strategy_lab_py import model_b_parallel_attribution as model_b_parallel
 from strategy_lab_py import stage60_model_c as stage60_parallel
 from strategy_lab_py import stage60_source_port_lease
@@ -23,6 +24,12 @@ def main() -> int:
     if args[:1] == ["discovery-probe-measure"]:
         try:
             return discovery_probe_measurement.main(args[1:])
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 64
+    if args[:1] == ["model-c-lifecycle-measure"]:
+        try:
+            return model_c_lifecycle_measurement.main(args[1:])
         except ValueError as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 64
