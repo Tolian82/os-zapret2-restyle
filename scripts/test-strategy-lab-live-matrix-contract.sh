@@ -65,8 +65,8 @@ revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; 
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${version}" = '0.4.1' ] || fail 'measurement line must remain on VERSION=0.4.1'
-[ "${revision}" -eq 11 ] || fail 'current Model-C profile-compatible batching corrective must use PLUGIN_REVISION=11'
-[ "${candidate}" = 'os-zapret2-restyle-0.4.1_11.pkg' ] || fail 'unexpected current Model-C profile-compatible batching package identity'
+[ "${revision}" -eq 12 ] || fail 'current warm-worker readiness polling corrective must use PLUGIN_REVISION=12'
+[ "${candidate}" = 'os-zapret2-restyle-0.4.1_12.pkg' ] || fail 'unexpected current warm-worker readiness polling package identity'
 
 require "${STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${STATE}" 'Latest persistently published testing package: `v0.4.1_6` / `os-zapret2-restyle-0.4.1_6.pkg`'
@@ -220,4 +220,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} is the current Model-C profile-compatible batching source candidate, owner-tested history remains _6, and production live truth remains _26"
+echo "PASS: ${candidate} is the current warm-worker readiness polling source candidate, owner-tested history remains _6, and production live truth remains _26"
