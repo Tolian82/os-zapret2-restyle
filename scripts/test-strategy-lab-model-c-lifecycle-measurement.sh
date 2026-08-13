@@ -14,10 +14,12 @@ for file in "${MODULE}" "${ENTRY}" "${WRAPPER}" "${WORKER}"; do [ -s "${file}" ]
 
 PYTHONPATH="${MODULE_ROOT}" "${PYTHON_BIN}" - <<'PY'
 import json
+import os
 import tempfile
 import time
 from pathlib import Path
 
+import strategy_lab_python as entry
 from strategy_lab_py import model_c_lifecycle_measurement as m
 from strategy_lab_py import stage60_model_c
 
@@ -99,6 +101,50 @@ try:
 finally:
     stage60_model_c._bucket_batch = real_bucket
 
+# `_7` created these three ancestors as 0700 even though the launched dvtws2 workers
+# drop privileges to nobody. The `_8` entry boundary must make only the expected replay
+# ancestors execute-traversable (0711) before any Model-C/Model-B/cold runtime starts.
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp) / "model-c-lifecycle-measurement"
+    session = root / "session.12345"
+    runs = session / "runs"
+    cleanup = session / "cleanup-runtime"
+    cleanup.mkdir(parents=True)
+    runs.mkdir()
+    for path in (root, session, runs, cleanup):
+        path.chmod(0o700)
+    previous = os.environ.get("STRATEGY_LAB_MODEL_C_LIFECYCLE_MEASUREMENT_DIR")
+    os.environ["STRATEGY_LAB_MODEL_C_LIFECYCLE_MEASUREMENT_DIR"] = str(runs)
+    try:
+        entry._prepare_model_c_lifecycle_runtime_permissions(["run", "job.reference", "/tmp/out.json", "5"])
+    finally:
+        if previous is None:
+            os.environ.pop("STRATEGY_LAB_MODEL_C_LIFECYCLE_MEASUREMENT_DIR", None)
+        else:
+            os.environ["STRATEGY_LAB_MODEL_C_LIFECYCLE_MEASUREMENT_DIR"] = previous
+    assert (root.stat().st_mode & 0o777) == 0o711
+    assert (session.stat().st_mode & 0o777) == 0o711
+    assert (runs.stat().st_mode & 0o777) == 0o711
+    assert (cleanup.stat().st_mode & 0o777) == 0o700
+
+with tempfile.TemporaryDirectory() as tmp:
+    unexpected = Path(tmp) / "wrong" / "session.1" / "runs"
+    unexpected.mkdir(parents=True)
+    previous = os.environ.get("STRATEGY_LAB_MODEL_C_LIFECYCLE_MEASUREMENT_DIR")
+    os.environ["STRATEGY_LAB_MODEL_C_LIFECYCLE_MEASUREMENT_DIR"] = str(unexpected)
+    try:
+        try:
+            entry._prepare_model_c_lifecycle_runtime_permissions(["run"])
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("unexpected lifecycle measurement directory layout accepted")
+    finally:
+        if previous is None:
+            os.environ.pop("STRATEGY_LAB_MODEL_C_LIFECYCLE_MEASUREMENT_DIR", None)
+        else:
+            os.environ["STRATEGY_LAB_MODEL_C_LIFECYCLE_MEASUREMENT_DIR"] = previous
+
 assert m._bool_arg("1", "cleanup ok") is True
 assert m._bool_arg("true", "cleanup ok") is True
 assert m._bool_arg("0", "cleanup ok") is False
@@ -146,11 +192,14 @@ with tempfile.TemporaryDirectory() as tmp:
 PY
 
 grep -Fq 'model-c-lifecycle-measure' "${ENTRY}" || fail 'measurement entry point missing'
+grep -Fq '_prepare_model_c_lifecycle_runtime_permissions' "${ENTRY}" || fail 'lifecycle replay traversal corrective missing'
+grep -Fq 'path.chmod(0o711)' "${ENTRY}" || fail 'lifecycle replay ancestors are not made execute-traversable'
 grep -Fq 'zapret2-lifecycle.lock' "${WRAPPER}" || fail 'lifecycle lock missing'
 grep -Fq 'strategy-lab-stop' "${WORKER}" || fail 'normal service stop boundary missing'
 grep -Fq 'strategy-lab-start' "${WORKER}" || fail 'normal service restore boundary missing'
 grep -Fq 'strategy-lab-evidence' "${WORKER}" || fail 'semantic lifecycle evidence missing'
 grep -Fq 'cleanup-all' "${WORKER}" || fail 'reserved Model-C runtime cleanup missing'
+grep -Fq 'chmod 0600 "${_output}"' "${WORKER}" || fail 'lifecycle evidence privacy boundary missing'
 grep -Fq 'stage60_source_port_lease.install()' "${MODULE}" || fail 'production source-port lease path is not measured'
 grep -Fq 'stage60_model_c.expand(' "${MODULE}" || fail 'production Model-C expansion path is not measured'
 grep -Fq '"production_model_changed": False' "${MODULE}" || fail 'production Model-C immutability gate missing'

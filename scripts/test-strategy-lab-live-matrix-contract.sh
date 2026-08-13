@@ -65,12 +65,12 @@ revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; 
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${version}" = '0.4.1' ] || fail 'measurement line must remain on VERSION=0.4.1'
-[ "${revision}" -eq 7 ] || fail 'current Model-C lifecycle measurement must use PLUGIN_REVISION=7'
-[ "${candidate}" = 'os-zapret2-restyle-0.4.1_7.pkg' ] || fail 'unexpected current Model-C lifecycle measurement package identity'
+[ "${revision}" -eq 8 ] || fail 'current Model-C lifecycle corrective must use PLUGIN_REVISION=8'
+[ "${candidate}" = 'os-zapret2-restyle-0.4.1_8.pkg' ] || fail 'unexpected current Model-C lifecycle corrective package identity'
 
-# PROJECT_STATE intentionally remains publication/owner-live truth until `_7` has exact
-# GitHub package identity and owner-live evidence. Do not couple a new source candidate to
-# the last published/accepted testing candidate.
+# PROJECT_STATE intentionally remains publication/owner-live truth until current candidate
+# publication and owner-live evidence are recorded. Do not couple a new source candidate to
+# the last accepted owner-tested testing candidate.
 require "${STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${STATE}" 'Latest persistently published testing package: `v0.4.1_6` / `os-zapret2-restyle-0.4.1_6.pkg`'
 require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_6` — discovery cleanup-finalizer corrective ACCEPTED / measurement_accepted'
@@ -222,4 +222,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} is the current measurement source candidate, accepted published history remains _6, and production live truth remains _26"
+echo "PASS: ${candidate} is the current corrective source candidate, owner-tested history remains _6, and production live truth remains _26"
