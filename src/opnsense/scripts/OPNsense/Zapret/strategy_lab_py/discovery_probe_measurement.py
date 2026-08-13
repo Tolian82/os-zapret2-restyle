@@ -48,6 +48,15 @@ def _positive_int(raw: str, name: str) -> int:
     return value
 
 
+def _bool_arg(raw: str, name: str) -> bool:
+    value = raw.strip().lower()
+    if value in {"1", "true"}:
+        return True
+    if value in {"0", "false"}:
+        return False
+    raise ValueError(f"{name} must be true/false or 1/0")
+
+
 def _replace_option(command: list[str], name: str, value: str) -> None:
     try:
         index = command.index(name)
@@ -373,5 +382,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         count = DEFAULT_CANDIDATES if len(args) == 3 else _positive_int(args[3], "candidate count")
         return run(args[1], Path(args[2]), count)
     if args[:1] == ["finalize"] and len(args) == 5:
-        return finalize(Path(args[1]), Path(args[2]), Path(args[3]), args[4].lower() == "true")
+        return finalize(Path(args[1]), Path(args[2]), Path(args[3]), _bool_arg(args[4], "cleanup ok"))
     raise ValueError("discovery-probe-measure requires: run REFERENCE_JOB OUTPUT [COUNT] | finalize OUTPUT INITIAL FINAL CLEANUP_OK")

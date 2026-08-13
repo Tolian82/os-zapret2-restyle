@@ -12,6 +12,9 @@ BLOB_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_3-blob-start
 BLOB4_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md"
 BLOB4_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md"
 DISCOVERY_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md"
+DISCOVERY_ROOT_CAUSE="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_5-cleanup-finalizer-root-cause.md"
+DISCOVERY6_INPUT="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-input.md"
+DISCOVERY6_PLAN="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_6-source-verification-plan.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 LUA_DOC="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md"
@@ -22,7 +25,8 @@ BLOB_DOC="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_BLOB_LOADING.md"
 BLOB_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_4.md"
 BLOB_TEST="${ROOT_DIR}/scripts/test-strategy-lab-blob-startup-measurement.sh"
 BLOB_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/blob_startup_measurement.py"
-DISCOVERY_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_5.md"
+DISCOVERY5_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_5.md"
+DISCOVERY6_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_6.md"
 DISCOVERY_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/discovery_probe_measurement.py"
 MODEL_B_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md"
 MODEL_C_CORRECTIVE_PASS="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md"
@@ -39,9 +43,10 @@ fail(){ echo "FAIL: $*" >&2; exit 1; }
 require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
 for file in "${MATRIX}" "${STATE}" "${INDEX}" "${RELEASE_DOC}" "${RELEASE_EVIDENCE}" \
-    "${BLOB_PUBLICATION}" "${BLOB_LIVE}" "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${DISCOVERY_PUBLICATION}" "${VERSION_FILE}" "${MAKEFILE}" \
+    "${BLOB_PUBLICATION}" "${BLOB_LIVE}" "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${DISCOVERY_PUBLICATION}" \
+    "${DISCOVERY_ROOT_CAUSE}" "${DISCOVERY6_INPUT}" "${DISCOVERY6_PLAN}" "${VERSION_FILE}" "${MAKEFILE}" \
     "${LUA_DOC}" "${LUA_PATCH}" "${LUA_TEST}" "${LUA_PY}" "${BLOB_DOC}" "${BLOB_PATCH}" \
-    "${BLOB_TEST}" "${BLOB_PY}" "${DISCOVERY_PATCH}" "${DISCOVERY_PY}" "${LUA_LIVE}" "${MODEL_B_EVIDENCE}" \
+    "${BLOB_TEST}" "${BLOB_PY}" "${DISCOVERY5_PATCH}" "${DISCOVERY6_PATCH}" "${DISCOVERY_PY}" "${LUA_LIVE}" "${MODEL_B_EVIDENCE}" \
     "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" "${LIVE26}" "${BUDGET_PY}" \
     "${LEASE_PY}" "${MODEL_C_PY}" "${MODEL_B_PY}" "${LIVE_GATE_DECISION}"
 do
@@ -53,14 +58,14 @@ revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; 
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${version}" = '0.4.1' ] || fail 'measurement line must remain on VERSION=0.4.1'
-[ "${revision}" -eq 5 ] || fail 'current discovery measurement must use PLUGIN_REVISION=5'
-[ "${candidate}" = 'os-zapret2-restyle-0.4.1_5.pkg' ] || fail 'unexpected current discovery measurement package identity'
+[ "${revision}" -eq 6 ] || fail 'current discovery corrective must use PLUGIN_REVISION=6'
+[ "${candidate}" = 'os-zapret2-restyle-0.4.1_6.pkg' ] || fail 'unexpected current discovery corrective package identity'
 
-require "${STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=5`'
-require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_5.pkg`'
+require "${STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=6`'
+require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_6.pkg`'
 require "${STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${STATE}" 'Latest persistently published testing package: `v0.4.1_5` / `os-zapret2-restyle-0.4.1_5.pkg`'
-require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_4` — BLOB common-set scaling measurement PASS'
+require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_5` — multidomain discovery data collected / cleanup-finalizer defect confirmed'
 require "${STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
 require "${STATE}" 'job.xhdgCU'
 require "${STATE}" 'Stage 60 duration `34209 ms`'
@@ -69,10 +74,17 @@ require "${STATE}" 'Policy: `blob-common-set-scaling-v1`, schema `2`.'
 require "${STATE}" 'production_change_recommended=false'
 require "${STATE}" 'publication workflow run `31633335688` — SUCCESS'
 require "${STATE}" 'V0.4.1_4 BLOB COMMON-SET SCALING — ACCEPTED / OPTIMIZATION CLOSED'
-require "${STATE}" 'V0.4.1_5 DISCOVERY PROBE AGREEMENT — PUBLISHED / OWNER-LIVE PENDING'
+require "${STATE}" 'V0.4.1_5 DISCOVERY PROBE AGREEMENT — OWNER-LIVE DATA COLLECTED / FINALIZER DEFECT CONFIRMED'
+require "${STATE}" 'V0.4.1_6 DISCOVERY CLEANUP FINALIZER — CURRENT SOURCE CORRECTIVE'
+require "${STATE}" 'Rutracker Stage 60 completed in `24204 ms`'
+require "${STATE}" 'YouTube Stage 60 completed in `9151 ms`'
 require "${STATE}" 'publication workflow run `31652568754` / #42 — SUCCESS'
 require "${STATE}" 'sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce'
 
+require "${INDEX}" 'docs/patches/v0.4.1_6.md'
+require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-input.md'
+require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_6-source-verification-plan.md'
+require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_5-cleanup-finalizer-root-cause.md'
 require "${INDEX}" 'docs/patches/v0.4.1_5.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md'
 require "${INDEX}" 'docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md'
@@ -112,9 +124,17 @@ require "${BLOB4_LIVE}" 'close the BLOB-loading startup/RSS optimization as a ne
 
 require "${DISCOVERY_PY}" 'POLICY = "discovery-probe-agreement-v1"'
 require "${DISCOVERY_PY}" 'VARIANTS = ("head", "get-1", "get-4k", "deep-16k")'
+require "${DISCOVERY_PY}" 'def _bool_arg(raw: str, name: str) -> bool:'
+require "${DISCOVERY_PY}" 'value in {"1", "true"}'
 require "${DISCOVERY_PY}" 'production_discovery_policy_changed": False'
-require "${DISCOVERY_PATCH}" 'latest-head GitHub Actions FreeBSD-15 job'
-require "${DISCOVERY_PATCH}" 'Persistent GitHub test package publication'
+require "${DISCOVERY5_PATCH}" 'latest-head GitHub Actions FreeBSD-15 job'
+require "${DISCOVERY5_PATCH}" 'Persistent GitHub test package publication'
+require "${DISCOVERY6_PATCH}" 'Discovery measurement cleanup finalizer correction'
+require "${DISCOVERY6_PATCH}" 'Production discovery remains the bounded 4 KiB GET'
+require "${DISCOVERY_ROOT_CAUSE}" 'finalizer receives literal `1` after successful cleanup and literal `0` after failed cleanup.'
+require "${DISCOVERY6_INPUT}" 'Stage-60 adapter wall time: `24204 ms`'
+require "${DISCOVERY6_INPUT}" 'Stage-60 adapter wall time: `9151 ms`'
+require "${DISCOVERY6_PLAN}" 'numeric cleanup success `1` and failure `0`'
 require "${DISCOVERY_PUBLICATION}" 'Status: **PUBLISHED / OWNER-LIVE PENDING**'
 require "${DISCOVERY_PUBLICATION}" '31652568754'
 require "${DISCOVERY_PUBLICATION}" '369590644'
@@ -168,4 +188,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} discovery measurement is persistently published, accepted BLOB history is preserved, and production live truth remains _26"
+echo "PASS: ${candidate} discovery cleanup finalizer corrective is current, _5 remains the latest persistent testing package, accepted BLOB history is preserved, and production live truth remains _26"

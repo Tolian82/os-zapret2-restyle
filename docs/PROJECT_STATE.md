@@ -14,13 +14,13 @@ QUICK CONTEXT
 
 Project: `os-zapret2-restyle`
 Primary branch: `main`
-Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=5`
-Current source candidate: `os-zapret2-restyle-0.4.1_5.pkg` — PERSISTENT GITHUB PACKAGE PUBLISHED / owner-live pending
+Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=6`
+Current source candidate: `os-zapret2-restyle-0.4.1_6.pkg` — DISCOVERY CLEANUP FINALIZER CORRECTIVE / owner-live not yet verified
 Current published release tag: `v0.4.1`
 Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`
 Latest persistently published testing package: `v0.4.1_5` / `os-zapret2-restyle-0.4.1_5.pkg`
 Latest owner-tested stable package: `os-zapret2-restyle-0.4.1_1.pkg` — upgrade/install smoke PASS
-Latest owner-tested testing candidate: `v0.4.1_4` — BLOB common-set scaling measurement PASS
+Latest owner-tested testing candidate: `v0.4.1_5` — multidomain discovery data collected / cleanup-finalizer defect confirmed
 Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS
 Required package ABI: `FreeBSD:15:amd64`
 
@@ -80,7 +80,7 @@ Published and owner-tested `_4` testing identity:
 `_4` is accepted for the remaining bounded common-set scaling scope. Because `_2`, `_3`, and `_4`
 are measurement-only, detailed production behavior still uses the accepted `_26` runtime evidence.
 
-Current `_5` source candidate is the measurement-only discovery-probe experiment. It compares
+Published `_5` is the measurement-only discovery-probe experiment. It compares
 `HEAD`, one-byte GET and the existing 4 KiB discovery GET with the current finalist deep-GET
 reference on the same pinned endpoint epoch and native candidate corpus.
 
@@ -96,7 +96,7 @@ reference on the same pinned endpoint epoch and native candidate corpus.
 - post-merge main CI run `31645659351` / #786 — SUCCESS (`Verify main integrity` PASS);
 - evidence: `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`.
 
-The Actions artifact above proves `_5` was built and inspected, but it did not by itself satisfy owner package delivery under the GitHub-only rule. That delivery gate is now closed by the persistent GitHub publication below.
+The Actions artifact above proves `_5` was built and inspected, but it did not by itself satisfy owner package delivery under the GitHub-only rule. That delivery gate is closed by the persistent GitHub publication below.
 
 Published `_5` testing-package identity:
 
@@ -110,6 +110,8 @@ Published `_5` testing-package identity:
 - publication branch `publish/v0.4.1_5` was deleted by the successful workflow;
 - publication performed no Pages or pkg-repository promotion;
 - evidence: `docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md`.
+
+Current `_6` source corrective fixes only the `_5` measurement finalizer boolean boundary. The shell worker passes cleanup success/failure as `1`/`0`; `_5` decoded only literal `true`, making successful cleanup persist as false. `_6` accepts canonical numeric/text booleans, rejects unknown values, and regression-tests both accepted and rejected finalization paths. Production Model C and production GET-4K are unchanged.
 
 ==================================================
 CURRENT AUTHORITIES
@@ -129,7 +131,11 @@ Current Strategy Lab authorities:
 - `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
+- `docs/patches/v0.4.1_6.md`;
+- `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-input.md`;
+- `docs/verification/evidence/2026-08-13-v0.4.1_6-source-verification-plan.md`;
 - `docs/patches/v0.4.1_5.md`;
+- `docs/verification/evidence/2026-08-13-v0.4.1_5-cleanup-finalizer-root-cause.md`;
 - `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`;
 - `docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md`;
 - `docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md`;
@@ -246,7 +252,7 @@ Owner-live evidence:
 `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`.
 
 ==================================================
-V0.4.1_5 DISCOVERY PROBE AGREEMENT — PUBLISHED / OWNER-LIVE PENDING
+V0.4.1_5 DISCOVERY PROBE AGREEMENT — OWNER-LIVE DATA COLLECTED / FINALIZER DEFECT CONFIRMED
 ==================================================
 
 Policy: `discovery-probe-agreement-v1`, schema `1`.
@@ -256,12 +262,13 @@ For each selected eligible native TLS 1.3 candidate it performs four cold replay
 cyclic order: `HEAD`, `GET Range 0-0`, the current discovery `GET Range 0-4095`, and the existing
 deep finalist GET reference requiring `16384` bytes when the resource is long enough.
 
-The report records probe/total duration, response bytes/status, deep/cheap classification,
-false PASS/false FAIL/agreement, pinned endpoint match, firewall interception and search-epoch
-identity. The wrapper owns the shared lifecycle lock, stops normal Zapret2 only for the experiment,
-cleans candidate residue and must restore byte-for-byte equivalent semantic lifecycle evidence.
+The owner-live multidomain set covers Telegram zero-winner exhaustive, Rutracker two-winner exhaustive and YouTube three-winner early-stop Model-C execution, all without fallback. Rutracker Stage 60 completed in `24204 ms`; YouTube Stage 60 completed in `9151 ms`. Across the three ten-candidate discovery corpora every cheap probe recorded 29/29 agreement on comparable pairs, zero false PASS and zero false FAIL, plus one expected Rutracker deep-inconclusive short-resource pair.
 
-Historical FreeBSD-15 build evidence from latest-head CI #785 remains bound to the exact merged-main tree by `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`. Persistent GitHub testing package `v0.4.1_5` is now published from the exact source commit by workflow `31652568754`; the published asset is `os-zapret2-restyle-0.4.1_5.pkg`, `188854` bytes, `sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce`. Publication evidence: `docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md`.
+Equal-sample pooled mean total time was approximately `3452.97 ms` for HEAD, `3442.37 ms` for GET-1 and `3439.70 ms` for current GET-4K. No material cheaper-probe advantage was demonstrated, so production GET-4K remains unchanged.
+
+All three `_5` reports were formally rejected only because `checks.cleanup_ok=false`. Source inspection proved this was deterministic: the shell worker supplied numeric `1`/`0`, while the Python finalizer accepted only literal `true`. Root-cause evidence: `docs/verification/evidence/2026-08-13-v0.4.1_5-cleanup-finalizer-root-cause.md`.
+
+Historical FreeBSD-15 build evidence from latest-head CI #785 remains bound to the exact merged-main tree by `docs/verification/evidence/2026-08-13-v0.4.1_5-ci-package-artifact.md`. Persistent GitHub testing package `v0.4.1_5` remains published from the exact source commit by workflow `31652568754`; the published asset is `os-zapret2-restyle-0.4.1_5.pkg`, `188854` bytes, `sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce`. Publication evidence: `docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md`.
 
 `production_model_changed=false`, `production_discovery_policy_changed=false`, and
 `production_change_recommended=false`.
@@ -269,13 +276,25 @@ Historical FreeBSD-15 build evidence from latest-head CI #785 remains bound to t
 Patch contract: `docs/patches/v0.4.1_5.md`.
 
 ==================================================
+V0.4.1_6 DISCOVERY CLEANUP FINALIZER — CURRENT SOURCE CORRECTIVE
+==================================================
+
+`_6` fixes only the experiment cleanup boolean boundary. Numeric shell values `1`/`0` and textual `true`/`false` are decoded canonically; unknown values fail closed. Regression coverage proves successful cleanup can satisfy the finalizer and failed cleanup still rejects the measurement.
+
+Patch contract: `docs/patches/v0.4.1_6.md`.
+Preserved corrective input: `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-input.md`.
+
+Production Stage 60 and discovery policy are unchanged. `_6` does not promote HEAD or GET-1 and does not modify Model C, Model B, Model A, source-port dispatch, the native search graph or candidate semantics.
+
+==================================================
 CURRENT BOUNDARY / NEXT WORK
 ==================================================
 
-The Model-C Lua initialization and BLOB startup/RSS optimization questions remain closed by
-owner-live evidence without production changes. `_5` source, CI and persistent GitHub package publication are complete; owner-live discovery-probe agreement/cost measurement is the next gate.
+The Model-C Lua initialization and BLOB startup/RSS optimization questions remain closed by owner-live evidence without production changes. `_5` multidomain discovery data is retained and the formal rejection was localized to the cleanup-finalizer interface. `_6` is the current source corrective for that defect.
 
-No production discovery change is authorized before owner-live evidence demonstrates zero false PASS against the deep reference and a material reproducible cost benefit.
+After `_6` is package-available, one corrected owner-live discovery measurement should verify `cleanup_ok=true`, lifecycle restoration, attribution and zero residue. That repeat is a harness verification only.
+
+No production discovery change is authorized: the current multidomain data did not demonstrate a material reproducible cost benefit over GET-4K.
 
 Production behavior remains
 `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
