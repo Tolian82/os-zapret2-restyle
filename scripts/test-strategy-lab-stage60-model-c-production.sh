@@ -66,12 +66,51 @@ with tempfile.TemporaryDirectory() as raw:
     assert stage60_model_c._bucket_profile_key(by_id["fake-rnd"]) == (
         "ipv4", "tcp", 443, "tls", True
     )
-    prefix = stage60_model_c._compatible_batch_prefix(mixed)
-    assert [decision.node.candidate_id for decision in prefix] == [
-        "fake-rnd", "fake-split-host"
-    ]
-    assert mixed[len(prefix)].node.candidate_id == "syndata-1603"
-    assert stage60_model_c._compatible_batch_prefix(mixed[2:])[0].node.candidate_id == "syndata-1603"
+    segments = stage60_model_c._compatible_batch_segments(mixed)
+    assert [
+        [decision.node.candidate_id for decision in segment] for segment in segments
+    ] == [["fake-rnd", "fake-split-host"], ["syndata-1603"]]
+
+    original_segment = stage60_model_c._bucket_segment
+    calls = []
+    def fake_segment(job_id, decisions, bindings, inventory, source_ports, indexes):
+        ids = [decision.node.candidate_id for decision in decisions]
+        calls.append(ids)
+        return (
+            [{"id": candidate_id} for candidate_id in ids],
+            {
+                "execution_model": stage60_model_c.MODEL,
+                "width": len(decisions),
+                "physical_worker_count": 1,
+                "divert_port": 9990,
+                "route_rules": [19128 + index for index in range(len(decisions))],
+                "selector": stage60_model_c.SELECTOR_FUNCTION,
+                "selector_ports": {candidate_id: [42000 + index] for index, candidate_id in enumerate(ids)},
+                "max_overlap_observed": len(decisions),
+                "pool_startup_ms": 10 * len(decisions),
+                "parallel_probe_wall_ms": 20,
+                "rss": {"aggregate_kb": 4300 + len(calls), "all_numeric": True},
+                "worker": {},
+                "runtime_arguments": [],
+                "candidate_ids": ids,
+                "total_ms": 50,
+            },
+        )
+    stage60_model_c._bucket_segment = fake_segment
+    try:
+        candidates, evidence = stage60_model_c._bucket_batch(
+            "job.fixture", mixed, (), inventory, {}, {}
+        )
+    finally:
+        stage60_model_c._bucket_segment = original_segment
+    assert calls == [["fake-rnd", "fake-split-host"], ["syndata-1603"]]
+    assert [item["id"] for item in candidates] == list(mixed_ids)
+    assert evidence["candidate_ids"] == list(mixed_ids)
+    assert evidence["profile_segment_count"] == 2
+    assert [item["candidate_ids"] for item in evidence["profile_segments"]] == calls
+    assert evidence["pool_startup_ms"] == 30
+    assert evidence["parallel_probe_wall_ms"] == 40
+    assert evidence["rss"]["aggregate_kb"] == 4302
 
     selectors = {
         ordinary.candidate_id: (42000, 42001),
@@ -122,12 +161,15 @@ grep -Fq 'tcp.th_sport' "${SELECTOR}" || fail 'Model C selector does not inspect
 grep -Fq 'tcp.th_dport' "${SELECTOR}" || fail 'Model C selector does not preserve client-port identity for reverse direction'
 grep -Fq 'return false' "${SELECTOR}" || fail 'Model C selector is not fail-closed'
 grep -Fq 'fallback_execution_model' "${MODULE}" || fail 'Model C does not record Model B fallback'
-grep -Fq 'original_batch_decisions' "${MODULE}" || fail 'generic adaptive chooser is not retained'
-grep -Fq '_compatible_batch_prefix' "${MODULE}" || fail 'Model C does not enforce compatible ready-batch prefixes'
-grep -Fq 'stage60_parallel._batch_decisions = original_batch_decisions' "${MODULE}" || fail 'generic adaptive chooser is not restored'
+grep -Fq 'original_batch' "${MODULE}" || fail 'accepted Model B fallback is not retained'
+grep -Fq '_compatible_batch_segments' "${MODULE}" || fail 'Model C does not split incompatible profile segments'
+grep -Fq 'profile_segments' "${MODULE}" || fail 'Model C does not persist profile-segment evidence'
+if grep -Fq 'stage60_parallel._batch_decisions =' "${MODULE}"; then
+    fail 'Model C must not replace the authoritative adaptive batch chooser'
+fi
 grep -Fq 'ThreadPoolExecutor(max_workers=len(decisions)' "${MODULE}" || fail 'Model C candidate-level width-three overlap is missing'
 grep -Fq 'model_b_parallel_attribution._probe_endpoint' "${MODULE}" || fail 'Model C does not reuse exact source-port-qualified route attribution'
 grep -Fq 'physical_worker_count' "${MODULE}" || fail 'Model C does not evidence one physical bucket worker'
 grep -Fq 'cleanup-all' "${MODULE}" || fail 'Model C has no explicit bucket cleanup boundary'
 
-echo 'PASS: production Stage 60 keeps Model-C batches profile-compatible without reordering the native planner, while retaining exact source-port dispatch, width-three overlap, Model B fallback, and cold Model A containment'
+echo 'PASS: production Stage 60 keeps each planner-selected logical batch intact, segments only incompatible Model-C profiles at runtime, and retains exact source-port dispatch, Model B fallback, and cold Model A containment'

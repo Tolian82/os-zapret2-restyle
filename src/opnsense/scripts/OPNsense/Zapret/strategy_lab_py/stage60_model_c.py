@@ -90,18 +90,23 @@ def _bucket_profile_key(spec: candidate_spec.CandidateSpec) -> tuple[str, str, i
     return (spec.l3, spec.transport, spec.port, spec.l7, spec.target_binding)
 
 
-def _compatible_batch_prefix(
+def _compatible_batch_segments(
     decisions: Sequence[search_graph.SearchDecision],
-) -> list[search_graph.SearchDecision]:
-    if not decisions:
-        return []
-    profile = _bucket_profile_key(decisions[0].node.spec)
-    compatible: list[search_graph.SearchDecision] = []
+) -> list[list[search_graph.SearchDecision]]:
+    segments: list[list[search_graph.SearchDecision]] = []
+    current: list[search_graph.SearchDecision] = []
+    profile: tuple[str, str, int, str | None, bool] | None = None
     for decision in decisions:
-        if _bucket_profile_key(decision.node.spec) != profile:
-            break
-        compatible.append(decision)
-    return compatible
+        decision_profile = _bucket_profile_key(decision.node.spec)
+        if current and decision_profile != profile:
+            segments.append(current)
+            current = []
+        if not current:
+            profile = decision_profile
+        current.append(decision)
+    if current:
+        segments.append(current)
+    return segments
 
 
 def _validate_bucket_spec(spec: candidate_spec.CandidateSpec) -> None:
@@ -295,7 +300,7 @@ def _bucket_probe_candidate(
     }
 
 
-def _bucket_batch(
+def _bucket_segment(
     job_id: str,
     decisions: Sequence[search_graph.SearchDecision],
     bindings: Sequence[dict[str, Any]],
@@ -442,6 +447,71 @@ def _bucket_batch(
             raise ModelCInfrastructureError("Model C bucket cleanup failed")
 
 
+def _bucket_batch(
+    job_id: str,
+    decisions: Sequence[search_graph.SearchDecision],
+    bindings: Sequence[dict[str, Any]],
+    inventory: resources.ResourceInventory,
+    source_ports: dict[tuple[int, int], int],
+    indexes: dict[str, int],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if not decisions or len(decisions) > WIDTH:
+        raise ModelCInfrastructureError("Model C batch width is invalid")
+    segments = _compatible_batch_segments(decisions)
+    if len(segments) == 1:
+        return _bucket_segment(job_id, decisions, bindings, inventory, source_ports, indexes)
+
+    batch_started = time.monotonic()
+    candidates: list[dict[str, Any]] = []
+    segment_evidence: list[dict[str, Any]] = []
+    for segment in segments:
+        segment_candidates, evidence = _bucket_segment(
+            job_id, segment, bindings, inventory, source_ports, indexes
+        )
+        candidates.extend(segment_candidates)
+        segment_evidence.append(evidence)
+
+    rss_values = [
+        item.get("rss") for item in segment_evidence
+        if isinstance(item.get("rss"), dict)
+    ]
+    peak_rss = max(
+        rss_values,
+        key=lambda item: int(item.get("aggregate_kb", -1))
+        if isinstance(item.get("aggregate_kb"), int) else -1,
+    ) if rss_values else {"aggregate_kb": None, "all_numeric": False}
+    selector_ports: dict[str, Any] = {}
+    for item in segment_evidence:
+        raw_ports = item.get("selector_ports")
+        if isinstance(raw_ports, dict):
+            selector_ports.update(raw_ports)
+
+    batch = dict(segment_evidence[-1])
+    batch.update(
+        {
+            "execution_model": MODEL,
+            "width": len(decisions),
+            "physical_worker_count": 1,
+            "candidate_ids": [decision.node.candidate_id for decision in decisions],
+            "profile_segment_count": len(segment_evidence),
+            "profile_segments": [dict(item) for item in segment_evidence],
+            "selector_ports": selector_ports,
+            "max_overlap_observed": max(
+                int(item.get("max_overlap_observed", 0)) for item in segment_evidence
+            ),
+            "pool_startup_ms": sum(
+                int(item.get("pool_startup_ms", 0)) for item in segment_evidence
+            ),
+            "parallel_probe_wall_ms": sum(
+                int(item.get("parallel_probe_wall_ms", 0)) for item in segment_evidence
+            ),
+            "rss": peak_rss,
+            "total_ms": round((time.monotonic() - batch_started) * 1000),
+        }
+    )
+    return candidates, batch
+
+
 def _run_existing_model(model: str, *args: str) -> int:
     previous = os.environ.get("STRATEGY_LAB_STAGE60_MODEL")
     had_previous = "STRATEGY_LAB_STAGE60_MODEL" in os.environ
@@ -464,22 +534,11 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
         return _run_existing_model("parallel", job_id, endpoints_file, family_result_file, result_file)
 
     original_batch = stage60_parallel._warm_batch
-    original_batch_decisions = stage60_parallel._batch_decisions
     original_model = stage60_parallel.MODEL
     previous_env = os.environ.get("STRATEGY_LAB_STAGE60_MODEL")
     had_previous_env = "STRATEGY_LAB_STAGE60_MODEL" in os.environ
     model_c_enabled = True
     disable_reason = ""
-
-    def production_batch_decisions(
-        planner: search_graph.AdaptiveSearchPlanner,
-        outcomes: dict[str, str],
-        width: int,
-    ) -> list[search_graph.SearchDecision]:
-        decisions = original_batch_decisions(planner, outcomes, width)
-        if not model_c_enabled:
-            return decisions
-        return _compatible_batch_prefix(decisions)
 
     def production_batch(*batch_args: Any, **batch_kwargs: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         nonlocal model_c_enabled, disable_reason
@@ -515,12 +574,10 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
 
     os.environ["STRATEGY_LAB_STAGE60_MODEL"] = "parallel"
     stage60_parallel.MODEL = MODEL
-    stage60_parallel._batch_decisions = production_batch_decisions
     stage60_parallel._warm_batch = production_batch
     try:
         return stage60_parallel.expand(job_id, endpoints_file, family_result_file, result_file)
     finally:
-        stage60_parallel._batch_decisions = original_batch_decisions
         stage60_parallel._warm_batch = original_batch
         stage60_parallel.MODEL = original_model
         if had_previous_env:
