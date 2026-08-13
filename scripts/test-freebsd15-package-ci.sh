@@ -16,6 +16,7 @@ BLOB_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_3-blob-start
 BLOB4_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md"
 BLOB4_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md"
 DISCOVERY_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md"
+DISCOVERY6_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md"
 BUILD_PKG="${ROOT_DIR}/scripts/build-pkg.sh"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
@@ -49,7 +50,7 @@ require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 for file in \
     "${CI}" "${RELEASE}" "${PROJECT_STATE}" "${INDEX}" "${GITHUB_ONLY_PACKAGE_DECISION}" "${RELEASE_DOC}" \
     "${RELEASE_EVIDENCE}" "${LUA_PUBLICATION}" "${LUA_LIVE}" "${BLOB_PUBLICATION}" "${BLOB_LIVE}" \
-    "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${DISCOVERY_PUBLICATION}" "${BUILD_PKG}" "${VERSION_FILE}" "${MAKEFILE}" "${CORRECTIVE_MATRIX}" \
+    "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${DISCOVERY_PUBLICATION}" "${DISCOVERY6_LIVE}" "${BUILD_PKG}" "${VERSION_FILE}" "${MAKEFILE}" "${CORRECTIVE_MATRIX}" \
     "${LUA_PY}" "${BLOB_TEST}" "${BLOB_PY}" "${BLOB_WRAPPER}" "${BLOB_WORKER}" \
     "${BLOB_DOC}" "${BLOB_PATCH}" "${DISCOVERY_PY}" "${DISCOVERY_WRAPPER}" "${DISCOVERY_WORKER}" "${DISCOVERY5_PATCH}" "${DISCOVERY6_PATCH}" \
     "${RESOURCES_PY}" "${ADAPTIVE_BUDGET_PY}" "${MODEL_C_PY}" "${MODEL_B_PY}" "${LEASE_PY}" "${PYTHON_ENTRY}" \
@@ -146,6 +147,7 @@ require "${DISCOVERY5_PATCH}" 'not** a tag, GitHub Release, prerelease, Pages up
 require "${DISCOVERY5_PATCH}" 'Persistent GitHub test package publication'
 require "${DISCOVERY6_PATCH}" 'Discovery measurement cleanup finalizer correction'
 require "${DISCOVERY6_PATCH}" 'Production discovery remains the bounded 4 KiB GET'
+require "${DISCOVERY6_PATCH}" 'Status: **ACCEPTED / OWNER-LIVE PASS / PRODUCTION BEHAVIOR UNCHANGED**'
 
 require "${ADAPTIVE_BUDGET_PY}" 'POLICY = "eligible-work-v1"'
 require "${MODEL_C_PY}" 'MODEL = "C-warm-bucket-source-port-dispatch"'
@@ -187,16 +189,20 @@ done
 require "${PROJECT_STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=6`'
 require "${PROJECT_STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_6.pkg`'
 require "${PROJECT_STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
-require "${PROJECT_STATE}" 'Latest persistently published testing package: `v0.4.1_5` / `os-zapret2-restyle-0.4.1_5.pkg`'
-require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.1_5` — multidomain discovery data collected / cleanup-finalizer defect confirmed'
+require "${PROJECT_STATE}" 'Latest persistently published testing package: `v0.4.1_6` / `os-zapret2-restyle-0.4.1_6.pkg`'
+require "${PROJECT_STATE}" 'Latest owner-tested testing candidate: `v0.4.1_6` — discovery cleanup-finalizer corrective ACCEPTED / measurement_accepted'
 require "${PROJECT_STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
-require "${PROJECT_STATE}" 'V0.4.1_6 DISCOVERY CLEANUP FINALIZER — CURRENT SOURCE CORRECTIVE'
+require "${PROJECT_STATE}" 'V0.4.1_6 DISCOVERY CLEANUP FINALIZER — ACCEPTED / OWNER-LIVE PASS'
 require "${PROJECT_STATE}" 'publication workflow run `31652568754` / #42 — SUCCESS'
 require "${PROJECT_STATE}" 'sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce'
+require "${PROJECT_STATE}" 'publication workflow run `31689302668` / #43 — SUCCESS'
+require "${PROJECT_STATE}" 'sha256:e708d2ac0eb13d41d1d79da96e2b5f1f6e9d4fc9e138366fd4e72e30b96a02b7'
+require "${PROJECT_STATE}" 'corrected owner-live Rutracker measurement concluded `measurement_accepted`'
 require "${GITHUB_ONLY_PACKAGE_DECISION}" 'Actions artifacts are build evidence, never final delivery'
 require "${GITHUB_ONLY_PACKAGE_DECISION}" 'Every owner-facing package is delivered from GitHub'
 require "${INDEX}" 'docs/decisions/DEC-2026-08-13-github-only-package-delivery.md'
 require "${INDEX}" 'docs/patches/v0.4.1_6.md'
+require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md'
 require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
 require "${INDEX}" 'docs/patches/v0.4.1_4.md'
@@ -241,6 +247,13 @@ require "${DISCOVERY_PUBLICATION}" '369590644'
 require "${DISCOVERY_PUBLICATION}" '512227845'
 require "${DISCOVERY_PUBLICATION}" 'os-zapret2-restyle-0.4.1_5.pkg'
 require "${DISCOVERY_PUBLICATION}" 'sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce'
+require "${DISCOVERY6_LIVE}" 'Status: **ACCEPTED / OWNER-LIVE PASS**'
+require "${DISCOVERY6_LIVE}" '31689302668'
+require "${DISCOVERY6_LIVE}" '369818027'
+require "${DISCOVERY6_LIVE}" '512818044'
+require "${DISCOVERY6_LIVE}" 'os-zapret2-restyle-0.4.1_6.pkg'
+require "${DISCOVERY6_LIVE}" 'sha256:e708d2ac0eb13d41d1d79da96e2b5f1f6e9d4fc9e138366fd4e72e30b96a02b7'
+require "${DISCOVERY6_LIVE}" 'Discovery probe measurement conclusion: measurement_accepted'
 require "${PUBLICATION26}" '8ada9cba28916fff506f19b34f5ef3de16e2008e'
 require "${LIVE26}" 'Status: **PASS**'
 require "${LIVE26}" 'job.xhdgCU'
@@ -249,4 +262,4 @@ require "${MODEL_C_CORRECTIVE_PASS}" 'job.5yGde5'
 require "${MODEL_B_LIVE}" 'PRODUCTION STAGE-60 MODEL B OWNER-LIVE PASS'
 
 sh -n "$0"
-printf '%s\n' "PASS: FreeBSD 15 package CI accepts current source corrective ${candidate}; _5 remains the persistent owner-facing testing package, and production runtime/discovery behavior is unchanged"
+printf '%s\n' "PASS: FreeBSD 15 package CI accepts current ${candidate}; _6 is the persistent owner-facing testing package, and production runtime/discovery behavior is unchanged"
