@@ -8,9 +8,11 @@ MODULE="${MODULE_ROOT}/strategy_lab_py/model_c_lifecycle_measurement.py"
 ENTRY="${MODULE_ROOT}/strategy_lab_python.py"
 WRAPPER="${MODULE_ROOT}/strategy_lab_model_c_lifecycle_measurement.sh"
 WORKER="${MODULE_ROOT}/strategy_lab_model_c_lifecycle_measurement_worker.sh"
+PRODUCTION_OWNER="${MODULE_ROOT}/strategy_lab_stage60_parallel_runner.sh"
+PARALLEL_ADAPTER="${MODULE_ROOT}/strategy_lab_model_b_parallel_adapter.sh"
 
 fail(){ echo "FAIL: $*" >&2; exit 1; }
-for file in "${MODULE}" "${ENTRY}" "${WRAPPER}" "${WORKER}"; do [ -s "${file}" ] || fail "missing ${file}"; done
+for file in "${MODULE}" "${ENTRY}" "${WRAPPER}" "${WORKER}" "${PRODUCTION_OWNER}" "${PARALLEL_ADAPTER}"; do [ -s "${file}" ] || fail "missing ${file}"; done
 
 PYTHONPATH="${MODULE_ROOT}" "${PYTHON_BIN}" - <<'PY'
 import json
@@ -224,6 +226,15 @@ grep -Fq 'strategy-lab-start' "${WORKER}" || fail 'normal service restore bounda
 grep -Fq 'strategy-lab-evidence' "${WORKER}" || fail 'semantic lifecycle evidence missing'
 grep -Fq 'cleanup-all' "${WORKER}" || fail 'reserved Model-C runtime cleanup missing'
 grep -Fq 'chmod 0600 "${_output}"' "${WORKER}" || fail 'lifecycle evidence privacy boundary missing'
+grep -Fq 'strategy_lab_model_b_parallel_adapter.sh' "${PRODUCTION_OWNER}" || fail 'production Stage-60 owner does not select the controlled-parallel adapter'
+grep -Fq 'STRATEGY_LAB_MODEL_B_SYSTEM_ADAPTER="${PARALLEL_ADAPTER}"' "${PRODUCTION_OWNER}" || fail 'production Stage-60 owner does not export the resolved parallel adapter'
+grep -Fq 'strategy_lab_model_b_parallel_adapter.sh' "${WORKER}" || fail 'lifecycle measurement does not default to the production controlled-parallel adapter'
+grep -Fq 'STRATEGY_LAB_MODEL_B_SYSTEM_ADAPTER="${MODEL_B_ADAPTER}"' "${WORKER}" || fail 'lifecycle measurement does not bind the Python replay to its resolved runtime adapter'
+grep -Fq 'export STRATEGY_LAB_MODEL_C_LIFECYCLE_MEASUREMENT_DIR STRATEGY_LAB_MODEL_B_SYSTEM_ADAPTER' "${WORKER}" || fail 'lifecycle measurement does not export the production-equivalent adapter'
+grep -Fq 'source-port-free)' "${PARALLEL_ADAPTER}" || fail 'controlled-parallel adapter source-port availability action missing'
+grep -Fq 'route-add-source)' "${PARALLEL_ADAPTER}" || fail 'controlled-parallel adapter source-port-qualified route action missing'
+FALSE_BIN=$(command -v false)
+STRATEGY_LAB_MODEL_B_SOCKSTAT_BIN="${FALSE_BIN}" STRATEGY_LAB_MODEL_B_NETSTAT_BIN="${FALSE_BIN}" "${PARALLEL_ADAPTER}" source-port-free 42000 || fail 'real controlled-parallel adapter did not accept a synthetic free source port'
 grep -Fq 'stage60_source_port_lease.install()' "${MODULE}" || fail 'production source-port lease path is not measured'
 grep -Fq 'stage60_model_c.expand(' "${MODULE}" || fail 'production Model-C expansion path is not measured'
 grep -Fq 'def _fallback_evidence' "${MODULE}" || fail 'Model-C fallback evidence helper missing'
@@ -232,5 +243,6 @@ grep -Fq '"production_model_changed": False' "${MODULE}" || fail 'production Mod
 grep -Fq '"production_search_semantics_changed": False' "${MODULE}" || fail 'production search immutability gate missing'
 grep -Fq '"production_dispatch_width_changed": False' "${MODULE}" || fail 'production width immutability gate missing'
 grep -Fq '"production_change_recommended": False' "${MODULE}" || fail 'measurement-only decision gate missing'
+sh -n "${WORKER}" "${PRODUCTION_OWNER}" "${PARALLEL_ADAPTER}"
 
-echo 'PASS: Model-C lifecycle measurement is isolated, production-path faithful, lifecycle-owned, cleanup-gated, and production-neutral'
+echo 'PASS: Model-C lifecycle measurement is isolated, production-adapter faithful, lifecycle-owned, cleanup-gated, and production-neutral'
