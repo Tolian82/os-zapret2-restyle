@@ -160,7 +160,7 @@ require "${DISCOVERY_PUBLICATION}" '369590644'
 require "${DISCOVERY_PUBLICATION}" '512227845'
 require "${DISCOVERY_PUBLICATION}" 'sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce'
 
-require "${LIFECYCLE7_PATCH}" 'Model-C per-batch lifecycle amortization measurement'
+require "${LIFECYCLE7_PATCH}" '# v0.4.1_7 — Measure Model-C per-batch lifecycle amortization'
 require "${LIFECYCLE7_PATCH}" 'Production Model C, Model B fallback, cold Model A'
 require "${LIFECYCLE7_PATCH}" 'amortizable_upper_bound'
 require "${LIFECYCLE7_PY}" 'POLICY = "model-c-batch-lifecycle-amortization-v1"'
