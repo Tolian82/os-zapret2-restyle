@@ -29,6 +29,11 @@ BLOB_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/blob_s
 DISCOVERY5_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_5.md"
 DISCOVERY6_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_6.md"
 DISCOVERY_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/discovery_probe_measurement.py"
+LIFECYCLE7_PATCH="${ROOT_DIR}/docs/patches/v0.4.1_7.md"
+LIFECYCLE7_TEST="${ROOT_DIR}/scripts/test-strategy-lab-model-c-lifecycle-measurement.sh"
+LIFECYCLE7_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_c_lifecycle_measurement.py"
+LIFECYCLE7_WRAPPER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_c_lifecycle_measurement.sh"
+LIFECYCLE7_WORKER="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_c_lifecycle_measurement_worker.sh"
 MODEL_B_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md"
 MODEL_C_CORRECTIVE_PASS="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md"
 PUBLICATION26="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md"
@@ -47,8 +52,9 @@ for file in "${MATRIX}" "${STATE}" "${INDEX}" "${RELEASE_DOC}" "${RELEASE_EVIDEN
     "${BLOB_PUBLICATION}" "${BLOB_LIVE}" "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${DISCOVERY_PUBLICATION}" \
     "${DISCOVERY_ROOT_CAUSE}" "${DISCOVERY6_INPUT}" "${DISCOVERY6_PLAN}" "${DISCOVERY6_LIVE}" "${VERSION_FILE}" "${MAKEFILE}" \
     "${LUA_DOC}" "${LUA_PATCH}" "${LUA_TEST}" "${LUA_PY}" "${BLOB_DOC}" "${BLOB_PATCH}" \
-    "${BLOB_TEST}" "${BLOB_PY}" "${DISCOVERY5_PATCH}" "${DISCOVERY6_PATCH}" "${DISCOVERY_PY}" "${LUA_LIVE}" "${MODEL_B_EVIDENCE}" \
-    "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" "${LIVE26}" "${BUDGET_PY}" \
+    "${BLOB_TEST}" "${BLOB_PY}" "${DISCOVERY5_PATCH}" "${DISCOVERY6_PATCH}" "${DISCOVERY_PY}" \
+    "${LIFECYCLE7_PATCH}" "${LIFECYCLE7_TEST}" "${LIFECYCLE7_PY}" "${LIFECYCLE7_WRAPPER}" "${LIFECYCLE7_WORKER}" \
+    "${LUA_LIVE}" "${MODEL_B_EVIDENCE}" "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" "${LIVE26}" "${BUDGET_PY}" \
     "${LEASE_PY}" "${MODEL_C_PY}" "${MODEL_B_PY}" "${LIVE_GATE_DECISION}"
 do
     [ -s "${file}" ] || fail "missing Strategy Lab/release record: ${file}"
@@ -59,11 +65,12 @@ revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; 
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${version}" = '0.4.1' ] || fail 'measurement line must remain on VERSION=0.4.1'
-[ "${revision}" -eq 6 ] || fail 'current discovery corrective must use PLUGIN_REVISION=6'
-[ "${candidate}" = 'os-zapret2-restyle-0.4.1_6.pkg' ] || fail 'unexpected current discovery corrective package identity'
+[ "${revision}" -eq 7 ] || fail 'current Model-C lifecycle measurement must use PLUGIN_REVISION=7'
+[ "${candidate}" = 'os-zapret2-restyle-0.4.1_7.pkg' ] || fail 'unexpected current Model-C lifecycle measurement package identity'
 
-require "${STATE}" 'Current source line: `VERSION=0.4.1`, `PLUGIN_REVISION=6`'
-require "${STATE}" 'Current source candidate: `os-zapret2-restyle-0.4.1_6.pkg`'
+# PROJECT_STATE intentionally remains publication/owner-live truth until `_7` has exact
+# GitHub package identity and owner-live evidence. Do not couple a new source candidate to
+# the last published/accepted testing candidate.
 require "${STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${STATE}" 'Latest persistently published testing package: `v0.4.1_6` / `os-zapret2-restyle-0.4.1_6.pkg`'
 require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_6` — discovery cleanup-finalizer corrective ACCEPTED / measurement_accepted'
@@ -153,6 +160,21 @@ require "${DISCOVERY_PUBLICATION}" '369590644'
 require "${DISCOVERY_PUBLICATION}" '512227845'
 require "${DISCOVERY_PUBLICATION}" 'sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce'
 
+require "${LIFECYCLE7_PATCH}" 'Model-C per-batch lifecycle amortization measurement'
+require "${LIFECYCLE7_PATCH}" 'Production Model C, Model B fallback, cold Model A'
+require "${LIFECYCLE7_PATCH}" 'amortizable_upper_bound'
+require "${LIFECYCLE7_PY}" 'POLICY = "model-c-batch-lifecycle-amortization-v1"'
+require "${LIFECYCLE7_PY}" 'with stage60_source_port_lease.install():'
+require "${LIFECYCLE7_PY}" 'stage60_model_c.expand('
+require "${LIFECYCLE7_PY}" '"production_model_changed": False'
+require "${LIFECYCLE7_PY}" '"production_search_semantics_changed": False'
+require "${LIFECYCLE7_PY}" '"production_dispatch_width_changed": False'
+require "${LIFECYCLE7_PY}" '"production_change_recommended": False'
+require "${LIFECYCLE7_TEST}" 'PASS: Model-C lifecycle measurement is isolated, production-path faithful, lifecycle-owned, cleanup-gated, and production-neutral'
+require "${LIFECYCLE7_WRAPPER}" 'zapret2-lifecycle.lock'
+require "${LIFECYCLE7_WORKER}" 'cleanup-all'
+require "${LIFECYCLE7_WORKER}" 'strategy-lab-evidence'
+
 require "${MATRIX}" 'Current published release package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${MATRIX}" 'Latest owner-tested runtime package: `os-zapret2-restyle-0.4.0_26.pkg`'
 require "${MATRIX}" '`v0.4.1` RELEASE-SELECTED LIVE BASIS — PASS ON `_26`'
@@ -200,4 +222,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} discovery cleanup finalizer corrective is published and owner-live accepted, accepted BLOB history is preserved, and production live truth remains _26"
+echo "PASS: ${candidate} is the current measurement source candidate, accepted published history remains _6, and production live truth remains _26"
