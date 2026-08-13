@@ -43,22 +43,82 @@ with tempfile.TemporaryDirectory() as raw:
     graph = search_graph.native_tls13_graph()
     plan = graph.plan("expansion", (), inventory)
     by_id = {node.candidate_id: node.spec for node in plan.scheduled}
+    nodes = {node.candidate_id: node for node in plan.scheduled}
     ordinary = by_id["seqovl-host"]
     external = by_id[search_graph.GOLDEN_EXTERNAL_ID]
     assert ordinary.out_range == "-d10"
     assert external.out_range == "-d8"
+
+    mixed_ids = ("fake-rnd", "fake-split-host", "syndata-1603")
+    mixed = [
+        search_graph.SearchDecision(
+            node=nodes[candidate_id],
+            reason="fixture",
+            evidence_source="fixture",
+            evidence_outcome="pending",
+            priority=(index,),
+        )
+        for index, candidate_id in enumerate(mixed_ids)
+    ]
+    assert by_id["fake-rnd"].target_binding is True
+    assert by_id["fake-split-host"].target_binding is True
+    assert by_id["syndata-1603"].target_binding is False
+    assert stage60_model_c._bucket_profile_key(by_id["fake-rnd"]) == (
+        "ipv4", "tcp", 443, "tls", True
+    )
+    segments = stage60_model_c._compatible_batch_segments(mixed)
+    assert [
+        [decision.node.candidate_id for decision in segment] for segment in segments
+    ] == [["fake-rnd", "fake-split-host"], ["syndata-1603"]]
+
+    original_segment = stage60_model_c._bucket_segment
+    calls = []
+    def fake_segment(job_id, decisions, bindings, inventory, source_ports, indexes):
+        ids = [decision.node.candidate_id for decision in decisions]
+        calls.append(ids)
+        return (
+            [{"id": candidate_id} for candidate_id in ids],
+            {
+                "execution_model": stage60_model_c.MODEL,
+                "width": len(decisions),
+                "physical_worker_count": 1,
+                "divert_port": 9990,
+                "route_rules": [19128 + index for index in range(len(decisions))],
+                "selector": stage60_model_c.SELECTOR_FUNCTION,
+                "selector_ports": {candidate_id: [42000 + index] for index, candidate_id in enumerate(ids)},
+                "max_overlap_observed": len(decisions),
+                "pool_startup_ms": 10 * len(decisions),
+                "parallel_probe_wall_ms": 20,
+                "rss": {"aggregate_kb": 4300 + len(calls), "all_numeric": True},
+                "worker": {},
+                "runtime_arguments": [],
+                "candidate_ids": ids,
+                "total_ms": 50,
+            },
+        )
+    stage60_model_c._bucket_segment = fake_segment
+    try:
+        candidates, evidence = stage60_model_c._bucket_batch(
+            "job.fixture", mixed, (), inventory, {}, {}
+        )
+    finally:
+        stage60_model_c._bucket_segment = original_segment
+    assert calls == [["fake-rnd", "fake-split-host"], ["syndata-1603"]]
+    assert [item["id"] for item in candidates] == list(mixed_ids)
+    assert evidence["candidate_ids"] == list(mixed_ids)
+    assert evidence["profile_segment_count"] == 2
+    assert [item["candidate_ids"] for item in evidence["profile_segments"]] == calls
+    assert evidence["pool_startup_ms"] == 30
+    assert evidence["parallel_probe_wall_ms"] == 40
+    assert evidence["rss"]["aggregate_kb"] == 4302
 
     selectors = {
         ordinary.candidate_id: (42000, 42001),
         external.candidate_id: (42002, 42003),
     }
     args = stage60_model_c._render_bucket_arguments(
-        (ordinary, external),
-        selectors,
-        inventory,
-        divert_port=9990,
-        hostlist_path=hostlist,
-        selector_lua=selector,
+        (ordinary, external), selectors, inventory,
+        divert_port=9990, hostlist_path=hostlist, selector_lua=selector,
     )
     assert args.count("--port=9990") == 1
     assert args.count("--filter-tcp=443") == 1
@@ -68,20 +128,10 @@ with tempfile.TemporaryDirectory() as raw:
     assert f"--lua-init=@{selector}" in args
     assert f"--blob=fake_tls_7:@{fake_root / 'fake_tls_7.bin'}" in args
 
-    ordinary_cond = next(
-        index for index, value in enumerate(args)
-        if f"candidate_id={ordinary.candidate_id}" in value
-    )
-    external_cond = next(
-        index for index, value in enumerate(args)
-        if f"candidate_id={external.candidate_id}" in value
-    )
-    assert args[ordinary_cond - 3:ordinary_cond] == (
-        "--in-range=x", "--out-range=-d10", "--payload=tls_client_hello"
-    )
-    assert args[external_cond - 3:external_cond] == (
-        "--in-range=x", "--out-range=-d8", "--payload=tls_client_hello"
-    )
+    ordinary_cond = next(index for index, value in enumerate(args) if f"candidate_id={ordinary.candidate_id}" in value)
+    external_cond = next(index for index, value in enumerate(args) if f"candidate_id={external.candidate_id}" in value)
+    assert args[ordinary_cond - 3:ordinary_cond] == ("--in-range=x", "--out-range=-d10", "--payload=tls_client_hello")
+    assert args[external_cond - 3:external_cond] == ("--in-range=x", "--out-range=-d8", "--payload=tls_client_hello")
     assert "source_ports=42000,42001" in args[ordinary_cond]
     assert "source_ports=42002,42003" in args[external_cond]
     assert f"instances={len(ordinary.lua_instances)}" in args[ordinary_cond]
@@ -112,9 +162,14 @@ grep -Fq 'tcp.th_dport' "${SELECTOR}" || fail 'Model C selector does not preserv
 grep -Fq 'return false' "${SELECTOR}" || fail 'Model C selector is not fail-closed'
 grep -Fq 'fallback_execution_model' "${MODULE}" || fail 'Model C does not record Model B fallback'
 grep -Fq 'original_batch' "${MODULE}" || fail 'accepted Model B fallback is not retained'
+grep -Fq '_compatible_batch_segments' "${MODULE}" || fail 'Model C does not split incompatible profile segments'
+grep -Fq 'profile_segments' "${MODULE}" || fail 'Model C does not persist profile-segment evidence'
+if grep -Fq 'stage60_parallel._batch_decisions =' "${MODULE}"; then
+    fail 'Model C must not replace the authoritative adaptive batch chooser'
+fi
 grep -Fq 'ThreadPoolExecutor(max_workers=len(decisions)' "${MODULE}" || fail 'Model C candidate-level width-three overlap is missing'
 grep -Fq 'model_b_parallel_attribution._probe_endpoint' "${MODULE}" || fail 'Model C does not reuse exact source-port-qualified route attribution'
 grep -Fq 'physical_worker_count' "${MODULE}" || fail 'Model C does not evidence one physical bucket worker'
 grep -Fq 'cleanup-all' "${MODULE}" || fail 'Model C has no explicit bucket cleanup boundary'
 
-echo 'PASS: production Stage 60 defaults to one warm Model C bucket with exact source-port candidate dispatch, preserved ranges/resources, width-three candidate overlap, Model B fallback, and cold Model A containment'
+echo 'PASS: production Stage 60 keeps each planner-selected logical batch intact, segments only incompatible Model-C profiles at runtime, and retains exact source-port dispatch, Model B fallback, and cold Model A containment'
