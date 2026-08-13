@@ -43,22 +43,43 @@ with tempfile.TemporaryDirectory() as raw:
     graph = search_graph.native_tls13_graph()
     plan = graph.plan("expansion", (), inventory)
     by_id = {node.candidate_id: node.spec for node in plan.scheduled}
+    nodes = {node.candidate_id: node for node in plan.scheduled}
     ordinary = by_id["seqovl-host"]
     external = by_id[search_graph.GOLDEN_EXTERNAL_ID]
     assert ordinary.out_range == "-d10"
     assert external.out_range == "-d8"
+
+    mixed_ids = ("fake-rnd", "fake-split-host", "syndata-1603")
+    mixed = [
+        search_graph.SearchDecision(
+            node=nodes[candidate_id],
+            reason="fixture",
+            evidence_source="fixture",
+            evidence_outcome="pending",
+            priority=(index,),
+        )
+        for index, candidate_id in enumerate(mixed_ids)
+    ]
+    assert by_id["fake-rnd"].target_binding is True
+    assert by_id["fake-split-host"].target_binding is True
+    assert by_id["syndata-1603"].target_binding is False
+    assert stage60_model_c._bucket_profile_key(by_id["fake-rnd"]) == (
+        "ipv4", "tcp", 443, "tls", True
+    )
+    prefix = stage60_model_c._compatible_batch_prefix(mixed)
+    assert [decision.node.candidate_id for decision in prefix] == [
+        "fake-rnd", "fake-split-host"
+    ]
+    assert mixed[len(prefix)].node.candidate_id == "syndata-1603"
+    assert stage60_model_c._compatible_batch_prefix(mixed[2:])[0].node.candidate_id == "syndata-1603"
 
     selectors = {
         ordinary.candidate_id: (42000, 42001),
         external.candidate_id: (42002, 42003),
     }
     args = stage60_model_c._render_bucket_arguments(
-        (ordinary, external),
-        selectors,
-        inventory,
-        divert_port=9990,
-        hostlist_path=hostlist,
-        selector_lua=selector,
+        (ordinary, external), selectors, inventory,
+        divert_port=9990, hostlist_path=hostlist, selector_lua=selector,
     )
     assert args.count("--port=9990") == 1
     assert args.count("--filter-tcp=443") == 1
@@ -68,20 +89,10 @@ with tempfile.TemporaryDirectory() as raw:
     assert f"--lua-init=@{selector}" in args
     assert f"--blob=fake_tls_7:@{fake_root / 'fake_tls_7.bin'}" in args
 
-    ordinary_cond = next(
-        index for index, value in enumerate(args)
-        if f"candidate_id={ordinary.candidate_id}" in value
-    )
-    external_cond = next(
-        index for index, value in enumerate(args)
-        if f"candidate_id={external.candidate_id}" in value
-    )
-    assert args[ordinary_cond - 3:ordinary_cond] == (
-        "--in-range=x", "--out-range=-d10", "--payload=tls_client_hello"
-    )
-    assert args[external_cond - 3:external_cond] == (
-        "--in-range=x", "--out-range=-d8", "--payload=tls_client_hello"
-    )
+    ordinary_cond = next(index for index, value in enumerate(args) if f"candidate_id={ordinary.candidate_id}" in value)
+    external_cond = next(index for index, value in enumerate(args) if f"candidate_id={external.candidate_id}" in value)
+    assert args[ordinary_cond - 3:ordinary_cond] == ("--in-range=x", "--out-range=-d10", "--payload=tls_client_hello")
+    assert args[external_cond - 3:external_cond] == ("--in-range=x", "--out-range=-d8", "--payload=tls_client_hello")
     assert "source_ports=42000,42001" in args[ordinary_cond]
     assert "source_ports=42002,42003" in args[external_cond]
     assert f"instances={len(ordinary.lua_instances)}" in args[ordinary_cond]
@@ -111,10 +122,12 @@ grep -Fq 'tcp.th_sport' "${SELECTOR}" || fail 'Model C selector does not inspect
 grep -Fq 'tcp.th_dport' "${SELECTOR}" || fail 'Model C selector does not preserve client-port identity for reverse direction'
 grep -Fq 'return false' "${SELECTOR}" || fail 'Model C selector is not fail-closed'
 grep -Fq 'fallback_execution_model' "${MODULE}" || fail 'Model C does not record Model B fallback'
-grep -Fq 'original_batch' "${MODULE}" || fail 'accepted Model B fallback is not retained'
+grep -Fq 'original_batch_decisions' "${MODULE}" || fail 'generic adaptive chooser is not retained'
+grep -Fq '_compatible_batch_prefix' "${MODULE}" || fail 'Model C does not enforce compatible ready-batch prefixes'
+grep -Fq 'stage60_parallel._batch_decisions = original_batch_decisions' "${MODULE}" || fail 'generic adaptive chooser is not restored'
 grep -Fq 'ThreadPoolExecutor(max_workers=len(decisions)' "${MODULE}" || fail 'Model C candidate-level width-three overlap is missing'
 grep -Fq 'model_b_parallel_attribution._probe_endpoint' "${MODULE}" || fail 'Model C does not reuse exact source-port-qualified route attribution'
 grep -Fq 'physical_worker_count' "${MODULE}" || fail 'Model C does not evidence one physical bucket worker'
 grep -Fq 'cleanup-all' "${MODULE}" || fail 'Model C has no explicit bucket cleanup boundary'
 
-echo 'PASS: production Stage 60 defaults to one warm Model C bucket with exact source-port candidate dispatch, preserved ranges/resources, width-three candidate overlap, Model B fallback, and cold Model A containment'
+echo 'PASS: production Stage 60 keeps Model-C batches profile-compatible without reordering the native planner, while retaining exact source-port dispatch, width-three overlap, Model B fallback, and cold Model A containment'
