@@ -6,27 +6,18 @@ This file answers: **How are project changes/packages/releases delivered through
 
 Permanent principles: `docs/PROJECT_PRINCIPLES.md`.
 Current task: `docs/START_HERE.md`.
-Operational handoff/preflight authority: `docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md`.
-Owner-canon/zero-memory authority: `docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`.
-Canon-lock/hygiene authority: `docs/decisions/DEC-2026-08-14-owner-canon-lock-and-repository-hygiene.md`.
 
-Read this file completely immediately before GitHub mutation. The decisions above record rationale and
-supersession boundaries; they are not additional mandatory rereads for every ordinary mutation unless
-the current operation needs that rationale.
+Read this file completely immediately before GitHub mutation. Decision records contain rationale and
+are loaded only when the current operation needs that rationale.
 
 ## GitHub plugin boundary
 
 Use the connected GitHub plugin first for every supported repository operation.
 
-A fallback transport is allowed only when:
-
-- the plugin is responding;
-- one exact required function/permission is confirmed missing/insufficient;
-- fallback is limited to that operation;
-- subsequent supported operations return to the plugin.
-
-Plugin unavailability/non-response or inability to read authoritative required state is a stop
-condition, not permission to switch transports silently.
+A fallback transport is allowed only when the plugin is responding but one exact required function or
+permission is confirmed missing/insufficient. Limit fallback to that operation and return to the
+plugin afterwards. Plugin unavailability or inability to read required authoritative state is a stop
+condition.
 
 ## Scope-first preflight
 
@@ -34,71 +25,50 @@ Always verify before mutation:
 
 1. exact current `main` SHA;
 2. current `VERSION` and `PLUGIN_REVISION`;
-3. current documented task/plan reconciled against the owner's newest unambiguous instruction/fact;
+3. current documented task reconciled against the owner's newest unambiguous instruction/fact;
 4. same-scope/relevant open PR state;
 5. plugin availability for the operation.
 
-Once an owner instruction/fact/confirmed decision is unambiguous, do not ask again merely because an
-old document/test disagrees. Reopen it only if the owner changes it or fresh direct reproducible
-evidence contradicts a factual assertion.
+Expand inventory only when scope requires it: CI logs for CI debugging, tag/release/assets for package
+publication, branch inventory for cleanup/recovery, protection state when relevant, recursive tree for
+a genuine broad investigation, and a broad active-document sweep when owner canon must be recorded.
 
-Expand inventory only when the operation needs it:
+## Owner canon / stale contracts
 
-- CI debugging/current PR -> relevant runs/jobs/checks/logs;
-- testing package/release -> exact artifact/tag/release/asset/publication-run state;
-- branch cleanup/recovery/hygiene -> relevant complete branch inventory;
-- protection/permission work -> relevant protection/permission state;
-- broad/cross-cutting investigation with unknown paths -> pinned recursive tree;
-- owner `зафиксируй`/canon reconciliation -> active/current authority-document sweep broad enough to
-  find every possible contradiction.
+The newest unambiguous owner instruction, explicit fact or confirmed decision is current project canon
+and supersedes conflicting older active docs/tests/plans. Do not reconfirm settled canon merely because
+old material disagrees.
 
-A known-file task named by `START_HERE.md` does not require unrelated historical branch/workflow/tag/
-release discovery before implementation unless the owner explicitly requested a broad consistency
-review.
+When the owner says `зафиксируй` / equivalent, the first GitHub docs change must:
 
-## Owner canon / stale contract handling
-
-The owner's newest unambiguous instruction, explicit project fact or explicitly confirmed decision is
-current project canon and immediately supersedes conflicting older active documentation, tests and
-plans.
-
-When the owner says `зафиксируй`, `запиши это`, `record this` or equivalent, the first GitHub docs
-change must:
-
-1. record the canon in canonical/current authority;
-2. inspect all active/current authority files capable of contradicting it;
+1. record canon in current/canonical authority;
+2. inspect active/current authority files capable of contradicting it;
 3. correct every active contradiction in the same logical change;
-4. retain old statements only as clearly historical/superseded records.
+4. leave old statements only as clearly historical/superseded records.
 
-A stale CI/test assertion does not outrank current canon. If the assertion itself is obsolete, update
-that stale contract rather than modifying current architecture/docs back toward obsolete intent.
+A stale CI/test assertion is corrected rather than used to bend current canon back to obsolete intent.
 
-## Documentation / zero-memory recovery gate
+## Documentation / zero-memory gate
 
-The unchanged task branch may be created from the verified base immediately after preflight.
+Before the first substantive changed branch state is considered ready for delivery, synchronize the
+three-level documentation model:
 
-Before the **first substantive changed branch state** is published to GitHub, the logical change must
-already contain synchronized documentation that makes that GitHub state a self-contained recovery
-checkpoint. It must state:
+- Level 1 exposes current facts, compact handoff, short lifetime path and exact next task;
+- the active minor-line Level-2 ledger records richer current chronology when useful;
+- Level 3 retains old archive maps and original deep records on demand;
+- `ROADMAP` contains current/future ordering, not a growing historical narrative;
+- `INDEX` routes directly to the current ledger, each completed version-line archive and deep stores;
+- every newly approved permanent rule is in `PROJECT_PRINCIPLES`;
+- an owner `зафиксируй` request has received its required active-authority consistency sweep.
 
-1. the most recent completed logical work/recovery boundary;
-2. what this logical change changes and why;
-3. intended effect and expected result/acceptance boundary;
-4. the exact immediate next step after this delivery;
-5. the complete ordered next plan, including completed/superseded/deferred near-term and long-term
-   work;
-6. every newly approved durable principle in `docs/PROJECT_PRINCIPLES.md` itself;
-7. the relevant patch/devlog/evidence record for detailed chronology;
-8. the result of any full active-document reconciliation required by an owner `зафиксируй` request.
+Detailed patch/devlog/evidence records are created/updated when they add distinct contract, execution
+or proof value; they are not duplicated merely to repeat text already held by the current-line ledger.
+Existing historical records are never deleted merely to reduce context.
 
-Before opening/updating a Ready PR for the final intended head, and again immediately before merge,
-reconcile that recovery checkpoint against implementation/testing discoveries and the newest owner
-canon. If scope, expected result, test/audit needs, priority or deferred state changed, update
-documentation first.
-
-Acceptance question: could a future session with complete loss of chat/model memory, even years later,
-read the mandatory startup documents and continue at the exact boundary without rediscovering settled
-project intent? If not, the delivery is not ready.
+Before Ready PR and again before merge, reconcile documentation against implementation/testing and the
+newest owner canon. Acceptance question: could a future session with complete loss of chat/model
+memory resume the exact boundary from Level 1 and discover deeper history through links only when
+needed? If not, the delivery is not ready.
 
 ## Candidate identity / titles
 
@@ -108,26 +78,25 @@ Derive from proposed head:
 - package revision from `PLUGIN_REVISION`;
 - title prefix `v<VERSION>_<PLUGIN_REVISION>:` for non-zero revision.
 
-Every PR title, PR-branch commit subject and final squash subject uses the exact candidate prefix.
+Every PR title, PR-branch commit subject and final squash subject uses that candidate prefix.
 Docs/governance/CI-only changes do not alter package metadata.
 
 ## Ordinary development flow
 
-1. resolve owner scope/stopping boundary and newest owner canon;
-2. complete mandatory startup + task-specialist reading;
+1. resolve owner scope/stopping boundary and newest canon;
+2. complete mandatory Level-1 + task-specialist reading;
 3. perform scope-first preflight;
 4. create one task branch from exact base;
-5. implement one logical scope with synchronized zero-memory documentation;
+5. implement one logical scope with synchronized documentation;
 6. run focused validation and review complete diff;
-7. reconcile documentation/current+long-term plan and any required canon sweep;
+7. reconcile current state/roadmap/current-line ledger and any required canon sweep;
 8. open one Ready PR (Draft only for intentional WIP);
 9. keep same-scope corrections in that PR;
 10. require successful checks for latest mergeable head;
 11. re-reconcile owner canon/plan and verify title/scope/checks/exact head;
 12. squash merge once with exact versioned subject;
 13. verify resulting `main`;
-14. verify temporary branch content, preserve useful unique work if any, otherwise remove the branch
-    and verify repository branch hygiene.
+14. preserve useful unique branch work if any, otherwise remove temporary branch and verify hygiene.
 
 A PR branch may contain multiple same-scope commits; `main` receives one logical squash commit.
 
@@ -136,50 +105,37 @@ A PR branch may contain multiple same-scope commits; `main` receives one logical
 Read exact failed-job evidence before changing source/workflow/runner/branch.
 
 - confirmed same-scope source/docs/test defect -> repair same PR;
-- stale test/CI assertion that conflicts with newer owner canon -> update the stale assertion/contract,
-  not current canon;
-- external GitHub/runner/network/action/dependency outage -> zero source change; at most one unchanged
-  rerun after recovery;
+- stale test/CI assertion -> update stale assertion/contract, not current canon;
+- external GitHub/runner/network/action/dependency outage -> zero speculative source change;
 - PR metadata defect -> correct metadata;
 - materially wrong base/scope/history -> replace only with recorded evidence;
 - missing protected authority/credentials or unavailable plugin -> stop at boundary.
 
 Do not create retry/final sibling branches, change runner OS, add replacement workflows or perform
-unbounded retries without evidence that the current mechanism is defective.
+unbounded retries without evidence the current mechanism is defective.
 
 ## Repository / branch hygiene
 
-Repository cleanup is a normal completion obligation and is normally silent to the owner.
-
 After merge/completion:
 
-1. compare the temporary branch/PR work to the merged `main` state;
-2. if useful unique work exists, preserve it in the correct active/history branch/path first;
+1. compare temporary branch/PR work with merged `main`;
+2. preserve useful unique work first if any;
 3. otherwise remove the temporary branch;
-4. verify no obsolete task/publication branch remains;
-5. leave normal steady-state branch authority clean.
+4. verify no obsolete task/publication branch remains.
 
-Do not tell the owner to perform routine branch cleanup. Escalate only when a real permission/tooling
-boundary prevents safe cleanup.
+Routine successful cleanup is not an owner problem and is normally silent.
 
-## Owner-facing status presentation
+## Owner-facing status
 
-Internal GitHub/CI execution may use technical English, but owner-facing status/results are clear
-Russian by default.
-
-Do not require the owner to decode terms such as `latest head`, `Ready PR`, `exact-head`, `squash`,
-`governance`, `hygiene` or raw check names. If one is materially useful as evidence, explain its
-practical meaning in Russian in the same message: what passed/failed, whether the change is already in
-`main`, and what happens next.
-
-Routine successful CI/branch housekeeping should not distract the owner.
+Owner-facing project status/results are clear Russian by default. If internal English GitHub/CI terms
+are useful as evidence, explain their practical meaning in Russian: what passed/failed, whether the
+change is already in `main`, and what happens next.
 
 ## Owner testing-package delivery
 
 Any owner request for package/patch bytes for testing/installation/delivery means a persistent GitHub
-`.pkg`, unless the owner explicitly requests build/CI evidence only.
-
-Actions artifacts/local files are build evidence only.
+`.pkg`, unless build/CI evidence only was explicitly requested. Actions artifacts/local files are build
+evidence only.
 
 `не релиз, а пакет` means:
 
@@ -188,45 +144,59 @@ Actions artifacts/local files are build evidence only.
 - no Pages/pkg-repository promotion;
 - yes: persist the deterministic testing `.pkg` on GitHub.
 
-The package request itself authorizes deterministic testing-package publication; no second
-confirmation is required merely because GitHub uses a prerelease/tag container.
+No second confirmation is required merely because GitHub uses a prerelease/tag container.
 
 When verified bytes already exist:
 
 1. bind exact source commit/build/run/artifact/digest;
 2. verify package manifest version/ABI/arch;
-3. publish exact testing tag/asset through plugin if supported, otherwise narrow fallback only for the
+3. publish exact testing tag/asset through plugin if supported, otherwise narrow fallback for only the
    missing release-asset operation;
 4. verify target SHA, tag, draft/prerelease flags, asset name/size/digest/direct URL;
-5. record publication identity in documentation.
+5. record publication identity in current documentation/evidence as appropriate.
 
-When repository-owned build/publish automation is needed, use only the generic
-`.github/workflows/publish-prerelease.yml` and temporary `publish/v<VERSION>_<REVISION>` branch.
-Remove temporary publication branch after success.
-
-Testing-package publication never deploys Pages/pkg repository metadata.
+When repository-owned automation is needed, use only the approved generic testing-package workflow and
+remove temporary publication branch after success. Testing-package publication never deploys Pages/pkg
+repository metadata.
 
 ## Full semantic release
 
-Separate from testing-package publication. Requires explicit exact new `VERSION` authority and the
-current product/live release gates.
+A full semantic release requires explicit exact new `VERSION` authority and the current product/live
+release gates.
 
-Normal preparation identity:
+### Automatic semantic-minor documentation rollover
 
-- set new VERSION;
+Before publishing the first release whose `MAJOR.MINOR` differs from the active line, for example the
+owner requests `v0.5.0_1` while `v0.4.x` is current, the release change automatically must:
+
+1. update `docs/history/current/v0.4.x.md` through the final `v0.4.x` state;
+2. freeze/create `docs/history/archive/v0.4.x.md` as the compact map for that completed line;
+3. preserve every original `v0.4.x` devlog/patch/verification/release/decision/audit record;
+4. initialize `docs/history/current/v0.5.x.md`;
+5. update `docs/INDEX.md` so it directly links the new current ledger and the new archive;
+6. update `START_HERE`, `PROJECT_STATE`, `ROADMAP` and the short lifetime path for `v0.5.x`;
+7. keep current architecture/contracts and permanent principles current rather than archiving them;
+8. then continue the normal VERSION/tag/release pipeline.
+
+The explicit request for the new minor release is authority for this rollover; no extra owner reminder
+or confirmation is required.
+
+Normal release identity after any required rollover:
+
+- set new `VERSION`;
 - reset `PLUGIN_REVISION=1`;
 - title/squash `vX.Y.Z_1: Prepare release vX.Y.Z`;
 - verified merge;
-- immutable semantic tag and full release/package/pkg-repository/Pages pipeline as defined by the
-  current release procedure.
+- immutable semantic tag and full release/package/pkg-repository/Pages pipeline defined by current
+  release procedure.
 
 Never rewrite published `main`, tags, releases, assets or package history.
 
-## Transport order when fallback is genuinely needed
+## Transport order for a genuine plugin gap
 
 1. GitHub plugin for supported operations;
-2. authenticated ordinary Git for an exact local editing/ref gap;
-3. `gh` for an exact Actions/release gap;
+2. authenticated ordinary Git for exact local editing/ref gap;
+3. `gh` for exact Actions/release gap;
 4. Git data API for atomic multi-file construction when needed;
 5. web UI only for an exact operation tools cannot perform.
 
