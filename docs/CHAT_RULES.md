@@ -104,7 +104,7 @@ CHAT-027. **Project patches and packages are never delivered through chat/sandbo
 | `CHAT-007` | `DEV-001` |
 | `CHAT-009` | `DEV-001` |
 | `CHAT-010` | `GH-029` |
-| `CHAT-015` | `GH-034`, `GH-060` |
+| `CHAT-015` | `DEV-040`, `GH-034`, `GH-060` |
 | `CHAT-016` | `DEV-040`, `GH-034`, `GH-060` |
 | `CHAT-017` | `DEV-039`, `GH-039` |
 | `CHAT-022` | `GH-029` |
