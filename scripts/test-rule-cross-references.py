@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the four canonical rule books and their cross-reference registries."""
+"""Validate permanent canonical rule IDs, lifecycle state, and cross-book registries."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import pathlib
 import re
 import subprocess
 import sys
-from collections import defaultdict
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BOOKS = {
@@ -19,6 +18,11 @@ BOOKS = {
 RULE_START = re.compile(r"^(DOC|DEV|CHAT|GH)-(\d{3})\.\s", re.M)
 SINGLE = re.compile(r"`?(DOC|DEV|CHAT|GH)-(\d{3})`?")
 RANGE = re.compile(r"`?(DOC|DEV|CHAT|GH)-(\d{3})`?\s*[–-]\s*`?\1-(\d{3})`?")
+CANCELLED = re.compile(r"^\*\*\[ОТМЕНЕНО\]", re.I)
+REPLACED = re.compile(
+    r"^\*\*\[ЗАМЕНЕНО\s+НА\s+((?:DOC|DEV|CHAT|GH)-\d{3})\]",
+    re.I,
+)
 OUT_BEGIN = "<!-- RULE-XREF-OUT-BEGIN -->"
 OUT_END = "<!-- RULE-XREF-OUT-END -->"
 IN_BEGIN = "<!-- RULE-XREF-IN-BEGIN -->"
@@ -40,6 +44,7 @@ DEEP_HISTORY_FILES = {
     "docs/CHANGELOG.md",
 }
 TEXT_SUFFIXES = {".md", ".sh", ".py", ".yml", ".yaml", ".txt"}
+BOOK_RELS = {str(path.relative_to(ROOT)) for path in BOOKS.values()}
 
 
 def fail(message: str) -> None:
@@ -63,15 +68,32 @@ def expand_refs(text: str) -> set[str]:
     return refs
 
 
-def read_books() -> tuple[dict[str, str], dict[str, set[str]]]:
+def rule_blocks(text: str) -> list[tuple[str, str, str]]:
+    registry_at = text.find("## Cross-reference registry")
+    body = text if registry_at < 0 else text[:registry_at]
+    matches = list(RULE_START.finditer(body))
+    blocks: list[tuple[str, str, str]] = []
+    for index, match in enumerate(matches):
+        start = match.start()
+        content_start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(body)
+        blocks.append((f"{match.group(1)}-{match.group(2)}", body[start:end], body[content_start:end].lstrip()))
+    return blocks
+
+
+def read_books() -> tuple[dict[str, str], dict[str, set[str]], dict[str, str], dict[str, str]]:
     texts: dict[str, str] = {}
     ids: dict[str, set[str]] = {}
+    status: dict[str, str] = {}
+    replacement: dict[str, str] = {}
+
     for prefix, path in BOOKS.items():
         if not path.is_file():
             fail(f"missing canonical rule book: {path.relative_to(ROOT)}")
         text = path.read_text(encoding="utf-8")
         texts[prefix] = text
-        found = [f"{p}-{n}" for p, n in RULE_START.findall(text)]
+        blocks = rule_blocks(text)
+        found = [rule_id for rule_id, _, _ in blocks]
         if not found:
             fail(f"no {prefix} rules found in {path.relative_to(ROOT)}")
         if len(found) != len(set(found)):
@@ -79,30 +101,54 @@ def read_books() -> tuple[dict[str, str], dict[str, set[str]]]:
         if any(not item.startswith(prefix + "-") for item in found):
             fail(f"wrong rule domain in {path.relative_to(ROOT)}")
         ids[prefix] = set(found)
-    return texts, ids
+
+        for rule_id, _, after_id in blocks:
+            replaced = REPLACED.match(after_id)
+            if CANCELLED.match(after_id):
+                status[rule_id] = "cancelled"
+            elif replaced:
+                status[rule_id] = "replaced"
+                replacement[rule_id] = replaced.group(1).upper()
+            else:
+                status[rule_id] = "active"
+
+    return texts, ids, status, replacement
 
 
-def rule_blocks(text: str) -> list[tuple[str, str]]:
-    registry_at = text.find("## Cross-reference registry")
-    body = text if registry_at < 0 else text[:registry_at]
-    matches = list(RULE_START.finditer(body))
-    blocks: list[tuple[str, str]] = []
-    for index, match in enumerate(matches):
-        start = match.start()
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(body)
-        blocks.append((f"{match.group(1)}-{match.group(2)}", body[start:end]))
-    return blocks
+def validate_lifecycle(known: set[str], status: dict[str, str], replacement: dict[str, str]) -> None:
+    for source, target in replacement.items():
+        if target not in known:
+            fail(f"{source} replacement target does not exist: {target}")
+        if target == source:
+            fail(f"{source} replaces itself")
+
+    for start in replacement:
+        seen: list[str] = []
+        current = start
+        while status.get(current) == "replaced":
+            if current in seen:
+                fail(f"replacement cycle: {' -> '.join(seen + [current])}")
+            seen.append(current)
+            current = replacement[current]
+        if status.get(current) != "active":
+            fail(f"replacement chain for {start} terminates at non-active rule {current}")
 
 
-def actual_pairs(texts: dict[str, str], known: set[str]) -> set[tuple[str, str]]:
+def actual_pairs(
+    texts: dict[str, str], known: set[str], status: dict[str, str]
+) -> set[tuple[str, str]]:
     pairs: set[tuple[str, str]] = set()
     for source_book, text in texts.items():
-        for source, block in rule_blocks(text):
+        for source, block, _ in rule_blocks(text):
+            if status[source] != "active":
+                continue
             for target in expand_refs(block):
                 if target == source:
                     continue
                 if target not in known:
                     fail(f"{source} references nonexistent canonical rule {target}")
+                if status[target] != "active":
+                    fail(f"active rule {source} depends on non-active rule {target}")
                 if target.split("-", 1)[0] != source_book:
                     pairs.add((source, target))
     return pairs
@@ -116,7 +162,9 @@ def registry_section(text: str, begin: str, end: str) -> str:
     return text[start:stop]
 
 
-def parse_registry_pairs(section: str, direction: str, known: set[str]) -> set[tuple[str, str]]:
+def parse_registry_pairs(
+    section: str, direction: str, known: set[str], status: dict[str, str]
+) -> set[tuple[str, str]]:
     pairs: set[tuple[str, str]] = set()
     for raw in section.splitlines():
         line = raw.strip()
@@ -132,6 +180,8 @@ def parse_registry_pairs(section: str, direction: str, known: set[str]) -> set[t
         for item in left | right:
             if item not in known:
                 fail(f"registry references nonexistent canonical rule {item}")
+            if status[item] != "active":
+                fail(f"active cross-reference registry contains non-active rule {item}")
         if direction == "out":
             pairs.update((source, target) for source in left for target in right)
         else:
@@ -139,10 +189,12 @@ def parse_registry_pairs(section: str, direction: str, known: set[str]) -> set[t
     return pairs
 
 
-def validate_registries(texts: dict[str, str], actual: set[tuple[str, str]], known: set[str]) -> None:
+def validate_registries(
+    texts: dict[str, str], actual: set[tuple[str, str]], known: set[str], status: dict[str, str]
+) -> None:
     for book, text in texts.items():
-        outbound = parse_registry_pairs(registry_section(text, OUT_BEGIN, OUT_END), "out", known)
-        inbound = parse_registry_pairs(registry_section(text, IN_BEGIN, IN_END), "in", known)
+        outbound = parse_registry_pairs(registry_section(text, OUT_BEGIN, OUT_END), "out", known, status)
+        inbound = parse_registry_pairs(registry_section(text, IN_BEGIN, IN_END), "in", known, status)
         expected_out = {pair for pair in actual if pair[0].startswith(book + "-")}
         expected_in = {pair for pair in actual if pair[1].startswith(book + "-")}
         missing_out = sorted(expected_out - outbound)
@@ -156,7 +208,7 @@ def validate_registries(texts: dict[str, str], actual: set[tuple[str, str]], kno
             )
 
 
-def validate_active_references(known: set[str]) -> None:
+def validate_active_references(known: set[str], status: dict[str, str]) -> None:
     proc = subprocess.run(
         ["git", "-C", str(ROOT), "ls-files"],
         check=True,
@@ -164,7 +216,7 @@ def validate_active_references(known: set[str]) -> None:
         stdout=subprocess.PIPE,
     )
     for rel in proc.stdout.splitlines():
-        if rel in DEEP_HISTORY_FILES or rel.startswith(DEEP_HISTORY_PREFIXES):
+        if rel in BOOK_RELS or rel in DEEP_HISTORY_FILES or rel.startswith(DEEP_HISTORY_PREFIXES):
             continue
         path = ROOT / rel
         if path.suffix.lower() not in TEXT_SUFFIXES or not path.is_file():
@@ -176,17 +228,22 @@ def validate_active_references(known: set[str]) -> None:
         for ref in expand_refs(text):
             if ref not in known:
                 fail(f"active file {rel} references nonexistent canonical rule {ref}")
+            if status[ref] != "active" and not rel.startswith("scripts/test-"):
+                fail(f"active file {rel} references non-active canonical rule {ref}")
 
 
 def main() -> None:
-    texts, ids_by_book = read_books()
+    texts, ids_by_book, status, replacement = read_books()
     known = set().union(*ids_by_book.values())
-    actual = actual_pairs(texts, known)
-    validate_registries(texts, actual, known)
-    validate_active_references(known)
+    validate_lifecycle(known, status, replacement)
+    actual = actual_pairs(texts, known, status)
+    validate_registries(texts, actual, known, status)
+    validate_active_references(known, status)
+    retired = sorted(rule_id for rule_id, state in status.items() if state != "active")
     print(
-        "PASS: four canonical rule books have unique persistent IDs, valid active references, "
-        "and exact bidirectional cross-reference registries"
+        "PASS: four canonical rule books have permanent unique IDs, valid lifecycle state, "
+        "valid active references, and exact bidirectional cross-reference registries; "
+        f"non-active IDs={retired}"
     )
 
 

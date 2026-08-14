@@ -1,9 +1,9 @@
-# GitHub rules
+# GitHub rules — Правила работы с GitHub
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
 **Updated:** 2026-08-14
 
-This file is the single normative home for working with GitHub in this project: repository access, preflight, branches, PRs, CI, merges, testing packages, full releases, and repository hygiene. The filename is retained for link compatibility; its scope is all GitHub work, not publication only.
+This file is the fourth canonical rule book and the single normative home for working with GitHub in this project: repository access, preflight, branches, PRs, CI, merges, testing packages, full releases, documentation synchronization, and repository hygiene. The filename `GITHUB_PUBLICATION.md` is intentionally retained; its scope is all GitHub work, not publication only.
 
 Other canonical rule domains:
 
@@ -23,7 +23,7 @@ Read this file completely before GitHub mutation.
 - testing package: `GH-034`–`GH-038`;
 - full release: `GH-039`–`GH-048`;
 - release-trigger behavior: `GH-049`–`GH-052`;
-- documentation/process synchronization: `GH-053`–`GH-058`.
+- documentation/process synchronization: `GH-053`–`GH-059`.
 
 ## GitHub access and preflight
 
@@ -37,7 +37,7 @@ GH-004. **Pin the exact `main` SHA before mutation.** The task branch base and b
 
 GH-005. **Read current package identity before a delivery.** Resolve `VERSION` and `PLUGIN_REVISION` and apply `DEV-027`–`DEV-040`; never infer candidate identity from a stale title, tag, README, or previous chat.
 
-GH-006. **Complete the mandatory cold-start/current-authority reading before mutation.** Apply `DOC-016`, then read every current-task specialist document selected by `START_HERE.md` through EOF.
+GH-006. **Complete the mandatory cold-start/current-authority reading before mutation.** Apply `DOC-016`, then read every current-task specialist document selected by `START_HERE.md` through EOF. Reuse of already-read unchanged Level-1 material is allowed only under `DOC-049`.
 
 GH-007. **Preflight is scope/risk based.** Always check exact `main`, candidate identity, current handoff/state, and relevant same-scope open PR state. Expand to CI runs, permissions, releases, branches, artifacts, or full tree only when scope/risk requires them.
 
@@ -155,9 +155,11 @@ GH-055. **GitHub-rule changes are recorded here first.** Add or amend the persis
 
 GH-056. **Legacy GitHub decisions are rationale/history, not competing current procedure.** Where an older decision was superseded, preserve it as history and do not merge obsolete behavior back into this file.
 
-GH-057. **The repository tree must be self-consistent at merge.** Active canonical paths, navigation, current state/handoff, rule references, and tests must resolve together; known dangling or contradictory current references block merge under `DOC-019`, `DOC-045`, and `DOC-047`.
+GH-057. **The repository tree must be self-consistent at merge.** Active canonical paths, navigation, current state/handoff, rule references, tests, and local documentation links must resolve together; known dangling or contradictory current references block merge under `DOC-019`, `DOC-045`, `DOC-047`, and `DOC-053`.
 
-GH-058. **A canonical rule-book change must pass cross-reference integrity validation.** The bidirectional registries and actual rule-body references must agree under `DOC-042`–`DOC-045` before merge.
+GH-058. **A canonical rule-book change must pass cross-reference integrity validation.** The bidirectional registries, active rule-body references, and rule lifecycle state must agree under `DOC-042`–`DOC-045` before merge.
+
+GH-059. **Deleting or renaming documentation is a repository-wide reference migration.** Apply `DOC-053`: migrate affected tracked Markdown links and active navigation in the same logical scope, then require the internal-link validator to pass. Do not keep an obsolete duplicate document merely to preserve an in-repository link when those references can be migrated cleanly.
 
 ## Cross-reference registry
 
@@ -167,7 +169,7 @@ GH-058. **A canonical rule-book change must pass cross-reference integrity valid
 | Source rule | Target rules |
 |---|---|
 | `GH-005` | `DEV-027`–`DEV-040` |
-| `GH-006` | `DOC-016` |
+| `GH-006` | `DOC-016`, `DOC-049` |
 | `GH-009` | `DOC-004`, `DOC-005`, `CHAT-009` |
 | `GH-011` | `DEV-017` |
 | `GH-014` | `DEV-027`, `DEV-028` |
@@ -187,8 +189,9 @@ GH-058. **A canonical rule-book change must pass cross-reference integrity valid
 | `GH-053` | `DOC-036`, `DOC-037`, `DOC-047` |
 | `GH-054` | `DOC-011`, `DOC-012`, `DOC-047` |
 | `GH-055` | `DOC-008`, `DOC-042`–`DOC-045` |
-| `GH-057` | `DOC-019`, `DOC-045`, `DOC-047` |
+| `GH-057` | `DOC-019`, `DOC-045`, `DOC-047`, `DOC-053` |
 | `GH-058` | `DOC-042`–`DOC-045` |
+| `GH-059` | `DOC-053` |
 <!-- RULE-XREF-OUT-END -->
 
 ### Inbound references
@@ -218,6 +221,6 @@ GH-058. **A canonical rule-book change must pass cross-reference integrity valid
 | `GH-054` | `DOC-047` |
 <!-- RULE-XREF-IN-END -->
 
-## Retired rule IDs
+## Rule lifecycle
 
-None. Retired IDs are recorded rather than recycled.
+No cancelled or replaced `GH-*` IDs currently exist. Rule cancellation/replacement preserves the permanent ID under the documentation-rule lifecycle contract.

@@ -1,7 +1,7 @@
 # Decision: Stable rule references and active-document consolidation
 
 **Date:** 2026-08-14
-**Status:** ACTIVE · EXTENDS FOUR-RULE-BOOK DECISION
+**Status:** ACTIVE · EXTENDS FOUR-RULE-BOOK DECISION · PARTIALLY SUPERSEDED BY LIFECYCLE FOLLOW-UP
 
 ## Context
 
@@ -16,8 +16,7 @@ The owner also required cold-start recovery after total context loss, unavoidabl
 ## Decision
 
 - The project continues to have exactly four canonical general rule books.
-- `GITHUB_PUBLICATION.md` is the sole GitHub rule book and now includes the task-oriented route formerly carried by `GITHUB_WORKFLOW.md`.
-- `GITHUB_WORKFLOW.md`, `DEVELOPMENT_GUIDE.md`, and `WORKING_CONVENTIONS.md` remain only as small compatibility pointers so historical links do not break; they contain no independent mutable canon and are removed from active Level-2 reading.
+- `GITHUB_PUBLICATION.md` is the sole GitHub rule book and includes the task-oriented route formerly carried by `GITHUB_WORKFLOW.md`.
 - Existing rule IDs are persistent identities, not ordinal positions. Sorting or inserting rules does not renumber old IDs.
 - Each canonical book contains explicit outbound and inbound cross-reference registries.
 - CI validates actual cross-book rule references against those registries and rejects nonexistent, duplicate, missing, stale, or asymmetric references.
@@ -28,9 +27,17 @@ The owner also required cold-start recovery after total context loss, unavoidabl
 - Every GitHub delivery makes a documentation-impact decision; affected documentation changes in the same scope, while a genuinely unaffected document is not touched mechanically.
 - Current and newly written documentation uses standard Markdown rather than decorative separator walls.
 
-## Useful-information boundary
+## Follow-up supersession — 2026-08-14
 
-“All useful information lives in the four files” is interpreted as **all useful current general normative information**. Product-specific technical contracts, measurements, evidence, current facts, and chronology remain useful but keep their specialist homes. Copying all of them into Level 1 would increase memory cost, duplicate sources of truth, and make documentation less reliable.
+The owner later refined two parts of this decision.
+
+First, retaining empty compatibility-pointer files is no longer the chosen end state. `GITHUB_WORKFLOW.md`, `DEVELOPMENT_GUIDE.md`, and `WORKING_CONVENTIONS.md` are removed after their useful current meaning and tracked Markdown references are migrated. Their former contents/history remain available in Git.
+
+Second, the blanket formulation that “all useful current general normative information belongs in the four rule books” is no longer needed as an additional rule. `DOC-014` is therefore retained at its permanent ID but marked `[ОТМЕНЕНО]` under the new rule lifecycle. The other bounded-role, single-home, cold-start, reconciliation, and navigation rules remain sufficient.
+
+The stable-ID, cross-reference, context-first cold-start, repository-state reuse, owner-instruction, explicit read-only, documentation-impact, and clean-Markdown conclusions of this decision remain active.
+
+The permanent cancellation/replacement lifecycle and Markdown-link integrity follow-up is recorded in `DEC-2026-08-14-rule-lifecycle-and-link-integrity.md`.
 
 ## Historical formatting boundary
 

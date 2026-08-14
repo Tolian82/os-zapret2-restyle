@@ -29,13 +29,7 @@ Read completely in this order (`DOC-016`):
 - [`USER_GUIDE_STRATEGY_LAB.md`](USER_GUIDE_STRATEGY_LAB.md) — user-facing Strategy Lab guide.
 - [`SECURITY.md`](SECURITY.md) — security reporting/reference.
 
-## Compatibility pointers — not active authority
-
-These paths are retained so historical links continue to resolve. They contain no independent mutable canon (`DOC-048`) and are not part of normal current-context reading:
-
-- [`GITHUB_WORKFLOW.md`](GITHUB_WORKFLOW.md) → current GitHub route/rules are in `GITHUB_PUBLICATION.md`;
-- [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) → current development route begins at `AGENTS.md` / `START_HERE.md`;
-- [`WORKING_CONVENTIONS.md`](WORKING_CONVENTIONS.md) → current rules/facts/contracts are routed to their canonical homes.
+The former duplicate quick-reference files `GITHUB_WORKFLOW.md`, `DEVELOPMENT_GUIDE.md`, and `WORKING_CONVENTIONS.md` were removed after their useful current meaning was migrated to the canonical homes above. They are not navigation targets or current authority.
 
 ## Level 3 — completed version-line archives
 
@@ -66,4 +60,4 @@ These stores preserve original chronology, rationale, and evidence. Historical s
 
 ## Integrity contract
 
-A documentation change must not strand a current authority, active specialist, completed version-line archive, compatibility target, or deep record store outside this map. Rule-reference integrity is independently protected by the four in-file registries and CI (`DOC-042`–`DOC-045`). `PROJECT_STATE.md` independently retains direct completed-archive links (`DOC-029`).
+A documentation change must not strand a current authority, active specialist, completed version-line archive, or deep record store outside this map. Rule-reference integrity is independently protected by the four in-file registries and CI (`DOC-042`–`DOC-045`). Local Markdown file/directory links and Markdown heading fragments are independently protected by `DOC-053` and CI. `PROJECT_STATE.md` independently retains direct completed-archive links (`DOC-029`).

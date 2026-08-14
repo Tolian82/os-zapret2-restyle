@@ -48,8 +48,21 @@ Current equivalent rules were rewritten for one clear meaning and placed in thei
 - `PROJECT_STATE.md` contains current facts, not version/documentation procedure.
 - `ROADMAP.md` contains the development plan, not version/release policy.
 - `INDEX.md` preserves independent navigation/integrity to all four books, current memory levels, archives, and deep history.
-- `WORKING_CONVENTIONS.md`, `DEVELOPMENT_GUIDE.md`, `GITHUB_WORKFLOW.md`, and `CONTRIBUTING.md` become noncanonical quick references/process maps that point to rule IDs.
-- CI documentation/governance tests validate the four-book boundary and rule-ID sequences rather than requiring old duplicated phrases in old files.
+- CI documentation/governance tests validate the four-book boundary and rule identities rather than requiring duplicated phrases in supporting documents.
+
+## Follow-up — permanent rule lifecycle and removal of duplicate quick references
+
+A later owner-approved refinement on the same date keeps the four-book decision intact and changes only its cleanup mechanics:
+
+- `GITHUB_PUBLICATION.md` keeps its filename and is explicitly the complete fourth book, **Правила работы с GitHub**;
+- `GITHUB_WORKFLOW.md`, `DEVELOPMENT_GUIDE.md`, and `WORKING_CONVENTIONS.md`, which had first been reduced to compatibility pointers, are physically removed after repository-wide reference migration because they contain no unique current canon;
+- canonical rule IDs are permanent and are not cascade-renumbered;
+- cancelled/replaced rules remain physically in their canonical books with lifecycle markers instead of disappearing;
+- local Markdown links/anchors are CI-validated so documentation paths can be removed without leaving dangling tracked links.
+
+The detailed follow-up is recorded in `DEC-2026-08-14-rule-lifecycle-and-link-integrity.md` and the current `DOC-*` rules.
+
+`CONTRIBUTING.md` remains a bounded noncanonical contributor entrypoint; it does not become a fifth rule book.
 
 ## Supersession boundary
 

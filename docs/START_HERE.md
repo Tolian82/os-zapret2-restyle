@@ -29,22 +29,24 @@ Documentation/CI-only `main` may be newer than the packaged source while package
 
 ## What was just established
 
-The documentation-governance audit tightened the four-book model without changing product/package code:
+The documentation-governance audit now has a stable rule-lifecycle and link-integrity model without changing product/package code:
 
 - all current general rules remain in exactly four canonical books;
-- the GitHub task route is now inside the single `GH-*` book; `GITHUB_WORKFLOW.md` is only a compatibility pointer;
-- `DEVELOPMENT_GUIDE.md` and `WORKING_CONVENTIONS.md` are compatibility pointers rather than extra mutable process/state stores;
-- existing rule IDs are persistent identities and are not renumbered merely for sorting;
-- every canonical book contains explicit outbound and inbound cross-reference registries;
-- CI validates rule-ID existence plus registry/body symmetry;
-- owner instructions are explicitly binding and must result in execution, persisted canon, or a concrete blocker;
-- a read-only boundary must be explicit rather than inferred from words such as `проверь` when the same instruction also says to act;
-- every GitHub change performs a documentation-impact check and updates affected documentation in the same logical scope;
-- cold start is context-first: handoff/state before the complete four-book canon, then plan/index/specialists;
-- already-read Level-1 material may be reused while the exact repository state is unchanged, reducing repeated context load;
-- current and newly written documentation uses normal Markdown rather than decorative `=====` walls.
+- `GITHUB_PUBLICATION.md` remains the fourth canonical book and is explicitly the complete **Правила работы с GitHub**;
+- obsolete duplicate files `GITHUB_WORKFLOW.md`, `DEVELOPMENT_GUIDE.md`, and `WORKING_CONVENTIONS.md` are physically removed after their useful current meaning and repository references are migrated;
+- rule IDs are permanent identities and are never cascade-renumbered merely because a rule is inserted, moved, or reorganized;
+- cancelling a rule does not delete its ID/text: the rule remains in its canonical book marked `[ОТМЕНЕНО]`; replacement uses `[ЗАМЕНЕНО НА <ID>]`;
+- cancelled/replaced IDs have no current normative force and are never recycled;
+- the former blanket `DOC-014` formulation about all useful normative information being in the four books is cancelled in place as unnecessary;
+- the former automatic read-only interpretation of words such as `проверь`/`аудит` is explicitly cancelled; active `CHAT-011` requires a real read-only prohibition;
+- every canonical book retains explicit outbound/inbound cross-reference registries;
+- CI validates active rule references, lifecycle state, replacement chains, and cross-reference symmetry;
+- CI also validates tracked local Markdown file/directory links and Markdown heading fragments;
+- cold start is context-first: `AGENTS -> START_HERE -> PROJECT_STATE -> four rule books -> ROADMAP -> INDEX -> selected specialists`;
+- already-read Level-1 material may be reused while the exact repository state is unchanged; after `main` advances, affected current/mandatory documents are reread;
+- every GitHub scope continues to perform a documentation-impact decision and keeps the active tree self-consistent.
 
-The detailed rules are canonical in `DOC-*`, `DEV-*`, `CHAT-*`, and `GH-*`; this handoff does not duplicate them.
+The detailed rules are canonical in `DOC-*`, `DEV-*`, `CHAT-*`, and `GH-*`; this handoff does not redefine them.
 
 ## Current product facts needed for the next code patch
 

@@ -23,11 +23,11 @@ DOC-004. **Historical text is preserved as history.** Decisions, devlogs, patche
 
 DOC-005. **Superseded rules stay superseded.** Check newer owner canon and explicit supersession before promoting an old statement into a current rule book.
 
-DOC-006. **Rule IDs are persistent identities, not ordinal positions.** Existing `DOC-*`, `DEV-*`, `CHAT-*`, and `GH-*` IDs are not renumbered merely because rules are sorted, inserted, merged, or rewritten. A new rule receives the next unused ID in its domain; a retired ID is not silently reused for a different meaning.
+DOC-006. **Rule IDs are permanent identities, not ordinal positions.** Existing `DOC-*`, `DEV-*`, `CHAT-*`, and `GH-*` IDs are not renumbered merely because rules are inserted, moved, grouped, merged, or rewritten. A new rule receives the next unused ID in its domain. Cascade renumbering of following rules is prohibited; any earlier noncanonical convention implying such renumbering is cancelled and must not be restored.
 
 DOC-007. **Cross-document references use rule IDs.** Active documents point to the canonical file and rule ID rather than copy full normative wording.
 
-DOC-008. **A rule-book change requires same-scope consistency reconciliation.** Adding, moving, merging, retiring, materially rewriting, or exceptionally migrating an ID requires review of dependent active documents, cross-reference registries, navigation, and automated checks.
+DOC-008. **A rule-book change requires same-scope consistency reconciliation.** Adding, moving, replacing, cancelling, materially rewriting, or exceptionally migrating an ID requires review of dependent active documents, cross-reference registries, navigation, and automated checks.
 
 ## Documentation purpose and authority
 
@@ -41,7 +41,7 @@ DOC-012. **One current fact has one primary current home.** Other active documen
 
 DOC-013. **Current authority and history are different.** Current rule books, current architecture, current state, and current handoff govern present work; archived or superseded material is read for rationale, chronology, or proof.
 
-DOC-014. **All useful current general normative information belongs in the four rule books; useful specialist information does not.** Product-specific stage orders, ports, paths, state machines, algorithms, measurements, protocol contracts, evidence, and other technical detail remain in requirements, architecture, current state/ledger, or proof records. Do not inflate Level 1 by copying the project into the rule books.
+DOC-014. **[ОТМЕНЕНО] All useful current general normative information belongs in the four rule books; useful specialist information does not.** This rule was cancelled by the owner on 2026-08-14 because the remaining documentation-role, single-home, cold-start, reconciliation, and navigation rules already provide the required integrity without this additional blanket formulation. The ID and original wording remain here permanently so existing references do not become ambiguous.
 
 ## Engineering memory and cold start
 
@@ -53,7 +53,7 @@ DOC-017. **Level 2 owns richer current-line detail.** `docs/history/current/vX.Y
 
 DOC-018. **Level 3 preserves detailed history.** Completed line archives plus original devlogs, patches, evidence, decisions, audits, releases, and Git history remain available without default loading.
 
-DOC-019. **`INDEX.md` is the integrity/navigation map.** It routes to the four rule books, Level-1 state/handoff/plan, current ledger, completed line archives, specialist documentation, compatibility pointers, and deep record stores.
+DOC-019. **`INDEX.md` is the integrity/navigation map.** It routes to the four rule books, Level-1 state/handoff/plan, current ledger, completed line archives, specialist documentation, and deep record stores.
 
 DOC-020. **Archiving never means deletion.** A compact archive may summarize a completed line while original detailed records remain intact and reachable.
 
@@ -109,21 +109,29 @@ DOC-041. **Documentation-policy changes are recorded here first.** Add or amend 
 
 ## Cross-reference integrity and maintainability
 
-DOC-042. **Each canonical rule book contains an explicit cross-reference registry.** The registry lists every cross-book rule reference made by rules in that file and every cross-book rule reference made into that file.
+DOC-042. **Each canonical rule book contains an explicit cross-reference registry.** The registry lists every cross-book rule reference made by active rules in that file and every active cross-book rule reference made into that file.
 
-DOC-043. **Cross-reference registries are bidirectional.** A source-book outbound reference and the target-book inbound reference must describe the same source/target relationship.
+DOC-043. **Cross-reference registries are bidirectional.** A source-book outbound reference and the target-book inbound reference must describe the same active source/target relationship.
 
-DOC-044. **Rule-ID migration is exceptional and atomic.** Ordinary edits never renumber existing IDs. If an ID must be replaced, the same logical change updates every rule body, registry, active-document reference, test, and navigation dependency before merge.
+DOC-044. **Rule-ID migration is exceptional and atomic.** Ordinary edits never renumber existing IDs. If an ID must be migrated, the old rule remains physically present and is marked `ЗАМЕНЕНО НА <ID>`; the same logical change updates every active rule body, registry, active-document reference, test, and navigation dependency before merge.
 
-DOC-045. **CI protects rule-reference integrity.** It must reject duplicate canonical IDs, references to nonexistent IDs, stale registry entries, missing registry entries, or asymmetric inbound/outbound relationships.
+DOC-045. **CI protects rule-reference integrity.** It must reject duplicate canonical IDs, references to nonexistent IDs, active-rule dependencies on cancelled/replaced IDs, invalid replacement targets or cycles, stale registry entries, missing registry entries, or asymmetric inbound/outbound relationships.
 
 DOC-046. **Current and newly written documentation uses clean standard Markdown.** Prefer one title, normal section headings, short paragraphs, bullets, tables, and code fences. Decorative separator walls such as long `=====` blocks are forbidden in current/active documents and new records. Historical Level-3 records need not be rewritten merely for style.
 
 DOC-047. **Every GitHub change performs an explicit documentation-impact check.** The result may legitimately be “no documentation change required” when no documented fact, contract, handoff, plan, rule, or user-facing behavior changed; otherwise the documentation change belongs in the same scope under `GH-053`–`GH-054`.
 
-DOC-048. **Compatibility pointers contain no independent current canon.** A legacy path retained to avoid breaking historical links may point to the current authority, but must not duplicate mutable rules, current state, or process detail.
+DOC-048. **[ОТМЕНЕНО] Compatibility pointers contain no independent current canon.** This rule was cancelled by the owner on 2026-08-14 for the former duplicate quick-reference documents. Those files are removed after repository-wide reference migration instead of being retained solely as compatibility placeholders. The ID and original wording remain reserved.
 
 DOC-049. **Level-1 reading is repository-state scoped.** Once the mandatory set has been fully read for an exact repository state, unchanged files need not be repeatedly reloaded during the same continuous work. If `main` advances, compare the new state and reread every affected mandatory/current document before further mutation under `GH-004` and `GH-026`.
+
+DOC-050. **Cancelled or replaced canonical rules are never physically deleted.** Keep the original rule at its permanent ID and place an explicit marker at the beginning of the rule title: `[ОТМЕНЕНО]` when it has no successor, or `[ЗАМЕНЕНО НА <ID>]` when another canonical rule supersedes it. Preserve enough original wording, date, and reason to understand what ceased to apply.
+
+DOC-051. **A cancelled or replaced rule has no current normative force.** Active rules and current documents must be reconciled away from a cancelled rule or toward the replacement rule in the same logical change. Historical Level-3 records may continue to cite the old permanent ID as history.
+
+DOC-052. **Rule lifecycle metadata is validated, not decorative.** Replacement targets must exist, replacement chains must terminate in an active rule, cycles are forbidden, cancelled/replaced IDs remain reserved, and an active canonical rule may not normatively depend on a cancelled/replaced rule.
+
+DOC-053. **Internal Markdown links are repository integrity.** Every tracked local Markdown link must resolve to an existing repository file/directory and, when a local Markdown fragment is supplied, to an existing heading/anchor. Deleting or renaming a documentation path requires repository-wide link migration in the same logical scope; CI rejects dangling local links before merge.
 
 ## Cross-reference registry
 
@@ -170,8 +178,13 @@ This registry is part of the rule contract. It is maintained with rule changes a
 | `DOC-044` | `DEV-046`, `CHAT-025`, `GH-055`, `GH-058` |
 | `DOC-045` | `DEV-046`, `CHAT-025`, `GH-055`, `GH-057`, `GH-058` |
 | `DOC-047` | `GH-053`, `GH-054`, `GH-057` |
+| `DOC-049` | `GH-006` |
+| `DOC-053` | `GH-057`, `GH-059` |
 <!-- RULE-XREF-IN-END -->
 
-## Retired rule IDs
+## Rule lifecycle
 
-None. When a rule is retired later, record the ID and replacement/reason here; never silently recycle it.
+- `DOC-014` — **ОТМЕНЕНО**, 2026-08-14; no replacement.
+- `DOC-048` — **ОТМЕНЕНО**, 2026-08-14; no replacement.
+
+Cancelled/replaced IDs remain physically in this file and are never recycled.
