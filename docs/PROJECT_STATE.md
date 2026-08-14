@@ -84,6 +84,33 @@ The first two now describe current Model-C architecture. The experiment-plan fil
 **HISTORICAL / COMPLETED**, preserves the experiment/evidence chain, and points to current Model-C
 authorities. Its former present-tense Model-B selection is no longer active documentation.
 
+## Accepted Model-C live evidence
+
+Production baseline `v0.4.0_26`, Extended `telegram.org`, `job.xhdgCU`:
+
+- Model C handled 16/16 candidates and the graph exhausted with zero winners;
+- no fallback occurred;
+- Stage 60 `34209 ms`;
+- Stage-90 restoration passed;
+- normal Zapret2 remained running;
+- no temporary firewall-rule residue remained.
+
+Latest `_12` lifecycle/readiness replay:
+
+- 5/5 completed;
+- 5/5 `model_c_only=true`;
+- no fallback observed in the retained live replay;
+- lifecycle/RSS evidence complete;
+- cleanup/restoration PASS;
+- physical-segment startup median `82.5 ms`;
+- median aggregate RSS `4366 KiB`.
+
+Latest evidence:
+`docs/verification/evidence/2026-08-14-v0.4.1_12-warm-readiness-live-pass.md`.
+
+These accepted live records are retained as current evidence for the Model-C direction; they are not
+old model-selection gates.
+
 ## Model-C behavior already accepted and preserved
 
 - native adaptive graph/planner and immutable CandidateSpec;
@@ -99,21 +126,6 @@ authorities. Its former present-tense Model-B selection is no longer active docu
 - finite `eligible-work-v1` adaptive budgets;
 - cleanup/cancellation containment and Stage-90 semantic restoration;
 - downstream Stage 70/80/85/result ownership.
-
-## Accepted live evidence
-
-Latest `_12` lifecycle/readiness evidence:
-
-- 5/5 completed;
-- 5/5 `model_c_only=true`;
-- no fallback observed in the retained live replay;
-- lifecycle/RSS evidence complete;
-- cleanup/restoration PASS;
-- physical-segment startup median `82.5 ms`;
-- median aggregate RSS `4366 KiB`.
-
-Evidence:
-`docs/verification/evidence/2026-08-14-v0.4.1_12-warm-readiness-live-pass.md`.
 
 ## Closed measurement questions
 
@@ -139,9 +151,11 @@ Current docs-only work is the canon-lock and active-documentation reconciliation
 
 No runtime/source/package metadata change is part of this corrective.
 
-## Exact next packaged source change — `v0.4.1_13`
+## Current next packaged source change — `v0.4.1_13`
 
-Make Model C the **only normal production Stage-60 runtime**:
+Make Model C the only normal production Stage-60 runtime.
+
+Required scope:
 
 - remove automatic production replay through Model B/cold Model A;
 - keep Model-C infrastructure failures explicit and bounded;
