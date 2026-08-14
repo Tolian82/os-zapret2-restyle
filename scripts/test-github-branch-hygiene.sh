@@ -53,15 +53,18 @@ require_fixed 'GITHUB_PUBLICATION.md' "${INDEX}" 'INDEX does not route to GitHub
 
 require_fixed 'GH-001.' "${GH_RULES}" 'GitHub connector-first rule is missing'
 require_fixed 'GH-007.' "${GH_RULES}" 'scope/risk preflight rule is missing'
+require_fixed 'GH-009. **[ОТМЕНЕНО]' "${GH_RULES}" 'cancelled broad-reconciliation rule marker is missing'
+require_fixed 'GH-016.' "${GH_RULES}" 'scope-proportionate validation rule is missing'
 require_fixed 'GH-021.' "${GH_RULES}" 'latest-head CI rule is missing'
 require_fixed 'GH-024.' "${GH_RULES}" 'exact-head merge rule is missing'
-require_fixed 'GH-027.' "${GH_RULES}" 'forward-only published-history rule is missing'
+require_fixed 'GH-027.' "${GH_RULES}" 'forward-only published-release identity rule is missing'
 require_fixed 'GH-034.' "${GH_RULES}" 'testing-package GitHub boundary is missing'
 require_fixed 'GH-039.' "${GH_RULES}" 'full-release GitHub boundary is missing'
 require_fixed 'GH-047.' "${GH_RULES}" 'second-component transition GitHub guard is missing'
 require_fixed 'GH-049.' "${GH_RULES}" 'release-trigger classification rule is missing'
 require_fixed 'GH-055.' "${GH_RULES}" 'GitHub rule maintenance boundary is missing'
 
+require_fixed 'CHAT-001.' "${CHAT_RULES}" 'owner-facing Russian-language rule is missing'
 require_fixed 'CHAT-008.' "${CHAT_RULES}" 'chat Stop rule is missing'
 require_fixed 'CHAT-009.' "${CHAT_RULES}" 'chat record/fix canon rule is missing'
 require_fixed 'CHAT-010.' "${CHAT_RULES}" 'ordinary action authorization rule is missing'
@@ -100,9 +103,17 @@ require_fixed 'prerelease: false' "${RELEASE_WORKFLOW}" 'full release workflow s
 require_fixed 'Publish pkg repository' "${RELEASE_WORKFLOW}" 'full release workflow does not publish pkg repository'
 require_fixed 'pages/FreeBSD:15:amd64' "${RELEASE_WORKFLOW}" 'full release workflow does not verify Web/pkg outputs'
 
-# Ordinary PR/main controls remain mandatory.
+# Ordinary PR/main controls remain mandatory, with a focused path for Markdown-only documentation changes.
 require_fixed 'concurrency:' "${CI}" 'CI concurrency is missing'
 require_fixed 'Classify changed paths' "${CI}" 'CI path classification is missing'
+require_fixed 'docs_only: ${{ steps.paths.outputs.docs_only }}' "${CI}" 'CI does not expose docs-only classification'
+require_fixed "grep -Ev '^(AGENTS\\.md|README\\.md|docs/.*\\.md)$'" "${CI}" 'docs-only path boundary is missing'
+require_fixed 'name: Validate documentation' "${CI}" 'focused documentation validation job is missing'
+require_fixed "needs.changes.outputs.docs_only == 'true'" "${CI}" 'documentation validation is not gated by docs-only classification'
+require_fixed "needs.changes.outputs.docs_only != 'true'" "${CI}" 'full product validation is not skipped for docs-only PRs'
+require_fixed 'run: sh scripts/test-release-trigger.sh' "${CI}" 'focused documentation validation lacks release-governance test'
+require_fixed 'run: sh scripts/test-github-branch-hygiene.sh' "${CI}" 'focused documentation validation lacks GitHub-governance test'
+require_fixed 'run: sh scripts/test-repository-hygiene.sh' "${CI}" 'focused documentation validation lacks repository-integrity test'
 require_fixed 'Verify main integrity' "${CI}" 'main integrity job is missing'
 require_fixed 'Invalid main commit subject' "${CI}" 'main squash-subject validation is missing'
 require_fixed 'Validate versioned PR and commit subjects' "${TITLE_WORKFLOW}" 'versioned PR/commit validation is missing'
@@ -115,4 +126,4 @@ if grep -Eq '"(governance|docs|ci|chore): "\*' "${TITLE_WORKFLOW}"; then
   fail 'unversioned conventional-title exception remains in PR title validation'
 fi
 
-echo "GitHub four-book governance, delivery, release, and repository controls passed for candidate ${expected}."
+echo "GitHub four-book governance, scoped CI, delivery, release, and repository controls passed for candidate ${expected}."
