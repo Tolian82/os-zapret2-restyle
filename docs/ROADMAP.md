@@ -48,7 +48,8 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
 - [ ] Model-C-only production (`v0.4.1_13`)
   - [x] remove automatic B/A production fallback from the normal packaged Stage-60 path
   - [x] keep explicit Model B/A reference/benchmark/test overrides
-  - [ ] exact-head corrective matrix + FreeBSD-15 qualification
+  - [x] exact-head corrective matrix + FreeBSD-15 qualification
+  - [x] exact verified head squash-merged to `main`
   - [ ] owner-live Model-C-only regression
 - [ ] Risk-selected Strategy Lab regression coverage
   - [ ] initial Zapret2 STOPPED state
@@ -76,13 +77,17 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
 
 ## Current priority — finish `v0.4.1_13`
 
-Model selection is closed and the source change is defined: normal production Stage 60 routes through the Model-C-only owner, while Model B/A remain explicit reference tooling.
+Model selection is closed. Normal production Stage 60 is Model-C-only in merged source `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`, while Model B/A remain explicit reference tooling.
 
-Current gates:
+Completed automated gates:
 
-- run the complete Strategy Lab corrective matrix on the exact PR head;
-- run FreeBSD 15 package qualification on that same head;
-- squash-merge only the verified head;
+- complete Strategy Lab corrective matrix PASS on exact PR head `8e1af17ce4ccfaad4851329167b386741d0c9ee8`;
+- FreeBSD 15 package build/inspection qualification PASS on the same head;
+- squash merge to `main` complete;
+- GitHub Actions CI run `31819116248` complete successfully.
+
+Remaining live gate:
+
 - publish a persistent `_13` testing package only when testing-package delivery is requested;
 - perform one selected owner-live normal Model-C-only regression;
 - verify correct result handling, explicit no-fallback behavior, Stage-90 restoration, and absence of temporary IPFW/process/socket residue.

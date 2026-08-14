@@ -22,12 +22,13 @@ This file answers: **what has just been established at the current `_N` boundary
 - current state line: `v0.4.x`;
 - current development stage: `v0.4.1`;
 - current source package candidate: `os-zapret2-restyle-0.4.1_13.pkg`;
+- `_13` source merge: `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
 - latest published testing package/tag remains `os-zapret2-restyle-0.4.1_12.pkg` / `v0.4.1_12` until a separate testing-package publication is requested;
 - required ABI: `FreeBSD:15:amd64`.
 
 Resolve the exact current `main` SHA at execution time under `GH-004`. A source candidate and a persistently published testing package are distinct identities (`DEV-033`, `GH-047`–`GH-050`).
 
-## What was just established — Model-C-only production
+## What was established — Model-C-only production
 
 `v0.4.1_13` closes the transitional Stage-60 runtime chain without changing search semantics:
 
@@ -51,19 +52,22 @@ Detailed runtime contract: [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture
 
 Detailed measurements and proof links are in [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
 
-## `_13` automated acceptance
+## `_13` automated acceptance — PASS
 
-Before `_13` is considered source-complete and mergeable:
+The `_13` source boundary is complete and merged:
 
-- normal production Stage 60 must reach Model C only;
-- an injected Model-C infrastructure failure must produce explicit bounded failure with no B/A replay;
-- cleanup must remain bounded on success/failure/cancel;
-- source-port leasing/attribution and segmentation must remain correct;
-- the complete Strategy Lab corrective matrix must pass;
-- FreeBSD 15 package qualification must pass on the exact PR head;
-- merge must use that exact verified head under `GH-024`–`GH-026`.
+- PR `#230` exact verified head: `8e1af17ce4ccfaad4851329167b386741d0c9ee8`;
+- normal production Stage 60 reaches Model C only;
+- injected Model-C infrastructure failure produces explicit bounded failure with no B/A replay;
+- cleanup, source-port leasing/attribution and profile segmentation regressions pass;
+- complete Strategy Lab corrective matrix: PASS;
+- FreeBSD 15 package build/inspection qualification: PASS;
+- PR title/governance checks: PASS;
+- exact verified head squash-merged as `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`.
 
-## Immediate post-merge/live gate
+GitHub Actions CI run: `31819116248`.
+
+## Immediate remaining `_13` live gate
 
 `_13` owner-live acceptance still requires one selected normal Model-C-only run on OPNsense with:
 
@@ -72,7 +76,7 @@ Before `_13` is considered source-complete and mergeable:
 - Stage-90 semantic restoration PASS;
 - no temporary IPFW/process/socket residue.
 
-A persistent `v0.4.1_13` testing package/tag is published only when testing-package delivery is requested; do not infer publication merely from source merge.
+A persistent `v0.4.1_13` testing package/tag is published only when testing-package delivery is requested; source merge and CI artifact creation do **not** constitute persistent testing-package publication.
 
 After the selected `_13` owner-live PASS, return to [`ROADMAP.md`](ROADMAP.md) and take the next accepted risk-selected product task. Do not reopen A/B/C selection or closed measurement experiments by inertia.
 
