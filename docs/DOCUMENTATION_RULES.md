@@ -65,7 +65,7 @@ DOC-022. **The top of `START_HERE.md` provides direct orientation links.** `PROJ
 
 DOC-023. **`START_HERE.md` is not a patch diary.** It carries the current `_N` boundary rather than a copy of every previous revision.
 
-DOC-024. **Completed handoff facts flow forward.** Durable current facts move to `PROJECT_STATE.md`; detailed execution/proof remains in the current ledger or deep records.
+DOC-024. **Current-work documentation follows one state-flow: `START_HERE -> PROJECT_STATE -> archive`.** Active work and the immediate next boundary live in `START_HERE.md`. When a result becomes a durable current fact for the active second-component line, it flows into `PROJECT_STATE.md`. When that line closes, the final state flows into the version-line archive under `DOC-028`–`DOC-030`. The current ledger and deep records may preserve chronology, rationale, measurements, and proof, but they are not parallel owners of current state.
 
 DOC-025. **The handoff names the exact next task.** A fresh session must not rediscover completed investigations merely to identify the next approved change.
 
@@ -83,7 +83,7 @@ DOC-030. **The final-state-snapshot archive model starts with closure of `v0.4.x
 
 ## Master plan and current ledger
 
-DOC-031. **`ROADMAP.md` is the complete concise master plan.** It contains the short lifetime path, current priority, and every known future development intention at least once.
+DOC-031. **`ROADMAP.md` is the complete concise master plan.** It contains the short lifetime path, current priority, and every owner-approved or otherwise accepted future development direction at least once. Ideas, hypotheses, rejected options, and unapproved possibilities do not become roadmap commitments merely because they were mentioned.
 
 DOC-032. **The roadmap keeps the major completed path visible without becoming a devlog.**
 
@@ -95,7 +95,7 @@ DOC-035. **Standalone deep records must add distinct value.** Create them for di
 
 ## Reconciliation and release presentation
 
-DOC-036. **Every logical development scope begins and ends with documentation reconciliation.** Before implementation, establish the current handoff/state/rules; before completion, reconcile every affected active fact, contract, handoff, plan, and proof pointer.
+DOC-036. **Every logical development scope begins and ends with documentation reconciliation.** Before implementation, establish the current handoff/state/rules; before completion, reconcile every affected active fact, contract, handoff, plan, and proof pointer. The reconciliation decision is mandatory, but editing documentation files is not: when nothing documented changed, the correct result is an evidence-based no-op under `DOC-047`.
 
 DOC-037. **Every GitHub delivery includes a documentation-impact decision.** If committed behavior, facts, contracts, next work, or governance changed, update affected documentation in the same logical PR; GitHub execution follows `GH-053`.
 
@@ -133,6 +133,8 @@ DOC-052. **Rule lifecycle metadata is validated, not decorative.** Replacement t
 
 DOC-053. **Internal Markdown links are repository integrity.** Every tracked local Markdown link must resolve to an existing repository file/directory and, when a local Markdown fragment is supplied, to an existing heading/anchor. Deleting or renaming a documentation path requires repository-wide link migration in the same logical scope; CI rejects dangling local links before merge.
 
+DOC-054. **Choose rule lifecycle actions by meaning, not convenience.** Create a new rule only for a new durable normative principle that is not already covered. Modify an existing active rule when its normative identity remains the same and the change only clarifies, narrows, strengthens, or otherwise refines that same principle. Cancel a rule when its requirement no longer applies and has no successor. Replace a rule when the old normative meaning ceases to apply and a materially different durable rule takes its place. One-off tasks, current implementation facts, test results, temporary plans, and ordinary handoff state are not new canonical rules; route them through the current-work flow in `DOC-024` and the appropriate state/history documents.
+
 ## Cross-reference registry
 
 This registry is part of the rule contract. It is maintained with rule changes and validated by CI under `DOC-042`–`DOC-045`.
@@ -157,8 +159,6 @@ This registry is part of the rule contract. It is maintained with rule changes a
 | Target rule | Referenced by |
 |---|---|
 | `DOC-003` | `CHAT-009` |
-| `DOC-004` | `GH-009` |
-| `DOC-005` | `GH-009` |
 | `DOC-008` | `DEV-046`, `CHAT-009`, `CHAT-025`, `GH-055` |
 | `DOC-011` | `GH-054` |
 | `DOC-012` | `GH-054` |
