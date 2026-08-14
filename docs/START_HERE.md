@@ -8,8 +8,8 @@
 - **Master development plan:** [`ROADMAP.md`](ROADMAP.md)
 - **Documentation/navigation index:** [`INDEX.md`](INDEX.md)
 
-**Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1  
-**Updated:** 2026-08-14  
+**Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
+**Updated:** 2026-08-14
 **Current handoff identity:** `v0.4.1_12`
 
 This file answers: **what has just been established at the current `_N` boundary, what is its effect, and what happens next?**

@@ -1,13 +1,13 @@
 # os-zapret2-restyle — Master development plan
 
-**Status:** CURRENT · COMPLETE CONCISE PLAN  
+**Status:** CURRENT · COMPLETE CONCISE PLAN
 **Updated:** 2026-08-14
 
-Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md).  
-Exact revision handoff: [`START_HERE.md`](START_HERE.md).  
-Documentation rules: [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md).  
-Project-development rules: [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md).  
-Current-line detail: [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
+- Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
+- Exact revision handoff: [`START_HERE.md`](START_HERE.md)
+- Documentation rules: [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md)
+- Project-development rules: [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md)
+- Current-line detail: [`history/current/v0.4.x.md`](history/current/v0.4.x.md)
 
 This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and release semantics remain canonical in `DEV-027`–`DEV-040`.
 

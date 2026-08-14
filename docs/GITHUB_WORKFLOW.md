@@ -1,6 +1,6 @@
 # GitHub workflow — compatibility pointer
 
-**Status:** LEGACY COMPATIBILITY POINTER · NONCANONICAL  
+**Status:** LEGACY COMPATIBILITY POINTER · NONCANONICAL
 **Updated:** 2026-08-14
 
 This path is retained only so historical links do not break.

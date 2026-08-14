@@ -1,6 +1,6 @@
 # os-zapret2-restyle — Engineering memory index
 
-**Status:** NAVIGATION / INTEGRITY MAP · NOT A CURRENT-STATE NARRATIVE  
+**Status:** NAVIGATION / INTEGRITY MAP · NOT A CURRENT-STATE NARRATIVE
 **Updated:** 2026-08-14
 
 This file answers only: **where should I look?** Its role is defined by `DOC-019`–`DOC-020`.

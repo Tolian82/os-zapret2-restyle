@@ -1,6 +1,6 @@
 # Decision: Stable rule references and active-document consolidation
 
-**Date:** 2026-08-14  
+**Date:** 2026-08-14
 **Status:** ACTIVE · EXTENDS FOUR-RULE-BOOK DECISION
 
 ## Context

@@ -17,6 +17,7 @@ DEV_POINTER="${ROOT_DIR}/docs/DEVELOPMENT_GUIDE.md"
 WORK_POINTER="${ROOT_DIR}/docs/WORKING_CONVENTIONS.md"
 XREF_TEST="${ROOT_DIR}/scripts/test-rule-cross-references.py"
 CURRENT_LEDGER="${ROOT_DIR}/docs/history/current/v0.4.x.md"
+RULE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-14-rule-cross-reference-integrity.md"
 ARCHIVE_01="${ROOT_DIR}/docs/history/archive/v0.1.x.md"
 ARCHIVE_02="${ROOT_DIR}/docs/history/archive/v0.2.x.md"
 ARCHIVE_03="${ROOT_DIR}/docs/history/archive/v0.3.x.md"
@@ -41,8 +42,8 @@ done
 for file in \
     "${AGENTS}" "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}" \
     "${START_HERE}" "${PROJECT_STATE}" "${ROADMAP}" "${INDEX}" "${CURRENT_LEDGER}" \
-    "${ARCHIVE_01}" "${ARCHIVE_02}" "${ARCHIVE_03}" "${GH_POINTER}" "${DEV_POINTER}" \
-    "${WORK_POINTER}" "${XREF_TEST}"
+    "${RULE_DECISION}" "${ARCHIVE_01}" "${ARCHIVE_02}" "${ARCHIVE_03}" "${GH_POINTER}" \
+    "${DEV_POINTER}" "${WORK_POINTER}" "${XREF_TEST}"
 do
     test -s "${file}" || fail "required documentation/integrity file is missing: ${file}"
 done
@@ -98,10 +99,18 @@ do
     require_fixed 'DOC-048' "${pointer}" "legacy pointer does not bind itself to DOC-048: ${pointer}"
 done
 
-for file in "${AGENTS}" "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}" "${START_HERE}" "${PROJECT_STATE}" "${ROADMAP}" "${INDEX}" "${GH_POINTER}" "${DEV_POINTER}" "${WORK_POINTER}"
+for file in \
+    "${AGENTS}" "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}" \
+    "${START_HERE}" "${PROJECT_STATE}" "${ROADMAP}" "${INDEX}" "${CURRENT_LEDGER}" \
+    "${RULE_DECISION}" "${GH_POINTER}" "${DEV_POINTER}" "${WORK_POINTER}"
 do
     if grep -Eq '^={8,}$' "${file}"; then
         fail "decorative equals-sign banner remains in current/active documentation: ${file}"
+    fi
+    if grep -nE '[[:blank:]]+$' "${file}" >/dev/null; then
+        echo "Trailing whitespace in current/active documentation: ${file}" >&2
+        grep -nE '[[:blank:]]+$' "${file}" >&2 || true
+        exit 1
     fi
 done
 
@@ -112,4 +121,4 @@ require_fixed 'v0.3.x archive' "${PROJECT_STATE}" 'PROJECT_STATE lacks v0.3.x ar
 
 require_fixed 'scripts/test-repository-hygiene.sh' "${CI}" 'repository hygiene test is not wired into CI'
 
-echo 'Repository artifact, four-rule-book, cross-reference, Level-1, compatibility, archive, style, and INDEX integrity tests passed.'
+echo 'Repository artifact, four-rule-book, cross-reference, Level-1, compatibility, archive, style, whitespace, and INDEX integrity tests passed.'

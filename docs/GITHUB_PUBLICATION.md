@@ -1,6 +1,6 @@
 # GitHub rules
 
-**Status:** CANONICAL · MANDATORY LEVEL 1  
+**Status:** CANONICAL · MANDATORY LEVEL 1
 **Updated:** 2026-08-14
 
 This file is the single normative home for working with GitHub in this project: repository access, preflight, branches, PRs, CI, merges, testing packages, full releases, and repository hygiene. The filename is retained for link compatibility; its scope is all GitHub work, not publication only.
