@@ -37,7 +37,7 @@ The documentation-governance audit now has a stable rule-lifecycle and link-inte
 - rule IDs are permanent identities and are never cascade-renumbered merely because a rule is inserted, moved, or reorganized;
 - cancelling a rule does not delete its ID/text: the rule remains in its canonical book marked `[ОТМЕНЕНО]`; replacement uses `[ЗАМЕНЕНО НА <ID>]`;
 - cancelled/replaced IDs have no current normative force and are never recycled;
-- the former blanket `DOC-014` formulation about all useful normative information being in the four books is cancelled in place as unnecessary;
+- the former blanket formulation about all useful normative information being in the four books is cancelled as unnecessary;
 - the former automatic read-only interpretation of words such as `проверь`/`аудит` is explicitly cancelled; active `CHAT-011` requires a real read-only prohibition;
 - every canonical book retains explicit outbound/inbound cross-reference registries;
 - CI validates active rule references, lifecycle state, replacement chains, and cross-reference symmetry;
