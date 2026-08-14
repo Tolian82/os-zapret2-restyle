@@ -1,11 +1,11 @@
 # os-zapret2-restyle — START HERE
 
-**Current project state:** [`PROJECT_STATE.md`](PROJECT_STATE.md)  
-**Documentation rules:** [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md)  
-**Permanent project principles:** [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md)  
-**GitHub delivery/release rules:** [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md)  
-**Master development plan:** [`ROADMAP.md`](ROADMAP.md)  
-**Documentation/navigation index:** [`INDEX.md`](INDEX.md)
+- **Current project state:** [`PROJECT_STATE.md`](PROJECT_STATE.md)
+- **Documentation rules:** [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md)
+- **Permanent project principles:** [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md)
+- **GitHub delivery/release rules:** [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md)
+- **Master development plan:** [`ROADMAP.md`](ROADMAP.md)
+- **Documentation/navigation index:** [`INDEX.md`](INDEX.md)
 
 Status: **AUTHORITATIVE REVISION HANDOFF / LEVEL 1**
 Updated: 2026-08-14
