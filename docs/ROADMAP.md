@@ -50,6 +50,7 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
   - [x] keep explicit Model B/A reference/benchmark/test overrides
   - [x] exact-head corrective matrix + FreeBSD-15 qualification
   - [x] exact verified head squash-merged to `main`
+  - [x] persistent testing package `v0.4.1_13` published and verified
   - [ ] owner-live Model-C-only regression
 - [ ] Risk-selected Strategy Lab regression coverage
   - [ ] initial Zapret2 STOPPED state
@@ -77,19 +78,21 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
 
 ## Current priority — finish `v0.4.1_13`
 
-Model selection is closed. Normal production Stage 60 is Model-C-only in merged source `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`, while Model B/A remain explicit reference tooling.
+Model selection is closed. Normal production Stage 60 is Model-C-only in source merge `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`, while Model B/A remain explicit reference tooling.
 
-Completed automated gates:
+Completed delivery gates:
 
 - complete Strategy Lab corrective matrix PASS on exact PR head `8e1af17ce4ccfaad4851329167b386741d0c9ee8`;
 - FreeBSD 15 package build/inspection qualification PASS on the same head;
 - squash merge to `main` complete;
-- GitHub Actions CI run `31819116248` complete successfully.
+- source CI run `31819116248` complete successfully;
+- persistent testing prerelease `v0.4.1_13` published from the exact source merge;
+- publication workflow run `31838633599` complete successfully;
+- package `os-zapret2-restyle-0.4.1_13.pkg` verified as `FreeBSD:15:amd64`, SHA-256 `7a2f864aa14ba2170ca378954ab5421092b76aca79b7b1765b976de2f024797b`.
 
 Remaining live gate:
 
-- publish a persistent `_13` testing package only when testing-package delivery is requested;
-- perform one selected owner-live normal Model-C-only regression;
+- perform one selected owner-live normal Model-C-only regression on OPNsense using the published `_13` package;
 - verify correct result handling, explicit no-fallback behavior, Stage-90 restoration, and absence of temporary IPFW/process/socket residue.
 
 After the selected `_13` owner-live PASS, move to the accepted risk-selected Strategy Lab regression backlog rather than reopening historical A/B/C selection or closed Lua/BLOB/discovery/lifecycle experiments.
