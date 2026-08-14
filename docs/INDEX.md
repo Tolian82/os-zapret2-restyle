@@ -47,12 +47,14 @@ It strengthens the prior zero-memory decision and establishes:
 - one unambiguous owner fact/decision is enough; do not repeatedly reconfirm it;
 - DNS is fixed/currently working unless fresh direct evidence shows a new problem;
 - Model C is selected; A/B/C production model selection is closed;
-- `зафиксируй` means a full review/correction of all conflicting active authority docs;
+- `зафиксируй` means a full review/correction of all conflicting active/current-looking authority docs;
 - stale tests/contracts do not override current canon;
 - owner-facing project reports are understandable Russian by default;
 - routine temporary branch/repository cleanup is part of normal completion;
 - root architecture and base Strategy Lab architecture were corrected after stale `_31` / unselected
-  A/B/C wording was found in active files.
+  A/B/C wording was found;
+- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` was changed from misleading current
+  Model-B-era plan to **HISTORICAL / COMPLETED** experiment/evidence history.
 
 Prior continuity decision remains historical foundation:
 `docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`.
@@ -77,7 +79,13 @@ Current top-level/base architecture is also synchronized in:
 - `docs/ARCHITECTURE.md`;
 - `docs/architecture/STRATEGY_LAB.md`.
 
-Do not let historical A/B/C experiment records override these current authorities.
+Historical A/B/C experiment navigation:
+
+- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — historical/completed summary and
+  evidence index only; full pre-archive plan remains in Git history at
+  `938d01bca0617d4dad6e4715e637ebd2a3cb11f4`.
+
+Do not let historical A/B/C experiment records override current Model-C authority.
 
 ## Retained evidence navigation
 
