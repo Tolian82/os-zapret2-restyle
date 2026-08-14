@@ -20,29 +20,24 @@ Strategy Lab backlog.
 Current packaged source: `v0.4.1_12`.
 Next packaged source change: **`v0.4.1_13` — Model-C-only production finalization**.
 
+## Documentation/continuity architecture — completed
+
+The current documentation architecture establishes:
+
+- mandatory always-read `PROJECT_PRINCIPLES.md`;
+- startup path `AGENTS -> PROJECT_PRINCIPLES -> START_HERE -> PROJECT_STATE -> task specialists`;
+- current `START_HERE` handoff;
+- current `_12` state instead of stale `_6/_7` guidance;
+- scope-first GitHub preflight;
+- mandatory three-part documentation for every delivery;
+- plan reconciliation immediately before publication;
+- explicit preservation of both near-term and long-term plans;
+- audits remain first-class work when owner/current plan/new evidence requires them.
+
+Future sessions should use this documentation rather than reconstructing the same project state from
+chat history or broad GitHub discovery.
+
 ## Immediate ordered plan
-
-### 0. Documentation/governance handoff — current docs-only change
-
-Purpose:
-
-- make permanent project principles guaranteed startup context;
-- make documentation the reliable operational memory it was originally designed to be;
-- remove stale `_6/_7` current-state/roadmap guidance;
-- record exact `_12` state and `_13` next action;
-- make every future GitHub delivery carry synchronized documentation for scope/reason, expected
-  result and complete near/long-term plan;
-- require plan reconciliation immediately before publication.
-
-Expected result:
-
-- a new chat reads `AGENTS -> PROJECT_PRINCIPLES -> START_HERE -> PROJECT_STATE` and can begin the
-  documented task without reconstructing project history;
-- audits remain valid when the plan/owner/evidence requires them;
-- ordinary known-scope work no longer pays for unrelated full GitHub/repository inventory;
-- current docs no longer point backward to `_6/_7` as the active boundary.
-
-After merge: start `_13` directly if current repository state still matches the handoff.
 
 ### 1. `v0.4.1_13` — Model-C-only production finalization
 
