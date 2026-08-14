@@ -6,8 +6,11 @@ This file answers: **How are project changes/packages/releases delivered through
 
 Permanent principles: `docs/PROJECT_PRINCIPLES.md`.
 Current task: `docs/START_HERE.md`.
+Operational handoff/preflight authority: `docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md`.
 
-Read this file completely immediately before GitHub mutation.
+Read this file completely immediately before GitHub mutation. The decision above records rationale and
+supersession boundaries; it is not an additional mandatory reread for every ordinary mutation unless
+the current operation needs that rationale.
 
 ## GitHub plugin boundary
 
@@ -70,8 +73,8 @@ Derive from proposed head:
 - package revision from `PLUGIN_REVISION`;
 - title prefix `v<VERSION>_<PLUGIN_REVISION>:` for non-zero revision.
 
-Every PR title, substantive branch commit subject and final squash subject uses the exact candidate
-prefix. Docs/governance/CI-only changes do not alter package metadata.
+Every PR title, PR-branch commit subject and final squash subject uses the exact candidate prefix.
+Docs/governance/CI-only changes do not alter package metadata.
 
 ## Ordinary development flow
 
