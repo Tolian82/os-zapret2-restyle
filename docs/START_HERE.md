@@ -10,7 +10,7 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-14
-**Current handoff identity:** `v0.4.1_12`
+**Current handoff identity:** `v0.4.1_13`
 
 This file answers: **what has just been established at the current `_N` boundary, what is its effect, and what happens next?**
 
@@ -18,61 +18,67 @@ This file answers: **what has just been established at the current `_N` boundary
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
-- `PLUGIN_REVISION=12`;
+- `PLUGIN_REVISION=13`;
 - current state line: `v0.4.x`;
 - current development stage: `v0.4.1`;
-- current testing package/tag: `os-zapret2-restyle-0.4.1_12.pkg` / `v0.4.1_12`;
-- packaged runtime/source merge: `acf65d39eaa88a16debe1d35affa71f03f1d848d`;
+- current source package candidate: `os-zapret2-restyle-0.4.1_13.pkg`;
+- latest published testing package/tag remains `os-zapret2-restyle-0.4.1_12.pkg` / `v0.4.1_12` until a separate testing-package publication is requested;
 - required ABI: `FreeBSD:15:amd64`.
 
-Documentation/CI-only `main` may be newer than the packaged source while package identity remains `_12` (`DEV-033`).
+Resolve the exact current `main` SHA at execution time under `GH-004`. A source candidate and a persistently published testing package are distinct identities (`DEV-033`, `GH-047`–`GH-050`).
 
-## What was just established
+## What was just established — Model-C-only production
 
-The documentation/governance rules were audited again without changing product/package code:
+`v0.4.1_13` closes the transitional Stage-60 runtime chain without changing search semantics:
 
-- owner-facing project explanations must be written as normal Russian sentences; literal English technical names may remain only as object names, while service-status/process jargon is translated unless quoted literally;
-- current work has one documentation flow: `START_HERE -> PROJECT_STATE -> version-line archive`;
-- `START_HERE.md` owns active work and the immediate next boundary; durable completed facts flow into `PROJECT_STATE.md`; line closure moves final state into the archive;
-- current ledgers, decisions, devlogs, and evidence preserve chronology/rationale/proof but are not parallel owners of current state;
-- rule maintenance now has an explicit decision boundary: create a new rule only for a new durable normative principle; refine an existing rule when its identity remains the same; cancel it when it no longer applies; replace it when a materially different durable rule supersedes it;
-- one-off tasks, test results, temporary plans, and ordinary current work do not become canonical rules merely because they are currently important;
-- the former mandatory broad GitHub reconciliation rule is cancelled; targeted dependency/reference reconciliation plus scope/risk inspection replaces its repository-wide audit requirement;
-- documentation reconciliation remains mandatory for every logical scope, but editing documentation files is not required when the evidence-based result is that documented state did not change;
-- roadmap commitments are limited to owner-approved or otherwise accepted future development directions, not every idea mentioned during discussion;
-- release tag/asset identity remains immutable, while human-facing release notes may be transparently corrected when binary identity and publication truth do not change;
-- CI is being aligned with scope/risk: pure documentation changes use focused documentation/governance integrity checks, while product/package changes retain the full product matrix and package qualification as applicable.
+- the packaged `stage60-parallel` compatibility command routes normal production through `strategy_lab_py/stage60_model_c_production.py`;
+- the production owner reuses the proven Model-C `_bucket_batch` engine and the existing authoritative Stage-60 planner;
+- normal production Model-C infrastructure/selector/rendering/readiness/attribution/cleanup failure becomes an explicit bounded structural Stage-60 failure;
+- that failure is deliberately not a `WarmInfrastructureError`, so the legacy Model-B/cold-Model-A fallback handler cannot consume it;
+- persisted Stage-60 evidence marks `model_c_only=true` and `cold_fallback_available=false` when a result file exists;
+- automatic production replay through Model B and cold Model A is removed;
+- Model B and Model A remain available only through explicit reference/benchmark/test overrides;
+- source-port leasing/attribution, profile-compatible segmentation, `_12` readiness, adaptive budgets, GET-4K discovery, cleanup/cancellation and Stage-90 restoration ownership are unchanged.
 
-The detailed rules are canonical in `DOC-*`, `DEV-*`, `CHAT-*`, and `GH-*`; this handoff does not redefine them.
+Detailed runtime contract: [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md).
 
-## Current product facts needed for the next code patch
+## Current product facts
 
 - DNS is fixed/currently working; historical DNS failures are closed absent fresh direct evidence.
-- Model C is the selected normal production Stage-60 direction; A/B/C selection is closed.
-- packaged `_12` still implements transitional `Model C -> Model B -> Model A cold` production fallback.
+- Model C is the only normal production Stage-60 runtime; A/B/C selection is closed.
 - accepted measurement decisions remain closed: no Lua-init production change, no lazy-BLOB/common-set production change, retain bounded GET-4K discovery, no cross-batch keep-warm/reuse for the current architecture.
+- Model B/A fallback code may remain inside explicit reference/measurement tooling, but it is not reachable from the normal packaged production entry point.
 
 Detailed measurements and proof links are in [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
 
-## Exact next code change — `v0.4.1_13`
+## `_13` automated acceptance
 
-Make normal production Stage 60 Model-C-only:
+Before `_13` is considered source-complete and mergeable:
 
-- remove automatic production replay through Model B/cold Model A;
-- keep Model-C infrastructure, selector, rendering, readiness, and attribution failures explicit and bounded;
-- remove production fallback plumbing used only for B/A replay;
-- retain B/A where useful as reference/benchmark/test tooling;
-- preserve planner/search semantics, CandidateSpec/ResourceInventory, source-port leasing/attribution, profile-compatible segmentation, readiness, adaptive budgets, GET-4K discovery, cleanup, cancellation containment, and Stage-90 semantic restoration.
+- normal production Stage 60 must reach Model C only;
+- an injected Model-C infrastructure failure must produce explicit bounded failure with no B/A replay;
+- cleanup must remain bounded on success/failure/cancel;
+- source-port leasing/attribution and segmentation must remain correct;
+- the complete Strategy Lab corrective matrix must pass;
+- FreeBSD 15 package qualification must pass on the exact PR head;
+- merge must use that exact verified head under `GH-024`–`GH-026`.
 
-Package metadata follows `DEV-032`:
+## Immediate post-merge/live gate
 
-- keep `VERSION=0.4.1`;
-- increment `PLUGIN_REVISION 12 -> 13`;
-- use candidate prefix `v0.4.1_13:` for GitHub delivery (`GH-014`).
+`_13` owner-live acceptance still requires one selected normal Model-C-only run on OPNsense with:
 
-## Current task reading for `_13`
+- correct result handling;
+- no automatic Model B/A replay;
+- Stage-90 semantic restoration PASS;
+- no temporary IPFW/process/socket residue.
 
-Before editing `_13`, read completely:
+A persistent `v0.4.1_13` testing package/tag is published only when testing-package delivery is requested; do not infer publication merely from source merge.
+
+After the selected `_13` owner-live PASS, return to [`ROADMAP.md`](ROADMAP.md) and take the next accepted risk-selected product task. Do not reopen A/B/C selection or closed measurement experiments by inertia.
+
+## Current task reading
+
+For Model-C-only production/live work, read completely:
 
 1. `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
 2. `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
@@ -80,15 +86,4 @@ Before editing `_13`, read completely:
 
 Read the current `v0.4.x` ledger when richer chronology/proof is needed. Use `INDEX.md` for older records on demand.
 
-## `_13` acceptance
-
-- normal production Stage 60 reaches Model C only;
-- no silent B/A replay;
-- Model-C infrastructure failure is explicit and bounded;
-- cleanup succeeds on success/failure/cancel;
-- source-port leasing/attribution and segmentation remain correct;
-- Strategy Lab corrective matrix passes;
-- FreeBSD 15 package qualification passes;
-- selected owner-live normal Model-C-only regression verifies result handling and restoration.
-
-When the owner says `продолжаем`, apply `CHAT-012`: verify repository/handoff identity and start `_13` directly if it still matches.
+When the owner says `продолжаем`, apply `CHAT-012`: verify repository/handoff identity and continue from this exact `_13` boundary rather than reconstructing or reopening closed choices.
