@@ -163,7 +163,7 @@ Metadata:
 - increment packaged source `PLUGIN_REVISION 12 -> 13`;
 - title/commit prefix `v0.4.1_13:`.
 
-Do **not** spend `_13` improving the legacy C->B transition. Remove the transition.
+**do not spend the next patch improving timeout admission for `C -> B`; remove the transition instead.**
 
 ## Expected result
 
