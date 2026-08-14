@@ -4,9 +4,12 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 AGENTS="${ROOT_DIR}/AGENTS.md"
+PRINCIPLES="${ROOT_DIR}/docs/PROJECT_PRINCIPLES.md"
+START_HERE="${ROOT_DIR}/docs/START_HERE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
 PUBLICATION="${ROOT_DIR}/docs/GITHUB_PUBLICATION.md"
 WORKFLOW_SUMMARY="${ROOT_DIR}/docs/GITHUB_WORKFLOW.md"
+OPERATIONAL_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md"
 EVIDENCE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md"
 EFFICIENT_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-05-efficient-github-delivery.md"
 TITLE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md"
@@ -43,9 +46,12 @@ require_doc_marker()
 
 for file in \
   "${AGENTS}" \
+  "${PRINCIPLES}" \
+  "${START_HERE}" \
   "${INDEX}" \
   "${PUBLICATION}" \
   "${WORKFLOW_SUMMARY}" \
+  "${OPERATIONAL_DECISION}" \
   "${EVIDENCE_DECISION}" \
   "${EFFICIENT_DECISION}" \
   "${TITLE_DECISION}" \
@@ -59,9 +65,7 @@ do
   test -s "${file}" || fail "missing or empty GitHub governance file: ${file}"
 done
 
-# Documentation markers are semantic guards, not exact prose/line-placement contracts.
-# Executable workflow markers below remain case-sensitive and exact.
-
+# Documentation checks guard authority relationships and required semantics, not mutable line placement.
 version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' "${MAKEFILE}" | head -1)
 
@@ -73,20 +77,29 @@ if [ -n "${revision}" ] && [ "${revision}" != "0" ]; then
   expected="${expected}_${revision}"
 fi
 
+grep -Eq '^Status:[[:space:]]+\*\*ACTIVE\*\*$' "${OPERATIONAL_DECISION}" || fail 'operational handoff decision is not active'
 grep -Eq '^Status:[[:space:]]+Active([,[:space:]].*)?$' "${EVIDENCE_DECISION}" || fail 'evidence-first decision is not active'
 grep -Eq '^Status:[[:space:]]+Active([,[:space:]].*)?$' "${EFFICIENT_DECISION}" || fail 'efficient delivery decision is not active'
 grep -Eq '^Status:[[:space:]]+Active([,[:space:]].*)?$' "${TITLE_DECISION}" || fail 'universal title decision is not active'
 grep -Eq '^Status:[[:space:]]+Superseded' "${OLD_DECISION}" || fail 'old atomic decision is not superseded'
 
+require_doc_marker 'docs/PROJECT_PRINCIPLES.md' "${AGENTS}" 'AGENTS does not require canonical project principles'
+require_doc_marker 'docs/START_HERE.md' "${AGENTS}" 'AGENTS does not require operational handoff'
 require_doc_marker 'docs/GITHUB_PUBLICATION.md' "${AGENTS}" 'AGENTS does not name publication authority'
-require_doc_marker 'DEC-2026-08-05-universal-versioned-github-titles.md' "${AGENTS}" 'AGENTS does not name universal title decision'
+require_doc_marker 'docs/PROJECT_PRINCIPLES.md' "${INDEX}" 'INDEX does not route to canonical principles'
+require_doc_marker 'docs/START_HERE.md' "${INDEX}" 'INDEX does not route to operational handoff'
 require_doc_marker 'DEC-2026-08-05-universal-versioned-github-titles.md' "${INDEX}" 'INDEX does not name universal title decision'
-require_doc_marker 'DEC-2026-08-05-universal-versioned-github-titles.md' "${WORKFLOW_SUMMARY}" 'workflow summary does not name universal title decision'
-require_doc_marker 'every PR title, every PR-branch commit subject' "${AGENTS}" 'AGENTS does not require versioned work and repair commits'
-require_doc_marker 'final squash subject' "${AGENTS}" 'AGENTS does not require a versioned squash subject'
-require_doc_marker 'every PR title, every PR-branch commit subject' "${PUBLICATION}" 'publication rules do not cover pull-request and repair titles'
-require_doc_marker 'final squash subject' "${PUBLICATION}" 'publication rules do not cover squash commit subjects'
-require_doc_marker 'Governance/documentation/CI-only work' "${PUBLICATION}" 'publication rules do not cover non-packaged changes'
+require_doc_marker 'DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md' "${PUBLICATION}" 'publication procedure does not name operational handoff decision'
+require_doc_marker 'package-candidate prefix' "${AGENTS}" 'AGENTS does not require versioned project delivery identity'
+require_doc_marker 'final squash subject' "${AGENTS}" 'AGENTS does not require versioned squash identity'
+require_doc_marker 'every PR title' "${PUBLICATION}" 'publication rules do not cover PR title identity'
+require_doc_marker 'PR-branch commit subject' "${PUBLICATION}" 'publication rules do not cover branch commit identity'
+require_doc_marker 'final squash subject' "${PUBLICATION}" 'publication rules do not cover squash identity'
+require_doc_marker 'Docs/governance/CI-only changes' "${PUBLICATION}" 'publication rules do not cover non-packaged changes'
+require_doc_marker 'what changes and why' "${PRINCIPLES}" 'canonical principles omit delivery documentation scope/reason'
+require_doc_marker 'expected result' "${PRINCIPLES}" 'canonical principles omit expected result requirement'
+require_doc_marker 'long-term' "${PRINCIPLES}" 'canonical principles omit long-term plan requirement'
+require_doc_marker 'reconcile' "${PUBLICATION}" 'publication procedure omits plan reconciliation'
 
 # One generic publisher is allowed; version-specific publishers in main are forbidden.
 version_specific=$(find "${ROOT_DIR}/.github/workflows" -maxdepth 1 -type f \

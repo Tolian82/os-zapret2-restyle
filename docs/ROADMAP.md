@@ -1,205 +1,167 @@
 # os-zapret2-restyle — Roadmap
 
-==================================================
-DOCUMENT ROLE
-==================================================
+Status: **CURRENT**
+Updated: 2026-08-14
 
-Question answered:
-What should be done next?
+This file answers: **What should be done next?**
 
-Purpose:
-Record ordered future work and gates without duplicating current-state or implementation history.
+Permanent principles are canonical in `docs/PROJECT_PRINCIPLES.md`.
+Current state is in `docs/PROJECT_STATE.md`.
+Exact continuation handoff is in `docs/START_HERE.md`.
 
-Updated when:
-Priority, sequencing, or acceptance gates change.
+The roadmap records both immediate and long-term work. Long-term items are never silently dropped;
+when priorities change they are explicitly completed, superseded, rejected or deferred.
 
-Read after:
-`docs/DEVLOG.md`.
+## Current priority
 
-Do not store here:
-Detailed rationale, current live logs, or completed implementation internals.
+Finish the Model-B -> Model-C production transition cleanly, then return to the broader product /
+Strategy Lab backlog.
 
-==================================================
-CURRENT PRIORITY
-==================================================
+Current packaged source: `v0.4.1_12`.
+Next packaged source change: **`v0.4.1_13` — Model-C-only production finalization**.
 
-Stable project publication `v0.4.1` / package `os-zapret2-restyle-0.4.1_1.pkg` is complete
-and the owner reports successful upgrade/normal operation.
+## Documentation/continuity architecture — completed
 
-The independent Model-C measurement sequence has now closed three optimization questions
-without production changes:
+The current documentation architecture establishes:
 
-- `_2`: common/current Lua initialization is already the candidate-minimal set;
-- `_3` + `_4`: BLOB startup/readiness/RSS cost is not material for the current width-three
-  architecture, including the representative common eager external-BLOB set;
-- `_5` + `_6`: HEAD/GET-1/GET-4K discovery probes agree on comparable pairs, but the
-  cheaper probes do not provide a material timing benefit; production discovery remains
-  bounded GET-4K.
+- mandatory always-read `PROJECT_PRINCIPLES.md`;
+- startup path `AGENTS -> PROJECT_PRINCIPLES -> START_HERE -> PROJECT_STATE -> task specialists`;
+- current `START_HERE` handoff;
+- current `_12` state instead of stale `_6/_7` guidance;
+- scope-first GitHub preflight;
+- mandatory three-part documentation for every delivery;
+- plan reconciliation immediately before publication;
+- explicit preservation of both near-term and long-term plans;
+- audits remain first-class work when owner/current plan/new evidence requires them.
 
-Current production remains:
+Future sessions should use this documentation rather than reconstructing the same project state from
+chat history or broad GitHub discovery.
 
-`C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
+## Immediate ordered plan
 
-Source review also confirms that current Model C is already **lazy at the adaptive-batch
-boundary**: a bucket is rendered/launched only after the planner has admitted a currently
-reachable frontier batch, and that physical bucket is cleaned after the batch. Model C
-does not eagerly start dormant buckets for unresolved search branches.
+### 1. `v0.4.1_13` — Model-C-only production finalization
 
-Next independent logical change: prepare a measurement-only `v0.4.1_7` experiment for
-**Model-C per-batch bucket lifecycle amortization**. Measure the real cost of repeatedly
-launching, reaching readiness and cleaning the current one-bucket runtime across successive
-actually reached Stage-60 batches, and calculate the maximum plausible saving available to
-any future cross-batch keep-warm/reuse design.
+What changes:
 
-The experiment must not synthesize an eager dormant-bucket fleet and must not alter
-production Model C, dispatcher width, candidate scheduling or search semantics. It must
-measure at least first-result latency, total Stage-60 wall time, per-batch startup/readiness,
-per-batch cleanup/lifecycle overhead, ready/settled RSS, reached batch count, candidate
-attribution and semantic restoration. A broader cross-batch bucket/reuse design is justified
-only if this evidence first shows material reproducible lifecycle headroom outside normal
-jitter.
+- make Model C the only normal production Stage-60 runtime;
+- retire automatic production fallback `C -> B -> A`;
+- surface Model-C infrastructure failure explicitly/bounded instead of silently replaying old
+  engines;
+- keep Model B/A code only where useful for benchmark/reference/test tooling;
+- preserve leasing, attribution, `_11` profile segmentation, `_12` readiness, adaptive budgets,
+  GET-4K discovery, cleanup and Stage-90 restoration.
 
-Current state authority: `docs/PROJECT_STATE.md`.
-Adaptive-search experiment authority: `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
-Model-C authority: `docs/architecture/STRATEGY_LAB_MODEL_C.md`.
+Primary files:
 
-==================================================
-COMPLETED STRATEGY LAB FOUNDATION
-==================================================
+- `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_model_c.py`;
+- `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_python.py`;
+- `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_source_port_lease.py`;
+- `scripts/test-strategy-lab-stage60-model-c-production.sh`;
+- narrow-search hits that encode production fallback selection.
 
-- [x] asynchronous Strategy Lab architecture, lifecycle, network precheck, candidate
-  runtime/search/stability/extended/circular/GUI;
-- [x] shell-era corrective series and semantic restoration hardening;
-- [x] Python 3.13 state/stage/request/probe/candidate/search/result ownership;
-- [x] live DNS/restoration corrections and risk-based owner-live policy.
+Acceptance:
 
-==================================================
-COMPLETED ADAPTIVE-SEARCH / RUNTIME SERIES
-==================================================
+- normal production Stage 60 is Model-C-only;
+- no silent B/A replay after Model-C infrastructure failure;
+- injected infrastructure failure is explicit/bounded;
+- cleanup and source-port attribution remain correct;
+- full Strategy Lab corrective matrix PASS;
+- FreeBSD 15 package qualification PASS.
 
-Historical engineering labels `_28`-`_33` are completed work-item names, not package
-revision suffixes.
+### 2. Publish/test `_13`
 
-- [x] Stage-50 evidence is priority only, not Stage-60 reachability gating;
-- [x] immutable CandidateSpec + ResourceInventory;
-- [x] deterministic native Zapret2 graph, fixed endpoint epoch and adaptive planner;
-- [x] measured deadline containment and finalist validation;
-- [x] cold Model A correctness/reference;
-- [x] controlled width-three Model B fallback/reference with corrected failed attribution;
-- [x] preferred one-worker Model C dispatcher;
-- [x] `preferred-free-else-alternate` source-port leasing and fresh Model-B fallback lease;
-- [x] `eligible-work-v1` adaptive finite budgets after Stage 30;
-- [x] `_26` owner-live Extended `telegram.org`, `job.xhdgCU`, Model-C 16/16 no-fallback
-  execution with exact budget persistence and clean restoration.
+After verified merge and owner package/testing request:
 
-Do not repeat old Model-B architecture benchmarks unless later work invalidates their
-assumptions.
+- persist deterministic `os-zapret2-restyle-0.4.1_13.pkg` on GitHub;
+- verify exact source/tag/asset identity;
+- perform one selected normal OPNsense Model-C-only regression;
+- verify result handling, cleanup/restoration and no temporary IPFW/process/socket residue;
+- record owner-live evidence.
 
-==================================================
-COMPLETED RELEASE CYCLE — `v0.4.1 / 0.4.1_1`
-==================================================
+If PASS: close the B -> C transition.
+If FAIL: diagnose the concrete defect from evidence and fix only that defect.
 
-- [x] VERSION `0.4.1`, revision reset to `1`;
-- [x] PR/CI/FreeBSD 15 qualification;
-- [x] semantic tag/Release/package/checksum/Pages/pkg repository publication;
-- [x] durable publication evidence;
-- [x] owner upgrade/install smoke: PASS, normal operation reported correct.
+## Model-C transition work already completed
 
-Published semantic tag `v0.4.1` remains immutable release history.
+- [x] Model A cold correctness/reference baseline;
+- [x] Model B controlled warm/parallel experiments and accepted reference;
+- [x] Model C source-port dispatcher selected and integrated (`v0.4.0_23`);
+- [x] source-port collision/lease corrective (`_25`);
+- [x] `eligible-work-v1` finite adaptive budgets (`_26`);
+- [x] stable semantic `v0.4.1` release;
+- [x] Lua initialization measurement (`v0.4.1_2`) — no production change;
+- [x] BLOB startup/RSS and common-set scaling (`_3/_4`) — no production change;
+- [x] discovery HEAD/GET-1/GET-4K measurement (`_5/_6`) — keep GET-4K;
+- [x] lifecycle amortization measurement series (`_7+`);
+- [x] measurement-harness corrections (`_8/_9/_10`);
+- [x] Model-C profile-compatible segmentation corrective (`_11`);
+- [x] warm readiness polling corrective (`_12`);
+- [x] cross-batch keep-warm/reuse decision closed with no further production architecture change.
 
-==================================================
-OPTIMIZATION SEQUENCE
-==================================================
+Do not treat these completed items as uninvestigated in a new session. Reopen them when the owner,
+roadmap, a new reproducible defect or material architecture change calls for a new audit/retest.
 
-### 1. Lua initialization — closed by `_2`
+## After B -> C transition closure
 
-- [x] establish exact current CandidateSpec Lua dependencies;
-- [x] establish Model-C shared requirements (`zapret-auto.lua`, dispatcher Lua);
-- [x] package deterministic equivalence report;
-- [x] CI/FreeBSD 15 qualification and testing prerelease;
-- [x] owner-installed report;
-- [x] close with no production change because current and candidate-minimal sets are equivalent.
+Return to product/Strategy Lab work according to owner priority and current risk, rather than
+opening another Model-C optimization automatically.
 
-### 2. BLOB loading/startup/RSS — closed by `_3` + `_4`
+### Owner-assisted regression backlog
 
-- [x] measure BLOB-free, built-in and representative external-BLOB startup/readiness/RSS;
-- [x] measure representative common eager external-BLOB set at current width-three scale;
-- [x] compare repeated samples against normal jitter;
-- [x] owner-live acceptance;
-- [x] close with no production change because no material startup/readiness/RSS penalty was measured.
+Retained risk-selected coverage:
 
-Lazy BLOB loading is therefore not justified by the current evidence. Reopen only if later
-runtime architecture materially increases BLOB-set width or otherwise invalidates the
-accepted `_3`/`_4` assumptions.
+1. initial normal Zapret2 state STOPPED;
+2. Extended TLS 1.2 and HTTP paths;
+3. capability-gated QUIC;
+4. configured Generic UDP;
+5. already-accessible target behavior;
+6. cancellation/internal failure containment;
+7. circular start/stop/TTL/stale recovery;
+8. Settings Apply guards and service-state correctness;
+9. Diagnostics persisted-result reload behavior;
+10. RU/EN presentation/localization checks;
+11. retention/cleanup boundaries;
+12. reboot/residue verification.
 
-### 3. Discovery probe agreement/cost — closed by `_5` + `_6`
+These are not all unconditional blockers for every patch. Select rows according to the changed
+risk. When a future release requires a broader matrix, record that gate explicitly before release.
 
-- [x] compare HEAD, GET-1 and production GET-4K against the same native candidate corpus;
-- [x] collect multidomain owner-live evidence;
-- [x] correct the measurement finalizer boundary;
-- [x] verify clean cleanup/restoration;
-- [x] keep production GET-4K because the cheaper probes do not provide a material timing benefit.
+### Deferred performance/research ideas
 
-### 4. Model-C per-batch bucket lifecycle amortization — next independent experiment
+Retain, but do not activate by inertia:
 
-Prepare measurement-only `_7` without changing production search behavior.
+- candidate parallel width greater than three;
+- endpoint-level parallelism;
+- renewed cross-batch keep-warm only if later architecture/evidence invalidates the `_12` decision;
+- renewed BLOB/Lua/discovery optimization only if later architecture materially changes the accepted
+  assumptions;
+- Model-C-only timeout/deadline audit when selected by plan/owner or triggered by a concrete
+  containment defect.
 
-Current source behavior is the baseline: planner admission first, then one physical Model-C
-bucket is rendered/launched for that reached batch, probed, and cleaned before a later batch
-is admitted. There is no current eager fleet of dormant branch buckets to optimize away.
+### Broader project/product work
 
-Record:
+After the current Strategy Lab transition is closed, use owner priority plus `REQUIREMENTS.md` and
+current product state to select the next implementation area. Preserve existing working GUI/runtime
+behavior and do not displace approved functionality with speculative redesign.
 
-- first-result latency;
-- total Stage-60 wall time;
-- number and width of actually reached Model-C batches;
-- bucket launch and stable-readiness timing per batch;
-- bucket cleanup/lifecycle timing per batch;
-- ready and settled RSS;
-- measured lifecycle share of Stage-60 wall time;
-- an explicit upper bound for savings if repeated lifecycle cost were completely amortized;
-- exact candidate/result equivalence and attribution;
-- deadline containment;
-- cleanup and semantic restoration.
+Known long-term product directions retained in project documentation include:
 
-If repeated lifecycle cost is not material, close the optimization with no production
-change. If it is material, only then open a separate design/measurement change for
-cross-batch keep-warm or broader dispatcher/bucket grouping. Such reuse is not equivalent
-to merely delaying startup because the current bucket runtime arguments and selector set
-are rendered from the admitted candidates; extending the bucket across different batches
-therefore intersects candidate/profile grouping and must retain the width-three and exact
-attribution safety properties unless separately re-qualified.
+- continue OPNsense-native service/runtime management and maintenance reliability;
+- continue Strategy Lab correctness and owner-assisted coverage for supported protocol/capability
+  branches;
+- keep Settings/Diagnostics/Circular/retention behavior coherent with the Strategy Lab lifecycle;
+- maintain RU/EN GUI behavior and package/runtime version visibility;
+- keep bol-van/zapret2 management through the single approved `setup.sh` backend rather than
+  introducing a second installer;
+- only activate the separately discussed additional BLOB-repository GUI work after its repository
+  and technical contract are explicitly supplied/approved.
 
-### 5. Later independent ideas
+## Before every future GitHub delivery
 
-- cross-batch keep-warm / broader dispatcher-bucket grouping, only if `_7` shows material
-  amortizable lifecycle cost;
-- candidate width greater than three;
-- endpoint-level parallelism.
+Apply the documentation contract in `docs/PROJECT_PRINCIPLES.md`:
 
-Every item requires its own evidence and must not silently weaken candidate attribution,
-finite deadlines, cleanup or semantic restoration.
-
-QUIC remains capability/precheck scope rather than an adaptive Stage-60 search priority.
-IPv6 remains capability-gated and lower priority.
-
-==================================================
-BROADER OWNER-ASSISTED REGRESSION BACKLOG
-==================================================
-
-The canonical matrix remains `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
-Rows are selected per change/release risk; they are not all unconditional blockers.
-
-Retained backlog includes initial Zapret2 STOPPED; Extended TLS1.2/HTTP and capability-gated
-QUIC; Generic UDP; already-accessible target; cancellation/internal failure; circular
-start/stop/TTL/stale recovery; Settings Apply guards; Diagnostics reload behavior;
-RU/EN presentation; retention and reboot/residue checks.
-
-==================================================
-RELEASE BOUNDARY
-==================================================
-
-Stable `v0.4.1` remains the published semantic release. The latest published and owner-live
-testing candidate is `v0.4.1_6`; the next packaged measurement change, if implemented, is
-`v0.4.1_7` and must not mutate the semantic `v0.4.1` tag/asset history. Future stable
-releases require their own exact VERSION authorization and release pipeline.
+- record what changes and why;
+- record the expected result/acceptance boundary;
+- record the complete next plan, including long-term/deferred work;
+- immediately before publication, reconcile this roadmap and current handoff with what was learned;
+- update changed priorities **before** publishing.

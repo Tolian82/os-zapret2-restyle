@@ -1,230 +1,91 @@
-MANDATORY: Use the connected GitHub plugin first for every repository operation; use another transport only when the plugin lacks the required function or confirmed permission.
-
-Known connector state and stop rule (re-verify before relying on time-sensitive details):
-
-- At the 2026-08-07 verification, the repository returned no configured rulesets.
-- The connected GitHub plugin can read and change repository objects, but its current
-  installation receives `403 Resource not accessible by integration` when reading the
-  repository Actions-permission settings and branch-protection settings. This is a
-  connector permission boundary; it is not evidence that Actions or branch protection
-  are disabled.
-- When the plugin responds and only one exact function or permission is missing, a
-  fallback is allowed only for that operation under the rules below.
-- If the GitHub plugin stops responding, is unavailable, or cannot provide the
-  authoritative repository state required to proceed, stop all GitHub work. Do not
-  silently continue through local Git, `gh`, raw API calls, the web UI, an automation,
-  or a scheduled tracker. Inform the project owner and wait for explicit direction.
+MANDATORY: Use the connected GitHub plugin first for every repository operation. If the plugin is unavailable or cannot provide the authoritative state required to proceed safely, stop GitHub work and report the boundary.
 
 # AGENTS.md
 
-This repository uses a mandatory risk-based documentation and GitHub preflight.
+This file is the mandatory entrypoint. Do not reconstruct project state from chat history or model memory.
 
-Before project work:
+## Mandatory startup order
 
-1. Read this file, `docs/INDEX.md`, and `docs/PROJECT_STATE.md`.
-2. Read the specialist documents relevant to the requested scope.
-3. Read `docs/GITHUB_PUBLICATION.md` immediately before any GitHub mutation.
-4. For GitHub work, also read
-   `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md` and
-   `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md`.
-5. Treat the project owner's current instruction as the highest scope boundary.
-6. Use current repository and GitHub state; chat history is supporting context only.
+For every new or resumed project context, read completely through EOF in this order:
 
-MANDATORY DOCUMENT-COMPLETION RULE:
+1. `AGENTS.md`;
+2. `docs/PROJECT_PRINCIPLES.md` — canonical permanent principles that must always be in context;
+3. `docs/START_HERE.md` — current operational handoff;
+4. `docs/PROJECT_STATE.md` — current repository/product state;
+5. specialist documents named by the current documented task.
 
-- Every document required by this file, `docs/INDEX.md`, or the current specialist scope
-  must be read from its first line through EOF before project action begins.
-- A successful file-open/fetch call is not proof of a complete read.
-- If a tool response is truncated, paginated, clamped, or range-limited, continue with
-  the remaining ranges until EOF. Do not act from only the visible first chunk.
-- If a required document cannot be read completely, stop before mutation, package
-  delivery, OPNsense commands, or source changes and report the boundary instead of
-  filling the missing rules from memory.
+Use `docs/INDEX.md` only as navigation when additional specialist/history material is required.
 
-A complete read of every audit, decision, devlog, architecture, roadmap, and requirement
-file is required only for a repository-wide audit or genuine full-context recovery. It is
-not a blocking prerequisite for every diagnosis, command, or small change. The documents
-that are required for the chosen scope, however, must always be read completely through
-EOF.
+Historical audits, decisions, patches, devlogs and evidence remain authoritative project records. Read them when the current plan, owner request, new defect or specialist scope requires them. Do not automatically reread the complete history merely because a new chat started.
 
-==================================================
-GITHUB DELIVERY AUTHORITY
-==================================================
+If a selected required document is truncated, paginated, clamped or range-limited, continue until EOF before acting. If a required authority cannot be read completely, stop before mutation/source change/package delivery rather than guessing.
 
-Authority order for GitHub work:
+## Documentation authority
 
-1. current owner instruction;
-2. this file;
-3. `docs/GITHUB_PUBLICATION.md`;
-4. `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md`;
-5. `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
-6. `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
-7. `docs/decisions/DEC-2026-08-05-efficient-github-delivery.md`;
-8. `docs/GITHUB_WORKFLOW.md`.
+`docs/PROJECT_PRINCIPLES.md` is the single canonical set of permanent project principles. Do not create competing formulations of those principles in current-state or specialist documents.
 
-The connected GitHub plugin is the mandatory first transport for repository discovery,
-state inspection, pull requests, branches, commits, reviews, checks, merges, and every
-other operation it supports. Local `git`, `gh`, raw API calls, the web UI, and other
-transports are narrow fallbacks only when the plugin is available and the exact required
-function or permission is confirmed missing. Plugin unavailability is a stop condition,
-not permission to switch transports automatically.
+Before any GitHub delivery, verify that the documentation contract in `PROJECT_PRINCIPLES.md` is satisfied: the repository must state what changes and why, the expected result/acceptance boundary, and the complete near-term and long-term plan. Reconcile the plan immediately before publication and update it first if implementation/testing changed it.
 
-The evidence-first decision supersedes conflicting historical or active wording that
-requires mandatory Draft PRs, exactly one branch commit, full-document rereading for
-every operation, unversioned release-preparation titles, replacement publication
-branches, or source changes in response to an external GitHub failure.
+## Scope-first repository preflight
 
-==================================================
-PRE-MUTATION INVENTORY
-==================================================
+Before mutation always verify through the GitHub plugin:
 
-Before creating or changing a branch, PR, workflow, tag, release, or asset, inspect:
+- exact current `main` SHA;
+- current `VERSION` and `PLUGIN_REVISION`;
+- same-scope/relevant open PR state;
+- current documented task/plan;
+- plugin availability for the required operation.
 
-- exact `main` SHA and current `VERSION` / `PLUGIN_REVISION`;
-- relevant PRs and branches;
-- existing workflows capable of the operation;
-- active, queued, failed, and successful runs;
-- reusable artifacts, tags, releases, and assets;
-- actual GitHub-plugin capabilities and permissions, followed only when necessary by
-  connector/API/Git/`gh` fallback capabilities.
+Expand the inventory only when the operation needs it:
 
-Do not invent a new mechanism until this inventory proves that the existing mechanisms
-cannot safely complete the operation.
+- workflows/runs/job logs for CI debugging or current-PR checks;
+- artifacts/tags/releases/assets for package publication or release work;
+- complete branch inventory for cleanup/collision/recovery/hygiene work;
+- rulesets/protection/permissions when relevant;
+- recursive repository tree for a genuine broad audit/cross-cutting investigation whose file/call path is unknown.
 
-==================================================
-ORDINARY DELIVERY RULES
-==================================================
+A known-file task already named by `START_HERE.md` does not require a full repository/GitHub inventory before implementation.
 
-Default ordinary delivery:
+Authority: `docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md`.
 
-one logical change
-        ↓
-one task branch and one Ready pull request
-        ↓
-focused validation
-        ↓
-required checks for the latest PR state
-        ↓
-one squash merge into `main` using the expected head SHA
-        ↓
-verify `main` and clean the temporary branch
+## GitHub delivery mechanics
+
+For any GitHub mutation, read `docs/GITHUB_PUBLICATION.md` completely immediately before mutation. Package/release work also uses the current package-delivery and release decisions listed there.
+
+Ordinary implementation flow:
+
+one logical scope → one task branch + Ready PR → focused validation → latest-head required checks → exact-head squash merge → verify `main` → clean temporary branch.
 
 Rules:
 
-- Keep one logical scope per pull request.
-- A PR branch may contain multiple same-scope work or repair commits.
-- Same-scope failures are corrected in the same branch and PR.
-- Draft is optional and reserved for intentional work in progress.
-- Every PR title, every PR-branch commit subject, and the final squash subject must
-  begin with the exact current package-candidate prefix `v<VERSION>_<REVISION>:`.
-- Governance/documentation/CI-only changes do not change package metadata.
-- Required CI gates the latest mergeable head, not every historical run.
-- Independent analysis may continue while CI runs; unrelated work is not added to the
-  checked branch.
-- Never force-update `main`, move a published tag, or rewrite published history.
+- same-scope repairs stay in the same PR;
+- Draft is only for intentional WIP;
+- every PR title, branch commit subject and final squash subject begins with the exact current package-candidate prefix `v<VERSION>_<PLUGIN_REVISION>:`;
+- docs/governance/CI-only changes do not change package metadata;
+- never force-update `main`, move a published tag or rewrite published history;
+- read exact failed-job evidence before changing source/workflow/runner;
+- external infrastructure failure causes no speculative source change.
 
-==================================================
-OWNER PACKAGE DELIVERY RULE
-==================================================
+## Request scope / standing authority
 
-Any owner request for a package/patch deliverable — including `пакет`, `пакет для
-тестирования`, `тестовый пакет`, `патч`, `патч для установки`, `дай пакет`, `собери
-пакет`, and obvious equivalents — means a persistent GitHub-hosted `.pkg`, unless the
-owner explicitly asks for build/CI evidence only and no package delivery.
+- `analyse`, `diagnose`, `review`, `audit`, `explain`: inspect/report only unless the owner also asks for changes;
+- `fix`, `add`, `change`, `implement`, `complete`: perform the ordinary branch → Ready PR → checks → squash merge → verification cycle;
+- package/test-package/installable-patch request: complete packaged source work as needed and persist the deterministic `.pkg` on GitHub;
+- explicit candidate publication: publish only that testing package, no Pages/pkg-repository promotion;
+- explicit new semantic release: perform the authorized full release pipeline.
 
-- GitHub Actions artifacts are intermediate build evidence, not final owner delivery.
-- Local/container/sandbox file links are never the final project package.
-- A package request itself authorizes deterministic testing-package publication on
-  GitHub; do not ask for a second publication confirmation.
-- The phrase `не релиз, а пакет` means no stable/full project release, no semantic
-  `VERSION` promotion, no Pages and no pkg-repository promotion. It does not mean stop
-  at an Actions artifact. Persist the testing `.pkg` on GitHub using the established
-  testing-package publication mechanism.
-- The technical GitHub prerelease/tag used to host a testing `.pkg` is a storage and
-  delivery mechanism, not a stable/full project release.
-- Final owner-facing output is a direct GitHub `.pkg` URL or a csh-safe OPNsense
-  installation command, never an Actions ZIP or sandbox link.
+Do not ask for routine branch names, commit wording, PR text, CI inspection, same-scope repair, squash merge, cleanup or a second testing-package publication confirmation when the scope already authorizes them.
 
-==================================================
-PRERELEASE PUBLICATION RULES
-==================================================
+Stop for owner input only on material product ambiguity, relevant unpublished owner-local state, unavailable owner-only live evidence, credentials/protected authority, destructive changes to user/pre-existing remote data, history rewrite/direct-main publication, unresolvable required-check failure, or GitHub-plugin unavailability.
 
-Publishing an already verified candidate as a testing package is a package-delivery
-operation, not a code PR and not a full semantic project release.
+## Package boundary
 
-- Owner authorization is supplied either by an exact candidate-publication instruction
-  or by any package-delivery request covered by the rule above.
-- Prefer direct Release API/UI/`gh` upload when verified package bytes already exist and
-  the GitHub plugin does not expose the required release-asset write operation.
-- Reuse an Actions artifact only by exact run ID, artifact ID/name, and digest, and
-  recheck its `+MANIFEST` before publication.
-- Use `.github/workflows/publish-prerelease.yml` only when repository-owned build and
-  publication automation is needed.
-- Permit only one active publication run per candidate.
-- A temporary `publish/v<VERSION>_<REVISION>` branch does not receive a PR.
-- A testing package publication publishes neither GitHub Pages nor the pkg repository.
-- Verify target SHA, tag, draft/prerelease flags, asset name, and direct URL.
-- Delete the temporary publication branch after success.
+- ordinary packaged source change: keep `VERSION`, increment `PLUGIN_REVISION` once;
+- documentation/governance/CI-only change: change neither;
+- testing-package publication: no semantic VERSION change, no Pages/pkg repo;
+- full project release: explicit VERSION authority, revision reset to `1`, full release pipeline;
+- owner-facing package delivery is a persistent GitHub `.pkg`; Actions artifacts/local files are build evidence only.
 
-==================================================
-FAILURE HANDLING
-==================================================
+## OPNsense command rule
 
-Read the exact failed job log before changing source, workflow, runner, or branch.
-
-- A confirmed same-scope source defect is repaired in the same PR.
-- An external GitHub, runner, network, or action-distribution failure causes zero source
-  changes and permits at most one unchanged rerun after recovery.
-- Do not switch runner operating systems, create `-final`/`-retry` sibling branches, or
-  add replacement workflows without evidence that the current workflow is defective.
-- A second unchanged infrastructure failure stops the operation for diagnosis.
-- Scheduled monitoring must be unique and bounded. Duplicate trackers and unbounded
-  automatic retries are forbidden.
-- Loss of GitHub-plugin availability stops GitHub work immediately and must be reported
-  to the project owner; it does not authorize an automatic transport fallback.
-
-==================================================
-REQUEST SCOPE AND AUTHORIZATION
-==================================================
-
-- analyse, diagnose, explain, review, audit: inspect and report; do not mutate;
-- patch only, branch only, PR only: stop at the named boundary;
-- fix, add, change, implement, complete: perform the ordinary branch → Ready PR →
-  checks → squash merge → verification cycle;
-- package, test package, package for testing, installable patch: complete the ordinary
-  packaged cycle as needed, then persistently publish the deterministic `.pkg` on GitHub
-  and return its direct GitHub URL/installation command;
-- publish candidate `vX.Y.Z_N`: publish only that authorized testing package asset,
-  without Pages/pkg-repository promotion;
-- release version `X.Y.Z`: perform the authorized full stable release pipeline for that
-  exact version and its existing product gates.
-
-Do not ask for routine branch names, commit wording, PR text, CI inspection, same-scope
-repair, squash merge, cleanup, or a second testing-package publication confirmation after
-the owner has requested the package. Stop for owner input only on material product
-ambiguity, relevant unpublished owner state, unavailable credentials/protected authority,
-destructive changes to user data or pre-existing remote objects, history rewriting/direct-
-main publication, an unresolvable required-check failure, GitHub-plugin unavailability,
-or mandatory live OPNsense evidence available only from the owner.
-
-==================================================
-PATCH AND RELEASE BOUNDARY
-==================================================
-
-- Ordinary packaged source change: keep `VERSION`, increment `PLUGIN_REVISION` once.
-- If the owner requests the resulting package for testing, installation, or delivery,
-  publish that exact testing `.pkg` persistently on GitHub after verification. Do not
-  stop at the Actions artifact.
-- Governance/documentation/CI-only change: change neither value.
-- Testing package publication: no semantic `VERSION` change, no GitHub Pages and no pkg
-  repository; the technical GitHub prerelease/tag is only the persistent package host.
-- Full project release: change `VERSION`, reset revision to `1`, and use the versioned
-  release-preparation subject `vX.Y.Z_1: Prepare release vX.Y.Z`.
-- Published tags, releases, assets, and versions are immutable and forward-only.
-
-==================================================
-OPNSENSE COMMAND RULE
-==================================================
-
-OPNsense console commands target the default root `csh` shell. POSIX-only syntax must be
-placed between an explicit standalone `sh` command and a matching standalone `exit`.
+Owner console commands target root `csh`. POSIX-only syntax must be explicitly placed inside `sh`/`/bin/sh` and returned with `exit`.
