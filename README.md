@@ -11,10 +11,7 @@
 | **OPNsense service** | `zapret` |
 | **License** | MIT |
 
-The project is an independent OPNsense integration around the upstream
-[bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. It provides a native Web GUI,
-transactional runtime management, structured traffic strategies and **Strategy Lab** — an automated
-search/verification pipeline for DPI-bypass candidates.
+The project is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. It provides a native Web GUI, transactional runtime management, structured traffic strategies and **Strategy Lab** — an automated search/verification pipeline for DPI-bypass candidates.
 
 ---
 
@@ -30,8 +27,7 @@ search/verification pipeline for DPI-bypass candidates.
 
 ### 🧠 Traffic Strategy editor
 
-The Settings page provides one multiline strategy editor with native Zapret2 syntax plus project
-shorthand for managed target lists:
+The Settings page provides one multiline strategy editor with native Zapret2 syntax plus project shorthand for managed target lists:
 
 ```text
 <HOSTLIST:name>
@@ -44,14 +40,11 @@ Profiles are separated with Zapret2's normal:
 --new
 ```
 
-The backend validates and normalizes configuration before it becomes active. Apply is transactional:
-an invalid or unhealthy candidate does not replace a working configuration.
+The backend validates and normalizes configuration before it becomes active. Apply is transactional: an invalid or unhealthy candidate does not replace a working configuration.
 
 ### 🧪 Strategy Lab
 
-Strategy Lab is the project's automated DPI-bypass strategy search engine. It runs from Diagnostics
-and is designed to answer a practical question: **which Zapret2 strategy actually works for the target
-from this OPNsense installation?**
+Strategy Lab is the project's automated DPI-bypass strategy search engine. It runs from Diagnostics and is designed to answer a practical question: **which Zapret2 strategy actually works for the target from this OPNsense installation?**
 
 Current capabilities include:
 
@@ -65,14 +58,11 @@ Current capabilities include:
 - exact restoration of the pre-test Zapret2 service state;
 - Russian and English user-facing progress/result text.
 
-The current development line has selected **Model C** as the normal production Stage-60 architecture.
-The remaining development transition is to remove the old automatic Model-B/Model-A fallback from the
-production path; those models remain useful as benchmark/reference tooling.
+The current development line has selected **Model C** as the normal production Stage-60 architecture. The remaining development transition is to remove the old automatic Model-B/Model-A fallback from the production path; those models remain useful as benchmark/reference tooling.
 
 ### 🔄 Zapret2 Service manager
 
-The Settings page also contains **Zapret2 Service / Служба Zapret2** for the upstream runtime itself.
-It can:
+The Settings page also contains **Zapret2 Service / Служба Zapret2** for the upstream runtime itself. It can:
 
 - show the installed upstream release;
 - show the latest stable upstream releases;
@@ -87,8 +77,7 @@ No OPNsense reboot is required after a successful managed operation.
 
 ## Installation from the OPNsense Web GUI
 
-The supported full-release channel is the project-owned FreeBSD pkg repository on GitHub Pages.
-Register it once on the firewall:
+The supported full-release channel is the project-owned FreeBSD pkg repository on GitHub Pages. Register it once on the firewall:
 
 ```sh
 fetch -o /usr/local/etc/pkg/repos/zapret2-restyle.conf \
@@ -96,38 +85,26 @@ fetch -o /usr/local/etc/pkg/repos/zapret2-restyle.conf \
 pkg update -f
 ```
 
-Then open:
+Then open **System → Firmware → Plugins** and install **`os-zapret2-restyle`**.
 
-**System → Firmware → Plugins**
-
-and install **`os-zapret2-restyle`**.
-
-The repository is transported over HTTPS and currently uses the approved unsigned pkg configuration
-`signature_type: "none"`.
+The repository is transported over HTTPS and currently uses the approved unsigned pkg configuration `signature_type: "none"`.
 
 > **Full release vs testing package**
 >
-> The Web/pkg repository carries the full project release. Newer `_N` packages may also be published
-> on GitHub for owner-assisted development testing; those testing candidates do **not** automatically
-> replace the Web/pkg release.
+> The Web/pkg repository carries the full project release. Newer `_N` packages may also be published on GitHub for owner-assisted development testing; those testing candidates do **not** automatically replace the Web/pkg release.
 
 ---
 
 ## First setup
-
-After plugin installation:
 
 1. Open **Services → Zapret2 → Settings**.
 2. Open **Zapret2 Service / Служба Zapret2**.
 3. Select an upstream bol-van/zapret2 release and click **Apply**.
 4. Configure target lists and the **Traffic Strategy**.
 5. Apply the settings.
-6. Use **Diagnostics → Strategy Lab** when you need to search for a working bypass strategy for a
-   blocked domain.
+6. Use **Diagnostics → Strategy Lab** when you need to search for a working bypass strategy for a blocked domain.
 
-The plugin package and the upstream bol-van/zapret2 runtime have separate lifecycles intentionally:
-plugin installation remains quick, while the desired upstream release is selected/compiled through
-the managed service backend.
+The plugin package and upstream bol-van/zapret2 runtime have separate lifecycles intentionally: plugin installation remains quick, while the desired upstream release is selected/compiled through the managed service backend.
 
 ---
 
@@ -169,8 +146,7 @@ Supported managed placeholders are intentionally limited to:
 <IPSET:name>
 ```
 
-A profile may contain several target placeholders. The backend expands them into concrete runtime
-profiles while preserving the remaining Zapret2 arguments and user-authored `--new` boundaries.
+A profile may contain several target placeholders. The backend expands them into concrete runtime profiles while preserving the remaining Zapret2 arguments and user-authored `--new` boundaries.
 
 ### Domain targets
 
@@ -181,8 +157,7 @@ youtube.com
 *.youtube.com
 ```
 
-Both forms are normalized to the managed domain form. Invalid names, IP addresses and unrelated text
-are rejected.
+Both forms are normalized to the managed domain form. Invalid names, IP addresses and unrelated text are rejected.
 
 ### IPv4 targets
 
@@ -208,11 +183,9 @@ Configuration changes use a transactional path:
 5. verify firewall/process health;
 6. keep or restore the previous working state if activation fails.
 
-Runtime lifecycle operations are serialized. The plugin manages its own PID/state files, supervisor
-ownership and firewall rules so stale callbacks cannot tear down a replacement runtime.
+Runtime lifecycle operations are serialized. The plugin manages its own PID/state files, supervisor ownership and firewall rules so stale callbacks cannot tear down a replacement runtime.
 
-Before `dvtws2` starts, required FreeBSD firewall prerequisites are prepared automatically, including
-`ipdivert`/`ipfw` support required by the managed divert path.
+Before `dvtws2` starts, required FreeBSD firewall prerequisites are prepared automatically, including `ipdivert`/`ipfw` support required by the managed divert path.
 
 ---
 
@@ -235,8 +208,7 @@ The Web GUI uses the same authoritative backend available to administrators:
 /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh --help
 ```
 
-The GUI wraps this backend in a transactional activation layer that records the previous upstream
-checkout/binaries/runtime marker/service state and restores them if the requested activation fails.
+The GUI wraps this backend in a transactional activation layer that records the previous upstream checkout, binaries, runtime marker, and service state and restores them if requested activation fails.
 
 ---
 
@@ -252,15 +224,13 @@ checkout/binaries/runtime marker/service state and restores them if the requeste
 /var/log/zapret2/supervisor.log
 ```
 
-`dvtws2` drops privileges to UID/GID `65534`; managed runtime Lua/BLOB files and directories are
-normalized to readable/executable permissions appropriate for that privilege boundary.
+`dvtws2` drops privileges to UID/GID `65534`; managed runtime Lua/BLOB files and directories are normalized to readable/executable permissions appropriate for that privilege boundary.
 
 ---
 
 ## Removal policy
 
-Removing the OPNsense plugin stops its managed service before package files disappear. By policy the
-following are preserved for later reinstall or investigation:
+Removing the OPNsense plugin stops its managed service before package files disappear. By policy the following are preserved for later reinstall or investigation:
 
 - saved OPNsense configuration;
 - downloaded bol-van/zapret2 runtime;
@@ -271,40 +241,39 @@ following are preserved for later reinstall or investigation:
 
 ## Release model
 
-For users, the project exposes two publication types:
-
 | Type | Meaning |
 |---|---|
 | **Testing package** | Persistent GitHub `.pkg` used for development/live verification. It does not replace the full Web/pkg release. |
 | **Full release** | Verified package published through the project pkg repository and ready for install/update through the OPNsense Web GUI. |
 
-The canonical development/version semantics are in [`docs/PROJECT_PRINCIPLES.md`](docs/PROJECT_PRINCIPLES.md) (`DEV-027`–`DEV-040`); GitHub publication mechanics are in [`docs/GITHUB_PUBLICATION.md`](docs/GITHUB_PUBLICATION.md) (`GH-034`–`GH-052`). This README describes the user-facing result and does not independently define release policy.
+Canonical version/product semantics are in [`docs/PROJECT_PRINCIPLES.md`](docs/PROJECT_PRINCIPLES.md) (`DEV-027`–`DEV-040`); GitHub mechanics are in [`docs/GITHUB_PUBLICATION.md`](docs/GITHUB_PUBLICATION.md) (`GH-034`–`GH-052`). This README describes the user-visible result rather than redefining release policy.
 
 ---
 
 ## Documentation for contributors
 
-Engineering documentation lives in [`docs/`](docs/). It uses a bounded three-level memory model with exactly four canonical general rule books.
-
-Start with:
+Engineering documentation uses a bounded three-level memory model and exactly four canonical general rule books. For a cold start, follow the repository bootstrap order:
 
 1. [`AGENTS.md`](AGENTS.md)
-2. [`docs/DOCUMENTATION_RULES.md`](docs/DOCUMENTATION_RULES.md) — `DOC-*`
-3. [`docs/PROJECT_PRINCIPLES.md`](docs/PROJECT_PRINCIPLES.md) — `DEV-*`
-4. [`docs/CHAT_RULES.md`](docs/CHAT_RULES.md) — `CHAT-*`
-5. [`docs/GITHUB_PUBLICATION.md`](docs/GITHUB_PUBLICATION.md) — `GH-*`
-6. [`docs/START_HERE.md`](docs/START_HERE.md)
-7. [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
-8. task-specific documents named by `START_HERE.md`
+2. [`docs/START_HERE.md`](docs/START_HERE.md)
+3. [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
+4. [`docs/DOCUMENTATION_RULES.md`](docs/DOCUMENTATION_RULES.md) — `DOC-*`
+5. [`docs/PROJECT_PRINCIPLES.md`](docs/PROJECT_PRINCIPLES.md) — `DEV-*`
+6. [`docs/CHAT_RULES.md`](docs/CHAT_RULES.md) — `CHAT-*`
+7. [`docs/GITHUB_PUBLICATION.md`](docs/GITHUB_PUBLICATION.md) — `GH-*`
+8. [`docs/ROADMAP.md`](docs/ROADMAP.md)
+9. [`docs/INDEX.md`](docs/INDEX.md)
+10. task-specific documents selected by `START_HERE.md`
 
-Use [`docs/ROADMAP.md`](docs/ROADMAP.md) for the complete concise plan and [`docs/INDEX.md`](docs/INDEX.md) to reach the current version-line ledger, completed version archives, devlogs, patch records, decisions and verification evidence only when that detail is needed.
+Rule IDs are persistent cross-document identities. The four canonical books contain explicit inbound/outbound reference registries, checked by CI, so a rule change cannot silently leave stale current references.
+
+Use `INDEX.md` to reach the current version-line ledger, completed archives, architecture, requirements, decisions, audits, devlogs, patch records and verification evidence only when that detail is needed.
 
 ---
 
 ## Acknowledgements
 
-This independent project builds on open-source work by **bol-van** and **Umur Gorur**. Their copyright
-notices and licenses are preserved in [`NOTICE`](NOTICE).
+This independent project builds on open-source work by **bol-van** and **Umur Gorur**. Their copyright notices and licenses are preserved in [`NOTICE`](NOTICE).
 
 ## License
 
