@@ -4,6 +4,7 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 AGENTS="${ROOT_DIR}/AGENTS.md"
+README="${ROOT_DIR}/README.md"
 PRINCIPLES="${ROOT_DIR}/docs/PROJECT_PRINCIPLES.md"
 START_HERE="${ROOT_DIR}/docs/START_HERE.md"
 STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
@@ -25,6 +26,7 @@ TITLE_WORKFLOW="${ROOT_DIR}/.github/workflows/pr-title.yml"
 CLEANUP_WORKFLOW="${ROOT_DIR}/.github/workflows/cleanup-merged-branch.yml"
 PRERELEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/publish-prerelease.yml"
 RELEASE_TRIGGER="${ROOT_DIR}/.github/workflows/release-trigger.yml"
+RELEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/release.yml"
 MAKEFILE="${ROOT_DIR}/Makefile"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 
@@ -52,6 +54,7 @@ require_doc_marker()
 
 for file in \
   "${AGENTS}" \
+  "${README}" \
   "${PRINCIPLES}" \
   "${START_HERE}" \
   "${STATE}" \
@@ -72,7 +75,8 @@ for file in \
   "${TITLE_WORKFLOW}" \
   "${CLEANUP_WORKFLOW}" \
   "${PRERELEASE_WORKFLOW}" \
-  "${RELEASE_TRIGGER}"
+  "${RELEASE_TRIGGER}" \
+  "${RELEASE_WORKFLOW}"
 do
   test -s "${file}" || fail "missing or empty GitHub governance/memory file: ${file}"
 done
@@ -102,7 +106,7 @@ require_doc_marker 'docs/PROJECT_PRINCIPLES.md' "${AGENTS}" 'AGENTS does not req
 require_doc_marker 'docs/START_HERE.md' "${AGENTS}" 'AGENTS does not require operational handoff'
 require_doc_marker 'docs/PROJECT_STATE.md' "${AGENTS}" 'AGENTS does not require current project state'
 require_doc_marker 'docs/GITHUB_PUBLICATION.md' "${AGENTS}" 'AGENTS does not name publication authority'
-require_doc_marker 'history/current/v0.4.x.md' "${INDEX}" 'INDEX does not route to current semantic-line ledger'
+require_doc_marker 'history/current/v0.4.x.md' "${INDEX}" 'INDEX does not route to current version-line ledger'
 require_doc_marker 'history/archive/v0.1.x.md' "${INDEX}" 'INDEX does not route to v0.1.x archive'
 require_doc_marker 'history/archive/v0.2.x.md' "${INDEX}" 'INDEX does not route to v0.2.x archive'
 require_doc_marker 'history/archive/v0.3.x.md' "${INDEX}" 'INDEX does not route to v0.3.x archive'
@@ -114,10 +118,28 @@ require_doc_marker 'decisions/' "${INDEX}" 'INDEX does not route to deep decisio
 require_doc_marker 'navigation only' "${INDEX}" 'INDEX is no longer explicitly navigation-only'
 require_doc_marker 'Archiving never deletes' "${INDEX}" 'INDEX omits archive-integrity guarantee'
 require_doc_marker 'Level 1' "${STATE}" 'PROJECT_STATE does not expose current memory-level state'
-require_doc_marker 'v0.4.x' "${CURRENT_LEDGER}" 'current semantic-line ledger identity is missing'
+require_doc_marker 'v0.4.x' "${CURRENT_LEDGER}" 'current version-line ledger identity is missing'
 require_doc_marker 'Handoff to v0.2.x' "${ARCHIVE_01}" 'v0.1.x archive lacks next-line handoff'
 require_doc_marker 'Handoff to v0.3.x' "${ARCHIVE_02}" 'v0.2.x archive lacks next-line handoff'
 require_doc_marker 'Handoff to v0.4.x' "${ARCHIVE_03}" 'v0.3.x archive lacks next-line handoff'
+
+# Owner-controlled second numeric component and full-release semantics.
+require_doc_marker 'second numeric component' "${PRINCIPLES}" 'canonical principles omit explicit second-version-component terminology'
+require_doc_marker 'assistant must never initiate' "${PRINCIPLES}" 'canonical principles omit owner gate for second-version-component changes'
+require_doc_marker 'second-component change => full release' "${PRINCIPLES}" 'canonical principles omit second-component-to-release implication'
+require_doc_marker 'full release != second-component change' "${PRINCIPLES}" 'canonical principles omit one-way release implication'
+require_doc_marker 'Every full release includes a complete human-facing `README.md` revision' "${PRINCIPLES}" 'canonical principles omit README release gate'
+require_doc_marker 'Owner-controlled second numeric component' "${PUBLICATION}" 'publication rules omit explicit second-version-component authority'
+require_doc_marker 'assistant must never initiate a second-component change' "${PUBLICATION}" 'publication rules permit inferred second-version-component changes'
+require_doc_marker 'full release =/=> second numeric component changes' "${PUBLICATION}" 'publication rules omit one-way release implication'
+require_doc_marker 'complete `README.md` revision' "${PUBLICATION}" 'publication rules omit full-release README revision'
+require_doc_marker 'history/archive/v0.4.x.md' "${PUBLICATION}" 'publication rules do not demonstrate old-line archive creation'
+require_doc_marker 'no extra owner' "${PUBLICATION}" 'publication rules do not make authorized rollover self-contained'
+require_doc_marker 'second numeric component' "${MEMORY_DECISION}" 'active memory decision still lacks explicit second-version-component terminology'
+require_doc_marker 'Full Web/pkg release' "${README}" 'README does not expose the full Web/pkg release'
+require_doc_marker 'Current development candidate' "${README}" 'README does not distinguish current development package'
+require_doc_marker 'Strategy Lab' "${README}" 'README does not present current Strategy Lab capability'
+require_doc_marker 'second numeric component' "${README}" 'README does not explain the project version/release boundary'
 
 # Publication/governance semantics remain mandatory while deep decision records are loaded on demand.
 require_doc_marker 'PR/branch commit/final squash subjects begin' "${AGENTS}" 'AGENTS does not require versioned project delivery identity'
@@ -126,9 +148,6 @@ require_doc_marker 'every PR title' "${PUBLICATION}" 'publication rules do not c
 require_doc_marker 'PR-branch commit subject' "${PUBLICATION}" 'publication rules do not cover branch commit identity'
 require_doc_marker 'final squash subject' "${PUBLICATION}" 'publication rules do not cover squash identity'
 require_doc_marker 'Docs/governance/CI-only changes' "${PUBLICATION}" 'publication rules do not cover non-packaged changes'
-require_doc_marker 'Automatic semantic-minor documentation rollover' "${PUBLICATION}" 'publication rules omit automatic minor-line archive rollover'
-require_doc_marker 'history/archive/v0.4.x.md' "${PUBLICATION}" 'publication rules do not demonstrate old-line archive creation'
-require_doc_marker 'no extra owner reminder' "${PUBLICATION}" 'publication rules do not make minor-line rollover automatic'
 require_doc_marker 'what changes and why' "${PRINCIPLES}" 'canonical principles omit delivery documentation scope/reason'
 require_doc_marker 'expected result' "${PRINCIPLES}" 'canonical principles omit expected result requirement'
 require_doc_marker 'long-term' "${PRINCIPLES}" 'canonical principles omit long-term plan requirement'
@@ -136,7 +155,7 @@ require_doc_marker 'three memory levels' "${PRINCIPLES}" 'canonical principles o
 require_doc_marker 'one primary home' "${PRINCIPLES}" 'canonical principles omit one-primary-home rule'
 require_doc_marker 'reconcile' "${PUBLICATION}" 'publication procedure omits plan reconciliation'
 
-# One generic publisher is allowed; version-specific publishers in main are forbidden.
+# One generic testing-package publisher is allowed; version-specific publishers in main are forbidden.
 version_specific=$(find "${ROOT_DIR}/.github/workflows" -maxdepth 1 -type f \
   -name 'publish-v*-prerelease.yml' -print)
 [ -z "${version_specific}" ] || {
@@ -151,15 +170,18 @@ require_fixed 'FreeBSD:15:amd64' "${PRERELEASE_WORKFLOW}" 'generic publisher doe
 require_fixed 'freebsd:15:x86:64' "${PRERELEASE_WORKFLOW}" 'generic publisher does not validate architecture'
 require_fixed 'gh release create' "${PRERELEASE_WORKFLOW}" 'generic publisher does not use repository release API'
 require_fixed 'Delete temporary publication branch' "${PRERELEASE_WORKFLOW}" 'generic publisher lacks branch cleanup'
-require_fixed 'prerelease == true' "${PRERELEASE_WORKFLOW}" 'generic publisher lacks release verification'
+require_fixed 'prerelease == true' "${PRERELEASE_WORKFLOW}" 'generic publisher lacks testing-prerelease verification'
 
 if grep -Eq 'pages:[[:space:]]*write|actions/deploy-pages|build-pkg-repository' "${PRERELEASE_WORKFLOW}"; then
   fail 'testing prerelease publisher must not publish GitHub Pages or pkg repository'
 fi
 
-# Full release trigger must obey universal versioned titles.
+# Full release trigger/workflow must obey version identity and publish a normal Web/pkg release.
 require_fixed '[[ "${REVISION}" == "1" ]]' "${RELEASE_TRIGGER}" 'release trigger does not require revision 1'
 require_fixed '^v${ESCAPED_VERSION}_1:\ Prepare\ release\ v${ESCAPED_VERSION}' "${RELEASE_TRIGGER}" 'release trigger still expects an unversioned squash subject'
+require_fixed 'prerelease: false' "${RELEASE_WORKFLOW}" 'full release workflow still marks full releases as testing prereleases'
+require_fixed 'Publish pkg repository' "${RELEASE_WORKFLOW}" 'full release workflow does not publish the pkg repository'
+require_fixed 'pages/FreeBSD:15:amd64' "${RELEASE_WORKFLOW}" 'full release workflow does not verify the Web/pkg repository outputs'
 
 # Existing ordinary PR and main-integrity controls remain mandatory.
 require_fixed 'concurrency:' "${CI}" 'CI concurrency is missing'
@@ -192,4 +214,4 @@ require_fixed 'types: [closed]' "${CLEANUP_WORKFLOW}" 'cleanup workflow does not
 require_fixed 'github.event.pull_request.merged == true' "${CLEANUP_WORKFLOW}" 'cleanup workflow does not require merged PRs'
 require_fixed 'github.event.pull_request.head.repo.full_name == github.repository' "${CLEANUP_WORKFLOW}" 'cleanup workflow lacks same-repository guard'
 
-echo "GitHub delivery, workflow, and three-level documentation-memory tests passed for package candidate ${expected}."
+echo "GitHub delivery, workflow, release-authority, README, and documentation-memory tests passed for package candidate ${expected}."
