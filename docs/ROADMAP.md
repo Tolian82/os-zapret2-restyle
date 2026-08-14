@@ -28,8 +28,9 @@ completed, superseded, rejected or deferred rather than silently disappearing.
 - [x] stale CI/test contracts cannot override current canon;
 - [x] owner-facing status defaults to understandable Russian;
 - [x] repository/temporary-branch hygiene made a normal silent completion obligation;
-- [x] broad active-doc audit found and corrected stale `_31` / “A-B-C not selected” text in root
-  architecture and base Strategy Lab architecture.
+- [x] broad active/current-looking documentation audit corrected stale `_31` / “A-B-C not selected”
+  architecture and reclassified the old “Model B selected / Model C future” experiment plan as
+  **HISTORICAL / COMPLETED**.
 
 Current docs/governance corrective keeps `VERSION=0.4.1`, `PLUGIN_REVISION=12`.
 
