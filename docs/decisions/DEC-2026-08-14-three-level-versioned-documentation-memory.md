@@ -9,9 +9,9 @@ Project engineering memory uses three levels:
 1. **Level 1 — mandatory bounded recovery memory:** root `AGENTS.md`, `PROJECT_PRINCIPLES.md`,
    `START_HERE.md`, `PROJECT_STATE.md`, then only current-task specialist documents named by the
    handoff.
-2. **Level 2 — current semantic-minor-line memory:** one rolling `docs/history/current/vX.Y.x.md`
-   ledger plus specialist documents selected by the active task.
-3. **Level 3 — historical memory:** one compact archive map per completed semantic minor line plus the
+2. **Level 2 — current version-line memory:** one rolling `docs/history/current/vX.Y.x.md` ledger plus
+   specialist documents selected by the active task.
+3. **Level 3 — historical memory:** one compact archive map per completed version line plus the
    original detailed devlog/patch/verification/release/decision/audit records.
 
 `docs/INDEX.md` is navigation only and must directly link the current ledger, every completed version-
@@ -20,19 +20,31 @@ line archive and the deep record stores.
 The mandatory Level-1 handoff always contains a very short lifetime project path and exact next task,
 not a patch-by-patch history.
 
-## Minor-line rollover
+## Second-numeric-component rollover
 
-When the owner requests the first release in a new semantic minor line, for example
-`v0.4.x -> v0.5.0_1`, the release procedure automatically:
+The version-line boundary is the **second numeric component**: the `4` in `0.4.x`, for example
+`v0.4.x -> v0.5.x`. This wording is intentionally explicit; the standalone word `minor` is not used as
+the authority for the transition.
+
+The assistant never initiates a second-component change. It requires either an explicit owner
+version/transition instruction or separate owner approval of a proposal. Once that transition is
+authorized, no second confirmation is required for its implied documentation rollover and full
+release.
+
+The transition procedure automatically:
 
 1. finalizes the old current-line ledger;
 2. creates/freezes the compact `history/archive/v0.4.x.md` map;
 3. preserves every original detailed record;
 4. initializes `history/current/v0.5.x.md`;
 5. updates `INDEX`, Level 1 and the short lifetime path;
-6. proceeds with the normal semantic release.
+6. performs the mandatory full human-facing `README.md` revision;
+7. proceeds with the full project release, including the package published into the OPNsense
+   Pages/pkg repository for Web GUI installation.
 
-No separate owner reminder/confirmation is required.
+A full project release can also be explicitly requested while keeping the same second numeric
+component. Thus the implication is one-way: second-component change requires a full release; a full
+release does not itself authorize a second-component change.
 
 ## Integrity rule
 
@@ -63,6 +75,9 @@ loading that history during every new ChatGPT context wastes working context and
 history over current facts. Read-set control provides the memory reduction without sacrificing
 traceability.
 
+The explicit second-component wording prevents an assistant from treating an inferred semantic
+versioning convention as permission to move the project from one version line to another.
+
 ## Supersession
 
 This decision and the newer canonical principles supersede older `docs/DECISIONS.md` statements to
@@ -84,12 +99,14 @@ as current authority where this newer decision explicitly supersedes it.
 
 - `v0.1.x`, `v0.2.x`, `v0.3.x` receive compact archive maps now;
 - `v0.4.x` remains the active current-line ledger;
-- the first future `v0.5.x` release will create/freeze the `v0.4.x` archive automatically;
+- a future owner-authorized `v0.4.x -> v0.5.x` transition will create/freeze the `v0.4.x` archive as
+  part of the required full release;
 - `INDEX.md` provides direct routes to every archive/current ledger and to deep detailed records.
 
 ## Affected documents
 
 - `AGENTS.md`
+- `README.md`
 - `docs/PROJECT_PRINCIPLES.md`
 - `docs/START_HERE.md`
 - `docs/PROJECT_STATE.md`

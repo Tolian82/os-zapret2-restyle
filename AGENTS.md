@@ -16,7 +16,7 @@ Read completely through EOF:
 
 Do **not** routinely load historical devlogs, patch records, evidence or archives. Use
 `docs/INDEX.md` to navigate them only when the current task needs history, proof or older rationale.
-The active minor-line ledger is Level 2 and is read only when more current-line chronology is needed.
+The active version-line ledger is Level 2 and is read only when more current-line chronology is needed.
 
 If a required selected document is truncated/paginated, continue to EOF before acting. If required
 authority cannot be read completely, stop before mutation rather than guess.
@@ -24,7 +24,8 @@ authority cannot be read completely, stop before mutation rather than guess.
 ## Canon and documentation
 
 `docs/PROJECT_PRINCIPLES.md` is the single cumulative authority for permanent principles. Apply its
-owner-canon, stale-contract, zero-memory, three-level-memory and archive-rotation rules directly.
+owner-canon, stale-contract, zero-memory, three-level-memory, release and archive-rotation rules
+directly.
 
 The newest unambiguous owner instruction/fact/confirmed decision supersedes conflicting older active
 docs/tests/plans. Once accepted, do not reconfirm it merely because older material disagrees. Reopen
@@ -69,8 +70,13 @@ Before GitHub mutation read `docs/GITHUB_PUBLICATION.md` completely. Ordinary im
 - preserve useful unique branch work before routine cleanup.
 
 Standing owner authorization for `fix/add/change/implement/complete` covers branch, PR, checks,
-same-scope repair, squash merge, main verification and cleanup. Explicit semantic-release requests
-also invoke the automatic minor-line documentation rollover rule when `MAJOR.MINOR` changes.
+same-scope repair, squash merge, main verification and cleanup.
+
+A change to the **second numeric component** of `VERSION` — the `4` in `0.4.x`, for example
+`v0.4.x -> v0.5.x` — is never assistant-initiated. It requires an explicit owner version/transition
+instruction or separate owner approval of a proposal. Once authorized it always includes the complete
+full-release + documentation-rollover procedure. A full release may also be explicitly requested
+without changing that second component.
 
 Stop for owner input only on material product ambiguity, relevant unpublished owner-local state,
 owner-only live evidence, credentials/protected authority, destructive changes to pre-existing user
@@ -81,8 +87,9 @@ unavailability.
 
 - packaged source change with unchanged `VERSION`: increment `PLUGIN_REVISION` once;
 - docs/governance/CI-only change: change neither;
-- testing package: persistent GitHub `.pkg`, no semantic release/Pages/pkg-repo promotion;
-- full semantic release: explicit VERSION authority, revision reset to `1`, full release pipeline.
+- testing package: persistent GitHub `.pkg`, no full release/Pages/pkg-repo promotion;
+- full release: explicit owner release + VERSION authority, revision reset to `1`, full README review,
+  GitHub release assets and verified Pages/pkg-repository publication ready for OPNsense Web install.
 
 ## Owner-facing communication / OPNsense
 

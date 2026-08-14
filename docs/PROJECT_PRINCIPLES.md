@@ -120,20 +120,27 @@ detailed procedures live in specialist documents.
 
 24. **Project documentation uses three memory levels to minimize context without losing history.**
     Level 1 is the aggressively bounded always-read recovery set (`AGENTS`, principles, `START_HERE`,
-    `PROJECT_STATE`). Level 2 is one rolling current semantic-minor-line ledger such as `v0.4.x` and
-    current specialist documents, read only when the active task needs that detail. Level 3 is the
-    archive of completed minor lines plus deep `devlog`/`patches`/`verification`/release/decision
-    evidence, read only for historical dependency, investigation or proof. `docs/INDEX.md` must link
-    directly to the current ledger, every version-line archive and the deep evidence stores.
+    `PROJECT_STATE`). Level 2 is one rolling current version-line ledger such as `v0.4.x` and current
+    specialist documents, read only when the active task needs that detail. Level 3 is the archive of
+    completed version lines plus deep `devlog`/`patches`/`verification`/release/decision evidence,
+    read only for historical dependency, investigation or proof. `docs/INDEX.md` must link directly
+    to the current ledger, every version-line archive and the deep evidence stores.
 
-25. **A semantic minor-line transition automatically rotates documentation history.** When the owner
-    requests the first release in a new line (for example `v0.4.x -> v0.5.0_1`), close/freeze the
-    current `v0.4.x` ledger as archive `v0.4.x`, initialize the new `v0.5.x` current ledger, update
-    `INDEX` and the short lifetime path, then proceed with the release. This requires no separate
-    reminder or confirmation. Archiving never deletes or rewrites detailed records: archive files are
-    compact maps with links to the original chronology/evidence, and current architecture/contracts
-    plus permanent principles remain current rather than being archived merely because a version
-    line changed.
+25. **Changing the second numeric component of `VERSION` is owner-controlled and always means a full
+    release.** The “second numeric component” is explicit: the `4` in `0.4.x`, for example
+    `v0.4.x -> v0.5.x` (and later `v0.9.x -> v0.10.x`). Do not use the standalone word `minor` as the
+    authority for this transition. The assistant must never initiate such a change on its own. The
+    second numeric component may change only when the owner explicitly states the new version or the
+    transition, or separately approves a proposed transition. Once that authority exists, no second
+    confirmation is required for the associated release/rollover work. Every such transition must
+    produce a complete full project release: a verified OPNsense package published into the project
+    pkg repository and installable through the OPNsense Web GUI, together with the normal release
+    tag/assets/repository publication and documentation rollover. The converse is not true: the owner
+    may request a full release while keeping the same second numeric component. Therefore:
+    **second-component change => full release; full release != second-component change.** During a
+    second-component transition, close/freeze the old current version-line ledger as its archive,
+    initialize the new current ledger, update `INDEX` and the short lifetime path, and preserve every
+    original deep record.
 
 26. **Current facts have one primary home; other active documents link instead of retelling history.**
     `PROJECT_STATE` stores present facts, `START_HERE` stores the compact operational handoff and exact
@@ -141,13 +148,21 @@ detailed procedures live in specialist documents.
     chronology. Detailed measurements and patch narratives are referenced, not copied repeatedly into
     the mandatory layer. `INDEX` is navigation only.
 
+27. **Every full release includes a complete human-facing `README.md` revision.** Release preparation
+    must review the README against the actual current project and update it with all materially current
+    capabilities, installation/use guidance, release identity and important limitations. The README is
+    a presentation surface for people, not an engineering journal: it should be attractive, readable,
+    concise enough to scan, detailed enough to understand the product, and should present the best
+    current state of the project rather than accumulated obsolete history. It must clearly distinguish
+    the latest full Web/pkg-repository release from newer testing/development package candidates.
+
 ## Authority map
 
 - `docs/START_HERE.md` — compact operational handoff, short lifetime path and exact current task;
 - `docs/PROJECT_STATE.md` — current factual project/repository/product/environment state only;
 - `docs/ROADMAP.md` — current/future ordered plan, not a historical journal;
-- `docs/history/current/` — current semantic-minor-line working ledger;
-- `docs/history/archive/` — compact completed minor-line archive maps;
+- `docs/history/current/` — current version-line working ledger;
+- `docs/history/archive/` — compact completed version-line archive maps;
 - `docs/WORKING_CONVENTIONS.md` — how these principles are applied day to day;
 - `docs/GITHUB_PUBLICATION.md` — authoritative GitHub delivery/release procedure;
 - `docs/ARCHITECTURE.md` / `docs/architecture/` — current technical architecture only;

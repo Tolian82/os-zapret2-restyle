@@ -69,7 +69,12 @@ Package metadata:
 
 - packaged source/behavior change with unchanged `VERSION`: increment `PLUGIN_REVISION` once;
 - docs/governance/CI-only change: change neither;
-- explicitly authorized semantic release: change `VERSION`, reset revision to `1`.
+- explicitly authorized full release: set the exact owner-authorized `VERSION`, reset revision to `1`.
+
+The **second numeric component** is the `4` in `0.4.x`. Never change it by inference or assistant
+initiative. An explicit owner version/transition instruction or separate approval is required. A
+second-component change always invokes the full-release procedure; a full release can be requested
+without changing the second component.
 
 ## Testing conventions
 
@@ -90,7 +95,7 @@ Documentation follows the three-level model from `PROJECT_PRINCIPLES.md`.
 ### Before work
 
 - Level 1 only by default: `AGENTS -> PROJECT_PRINCIPLES -> START_HERE -> PROJECT_STATE -> task docs`;
-- read the current minor-line ledger only if richer current-line context is needed;
+- read the current version-line ledger only if richer current-line context is needed;
 - read archives/deep records only for a concrete historical dependency, investigation or proof;
 - record/reconcile objective, implementation plan and expected acceptance in the appropriate primary
   current home.
@@ -99,7 +104,7 @@ Documentation follows the three-level model from `PROJECT_PRINCIPLES.md`.
 
 - record approved concepts/permanent rules where they belong;
 - record discoveries that materially change later work;
-- keep richer chronology in the current semantic-minor ledger;
+- keep richer chronology in the current version-line ledger;
 - create/update patch/devlog/evidence/decision records only when they add distinct contract,
   execution, proof or rationale value;
 - when owner canon changes, synchronize all affected active authority before stale text can drive work.
@@ -116,7 +121,7 @@ Documentation follows the three-level model from `PROJECT_PRINCIPLES.md`.
 
 - record current factual changes in `PROJECT_STATE` only when current state changed;
 - update exact handoff/task in `START_HERE` only when the recovery boundary changed;
-- append useful richer chronology to the current minor-line ledger;
+- append useful richer chronology to the current version-line ledger;
 - update `ROADMAP` only when current/future priority or sequencing changed;
 - add detailed patch/devlog/evidence records only when they contribute non-duplicate information;
 - record exact next stage and verify repository/temporary-branch cleanup.
@@ -127,10 +132,29 @@ document.
 
 ### Version-line rollover
 
-On the first release in a new semantic minor line, automatically finalize the old current ledger into
-`docs/history/archive/vX.Y.x.md`, initialize the new current ledger, update `INDEX` and Level 1, and
-preserve all original deep records. Current architecture/contracts and permanent principles do not
-become historical merely because the version line changed.
+When the owner explicitly authorizes a change to the second numeric component, for example
+`v0.4.x -> v0.5.x`, the same release change must finalize the old current ledger into
+`docs/history/archive/v0.4.x.md`, initialize the new current ledger, update `INDEX` and Level 1,
+preserve all original deep records, perform the mandatory full `README.md` revision and complete the
+full release. No independent rollover confirmation is required after the second-component transition
+itself has been authorized.
+
+Current architecture/contracts and permanent principles do not become historical merely because the
+version line changed.
+
+## Full release convention
+
+A full release means a complete OPNsense delivery, not merely a tag or testing asset:
+
+1. explicit owner release + exact `VERSION` authority;
+2. `PLUGIN_REVISION=1` release preparation and verified merge;
+3. complete human-facing `README.md` review/update;
+4. immutable semantic tag;
+5. normal GitHub Release with verified package/checksum assets;
+6. matching project Pages/pkg repository publication for `FreeBSD:15:amd64`;
+7. package install/update availability through the OPNsense Web GUI using the project repository.
+
+Testing `.pkg` publication remains a different operation and does not imply a full release.
 
 ## Findings versus Architecture Debt
 
@@ -187,7 +211,8 @@ override the default.
 
 Stop for owner direction only on material product/architecture ambiguity, relevant unpublished owner-
 local state, unresolvable required checks, unavailable GitHub plugin/authority, destructive changes to
-pre-existing user remote data, history rewriting/direct-main publication, or owner-only live evidence.
+pre-existing user remote data, history rewriting/direct-main publication, owner-only live evidence, or
+an unapproved attempt to change the second numeric component of `VERSION`.
 
 ## Local-only state exception
 

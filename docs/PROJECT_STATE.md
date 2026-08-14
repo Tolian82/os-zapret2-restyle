@@ -14,13 +14,14 @@ Future ordering: [`ROADMAP.md`](ROADMAP.md).
 - primary branch: `main`;
 - semantic version: `0.4.1`;
 - packaged source revision: `12`;
-- package candidate: `os-zapret2-restyle-0.4.1_12.pkg`;
+- current testing package candidate: `os-zapret2-restyle-0.4.1_12.pkg`;
 - testing tag: `v0.4.1_12`;
+- latest full Web/pkg release: `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - packaged runtime/source merge: `acf65d39eaa88a16debe1d35affa71f03f1d848d`;
-- package SHA-256: `3b5a6c39c09abdfc8d8f1b59923312c40dda27e11c4f03e20773131996f6789d`;
+- testing-package SHA-256: `3b5a6c39c09abdfc8d8f1b59923312c40dda27e11c4f03e20773131996f6789d`;
 - required ABI: `FreeBSD:15:amd64`.
 
-Resolve the actual `main` SHA before every mutation; docs-only `main` may be newer than packaged
+Resolve the actual `main` SHA before every mutation; docs/CI-only `main` may be newer than packaged
 source without changing package identity.
 
 ## Current product facts
@@ -52,6 +53,17 @@ Current architecture authorities:
 
 Historical A/B/C experiment material is evidence only and cannot reopen current production choice.
 
+## Current release/version authority
+
+The second numeric component is the `4` in `0.4.x`. It changes only after explicit owner
+version/transition instruction or separate owner approval. A transition such as `v0.4.x -> v0.5.x`
+necessarily includes a full project release and version-line archive rollover. A full release can also
+be requested while keeping the second numeric component unchanged.
+
+A full release means a verified OPNsense package published into the project Pages/pkg repository for
+installation/update through the OPNsense Web GUI, together with the semantic tag, release assets and
+checksums. Every full release includes a complete human-facing `README.md` review.
+
 ## Documentation memory state
 
 Documentation uses three levels:
@@ -63,9 +75,6 @@ Documentation uses three levels:
 Completed archives: [`v0.1.x`](history/archive/v0.1.x.md),
 [`v0.2.x`](history/archive/v0.2.x.md), [`v0.3.x`](history/archive/v0.3.x.md).
 Current ledger: [`v0.4.x`](history/current/v0.4.x.md).
-
-At the first `v0.5.x` release request, `v0.4.x` is finalized into its archive and a new `v0.5.x`
-current ledger is initialized automatically; original detailed records are retained.
 
 ## Exact next packaged source change
 

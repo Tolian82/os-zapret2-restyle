@@ -13,9 +13,9 @@ Do not load every linked document during startup.
 4. [`PROJECT_STATE.md`](PROJECT_STATE.md)
 5. only the current-task specialist documents named by `START_HERE.md`
 
-## Level 2 — current semantic line / task-selected detail
+## Level 2 — current version line / task-selected detail
 
-Current line:
+Current line (same second numeric component, the `4` in `0.4.x`):
 
 - **[`v0.4.x working ledger`](history/current/v0.4.x.md)** — richer current-line chronology,
   decisions/evidence links and handoff detail; read only when the current task needs more than Level 1.
@@ -37,9 +37,11 @@ These are compact maps, not replacements for original records:
 - **[`v0.2.x archive`](history/archive/v0.2.x.md)**
 - **[`v0.3.x archive`](history/archive/v0.3.x.md)**
 
-`v0.4.x` is current and therefore is **not** archived yet. When the owner requests the first `v0.5.x`
-release, the current `v0.4.x` ledger is finalized as `history/archive/v0.4.x.md`, a new
-`history/current/v0.5.x.md` is created, and this index is updated before release publication.
+`v0.4.x` is current and therefore is **not** archived yet. Only after the owner explicitly authorizes
+a change of the second numeric component from `4` to `5` (`v0.4.x -> v0.5.x`), the same full-release
+change finalizes `history/archive/v0.4.x.md`, creates `history/current/v0.5.x.md`, updates this index and
+performs the required README/full-release procedure. A full release can occur without changing the
+second numeric component.
 
 ## Level 3 — deep chronology / evidence
 

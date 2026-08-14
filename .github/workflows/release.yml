@@ -157,7 +157,7 @@ jobs:
             release-build/*.pkg
             release-build/SHA256SUMS
           draft: false
-          prerelease: true
+          prerelease: false
           generate_release_notes: true
 
   deploy-pages:

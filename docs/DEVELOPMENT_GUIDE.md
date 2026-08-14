@@ -15,7 +15,7 @@ Mandatory Level 1:
 
 Then escalate only when needed:
 
-- Level 2 `history/current/vX.Y.x.md` — richer chronology for the active minor line;
+- Level 2 `history/current/vX.Y.x.md` — richer chronology for the active version line;
 - Level 3 `history/archive/` + devlog/patches/verification/releases/decisions/audits — only for a
   concrete historical dependency, investigation, rationale or proof.
 
@@ -80,6 +80,10 @@ Otherwise proceed directly with the known-file task after baseline verification.
 Packaged source change with unchanged `VERSION` increments `PLUGIN_REVISION` once. Docs/governance/
 CI-only changes change neither value.
 
+The **second numeric component** of the version is the `4` in `0.4.x`. Never change it by inference or
+assistant initiative. It changes only after explicit owner version/transition instruction or separate
+owner approval. A full release request by itself does not authorize changing this component.
+
 ## 6. Validate
 
 Run focused syntax/static/unit/contract tests appropriate to changed behavior, then the broader matrix
@@ -104,17 +108,23 @@ Before Ready PR and again before merge, verify zero-memory recovery:
 Acceptance question: **could a future session with no chat/model memory resume the exact current
 boundary from Level 1, then discover deeper history through links only if needed?**
 
-## 8. Semantic-minor documentation rollover
+## 8. Second-numeric-component release rollover
 
-When an explicit release changes `MAJOR.MINOR`, for example `v0.4.x -> v0.5.0_1`, perform this in the
-release change without a separate reminder:
+When the owner explicitly authorizes a change to the second numeric component, for example
+`v0.4.x -> v0.5.x`, the same change is necessarily a full project release. Perform the following
+without a second rollover/release confirmation:
 
 1. finish the current-line ledger through the final old-line state;
 2. freeze/create `history/archive/v0.4.x.md` as a compact archive map;
 3. preserve all original devlog/patch/evidence/release/decision records;
 4. initialize `history/current/v0.5.x.md`;
 5. update `INDEX`, `START_HERE`, `PROJECT_STATE`, short lifetime path and `ROADMAP`;
-6. then proceed with normal semantic release publication.
+6. perform the mandatory full human-facing `README.md` review/update;
+7. set the exact owner-authorized new `VERSION` and reset `PLUGIN_REVISION=1`;
+8. proceed with the normal full release pipeline: verified merge, semantic tag, normal GitHub Release,
+   package/checksum assets and matching Pages/pkg repository ready for OPNsense Web installation.
+
+A full release can also be explicitly requested without changing the second numeric component.
 
 Archiving chronology must never archive current architecture/contracts or permanent principles merely
 because the version line changed.
@@ -133,6 +143,9 @@ the current request explicitly stops earlier.
 Build/live gates apply when changed scope requires them. Use the smallest live gate that verifies the
 changed risk. Owner requests for an installable testing package mean persistent GitHub `.pkg` delivery;
 Actions artifacts/local files are build evidence only.
+
+A full release is stricter than a testing package: it must publish the verified package to the project
+pkg repository for OPNsense Web installation and must include the full README review defined above.
 
 ## 11. OPNsense / unpublished state
 
