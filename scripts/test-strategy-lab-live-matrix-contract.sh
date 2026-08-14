@@ -5,6 +5,9 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MATRIX="${ROOT_DIR}/docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md"
 STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
+START_HERE="${ROOT_DIR}/docs/START_HERE.md"
+PRINCIPLES="${ROOT_DIR}/docs/PROJECT_PRINCIPLES.md"
+ROADMAP="${ROOT_DIR}/docs/ROADMAP.md"
 RELEASE_DOC="${ROOT_DIR}/docs/releases/v0.4.1.md"
 RELEASE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md"
 BLOB_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md"
@@ -16,6 +19,7 @@ DISCOVERY_ROOT_CAUSE="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_5
 DISCOVERY6_INPUT="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-input.md"
 DISCOVERY6_PLAN="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_6-source-verification-plan.md"
 DISCOVERY6_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md"
+READINESS12_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-14-v0.4.1_12-warm-readiness-live-pass.md"
 VERSION_FILE="${ROOT_DIR}/VERSION"
 MAKEFILE="${ROOT_DIR}/Makefile"
 LUA_DOC="${ROOT_DIR}/docs/architecture/STRATEGY_LAB_LUA_INITIALIZATION.md"
@@ -48,14 +52,16 @@ LIVE_GATE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-09-risk-based-live-re
 fail(){ echo "FAIL: $*" >&2; exit 1; }
 require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
-for file in "${MATRIX}" "${STATE}" "${INDEX}" "${RELEASE_DOC}" "${RELEASE_EVIDENCE}" \
-    "${BLOB_PUBLICATION}" "${BLOB_LIVE}" "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${DISCOVERY_PUBLICATION}" \
-    "${DISCOVERY_ROOT_CAUSE}" "${DISCOVERY6_INPUT}" "${DISCOVERY6_PLAN}" "${DISCOVERY6_LIVE}" "${VERSION_FILE}" "${MAKEFILE}" \
-    "${LUA_DOC}" "${LUA_PATCH}" "${LUA_TEST}" "${LUA_PY}" "${BLOB_DOC}" "${BLOB_PATCH}" \
-    "${BLOB_TEST}" "${BLOB_PY}" "${DISCOVERY5_PATCH}" "${DISCOVERY6_PATCH}" "${DISCOVERY_PY}" \
-    "${LIFECYCLE7_PATCH}" "${LIFECYCLE7_TEST}" "${LIFECYCLE7_PY}" "${LIFECYCLE7_WRAPPER}" "${LIFECYCLE7_WORKER}" \
-    "${LUA_LIVE}" "${MODEL_B_EVIDENCE}" "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" "${LIVE26}" "${BUDGET_PY}" \
-    "${LEASE_PY}" "${MODEL_C_PY}" "${MODEL_B_PY}" "${LIVE_GATE_DECISION}"
+for file in "${MATRIX}" "${STATE}" "${INDEX}" "${START_HERE}" "${PRINCIPLES}" "${ROADMAP}" \
+    "${RELEASE_DOC}" "${RELEASE_EVIDENCE}" "${BLOB_PUBLICATION}" "${BLOB_LIVE}" \
+    "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${DISCOVERY_PUBLICATION}" "${DISCOVERY_ROOT_CAUSE}" \
+    "${DISCOVERY6_INPUT}" "${DISCOVERY6_PLAN}" "${DISCOVERY6_LIVE}" "${READINESS12_LIVE}" \
+    "${VERSION_FILE}" "${MAKEFILE}" "${LUA_DOC}" "${LUA_PATCH}" "${LUA_TEST}" "${LUA_PY}" \
+    "${BLOB_DOC}" "${BLOB_PATCH}" "${BLOB_TEST}" "${BLOB_PY}" "${DISCOVERY5_PATCH}" \
+    "${DISCOVERY6_PATCH}" "${DISCOVERY_PY}" "${LIFECYCLE7_PATCH}" "${LIFECYCLE7_TEST}" \
+    "${LIFECYCLE7_PY}" "${LIFECYCLE7_WRAPPER}" "${LIFECYCLE7_WORKER}" "${LUA_LIVE}" \
+    "${MODEL_B_EVIDENCE}" "${MODEL_C_CORRECTIVE_PASS}" "${PUBLICATION26}" "${LIVE26}" \
+    "${BUDGET_PY}" "${LEASE_PY}" "${MODEL_C_PY}" "${MODEL_B_PY}" "${LIVE_GATE_DECISION}"
 do
     [ -s "${file}" ] || fail "missing Strategy Lab/release record: ${file}"
 done
@@ -64,52 +70,45 @@ version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; exit}' "${MAKEFILE}")
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
-[ "${version}" = '0.4.1' ] || fail 'measurement line must remain on VERSION=0.4.1'
-[ "${revision}" -eq 12 ] || fail 'current warm-worker readiness polling corrective must use PLUGIN_REVISION=12'
-[ "${candidate}" = 'os-zapret2-restyle-0.4.1_12.pkg' ] || fail 'unexpected current warm-worker readiness polling package identity'
+[ "${version}" = '0.4.1' ] || fail 'current Strategy Lab line must remain on VERSION=0.4.1'
+[ "${revision}" -eq 12 ] || fail 'current packaged source must remain PLUGIN_REVISION=12'
+[ "${candidate}" = 'os-zapret2-restyle-0.4.1_12.pkg' ] || fail 'unexpected current package identity'
 
-require "${STATE}" 'Current published stable package: `os-zapret2-restyle-0.4.1_1.pkg`'
-require "${STATE}" 'Latest persistently published testing package: `v0.4.1_6` / `os-zapret2-restyle-0.4.1_6.pkg`'
-require "${STATE}" 'Latest owner-tested testing candidate: `v0.4.1_6` — discovery cleanup-finalizer corrective ACCEPTED / measurement_accepted'
-require "${STATE}" 'Latest detailed Strategy Lab runtime basis: `v0.4.0_26` — adaptive-budget owner-live PASS'
+# Current-state authorities must describe current truth, not freeze an older historical ledger.
+require "${PRINCIPLES}" 'CANONICAL / MANDATORY READING IN EVERY PROJECT CONTEXT'
+require "${STATE}" 'current packaged source revision: `12`'
+require "${STATE}" 'package candidate: `os-zapret2-restyle-0.4.1_12.pkg`'
+require "${STATE}" 'acf65d39eaa88a16debe1d35affa71f03f1d848d'
+require "${STATE}" 'v0.4.1_12'
 require "${STATE}" 'job.xhdgCU'
-require "${STATE}" 'Stage 60 duration `34209 ms`'
-require "${STATE}" 'total job duration `114644 ms`'
-require "${STATE}" 'Policy: `blob-common-set-scaling-v1`, schema `2`.'
-require "${STATE}" 'production_change_recommended=false'
-require "${STATE}" 'publication workflow run `31633335688` — SUCCESS'
-require "${STATE}" 'V0.4.1_4 BLOB COMMON-SET SCALING — ACCEPTED / OPTIMIZATION CLOSED'
-require "${STATE}" 'V0.4.1_5 DISCOVERY PROBE AGREEMENT — OWNER-LIVE DATA COLLECTED / FINALIZER DEFECT CONFIRMED'
-require "${STATE}" 'V0.4.1_6 DISCOVERY CLEANUP FINALIZER — ACCEPTED / OWNER-LIVE PASS'
-require "${STATE}" 'Rutracker Stage 60 completed in `24204 ms`'
-require "${STATE}" 'YouTube Stage 60 completed in `9151 ms`'
-require "${STATE}" 'publication workflow run `31652568754` / #42 — SUCCESS'
-require "${STATE}" 'sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce'
-require "${STATE}" 'publication workflow run `31689302668` / #43 — SUCCESS'
-require "${STATE}" 'sha256:e708d2ac0eb13d41d1d79da96e2b5f1f6e9d4fc9e138366fd4e72e30b96a02b7'
-require "${STATE}" 'corrected owner-live Rutracker measurement concluded `measurement_accepted`'
+require "${STATE}" 'Stage 60 `34209 ms`'
+require "${STATE}" '5/5 `model_c_only=true`'
+require "${STATE}" 'physical-segment startup median `82.5 ms`'
+require "${STATE}" 'Current next packaged source change — `v0.4.1_13`'
+require "${STATE}" 'Make Model C the only normal production Stage-60 runtime'
+require "${START_HERE}" 'Exact next code change — `v0.4.1_13`'
+require "${START_HERE}" 'do not spend the next patch improving timeout admission for `C -> B`'
+require "${ROADMAP}" '`v0.4.1_13` — Model-C-only production finalization'
 
-require "${INDEX}" 'docs/patches/v0.4.1_6.md'
-require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-input.md'
-require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_6-source-verification-plan.md'
+# INDEX is navigation. It must route to current authorities and retained evidence without claiming
+# that an old testing candidate is still current.
+require "${INDEX}" 'docs/PROJECT_PRINCIPLES.md'
+require "${INDEX}" 'docs/START_HERE.md'
+require "${INDEX}" 'docs/PROJECT_STATE.md'
+require "${INDEX}" 'docs/ROADMAP.md'
+require "${INDEX}" 'docs/verification/evidence/2026-08-14-v0.4.1_12-warm-readiness-live-pass.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md'
-require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_5-cleanup-finalizer-root-cause.md'
-require "${INDEX}" 'docs/patches/v0.4.1_5.md'
-require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_5-discovery-probe-publication.md'
-require "${INDEX}" 'docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md'
-require "${INDEX}" 'docs/architecture/STRATEGY_LAB_BLOB_LOADING.md'
-require "${INDEX}" 'docs/patches/v0.4.1_4.md'
-require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-publication.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md'
-require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md'
 require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md'
-require "${INDEX}" 'C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback'
+require "${INDEX}" 'v0.4.1_13'
 
+# Historical source/build/live evidence remains checked directly at its immutable record.
 require "${RELEASE_DOC}" '# os-zapret2-restyle v0.4.1'
 require "${RELEASE_DOC}" '`os-zapret2-restyle-0.4.1_1.pkg`'
 require "${RELEASE_EVIDENCE}" 'Status: **PUBLISHED**'
 require "${RELEASE_EVIDENCE}" 'os-zapret2-restyle-0.4.1_1.pkg'
+
 require "${BLOB_PUBLICATION}" 'Status: **PUBLISHED / OWNER-LIVE PENDING**'
 require "${BLOB_PUBLICATION}" 'da427cd061df1f3cbc01ba11a14a6417f2e406b3'
 require "${BLOB_PUBLICATION}" '31616501996'
@@ -118,6 +117,7 @@ require "${BLOB_LIVE}" 'Status: **PASS**'
 require "${BLOB_LIVE}" '27 complete worker starts'
 require "${BLOB_LIVE}" 'Median ready and settled RSS was exactly `4360 KiB`'
 require "${BLOB_LIVE}" 'Do **not** change production Model C BLOB loading.'
+
 require "${BLOB4_PUBLICATION}" 'Status: **PUBLISHED / OWNER-LIVE PENDING**'
 require "${BLOB4_PUBLICATION}" '461fe2d045b131f3400f285a9cb59808b5f33ce2'
 require "${BLOB4_PUBLICATION}" '31633335688'
@@ -151,28 +151,28 @@ require "${DISCOVERY6_LIVE}" '369818027'
 require "${DISCOVERY6_LIVE}" '512818044'
 require "${DISCOVERY6_LIVE}" 'sha256:e708d2ac0eb13d41d1d79da96e2b5f1f6e9d4fc9e138366fd4e72e30b96a02b7'
 require "${DISCOVERY6_LIVE}" 'Discovery probe measurement conclusion: measurement_accepted'
-require "${DISCOVERY_PUBLICATION}" 'Status: **PUBLISHED / OWNER-LIVE PENDING**'
 require "${DISCOVERY_PUBLICATION}" '31652568754'
 require "${DISCOVERY_PUBLICATION}" '369590644'
 require "${DISCOVERY_PUBLICATION}" '512227845'
 require "${DISCOVERY_PUBLICATION}" 'sha256:f3c55966658d336a3f51a76d0847f194f79ba13d9e140553e7fa9c308ec5f6ce'
 
 require "${LIFECYCLE7_PATCH}" '# v0.4.1_7 — Measure Model-C per-batch lifecycle amortization'
-require "${LIFECYCLE7_PATCH}" 'Production Model C, Model B fallback, cold'
 require "${LIFECYCLE7_PATCH}" 'amortizable_upper_bound'
 require "${LIFECYCLE7_PY}" 'POLICY = "model-c-batch-lifecycle-amortization-v1"'
 require "${LIFECYCLE7_PY}" 'with stage60_source_port_lease.install():'
 require "${LIFECYCLE7_PY}" 'stage60_model_c.expand('
 require "${LIFECYCLE7_PY}" '"production_model_changed": False'
-require "${LIFECYCLE7_PY}" '"production_search_semantics_changed": False'
-require "${LIFECYCLE7_PY}" '"production_dispatch_width_changed": False'
-require "${LIFECYCLE7_PY}" '"production_change_recommended": False'
 require "${LIFECYCLE7_TEST}" 'PASS: Model-C lifecycle measurement is isolated, production-adapter faithful, lifecycle-owned, cleanup-gated, and production-neutral'
 require "${LIFECYCLE7_WRAPPER}" 'zapret2-lifecycle.lock'
 require "${LIFECYCLE7_WORKER}" 'cleanup-all'
 require "${LIFECYCLE7_WORKER}" 'strategy-lab-evidence'
 require "${LIFECYCLE7_WORKER}" 'strategy_lab_model_b_parallel_adapter.sh'
 
+require "${READINESS12_LIVE}" 'OWNER-LIVE PASS / READINESS CORRECTIVE VALIDATED / CROSS-BATCH REUSE CLOSED'
+require "${READINESS12_LIVE}" '82.5'
+require "${READINESS12_LIVE}" 'fallback_detected=false'
+
+# Canonical live-matrix rows remain historical/release-gate evidence independent of current-state docs.
 require "${MATRIX}" 'Current published release package: `os-zapret2-restyle-0.4.1_1.pkg`'
 require "${MATRIX}" 'Latest owner-tested runtime package: `os-zapret2-restyle-0.4.0_26.pkg`'
 require "${MATRIX}" '`v0.4.1` RELEASE-SELECTED LIVE BASIS — PASS ON `_26`'
@@ -220,4 +220,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} is the current warm-worker readiness polling source candidate, owner-tested history remains _6, and production live truth remains _26"
+echo "PASS: ${candidate} current state is _12, immutable historical live evidence remains bound to its records, and the next documented source task is _13 Model-C-only production finalization"
