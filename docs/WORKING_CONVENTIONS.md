@@ -13,6 +13,33 @@ create competing formulations of them.
 - internal service/configd namespace: `zapret`;
 - semantic version source: `VERSION`.
 
+## Owner canon lock
+
+The owner's newest unambiguous instruction, explicit project fact or explicitly confirmed decision is
+current canon.
+
+Once accepted:
+
+- do not repeatedly reconfirm it merely because an old document/test disagrees;
+- do not write later reports as if the decision is still open;
+- reopen a factual claim only when the owner changes it or fresh direct reproducible evidence
+  contradicts it;
+- old documentation, historical CI assertions, previous chats and missing model memory are not
+  counter-evidence.
+
+Current locked examples: DNS is fixed; Model C is selected for normal production Stage 60.
+
+When the owner says `зафиксируй`, `запиши это`, `record this` or equivalent:
+
+1. write the new canon into canonical/current authority;
+2. obtain a broad active-document map when multiple authorities may mention it;
+3. inspect all active/current authority documents capable of contradicting it;
+4. correct every active contradiction in the same logical docs change;
+5. keep old statements only in clearly historical/superseded records.
+
+A stale test/CI contract that asserts superseded canon is updated; current architecture is not bent
+back toward the obsolete assertion.
+
 ## Audit conventions
 
 Every inherited reference must be classified before removal.
@@ -79,6 +106,10 @@ When working from a local checkout, inspect at least:
 Perform focused live OPNsense tests when the changed behavior needs appliance evidence.
 Never claim a test passed unless it actually ran.
 
+A failed test proves only that its assertion failed. If it exposes a real same-scope defect, repair
+that defect. If it exposes a stale assertion that contradicts newer owner canon, update the stale
+contract instead of reverting current documentation/architecture.
+
 Static verification, package archive verification and live OPNsense verification are distinct states.
 A package built from uncommitted source is not a reproducible project baseline until source and
 synchronized documentation are committed.
@@ -91,13 +122,16 @@ Before work:
 
 - record objective;
 - record implementation plan;
-- record expected verification/acceptance.
+- record expected verification/acceptance;
+- reconcile task with newest owner canon.
 
 During work:
 
 - record approved concepts immediately;
 - record permanent rules/architecture changes immediately;
-- record discoveries that change later work.
+- record discoveries that change later work;
+- when the owner changes/records canon, synchronize all affected active authority before stale text
+  can drive later work.
 
 Before GitHub publication:
 
@@ -105,16 +139,19 @@ Before GitHub publication:
 - confirm expected result/acceptance boundary;
 - confirm the complete near-term and long-term plan;
 - reconcile that plan with what implementation/testing learned;
-- update changed priorities before publication.
+- update changed priorities before publication;
+- if the owner said `зафиксируй`, confirm the full active-authority reconciliation was performed;
+- confirm every new durable principle is in `PROJECT_PRINCIPLES`.
 
 After work:
 
 - record what completed and what was verified;
 - record failures/unresolved issues;
 - update `START_HERE` and `PROJECT_STATE`;
-- update patch/evidence record;
+- update patch/evidence/devlog record;
 - update `ROADMAP` when priority/sequencing/future/deferred work changed;
-- record the exact next stage.
+- record the exact next stage;
+- verify repository/temporary-branch cleanup.
 
 Engineering Memory is maintained during development, not reconstructed only at the end.
 
@@ -131,6 +168,10 @@ Architecture Debt lifecycle:
 
 A Finding must not be remediated while open Architecture Debt determines its intended behavior.
 
+Once the owner explicitly closes an architecture question (for example, selecting Model C), old
+Architecture Debt/experiment records cannot reopen it; remaining implementation differences are
+transition debt/findings against the settled direction.
+
 ## Project-context preflight
 
 Mandatory reading order is controlled by root `AGENTS.md`:
@@ -143,26 +184,32 @@ or when the current plan/evidence calls for it; do not use it as automatic start
 Before GitHub mutation, also read `docs/GITHUB_PUBLICATION.md` and apply scope-first inventory from
 the active operational-handoff decision.
 
+A requested `зафиксируй`/canon reconciliation is a broad active-document consistency task by
+definition when several active authority files can mention the subject.
+
 ## GitHub development convention
 
 Ordinary flow:
 
 1. connected GitHub plugin first;
-2. current `main` SHA, metadata, current plan and same-scope PR state;
+2. current `main` SHA, metadata, newest canon/current plan and same-scope PR state;
 3. create one logical task branch;
 4. implement + synchronized documentation;
 5. focused validation + complete diff review;
-6. plan reconciliation;
+6. plan/canon reconciliation;
 7. one Ready PR;
 8. latest-head required CI;
 9. same-scope repair in the same PR if needed;
 10. exact-head squash merge using exact versioned subject;
-11. verify `main` and clean the temporary branch;
-12. package/live verification when applicable.
+11. verify `main`;
+12. verify whether the temporary branch has useful unique work, preserve it if so, otherwise remove
+    the branch and verify clean branch state;
+13. package/live verification when applicable.
 
 Additional branch/workflow/tag/release/tree inventory is performed when that operation actually needs
 it. A pinned recursive tree is recommended for a genuine broad/cross-cutting investigation with
-unknown path/call chain, not for every known-file patch.
+unknown path/call chain and for explicit broad active-document canon reconciliation, not for every
+known-file patch.
 
 The connected GitHub plugin is the mandatory first repository interface. A narrow fallback is allowed
 only when the plugin is responding and one exact function/permission is confirmed missing. Plugin
@@ -183,7 +230,8 @@ changes to user/pre-existing remote data, history rewriting/direct-main publicat
 live appliance evidence available only from the owner.
 
 Never ask the owner to confirm facts available from repository/GitHub/CI/current docs/read-only
-diagnostics.
+diagnostics. Never ask the owner to reconfirm an already-settled owner fact/decision solely because
+old documentation/test history disagrees.
 
 ## Local-only state exception
 
@@ -195,6 +243,18 @@ If relevant owner-local changes are uncommitted/unpushed:
 2. ask the owner to commit/push or explicitly transfer archive/patch;
 3. establish exact transferred baseline;
 4. never reconstruct/overwrite unpublished state from memory.
+
+## Owner-facing communication
+
+Project status/results to the owner are written in clear Russian by default.
+
+Internal GitHub/CI English is secondary evidence. Terms such as `latest head`, `Ready PR`,
+`exact-head`, `squash`, `governance`, `hygiene`, or raw check names must not be left unexplained when
+they are necessary. State the practical meaning in Russian: what passed/failed, whether the change is
+already in `main`, and what happens next.
+
+Routine successful CI/branch housekeeping should not distract the owner. Report it only when it
+changes the project outcome or when a real blocking boundary remains.
 
 ## OPNsense command presentation
 
@@ -275,4 +335,5 @@ historical/superseded where needed.
 `scripts/test-repository-hygiene.sh` is the repository-hygiene CI gate.
 
 Normal steady-state branch authority is `main`; `recovery/base` is retained as a recovery reference.
-Ordinary task/publication branches are temporary and removed after completion.
+Ordinary task/publication branches are temporary. After completion, preserve any useful unique work
+first and otherwise remove them automatically. Routine cleanup is not delegated to the owner.

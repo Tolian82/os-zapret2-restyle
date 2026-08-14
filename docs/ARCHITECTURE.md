@@ -8,17 +8,12 @@ Question answered:
 How is the current system built?
 
 Purpose:
-Describe the active technical architecture, runtime ownership, interfaces, and
-component responsibilities.
-
-Updated when:
-The system architecture or component responsibilities change.
+Describe active technical architecture, runtime ownership, interfaces and component
+responsibilities. This file is current-state architecture only; historical implementation
+sequences belong in decisions/devlog/patch/evidence records.
 
 Read after:
-DEVELOPMENT_GUIDE.md
-
-Do not store here:
-Current task status, decision rationale, roadmap, or chronological history.
+`docs/PROJECT_STATE.md` and `docs/DEVELOPMENT_GUIDE.md`.
 
 ==================================================
 IDENTITY AND SOURCE OF TRUTH
@@ -27,16 +22,16 @@ IDENTITY AND SOURCE OF TRUTH
 Repository: `https://github.com/Tolian82/os-zapret2-restyle`
 Primary branch: `main`
 Project/package: `os-zapret2-restyle`
-Internal service and configd namespace: `zapret`
+Internal service/configd namespace: `zapret`
 Version source: `VERSION`
+Required packaged runtime: Python 3.13 on supported OPNsense / FreeBSD 15 amd64.
 
-The repository is independent and contains every project-owned file required to
-build and install the plugin on a supported clean OPNsense system. Generated
-runtime, binaries, logs, PID files, backups, and appliance configuration are not
-source files.
+Committed source describes actual implemented behavior. Current project direction and
+approved transition state are recorded in current documentation. A stale historical
+architecture statement cannot override newer owner canon.
 
 ==================================================
-CONFIGURATION AND RUNTIME PIPELINE
+CONFIGURATION AND NORMAL RUNTIME
 ==================================================
 
 ```text
@@ -45,7 +40,7 @@ OPNsense model
   -> parser and count-carrying profile pipeline
   -> Target Mode and profile normalization
   -> HOSTLIST/IPSET resolver and exclusions
-  -> blob and port resolution
+  -> BLOB and port resolution
   -> dvtws2 argument generation
   -> candidate validation
   -> atomic activation or rollback
@@ -55,13 +50,12 @@ OPNsense model
 ```
 
 The active generated runtime is `/usr/local/etc/zapret2/runtime-v2`. One supervised
-dvtws2 process owns the active strategy. Invalid candidate configuration must not
-change the active runtime, child PID, supervisor, or plugin-owned firewall rules.
+normal dvtws2 process owns the active saved strategy. Invalid candidate configuration
+must not replace the active runtime or leave partial firewall/process state.
 
-Only `HOSTLIST:name` and `IPSET:name` target selectors are supported. A user profile
-with multiple unique supported selectors is normalized into one runtime profile per
-selector while preserving non-selector lines and first-use order. User-authored
-`--new` boundaries remain valid.
+Only `HOSTLIST:name` and `IPSET:name` target selectors are supported. Multiple unique
+supported selectors in one user profile are normalized into separate runtime profiles
+while preserving non-selector lines, order and user-authored `--new` boundaries.
 
 ==================================================
 SETTINGS APPLY
@@ -69,22 +63,22 @@ SETTINGS APPLY
 
 ```text
 /ui/zapret
-  -> Settings API validates and normalizes the model
+  -> Settings API validation/normalization
   -> persistent save
   -> configctl zapret reconfigure
-  -> zapret_service.sh reloads the template
-  -> Backend v2 candidate build and validation
+  -> zapret_service.sh
+  -> Backend-v2 candidate build/validation
   -> atomic runtime switch or rollback
 ```
 
-Only an exact successful configd response completes Apply. On failure, the previous
-persistent model, generated template, and runtime are restored.
+Only an exact successful configd response completes Apply. On failure, persistent model,
+generated template and runtime are restored to the prior valid state.
 
 ==================================================
 DIAGNOSTICS INTERFACES
 ==================================================
 
-Short domain connectivity probe:
+Short connectivity probe:
 
 ```text
 /ui/zapret/diagnostics
@@ -93,85 +87,29 @@ Short domain connectivity probe:
   -> test_domain.sh
 ```
 
-Strategy finding uses only the asynchronous Strategy Lab path:
+Strategy finding uses only asynchronous Strategy Lab:
 
 ```text
 /ui/zapret/diagnostics
   -> POST /api/zapret/strategy_lab/start
   -> immediate job_id
-  -> POST status once per second
-  -> structured stages and partial results
-  -> POST result after terminal state
-  -> optional POST cancel
+  -> read-only status/events polling
+  -> structured stage/partial results
+  -> terminal result
+  -> optional cancel
 ```
 
-The synchronous `blockcheck.sh` wrapper, configd `blockcheck` action,
-`DiagnosticsController::blockcheckAction`, synchronous API URL, and long browser
-request are not active or fallback interfaces.
-
-The detailed GUI and API contract is defined in
-`docs/architecture/STRATEGY_LAB_ACTIVATION.md`.
+The synchronous Blockcheck path is retired and is not an active fallback interface.
 
 ==================================================
-STRATEGY LAB TRANSACTION
+STRATEGY LAB CURRENT ARCHITECTURE
 ==================================================
 
-An automated job owns the shared Zapret2 lifecycle lock from initial snapshot through
-mandatory restoration. The normal service is stopped only after its exact initial
-state is recorded. The current `_31` implementation starts and fully removes one cold
-temporary dvtws2 candidate between probes. Whether a later search implementation keeps
-multiple isolated workers or a compatible candidate bucket warm is deliberately open
-under `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md`.
+An automated Strategy Lab job owns the shared Zapret2 lifecycle boundary from initial
+snapshot through mandatory restoration. The normal service is stopped only after its
+exact initial state is recorded and verified.
 
-Stages are persisted atomically:
-
-```text
-00 target initialization
-10 lifecycle snapshot
-20 normal service stop
-30 network capability precheck
-40 clean baseline
-50 TLS 1.3 reconnaissance (current `_31`: seven low-cost native graph seeds on one endpoint epoch)
-60 native graph expansion (current `_31`: each PASS/FAIL selects the next reachable neighbor)
-70 three-of-three stability confirmation
-80 extended protocol branches
-85 shortlist
-90 cleanup and exact service restoration
-99 final report
-```
-
-The current `_31` implementation runs different strategies strictly sequentially.
-Screening may probe two different endpoints of the same service concurrently with one
-strategy. Stability confirmation uses fresh sequential connections and requires every
-required endpoint to pass three of three attempts. The approved target keeps 3/3 but
-makes it fail-fast and does not assume that cold process startup is permanently required
-for discovery.
-
-In the current `_31` source, Standard mode searches TLS 1.3 and Extended mode adds TLS
-1.2, plain HTTP, capability-gated QUIC, and configured request-response UDP. The approved
-next search architecture removes the QUIC candidate-search branch while retaining the
-fixed IPv4 UDP/443 capability/precheck; IPv4/TCP/TLS receives the primary search budget
-and IPv6 remains capability-gated/lower priority.
-
-Cancellation marks the current work cancelled, preserves completed structured results,
-stops temporary probes/runtime, and always executes stage 90. A restoration failure
-changes the terminal result to `restore_failed`; it is never reported as success.
-
-==================================================
-STRATEGY LAB IMPLEMENTATION TRANSITION
-==================================================
-
-The `v0.3.3_17` live boundary was the final shell-era handoff. Migration Patches 1–8
-(`_18`–`_25`) subsequently moved the complete automated Strategy Lab backend to Python
-and reconciled Diagnostics/status presentation. Correctives `_26` and `_27` preserve
-that ownership; adaptive-search `_28` changes Python-owned Stage-60 catalog
-reachability/prioritization, and `_29` adds normalized candidate/resource evidence and
-exact Python-owned runtime rendering. `_30` replaces active Stage-50/60 flat-catalog
-policy with the native DAG, golden corpus, semantic resource branches and exact variable
-ranges. `_31` adds live frontier decisions, fixed Stage-40 endpoint identity,
-two-to-three-winner defaults and durable phase timing.
-
-The active implementation boundary is:
+The current implementation boundary is:
 
 ```text
 Diagnostics GUI / JavaScript
@@ -182,102 +120,144 @@ configd
         ↓
 thin compatibility launcher
         ↓
-Python Strategy Lab orchestration
+Python 3.13 Strategy Lab orchestration
         ↓
-small explicit FreeBSD/OPNsense adapters and external tools
+small explicit FreeBSD/OPNsense adapters
+        ↓
+IPFW/divert + temporary dvtws2 + bounded probes
 ```
 
-PHP remains the web/API integration layer. Python is the automated owner for job state,
-stage orchestration, budgets/cancellation, subprocess execution, output parsing,
-candidate/search control, and structured result generation. Small shell/service adapters
-remain for already-audited Zapret2 lifecycle, shared-lock, `ipfw`, process ownership,
-and short FreeBSD-specific mutations.
+Python owns automated job state, stages, budgets/cancellation, subprocess execution,
+probe parsing, CandidateSpec/ResourceInventory, adaptive search decisions, runtime
+rendering inputs and structured results. Small shell/service adapters own narrow
+FreeBSD/OPNsense lifecycle and firewall/process mutations only.
 
-The public asynchronous API, stage numbers, evidence locations, lifecycle/restoration
-semantics, temporary firewall ownership, saved-configuration immutability, and result
-contracts do not change merely because the implementation language changes.
+Stages remain:
 
-There must be only one authoritative owner for each migrated responsibility. A replaced
-shell orchestration path is removed after parity qualification; it is not kept as a
-silent fallback competitor.
+```text
+00 target initialization
+10 lifecycle snapshot
+20 normal service stop
+30 network capability precheck
+40 clean baseline
+50 TLS 1.3 reconnaissance / evidence
+60 bounded adaptive native-Zapret2 expansion
+70 stability confirmation
+80 extended protocol branches
+85 shortlist
+90 cleanup and exact restoration
+99 final report
+```
 
-The packaged runtime contract is Python 3.13 through the OPNsense-managed interpreter;
-no third-party `pip` dependency is approved by default.
+The public asynchronous API, stage numbers, saved-configuration immutability,
+cancellation semantics and Stage-90 restoration contract remain stable.
+
+Specialist base contract:
+`docs/architecture/STRATEGY_LAB.md`.
+
+==================================================
+MODEL C — SELECTED PRODUCTION DIRECTION
+==================================================
+
+**Model C is selected. A/B/C model selection is closed.**
+
+Model roles:
+
+- Model A: retained cold correctness/reference implementation;
+- Model B: retained warm/reference implementation and temporary legacy fallback in
+  packaged source through `v0.4.1_12`;
+- Model C: selected normal production Stage-60 runtime.
+
+Current packaged `_12` source still contains transition debt:
+
+`Model C -> Model B -> Model A cold`.
+
+That describes current implementation only. It is **not** an architecture choice, gate,
+fallback requirement or invitation to re-select Model B. `v0.4.1_13` removes B/A from
+the normal production Stage-60 fallback chain.
+
+Model C uses source-port-qualified dispatch so one compatible physical warm worker can
+serve a planner-selected logical batch while preserving exact candidate attribution.
+Current accepted constraints include:
+
+- immutable CandidateSpec and job-scoped ResourceInventory;
+- logical candidate width at most three;
+- pinned endpoints sequential inside one candidate;
+- exact source-port-qualified IPFW/Lua attribution;
+- `preferred-free-else-alternate` source-port leasing;
+- profile-compatible physical segmentation while preserving the logical planner batch;
+- readiness from process identity + socket + clean startup log + two consecutive good
+  snapshots with 25 ms polling and a 4 s bound;
+- cleanup on success/failure/cancel and Stage-90 semantic restoration.
 
 Specialist authority:
-`docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
-
-Decision authority:
-`docs/decisions/DEC-2026-08-07-strategy-lab-python-orchestration.md`.
+`docs/architecture/STRATEGY_LAB_MODEL_C.md`.
 
 ==================================================
-APPROVED ADAPTIVE SEARCH TARGET
+ADAPTIVE SEARCH CONTRACT
 ==================================================
 
-The current `_31` search implements the first four adaptive-search slices: Stage-50
-acceptance can prioritize a family but cannot gate other Stage-60 graph branches, and
-each candidate now has an immutable Python `CandidateSpec` bound to one job-scoped
-installed `ResourceInventory`. Python renders exact runtime arguments; active shell
-adapters perform only lifecycle/IPFW/dvtws2 system actions. Active Stage 50/60 use a
-validated seven-seed/sixteen-node native DAG with exact golden candidates; semantic
-resource eligibility and optional candidate ranges are persisted and preserved. Every
-next Stage-60 node now follows live PASS/FAIL evidence, all comparisons use one recorded
-endpoint epoch, the normal result target is two to three and phase timing is durable.
-Timeout containment and later validation are not yet the final target. The approved
-post-migration architecture is defined in
+Strategy Lab searches native `bol-van/zapret2` semantics only.
+
+Stage 50 provides evidence/priority and never acts as a hard family allowlist. Stage 60
+uses a bounded native DAG where current-job evidence changes priority/reachability of
+compatible neighbors without silently inventing strategies.
+
+Stable search identities:
+
+- immutable CandidateSpec;
+- one job-scoped installed ResourceInventory;
+- exact candidate ranges/resources/action order;
+- pinned endpoint/search epoch;
+- bounded GET-4K discovery;
+- downstream stability/result ownership;
+- finite `eligible-work-v1` parent budgets;
+- infrastructure failures remain distinct from candidate network PASS/FAIL.
+
+Runtime acceleration must not change search semantics.
+
+Specialist authority:
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and
-`docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md`.
+`docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`.
 
-Key target properties:
+==================================================
+CURRENT MEASUREMENT DECISIONS
+==================================================
 
-- native Zapret2-only candidate semantics;
-- Stage-50 results are evidence rather than hard family permission for Stage 60;
-- explicit Python `CandidateSpec` and job-scoped installed `ResourceInventory`
-  (**implemented in `_29`**);
-- semantic BLOB-free/built-in/inline/external resource selection;
-- candidate-owned optional output range instead of global `-d10`;
-- golden native/owner working strategies prove representability and graph reachability;
-- the preceding three properties and deterministic native DAG are **implemented in
-  `_30`**;
-- adaptive cost/evidence-based graph exploration with current-job hits affecting order,
-  never reachability;
-- pinned endpoint/search-epoch comparison;
-- inexpensive discovery followed by fail-fast 3/3 and cold finalist long-GET validation;
-- normal early stop after two to three strong stable winners;
-- telemetry-driven timeout containment.
+The following measurement questions are closed for the current architecture unless the
+owner, roadmap, a material architecture change or fresh reproducible evidence reopens
+them:
 
-Live graph ordering, endpoint pinning, the normal winner bound and timing collection are
-**implemented in `_31`**. Telemetry-driven deadline changes remain `_32`; lightweight
-discovery and finalist validation remain `_33`.
+- Lua initialization: no production reduction justified;
+- current-width BLOB preload/common set: no material startup/RSS penalty and no lazy-BLOB
+  production change justified;
+- discovery: bounded GET-4K retained;
+- cross-batch keep-warm/reuse: not justified after the `_11/_12` lifecycle/readiness
+  corrections.
 
-Cold A, multiple-warm-worker B and warm-bucket/dispatcher C are experimental execution
-models. The architecture does not select one until the dedicated OPNsense experiment plan
-proves result equivalence, deterministic routing, no state leakage and exact cleanup.
+Do not restore an old experiment sequence merely because older documentation mentions it.
+
+==================================================
+DNS / NETWORK FACT BOUNDARY
+==================================================
+
+The previously reported local/container DNS slowness/failure is historical and closed:
+**the owner fixed DNS**. Current work treats DNS as working.
+
+A future DNS issue requires fresh direct reproducible evidence. An old timeout, old log,
+old document or new-session memory gap is not sufficient to classify DNS as broken again.
 
 ==================================================
 SHORTLIST AND CIRCULAR VALIDATION
 ==================================================
 
-The current `_31` result contract publishes at most three replay-verified finalists,
-ordered with recommendation number one first. The normal target is two to three; a
-truthful one-candidate result remains valid when no second winner survives. Strategy Lab
-never writes a candidate to the saved Traffic Strategy.
+Strategy Lab may publish up to three replay/stability-qualified finalists and never
+writes a candidate automatically into saved Traffic Strategy.
 
-Temporary circular validation is a separate bounded lifecycle transaction:
-
-```text
-completed domain shortlist
-  -> one target-scoped dvtws2 profile
-  -> upstream Zapret2 circular orchestrator
-  -> bidirectional TCP/443 interception
-  -> browser/application validation
-  -> explicit stop or TTL
-  -> temporary cleanup
-  -> exact restoration of initial Zapret2 state
-```
-
-Circular validation and automated Strategy Lab jobs cannot run concurrently because
-they share the lifecycle lock. The saved configuration remains immutable.
+Temporary circular validation is a separate bounded lifecycle transaction. Circular
+validation and an automated Strategy Lab job cannot run concurrently because they share
+the lifecycle lock. Saved configuration remains immutable and original service state is
+restored exactly.
 
 ==================================================
 SERVICE LIFECYCLE
@@ -292,45 +272,39 @@ All public mutating operations converge on `zapret_service.sh` and share
 - automated Strategy Lab job;
 - temporary circular validation.
 
-Status operations are read-only. Long-lived dvtws2 and supervisor processes must not
-inherit the lifecycle lock descriptor. Runtime-failure callbacks use a non-blocking
-try-lock so a stale supervisor cannot tear down a replacement runtime.
-
-The supervisor only detects runtime failure and reports it to the service lifecycle.
-It does not independently regenerate configuration, restart the service, or own a
-second watchdog lifecycle.
+Status operations are read-only. Long-lived processes must not inherit the lifecycle
+lock descriptor. Runtime-failure callbacks use bounded/non-competing lifecycle ownership.
+The supervisor detects runtime failure but does not become a second independent lifecycle
+manager.
 
 ==================================================
-PACKAGE AND UPSTREAM RUNTIME BOUNDARY
+PACKAGE / UPSTREAM BOUNDARY
 ==================================================
 
-The FreeBSD package owns plugin files and immediate OPNsense integration. Package
-upgrade stops and verifies the old service before replacement, refreshes plugin and
-Web GUI integration, and restarts only when the service was initially running.
+The FreeBSD package owns plugin files and immediate OPNsense integration.
 
-`setup.sh` owns upstream bol-van/zapret2 acquisition, selected stable release checkout,
-dvtws2 compilation, verification, and preservation of the initially running or stopped
-service state. Service Start, Apply, and Reconfigure never install dependencies or
-compile the engine.
+`setup.sh` is the single approved backend for upstream bol-van/zapret2 acquisition,
+release selection, build and verification. Service Start/Apply/Reconfigure never compile
+or install upstream dependencies.
 
-Package removal stops packet interception but preserves runtime content,
-configuration, logs, and dependencies. Destructive cleanup requires a separate explicit
-maintenance operation.
+Package lifecycle preserves the initially running/stopped service state and fails closed
+on incomplete/unknown state or unsuccessful stop/setup verification.
 
 ==================================================
 TECHNICAL CONSTRAINTS
 ==================================================
 
-- FreeBSD `/bin/sh` compatibility remains required for retained shell entry points and adapters.
-- Python migration code must use only the verified supported OPNsense interpreter/dependency model.
-- OPNsense configuration and configd are the integration boundary.
-- Candidate validation precedes activation.
-- Generated runtime is never committed.
-- Lifecycle mutation is serialized and fail-closed.
-- Temporary diagnostics use target-scoped firewall rules.
-- No automatic permanent strategy modification.
-- Ordinary package patches do not create tags, releases, or pkg-repository publication.
+- FreeBSD `/bin/sh` compatibility remains required for retained shell adapters;
+- owner console examples target root `csh` unless explicitly entering `sh`;
+- Python runtime uses the supported OPNsense Python 3.13 dependency model;
+- OPNsense configuration/configd are the integration boundary;
+- candidate validation precedes activation;
+- generated runtime is never committed;
+- lifecycle mutation is serialized and fail-closed;
+- temporary diagnostics use owned target-scoped firewall rules;
+- no automatic permanent strategy modification;
+- ordinary package patches do not imply stable release/pkg-repository publication.
 
-Audit evidence is maintained in `AUDIT.md`, approved rationale in `DECISIONS.md` and
-`docs/decisions/`, delivery order in `ROADMAP.md`, and completed implementation records
-in `docs/devlog/`.
+Current state is in `docs/PROJECT_STATE.md`; exact next work in `docs/START_HERE.md`;
+future sequence in `docs/ROADMAP.md`; historical rationale/evidence in decisions,
+patches, devlogs and verification records.

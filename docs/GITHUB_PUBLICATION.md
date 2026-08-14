@@ -8,6 +8,7 @@ Permanent principles: `docs/PROJECT_PRINCIPLES.md`.
 Current task: `docs/START_HERE.md`.
 Operational handoff/preflight authority: `docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md`.
 Owner-canon/zero-memory authority: `docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`.
+Canon-lock/hygiene authority: `docs/decisions/DEC-2026-08-14-owner-canon-lock-and-repository-hygiene.md`.
 
 Read this file completely immediately before GitHub mutation. The decisions above record rationale and
 supersession boundaries; they are not additional mandatory rereads for every ordinary mutation unless
@@ -33,13 +34,13 @@ Always verify before mutation:
 
 1. exact current `main` SHA;
 2. current `VERSION` and `PLUGIN_REVISION`;
-3. current documented task/plan reconciled against the owner's newest unambiguous instruction;
+3. current documented task/plan reconciled against the owner's newest unambiguous instruction/fact;
 4. same-scope/relevant open PR state;
 5. plugin availability for the operation.
 
-If the newest owner instruction conflicts with older active docs, the new instruction is the intended
-direction authority. Resolve only a genuine material ambiguity, then synchronize the conflicting
-active documentation before substantive work follows the new direction.
+Once an owner instruction/fact/confirmed decision is unambiguous, do not ask again merely because an
+old document/test disagrees. Reopen it only if the owner changes it or fresh direct reproducible
+evidence contradicts a factual assertion.
 
 Expand inventory only when the operation needs it:
 
@@ -47,10 +48,30 @@ Expand inventory only when the operation needs it:
 - testing package/release -> exact artifact/tag/release/asset/publication-run state;
 - branch cleanup/recovery/hygiene -> relevant complete branch inventory;
 - protection/permission work -> relevant protection/permission state;
-- broad/cross-cutting investigation with unknown paths -> pinned recursive tree.
+- broad/cross-cutting investigation with unknown paths -> pinned recursive tree;
+- owner `зафиксируй`/canon reconciliation -> active/current authority-document sweep broad enough to
+  find every possible contradiction.
 
 A known-file task named by `START_HERE.md` does not require unrelated historical branch/workflow/tag/
-release discovery before implementation.
+release discovery before implementation unless the owner explicitly requested a broad consistency
+review.
+
+## Owner canon / stale contract handling
+
+The owner's newest unambiguous instruction, explicit project fact or explicitly confirmed decision is
+current project canon and immediately supersedes conflicting older active documentation, tests and
+plans.
+
+When the owner says `зафиксируй`, `запиши это`, `record this` or equivalent, the first GitHub docs
+change must:
+
+1. record the canon in canonical/current authority;
+2. inspect all active/current authority files capable of contradicting it;
+3. correct every active contradiction in the same logical change;
+4. retain old statements only as clearly historical/superseded records.
+
+A stale CI/test assertion does not outrank current canon. If the assertion itself is obsolete, update
+that stale contract rather than modifying current architecture/docs back toward obsolete intent.
 
 ## Documentation / zero-memory recovery gate
 
@@ -67,19 +88,17 @@ checkpoint. It must state:
 5. the complete ordered next plan, including completed/superseded/deferred near-term and long-term
    work;
 6. every newly approved durable principle in `docs/PROJECT_PRINCIPLES.md` itself;
-7. the relevant patch/devlog/evidence record for detailed chronology.
+7. the relevant patch/devlog/evidence record for detailed chronology;
+8. the result of any full active-document reconciliation required by an owner `зафиксируй` request.
 
 Before opening/updating a Ready PR for the final intended head, and again immediately before merge,
 reconcile that recovery checkpoint against implementation/testing discoveries and the newest owner
-instruction. If scope, expected result, test/audit needs, priority or deferred state changed, update
+canon. If scope, expected result, test/audit needs, priority or deferred state changed, update
 documentation first.
 
 Acceptance question: could a future session with complete loss of chat/model memory, even years later,
 read the mandatory startup documents and continue at the exact boundary without rediscovering settled
 project intent? If not, the delivery is not ready.
-
-This avoids both extremes: an unchanged branch may be created early, but substantive project changes
-must never be published without their Engineering Memory.
 
 ## Candidate identity / titles
 
@@ -100,13 +119,15 @@ Docs/governance/CI-only changes do not alter package metadata.
 4. create one task branch from exact base;
 5. implement one logical scope with synchronized zero-memory documentation;
 6. run focused validation and review complete diff;
-7. reconcile documentation/current+long-term plan;
+7. reconcile documentation/current+long-term plan and any required canon sweep;
 8. open one Ready PR (Draft only for intentional WIP);
 9. keep same-scope corrections in that PR;
 10. require successful checks for latest mergeable head;
 11. re-reconcile owner canon/plan and verify title/scope/checks/exact head;
 12. squash merge once with exact versioned subject;
-13. verify resulting `main` and clean the temporary branch.
+13. verify resulting `main`;
+14. verify temporary branch content, preserve useful unique work if any, otherwise remove the branch
+    and verify repository branch hygiene.
 
 A PR branch may contain multiple same-scope commits; `main` receives one logical squash commit.
 
@@ -115,6 +136,8 @@ A PR branch may contain multiple same-scope commits; `main` receives one logical
 Read exact failed-job evidence before changing source/workflow/runner/branch.
 
 - confirmed same-scope source/docs/test defect -> repair same PR;
+- stale test/CI assertion that conflicts with newer owner canon -> update the stale assertion/contract,
+  not current canon;
 - external GitHub/runner/network/action/dependency outage -> zero source change; at most one unchanged
   rerun after recovery;
 - PR metadata defect -> correct metadata;
@@ -123,6 +146,33 @@ Read exact failed-job evidence before changing source/workflow/runner/branch.
 
 Do not create retry/final sibling branches, change runner OS, add replacement workflows or perform
 unbounded retries without evidence that the current mechanism is defective.
+
+## Repository / branch hygiene
+
+Repository cleanup is a normal completion obligation and is normally silent to the owner.
+
+After merge/completion:
+
+1. compare the temporary branch/PR work to the merged `main` state;
+2. if useful unique work exists, preserve it in the correct active/history branch/path first;
+3. otherwise remove the temporary branch;
+4. verify no obsolete task/publication branch remains;
+5. leave normal steady-state branch authority clean.
+
+Do not tell the owner to perform routine branch cleanup. Escalate only when a real permission/tooling
+boundary prevents safe cleanup.
+
+## Owner-facing status presentation
+
+Internal GitHub/CI execution may use technical English, but owner-facing status/results are clear
+Russian by default.
+
+Do not require the owner to decode terms such as `latest head`, `Ready PR`, `exact-head`, `squash`,
+`governance`, `hygiene` or raw check names. If one is materially useful as evidence, explain its
+practical meaning in Russian in the same message: what passed/failed, whether the change is already in
+`main`, and what happens next.
+
+Routine successful CI/branch housekeeping should not distract the owner.
 
 ## Owner testing-package delivery
 
