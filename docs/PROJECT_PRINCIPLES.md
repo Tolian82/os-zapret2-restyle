@@ -1,133 +1,120 @@
-# os-zapret2-restyle — Project principles
+# os-zapret2-restyle — Project development rules
 
-Status: **CANONICAL / MANDATORY READING IN EVERY PROJECT CONTEXT**
+Status: **CANONICAL / MANDATORY LEVEL 1**
+Updated: 2026-08-14
 
-This file contains permanent **project/development** principles. All documentation-specific rules are
-canonically enumerated in [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md); detailed GitHub delivery
-procedure lives in [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md). Rationale lives in decisions.
+This file is the single normative home for owner-approved rules, principles, and assertions that govern **how the project itself is designed, changed, verified, versioned, and released as a product**.
 
-## Canonical principles
+Other rule domains:
 
-1. **Documentation is part of the project architecture.** Critical project knowledge must not depend
-   on chat history or model memory. Apply the complete numbered documentation contract in
-   `DOCUMENTATION_RULES.md`.
+- [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md) — documentation governance (`DOC-*`);
+- [`CHAT_RULES.md`](CHAT_RULES.md) — owner/assistant communication semantics (`CHAT-*`);
+- [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md) — GitHub operations and publication (`GH-*`).
 
-2. **The owner's newest unambiguous instruction or project fact is current canon.** It supersedes
-   conflicting older active documentation, tests and plans immediately.
+Current product facts belong in `PROJECT_STATE.md`; concrete technical contracts belong in requirements/architecture. This file contains durable cross-task development rules.
 
-3. **Once accepted, owner canon stays locked until explicitly changed or directly disproved by fresh
-   reproducible evidence.** Old documentation, an old roadmap item, a new chat or missing model memory
-   is not counter-evidence.
+## A. Owner canon and engineering authority
 
-4. **The owner-canon “Суслик” rule is permanent.** If active documentation contradicts the owner's
-   newest unambiguous words, reconcile the documentation; do not reinterpret the owner's words to
-   preserve stale text.
+DEV-001. **The owner's newest unambiguous project instruction, fact, or approved decision is current project canon.** It supersedes conflicting older active plans, assumptions, or normative text.
 
-5. **`Зафиксируй` / `record this` requires full active-documentation reconciliation at the first GitHub
-   documentation opportunity.** Record the canon and remove every active contradiction in the same
-   logical change; history may retain old statements only as clearly historical/superseded material.
+DEV-002. **Accepted owner canon remains locked until the owner explicitly changes it or fresh direct reproducible evidence disproves the factual premise.** Loss of conversational memory, an old document, or a stale test is not counter-evidence.
 
-6. **A stale test never outranks current project canon.** Update stale assertions/contracts rather than
-   bending current architecture or documentation back toward obsolete intent.
+DEV-003. **The “Суслик” principle is permanent.** If implementation, active documentation, tests, or plans contradict the newest unambiguous owner canon, reconcile the project to that canon; do not reinterpret the owner's words merely to preserve stale project material.
 
-7. **Committed source code is authoritative for implemented behavior; documentation is authoritative
-   for approved intent, current state, current task and plan.** Explicitly document transition debt
-   until implementation catches up with approved direction.
+DEV-004. **Settled findings stay settled.** Do not reopen a completed investigation or design choice solely because a later session starts with less context. Reopen it only for a new owner decision, a changed requirement, or new direct evidence material to the conclusion.
 
-8. **Every published GitHub project state is a zero-memory recovery checkpoint.** A future session must
-   be able to resume from repository documentation without conversational memory.
+DEV-005. **Source and approved intent have different authority.** Committed source is authoritative for what is currently implemented; owner-approved requirements/architecture/current-state documentation is authoritative for intended direction. A mismatch is explicit transition debt, not an excuse to silently choose one narrative.
 
-9. **Every development stage begins with documentation and ends with documentation.** Record objective,
-   plan and expected verification before work; record meaningful decisions during work; reconcile
-   result, current facts, plan progress and exact continuation after work.
+DEV-006. **A project decision must have an evidentiary or owner-authority basis.** Do not turn a guess, convenience, benchmark projection, or tooling limitation into architecture canon.
 
-10. **Every GitHub delivery includes synchronized documentation.** State what changes and why, intended
-    effect/acceptance, what was actually verified, the immediate next step and the complete concise
-    future plan required by `DOCUMENTATION_RULES.md`.
+## B. Engineering quality and change discipline
 
-11. **Owner-facing project communication is normal understandable Russian by default.** Internal
-    English GitHub/CI terminology is used only when necessary and is translated or explained.
+DEV-007. **Correctness and sufficiency outrank speed.** Prefer the smallest change that fully solves the confirmed problem and preserves required behavior over speculative breadth.
 
-12. **Repository hygiene is continuous and normally silent.** Keep the tree, branches, documentation
-    paths and tracked artifacts orderly; preserve unique work before deleting temporary branches.
+DEV-008. **Preserve working behavior before optimizing it.** Optimization is justified only when the relevant cost or defect is measured or otherwise demonstrated and the required semantics are preserved.
 
-13. **Correctness over speed; preserve working behavior before optimization.** Prefer minimal,
-    reviewable and sufficient changes over speculative completeness.
+DEV-009. **Do not hide behavior behind silent magic.** Important defaults, fallback, state mutation, lossy normalization, recovery, or failure handling must be explicit enough to reason about and verify.
 
-14. **Audit before refactoring/removing inherited behavior when scope requires it.** Existing evidence
-    is the starting point; loss of conversational memory is not itself a reason to repeat an audit.
+DEV-010. **Failure classes must remain truthful.** Infrastructure/internal/restoration/validation failures must not be reported as network candidate failure, normal completion, or success merely to simplify control flow.
 
-15. **One logical scope per project change.** Same-scope repair commits may share one task branch/PR;
-    `main` receives one verified squash commit. Affected documentation belongs to the same scope.
+DEV-011. **Never claim an unexecuted verification as PASS.** A test, live row, package build, restoration check, benchmark, or release gate is PASS only when corresponding evidence actually exists.
 
-16. **Validate before activation/publication.** Never claim a check passed unless it ran; diagnose
-    failures from exact evidence and do not modify source to mask external infrastructure failure.
+DEV-012. **Diagnose from exact evidence before changing code.** Read the concrete failure/log/state first; do not patch a plausible cause and then retrofit the explanation.
 
-17. **GitHub plugin first.** Use the connected GitHub plugin as the mandatory first repository
-    interface. A narrow fallback is allowed only for an exact confirmed missing operation while the
-    plugin is otherwise available.
+DEV-013. **A stale test never outranks current owner canon or current architecture.** Update the stale assertion/fixture/contract rather than bending valid implementation back toward obsolete behavior.
 
-18. **Preflight is scope/risk based.** Always verify current `main`, package metadata, current handoff/
-    state/plan and same-scope PR state. Expand to broad tree/release/branch inventory when the task
-    actually needs it; owner-canon reconciliation is a broad active-document sweep by definition.
+DEV-014. **External infrastructure failures do not justify speculative product changes.** Runner, network, service, action, or dependency outages are retried or diagnosed as infrastructure unless source evidence establishes a product defect.
 
-19. **Published history is forward-only.** Never force-update `main`, move published tags or rewrite
-    published release/package history.
+DEV-015. **Unknown platform behavior is verified, not guessed.** Material OPNsense, FreeBSD, configd, package, shell, firewall, process, PHP, JavaScript, or upstream Zapret2 behavior must be checked against current source/runtime evidence when correctness depends on it.
 
-20. **Package identity is deterministic and version roles are explicit.** `VERSION` is the project
-    version source and `PLUGIN_REVISION` is the package revision suffix. In `v0.4.2_14`, `4` is the
-    second numeric component/state line, `2` is the third numeric component/development stage and
-    `_14` is the exact package patch/iteration.
+DEV-016. **Audits and refactors are scope/risk based.** Inspect enough surrounding behavior to prove the change safe; do not repeat broad audits mechanically when existing evidence remains applicable.
 
-21. **Ordinary same-stage packaged source changes increment only `PLUGIN_REVISION`.** Documentation/
-    governance/CI-only changes change neither `VERSION` nor `PLUGIN_REVISION`.
+DEV-017. **One logical engineering scope should remain one logical change.** Same-root-cause repairs, tests, and documentation belong together; unrelated improvements wait for their own scope.
 
-22. **A genuine new development stage changes the third numeric component and resets the package
-    revision to `_1`.** A third-component-only transition does not itself mean a full release.
+DEV-018. **Do not change approved architecture merely to make an old test or old implementation path convenient.** First determine whether the contract or the implementation is stale.
 
-23. **Changing the second numeric component is owner-controlled and always means a full release.** The
-    second component is the `4` in `0.4.x`; the assistant must never initiate `v0.4.x -> v0.5.x` by
-    inference. Explicit owner instruction/approval is required.
+DEV-019. **Requirements or architecture changes require explicit rationale.** A change to approved user-visible behavior, safety semantics, ownership, or public contract is not smuggled in as an implementation cleanup.
 
-24. **A full release does not imply a second-component change and does not by itself reset `_N`.** A
-    full release may use the current exact package candidate. Revision reset is caused by a new third-
-    component or second-component stage transition, not merely by release publication.
+## C. Runtime and product-safety invariants
 
-25. **A full release is an installation-ready OPNsense delivery.** It includes the exact candidate
-    package, semantic tag, GitHub Release assets/checksum, matching Pages/pkg repository and Web-GUI
-    install/update availability. Every full release also includes a complete human-facing README review.
+DEV-020. **Runtime/lifecycle changes fail closed.** Preserve bounded actions, transactional mutation, explicit ownership, cleanup on success/failure/cancel, and verifiable restoration.
 
-26. **Owner-facing testing packages live persistently on GitHub but are not full releases.** Actions
-    artifacts/local files are build evidence only; a testing `.pkg` does not promote Pages/pkg repo.
+DEV-021. **Semantic restoration is stronger than command success.** When work temporarily changes runtime state, success requires the required final semantic state/evidence, not merely a zero exit code or a new process ID.
 
-27. **Runtime safety is fail-closed.** Preserve transactional Apply, bounded lifecycle behavior,
-    cleanup/cancellation containment and exact semantic restoration across Strategy Lab/runtime changes.
+DEV-022. **A restoration failure outranks a useful intermediate result.** Never hide `RESTORE_FAILED` or equivalent unsafe residue behind a successful search, setup, Apply, package, or diagnostic result.
 
-28. **OPNsense commands target root `csh`.** POSIX-only syntax must explicitly enter `sh`/`/bin/sh` and
-    return with `exit`.
+DEV-023. **A subsystem has one authoritative owner for each piece of mutable state or policy.** Compatibility layers may adapt inputs/outputs but must not recreate a competing source of truth.
 
-29. **Documentation structure, version-state flow, master-plan completeness and archive behavior are
-    governed only by the numbered rules in `DOCUMENTATION_RULES.md`.** Do not create competing active
-    formulations in specialist documents.
+DEV-024. **Preserve native Zapret2 semantics.** Candidate syntax, Lua/BLOB identity, filters/ranges, and upstream behavior are not approximated or normalized into a different strategy unless a specific approved design intentionally changes them.
 
-30. **Current settled product facts remain settled until changed by owner or fresh direct evidence.**
-    DNS is fixed/currently working; Model C is the selected normal production Stage-60 direction;
-    A/B/C model selection is closed.
+DEV-025. **Project source shell is POSIX `/bin/sh` unless a documented boundary explicitly requires something else.** FreeBSD-specific commands are allowed; shell-language assumptions must remain deliberate and testable.
 
-## Authority map
+DEV-026. **Repository/package identity remains independent.** The project is `Tolian82/os-zapret2-restyle`, package `os-zapret2-restyle`, and internal service key `zapret`; inherited upstream/fork identity must not leak back into product ownership. Changing the service key or product identity requires explicit owner approval.
 
-- `docs/DOCUMENTATION_RULES.md` — numbered canonical documentation rules;
-- `docs/START_HERE.md` — exact current `_N` revision handoff;
-- `docs/PROJECT_STATE.md` — current facts for the active second-component line;
-- `docs/ROADMAP.md` — complete concise master development plan;
-- `docs/history/current/` — richer current second-component-line chronology;
-- `docs/history/archive/` — completed second-component archive maps/final-state snapshots from v0.4.x onward;
-- `docs/WORKING_CONVENTIONS.md` — day-to-day engineering application;
-- `docs/GITHUB_PUBLICATION.md` — authoritative GitHub/package/release procedure;
-- `docs/ARCHITECTURE.md` / `docs/architecture/` — current technical architecture;
-- `docs/devlog/` / `docs/patches/` / `docs/verification/` / `docs/releases/` / `docs/decisions/` — deep durable records;
-- `docs/INDEX.md` — navigation/integrity map.
+## D. Version semantics
 
-If a permanent project principle changes, update this file. If a documentation rule changes, update
-`DOCUMENTATION_RULES.md` with the next sequential rule number and reconcile affected active documents
-and tests in the same logical change.
+DEV-027. **`VERSION` is the single project-version source.** Its value has exactly three numeric components `A.B.C`.
+
+DEV-028. **`PLUGIN_REVISION` is the package revision suffix `_N`.** It identifies the concrete installable patch/iteration inside the current `VERSION`.
+
+DEV-029. **The second numeric component defines the long-lived project-state/release line.** In `v0.4.2_14`, `4` defines line `v0.4.x` and the scope of `PROJECT_STATE.md`.
+
+DEV-030. **The third numeric component defines the current development stage/task.** In `v0.4.2_14`, `2` identifies the genuine current development stage inside `v0.4.x`.
+
+DEV-031. **The `_N` suffix defines the concrete patch/iteration.** In `v0.4.2_14`, `_14` is the exact package candidate and handoff boundary.
+
+DEV-032. **An ordinary packaged source/behavior change inside the same development stage increments only `PLUGIN_REVISION`.** It does not change `VERSION` merely because a new package is built.
+
+DEV-033. **Documentation/governance/CI-only changes change neither `VERSION` nor `PLUGIN_REVISION`.** They may advance `main` while the packaged candidate identity stays unchanged.
+
+DEV-034. **A genuine new development stage changes the third numeric component and starts at package revision `_1`.** Do not change the third component merely because many patches accumulated; it marks a real change of development stage.
+
+DEV-035. **A third-component transition is not a full release by itself.** `v0.4.1_N -> v0.4.2_1` may be an internal development-stage transition with no stable/Web/pkg publication.
+
+DEV-036. **A second-component transition is owner-controlled.** The assistant must never infer or initiate `v0.4.x -> v0.5.x` from apparent readiness, technical scope, roadmap progress, or accumulated changes. It requires the owner's explicit version/transition instruction or explicit agreement to a proposed transition.
+
+DEV-037. **A second-component transition always includes a full release and documentation-line rollover.** Therefore `second-component transition => full release`; the inverse is not true.
+
+DEV-038. **A full release may occur without changing the second component and may use the exact current `_N` candidate.** Publication alone does not reset `PLUGIN_REVISION`; `_1` is caused by a new third-component stage or new second-component line.
+
+DEV-039. **A full release means a complete installation-ready OPNsense delivery.** It is not merely a tag or uploaded file: the exact package must be published through the project package repository and be installable/upgradable through the OPNsense Web interface, with the associated release identity/assets verified.
+
+DEV-040. **A testing package is not a full release.** It may be persistently published for owner testing without promoting the stable project package repository or claiming stable release status.
+
+## E. Verification and release readiness
+
+DEV-041. **Live release gates are selected from current risk and evidence, not from a blanket checklist.** A live-only defect fixed by the candidate, materially changed appliance-only behavior, or affected lifecycle/restoration safety requires applicable replacement live evidence.
+
+DEV-042. **CI, FreeBSD package qualification, and live OPNsense evidence are complementary.** None may fabricate or substitute for evidence that only another layer can establish.
+
+DEV-043. **Known critical defects block a full release.** `RESTORE_FAILED`, unverified restoration, unexplained temporary runtime/firewall residue, or another known critical defect remains a blocker until resolved and evidenced.
+
+DEV-044. **Only explicitly selected mandatory live rows block a given release for being pending.** Unrelated regression rows remain valuable coverage but are not silently promoted to mandatory gates; an unrun row is never rewritten as PASS.
+
+DEV-045. **Optimization decisions are measurement-driven.** If measured data does not show a meaningful benefit or reveals semantic cost, retain the simpler/accepted production architecture and close the optimization question until new evidence appears.
+
+## Authority boundary
+
+Current facts (for example the selected production model, current DNS status, exact next patch, or latest package) belong in `PROJECT_STATE.md` / `START_HERE.md`, not in this permanent rule book. Documentation mechanics belong to `DOC-*`; communication semantics belong to `CHAT-*`; GitHub mechanics belong to `GH-*`.
+
+When a durable project-development rule changes, update this file using the next stable `DEV-*` ID or explicitly supersede the affected rule, then apply `DOC-008` to reconcile dependent active documents and checks.

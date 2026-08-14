@@ -2,56 +2,43 @@
 
 Status: **NAVIGATION / INTEGRITY MAP — NOT A CURRENT-STATE NARRATIVE**
 
-This file answers only: **where should I look?** Do not load every linked document during startup.
+This file answers only: **where should I look?** Its role is defined by `DOC-019`–`DOC-020`.
 
 ## Level 1 — always read
 
 1. [`../AGENTS.md`](../AGENTS.md)
-2. [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md)
-3. [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md)
-4. [`START_HERE.md`](START_HERE.md)
-5. [`PROJECT_STATE.md`](PROJECT_STATE.md)
-6. only the current-task specialist documents named by `START_HERE.md`
+2. [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md) — `DOC-*`
+3. [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) — `DEV-*`
+4. [`CHAT_RULES.md`](CHAT_RULES.md) — `CHAT-*`
+5. [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md) — `GH-*`
+6. [`START_HERE.md`](START_HERE.md)
+7. [`PROJECT_STATE.md`](PROJECT_STATE.md)
+8. only current-task specialist documents named by `START_HERE.md`
 
-Always-available plan/navigation links:
+Always-available plan/navigation:
 
-- [`ROADMAP.md`](ROADMAP.md) — concise master development plan
-- this `INDEX.md` — integrity/navigation map
+- [`ROADMAP.md`](ROADMAP.md) — complete concise master plan
+- this `INDEX.md` — navigation/integrity map
 
-## Level 2 — current second-component line / task-selected detail
+## Level 2 — current line / task-selected detail
 
-Current line (same second numeric component, the `4` in `0.4.x`):
+- **[`v0.4.x working ledger`](history/current/v0.4.x.md)** — richer current-line chronology and proof links.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) / [`architecture/`](architecture/) — current technical architecture/contracts.
+- [`REQUIREMENTS.md`](REQUIREMENTS.md) — product requirements.
+- [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) — noncanonical development process map.
+- [`GITHUB_WORKFLOW.md`](GITHUB_WORKFLOW.md) — noncanonical GitHub quick reference; `GH-*` remains normative.
+- [`WORKING_CONVENTIONS.md`](WORKING_CONVENTIONS.md) — noncanonical engineering quick reference.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributor commands/entry points.
 
-- **[`v0.4.x working ledger`](history/current/v0.4.x.md)** — richer current-line chronology,
-  decisions/proof links and handoff detail; read only when the task needs more than Level 1.
+## Level 3 — completed version-line archives
 
-Current technical/procedural authorities:
+- **[`v0.1.x archive`](history/archive/v0.1.x.md)**
+- **[`v0.2.x archive`](history/archive/v0.2.x.md)**
+- **[`v0.3.x archive`](history/archive/v0.3.x.md)**
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- [`architecture/`](architecture/)
-- [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md)
-- [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md)
-- [`GITHUB_WORKFLOW.md`](GITHUB_WORKFLOW.md)
-- [`WORKING_CONVENTIONS.md`](WORKING_CONVENTIONS.md)
+`v0.4.x` remains current. Archive rollover mechanics are owned by `DOC-026`–`DOC-030` and version authority by `DEV-029`–`DEV-038`; this index does not restate them.
 
-## Level 3 — completed second-component archives
-
-These files are compact archive maps. Starting with the eventual `v0.4.x` archive, each new archive
-also preserves the final `PROJECT_STATE` snapshot for that completed line. Older lines are not
-retroactively rewritten into the new snapshot format.
-
-- **[`v0.1.x archive`](history/archive/v0.1.x.md)** — legacy compact map
-- **[`v0.2.x archive`](history/archive/v0.2.x.md)** — legacy compact map
-- **[`v0.3.x archive`](history/archive/v0.3.x.md)** — legacy compact map
-
-`v0.4.x` is current and is not archived yet. Only an explicitly owner-authorized change of the second
-numeric component (`v0.4.x -> v0.5.x`) closes it. That same full-release change preserves the final
-`PROJECT_STATE` in `history/archive/v0.4.x.md`, initializes `history/current/v0.5.x.md`, rewrites the
-current `PROJECT_STATE` for `v0.5.x`, updates this index and performs the required README/release work.
-
-## Level 3 — deep action history, decisions and proof
-
-Open only when exact chronology, rationale, audit finding or proof is needed:
+## Level 3 — deep history, decisions, audits, and proof
 
 - [`DECISIONS.md`](DECISIONS.md) / [`decisions/`](decisions/)
 - [`AUDIT.md`](AUDIT.md) / [`audit/`](audit/)
@@ -61,24 +48,15 @@ Open only when exact chronology, rationale, audit finding or proof is needed:
 - [`verification/evidence/`](verification/evidence/)
 - [`releases/`](releases/)
 
-Archive maps link back into these stores. **Archiving never deletes, rewrites or folds away original
-records.** Git history and published release history remain intact.
+These stores preserve original chronology, rationale, and evidence. Historical statements remain historical and do not become a fifth source of current general rules (`DOC-004`–`DOC-005`).
 
-## Integrity rule
+## User and project reference documents
 
-A documentation change is incomplete when a current authority, archive route or deep-record store
-becomes unreachable from this map. `PROJECT_STATE` separately carries direct links to every completed
-second-component archive so current state and global navigation independently expose the archive chain.
+- [`README.md`](../README.md)
+- [`USER_GUIDE_STRATEGY_LAB.md`](USER_GUIDE_STRATEGY_LAB.md)
+- [`SECURITY.md`](SECURITY.md)
+- [`CHANGELOG.md`](CHANGELOG.md)
 
-## Reading rule
+## Integrity check
 
-Default cold start:
-
-`AGENTS -> PROJECT_PRINCIPLES -> DOCUMENTATION_RULES -> START_HERE -> PROJECT_STATE -> current-task specialists`
-
-Use `ROADMAP` for the concise whole-project plan. Escalate to the current `v0.4.x` ledger only when
-richer current-line context is needed. Escalate to archives or deep records only for a concrete
-historical dependency, investigation, rationale or proof request.
-
-This read-set discipline preserves complete engineering memory while avoiding repeated loading of
-history that cannot affect the current task.
+A documentation change must not strand a current authority, completed version-line archive, or deep record store outside this map (`DOC-019`). `PROJECT_STATE.md` independently ends with direct completed-archive links (`DOC-029`).

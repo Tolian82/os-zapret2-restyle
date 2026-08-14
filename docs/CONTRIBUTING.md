@@ -2,21 +2,19 @@
 
 Thank you for contributing to `os-zapret2-restyle`.
 
-## Engineering principles
+## Canonical rules
 
-- Correctness over speed.
-- No hidden magic or silent data loss.
-- Prefer generic mechanisms over service-specific special cases.
-- Keep backend modules focused on one responsibility.
-- Validate candidate configuration before disturbing an active service.
-- Preserve native zapret2 strategy syntax where possible.
-- Use FreeBSD-compatible `/bin/sh`; do not introduce Bash-only syntax.
-- Do not assume OPNsense framework, HTML, shell, or command behavior without verification.
-- Discuss requirement or architecture changes before implementation.
+General contributor rules are not duplicated here. Read:
 
-## Required checks
+- [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md) — `DOC-*`;
+- [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) — `DEV-*`;
+- [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md) — `GH-*`.
 
-Run the relevant checks before submitting a pull request:
+Current work scope is defined by `START_HERE.md` and current facts by `PROJECT_STATE.md`.
+
+## Required local checks
+
+Run checks relevant to the changed files/behavior before submitting a PR. Common checks include:
 
 ```sh
 find src pkg scripts -type f -name '*.sh' -exec sh -n {} \;
@@ -25,16 +23,16 @@ find src -type f -name '*.xml' -exec xmllint --noout {} \;
 git diff --check
 ```
 
-Live OPNsense testing is required for changes affecting service lifecycle,
-configuration generation, ipfw, dvtws2 startup, or the GUI Apply flow.
+Repository CI remains authoritative for the complete current automated matrix. Live OPNsense verification is selected by the current risk/evidence gate (`DEV-041`–`DEV-044`), not by a blanket rule that every change must repeat every appliance scenario.
 
-## Repository hygiene
+## Repository-specific exclusions
 
-Do not commit:
+In addition to `GH-031`–`GH-033`, do not commit runtime state or private installation data such as:
 
-- runtime-v2 files;
-- installed zapret2 engine files or binaries;
+- generated `runtime-v2` contents;
+- installed upstream zapret2 engine files/binaries;
 - `/conf/config.xml`;
-- PID files or logs;
-- `.orig`, `.rej`, editor backups, or temporary archives;
-- credentials, tokens, private keys, public IP details, or other secrets.
+- PID files or runtime logs;
+- credentials, tokens, private keys, or other secrets/private configuration.
+
+Technical source changes must follow the platform/safety rules in `DEV-020`–`DEV-026`.

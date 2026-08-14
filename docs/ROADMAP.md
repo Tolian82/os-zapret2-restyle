@@ -6,10 +6,10 @@ Updated: 2026-08-14
 Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md).
 Exact revision handoff: [`START_HERE.md`](START_HERE.md).
 Documentation rules: [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md).
+Project-development rules: [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md).
 Current-line detail: [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
 
-This file is the always-available short master plan. Every known future intention must appear here at
-least once, but implementation detail, timings and proof belong in the current ledger/deep records.
+This is the short master plan defined by `DOC-031`–`DOC-033`. Version transitions and release semantics are not redefined here; see `DEV-027`–`DEV-040`.
 
 ## Whole-project path
 
@@ -38,8 +38,8 @@ least once, but implementation detail, timings and proof belong in the current l
 - [x] GET-4K discovery decision
 - [x] Warm/readiness repeat verification
 - [x] Three-level documentation memory
-- [x] Release/README authority rules
-- [x] Version-aware documentation rules
+- [x] Version-aware state/handoff/archive model
+- [x] Four canonical rule domains (`DOC-*`, `DEV-*`, `CHAT-*`, `GH-*`)
 - [ ] Model-C-only production
   - [ ] remove B/A production fallback (`v0.4.1_13`)
   - [ ] owner-live Model-C-only regression
@@ -88,7 +88,7 @@ Acceptance:
 - correct cleanup, attribution and segmentation;
 - complete Strategy Lab corrective matrix PASS;
 - FreeBSD 15 package qualification PASS;
-- one owner-live normal Model-C-only regression.
+- one owner-live normal Model-C-only regression selected by the current risk gate (`DEV-041`–`DEV-044`).
 
 ## Deferred research — retain, do not activate by inertia
 
@@ -97,14 +97,3 @@ Acceptance:
 - [ ] cross-batch keep-warm — only if accepted decision is invalidated by new evidence
 - [ ] BLOB/Lua/discovery optimization — only after material architecture change/new evidence
 - [ ] Model-C timeout/deadline audit — only when owner/plan selects it or a concrete defect requires it
-
-## Version-stage transitions
-
-- ordinary same-stage patch: keep third component and increment `_N`;
-- genuine next development stage: increment/change the third numeric component and reset `_N` to `_1`;
-- third-component change alone: **not** a full release;
-- explicitly authorized second-component change: archive current state/line and perform a full release;
-- full release inside the current second-component line: allowed when explicitly requested and does not
-  itself authorize a second-component change.
-
-The second numeric component never changes automatically.
