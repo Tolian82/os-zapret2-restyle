@@ -120,7 +120,7 @@ require_doc_marker 'Handoff to v0.3.x' "${ARCHIVE_02}" 'v0.2.x archive lacks nex
 require_doc_marker 'Handoff to v0.4.x' "${ARCHIVE_03}" 'v0.3.x archive lacks next-line handoff'
 
 # Publication/governance semantics remain mandatory while deep decision records are loaded on demand.
-require_doc_marker 'package-candidate prefix' "${AGENTS}" 'AGENTS does not require versioned project delivery identity'
+require_doc_marker 'PR/branch commit/final squash subjects begin' "${AGENTS}" 'AGENTS does not require versioned project delivery identity'
 require_doc_marker 'final squash subject' "${AGENTS}" 'AGENTS does not require versioned squash identity'
 require_doc_marker 'every PR title' "${PUBLICATION}" 'publication rules do not cover PR title identity'
 require_doc_marker 'PR-branch commit subject' "${PUBLICATION}" 'publication rules do not cover branch commit identity'
