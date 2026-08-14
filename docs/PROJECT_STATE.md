@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.4.x`
 
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1
-**Updated:** 2026-08-14
+**Updated:** 2026-08-15
 State-line scope: **`v0.4.x`**
 
 This file contains current facts only (`DOC-026`–`DOC-030`).
@@ -88,6 +88,11 @@ Owner-live `_13` is now the remaining gate: one selected normal Model-C-only OPN
 
 - exactly four canonical general rule books exist: `DOCUMENTATION_RULES.md`, `PROJECT_PRINCIPLES.md`, `CHAT_RULES.md`, and `GITHUB_PUBLICATION.md`;
 - `GITHUB_PUBLICATION.md` is the fourth book, **Правила работы с GitHub**, despite the retained historical filename;
+- owner shorthand `сделай патч` / `сделай пакет` / `выложи пакет` is GitHub-native delivery, not a request for chat-generated files;
+- project patch/package delivery never uses chat/sandbox `.pkg`, `.zip`, `.tar.*`, `.patch`, `.diff`, Actions artifacts, or equivalent transport files as the completion result;
+- a patch that creates a new package candidate automatically continues after exact-head source merge to persistent GitHub testing-package publication without a second owner confirmation;
+- testing publication is pinned to the candidate-defining merged source commit: the source must be an ancestor of `main` and its parent must have a different package identity, so a later same-identity docs/governance commit cannot be published accidentally;
+- successful testing publication creates a machine-evidence Draft `publication-record/...` PR; that bounded docs-only tail must be reconciled, validated, exact-head squash-merged, verified on `main`, and cleaned before the package/patch command is complete;
 - rule IDs are permanent identities and are not cascade-renumbered when rules are inserted or reorganized;
 - cancelled/replaced rules remain physically at their permanent IDs with explicit lifecycle markers; those IDs are never recycled;
 - creating, refining, cancelling, and replacing rules has an explicit semantic decision boundary in `DOC-054`;
