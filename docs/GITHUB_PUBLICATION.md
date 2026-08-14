@@ -7,9 +7,10 @@ This file answers: **How are project changes/packages/releases delivered through
 Permanent principles: `docs/PROJECT_PRINCIPLES.md`.
 Current task: `docs/START_HERE.md`.
 Operational handoff/preflight authority: `docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md`.
+Owner-canon/zero-memory authority: `docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`.
 
-Read this file completely immediately before GitHub mutation. The decision above records rationale and
-supersession boundaries; it is not an additional mandatory reread for every ordinary mutation unless
+Read this file completely immediately before GitHub mutation. The decisions above record rationale and
+supersession boundaries; they are not additional mandatory rereads for every ordinary mutation unless
 the current operation needs that rationale.
 
 ## GitHub plugin boundary
@@ -32,9 +33,13 @@ Always verify before mutation:
 
 1. exact current `main` SHA;
 2. current `VERSION` and `PLUGIN_REVISION`;
-3. current documented task/plan;
+3. current documented task/plan reconciled against the owner's newest unambiguous instruction;
 4. same-scope/relevant open PR state;
 5. plugin availability for the operation.
+
+If the newest owner instruction conflicts with older active docs, the new instruction is the intended
+direction authority. Resolve only a genuine material ambiguity, then synchronize the conflicting
+active documentation before substantive work follows the new direction.
 
 Expand inventory only when the operation needs it:
 
@@ -47,20 +52,31 @@ Expand inventory only when the operation needs it:
 A known-file task named by `START_HERE.md` does not require unrelated historical branch/workflow/tag/
 release discovery before implementation.
 
-## Documentation gate
+## Documentation / zero-memory recovery gate
 
 The unchanged task branch may be created from the verified base immediately after preflight.
 
 Before the **first substantive changed branch state** is published to GitHub, the logical change must
-already contain synchronized documentation stating:
+already contain synchronized documentation that makes that GitHub state a self-contained recovery
+checkpoint. It must state:
 
-1. what changes and why;
-2. expected result and acceptance boundary;
-3. complete ordered next plan, including near-term and long-term/deferred work.
+1. the most recent completed logical work/recovery boundary;
+2. what this logical change changes and why;
+3. intended effect and expected result/acceptance boundary;
+4. the exact immediate next step after this delivery;
+5. the complete ordered next plan, including completed/superseded/deferred near-term and long-term
+   work;
+6. every newly approved durable principle in `docs/PROJECT_PRINCIPLES.md` itself;
+7. the relevant patch/devlog/evidence record for detailed chronology.
 
 Before opening/updating a Ready PR for the final intended head, and again immediately before merge,
-reconcile that plan against implementation/testing discoveries. If scope, expected result, test/audit
-needs, priority or deferred state changed, update documentation first.
+reconcile that recovery checkpoint against implementation/testing discoveries and the newest owner
+instruction. If scope, expected result, test/audit needs, priority or deferred state changed, update
+documentation first.
+
+Acceptance question: could a future session with complete loss of chat/model memory, even years later,
+read the mandatory startup documents and continue at the exact boundary without rediscovering settled
+project intent? If not, the delivery is not ready.
 
 This avoids both extremes: an unchanged branch may be created early, but substantive project changes
 must never be published without their Engineering Memory.
@@ -78,17 +94,17 @@ Docs/governance/CI-only changes do not alter package metadata.
 
 ## Ordinary development flow
 
-1. resolve owner scope/stopping boundary;
+1. resolve owner scope/stopping boundary and newest owner canon;
 2. complete mandatory startup + task-specialist reading;
 3. perform scope-first preflight;
 4. create one task branch from exact base;
-5. implement one logical scope with synchronized documentation;
+5. implement one logical scope with synchronized zero-memory documentation;
 6. run focused validation and review complete diff;
-7. reconcile documentation/plan;
+7. reconcile documentation/current+long-term plan;
 8. open one Ready PR (Draft only for intentional WIP);
 9. keep same-scope corrections in that PR;
 10. require successful checks for latest mergeable head;
-11. re-reconcile plan and verify title/scope/checks/exact head;
+11. re-reconcile owner canon/plan and verify title/scope/checks/exact head;
 12. squash merge once with exact versioned subject;
 13. verify resulting `main` and clean the temporary branch.
 

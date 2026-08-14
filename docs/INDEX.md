@@ -14,25 +14,40 @@ For every new/resumed project context:
 4. `docs/PROJECT_STATE.md`;
 5. specialist documents explicitly named by the current task in `START_HERE.md`.
 
-Read selected required documents completely through EOF. Historical material is read when the
-current task/plan/evidence needs it, not automatically on every new chat.
+Read selected required documents completely through EOF. `START_HERE.md` itself contains the short
+mandatory summary of the most recent completed logical work and points to its detailed patch/devlog/
+evidence records. Historical material is read when the current task/plan/evidence needs it, not
+automatically on every new chat.
 
 ## Core map
 
-- `docs/PROJECT_PRINCIPLES.md` — permanent principles that must always be in context;
-- `docs/START_HERE.md` — exact current handoff and next task;
-- `docs/PROJECT_STATE.md` — current factual project/repository/product state;
-- `docs/ROADMAP.md` — ordered near-term, long-term and deferred work;
+- `docs/PROJECT_PRINCIPLES.md` — cumulative canonical permanent principles; every new durable active
+  principle is added here in the first synchronized documentation change;
+- `docs/START_HERE.md` — exact current handoff, most recent completed logical work and exact next task;
+- `docs/PROJECT_STATE.md` — current factual project/repository/product/environment state;
+- `docs/ROADMAP.md` — ordered near-term, long-term and deferred work with completed/superseded status;
 - `docs/DECISIONS.md`, `docs/decisions/` — why something was approved/superseded;
 - `docs/WORKING_CONVENTIONS.md` — how permanent principles are applied day to day;
 - `docs/DEVELOPMENT_GUIDE.md` — repeatable development procedure;
 - `docs/ARCHITECTURE.md`, `docs/architecture/` — current technical contracts;
 - `docs/AUDIT.md`, `docs/audit/` — audit findings/evidence/remediation history;
-- `docs/DEVLOG.md`, `docs/devlog/` — chronological implementation history;
+- `docs/DEVLOG.md`, `docs/devlog/` — chronological implementation/activity history;
 - `docs/REQUIREMENTS.md` — product requirements;
 - `docs/patches/` — exact patch contracts/history;
 - `docs/verification/`, `docs/verification/evidence/` — test/live evidence;
 - `docs/releases/` — semantic release records.
+
+## Latest continuity record
+
+The current docs/governance continuity checkpoint is recorded in:
+
+- `docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`;
+- `docs/patches/v0.4.1_12-owner-canon-zero-memory-checkpoint.md`;
+- `docs/devlog/2026-08-14-owner-canon-zero-memory-checkpoint.md`.
+
+Its active consequences are summarized in mandatory `START_HERE`: newest owner canon wins over stale
+docs, new durable principles enter `PROJECT_PRINCIPLES`, every GitHub delivery is zero-memory
+recoverable, and the old slow/flaky local/container DNS problem is closed after the owner fixed it.
 
 ## Current Strategy Lab / Model-C continuation
 
@@ -45,7 +60,8 @@ Required current-task specialist reading is defined only by `docs/START_HERE.md`
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`.
 
-Do not infer extra mandatory reading from the historical lists below.
+Do not infer extra mandatory reading from the historical lists below. A newer explicit owner
+instruction supersedes this current priority and must first be synchronized into the current docs.
 
 ### Retained evidence navigation
 
@@ -71,11 +87,13 @@ For every GitHub mutation, the only always-required delivery procedure after sta
 
 - `docs/GITHUB_PUBLICATION.md`.
 
-Read decision files only when the operation needs their rationale/special boundary, for example:
+Read decision files only when an operation needs their rationale/special boundary, for example:
 
+- owner-canon / zero-memory recovery / stale-current-doc dispute:
+  `docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`;
 - package delivery: `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md`;
 - CI/evidence dispute: `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
-- documentation/preflight authority question:
+- operational handoff/preflight authority question:
   `docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md`;
 - title-policy dispute: `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`.
 

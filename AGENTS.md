@@ -10,21 +10,29 @@ For every new or resumed project context, read completely through EOF in this or
 
 1. `AGENTS.md`;
 2. `docs/PROJECT_PRINCIPLES.md` — canonical permanent principles that must always be in context;
-3. `docs/START_HERE.md` — current operational handoff;
-4. `docs/PROJECT_STATE.md` — current repository/product state;
+3. `docs/START_HERE.md` — current operational handoff, including the most recent completed logical work;
+4. `docs/PROJECT_STATE.md` — current repository/product/environment state;
 5. specialist documents named by the current documented task.
 
 Use `docs/INDEX.md` only as navigation when additional specialist/history material is required.
 
-Historical audits, decisions, patches, devlogs and evidence remain authoritative project records. Read them when the current plan, owner request, new defect or specialist scope requires them. Do not automatically reread the complete history merely because a new chat started.
+Historical audits, decisions, patches, devlogs and evidence remain authoritative project records. Read them when the current plan, owner request, new defect or specialist scope requires them. `START_HERE.md` must point to the latest relevant patch/devlog/evidence record so recent work is never lost merely because the full historical log is not reread on every session.
 
 If a selected required document is truncated, paginated, clamped or range-limited, continue until EOF before acting. If a required authority cannot be read completely, stop before mutation/source change/package delivery rather than guessing.
 
+## Owner canon precedence
+
+The owner's newest unambiguous instruction or explicitly confirmed decision is authoritative project intent and immediately supersedes conflicting older documentation. Stale documentation is never a reason to revert to an older direction.
+
+If a new owner instruction is materially ambiguous, ask only the narrow clarification needed. Once the direction is unambiguous/confirmed, synchronize all affected active documentation in the same logical change before later work can consume the stale rule. Preserve older records as historical/superseded where useful.
+
 ## Documentation authority
 
-`docs/PROJECT_PRINCIPLES.md` is the single canonical set of permanent project principles. Do not create competing formulations of those principles in current-state or specialist documents.
+`docs/PROJECT_PRINCIPLES.md` is the single canonical set of permanent project principles. Every new durable development principle must be added there in the first synchronized documentation change after approval; it must not remain only in chat, a patch note or a decision file.
 
-Before any GitHub delivery, verify that the documentation contract in `PROJECT_PRINCIPLES.md` is satisfied: the repository must state what changes and why, the expected result/acceptance boundary, and the complete near-term and long-term plan. Reconcile the plan immediately before publication and update it first if implementation/testing changed it.
+Every substantive GitHub delivery is also a zero-memory recovery checkpoint. Before publication, verify that a future session with no chat/model memory can determine from the repository alone: the most recent completed logical work, what the latest/current delivery changed and why, its intended effect/acceptance boundary, the exact immediate next step, the complete ordered plan with completed/superseded/deferred status, and the active rules through `PROJECT_PRINCIPLES.md`.
+
+Before any GitHub delivery, verify that the documentation contract in `PROJECT_PRINCIPLES.md` is satisfied: the repository must state what changes and why, the expected result/acceptance boundary, and the complete near-term and long-term plan. Reconcile the plan immediately before publication and update it first if implementation/testing or a newer owner instruction changed it.
 
 ## Scope-first repository preflight
 
@@ -33,7 +41,7 @@ Before mutation always verify through the GitHub plugin:
 - exact current `main` SHA;
 - current `VERSION` and `PLUGIN_REVISION`;
 - same-scope/relevant open PR state;
-- current documented task/plan;
+- current documented task/plan, reconciled against any newer owner instruction;
 - plugin availability for the required operation.
 
 Expand the inventory only when the operation needs it:
@@ -46,7 +54,7 @@ Expand the inventory only when the operation needs it:
 
 A known-file task already named by `START_HERE.md` does not require a full repository/GitHub inventory before implementation.
 
-Authority: `docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md`.
+Authority: `docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md` and `docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`.
 
 ## GitHub delivery mechanics
 

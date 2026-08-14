@@ -9,8 +9,26 @@ Permanent principles: `docs/PROJECT_PRINCIPLES.md`.
 Current facts: `docs/PROJECT_STATE.md`.
 Exact immediate handoff: `docs/START_HERE.md`.
 
+This roadmap records the current ordered plan, not a veto over the owner. A newer unambiguous owner
+instruction immediately becomes the new intended priority and supersedes conflicting older roadmap
+text; synchronize this file before later work follows the stale plan.
+
 Long-term items are never silently dropped. When priorities change, mark work completed, superseded,
 rejected or deferred and preserve the reason.
+
+## Continuity / governance work already completed
+
+- [x] documentation treated as project architecture rather than chat memory;
+- [x] concise always-read `PROJECT_PRINCIPLES` layer;
+- [x] exact `START_HERE` operational handoff;
+- [x] explicit owner-canon precedence over conflicting older documentation;
+- [x] rule that every new durable principle is added to `PROJECT_PRINCIPLES` immediately;
+- [x] zero-memory recovery checkpoint contract for every substantive GitHub delivery;
+- [x] latest completed logical work summarized in mandatory `START_HERE` with patch/devlog pointers;
+- [x] historical local/container DNS slowness/failures marked closed after the owner fixed DNS.
+
+The continuity corrective is docs/governance-only and keeps `VERSION=0.4.1`,
+`PLUGIN_REVISION=12`.
 
 ## Current priority
 
@@ -18,6 +36,9 @@ Finish the B -> C production transition, then return to the broader product / St
 
 Current packaged source: `v0.4.1_12`.
 Next packaged source change: **`v0.4.1_13` — Model-C-only production finalization**.
+
+This `_13` priority is the currently confirmed owner direction: Model C is the production target.
+Historical A/B/C selection/fallback text must not be treated as a gate that can reverse it.
 
 ## Immediate ordered plan
 
@@ -119,9 +140,11 @@ Retain, do not activate by inertia:
 
 ## Before every GitHub delivery
 
-Apply the documentation contract in `docs/PROJECT_PRINCIPLES.md`:
+Apply the zero-memory documentation contract in `docs/PROJECT_PRINCIPLES.md`:
 
+- record the most recent completed logical work/current recovery boundary;
 - what changes and why;
-- expected result/acceptance;
-- complete near-term and long-term/deferred plan;
-- reconcile the plan immediately before publication and update changed priorities first.
+- intended effect and expected result/acceptance;
+- exact immediate next step;
+- complete near-term and long-term/deferred plan with completed/superseded/deferred status;
+- reconcile the plan with the newest owner instruction immediately before publication.
