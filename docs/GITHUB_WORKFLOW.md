@@ -2,96 +2,77 @@
 
 Official repository: `Tolian82/os-zapret2-restyle`
 Primary branch: `main`
-Authoritative procedure: `docs/GITHUB_PUBLICATION.md`
-
-Permanent principles: `docs/PROJECT_PRINCIPLES.md`.
-Operational handoff: `docs/START_HERE.md`.
-Current state: `docs/PROJECT_STATE.md`.
+Authoritative procedure: [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md)
+Documentation rules: [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md)
 
 ## Before work
 
 Mandatory context order is controlled by root `AGENTS.md`:
 
-`AGENTS -> PROJECT_PRINCIPLES -> START_HERE -> PROJECT_STATE -> task specialists`.
+`AGENTS -> PROJECT_PRINCIPLES -> DOCUMENTATION_RULES -> START_HERE -> PROJECT_STATE -> task specialists`.
 
-For GitHub mutation, then read `docs/GITHUB_PUBLICATION.md` completely.
+`START_HERE` links the master plan and index at its top. Before GitHub mutation read
+`GITHUB_PUBLICATION.md` completely.
 
 ## Scope-first preflight
 
-Always verify:
-
-- current `main` SHA;
-- `VERSION` / `PLUGIN_REVISION`;
-- current documented task/plan;
-- same-scope open PR state;
-- GitHub-plugin availability.
-
-Expand inventory only when the operation needs it: CI runs/logs, release/artifact state, complete
-branch inventory, protection settings or recursive tree.
+Verify current `main`, `VERSION`, `PLUGIN_REVISION`, current revision handoff, current second-component
+state, master plan, same-scope PR state and GitHub-plugin availability.
 
 ## Documentation gate
 
-Before publication confirm project docs record:
+Every delivery must leave a zero-memory checkpoint. Reconcile:
 
-1. what changes and why;
-2. expected result and acceptance;
-3. complete immediate + long-term plan.
+- `START_HERE` — exact `_N` revision work/effect/next step;
+- `PROJECT_STATE` — durable current facts for the second-component line;
+- `ROADMAP` — complete concise completed/current/future plan;
+- `INDEX` — navigation integrity;
+- current line ledger/deep records — only when distinct chronology/proof is useful.
 
-Immediately before publication reconcile the plan against implementation/testing and update changed
-priorities first.
+Owner `зафиксируй` invokes the complete active-document “Суслик” reconciliation from
+`DOCUMENTATION_RULES.md`.
+
+## Version flow
+
+- same development stage: keep third component, increment `_N` for packaged source change;
+- new development stage: change third numeric component and reset `_N` to `_1`;
+- third-component-only transition: no automatic full release;
+- second-component transition: owner-authorized only, reset `_N` to `_1`, archive state/line and full release;
+- full release inside same second-component line: allowed at the current exact `_N` candidate when
+  explicitly requested; release itself does not reset `_N`.
 
 ## Ordinary change
 
-1. record exact base and scope;
-2. create one task branch;
-3. implement code + synchronized docs;
-4. run focused validation and review complete diff;
-5. reconcile current/future plan;
-6. open one Ready PR;
-7. keep same-scope repairs in the PR;
-8. require successful latest-head checks;
-9. squash merge exact expected head with versioned subject;
-10. verify `main` and branch cleanup.
-
-Draft is optional for intentional WIP only.
-
-Every PR title/branch commit/squash subject starts with exact candidate prefix
-`v<VERSION>_<PLUGIN_REVISION>:`.
+1. exact base/scope;
+2. one task branch;
+3. implementation + synchronized documentation;
+4. focused validation + complete diff review;
+5. handoff/state/master-plan reconciliation;
+6. one Ready PR;
+7. same-scope repairs stay in that PR;
+8. latest-head required checks pass;
+9. exact-head squash merge with current candidate prefix;
+10. verify `main` and clean temporary branch.
 
 ## CI failure
 
-Read exact failed-job evidence before source/workflow/runner changes.
-
-- same-scope defect -> repair same PR;
-- external infrastructure -> no source change, at most one unchanged rerun after recovery;
-- second unchanged infrastructure failure -> stop for diagnosis;
-- plugin unavailable -> stop GitHub work.
+Read exact failed evidence before changing code or workflows. Repair same-scope defects in the same PR;
+update stale assertions; do not make speculative source changes for external infrastructure failures.
 
 ## Testing package
 
-Owner package/testing/install request means persistent GitHub `.pkg` unless explicitly requesting
-build/CI evidence only.
-
-- Actions artifacts/local files are not final delivery;
-- `не релиз, а пакет` still publishes a testing `.pkg`, but no full release/Pages/pkg repo;
-- package request itself authorizes deterministic testing-package publication;
-- verify exact source/tag/asset/digest/direct URL;
-- use generic `publish-prerelease.yml` only when build-and-publish automation is needed;
-- remove temporary publication branch after success.
+Persistent GitHub `.pkg` for testing; no full release and no Pages/pkg-repository promotion.
 
 ## Full release
 
-A full release requires explicit owner release + exact `VERSION` authority, revision reset to `1`,
-versioned preparation title, complete README review, verified merge/tag, normal GitHub Release assets
-and verified Pages/pkg-repository publication ready for OPNsense Web installation.
+Explicit owner authority; exact current candidate; full README review; merge subject
+`v<VERSION>_<PLUGIN_REVISION>: Prepare release v<VERSION>`; immutable semantic tag; normal GitHub
+Release assets/checksum; matching Pages/pkg repository ready for OPNsense Web installation.
 
-The **second numeric component** is the `4` in `0.4.x`. Never change it by inference or assistant
-initiative. A transition such as `v0.4.x -> v0.5.x` requires an explicit owner transition/version
-instruction or separate owner approval and always includes the full release + version-line archive
-rollover. A full release can be requested without changing the second numeric component.
+A change to the second numeric component always requires this full-release path. A full release does
+not itself require such a change.
 
-Never rewrite published `main`/tags/assets/history.
+## OPNsense / communication
 
-## OPNsense
-
-Owner console is root `csh`; POSIX-only commands must explicitly enter `sh` and return with `exit`.
+Owner console is root `csh`; POSIX-only commands explicitly enter `sh` and return with `exit`.
+Owner-facing project communication is normal understandable Russian; explain internal English terms.

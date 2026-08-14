@@ -1,161 +1,133 @@
 # os-zapret2-restyle — Development guide
 
-This file answers: **How do we develop this project?**
+This file answers: **how do we develop this project?**
+
 Permanent principles: [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md).
-Current task: [`START_HERE.md`](START_HERE.md).
+Numbered documentation rules: [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md).
+Current revision: [`START_HERE.md`](START_HERE.md).
+Current second-component state: [`PROJECT_STATE.md`](PROJECT_STATE.md).
+Master plan: [`ROADMAP.md`](ROADMAP.md).
 GitHub delivery: [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md).
 
-Do not store competing current project status or duplicate specialist contracts here.
+Do not store competing current state or documentation policy here.
 
 ## 1. Restore context with the smallest sufficient read set
 
 Mandatory Level 1:
 
-`AGENTS -> PROJECT_PRINCIPLES -> START_HERE -> PROJECT_STATE -> current-task specialist docs`.
+`AGENTS -> PROJECT_PRINCIPLES -> DOCUMENTATION_RULES -> START_HERE -> PROJECT_STATE -> current-task specialists`.
 
-Then escalate only when needed:
-
-- Level 2 `history/current/vX.Y.x.md` — richer chronology for the active version line;
-- Level 3 `history/archive/` + devlog/patches/verification/releases/decisions/audits — only for a
-  concrete historical dependency, investigation, rationale or proof.
-
-Do not reread full historical devlogs merely because a new chat/session started. Do not perform a
-repository-wide audit just to reconstruct context when Level 1 names a focused task.
-
-If the current owner instruction conflicts with active docs, apply owner canon from
-`PROJECT_PRINCIPLES.md` and synchronize affected active authority. Old archives/history cannot veto a
-newer settled direction.
+Then use the current `history/current/vX.Y.x.md` ledger only for richer current-line chronology and
+Level-3 archives/deep records only for a concrete historical dependency, investigation, rationale or
+proof.
 
 ## 2. Establish exact baseline
 
-Use the connected GitHub plugin first. Before mutation verify:
-
-- exact current `main` SHA;
-- `VERSION` and `PLUGIN_REVISION`;
-- current documented task reconciled with newest owner instruction;
-- same-scope open PR state;
-- relevant unpublished owner-local state if reported.
-
-A local checkout, when used, must match the recorded GitHub baseline.
+Use the connected GitHub plugin first. Verify exact `main`, `VERSION`, `PLUGIN_REVISION`, current
+handoff/state/master plan, same-scope PR state and relevant unpublished owner-local state if reported.
 
 ## 3. Define one logical work package
 
-The synchronized documentation must make clear:
+Before implementation documentation must make clear:
 
 1. what changes and why;
-2. intended result/acceptance boundary;
-3. exact immediate next step;
-4. current/future ordered plan affected by the change;
-5. any new durable principle in `PROJECT_PRINCIPLES.md`.
+2. intended effect/acceptance;
+3. exact immediate next action after the patch;
+4. master-plan progress/future direction affected by it;
+5. any new owner canon or numbered documentation rule.
 
-Put information in its primary home:
+Use primary homes from `DOCUMENTATION_RULES.md`; do not duplicate one long narrative across Level 1,
+roadmap, ledger, patch and devlog.
 
-- current fact -> `PROJECT_STATE`;
-- exact handoff/current task -> `START_HERE`;
-- current/future ordering -> `ROADMAP`;
-- richer active-line chronology -> current version-line ledger;
-- detailed execution/evidence/rationale -> devlog/patch/verification/decision only when that distinct
-  record adds value.
+## 4. Apply version roles
 
-Do **not** copy the same narrative into START_HERE + PROJECT_STATE + ROADMAP + patch + devlog. A
-single current-line ledger entry may serve as the chronology for a docs/governance-only change when no
-separate patch/devlog record adds information.
+For `v0.4.2_14`:
 
-## 4. Audit only when scope requires it
+- `4` = current second-component state line;
+- `2` = current development stage;
+- `_14` = exact patch/iteration.
 
-Audit when owner requests it, roadmap schedules it, inherited behavior must be classified before
-refactor/removal, a reproducible defect has unknown/cross-cutting scope, or source/current architecture
-cannot be reconciled narrowly.
+Use these transitions:
 
-Otherwise proceed directly with the known-file task after baseline verification.
+- ordinary same-stage packaged source patch -> keep `VERSION`, increment `_N` once;
+- docs/governance/CI-only patch -> change neither value;
+- genuine new development stage -> change third component, reset `_N` to `_1`, no automatic release;
+- owner-authorized second-component transition -> reset `_N` to `_1`, archive old line/state and full release;
+- owner-requested full release inside same line -> release exact current candidate; do not reset `_N`
+  merely because it is a release.
 
-## 5. Implement one logical scope
+Before every `_N` increment reconcile `START_HERE`, master plan and `PROJECT_STATE` when facts changed.
 
-- smallest maintainable change satisfying the task;
+## 5. Audit only when scope requires it
+
+Audit when owner requests it, the master plan schedules it, inherited behavior must be classified
+before removal/refactor, new reproducible evidence has unknown/cross-cutting scope, or source/current
+architecture cannot be reconciled narrowly. Do not repeat an audit merely because a new chat lacks
+memory.
+
+## 6. Implement one logical scope
+
+- smallest maintainable change satisfying approved intent;
 - preserve working behavior outside scope;
-- affected docs belong to the same logical change;
-- keep generated runtime/build output out of source control;
-- same-scope repairs remain in the same branch/PR.
+- affected documentation belongs to the same logical change;
+- generated runtime/build output stays out of source control;
+- same-scope repairs stay in the same branch/PR.
 
-Packaged source change with unchanged `VERSION` increments `PLUGIN_REVISION` once. Docs/governance/
-CI-only changes change neither value.
+## 7. Validate
 
-The **second numeric component** of the version is the `4` in `0.4.x`. Never change it by inference or
-assistant initiative. It changes only after explicit owner version/transition instruction or separate
-owner approval. A full release request by itself does not authorize changing this component.
+Run focused syntax/static/unit/contract tests and broader matrix required by changed risk. Review the
+complete diff. Never claim a test passed unless it ran. Diagnose CI failure from exact evidence before
+changing source/workflow. Update stale assertions instead of reversing current canon.
 
-## 6. Validate
+## 8. Reconcile documentation before publication
 
-Run focused syntax/static/unit/contract tests appropriate to changed behavior, then the broader matrix
-required by the task. Review complete diff. Never claim a test passed unless it ran.
+Before Ready PR and again before merge verify:
 
-For CI failure, inspect exact failed-job evidence first. Repair same-scope defects in the same PR;
-external infrastructure failure causes no speculative source change. If a test encodes superseded
-canon, update the stale test rather than current canon.
+- `START_HERE` describes the exact current revision, recent work/effect, immediate continuation;
+- completed durable facts have flowed into the current second-line `PROJECT_STATE`;
+- `PROJECT_STATE` ends with links to all completed line archives;
+- `ROADMAP` contains every known future intention and the compact completed trajectory;
+- `INDEX` still reaches all current/archive/deep stores;
+- owner `зафиксируй` received the complete “Суслик” sweep;
+- new documentation rules are numbered in `DOCUMENTATION_RULES.md`;
+- Level 1 remains readable and compact.
 
-## 7. Reconcile documentation before publication
+Acceptance question: **could a future session with no chat/model memory resume correctly without first
+rediscovering the repository?**
 
-Before Ready PR and again before merge, verify zero-memory recovery:
+## 9. Second-component rollover
 
-- Level 1 contains only current facts, compact handoff, short lifetime path and exact next task;
-- the active version-line ledger contains richer chronology when needed;
-- `ROADMAP` remains current/future rather than accumulating history;
-- detailed records are linked instead of copied into Level 1;
-- any owner `зафиксируй` request has received a full active-authority consistency sweep;
-- new permanent rules are in `PROJECT_PRINCIPLES`;
-- `INDEX` routes to current ledger, every completed version-line archive and deep evidence.
+When the owner explicitly authorizes a second-component change, for example `v0.4.x -> v0.5.x`:
 
-Acceptance question: **could a future session with no chat/model memory resume the exact current
-boundary from Level 1, then discover deeper history through links only if needed?**
+1. reconcile final old `PROJECT_STATE`;
+2. finish the old current-line ledger;
+3. create/freeze `history/archive/v0.4.x.md` containing the compact map plus final state snapshot;
+4. preserve all original detailed records;
+5. initialize `history/current/v0.5.x.md`;
+6. initialize `PROJECT_STATE` for `v0.5.x` and retain links to every completed archive;
+7. initialize `START_HERE` for the new exact revision;
+8. update `ROADMAP`, `INDEX` and lifetime path;
+9. perform complete README review;
+10. complete the full project release.
 
-## 8. Second-numeric-component release rollover
+Do not retroactively rewrite `v0.4.0` or older archive history into the new state-snapshot scheme.
 
-When the owner explicitly authorizes a change to the second numeric component, for example
-`v0.4.x -> v0.5.x`, the same change is necessarily a full project release. Perform the following
-without a second rollover/release confirmation:
-
-1. finish the current-line ledger through the final old-line state;
-2. freeze/create `history/archive/v0.4.x.md` as a compact archive map;
-3. preserve all original devlog/patch/evidence/release/decision records;
-4. initialize `history/current/v0.5.x.md`;
-5. update `INDEX`, `START_HERE`, `PROJECT_STATE`, short lifetime path and `ROADMAP`;
-6. perform the mandatory full human-facing `README.md` review/update;
-7. set the exact owner-authorized new `VERSION` and reset `PLUGIN_REVISION=1`;
-8. proceed with the normal full release pipeline: verified merge, semantic tag, normal GitHub Release,
-   package/checksum assets and matching Pages/pkg repository ready for OPNsense Web installation.
-
-A full release can also be explicitly requested without changing the second numeric component.
-
-Archiving chronology must never archive current architecture/contracts or permanent principles merely
-because the version line changed.
-
-## 9. Deliver through GitHub
+## 10. Deliver through GitHub
 
 Follow `GITHUB_PUBLICATION.md`:
 
 `task branch -> implementation + docs -> validation -> Ready PR -> required checks -> exact-head squash merge -> verify main -> clean temporary branch`.
 
-Standing owner authorization covers routine branch/PR/check/repair/merge/verification/cleanup unless
-the current request explicitly stops earlier.
+Standing owner authorization covers normal branch/PR/check/repair/merge/verification/cleanup unless the
+current request explicitly stops earlier.
 
-## 10. Package / live verification
+## 11. Package / live verification
 
-Build/live gates apply when changed scope requires them. Use the smallest live gate that verifies the
-changed risk. Owner requests for an installable testing package mean persistent GitHub `.pkg` delivery;
-Actions artifacts/local files are build evidence only.
+Build/live gates follow changed risk. Owner requests for installable testing bytes mean persistent
+GitHub `.pkg`; Actions artifacts/local files are build evidence only. Full release additionally
+publishes the current exact candidate through the Pages/pkg repository and OPNsense Web channel.
 
-A full release is stricter than a testing package: it must publish the verified package to the project
-pkg repository for OPNsense Web installation and must include the full README review defined above.
-
-## 11. OPNsense / unpublished state
+## 12. OPNsense / owner communication
 
 Owner console target is root `csh`; enter explicit `sh`/`/bin/sh` for POSIX-only syntax and return with
-`exit`.
-
-If relevant owner-local changes are uncommitted/unpushed, do not overwrite/reconstruct them from
-memory; establish the exact transferred baseline before overlapping edits.
-
-## Specialist workflows
-
-Architecture, audit, lifecycle, release and verification contracts belong to specialist docs. Read
-them only when the current task selects that scope.
+`exit`. Owner-facing status is clear Russian; technical English is translated/explained when shown.

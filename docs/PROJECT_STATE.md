@@ -1,19 +1,26 @@
-# os-zapret2-restyle — Current state
+# os-zapret2-restyle — Current state for `v0.4.x`
 
-Status: **CURRENT / LEVEL 1**
+Status: **CURRENT SECOND-COMPONENT STATE / LEVEL 1**
 Updated: 2026-08-14
+State-line scope: **`v0.4.x`** — the second numeric component is `4`.
 
-This file answers only: **what is true now?**
-Exact continuation: [`START_HERE.md`](START_HERE.md).
-Current-line chronology/evidence: [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
-Future ordering: [`ROADMAP.md`](ROADMAP.md).
+This file answers only: **what is true now for the current `v0.4.x` project-state line?**
+Exact revision continuation: [`START_HERE.md`](START_HERE.md).
+Documentation rules: [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md).
+Master development plan: [`ROADMAP.md`](ROADMAP.md).
+Current-line chronology and proof links: [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
+
+`PROJECT_STATE.md` remains the current factual state file for the whole `v0.4.x` line while the second
+numeric component stays `4`. Changes to the third numeric component update this file when current facts
+change but do **not** archive it. The final state is archived only when the second component changes.
 
 ## Repository / package
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
-- semantic version: `0.4.1`;
-- packaged source revision: `12`;
+- current project version: `0.4.1`;
+- current third-component development stage: `1` in `0.4.1`;
+- packaged source revision: `_12`;
 - current testing package candidate: `os-zapret2-restyle-0.4.1_12.pkg`;
 - testing tag: `v0.4.1_12`;
 - latest full Web/pkg release: `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
@@ -21,8 +28,8 @@ Future ordering: [`ROADMAP.md`](ROADMAP.md).
 - testing-package SHA-256: `3b5a6c39c09abdfc8d8f1b59923312c40dda27e11c4f03e20773131996f6789d`;
 - required ABI: `FreeBSD:15:amd64`.
 
-Resolve the actual `main` SHA before every mutation; docs/CI-only `main` may be newer than packaged
-source without changing package identity.
+Resolve the actual `main` SHA before every mutation; documentation/CI-only `main` can be newer than the
+packaged source without changing package identity.
 
 ## Current product facts
 
@@ -32,11 +39,13 @@ source without changing package identity.
 - Model B is reference/warm tooling plus `_12` transition fallback; Model A is cold reference tooling.
 - packaged `_12` still contains `Model C -> Model B -> Model A cold`; this is implementation debt,
   not approved long-term architecture.
-- `_13` removes automatic B/A production replay and leaves normal production Stage 60 Model-C-only.
+- the next ordinary packaged patch removes automatic B/A production replay and leaves normal
+  production Stage 60 Model-C-only.
 - Lua-init, BLOB lazy-loading/common-set, bounded GET-4K discovery and cross-batch keep-warm questions
   are closed for the current architecture by accepted measured evidence.
 
-Detailed measurements and evidence links intentionally live only in the current `v0.4.x` ledger.
+Detailed measurements and proof links live in the current `v0.4.x` ledger rather than being copied
+into this Level-1 state file.
 
 ## Current architecture / safety
 
@@ -51,33 +60,57 @@ Current architecture authorities:
 - [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md)
 - [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md)
 
-Historical A/B/C experiment material is evidence only and cannot reopen current production choice.
+Historical A/B/C experiment material is proof/history only and cannot reopen current production choice.
 
-## Current release/version authority
+## Current version/documentation facts
 
-The second numeric component is the `4` in `0.4.x`. It changes only after explicit owner
-version/transition instruction or separate owner approval. A transition such as `v0.4.x -> v0.5.x`
-necessarily includes a full project release and version-line archive rollover. A full release can also
-be requested while keeping the second numeric component unchanged.
+- second numeric component `4` defines this state line `v0.4.x`;
+- third numeric component `1` identifies the current development stage inside this line;
+- `_12` identifies the current concrete package revision/handoff boundary;
+- a same-stage ordinary source patch increments only `_N`;
+- a genuine new development stage changes the third component and resets `_N` to `_1`;
+- a third-component-only stage change does not itself mean a full release;
+- a second-component change is owner-controlled and always means full release + final state/archive
+  rollover;
+- a full release can occur inside the same second-component line and may use the current `_N` candidate;
+- every full release includes a complete human-facing `README.md` review.
 
-A full release means a verified OPNsense package published into the project Pages/pkg repository for
-installation/update through the OPNsense Web GUI, together with the semantic tag, release assets and
-checksums. Every full release includes a complete human-facing `README.md` review.
+The complete numbered documentation contract is in [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md).
 
 ## Documentation memory state
 
 Documentation uses three levels:
 
-- Level 1: mandatory bounded recovery set (`AGENTS`, principles, `START_HERE`, this file);
-- Level 2: current `v0.4.x` ledger plus task-selected specialist docs;
-- Level 3: completed version archives and deep chronology/evidence, loaded on demand.
+- Level 1: `AGENTS`, `PROJECT_PRINCIPLES`, `DOCUMENTATION_RULES`, `START_HERE`, this file, then only
+  current-task specialist documents;
+- Level 2: current `v0.4.x` ledger plus task-selected current detail;
+- Level 3: completed version-line archives and deep history/proof, loaded on demand.
 
-Completed archives: [`v0.1.x`](history/archive/v0.1.x.md),
-[`v0.2.x`](history/archive/v0.2.x.md), [`v0.3.x`](history/archive/v0.3.x.md).
-Current ledger: [`v0.4.x`](history/current/v0.4.x.md).
+`START_HERE` owns the exact current `_N` task. `ROADMAP` owns the complete concise master plan.
+`INDEX` owns navigation. This file owns current facts for `v0.4.x`.
 
-## Exact next packaged source change
+## Future state rollover
 
-**`v0.4.1_13` — Model-C-only production finalization.**
+Only an explicitly owner-authorized change of the second numeric component closes this state line.
+For example, on `v0.4.x -> v0.5.x`:
 
-Scope and acceptance are intentionally kept in [`START_HERE.md`](START_HERE.md), not duplicated here.
+1. reconcile this file through the final true `v0.4.x` state;
+2. preserve that final state inside `history/archive/v0.4.x.md` together with the compact archive map;
+3. preserve all detailed `v0.4.x` records unchanged;
+4. initialize this file as the current `v0.5.x` state;
+5. initialize the new `history/current/v0.5.x.md` ledger;
+6. update `INDEX`, `START_HERE`, `ROADMAP` and README as required by the full-release procedure.
+
+The new final-state-snapshot rule is not retroactively imposed on `v0.4.0` or older history.
+
+## Completed version-line archives
+
+All currently completed archive files are linked here as required:
+
+- [`v0.1.x archive`](history/archive/v0.1.x.md)
+- [`v0.2.x archive`](history/archive/v0.2.x.md)
+- [`v0.3.x archive`](history/archive/v0.3.x.md)
+
+Current non-archived line: [`v0.4.x working ledger`](history/current/v0.4.x.md).
+When `v0.4.x` eventually closes, its new archive link is appended to this list before the new current
+state is published.

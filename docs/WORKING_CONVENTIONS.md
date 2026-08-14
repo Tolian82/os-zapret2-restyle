@@ -1,9 +1,10 @@
 # os-zapret2-restyle — Working conventions
 
-This file answers: **How are the permanent principles applied in day-to-day engineering?**
+This file answers: **how are permanent principles applied day to day?**
 
-Canonical permanent principles are defined only in `docs/PROJECT_PRINCIPLES.md`. This file must not
-create competing formulations of them.
+Canonical project principles: [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md).
+Canonical numbered documentation rules: [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md).
+This file must not create competing formulations of either.
 
 ## Stable identities
 
@@ -11,227 +12,122 @@ create competing formulations of them.
 - Makefile `PLUGIN_NAME`: `zapret2-restyle`;
 - MVC namespace: `OPNsense\Zapret`;
 - internal service/configd namespace: `zapret`;
-- semantic version source: `VERSION`.
+- project version source: `VERSION`;
+- package revision suffix: `PLUGIN_REVISION`.
 
 ## Owner canon lock
 
-The owner's newest unambiguous instruction, explicit project fact or explicitly confirmed decision is
-current canon.
-
-Once accepted:
-
-- do not repeatedly reconfirm it merely because an old document/test disagrees;
-- do not write later reports as if the decision is still open;
-- reopen a factual claim only when the owner changes it or fresh direct reproducible evidence
-  contradicts it;
-- old documentation, historical CI assertions, previous chats and missing model memory are not
-  counter-evidence.
-
-Current locked examples: DNS is fixed; Model C is selected for normal production Stage 60.
-
-When the owner says `зафиксируй`, `запиши это`, `record this` or equivalent:
-
-1. write the new canon into canonical/current authority;
-2. obtain a broad active-document map when multiple authorities may mention it;
-3. inspect all active/current authority documents capable of contradicting it;
-4. correct every active contradiction in the same logical docs change;
-5. keep old statements only in clearly historical/superseded records.
-
-A stale test/CI contract that asserts superseded canon is updated; current architecture is not bent
-back toward the obsolete assertion.
-
-## Audit conventions
-
-Every inherited reference must be classified before removal.
-
-Allowed classifications: `OK`, `broken`, `unused`, `duplicate`, `inherited`, `requires live test`.
-The word `zapret` alone is not evidence of obsolete inheritance.
-
-`docs/AUDIT.md` is the authoritative register for audit scope, findings, evidence, live-test needs,
-remediation and closure. Every non-OK finding requires a unique ID, exact affected chain, evidence/
-impact, verification/remediation plan, acceptance criteria, required docs updates and status.
-
-A broken chain is recorded before it is fixed. Resolved findings remain as history. Audits are
-complete only when affected current-state/roadmap/decision/specialist documentation is synchronized.
-Use existing evidence as the starting point rather than repeating an audit because memory was lost.
+The owner's newest unambiguous instruction/fact/confirmed decision is current canon. Apply the
+“Суслик” rule from `DOCUMENTATION_RULES.md`: active contradictions are corrected, not negotiated back
+into the owner's wording. `Зафиксируй` requires the complete active-document/CI sweep at the first
+GitHub documentation opportunity.
 
 ## Change conventions
 
 - use the exact current GitHub base commit;
 - keep one logical scope per task branch/PR;
 - same-scope work and repairs may coexist in that branch;
-- include affected documentation/file-mode changes in the same logical scope;
-- validate before publication and review the complete diff;
+- include affected documentation/file-mode changes in the same scope;
+- validate before publication and review complete diff;
 - repair same-scope failures in the same PR;
 - do not publish a failed/partially validated latest head.
 
-Package metadata:
+## Version conventions
 
-- packaged source/behavior change with unchanged `VERSION`: increment `PLUGIN_REVISION` once;
-- docs/governance/CI-only change: change neither;
-- explicitly authorized full release: set the exact owner-authorized `VERSION`, reset revision to `1`.
+For `v0.4.2_14`, `4` is the second-component state line, `2` is the development stage and `_14` is the
+patch/iteration.
 
-The **second numeric component** is the `4` in `0.4.x`. Never change it by inference or assistant
-initiative. An explicit owner version/transition instruction or separate approval is required. A
-second-component change always invokes the full-release procedure; a full release can be requested
-without changing the second component.
+- same-stage packaged source/behavior change -> keep `VERSION`, increment `_N` once;
+- docs/governance/CI-only change -> change neither;
+- genuine new development stage -> change third component and reset `_N` to `_1`;
+- third-component transition alone -> no full release;
+- second-component transition -> explicit owner authority, `_1`, state/archive rollover and full release;
+- full release inside same second-component line -> exact current candidate; no release-only revision reset.
+
+Before every `_N` increment reconcile `START_HERE`, master plan and `PROJECT_STATE` when current facts
+changed.
 
 ## Testing conventions
 
-Run syntax/static/focused tests appropriate to changed behavior. For a local checkout inspect at least
-`git status --short`, `git diff --check`, `git diff --stat` and complete relevant diff.
+Run syntax/static/focused tests appropriate to changed behavior. Never claim a test passed unless it
+ran. Static verification, package archive verification and live verification are distinct states.
+A failed test proves only its assertion failed; diagnose whether implementation or assertion is stale.
 
-Perform focused live OPNsense tests when changed behavior needs appliance evidence. Never claim a test
-passed unless it ran. Static verification, package archive verification and live verification are
-distinct states.
+## Documentation workflow
 
-A failed test proves only that its assertion failed. Repair a real same-scope defect; update a stale
-assertion that contradicts newer owner canon rather than reverting current architecture/docs.
+Mandatory startup:
 
-## Engineering Memory workflow
+`AGENTS -> PROJECT_PRINCIPLES -> DOCUMENTATION_RULES -> START_HERE -> PROJECT_STATE -> task specialists`.
 
-Documentation follows the three-level model from `PROJECT_PRINCIPLES.md`.
+During work:
 
-### Before work
+- keep `START_HERE` as the live `_N` handoff;
+- flow completed durable facts into the current second-line `PROJECT_STATE`;
+- keep the complete concise completed/current/future checklist in `ROADMAP`;
+- keep richer line chronology in the current ledger;
+- use deep records only for distinct execution/proof/rationale value;
+- keep `INDEX` and archive links intact;
+- avoid narrative duplication.
 
-- Level 1 only by default: `AGENTS -> PROJECT_PRINCIPLES -> START_HERE -> PROJECT_STATE -> task docs`;
-- read the current version-line ledger only if richer current-line context is needed;
-- read archives/deep records only for a concrete historical dependency, investigation or proof;
-- record/reconcile objective, implementation plan and expected acceptance in the appropriate primary
-  current home.
+At a second-component rollover preserve final old `PROJECT_STATE` in the old line archive, initialize
+new current state/ledger/handoff, update index/master plan, review README and complete the full release.
+Older `v0.4.0` and earlier history is not retroactively rewritten.
 
-### During work
+## Findings versus architecture debt
 
-- record approved concepts/permanent rules where they belong;
-- record discoveries that materially change later work;
-- keep richer chronology in the current version-line ledger;
-- create/update patch/devlog/evidence/decision records only when they add distinct contract,
-  execution, proof or rationale value;
-- when owner canon changes, synchronize all affected active authority before stale text can drive work.
-
-### Before GitHub publication
-
-- confirm current facts, current task and current/future plan are synchronized;
-- confirm Level 1 remains compact and does not copy detailed history;
-- confirm `INDEX` routes to the current ledger, completed version archives and deep evidence;
-- if the owner said `зафиксируй`, confirm full active-authority reconciliation;
-- confirm every new durable principle is in `PROJECT_PRINCIPLES`.
-
-### After work
-
-- record current factual changes in `PROJECT_STATE` only when current state changed;
-- update exact handoff/task in `START_HERE` only when the recovery boundary changed;
-- append useful richer chronology to the current version-line ledger;
-- update `ROADMAP` only when current/future priority or sequencing changed;
-- add detailed patch/devlog/evidence records only when they contribute non-duplicate information;
-- record exact next stage and verify repository/temporary-branch cleanup.
-
-Engineering Memory is maintained during development, but **duplication is not preservation**. Preserve
-history by durable links and primary homes rather than copying the same narrative into every active
-document.
-
-### Version-line rollover
-
-When the owner explicitly authorizes a change to the second numeric component, for example
-`v0.4.x -> v0.5.x`, the same release change must finalize the old current ledger into
-`docs/history/archive/v0.4.x.md`, initialize the new current ledger, update `INDEX` and Level 1,
-preserve all original deep records, perform the mandatory full `README.md` revision and complete the
-full release. No independent rollover confirmation is required after the second-component transition
-itself has been authorized.
-
-Current architecture/contracts and permanent principles do not become historical merely because the
-version line changed.
-
-## Full release convention
-
-A full release means a complete OPNsense delivery, not merely a tag or testing asset:
-
-1. explicit owner release + exact `VERSION` authority;
-2. `PLUGIN_REVISION=1` release preparation and verified merge;
-3. complete human-facing `README.md` review/update;
-4. immutable semantic tag;
-5. normal GitHub Release with verified package/checksum assets;
-6. matching project Pages/pkg repository publication for `FreeBSD:15:amd64`;
-7. package install/update availability through the OPNsense Web GUI using the project repository.
-
-Testing `.pkg` publication remains a different operation and does not imply a full release.
-
-## Findings versus Architecture Debt
-
-A Finding is a confirmed implementation defect/inconsistency/obsolete or concrete operational risk.
-Architecture Debt is an unresolved design question and is not fixed before intended behavior is
+A Finding is a confirmed implementation defect/inconsistency/obsolete behavior or concrete operational
+risk. Architecture Debt is an unresolved design question and is not fixed before intended behavior is
 approved.
 
-Architecture Debt lifecycle:
+Lifecycle:
 
 `Open -> Discussion -> Decision -> Implementation -> Verification -> Documentation -> Closed`
 
-Once the owner explicitly closes an architecture question, old debt/experiment records cannot reopen
-it; remaining implementation differences are transition debt/findings against the settled direction.
-
-## Project-context preflight
-
-Mandatory order is controlled by root `AGENTS.md`:
-
-`AGENTS -> PROJECT_PRINCIPLES -> START_HERE -> PROJECT_STATE -> task specialists`.
-
-Read broader history only when the current task needs it. Before GitHub mutation also read
-`docs/GITHUB_PUBLICATION.md` and apply scope-first inventory. A requested owner-canon reconciliation is
-a broad active-document consistency task when several active authorities can mention the subject.
+Settled architecture cannot be reopened by old historical material alone.
 
 ## GitHub development convention
 
-Ordinary flow:
-
 1. connected GitHub plugin first;
-2. current `main` SHA, metadata, newest canon/current plan and same-scope PR state;
-3. create one logical task branch;
-4. implement + synchronized documentation;
+2. exact `main`, metadata, current handoff/state/plan and same-scope PR state;
+3. one logical task branch;
+4. implementation + synchronized documentation;
 5. focused validation + complete diff review;
 6. plan/canon reconciliation;
 7. one Ready PR;
-8. latest-head required CI;
-9. same-scope repair in the same PR if needed;
-10. exact-head squash merge using exact versioned subject;
+8. required latest-head CI;
+9. same-scope repair in same PR;
+10. exact-head squash merge with versioned subject;
 11. verify `main`;
-12. preserve useful unique branch work or remove temporary branch and verify clean state;
+12. preserve unique work or remove temporary branch;
 13. package/live verification when applicable.
 
-Additional branch/workflow/tag/release/tree inventory is performed only when needed. The GitHub plugin
-is the mandatory first repository interface. A narrow fallback is allowed only for an exact confirmed
-missing function while the plugin responds. Plugin unavailability stops GitHub work.
-
-Direct publication to `main` requires explicit owner authority and must never rewrite history.
+Direct publication to `main`, history rewriting or published-tag movement requires explicit authority
+and is never inferred from ordinary task authorization.
 
 ## Standing delivery authorization
 
-A request to fix/add/change/implement/complete an ordinary task authorizes normal task branch, Ready
-PR, checks, same-scope repair, squash merge, main verification and cleanup. Explicit stopping points
-override the default.
+An ordinary owner request to fix/add/change/implement/complete covers normal branch, Ready PR, checks,
+same-scope repair, squash merge, main verification and cleanup. Explicit stopping points override it.
 
-Stop for owner direction only on material product/architecture ambiguity, relevant unpublished owner-
-local state, unresolvable required checks, unavailable GitHub plugin/authority, destructive changes to
-pre-existing user remote data, history rewriting/direct-main publication, owner-only live evidence, or
-an unapproved attempt to change the second numeric component of `VERSION`.
+Stop for owner direction on material product ambiguity, unpublished overlapping owner-local state,
+unresolvable required checks, unavailable GitHub authority/plugin, destructive changes to pre-existing
+remote data, history rewrite/direct-main publication, owner-only live evidence, or any unapproved
+second-component version transition.
 
 ## Local-only state exception
 
-GitHub is authoritative for committed/pushed state only. If relevant owner-local changes are
-uncommitted/unpushed, stop overlapping edits, establish exact transferred baseline, and never
-reconstruct/overwrite unpublished state from memory.
+GitHub is authoritative for committed/pushed state only. Never reconstruct or overwrite relevant
+unpublished owner-local changes from memory.
 
 ## Owner-facing communication
 
-Project status/results to the owner are clear Russian by default. Explain any materially useful
-internal GitHub/CI English in Russian. Routine successful CI/branch housekeeping should not distract
-the owner.
+Project status/results are clear Russian by default. Explain useful internal English GitHub/CI labels
+in Russian. Routine successful cleanup is handled silently.
 
 ## OPNsense command presentation
 
 Default owner console is root `csh`. Keep read-only checks separate from state changes. Enter explicit
-`sh`/`/bin/sh` for POSIX-only constructs and return with `exit`; subsequent commands must be csh-valid.
-Do not mutate tracked repository files from OPNsense with editor/rewrite one-liners unless owner
-explicitly selects a local patch-transfer workflow.
+`sh`/`/bin/sh` for POSIX-only constructs and return with `exit`.
 
 ## Focus and sufficiency
 
@@ -239,21 +135,19 @@ Priorities:
 
 1. make approved functionality work correctly;
 2. verify it on supported OPNsense;
-3. keep documentation synchronized for reliable recovery;
-4. retain future ideas without displacing current implementation work.
+3. keep documentation synchronized for zero-memory recovery;
+4. retain every known future intention in the concise master plan without displacing current work.
 
-Prefer sufficient maintainable implementation over speculative completeness. Keep UI stable unless
-implemented capability requires a change or current interface demonstrably blocks it.
+Prefer sufficient maintainable implementation over speculative completeness.
 
 ## Runtime lifecycle ownership
 
 Package lifecycle/runtime bootstrap changes are one architectural unit: hooks, setup backend, service
 boundaries, configd integration, verification and documentation move together.
 
-Runtime setup uses the single approved `setup.sh install` backend. Package upgrade preserves service
-state: running replacement is stopped before file replacement and restored as required; stopped stays
-stopped; stop/setup failure and incomplete/unknown initial state fail closed; successful setup verifies
-service state before reporting ready.
+Runtime setup uses the approved `setup.sh install` backend. Package upgrade preserves service state:
+running returns running; stopped stays stopped; incomplete/unknown state fails closed; successful setup
+verifies service state before reporting ready.
 
 ## BLOB shorthand
 
@@ -266,20 +160,18 @@ service state before reporting ready.
 
 ## GUI maintenance backend
 
-`/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh` is the single approved backend for GUI
-management of bol-van/zapret2 releases. Required user-visible capability includes release discovery,
-installed version, update notice, release selection and install/update/reinstall.
+`/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh` is the approved backend for GUI management of
+bol-van/zapret2 releases. Required capability includes release discovery, installed version, update
+notice, release selection and install/update/reinstall.
 
-The separately discussed additional BLOB repository is deferred until its technical contract is
-supplied/approved; do not invent its URL/manifest/layout/version/integrity/update behavior.
+The separately discussed additional BLOB repository remains deferred until its technical contract is
+supplied/approved; do not invent URL/manifest/layout/version/integrity/update behavior.
 
 ## Repository artifact hygiene
 
 Forbidden tracked artifacts include editor backups/rejects/ad-hoc patches/transport fragments such as
 `*.orig`, `*.rej`, `*.patch`, `*.diff`, `*.b64`, `*.base64`, `*.bak`, `*.part-*`, `*~`.
 
-Historical engineering evidence may remain when intentional and clearly marked historical/superseded
-where needed. `scripts/test-repository-hygiene.sh` is the CI gate.
-
-Normal steady-state branch authority is `main`; `recovery/base` is retained as recovery reference.
-Ordinary task/publication branches are temporary and are removed after useful unique work is preserved.
+Historical engineering proof may remain when intentional and clearly historical/superseded.
+Normal steady-state branches are `main` plus retained recovery references; ordinary task/publication
+branches are temporary after useful work is preserved.
