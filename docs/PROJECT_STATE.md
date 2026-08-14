@@ -78,7 +78,7 @@ Historical A/B/C experiment material is history/proof and does not represent cur
 - current work follows one state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`; ledgers/decisions/devlogs/evidence preserve chronology and proof but are not parallel owners of current state;
 - zero-memory recovery is context-first: handoff/state, then all four rule books, plan/index, then selected specialists;
 - Level-1 material already read for an unchanged exact repository state may be reused; advancing `main` requires affected current/mandatory material to be reread;
-- `GH-009` is cancelled; consistency work uses targeted rule dependencies, reference/link validation, and scope/risk expansion instead of a mandatory repository-wide audit for every canon change;
+- the former mandatory broad GitHub reconciliation rule is cancelled; consistency work uses targeted rule dependencies, reference/link validation, and scope/risk expansion instead of a mandatory repository-wide audit for every canon change;
 - pure documentation PRs use focused documentation/governance integrity validation rather than mechanically running the complete product matrix; product/package changes retain full validation as applicable;
 - this file is current state for `v0.4.x`;
 - `ROADMAP.md` is the complete concise master plan;
