@@ -47,7 +47,6 @@ do
     test -s "${file}" || fail "required documentation/integrity file is missing: ${file}"
 done
 
-# Exactly four canonical rule books; rule identity/reference correctness is validated semantically.
 python3 "${XREF_TEST}"
 for file in "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}"
 do
@@ -70,7 +69,6 @@ require_fixed 'CHAT-026.' "${CHAT_RULES}" 'owner instruction consequence rule is
 require_fixed 'GH-057.' "${GH_RULES}" 'tree consistency rule is missing'
 require_fixed 'GH-058.' "${GH_RULES}" 'rule cross-reference merge gate is missing'
 
-# Bootstrap and Level-1 routing remain context-first and expose exactly the four rule books.
 require_fixed 'docs/START_HERE.md' "${AGENTS}" 'AGENTS does not route to START_HERE'
 require_fixed 'docs/PROJECT_STATE.md' "${AGENTS}" 'AGENTS does not route to PROJECT_STATE'
 require_fixed 'docs/DOCUMENTATION_RULES.md' "${AGENTS}" 'AGENTS does not route to DOC rules'
@@ -83,7 +81,6 @@ do
     require_fixed "${marker}" "${START_HERE}" "START_HERE does not expose ${marker}"
 done
 
-# INDEX preserves current, compatibility, archive, and deep-history integrity without making legacy pointers active authority.
 for marker in \
     DOCUMENTATION_RULES.md PROJECT_PRINCIPLES.md CHAT_RULES.md GITHUB_PUBLICATION.md \
     START_HERE.md PROJECT_STATE.md ROADMAP.md history/current/v0.4.x.md \
@@ -101,7 +98,6 @@ do
     require_fixed 'DOC-048' "${pointer}" "legacy pointer does not bind itself to DOC-048: ${pointer}"
 done
 
-# Current/active documents use normal Markdown rather than the retired decorative banner style.
 for file in "${AGENTS}" "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}" "${START_HERE}" "${PROJECT_STATE}" "${ROADMAP}" "${INDEX}" "${GH_POINTER}" "${DEV_POINTER}" "${WORK_POINTER}"
 do
     if grep -Eq '^={8,}$' "${file}"; then
@@ -109,7 +105,7 @@ do
     fi
 done
 
-require_fixed 'State-line scope:** `v0.4.x`' "${PROJECT_STATE}" 'PROJECT_STATE is not scoped to v0.4.x'
+require_fixed 'State-line scope: **`v0.4.x`**' "${PROJECT_STATE}" 'PROJECT_STATE is not scoped to v0.4.x'
 require_fixed 'v0.1.x archive' "${PROJECT_STATE}" 'PROJECT_STATE lacks v0.1.x archive link'
 require_fixed 'v0.2.x archive' "${PROJECT_STATE}" 'PROJECT_STATE lacks v0.2.x archive link'
 require_fixed 'v0.3.x archive' "${PROJECT_STATE}" 'PROJECT_STATE lacks v0.3.x archive link'

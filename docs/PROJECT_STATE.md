@@ -2,7 +2,7 @@
 
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1  
 **Updated:** 2026-08-14  
-**State-line scope:** `v0.4.x`
+State-line scope: **`v0.4.x`**
 
 This file contains current facts only (`DOC-026`–`DOC-030`).
 
