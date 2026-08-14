@@ -133,7 +133,7 @@ require_doc_marker 'what changes and why' "${PRINCIPLES}" 'canonical principles 
 require_doc_marker 'expected result' "${PRINCIPLES}" 'canonical principles omit expected result requirement'
 require_doc_marker 'long-term' "${PRINCIPLES}" 'canonical principles omit long-term plan requirement'
 require_doc_marker 'three memory levels' "${PRINCIPLES}" 'canonical principles omit three-level documentation memory'
-require_doc_marker 'single primary home' "${PRINCIPLES}" 'canonical principles omit single-primary-home rule'
+require_doc_marker 'one primary home' "${PRINCIPLES}" 'canonical principles omit one-primary-home rule'
 require_doc_marker 'reconcile' "${PUBLICATION}" 'publication procedure omits plan reconciliation'
 
 # One generic publisher is allowed; version-specific publishers in main are forbidden.
