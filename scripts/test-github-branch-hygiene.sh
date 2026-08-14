@@ -13,6 +13,7 @@ CI="${ROOT_DIR}/.github/workflows/ci.yml"
 TITLE_WORKFLOW="${ROOT_DIR}/.github/workflows/pr-title.yml"
 CLEANUP_WORKFLOW="${ROOT_DIR}/.github/workflows/cleanup-merged-branch.yml"
 PRERELEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/publish-prerelease.yml"
+DELIVERY_CI="${ROOT_DIR}/.github/workflows/testing-package-delivery-ci.yml"
 RELEASE_TRIGGER="${ROOT_DIR}/.github/workflows/release-trigger.yml"
 RELEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/release.yml"
 MAKEFILE="${ROOT_DIR}/Makefile"
@@ -32,7 +33,7 @@ require_fixed()
 for file in \
   "${AGENTS}" "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}" \
   "${START_HERE}" "${INDEX}" "${CI}" "${TITLE_WORKFLOW}" "${CLEANUP_WORKFLOW}" \
-  "${PRERELEASE_WORKFLOW}" "${RELEASE_TRIGGER}" "${RELEASE_WORKFLOW}"
+  "${PRERELEASE_WORKFLOW}" "${DELIVERY_CI}" "${RELEASE_TRIGGER}" "${RELEASE_WORKFLOW}"
 do
   test -s "${file}" || fail "missing or empty GitHub/rule authority: ${file}"
 done
@@ -110,6 +111,14 @@ fi
 if grep -Eq 'actions/upload-artifact|upload-artifact@' "${PRERELEASE_WORKFLOW}"; then
   fail 'testing package publisher must not use an Actions artifact as delivery'
 fi
+
+# Publisher-contract changes have their own CI gate and real FreeBSD 15 package qualification.
+require_fixed 'name: Testing package delivery contract' "${DELIVERY_CI}" 'testing-package delivery CI workflow is missing its identity'
+require_fixed "- '.github/workflows/publish-prerelease.yml'" "${DELIVERY_CI}" 'delivery CI does not trigger on publisher changes'
+require_fixed "- 'scripts/test-github-branch-hygiene.sh'" "${DELIVERY_CI}" 'delivery CI does not trigger on governance-test changes'
+require_fixed 'sh scripts/test-github-branch-hygiene.sh' "${DELIVERY_CI}" 'delivery CI does not execute the governance contract'
+require_fixed "release: '15.0'" "${DELIVERY_CI}" 'delivery CI does not qualify package build on FreeBSD 15'
+require_fixed '.abi == "FreeBSD:15:amd64"' "${DELIVERY_CI}" 'delivery CI does not verify FreeBSD 15 package ABI'
 
 # Full release trigger/workflow enforce current version semantics.
 require_fixed 'Classify version transition / release' "${RELEASE_TRIGGER}" 'release trigger lacks version-transition classifier'
