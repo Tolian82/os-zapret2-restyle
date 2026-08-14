@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
 **Status:** CURRENT · COMPLETE CONCISE PLAN
-**Updated:** 2026-08-14
+**Updated:** 2026-08-15
 
 - Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - Exact revision handoff: [`START_HERE.md`](START_HERE.md)
@@ -45,6 +45,7 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
 - [x] Remove obsolete duplicate quick-reference documents after reference migration
 - [x] Context-first/SHA-scoped documentation cold-start optimization
 - [x] Internal Markdown link/anchor integrity validation
+- [x] GitHub-native patch/package delivery with candidate-defining source verification and mandatory publication-record tail
 - [ ] Model-C-only production (`v0.4.1_13`)
   - [x] remove automatic B/A production fallback from the normal packaged Stage-60 path
   - [x] keep explicit Model B/A reference/benchmark/test overrides
