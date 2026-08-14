@@ -1,6 +1,6 @@
 # Project development rules
 
-**Status:** CANONICAL · MANDATORY LEVEL 1  
+**Status:** CANONICAL · MANDATORY LEVEL 1
 **Updated:** 2026-08-14
 
 This file is the single normative home for owner-approved rules, principles, and assertions governing how the project itself is designed, changed, verified, versioned, and released as a product.

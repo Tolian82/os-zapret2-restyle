@@ -1,6 +1,6 @@
 # Owner / assistant chat rules
 
-**Status:** CANONICAL · MANDATORY LEVEL 1  
+**Status:** CANONICAL · MANDATORY LEVEL 1
 **Updated:** 2026-08-14
 
 This file is the single normative home for owner-approved rules about how the assistant interprets the owner's words and communicates or acts from project chat.

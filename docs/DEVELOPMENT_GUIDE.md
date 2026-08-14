@@ -1,6 +1,6 @@
 # Development guide — compatibility pointer
 
-**Status:** LEGACY COMPATIBILITY POINTER · NONCANONICAL  
+**Status:** LEGACY COMPATIBILITY POINTER · NONCANONICAL
 **Updated:** 2026-08-14
 
 This path is retained for historical links only. It no longer carries an independent current development procedure.
