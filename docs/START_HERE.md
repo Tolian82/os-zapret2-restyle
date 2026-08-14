@@ -67,17 +67,20 @@ Why it was needed:
 
 - the previous continuity corrective had correctly recorded fixed DNS and selected Model C in the
   current handoff/state/roadmap;
-- however, a broad active-document review found two current architecture authorities still carrying
-  old `_31` / “A-B-C not selected” wording;
-- leaving those files active meant a future cold-start session could still revive obsolete Model-B
-  selection despite newer owner canon.
+- however, a broad active-document review found three current/current-looking authorities that could
+  still revive obsolete Model-B selection;
+- leaving them unchanged meant a future cold-start session could still read old A/B/C selection as
+  active despite newer owner canon.
 
-Corrected active architecture:
+Corrected active/current-looking documentation:
 
 - `docs/ARCHITECTURE.md` now describes current Python/Model-C architecture and explicitly says A/B/C
   selection is closed;
 - `docs/architecture/STRATEGY_LAB.md` is now a current-state base contract and no longer delegates
-  production runtime choice to the historical A/B/C experiment plan.
+  production runtime choice to the historical A/B/C experiment plan;
+- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` is now explicitly
+  **HISTORICAL / COMPLETED**, preserves the experiment/evidence chain, and cannot present the former
+  Model-B selection as current architecture.
 
 Durable records:
 
@@ -133,7 +136,8 @@ Before editing `_13`, read completely:
 3. `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`.
 
 The rewritten `docs/ARCHITECTURE.md` and `docs/architecture/STRATEGY_LAB.md` are current active
-architecture and must not be overridden by historical experiment documents.
+architecture. `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` is historical evidence.
+None may be interpreted to reopen A/B/C selection.
 
 # Exact next code change — `v0.4.1_13`
 
