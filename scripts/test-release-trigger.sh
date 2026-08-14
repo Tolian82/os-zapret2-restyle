@@ -5,6 +5,9 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TRIGGER_WORKFLOW="${ROOT_DIR}/.github/workflows/release-trigger.yml"
 RELEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/release.yml"
+PUBLICATION="${ROOT_DIR}/docs/GITHUB_PUBLICATION.md"
+PRINCIPLES="${ROOT_DIR}/docs/PROJECT_PRINCIPLES.md"
+README="${ROOT_DIR}/README.md"
 
 fail()
 {
@@ -14,6 +17,9 @@ fail()
 
 test -f "${TRIGGER_WORKFLOW}" || fail "release trigger workflow is missing"
 test -f "${RELEASE_WORKFLOW}" || fail "release workflow is missing"
+test -s "${PUBLICATION}" || fail "release publication authority is missing"
+test -s "${PRINCIPLES}" || fail "project principles are missing"
+test -s "${README}" || fail "README is missing"
 
 grep -Fq 'branches: [main]' "${TRIGGER_WORKFLOW}" || fail "trigger is not limited to main"
 grep -Fq -- '- VERSION' "${TRIGGER_WORKFLOW}" || fail "trigger is not limited to VERSION changes"
@@ -26,5 +32,17 @@ grep -Fq 'git tag -a "${TAG}" "${GITHUB_SHA}"' "${TRIGGER_WORKFLOW}" || fail "an
 grep -Fq 'gh release view "${TAG}"' "${TRIGGER_WORKFLOW}" || fail "published release idempotence check is missing"
 grep -Fq 'gh workflow run release.yml --ref "${TAG}"' "${TRIGGER_WORKFLOW}" || fail "release dispatch is missing"
 grep -Fq 'workflow_dispatch:' "${RELEASE_WORKFLOW}" || fail "release workflow cannot be dispatched"
+grep -Fq 'prerelease: false' "${RELEASE_WORKFLOW}" || fail "full release is still published as a testing prerelease"
+grep -Fq 'Publish pkg repository' "${RELEASE_WORKFLOW}" || fail "full release does not deploy the pkg repository"
+grep -Fq 'pages/FreeBSD:15:amd64' "${RELEASE_WORKFLOW}" || fail "full release does not verify FreeBSD 15 pkg-repository outputs"
 
-echo "Release trigger contract tests passed."
+grep -Fq 'second numeric component' "${PRINCIPLES}" || fail "canonical second-version-component authority is missing"
+grep -Fq 'assistant must never initiate' "${PRINCIPLES}" || fail "second-version-component owner gate is missing"
+grep -Fq 'full release != second-component change' "${PRINCIPLES}" || fail "release/second-component implication is not explicit"
+grep -Fq 'README.md' "${PRINCIPLES}" || fail "canonical full-release README revision gate is missing"
+grep -Fq 'Owner-controlled second numeric component' "${PUBLICATION}" || fail "publication procedure lacks second-component authority"
+grep -Fq 'Every full release preparation must also perform a complete `README.md` revision' "${PUBLICATION}" || fail "publication procedure lacks README release review"
+grep -Fq 'Full Web/pkg release' "${README}" || fail "README does not expose the full Web/pkg release"
+grep -Fq 'Current development candidate' "${README}" || fail "README does not distinguish the development candidate"
+
+echo "Release trigger and full-release policy contract tests passed."
