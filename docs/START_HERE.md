@@ -21,12 +21,12 @@ This file answers: **what has just been established at the current `_N` boundary
 - `PLUGIN_REVISION=13`;
 - current state line: `v0.4.x`;
 - current development stage: `v0.4.1`;
-- current source package candidate: `os-zapret2-restyle-0.4.1_13.pkg`;
-- `_13` source merge: `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
-- latest published testing package/tag remains `os-zapret2-restyle-0.4.1_12.pkg` / `v0.4.1_12` until a separate testing-package publication is requested;
+- current testing package/tag: `os-zapret2-restyle-0.4.1_13.pkg` / `v0.4.1_13`;
+- testing-package SHA-256: `7a2f864aa14ba2170ca378954ab5421092b76aca79b7b1765b976de2f024797b`;
+- `_13` source merge and testing-tag target: `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
 - required ABI: `FreeBSD:15:amd64`.
 
-Resolve the exact current `main` SHA at execution time under `GH-004`. A source candidate and a persistently published testing package are distinct identities (`DEV-033`, `GH-047`–`GH-050`).
+Resolve the exact current `main` SHA at execution time under `GH-004`. The testing prerelease is persistent GitHub delivery only; it does not publish the stable Pages/pkg repository (`GH-034`–`GH-038`).
 
 ## What was established — Model-C-only production
 
@@ -52,31 +52,29 @@ Detailed runtime contract: [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture
 
 Detailed measurements and proof links are in [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
 
-## `_13` automated acceptance — PASS
+## `_13` automated acceptance and testing-package publication — PASS
 
-The `_13` source boundary is complete and merged:
+The `_13` source and persistent testing-delivery boundaries are complete:
 
 - PR `#230` exact verified head: `8e1af17ce4ccfaad4851329167b386741d0c9ee8`;
-- normal production Stage 60 reaches Model C only;
-- injected Model-C infrastructure failure produces explicit bounded failure with no B/A replay;
-- cleanup, source-port leasing/attribution and profile segmentation regressions pass;
 - complete Strategy Lab corrective matrix: PASS;
 - FreeBSD 15 package build/inspection qualification: PASS;
-- PR title/governance checks: PASS;
-- exact verified head squash-merged as `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`.
-
-GitHub Actions CI run: `31819116248`.
+- exact verified head squash-merged as `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
+- source CI run: `31819116248`;
+- testing publication workflow run: `31838633599`;
+- persistent prerelease `v0.4.1_13`: published;
+- package asset `os-zapret2-restyle-0.4.1_13.pkg`: uploaded and verified;
+- tag `v0.4.1_13` points exactly to `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
+- publication branch `publish/v0.4.1_13`: deleted after successful publication.
 
 ## Immediate remaining `_13` live gate
 
-`_13` owner-live acceptance still requires one selected normal Model-C-only run on OPNsense with:
+Run one selected normal Model-C-only Strategy Lab regression on OPNsense with the published `_13` package and verify:
 
 - correct result handling;
 - no automatic Model B/A replay;
 - Stage-90 semantic restoration PASS;
 - no temporary IPFW/process/socket residue.
-
-A persistent `v0.4.1_13` testing package/tag is published only when testing-package delivery is requested; source merge and CI artifact creation do **not** constitute persistent testing-package publication.
 
 After the selected `_13` owner-live PASS, return to [`ROADMAP.md`](ROADMAP.md) and take the next accepted risk-selected product task. Do not reopen A/B/C selection or closed measurement experiments by inertia.
 
