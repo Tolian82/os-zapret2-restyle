@@ -271,42 +271,33 @@ following are preserved for later reinstall or investigation:
 
 ## Release model
 
-The project distinguishes two publication types:
+For users, the project exposes two publication types:
 
 | Type | Meaning |
 |---|---|
-| **Testing package** | Persistent GitHub `.pkg` for development/live verification. Does not promote the Pages/pkg repository. |
-| **Full release** | Verified current candidate package + semantic tag + release assets/checksum + updated Pages/pkg repository, ready for install/update through the OPNsense Web GUI. |
+| **Testing package** | Persistent GitHub `.pkg` used for development/live verification. It does not replace the full Web/pkg release. |
+| **Full release** | Verified package published through the project pkg repository and ready for install/update through the OPNsense Web GUI. |
 
-A change to the **second numeric component** of the project version — for example
-`v0.4.x → v0.5.x` — happens only after explicit owner instruction/approval and always includes a full
-release. A full release can also be made without changing that second component and may use the current
-`_N` candidate; publication itself does not force an artificial revision reset.
-
-Every full release includes a fresh review of this README so the repository front page describes the
-actual current product rather than an accumulated historical snapshot.
+The canonical development/version semantics are in [`docs/PROJECT_PRINCIPLES.md`](docs/PROJECT_PRINCIPLES.md) (`DEV-027`–`DEV-040`); GitHub publication mechanics are in [`docs/GITHUB_PUBLICATION.md`](docs/GITHUB_PUBLICATION.md) (`GH-034`–`GH-052`). This README describes the user-facing result and does not independently define release policy.
 
 ---
 
 ## Documentation for contributors
 
-Engineering documentation lives in [`docs/`](docs/). It uses a three-level memory model so a new
-session can recover current state without loading the project's complete history.
+Engineering documentation lives in [`docs/`](docs/). It uses a bounded three-level memory model with exactly four canonical general rule books.
 
 Start with:
 
 1. [`AGENTS.md`](AGENTS.md)
-2. [`docs/PROJECT_PRINCIPLES.md`](docs/PROJECT_PRINCIPLES.md)
-3. [`docs/DOCUMENTATION_RULES.md`](docs/DOCUMENTATION_RULES.md)
-4. [`docs/START_HERE.md`](docs/START_HERE.md)
-5. [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
-6. task-specific documents named by `START_HERE.md`
+2. [`docs/DOCUMENTATION_RULES.md`](docs/DOCUMENTATION_RULES.md) — `DOC-*`
+3. [`docs/PROJECT_PRINCIPLES.md`](docs/PROJECT_PRINCIPLES.md) — `DEV-*`
+4. [`docs/CHAT_RULES.md`](docs/CHAT_RULES.md) — `CHAT-*`
+5. [`docs/GITHUB_PUBLICATION.md`](docs/GITHUB_PUBLICATION.md) — `GH-*`
+6. [`docs/START_HERE.md`](docs/START_HERE.md)
+7. [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
+8. task-specific documents named by `START_HERE.md`
 
-The top of `START_HERE.md` also links the current state, numbered documentation rules, permanent
-principles, GitHub publication rules, master development plan and documentation index for fast recovery.
-
-Use [`docs/INDEX.md`](docs/INDEX.md) to reach the current version-line ledger, completed version
-archives, devlogs, patch records, decisions and verification evidence only when that history is needed.
+Use [`docs/ROADMAP.md`](docs/ROADMAP.md) for the complete concise plan and [`docs/INDEX.md`](docs/INDEX.md) to reach the current version-line ledger, completed version archives, devlogs, patch records, decisions and verification evidence only when that detail is needed.
 
 ---
 

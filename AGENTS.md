@@ -1,105 +1,33 @@
-MANDATORY: Use the connected GitHub plugin first for every repository operation. If the plugin is unavailable or cannot provide required authoritative state, stop GitHub work and report the boundary.
-
 # AGENTS.md
 
-This is the mandatory repository entrypoint. Do not reconstruct project state from chat/model memory.
+This is the mandatory repository entrypoint. It is a bootstrap map, not a fifth rule book.
 
-## Mandatory startup order — Level 1
+## Mandatory Level-1 startup
 
-Read completely through EOF:
+Read completely through EOF in this order:
 
 1. `AGENTS.md`;
-2. `docs/PROJECT_PRINCIPLES.md` — permanent project/development canon;
-3. `docs/DOCUMENTATION_RULES.md` — numbered canonical documentation rules;
-4. `docs/START_HERE.md` — exact current package-revision handoff and immediate continuation;
-5. `docs/PROJECT_STATE.md` — current facts for the active second-numeric-component line;
-6. only the specialist documents named by the current task in `START_HERE.md`.
+2. `docs/DOCUMENTATION_RULES.md` — documentation rules (`DOC-*`);
+3. `docs/PROJECT_PRINCIPLES.md` — project-development rules (`DEV-*`);
+4. `docs/CHAT_RULES.md` — owner/assistant chat rules (`CHAT-*`);
+5. `docs/GITHUB_PUBLICATION.md` — GitHub rules (`GH-*`);
+6. `docs/START_HERE.md` — exact current `_N` handoff;
+7. `docs/PROJECT_STATE.md` — current facts for the active second-component line;
+8. only specialist documents named for the current task in `START_HERE.md`.
 
-`docs/ROADMAP.md` is the concise master development plan and is linked at the top of `START_HERE.md`.
-`docs/INDEX.md` is the navigation/integrity map. Do not routinely load historical devlogs, patch
-records, proof or archives. The active `history/current/vX.Y.x.md` ledger is Level 2 and is read only
-when richer current-line chronology is needed.
+`docs/ROADMAP.md` is the complete concise master plan. `docs/INDEX.md` is the navigation/integrity map. The current-line ledger under `docs/history/current/` is Level 2 and is loaded only when richer current-line chronology is needed. Older/deeper records are Level 3 and are loaded on demand.
 
-If a selected mandatory document is truncated/paginated, continue to EOF before acting. If required
-authority cannot be read completely, stop before mutation rather than guess.
+If a selected mandatory document is truncated or paginated, continue to EOF before mutation. If required authority cannot be read safely, apply `GH-003` rather than guess.
 
-## Canon and documentation
+## Applying the four rule books
 
-The owner's newest unambiguous instruction/fact/confirmed decision supersedes conflicting older active
-documentation, tests and plans. Apply `PROJECT_PRINCIPLES.md` and the numbered rules in
-`DOCUMENTATION_RULES.md` directly.
+- Documentation structure/maintenance/archiving/reading: `DOC-*`.
+- Project design/change/version/product verification: `DEV-*`.
+- Meaning of the owner's chat instructions and owner-facing communication: `CHAT-*`.
+- Repository/branch/PR/CI/merge/package/release mechanics: `GH-*`.
 
-The permanent owner-canon “Суслик” rule applies: an active contradiction is a documentation defect.
-When the owner says `зафиксируй` / equivalent, the first GitHub documentation change must record the
-canon and reconcile every active/current authority and CI contract capable of contradicting it.
-Historical material may keep the old state only when clearly historical/superseded.
+A current rule belongs in exactly one of those four files (`DOC-001`–`DOC-008`). Historical decisions and specialist technical contracts remain available for rationale/implementation detail but do not form additional general rule books.
 
-Every substantive GitHub delivery must leave a zero-memory recovery checkpoint. Detailed chronology
-belongs in the current-line ledger and deep records rather than being copied into Level 1.
+## Current continuation
 
-## Version/documentation hierarchy
-
-For candidate `v0.4.2_14`:
-
-- second numeric component `4` => current project-state line `v0.4.x` and `PROJECT_STATE.md` scope;
-- third numeric component `2` => current development stage/task inside that line;
-- package revision suffix `_14` => exact patch/iteration and `START_HERE.md` handoff boundary.
-
-A second-component change is never assistant-initiated and always requires owner authority plus a full
-release. A third-component-only stage transition does not itself mean a release and resets package
-revision to `_1`. A full release may occur without changing the second component and may use the
-current `_N` candidate.
-
-## Scope-first preflight
-
-Before mutation verify through the GitHub plugin:
-
-- exact current `main` SHA;
-- current `VERSION` and `PLUGIN_REVISION`;
-- current documented task reconciled with the newest owner instruction;
-- current `START_HERE` / `PROJECT_STATE` / master-plan consistency;
-- same-scope/relevant open PR state;
-- plugin availability for the required operation.
-
-Expand inventory only when scope needs it: CI logs for CI failure, tags/assets for publication,
-branches for cleanup/recovery, protection/permissions when relevant, recursive tree for a genuine
-broad investigation, and active-document sweep for owner-canon reconciliation.
-
-## GitHub delivery
-
-Before GitHub mutation read `docs/GITHUB_PUBLICATION.md` completely. Ordinary implementation flow:
-
-`one logical scope -> task branch -> implementation + synchronized docs -> validation -> Ready PR -> required checks -> exact-head squash merge -> verify main -> clean temporary branch`.
-
-- same-scope repairs stay in the same PR;
-- Draft only for intentional WIP;
-- PR/branch commit/final squash subjects begin `v<VERSION>_<PLUGIN_REVISION>:`;
-- docs/governance/CI-only changes do not change package metadata;
-- every revision increment reconciles `START_HERE`, the master plan and `PROJECT_STATE` when facts changed;
-- never force-update `main`, move published tags or rewrite published history;
-- diagnose failed checks from exact evidence before changing source;
-- external infrastructure failure causes no speculative source change;
-- stale tests are corrected instead of reversing current canon;
-- preserve useful unique branch work before routine cleanup.
-
-Standing owner authorization for `fix/add/change/implement/complete` covers branch, PR, checks,
-same-scope repair, squash merge, main verification and cleanup. Explicit stopping points override it.
-
-## Package / release boundary
-
-- ordinary packaged source change in the same stage: keep `VERSION`, increment `PLUGIN_REVISION` once;
-- new third-component development stage: change third component and reset `PLUGIN_REVISION=1`;
-- docs/governance/CI-only change: change neither;
-- testing package: persistent GitHub `.pkg`, no full release/Pages/pkg-repo promotion;
-- full release: explicit owner release authority, exact current candidate, full README review, semantic
-  tag, GitHub release assets/checksum and verified Pages/pkg-repository publication ready for OPNsense
-  Web installation;
-- second-component change: explicit owner authority, archive rollover and mandatory full release.
-
-## Owner-facing communication / OPNsense
-
-Project status/results are clear Russian by default. Translate or explain internal English GitHub/CI
-terms instead of making the owner decode them. Routine cleanup is handled silently.
-
-Owner console commands target root `csh`. POSIX-only syntax must explicitly enter `sh`/`/bin/sh` and
-return with `exit`.
+After the rule books, follow `START_HERE.md`. It contains the exact current revision boundary, the recently established effect, the exact next task, and the minimum specialist reading required to proceed.

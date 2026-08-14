@@ -1,202 +1,144 @@
-# GitHub publication and delivery discipline
+# GitHub rules and publication discipline
 
-Status: **AUTHORITATIVE PROCEDURE**
+Status: **CANONICAL / MANDATORY LEVEL 1**
+Updated: 2026-08-14
 
-This file answers: **how are project changes, testing packages and full releases delivered through GitHub?**
+This file is the single normative home for rules about **working with GitHub for this project**: repository access, preflight, branches, PRs, CI, merges, testing-package publication, full releases, and repository hygiene.
 
-Permanent principles: [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md).
-Documentation rules: [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md).
-Current handoff: [`START_HERE.md`](START_HERE.md).
-Current state: [`PROJECT_STATE.md`](PROJECT_STATE.md).
-Master plan: [`ROADMAP.md`](ROADMAP.md).
+Other rule domains:
 
-Read this file completely immediately before GitHub mutation.
+- [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md) — documentation governance (`DOC-*`);
+- [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) — project-development/version/product rules (`DEV-*`);
+- [`CHAT_RULES.md`](CHAT_RULES.md) — owner/assistant communication semantics (`CHAT-*`).
 
-## GitHub plugin boundary
+Read this file completely before GitHub mutation.
 
-Use the connected GitHub plugin first for every supported repository operation. A fallback transport is
-allowed only when the plugin is responding but one exact required function/permission is confirmed
-missing. Plugin unavailability or inability to read required authoritative state stops GitHub work.
+## A. GitHub access and preflight
 
-## Scope-first preflight
+GH-001. **Use the connected GitHub plugin/connector first for every supported repository operation.** It is the primary repository interface for reads and writes.
 
-Always verify before mutation:
+GH-002. **A fallback transport is narrow and evidence-based.** Use it only when the GitHub plugin is responding but one exact required operation/permission is confirmed missing or when a read-only bulk operation is not exposed. Do not replace the connected plugin as the normal workflow.
 
-1. exact current `main` SHA;
-2. current `VERSION` and `PLUGIN_REVISION`;
-3. current `START_HERE`, `PROJECT_STATE` and master-plan consistency with newest owner canon;
-4. same-scope/relevant open PR state;
-5. plugin availability.
+GH-003. **If required authoritative GitHub state cannot be read safely, stop mutation.** Do not guess branch heads, PR heads, release identity, CI state, or permissions.
 
-Expand inventory only when scope needs it: exact CI/log evidence, release assets, branch hygiene,
-protection/permissions, recursive tree for broad investigation, or broad active-document sweep for
-owner-canon reconciliation.
+GH-004. **Pin the exact `main` SHA before mutation.** The task branch base and all broad investigation references must be tied to an explicit current commit, not an assumed moving branch state.
 
-## Owner canon / “Суслик” rule
+GH-005. **Read current package identity before a delivery.** Resolve `VERSION` and `PLUGIN_REVISION`, applying `DEV-027`–`DEV-040`; do not infer candidate identity from a stale title, tag, README, or previous chat.
 
-The newest unambiguous owner instruction/fact/confirmed decision is current canon. When the owner says
-`зафиксируй` / equivalent, the first GitHub documentation change must record it and reconcile every
-active/current authority and CI contract capable of contradicting it. Historical material may retain
-old statements only as clearly historical/superseded records.
+GH-006. **Read the current handoff/state/rules required by Level 1 before mutation.** Apply `DOC-016`, then read the current-task specialist documents named by `START_HERE.md`.
 
-## Documentation gate
+GH-007. **Preflight is scope/risk based.** Always check exact `main`, candidate identity, current handoff/state, and relevant same-scope open PR state. Expand to CI runs, permissions, releases, branches, artifacts, or full tree only when the scope/risk needs them.
 
-Every GitHub delivery obeys the numbered rules in `DOCUMENTATION_RULES.md`.
+GH-008. **Broad investigation uses one pinned recursive tree as an index when practical.** Resolve the exact SHA once, obtain the tree, and fetch only files/objects needed from that immutable snapshot rather than repeatedly rediscovering repository structure.
 
-Before publication confirm:
+GH-009. **Owner-canon/documentation reconciliation is broad by definition.** When `CHAT-009` applies, inspect every active/current-looking authority capable of contradicting the new canon, while preserving historical records under `DOC-004`–`DOC-005`.
 
-- Level 1 is internally consistent and sufficient for zero-memory recovery;
-- `START_HERE` describes the exact current `_N` revision, recent change/effect, immediate next action
-  and relevant future direction;
-- durable completed facts have flowed into `PROJECT_STATE` when applicable;
-- `PROJECT_STATE` remains scoped to the current second-component line and ends with all archive links;
-- `ROADMAP` contains the complete concise completed/current/future plan;
-- `INDEX` routes to every memory level/archive/deep-record store;
-- the current line ledger records richer chronology when useful;
-- every owner `зафиксируй` request received its active-document consistency sweep.
+## B. Branch and logical-scope discipline
 
-Detailed devlog/patch/verification/decision records are created when they add distinct execution,
-proof or rationale value; duplication is not preservation.
+GH-010. **One logical scope uses one task branch and one PR.** Branch from the exact verified `main` SHA; unrelated work gets another scope.
 
-## Version and candidate identity
+GH-011. **Same-root-cause corrections stay in the same PR.** A stale test, fixture, documentation contract, or CI assertion exposed by the intended change is repaired in that PR rather than split into artificial follow-up PRs before merge.
 
-For candidate `v0.4.2_14`:
+GH-012. **Do not mix unrelated opportunistic cleanup into a task branch.** Preserve reviewability and causality.
 
-- second numeric component `4` = state/release line `v0.4.x`;
-- third numeric component `2` = current development stage/task;
-- package revision `_14` = exact patch/iteration.
+GH-013. **A Ready PR is the default for complete intended work.** Use Draft only for intentionally incomplete work that must be published before it is merge-ready.
 
-Derive PR/branch/final squash prefix from current candidate:
+GH-014. **Branch/PR/commit identity follows the exact current candidate prefix.** Unless a specific repository mechanism requires otherwise, PR titles, branch-commit subjects, and final squash subjects use `v<VERSION>_<PLUGIN_REVISION>:` even for docs/governance changes that intentionally do not bump metadata.
 
-`v<VERSION>_<PLUGIN_REVISION>:`
+GH-015. **A docs/governance/CI-only delivery may advance `main` without changing package metadata.** Apply `DEV-033`; its title prefix still names the current package candidate so repository chronology remains anchored.
 
-Every PR title, PR-branch commit subject and final squash subject uses that prefix.
+## C. Validation and CI failure handling
 
-### Ordinary same-stage patch
+GH-016. **Validate before publication/merge.** Run the focused checks required by scope and the repository CI contract. Never merge based on an unverified older head.
 
-- keep `VERSION` unchanged;
-- increment `PLUGIN_REVISION` once for packaged source/behavior change;
-- synchronize documentation for the new `_N` boundary;
-- docs/governance/CI-only changes change neither value.
+GH-017. **Read exact failed-job evidence before changing source, tests, workflow, or branch state.** A plausible explanation is not enough (`DEV-012`).
 
-### Third-numeric-component stage transition
+GH-018. **A confirmed same-scope defect is corrected in the same PR.** Update the PR head and re-run applicable checks.
 
-A genuine new current development stage may move, for example, `v0.4.1_14 -> v0.4.2_1`:
+GH-019. **A stale test or CI assertion is corrected, not obeyed as obsolete product authority.** Apply `DEV-013` and preserve the current intended architecture.
 
-- second component stays unchanged;
-- third component changes because the active task/stage genuinely changed;
-- `PLUGIN_REVISION` resets to `1`;
-- `START_HERE` is initialized for the new stage/revision;
-- `PROJECT_STATE` remains the same `v0.4.x` state file and is updated only for facts that changed;
-- this transition **does not publish a full release by itself**.
+GH-020. **An external runner/network/action/dependency outage does not justify speculative source changes.** Retry the unchanged applicable job/run when appropriate or diagnose infrastructure first (`DEV-014`).
 
-A third-component stage transition therefore changes development relevance without closing the current
-second-component project-state line.
+GH-021. **Only successful checks for the latest mergeable head authorize merge.** If the head changes, prior successful checks do not prove the new head.
 
-The release trigger must classify this as a development-stage transition and finish successfully
-without creating a semantic tag/release unless the exact merge subject explicitly prepares a release.
+GH-022. **Never report a skipped/unrun job as PASS.** A legitimately path-skipped package build is `SKIPPED`, not a successful package qualification (`DEV-011`).
 
-### Second-numeric-component transition
+GH-023. **Path-gated package builds remain meaningful.** Packaged-source or package/CI infrastructure changes run the required FreeBSD package qualification; pure docs/governance changes may skip package build when the workflow classifies them as non-package changes.
 
-The `4` in `0.4.x` is owner-controlled. The assistant never initiates `v0.4.x -> v0.5.x` by inference.
-It requires explicit owner version/transition instruction or separate approval. Once authorized:
+## D. PR merge and post-merge verification
 
-- the transition always includes a full release;
-- the new stage begins at package revision `_1`;
-- final old `PROJECT_STATE` content is preserved in the old line archive;
-- old current ledger is finalized as archive and the new current ledger is initialized;
-- Level 1, `ROADMAP`, `INDEX` and README are reconciled;
-- no redundant second confirmation is required for the already-authorized rollover/release.
+GH-024. **Merge only the exact verified PR head.** Use expected-head protection when available so a moved head cannot be merged accidentally.
 
-A full release may also occur without changing the second component.
+GH-025. **Normal project integration is one squash merge per logical scope.** The resulting `main` commit subject uses the exact candidate prefix and describes the logical change.
 
-## Ordinary development flow
+GH-026. **Verify the resulting `main` after merge.** Confirm the new SHA and applicable `main` integrity/release-classification behavior rather than assuming the PR result automatically proves post-merge state.
 
-1. resolve owner scope/stopping boundary and newest canon;
-2. complete mandatory Level 1 and task-specialist reading;
-3. perform scope-first preflight;
-4. create one task branch from exact base;
-5. implement one logical scope with synchronized documentation;
-6. run focused validation and review the complete diff;
-7. reconcile `START_HERE`, `PROJECT_STATE`, master plan, current ledger and any required canon sweep;
-8. open one Ready PR (Draft only for intentional WIP);
-9. keep same-scope corrections in that PR;
-10. require successful checks for the latest mergeable head;
-11. re-reconcile owner canon/plan and verify title/scope/checks/exact head;
-12. squash merge once with exact versioned subject;
-13. verify resulting `main`;
-14. preserve useful unique branch work or remove the temporary branch and verify clean state.
+GH-027. **Published history is forward-only.** Never force-update `main`, rewrite an already-published release, move a published tag to another commit, or hide a failed publication by rewriting history. Repair forward with another logical change.
 
-## CI failure handling
+GH-028. **Temporary branches are completion machinery, not permanent clutter.** After merge/completion, compare against `main`; preserve useful unique work first, otherwise delete the temporary task/publication branch and verify normal branch state.
 
-Read exact failed-job evidence before changing source/workflow/runner/branch.
+GH-029. **Routine branch cleanup is performed without a separate owner confirmation.** Apply `CHAT-010` and `CHAT-022`; escalate only a real permission/tooling/safety boundary.
 
-- confirmed same-scope defect -> repair in same PR;
-- stale test/CI assertion -> update stale assertion/contract;
-- external runner/network/action/dependency outage -> no speculative source change;
-- PR metadata defect -> correct metadata;
-- missing protected authority or unavailable plugin -> stop at boundary.
+GH-030. **Normal steady-state branch hygiene is `main` plus explicitly retained long-lived recovery/work branches.** Do not leave obsolete task/publication branches after their work is safely integrated.
 
-## Repository / branch hygiene
+## E. Repository artifact and secret hygiene
 
-After merge/completion compare temporary branch work with merged `main`; preserve any useful unique work,
-otherwise remove the branch and verify no obsolete task/publication branch remains.
+GH-031. **Do not commit transport/scratch/backup artifacts.** `.orig`, `.rej`, `.patch`, `.diff`, `.b64`, `.base64`, `.bak`, split-part artifacts, editor backups, and equivalent temporary files are not repository state unless an explicit approved artifact format requires them.
 
-## Owner testing-package delivery
+GH-032. **Never publish secrets or sensitive private configuration.** Credentials, tokens, private configuration, private exploit details, or unredacted sensitive logs do not belong in public issues, PRs, commits, release assets, or repository documentation.
 
-An owner request for package bytes for testing/installation means persistent GitHub `.pkg` unless
-build/CI evidence only was explicitly requested.
+GH-033. **Repository hygiene checks are part of normal CI.** Do not disable or weaken them merely to make an otherwise incorrect tree pass.
 
-Testing package means:
+## F. Owner testing-package publication
 
-- no full release;
-- no Pages/pkg-repository promotion;
-- persistent deterministic GitHub package/prerelease asset;
-- exact source/tag/asset/digest identity verified;
-- temporary publication branch removed after success.
+GH-034. **Interpret owner package shorthand through `CHAT-015`–`CHAT-016`.** A testing package is persistent GitHub delivery, not an ephemeral Actions artifact unless the owner explicitly requested build evidence only.
 
-## Full project release
+GH-035. **A testing package is tied to an immutable exact source identity.** Verify candidate version/revision, source commit/tag, uploaded `.pkg`, and checksum/digest as applicable.
 
-A full release is not merely a tag or uploaded package. It is a complete OPNsense delivery:
+GH-036. **Testing-package publication does not promote the stable project package repository.** No stable Pages/pkg-repository update or full-release claim occurs merely because a `.pkg` is published for testing.
 
-- explicit owner release authority;
-- exact current candidate `VERSION` + `PLUGIN_REVISION`;
-- complete human-facing `README.md` revision;
-- verified merge commit titled `v<VERSION>_<PLUGIN_REVISION>: Prepare release v<VERSION>`;
-- immutable semantic tag `v<VERSION>` pointing to that exact merge;
-- normal GitHub Release with the exact package and checksum assets;
-- matching `FreeBSD:15:amd64` Pages/pkg repository deployment;
-- installation/update availability through the OPNsense Web GUI.
+GH-037. **Testing package bytes remain retrievable after workflow completion.** Use a persistent GitHub release/prerelease asset or equivalent approved persistent GitHub surface; Actions artifacts/local container files alone are build evidence.
 
-**A full release does not reset `PLUGIN_REVISION` merely because it is a release.** The current exact
-`_N` candidate may be released. Revision resets to `_1` only when a new third-component stage or new
-second-component line is entered.
+GH-038. **Temporary testing-publication branches are removed after successful publication once unique work is safely preserved.** Do not leave version-specific publisher branches as permanent process state.
 
-If semantic tag `v<VERSION>` already exists at another commit, published history is immutable: do not
-move it. A later full release requires a new appropriate project version according to owner-approved
-version semantics.
+## G. Full release publication
 
-## Release-trigger contract
+GH-039. **Interpret `релиз` through `CHAT-017` and `DEV-039`.** A full release is not complete until the package repository/Web-install boundary is verified.
 
-The `main` release-trigger workflow classifies every merge:
+GH-040. **A full release requires explicit owner release authority.** Do not infer a stable release merely because CI is green or a package exists.
 
-1. normal same-`VERSION` commit -> no release;
-2. third-component-only `VERSION` change -> require `_1`, no release unless the merge subject is an
-   explicit release-preparation subject;
-3. second-component change -> require `_1` and explicit release-preparation subject, otherwise fail;
-4. explicit release-preparation subject at the current candidate -> create/verify semantic tag and
-   dispatch the full release workflow.
+GH-041. **A full release uses the exact current candidate.** It may publish the current `_N`; publication itself does not reset revision (`DEV-038`).
 
-The implication is one-way: **second-component change => full release**, while a full release can
-happen inside the existing second-component line.
+GH-042. **A full release must pass the README gate.** Apply `DOC-038`–`DOC-039` before release preparation.
 
-## Published-history safety
+GH-043. **Release preparation merge identity is explicit.** The verified merge subject is `v<VERSION>_<PLUGIN_REVISION>: Prepare release v<VERSION>` (optionally with the repository's squash PR suffix where accepted by validation).
 
-Never force-update `main`, move published tags, replace published assets/history or hide a failed
-release by rewriting history. Repair forward with a new logical change.
+GH-044. **The semantic release tag is immutable and points to the exact release-preparation merge.** If `v<VERSION>` already exists at another commit, do not move it; choose a new owner-approved project version for a later full release.
 
-## Owner-facing status
+GH-045. **A full GitHub Release contains the exact package and checksum assets and is not marked as a testing prerelease.** Verify the released asset identity against the source candidate.
 
-Project status/results are clear Russian by default. Explain any materially useful internal English
-GitHub/CI labels in practical Russian: what passed/failed, whether the change is already in `main`, and
-what happens next.
+GH-046. **A full release publishes and verifies the matching `FreeBSD:15:amd64` project package repository.** Confirm the generated repository metadata/package location and OPNsense Web install/update availability.
+
+GH-047. **A second-component transition is guarded by `DEV-036`–`DEV-037`.** It must start at `_1`, include explicit full-release preparation, and perform the documentation-line rollover defined by `DOC-028`–`DOC-030`.
+
+GH-048. **A third-component transition is guarded by `DEV-034`–`DEV-035`.** It starts at `_1` but does not trigger a full release unless the same exact merge is explicitly a release-preparation merge.
+
+## H. Release-trigger behavior
+
+GH-049. **Every `main` merge is classified, but ordinary changes do not publish a release.** Same-`VERSION` merges finish with no tag/release dispatch unless they are the exact explicit release-preparation case.
+
+GH-050. **A third-component-only `VERSION` change requires `_1` and is accepted as a development-stage transition without release by default.** Release occurs only with explicit release-preparation identity.
+
+GH-051. **A first/second-component transition requires `_1` and explicit full-release preparation.** A second-component transition without that authority is a failed governance boundary, not an implicit release.
+
+GH-052. **An explicit release-preparation merge at the current candidate creates/verifies the semantic tag and dispatches the full release workflow.** Post-release verification remains mandatory.
+
+## I. Documentation and process synchronization
+
+GH-053. **Every GitHub delivery applies the same-scope documentation reconciliation required by `DOC-036`–`DOC-037`.** Do not create a second GitHub-specific copy of documentation rules here.
+
+GH-054. **`INDEX.md`, rule books, handoff/state/roadmap, and current ledger are updated only when their bounded roles actually change.** Do not touch documents mechanically just to increase the number of files in a PR.
+
+GH-055. **GitHub procedure changes are recorded here first.** Assign the next `GH-*` ID, then update affected workflows/tests/quick-reference documents under `DOC-008` in the same logical scope.
+
+GH-056. **Legacy decision records are rationale/history, not competing current procedure.** Where an older GitHub decision was superseded, keep it marked historical/superseded; do not merge its obsolete mandatory behavior back into this file.

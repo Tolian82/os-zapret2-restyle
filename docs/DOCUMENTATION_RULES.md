@@ -1,221 +1,108 @@
-# os-zapret2-restyle — Documentation rules
+# Documentation Rules
 
 Status: **CANONICAL / MANDATORY LEVEL 1**
 Updated: 2026-08-14
 
-This file is the single primary authority for **how project documentation is structured, updated,
-archived and read**. General project principles remain in [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md);
-GitHub delivery mechanics remain in [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md). Where an older
-active document conflicts with these rules, the newer owner canon and this file win and the active
-document must be reconciled.
+This file is the single normative home for rules about project documentation structure, maintenance, reading, archiving, and internal consistency.
 
-## Numbered documentation rules
+The other three canonical rule books are:
 
-1. **Documentation is part of the project architecture.** It is not optional commentary and must move
-   with the code, workflows and project decisions it describes.
+- [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) — project-development rules (`DEV-*`);
+- [`CHAT_RULES.md`](CHAT_RULES.md) — owner/assistant chat rules (`CHAT-*`);
+- [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md) — GitHub rules (`GH-*`).
 
-2. **Every published GitHub project state must be recoverable with zero chat/model memory.** A future
-   assistant must be able to determine what the project is, what recently changed, what is true now,
-   what the current patch is meant to achieve, what comes next and where the full history is stored.
+## A. Canonical rule architecture
 
-3. **The owner's newest unambiguous statement is current canon.** If current documentation disagrees
-   with it, the documentation is stale and must be brought into agreement; old documentation does not
-   override the owner.
+DOC-001. **Exactly four canonical rule books exist.** Documentation rules live here; project-development rules live in `PROJECT_PRINCIPLES.md`; chat rules live in `CHAT_RULES.md`; GitHub rules live in `GITHUB_PUBLICATION.md`.
 
-4. **The owner-canon “Суслик” rule is permanent.** Never keep a known contradiction hidden in another
-   active document. A current statement is either reconciled everywhere it can matter or explicitly
-   historical/superseded.
+DOC-002. **One current rule has one normative home.** Other active documents reference its rule ID instead of restating the same rule as a second authority.
 
-5. **`Зафиксируй` / `запиши это` / `record this` has a strict meaning.** At the first GitHub change
-   after that instruction, record the owner's words in the correct canonical/current home and perform
-   a complete active-documentation sweep so no current text or CI contract can still contradict them.
+DOC-003. **Rule domains are semantic.** When a current rule is found in the wrong domain, move its normative meaning to the proper rule book and replace active duplicates with references where needed.
 
-6. **A stale documentation test is stale documentation.** Tests and CI rules must be updated when they
-   encode superseded documentation canon; current architecture or owner intent must never be distorted
-   merely to satisfy an old textual assertion.
+DOC-004. **Historical text is preserved as history.** Decisions, devlogs, patches, evidence, audits, releases, and Git history keep their original context and do not regain current authority merely because they remain available.
 
-7. **Source code and documentation answer different questions.** Source is authoritative for what the
-   implementation currently does; documentation is authoritative for approved intent, current state,
-   current task and future plan. A temporary difference between implementation and approved direction
-   must be stated explicitly until it is removed.
+DOC-005. **Superseded rules stay superseded.** Check newer owner canon and explicit supersession before promoting an old statement into a current rule book.
 
-8. **Owner-facing communication is normal understandable Russian by default.** Internal English terms
-   are used in chat only when technically necessary and are immediately explained in Russian. Phrases
-   such as “evidence/history”, “latest head” or “governance” must not be used as unexplained owner-facing
-   shorthand.
+DOC-006. **Rule IDs are stable references.** Use sequential domain-prefixed IDs (`DOC-*`, `DEV-*`, `CHAT-*`, `GH-*`); do not silently recycle an ID for a different meaning.
 
-9. **Use precise version terminology.** Say “second numeric component”, “third numeric component” and
-   “package revision suffix” rather than relying on the ambiguous standalone word `minor`.
+DOC-007. **Cross-document references use IDs.** Active documents should point to the canonical file and rule ID rather than copy the full normative wording.
 
-10. **The version hierarchy has three documentation meanings.** In `v0.4.2_14`: the second numeric
-    component is `4`, the third numeric component is `2`, and the package revision suffix is `_14`.
+DOC-008. **Rule-book changes require consistency reconciliation.** Adding, moving, merging, removing, or materially rewriting a rule requires same-scope review of dependent active documents, navigation, and automated checks.
 
-11. **The second numeric component defines the long-lived project-state line.** Examples are `v0.4.x`,
-    `v0.5.x`, `v0.6.x`. `PROJECT_STATE.md` belongs to that line and remains the current factual state
-    file while the second numeric component stays unchanged.
+## B. Documentation purpose and authority
 
-12. **Changing the second numeric component is owner-controlled.** The assistant must never initiate
-    `v0.4.x -> v0.5.x` by inference. It requires an explicit owner version/transition instruction or
-    separate owner approval of a proposal.
+DOC-009. **Documentation is part of the architecture.** A logical change is incomplete if committed documentation cannot recover current intent, state, constraints, and next action.
 
-13. **Changing the second numeric component always means a full project release.** Once the transition
-    itself is authorized, its archive/release steps need no redundant second confirmation.
+DOC-010. **Zero-memory recovery is a design target.** A fresh session must recover current direction from a bounded Level-1 set without reconstructing settled history from chat memory.
 
-14. **A full release does not imply a change of the second numeric component.** The owner may publish a
-    full release while remaining inside the same `v0.4.x`/`v0.5.x` line.
+DOC-011. **Each active document has a bounded role.** State, handoff, roadmap, architecture, requirements, procedures, history, decisions, evidence, and navigation must not become interchangeable monoliths.
 
-15. **The third numeric component identifies the current development stage/current relevance inside
-    one second-component line.** For example `v0.4.1 -> v0.4.2` means the project has moved to a new
-    current task/stage while still belonging to the `v0.4.x` project-state line.
+DOC-012. **One current fact has one primary current home.** Other active documents may link to it or summarize only what their own role requires.
 
-16. **A third-component transition is not a full release by itself.** It may coincide with a full
-    release only when the owner explicitly requests that release.
+DOC-013. **Current authority and history are different.** Current rule books/current architecture/current state govern present work; archived or superseded material is read for rationale, chronology, or proof.
 
-17. **A third-component transition is made only for a real change of current development stage/task.**
-    Do not increment it merely because another small patch was created.
+DOC-014. **Specialist technical contracts stay specialist.** Product-specific stage orders, ports, paths, state machines, timeouts, algorithms, and protocol contracts remain in requirements/architecture instead of being copied into the four general rule books.
 
-18. **When the third numeric component changes, the package revision suffix resets to `_1`.** Thus a
-    normal new-stage transition is, for example, `v0.4.1_14 -> v0.4.2_1`.
+## C. Three-level engineering memory
 
-19. **The package revision suffix `_N` identifies the concrete patch/iteration inside the current third-
-    component stage.** `START_HERE.md` is oriented primarily to this exact current revision boundary.
+DOC-015. **Engineering memory has three levels.** Level 1 is bounded mandatory recovery; Level 2 is current-line/current-task detail; Level 3 is historical/deep proof loaded on demand.
 
-20. **Before every package-revision increment, reconcile the plan and documentation.** Compare the
-    proposed patch with the current plan, update `START_HERE.md` for the new revision and update
-    `PROJECT_STATE.md` whenever the patch changes facts that are true for the current second-component
-    line.
+DOC-016. **Level 1 is bounded.** Read root `AGENTS.md`, the four canonical rule books, `START_HERE.md`, `PROJECT_STATE.md`, then only specialist documents required by the current handoff.
 
-21. **Every GitHub delivery includes synchronized documentation even when package metadata does not
-    change.** Documentation-only and CI-only changes still update the current handoff/state/plan when
-    their facts or rules changed.
+DOC-017. **Level 2 owns richer current-line detail.** `docs/history/current/vX.Y.x.md` carries active-line chronology, supplemented by selected current-task specialist documents.
 
-22. **`START_HERE.md` is the live revision-level handoff, not a historical journal.** It tells a zero-
-    memory session what the current exact revision is doing and how to continue from it.
+DOC-018. **Level 3 preserves detailed history.** Completed line archives plus original devlogs, patches, evidence, decisions, audits, releases, and Git history remain available without default loading.
 
-23. **The first links in `START_HERE.md` are mandatory orientation links.** The first one is
-    `PROJECT_STATE.md`; it is followed by this documentation-rules file, `PROJECT_PRINCIPLES.md`, the
-    GitHub publication rules, the master development plan and `INDEX.md`.
+DOC-019. **`INDEX.md` is the integrity/navigation map.** It routes to the four rule books, Level-1 state/handoff/plan, current ledger, completed line archives, and deep record stores.
 
-24. **`START_HERE.md` must state the current revision identity, what was just done in the current
-    revision, why it was done, the intended effect/acceptance, the exact immediate next action and the
-    relevant future-plan direction.** It remains concise and links to detail instead of copying it.
+DOC-020. **Archiving never means deletion.** A compact archive may summarize a completed line, while original detailed records remain intact and reachable.
 
-25. **Completed tasks flow from `START_HERE.md` into `PROJECT_STATE.md` as durable current facts.** The
-    handoff then moves to the next task/revision. Detailed execution chronology flows to the current
-    ledger/devlog/evidence stores rather than bloating either Level-1 file.
+## D. `START_HERE.md`
 
-26. **`PROJECT_STATE.md` is scoped to the current second numeric component.** For example, throughout
-    `v0.4.x` it contains the current facts accumulated and still true for that line, regardless of
-    whether the third component is `0`, `1`, `2` or later.
+DOC-021. **`START_HERE.md` is the exact revision handoff.** It states what was just established at the current `_N` boundary, its effect, exact next action, and minimum specialist reading.
 
-27. **`PROJECT_STATE.md` contains current facts, not patch-by-patch history and not the exact next-task
-    specification.** The exact next patch belongs in `START_HERE.md`; chronology belongs in the current
-    line ledger and deep records.
+DOC-022. **The top of `START_HERE.md` provides direct orientation links.** `PROJECT_STATE.md` is first, followed by the four rule books, the master plan, and `INDEX.md`.
 
-28. **When the second numeric component changes, the final old `PROJECT_STATE.md` content flows into
-    that line's archive before the new state is initialized.** For `v0.4.x -> v0.5.x`, the final
-    `v0.4.x` state is preserved in `history/archive/v0.4.x.md`, then `PROJECT_STATE.md` is rewritten as
-    the current `v0.5.x` state.
+DOC-023. **`START_HERE.md` is not a patch diary.** It carries the current `_N` boundary rather than a copy of every previous revision.
 
-29. **Every current `PROJECT_STATE.md` ends with direct links to every completed version-line archive.**
-    The list grows when new second-component lines are archived.
+DOC-024. **Completed handoff facts flow forward.** Durable current facts move to `PROJECT_STATE.md`; detailed execution/proof remains in the current ledger or deep records.
 
-30. **Do not retroactively rewrite `v0.4.0` or older history into this new model.** Existing older
-    archive maps remain historically valid. The state-snapshot rule applies to the current `v0.4.x`
-    line when it eventually closes and to all later lines.
+DOC-025. **The handoff names the exact next task.** A fresh session must not rediscover completed investigations merely to identify the next approved change.
 
-31. **`ROADMAP.md` is the master development plan and must always be easy to find.** It contains a
-    compact ordered list of the project's major completed, current and future intentions.
+## E. `PROJECT_STATE.md` and archives
 
-32. **The master plan records every known future intention at least once.** A future task may be only a
-    short line of a few words; sub-items are allowed when one line would be ambiguous.
+DOC-026. **`PROJECT_STATE.md` belongs to the active second-component line.** Its scope is `vX.Y.x` under `DEV-029`–`DEV-031`; third-component and `_N` changes do not rotate it.
 
-33. **The master plan also preserves the major completed path.** Entries such as Model A testing,
-    Model B testing/integration and Model C testing/integration stay visible as short checked items so
-    a zero-memory reader can understand the overall development trajectory without reading a devlog.
+DOC-027. **`PROJECT_STATE.md` contains current facts, not chronology.** Keep identity, settled facts, active constraints/debt, next boundary, and direct evidence/architecture pointers.
 
-34. **The master plan is concise by design.** Detailed implementation notes, timings and evidence do
-    not belong there; link to the current ledger or deep records when needed.
+DOC-028. **Second-component rollover archives final state.** An owner-authorized transition under `DEV-036`–`DEV-037` preserves the final old-line state snapshot before the new line is initialized.
 
-35. **Documentation uses three memory levels.** Level 1 is the bounded always-read recovery set;
-    Level 2 is current version-line and task-selected detail; Level 3 is archives and deep history.
+DOC-029. **Every current `PROJECT_STATE.md` ends with archive links.** It directly links every completed version-line archive in chronological order while `INDEX.md` independently preserves global navigation.
 
-36. **Level 1 consists of `AGENTS.md`, `PROJECT_PRINCIPLES.md`, this file, `START_HERE.md`,
-    `PROJECT_STATE.md`, then only the current-task specialist documents named by the handoff.** Keep
-    these files compact enough for frequent cold starts.
+DOC-030. **The final-state-snapshot archive model starts with closure of `v0.4.x`.** Earlier history is not retroactively rewritten merely to imitate the newer archive shape.
 
-37. **The current `history/current/vX.Y.x.md` ledger is Level 2.** It stores richer chronology for the
-    current second-component line and is read only when the current task needs more context than Level 1.
+## F. Master plan and current ledger
 
-38. **Completed `history/archive/vX.Y.x.md` files are Level 3 archive maps/state snapshots.** Archiving
-    never deletes, rewrites or folds away original detailed devlogs, patches, verification evidence,
-    decisions, audits, release records or Git history.
+DOC-031. **`ROADMAP.md` is the complete concise master plan.** It contains the short lifetime path, current priority, and every known future development intention at least once.
 
-39. **`INDEX.md` is the integrity/navigation map.** It must directly route to all Level-1 authorities,
-    the current line ledger, every completed line archive and every deep-record store. It is not a
-    current-state narrative.
+DOC-032. **The roadmap keeps major completed path visible without becoming a devlog.**
 
-40. **One fact has one primary current home.** `PROJECT_STATE` owns current line facts; `START_HERE`
-    owns the exact revision handoff; `ROADMAP` owns the master plan; the current ledger owns richer line
-    chronology; deep records own detailed execution/proof/rationale; `INDEX` owns navigation.
+DOC-033. **The roadmap stays concise.** Detailed measurements, implementation chronology, and proof belong in the current ledger/deep records.
 
-41. **Duplication is not preservation.** Preserve information through primary homes and durable links;
-    do not copy the same long narrative into `START_HERE`, `PROJECT_STATE`, `ROADMAP`, ledger, patch and
-    devlog simultaneously.
+DOC-034. **The current-line ledger owns current chronology.** It carries richer ordered work/evidence that is too large for mandatory Level 1.
 
-42. **Detailed action logging remains durable and discoverable.** Recent execution/proof lives in the
-    existing devlog/patch/verification/decision stores and is reached through `INDEX.md` or the current
-    ledger when the current task needs it.
+DOC-035. **Standalone deep records must add distinct value.** Create them for distinct chronology, rationale, proof, or reproducibility, not merely to duplicate another primary home.
 
-43. **Every development stage begins and ends with documentation reconciliation.** Before work state
-    objective/plan/expected result; during work record decisions that affect later work; after work
-    record actual result, verification, current facts, plan progress and exact continuation.
+## G. Reconciliation and release presentation
 
-44. **A full release always includes a complete human-facing `README.md` review.** The README must
-    present the actual current product clearly, attractively and concisely and distinguish the full
-    Web/pkg release from later testing candidates.
+DOC-036. **Every development stage begins and ends with documentation reconciliation.** Confirm current handoff/state/rules before implementation and update affected active documents after the logical change.
 
-45. **A full release is a complete OPNsense delivery.** It includes the exact current candidate package,
-    semantic tag, GitHub Release assets/checksum and matching Pages/pkg repository so installation or
-    update is available through the OPNsense Web GUI.
+DOC-037. **Every GitHub delivery includes same-scope documentation consistency.** GitHub mechanics remain in `GH-*`; affected documentation is reconciled in the same logical PR.
 
-46. **A testing package is not a full release.** It may be a persistent GitHub prerelease `.pkg` for
-    live verification and does not promote the Pages/pkg repository.
+DOC-038. **A full release includes a complete README review.** Before the full release defined by `DEV-039` and executed under `GH-039`–`GH-046`, review `README.md` against actual capabilities, installation path, support boundary, release identity, and contributor navigation.
 
-47. **Full-release publication is independent of the package revision suffix.** A full release may use
-    the current `_N` candidate; the suffix resets to `_1` because of a new third-component/second-
-    component stage transition, not merely because a release is being published.
+DOC-039. **README is human-facing, current, and concise.** It should be attractive, readable, understandable, and sufficiently complete without becoming an internal engineering dump.
 
-48. **The release workflow must enforce the version meanings.** A second-component change cannot pass
-    without a full-release preparation; a third-component-only change may pass without a release but
-    must reset the suffix to `_1`; an ordinary `_N -> _(N+1)` patch does not change `VERSION`.
+DOC-040. **Selected mandatory documents are read through EOF.** If the handoff/rules select a document as mandatory for the current task, read the entire selected document.
 
-49. **Repository structure and documentation must remain mutually consistent.** Keep referenced files,
-    branch state, workflow contracts and documentation paths current so future work does not begin with
-    avoidable rediscovery or repository cleanup.
-
-50. **Repository hygiene is continuous.** Temporary task/publication branches are removed after their
-    useful work is merged or preserved; obsolete generated/transport artifacts are not left tracked.
-
-51. **Selected mandatory documents are read completely through EOF before mutation.** Historical
-    documents are loaded only for a concrete dependency, investigation, proof or rationale question.
-
-52. **Changes to documentation policy are made here first.** Any new or changed documentation rule must
-    receive the next sequential number in this file and all affected active documents/tests must be
-    reconciled in the same logical GitHub change.
-
-## File responsibility map
-
-The numbered rules above are authoritative. This map is descriptive and contains no additional rules.
-
-- `AGENTS.md` — repository entrypoint and mandatory read order.
-- `PROJECT_PRINCIPLES.md` — general permanent project/development principles.
-- `DOCUMENTATION_RULES.md` — this file; all numbered documentation-governance rules.
-- `PROJECT_STATE.md` — current facts for the active second-component line.
-- `START_HERE.md` — exact current package-revision handoff.
-- `ROADMAP.md` — concise master development plan.
-- `history/current/vX.Y.x.md` — richer current-line chronology.
-- `history/archive/vX.Y.x.md` — completed-line archive map plus, from `v0.4.x` onward, final state snapshot.
-- `GITHUB_PUBLICATION.md` — GitHub/package/release procedure.
-- `INDEX.md` — navigation/integrity map.
-- `devlog/`, `patches/`, `verification/`, `decisions/`, `audit/`, `releases/` — deep durable records.
+DOC-041. **Documentation-policy changes are recorded here first.** Assign the next `DOC-*` ID before updating dependent active documents.
