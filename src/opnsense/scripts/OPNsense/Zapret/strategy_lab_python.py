@@ -13,7 +13,7 @@ from strategy_lab_py import discovery_probe_measurement
 from strategy_lab_py import lua_initialization_measurement
 from strategy_lab_py import model_c_lifecycle_measurement
 from strategy_lab_py import model_b_parallel_attribution as model_b_parallel
-from strategy_lab_py import stage60_model_c as stage60_parallel
+from strategy_lab_py import stage60_model_c_production as stage60_parallel
 from strategy_lab_py import stage60_source_port_lease
 
 
@@ -71,9 +71,8 @@ def main() -> int:
     if args[:1] == ["stage60-parallel"]:
         try:
             # Keep the established Stage-60 compatibility command while routing normal
-            # production execution through Model C. Model B and cold Model A remain
-            # explicit/fail-closed fallbacks inside the Model-C owner. `_25` leases exact
-            # free controlled source ports independently for Model C and Model B.
+            # production execution through the Model-C-only owner. Explicit Model B/cold
+            # Model A overrides remain reference/test tooling, never automatic replay.
             with adaptive_validation.probe_tier("discovery"):
                 with stage60_source_port_lease.install():
                     return stage60_parallel.main(args[1:])
