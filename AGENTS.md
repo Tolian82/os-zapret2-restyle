@@ -30,6 +30,17 @@ If a mandatory document is truncated or paginated, continue to EOF. If required 
 
 Each current general rule has one normative home. Each book contains an explicit inbound/outbound cross-reference registry; CI verifies that the registries and real rule references agree (`DOC-042`–`DOC-045`).
 
+## Current-work documentation flow
+
+Current development state follows one flow under `DOC-024`: `START_HERE.md -> PROJECT_STATE.md -> version-line archive`.
+
+- active work, the immediate boundary, and the exact next action live in `START_HERE.md`;
+- durable facts established by completed work flow into `PROJECT_STATE.md` for the active second-component line;
+- when that line closes, its final state flows into the version-line archive;
+- current ledgers, decisions, devlogs, and evidence preserve chronology, rationale, and proof but do not become parallel owners of current state.
+
+The four rule books are reserved for durable canon and hard rules. Ordinary current work does not become a new canonical rule merely because it is important now.
+
 ## Reading efficiently without losing freshness
 
 Level-1 reading is repository-state scoped (`DOC-049`). During one continuous piece of work, already-read mandatory files need not be reloaded when the exact repository state has not changed. If `main` advances, compare the new state and reread every affected mandatory/current document before further mutation.
