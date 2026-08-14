@@ -49,10 +49,12 @@ entry = "src/opnsense/scripts/OPNsense/Zapret/strategy_lab_python.py"
 measurement = "src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_c_lifecycle_measurement.py"
 lifecycle_test = "scripts/test-strategy-lab-model-c-lifecycle-measurement.sh"
 model_c = "src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_model_c.py"
+model_c_production = "src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_model_c_production.py"
 model_b = "src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_parallel.py"
 require(entry, "_prepare_model_c_lifecycle_runtime_permissions")
 require(entry, "path.chmod(0o711)")
 require(entry, "model-c-lifecycle-measure")
+require(entry, "from strategy_lab_py import stage60_model_c_production as stage60_parallel")
 require(lifecycle_test, "cleanup.stat().st_mode & 0o777) == 0o700")
 require(lifecycle_test, "unexpected lifecycle measurement directory layout accepted")
 require(measurement, 'POLICY = "model-c-batch-lifecycle-amortization-v1"')
@@ -65,14 +67,18 @@ require(measurement, '"production_model_changed": False')
 require(measurement, '"production_search_semantics_changed": False')
 require(measurement, '"production_dispatch_width_changed": False')
 require(model_c, 'MODEL = "C-warm-bucket-source-port-dispatch"')
+require(model_c_production, 'ModelCOnlyInfrastructureError(stage60_parallel.Stage60ParallelError)')
+require(model_c_production, 'parallel["cold_fallback_available"] = False')
+require(model_c_production, 'parallel["model_c_only"] = True')
 require(model_b, 'MODEL = "B-warm-worker-parallel-batched"')
 require("docs/decisions/DEC-2026-08-13-github-only-package-delivery.md", "Actions artifacts are build evidence, never final delivery")
 for installed in (
     "strategy_lab_py/model_c_lifecycle_measurement.py",
+    "strategy_lab_py/stage60_model_c_production.py",
     "strategy_lab_model_c_lifecycle_measurement.sh",
     "strategy_lab_model_c_lifecycle_measurement_worker.sh",
     "strategy_lab_python.py",
 ):
     if not (ROOT / "src/opnsense/scripts/OPNsense/Zapret" / installed).is_file():
         fail(f"packaged source path is missing: {installed}")
-print(f"PASS: FreeBSD 15 package CI accepts current candidate {candidate} with lifecycle traversal/fallback diagnostics and unchanged production models")
+print(f"PASS: FreeBSD 15 package CI accepts current candidate {candidate} with Model-C-only production routing, retained lifecycle diagnostics, and explicit Model B/A reference tooling")

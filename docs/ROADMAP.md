@@ -45,8 +45,10 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
 - [x] Remove obsolete duplicate quick-reference documents after reference migration
 - [x] Context-first/SHA-scoped documentation cold-start optimization
 - [x] Internal Markdown link/anchor integrity validation
-- [ ] Model-C-only production
-  - [ ] remove B/A production fallback (`v0.4.1_13`)
+- [ ] Model-C-only production (`v0.4.1_13`)
+  - [x] remove automatic B/A production fallback from the normal packaged Stage-60 path
+  - [x] keep explicit Model B/A reference/benchmark/test overrides
+  - [ ] exact-head corrective matrix + FreeBSD-15 qualification
   - [ ] owner-live Model-C-only regression
 - [ ] Risk-selected Strategy Lab regression coverage
   - [ ] initial Zapret2 STOPPED state
@@ -72,28 +74,20 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — `v0.4.1_13`
+## Current priority — finish `v0.4.1_13`
 
-**Model-C-only production finalization.** Model selection is already closed.
+Model selection is closed and the source change is defined: normal production Stage 60 routes through the Model-C-only owner, while Model B/A remain explicit reference tooling.
 
-Implement:
+Current gates:
 
-- make Model C the only normal production Stage-60 runtime;
-- remove automatic production fallback `C -> B -> A`;
-- keep Model-C infrastructure failures explicit and bounded;
-- preserve planner/CandidateSpec/ResourceInventory semantics;
-- preserve source-port leasing/attribution, profile-compatible segmentation and readiness;
-- preserve adaptive budgets, GET-4K discovery, cleanup/cancellation and Stage-90 restoration;
-- retain Model A/B only as reference/benchmark/test tooling.
+- run the complete Strategy Lab corrective matrix on the exact PR head;
+- run FreeBSD 15 package qualification on that same head;
+- squash-merge only the verified head;
+- publish a persistent `_13` testing package only when testing-package delivery is requested;
+- perform one selected owner-live normal Model-C-only regression;
+- verify correct result handling, explicit no-fallback behavior, Stage-90 restoration, and absence of temporary IPFW/process/socket residue.
 
-Acceptance:
-
-- no silent production B/A replay;
-- explicit bounded Model-C infrastructure failure;
-- correct cleanup, attribution and segmentation;
-- complete Strategy Lab corrective matrix PASS;
-- FreeBSD 15 package qualification PASS;
-- one owner-live normal Model-C-only regression selected by the current risk gate (`DEV-041`–`DEV-044`).
+After the selected `_13` owner-live PASS, move to the accepted risk-selected Strategy Lab regression backlog rather than reopening historical A/B/C selection or closed Lua/BLOB/discovery/lifecycle experiments.
 
 ## Deferred research — retain, do not activate by inertia
 

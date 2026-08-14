@@ -21,31 +21,31 @@ Direct orientation:
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
-- packaged source revision: `_12`;
-- current testing package candidate: `os-zapret2-restyle-0.4.1_12.pkg`;
-- testing tag: `v0.4.1_12`;
+- packaged source revision: `_13`;
+- current source package candidate: `os-zapret2-restyle-0.4.1_13.pkg`;
+- latest published testing package/tag: `os-zapret2-restyle-0.4.1_12.pkg` / `v0.4.1_12`;
+- latest published testing-package SHA-256: `3b5a6c39c09abdfc8d8f1b59923312c40dda27e11c4f03e20773131996f6789d`;
 - latest full Web/pkg release: `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
-- packaged runtime/source merge: `acf65d39eaa88a16debe1d35affa71f03f1d848d`;
-- testing-package SHA-256: `3b5a6c39c09abdfc8d8f1b59923312c40dda27e11c4f03e20773131996f6789d`;
 - required ABI: `FreeBSD:15:amd64`;
 - internal service key: `zapret`.
 
-The exact `main` SHA is resolved at execution time under `GH-004`; documentation/CI-only commits after the packaged source merge do not change `_12` package identity (`DEV-033`).
+The exact `main` SHA is resolved at execution time under `GH-004`. Source revision `_13` and the latest persistently published testing tag `_12` are intentionally distinct until testing-package publication is explicitly requested (`DEV-033`, `GH-047`–`GH-050`).
 
 ## Current product facts
 
 - DNS is fixed/currently working. Historical DNS failures are not a current blocker without fresh direct reproducible evidence.
-- Model C is the selected normal production Stage-60 direction. A/B/C model selection is closed.
-- Model B remains reference/warm tooling plus `_12` transition fallback; Model A remains cold reference tooling.
-- packaged `_12` still contains `Model C -> Model B -> Model A cold`; this is implementation debt, not approved long-term architecture.
-- exact next packaged source change is `v0.4.1_13`, which removes automatic production B/A replay and leaves normal Stage 60 Model-C-only.
+- Model C is the selected and only normal production Stage-60 runtime. A/B/C model selection is closed.
+- source `_13` removes automatic normal-production `Model C -> Model B -> Model A cold` replay;
+- Model-C infrastructure/selector/rendering/readiness/attribution/cleanup failure is an explicit bounded structural Stage-60 failure, not candidate PASS/FAIL and not a fallback trigger;
+- Model B remains explicit warm/reference/benchmark tooling; Model A remains explicit cold correctness/reference tooling;
+- legacy B->A fallback semantics may remain inside explicit reference/measurement modules, but are not reachable from the normal packaged Stage-60 production entry point;
 - Lua initialization, BLOB lazy-loading/common-set, bounded GET-4K discovery, and cross-batch keep-warm questions are closed for the current architecture by accepted measured evidence.
 
 Detailed measurements and proof links remain in the current `v0.4.x` ledger.
 
 ## Current architecture and safety facts
 
-Model C currently preserves:
+Normal Stage 60 routes through `strategy_lab_py/stage60_model_c_production.py`, which reuses the proven Model-C bucket engine while preserving:
 
 - adaptive-search planner semantics;
 - immutable CandidateSpec and job-scoped ResourceInventory identity;
@@ -57,6 +57,8 @@ Model C currently preserves:
 - cleanup/cancellation containment;
 - Stage-90 semantic restoration.
 
+The production owner deliberately converts Model-C infrastructure failure into a structural `Stage60ParallelError` that is not `WarmInfrastructureError`; this prevents the legacy Model-B/cold-Model-A replay handler from consuming normal production failures.
+
 Current architecture entry points:
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md);
@@ -65,13 +67,24 @@ Current architecture entry points:
 
 Historical A/B/C experiment material is history/proof and does not represent current production choice.
 
+## Current verification boundary
+
+For `_13` source acceptance:
+
+- focused Model-C production regression includes an injected Model-C infrastructure failure and proves no B/A reference path is invoked;
+- full Strategy Lab corrective matrix is required;
+- FreeBSD-15 package qualification is required on the exact PR head;
+- squash merge must use that exact verified head.
+
+Owner-live `_13` remains a separate post-publication gate: one selected normal Model-C-only OPNsense run must verify correct result handling, semantic restoration and absence of temporary IPFW/process/socket residue. Testing-package publication is not inferred from source merge.
+
 ## Current documentation and governance facts
 
 - exactly four canonical general rule books exist: `DOCUMENTATION_RULES.md`, `PROJECT_PRINCIPLES.md`, `CHAT_RULES.md`, and `GITHUB_PUBLICATION.md`;
 - `GITHUB_PUBLICATION.md` is the fourth book, **Правила работы с GitHub**, despite the retained historical filename;
 - rule IDs are permanent identities and are not cascade-renumbered when rules are inserted or reorganized;
 - cancelled/replaced rules remain physically at their permanent IDs with explicit lifecycle markers; those IDs are never recycled;
-- creating, refining, cancelling, and replacing rules now has an explicit semantic decision boundary in `DOC-054`;
+- creating, refining, cancelling, and replacing rules has an explicit semantic decision boundary in `DOC-054`;
 - each canonical book contains explicit inbound/outbound cross-reference registries and CI validates them against active rule bodies and lifecycle state;
 - local Markdown links and local Markdown heading fragments are validated by CI;
 - `START_HERE.md` is the exact `_N` handoff;

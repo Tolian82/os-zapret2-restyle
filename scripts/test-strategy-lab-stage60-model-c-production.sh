@@ -4,12 +4,13 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PYTHON_BIN="${STRATEGY_LAB_TEST_PYTHON:-python3}"
 MODULE_ROOT="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
-MODULE="${MODULE_ROOT}/strategy_lab_py/stage60_model_c.py"
+ENGINE="${MODULE_ROOT}/strategy_lab_py/stage60_model_c.py"
+OWNER="${MODULE_ROOT}/strategy_lab_py/stage60_model_c_production.py"
 SELECTOR="${MODULE_ROOT}/strategy_lab_model_c.lua"
 ENTRY="${MODULE_ROOT}/strategy_lab_python.py"
 
 fail(){ echo "FAIL: $*" >&2; exit 1; }
-for file in "${MODULE}" "${SELECTOR}" "${ENTRY}"; do
+for file in "${ENGINE}" "${OWNER}" "${SELECTOR}" "${ENTRY}"; do
     [ -s "${file}" ] || fail "missing Model C production surface: ${file}"
 done
 
@@ -18,12 +19,28 @@ import os
 import tempfile
 from pathlib import Path
 
-from strategy_lab_py import resources, search_graph, stage60_model_c
+from strategy_lab_py import (
+    model_b,
+    resources,
+    search_graph,
+    stage60_model_c,
+    stage60_model_c_production,
+    stage60_parallel,
+)
 
 assert stage60_model_c.MODEL == "C-warm-bucket-source-port-dispatch"
-assert stage60_model_c.MODEL_B == "B-warm-worker-parallel-batched"
 assert stage60_model_c.WIDTH == 3
-assert stage60_model_c._requested_model() == "model-c"
+assert stage60_model_c_production.MODEL == stage60_model_c.MODEL
+assert stage60_model_c_production.WIDTH == 3
+assert stage60_model_c_production._requested_model() == "model-c"
+assert issubclass(
+    stage60_model_c_production.ModelCOnlyInfrastructureError,
+    stage60_parallel.Stage60ParallelError,
+)
+assert not issubclass(
+    stage60_model_c_production.ModelCOnlyInfrastructureError,
+    stage60_parallel.WarmInfrastructureError,
+)
 
 with tempfile.TemporaryDirectory() as raw:
     root = Path(raw)
@@ -146,30 +163,79 @@ with tempfile.TemporaryDirectory() as raw:
     assert len({slot.rule for slot in routes}) == 3
     assert {slot.rule for slot in routes} == {19128, 19129, 19130}
 
+# Prove the normal production owner converts a Model-C infrastructure failure into a
+# structural Stage-60 failure which the legacy warm/cold fallback handler cannot catch.
+original_expand = stage60_parallel.expand
+original_bucket = stage60_model_c._bucket_batch
+original_reference = stage60_model_c._run_existing_model
+original_cleanup = model_b._try_adapter
+reference_calls = []
+
+def fail_bucket(*args, **kwargs):
+    raise stage60_model_c.ModelCInfrastructureError("fixture readiness failure")
+
+def fake_expand(*args):
+    assert stage60_parallel.MODEL == stage60_model_c_production.MODEL
+    return stage60_parallel._warm_batch("job.fixture", (), (), None, {}, {})
+
+def reference_model(*args):
+    reference_calls.append(args)
+    return 0
+
+stage60_parallel.expand = fake_expand
+stage60_model_c._bucket_batch = fail_bucket
+stage60_model_c._run_existing_model = reference_model
+model_b._try_adapter = lambda *args, **kwargs: True
+try:
+    try:
+        stage60_model_c_production.expand(
+            "job.fixture", "endpoints", "family", "missing-result.json"
+        )
+    except stage60_model_c_production.ModelCOnlyInfrastructureError as exc:
+        assert "fixture readiness failure" in str(exc)
+    else:
+        raise AssertionError("Model-C infrastructure failure did not fail Stage 60")
+finally:
+    stage60_parallel.expand = original_expand
+    stage60_model_c._bucket_batch = original_bucket
+    stage60_model_c._run_existing_model = original_reference
+    model_b._try_adapter = original_cleanup
+assert reference_calls == []
+
 os.environ["STRATEGY_LAB_STAGE60_MODEL"] = "model-b"
-assert stage60_model_c._requested_model() == "model-b"
+assert stage60_model_c_production._requested_model() == "model-b"
 os.environ["STRATEGY_LAB_STAGE60_MODEL"] = "parallel"
-assert stage60_model_c._requested_model() == "model-b"
+assert stage60_model_c_production._requested_model() == "model-b"
 os.environ["STRATEGY_LAB_STAGE60_MODEL"] = "cold"
-assert stage60_model_c._requested_model() == "cold"
+assert stage60_model_c_production._requested_model() == "cold"
 os.environ.pop("STRATEGY_LAB_STAGE60_MODEL", None)
 PY
 
-grep -Fq 'from strategy_lab_py import stage60_model_c as stage60_parallel' "${ENTRY}" || fail 'production entry point is not routed through Model C'
+grep -Fq 'from strategy_lab_py import stage60_model_c_production as stage60_parallel' "${ENTRY}" || fail 'production entry point is not routed through the Model-C-only owner'
 grep -Fq 'function strategy_lab_model_c_source_port(desync)' "${SELECTOR}" || fail 'Model C selector function is missing'
 grep -Fq 'tcp.th_sport' "${SELECTOR}" || fail 'Model C selector does not inspect outgoing client source port'
 grep -Fq 'tcp.th_dport' "${SELECTOR}" || fail 'Model C selector does not preserve client-port identity for reverse direction'
 grep -Fq 'return false' "${SELECTOR}" || fail 'Model C selector is not fail-closed'
-grep -Fq 'fallback_execution_model' "${MODULE}" || fail 'Model C does not record Model B fallback'
-grep -Fq 'original_batch' "${MODULE}" || fail 'accepted Model B fallback is not retained'
-grep -Fq '_compatible_batch_segments' "${MODULE}" || fail 'Model C does not split incompatible profile segments'
-grep -Fq 'profile_segments' "${MODULE}" || fail 'Model C does not persist profile-segment evidence'
-if grep -Fq 'stage60_parallel._batch_decisions =' "${MODULE}"; then
+grep -Fq 'ModelCOnlyInfrastructureError(stage60_parallel.Stage60ParallelError)' "${OWNER}" || fail 'Model-C-only infrastructure failure is not structural'
+if grep -Fq 'fallback_execution_model' "${OWNER}"; then
+    fail 'normal Model-C-only production owner still records Model B replay'
+fi
+if grep -Fq 'except stage60_parallel.WarmInfrastructureError' "${OWNER}"; then
+    fail 'normal Model-C-only production owner can still catch the legacy Model-B fallback signal'
+fi
+if grep -Fq 'model_c_enabled' "${OWNER}" || grep -Fq 'disable_reason' "${OWNER}"; then
+    fail 'normal Model-C-only production owner still carries transitional Model-C-disable replay state'
+fi
+grep -Fq 'cold_fallback_available"] = False' "${OWNER}" || fail 'Model-C-only result does not explicitly disable cold fallback'
+grep -Fq 'model_c_only"] = True' "${OWNER}" || fail 'Model-C-only result policy evidence is missing'
+grep -Fq '_compatible_batch_segments' "${ENGINE}" || fail 'Model C does not split incompatible profile segments'
+grep -Fq 'profile_segments' "${ENGINE}" || fail 'Model C does not persist profile-segment evidence'
+if grep -Fq 'stage60_parallel._batch_decisions =' "${ENGINE}"; then
     fail 'Model C must not replace the authoritative adaptive batch chooser'
 fi
-grep -Fq 'ThreadPoolExecutor(max_workers=len(decisions)' "${MODULE}" || fail 'Model C candidate-level width-three overlap is missing'
-grep -Fq 'model_b_parallel_attribution._probe_endpoint' "${MODULE}" || fail 'Model C does not reuse exact source-port-qualified route attribution'
-grep -Fq 'physical_worker_count' "${MODULE}" || fail 'Model C does not evidence one physical bucket worker'
-grep -Fq 'cleanup-all' "${MODULE}" || fail 'Model C has no explicit bucket cleanup boundary'
+grep -Fq 'ThreadPoolExecutor(max_workers=len(decisions)' "${ENGINE}" || fail 'Model C candidate-level width-three overlap is missing'
+grep -Fq 'model_b_parallel_attribution._probe_endpoint' "${ENGINE}" || fail 'Model C does not reuse exact source-port-qualified route attribution'
+grep -Fq 'physical_worker_count' "${ENGINE}" || fail 'Model C does not evidence one physical bucket worker'
+grep -Fq 'cleanup-all' "${ENGINE}" || fail 'Model C has no explicit bucket cleanup boundary'
 
-echo 'PASS: production Stage 60 keeps each planner-selected logical batch intact, segments only incompatible Model-C profiles at runtime, and retains exact source-port dispatch, Model B fallback, and cold Model A containment'
+echo 'PASS: normal production Stage 60 is Model-C-only with explicit bounded infrastructure failure, while planner batches, profile segmentation, exact source-port dispatch, and cleanup remain intact'
