@@ -1,104 +1,59 @@
 # os-zapret2-restyle — Roadmap
 
-Status: **CURRENT**
+Status: **CURRENT / FORWARD-LOOKING**
 Updated: 2026-08-14
 
-This file answers: **What should be done next?**
+This file answers only: **what should be done next?**
+Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md).
+Exact handoff: [`START_HERE.md`](START_HERE.md).
+Current-line chronology/completed detail: [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
 
-Permanent principles: `docs/PROJECT_PRINCIPLES.md`.
-Current facts: `docs/PROJECT_STATE.md`.
-Exact immediate handoff: `docs/START_HERE.md`.
+A newer unambiguous owner instruction supersedes conflicting roadmap text immediately. Completed
+history belongs in the current-line ledger/archive rather than growing this file indefinitely.
 
-A newer unambiguous owner instruction immediately supersedes conflicting roadmap text. Once owner
-canon is settled, old roadmap/history cannot reopen it. Long-term items are retained explicitly as
-completed, superseded, rejected or deferred rather than silently disappearing.
+## Current priority — v0.4.1_13
 
-## Continuity / governance work completed
+**Model-C-only production finalization.** Model selection is already closed.
 
-- [x] documentation treated as project architecture rather than chat memory;
-- [x] concise always-read `PROJECT_PRINCIPLES` layer;
-- [x] exact `START_HERE` operational handoff;
-- [x] zero-memory recovery checkpoint contract;
-- [x] newest owner instruction/fact takes precedence over conflicting old active docs;
-- [x] canonical principles file made cumulative;
-- [x] historical DNS problem recorded as fixed/closed;
-- [x] Model C recorded as selected production direction;
-- [x] canon-lock rule: one unambiguous owner statement/confirmation is enough;
-- [x] `зафиксируй` defined as full active-authority reconciliation;
-- [x] stale CI/test contracts cannot override current canon;
-- [x] owner-facing status defaults to understandable Russian;
-- [x] repository/temporary-branch hygiene made a normal silent completion obligation;
-- [x] broad active/current-looking documentation audit corrected stale `_31` / “A-B-C not selected”
-  architecture and reclassified the old “Model B selected / Model C future” experiment plan as
-  **HISTORICAL / COMPLETED**.
-
-Current docs/governance corrective keeps `VERSION=0.4.1`, `PLUGIN_REVISION=12`.
-
-## Current priority — Model C production finalization
-
-Model selection is **already closed**. The current priority is not “choose between B and C”; it is to
-finish removing the legacy fallback from the already-selected Model-C production architecture.
-
-Current packaged source: `v0.4.1_12`.
-Next packaged source change: **`v0.4.1_13` — Model-C-only production finalization**.
-
-### 1. Implement `_13`
+Implement:
 
 - make Model C the only normal production Stage-60 runtime;
 - remove automatic production fallback `C -> B -> A`;
-- expose Model-C infrastructure failures explicitly/bounded;
-- preserve CandidateSpec/ResourceInventory/search semantics;
-- preserve source-port leasing/attribution;
-- preserve `_11` profile-compatible physical segmentation;
-- preserve `_12` readiness;
-- preserve `eligible-work-v1` budgets and GET-4K discovery;
-- preserve cleanup/cancellation and Stage-90 exact restoration;
-- keep B/A only where useful as reference/benchmark/test tooling.
+- keep Model-C infrastructure failures explicit and bounded;
+- preserve planner/CandidateSpec/ResourceInventory semantics;
+- preserve source-port leasing/attribution, profile-compatible segmentation and readiness;
+- preserve adaptive budgets, GET-4K discovery, cleanup/cancellation and Stage-90 restoration;
+- retain Model A/B only as useful reference/benchmark/test tooling.
 
 Acceptance:
 
-- normal production Stage 60 reaches Model C only;
-- no silent B/A replay;
-- injected Model-C infrastructure failure is explicit and bounded;
-- cleanup and source-port attribution remain correct;
-- complete Strategy Lab corrective matrix passes;
-- FreeBSD 15 package qualification passes.
+- no silent production B/A replay;
+- explicit bounded Model-C infrastructure failure;
+- correct cleanup, attribution and segmentation;
+- complete Strategy Lab corrective matrix PASS;
+- FreeBSD 15 package qualification PASS.
 
-### 2. Publish/test `_13`
+Then, when owner package testing is requested, publish deterministic `_13` package and run one
+selected normal OPNsense Model-C-only regression. A PASS closes the fallback-removal transition.
 
-After verified merge and owner package/testing request:
+## Current v0.4.x status — compact only
 
-- persist deterministic `os-zapret2-restyle-0.4.1_13.pkg` on GitHub;
-- verify exact package/source identity;
-- perform one selected normal OPNsense Model-C-only regression;
-- verify result handling, cleanup/restoration and absence of temporary IPFW/process/socket residue;
-- record owner-live evidence.
+- [x] Strategy Lab Python migration/hardening;
+- [x] Model A reference baseline;
+- [x] Model B warm/parallel investigation;
+- [x] Model C architecture/integration;
+- [x] Model C source-port/budget/lifecycle/readiness work;
+- [x] Model C selected for production;
+- [x] Lua/BLOB/discovery/current lifecycle measurements closed;
+- [ ] `_13` remove production B/A fallback;
+- [ ] one owner-live `_13` regression and evidence closure.
 
-A PASS closes the **fallback-removal transition**, not model selection (which is already closed).
-A FAIL triggers diagnosis of the concrete observed defect only.
-
-## Model-C work already completed
-
-- [x] Model A cold correctness/reference baseline;
-- [x] Model B controlled warm/reference baseline;
-- [x] Model C source-port dispatcher integrated;
-- [x] source-port leasing/collision corrective;
-- [x] finite `eligible-work-v1` adaptive budgets;
-- [x] stable semantic `v0.4.1` release;
-- [x] Lua initialization measurement — no production change;
-- [x] BLOB startup/RSS and common-set scaling — no production change;
-- [x] discovery measurement — bounded GET-4K retained;
-- [x] lifecycle measurement/harness series;
-- [x] profile-compatible Model-C segmentation (`_11`);
-- [x] readiness polling corrective (`_12`);
-- [x] cross-batch keep-warm/reuse rejected for current architecture by measured evidence.
-
-These are completed facts, not questions to rediscover in a new chat.
+Details/evidence are intentionally not duplicated here; use the current `v0.4.x` ledger.
 
 ## After `_13` live acceptance
 
-Select the next item by the owner's newest priority and current risk. Do not automatically reopen old
-A/B/C, Lua, BLOB, discovery or cross-batch experiments.
+Choose the next item from owner priority and changed risk. Do not automatically reopen completed A/B/C,
+Lua, BLOB, discovery or cross-batch experiments.
 
 ### Owner-assisted regression backlog
 
@@ -119,33 +74,35 @@ Risk-selected future/release coverage:
 
 These are not unconditional blockers for every patch; select by changed risk.
 
-### Deferred research/performance work
+### Deferred research/performance
 
 Retain but do not activate by inertia:
 
-- candidate parallel width greater than three;
+- candidate parallel width > 3;
 - endpoint-level parallelism;
-- renewed cross-batch keep-warm only if later evidence invalidates the accepted `_12` decision;
-- renewed BLOB/Lua/discovery optimization only after material architecture change/new evidence;
-- Model-C-only timeout/deadline audit only when selected by owner/roadmap or triggered by a concrete
-  containment defect.
+- cross-batch keep-warm only if new evidence invalidates the accepted decision;
+- BLOB/Lua/discovery optimization only after material architecture change/new evidence;
+- Model-C timeout/deadline audit only when owner/roadmap selects it or a concrete containment defect
+  requires it.
 
 ### Long-term product directions
 
-- continue OPNsense-native runtime/service reliability;
-- continue Strategy Lab correctness across supported protocol/capability branches;
-- keep Settings/Diagnostics/Circular/retention lifecycle coherent;
-- maintain RU/EN GUI behavior and package/runtime version visibility;
-- keep bol-van/zapret2 management through the single approved `setup.sh` backend;
-- activate the separately discussed additional BLOB-repository GUI work only after its technical
-  contract is explicitly supplied/approved.
+- OPNsense-native runtime/service reliability;
+- Strategy Lab correctness across supported protocol/capability branches;
+- coherent Settings/Diagnostics/Circular/retention lifecycle;
+- RU/EN GUI behavior and package/runtime version visibility;
+- bol-van/zapret2 management through the approved `setup.sh` backend;
+- additional BLOB-repository GUI work only after its technical contract is supplied/approved.
 
-## Before every GitHub delivery
+## Documentation rollover milestone
 
-- reconcile active docs against the newest owner canon;
-- if the owner said `зафиксируй`, perform the full active-authority sweep in that docs change;
-- record the most recent completed logical work/current recovery boundary;
-- state what changes and why, intended effect and acceptance;
-- record exact next step and complete further plan;
-- correct stale tests/contracts instead of bending current canon;
-- verify/clean temporary repository state as part of completion.
+On the first release in a new semantic minor line, for example `v0.5.0_1`:
+
+1. finalize current `v0.4.x` ledger;
+2. create/freeze `history/archive/v0.4.x.md`;
+3. initialize `history/current/v0.5.x.md`;
+4. update `INDEX.md`, `START_HERE.md`, `PROJECT_STATE.md` and the short lifetime path;
+5. retain all deep detailed records unchanged;
+6. proceed with the semantic release.
+
+This rollover is automatic and requires no separate owner reminder.
