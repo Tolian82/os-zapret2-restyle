@@ -1,170 +1,134 @@
 # Strategy Lab adaptive workload budget architecture
 
-==================================================
-DOCUMENT ROLE
-==================================================
+Status: **CURRENT**
 
-Question answered:
-How does Strategy Lab derive finite job/stage parent budgets from measured eligible work?
+This file answers: **How are finite parent budgets derived without changing search/runtime semantics?**
 
-Read after:
+Read with:
 
-- `docs/architecture/STRATEGY_LAB.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
-- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md`.
+- `docs/architecture/STRATEGY_LAB_MODEL_C.md`.
 
-Current implementation patch: `docs/patches/v0.4.0_26.md`.
+Current implementation origin: `docs/patches/v0.4.0_26.md`.
 
-==================================================
-BOUNDARY
-==================================================
+## Ownership boundary
 
-The budget owner is scheduling/containment policy, not search policy.
+Budget policy owns only finite parent time envelopes and admission against remaining absolute time.
+It does **not** choose candidates, reorder the adaptive graph, select Model A/B/C, alter source-port
+ownership, reinterpret PASS/FAIL, rank results or change restoration semantics.
 
-It may change only parent time envelopes according to work that the current job is actually
-eligible to execute. It must not change candidate identity, native graph reachability,
-Model-C/Model-B/cold-Model-A ordering, source-port ownership, PASS/FAIL classification,
-result ranking, cancellation, or restoration semantics.
+Therefore runtime selection may change independently (for example `_13` retiring B/A production
+fallback) without changing this budget policy, provided all child work remains contained by the same
+absolute stage/job parents.
 
-The invariant remains:
+Invariant:
 
 `bounded child operation <= stage parent <= finite job parent`.
 
-An adaptive extension is never permission for an unbounded child and never restarts the job
-clock.
+An adaptive extension is never permission for an unbounded child and never restarts the job clock.
 
-==================================================
-WHEN THE PLAN IS CREATED
-==================================================
+## When the plan becomes authoritative
 
-The initial configured budget is recorded at job start because Stage 00/10/20/30 themselves
-must already have a finite parent.
+Initial configured budgets exist from job start because early stages already require finite parents.
 
-A workload-derived plan can be authoritative only after Stage 30 has completed successfully,
-because that is the first point where Strategy Lab has both:
+The workload-derived plan becomes authoritative only after Stage 30 PASS, when Strategy Lab has:
 
-- validated endpoint count from Stage 00;
-- measured IPv4/IPv6/QUIC capability state from Stage 30;
-- validated job mode and Generic UDP request from job state.
+- validated endpoint count;
+- measured IPv4/IPv6/QUIC capability state;
+- validated Standard/Extended mode;
+- validated Generic UDP request state.
 
-Therefore production `_26` applies the adaptive plan immediately after Stage-30 PASS and
-before Stage 40. Every resulting absolute deadline remains calculated from the original
-`started_epoch`.
+All resulting deadlines remain anchored to the original job `started_epoch`.
 
-==================================================
-INPUT MATRIX
-==================================================
+## Input matrix
 
-The canonical input is:
+Canonical workload dimensions:
 
-`number of endpoints × IPv4/IPv6 × TLS/QUIC × Generic UDP × Standard/Extended mode`.
+`endpoint count × IPv4/IPv6 capability × TLS/QUIC eligibility × Generic UDP eligibility × mode`.
 
-The matrix records actual current semantics rather than hypothetical future support:
+Current semantics:
 
-- IPv4 must be `available` for the plan to exist;
-- the native search epoch remains IPv4;
-- IPv6 currently adds Stage-40 AAAA/TLSv6 baseline work when available;
-- Extended TCP remains part of the existing Extended floor;
-- QUIC work exists only in Extended mode and only when `quic_ipv4=available`;
-- Generic UDP work exists only in Extended mode with a validated configured UDP request.
+- IPv4 must be available for the search plan to proceed;
+- native Stage-60 search epoch remains IPv4;
+- IPv6 adds only currently implemented eligible baseline work;
+- QUIC/Generic UDP additions apply only when their existing Extended branches are actually eligible;
+- unavailable/skipped work adds no budget.
 
-==================================================
-CALIBRATED FLOOR
-==================================================
+## Base floors
 
-The existing environment-controlled values remain the minimum:
+Environment-configured minimums remain:
 
 - `STRATEGY_LAB_STANDARD_BUDGET`, default `150 s`;
 - `STRATEGY_LAB_EXTENDED_BUDGET`, default `120 s`;
 - `STRATEGY_LAB_STAGE80_TIMEOUT`, default `120 s`.
 
-The current reference topology contains at most two endpoints. The clean `_25` owner-live
-Extended Telegram run completed in `114759 ms` total with Stage 60 `34198 ms`, two endpoints,
-IPv4 available, IPv6 unavailable, QUIC closed and Generic UDP inactive. `_26` intentionally
-keeps that topology at exactly the existing `270 s` total floor; it does not reduce a proven
-safe parent merely because one observed run finished faster.
+The proven reference two-endpoint topology keeps the existing Extended total floor of `270 s` when no
+optional additions are eligible. The policy does not reduce a known-safe configured floor merely
+because one observed run was faster.
 
-==================================================
-FINITE ADDITIONS — `eligible-work-v1`
-==================================================
+## `eligible-work-v1` additions
 
-`policy=eligible-work-v1` uses these explicit bounded weights:
+Current bounded weights:
 
 - endpoint count above two: `+30 s` per extra endpoint to Standard;
-- endpoint count above two in Extended mode: another `+15 s` per extra endpoint to Extended
-  and Stage 80;
-- IPv6 available: `+5 s` per endpoint to Standard for the additional AAAA/TLSv6 baseline;
-- Extended QUIC available: `+20 s`, matching the current four-entry catalog times the
-  existing `5 s` optional-candidate envelope;
-- Extended Generic UDP configured: `+15 s`, matching the current three-entry catalog times
-  the existing `5 s` optional-candidate envelope.
+- extra endpoints in Extended mode: another `+15 s` per extra endpoint to Extended/Stage 80;
+- IPv6 available: `+5 s` per endpoint to Standard;
+- Extended QUIC available: `+20 s`;
+- Extended Generic UDP configured: `+15 s`.
 
-The calculation is additive and monotonic. It never subtracts from environment-configured
-base values. Recalculation on the same Budget object uses the cached original base so an
-adaptive addition cannot compound itself.
+Calculation is additive/monotonic and starts from cached original configured bases so recalculation
+cannot compound additions.
 
-For two endpoints with every currently optional branch eligible:
+## Deadlines
 
-- Standard: `150 + 10 = 160 s`;
-- Extended: `120 + 20 + 15 = 155 s`;
-- overall Extended search budget: `315 s`;
-- Stage 80: `155 s`.
-
-==================================================
-DEADLINES
-==================================================
-
-Let `t0` be the original job start epoch.
+Let `t0` be original job start time.
 
 After adaptation:
 
 - `standard_deadline = t0 + effective_standard`;
 - Standard `overall_deadline = standard_deadline`;
 - Extended `overall_deadline = t0 + effective_standard + effective_extended`;
-- Stage-80 deadline remains `min(stage80_start + effective_stage80, overall_deadline)`.
+- Stage-80 deadline remains the minimum of its finite local parent and the overall deadline.
 
-Thus optional work receives finite headroom but Stage 80 can never outlive the whole-job
-parent. Candidate admission and operation-specific limits remain active below these parents.
+Children remain subject to their own bounded operation/candidate admission below these parents.
 
-==================================================
-EVIDENCE
-==================================================
+## Evidence
 
-Every successful adaptation persists `adaptive-budget.json` in the job directory with:
+Successful adaptation persists `adaptive-budget.json` with:
 
-- policy and schema;
-- exact measured work matrix;
-- weights used;
-- additions by source;
-- configured base seconds;
+- policy/schema;
+- exact workload matrix;
+- weights/additions;
+- configured bases;
 - effective Standard/Extended/search/Stage-80 seconds.
 
-The established atomic state owner rewrites the public effective numeric budget/deadline
-fields in `status.json`. `timing-telemetry.json` receives a `budget_adaptation` event at
-Stage 30 containing the same plan.
+`status.json` exposes public effective budget/deadline fields and timing telemetry records the same
+adaptation event.
 
-This evidence is required for owner-live validation because a terminal PASS alone cannot
-prove that the adaptive owner was actually active.
+## Fail-closed rules
 
-==================================================
-FAIL-CLOSED RULES
-==================================================
+Planning fails closed when required Stage-30 state is malformed, no endpoint exists or IPv4 is not
+actually available. It does not infer capability from old jobs, DNS names, historical telemetry or
+expectation.
 
-Adaptive planning fails closed if Stage-30 state is malformed, no endpoint exists, or IPv4
-is not actually available. It does not infer capabilities from DNS names, old jobs, historical
-telemetry or user expectation.
+Optional unavailable work contributes zero seconds.
 
-An unavailable optional capability contributes zero additional seconds; Strategy Lab does not
-charge time for a branch it will skip. Standard mode similarly ignores Extended-only QUIC and
-Generic UDP even if corresponding state fields are present.
+## Relationship to Model-C-only `_13`
 
-==================================================
-VERIFICATION
-==================================================
+Through `_12`, current Stage 60 may execute Model C and then legacy B/A fallback. `_13` removes the
+automatic production B/A replay.
+
+This budget document does **not** require the old `C -> B -> A` order and must not be used as a reason
+to preserve it. Its requirement is only that whichever runtime the current production architecture
+selects remains bounded by child/stage/job containment and remaining-budget admission.
+
+Do not enlarge parent budgets merely to keep a legacy fallback alive. If Model-C-only operation later
+exposes a concrete containment defect, investigate it as its own evidence-based timeout task.
+
+## Verification
 
 Source contract: `scripts/test-strategy-lab-adaptive-budget.sh`.
 
-Owner-live `_26` gate: one normal Extended run must show `policy=eligible-work-v1`, a work
-matrix matching the appliance state, exact calculated effective seconds, no new timeout or
-unexpected Stage-60 fallback, and clean semantic restoration. Optional IPv6/QUIC/UDP need not
-be fabricated on the owner appliance; their deterministic additions are source-tested.
+The accepted `_26` owner-live gate established `eligible-work-v1` operation, workload/effective-budget
+evidence, no unexpected timeout/fallback and clean semantic restoration for its tested topology.
+Future runtime changes preserve this policy unless a dedicated budget patch explicitly changes it.
