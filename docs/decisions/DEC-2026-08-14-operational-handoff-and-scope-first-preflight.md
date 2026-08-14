@@ -5,158 +5,151 @@ Date: 2026-08-14
 
 ## Context / root cause
 
-The project already had the correct documentation principle from 2026-07-28. `DECISIONS.md` says
-critical knowledge must live in the repository rather than chat history/memory, and
-`WORKING_CONVENTIONS.md` implemented the Engineering Memory workflow.
+The project already had the correct 2026-07-28 rule that documentation is part of architecture and
+critical knowledge must live in the repository rather than chat/model memory.
 
-The failure was structural, not conceptual:
+The failure was structural:
 
-- `AGENTS.md` mandatory startup reading did not guarantee that `DECISIONS.md` or
-  `WORKING_CONVENTIONS.md` would be read in every new context;
-- `docs/INDEX.md` emphasized current Strategy Lab specialists but did not put the permanent
-  principles in a mandatory always-read layer;
-- `PROJECT_STATE.md` and `ROADMAP.md` later became stale (`_6/_7`) while packaged source advanced to
-  `_12`;
-- a new session could therefore obey the visible startup procedure while still missing settled
-  permanent principles and current plan, then spend hours reconstructing them from GitHub/history.
+- mandatory startup did not guarantee permanent principles were loaded;
+- current-state/roadmap docs became stale while packaged source advanced;
+- specialist/process docs still contained historical wording that could override the new handoff in
+  practice;
+- new sessions could therefore obey visible procedure yet spend hours reconstructing settled state.
 
-The documentation principle itself remains unchanged. This decision changes **where permanent
-principles live, what is mandatory startup context, and how current plans are kept synchronized**.
-
-Audits remain valid first-class work whenever selected by owner/current plan/new evidence.
+Audits remain first-class work when selected by owner/current plan/refactor boundary/new evidence.
 
 ## Decision
 
-### 1. One canonical always-read principles file
+### 1. One always-read principles layer
 
-`docs/PROJECT_PRINCIPLES.md` is the single canonical compilation of permanent project principles.
+`docs/PROJECT_PRINCIPLES.md` is the canonical compilation of permanent principles.
 
-Mandatory startup order is:
+Mandatory startup order:
 
 1. repository-root `AGENTS.md`;
 2. `docs/PROJECT_PRINCIPLES.md`;
 3. `docs/START_HERE.md`;
 4. `docs/PROJECT_STATE.md`;
-5. specialist documents named by the current task.
+5. specialist documents explicitly named by the current task in `START_HERE.md`.
 
-`DECISIONS.md` retains rationale/history. `WORKING_CONVENTIONS.md` retains implementation
-procedures. They must reference, not create alternative canonical principle formulations.
+`INDEX.md` is navigation only.
 
-`docs/INDEX.md` is navigation, not an extra compulsory historical reading list.
+### 2. Source/documentation authority is split by question
 
-### 2. Operational handoff
+- committed source code is authoritative for actual implemented behavior;
+- documentation is authoritative for approved decisions, documented project state and plan;
+- a contradiction is a synchronization defect, not permission to silently choose one side;
+- resolve the narrow mismatch and synchronize the affected project documents/source before continuing.
 
-`docs/START_HERE.md` records only the information needed to resume immediately:
+### 3. One operational handoff
 
-- current package/runtime identity;
-- accepted conclusions/unresolved issues;
-- current production architecture;
-- exact next action;
-- likely source surfaces;
+`docs/START_HERE.md` must contain only what is needed to resume:
+
+- current identity;
+- current engineering conclusion;
+- exact next task;
+- required specialist reading for that task;
+- likely source/test surfaces;
 - expected result/acceptance;
-- immediate and long-term plan;
-- owner-only blockers.
+- complete immediate and long-term continuation plan.
 
-Historical evidence remains under decisions/patches/devlogs/audits/verification and is read when the
-current task requires it.
+Historical rationale/evidence stays in decisions/patches/devlogs/audits/verification and is read only
+when the task needs it.
 
-### 3. Documentation contract for every GitHub delivery
+### 4. Current-state docs have single responsibilities
 
-Every logical delivery must have synchronized documentation that records:
+- `START_HERE` — exact operational handoff;
+- `PROJECT_STATE` — current facts/state;
+- `ROADMAP` — future ordered work;
+- `INDEX` — navigation;
+- `PROJECT_PRINCIPLES` — permanent principles;
+- `WORKING_CONVENTIONS` — procedural application of principles;
+- `DEVELOPMENT_GUIDE` — repeatable development procedure.
 
-1. what changes and why;
-2. expected result and acceptance boundary;
-3. complete ordered next plan, including near-term and long-term/deferred actions.
+This supersedes the **role mapping** in the 2026-07-28 `ONE DOCUMENT, ONE QUESTION` decision where the
+new `PROJECT_PRINCIPLES` / `START_HERE` layers did not yet exist. The underlying single-responsibility
+principle remains active.
 
-Immediately before publication, reconcile that plan with implementation/testing discoveries. If
-scope, expected result, sequencing, audit/test needs, long-term priority or deferred status changed,
-update documentation **before** publishing.
+### 5. Audit behavior is conditional, not universal startup work
 
-At the end of a logical cycle update at minimum:
+Perform audits when:
 
-- `START_HERE`;
-- `PROJECT_STATE`;
-- current patch/evidence record;
-- `ROADMAP` whenever priority/sequencing/future/deferred work changed.
+- owner requests one;
+- current handoff/roadmap schedules one;
+- refactoring/removing inherited behavior requires prior classification;
+- new reproducible evidence has unknown/cross-cutting scope;
+- source materially contradicts documented architecture/state and the mismatch cannot be resolved
+  narrowly.
 
-Long-term plans are not silently dropped: mark them completed, superseded, rejected or deferred with
-reason.
+Do not insert a context-recovery audit solely because a new chat has no memory.
 
-### 4. Scope-first GitHub preflight
+### 6. Scope-first GitHub preflight
 
 Always verify before mutation:
 
 - current `main` SHA;
-- current `VERSION` / `PLUGIN_REVISION`;
+- `VERSION` / `PLUGIN_REVISION`;
 - current documented task/plan;
 - same-scope/relevant open PR state;
-- GitHub-plugin availability for the operation.
+- plugin availability.
 
-Expand inventory only as needed:
+Expand inventory only when the operation requires CI/log, artifact/release, branch-hygiene,
+protection/permission or broad recursive-tree evidence.
 
-- CI/log state for CI debugging/current PR;
-- artifacts/tags/releases/assets for package/release work;
-- full branch inventory for cleanup/recovery/hygiene;
-- protection/permission state when relevant;
-- recursive tree for broad/cross-cutting investigation with unknown file/call path.
+### 7. GitHub reading path is minimal
 
-This amends older broad `PRE-MUTATION INVENTORY` wording. Evidence-first remains mandatory; only the
-breadth becomes proportional to scope/risk.
+After mandatory startup, every GitHub mutation always requires only the authoritative
+`docs/GITHUB_PUBLICATION.md` procedure.
 
-### 5. Audit behavior
+Decision files are read when an operation needs their special boundary/rationale. `GITHUB_WORKFLOW.md`
+is a cheat sheet, not a second mandatory authority.
 
-Audits are performed when:
+### 8. Documentation gate timing
 
-- owner requests them;
-- current `START_HERE`/`PROJECT_STATE`/`ROADMAP` schedules them;
-- new reproducible evidence/architecture change requires them;
-- source contradicts documented current state.
+An unchanged task branch may be created after preflight.
 
-Use existing audit/evidence as starting context. Do not insert an unscheduled context-recovery audit
-solely because conversational memory is absent.
+Before the first substantive changed branch state is published, the same logical change must already
+contain synchronized documentation with:
 
-### 6. Current Model-C application
+1. what changes and why;
+2. expected result/acceptance boundary;
+3. complete near-term and long-term/deferred plan.
 
-Current decision/plan at adoption:
+Reconcile that plan before Ready-PR finalization and again before merge.
 
-- B -> C transition is complete as engineering direction;
-- source still has automatic B/A production fallback as a transition tail;
-- next packaged source patch is `v0.4.1_13` Model-C-only production finalization;
-- do not first implement the previously considered larger timeout-admission envelope for `C -> B`;
-- retain B/A code where useful as benchmark/reference/test tooling;
-- accepted Lua/BLOB/discovery/lifecycle evidence remains available and may be audited again when
-  future plan/new evidence requires it.
+### 9. Current Model-C application
 
-Exact current handoff: `docs/START_HERE.md`.
+At adoption/current `_12` state:
 
-## Priority / supersession
+- Model C is the selected production direction;
+- source still carries automatic B/A production fallback as transition debt;
+- `_13` is the next packaged source patch and removes that production fallback;
+- B/A may remain as benchmark/reference/test tooling;
+- do not optimize the legacy `C -> B` admission path before completing `_13`;
+- accepted Lua/BLOB/discovery/lifecycle evidence remains closed unless owner/roadmap/new evidence or a
+  material architecture change reopens it.
 
-This decision controls documentation startup architecture, operational handoff, pre-publication plan
-reconciliation and preflight breadth.
+Current Strategy Lab architecture documents must describe this state, not preserve old `_23` / `_31`
+selection text as if it were still current.
 
-It does not weaken:
+## Documentation contract for every delivery
 
-- canonical permanent principles in `PROJECT_PRINCIPLES.md`;
-- complete reading of selected required documents through EOF;
+Every logical delivery records:
+
+1. what changes and why;
+2. expected result and acceptance;
+3. complete ordered next plan, including long-term/deferred actions.
+
+At the end of a logical cycle update `START_HERE`, `PROJECT_STATE`, current patch/evidence and
+`ROADMAP` when priority/sequencing/future/deferred work changed. Long-term work is never silently
+removed; mark it completed, superseded, rejected or deferred.
+
+## What this does not weaken
+
 - GitHub-plugin-first transport;
-- exact current base/candidate identity;
+- complete reading of selected required docs through EOF;
 - one logical Ready PR/latest-head CI/exact-head squash merge;
 - evidence-based CI failure handling;
 - package/release immutability and owner-authority boundaries;
-- runtime cleanup/restoration correctness.
-
-It supersedes only older interpretations that require broad repository/GitHub re-inventory or
-historical rereading for every ordinary mutation.
-
-## Affected controls
-
-- `AGENTS.md`;
-- `docs/PROJECT_PRINCIPLES.md`;
-- `docs/START_HERE.md`;
-- `docs/PROJECT_STATE.md`;
-- `docs/INDEX.md`;
-- `docs/WORKING_CONVENTIONS.md`;
-- `docs/ROADMAP.md`;
-- `docs/GITHUB_PUBLICATION.md`;
-- `docs/GITHUB_WORKFLOW.md`;
-- `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md` (inventory breadth amended).
+- runtime cleanup/restoration correctness;
+- audits when actually required by scope.

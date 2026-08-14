@@ -5,10 +5,11 @@ Updated: 2026-08-14
 
 This file answers: **Where is the project now?**
 
-Permanent principles are canonical in `docs/PROJECT_PRINCIPLES.md` and are not repeated here.
-Operational continuation details are in `docs/START_HERE.md`.
+Permanent principles: `docs/PROJECT_PRINCIPLES.md`.
+Exact continuation handoff: `docs/START_HERE.md`.
+Future work: `docs/ROADMAP.md`.
 
-## Current repository/package identity
+## Repository / package identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
@@ -18,150 +19,94 @@ Operational continuation details are in `docs/START_HERE.md`.
 - required ABI: `FreeBSD:15:amd64`;
 - packaged runtime/source merge: `acf65d39eaa88a16debe1d35affa71f03f1d848d`;
 - testing tag: `v0.4.1_12`;
-- package SHA-256: `3b5a6c39c09abdfc8d8f1b59923312c40dda27e11c4f03e20773131996f6789d`;
-- direct package URL: `https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.4.1_12/os-zapret2-restyle-0.4.1_12.pkg`.
+- package SHA-256: `3b5a6c39c09abdfc8d8f1b59923312c40dda27e11c4f03e20773131996f6789d`.
 
-Current documentation-only `main` may be later than the packaged source merge. Always resolve the
-actual `main` SHA before mutation.
+Documentation-only `main` may be newer than the packaged source merge. Always resolve the actual
+`main` SHA before mutation.
 
-Stable semantic release remains `v0.4.1`; testing revisions remain forward candidate history and do
-not rewrite the semantic tag.
+## Current production behavior and approved direction
 
-## Current Strategy Lab production state
-
-Current source normal path enters:
-
-`C-warm-bucket-source-port-dispatch`
-
-but still retains automatic legacy fallbacks:
+Actual current source enters Model C first but still retains automatic legacy fallback:
 
 `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
 
-Current engineering decision:
+Approved direction:
 
-- Model C is the selected/final production direction;
-- automatic Model-B and cold-Model-A fallback is a legacy transition tail;
-- B/A code may remain where useful as benchmark/reference/test tooling;
-- the next packaged source change removes B/A from normal production fallback rather than optimizing
-  that fallback further.
+- Model C is the final normal production Stage-60 runtime;
+- automatic Model-B / cold-Model-A replay is a legacy transition tail;
+- B/A may remain as benchmark/reference/test tooling;
+- the next packaged source patch removes B/A from the production fallback chain instead of improving
+  that chain further.
 
-Preserved current Model-C behavior:
+This is not a contradiction: the source describes current implementation; the documentation records
+that the remaining fallback is scheduled transition debt. If source and this approved state diverge
+in another way, treat it as a synchronization defect and resolve it narrowly.
 
-- native adaptive search/planner and CandidateSpec identity;
-- ResourceInventory semantics;
+## Model-C behavior that is already accepted and must be preserved
+
+- native adaptive graph/planner and immutable CandidateSpec identity;
+- job-scoped ResourceInventory semantics;
 - candidate width at most three;
 - exact source-port-qualified attribution;
-- sequential pinned endpoints inside a candidate;
-- source-port leasing `preferred-free-else-alternate`;
+- pinned endpoints sequential inside one candidate;
+- `preferred-free-else-alternate` source-port leasing;
 - `_11` logical-batch preservation with profile-compatible physical segmentation;
-- `_12` readiness: process identity + socket ready + clean log + two consecutive qualified
-  snapshots, 25 ms polling, 4 s bound;
+- `_12` readiness: process identity + socket readiness + clean log + two consecutive qualified
+  snapshots, 25 ms polling, bounded by 4 s;
 - production discovery GET-4K;
-- `eligible-work-v1` finite adaptive budgets;
-- bounded cancellation/cleanup and Stage-90 restoration;
+- finite `eligible-work-v1` adaptive budgets;
+- bounded cancellation/cleanup and Stage-90 semantic restoration;
 - downstream Stage 70/80/85/result ownership.
 
-## Latest accepted live evidence
+## Accepted live evidence
 
-### Production baseline — `v0.4.0_26`
+Production baseline `v0.4.0_26`, Extended `telegram.org`, `job.xhdgCU`:
 
-Extended `telegram.org`, `job.xhdgCU`:
-
-- effective adaptive budgets `150/120/270/120`;
 - Model C 16/16, graph exhausted, zero winners;
-- `.parallel.fallbacks=[]`;
-- Stage 60 `34209 ms`, total `114644 ms`;
+- no fallback;
+- Stage 60 `34209 ms`;
 - Stage-90 restoration PASS;
-- normal Zapret2 remained RUNNING;
-- no `19128-19130` residue.
+- normal Zapret2 remained running;
+- no temporary rule residue.
 
-### Latest Model-C lifecycle/readiness evidence — `v0.4.1_12`
-
-Retained `job.lWLjqL`, five repeats:
+Latest readiness/lifecycle evidence `v0.4.1_12`, retained job replay:
 
 - 5/5 completed;
 - 5/5 `model_c_only=true`;
 - no fallback;
-- instrumentation/persisted logical-batch counts matched;
-- lifecycle/RSS complete;
+- lifecycle/RSS evidence complete;
 - cleanup/restoration PASS;
-- physical-segment startup median `82.5 ms`, mean `93.87 ms`, p90 `163 ms`;
-- one segment about `80-90 ms`, two sequential segments about `163-171 ms`;
-- median aggregate RSS `4366 KiB`;
-- median Stage-60 wall `22715 ms`.
+- physical-segment startup median `82.5 ms`;
+- median aggregate RSS `4366 KiB`.
 
-Strict lifecycle `measurement_rejected` was caused by live candidate result variation between repeats,
+Strict lifecycle `measurement_rejected` reflected live candidate-result variation between repeats,
 not Model-C infrastructure failure.
 
 Evidence:
 `docs/verification/evidence/2026-08-14-v0.4.1_12-warm-readiness-live-pass.md`.
 
-## Accepted/closed optimization evidence
+## Closed measurement questions
 
-These conclusions remain current until invalidated by new evidence, owner requirement or a material
-architecture change. They may be audited when the current plan calls for it.
+These conclusions remain accepted until the owner/current roadmap/new reproducible evidence or a
+material architecture change reopens them:
 
-- Lua initialization (`_2`): current/common init already equals candidate-minimal union; no production
-  change justified.
-- BLOB startup/RSS (`_3`): 27/27 starts accepted; stable readiness medians
-  `63.061/62.652/62.566 ms` for BLOB-free/builtin/external; median RSS `4360 KiB`; no material cost.
-- BLOB common set (`_4`): 48/48 starts accepted; common-3 vs external-single median readiness
-  `+0.234 ms/+0.375%`, median RSS `+2 KiB/+0.046%`; below run spread; no lazy-BLOB change justified.
-- Discovery (`_5/_6`): HEAD/GET-1/GET-4K agreement established on comparable samples; cheaper probes
-  did not show a material timing benefit; production GET-4K retained.
-- Cross-batch lifecycle (`_7` through `_12`): `_11` and `_12` fixed real production defects; further
-  keep-warm/reuse architecture not justified by accepted measured cost/jitter boundary.
+- Lua initialization (`_2`): no production change justified;
+- BLOB startup/RSS and common-set scaling (`_3/_4`): no material current-width penalty; no lazy-BLOB
+  production change;
+- discovery (`_5/_6`): retain bounded GET-4K;
+- cross-batch lifecycle (`_7` through `_12`): `_11/_12` fixed real defects; further keep-warm/reuse
+  architecture not justified by current measurements.
 
 ## Current next packaged source change — `v0.4.1_13`
 
-### What changes and why
+**Make Model C the only normal production Stage-60 runtime.**
 
-Make Model C the only normal production Stage-60 runtime:
+Scope summary:
 
 - remove automatic production replay through Model B/cold Model A;
-- surface Model-C infrastructure/selector/rendering/readiness/attribution failures explicitly and
-  within existing bounded behavior;
-- keep B/A modules where useful as benchmark/reference/test tooling;
-- preserve Model-C leasing, attribution, segmentation, readiness, cleanup and restoration semantics.
+- keep Model-C infrastructure failures explicit/bounded;
+- preserve leasing, attribution, segmentation, readiness, budgets, cleanup and restoration;
+- retain B/A code only where still useful outside the normal production path.
 
-Primary source/test surfaces:
-
-- `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_model_c.py`;
-- `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_python.py`;
-- `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_source_port_lease.py`;
-- `scripts/test-strategy-lab-stage60-model-c-production.sh`;
-- narrow-search hits that encode production `C -> B -> A` fallback.
-
-Metadata:
-
-- keep `VERSION=0.4.1`;
-- increment `PLUGIN_REVISION 12 -> 13`;
-- candidate/title prefix `v0.4.1_13:`.
-
-### Expected result
-
-- normal production Stage 60 uses Model C only;
-- no silent B/A fallback after Model-C infrastructure failure;
-- injected Model-C infrastructure failure is explicit and bounded;
-- cleanup succeeds on success/failure/cancel boundaries;
-- leasing/attribution and `_11` segmentation remain intact;
-- complete Strategy Lab corrective matrix PASS;
-- FreeBSD 15 package qualification PASS;
-- one selected owner-live Model-C-only regression proves result handling, restoration and no
-  temporary residue.
-
-### Further plan
-
-1. implement `_13` Model-C-only production finalization;
-2. run focused and full corrective validation;
-3. qualify FreeBSD 15 package;
-4. reconcile docs/near/long-term plan against implementation/test discoveries before publication;
-5. Ready PR -> latest-head checks -> exact-head squash merge -> verify `main`;
-6. publish deterministic `_13` testing package when owner testing/package delivery is requested;
-7. perform one selected owner-live Model-C-only regression;
-8. record evidence and close B -> C transition on PASS;
-9. return to `docs/ROADMAP.md` for the next owner-selected product/Strategy-Lab work.
-
-Do not implement the previously considered larger timeout-admission envelope for legacy `C -> B`
-before `_13`; that specific problem disappears if the automatic fallback is retired. Future timeout
-audits remain valid when selected by roadmap/owner or triggered by a real Model-C-only defect.
+Exact implementation files, required specialist reading, acceptance and complete further plan are in
+`docs/START_HERE.md`.
