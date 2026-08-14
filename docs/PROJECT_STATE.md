@@ -23,6 +23,7 @@ Direct orientation:
 - project version: `0.4.1`;
 - packaged source revision: `_13`;
 - current source package candidate: `os-zapret2-restyle-0.4.1_13.pkg`;
+- `_13` source merge: `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
 - latest published testing package/tag: `os-zapret2-restyle-0.4.1_12.pkg` / `v0.4.1_12`;
 - latest published testing-package SHA-256: `3b5a6c39c09abdfc8d8f1b59923312c40dda27e11c4f03e20773131996f6789d`;
 - latest full Web/pkg release: `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
@@ -69,14 +70,16 @@ Historical A/B/C experiment material is history/proof and does not represent cur
 
 ## Current verification boundary
 
-For `_13` source acceptance:
+`_13` automated source acceptance is complete:
 
-- focused Model-C production regression includes an injected Model-C infrastructure failure and proves no B/A reference path is invoked;
-- full Strategy Lab corrective matrix is required;
-- FreeBSD-15 package qualification is required on the exact PR head;
-- squash merge must use that exact verified head.
+- PR `#230` exact verified head: `8e1af17ce4ccfaad4851329167b386741d0c9ee8`;
+- focused Model-C production regression proves injected infrastructure failure does not invoke B/A reference paths;
+- full Strategy Lab corrective matrix: PASS;
+- FreeBSD-15 package build/inspection qualification: PASS;
+- GitHub Actions CI run: `31819116248`;
+- verified head squash-merged as `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`.
 
-Owner-live `_13` remains a separate post-publication gate: one selected normal Model-C-only OPNsense run must verify correct result handling, semantic restoration and absence of temporary IPFW/process/socket residue. Testing-package publication is not inferred from source merge.
+Owner-live `_13` remains a separate post-publication gate: one selected normal Model-C-only OPNsense run must verify correct result handling, no automatic B/A replay, semantic restoration and absence of temporary IPFW/process/socket residue. Persistent `_13` testing-package publication has **not** occurred and is not inferred from source merge or Actions artifacts.
 
 ## Current documentation and governance facts
 
