@@ -5,9 +5,33 @@ proceed safely, stop GitHub work and report the boundary.
 
 # AGENTS.md
 
-This repository treats documentation as **operational project memory**. A new session must be able
-to read the current handoff and resume the documented task without reconstructing the same project
-history for hours.
+==================================================
+NON-NEGOTIABLE PROJECT MEMORY RULE
+==================================================
+
+**DOCUMENTATION IS PART OF THE PROJECT AND IS THE MANDATORY SOURCE OF CURRENT PROJECT STATE,
+DECISIONS, PLAN, NEXT ACTIONS, ACCEPTANCE BOUNDARIES, AND LONG-TERM DIRECTION.**
+
+This is a root project invariant, not a documentation preference.
+
+- A new chat/session does **not** reconstruct the project from conversation memory, intuition,
+  historical PRs, or a fresh repository audit when current project documentation already records
+  the state and plan.
+- Chat history and model memory are supporting context only. They never replace current repository
+  documentation.
+- Before deciding what to do next, read the current operational documentation and follow it.
+- If current source and documentation disagree, investigate and resolve that concrete discrepancy;
+  do not silently choose memory over documentation.
+- If the owner changes a decision or plan, update the documentation as part of that same logical
+  project cycle so the next session inherits the new truth.
+- Every GitHub delivery must leave the documentation sufficient for a future session to understand
+  what changed, why, what result is expected, and the complete next plan without reconstructing the
+  work from old chats.
+
+**Ignoring current documentation and rebuilding project context from scratch is a process defect.**
+
+The operational handoff is `docs/START_HERE.md`; the current-state record is
+`docs/PROJECT_STATE.md`; the ordered future plan is `docs/ROADMAP.md`.
 
 ==================================================
 MANDATORY STARTUP READING
