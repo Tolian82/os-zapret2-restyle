@@ -1,264 +1,867 @@
-# Strategy Lab architecture
+# Strategy Lab architecture and delivery plan
 
-Status: **CURRENT**
+==================================================
+DOCUMENT ROLE
+==================================================
 
-This document is the active base product/lifecycle/stage contract for asynchronous
-Strategy Lab. Historical implementation sequences and superseded experiment plans live
-in decisions, patches, devlogs and verification records and do not override this file,
-`docs/PROJECT_STATE.md`, `docs/START_HERE.md`, or newer owner canon.
+Question answered:
+How does the approved asynchronous Strategy Lab behave, and which product/lifecycle/stage contracts remain active?
 
-Read with:
+Purpose:
+Record the complete approved product, runtime, lifecycle, reporting, timeout, testing,
+and delivery contract. Historical implementation sections are retained only as history
+and never override current owner canon or current specialist architecture.
+
+Updated when:
+An approved Strategy Lab behavior, implementation boundary, patch boundary, message,
+timeout, verification gate, or delivery order changes.
+
+Read after:
+`docs/ARCHITECTURE.md`.
+
+Do not store here:
+Unrelated plugin architecture or release history.
+
+==================================================
+STATUS AND AUTHORITY
+==================================================
+
+Status:
+Initial architecture approved on 2026-08-04 and implemented. Search-policy portions were
+amended on 2026-08-08 and subsequently implemented/evolved through the current Python,
+adaptive-search and Model-C architecture.
+
+This document remains the base product/lifecycle/stage authority. Current specialist
+authorities are:
 
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — current Stage-50/60 search semantics;
-- `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md` — finite parent budgets;
-- `docs/architecture/STRATEGY_LAB_MODEL_C.md` — selected Stage-60 runtime;
-- `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md` — live verification coverage.
+- `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md` — current parent-budget ownership;
+- `docs/architecture/STRATEGY_LAB_MODEL_C.md` — current Stage-60 runtime execution;
+- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — implementation ownership/migration history.
 
-## Objective
+**Model C is selected as the normal production Stage-60 direction. A/B/C production
+model selection is closed.** Packaged source through `v0.4.1_12` still contains legacy
+B/A automatic fallback, but that is implementation transition debt scheduled for
+removal by `v0.4.1_13`, not an unresolved architecture choice.
+
+The synchronous Blockcheck path has already been replaced. Historical initial-delivery
+sections below are retained as engineering history and do not override current
+`docs/PROJECT_PRINCIPLES.md`, `docs/START_HERE.md`, `docs/PROJECT_STATE.md`,
+`docs/ROADMAP.md`, or current specialist architecture.
+
+==================================================
+OBJECTIVE
+==================================================
 
 Provide an asynchronous Strategy Lab that:
 
-- tests a domain/IP target without interference from the saved normal Zapret2 runtime;
+- tests a domain or IP target without interference from the user's active Zapret2
+  service;
 - reports online progress by numbered stages;
-- searches native Zapret2 candidates adaptively;
-- preserves deterministic candidate/resource/endpoint identity;
-- distinguishes infrastructure failure from candidate network failure;
-- confirms stability before recommendation;
-- supports controlled cancellation with partial results;
-- always cleans temporary state;
+- isolates candidate effects and preserves deterministic candidate ownership;
+- searches native Zapret2 candidates adaptively instead of making family acceptance a
+  hard reachability gate;
+- confirms stability before recommending a strategy;
+- can be interrupted without losing completed results;
+- always cleans temporary runtime state;
 - restores the exact initial Zapret2 service state;
-- supports Russian/English GUI presentation;
-- remains bounded by finite operation/stage/job budgets.
+- reports concise English or Russian results according to the OPNsense language;
+- finishes within bounded operation/stage/job budgets;
+- supports extended TLS 1.2, HTTP and configured UDP while keeping QUIC limited to the
+  fixed IPv4 UDP/443 capability/precheck and circular validation separate from discovery.
 
-## Non-goals
+==================================================
+NON-GOALS
+==================================================
 
-Strategy Lab does not:
+The work package does not:
 
-- use classic zapret/nfqws1 strategy syntax as a search source;
+- use classic zapret/nfqws1 strategy syntax as a search source or translation input;
+- allow unqualified/unattributed simultaneous different-candidate traffic;
 - run multiple permanent dvtws2 instances;
-- automatically replace/merge the user's saved Traffic Strategy;
-- infer arbitrary unrelated service endpoints;
-- turn a global success percentage into a PASS when a required endpoint fails;
-- treat A/B/C as still-competing production runtime choices;
-- treat historical experiment sequencing as current work merely because it remains in
-  historical records.
+- replace the permanent Traffic Strategy automatically;
+- merge a recommended profile into saved settings automatically;
+- infer arbitrary service endpoints without an explicit contract;
+- treat a global success percentage as sufficient when a required endpoint fails;
+- reopen A/B/C model selection because historical experiment text remains in the repository.
 
-## High-level flow
+==================================================
+HIGH-LEVEL FLOW
+==================================================
 
-```text
 Diagnostics GUI
-  -> start asynchronous job / return job_id
-  -> acquire shared lifecycle boundary
-  -> snapshot exact initial Zapret2 state
-  -> stop normal runtime when required
-  -> capability + clean-baseline checks
-  -> Stage-50 evidence
-  -> Stage-60 adaptive native search using selected Model C runtime
-  -> stability / extended checks / shortlist
-  -> cleanup temporary processes/rules/runtime
-  -> exact restoration
-  -> publish complete or partial result
-```
+        ↓
+start asynchronous Strategy Lab job
+        ↓
+return job_id immediately
+        ↓
+GUI polls read-only status and events
+        ↓
+acquire the shared lifecycle boundary
+        ↓
+record the exact initial Zapret2 state
+        ↓
+stop the normal Zapret2 runtime when it was running
+        ↓
+run capability and clean-baseline tests
+        ↓
+execute candidate probes under the selected Model-C runtime contract
+        ↓
+confirm stable candidates and form a shortlist
+        ↓
+clean every temporary process and rule
+        ↓
+restore the exact initial Zapret2 state
+        ↓
+publish complete or partial results
 
-## Job model
+==================================================
+DELIVERY AUTHORITY
+==================================================
 
-Only one Strategy Lab job may be active. A second start reports busy and does not alter
-the active job.
+Strategy Lab changes follow the current repository-wide authority in
+`docs/GITHUB_PUBLICATION.md` and the canonical principles in
+`docs/PROJECT_PRINCIPLES.md`.
 
-The job survives page refresh/close. Reopening Diagnostics discovers the active job and
-resumes read-only polling.
+One logical scope uses one Ready PR and required latest-head checks; same-scope repairs
+remain in that PR; `main` receives one squash commit. Independent analysis/documentation
+may continue while unrelated GitHub processing runs, but unrelated source is never added
+to the checked branch.
 
-Job state describes work but never replaces the shared lifecycle lock.
+A stale test/documentation contract never overrides newer owner canon. When a contract
+asserts a superseded decision, correct the stale contract rather than bending current
+architecture back toward it.
 
-## Lifecycle ownership
+==================================================
+MANUAL VERIFICATION POLICY
+==================================================
 
-Before baseline/candidate testing Strategy Lab must:
+Current live verification is governed by
+`docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`. Historical A/B/C and adaptive
+search experiment plans are retained as evidence/history; they do not reopen current
+Model-C selection.
 
-1. enter the same exclusive lifecycle boundary used by normal Zapret2 mutations;
-2. classify initial state exactly as RUNNING or STOPPED;
-3. reject incomplete/unknown state before temporary runtime mutation;
-4. record the process/supervisor/firewall/runtime evidence required for restoration;
-5. stop the normal service through its approved lifecycle path when initially RUNNING;
-6. verify the normal runtime is absent before isolated testing.
+Each source patch still requires:
 
-Every exit path performs cleanup and restoration, including normal completion, no
-candidate, timeout, cancellation, candidate start/probe failure and internal error.
+- focused automated contract tests;
+- syntax/static validation;
+- standard pull-request CI;
+- standard FreeBSD package qualification when applicable;
+- synchronized documentation in the same logical change.
+
+Owner-assisted evidence is requested only when behavior cannot be proved faithfully in
+repository CI, such as FreeBSD/IPFW routing, real-provider results or timing on the
+supported appliance.
+
+==================================================
+JOB MODEL
+==================================================
+
+The GUI uses an asynchronous job contract:
+
+- start: validate input, create one job, return `job_id` immediately;
+- status: read the current job state without mutating runtime;
+- events: return/expose ordered progress records;
+- cancel: request controlled interruption of the active job;
+- result: return complete or partial stage results after mandatory cleanup.
+
+Only one Strategy Lab job may be active. A second start request reports busy and does
+not alter the active job.
+
+The job continues if the Diagnostics page is refreshed or closed. Reopening the page
+must discover the active job and resume status polling.
+
+Recommended persistent runtime locations:
+
+- `/var/run/zapret2-restyle/strategy-lab/` for active job state and control;
+- `/var/log/zapret2/strategy-lab/` for detailed per-job logs;
+- `status.json` for an atomically replaced current snapshot;
+- `events.ndjson` for append-only ordered progress events.
+
+State files never replace the lifecycle lock. They describe the job; they do not
+serialize firewall or process mutation.
+
+==================================================
+LIFECYCLE OWNERSHIP
+==================================================
+
+The user's active Zapret2 service must not influence Strategy Lab results.
+
+Before baseline or candidate testing, Strategy Lab must:
+
+1. Enter the same exclusive lifecycle boundary used by normal Zapret2 mutations.
+2. Classify the initial service state as exactly RUNNING or STOPPED.
+3. Reject incomplete or unknown initial state before test runtime mutation.
+4. Record the active dvtws2 identity, supervisor identity, plugin-owned firewall state,
+   and active runtime identity needed for restoration verification.
+5. When initially RUNNING, stop the normal service through its approved service path.
+6. Verify that normal dvtws2, supervisor processes, and plugin-owned rules are absent.
+7. When initially STOPPED, verify that no normal runtime remains active.
+
+Every exit path performs cleanup and restoration:
+
+- normal completion;
+- no strategy found;
+- operation timeout;
+- stage timeout;
+- overall timeout;
+- user cancel;
+- worker TERM or HUP;
+- candidate start failure;
+- probe failure;
+- internal error.
 
 Final-state contract:
 
-- initial RUNNING -> fully RUNNING;
-- initial STOPPED -> fully STOPPED;
-- temporary dvtws2/rules/sockets/runtime state absent;
-- restoration failure -> explicit restore failure, never normal success.
+- initial RUNNING becomes fully RUNNING again;
+- initial STOPPED remains fully STOPPED;
+- temporary dvtws2 processes and temporary rules are absent;
+- restoration failure produces `RESTORE_FAILED` and is never reported as a normal
+  completed or canceled result.
 
-Stage 90 cleanup/restoration is not user-cancelable.
+The cleanup and restoration stage cannot be canceled by the user.
 
-## Cancel contract
+==================================================
+CANCEL CONTRACT
+==================================================
 
-Cancel is a controlled request, not an abrupt abandonment:
+The GUI provides a separate `Stop test` / `Прервать тест` control.
 
-1. persist cancel request;
-2. stop current bounded probe/runtime activity;
-3. remove temporary candidate state;
-4. preserve already completed results;
-5. mark unexecuted work skipped due to cancellation;
-6. run mandatory Stage 90 restoration;
-7. publish partial result.
+Cancel behavior:
 
-## Numbered stages
+1. Record a cancel request for the active `job_id`.
+2. Stop or terminate the currently running probe within its bounded operation timeout.
+3. Stop the temporary candidate dvtws2 when one exists.
+4. Remove temporary candidate firewall rules and runtime files.
+5. Preserve every result from stages completed before cancellation.
+6. Mark the interrupted and all remaining unexecuted user-visible stages as skipped due
+   to cancellation.
+7. Execute the full cleanup and restoration stage.
+8. Produce a partial report rather than an error.
 
-### 00 — Target initialization
+Approved user-visible skipped messages:
 
-Validate/normalize target, establish required endpoint/protocol contract and create job
-state.
+Russian:
+`SKIPPED — отменено`
 
-### 10 — Lifecycle snapshot
+English:
+`SKIPPED — canseled`
 
-Acquire lifecycle ownership, classify initial state and persist restoration evidence.
+The exact approved English spelling above is retained as the current product text.
+Internal state keys may use conventional machine-readable spelling, but the displayed
+message follows the approved text until the owner changes it.
 
-### 20 — Stop normal Zapret2
+==================================================
+NUMBERED STAGES
+==================================================
 
-Stop the initially running normal service and verify normal process/rule absence. Leave
-an initially stopped service stopped.
+00 — Target initialization
 
-### 30 — Network capability precheck
+- validate domain or IP input;
+- normalize the target;
+- register required endpoints;
+- select standard or extended mode;
+- create the job and initial stage table.
 
-Record required IPv4/IPv6/capability evidence. The fixed IPv4 UDP/443 QUIC check remains
-a capability/precheck, not an adaptive QUIC strategy-search branch.
+10 — Lifecycle lock and snapshot
 
-### 40 — Clean baseline
+- enter the shared lifecycle boundary;
+- classify initial Zapret2 state;
+- record runtime, process, supervisor, and firewall evidence required for restoration.
 
-Resolve/pin required target identity and test the target without Zapret2. If the target
-already satisfies the direct-access contract, return `TARGET_ACCESSIBLE` rather than
-searching for an unnecessary bypass.
+20 — Stop normal Zapret2
 
-### 50 — Low-cost TLS 1.3 reconnaissance
+- stop the service when initially running;
+- verify absence of normal dvtws2, supervisor, and plugin-owned rules;
+- leave an initially stopped service stopped.
 
-Run low-cost native candidates and record evidence. Stage-50 family results influence
-priority only and never become a hard Stage-60 family allowlist.
+30 — Network capability precheck
 
-### 60 — Adaptive native-Zapret2 search
+- verify IPv4 control connectivity;
+- determine whether usable IPv6 routing/connectivity exist;
+- perform the fixed QUIC/IPv4 precheck;
+- record IPv6/QUIC capability evidence; the adaptive target does not open a QUIC
+  strategy-search branch.
 
-Explore the bounded native graph according to current evidence, compatibility, cost and
-remaining budget. Candidate identity/resources/ranges/actions are immutable. Normal
-planner logical width is at most three.
+40 — Clean target baseline
 
-**Model C is the selected normal production runtime for Stage 60.** Packaged source
-through `v0.4.1_12` still contains legacy automatic B/A fallback, but that is transition
-debt scheduled for removal in `v0.4.1_13`; it is not an unresolved model-selection
-question.
+- resolve/pin required target addresses;
+- test the target without Zapret2;
+- determine whether direct TLS 1.3 already works;
+- record results for every required endpoint.
 
-### 70 — Stability confirmation
+50 — Low-cost TLS 1.3 reconnaissance
 
-Run fresh sequential checks for the best candidates and apply the current stability
-contract with fail-fast rejection when success becomes impossible.
+- run inexpensive native-Zapret2 seed candidates;
+- record pass/fail evidence and technique/family tags;
+- use evidence for Stage-60 ordering, never as a hard branch allowlist.
 
-### 80 — Extended protocol testing
+60 — Adaptive TLS 1.3 candidate search
 
-Execute applicable supported extended branches such as TLS 1.2, plain HTTP and explicitly
-configured request-response UDP. QUIC adaptive candidate search is not part of the
-current target.
+- explore compatible native-Zapret2 neighbors/stronger branches according to current
+  evidence, cost and remaining budget;
+- permit stronger variants after a simple representative failed;
+- stop expansion when enough strong candidates exist or the stage budget is exhausted;
+- preserve all results already obtained;
+- execute normal production candidate work under the selected Model-C runtime contract.
 
-### 85 — Shortlist
+70 — Stability confirmation
 
-Rank truthful stable results and normally publish up to three candidates when available.
-A smaller truthful result is valid. Never write the recommendation into saved settings
-automatically.
+- run sequential fresh-connection checks for the best candidates;
+- require each required endpoint to pass 3 of 3 attempts;
+- fail fast after the first attempt that makes 3/3 impossible;
+- reject unstable candidates.
 
-### 90 — Cleanup and exact restoration
+80 — Extended protocol testing
 
-Remove temporary processes/rules/runtime and restore exact initial normal Zapret2 state.
+- TLS 1.2;
+- plain HTTP;
+- arbitrary UDP when a non-web UDP target is explicitly configured;
+- additional approved URIs/endpoints.
 
-### 99 — Final report
+The fixed IPv4 UDP/443 QUIC precheck remains Stage-30 diagnostic evidence only.
 
-Build complete/partial result only from recorded evidence and report restoration outcome
-explicitly.
+85 — Shortlist and recommendation
 
-## Status semantics
+- normally select the best two to three stable candidates when available;
+- rank by required-endpoint coverage, stability, simplicity and minimal traffic modification;
+- recommend candidate number 1.
 
-User-visible stage states:
+90 — Cleanup and exact restoration
 
-- `PASS` — valid stage result obtained;
-- `FAIL` — tested network condition/candidate failed;
-- `TIMEOUT` — stage exhausted its finite budget;
-- `SKIPPED` — not applicable or canceled before execution;
-- `ERROR` — internal/infrastructure failure prevented a valid result.
+- stop temporary probes/dvtws2;
+- remove temporary rules/runtime state;
+- restore RUNNING to RUNNING or STOPPED to STOPPED;
+- verify processes, supervisor and firewall state.
+
+99 — Final report
+
+- construct complete/partial report only from recorded stage results;
+- report restoration explicitly;
+- never discard completed data because a later stage was canceled/timed out.
+
+==================================================
+STAGE AND JOB STATUSES
+==================================================
+
+User-visible stage statuses:
+
+- `PASS` — stage completed and produced a valid result;
+- `FAIL` — tested network condition/strategy failed;
+- `TIMEOUT` — stage exhausted its budget;
+- `SKIPPED` — not applicable/canceled before execution;
+- `ERROR` — internal/infrastructure failure prevented a valid stage result.
 
 A negative network result is `FAIL`, not `ERROR`. Model-C infrastructure/readiness/
-attribution/rendering failure is not silently classified as candidate network FAIL.
+attribution/rendering failure is not silently rewritten as candidate network FAIL.
 
-## Candidate / resource / endpoint identity
+Internal job outcomes may distinguish:
 
-Each candidate is one immutable `CandidateSpec` sufficient to reproduce its tested
-strategy. One job-scoped `ResourceInventory` snapshots available Lua/BLOB/inline/built-in
-resources. Installed resources are availability, not permission to generate unrelated
-Cartesian combinations.
+- `COMPLETED`;
+- `PARTIAL`;
+- `TIMEOUT`;
+- `NO_STRATEGY`;
+- `TARGET_ACCESSIBLE`;
+- `RESTORE_FAILED`;
+- `ERROR`.
 
-For one search epoch, endpoint identity is pinned and original hostname/SNI semantics are
-preserved. A deliberate re-resolution creates a new explicit epoch instead of silently
-changing comparison targets.
+Cancellation produces a partial normal result after restoration.
 
-## Probe / validation contract
+==================================================
+ONLINE PROGRESS OUTPUT
+==================================================
 
-Web probes are bounded and explicit about IP family, TLS version where relevant,
-redirect/retry/fresh-connection behavior, deadlines and response-size limit.
+The GUI polls job state approximately once per second and shows useful current progress,
+not only a spinner.
 
-Current mass discovery uses bounded GET-4K because measured HEAD/GET-1 alternatives did
-not justify a production change. Stability/result stages remain separate evidence levels.
+The snapshot may include:
 
-## Model C runtime contract
+- current stage number/name/status;
+- current operation;
+- active candidate and technique/family tags;
+- candidate index/count;
+- endpoint being checked;
+- completed endpoint results;
+- Stage-50 evidence / working candidate count;
+- cancel requested state;
+- cleanup/restoration state.
 
-Model C executes planner-selected logical work while preserving search semantics.
+Detailed timing may be stored for diagnostics/timeout enforcement. The approved short
+report does not display elapsed time.
 
-Current accepted properties:
+==================================================
+TARGET AND ENDPOINT MODEL
+==================================================
 
-- exact source-port-qualified candidate attribution through IPFW + Lua selector;
-- pinned endpoints sequential inside one candidate;
-- logical batch width at most three;
-- `preferred-free-else-alternate` source-port leasing;
-- profile-compatible physical segmentation without changing logical batch identity;
-- readiness requires expected process identity, socket readiness, clean startup log and
-  two consecutive qualifying snapshots;
-- 25 ms readiness polling, bounded by 4 s;
-- cleanup on success/failure/cancel;
-- Stage-90 semantic restoration remains mandatory.
+Supported target types:
 
-The A/B/C selection experiment is closed. Model A/B may remain for reference/testing;
-they are not competing normal production choices.
+- domain;
+- IP address for a protocol with explicit port/probe contract.
 
-## Timeout / budget contract
+A domain job contains:
 
-Containment invariant:
+- one primary target;
+- one or more explicitly defined required endpoints;
+- no more than two different endpoints tested concurrently during screening;
+- one selected candidate identity shared by those endpoint requests.
 
-`bounded child operation <= candidate/stage parent <= finite job parent`.
+The system does not guess unrelated `www`, CDN, API or application hosts. Additional
+endpoints are explicit inputs/approved built-in service definitions.
 
-Current parent-budget policy is `eligible-work-v1`. Admission is based on remaining
-absolute budget. Cleanup/restoration is not made unbounded to gain more search time.
+A candidate passes only when every required endpoint passes. Optional endpoints may add
+information but cannot compensate for a failed required endpoint.
 
-A historical containment question affected the transitional `C -> B` replay path. Do
-not optimize that legacy fallback instead of completing Model-C-only production. A later
-Model-C-only timeout audit is a separate evidence-based task if selected.
+For a destination IP representing a TLS service, hostname/SNI remain explicit. A raw IP
+URL must not silently replace service hostname identity.
 
-## DNS fact boundary
+==================================================
+PROBE AND VALIDATION CONTRACT
+==================================================
 
-Historical local/container DNS slowness/failures are closed because the owner fixed DNS.
-Treat DNS as working now. Reopen DNS diagnosis only on fresh direct reproducible evidence;
-do not revive the old diagnosis because an old log/doc/test mentions it.
+Web probes use explicit settings:
 
-## Circular validation
+- explicit IPv4/IPv6 selection;
+- exact TLS min/max version where relevant;
+- HTTP/1.1 for primary search unless separately approved;
+- bounded redirects;
+- retry disabled;
+- bounded connect/request timeout;
+- fresh-connection guarantee;
+- bounded response download;
+- recorded exit status/remote address/protocol/status/size where supported.
 
-Circular validation is a separate bounded lifecycle transaction for an already selected
-profile/result. It shares the lifecycle lock with automated Strategy Lab and therefore
-cannot run concurrently with a Strategy Lab job. Saved configuration remains immutable;
-cleanup and exact service-state restoration are mandatory.
+No `-k` certificate bypass is used for Strategy Lab validation.
 
-## Current handoff
+Current mass discovery uses bounded GET-4K, selected by the `_5/_6` measurement cycle.
+HEAD/GET-1 did not justify a production change. Historical long-GET finalist proposals
+are not automatic current requirements unless a current specialist contract selects them.
 
-Current packaged source is `v0.4.1_12`.
+Stability confirmation remains sequential/fresh and fail-fast under its current contract.
 
-The exact next packaged source change is `v0.4.1_13`: remove automatic Model-B/cold-
-Model-A production replay so Model C becomes the only normal production Stage-60 runtime,
-while preserving search semantics, budgets, leasing/attribution, segmentation, readiness,
-cleanup and restoration.
+Model C may execute multiple logical candidates through compatible physical segments,
+but every probe must remain deterministically attributable to exactly one candidate.
+See `docs/architecture/STRATEGY_LAB_MODEL_C.md`.
 
-See `docs/START_HERE.md` for exact work surfaces and acceptance.
+==================================================
+FIXED QUIC PRECHECK
+==================================================
+
+The QUIC precheck is fixed and not configurable:
+
+- control host: `yandex.ru`;
+- port: `443`;
+- IP family: IPv4;
+- protocol: QUIC;
+- ALPN: `h3`;
+- timeout: 2 seconds;
+- success determined only from command exit status.
+
+The runtime does not:
+
+- inspect output to override exit status;
+- test OpenSSL `-quic` support before the precheck;
+- search local PF/IPFW rules for UDP/443 blocking;
+- repeat against another provider-selected host.
+
+PASS/FAIL is capability evidence only and does not open an adaptive QUIC candidate-search branch.
+
+==================================================
+IPV6 POLICY
+==================================================
+
+AAAA records alone do not prove IPv6 availability.
+
+IPv6 testing requires usable IPv6 routing and successful control connectivity. When unavailable:
+
+- IPv6 target probes are skipped;
+- IPv6 candidate strategies are skipped;
+- IPv4 testing continues.
+
+==================================================
+DNS FACT BOUNDARY
+==================================================
+
+The historical local/container DNS problem is **closed**. DNS used to be slow/unreliable,
+but the owner fixed it. Treat DNS as currently working.
+
+Existing bounded DNS operation handling remains an implementation containment mechanism;
+it is not evidence that DNS is currently broken. Reopen a DNS diagnosis only on fresh
+direct reproducible evidence, not an old log, old timeout, historical document or new-chat
+memory gap.
+
+==================================================
+TIMEOUT / BUDGET POLICY
+==================================================
+
+All operations remain bounded and preserve this containment hierarchy:
+
+`operation/candidate work <= stage parent <= finite job parent`.
+
+Current Stage-60/job parent-budget ownership is the implemented `eligible-work-v1` policy
+documented in `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`. Admission uses remaining
+absolute budget and cleanup/restoration remain bounded/mandatory.
+
+Historical fixed numeric stage/job values and the `_31/_32` measurement plan are retained
+in prior patch/decision/evidence records as implementation history; they do not override
+the current adaptive-budget contract.
+
+A previously observed admission concern involved the legacy `C -> B` fallback transition.
+Do not optimize that transition instead of completing `_13`. After Model-C-only production
+finalization, any Model-C-only timeout/deadline defect is a separate evidence-based task.
+
+==================================================
+LIVE MEASUREMENT HISTORY
+==================================================
+
+Historical owner-supplied OPNsense measurements established initial implementation bounds
+and later measurement cycles refined Lua/BLOB/discovery/lifecycle behavior. Current accepted
+conclusions are summarized in `docs/PROJECT_STATE.md` and specialist architecture.
+
+The old DNS timing observations are historical only because DNS has since been fixed by the owner.
+
+==================================================
+STRATEGY SEARCH MODEL
+==================================================
+
+The search space uses native Zapret2 mechanisms. Technique/family tags may include:
+
+- multisplit;
+- multidisorder;
+- seqovl;
+- fake;
+- fake plus split;
+- syndata;
+- hostfakesplit.
+
+Stage 50 may test inexpensive representatives, but PASS/FAIL is only evidence. Stage 60
+must not use accepted-family set as a reachability gate.
+
+Adaptive exploration may cover:
+
+- split positions;
+- seqovl values;
+- semantically compatible BLOB-free, built-in, inline and installed external resources;
+- repeats;
+- out-range;
+- other native Zapret2 parameters represented by `CandidateSpec`.
+
+Classic zapret/nfqws1/dvtws/winws examples are not used as candidate/translation input.
+Community presets are ordering evidence, not proof for the current provider/target/path.
+Known native/owner-proven strategies form a golden corpus for CandidateSpec/resource/graph
+representability; historical success changes priority only, never removes graph reachability.
+
+==================================================
+CANDIDATE RUNTIME ISOLATION — MODEL C SELECTED
+==================================================
+
+Candidate effect must always be isolated and attributable.
+
+A/B/C selection is closed:
+
+- Model A — cold correctness/reference implementation;
+- Model B — warm/reference implementation and legacy `_12` automatic fallback only;
+- Model C — selected normal production Stage-60 runtime.
+
+Current `_12` source still has `Model C -> Model B -> Model A cold` automatic replay. That
+is transition debt, not architecture authority. `_13` removes B/A from the normal
+production fallback chain.
+
+Model C must preserve:
+
+- exact candidate results/identity;
+- deterministic source-port-qualified routing/attribution;
+- no cross-candidate state leakage;
+- logical planner batch identity even when physical profile-compatible segmentation is required;
+- bounded cancellation/cleanup/restoration;
+- current readiness proof.
+
+Historical A/B/C experiment documentation is retained as evidence for how Model C was selected.
+It cannot reopen the selection question.
+
+==================================================
+SCREENING, EXPANSION, AND STABILITY
+==================================================
+
+Reconnaissance:
+
+- inexpensive native seeds produce candidate-local evidence;
+- technique/family labels remain diagnostic metadata;
+- rejected representative does not reject stronger related candidates.
+
+Adaptive expansion:
+
+- schedule graph neighbors according to cost/current evidence;
+- simple success prioritizes nearby stable/simple variants;
+- simple failure may open stronger compatible combinations;
+- stop when enough strong candidates exist or budget is exhausted;
+- preserve candidates found before budget exhaustion/cancellation.
+
+Stability confirmation:
+
+- sequential fresh connections;
+- three attempts per required endpoint under the current stability contract;
+- every required endpoint must pass required attempts;
+- stop further attempts when required success becomes impossible;
+- combined percentage never hides a failed required endpoint.
+
+==================================================
+SHORTLIST AND RANKING
+==================================================
+
+The normal target is up to three strong stable strategies when enough candidates exist.
+A truthful smaller shortlist is valid.
+
+Ranking order:
+
+1. every required endpoint passes;
+2. stability across repeated fresh connections;
+3. no detected control/collateral regression;
+4. simpler strategy structure;
+5. minimal traffic modification;
+6. lower fake/repeat requirements;
+7. TTL/AutoTTL only when simpler strategies do not work;
+8. complex multi-step chains only when required.
+
+Strategy number 1 is the recommendation. Strategy Lab never overwrites/merges saved Traffic Strategy.
+
+==================================================
+EXTENDED MODE
+==================================================
+
+Extended branches may include:
+
+- TLS 1.2;
+- plain HTTP;
+- approved URI paths;
+- arbitrary UDP with explicit port/probe contract.
+
+TLS 1.1 is outside normal interface unless separately approved. The fixed IPv4 UDP/443
+QUIC precheck remains diagnostic evidence only. Generic UDP is never reported as QUIC.
+
+==================================================
+CIRCULAR LIVE VALIDATION
+==================================================
+
+Circular validation is a separate second-stage bounded lifecycle transaction.
+
+It:
+
+- receives eligible stable shortlist results;
+- builds a temporary target-scoped profile;
+- allows browser/application validation;
+- provides its own Stop control;
+- never modifies permanent Traffic Strategy;
+- cleans temporary runtime and restores initial service state.
+
+Circular validation and automated Strategy Lab jobs cannot run concurrently because they
+share the lifecycle lock. Its eligibility/TTL behavior is controlled by the current
+circular contract; historical discovery winner targets do not force Strategy Lab to
+manufacture extra winners.
+
+==================================================
+BILINGUAL SHORT REPORT CONTRACT
+==================================================
+
+Language selection follows active OPNsense document language:
+
+- English default/fallback for non-`ru*`;
+- Russian when language begins with `ru`;
+- no plugin-specific language selector.
+
+Messages use stable keys with variable substitution. Approved examples follow.
+
+Target:
+
+EN:
+`PASS — Target: telegram.org; type: domain; endpoints: telegram.org, web.telegram.org; mode: standard.`
+
+RU:
+`PASS — Цель: telegram.org; тип: домен; endpoints: telegram.org, web.telegram.org; режим: основной.`
+
+Normal service stopped:
+
+EN:
+`PASS — The Zapret2 service has been stopped.`
+
+RU:
+`PASS — Служба Zapret2 остановлена.`
+
+Network capability, restricted:
+
+EN:
+`PASS — IPv4 is available; IPv6 is unavailable; QUIC/IPv4 is blocked; IPv6 and QUIC tests have been excluded.`
+
+RU:
+`PASS — IPv4 доступен; IPv6 недоступен; QUIC/IPv4 закрыт; проверки IPv6 и QUIC исключены.`
+
+Network capability, full:
+
+EN:
+`PASS — IPv4, IPv6, and QUIC/IPv4 are available.`
+
+RU:
+`PASS — IPv4, IPv6 и QUIC/IPv4 доступны.`
+
+Clean baseline:
+
+EN:
+`PASS — DNS: OK; direct TLS 1.3 connection failed.`
+
+RU:
+`PASS — DNS: OK; прямое TLS 1.3-соединение не установлено.`
+
+Rejected families:
+
+EN:
+`PASS — multisplit, multidisorder, and fake were rejected.`
+
+RU:
+`PASS — multisplit, multidisorder и fake были отклонены.`
+
+Accepted families:
+
+EN:
+`PASS — multisplit, multidisorder, and fake were accepted.`
+
+RU:
+`PASS — multisplit, multidisorder и fake были приняты.`
+
+Candidate expansion:
+
+EN:
+`PASS — Tested 18 variants across three working families; found 6 candidates that opened both endpoints.`
+
+RU:
+`PASS — Проверено 18 вариантов в трёх рабочих семействах; найдено 6 кандидатов, открывающих оба endpoints.`
+
+Early expansion stop:
+
+EN:
+`PASS — Enough working candidates were found; further parameter testing was stopped.`
+
+RU:
+`PASS — Получено достаточно рабочих кандидатов; дальнейший перебор параметров остановлен.`
+
+Stability passed:
+
+EN:
+`PASS — Three candidates passed stability testing: each endpoint was opened successfully 3 out of 3 times.`
+
+RU:
+`PASS — Три кандидата прошли проверку устойчивости: каждый endpoint успешно открыт 3 из 3 раз.`
+
+Stability filtered:
+
+EN:
+`PASS — Three of 6 candidates confirmed stability; the remaining candidates produced unstable results.`
+
+RU:
+`PASS — Из 6 кандидатов три подтвердили устойчивость; остальные дали нестабильные результаты.`
+
+Extended mode not requested:
+
+EN:
+`SKIPPED — Extended testing was not requested.`
+
+RU:
+`SKIPPED — Расширенное тестирование не запрашивалось.`
+
+Extended web results:
+
+EN:
+`PASS — TLS 1.2 and HTTP were tested; 2 additional profiles were found. QUIC and IPv6 were skipped because they are unavailable.`
+
+RU:
+`PASS — TLS 1.2 и HTTP проверены; найдено 2 дополнительных профиля. QUIC и IPv6 пропущены как недоступные.`
+
+UDP result:
+
+EN:
+`PASS — One working profile was found for the UDP target; QUIC profiles were not tested.`
+
+RU:
+`PASS — Для UDP-цели найден один рабочий профиль; QUIC-профили не проверялись.`
+
+Shortlist:
+
+EN:
+`PASS — Three strategies were selected; strategy No. 1 is recommended because of its 3/3 stability and minimal traffic modification.`
+
+RU:
+`PASS — Выбраны 3 стратегии; №1 рекомендована из-за устойчивости 3/3 и минимального количества модификаций трафика.`
+
+Restore running:
+
+EN:
+`PASS — Temporary processes and rules were removed; the original Zapret2 service was restarted and is fully operational.`
+
+RU:
+`PASS — Временные процессы и правила удалены; исходная служба Zapret2 снова запущена и полностью исправна.`
+
+Restore stopped:
+
+EN:
+`PASS — Temporary processes and rules were removed; Zapret2 was left in its original stopped state.`
+
+RU:
+`PASS — Временные процессы и правила удалены; Zapret2 оставлен в исходном остановленном состоянии.`
+
+Final result:
+
+EN:
+`COMPLETED — The target is blocked without bypass. Three stable strategies were found that open all required endpoints. Strategy No. 1 is recommended. The original Zapret2 state was restored.`
+
+RU:
+`COMPLETED — Цель заблокирована без обхода. Найдены 3 устойчивые стратегии, открывающие все обязательные endpoints. Рекомендована стратегия №1. Исходное состояние Zapret2 восстановлено.`
+
+Cancellation skip:
+
+EN:
+`SKIPPED — canseled`
+
+RU:
+`SKIPPED — отменено`
+
+Recommended message keys:
+
+- `target_initialized`;
+- `service_stopped`;
+- `network_ipv4_only`;
+- `network_full`;
+- `baseline_tls_failed`;
+- `families_rejected`;
+- `families_accepted`;
+- `candidates_found`;
+- `candidate_limit_reached`;
+- `stability_passed`;
+- `stability_filtered`;
+- `extended_skipped`;
+- `extended_web_passed`;
+- `udp_profile_found`;
+- `shortlist_ready`;
+- `service_restored_running`;
+- `service_restored_stopped`;
+- `test_completed`;
+- `stage_canceled`.
+
+==================================================
+HISTORICAL INITIAL IMPLEMENTATION PATCH SERIES
+==================================================
+
+The original 13-patch implementation plan is retained in Git history and the prior
+version of this document, plus patch/devlog records. It is complete and is **not** the
+current roadmap. Its family-first, QUIC-search, serial-delivery and cold-candidate
+assumptions do not override current Python/adaptive/Model-C architecture.
+
+Current next source work is `v0.4.1_13` Model-C-only production finalization as defined in
+`docs/START_HERE.md` and `docs/ROADMAP.md`.
+
+==================================================
+HISTORICAL VERIFICATION / ACCEPTANCE
+==================================================
+
+Historical implementation-series verification and acceptance are preserved in
+`docs/verification/`, `docs/patches/`, `docs/devlog/`, decisions and Git history.
+
+Current verification authority is the current live matrix, specialist architecture and
+exact current patch acceptance in `docs/START_HERE.md`.
