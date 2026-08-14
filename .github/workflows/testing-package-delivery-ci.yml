@@ -1,0 +1,54 @@
+name: Testing package delivery contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-prerelease.yml'
+      - '.github/workflows/testing-package-delivery-ci.yml'
+      - 'scripts/test-github-branch-hygiene.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  governance:
+    name: Validate testing-package delivery governance
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate delivery contract syntax
+        run: |
+          sh -n scripts/test-github-branch-hygiene.sh
+          sh scripts/test-github-branch-hygiene.sh
+
+  package:
+    name: Qualify testing-package build on FreeBSD 15
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build package inside FreeBSD 15 VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: '15.0'
+          usesh: true
+          prepare: pkg install -y jq
+          run: |
+            test "$(freebsd-version -u | cut -d. -f1)" = "15"
+            sh scripts/build-pkg.sh
+
+      - name: Verify package manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE=$(find dist -maxdepth 1 -type f -name 'os-zapret2-restyle-*.pkg' -print -quit)
+          test -n "${PACKAGE}"
+          MANIFEST=$(mktemp)
+          trap 'rm -f "${MANIFEST}"' EXIT
+          tar -xOf "${PACKAGE}" +MANIFEST > "${MANIFEST}"
+          jq -e '.abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64"' "${MANIFEST}" >/dev/null
+          sha256sum "${PACKAGE}"
