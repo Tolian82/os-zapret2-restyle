@@ -2,104 +2,117 @@
 
 This file answers: **Where should I look?**
 
-It is navigation only. Permanent principles are canonical in `docs/PROJECT_PRINCIPLES.md`.
+Navigation only. Permanent principles are canonical in `docs/PROJECT_PRINCIPLES.md`.
 
 ## Mandatory startup order
-
-For every new/resumed project context:
 
 1. repository-root `AGENTS.md`;
 2. `docs/PROJECT_PRINCIPLES.md`;
 3. `docs/START_HERE.md`;
 4. `docs/PROJECT_STATE.md`;
-5. specialist documents explicitly named by the current task in `START_HERE.md`.
+5. specialist documents named by the current task in `START_HERE.md`.
 
-Read selected required documents completely through EOF. `START_HERE.md` itself contains the short
-mandatory summary of the most recent completed logical work and points to its detailed patch/devlog/
-evidence records. Historical material is read when the current task/plan/evidence needs it, not
-automatically on every new chat.
+`START_HERE.md` carries the mandatory short summary of the most recent completed logical work and
+points to detailed patch/devlog/evidence records. Historical material is read when the task needs it,
+not automatically on every new chat.
 
 ## Core map
 
-- `docs/PROJECT_PRINCIPLES.md` — cumulative canonical permanent principles; every new durable active
-  principle is added here in the first synchronized documentation change;
-- `docs/START_HERE.md` — exact current handoff, most recent completed logical work and exact next task;
+- `docs/PROJECT_PRINCIPLES.md` — cumulative permanent canon;
+- `docs/START_HERE.md` — exact current handoff and latest completed work;
 - `docs/PROJECT_STATE.md` — current factual project/repository/product/environment state;
-- `docs/ROADMAP.md` — ordered near-term, long-term and deferred work with completed/superseded status;
-- `docs/DECISIONS.md`, `docs/decisions/` — why something was approved/superseded;
-- `docs/WORKING_CONVENTIONS.md` — how permanent principles are applied day to day;
+- `docs/ROADMAP.md` — current ordered near-/long-term/deferred plan;
+- `docs/ARCHITECTURE.md` — current top-level technical architecture;
+- `docs/architecture/` — current specialist architecture contracts;
+- `docs/WORKING_CONVENTIONS.md` — day-to-day application of principles;
+- `docs/GITHUB_PUBLICATION.md` — GitHub delivery procedure;
 - `docs/DEVELOPMENT_GUIDE.md` — repeatable development procedure;
-- `docs/ARCHITECTURE.md`, `docs/architecture/` — current technical contracts;
-- `docs/AUDIT.md`, `docs/audit/` — audit findings/evidence/remediation history;
-- `docs/DEVLOG.md`, `docs/devlog/` — chronological implementation/activity history;
-- `docs/REQUIREMENTS.md` — product requirements;
-- `docs/patches/` — exact patch contracts/history;
-- `docs/verification/`, `docs/verification/evidence/` — test/live evidence;
+- `docs/DECISIONS.md`, `docs/decisions/` — decision history/rationale;
+- `docs/AUDIT.md`, `docs/audit/` — audit evidence/history;
+- `docs/DEVLOG.md`, `docs/devlog/` — implementation/activity chronology;
+- `docs/patches/` — logical patch contracts/history;
+- `docs/verification/`, `docs/verification/evidence/` — automated/live evidence;
 - `docs/releases/` — semantic release records.
 
-## Latest continuity record
+## Latest continuity / canon-lock record
 
-The current docs/governance continuity checkpoint is recorded in:
+Current docs/governance checkpoint:
 
-- `docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`;
-- `docs/patches/v0.4.1_12-owner-canon-zero-memory-checkpoint.md`;
-- `docs/devlog/2026-08-14-owner-canon-zero-memory-checkpoint.md`.
+- `docs/decisions/DEC-2026-08-14-owner-canon-lock-and-repository-hygiene.md`;
+- `docs/patches/v0.4.1_12-owner-canon-lock-doc-audit.md`;
+- `docs/devlog/2026-08-14-owner-canon-lock-doc-audit.md`.
 
-Its active consequences are summarized in mandatory `START_HERE`: newest owner canon wins over stale
-docs, new durable principles enter `PROJECT_PRINCIPLES`, every GitHub delivery is zero-memory
-recoverable, and the old slow/flaky local/container DNS problem is closed after the owner fixed it.
+It strengthens the prior zero-memory decision and establishes:
+
+- one unambiguous owner fact/decision is enough; do not repeatedly reconfirm it;
+- DNS is fixed/currently working unless fresh direct evidence shows a new problem;
+- Model C is selected; A/B/C production model selection is closed;
+- `зафиксируй` means a full review/correction of all conflicting active authority docs;
+- stale tests/contracts do not override current canon;
+- owner-facing project reports are understandable Russian by default;
+- routine temporary branch/repository cleanup is part of normal completion;
+- root architecture and base Strategy Lab architecture were corrected after stale `_31` / unselected
+  A/B/C wording was found in active files.
+
+Prior continuity decision remains historical foundation:
+`docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`.
 
 ## Current Strategy Lab / Model-C continuation
 
 Current packaged source: `VERSION=0.4.1`, `PLUGIN_REVISION=12`.
-Current next source patch: `v0.4.1_13` Model-C-only production finalization.
 
-Required current-task specialist reading is defined only by `docs/START_HERE.md`. For `_13` it is:
+**Model C is already selected.** Current `_12` B/A fallback is transition debt only.
+
+Exact next source patch: `v0.4.1_13` — remove automatic B/A production replay and make Model C the
+only normal production Stage-60 runtime.
+
+Required current-task specialist reading:
 
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
 - `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`.
 
-Do not infer extra mandatory reading from the historical lists below. A newer explicit owner
-instruction supersedes this current priority and must first be synchronized into the current docs.
+Current top-level/base architecture is also synchronized in:
 
-### Retained evidence navigation
+- `docs/ARCHITECTURE.md`;
+- `docs/architecture/STRATEGY_LAB.md`.
 
-Use only when the current task needs historical proof:
+Do not let historical A/B/C experiment records override these current authorities.
+
+## Retained evidence navigation
+
+Use when historical proof is needed:
 
 - Model A reference: `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`;
-- Model B baseline: `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`;
-- Model C source-port acceptance:
-  `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
-- adaptive budgets:
-  `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`;
-- stable `v0.4.1`: `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`;
+- Model B reference: `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`;
+- Model C source-port acceptance: `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
+- adaptive budgets: `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`;
 - Lua: `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`;
-- BLOB startup: `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
+- BLOB startup/RSS: `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
 - BLOB common set: `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`;
 - discovery: `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md`;
-- latest readiness/lifecycle:
-  `docs/verification/evidence/2026-08-14-v0.4.1_12-warm-readiness-live-pass.md`.
+- latest readiness/lifecycle: `docs/verification/evidence/2026-08-14-v0.4.1_12-warm-readiness-live-pass.md`.
+
+These are evidence/history, not competing current production choices.
 
 ## GitHub delivery reading
 
-For every GitHub mutation, the only always-required delivery procedure after startup is:
+For every GitHub mutation after startup read:
 
 - `docs/GITHUB_PUBLICATION.md`.
 
-Read decision files only when an operation needs their rationale/special boundary, for example:
+Decision references when rationale is needed:
 
-- owner-canon / zero-memory recovery / stale-current-doc dispute:
+- canon lock / stale docs or tests / Russian status / cleanup:
+  `docs/decisions/DEC-2026-08-14-owner-canon-lock-and-repository-hygiene.md`;
+- zero-memory recovery foundation:
   `docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`;
-- package delivery: `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md`;
-- CI/evidence dispute: `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`;
-- operational handoff/preflight authority question:
+- operational handoff/preflight:
   `docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md`;
-- title-policy dispute: `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`.
-
-`docs/GITHUB_WORKFLOW.md` is a concise cheat sheet, not a second mandatory authority.
+- package delivery: `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md`;
+- CI evidence handling: `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`.
 
 ## OPNsense command authority
 
-Owner console target is root `csh`. POSIX-only syntax must explicitly enter `sh`/`/bin/sh` and
-return with `exit`.
+Owner console target is root `csh`. POSIX-only syntax must explicitly enter `sh`/`/bin/sh` and return
+with `exit`.

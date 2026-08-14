@@ -16,15 +16,29 @@ For every new or resumed project context, read completely through EOF in this or
 
 Use `docs/INDEX.md` only as navigation when additional specialist/history material is required.
 
-Historical audits, decisions, patches, devlogs and evidence remain authoritative project records. Read them when the current plan, owner request, new defect or specialist scope requires them. `START_HERE.md` must point to the latest relevant patch/devlog/evidence record so recent work is never lost merely because the full historical log is not reread on every session.
+Historical audits, decisions, patches, devlogs and evidence remain authoritative project records only for the state/time they describe. Read them when the current plan, owner request, new defect or specialist scope requires them. `START_HERE.md` must point to the latest relevant patch/devlog/evidence record so recent work is never lost merely because the full historical log is not reread on every session.
 
 If a selected required document is truncated, paginated, clamped or range-limited, continue until EOF before acting. If a required authority cannot be read completely, stop before mutation/source change/package delivery rather than guessing.
 
-## Owner canon precedence
+## Owner canon lock
 
-The owner's newest unambiguous instruction or explicitly confirmed decision is authoritative project intent and immediately supersedes conflicting older documentation. Stale documentation is never a reason to revert to an older direction.
+The owner's newest unambiguous instruction, explicit project fact or explicitly confirmed decision is current project canon and immediately supersedes conflicting older documentation, tests and plans.
 
-If a new owner instruction is materially ambiguous, ask only the narrow clarification needed. Once the direction is unambiguous/confirmed, synchronize all affected active documentation in the same logical change before later work can consume the stale rule. Preserve older records as historical/superseded where useful.
+Once the owner has stated/confirmed a fact or direction unambiguously, do **not** ask again merely because an old document/test disagrees. Reopen it only if:
+
+- the owner explicitly changes it; or
+- fresh direct reproducible evidence contradicts the factual claim.
+
+Old documentation, old CI assertions, previous chats, missing memory or an earlier architecture plan are not counter-evidence.
+
+Current locked examples:
+
+- DNS is fixed; historical DNS slowness/failures are closed unless fresh direct evidence shows a new DNS problem;
+- Model C is the selected production Stage-60 direction; A/B are not competing production choices.
+
+When the owner says `зафиксируй`, `запиши это`, `record this` or equivalent, the first GitHub documentation change must include a **full reconciliation of all active/current authority documents that could contradict the new canon**. Correct every active contradiction in the same logical docs change. Historical records may keep old state only as clearly historical/superseded material.
+
+If a test/CI contract encodes stale canon, update the stale contract; never bend current documentation back toward an obsolete decision to make the test green.
 
 ## Documentation authority
 
@@ -32,7 +46,15 @@ If a new owner instruction is materially ambiguous, ask only the narrow clarific
 
 Every substantive GitHub delivery is also a zero-memory recovery checkpoint. Before publication, verify that a future session with no chat/model memory can determine from the repository alone: the most recent completed logical work, what the latest/current delivery changed and why, its intended effect/acceptance boundary, the exact immediate next step, the complete ordered plan with completed/superseded/deferred status, and the active rules through `PROJECT_PRINCIPLES.md`.
 
-Before any GitHub delivery, verify that the documentation contract in `PROJECT_PRINCIPLES.md` is satisfied: the repository must state what changes and why, the expected result/acceptance boundary, and the complete near-term and long-term plan. Reconcile the plan immediately before publication and update it first if implementation/testing or a newer owner instruction changed it.
+Before any GitHub delivery, verify that the documentation contract in `PROJECT_PRINCIPLES.md` is satisfied and reconcile it against the owner's newest canon.
+
+## Owner-facing communication
+
+Project status/results to the owner are written in clear Russian by default.
+
+Do not require the owner to decode raw GitHub/CI jargon. If an English/internal term is materially useful (`pull request`, `CI`, `latest head`, check name, etc.), immediately explain it in Russian and state the practical result: what succeeded/failed and what happens next.
+
+Routine internal cleanup is not an owner problem. Fix ordinary branch/repository hygiene silently inside the authorized task unless a real permission/tool boundary prevents safe completion.
 
 ## Scope-first repository preflight
 
@@ -50,11 +72,12 @@ Expand the inventory only when the operation needs it:
 - artifacts/tags/releases/assets for package publication or release work;
 - complete branch inventory for cleanup/collision/recovery/hygiene work;
 - rulesets/protection/permissions when relevant;
-- recursive repository tree for a genuine broad audit/cross-cutting investigation whose file/call path is unknown.
+- recursive repository tree for a genuine broad audit/cross-cutting investigation whose file/call path is unknown;
+- active/current authority document sweep when the owner requests canon/documentation reconciliation.
 
-A known-file task already named by `START_HERE.md` does not require a full repository/GitHub inventory before implementation.
+A known-file task already named by `START_HERE.md` does not require a full repository/GitHub inventory before implementation unless the owner explicitly requested a broad consistency review.
 
-Authority: `docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md` and `docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`.
+Authority: `docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md`, `docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`, and `docs/decisions/DEC-2026-08-14-owner-canon-lock-and-repository-hygiene.md`.
 
 ## GitHub delivery mechanics
 
@@ -72,12 +95,15 @@ Rules:
 - docs/governance/CI-only changes do not change package metadata;
 - never force-update `main`, move a published tag or rewrite published history;
 - read exact failed-job evidence before changing source/workflow/runner;
-- external infrastructure failure causes no speculative source change.
+- external infrastructure failure causes no speculative source change;
+- if a failed test proves only that the test encodes superseded canon, update the stale test/contract instead of reverting current canon;
+- after completion, verify temporary branches contain no useful unique work and remove them; preserve useful unique work before cleanup.
 
 ## Request scope / standing authority
 
 - `analyse`, `diagnose`, `review`, `audit`, `explain`: inspect/report only unless the owner also asks for changes;
-- `fix`, `add`, `change`, `implement`, `complete`: perform the ordinary branch → Ready PR → checks → squash merge → verification cycle;
+- `fix`, `add`, `change`, `implement`, `complete`: perform the ordinary branch → Ready PR → checks → squash merge → verification → cleanup cycle;
+- `зафиксируй` / equivalent: synchronize the stated canon plus all conflicting active documentation at the first GitHub docs opportunity;
 - package/test-package/installable-patch request: complete packaged source work as needed and persist the deterministic `.pkg` on GitHub;
 - explicit candidate publication: publish only that testing package, no Pages/pkg-repository promotion;
 - explicit new semantic release: perform the authorized full release pipeline.
