@@ -45,6 +45,7 @@ selected normal OPNsense Model-C-only regression. A PASS closes the fallback-rem
 - [x] Model C source-port/budget/lifecycle/readiness work;
 - [x] Model C selected for production;
 - [x] Lua/BLOB/discovery/current lifecycle measurements closed;
+- [x] three-level documentation memory and explicit release/version authority;
 - [ ] `_13` remove production B/A fallback;
 - [ ] one owner-live `_13` regression and evidence closure.
 
@@ -94,15 +95,19 @@ Retain but do not activate by inertia:
 - bol-van/zapret2 management through the approved `setup.sh` backend;
 - additional BLOB-repository GUI work only after its technical contract is supplied/approved.
 
-## Documentation rollover milestone
+## Future second-numeric-component transition
 
-On the first release in a new semantic minor line, for example `v0.5.0_1`:
+The second numeric component is the `4` in `0.4.x`. It never changes automatically. Only after the
+owner explicitly requests/approves a transition such as `v0.4.x -> v0.5.x`, the same change must:
 
 1. finalize current `v0.4.x` ledger;
 2. create/freeze `history/archive/v0.4.x.md`;
 3. initialize `history/current/v0.5.x.md`;
 4. update `INDEX.md`, `START_HERE.md`, `PROJECT_STATE.md` and the short lifetime path;
 5. retain all deep detailed records unchanged;
-6. proceed with the semantic release.
+6. perform the mandatory complete `README.md` revision;
+7. complete the full project release, including verified package publication into the OPNsense
+   Pages/pkg repository for Web GUI installation.
 
-This rollover is automatic and requires no separate owner reminder.
+A full release may be requested independently while remaining in `v0.4.x`; it does not authorize a
+change to the second numeric component.
