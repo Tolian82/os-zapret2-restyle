@@ -22,15 +22,14 @@ Direct orientation:
 - primary branch: `main`;
 - project version: `0.4.1`;
 - packaged source revision: `_13`;
-- current source package candidate: `os-zapret2-restyle-0.4.1_13.pkg`;
-- `_13` source merge: `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
-- latest published testing package/tag: `os-zapret2-restyle-0.4.1_12.pkg` / `v0.4.1_12`;
-- latest published testing-package SHA-256: `3b5a6c39c09abdfc8d8f1b59923312c40dda27e11c4f03e20773131996f6789d`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_13.pkg` / `v0.4.1_13`;
+- testing-package SHA-256: `7a2f864aa14ba2170ca378954ab5421092b76aca79b7b1765b976de2f024797b`;
+- `_13` source merge and testing-tag target: `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
 - latest full Web/pkg release: `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
 - internal service key: `zapret`.
 
-The exact `main` SHA is resolved at execution time under `GH-004`. Source revision `_13` and the latest persistently published testing tag `_12` are intentionally distinct until testing-package publication is explicitly requested (`DEV-033`, `GH-047`–`GH-050`).
+The exact `main` SHA is resolved at execution time under `GH-004`. The `_13` testing prerelease is persistent GitHub delivery only and does not update the stable Pages/pkg repository (`GH-034`–`GH-038`).
 
 ## Current product facts
 
@@ -70,16 +69,20 @@ Historical A/B/C experiment material is history/proof and does not represent cur
 
 ## Current verification boundary
 
-`_13` automated source acceptance is complete:
+`_13` automated source acceptance and persistent testing-package publication are complete:
 
 - PR `#230` exact verified head: `8e1af17ce4ccfaad4851329167b386741d0c9ee8`;
 - focused Model-C production regression proves injected infrastructure failure does not invoke B/A reference paths;
 - full Strategy Lab corrective matrix: PASS;
 - FreeBSD-15 package build/inspection qualification: PASS;
-- GitHub Actions CI run: `31819116248`;
-- verified head squash-merged as `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`.
+- source CI run: `31819116248`;
+- verified head squash-merged as `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
+- testing publication workflow run: `31838633599`;
+- prerelease `v0.4.1_13` and package asset published and verified;
+- tag target matches the `_13` source merge exactly;
+- temporary publication branch was removed after success.
 
-Owner-live `_13` remains a separate post-publication gate: one selected normal Model-C-only OPNsense run must verify correct result handling, no automatic B/A replay, semantic restoration and absence of temporary IPFW/process/socket residue. Persistent `_13` testing-package publication has **not** occurred and is not inferred from source merge or Actions artifacts.
+Owner-live `_13` is now the remaining gate: one selected normal Model-C-only OPNsense run must verify correct result handling, no automatic B/A replay, semantic restoration and absence of temporary IPFW/process/socket residue.
 
 ## Current documentation and governance facts
 
