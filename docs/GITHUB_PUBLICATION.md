@@ -1,7 +1,7 @@
 # GitHub rules — Правила работы с GitHub
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-08-14
+**Updated:** 2026-08-15
 
 This file is the fourth canonical rule book and the single normative home for working with GitHub in this project: repository access, preflight, branches, PRs, CI, merges, testing packages, full releases, documentation synchronization, and repository hygiene. The filename `GITHUB_PUBLICATION.md` is intentionally retained; its scope is all GitHub work, not publication only.
 
@@ -20,7 +20,7 @@ Read this file completely before GitHub mutation.
 - validation and CI: `GH-016`–`GH-023`;
 - merge, post-merge verification, cleanup: `GH-024`–`GH-030`;
 - repository/secret hygiene: `GH-031`–`GH-033`;
-- testing package: `GH-034`–`GH-038`;
+- testing package: `GH-034`–`GH-038`, `GH-060`;
 - full release: `GH-039`–`GH-048`;
 - release-trigger behavior: `GH-049`–`GH-052`;
 - documentation/process synchronization: `GH-053`–`GH-059`.
@@ -47,7 +47,7 @@ GH-009. **[ОТМЕНЕНО] Owner-canon/documentation reconciliation is broad b
 
 ## Branch and logical-scope discipline
 
-GH-010. **One logical scope uses one task branch and one PR.** Branch from the exact verified `main` SHA; unrelated work gets another scope.
+GH-010. **One logical engineering/source scope uses one task branch and one source PR.** Branch from the exact verified `main` SHA; unrelated work gets another scope. The bounded post-publication documentation-record PR required by `GH-060` is the explicit delivery-tail exception because immutable publication facts do not exist before the source merge and publication; that tail contains no product/package change.
 
 GH-011. **Same-root-cause corrections stay in the same PR.** A stale test, fixture, documentation contract, or CI assertion exposed by the intended change is repaired in that PR; this is the GitHub application of `DEV-017`.
 
@@ -103,15 +103,17 @@ GH-033. **Repository hygiene checks are part of normal CI.** Do not disable or w
 
 ## Owner testing-package publication
 
-GH-034. **Interpret owner package shorthand through `CHAT-015`–`CHAT-016`.** A testing package is persistent GitHub delivery, not an ephemeral Actions artifact unless the owner explicitly requests build evidence only.
+GH-034. **Interpret owner package shorthand through `CHAT-015`, `CHAT-016`, and `CHAT-027`.** A testing package is persistent GitHub delivery, not an ephemeral Actions artifact unless the owner explicitly requests build evidence only.
 
-GH-035. **A testing package is tied to an immutable exact source identity.** Verify candidate version/revision, source commit/tag, uploaded `.pkg`, and checksum or digest as applicable.
+GH-035. **A testing package is tied to the immutable exact merged commit that introduced the current package identity.** Verify that the publication source is already an ancestor of current `main`, that its parent has a different package identity, and that candidate version/revision, tag target, uploaded `.pkg`, and checksum/digest all agree. Do not publish a current candidate from a later docs-only/governance commit merely because `VERSION` and `PLUGIN_REVISION` still match.
 
 GH-036. **Testing-package publication does not promote the stable project package repository.** No stable Pages/pkg-repository update or full-release claim occurs merely because a `.pkg` is published for testing.
 
-GH-037. **Testing package bytes remain retrievable after workflow completion.** Use a persistent GitHub release/prerelease asset or equivalent approved persistent GitHub surface; Actions artifacts or local files alone are build evidence.
+GH-037. **Testing package bytes remain retrievable after workflow completion.** Use a persistent GitHub release/prerelease asset or equivalent approved persistent GitHub surface; Actions artifacts, local files, sandbox files, and chat attachments are build evidence or transport artifacts, not package delivery.
 
 GH-038. **Temporary testing-publication branches are removed after successful publication once unique work is safely preserved.** Do not leave version-specific publisher branches as permanent process state.
+
+GH-060. **An owner package/patch command is complete only after direct GitHub testing-package delivery.** For the shorthand governed by `CHAT-015`–`CHAT-016`: finish the source scope under the normal PR/CI/exact-head merge rules; when the command creates a new package candidate, immediately publish that exact candidate from its candidate-defining merged source commit through the generic testing publisher without asking for a second publication confirmation; verify prerelease/tag target, uploaded `.pkg`, checksum/digest, and publication-branch cleanup; perform the bounded post-publication documentation reconciliation required by `DOC-037`; and only then report completion with the direct GitHub `.pkg` asset URL. A source PR, merge, CI package artifact, local `.pkg`, sandbox download, or chat attachment is not completion. If GitHub publication is concretely blocked, report that blocker and do not substitute a chat-delivered package/archive. The product boundary remains `DEV-040`, and owner-facing file delivery obeys `CHAT-027`.
 
 ## Full release publication
 
@@ -147,7 +149,7 @@ GH-052. **An explicit release-preparation merge at the current candidate creates
 
 ## Documentation and process synchronization
 
-GH-053. **Every GitHub delivery applies documentation reconciliation.** Apply `DOC-036`, `DOC-037`, and `DOC-047`: update affected documentation in the same logical PR when facts/contracts/handoff/plan/rules changed; otherwise record an evidence-based no-op by leaving bounded documents untouched.
+GH-053. **Every GitHub delivery applies documentation reconciliation.** Apply `DOC-036`, `DOC-037`, and `DOC-047`. Facts/contracts/handoff/plan/rules known before source merge are reconciled in that logical source PR. Facts that exist only after successful immutable testing-package publication—such as release/tag identity, asset digest, publication workflow result, and automatic publisher-branch cleanup—are reconciled immediately in the bounded docs-only publication-record PR required by `GH-060`; this is the explicit post-publication exception to the same-source-PR rule and must contain no product/package change. Otherwise use an evidence-based no-op when nothing documented changed.
 
 GH-054. **Touch bounded documents only when their role requires it.** Apply `DOC-011`, `DOC-012`, and `DOC-047`; do not mechanically edit state, handoff, roadmap, or rule books merely to increase PR file count.
 
@@ -178,7 +180,7 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-020` | `DEV-014` |
 | `GH-022` | `DEV-011` |
 | `GH-029` | `CHAT-010`, `CHAT-022` |
-| `GH-034` | `CHAT-015`, `CHAT-016` |
+| `GH-034` | `CHAT-015`, `CHAT-016`, `CHAT-027` |
 | `GH-039` | `DEV-039`, `CHAT-017` |
 | `GH-041` | `DEV-038` |
 | `GH-042` | `DOC-038`, `DOC-039` |
@@ -191,6 +193,7 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-057` | `DOC-019`, `DOC-045`, `DOC-047`, `DOC-053` |
 | `GH-058` | `DOC-042`–`DOC-045` |
 | `GH-059` | `DOC-053` |
+| `GH-060` | `DOC-037`, `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
 <!-- RULE-XREF-OUT-END -->
 
 ### Inbound references
@@ -206,7 +209,7 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-016`–`GH-023` | `CHAT-010` |
 | `GH-024`–`GH-030` | `CHAT-010`, `CHAT-018` |
 | `GH-026` | additionally `DOC-049` |
-| `GH-034`–`GH-038` | `DEV-040`, `CHAT-015`, `CHAT-016` |
+| `GH-034`–`GH-038` | `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
 | `GH-039` | `DOC-038`, `DEV-039`, `CHAT-017` |
 | `GH-040` | `DOC-038`, `CHAT-017` |
 | `GH-041` | `DOC-038`, `DEV-038`, `CHAT-017` |
@@ -218,6 +221,7 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-052` | `CHAT-017` |
 | `GH-053` | `DOC-037`, `DOC-047` |
 | `GH-054` | `DOC-047` |
+| `GH-060` | `DOC-037`, `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
 <!-- RULE-XREF-IN-END -->
 
 ## Rule lifecycle
