@@ -1,15 +1,15 @@
 # os-zapret2-restyle — Master development plan
 
-Status: **CURRENT / COMPLETE CONCISE PLAN**
-Updated: 2026-08-14
+**Status:** CURRENT · COMPLETE CONCISE PLAN  
+**Updated:** 2026-08-14
 
-Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md).
-Exact revision handoff: [`START_HERE.md`](START_HERE.md).
-Documentation rules: [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md).
-Project-development rules: [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md).
+Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md).  
+Exact revision handoff: [`START_HERE.md`](START_HERE.md).  
+Documentation rules: [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md).  
+Project-development rules: [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md).  
 Current-line detail: [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
 
-This is the short master plan defined by `DOC-031`–`DOC-033`. Version transitions and release semantics are not redefined here; see `DEV-027`–`DEV-040`.
+This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and release semantics remain canonical in `DEV-027`–`DEV-040`.
 
 ## Whole-project path
 
@@ -40,6 +40,9 @@ This is the short master plan defined by `DOC-031`–`DOC-033`. Version transiti
 - [x] Three-level documentation memory
 - [x] Version-aware state/handoff/archive model
 - [x] Four canonical rule domains (`DOC-*`, `DEV-*`, `CHAT-*`, `GH-*`)
+- [x] Stable rule IDs and bidirectional cross-reference integrity
+- [x] Retire duplicate active quick-reference canon into compatibility pointers
+- [x] Context-first/SHA-scoped documentation cold-start optimization
 - [ ] Model-C-only production
   - [ ] remove B/A production fallback (`v0.4.1_13`)
   - [ ] owner-live Model-C-only regression

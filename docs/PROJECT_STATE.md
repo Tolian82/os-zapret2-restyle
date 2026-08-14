@@ -1,22 +1,22 @@
 # os-zapret2-restyle — Current state for `v0.4.x`
 
-Status: **CURRENT SECOND-COMPONENT STATE / LEVEL 1**
-Updated: 2026-08-14
+**Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1  
+**Updated:** 2026-08-14  
 State-line scope: **`v0.4.x`**
 
 This file contains current facts only (`DOC-026`–`DOC-030`).
 
 Direct orientation:
 
-- exact revision handoff: [`START_HERE.md`](START_HERE.md)
-- documentation rules: [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md)
-- project-development rules: [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md)
-- chat rules: [`CHAT_RULES.md`](CHAT_RULES.md)
-- GitHub rules: [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md)
-- master plan: [`ROADMAP.md`](ROADMAP.md)
-- current-line chronology/proof: [`history/current/v0.4.x.md`](history/current/v0.4.x.md)
+- exact revision handoff: [`START_HERE.md`](START_HERE.md);
+- documentation rules: [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md);
+- project-development rules: [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md);
+- chat rules: [`CHAT_RULES.md`](CHAT_RULES.md);
+- GitHub rules: [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md);
+- master plan: [`ROADMAP.md`](ROADMAP.md);
+- current-line chronology/proof: [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
 
-## Repository / package facts
+## Repository and package facts
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
@@ -30,7 +30,7 @@ Direct orientation:
 - required ABI: `FreeBSD:15:amd64`;
 - internal service key: `zapret`.
 
-The current exact `main` SHA is resolved at execution time by `GH-004`; documentation/CI-only commits after the packaged source merge do not change the `_12` package identity (`DEV-033`).
+The exact `main` SHA is resolved at execution time under `GH-004`; documentation/CI-only commits after the packaged source merge do not change `_12` package identity (`DEV-033`).
 
 ## Current product facts
 
@@ -43,7 +43,7 @@ The current exact `main` SHA is resolved at execution time by `GH-004`; document
 
 Detailed measurements and proof links remain in the current `v0.4.x` ledger.
 
-## Current architecture / safety facts
+## Current architecture and safety facts
 
 Model C currently preserves:
 
@@ -59,23 +59,26 @@ Model C currently preserves:
 
 Current architecture entry points:
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md)
-- [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md)
+- [`ARCHITECTURE.md`](ARCHITECTURE.md);
+- [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md);
+- [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md).
 
 Historical A/B/C experiment material is history/proof and does not represent current production choice.
 
-## Current documentation/governance facts
+## Current documentation and governance facts
 
 - exactly four canonical general rule books exist: `DOCUMENTATION_RULES.md`, `PROJECT_PRINCIPLES.md`, `CHAT_RULES.md`, and `GITHUB_PUBLICATION.md`;
-- their rules use stable `DOC-*`, `DEV-*`, `CHAT-*`, and `GH-*` identifiers;
+- rules use persistent `DOC-*`, `DEV-*`, `CHAT-*`, and `GH-*` identities rather than renumbering for presentation order;
+- each canonical book contains explicit inbound/outbound cross-reference registries and CI validates them against actual rule bodies;
 - `START_HERE.md` is the exact `_N` handoff;
 - this file is current state for `v0.4.x`;
 - `ROADMAP.md` is the complete concise master plan;
 - `INDEX.md` is the global navigation/integrity map;
-- [`history/current/v0.4.x.md`](history/current/v0.4.x.md) is the current Level-2 chronology.
+- [`history/current/v0.4.x.md`](history/current/v0.4.x.md) is the current Level-2 chronology;
+- `GITHUB_WORKFLOW.md`, `DEVELOPMENT_GUIDE.md`, and `WORKING_CONVENTIONS.md` are legacy compatibility pointers only and contain no independent mutable canon;
+- active/new documentation uses clean standard Markdown; old Level-3 historical formatting is preserved unless deliberately migrated separately.
 
-The normative mechanics behind these facts live only in the corresponding rule books (`DOC-001`–`DOC-041`, `DEV-*`, `CHAT-*`, `GH-*`) and are not duplicated here.
+The normative mechanics behind these facts live only in the corresponding rule books and are not duplicated here.
 
 ## Completed version-line archives
 
