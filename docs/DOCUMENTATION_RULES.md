@@ -1,7 +1,7 @@
 # Documentation rules
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-08-14
+**Updated:** 2026-08-15
 
 This file is the single normative home for general rules about project documentation: structure, maintenance, reading, synchronization, archiving, rule references, and documentation integrity.
 
@@ -53,7 +53,7 @@ DOC-017. **Level 2 owns richer current-line detail.** `docs/history/current/vX.Y
 
 DOC-018. **Level 3 preserves detailed history.** Completed line archives plus original devlogs, patches, evidence, decisions, audits, releases, and Git history remain available without default loading.
 
-DOC-019. **`INDEX.md` is the integrity/navigation map.** It routes to the four rule books, Level-1 state/handoff/plan, current ledger, completed line archives, specialist documentation, and deep record stores.
+DOC-019. **`INDEX.md` is the integrity/navigation map.** It routes to the four rule books, Level-1 state/handoff/plan, current ledger, completed version-line archives, specialist documentation, and deep record stores.
 
 DOC-020. **Archiving never means deletion.** A compact archive may summarize a completed line while original detailed records remain intact and reachable.
 
@@ -97,7 +97,7 @@ DOC-035. **Standalone deep records must add distinct value.** Create them for di
 
 DOC-036. **Every logical development scope begins and ends with documentation reconciliation.** Before implementation, establish the current handoff/state/rules; before completion, reconcile every affected active fact, contract, handoff, plan, and proof pointer. The reconciliation decision is mandatory, but editing documentation files is not: when nothing documented changed, the correct result is an evidence-based no-op under `DOC-047`.
 
-DOC-037. **Every GitHub delivery includes a documentation-impact decision.** If committed behavior, facts, contracts, next work, or governance changed, update affected documentation in the same logical PR; GitHub execution follows `GH-053`.
+DOC-037. **Every GitHub delivery includes a documentation-impact decision and one complete documentation reconciliation.** Facts, contracts, handoff, plan, and governance that exist before an engineering/source merge belong in that same logical source PR. Immutable testing-package facts that do not exist until after that merge and successful publication are the single bounded exception: the generic publisher must create the docs-only publication-record PR defined by `GH-060`–`GH-061`, and that PR is part of the same delivery rather than a second engineering scope. Before that tail is merged, reconcile every affected current document whose bounded role actually changed; do not create a separate ad-hoc cleanup PR for publication facts. GitHub execution follows `GH-053`.
 
 DOC-038. **A full release includes a complete README review.** Before the release defined by `DEV-039` and executed under `GH-039`–`GH-046`, review `README.md` against actual capabilities, installation path, support boundary, release identity, and contributor navigation.
 
@@ -119,7 +119,7 @@ DOC-045. **CI protects rule-reference integrity.** It must reject duplicate cano
 
 DOC-046. **Current and newly written documentation uses clean standard Markdown.** Prefer one title, normal section headings, short paragraphs, bullets, tables, and code fences. Decorative separator walls such as long `=====` blocks are forbidden in current/active documents and new records. Historical Level-3 records need not be rewritten merely for style.
 
-DOC-047. **Every GitHub change performs an explicit documentation-impact check.** The result may legitimately be “no documentation change required” when no documented fact, contract, handoff, plan, rule, or user-facing behavior changed; otherwise the documentation change belongs in the same scope under `GH-053`–`GH-054`.
+DOC-047. **Every GitHub change performs an explicit documentation-impact check.** The result may legitimately be “no documentation change required” when no documented fact, contract, handoff, plan, rule, or user-facing behavior changed; otherwise the documentation change belongs in the same delivery under `GH-053`–`GH-054`, including the bounded post-publication tail required by `GH-060`–`GH-061` when immutable testing-package facts are created only after source merge.
 
 DOC-048. **[ОТМЕНЕНО] Compatibility pointers contain no independent current canon.** This rule was cancelled by the owner on 2026-08-14 for the former duplicate quick-reference documents. Those files are removed after repository-wide reference migration instead of being retained solely as compatibility placeholders. The ID and original wording remain reserved.
 
@@ -147,9 +147,9 @@ This registry is part of the rule contract. It is maintained with rule changes a
 | `DOC-016` | `GH-006` |
 | `DOC-026` | `DEV-029`, `DEV-030`, `DEV-031` |
 | `DOC-028` | `DEV-036`, `DEV-037` |
-| `DOC-037` | `GH-053` |
+| `DOC-037` | `GH-053`, `GH-060`–`GH-061` |
 | `DOC-038` | `DEV-039`, `GH-039`–`GH-046` |
-| `DOC-047` | `GH-053`, `GH-054` |
+| `DOC-047` | `GH-053`, `GH-054`, `GH-060`–`GH-061` |
 | `DOC-049` | `GH-004`, `GH-026` |
 <!-- RULE-XREF-OUT-END -->
 
@@ -170,7 +170,7 @@ This registry is part of the rule contract. It is maintained with rule changes a
 | `DOC-029` | `GH-047` |
 | `DOC-030` | `GH-047` |
 | `DOC-036` | `GH-053` |
-| `DOC-037` | `GH-053` |
+| `DOC-037` | `GH-053`, `GH-060`, `GH-061` |
 | `DOC-038` | `GH-042` |
 | `DOC-039` | `GH-042` |
 | `DOC-042` | `DEV-046`, `CHAT-025`, `GH-055`, `GH-058` |

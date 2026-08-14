@@ -1,7 +1,7 @@
 # Project development rules
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-08-14
+**Updated:** 2026-08-15
 
 This file is the single normative home for owner-approved rules, principles, and assertions governing how the project itself is designed, changed, verified, versioned, and released as a product.
 
@@ -99,7 +99,7 @@ DEV-038. **A full release may occur without changing the second component and ma
 
 DEV-039. **A full release means a complete installation-ready OPNsense delivery.** It is not merely a tag or uploaded file: the exact package must be published through the project package repository and be installable/upgradable through the OPNsense Web interface, with release identity/assets verified. Chat shorthand is defined by `CHAT-017`; GitHub completion is governed by `GH-039`, `GH-045`, and `GH-046`.
 
-DEV-040. **A testing package is not a full release.** It may be persistently published for owner testing without promoting the stable project package repository or claiming stable release status; `CHAT-016` and `GH-034`–`GH-038` govern that path.
+DEV-040. **A testing package is not a full release, but requested testing-package delivery is complete only on GitHub.** It may be persistently published for owner testing without promoting the stable project package repository or claiming stable release status. For owner patch/package shorthand, a local build, Actions artifact, chat attachment, or sandbox `.pkg`/archive is not the delivered package; completion follows `CHAT-015`–`CHAT-016`, `CHAT-027`, `GH-034`–`GH-038`, and `GH-060`–`GH-061`.
 
 ## Verification and release readiness
 
@@ -129,7 +129,7 @@ DEV-046. **A development-rule change is not complete until its references are re
 | `DEV-037` | `DOC-028`, `GH-047`, `GH-051` |
 | `DEV-038` | `GH-041` |
 | `DEV-039` | `CHAT-017`, `GH-039`, `GH-045`, `GH-046` |
-| `DEV-040` | `CHAT-016`, `GH-034`–`GH-038` |
+| `DEV-040` | `CHAT-015`, `CHAT-016`, `CHAT-027`, `GH-034`–`GH-038`, `GH-060`–`GH-061` |
 | `DEV-046` | `DOC-008`, `DOC-042`–`DOC-045` |
 <!-- RULE-XREF-OUT-END -->
 
@@ -160,7 +160,7 @@ DEV-046. **A development-rule change is not complete until its references are re
 | `DEV-037` | `DOC-028`, `GH-005`, `GH-047`, `GH-051` |
 | `DEV-038` | `GH-005`, `GH-041` |
 | `DEV-039` | `DOC-038`, `CHAT-017`, `GH-005`, `GH-039` |
-| `DEV-040` | `CHAT-016`, `GH-005` |
+| `DEV-040` | `CHAT-016`, `GH-005`, `GH-060` |
 | `DEV-042` | `CHAT-021` |
 <!-- RULE-XREF-IN-END -->
 

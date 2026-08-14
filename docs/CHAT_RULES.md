@@ -1,7 +1,7 @@
 # Owner / assistant chat rules
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-08-14
+**Updated:** 2026-08-15
 
 This file is the single normative home for owner-approved rules about how the assistant interprets the owner's words and communicates or acts from project chat.
 
@@ -45,9 +45,9 @@ CHAT-014. **Ask only at a real owner decision boundary.** If ambiguity cannot be
 
 ## Package and release shorthand
 
-CHAT-015. **`Пакет`, `патч`, `сделай пакет`, `выложи пакет`, or equivalent owner shorthand means a persistent installable OPNsense `.pkg` on GitHub unless the owner explicitly asks only for build/CI evidence.** Publication follows `GH-034`–`GH-038`.
+CHAT-015. **`Патч`, `сделай патч`, `пакет`, `сделай пакет`, `выложи пакет`, or equivalent owner shorthand is a GitHub-delivery command, not a request for a chat file.** A patch is delivered through the normal GitHub branch/PR/CI/exact-head merge path. If that patch creates a new package candidate, the same already-authorized command continues automatically through persistent testing-package publication and its publication-record tail under `GH-034`–`GH-038` and `GH-060`–`GH-061`; do not ask for a second publication confirmation. `Выложи пакет` always means a persistent installable OPNsense `.pkg` published on GitHub. Only an explicit owner request for build/CI evidence only may intentionally stop before package publication.
 
-CHAT-016. **`Не релиз, а пакет` means testing-package publication only.** Do not create or promote a full stable release or project package repository; provide the persistent testing package under `GH-034`–`GH-038` and the product boundary in `DEV-040`.
+CHAT-016. **`Не релиз, а пакет` means testing-package publication only.** Do not create or promote a full stable release or project package repository; complete the persistent GitHub testing-package path under `DEV-040`, `GH-034`–`GH-038`, and `GH-060`–`GH-061`.
 
 CHAT-017. **`Релиз` means the full installation-ready project release defined by `DEV-039` and completed through `GH-039`–`GH-052`.** A tag, prerelease, Actions artifact, or lone `.pkg` is not enough to claim completion.
 
@@ -73,6 +73,8 @@ CHAT-025. **When the owner corrects terminology or communication behavior, adopt
 
 CHAT-026. **An unambiguous owner instruction must have an observable consequence.** It ends in execution, persisted canon, or an explicit concrete blocker; it may not be silently omitted, downgraded to a suggestion, or deferred because old documentation, tests, habits, or assistant preferences disagree. This reinforces `DEV-001` and `DEV-003`.
 
+CHAT-027. **Project patches and packages are never delivered through chat/sandbox files.** Do not create or attach `.pkg`, `.zip`, `.tar.*`, `.patch`, `.diff`, or equivalent downloadable transport artifacts in chat as the delivery mechanism for project patches/packages, and never substitute an Actions artifact or local/sandbox file for the required GitHub delivery. Owner-facing completion provides the GitHub PR/repository result for a patch and, when a package candidate is involved, the direct persistent GitHub release-asset URL required by `GH-034`–`GH-038` and `GH-060`–`GH-061`. If GitHub delivery is concretely blocked, report the blocker; do not fall back to a chat-delivered package/archive.
+
 ## Cross-reference registry
 
 ### Outbound references
@@ -84,13 +86,14 @@ CHAT-026. **An unambiguous owner instruction must have an observable consequence
 | `CHAT-009` | `DOC-003`, `DOC-008`, `DEV-003` |
 | `CHAT-010` | `GH-010`–`GH-030` |
 | `CHAT-012` | `DOC-021`, `DOC-025`, `GH-004` |
-| `CHAT-015` | `GH-034`–`GH-038` |
-| `CHAT-016` | `DEV-040`, `GH-034`–`GH-038` |
+| `CHAT-015` | `GH-034`–`GH-038`, `GH-060`–`GH-061` |
+| `CHAT-016` | `DEV-040`, `GH-034`–`GH-038`, `GH-060`–`GH-061` |
 | `CHAT-017` | `DEV-039`, `GH-039`–`GH-052` |
 | `CHAT-018` | `GH-024`–`GH-030` |
 | `CHAT-021` | `DEV-011`, `DEV-042` |
 | `CHAT-025` | `DOC-008`, `DOC-042`–`DOC-045` |
 | `CHAT-026` | `DEV-001`, `DEV-003` |
+| `CHAT-027` | `GH-034`–`GH-038`, `GH-060`–`GH-061` |
 <!-- RULE-XREF-OUT-END -->
 
 ### Inbound references
@@ -101,11 +104,12 @@ CHAT-026. **An unambiguous owner instruction must have an observable consequence
 | `CHAT-007` | `DEV-001` |
 | `CHAT-009` | `DEV-001` |
 | `CHAT-010` | `GH-029` |
-| `CHAT-015` | `GH-034` |
-| `CHAT-016` | `DEV-040`, `GH-034` |
+| `CHAT-015` | `DEV-040`, `GH-034`, `GH-060` |
+| `CHAT-016` | `DEV-040`, `GH-034`, `GH-060` |
 | `CHAT-017` | `DEV-039`, `GH-039` |
 | `CHAT-022` | `GH-029` |
 | `CHAT-026` | `DEV-001` |
+| `CHAT-027` | `DEV-040`, `GH-034`, `GH-060` |
 <!-- RULE-XREF-IN-END -->
 
 ## Rule lifecycle

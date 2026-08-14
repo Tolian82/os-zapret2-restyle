@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: prerelease-${{ github.ref_name }}
@@ -15,7 +16,7 @@ concurrency:
 
 jobs:
   publish:
-    name: Build, verify, and publish FreeBSD 15 prerelease
+    name: Build, verify, publish, and open record PR
     runs-on: ubuntu-latest
 
     steps:
@@ -43,23 +44,68 @@ jobs:
           EXPECTED_BRANCH="publish/v${PACKAGE_VERSION}"
           [[ "${GITHUB_REF_NAME}" == "${EXPECTED_BRANCH}" ]]
 
+          TARGET_SHA="${GITHUB_SHA}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${TARGET_SHA}" origin/main || {
+            echo "Publication source ${TARGET_SHA} is not an ancestor of current main." >&2
+            exit 1
+          }
+
+          identity_at()
+          {
+            commit=$1
+            version=$(git show "${commit}:VERSION" | tr -d '[:space:]')
+            revision=$(git show "${commit}:Makefile" | sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' | head -1)
+            [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            [[ "${revision}" =~ ^[0-9]+$ ]]
+            if [[ "${revision}" == "0" ]]; then
+              printf '%s\n' "${version}"
+            else
+              printf '%s_%s\n' "${version}" "${revision}"
+            fi
+          }
+
+          CURRENT_IDENTITY=$(identity_at "${TARGET_SHA}")
+          PARENT_IDENTITY=$(identity_at "${TARGET_SHA}^")
+          [[ "${CURRENT_IDENTITY}" == "${PACKAGE_VERSION}" ]]
+          [[ "${PARENT_IDENTITY}" != "${CURRENT_IDENTITY}" ]] || {
+            echo "Publication source ${TARGET_SHA} did not introduce package identity ${PACKAGE_VERSION}; refuse a later docs/governance commit." >&2
+            exit 1
+          }
+
           echo "package_version=${PACKAGE_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "tag=v${PACKAGE_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "asset=os-zapret2-restyle-${PACKAGE_VERSION}.pkg" >> "${GITHUB_OUTPUT}"
+          echo "target_sha=${TARGET_SHA}" >> "${GITHUB_OUTPUT}"
 
-      - name: Reject duplicate publication state
+      - name: Inspect immutable publication state
+        id: publication
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.candidate.outputs.tag }}
+          ASSET: ${{ steps.candidate.outputs.asset }}
+          TARGET_SHA: ${{ steps.candidate.outputs.target_sha }}
         run: |
           set -euo pipefail
-          if gh release view "${TAG}" >/dev/null 2>&1; then
-            echo "Release ${TAG} already exists; published candidates are immutable." >&2
-            exit 1
+
+          if RELEASE_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>/dev/null); then
+            jq -e \
+              --arg tag "${TAG}" \
+              --arg target "${TARGET_SHA}" \
+              --arg asset "${ASSET}" \
+              '.tag_name == $tag and .target_commitish == $target and .draft == false and .prerelease == true and any(.assets[]; .name == $asset and .state == "uploaded")' \
+              <<< "${RELEASE_JSON}" >/dev/null || {
+                echo "Existing release ${TAG} does not match the immutable requested candidate." >&2
+                exit 1
+              }
+            echo "already_published=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "already_published=false" >> "${GITHUB_OUTPUT}"
           fi
 
       - name: Build package inside FreeBSD 15 VM
+        if: steps.publication.outputs.already_published != 'true'
         uses: vmactions/freebsd-vm@v1
         with:
           release: '15.0'
@@ -69,7 +115,20 @@ jobs:
             test "$(freebsd-version -u | cut -d. -f1)" = "15"
             sh scripts/build-pkg.sh
 
-      - name: Verify package manifest
+      - name: Recover already-published package for verification
+        if: steps.publication.outputs.already_published == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.candidate.outputs.tag }}
+          ASSET: ${{ steps.candidate.outputs.asset }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "${TAG}" --pattern "${ASSET}" --dir dist
+
+      - name: Verify package manifest and digest
+        id: package
         shell: bash
         env:
           PACKAGE_VERSION: ${{ steps.candidate.outputs.package_version }}
@@ -86,15 +145,18 @@ jobs:
             --arg version "${PACKAGE_VERSION}" \
             '.version == $version and .abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64"' \
             "${MANIFEST}" >/dev/null
-          sha256sum "${PACKAGE}"
+          DIGEST=$(sha256sum "${PACKAGE}" | awk '{print $1}')
+          echo "sha256=${DIGEST}" >> "${GITHUB_OUTPUT}"
+          echo "${DIGEST}  ${ASSET}"
 
       - name: Publish testing prerelease
+        if: steps.publication.outputs.already_published != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.candidate.outputs.tag }}
           ASSET: ${{ steps.candidate.outputs.asset }}
-          TARGET_SHA: ${{ github.sha }}
+          TARGET_SHA: ${{ steps.candidate.outputs.target_sha }}
         run: |
           set -euo pipefail
 
@@ -110,7 +172,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.candidate.outputs.tag }}
           ASSET: ${{ steps.candidate.outputs.asset }}
-          TARGET_SHA: ${{ github.sha }}
+          TARGET_SHA: ${{ steps.candidate.outputs.target_sha }}
         run: |
           set -euo pipefail
 
@@ -122,6 +184,96 @@ jobs:
             '.tag_name == $tag and .target_commitish == $target and .draft == false and .prerelease == true and any(.assets[]; .name == $asset and .state == "uploaded")' \
             <<< "${RELEASE_JSON}" >/dev/null
 
+          TAG_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.sha')
+          [[ "${TAG_SHA}" == "${TARGET_SHA}" ]]
+
+      - name: Create or verify publication-record Draft PR
+        id: record
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_VERSION: ${{ steps.candidate.outputs.package_version }}
+          TAG: ${{ steps.candidate.outputs.tag }}
+          ASSET: ${{ steps.candidate.outputs.asset }}
+          TARGET_SHA: ${{ steps.candidate.outputs.target_sha }}
+          DIGEST: ${{ steps.package.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+
+          RECORD_BRANCH="publication-record/${TAG}"
+          RECORD_FILE="docs/verification/evidence/testing-publications/${TAG}.md"
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          ASSET_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${TAG}/${ASSET}"
+
+          git fetch --no-tags origin main
+          if git ls-remote --exit-code --heads origin "${RECORD_BRANCH}" >/dev/null 2>&1; then
+            git fetch --no-tags origin "${RECORD_BRANCH}:${RECORD_BRANCH}"
+            git switch "${RECORD_BRANCH}"
+          else
+            git switch --create "${RECORD_BRANCH}" origin/main
+            mkdir -p "$(dirname "${RECORD_FILE}")"
+            cat > "${RECORD_FILE}" <<EOF
+          # Testing-package publication — ${TAG}
+
+          - package identity: \`${PACKAGE_VERSION}\`
+          - source/tag target: \`${TARGET_SHA}\`
+          - release/tag: \`${TAG}\`
+          - package asset: \`${ASSET}\`
+          - SHA-256: \`${DIGEST}\`
+          - ABI: \`FreeBSD:15:amd64\`
+          - publication workflow run: [${GITHUB_RUN_ID}](${RUN_URL})
+          - direct package asset: [${ASSET}](${ASSET_URL})
+          - stable Pages/pkg repository promoted: **no**
+
+          This record is generated by \`.github/workflows/publish-prerelease.yml\`. The publication-record PR remains Draft until bounded current documentation is reconciled under \`GH-060\`–\`GH-061\` and \`DOC-037\`.
+          EOF
+
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add "${RECORD_FILE}"
+            git commit -m "${TAG}: Record testing-package publication"
+            git push --set-upstream origin "${RECORD_BRANCH}"
+          fi
+
+          PR_JSON=$(gh pr list --state all --head "${RECORD_BRANCH}" --json number,state,isDraft,mergedAt,url --limit 1)
+          PR_COUNT=$(jq 'length' <<< "${PR_JSON}")
+          if [[ "${PR_COUNT}" == "0" ]]; then
+            BODY=$(mktemp)
+            trap 'rm -f "${BODY}"' EXIT
+            cat > "${BODY}" <<EOF
+          ## Testing-package publication record
+
+          The generic publisher has already published and verified \`${TAG}\` from candidate-defining source merge \`${TARGET_SHA}\`.
+
+          This Draft PR is the mandatory post-publication documentation tail. Before marking it ready and merging it:
+
+          - keep this PR documentation-only;
+          - reconcile only bounded current documents whose role changed (for example START_HERE / PROJECT_STATE / ROADMAP / current ledger when applicable);
+          - do not change VERSION, PLUGIN_REVISION, product/package source, workflows, scripts, repository output, or binaries;
+          - require documentation/governance CI on the exact final head;
+          - squash-merge, verify main, and clean this branch without asking for a second owner confirmation.
+
+          Direct package asset: ${ASSET_URL}
+          EOF
+            gh pr create \
+              --draft \
+              --base main \
+              --head "${RECORD_BRANCH}" \
+              --title "${TAG}: Record testing-package publication" \
+              --body-file "${BODY}"
+            PR_JSON=$(gh pr list --state open --head "${RECORD_BRANCH}" --json number,state,isDraft,mergedAt,url --limit 1)
+          fi
+
+          jq -e 'length == 1 and .[0].state == "OPEN"' <<< "${PR_JSON}" >/dev/null || {
+            echo "Publication-record PR is not open and actionable." >&2
+            exit 1
+          }
+          PR_NUMBER=$(jq -r '.[0].number' <<< "${PR_JSON}")
+          PR_URL=$(jq -r '.[0].url' <<< "${PR_JSON}")
+          echo "pr_number=${PR_NUMBER}" >> "${GITHUB_OUTPUT}"
+          echo "pr_url=${PR_URL}" >> "${GITHUB_OUTPUT}"
+          echo "Publication-record PR: ${PR_URL}"
+
       - name: Delete temporary publication branch
         if: success()
         shell: bash
@@ -131,4 +283,8 @@ jobs:
         run: |
           set -euo pipefail
           ENCODED_BRANCH=${BRANCH//\//%2F}
-          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${ENCODED_BRANCH}"
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${ENCODED_BRANCH}" 2>/dev/null || true
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${ENCODED_BRANCH}" >/dev/null 2>&1; then
+            echo "Temporary publication branch still exists: ${BRANCH}" >&2
+            exit 1
+          fi
