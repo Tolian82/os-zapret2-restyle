@@ -9,7 +9,7 @@
 - **Documentation/navigation index:** [`INDEX.md`](INDEX.md)
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
-**Updated:** 2026-08-14
+**Updated:** 2026-08-15
 **Current handoff identity:** `v0.4.1_13`
 
 This file answers: **what has just been established at the current `_N` boundary, what is its effect, and what happens next?**
@@ -52,6 +52,18 @@ Detailed runtime contract: [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture
 
 Detailed measurements and proof links are in [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
 
+## Current GitHub patch/package delivery contract
+
+Owner shorthand `сделай патч`, `сделай пакет`, and `выложи пакет` is GitHub-native delivery under `CHAT-015`, `CHAT-027`, and `GH-060`–`GH-061`:
+
+- do not deliver project `.pkg`, `.zip`, `.tar.*`, `.patch`, `.diff`, or equivalent patch/package transport files through chat/sandbox;
+- a patch is completed through branch/PR/CI/exact-head merge on GitHub;
+- if the patch creates a new package candidate, the same authorization continues automatically to persistent testing-package publication without another confirmation;
+- the testing publisher accepts only the candidate-defining merged source SHA already contained in `main`, and rejects a later same-identity docs/governance SHA;
+- after successful immutable prerelease publication, the publisher creates a Draft `publication-record/...` PR containing machine-generated publication evidence;
+- that bounded docs-only PR is reconciled, validated, exact-head squash-merged, verified on `main`, and cleaned before the patch/package command is reported complete;
+- final package delivery is the direct persistent GitHub release-asset URL, never an Actions artifact or chat file.
+
 ## `_13` automated acceptance and testing-package publication — PASS
 
 The `_13` source and persistent testing-delivery boundaries are complete:
@@ -85,6 +97,8 @@ For Model-C-only production/live work, read completely:
 1. `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
 2. `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
 3. `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`.
+
+For any GitHub patch/package delivery, the canonical procedure is in `docs/CHAT_RULES.md` and `docs/GITHUB_PUBLICATION.md`; the package path is `GH-034`–`GH-038` plus `GH-060`–`GH-061`.
 
 Read the current `v0.4.x` ledger when richer chronology/proof is needed. Use `INDEX.md` for older records on demand.
 
