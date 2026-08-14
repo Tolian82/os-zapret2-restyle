@@ -158,25 +158,25 @@ close B -> C transition work.
 
 ## 3. Complete further plan
 
-Immediate ordered actions:
+Immediate ordered actions after this documentation handoff is on `main`:
 
-1. finish this documentation/governance closeout and merge it without package revision change;
-2. implement `_13` Model-C-only production finalization;
-3. focused `_13` regression;
-4. complete Strategy Lab corrective matrix;
-5. FreeBSD 15 package qualification;
-6. reconcile `START_HERE`, `PROJECT_STATE`, `ROADMAP` and patch docs before PR publication;
-7. Ready PR -> latest-head checks -> exact-head squash merge -> verify `main`;
-8. when owner testing/package delivery is requested, publish deterministic `v0.4.1_13` testing `.pkg`;
-9. execute the single selected owner-live Model-C-only regression;
-10. record live evidence and close the B -> C transition if accepted.
+1. implement `_13` Model-C-only production finalization;
+2. run focused `_13` regression;
+3. run complete Strategy Lab corrective matrix;
+4. qualify the FreeBSD 15 package;
+5. reconcile `START_HERE`, `PROJECT_STATE`, `ROADMAP` and `_13` patch docs against implementation/
+   test discoveries before publication;
+6. open Ready `_13` PR -> latest-head checks -> exact-head squash merge -> verify `main`;
+7. when owner testing/package delivery is requested, publish deterministic `v0.4.1_13` testing `.pkg`;
+8. execute the single selected owner-live Model-C-only regression;
+9. record live evidence and close the B -> C transition if accepted.
 
 After transition closure:
 
-11. return to the documented product/Strategy-Lab roadmap rather than opening another Model-C
+10. return to the documented product/Strategy-Lab roadmap rather than opening another Model-C
     optimization automatically;
-12. select the next backlog item according to owner priority and current roadmap;
-13. retain broader owner-assisted regression backlog for risk-selected execution:
+11. select the next backlog item according to owner priority and current roadmap;
+12. retain broader owner-assisted regression backlog for risk-selected execution:
     - initial Zapret2 STOPPED;
     - Extended TLS1.2/HTTP;
     - capability-gated QUIC and Generic UDP;
@@ -187,9 +187,9 @@ After transition closure:
     - Diagnostics reload behavior;
     - RU/EN presentation;
     - retention and reboot/residue checks;
-14. keep research ideas such as candidate width >3 and endpoint-level parallelism deferred until
+13. keep research ideas such as candidate width >3 and endpoint-level parallelism deferred until
     owner/roadmap explicitly activates them;
-15. before every later GitHub delivery, reconcile both the near-term and long-term plan and record any
+14. before every later GitHub delivery, reconcile both the near-term and long-term plan and record any
     changed priority before publication.
 
 ## Aborted timeout design
