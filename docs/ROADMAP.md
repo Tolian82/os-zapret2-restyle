@@ -40,9 +40,11 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
 - [x] Three-level documentation memory
 - [x] Version-aware state/handoff/archive model
 - [x] Four canonical rule domains (`DOC-*`, `DEV-*`, `CHAT-*`, `GH-*`)
-- [x] Stable rule IDs and bidirectional cross-reference integrity
-- [x] Retire duplicate active quick-reference canon into compatibility pointers
+- [x] Permanent rule IDs and bidirectional cross-reference integrity
+- [x] Rule cancellation/replacement lifecycle without ID deletion/reuse
+- [x] Remove obsolete duplicate quick-reference documents after reference migration
 - [x] Context-first/SHA-scoped documentation cold-start optimization
+- [x] Internal Markdown link/anchor integrity validation
 - [ ] Model-C-only production
   - [ ] remove B/A production fallback (`v0.4.1_13`)
   - [ ] owner-live Model-C-only regression

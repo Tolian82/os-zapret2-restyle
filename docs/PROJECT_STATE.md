@@ -68,14 +68,19 @@ Historical A/B/C experiment material is history/proof and does not represent cur
 ## Current documentation and governance facts
 
 - exactly four canonical general rule books exist: `DOCUMENTATION_RULES.md`, `PROJECT_PRINCIPLES.md`, `CHAT_RULES.md`, and `GITHUB_PUBLICATION.md`;
-- rules use persistent `DOC-*`, `DEV-*`, `CHAT-*`, and `GH-*` identities rather than renumbering for presentation order;
-- each canonical book contains explicit inbound/outbound cross-reference registries and CI validates them against actual rule bodies;
+- `GITHUB_PUBLICATION.md` is the fourth book, **Правила работы с GitHub**, despite the retained historical filename;
+- rule IDs are permanent identities and are not cascade-renumbered when rules are inserted or reorganized;
+- cancelled/replaced rules remain physically at their permanent IDs with explicit lifecycle markers; those IDs are never recycled;
+- each canonical book contains explicit inbound/outbound cross-reference registries and CI validates them against active rule bodies and lifecycle state;
+- local Markdown links and local Markdown heading fragments are validated by CI;
 - `START_HERE.md` is the exact `_N` handoff;
+- zero-memory recovery is context-first: handoff/state, then all four rule books, plan/index, then selected specialists;
+- Level-1 material already read for an unchanged exact repository state may be reused; advancing `main` requires affected current/mandatory material to be reread;
 - this file is current state for `v0.4.x`;
 - `ROADMAP.md` is the complete concise master plan;
 - `INDEX.md` is the global navigation/integrity map;
 - [`history/current/v0.4.x.md`](history/current/v0.4.x.md) is the current Level-2 chronology;
-- `GITHUB_WORKFLOW.md`, `DEVELOPMENT_GUIDE.md`, and `WORKING_CONVENTIONS.md` are legacy compatibility pointers only and contain no independent mutable canon;
+- obsolete duplicate quick-reference files `GITHUB_WORKFLOW.md`, `DEVELOPMENT_GUIDE.md`, and `WORKING_CONVENTIONS.md` have been removed after reference migration;
 - active/new documentation uses clean standard Markdown; old Level-3 historical formatting is preserved unless deliberately migrated separately.
 
 The normative mechanics behind these facts live only in the corresponding rule books and are not duplicated here.

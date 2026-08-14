@@ -35,7 +35,7 @@ CHAT-009. **`Зафиксируй`, `запиши`, `record this`, or an unambig
 
 CHAT-010. **A clear `делай`, `исправь`, `внеси`, `приступаем`, or equivalent action instruction authorizes ordinary same-scope execution.** Do not request a second confirmation for branch, PR, CI, same-scope correction, exact-head merge, verification, and cleanup inherent in completing the instructed scope; GitHub execution follows `GH-010`–`GH-030`.
 
-CHAT-011. **A read-only boundary is strict only when the owner actually sets one.** Explicit wording such as `никаких правок`, `только анализ`, `только аудит`, or an equivalent prohibition blocks mutation. Words such as `прочитай`, `проверь`, or `аудит` do not by themselves cancel an explicit same-message instruction to fix, record, publish, or otherwise act.
+CHAT-011. **A read-only boundary is strict only when the owner actually sets one.** Explicit wording such as `никаких правок`, `только анализ`, `только аудит`, or an equivalent prohibition blocks mutation. Words such as `прочитай`, `проверь`, or `аудит` do not by themselves cancel an explicit same-message instruction to fix, record, publish, or otherwise act. Any former interpretation that these words automatically impose read-only mode is explicitly cancelled and must not be restored.
 
 CHAT-012. **`Продолжаем` means continue from the committed handoff when identity still matches.** Verify the repository baseline under `GH-004`, then use the exact handoff defined by `DOC-021` and `DOC-025` without rediscovering settled history merely because a new chat began.
 
@@ -108,6 +108,6 @@ CHAT-026. **An unambiguous owner instruction must have an observable consequence
 | `CHAT-026` | `DEV-001` |
 <!-- RULE-XREF-IN-END -->
 
-## Retired rule IDs
+## Rule lifecycle
 
-None. Retired IDs are recorded rather than recycled.
+No cancelled or replaced `CHAT-*` IDs currently exist. The former automatic read-only interpretation never had a persistent canonical ID; `CHAT-011` explicitly cancels that interpretation.
