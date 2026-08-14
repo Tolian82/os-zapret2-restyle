@@ -220,8 +220,11 @@ grep -Fq 'ModelCOnlyInfrastructureError(stage60_parallel.Stage60ParallelError)' 
 if grep -Fq 'fallback_execution_model' "${OWNER}"; then
     fail 'normal Model-C-only production owner still records Model B replay'
 fi
-if grep -Fq 'original_batch' "${OWNER}"; then
-    fail 'normal Model-C-only production owner still owns Model B replay plumbing'
+if grep -Fq 'except stage60_parallel.WarmInfrastructureError' "${OWNER}"; then
+    fail 'normal Model-C-only production owner can still catch the legacy Model-B fallback signal'
+fi
+if grep -Fq 'model_c_enabled' "${OWNER}" || grep -Fq 'disable_reason' "${OWNER}"; then
+    fail 'normal Model-C-only production owner still carries transitional Model-C-disable replay state'
 fi
 grep -Fq 'cold_fallback_available"] = False' "${OWNER}" || fail 'Model-C-only result does not explicitly disable cold fallback'
 grep -Fq 'model_c_only"] = True' "${OWNER}" || fail 'Model-C-only result policy evidence is missing'
