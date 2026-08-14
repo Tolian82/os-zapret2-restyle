@@ -7,25 +7,25 @@ Updated: 2026-08-14
 PURPOSE
 ==================================================
 
-This file exists so a new ChatGPT session can resume project work in minutes instead of
-reconstructing the repository for hours.
+This file is the short operational memory of the project. It exists so a new ChatGPT session can
+understand the current state, the accepted conclusions and the next actions quickly instead of
+reconstructing the same history for hours.
 
 For an ordinary continuation request, read:
 
 1. repository-root `AGENTS.md`;
 2. this file completely;
 3. `docs/PROJECT_STATE.md` completely;
-4. only the specialist source/docs named by the exact next task below.
+4. only the specialist source/docs named by the current documented task.
 
-`docs/INDEX.md` is a navigation map, not a mandatory historical reading list. Historical
-patches, audits, devlogs and experiments are evidence archives. Do not reread them before an
-ordinary continuation unless this handoff explicitly sends you there or current source
-contradicts the handoff.
+`docs/INDEX.md` is navigation. Historical patches, audits, devlogs and evidence remain part of the
+project and must be read when the current plan, task risk or a new defect calls for them. They are
+not automatically reprocessed merely because a new chat started.
 
-If the owner says `продолжаем`, `делай`, or equivalent and the current repository still
-matches the state below, start implementing the exact NEXT CODE CHANGE. Do not begin with a
-new architecture audit, a recursive-tree crawl, a review of all branches/workflows/releases,
-or a fresh experiment plan.
+Audits are **not forbidden**. The rule is: orient by current documentation first. If the documented
+plan says an audit/review is the next action, perform it. If a new reproducible defect makes an
+audit necessary, perform it. Do not invent a new audit only because the previous chat context was
+lost when the current documentation already states what to do next.
 
 ==================================================
 CURRENT PACKAGE / RUNTIME STATE
@@ -43,254 +43,257 @@ Package URL:
 `https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.4.1_12/os-zapret2-restyle-0.4.1_12.pkg`
 Required ABI: `FreeBSD:15:amd64`
 
-The documentation-only `_12` owner-live closeout currently follows the packaged source tree.
-Always fetch the current `main` SHA once at session start; do not hard-code a docs-only `main`
-SHA into future implementation assumptions.
+Always fetch the current `main` SHA once at session start. Documentation-only commits may follow the
+packaged source commit, so do not hard-code an old docs-only `main` SHA into implementation logic.
 
-Normal OPNsense user shell is root `csh`. Commands supplied to the owner must be csh-safe;
-enter `/bin/sh`/`sh` explicitly for POSIX-only blocks.
+Normal OPNsense user shell is root `csh`. Owner commands must be csh-safe; enter `/bin/sh` or `sh`
+explicitly for POSIX-only blocks.
 
 ==================================================
-WHAT THE LAST ~57 HOURS ACTUALLY ESTABLISHED
+WHAT THE MODEL-C SERIES ESTABLISHED
 ==================================================
 
-The B -> C production transition is **complete as an engineering decision**. Do not treat
-Model C as an experiment that still needs another general audit before coding.
+The B -> C production transition is complete as an engineering direction. Current code still has
+legacy automatic B/A fallbacks, and removing that transition tail is the next code task.
 
 Key progression:
 
-- `v0.4.0_23`: normal Stage 60 was switched to
-  `C-warm-bucket-source-port-dispatch`.
-- `v0.4.0_25`: controlled source-port leasing was corrected to
-  `preferred-free-else-alternate`; owner-live Model C completed 16/16 without fallback and
-  restored runtime cleanly.
-- `v0.4.0_26`: workload-derived finite budgets (`eligible-work-v1`) were accepted owner-live;
-  Model C again completed 16/16 without fallback, with clean Stage-90 restoration.
-- `v0.4.1_2`: Lua initialization question closed. Current/common initialization already equals
-  the candidate-minimal union. **No production change justified.**
-- `v0.4.1_3` + `_4`: BLOB startup/readiness/RSS and common eager-set scaling closed. No material
-  penalty at current width three. **No lazy-BLOB production change justified.**
-- `v0.4.1_5` + `_6`: discovery-probe HEAD/GET-1/GET-4K comparison closed. Cheaper probes did not
-  show material timing benefit. **Production discovery remains GET-4K.**
-- `v0.4.1_7`: lifecycle amortization measurement was opened.
-- `_8`, `_9`, `_10`: corrected measurement-harness traversal/diagnostic/adapter defects. These
-  were measurement plumbing, not evidence that Model C itself was unsuitable.
-- `v0.4.1_11`: a real production Model-C issue was found and fixed: one planner-selected logical
-  batch can contain different profile keys. Model C now preserves the logical batch but runs
-  contiguous profile-compatible physical segments sequentially.
-- `v0.4.1_12`: a real readiness latency defect was fixed. The shared warm readiness check keeps
-  process/socket/log predicates and two stable snapshots but polls every 25 ms instead of sleeping
-  one second between checks.
+- `v0.4.0_23`: normal Stage 60 switched to `C-warm-bucket-source-port-dispatch`;
+- `v0.4.0_25`: source-port leasing became `preferred-free-else-alternate`; owner-live Model C
+  completed 16/16 without fallback and restored runtime cleanly;
+- `v0.4.0_26`: `eligible-work-v1` finite adaptive budgets were accepted owner-live; Model C again
+  completed 16/16 without fallback with clean Stage-90 restoration;
+- `v0.4.1_2`: Lua initialization question closed; current/common init already equals the
+  candidate-minimal union, so no production change was justified;
+- `v0.4.1_3` + `_4`: BLOB startup/readiness/RSS and bounded common eager-set scaling showed no
+  material penalty at width three, so no lazy-BLOB production change was justified;
+- `v0.4.1_5` + `_6`: HEAD/GET-1 did not show a material advantage over production GET-4K, so
+  discovery stays GET-4K;
+- `v0.4.1_7`: lifecycle amortization measurement started;
+- `_8`, `_9`, `_10`: fixed measurement-harness traversal/diagnostic/adapter defects;
+- `v0.4.1_11`: fixed a real production Model-C profile-compatibility defect while preserving the
+  planner-selected logical batch and executing compatible physical segments sequentially;
+- `v0.4.1_12`: fixed a real readiness latency defect by retaining the same process/socket/log proof
+  and two stable snapshots while polling every 25 ms instead of sleeping one second.
 
 Accepted `_12` owner-live lifecycle replay:
 
-- 5/5 requested repeats completed;
+- 5/5 repeats completed;
 - `model_c_only=true` in every repeat;
 - `fallback_detected=false`, `fallbacks=[]`;
 - instrumentation/persisted logical-batch counts matched;
-- lifecycle metrics and RSS were complete;
-- cleanup and semantic restoration passed;
-- median physical-segment `pool_startup_ms` fell to `82.5 ms` (mean `93.87 ms`, p90 `163 ms`);
-- one-segment starts are normally about `80-90 ms`; two sequential profile segments about
-  `163-171 ms`;
+- lifecycle metrics and RSS complete;
+- cleanup and semantic restoration PASS;
+- median physical-segment `pool_startup_ms=82.5 ms`, mean `93.87 ms`, p90 `163 ms`;
+- normal one-segment starts about `80-90 ms`; two sequential profile segments about `163-171 ms`;
 - median aggregate RSS `4366 KiB`;
 - median Stage-60 wall `22715 ms` in that five-run replay;
-- cross-batch keep-warm/reuse was closed as **NO FURTHER PRODUCTION CHANGE** because the remaining
-  conservative amortizable upper bound was not cleanly separable from live jitter and did not
-  justify additional stateful architecture.
+- cross-batch keep-warm/reuse closed as **NO FURTHER PRODUCTION CHANGE** under the measured
+  cost/jitter boundary.
 
-The lifecycle report's historical strict `measurement_rejected` label was caused by live
-candidate PASS/FAIL variation between repeats, not by Model-C infrastructure failure. Do not
-reopen Model C because of that label.
+The strict historical lifecycle `measurement_rejected` label came from live candidate PASS/FAIL
+variation between repeats, not Model-C infrastructure failure.
 
 Durable evidence:
 `docs/verification/evidence/2026-08-14-v0.4.1_12-warm-readiness-live-pass.md`.
 
 ==================================================
-IMPORTANT CONCLUSION — STOP THE AUDIT LOOP
+HOW TO USE CLOSED EVIDENCE
 ==================================================
 
-The project spent too long continuing to prove an already accepted Model C. That process is now
-explicitly closed.
+Accepted/closed work is still part of the project and may be audited when the current plan or new
+evidence requires it. But a new session should not automatically re-derive it from scratch.
 
-Do **not** automatically start another general audit or measurement for:
+Current closed conclusions that remain authoritative until invalidated by new evidence or changed
+architecture:
 
-- Model A versus Model B versus Model C performance;
-- Lua initialization;
-- BLOB eager/lazy loading at current width three;
-- HEAD/GET-1 versus GET-4K discovery;
-- cross-batch keep-warm/lifecycle amortization;
-- generic timeout telemetry whose only purpose is to make the legacy `C -> B -> A` fallback chain
-  more elaborate;
-- a repository-wide recursive-tree investigation merely because a new chat started.
+- Model C is the selected production direction;
+- current Lua initialization needs no optimization;
+- current width-three eager/common BLOB declarations have no measured material startup/RSS cost;
+- production discovery remains GET-4K;
+- cross-batch keep-warm/reuse is not justified by current measurements.
 
-Reopen a closed question only when a new reproducible production defect, changed requirement, or
-material architecture change invalidates its accepted evidence.
-
-The owner explicitly wants forward implementation progress rather than repeated audits of the same
-runtime.
+If a future audit is documented as required, use these accepted records as starting evidence rather
+than treating the project as if no prior work exists.
 
 ==================================================
 CURRENT CODE REALITY VERSUS CURRENT DECISION
 ==================================================
 
-Current source still contains this production fallback chain:
+Current source still contains:
 
 `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
 
-That chain is now considered a **legacy transition tail**, not the desired final production
-architecture.
+The B/A automatic production fallback chain is now a **legacy transition tail**. Model B and Model A
+may remain useful as benchmark/reference/test implementations, but they no longer need to be
+automatic production fallbacks just because they were used during Model-C introduction.
 
-Model B and Model A remain useful as historical benchmark/reference/test implementations, but they
-no longer need to remain automatic production fallbacks merely because they were used while Model C
-was being introduced.
-
-Keeping automatic B/A fallback now has negative cost:
-
-- it increases production branching and cleanup/deadline complexity;
-- it can hide a real Model-C infrastructure defect by silently replaying through old code;
-- it forces maintenance of three runtime paths;
-- it caused the aborted `_13` timeout-admission investigation to optimize a fallback path that the
-  project should instead retire.
-
-Therefore the next code change is not a new timeout experiment.
+Keeping the automatic fallback chain costs complexity and can mask real Model-C infrastructure
+failures. It also created an aborted timeout-admission design that tried to improve `C -> B` fallback
+instead of finishing the transition.
 
 ==================================================
 NEXT CODE CHANGE — v0.4.1_13 MODEL-C-ONLY PRODUCTION FINALIZATION
 ==================================================
 
-**This is the exact next implementation task. Do not precede it with another architecture audit.**
+This is the current documented next implementation task. Before starting, verify that current
+`main`, `VERSION`, revision and same-scope PR state still agree. If they do, start from the named
+source surfaces rather than re-deriving the whole architecture.
 
-Package metadata for this packaged source change:
+Package metadata:
 
 - keep `VERSION=0.4.1`;
 - increment `PLUGIN_REVISION` once: `12 -> 13`;
 - candidate/title prefix: `v0.4.1_13:`.
 
-Goal:
+### 1. What changes and why
 
-**Make Model C the only normal production Stage-60 runtime.**
+Goal: make Model C the only normal production Stage-60 runtime.
 
-Required implementation outcome:
+Required implementation:
 
 1. normal `strategy_lab_python.py stage60-parallel ...` execution uses Model C only;
-2. a Model-C infrastructure/selector/rendering/readiness/attribution failure is surfaced as an
-   explicit bounded Stage-60 failure/corrective signal; it must not silently replay the same batch
-   through Model B or cold Model A;
-3. production source-port leasing is owned for Model C; it must not install a second production
-   lease wrapper solely for Model-B fallback;
-4. Model B / Model A implementation modules may remain in the repository as benchmark,
-   compatibility, historical reference or focused-test tooling where useful; do **not** broaden
-   this patch into a gratuitous deletion campaign;
-5. remove/retire production runtime-selection branches that allow the normal entry point to choose
-   `model-b` or `cold` unless a narrowly documented non-production test/diagnostic interface still
-   requires them;
-6. preserve current Model-C cleanup/restoration fail-closed behavior.
+2. Model-C infrastructure/selector/rendering/readiness/attribution failure is explicit and bounded;
+   it does not silently replay the same batch through Model B or cold Model A;
+3. production source-port leasing is owned for Model C and does not install a second production
+   lease solely for Model-B fallback;
+4. Model B / Model A modules may remain as benchmark/reference/test tooling where useful; do not
+   broaden this patch into unrelated deletion;
+5. retire production runtime-selection branches that choose `model-b` or `cold` unless a clearly
+   non-production diagnostic/test interface still requires them;
+6. preserve Model-C cleanup/restoration fail-closed behavior.
 
-Start with these exact source surfaces; do not crawl the whole repository first:
+Start with:
 
 - `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_model_c.py`;
 - `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_python.py`;
 - `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_source_port_lease.py`;
 - `scripts/test-strategy-lab-stage60-model-c-production.sh`;
-- tests directly referencing production `C -> B -> A` fallback semantics, discovered by narrow
-  symbol/string search only.
+- tests directly referencing production `C -> B -> A` fallback semantics, found by narrow search.
 
 Preserve without redesign:
 
-- native adaptive planner/search graph and CandidateSpec identity;
-- ResourceInventory semantics;
-- candidate width at most three;
-- exact source-port-qualified attribution;
+- adaptive planner/search graph and CandidateSpec identity;
+- ResourceInventory;
+- width at most three;
+- exact source-port attribution;
 - sequential endpoint probes inside one candidate;
-- Model-C profile-compatible physical segmentation from `_11`;
-- 25 ms / two-stable-check readiness semantics from `_12`;
+- `_11` profile-compatible segmentation;
+- `_12` 25 ms/two-stable-check readiness;
 - discovery GET-4K;
-- `eligible-work-v1` parent budgets;
-- cancellation, cleanup and Stage-90 semantic restoration;
+- `eligible-work-v1` budgets;
+- cancellation, cleanup, Stage-90 restoration;
 - downstream Stage 70/80/85/result ownership.
 
-Focused automated acceptance for `_13`:
+### 2. Expected result after the patch
+
+Automated acceptance:
 
 - normal production entry reaches Model C;
-- no production call path silently invokes Model B or cold Model A after a Model-C infrastructure
-  failure;
+- no production path silently invokes Model B or cold Model A after Model-C infrastructure failure;
 - injected Model-C infrastructure failure is explicit and bounded;
-- Model-C cleanup still executes on success/failure/cancel boundaries;
+- Model-C cleanup executes on success/failure/cancel boundaries;
 - source-port leasing and exact attribution remain present;
-- planner-selected logical batch/profile segmentation remains unchanged;
-- full existing Strategy Lab corrective matrix passes;
-- FreeBSD 15 package qualification passes.
+- logical batch/profile segmentation remains unchanged;
+- full Strategy Lab corrective matrix PASS;
+- FreeBSD 15 package qualification PASS.
 
-Owner-live after publication:
+Owner-live acceptance after testing-package publication:
 
-- perform **one selected normal regression job** on OPNsense proving Model-C-only execution,
-  expected Stage-60 result handling, cleanup/restoration and absence of temporary rules/processes;
-- do not fabricate a large new experimental matrix and do not force appliance failures merely to
-  justify more analysis;
-- if that selected run passes, close the B -> C transition and move to the next product/roadmap
-  task outside this runtime-transition series.
+- one selected normal OPNsense regression proving Model-C-only execution, expected Stage-60 result
+  handling, cleanup/restoration and no temporary rule/process residue;
+- if the run exposes a concrete defect, diagnose/fix that defect under normal evidence-first rules;
+- if it passes, close the B -> C transition and proceed to the next documented roadmap work.
 
-==================================================
-DO NOT CONTINUE THE ABORTED `_13` TIMEOUT DESIGN
-==================================================
+### 3. Further plan — near and long term
 
-Immediately before this handoff, source review found that the legacy Model-C logical batch can
-contain several physical profile segments and that C infrastructure failure could replay through
-Model B without a fresh child admission check. That observation is valid for the **current legacy
-fallback implementation**.
+Near-term ordered actions:
 
-Do not implement the previously proposed corrective that expands admission accounting for
-`C -> B` fallback. It optimizes complexity that the next patch should remove.
+1. implement `_13` Model-C-only production finalization;
+2. focused regression + complete corrective matrix + FreeBSD 15 package qualification;
+3. squash merge exact verified head;
+4. publish the deterministic `_13` testing package when owner package/live testing is requested;
+5. execute the selected Model-C-only owner-live regression;
+6. record result in `START_HERE`, `PROJECT_STATE`, patch/evidence docs and `ROADMAP`;
+7. close the B -> C transition if accepted.
 
-After Model-C-only finalization, timeout/deadline work is reopened only for an observed Model-C-only
-containment defect, not because the old B/A chain had an awkward envelope.
+After B -> C closure:
 
-==================================================
-FAST START PROCEDURE FOR EVERY NEW CHAT
-==================================================
+8. return to the current project roadmap and canonical owner-assisted regression backlog rather than
+   inventing another Model-C optimization by inertia;
+9. select the next product/Strategy-Lab item according to owner priority and current roadmap;
+10. retain deferred research ideas (for example width >3 or endpoint-level parallelism) as deferred,
+    not automatic next steps; they become active only when the roadmap/owner explicitly selects them;
+11. before every later GitHub publication, reconcile the complete near-term and long-term plan and
+    update it if priorities changed.
 
-For ordinary continuation, use this sequence:
-
-1. GitHub plugin: fetch current `main` ref once.
-2. GitHub plugin: fetch `VERSION` and `Makefile` once.
-3. GitHub plugin: check only open PRs relevant to the requested/current task.
-4. Read `AGENTS.md`, this file, and concise `docs/PROJECT_STATE.md` through EOF.
-5. Read only the specialist file(s) named by the exact current task.
-6. If state still matches and no conflicting open PR exists, create the task branch and start the
-   code change.
-
-Do **not** inventory every historical branch, workflow, run, tag, release, artifact and PR for an
-ordinary source/docs patch. Inspect those classes only when the requested operation depends on them
-(CI debugging, package publication, release work, branch cleanup, etc.).
-
-Do **not** fetch the recursive repository tree by default. Use a pinned recursive tree only for a
-genuinely broad investigation where the call path/file set is unknown and narrow symbol/path search
-cannot resolve it.
-
-Do **not** reread old audits/patch histories to reconfirm a decision already summarized here.
+Historical/current backlog still includes risk-selected live coverage for STOPPED initial state,
+Extended TLS1.2/HTTP and capability-gated QUIC/Generic UDP, already-accessible target,
+cancellation/internal failure, circular lifecycle/recovery, Settings Apply guards, Diagnostics
+reload, RU/EN presentation, retention and reboot/residue. These are roadmap/backlog items, not all
+unconditional blockers for `_13`.
 
 ==================================================
-DOCUMENTATION MAINTENANCE RULE
+ABORTED TIMEOUT DESIGN
 ==================================================
 
-Documentation is the project's operational memory, not only an archive.
+A source review immediately before this handoff found that legacy Model C can execute multiple
+physical profile segments and, after an infrastructure failure, replay through Model B without a
+fresh child admission check. That observation is valid for the current fallback implementation.
 
-At the end of every logical work cycle that changes current state, update this handoff and
-`docs/PROJECT_STATE.md` so the next session contains:
+The current plan is **not** to implement the proposed larger admission envelope for `C -> B` before
+Model-C-only finalization. If the fallback is removed, that specific complexity disappears.
 
-- current VERSION / revision and latest packaged source identity;
-- latest owner-tested evidence that actually matters;
-- current production architecture;
-- closed questions that must not be reopened automatically;
-- exact next action;
-- likely source files for that action;
-- explicit non-goals;
-- verification/live boundary;
-- any blocker that requires owner input.
+Future timeout/deadline audits remain valid project work when the roadmap selects them or a real
+Model-C-only containment defect requires them. Start from current Model-C-only code/evidence rather
+than from the retired fallback-chain problem.
 
-Historical evidence remains in patches/devlogs/verification records and should be linked, not
-copied into an ever-growing mandatory startup list.
+==================================================
+FAST START PROCEDURE FOR A NEW CHAT
+==================================================
 
-If the handoff and current source disagree, resolve the concrete disagreement; do not use the
-mismatch as an excuse for a repository-wide re-audit.
+1. GitHub plugin: fetch current `main` ref.
+2. Fetch `VERSION` and `Makefile`.
+3. Check same-scope open PR state.
+4. Read `AGENTS.md`, this file and `docs/PROJECT_STATE.md` through EOF.
+5. Read specialist documents named by the current plan/task.
+6. If an audit is the documented next step, perform it. If code is the documented next step and
+   repository state matches, start coding.
+7. Expand to recursive-tree or broad GitHub inventory only when the task itself requires broad
+   discovery.
+
+A pinned recursive tree remains a useful accelerator for genuine repository-wide/cross-cutting
+investigation. It is not a mandatory startup ritual when the current task already names the files.
+
+==================================================
+MANDATORY DOCUMENTATION CONTRACT FOR EVERY GITHUB DELIVERY
+==================================================
+
+Documentation is part of the product change, not an afterthought.
+
+Before every GitHub delivery of a logical project change, documentation must explicitly answer all
+three questions:
+
+1. **What are we changing and why?**
+   Record the concrete scope, trigger/root reason and important non-goals.
+2. **What result do we expect after the patch?**
+   Record the intended user/runtime behavior and the automated/live acceptance boundary.
+3. **What do we do next?**
+   Record the complete ordered plan: immediate follow-up, next patches/tests, and known longer-term
+   actions/deferred items.
+
+Immediately before branch/PR publication or equivalent GitHub delivery, perform **plan
+reconciliation**:
+
+- reread the current plan in this handoff/`PROJECT_STATE`/`ROADMAP`;
+- compare it with what was actually learned while implementing the patch;
+- check whether near-term or long-term priorities changed;
+- if anything changed, update the documentation **before** publishing the GitHub change;
+- only then publish/merge/package according to the normal GitHub workflow.
+
+At the end of every logical cycle, update `docs/START_HERE.md` and `docs/PROJECT_STATE.md`; update
+`docs/ROADMAP.md` whenever priority, sequencing, future actions or deferred plans changed. Patch and
+evidence records retain detailed history.
+
+This three-part documentation contract applies to code, CI/governance and documentation changes
+whenever they alter project state or future work.
