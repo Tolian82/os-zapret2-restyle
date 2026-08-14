@@ -50,6 +50,7 @@ LUA_LIVE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-li
 BUDGET_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_budget.py"
 LEASE_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_source_port_lease.py"
 MODEL_C_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_model_c.py"
+MODEL_C_OWNER_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_model_c_production.py"
 MODEL_B_PY="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_parallel.py"
 LIVE_GATE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md"
 
@@ -65,8 +66,8 @@ for file in "${MATRIX}" "${STATE}" "${INDEX}" "${START_HERE}" "${PRINCIPLES}" "$
     "${BLOB_TEST}" "${BLOB_PY}" "${DISCOVERY5_PATCH}" "${DISCOVERY6_PATCH}" "${DISCOVERY_PY}" \
     "${LIFECYCLE7_PATCH}" "${LIFECYCLE7_TEST}" "${LIFECYCLE7_PY}" "${LIFECYCLE7_WRAPPER}" \
     "${LIFECYCLE7_WORKER}" "${LUA_LIVE}" "${MODEL_B_EVIDENCE}" "${MODEL_C_CORRECTIVE_PASS}" \
-    "${PUBLICATION26}" "${LIVE26}" "${BUDGET_PY}" "${LEASE_PY}" "${MODEL_C_PY}" "${MODEL_B_PY}" \
-    "${LIVE_GATE_DECISION}"
+    "${PUBLICATION26}" "${LIVE26}" "${BUDGET_PY}" "${LEASE_PY}" "${MODEL_C_PY}" \
+    "${MODEL_C_OWNER_PY}" "${MODEL_B_PY}" "${LIVE_GATE_DECISION}"
 do
     [ -s "${file}" ] || fail "missing Strategy Lab/release record: ${file}"
 done
@@ -76,8 +77,8 @@ revision=$(awk -F= '/^PLUGIN_REVISION=/ {gsub(/[[:space:]]/, "", $2); print $2; 
 case "${revision}" in ''|*[!0-9]*) fail 'invalid plugin revision' ;; esac
 candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${version}" = '0.4.1' ] || fail 'current Strategy Lab line must remain on VERSION=0.4.1'
-[ "${revision}" -eq 12 ] || fail 'current packaged source must remain PLUGIN_REVISION=12'
-[ "${candidate}" = 'os-zapret2-restyle-0.4.1_12.pkg' ] || fail 'unexpected current package identity'
+[ "${revision}" -eq 13 ] || fail 'current packaged source must be PLUGIN_REVISION=13'
+[ "${candidate}" = 'os-zapret2-restyle-0.4.1_13.pkg' ] || fail 'unexpected current source package identity'
 
 # Level-1 authorities must describe current truth compactly while general rules have one canonical home.
 require "${DOC_RULES}" 'DOC-015.'
@@ -86,15 +87,15 @@ require "${PRINCIPLES}" 'DEV-031.'
 require "${CHAT_RULES}" 'CHAT-001.'
 require "${GH_RULES}" 'GH-001.'
 require "${STATE}" 'State-line scope: **`v0.4.x`**'
-require "${STATE}" 'packaged source revision: `_12`'
-require "${STATE}" 'current testing package candidate: `os-zapret2-restyle-0.4.1_12.pkg`'
-require "${STATE}" 'acf65d39eaa88a16debe1d35affa71f03f1d848d'
-require "${STATE}" 'testing tag: `v0.4.1_12`'
-require "${STATE}" 'exact next packaged source change is `v0.4.1_13`'
-require "${START_HERE}" 'Exact next code change — `v0.4.1_13`'
-require "${START_HERE}" 'remove automatic production replay through Model B/cold Model A'
-require "${ROADMAP}" 'Current priority — `v0.4.1_13`'
-require "${ROADMAP}" '**Model-C-only production finalization.**'
+require "${STATE}" 'packaged source revision: `_13`'
+require "${STATE}" 'current source package candidate: `os-zapret2-restyle-0.4.1_13.pkg`'
+require "${STATE}" 'latest published testing package/tag: `os-zapret2-restyle-0.4.1_12.pkg` / `v0.4.1_12`'
+require "${STATE}" 'source `_13` removes automatic normal-production `Model C -> Model B -> Model A cold` replay'
+require "${START_HERE}" 'Current handoff identity:** `v0.4.1_13`'
+require "${START_HERE}" 'current source package candidate: `os-zapret2-restyle-0.4.1_13.pkg`'
+require "${START_HERE}" 'automatic production replay through Model B and cold Model A is removed'
+require "${ROADMAP}" 'Current priority — finish `v0.4.1_13`'
+require "${ROADMAP}" 'remove automatic B/A production fallback from the normal packaged Stage-60 path'
 
 # The richer current-line ledger owns retained measurements and proof routes that justify current conclusions.
 require "${CURRENT_LEDGER}" 'job.xhdgCU'
@@ -106,7 +107,8 @@ require "${CURRENT_LEDGER}" '2026-08-13-v0.4.1_6-discovery-corrective-live-pass.
 require "${CURRENT_LEDGER}" '2026-08-12-v0.4.1_4-blob-common-set-live-pass.md'
 require "${CURRENT_LEDGER}" '2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md'
 require "${CURRENT_LEDGER}" '2026-08-12-v0.4.1_2-lua-init-live-pass.md'
-require "${CURRENT_LEDGER}" 'Exact next packaged change — `v0.4.1_13`'
+require "${CURRENT_LEDGER}" '`v0.4.1_13` — Model-C-only production finalization'
+require "${CURRENT_LEDGER}" 'cold_fallback_available=false'
 
 # INDEX remains navigation/integrity only and routes to all four rule books, memory levels and deep proof stores.
 require "${INDEX}" 'DOCUMENTATION_RULES.md'
@@ -218,6 +220,10 @@ require "${BUDGET_PY}" 'POLICY = "eligible-work-v1"'
 require "${LEASE_PY}" 'preferred-free-else-alternate'
 require "${MODEL_C_PY}" 'MODEL = "C-warm-bucket-source-port-dispatch"'
 require "${MODEL_C_PY}" 'for name in spec.lua_dependencies'
+require "${MODEL_C_OWNER_PY}" 'ModelCOnlyInfrastructureError(stage60_parallel.Stage60ParallelError)'
+require "${MODEL_C_OWNER_PY}" 'parallel["cold_fallback_available"] = False'
+require "${MODEL_C_OWNER_PY}" 'parallel["model_c_only"] = True'
+require "${MODEL_C_OWNER_PY}" 'return stage60_model_c._run_existing_model(model, *args)'
 require "${MODEL_B_PY}" 'MODEL = "B-warm-worker-parallel-batched"'
 require "${LUA_PY}" 'POLICY = "lua-init-set-equivalence-v1"'
 require "${LUA_PY}" 'resources.configured_lua_root()'
@@ -240,4 +246,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} current state is _12, four canonical rule books are separated, retained v0.4.x measurements remain discoverable, and the next source task is _13 Model-C-only production finalization"
+echo "PASS: ${candidate} source state is _13 Model-C-only production, retained v0.4.x measurements remain discoverable, and persistent testing-package/owner-live _13 gates remain separate"
