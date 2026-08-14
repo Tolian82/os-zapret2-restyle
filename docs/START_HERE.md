@@ -29,22 +29,19 @@ Documentation/CI-only `main` may be newer than the packaged source while package
 
 ## What was just established
 
-The documentation-governance audit now has a stable rule-lifecycle and link-integrity model without changing product/package code:
+The documentation/governance rules were audited again without changing product/package code:
 
-- all current general rules remain in exactly four canonical books;
-- `GITHUB_PUBLICATION.md` remains the fourth canonical book and is explicitly the complete **Правила работы с GitHub**;
-- obsolete duplicate files `GITHUB_WORKFLOW.md`, `DEVELOPMENT_GUIDE.md`, and `WORKING_CONVENTIONS.md` are physically removed after their useful current meaning and repository references are migrated;
-- rule IDs are permanent identities and are never cascade-renumbered merely because a rule is inserted, moved, or reorganized;
-- cancelling a rule does not delete its ID/text: the rule remains in its canonical book marked `[ОТМЕНЕНО]`; replacement uses `[ЗАМЕНЕНО НА <ID>]`;
-- cancelled/replaced IDs have no current normative force and are never recycled;
-- the former blanket formulation about all useful normative information being in the four books is cancelled as unnecessary;
-- the former automatic read-only interpretation of words such as `проверь`/`аудит` is explicitly cancelled; active `CHAT-011` requires a real read-only prohibition;
-- every canonical book retains explicit outbound/inbound cross-reference registries;
-- CI validates active rule references, lifecycle state, replacement chains, and cross-reference symmetry;
-- CI also validates tracked local Markdown file/directory links and Markdown heading fragments;
-- cold start is context-first: `AGENTS -> START_HERE -> PROJECT_STATE -> four rule books -> ROADMAP -> INDEX -> selected specialists`;
-- already-read Level-1 material may be reused while the exact repository state is unchanged; after `main` advances, affected current/mandatory documents are reread;
-- every GitHub scope continues to perform a documentation-impact decision and keeps the active tree self-consistent.
+- owner-facing project explanations must be written as normal Russian sentences; literal English technical names may remain only as object names, while service-status/process jargon is translated unless quoted literally;
+- current work has one documentation flow: `START_HERE -> PROJECT_STATE -> version-line archive`;
+- `START_HERE.md` owns active work and the immediate next boundary; durable completed facts flow into `PROJECT_STATE.md`; line closure moves final state into the archive;
+- current ledgers, decisions, devlogs, and evidence preserve chronology/rationale/proof but are not parallel owners of current state;
+- rule maintenance now has an explicit decision boundary: create a new rule only for a new durable normative principle; refine an existing rule when its identity remains the same; cancel it when it no longer applies; replace it when a materially different durable rule supersedes it;
+- one-off tasks, test results, temporary plans, and ordinary current work do not become canonical rules merely because they are currently important;
+- the former mandatory broad GitHub reconciliation rule is cancelled; targeted dependency/reference reconciliation plus scope/risk inspection replaces its repository-wide audit requirement;
+- documentation reconciliation remains mandatory for every logical scope, but editing documentation files is not required when the evidence-based result is that documented state did not change;
+- roadmap commitments are limited to owner-approved or otherwise accepted future development directions, not every idea mentioned during discussion;
+- release tag/asset identity remains immutable, while human-facing release notes may be transparently corrected when binary identity and publication truth do not change;
+- CI is being aligned with scope/risk: pure documentation changes use focused documentation/governance integrity checks, while product/package changes retain the full product matrix and package qualification as applicable.
 
 The detailed rules are canonical in `DOC-*`, `DEV-*`, `CHAT-*`, and `GH-*`; this handoff does not redefine them.
 

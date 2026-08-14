@@ -164,6 +164,6 @@ DEV-046. **A development-rule change is not complete until its references are re
 | `DEV-042` | `CHAT-021` |
 <!-- RULE-XREF-IN-END -->
 
-## Retired rule IDs
+## Rule lifecycle
 
-None. Retired IDs are recorded rather than recycled.
+No cancelled or replaced `DEV-*` IDs currently exist. Existing IDs remain permanent and are never recycled.

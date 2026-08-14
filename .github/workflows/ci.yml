@@ -17,13 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       package: ${{ steps.paths.outputs.package }}
+      docs_only: ${{ steps.paths.outputs.docs_only }}
 
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Detect packaged-plugin changes
+      - name: Classify repository changes
         id: paths
         shell: bash
         env:
@@ -53,6 +54,14 @@ jobs:
           changed=$(git diff --name-only "${base_sha}" "${head_sha}")
           printf '%s\n' "${changed}"
 
+          docs_only=false
+          if [[ "${EVENT_NAME}" != "workflow_dispatch" && -n "${changed}" ]]; then
+            non_docs=$(printf '%s\n' "${changed}" | grep -Ev '^(AGENTS\.md|README\.md|docs/.*\.md)$' || true)
+            if [[ -z "${non_docs}" ]]; then
+              docs_only=true
+            fi
+          fi
+
           package=false
           if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
             package=true
@@ -60,11 +69,41 @@ jobs:
             package=true
           fi
 
+          echo "docs_only=${docs_only}" >> "${GITHUB_OUTPUT}"
           echo "package=${package}" >> "${GITHUB_OUTPUT}"
+
+  validate-docs:
+    name: Validate documentation
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.docs_only == 'true' }}
+    runs-on: ubuntu-latest
+    needs: changes
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python for documentation checks
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Validate documentation-governance scripts
+        run: |
+          sh -n scripts/test-release-trigger.sh
+          sh -n scripts/test-github-branch-hygiene.sh
+          sh -n scripts/test-repository-hygiene.sh
+
+      - name: Test automated release trigger contract
+        run: sh scripts/test-release-trigger.sh
+
+      - name: Test GitHub delivery governance
+        run: sh scripts/test-github-branch-hygiene.sh
+
+      - name: Test repository documentation integrity
+        run: sh scripts/test-repository-hygiene.sh
 
   validate:
     name: Validate Project
-    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.docs_only != 'true') }}
     runs-on: ubuntu-latest
     needs: changes
     env:

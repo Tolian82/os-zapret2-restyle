@@ -71,11 +71,15 @@ Historical A/B/C experiment material is history/proof and does not represent cur
 - `GITHUB_PUBLICATION.md` is the fourth book, **Правила работы с GitHub**, despite the retained historical filename;
 - rule IDs are permanent identities and are not cascade-renumbered when rules are inserted or reorganized;
 - cancelled/replaced rules remain physically at their permanent IDs with explicit lifecycle markers; those IDs are never recycled;
+- creating, refining, cancelling, and replacing rules now has an explicit semantic decision boundary in `DOC-054`;
 - each canonical book contains explicit inbound/outbound cross-reference registries and CI validates them against active rule bodies and lifecycle state;
 - local Markdown links and local Markdown heading fragments are validated by CI;
 - `START_HERE.md` is the exact `_N` handoff;
+- current work follows one state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`; ledgers/decisions/devlogs/evidence preserve chronology and proof but are not parallel owners of current state;
 - zero-memory recovery is context-first: handoff/state, then all four rule books, plan/index, then selected specialists;
 - Level-1 material already read for an unchanged exact repository state may be reused; advancing `main` requires affected current/mandatory material to be reread;
+- the former mandatory broad GitHub reconciliation rule is cancelled; consistency work uses targeted rule dependencies, reference/link validation, and scope/risk expansion instead of a mandatory repository-wide audit for every canon change;
+- pure documentation PRs use focused documentation/governance integrity validation rather than mechanically running the complete product matrix; product/package changes retain full validation as applicable;
 - this file is current state for `v0.4.x`;
 - `ROADMAP.md` is the complete concise master plan;
 - `INDEX.md` is the global navigation/integrity map;

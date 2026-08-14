@@ -15,7 +15,7 @@ Read this file completely before GitHub mutation.
 
 ## Quick route by task
 
-- access and preflight: `GH-001`–`GH-009`;
+- access and preflight: `GH-001`–`GH-008`;
 - branch and PR scope: `GH-010`–`GH-015`;
 - validation and CI: `GH-016`–`GH-023`;
 - merge, post-merge verification, cleanup: `GH-024`–`GH-030`;
@@ -43,7 +43,7 @@ GH-007. **Preflight is scope/risk based.** Always check exact `main`, candidate 
 
 GH-008. **Broad investigation uses one pinned recursive tree as an index when practical.** Resolve the exact SHA once and fetch only the files/objects needed from that immutable snapshot rather than repeatedly rediscovering repository structure.
 
-GH-009. **Owner-canon/documentation reconciliation is broad by definition.** When `CHAT-009` applies, inspect every active/current-looking authority capable of contradicting the new canon while preserving historical records under `DOC-004`–`DOC-005`.
+GH-009. **[ОТМЕНЕНО] Owner-canon/documentation reconciliation is broad by definition.** This rule previously required inspection of every active/current-looking authority whenever owner canon was recorded. The owner cancelled it on 2026-08-14 because permanent rule IDs, explicit dependency registries, targeted reconciliation under `DOC-008`, link validation, and scope/risk-based inspection provide stronger consistency without forcing a repository-wide audit for every canon change. The ID and original meaning remain permanently reserved.
 
 ## Branch and logical-scope discipline
 
@@ -61,7 +61,7 @@ GH-015. **A docs/governance/CI-only delivery may advance `main` without changing
 
 ## Validation and CI failure handling
 
-GH-016. **Validate before publication or merge.** Run focused checks required by scope and the repository CI contract. Never merge based on an unverified older head.
+GH-016. **Validate the latest head with checks proportionate to the changed scope.** Pure documentation changes run the documentation, rule-reference, link, release-governance, and repository-integrity checks that can be affected, without mechanically running the full product matrix. Product or packaged-source changes run the applicable full product validation. CI/workflow changes run their affected CI contracts and run the full product matrix when they change general validation logic. Never merge based on an unverified older head.
 
 GH-017. **Read exact failed-job evidence before changing source, tests, workflow, or branch state.** Apply `DEV-012`; a plausible explanation is not enough.
 
@@ -85,7 +85,7 @@ GH-025. **Normal project integration is one squash merge per logical scope.** Th
 
 GH-026. **Verify the resulting `main` after merge.** Confirm the new SHA and applicable main-integrity/release-classification behavior rather than assuming PR checks automatically prove post-merge state.
 
-GH-027. **Published history is forward-only.** Never force-update `main`, rewrite an already-published release, move a published tag to another commit, or hide a failed publication by rewriting history. Repair forward.
+GH-027. **Published release identity and bytes are forward-only.** Never force-update `main`, move a published tag to another commit, replace already-published package/checksum assets under the same release identity, or hide a failed publication by rewriting history. Repair substantive publication errors forward. Human-facing release notes may be transparently corrected when that edit does not change the release identity, tag target, binary/checksum assets, or conceal a publication defect.
 
 GH-028. **Temporary branches are completion machinery, not permanent clutter.** After merge/completion, preserve useful unique work first; otherwise delete the temporary task/publication branch and verify normal branch state.
 
@@ -170,7 +170,6 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 |---|---|
 | `GH-005` | `DEV-027`–`DEV-040` |
 | `GH-006` | `DOC-016`, `DOC-049` |
-| `GH-009` | `DOC-004`, `DOC-005`, `CHAT-009` |
 | `GH-011` | `DEV-017` |
 | `GH-014` | `DEV-027`, `DEV-028` |
 | `GH-015` | `DEV-033` |
@@ -223,4 +222,6 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 
 ## Rule lifecycle
 
-No cancelled or replaced `GH-*` IDs currently exist. Rule cancellation/replacement preserves the permanent ID under the documentation-rule lifecycle contract.
+- `GH-009` — **ОТМЕНЕНО**, 2026-08-14; no replacement.
+
+Cancelled/replaced IDs remain physically in this file and are never recycled.

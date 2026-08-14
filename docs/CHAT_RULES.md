@@ -13,7 +13,7 @@ Other canonical rule domains:
 
 ## Language and communication style
 
-CHAT-001. **Owner-facing project communication is normal, understandable Russian by default.** Do not make the owner decode English process jargon when a clear Russian explanation exists.
+CHAT-001. **Owner-facing project communication is normal, understandable Russian by default.** Build owner-facing explanations as Russian sentences. Translate service/status jargon such as `PASS`, `FAIL`, `SKIPPED`, `pending`, `classifier`, `head`, and similar process words into normal Russian unless they are being quoted literally from a log or interface. A literal English check name, file name, command, code identifier, package name, or protocol term may remain as the name of the object, preferably in parentheses after the Russian explanation when that improves clarity. Do not make the owner decode mixed Russian-English process shorthand.
 
 CHAT-002. **Use literal technical names only when useful.** File names, commands, code identifiers, GitHub check names, package names, and protocol terms may remain literal; unexplained mixed-language abstractions should be translated or immediately explained.
 
@@ -99,7 +99,7 @@ CHAT-026. **An unambiguous owner instruction must have an observable consequence
 | Target rule | Referenced by |
 |---|---|
 | `CHAT-007` | `DEV-001` |
-| `CHAT-009` | `DEV-001`, `GH-009` |
+| `CHAT-009` | `DEV-001` |
 | `CHAT-010` | `GH-029` |
 | `CHAT-015` | `GH-034` |
 | `CHAT-016` | `DEV-040`, `GH-034` |
