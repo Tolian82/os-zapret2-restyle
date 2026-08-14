@@ -152,16 +152,15 @@ Metadata:
 
 ### Further plan
 
-1. merge the current docs/governance handoff patch without package metadata change;
-2. implement `_13`;
-3. run focused and full corrective validation;
-4. qualify FreeBSD 15 package;
-5. reconcile docs/near/long-term plan before publication;
-6. Ready PR -> checks -> exact-head squash merge -> verify `main`;
-7. publish deterministic `_13` testing package when owner testing/package delivery is requested;
-8. perform one selected owner-live Model-C-only regression;
-9. record evidence and close B -> C transition on PASS;
-10. return to `docs/ROADMAP.md` for the next owner-selected product/Strategy-Lab work.
+1. implement `_13` Model-C-only production finalization;
+2. run focused and full corrective validation;
+3. qualify FreeBSD 15 package;
+4. reconcile docs/near/long-term plan against implementation/test discoveries before publication;
+5. Ready PR -> latest-head checks -> exact-head squash merge -> verify `main`;
+6. publish deterministic `_13` testing package when owner testing/package delivery is requested;
+7. perform one selected owner-live Model-C-only regression;
+8. record evidence and close B -> C transition on PASS;
+9. return to `docs/ROADMAP.md` for the next owner-selected product/Strategy-Lab work.
 
 Do not implement the previously considered larger timeout-admission envelope for legacy `C -> B`
 before `_13`; that specific problem disappears if the automatic fallback is retired. Future timeout
