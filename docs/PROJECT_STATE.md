@@ -24,16 +24,32 @@ Future work: `docs/ROADMAP.md`.
 Documentation-only `main` may be newer than the packaged source merge. Always resolve the actual
 `main` SHA before mutation.
 
+## Current governance / continuity facts
+
+- the owner's newest unambiguous/confirmed instruction is current intended project canon and
+  supersedes conflicting older active documentation;
+- all newly approved durable development principles must be added to
+  `docs/PROJECT_PRINCIPLES.md` in the first synchronized documentation change;
+- every substantive GitHub delivery is a zero-memory recovery checkpoint; current continuation is
+  summarized in `docs/START_HERE.md`, with detailed chronology in patch/devlog/evidence records;
+- the historical local/container DNS problem is **closed**. DNS previously worked slowly and with
+  failures; the owner fixed it. Treat DNS as currently working and do not diagnose a new failure as
+  the old DNS problem without fresh reproducible evidence.
+
+Detailed continuity decision:
+`docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`.
+
 ## Current production behavior and approved direction
 
 Actual current source enters Model C first but still retains automatic legacy fallback:
 
 `C-warm-bucket-source-port-dispatch -> B-warm-worker-parallel-batched -> A-cold-fallback`.
 
-Approved direction:
+Approved owner direction:
 
-- Model C is the final normal production Stage-60 runtime;
-- automatic Model-B / cold-Model-A replay is a legacy transition tail;
+- **Model C is the final normal production Stage-60 runtime**;
+- automatic Model-B / cold-Model-A replay is a legacy transition tail, not a requirement capable of
+  blocking or reversing the Model-C decision;
 - B/A may remain as benchmark/reference/test tooling;
 - the next packaged source patch removes B/A from the production fallback chain instead of improving
   that chain further.
@@ -97,6 +113,16 @@ material architecture change reopens them:
 - cross-batch lifecycle (`_7` through `_12`): `_11/_12` fixed real defects; further keep-warm/reuse
   architecture not justified by current measurements.
 
+Do not reopen these merely because a new chat lacks conversational memory.
+
+## Most recent docs/governance corrective
+
+The current docs-only continuity corrective does not change package/runtime code or metadata. It
+closes the owner-canon/DNS/zero-memory documentation gaps and records the latest work in:
+
+- `docs/patches/v0.4.1_12-owner-canon-zero-memory-checkpoint.md`;
+- `docs/devlog/2026-08-14-owner-canon-zero-memory-checkpoint.md`.
+
 ## Current next packaged source change — `v0.4.1_13`
 
 **Make Model C the only normal production Stage-60 runtime.**
@@ -109,4 +135,5 @@ Scope summary:
 - retain B/A code only where still useful outside the normal production path.
 
 Exact implementation files, required specialist reading, acceptance and complete further plan are in
-`docs/START_HERE.md`.
+`docs/START_HERE.md`. A newer explicit owner instruction supersedes this priority and must be
+synchronized here/there before implementation.

@@ -6,7 +6,7 @@ Permanent principles: `docs/PROJECT_PRINCIPLES.md`.
 Current task: `docs/START_HERE.md`.
 GitHub delivery procedure: `docs/GITHUB_PUBLICATION.md`.
 
-Do not store current project status or current implementation priority here.
+Do not store competing current project status or current implementation priority here.
 
 ## 1. Restore context
 
@@ -14,8 +14,17 @@ Read in the mandatory order from repository-root `AGENTS.md`:
 
 `AGENTS -> PROJECT_PRINCIPLES -> START_HERE -> PROJECT_STATE -> current-task specialist docs`.
 
+`START_HERE` must include a short mandatory summary of the most recent completed logical work and
+point to the relevant detailed patch/devlog/evidence record. This makes recent activity part of every
+cold-start context without requiring a full historical devlog reread.
+
 Do not reconstruct project state from chat history. Do not perform a repository-wide audit merely to
 recover context when the handoff already names a focused task.
+
+If the current owner instruction conflicts with `START_HERE`, `PROJECT_STATE`, `ROADMAP` or an older
+specialist document, apply the owner-canon rule from `PROJECT_PRINCIPLES`: resolve only a genuine
+material ambiguity, then synchronize the affected active docs before following the new direction.
+Never let an older documented plan silently override a newer confirmed owner instruction.
 
 ## 2. Establish the exact baseline
 
@@ -25,7 +34,7 @@ Before mutation verify:
 
 - exact current `main` SHA;
 - `VERSION` and `PLUGIN_REVISION`;
-- current documented task/plan;
+- current documented task/plan reconciled with the newest owner instruction;
 - same-scope open PR state;
 - relevant unpublished owner-local state, if the owner reports any.
 
@@ -37,11 +46,14 @@ relevant unpublished owner state explicitly transferred into scope.
 The synchronized documentation for the logical change must state:
 
 1. what changes and why;
-2. expected result and acceptance boundary;
-3. complete ordered next plan, including near-term and long-term/deferred work.
+2. intended effect and expected result/acceptance boundary;
+3. the exact immediate next step after the delivery;
+4. complete ordered next plan, including completed/superseded/deferred near-term and long-term work;
+5. any new durable principle in `PROJECT_PRINCIPLES` itself.
 
-Record affected source/docs and focused verification. Do not invent a new work package when
-`START_HERE.md` already defines one and current repository state still matches it.
+Record affected source/docs and focused verification. Do not implement a work package that the owner
+has just superseded. If `START_HERE.md` already defines one and current repository state plus the
+newest owner instruction still match it, do not invent a different one.
 
 ## 4. Decide whether an audit is part of this task
 
@@ -50,7 +62,7 @@ An audit is **not** a universal prerequisite for every code change.
 Perform or continue an audit when:
 
 - the owner requested an audit/review;
-- `START_HERE` / `ROADMAP` schedules one;
+- `START_HERE` / `ROADMAP` schedules one and no newer owner instruction supersedes it;
 - refactoring/removing inherited behavior requires classification first;
 - a new reproducible defect has unknown/cross-cutting scope;
 - source contradicts documented architecture/state and the mismatch cannot be resolved narrowly.
@@ -91,16 +103,25 @@ same-scope defect in the same PR; do not change source for an external infrastru
 
 ## 7. Reconcile documentation before publication
 
-Immediately before publishing substantive change state / Ready PR and again before merge:
+Immediately before publishing substantive changed branch state / Ready PR and again before merge,
+make the repository a self-contained **zero-memory recovery checkpoint**:
 
+- record the most recent completed logical work in `START_HERE` and link its patch/devlog/evidence;
 - confirm what changed and why;
-- confirm expected result/acceptance;
-- confirm complete near-term and long-term plan;
-- reconcile the plan against implementation/testing discoveries;
-- update `START_HERE`, `PROJECT_STATE`, patch/evidence record and `ROADMAP` as applicable.
+- confirm intended effect and expected result/acceptance;
+- record the exact immediate next step;
+- reconcile the complete near-term and long-term plan with explicit completed/superseded/deferred
+  state;
+- add any newly approved durable principle to `PROJECT_PRINCIPLES`;
+- reconcile all of the above against the newest owner instruction;
+- update `START_HERE`, `PROJECT_STATE`, patch/evidence/devlog record and `ROADMAP` as applicable.
+
+The acceptance question is: **could a future session with no chat/model memory, even years later,
+read the mandatory startup docs and continue at the exact boundary without rediscovering settled
+project intent?** If not, documentation is incomplete and publication must wait for synchronization.
 
 A task branch may be created from the unchanged baseline before this gate. The first substantive
-published change state must already carry the documentation required for that logical scope.
+published changed branch state must already carry the documentation required for that logical scope.
 
 ## 8. Deliver through GitHub
 
