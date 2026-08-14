@@ -13,7 +13,7 @@ responsibilities. This file is current-state architecture only; historical imple
 sequences belong in decisions/devlog/patch/evidence records.
 
 Read after:
-`docs/PROJECT_STATE.md` and `docs/DEVELOPMENT_GUIDE.md`.
+`docs/PROJECT_STATE.md` and the task-selected specialist architecture documents.
 
 ==================================================
 IDENTITY AND SOURCE OF TRUTH
@@ -156,25 +156,34 @@ Specialist base contract:
 `docs/architecture/STRATEGY_LAB.md`.
 
 ==================================================
-MODEL C — SELECTED PRODUCTION DIRECTION
+MODEL C — ONLY NORMAL PRODUCTION STAGE-60 RUNTIME
 ==================================================
 
 **Model C is selected. A/B/C model selection is closed.**
 
-Model roles:
+Model roles from source revision `v0.4.1_13`:
 
-- Model A: retained cold correctness/reference implementation;
-- Model B: retained warm/reference implementation and temporary legacy fallback in
-  packaged source through `v0.4.1_12`;
-- Model C: selected normal production Stage-60 runtime.
+- Model A: retained explicit cold correctness/reference implementation;
+- Model B: retained explicit warm/reference/benchmark implementation;
+- Model C: the only normal packaged production Stage-60 runtime.
 
-Current packaged `_12` source still contains transition debt:
+The transitional `_12` chain
 
-`Model C -> Model B -> Model A cold`.
+`Model C -> Model B -> Model A cold`
 
-That describes current implementation only. It is **not** an architecture choice, gate,
-fallback requirement or invitation to re-select Model B. `v0.4.1_13` removes B/A from
-the normal production Stage-60 fallback chain.
+is no longer reachable from the normal packaged production entry point. The compatibility
+command routes through `strategy_lab_py/stage60_model_c_production.py`, which reuses the
+proven Model-C bucket engine and existing authoritative Stage-60 planner.
+
+A Model-C infrastructure/selector/rendering/readiness/attribution/cleanup failure is
+converted into a bounded structural Stage-60 error that is deliberately not
+`WarmInfrastructureError`. Therefore the legacy Model-B/cold-Model-A replay handler does
+not consume it. Candidate network FAIL/timeout remains candidate evidence and is not an
+infrastructure fallback signal.
+
+Explicit `model-b|parallel|cold` runtime overrides remain available only for reference,
+benchmark and focused test tooling. Legacy fallback behavior inside those explicit
+reference modules is not normal production architecture.
 
 Model C uses source-port-qualified dispatch so one compatible physical warm worker can
 serve a planner-selected logical batch while preserving exact candidate attribution.
@@ -188,7 +197,9 @@ Current accepted constraints include:
 - profile-compatible physical segmentation while preserving the logical planner batch;
 - readiness from process identity + socket + clean startup log + two consecutive good
   snapshots with 25 ms polling and a 4 s bound;
-- cleanup on success/failure/cancel and Stage-90 semantic restoration.
+- cleanup on success/failure/cancel and Stage-90 semantic restoration;
+- persisted normal-production policy evidence `model_c_only=true` and
+  `cold_fallback_available=false`.
 
 Specialist authority:
 `docs/architecture/STRATEGY_LAB_MODEL_C.md`.
@@ -305,6 +316,6 @@ TECHNICAL CONSTRAINTS
 - no automatic permanent strategy modification;
 - ordinary package patches do not imply stable release/pkg-repository publication.
 
-Current state is in `docs/PROJECT_STATE.md`; exact next work in `docs/START_HERE.md`;
+Current state is in `docs/PROJECT_STATE.md`; exact handoff in `docs/START_HERE.md`;
 future sequence in `docs/ROADMAP.md`; historical rationale/evidence in decisions,
 patches, devlogs and verification records.
