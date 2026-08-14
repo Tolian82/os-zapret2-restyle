@@ -13,13 +13,9 @@ Current implementation origin: `docs/patches/v0.4.0_26.md`.
 
 ## Ownership boundary
 
-Budget policy owns only finite parent time envelopes and admission against remaining absolute time.
-It does **not** choose candidates, reorder the adaptive graph, select Model A/B/C, alter source-port
-ownership, reinterpret PASS/FAIL, rank results or change restoration semantics.
+Budget policy owns only finite parent time envelopes and admission against remaining absolute time. It does **not** choose candidates, reorder the adaptive graph, select runtime models, alter source-port ownership, reinterpret PASS/FAIL, rank results or change restoration semantics.
 
-Therefore runtime selection may change independently (for example `_13` retiring B/A production
-fallback) without changing this budget policy, provided all child work remains contained by the same
-absolute stage/job parents.
+Therefore the `_13` retirement of automatic B/A production replay does not change this budget policy, provided Model-C child work remains contained by the same absolute stage/job parents.
 
 Invariant:
 
@@ -62,9 +58,7 @@ Environment-configured minimums remain:
 - `STRATEGY_LAB_EXTENDED_BUDGET`, default `120 s`;
 - `STRATEGY_LAB_STAGE80_TIMEOUT`, default `120 s`.
 
-The proven reference two-endpoint topology keeps the existing Extended total floor of `270 s` when no
-optional additions are eligible. The policy does not reduce a known-safe configured floor merely
-because one observed run was faster.
+The proven reference two-endpoint topology keeps the existing Extended total floor of `270 s` when no optional additions are eligible. The policy does not reduce a known-safe configured floor merely because one observed run was faster.
 
 ## `eligible-work-v1` additions
 
@@ -76,8 +70,7 @@ Current bounded weights:
 - Extended QUIC available: `+20 s`;
 - Extended Generic UDP configured: `+15 s`.
 
-Calculation is additive/monotonic and starts from cached original configured bases so recalculation
-cannot compound additions.
+Calculation is additive/monotonic and starts from cached original configured bases so recalculation cannot compound additions.
 
 ## Deadlines
 
@@ -102,33 +95,24 @@ Successful adaptation persists `adaptive-budget.json` with:
 - configured bases;
 - effective Standard/Extended/search/Stage-80 seconds.
 
-`status.json` exposes public effective budget/deadline fields and timing telemetry records the same
-adaptation event.
+`status.json` exposes public effective budget/deadline fields and timing telemetry records the same adaptation event.
 
 ## Fail-closed rules
 
-Planning fails closed when required Stage-30 state is malformed, no endpoint exists or IPv4 is not
-actually available. It does not infer capability from old jobs, DNS names, historical telemetry or
-expectation.
+Planning fails closed when required Stage-30 state is malformed, no endpoint exists or IPv4 is not actually available. It does not infer capability from old jobs, DNS names, historical telemetry or expectation.
 
 Optional unavailable work contributes zero seconds.
 
 ## Relationship to Model-C-only `_13`
 
-Through `_12`, current Stage 60 may execute Model C and then legacy B/A fallback. `_13` removes the
-automatic production B/A replay.
+Normal Stage 60 is Model-C-only from `v0.4.1_13`. Automatic B/A replay is no longer part of the production workload.
 
-This budget document does **not** require the old `C -> B -> A` order and must not be used as a reason
-to preserve it. Its requirement is only that whichever runtime the current production architecture
-selects remains bounded by child/stage/job containment and remaining-budget admission.
+This budget policy neither requires nor permits enlarging parent budgets to recreate a retired fallback path. A Model-C infrastructure failure remains an explicit bounded structural failure below the existing finite parents.
 
-Do not enlarge parent budgets merely to keep a legacy fallback alive. If Model-C-only operation later
-exposes a concrete containment defect, investigate it as its own evidence-based timeout task.
+If Model-C-only operation later exposes a concrete containment defect, investigate it as its own evidence-based timeout task rather than reintroducing fallback or silently enlarging budgets.
 
 ## Verification
 
 Source contract: `scripts/test-strategy-lab-adaptive-budget.sh`.
 
-The accepted `_26` owner-live gate established `eligible-work-v1` operation, workload/effective-budget
-evidence, no unexpected timeout/fallback and clean semantic restoration for its tested topology.
-Future runtime changes preserve this policy unless a dedicated budget patch explicitly changes it.
+The accepted `_26` owner-live gate established `eligible-work-v1` operation, workload/effective-budget evidence, no unexpected timeout/fallback and clean semantic restoration for its tested topology. `_13` changes runtime fallback policy only and preserves this budget contract.
