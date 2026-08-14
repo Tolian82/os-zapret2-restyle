@@ -8,6 +8,7 @@ INDEX="${ROOT_DIR}/docs/INDEX.md"
 START_HERE="${ROOT_DIR}/docs/START_HERE.md"
 PRINCIPLES="${ROOT_DIR}/docs/PROJECT_PRINCIPLES.md"
 ROADMAP="${ROOT_DIR}/docs/ROADMAP.md"
+CURRENT_LEDGER="${ROOT_DIR}/docs/history/current/v0.4.x.md"
 RELEASE_DOC="${ROOT_DIR}/docs/releases/v0.4.1.md"
 RELEASE_EVIDENCE="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md"
 BLOB_PUBLICATION="${ROOT_DIR}/docs/verification/evidence/2026-08-12-v0.4.1_3-blob-measurement-publication.md"
@@ -53,7 +54,7 @@ fail(){ echo "FAIL: $*" >&2; exit 1; }
 require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
 for file in "${MATRIX}" "${STATE}" "${INDEX}" "${START_HERE}" "${PRINCIPLES}" "${ROADMAP}" \
-    "${RELEASE_DOC}" "${RELEASE_EVIDENCE}" "${BLOB_PUBLICATION}" "${BLOB_LIVE}" \
+    "${CURRENT_LEDGER}" "${RELEASE_DOC}" "${RELEASE_EVIDENCE}" "${BLOB_PUBLICATION}" "${BLOB_LIVE}" \
     "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${DISCOVERY_PUBLICATION}" "${DISCOVERY_ROOT_CAUSE}" \
     "${DISCOVERY6_INPUT}" "${DISCOVERY6_PLAN}" "${DISCOVERY6_LIVE}" "${READINESS12_LIVE}" \
     "${VERSION_FILE}" "${MAKEFILE}" "${LUA_DOC}" "${LUA_PATCH}" "${LUA_TEST}" "${LUA_PY}" \
@@ -74,34 +75,45 @@ candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${revision}" -eq 12 ] || fail 'current packaged source must remain PLUGIN_REVISION=12'
 [ "${candidate}" = 'os-zapret2-restyle-0.4.1_12.pkg' ] || fail 'unexpected current package identity'
 
-# Current-state authorities must describe current truth, not freeze an older historical ledger.
+# Level-1 authorities must describe current truth compactly. Detailed measurements belong to the
+# current semantic-minor ledger rather than being duplicated into PROJECT_STATE/START_HERE.
 require "${PRINCIPLES}" 'CANONICAL / MANDATORY READING IN EVERY PROJECT CONTEXT'
-require "${STATE}" 'current packaged source revision: `12`'
+require "${PRINCIPLES}" 'Project documentation uses three memory levels'
+require "${STATE}" 'packaged source revision: `12`'
 require "${STATE}" 'package candidate: `os-zapret2-restyle-0.4.1_12.pkg`'
 require "${STATE}" 'acf65d39eaa88a16debe1d35affa71f03f1d848d'
-require "${STATE}" 'v0.4.1_12'
-require "${STATE}" 'job.xhdgCU'
-require "${STATE}" 'Stage 60 `34209 ms`'
-require "${STATE}" '5/5 `model_c_only=true`'
-require "${STATE}" 'physical-segment startup median `82.5 ms`'
-require "${STATE}" 'Current next packaged source change — `v0.4.1_13`'
-require "${STATE}" 'Make Model C the only normal production Stage-60 runtime'
+require "${STATE}" 'testing tag: `v0.4.1_12`'
+require "${STATE}" '**`v0.4.1_13` — Model-C-only production finalization.**'
 require "${START_HERE}" 'Exact next code change — `v0.4.1_13`'
-require "${START_HERE}" 'do not spend the next patch improving timeout admission for `C -> B`'
-require "${ROADMAP}" '`v0.4.1_13` — Model-C-only production finalization'
+require "${START_HERE}" 'remove automatic production replay through Model B/cold Model A'
+require "${ROADMAP}" 'Current priority — v0.4.1_13'
+require "${ROADMAP}" '**Model-C-only production finalization.**'
 
-# INDEX is navigation. It must route to current authorities and retained evidence without claiming
-# that an old testing candidate is still current.
-require "${INDEX}" 'docs/PROJECT_PRINCIPLES.md'
-require "${INDEX}" 'docs/START_HERE.md'
-require "${INDEX}" 'docs/PROJECT_STATE.md'
-require "${INDEX}" 'docs/ROADMAP.md'
-require "${INDEX}" 'docs/verification/evidence/2026-08-14-v0.4.1_12-warm-readiness-live-pass.md'
-require "${INDEX}" 'docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md'
-require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md'
-require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md'
-require "${INDEX}" 'docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md'
-require "${INDEX}" 'v0.4.1_13'
+# The richer current-line ledger owns retained measurements and the evidence routes that justify
+# current conclusions without bloating Level 1.
+require "${CURRENT_LEDGER}" 'job.xhdgCU'
+require "${CURRENT_LEDGER}" 'Stage 60: `34209 ms`'
+require "${CURRENT_LEDGER}" '5/5 `model_c_only=true`'
+require "${CURRENT_LEDGER}" 'physical-segment startup median `82.5 ms`'
+require "${CURRENT_LEDGER}" '2026-08-14-v0.4.1_12-warm-readiness-live-pass.md'
+require "${CURRENT_LEDGER}" '2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md'
+require "${CURRENT_LEDGER}" '2026-08-12-v0.4.1_4-blob-common-set-live-pass.md'
+require "${CURRENT_LEDGER}" '2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md'
+require "${CURRENT_LEDGER}" '2026-08-12-v0.4.1_2-lua-init-live-pass.md'
+require "${CURRENT_LEDGER}" 'Exact next packaged change — v0.4.1_13'
+
+# INDEX is navigation only: it must route to Level 1, the current ledger, every completed minor-line
+# archive, and the deep evidence stores instead of copying individual current evidence links.
+require "${INDEX}" 'PROJECT_PRINCIPLES.md'
+require "${INDEX}" 'START_HERE.md'
+require "${INDEX}" 'PROJECT_STATE.md'
+require "${INDEX}" 'ROADMAP.md'
+require "${INDEX}" 'history/current/v0.4.x.md'
+require "${INDEX}" 'history/archive/v0.1.x.md'
+require "${INDEX}" 'history/archive/v0.2.x.md'
+require "${INDEX}" 'history/archive/v0.3.x.md'
+require "${INDEX}" 'verification/evidence/'
+require "${INDEX}" 'Archiving never deletes, rewrites or folds away original'
 
 # Historical source/build/live evidence remains checked directly at its immutable record.
 require "${RELEASE_DOC}" '# os-zapret2-restyle v0.4.1'
@@ -220,4 +232,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} current state is _12, immutable historical live evidence remains bound to its records, and the next documented source task is _13 Model-C-only production finalization"
+echo "PASS: ${candidate} current state is _12, Level-1 memory stays compact, retained v0.4.x measurements remain discoverable, and the next source task is _13 Model-C-only production finalization"
