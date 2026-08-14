@@ -117,6 +117,8 @@ Decision references when rationale is needed:
   `docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`;
 - operational handoff/preflight:
   `docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md`;
+- universal versioned GitHub title/commit identity:
+  `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
 - package delivery: `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md`;
 - CI evidence handling: `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`.
 
