@@ -50,11 +50,9 @@ detailed procedures live in specialist documents.
 
 8. **Every published GitHub project state is a zero-memory recovery checkpoint.** After a complete
    loss of chat/model memory — even years later — repository documentation must be sufficient to
-   resume quickly at the exact current boundary. The mandatory handoff must expose at least: the
-   most recent completed logical work, what the current/latest delivery changed and the intended
-   effect, the exact immediate next step, the ordered overall plan with completed/superseded/deferred
-   states, and the active development rules through this canonical file. Detailed chronology may live
-   in devlog/patch/evidence records, but the current handoff must point to the relevant record.
+   resume quickly at the exact current boundary. The mandatory handoff must expose the current facts,
+   the exact immediate next step, the short overall project path and pointers to current-line detail.
+   Detailed chronology remains durable but is loaded only when the current task needs it.
 
 9. **Every development stage begins with documentation and ends with documentation.** Before work,
    record the objective, implementation plan and expected verification. During work, record approved
@@ -120,16 +118,42 @@ detailed procedures live in specialist documents.
 23. **OPNsense commands target root `csh`.** POSIX-only shell syntax must explicitly enter
     `sh`/`/bin/sh` and return with `exit`.
 
+24. **Project documentation uses three memory levels to minimize context without losing history.**
+    Level 1 is the aggressively bounded always-read recovery set (`AGENTS`, principles, `START_HERE`,
+    `PROJECT_STATE`). Level 2 is one rolling current semantic-minor-line ledger such as `v0.4.x` and
+    current specialist documents, read only when the active task needs that detail. Level 3 is the
+    archive of completed minor lines plus deep `devlog`/`patches`/`verification`/release/decision
+    evidence, read only for historical dependency, investigation or proof. `docs/INDEX.md` must link
+    directly to the current ledger, every version-line archive and the deep evidence stores.
+
+25. **A semantic minor-line transition automatically rotates documentation history.** When the owner
+    requests the first release in a new line (for example `v0.4.x -> v0.5.0_1`), close/freeze the
+    current `v0.4.x` ledger as archive `v0.4.x`, initialize the new `v0.5.x` current ledger, update
+    `INDEX` and the short lifetime path, then proceed with the release. This requires no separate
+    reminder or confirmation. Archiving never deletes or rewrites detailed records: archive files are
+    compact maps with links to the original chronology/evidence, and current architecture/contracts
+    plus permanent principles remain current rather than being archived merely because a version
+    line changed.
+
+26. **Current facts have one primary home; other active documents link instead of retelling history.**
+    `PROJECT_STATE` stores present facts, `START_HERE` stores the compact operational handoff and exact
+    next task, `ROADMAP` stores current/future ordering, and the current-line ledger stores the richer
+    chronology. Detailed measurements and patch narratives are referenced, not copied repeatedly into
+    the mandatory layer. `INDEX` is navigation only.
+
 ## Authority map
 
-- `docs/START_HERE.md` — exact operational handoff, latest completed logical change and current task;
-- `docs/PROJECT_STATE.md` — current factual project/repository/product/environment state;
-- `docs/ROADMAP.md` — ordered near-term and long-term plan with completed/superseded/deferred status;
+- `docs/START_HERE.md` — compact operational handoff, short lifetime path and exact current task;
+- `docs/PROJECT_STATE.md` — current factual project/repository/product/environment state only;
+- `docs/ROADMAP.md` — current/future ordered plan, not a historical journal;
+- `docs/history/current/` — current semantic-minor-line working ledger;
+- `docs/history/archive/` — compact completed minor-line archive maps;
 - `docs/WORKING_CONVENTIONS.md` — how these principles are applied day to day;
-- `docs/GITHUB_PUBLICATION.md` — authoritative GitHub delivery procedure;
+- `docs/GITHUB_PUBLICATION.md` — authoritative GitHub delivery/release procedure;
 - `docs/ARCHITECTURE.md` / `docs/architecture/` — current technical architecture only;
-- `docs/devlog/` / `docs/patches/` / `docs/verification/` — durable chronology and evidence;
-- `docs/INDEX.md` — navigation only.
+- `docs/devlog/` / `docs/patches/` / `docs/verification/` / `docs/releases/` / `docs/decisions/` —
+  durable deep chronology, rationale and evidence, loaded on demand;
+- `docs/INDEX.md` — navigation only and direct route to all memory levels.
 
 If a permanent principle is created, changed or superseded, update this file and its decision/procedure
 in the same logical documentation change. Do not create competing active formulations of these

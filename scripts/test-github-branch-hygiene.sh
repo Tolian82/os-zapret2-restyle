@@ -6,9 +6,15 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 AGENTS="${ROOT_DIR}/AGENTS.md"
 PRINCIPLES="${ROOT_DIR}/docs/PROJECT_PRINCIPLES.md"
 START_HERE="${ROOT_DIR}/docs/START_HERE.md"
+STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
+CURRENT_LEDGER="${ROOT_DIR}/docs/history/current/v0.4.x.md"
+ARCHIVE_01="${ROOT_DIR}/docs/history/archive/v0.1.x.md"
+ARCHIVE_02="${ROOT_DIR}/docs/history/archive/v0.2.x.md"
+ARCHIVE_03="${ROOT_DIR}/docs/history/archive/v0.3.x.md"
 PUBLICATION="${ROOT_DIR}/docs/GITHUB_PUBLICATION.md"
 WORKFLOW_SUMMARY="${ROOT_DIR}/docs/GITHUB_WORKFLOW.md"
+MEMORY_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-14-three-level-versioned-documentation-memory.md"
 OPERATIONAL_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md"
 EVIDENCE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md"
 EFFICIENT_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-05-efficient-github-delivery.md"
@@ -48,9 +54,15 @@ for file in \
   "${AGENTS}" \
   "${PRINCIPLES}" \
   "${START_HERE}" \
+  "${STATE}" \
   "${INDEX}" \
+  "${CURRENT_LEDGER}" \
+  "${ARCHIVE_01}" \
+  "${ARCHIVE_02}" \
+  "${ARCHIVE_03}" \
   "${PUBLICATION}" \
   "${WORKFLOW_SUMMARY}" \
+  "${MEMORY_DECISION}" \
   "${OPERATIONAL_DECISION}" \
   "${EVIDENCE_DECISION}" \
   "${EFFICIENT_DECISION}" \
@@ -62,10 +74,11 @@ for file in \
   "${PRERELEASE_WORKFLOW}" \
   "${RELEASE_TRIGGER}"
 do
-  test -s "${file}" || fail "missing or empty GitHub governance file: ${file}"
+  test -s "${file}" || fail "missing or empty GitHub governance/memory file: ${file}"
 done
 
-# Documentation checks guard authority relationships and required semantics, not mutable line placement.
+# Documentation checks guard authority relationships and required semantics, not mutable line placement
+# or a requirement that INDEX duplicate individual deep-record links.
 version=$(tr -d '[:space:]' < "${VERSION_FILE}")
 revision=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' "${MAKEFILE}" | head -1)
 
@@ -77,28 +90,50 @@ if [ -n "${revision}" ] && [ "${revision}" != "0" ]; then
   expected="${expected}_${revision}"
 fi
 
+grep -Eq '^Status:[[:space:]]+\*\*ACTIVE / SUPERSEDING' "${MEMORY_DECISION}" || fail 'three-level memory decision is not active/superseding'
 grep -Eq '^Status:[[:space:]]+\*\*ACTIVE\*\*$' "${OPERATIONAL_DECISION}" || fail 'operational handoff decision is not active'
 grep -Eq '^Status:[[:space:]]+Active([,[:space:]].*)?$' "${EVIDENCE_DECISION}" || fail 'evidence-first decision is not active'
 grep -Eq '^Status:[[:space:]]+Active([,[:space:]].*)?$' "${EFFICIENT_DECISION}" || fail 'efficient delivery decision is not active'
 grep -Eq '^Status:[[:space:]]+Active([,[:space:]].*)?$' "${TITLE_DECISION}" || fail 'universal title decision is not active'
 grep -Eq '^Status:[[:space:]]+Superseded' "${OLD_DECISION}" || fail 'old atomic decision is not superseded'
 
+# Level-1 recovery and three-level memory routing.
 require_doc_marker 'docs/PROJECT_PRINCIPLES.md' "${AGENTS}" 'AGENTS does not require canonical project principles'
 require_doc_marker 'docs/START_HERE.md' "${AGENTS}" 'AGENTS does not require operational handoff'
+require_doc_marker 'docs/PROJECT_STATE.md' "${AGENTS}" 'AGENTS does not require current project state'
 require_doc_marker 'docs/GITHUB_PUBLICATION.md' "${AGENTS}" 'AGENTS does not name publication authority'
-require_doc_marker 'docs/PROJECT_PRINCIPLES.md' "${INDEX}" 'INDEX does not route to canonical principles'
-require_doc_marker 'docs/START_HERE.md' "${INDEX}" 'INDEX does not route to operational handoff'
-require_doc_marker 'DEC-2026-08-05-universal-versioned-github-titles.md' "${INDEX}" 'INDEX does not name universal title decision'
-require_doc_marker 'DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md' "${PUBLICATION}" 'publication procedure does not name operational handoff decision'
-require_doc_marker 'package-candidate prefix' "${AGENTS}" 'AGENTS does not require versioned project delivery identity'
+require_doc_marker 'history/current/v0.4.x.md' "${INDEX}" 'INDEX does not route to current semantic-line ledger'
+require_doc_marker 'history/archive/v0.1.x.md' "${INDEX}" 'INDEX does not route to v0.1.x archive'
+require_doc_marker 'history/archive/v0.2.x.md' "${INDEX}" 'INDEX does not route to v0.2.x archive'
+require_doc_marker 'history/archive/v0.3.x.md' "${INDEX}" 'INDEX does not route to v0.3.x archive'
+require_doc_marker 'PROJECT_PRINCIPLES.md' "${INDEX}" 'INDEX does not route to canonical principles'
+require_doc_marker 'START_HERE.md' "${INDEX}" 'INDEX does not route to operational handoff'
+require_doc_marker 'PROJECT_STATE.md' "${INDEX}" 'INDEX does not route to current state'
+require_doc_marker 'verification/evidence/' "${INDEX}" 'INDEX does not route to deep verification evidence'
+require_doc_marker 'decisions/' "${INDEX}" 'INDEX does not route to deep decisions'
+require_doc_marker 'navigation only' "${INDEX}" 'INDEX is no longer explicitly navigation-only'
+require_doc_marker 'Archiving never deletes' "${INDEX}" 'INDEX omits archive-integrity guarantee'
+require_doc_marker 'Level 1' "${STATE}" 'PROJECT_STATE does not expose current memory-level state'
+require_doc_marker 'v0.4.x' "${CURRENT_LEDGER}" 'current semantic-line ledger identity is missing'
+require_doc_marker 'Handoff to v0.2.x' "${ARCHIVE_01}" 'v0.1.x archive lacks next-line handoff'
+require_doc_marker 'Handoff to v0.3.x' "${ARCHIVE_02}" 'v0.2.x archive lacks next-line handoff'
+require_doc_marker 'Handoff to v0.4.x' "${ARCHIVE_03}" 'v0.3.x archive lacks next-line handoff'
+
+# Publication/governance semantics remain mandatory while deep decision records are loaded on demand.
+require_doc_marker 'PR/branch commit/final squash subjects begin' "${AGENTS}" 'AGENTS does not require versioned project delivery identity'
 require_doc_marker 'final squash subject' "${AGENTS}" 'AGENTS does not require versioned squash identity'
 require_doc_marker 'every PR title' "${PUBLICATION}" 'publication rules do not cover PR title identity'
 require_doc_marker 'PR-branch commit subject' "${PUBLICATION}" 'publication rules do not cover branch commit identity'
 require_doc_marker 'final squash subject' "${PUBLICATION}" 'publication rules do not cover squash identity'
 require_doc_marker 'Docs/governance/CI-only changes' "${PUBLICATION}" 'publication rules do not cover non-packaged changes'
+require_doc_marker 'Automatic semantic-minor documentation rollover' "${PUBLICATION}" 'publication rules omit automatic minor-line archive rollover'
+require_doc_marker 'history/archive/v0.4.x.md' "${PUBLICATION}" 'publication rules do not demonstrate old-line archive creation'
+require_doc_marker 'no extra owner reminder' "${PUBLICATION}" 'publication rules do not make minor-line rollover automatic'
 require_doc_marker 'what changes and why' "${PRINCIPLES}" 'canonical principles omit delivery documentation scope/reason'
 require_doc_marker 'expected result' "${PRINCIPLES}" 'canonical principles omit expected result requirement'
 require_doc_marker 'long-term' "${PRINCIPLES}" 'canonical principles omit long-term plan requirement'
+require_doc_marker 'three memory levels' "${PRINCIPLES}" 'canonical principles omit three-level documentation memory'
+require_doc_marker 'one primary home' "${PRINCIPLES}" 'canonical principles omit one-primary-home rule'
 require_doc_marker 'reconcile' "${PUBLICATION}" 'publication procedure omits plan reconciliation'
 
 # One generic publisher is allowed; version-specific publishers in main are forbidden.
@@ -157,4 +192,4 @@ require_fixed 'types: [closed]' "${CLEANUP_WORKFLOW}" 'cleanup workflow does not
 require_fixed 'github.event.pull_request.merged == true' "${CLEANUP_WORKFLOW}" 'cleanup workflow does not require merged PRs'
 require_fixed 'github.event.pull_request.head.repo.full_name == github.repository' "${CLEANUP_WORKFLOW}" 'cleanup workflow lacks same-repository guard'
 
-echo "GitHub delivery and workflow tests passed for package candidate ${expected}."
+echo "GitHub delivery, workflow, and three-level documentation-memory tests passed for package candidate ${expected}."

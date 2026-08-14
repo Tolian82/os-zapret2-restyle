@@ -1,165 +1,74 @@
 # os-zapret2-restyle — Current state
 
-Status: **CURRENT**
+Status: **CURRENT / LEVEL 1**
 Updated: 2026-08-14
 
-This file answers: **Where is the project now?**
+This file answers only: **what is true now?**
+Exact continuation: [`START_HERE.md`](START_HERE.md).
+Current-line chronology/evidence: [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
+Future ordering: [`ROADMAP.md`](ROADMAP.md).
 
-Permanent principles: `docs/PROJECT_PRINCIPLES.md`.
-Exact continuation: `docs/START_HERE.md`.
-Future work: `docs/ROADMAP.md`.
-
-## Repository / package identity
+## Repository / package
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - semantic version: `0.4.1`;
-- current packaged source revision: `12`;
+- packaged source revision: `12`;
 - package candidate: `os-zapret2-restyle-0.4.1_12.pkg`;
-- required ABI: `FreeBSD:15:amd64`;
-- packaged runtime/source merge: `acf65d39eaa88a16debe1d35affa71f03f1d848d`;
 - testing tag: `v0.4.1_12`;
-- package SHA-256: `3b5a6c39c09abdfc8d8f1b59923312c40dda27e11c4f03e20773131996f6789d`.
+- packaged runtime/source merge: `acf65d39eaa88a16debe1d35affa71f03f1d848d`;
+- package SHA-256: `3b5a6c39c09abdfc8d8f1b59923312c40dda27e11c4f03e20773131996f6789d`;
+- required ABI: `FreeBSD:15:amd64`.
 
-Documentation-only `main` may be newer than the packaged source merge. Resolve actual `main` SHA
-before every mutation.
+Resolve the actual `main` SHA before every mutation; docs-only `main` may be newer than packaged
+source without changing package identity.
 
-## Locked governance / owner facts
+## Current product facts
 
-- one unambiguous owner instruction/fact/confirmed decision becomes current canon immediately;
-- once accepted, it is not repeatedly reconfirmed merely because an old doc/test disagrees;
-- reopen a settled factual claim only when the owner changes it or fresh direct reproducible evidence
-  contradicts it;
-- `зафиксируй` / equivalent requires a full reconciliation of all active authority docs that could
-  contradict the new canon;
-- a stale test/CI contract is corrected instead of forcing current documentation back to old intent;
-- every new durable principle is added to `docs/PROJECT_PRINCIPLES.md` in the first synchronized docs
-  change;
-- owner-facing project status is written in clear Russian by default, with technical English/internal
-  labels translated/explained when shown;
-- routine temporary branch/repository cleanup is part of normal completion and is normally silent;
-- every substantive GitHub delivery remains a zero-memory recovery checkpoint.
+- DNS is fixed/currently working. Historical DNS failures are not a current blocker without fresh
+  direct reproducible evidence.
+- Model C is the selected normal production Stage-60 direction. A/B/C model selection is closed.
+- Model B is reference/warm tooling plus `_12` transition fallback; Model A is cold reference tooling.
+- packaged `_12` still contains `Model C -> Model B -> Model A cold`; this is implementation debt,
+  not approved long-term architecture.
+- `_13` removes automatic B/A production replay and leaves normal production Stage 60 Model-C-only.
+- Lua-init, BLOB lazy-loading/common-set, bounded GET-4K discovery and cross-batch keep-warm questions
+  are closed for the current architecture by accepted measured evidence.
 
-Decision:
-`docs/decisions/DEC-2026-08-14-owner-canon-lock-and-repository-hygiene.md`.
+Detailed measurements and evidence links intentionally live only in the current `v0.4.x` ledger.
 
-## DNS state — closed fact
+## Current architecture / safety
 
-**DNS is fixed/currently working.**
+Model C retains the accepted adaptive-search planner, CandidateSpec/ResourceInventory ownership,
+source-port-qualified attribution/leasing, profile-compatible physical segmentation, bounded
+readiness, finite adaptive budgets, GET-4K discovery, cleanup/cancellation containment and Stage-90
+semantic restoration.
 
-Historical local/container DNS behavior was slow and unreliable, but the owner fixed it. Do not
-classify DNS as broken again from historical evidence, an old timeout, old documentation or memory
-loss. A new DNS problem requires fresh direct reproducible evidence.
+Current architecture authorities:
 
-## Model-C state — selection closed
+- [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md)
+- [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md)
 
-**Model C is the selected normal production Stage-60 direction. A/B/C model selection is closed.**
+Historical A/B/C experiment material is evidence only and cannot reopen current production choice.
 
-Actual packaged `_12` source still contains legacy transition fallback:
+## Documentation memory state
 
-`Model C -> Model B -> Model A cold`.
+Documentation uses three levels:
 
-That chain describes current implementation debt only; it is not the approved long-term architecture
-and cannot be used to reopen Model B as a production choice.
+- Level 1: mandatory bounded recovery set (`AGENTS`, principles, `START_HERE`, this file);
+- Level 2: current `v0.4.x` ledger plus task-selected specialist docs;
+- Level 3: completed version archives and deep chronology/evidence, loaded on demand.
 
-Roles:
+Completed archives: [`v0.1.x`](history/archive/v0.1.x.md),
+[`v0.2.x`](history/archive/v0.2.x.md), [`v0.3.x`](history/archive/v0.3.x.md).
+Current ledger: [`v0.4.x`](history/current/v0.4.x.md).
 
-- Model C — selected normal production runtime;
-- Model B — reference/warm implementation plus `_12` transition fallback only;
-- Model A — cold correctness/reference implementation.
+At the first `v0.5.x` release request, `v0.4.x` is finalized into its archive and a new `v0.5.x`
+current ledger is initialized automatically; original detailed records are retained.
 
-Next packaged source patch `_13` removes automatic B/A production replay.
+## Exact next packaged source change
 
-## Active documentation reconciliation
+**`v0.4.1_13` — Model-C-only production finalization.**
 
-A full active/current-looking documentation audit after the previous continuity patch found three
-places that could still revive obsolete model-selection state:
-
-- `docs/ARCHITECTURE.md` — old `_31` runtime state and “A/B/C not selected” text;
-- `docs/architecture/STRATEGY_LAB.md` — old implementation/experiment ownership text;
-- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — still marked current and still
-  described Model B as selected production while Model C was “future”.
-
-The first two now describe current Model-C architecture. The experiment-plan file is now explicitly
-**HISTORICAL / COMPLETED**, preserves the experiment/evidence chain, and points to current Model-C
-authorities. Its former present-tense Model-B selection is no longer active documentation.
-
-## Accepted Model-C live evidence
-
-Production baseline `v0.4.0_26`, Extended `telegram.org`, `job.xhdgCU`:
-
-- Model C handled 16/16 candidates and the graph exhausted with zero winners;
-- no fallback occurred;
-- Stage 60 `34209 ms`;
-- Stage-90 restoration passed;
-- normal Zapret2 remained running;
-- no temporary firewall-rule residue remained.
-
-Latest `_12` lifecycle/readiness replay:
-
-- 5/5 completed;
-- 5/5 `model_c_only=true`;
-- no fallback observed in the retained live replay;
-- lifecycle/RSS evidence complete;
-- cleanup/restoration PASS;
-- physical-segment startup median `82.5 ms`;
-- median aggregate RSS `4366 KiB`.
-
-Latest evidence:
-`docs/verification/evidence/2026-08-14-v0.4.1_12-warm-readiness-live-pass.md`.
-
-These accepted live records are retained as current evidence for the Model-C direction; they are not
-old model-selection gates.
-
-## Model-C behavior already accepted and preserved
-
-- native adaptive graph/planner and immutable CandidateSpec;
-- job-scoped ResourceInventory;
-- logical candidate width at most three;
-- exact source-port-qualified attribution;
-- pinned endpoints sequential inside one candidate;
-- `preferred-free-else-alternate` source-port leasing;
-- profile-compatible physical segmentation preserving logical batch identity;
-- readiness: process identity + socket + clean log + two consecutive qualified snapshots;
-- 25 ms readiness polling, bounded by 4 s;
-- bounded GET-4K production discovery;
-- finite `eligible-work-v1` adaptive budgets;
-- cleanup/cancellation containment and Stage-90 semantic restoration;
-- downstream Stage 70/80/85/result ownership.
-
-## Closed measurement questions
-
-Do not reopen these merely because a new chat starts or an old plan mentions them:
-
-- Lua initialization (`_2`): no production change justified;
-- BLOB startup/RSS/common set (`_3/_4`): no material current-width penalty; no lazy-BLOB production
-  change justified;
-- discovery (`_5/_6`): retain bounded GET-4K;
-- lifecycle (`_7` through `_12`): `_11/_12` corrected real issues; further cross-batch keep-warm/reuse
-  is not justified for current architecture.
-
-Reopen only by newer owner direction, current roadmap selection, material architecture change or fresh
-direct reproducible evidence.
-
-## Most recent docs/governance corrective
-
-Current docs-only work is the canon-lock and active-documentation reconciliation:
-
-- `docs/patches/v0.4.1_12-owner-canon-lock-doc-audit.md`;
-- `docs/devlog/2026-08-14-owner-canon-lock-doc-audit.md`;
-- `docs/decisions/DEC-2026-08-14-owner-canon-lock-and-repository-hygiene.md`.
-
-No runtime/source/package metadata change is part of this corrective.
-
-## Current next packaged source change — `v0.4.1_13`
-
-Make Model C the only normal production Stage-60 runtime.
-
-Required scope:
-
-- remove automatic production replay through Model B/cold Model A;
-- keep Model-C infrastructure failures explicit and bounded;
-- preserve leasing, attribution, segmentation, readiness, budgets, discovery, cleanup and restoration;
-- retain B/A only where useful outside the normal production path.
-
-Exact work surfaces and acceptance are in `docs/START_HERE.md`.
+Scope and acceptance are intentionally kept in [`START_HERE.md`](START_HERE.md), not duplicated here.

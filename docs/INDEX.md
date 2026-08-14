@@ -1,128 +1,69 @@
 # os-zapret2-restyle — Engineering Memory Index
 
-This file answers: **Where should I look?**
+Status: **NAVIGATION ONLY — NOT A CURRENT-STATE NARRATIVE**
 
-Navigation only. Permanent principles are canonical in `docs/PROJECT_PRINCIPLES.md`.
+This file answers only: **where should I look?**
+Do not load every linked document during startup.
 
-## Mandatory startup order
+## Level 1 — always read
 
-1. repository-root `AGENTS.md`;
-2. `docs/PROJECT_PRINCIPLES.md`;
-3. `docs/START_HERE.md`;
-4. `docs/PROJECT_STATE.md`;
-5. specialist documents named by the current task in `START_HERE.md`.
+1. [`../AGENTS.md`](../AGENTS.md)
+2. [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md)
+3. [`START_HERE.md`](START_HERE.md)
+4. [`PROJECT_STATE.md`](PROJECT_STATE.md)
+5. only the current-task specialist documents named by `START_HERE.md`
 
-`START_HERE.md` carries the mandatory short summary of the most recent completed logical work and
-points to detailed patch/devlog/evidence records. Historical material is read when the task needs it,
-not automatically on every new chat.
+## Level 2 — current semantic line / task-selected detail
 
-## Core map
+Current line:
 
-- `docs/PROJECT_PRINCIPLES.md` — cumulative permanent canon;
-- `docs/START_HERE.md` — exact current handoff and latest completed work;
-- `docs/PROJECT_STATE.md` — current factual project/repository/product/environment state;
-- `docs/ROADMAP.md` — current ordered near-/long-term/deferred plan;
-- `docs/ARCHITECTURE.md` — current top-level technical architecture;
-- `docs/architecture/` — current specialist architecture contracts;
-- `docs/WORKING_CONVENTIONS.md` — day-to-day application of principles;
-- `docs/GITHUB_PUBLICATION.md` — GitHub delivery procedure;
-- `docs/DEVELOPMENT_GUIDE.md` — repeatable development procedure;
-- `docs/DECISIONS.md`, `docs/decisions/` — decision history/rationale;
-- `docs/AUDIT.md`, `docs/audit/` — audit evidence/history;
-- `docs/DEVLOG.md`, `docs/devlog/` — implementation/activity chronology;
-- `docs/patches/` — logical patch contracts/history;
-- `docs/verification/`, `docs/verification/evidence/` — automated/live evidence;
-- `docs/releases/` — semantic release records.
+- **[`v0.4.x working ledger`](history/current/v0.4.x.md)** — richer current-line chronology,
+  decisions/evidence links and handoff detail; read only when the current task needs more than Level 1.
 
-## Latest continuity / canon-lock record
+Current technical authorities:
 
-Current docs/governance checkpoint:
+- [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- [`architecture/`](architecture/)
+- [`ROADMAP.md`](ROADMAP.md)
+- [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md)
+- [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md)
+- [`WORKING_CONVENTIONS.md`](WORKING_CONVENTIONS.md)
 
-- `docs/decisions/DEC-2026-08-14-owner-canon-lock-and-repository-hygiene.md`;
-- `docs/patches/v0.4.1_12-owner-canon-lock-doc-audit.md`;
-- `docs/devlog/2026-08-14-owner-canon-lock-doc-audit.md`.
+## Level 3 — completed version-line archives
 
-It strengthens the prior zero-memory decision and establishes:
+These are compact maps, not replacements for original records:
 
-- one unambiguous owner fact/decision is enough; do not repeatedly reconfirm it;
-- DNS is fixed/currently working unless fresh direct evidence shows a new problem;
-- Model C is selected; A/B/C production model selection is closed;
-- `зафиксируй` means a full review/correction of all conflicting active/current-looking authority docs;
-- stale tests/contracts do not override current canon;
-- owner-facing project reports are understandable Russian by default;
-- routine temporary branch/repository cleanup is part of normal completion;
-- root architecture and base Strategy Lab architecture were corrected after stale `_31` / unselected
-  A/B/C wording was found;
-- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` was changed from misleading current
-  Model-B-era plan to **HISTORICAL / COMPLETED** experiment/evidence history.
+- **[`v0.1.x archive`](history/archive/v0.1.x.md)**
+- **[`v0.2.x archive`](history/archive/v0.2.x.md)**
+- **[`v0.3.x archive`](history/archive/v0.3.x.md)**
 
-Prior continuity decision remains historical foundation:
-`docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`.
+`v0.4.x` is current and therefore is **not** archived yet. When the owner requests the first `v0.5.x`
+release, the current `v0.4.x` ledger is finalized as `history/archive/v0.4.x.md`, a new
+`history/current/v0.5.x.md` is created, and this index is updated before release publication.
 
-## Current Strategy Lab / Model-C continuation
+## Level 3 — deep chronology / evidence
 
-Current packaged source: `VERSION=0.4.1`, `PLUGIN_REVISION=12`.
+Open only when exact old chronology, rationale, audit finding or proof is needed:
 
-**Model C is already selected.** Current `_12` B/A fallback is transition debt only.
+- [`DECISIONS.md`](DECISIONS.md) / [`decisions/`](decisions/)
+- [`AUDIT.md`](AUDIT.md) / [`audit/`](audit/)
+- [`DEVLOG.md`](DEVLOG.md) / [`devlog/`](devlog/)
+- [`patches/`](patches/)
+- [`verification/`](verification/)
+- [`verification/evidence/`](verification/evidence/)
+- [`releases/`](releases/)
 
-Exact next source patch: `v0.4.1_13` — remove automatic B/A production replay and make Model C the
-only normal production Stage-60 runtime.
+Archive maps link back into these stores. **Archiving never deletes, rewrites or folds away original
+records.** Git history and published release history remain intact.
 
-Required current-task specialist reading:
+## Reading rule
 
-- `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
-- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
-- `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`.
+Default cold start:
 
-Current top-level/base architecture is also synchronized in:
+`principles -> compact handoff/state -> short lifetime path -> exact current task -> only needed architecture`
 
-- `docs/ARCHITECTURE.md`;
-- `docs/architecture/STRATEGY_LAB.md`.
+Escalate to the current-line ledger only when richer `v0.4.x` context is needed. Escalate to archives
+or deep records only for a concrete historical dependency, investigation or proof request.
 
-Historical A/B/C experiment navigation:
-
-- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — historical/completed summary and
-  evidence index only; full pre-archive plan remains in Git history at
-  `938d01bca0617d4dad6e4715e637ebd2a3cb11f4`.
-
-Do not let historical A/B/C experiment records override current Model-C authority.
-
-## Retained evidence navigation
-
-Use when historical proof is needed:
-
-- Model A reference: `docs/verification/evidence/2026-08-10-v0.4.0_11-model-a-reference-collected.md`;
-- Model B reference: `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`;
-- Model C source-port acceptance: `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
-- adaptive budgets: `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`;
-- Lua: `docs/verification/evidence/2026-08-12-v0.4.1_2-lua-init-live-pass.md`;
-- BLOB startup/RSS: `docs/verification/evidence/2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md`;
-- BLOB common set: `docs/verification/evidence/2026-08-12-v0.4.1_4-blob-common-set-live-pass.md`;
-- discovery: `docs/verification/evidence/2026-08-13-v0.4.1_6-discovery-corrective-live-pass.md`;
-- latest readiness/lifecycle: `docs/verification/evidence/2026-08-14-v0.4.1_12-warm-readiness-live-pass.md`.
-
-These are evidence/history, not competing current production choices.
-
-## GitHub delivery reading
-
-For every GitHub mutation after startup read:
-
-- `docs/GITHUB_PUBLICATION.md`.
-
-Decision references when rationale is needed:
-
-- canon lock / stale docs or tests / Russian status / cleanup:
-  `docs/decisions/DEC-2026-08-14-owner-canon-lock-and-repository-hygiene.md`;
-- zero-memory recovery foundation:
-  `docs/decisions/DEC-2026-08-14-owner-canon-and-zero-memory-recovery.md`;
-- operational handoff/preflight:
-  `docs/decisions/DEC-2026-08-14-operational-handoff-and-scope-first-preflight.md`;
-- universal versioned GitHub title/commit identity:
-  `docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md`;
-- package delivery: `docs/decisions/DEC-2026-08-13-github-only-package-delivery.md`;
-- CI evidence handling: `docs/decisions/DEC-2026-08-06-evidence-first-github-operations.md`.
-
-## OPNsense command authority
-
-Owner console target is root `csh`. POSIX-only syntax must explicitly enter `sh`/`/bin/sh` and return
-with `exit`.
+This read-set discipline is the project's memory-economy mechanism: preserve complete engineering
+history while avoiding repeated loading of history that cannot affect the current task.
