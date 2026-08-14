@@ -4,47 +4,50 @@ Status: **ACTIVE / SUPERSEDING FOR DOCUMENT-READ AND HISTORY-RETENTION RULES**
 
 ## Decision
 
-Project engineering memory uses three levels:
+Project engineering memory uses three levels. The complete current documentation-governance contract is
+now enumerated in `docs/DOCUMENTATION_RULES.md`; this decision records the architecture/rationale.
 
-1. **Level 1 — mandatory bounded recovery memory:** root `AGENTS.md`, `PROJECT_PRINCIPLES.md`,
-   `START_HERE.md`, `PROJECT_STATE.md`, then only current-task specialist documents named by the
-   handoff.
-2. **Level 2 — current version-line memory:** one rolling `docs/history/current/vX.Y.x.md` ledger plus
-   specialist documents selected by the active task.
-3. **Level 3 — historical memory:** one compact archive map per completed version line plus the
+1. **Level 1 — mandatory bounded recovery:** root `AGENTS.md`, `PROJECT_PRINCIPLES.md`,
+   `DOCUMENTATION_RULES.md`, `START_HERE.md`, `PROJECT_STATE.md`, then only current-task specialist
+   documents named by the handoff.
+2. **Level 2 — current second-component-line memory:** one rolling
+   `docs/history/current/vX.Y.x.md` ledger plus specialist documents selected by the active task.
+3. **Level 3 — historical memory:** compact archive map per completed second-component line plus the
    original detailed devlog/patch/verification/release/decision/audit records.
 
-`docs/INDEX.md` is navigation only and must directly link the current ledger, every completed version-
-line archive and the deep record stores.
+`docs/INDEX.md` is navigation/integrity only and directly links the current ledger, every completed
+version-line archive and the deep record stores.
 
-The mandatory Level-1 handoff always contains a very short lifetime project path and exact next task,
-not a patch-by-patch history.
+## Version/document roles
 
-## Second-numeric-component rollover
+For `v0.4.2_14`:
 
-The version-line boundary is the **second numeric component**: the `4` in `0.4.x`, for example
-`v0.4.x -> v0.5.x`. This wording is intentionally explicit; the standalone word `minor` is not used as
-the authority for the transition.
+- second numeric component `4` defines the `v0.4.x` line and `PROJECT_STATE.md` scope;
+- third numeric component `2` defines the current development stage/task;
+- `_14` defines the exact package revision and `START_HERE.md` handoff boundary.
 
-The assistant never initiates a second-component change. It requires either an explicit owner
-version/transition instruction or separate owner approval of a proposal. Once that transition is
-authorized, no second confirmation is required for its implied documentation rollover and full
-release.
+A third-component stage transition resets revision to `_1` but is not a full release by itself.
+A second-component transition is owner-controlled and always includes a full release.
+A full release may occur inside the same second-component line and may use the current exact `_N`
+candidate; release publication itself does not reset revision.
 
-The transition procedure automatically:
+## State / handoff flow
 
-1. finalizes the old current-line ledger;
-2. creates/freezes the compact `history/archive/v0.4.x.md` map;
-3. preserves every original detailed record;
-4. initializes `history/current/v0.5.x.md`;
-5. updates `INDEX`, Level 1 and the short lifetime path;
-6. performs the mandatory full human-facing `README.md` revision;
-7. proceeds with the full project release, including the package published into the OPNsense
-   Pages/pkg repository for Web GUI installation.
+`START_HERE` is a live revision handoff. When its task becomes a durable current fact, that fact flows
+into `PROJECT_STATE`; execution detail stays in the current ledger/deep records.
 
-A full project release can also be explicitly requested while keeping the same second numeric
-component. Thus the implication is one-way: second-component change requires a full release; a full
-release does not itself authorize a second-component change.
+`PROJECT_STATE` remains the current facts file throughout one second-component line. When the second
+component changes, its final old-line contents are preserved in that line's archive before the file is
+initialized for the new line. From the eventual `v0.4.x` archive onward, archive files therefore
+contain both the compact archive map and final state snapshot.
+
+Older `v0.4.0` and earlier history is not retroactively rewritten into this new state-snapshot model.
+
+## Master plan
+
+`ROADMAP.md` is the always-available concise whole-project plan. It retains short completed milestones,
+marks the current item, and contains every known future intention at least once. Detailed execution and
+proof remain outside the roadmap.
 
 ## Integrity rule
 
@@ -58,64 +61,61 @@ version line changes.
 
 ## Single-primary-home rule
 
-- `PROJECT_STATE` — current facts only;
-- `START_HERE` — compact recovery handoff + short project path + exact current task;
-- `ROADMAP` — current/future ordering;
+- `DOCUMENTATION_RULES` — numbered documentation-governance canon;
+- `PROJECT_STATE` — current facts for current second-component line;
+- `START_HERE` — exact current `_N` handoff;
+- `ROADMAP` — complete concise master plan;
 - current version-line ledger — richer current chronology;
-- devlog/patch/verification/decision — distinct deep execution/contract/proof/rationale only;
-- `INDEX` — navigation only.
+- devlog/patch/verification/decision — distinct deep execution/proof/rationale;
+- `INDEX` — navigation/integrity map.
 
-A separate patch/devlog file is not mandatory when it would merely duplicate a docs/governance change
-already completely represented by the current-line ledger and canonical documents.
+Duplication is not preservation. A standalone patch/devlog record is used only when it adds distinct
+information rather than repeating the same narrative already held by its primary current home.
 
 ## Reason
 
-The repository must preserve full engineering history for auditability and zero-memory recovery, but
-loading that history during every new ChatGPT context wastes working context and can elevate stale
-history over current facts. Read-set control provides the memory reduction without sacrificing
-traceability.
+The repository must preserve complete engineering history for auditability and zero-memory recovery,
+while keeping the always-read context small. Tying documentation roles to explicit version components
+also prevents ambiguity about whether a new task, package iteration or full release should archive
+state or rotate the current line.
 
-The explicit second-component wording prevents an assistant from treating an inferred semantic
-versioning convention as permission to move the project from one version line to another.
+## Second-component rollover
+
+When the owner explicitly authorizes a second-component change such as `v0.4.x -> v0.5.x`:
+
+1. reconcile final old `PROJECT_STATE`;
+2. finish old current-line ledger;
+3. create/freeze `history/archive/v0.4.x.md` with compact map + final state snapshot;
+4. preserve every original detailed record;
+5. initialize `history/current/v0.5.x.md`;
+6. initialize `PROJECT_STATE` and `START_HERE` for the new line/current revision;
+7. update `ROADMAP`, `INDEX` and short lifetime path;
+8. perform complete human-facing README review;
+9. complete the full OPNsense Web/pkg release.
+
+No separate owner reminder/confirmation is required after the second-component transition itself has
+already been authorized.
 
 ## Supersession
 
-This decision and the newer canonical principles supersede older `docs/DECISIONS.md` statements to
-the extent they conflict, specifically old rules that:
+This decision, `DOCUMENTATION_RULES.md` and newer canonical principles supersede older documentation
+statements to the extent they conflict, including old rules that:
 
+- omitted `DOCUMENTATION_RULES.md` from Level 1;
 - made `INDEX.md` the mandatory context entrypoint rather than navigation only;
-- required the historical long-form context restoration order beginning with `INDEX` and including
-  `DECISIONS`, `DEVLOG`, `ROADMAP`, etc. on every restore;
-- required every approved concept/rule to be duplicated into monolithic `DECISIONS.md`;
-- required a standalone patch/devlog/evidence update after every logical change even when it would be
-  duplicate content;
-- required old document-role formatting where it conflicts with the newer Level/status/read-when
-  responsibility model.
+- treated `PROJECT_STATE` as an unversioned generic snapshot instead of current second-line state;
+- treated any `VERSION` change as an automatic full release;
+- forced full releases to revision `_1` even when no stage/line transition occurred;
+- required every approved rule to be duplicated into monolithic `DECISIONS.md`;
+- required a standalone patch/devlog/evidence record when it would add no distinct information.
 
-The underlying historical decision text remains intact as history and rationale. It must not be read
-as current authority where this newer decision explicitly supersedes it.
+Underlying historical text remains intact as history and must not be read as current authority where
+newer rules explicitly supersede it.
 
-## Initial migration
+## Initial migration boundary
 
-- `v0.1.x`, `v0.2.x`, `v0.3.x` receive compact archive maps now;
-- `v0.4.x` remains the active current-line ledger;
-- a future owner-authorized `v0.4.x -> v0.5.x` transition will create/freeze the `v0.4.x` archive as
-  part of the required full release;
-- `INDEX.md` provides direct routes to every archive/current ledger and to deep detailed records.
-
-## Affected documents
-
-- `AGENTS.md`
-- `README.md`
-- `docs/PROJECT_PRINCIPLES.md`
-- `docs/START_HERE.md`
-- `docs/PROJECT_STATE.md`
-- `docs/INDEX.md`
-- `docs/ROADMAP.md`
-- `docs/WORKING_CONVENTIONS.md`
-- `docs/DEVELOPMENT_GUIDE.md`
-- `docs/GITHUB_PUBLICATION.md`
-- `docs/history/current/v0.4.x.md`
-- `docs/history/archive/v0.1.x.md`
-- `docs/history/archive/v0.2.x.md`
-- `docs/history/archive/v0.3.x.md`
+- `v0.1.x`, `v0.2.x`, `v0.3.x` remain legacy compact archive maps;
+- `v0.4.x` remains the active current line;
+- new final-state-snapshot archive behavior begins when `v0.4.x` eventually closes;
+- no rewrite of `v0.4.0` or earlier history is required;
+- `INDEX.md` and the archive links at the end of `PROJECT_STATE.md` provide direct routes to archives.

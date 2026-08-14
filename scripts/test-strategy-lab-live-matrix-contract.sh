@@ -7,6 +7,7 @@ STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
 START_HERE="${ROOT_DIR}/docs/START_HERE.md"
 PRINCIPLES="${ROOT_DIR}/docs/PROJECT_PRINCIPLES.md"
+DOC_RULES="${ROOT_DIR}/docs/DOCUMENTATION_RULES.md"
 ROADMAP="${ROOT_DIR}/docs/ROADMAP.md"
 CURRENT_LEDGER="${ROOT_DIR}/docs/history/current/v0.4.x.md"
 RELEASE_DOC="${ROOT_DIR}/docs/releases/v0.4.1.md"
@@ -53,7 +54,7 @@ LIVE_GATE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-09-risk-based-live-re
 fail(){ echo "FAIL: $*" >&2; exit 1; }
 require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
 
-for file in "${MATRIX}" "${STATE}" "${INDEX}" "${START_HERE}" "${PRINCIPLES}" "${ROADMAP}" \
+for file in "${MATRIX}" "${STATE}" "${INDEX}" "${START_HERE}" "${PRINCIPLES}" "${DOC_RULES}" "${ROADMAP}" \
     "${CURRENT_LEDGER}" "${RELEASE_DOC}" "${RELEASE_EVIDENCE}" "${BLOB_PUBLICATION}" "${BLOB_LIVE}" \
     "${BLOB4_PUBLICATION}" "${BLOB4_LIVE}" "${DISCOVERY_PUBLICATION}" "${DISCOVERY_ROOT_CAUSE}" \
     "${DISCOVERY6_INPUT}" "${DISCOVERY6_PLAN}" "${DISCOVERY6_LIVE}" "${READINESS12_LIVE}" \
@@ -75,22 +76,25 @@ candidate="os-zapret2-restyle-${version}_${revision}.pkg"
 [ "${revision}" -eq 12 ] || fail 'current packaged source must remain PLUGIN_REVISION=12'
 [ "${candidate}" = 'os-zapret2-restyle-0.4.1_12.pkg' ] || fail 'unexpected current package identity'
 
-# Level-1 authorities must describe current truth compactly. Detailed measurements belong to the
-# current semantic-minor ledger rather than being duplicated into PROJECT_STATE/START_HERE.
+# Level-1 authorities must describe current truth compactly. Documentation policy now has its own
+# numbered canonical home; current measurements remain in the v0.4.x ledger rather than Level 1.
 require "${PRINCIPLES}" 'CANONICAL / MANDATORY READING IN EVERY PROJECT CONTEXT'
-require "${PRINCIPLES}" 'Project documentation uses three memory levels'
-require "${STATE}" 'packaged source revision: `12`'
-require "${STATE}" 'package candidate: `os-zapret2-restyle-0.4.1_12.pkg`'
+require "${DOC_RULES}" 'Documentation uses three memory levels.'
+require "${DOC_RULES}" 'The second numeric component defines the long-lived project-state line.'
+require "${DOC_RULES}" 'The package revision suffix `_N` identifies the concrete patch/iteration'
+require "${STATE}" 'State-line scope: **`v0.4.x`**'
+require "${STATE}" 'packaged source revision: `_12`'
+require "${STATE}" 'current testing package candidate: `os-zapret2-restyle-0.4.1_12.pkg`'
 require "${STATE}" 'acf65d39eaa88a16debe1d35affa71f03f1d848d'
 require "${STATE}" 'testing tag: `v0.4.1_12`'
-require "${STATE}" '**`v0.4.1_13` — Model-C-only production finalization.**'
+require "${STATE}" 'the next ordinary packaged patch removes automatic B/A production replay'
 require "${START_HERE}" 'Exact next code change — `v0.4.1_13`'
 require "${START_HERE}" 'remove automatic production replay through Model B/cold Model A'
-require "${ROADMAP}" 'Current priority — v0.4.1_13'
+require "${ROADMAP}" 'Current priority — `v0.4.1_13`'
 require "${ROADMAP}" '**Model-C-only production finalization.**'
 
-# The richer current-line ledger owns retained measurements and the evidence routes that justify
-# current conclusions without bloating Level 1.
+# The richer current-line ledger owns retained measurements and proof routes that justify current
+# conclusions without bloating Level 1.
 require "${CURRENT_LEDGER}" 'job.xhdgCU'
 require "${CURRENT_LEDGER}" 'Stage 60: `34209 ms`'
 require "${CURRENT_LEDGER}" '5/5 `model_c_only=true`'
@@ -100,11 +104,12 @@ require "${CURRENT_LEDGER}" '2026-08-13-v0.4.1_6-discovery-corrective-live-pass.
 require "${CURRENT_LEDGER}" '2026-08-12-v0.4.1_4-blob-common-set-live-pass.md'
 require "${CURRENT_LEDGER}" '2026-08-12-v0.4.1_3-blob-startup-rss-live-pass.md'
 require "${CURRENT_LEDGER}" '2026-08-12-v0.4.1_2-lua-init-live-pass.md'
-require "${CURRENT_LEDGER}" 'Exact next packaged change — v0.4.1_13'
+require "${CURRENT_LEDGER}" 'Exact next packaged change — `v0.4.1_13`'
 
-# INDEX is navigation only: it must route to Level 1, the current ledger, every completed minor-line
-# archive, and the deep evidence stores instead of copying individual current evidence links.
+# INDEX remains navigation/integrity only and routes to Level 1, the current ledger, completed line
+# archives and deep proof stores instead of duplicating individual current evidence links.
 require "${INDEX}" 'PROJECT_PRINCIPLES.md'
+require "${INDEX}" 'DOCUMENTATION_RULES.md'
 require "${INDEX}" 'START_HERE.md'
 require "${INDEX}" 'PROJECT_STATE.md'
 require "${INDEX}" 'ROADMAP.md'
@@ -232,4 +237,4 @@ if grep -Fq 'Stable release preparation and pkg-repository promotion remain bloc
 fi
 
 sh -n "$0"
-echo "PASS: ${candidate} current state is _12, Level-1 memory stays compact, retained v0.4.x measurements remain discoverable, and the next source task is _13 Model-C-only production finalization"
+echo "PASS: ${candidate} current state is _12, version-aware Level-1 memory stays compact, retained v0.4.x measurements remain discoverable, and the next source task is _13 Model-C-only production finalization"

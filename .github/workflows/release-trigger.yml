@@ -3,8 +3,6 @@ name: Release trigger
 on:
   push:
     branches: [main]
-    paths:
-      - VERSION
 
 permissions:
   actions: write
@@ -16,7 +14,7 @@ concurrency:
 
 jobs:
   trigger:
-    name: Create verified release tag
+    name: Classify version transition / release
     runs-on: ubuntu-latest
 
     steps:
@@ -24,7 +22,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate release merge
+      - name: Classify current candidate
         id: release
         shell: bash
         run: |
@@ -36,14 +34,62 @@ jobs:
           ESCAPED_VERSION=${VERSION_VALUE//./\\.}
 
           [[ "${VERSION_VALUE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          [[ "${REVISION}" == "1" ]]
-          [[ "${SUBJECT}" =~ ^v${ESCAPED_VERSION}_1:\ Prepare\ release\ v${ESCAPED_VERSION}(\ \(#[0-9]+\))?$ ]]
+          [[ "${REVISION}" =~ ^[0-9]+$ ]]
           grep -Eq '^PLUGIN_NAME=[[:space:]]+zapret2-restyle$' Makefile
           grep -Eq '^PLUGIN_VERSION!=[[:space:]]+/bin/cat \$\{\.CURDIR\}/VERSION$' Makefile
 
-          echo "tag=v${VERSION_VALUE}" >> "${GITHUB_OUTPUT}"
+          IFS='.' read -r MAJOR SECOND THIRD <<< "${VERSION_VALUE}"
 
-      - name: Create immutable tag
+          PREVIOUS_VERSION=$(git show "${GITHUB_SHA}^:VERSION" 2>/dev/null | tr -d '[:space:]' || true)
+          if [[ -z "${PREVIOUS_VERSION}" ]]; then
+            PREVIOUS_VERSION="${VERSION_VALUE}"
+          fi
+          [[ "${PREVIOUS_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          IFS='.' read -r PREVIOUS_MAJOR PREVIOUS_SECOND PREVIOUS_THIRD <<< "${PREVIOUS_VERSION}"
+
+          RELEASE_PATTERN="^v${ESCAPED_VERSION}_${REVISION}: Prepare release v${ESCAPED_VERSION}( \(#[0-9]+\))?$"
+          PUBLISH=false
+          if [[ "${SUBJECT}" =~ ${RELEASE_PATTERN} ]]; then
+            PUBLISH=true
+          fi
+
+          if [[ "${VERSION_VALUE}" != "${PREVIOUS_VERSION}" ]]; then
+            if [[ "${MAJOR}" != "${PREVIOUS_MAJOR}" || "${SECOND}" != "${PREVIOUS_SECOND}" ]]; then
+              [[ "${REVISION}" == "1" ]] || {
+                echo "A first/second-component transition must begin at package revision _1." >&2
+                exit 1
+              }
+              [[ "${PUBLISH}" == "true" ]] || {
+                echo "A first/second-component transition requires an explicit full-release preparation merge." >&2
+                exit 1
+              }
+            elif [[ "${THIRD}" != "${PREVIOUS_THIRD}" ]]; then
+              [[ "${REVISION}" == "1" ]] || {
+                echo "A third-component development-stage transition must begin at package revision _1." >&2
+                exit 1
+              }
+            else
+              echo "VERSION changed without a recognized numeric-component transition." >&2
+              exit 1
+            fi
+          fi
+
+          echo "publish=${PUBLISH}" >> "${GITHUB_OUTPUT}"
+          echo "tag=v${VERSION_VALUE}" >> "${GITHUB_OUTPUT}"
+          echo "version=${VERSION_VALUE}" >> "${GITHUB_OUTPUT}"
+          echo "previous_version=${PREVIOUS_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "revision=${REVISION}" >> "${GITHUB_OUTPUT}"
+
+          if [[ "${PUBLISH}" == "true" ]]; then
+            echo "Full release requested for exact candidate v${VERSION_VALUE}_${REVISION}."
+          elif [[ "${VERSION_VALUE}" != "${PREVIOUS_VERSION}" ]]; then
+            echo "Development-stage VERSION transition accepted without full release: ${PREVIOUS_VERSION} -> ${VERSION_VALUE}."
+          else
+            echo "Ordinary main change; no full release requested."
+          fi
+
+      - name: Create immutable semantic tag
+        if: steps.release.outputs.publish == 'true'
         shell: bash
         env:
           TAG: ${{ steps.release.outputs.tag }}
@@ -65,7 +111,8 @@ jobs:
             git push origin "refs/tags/${TAG}"
           fi
 
-      - name: Dispatch release workflow
+      - name: Dispatch full release workflow
+        if: steps.release.outputs.publish == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

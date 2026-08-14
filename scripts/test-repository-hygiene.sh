@@ -6,6 +6,7 @@ GITIGNORE="${ROOT_DIR}/.gitignore"
 CI="${ROOT_DIR}/.github/workflows/ci.yml"
 AGENTS="${ROOT_DIR}/AGENTS.md"
 PRINCIPLES="${ROOT_DIR}/docs/PROJECT_PRINCIPLES.md"
+DOC_RULES="${ROOT_DIR}/docs/DOCUMENTATION_RULES.md"
 START_HERE="${ROOT_DIR}/docs/START_HERE.md"
 PROJECT_STATE="${ROOT_DIR}/docs/PROJECT_STATE.md"
 ROADMAP="${ROOT_DIR}/docs/ROADMAP.md"
@@ -40,11 +41,11 @@ do
     grep -Fqx "${pattern}" "${GITIGNORE}" || fail "missing ignore rule: ${pattern}"
 done
 
-# Verify durable documentation authority relationships under the three-level memory model rather than
-# requiring every Level-1 role document to repeat links owned by AGENTS/START_HERE/INDEX.
+# Verify durable authority/navigation relationships under the version-aware three-level memory model.
 for file in \
     "${AGENTS}" \
     "${PRINCIPLES}" \
+    "${DOC_RULES}" \
     "${START_HERE}" \
     "${PROJECT_STATE}" \
     "${ROADMAP}" \
@@ -61,23 +62,42 @@ do
     test -s "${file}" || fail "required project authority/memory file is missing or empty: ${file}"
 done
 
+# Mandatory Level-1 routes.
 grep -Fq 'docs/PROJECT_PRINCIPLES.md' "${AGENTS}" || \
     fail 'AGENTS does not require canonical project principles'
+grep -Fq 'docs/DOCUMENTATION_RULES.md' "${AGENTS}" || \
+    fail 'AGENTS does not require canonical documentation rules'
 grep -Fq 'docs/START_HERE.md' "${AGENTS}" || \
-    fail 'AGENTS does not route to operational handoff'
+    fail 'AGENTS does not route to revision handoff'
 grep -Fq 'docs/PROJECT_STATE.md' "${AGENTS}" || \
     fail 'AGENTS does not route to current project state'
-grep -Fq 'docs/PROJECT_PRINCIPLES.md' "${START_HERE}" || \
-    fail 'operational handoff does not route to canonical project principles'
 
+grep -Fq 'PROJECT_STATE.md' "${START_HERE}" || \
+    fail 'START_HERE does not route first to PROJECT_STATE'
+grep -Fq 'DOCUMENTATION_RULES.md' "${START_HERE}" || \
+    fail 'START_HERE does not route to canonical documentation rules'
+grep -Fq 'PROJECT_PRINCIPLES.md' "${START_HERE}" || \
+    fail 'START_HERE does not route to canonical project principles'
+grep -Fq 'GITHUB_PUBLICATION.md' "${START_HERE}" || \
+    fail 'START_HERE does not route to GitHub publication procedure'
+grep -Fq 'ROADMAP.md' "${START_HERE}" || \
+    fail 'START_HERE does not route to master development plan'
+grep -Fq 'INDEX.md' "${START_HERE}" || \
+    fail 'START_HERE does not route to documentation index'
+
+# INDEX remains the global navigation/integrity map.
 grep -Fq 'PROJECT_PRINCIPLES.md' "${INDEX}" || \
     fail 'Engineering Memory index does not route to canonical project principles'
+grep -Fq 'DOCUMENTATION_RULES.md' "${INDEX}" || \
+    fail 'Engineering Memory index does not route to documentation rules'
 grep -Fq 'START_HERE.md' "${INDEX}" || \
-    fail 'Engineering Memory index does not route to operational handoff'
+    fail 'Engineering Memory index does not route to revision handoff'
 grep -Fq 'PROJECT_STATE.md' "${INDEX}" || \
     fail 'Engineering Memory index does not route to current project state'
+grep -Fq 'ROADMAP.md' "${INDEX}" || \
+    fail 'Engineering Memory index does not route to master plan'
 grep -Fq 'history/current/v0.4.x.md' "${INDEX}" || \
-    fail 'Engineering Memory index does not route to the current semantic-line ledger'
+    fail 'Engineering Memory index does not route to current v0.4.x ledger'
 grep -Fq 'history/archive/v0.1.x.md' "${INDEX}" || \
     fail 'Engineering Memory index does not route to the v0.1.x archive'
 grep -Fq 'history/archive/v0.2.x.md' "${INDEX}" || \
@@ -85,16 +105,19 @@ grep -Fq 'history/archive/v0.2.x.md' "${INDEX}" || \
 grep -Fq 'history/archive/v0.3.x.md' "${INDEX}" || \
     fail 'Engineering Memory index does not route to the v0.3.x archive'
 
+# Current role/status contracts.
 grep -Eq '^Status:[[:space:]]+\*\*CANONICAL / MANDATORY READING IN EVERY PROJECT CONTEXT\*\*$' "${PRINCIPLES}" || \
     fail 'project principles are not marked canonical mandatory reading'
-grep -Eq '^Status:[[:space:]]+\*\*AUTHORITATIVE OPERATIONAL HANDOFF / LEVEL 1\*\*$' "${START_HERE}" || \
-    fail 'operational handoff is not marked Level 1 authoritative'
-grep -Eq '^Status:[[:space:]]+\*\*CURRENT / LEVEL 1\*\*$' "${PROJECT_STATE}" || \
-    fail 'project state is not marked current Level 1'
-grep -Eq '^Status:[[:space:]]+\*\*CURRENT / FORWARD-LOOKING\*\*$' "${ROADMAP}" || \
-    fail 'roadmap is not marked current forward-looking'
+grep -Eq '^Status:[[:space:]]+\*\*CANONICAL / MANDATORY LEVEL 1\*\*$' "${DOC_RULES}" || \
+    fail 'documentation rules are not marked canonical mandatory Level 1'
+grep -Eq '^Status:[[:space:]]+\*\*AUTHORITATIVE REVISION HANDOFF / LEVEL 1\*\*$' "${START_HERE}" || \
+    fail 'START_HERE is not marked authoritative revision handoff'
+grep -Eq '^Status:[[:space:]]+\*\*CURRENT SECOND-COMPONENT STATE / LEVEL 1\*\*$' "${PROJECT_STATE}" || \
+    fail 'PROJECT_STATE is not marked current second-component state'
+grep -Eq '^Status:[[:space:]]+\*\*CURRENT / COMPLETE CONCISE PLAN\*\*$' "${ROADMAP}" || \
+    fail 'ROADMAP is not marked complete concise master plan'
 grep -Eq '^Status:[[:space:]]+\*\*CURRENT / LEVEL 2 / READ WHEN CURRENT-LINE DETAIL IS NEEDED\*\*$' "${CURRENT_LEDGER}" || \
-    fail 'current semantic-line ledger is not marked Level 2 on-demand'
+    fail 'current v0.4.x ledger is not marked Level 2 on-demand'
 grep -Eq '^Status:[[:space:]]+\*\*ARCHIVED / LEVEL 3 / READ ON DEMAND\*\*$' "${ARCHIVE_01}" || \
     fail 'v0.1.x archive is not marked Level 3 on-demand'
 grep -Eq '^Status:[[:space:]]+\*\*ARCHIVED / LEVEL 3 / READ ON DEMAND\*\*$' "${ARCHIVE_02}" || \
@@ -110,9 +133,18 @@ grep -Eq '^Status:[[:space:]]+Active([,[:space:]].*)?$' "${ACTIVE_GITHUB_DECISIO
 grep -Eq '^Status:[[:space:]]+Superseded' "${OLD_GITHUB_DECISION}" || \
     fail 'old atomic GitHub decision is not marked superseded'
 
+# State/archive and numbered-canon hygiene.
+grep -Fq 'State-line scope: **`v0.4.x`**' "${PROJECT_STATE}" || \
+    fail 'PROJECT_STATE is not scoped to the current second-component line'
+grep -Fq 'v0.1.x archive' "${PROJECT_STATE}" || fail 'PROJECT_STATE lacks v0.1.x archive link'
+grep -Fq 'v0.2.x archive' "${PROJECT_STATE}" || fail 'PROJECT_STATE lacks v0.2.x archive link'
+grep -Fq 'v0.3.x archive' "${PROJECT_STATE}" || fail 'PROJECT_STATE lacks v0.3.x archive link'
+rule_count=$(grep -Ec '^[0-9]+\. \*\*' "${DOC_RULES}")
+[ "${rule_count}" -ge 50 ] || fail 'numbered documentation canon is incomplete'
+
 grep -Eq 'Historical( delivery)? record' "${ROOT_DIR}/docs/audit/DIAG-001-strategy-lab.md" || \
     fail 'historical DIAG record has no authority banner'
 grep -Fq 'scripts/test-repository-hygiene.sh' "${CI}" || \
     fail 'repository hygiene test is not wired into CI'
 
-echo 'Repository artifact and three-level documentation authority hygiene tests passed.'
+echo 'Repository artifact and version-aware documentation authority hygiene tests passed.'

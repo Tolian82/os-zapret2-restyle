@@ -276,11 +276,12 @@ The project distinguishes two publication types:
 | Type | Meaning |
 |---|---|
 | **Testing package** | Persistent GitHub `.pkg` for development/live verification. Does not promote the Pages/pkg repository. |
-| **Full release** | Verified package + semantic tag + release assets/checksum + updated Pages/pkg repository, ready for install/update through the OPNsense Web GUI. |
+| **Full release** | Verified current candidate package + semantic tag + release assets/checksum + updated Pages/pkg repository, ready for install/update through the OPNsense Web GUI. |
 
 A change to the **second numeric component** of the project version — for example
 `v0.4.x → v0.5.x` — happens only after explicit owner instruction/approval and always includes a full
-release. A full release can also be made without changing that second component.
+release. A full release can also be made without changing that second component and may use the current
+`_N` candidate; publication itself does not force an artificial revision reset.
 
 Every full release includes a fresh review of this README so the repository front page describes the
 actual current product rather than an accumulated historical snapshot.
@@ -296,9 +297,13 @@ Start with:
 
 1. [`AGENTS.md`](AGENTS.md)
 2. [`docs/PROJECT_PRINCIPLES.md`](docs/PROJECT_PRINCIPLES.md)
-3. [`docs/START_HERE.md`](docs/START_HERE.md)
-4. [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
-5. task-specific documents named by `START_HERE.md`
+3. [`docs/DOCUMENTATION_RULES.md`](docs/DOCUMENTATION_RULES.md)
+4. [`docs/START_HERE.md`](docs/START_HERE.md)
+5. [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
+6. task-specific documents named by `START_HERE.md`
+
+The top of `START_HERE.md` also links the current state, numbered documentation rules, permanent
+principles, GitHub publication rules, master development plan and documentation index for fast recovery.
 
 Use [`docs/INDEX.md`](docs/INDEX.md) to reach the current version-line ledger, completed version
 archives, devlogs, patch records, decisions and verification evidence only when that history is needed.
