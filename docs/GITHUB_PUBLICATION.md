@@ -54,7 +54,7 @@ Before the first substantive changed branch state is considered ready for delive
 three-level documentation model:
 
 - Level 1 exposes current facts, compact handoff, short lifetime path and exact next task;
-- the active minor-line Level-2 ledger records richer current chronology when useful;
+- the active version-line Level-2 ledger records richer current chronology when useful;
 - Level 3 retains old archive maps and original deep records on demand;
 - `ROADMAP` contains current/future ordering, not a growing historical narrative;
 - `INDEX` routes directly to the current ledger, each completed version-line archive and deep stores;
@@ -140,11 +140,12 @@ evidence only.
 `не релиз, а пакет` means:
 
 - no semantic VERSION promotion;
-- no stable/full project release;
+- no full project release;
 - no Pages/pkg-repository promotion;
 - yes: persist the deterministic testing `.pkg` on GitHub.
 
-No second confirmation is required merely because GitHub uses a prerelease/tag container.
+No second confirmation is required merely because GitHub uses a prerelease/tag container for such a
+testing package.
 
 When verified bytes already exist:
 
@@ -159,15 +160,48 @@ When repository-owned automation is needed, use only the approved generic testin
 remove temporary publication branch after success. Testing-package publication never deploys Pages/pkg
 repository metadata.
 
-## Full semantic release
+## Full project release
 
-A full semantic release requires explicit exact new `VERSION` authority and the current product/live
-release gates.
+A **full project release** is not merely a GitHub tag or an uploaded `.pkg`. It is a complete,
+installation-ready OPNsense delivery whose verified package is published into the project-owned
+`FreeBSD:15:amd64` pkg repository and can be installed/updated through the OPNsense Web GUI via the
+configured repository. The full release also publishes the matching semantic tag, GitHub Release
+assets/checksums and Pages/pkg-repository metadata.
 
-### Automatic semantic-minor documentation rollover
+A full release requires explicit owner release authority and an exact `VERSION` target. The owner may
+request a full release while keeping the same second numeric component of the version.
 
-Before publishing the first release whose `MAJOR.MINOR` differs from the active line, for example the
-owner requests `v0.5.0_1` while `v0.4.x` is current, the release change automatically must:
+Every full release preparation must also perform a complete `README.md` revision against the actual
+current project. Update stale release identity, capabilities, installation/use guidance and important
+limitations; present the current best project state clearly for a human reader. Keep README concise and
+attractive rather than turning it into a devlog, and distinguish the full Web/pkg release from newer
+testing/development candidates.
+
+### Owner-controlled second numeric component
+
+The relevant version boundary is called the **second numeric component**, not merely “minor”. It is the
+`4` in `0.4.x`; examples are `v0.4.x -> v0.5.x` and `v0.9.x -> v0.10.x`.
+
+The assistant must never initiate a second-component change. It is authorized only when:
+
+1. the owner explicitly states the new version or explicitly requests the transition; or
+2. the assistant proposes it and the owner separately approves it.
+
+If neither condition exists, keep the current second numeric component even when a full release is
+requested.
+
+Once a second-component change is authorized, it necessarily includes a full project release; do not
+ask for another confirmation merely to perform the already implied release/rollover steps. The reverse
+implication does not exist:
+
+`second numeric component changes => full release`
+
+`full release =/=> second numeric component changes`
+
+### Automatic version-line documentation rollover
+
+Before publishing an authorized release whose second numeric component differs from the active line,
+for example `v0.4.x -> v0.5.x`, the release change automatically must:
 
 1. update `docs/history/current/v0.4.x.md` through the final `v0.4.x` state;
 2. freeze/create `docs/history/archive/v0.4.x.md` as the compact map for that completed line;
@@ -176,19 +210,21 @@ owner requests `v0.5.0_1` while `v0.4.x` is current, the release change automati
 5. update `docs/INDEX.md` so it directly links the new current ledger and the new archive;
 6. update `START_HERE`, `PROJECT_STATE`, `ROADMAP` and the short lifetime path for `v0.5.x`;
 7. keep current architecture/contracts and permanent principles current rather than archiving them;
-8. then continue the normal VERSION/tag/release pipeline.
+8. complete the mandatory human-facing `README.md` revision;
+9. then continue the normal VERSION/tag/full-release pipeline.
 
-The explicit request for the new minor release is authority for this rollover; no extra owner reminder
-or confirmation is required.
+The owner's explicit new-version/transition authority already authorizes this rollover; no extra owner
+reminder or confirmation is required.
 
-Normal release identity after any required rollover:
+Normal full-release identity after any required rollover:
 
-- set new `VERSION`;
+- set the explicitly authorized new `VERSION`;
 - reset `PLUGIN_REVISION=1`;
 - title/squash `vX.Y.Z_1: Prepare release vX.Y.Z`;
 - verified merge;
-- immutable semantic tag and full release/package/pkg-repository/Pages pipeline defined by current
-  release procedure.
+- immutable semantic tag;
+- normal GitHub Release (not a testing prerelease) with package/checksum assets;
+- verified matching Pages/pkg repository publication, ready for OPNsense Web installation.
 
 Never rewrite published `main`, tags, releases, assets or package history.
 
