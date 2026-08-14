@@ -20,9 +20,9 @@ documents.
    was verified, what remains unresolved, current state, roadmap progress and the next stage.
 
 3. **Every GitHub delivery includes synchronized documentation.** Before publication it must state:
-   (a) what changes and why; (b) what result is expected and how it will be accepted; (c) the complete
-   next plan, including near-term and long-term actions. Immediately before publication, reconcile
-   that plan with what implementation/testing actually learned and update it if priorities changed.
+   (a) what changes and why; (b) the expected result and acceptance boundary; (c) the complete next
+   plan, including near-term and long-term actions. Immediately before publication, reconcile that
+   plan with what implementation/testing actually learned and update it if priorities changed.
 
 4. **Repository source is authoritative for committed project state.** Generated runtime is never
    committed. Unpublished owner-local changes are a separate explicit boundary and must not be
