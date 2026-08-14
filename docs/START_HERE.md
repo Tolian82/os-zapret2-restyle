@@ -37,7 +37,7 @@ The documentation/governance rules were audited again without changing product/p
 - current ledgers, decisions, devlogs, and evidence preserve chronology/rationale/proof but are not parallel owners of current state;
 - rule maintenance now has an explicit decision boundary: create a new rule only for a new durable normative principle; refine an existing rule when its identity remains the same; cancel it when it no longer applies; replace it when a materially different durable rule supersedes it;
 - one-off tasks, test results, temporary plans, and ordinary current work do not become canonical rules merely because they are currently important;
-- `GH-009` is cancelled and retained only as a permanent historical rule ID; targeted dependency/reference reconciliation plus scope/risk inspection replaces its former mandatory broad audit;
+- the former mandatory broad GitHub reconciliation rule is cancelled; targeted dependency/reference reconciliation plus scope/risk inspection replaces its repository-wide audit requirement;
 - documentation reconciliation remains mandatory for every logical scope, but editing documentation files is not required when the evidence-based result is that documented state did not change;
 - roadmap commitments are limited to owner-approved or otherwise accepted future development directions, not every idea mentioned during discussion;
 - release tag/asset identity remains immutable, while human-facing release notes may be transparently corrected when binary identity and publication truth do not change;
