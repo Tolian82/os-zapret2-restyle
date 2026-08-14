@@ -103,7 +103,7 @@ Metadata:
 - increment `PLUGIN_REVISION 12 -> 13`;
 - title/commit prefix `v0.4.1_13:`.
 
-**Do not spend the next patch improving timeout admission for `C -> B`; finish the transition first.**
+**do not spend the next patch improving timeout admission for `C -> B`; finish the transition first.**
 The previously observed legacy `C -> B` admission gap becomes irrelevant if automatic B fallback is
 removed. A Model-C-only timeout/deadline audit remains valid later if the owner/roadmap/new evidence
 selects it.
