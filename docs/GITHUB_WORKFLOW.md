@@ -73,7 +73,7 @@ Owner package/testing/install request means persistent GitHub `.pkg` unless expl
 build/CI evidence only.
 
 - Actions artifacts/local files are not final delivery;
-- `не релиз, а пакет` still publishes a testing `.pkg`, but no semantic release/Pages/pkg repo;
+- `не релиз, а пакет` still publishes a testing `.pkg`, but no full release/Pages/pkg repo;
 - package request itself authorizes deterministic testing-package publication;
 - verify exact source/tag/asset/digest/direct URL;
 - use generic `publish-prerelease.yml` only when build-and-publish automation is needed;
@@ -81,8 +81,14 @@ build/CI evidence only.
 
 ## Full release
 
-Requires explicit semantic VERSION authority, revision reset to `1`, versioned preparation title,
-verified merge/tag and the full release/package/Pages/pkg-repository pipeline.
+A full release requires explicit owner release + exact `VERSION` authority, revision reset to `1`,
+versioned preparation title, complete README review, verified merge/tag, normal GitHub Release assets
+and verified Pages/pkg-repository publication ready for OPNsense Web installation.
+
+The **second numeric component** is the `4` in `0.4.x`. Never change it by inference or assistant
+initiative. A transition such as `v0.4.x -> v0.5.x` requires an explicit owner transition/version
+instruction or separate owner approval and always includes the full release + version-line archive
+rollover. A full release can be requested without changing the second numeric component.
 
 Never rewrite published `main`/tags/assets/history.
 
