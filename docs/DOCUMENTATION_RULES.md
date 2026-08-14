@@ -134,6 +134,7 @@ This registry is part of the rule contract. It is maintained with rule changes a
 <!-- RULE-XREF-OUT-BEGIN -->
 | Source rule | Target rules |
 |---|---|
+| `DOC-016` | `GH-006` |
 | `DOC-026` | `DEV-029`, `DEV-030`, `DEV-031` |
 | `DOC-028` | `DEV-036`, `DEV-037` |
 | `DOC-037` | `GH-053` |

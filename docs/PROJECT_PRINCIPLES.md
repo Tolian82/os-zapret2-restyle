@@ -156,11 +156,11 @@ DEV-046. **A development-rule change is not complete until its references are re
 | `DEV-033` | `GH-005`, `GH-015` |
 | `DEV-034` | `GH-005`, `GH-048` |
 | `DEV-035` | `GH-005`, `GH-048` |
-| `DEV-036` | `DOC-028`, `GH-005`, `GH-047` |
-| `DEV-037` | `DOC-028`, `GH-005`, `GH-047` |
+| `DEV-036` | `DOC-028`, `GH-005`, `GH-047`, `GH-051` |
+| `DEV-037` | `DOC-028`, `GH-005`, `GH-047`, `GH-051` |
 | `DEV-038` | `GH-005`, `GH-041` |
 | `DEV-039` | `DOC-038`, `CHAT-017`, `GH-005`, `GH-039` |
-| `DEV-040` | `GH-005` |
+| `DEV-040` | `CHAT-016`, `GH-005` |
 | `DEV-042` | `CHAT-021` |
 <!-- RULE-XREF-IN-END -->
 

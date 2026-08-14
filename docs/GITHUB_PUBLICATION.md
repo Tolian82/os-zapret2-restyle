@@ -197,7 +197,9 @@ GH-058. **A canonical rule-book change must pass cross-reference integrity valid
 | Target rule | Referenced by |
 |---|---|
 | `GH-004` | `DOC-049`, `CHAT-012` |
+| `GH-006` | `DOC-016` |
 | `GH-010`–`GH-014` | `CHAT-010` |
+| `GH-011` | additionally `DEV-017` |
 | `GH-015` | `DEV-033`, `CHAT-010` |
 | `GH-016`–`GH-023` | `CHAT-010` |
 | `GH-024`–`GH-030` | `CHAT-010`, `CHAT-018` |
