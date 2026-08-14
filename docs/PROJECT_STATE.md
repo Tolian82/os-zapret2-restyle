@@ -70,15 +70,19 @@ Roles:
 
 Next packaged source patch `_13` removes automatic B/A production replay.
 
-## Active architecture reconciliation
+## Active documentation reconciliation
 
-A full active-document audit after the previous continuity patch found stale current authority in:
+A full active/current-looking documentation audit after the previous continuity patch found three
+places that could still revive obsolete model-selection state:
 
 - `docs/ARCHITECTURE.md` — old `_31` runtime state and “A/B/C not selected” text;
-- `docs/architecture/STRATEGY_LAB.md` — old implementation/experiment ownership text.
+- `docs/architecture/STRATEGY_LAB.md` — old implementation/experiment ownership text;
+- `docs/verification/STRATEGY_LAB_ADAPTIVE_SEARCH_EXPERIMENTS.md` — still marked current and still
+  described Model B as selected production while Model C was “future”.
 
-Both are corrected in the current docs/governance change and now describe current Model-C architecture.
-Historical experiment records remain history only.
+The first two now describe current Model-C architecture. The experiment-plan file is now explicitly
+**HISTORICAL / COMPLETED**, preserves the experiment/evidence chain, and points to current Model-C
+authorities. Its former present-tense Model-B selection is no longer active documentation.
 
 ## Model-C behavior already accepted and preserved
 
