@@ -76,18 +76,20 @@
     - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit — separate non-presentation row
   - [x] already-accessible target — completed by owner confirmation
   - [ ] cancellation/internal-failure containment
-- [ ] **Laboratory target support: test IPv4 addresses as well as domains — ACTIVE NEXT**
+- [ ] **Laboratory target support: test IPv4 addresses as well as domains — ACTIVE `_22`**
   - [x] architecture/current-source audit: feature is feasible but not a validator-only change
   - [x] confirm dormant IP scaffolding in Stage 00/40, search epoch, firewall pinning and final `--ipset-ip=` profile generation
-  - [x] identify unsafe current behavior: IPv4 TLS candidates degrade to plain TCP-connect evidence and must not be allowed to create false PASS results
+  - [x] identify unsafe prior behavior: IPv4 TLS candidates degraded to plain TCP-connect evidence and must not create false PASS results
   - [x] select IPv4-first contract; do not silently claim IPv6 support in the first patch
   - [x] select fixed destination IP + explicit/conditional Host/SNI service identity for truthful web/TLS/QUIC validation
-  - [ ] implement domain-or-IPv4 API/shell target classification and persistence
-  - [ ] implement IP-aware candidate target binding without changing Model-C attribution/lifecycle ownership
-  - [ ] make TLS/HTTP/QUIC probes preserve service hostname/SNI while pinning destination IP; skip unsupported bare-IP branches truthfully
-  - [ ] preserve direct-IP Generic UDP behavior
-  - [ ] add focused domain-regression + IPv4/SNI + bare-IP/UDP/error-semantics coverage
-  - [ ] qualify/package/publish next testing revision and perform owner-live IP verification
+  - [x] implement domain-or-IPv4 API/shell target classification and per-job optional service identity
+  - [x] implement IP-aware candidate target binding without changing Model-C attribution/lifecycle ownership
+  - [x] make TLS/HTTP/QUIC probes preserve service hostname/SNI while pinning destination IP; bare-IP QUIC is unsupported rather than false PASS
+  - [x] preserve direct-IP Generic UDP behavior
+  - [x] add focused domain-regression + IPv4/SNI + bare-IP/error-semantics coverage
+  - [ ] latest-head complete CI + FreeBSD-15 package qualification
+  - [ ] exact-head squash merge + persistent `v0.4.1_22` testing publication
+  - [ ] owner-live domain-regression + IPv4/Host-SNI + Generic UDP/restoration verification
 - [ ] Circular lifecycle coverage
   - [ ] start/stop/TTL
   - [ ] stale-session recovery
@@ -103,9 +105,9 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — implement truthful IPv4 targets in Laboratory
+## Current priority — qualify and publish `v0.4.1_22` IPv4 Laboratory targets
 
-Current published testing identity:
+Current published testing identity remains:
 
 - tag: `v0.4.1_21`;
 - asset: `os-zapret2-restyle-0.4.1_21.pkg`;
@@ -118,20 +120,21 @@ Owner-live `_21` is accepted for the selected Laboratory presentation scope: the
 
 Owner-live `_21` evidence: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md).
 
-The selected IP-target direction is **not** to merely allow digits in the existing field. Current code already contains partial IP support, but the normal TLS search would be semantically unsafe if unlocked unchanged because IPv4 candidate probing currently falls back to a plain TCP connection. The next source patch must therefore make destination identity explicit and preserve truthful protocol validation.
-
-Selected first implementation contract:
+The `_22` source scope implements the selected contract rather than merely relaxing the input validator:
 
 1. the existing `Заблокированный домен / IP` field accepts either a domain or canonical IPv4;
 2. domains continue through the existing behavior unchanged;
 3. IPv4 skips DNS and is pinned directly for firewall/result attribution;
-4. add a conditional/optional `Host / SNI` identity for an IP target;
-5. with Host/SNI, web/TLS/QUIC connect to the fixed IP while preserving Host, SNI and certificate hostname verification;
-6. Generic UDP remains valid directly against the IP and does not require Host/SNI;
-7. a bare-IP protocol branch that cannot be validated semantically is SKIPPED/unsupported, never a false working strategy;
-8. final IP recommendations use `--ipset-ip=<target>`;
-9. Model C, timeout budgets, lifecycle, cleanup/restoration and deterministic attribution remain unchanged;
-10. IPv6 target support is deferred until an explicit later contract because the current search-epoch implementation is IPv4-specific.
+4. a conditional/optional `Host / SNI` field carries service identity separately from destination identity;
+5. with Host/SNI, web/TLS/QUIC connect to the fixed IP while preserving hostname/SNI/certificate verification;
+6. Generic UDP remains direct against the IP and does not require Host/SNI;
+7. TLS candidates no longer treat a successful plain TCP connection as successful TLS/DPI-bypass evidence;
+8. bare-IP QUIC without hostname verification is unsupported, never a false working strategy;
+9. final IP recommendations and exact replay use `--ipset-ip=<target>`;
+10. Model C, timeout budgets, lifecycle, cleanup/restoration and deterministic attribution remain unchanged;
+11. IPv6 target support remains deferred because the current search epoch is IPv4-specific.
+
+Source patch contract: [`patches/v0.4.1_22.md`](patches/v0.4.1_22.md).
 
 Enable QUIC OFF/default persistence reload/revisit proof remains a separate existing backlog row and is not folded into this IP-target patch.
 
