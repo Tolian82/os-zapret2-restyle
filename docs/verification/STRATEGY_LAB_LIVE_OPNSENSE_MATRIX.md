@@ -1,16 +1,19 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` PUBLISHED/OWNER-TESTED; QUIC OBSERVABILITY LIVE PASS, GENERIC UDP LIVE FAIL; `v0.4.1_16` SOURCE CORRECTION UNDER QUALIFICATION.**
+Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` PUBLISHED/OWNER-TESTED; QUIC OBSERVABILITY LIVE PASS, GENERIC UDP LIVE FAIL; `v0.4.1_16` PUBLISHED, OWNER-LIVE GENERIC UDP CORRECTION PENDING.**
 
 Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected owner-live evidence.
 
 ## Current package/source boundary
 
-- last published testing package/tag: `os-zapret2-restyle-0.4.1_15.pkg` / `v0.4.1_15`;
-- `_15` source/tag target: `a219161c901c663b56cac6757364d3bbd32766c7`;
-- `_15` package SHA-256: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`;
-- current source candidate: `v0.4.1_16`;
-- current source package: `os-zapret2-restyle-0.4.1_16.pkg` after successful package qualification; not published at this source-document boundary.
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_16.pkg` / `v0.4.1_16`;
+- `_16` source/tag target: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
+- `_16` package SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
+- publication workflow run: `31882091770`;
+- stable Pages/pkg repository promoted: no;
+- owner-live `_16` Generic UDP verification: pending.
+
+Machine publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_16.md`.
 
 Normal Stage 60 remains Model C only; automatic Model B/A production fallback remains disabled from `_13`.
 
@@ -28,7 +31,7 @@ Durable evidence: `docs/verification/evidence/2026-08-15-v0.4.1_13-model-c-only-
 
 The owner tested Extended `telegram.org` and `rutracker.org` with Enable QUIC ON. The old capability skip disappeared but ordinary output only showed `QUIC=not_found`, which did not prove how many candidates actually ran. The same cycle exposed localization gaps and Generic UDP input problems.
 
-## `_15` accepted source behavior
+## `_15` accepted source and live behavior
 
 ### QUIC tested count/IDs ordinary output
 
@@ -43,11 +46,11 @@ Owner-live `_15` evidence is positive: the `rutracker.org` Extended screenshot w
 
 ### Exact 140-byte binary input
 
-Automated `_15` coverage proved exact 140-byte Base64 decode/job-local metadata, but owner-live file selection still failed before configured UDP. Therefore exact 140-byte binary input remains **OWNER-LIVE FAIL/PENDING CORRECTION** despite backend automated PASS.
+Automated `_15` coverage proved exact 140-byte Base64 decode/job-local metadata, but owner-live file selection still failed before configured UDP. Therefore the `_15` live path is **FAIL/SUPERSEDED BY `_16` CORRECTION**.
 
 ### Selected-port/payload direct UDP observation
 
-The implemented `_15` configured-UDP path uses the exact selected search-epoch IP, destination port and job-local payload, recording reply/no-reply and timing. This owner-live row remains blocked until the browser payload reaches configured UDP.
+The implemented configured-UDP path uses the exact selected search-epoch IP, destination port and job-local payload, recording reply/no-reply and timing. Its owner-live row remains pending until `_16` proves browser payload handoff.
 
 ### No-reply does not mean closed / does not gate candidates
 
@@ -85,9 +88,7 @@ In `_15`, the application did not retain a prepared browser payload. The Run han
 - browser buffer validation no longer depends on realm-specific `instanceof ArrayBuffer`;
 - later job-local failures expose explicit classes, including `job_directory_not_writable`, `payload_temp_create_failed`, decode/write/chmod/move and state-record failures.
 
-## `_16` source acceptance gate
-
-Before owner install:
+## `_16` source/publication acceptance — PASS
 
 1. staged browser file-selection contract PASS;
 2. exact 140-byte backend/job-local regression PASS;
@@ -96,13 +97,15 @@ Before owner install:
 5. no-reply does not mean closed / does not gate candidates PASS;
 6. complete Strategy Lab corrective matrix PASS;
 7. FreeBSD-15 package build/inspection qualification PASS;
-8. exact verified-head source merge;
-9. persistent `v0.4.1_16` testing publication;
-10. publication-record docs reconciliation.
+8. exact verified source head `f7974f21dc7340b1e1416c24f9e7dade0322f0f3` squash-merged as `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
+9. persistent `v0.4.1_16` testing publication PASS;
+10. package SHA-256 `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`.
+
+Publication-record documentation tail is PR `#246`.
 
 ## Owner-live `_16` acceptance
 
-Required after publication:
+Required after installing the published package:
 
 - selecting a valid file immediately shows localized ready-to-send filename and exact decoded bytes;
 - exact 140-byte payload starts a new configured-UDP job;
@@ -124,12 +127,12 @@ Remaining independent `_15/_16` rows: Enable QUIC OFF/default persistence and fi
 | 5 | Historical closed-QUIC capability skip | **OBSERVED ON `_13`; SUPERSEDED** |
 | 6 | `_14` Enable QUIC ON / blocked control / no capability skip | **PASS, selected `_15` observability** |
 | 7 | `_15` QUIC tested count/IDs ordinary output | **OWNER-LIVE PASS — 4 IDs** |
-| 8 | `_15` exact/small Generic UDP file input | **OWNER-LIVE FAIL** |
-| 9 | `_16` application-owned staged file input | **SOURCE IMPLEMENTED; CI/PACKAGE/LIVE PENDING** |
-| 10 | `_16` exact 140-byte configured UDP | **AUTOMATED BACKEND BASIS; LIVE PENDING** |
-| 11 | selected-port/payload direct UDP observation | **AUTOMATED PASS; LIVE PENDING** |
-| 12 | no-reply does not mean closed / does not gate candidates | **AUTOMATED PASS; LIVE PENDING** |
-| 13 | terminal payload cleanup and Zapret2 restoration PASS. | **LIVE PENDING FOR `_16` UDP PATH** |
+| 8 | `_15` exact/small Generic UDP file input | **OWNER-LIVE FAIL; SUPERSEDED** |
+| 9 | `_16` application-owned staged file input | **AUTOMATED/PACKAGE PASS; OWNER-LIVE PENDING** |
+| 10 | `_16` exact 140-byte configured UDP | **AUTOMATED BACKEND PASS; OWNER-LIVE PENDING** |
+| 11 | selected-port/payload direct UDP observation | **AUTOMATED PASS; OWNER-LIVE PENDING** |
+| 12 | no-reply does not mean closed / does not gate candidates | **AUTOMATED PASS; OWNER-LIVE PENDING** |
+| 13 | terminal payload cleanup and Zapret2 restoration PASS. | **OWNER-LIVE PENDING FOR `_16` UDP PATH** |
 | 14 | Enable QUIC OFF/default/persistence | PENDING |
 | 15 | RU/EN presentation review | PENDING |
 | 16 | Target already accessible | PENDING REGRESSION |
@@ -140,4 +143,4 @@ Remaining independent `_15/_16` rows: Enable QUIC OFF/default persistence and fi
 
 ## Failure policy for `_16`
 
-`_16` fails if a valid selected file cannot become application-owned ready state, a 140-byte payload cannot reach configured UDP, Run again depends exclusively on native file-control retention, job-local permission/storage failure is collapsed into an unexplained unconfigured request, direct observation uses the wrong port/payload/binding, UDP silence is called a closed port, or lifecycle/payload cleanup fails.
+`_16` fails owner-live acceptance if a valid selected file cannot become application-owned ready state, a 140-byte payload cannot reach configured UDP, Run again depends exclusively on native file-control retention, job-local permission/storage failure is collapsed into an unexplained unconfigured request, direct observation uses the wrong port/payload/binding, UDP silence is called a closed port, or lifecycle/payload cleanup fails.
