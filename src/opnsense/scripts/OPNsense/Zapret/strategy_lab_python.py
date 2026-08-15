@@ -10,6 +10,7 @@ from strategy_lab_py.compat import main as compat_main
 from strategy_lab_py import adaptive_validation
 from strategy_lab_py import blob_startup_measurement
 from strategy_lab_py import discovery_probe_measurement
+from strategy_lab_py import ip_target_support
 from strategy_lab_py import lua_initialization_measurement
 from strategy_lab_py import model_c_lifecycle_measurement
 from strategy_lab_py import model_b_parallel_attribution as model_b_parallel
@@ -41,6 +42,7 @@ def _prepare_model_c_lifecycle_runtime_permissions(args: list[str]) -> None:
 
 
 def main() -> int:
+    ip_target_support.install()
     args = list(sys.argv[1:])
     if args[:1] == ["lua-init-measure"]:
         return lua_initialization_measurement.main(args[1:])
