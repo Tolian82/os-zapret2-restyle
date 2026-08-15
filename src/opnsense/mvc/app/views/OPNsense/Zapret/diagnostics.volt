@@ -106,6 +106,8 @@ $(document).ready(function () {
         $('#strategyLabModeLabel').text(ui.modeLabel + ':');
         $('#strategyLabMode option[value="standard"]').text(modeLabels.standard);
         $('#strategyLabMode option[value="extended"]').text(modeLabels.extended);
+        var modeFontReference=$('#strategyLabInputsTable > tbody > tr > td.zapret-field-label').first();
+        $('#strategyLabModeLabel').css({'font-size':modeFontReference.css('font-size'),'line-height':modeFontReference.css('line-height')});
         $('#strategyLabState,#circularState').text(label(statusLabels,'IDLE'));
         $('a[href="/ui/zapret"]').text(ui.navStrategy);
         $('a[href="/ui/zapret/diagnostics"]').text(ui.navLaboratory);
@@ -448,16 +450,32 @@ $(document).ready(function () {
 });
 </script>
 <style>
-#strategyLabInputsTable {
-    table-layout:fixed;
+.page-content-main {
+    margin:0 !important;
+    padding:0 !important;
 }
-#strategyLabInputsTable > tbody > tr > td.strategy-lab-label {
-    width:250px;
-    min-width:250px;
+.page-content-main > .container-fluid {
+    padding-left:0 !important;
+    padding-right:0 !important;
+}
+.page-content-main > .container-fluid > .row {
+    margin-left:0 !important;
+    margin-right:0 !important;
+}
+.page-content-main > .container-fluid > .row > .col-xs-12 {
+    padding-left:0 !important;
+    padding-right:0 !important;
+}
+.diagnostics-form-table {
+    table-layout:fixed;
+    width:100%;
+}
+.diagnostics-form-table > tbody > tr > td.zapret-field-label {
+    width:25%;
     white-space:nowrap;
     vertical-align:middle;
 }
-#strategyLabInputsTable > tbody > tr > td.strategy-lab-value {
+.diagnostics-form-table > tbody > tr > td.zapret-field-value {
     vertical-align:middle;
 }
 #strategyLabModeCell {
@@ -482,11 +500,11 @@ $(document).ready(function () {
 
 <section class="page-content-main"><div class="container-fluid">
 <div class="row"><section class="col-xs-12"><div class="content-box"><div class="content-box-header"><h3>{{ lang._('Test Domain Connectivity') }}</h3></div>
-<div class="content-box-main"><div class="table-responsive"><table class="table table-striped"><tbody><tr><td style="width:200px;">{{ lang._('Domain') }}</td><td><input type="text" class="form-control" id="testDomainInput" placeholder="example.com"/></td><td style="width:150px;"><button class="btn btn-primary" id="testDomainBtn" type="button">{{ lang._('Test') }} <i id="testDomainBtn_progress"></i></button></td></tr></tbody></table></div><pre id="testDomainResult" style="max-height:300px;overflow-y:auto;white-space:pre-wrap;">{{ lang._('Enter a domain and click Test to check HTTPS connectivity.') }}</pre></div></div></section></div>
+<div class="content-box-main"><div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="testDomainTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Domain') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="testDomainInput" placeholder="example.com"/></td><td style="width:150px;"><button class="btn btn-primary" id="testDomainBtn" type="button">{{ lang._('Test') }} <i id="testDomainBtn_progress"></i></button></td></tr></tbody></table></div><pre id="testDomainResult" style="max-height:300px;overflow-y:auto;white-space:pre-wrap;">{{ lang._('Enter a domain and click Test to check HTTPS connectivity.') }}</pre></div></div></section></div>
 <div class="row"><section class="col-xs-12"><div class="content-box"><div class="content-box-header"><h3>{{ lang._('Strategy Lab') }}</h3></div><div class="content-box-main">
-<div class="table-responsive"><table class="table table-striped" id="strategyLabInputsTable"><tbody><tr><td class="strategy-lab-label">{{ lang._('Blocked Domain') }}</td><td class="strategy-lab-value"><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org"/></td><td id="strategyLabModeCell"><div class="strategy-lab-mode-control"><span id="strategyLabModeLabel">Mode:</span><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></div></td><td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td></tr>
-<tr id="strategyLabUdpRow" style="display:none;"><td class="strategy-lab-label">{{ lang._('Generic UDP (optional)') }}</td><td class="strategy-lab-value"><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td><td colspan="2"><input type="file" class="form-control" id="strategyLabUdpPayload"/> <small id="strategyLabUdpHelp"></small><br/><small id="strategyLabUdpPayloadState" class="text-muted"></small></td></tr>
-<tr id="strategyLabQuicRow" style="display:none;"><td class="strategy-lab-label">{{ lang._('Enable QUIC') }}</td><td class="strategy-lab-value"><input type="checkbox" id="strategyLabEnableQuic" disabled/></td><td colspan="2"><small id="strategyLabQuicHelp"></small></td></tr></tbody></table></div>
+<div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="strategyLabInputsTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Blocked Domain') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org"/></td><td id="strategyLabModeCell"><div class="strategy-lab-mode-control"><span id="strategyLabModeLabel">Mode:</span><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></div></td><td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td></tr>
+<tr id="strategyLabUdpRow" style="display:none;"><td class="zapret-field-label">{{ lang._('Generic UDP (optional)') }}</td><td class="zapret-field-value"><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td><td colspan="2"><input type="file" class="form-control" id="strategyLabUdpPayload"/> <small id="strategyLabUdpHelp"></small><br/><small id="strategyLabUdpPayloadState" class="text-muted"></small></td></tr>
+<tr id="strategyLabQuicRow" style="display:none;"><td class="zapret-field-label">{{ lang._('Enable QUIC') }}</td><td class="zapret-field-value"><input type="checkbox" id="strategyLabEnableQuic" disabled/></td><td colspan="2"><small id="strategyLabQuicHelp"></small></td></tr></tbody></table></div>
 <div id="strategyLabSummary"></div><p><strong>Job:</strong> <code id="strategyLabJob">—</code> &nbsp; <strong>{{ lang._('Status') }}:</strong> <span id="strategyLabState">idle</span></p><p id="strategyLabMessage"></p>
 <div id="strategyLabProgressBox"><div class="progress" style="margin-bottom:5px;"><div id="strategyLabProgressBar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width:0%;">0%</div></div><p id="strategyLabProgressText"></p></div>
 <div class="table-responsive"><table class="table table-condensed" id="strategyLabStages"><thead><tr><th>#</th><th>{{ lang._('Stage') }}</th><th>{{ lang._('Status') }}</th><th>{{ lang._('Details') }}</th></tr></thead><tbody></tbody></table></div>
