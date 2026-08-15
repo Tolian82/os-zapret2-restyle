@@ -12,6 +12,8 @@ Direct orientation:
 - current-line chronology: [`history/current/v0.5.x.md`](history/current/v0.5.x.md);
 - completed `v0.4.x` archive: [`history/archive/v0.4.x.md`](history/archive/v0.4.x.md).
 
+Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+
 ## Repository and release facts
 
 - repository: `Tolian82/os-zapret2-restyle`;
