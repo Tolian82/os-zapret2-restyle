@@ -64,9 +64,7 @@
     - [x] tested OFF job completes SUCCESS and Stage-90 restoration PASS
   - [ ] Enable QUIC OFF/default persistence across reload/revisit — source persistence contract remains guarded; owner-live reload proof pending
   - [ ] **Strategy Lab / Laboratory RU-EN presentation completion**
-    - [x] `_17` source/publication: circular idle ordinary display removes raw `{` / `}` / `{"state":"idle"}` JSON
-    - [x] `_17` source/publication: RU `Состояние: ОЖИДАНИЕ` / EN `State: IDLE`
-    - [x] `_17` source/publication: raw machine job JSON remains only under explicitly advanced output
+    - [x] `_17` source/publication: circular idle ordinary display removes raw JSON
     - [x] `_17` source/publication: deterministic RU/EN result/stage/action labels
     - [x] `_17` latest-head full CI + FreeBSD-15 qualification
     - [x] `_17` exact-head source merge and persistent testing publication
@@ -82,9 +80,9 @@
       - [x] source: right-aligned `Режим:` / `Mode:` before mode selector
       - [x] source: RU idle `ожидание`; EN idle `idle`
       - [x] source: sidebar EN `Strategy` / `Laboratory`, RU `Стратегия` / `Лаборатория`
-      - [x] focused regression preserves circular-idle and Enable QUIC persistence source contracts
-      - [ ] latest-head full CI + FreeBSD-15 package qualification
-      - [ ] exact-head source merge and persistent `v0.4.1_19` testing publication
+      - [x] focused regression preserves circular ordinary-state and Enable QUIC persistence source contracts
+      - [x] latest-head full CI + FreeBSD-15 package qualification
+      - [x] exact-head source merge and persistent `v0.4.1_19` testing publication
       - [ ] owner-live RU layout/typography/mode/status/sidebar acceptance
       - [ ] owner-live EN mode/status/sidebar and no RU/EN leakage
     - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit
@@ -106,31 +104,29 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — qualify/publish `_19`, live-check it, then add IP targets to Laboratory
+## Current priority — live-check published `_19`, then add IP targets to Laboratory
 
-Current source candidate: `v0.4.1_19` (`PLUGIN_REVISION=19`).
+Current published testing identity:
 
-Last published testing identity remains `_18` until `_19` publication completes:
-
-- tag: `v0.4.1_18`;
-- asset: `os-zapret2-restyle-0.4.1_18.pkg`;
-- SHA-256: `1ca82e1405c688a5429e1fd1d68da19906bea613323d8d01090bba85068b34f0`;
-- source/tag target: `fa1b924a5c1d646f0daec13aff6e7406a534c6a3`;
-- publication workflow run: `31889449879`;
+- tag: `v0.4.1_19`;
+- asset: `os-zapret2-restyle-0.4.1_19.pkg`;
+- SHA-256: `142ec3f3f5843d6be09d0ad34aa433c00ddf4ef82e75bbb2fd7104fdcc3eb7f8`;
+- source/tag target: `6d06f0c3dfc7a76f0dc7b43ca6ba8cc0d0f83758`;
+- publication workflow run: `31892344832`;
 - stable Pages/pkg repository promoted: no.
 
-`_18` owner-live confirms the two requested labels and the one-line blocked-domain label, but rejects the 12 px typography workaround and resulting alignment. `_19` is the narrow corrective for normal typography, explicit alignment, mode/status translations and sidebar naming.
+`_19` source, complete corrective matrix, focused Laboratory regression, FreeBSD-15 qualification, exact-head merge and persistent testing publication are complete. The remaining `_19` boundary is owner-live presentation acceptance only.
 
-After `_19` publication/install:
+Current owner-live acceptance sequence:
 
-1. RU live acceptance of layout/typography/mode/status/sidebar;
-2. EN/no-leakage live acceptance;
+1. RU layout/typography/mode/status/sidebar;
+2. EN/no-leakage mode/status/sidebar;
 3. Enable QUIC OFF/default persistence reload/revisit proof;
 4. **next engineering plan: make Laboratory accept/test IP addresses as well as domains**;
 5. continue the remaining backlog above.
 
 Owner-live `_18` corrective evidence: [`verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md).
-Machine `_18` publication evidence: [`verification/evidence/testing-publications/v0.4.1_18.md`](verification/evidence/testing-publications/v0.4.1_18.md).
+Machine `_19` publication evidence: [`verification/evidence/testing-publications/v0.4.1_19.md`](verification/evidence/testing-publications/v0.4.1_19.md).
 
 ## Deferred research — retain, do not activate by inertia
 
