@@ -38,6 +38,34 @@ Durable evidence: `docs/verification/evidence/2026-08-15-v0.4.1_13-model-c-only-
 - initial permanent service STOPPED: `rutracker.org` `job.5b97u9` `SUCCESS`, service remained STOPPED; owner accepted the observable row.
 - Extended TLS 1.2/HTTP: `rutracker.org` `job.TJlWoY`, truthful executed negative protocol evidence, Stage 80/90 PASS.
 
+## `_14` owner-live observations that selected `_15`
+
+This historical section is retained as an accepted contract anchor, not as current product direction.
+
+### QUIC tested count/IDs ordinary output
+
+`_15` made the real attempted QUIC set visible in ordinary Stage 80 output. Owner-live runs showed all four current IDs.
+
+### Exact 140-byte binary input
+
+The accepted Generic UDP input contract is `1..4096 bytes`; the later `_16` owner-live run used an exact 140-byte fixture.
+
+### Selected-port/payload direct UDP observation
+
+The configured UDP path uses the selected endpoint, destination port, and exact job-local payload and records the direct observation separately from candidate results.
+
+### No-reply does not mean closed / does not gate candidates
+
+UDP silence is not treated as proof that a port is closed and does not suppress the candidate catalog.
+
+### application-owned staged file input
+
+The browser stages the selected payload into application-owned state before Run; the job consumes the exact staged Base64 payload.
+
+### terminal payload cleanup and Zapret2 restoration PASS.
+
+The accepted `_16` owner-live flow reached Stage 90 with temporary process/rule cleanup and Zapret2 restoration visible.
+
 ## `_14` through `_16` accepted protocol/input behavior
 
 `_14` established explicit persisted **Enable QUIC** as the execution gate. `_15` made attempted QUIC IDs visible. Owner-live Extended runs with ordinary QUIC blocked showed all four current IDs:
@@ -113,7 +141,7 @@ No Strategy Lab search/runtime semantics change in `_19`.
 | 9 | `_16` exact 140-byte configured UDP | **OWNER-LIVE PASS — `job.j09XUc`** |
 | 10 | Selected-port/payload direct UDP observation | **OWNER-LIVE PASS** |
 | 11 | No-reply does not mean closed / does not gate candidates | **OWNER-LIVE PASS** |
-| 12 | terminal payload cleanup and Zapret2 restoration | **OWNER-LIVE STAGE-90 PASS; deeper residue remains global backlog** |
+| 12 | terminal payload cleanup and Zapret2 restoration PASS. | **OWNER-LIVE STAGE-90 PASS; deeper residue remains global backlog** |
 | 13 | Enable QUIC OFF execution semantics | **OWNER-LIVE PASS** |
 | 14 | Enable QUIC OFF/default persistence across reload/revisit | **SOURCE CONTRACT GUARDED; OWNER-LIVE RELOAD PROOF PENDING** |
 | 15 | Circular idle ordinary presentation | **OWNER-LIVE RU PASS ON `_17`; `_19` changes idle casing/wording by owner request** |
