@@ -9,8 +9,6 @@
 - Project-development rules: [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md)
 - Current-line detail: [`history/current/v0.4.x.md`](history/current/v0.4.x.md)
 
-This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and release semantics remain canonical in `DEV-027`–`DEV-040`.
-
 ## Whole-project path
 
 - [x] Initial OPNsense plugin
@@ -23,42 +21,42 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
 - [x] Strategy Lab Python migration
 - [x] Adaptive candidate search
 - [x] Timeout/budget containment
-- [x] Model A baseline
-- [x] Model B testing
-- [x] Model B parallel testing
-- [x] Model B production integration
-- [x] Model C testing
-- [x] Model C production integration
+- [x] Model A/B/C experimentation and Model C selection
 - [x] Source-port attribution/leasing
 - [x] Adaptive budgets/readiness
-- [x] Model C selected
 - [x] Lua initialization measurements
-- [x] BLOB startup/RSS measurements
-- [x] BLOB common-set measurements
+- [x] BLOB startup/RSS/common-set measurements
 - [x] GET-4K discovery decision
 - [x] Warm/readiness repeat verification
-- [x] Three-level documentation memory
-- [x] Version-aware state/handoff/archive model
-- [x] Four canonical rule domains (`DOC-*`, `DEV-*`, `CHAT-*`, `GH-*`)
-- [x] Permanent rule IDs and bidirectional cross-reference integrity
-- [x] Rule cancellation/replacement lifecycle without ID deletion/reuse
-- [x] Remove obsolete duplicate quick-reference documents after reference migration
-- [x] Context-first/SHA-scoped documentation cold-start optimization
-- [x] Internal Markdown link/anchor integrity validation
-- [x] GitHub-native patch/package delivery with candidate-defining source verification and mandatory publication-record tail
 - [x] Model-C-only production (`v0.4.1_13`)
-  - [x] remove automatic B/A production fallback from the normal packaged Stage-60 path
-  - [x] keep explicit Model B/A reference/benchmark/test overrides
-  - [x] exact-head corrective matrix + FreeBSD-15 qualification
-  - [x] exact verified head squash-merged to `main`
-  - [x] persistent testing package `v0.4.1_13` published and verified
-  - [x] owner-live Model-C-only regression
-- [ ] Risk-selected Strategy Lab regression coverage
+- [x] GitHub-native patch/package delivery and publication-record tail
+- [x] Documentation memory/state/governance model
+- [ ] Strategy Lab risk-selected regression and protocol breadth
   - [x] initial Zapret2 STOPPED state
-  - [x] Extended TLS 1.2
-  - [x] Extended HTTP
-  - [x] QUIC capability gating
-  - [ ] configured Generic UDP — **current selected row**
+  - [x] Extended TLS 1.2 execution/result semantics
+  - [x] Extended HTTP execution/result semantics
+  - [x] historical `_13` closed-QUIC capability-skip observation
+  - [ ] **`v0.4.1_14` explicit Enable QUIC — current source task**
+    - [x] persisted checkbox in Extended GUI, default OFF
+    - [x] saved checkbox state survives page reload through model-backed API
+    - [x] copy resolved value into immutable job-local state at launch
+    - [x] OFF → explicit `disabled` QUIC skip
+    - [x] ON → run QUIC candidates regardless of Stage-30 `quic_ipv4` control result
+    - [x] remove capability-based execution gate from Python production QUIC runner
+    - [x] remove capability-based execution gate from shell/reference QUIC runner
+    - [x] keep Stage-30 QUIC precheck as diagnostic evidence only
+    - [x] focused automated regression for enabled QUIC with mocked `quic_ipv4=closed`
+    - [ ] merge/publish/install `_14`
+    - [ ] owner-live: default OFF + persistence
+    - [ ] owner-live: OFF → `skipped/disabled`
+    - [ ] owner-live: ON on blocked-QUIC ISP → candidates execute, truthful `working` or `not_found`
+  - [ ] **configured Generic UDP**
+    - [x] retain payload bound `1..4096` bytes
+    - [x] reject missing port/file pair before start
+    - [x] reject oversized browser file visibly before clearing previous result / entering running UI
+    - [x] keep backend authoritative size/Base64 validation
+    - [ ] owner-live: 2–3 MB file produces visible `1–4096` error and no new job
+    - [ ] owner-live: valid port + `1..4096` payload executes UDP branch (`working` or `not_found`, not `skipped`)
   - [ ] already-accessible target
   - [ ] cancellation/internal-failure containment
 - [ ] Circular lifecycle coverage
@@ -72,52 +70,24 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
 - [ ] Retention/cleanup boundaries
 - [ ] Reboot/residue verification
 - [ ] OPNsense runtime/service reliability follow-up
-- [ ] Strategy Lab protocol/capability breadth
 - [ ] Package/runtime version visibility follow-up
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — configured Generic UDP regression
+## Current priority — publish and live-verify `_14`
 
-`v0.4.1_13` Model-C-only production remains complete. Accepted risk-selected live coverage now includes:
+The owner changed the QUIC product rule after `_13` proved that the old capability gate skips QUIC when the ISP blocks ordinary QUIC. The new rule is intentionally the opposite: a blocked control path is a reason to allow bypass testing when the owner enables it.
 
-- initial normal Zapret2 RUNNING;
-- initial normal Zapret2 STOPPED;
-- Extended TLS 1.2 execution/result semantics;
-- Extended HTTP execution/result semantics;
-- QUIC capability gating when QUIC/IPv4 is closed.
+`v0.4.1_14` therefore combines one coherent Strategy Lab input/execution scope:
 
-The Extended protocol evidence came from `rutracker.org` Extended `job.TJlWoY`:
+1. **Enable QUIC** — explicit persisted opt-in, default OFF, sole QUIC execution gate;
+2. **Generic UDP input UX** — preserve the strict 1–4096-byte payload contract but turn the old apparent no-op for large files into an immediate visible validation error.
 
-- terminal `SUCCESS`, one stable shortlist entry;
-- Stage 80 `PASS`;
-- TLS 1.2 executed two candidates and truthfully persisted `working=null`;
-- HTTP executed two candidates and truthfully persisted `working=null`;
-- all four temporary candidate runtimes reached ready/stable state and produced interception/endpoint evidence;
-- Stage 30 classified QUIC/IPv4 as closed and Stage 80 reported `QUIC=skipped`;
-- Stage 90 restored the normal Zapret2 service successfully;
-- `UDP=skipped` because Generic UDP was not fully configured with a request payload file.
+The Stage-30 QUIC control probe remains useful diagnostic evidence, but it no longer has authority over Stage-80 candidate scheduling.
 
-A protocol row does not require fabricating a successful bypass where the measured target/environment has none. For TLS 1.2 and HTTP, the regression contract is satisfied by real branch execution, truthful candidate outcomes, correct runtime attribution and normal completion/restoration.
+Source acceptance requires focused tests, the repository corrective matrix, FreeBSD-15 package qualification, exact-head merge and persistent testing-package publication under the normal GitHub delivery contract.
 
-Durable evidence:
-
-- [`verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md);
-- [`verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md);
-- [`verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md).
-
-The next selected row is **configured Generic UDP**. Required acceptance:
-
-- use the unchanged published `_13` package;
-- use Extended mode;
-- supply both a valid UDP port and a 1-4096-byte request payload file so the request is classified as configured;
-- execute the UDP branch rather than `UDP=skipped`;
-- require a truthful `working` or `not_found` result with normal candidate/runtime cleanup;
-- preserve the normal Zapret2 lifecycle state after completion.
-
-This is regression coverage, not a new package candidate unless the live row exposes an actual defect.
-
-After this row is accepted, choose the next backlog row from current risk/evidence rather than mechanically repeating equivalent paths.
+After `_14` is published, one owner-live Extended cycle may cover both enabled QUIC and valid Generic UDP if both inputs are intentionally configured. Separate quick checks still verify checkbox persistence/default and oversized-file visible rejection.
 
 ## Deferred research — retain, do not activate by inertia
 
