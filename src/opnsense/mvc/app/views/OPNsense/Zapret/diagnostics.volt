@@ -272,7 +272,7 @@ $(document).ready(function () {
         if (!isFinite(percent)) percent = fallbackPercent(data.current_stage);
         percent = Math.max(0, Math.min(100, percent));
         var stageKey = progress.stage_key || ((Array.isArray(data.stages) ? data.stages : []).filter(function (s) { return s.number === data.current_stage; })[0] || {}).key || '';
-        $('#strategyLabProgressBar').css('width', percent + '%').attr('aria-valuenow', percent).text(percent + '% — ' + label(stageLabels, stageKey));
+        $('#strategyLabProgressBar').css('width', percent + '%').attr('aria-valuenow', percent).text(percent + '%');
         $('#strategyLabProgressText').text(ui.progress + ': ' + percent + '% — ' + label(stageLabels, stageKey));
     }
     function renderStages(data) {
