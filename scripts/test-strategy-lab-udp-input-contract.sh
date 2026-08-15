@@ -132,9 +132,9 @@ grep -Fq 'showInputError(ui.udpSize)' "${VIEW}" || fail 'GUI invalid payload rej
     fail 'GUI still trusts browser File.size for authoritative UDP payload rejection'
 ! grep -Fq 'readAsDataURL(payloadFile)' "${VIEW}" || fail 'GUI still uses Data URL parsing for binary UDP payload transport'
 size_line=$(grep -n 'bytes.byteLength<1||bytes.byteLength>udpPayloadMaxBytes' "${VIEW}" | head -1 | cut -d: -f1)
-reset_line=$(grep -n "clearInputError(); stopPolling(); activeJobId=''" "${VIEW}" | head -1 | cut -d: -f1)
-[ -n "${size_line}" ] && [ -n "${reset_line}" ] && [ "${size_line}" -lt "${reset_line}" ] ||
-    fail 'GUI clears/starts Strategy Lab before validating the decoded UDP payload size'
+start_call_line=$(grep -n 'beginStart(window.btoa(binary))' "${VIEW}" | head -1 | cut -d: -f1)
+[ -n "${size_line}" ] && [ -n "${start_call_line}" ] && [ "${size_line}" -lt "${start_call_line}" ] ||
+    fail 'GUI starts Strategy Lab before validating the decoded UDP payload size'
 grep -Eq 'for module in .*udp_input.*launch.*query' "${LAUNCHER}" || fail 'launcher does not load UDP input, launch, and query modules in order'
 grep -Fq 'case "$#" in' "${LAUNCH}" || fail 'launcher start contract is not backward compatible'
 grep -Fq 'strategy_lab_udp_input_prepare' "${LAUNCH}" || fail 'launcher does not create job-local UDP input'
