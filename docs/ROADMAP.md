@@ -49,7 +49,7 @@
     - [x] merge/publish/install `_14`
     - [ ] owner-live: default OFF + persistence
     - [ ] owner-live: OFF → disabled semantics
-  - [ ] **`v0.4.1_15` QUIC/UDP observability and valid-small-UDP correction — published, owner-live pending**
+  - [ ] **`v0.4.1_15` QUIC/UDP observability and Generic UDP live correction — published, live defect open**
     - [x] expose actual QUIC `tested` count and candidate IDs in ordinary Stage-80 RU/EN text
     - [x] Stage-30 RU/EN: `QUIC открыт` / `QUIC закрыт` plus separate QUIC-search enabled/disabled state
     - [x] keep Stage-30 measured QUIC state diagnostic-only; never use it as execution gate
@@ -57,7 +57,7 @@
     - [x] deterministic RU/EN Enable QUIC help text
     - [x] preserve raw protocol enums in structured/advanced evidence
     - [x] replace browser Data-URL/File.size validation ownership with ArrayBuffer exact-byte validation and Base64 encoding
-    - [x] exact 140-byte Generic UDP regression through Base64 decode/job-local payload metadata
+    - [x] exact 140-byte Generic UDP automated regression through Base64 decode/job-local payload metadata
     - [x] preserve decoded payload bound `1..4096` and strict backend validation
     - [x] configured Generic UDP direct control exchange uses exact search-epoch selected IP, destination port and job-local payload
     - [x] record selected endpoint/IP, port, payload bytes, reply/no-reply, timeout/return state and duration
@@ -69,14 +69,22 @@
     - [x] FreeBSD-15 package build/inspection qualification
     - [x] exact-head source merge `a219161c901c663b56cac6757364d3bbd32766c7`
     - [x] persistent `v0.4.1_15` testing-package publication
-    - [x] bounded publication-record docs reconciliation prepared in PR `#242`
-    - [ ] owner-live: localized RU/EN help and Stage-30/80 text
-    - [ ] owner-live: Enable QUIC ON on blocked-control path shows `tested > 0` and attempted IDs
-    - [ ] owner-live: Enable QUIC OFF shows natural disabled wording
-    - [ ] owner-live: exact/small UDP payload including 140 bytes starts normally
-    - [ ] owner-live: configured UDP shows selected port/payload/endpoints, control observation and actual candidate count/IDs
+    - [x] bounded publication-record docs reconciliation merged
+    - [x] owner-live: Enable QUIC ON on blocked-control path shows four attempted IDs in ordinary Stage-80 output
+    - [x] owner-live: Generic UDP file path still fails to reach configured UDP — defect recorded
+    - [ ] investigate browser file input/change event and selected `File` ownership
+    - [ ] verify ArrayBuffer read, actual byte count and Base64 value before start request
+    - [ ] verify PHP/API receives the Base64 payload and forwards it through configd
+    - [ ] verify launcher creates private job-local `udp-payload.bin` and `udp-port`
+    - [ ] inspect OPNsense runtime/job directory owner/mode/permissions; test the owner's permissions hypothesis
+    - [ ] verify Python Extended stage sees configured UDP when the job-local files exist
+    - [ ] implement the minimal correction at the proven failure point and publish the next package candidate if source changes are required
+    - [ ] owner-live after correction: exact/small UDP payload including 140 bytes starts normally
+    - [ ] owner-live after correction: configured UDP shows selected port/payload/endpoints, control observation and actual candidate count/IDs
     - [ ] owner-live: no-reply UDP text does not claim the port is closed
-    - [ ] owner-live: Stage-90 restoration and temporary process/firewall/socket cleanup PASS
+    - [ ] owner-live: Enable QUIC OFF shows natural disabled wording
+    - [ ] owner-live: remaining RU/EN presentation checks
+    - [ ] owner-live: Stage-90 restoration and temporary process/firewall/socket cleanup PASS for the corrected UDP path
   - [ ] already-accessible target
   - [ ] cancellation/internal-failure containment
 - [ ] Circular lifecycle coverage
@@ -94,20 +102,17 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — owner-live `_15`
+## Current priority — trace the `_15` Generic UDP live failure
 
-`v0.4.1_15` is now persistently published from candidate-defining source merge `a219161c901c663b56cac6757364d3bbd32766c7`.
+`v0.4.1_15` is correctly published, and the latest owner-live `rutracker.org` Extended run proves the QUIC attempt-observability portion is active: ordinary Stage 80 shows all four attempted QUIC IDs. The same live cycle proves that the Generic UDP browser-to-job path is still broken: attaching a valid small file does not produce a configured UDP request and Stage 80 reports UDP as not configured.
 
-Published identity:
+Do **not** guess the root cause or immediately rewrite size validation again. Trace the real path end to end:
 
-- tag: `v0.4.1_15`;
-- asset: `os-zapret2-restyle-0.4.1_15.pkg`;
-- SHA-256: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`;
-- stable Pages/pkg repository promoted: no.
+`file input/change -> selected File -> ArrayBuffer/byteLength -> Base64 start payload -> PHP/API -> configd -> launcher -> job-local udp-payload.bin/udp-port -> filesystem ownership/mode -> Python configured-UDP detection`.
 
-Machine evidence: [`verification/evidence/testing-publications/v0.4.1_15.md`](verification/evidence/testing-publications/v0.4.1_15.md).
+The owner's suspicion that the file may not actually be uploaded/saved, potentially because of permissions on the runtime/job directory, is an explicit investigation hypothesis. It becomes a root cause only if live evidence proves it.
 
-Next owner-live work is intentionally narrow and follows the unchecked `_15` items above: RU/EN help/presentation, real QUIC attempt count/IDs, Enable QUIC OFF wording, valid 140-byte Generic UDP input, direct selected-port/payload UDP observation, non-closed wording on no reply, and clean Stage-90 restoration/resource cleanup.
+Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
 
 ## Deferred research — retain, do not activate by inertia
 
