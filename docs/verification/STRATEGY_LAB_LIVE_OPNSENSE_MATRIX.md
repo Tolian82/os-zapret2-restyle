@@ -111,7 +111,7 @@ The owner selected the following visible UI items for implementation and later l
 - `Outcome` / RU `Результат`;
 - `Restoration` / RU `Восстановление`;
 - `Replay` / RU `Ответы`;
-- `Complete Traffic Strategy profile` / RU `Полный профиль Traffic Strategy`;
+- `Complete Traffic Strategy profile` / RU `Полный профиль Стратегий Трафика`;
 - `Run` / RU `Запуск`;
 - `Test Domain Connectivity` / RU `Тестирование соединения с доменом`;
 - `Blocked Domain` becomes EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`;
