@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP OWNER-LIVE PASS.**
+Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; QUIC PERSISTENCE AND RU/EN PRESENTATION PENDING.**
 
 Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected owner-live evidence.
 
@@ -12,10 +12,14 @@ Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected ow
 - `_16` package SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
 - publication workflow run: `31882091770`;
 - stable Pages/pkg repository promoted: no;
-- owner-live `_16` Generic UDP verification: **PASS**.
+- owner-live `_16` Generic UDP verification: **PASS**;
+- owner-live `_16` QUIC OFF execution semantics: **PASS**;
+- Enable QUIC OFF/default persistence across reload/revisit: **PENDING**;
+- selected RU/EN presentation cleanup: **PENDING IMPLEMENTATION**.
 
 Machine publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_16.md`.
 Owner-live Generic UDP evidence: `docs/verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`.
+Owner-live QUIC OFF/UI follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`.
 
 Normal Stage 60 remains Model C only; automatic Model B/A production fallback remains disabled from `_13`.
 
@@ -44,7 +48,7 @@ The owner tested Extended `telegram.org` and `rutracker.org` with Enable QUIC ON
 - `quic-ipfrag-8`;
 - `quic-ipfrag-16`.
 
-Owner-live `_15` evidence is positive: the `rutracker.org` Extended screenshot with blocked ordinary QUIC shows all four attempted IDs and no working QUIC candidate. Thus QUIC tested count/IDs ordinary output is **OWNER-LIVE PASS**.
+Owner-live evidence is positive: Extended runs with ordinary QUIC blocked show all four attempted IDs and no working QUIC candidate. Thus QUIC tested count/IDs ordinary output is **OWNER-LIVE PASS**.
 
 ### Exact 140-byte binary input
 
@@ -52,51 +56,13 @@ Automated `_15` coverage proved exact 140-byte Base64 decode/job-local metadata.
 
 ### Selected-port/payload direct UDP observation
 
-The configured-UDP path uses the exact selected search-epoch IP, destination port and job-local payload, recording reply/no-reply and timing. `_16` owner-live evidence now proves this path in the real GUI.
+The configured-UDP path uses the exact selected search-epoch IP, destination port and job-local payload, recording reply/no-reply and timing. `_16` owner-live evidence proves this path in the real GUI.
 
 ### No-reply does not mean closed / does not gate candidates
 
 Owner-live `_16` confirms the intended behavior: UDP silence is not classified as `port closed` and does not suppress the bypass candidate catalog.
 
-## Historical `_15` Generic UDP report — superseded diagnosis
-
-Durable chronology: `docs/verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`.
-
-At the time, the owner reported that Generic UDP file selection did not become configured. That record is retained as historical observation, but its working assumption of a valid small payload/browser or filesystem failure is superseded by the controlled `_16` exact-byte test. The owner identified that earlier files were around 140 KiB and therefore outside the documented 4096-byte limit.
-
-## `_16` trace result and correction
-
-Source tracing established that Generic UDP does **not** use a multipart server upload directory. The path is:
-
-`browser File -> ArrayBuffer -> Base64 start POST -> API -> configd -> launcher -> job-local udp-payload.bin/udp-port -> Python`.
-
-`_16` makes the boundary explicit and observable:
-
-- file-input `change` captures and immediately reads the `File`;
-- exact `1..4096` decoded bytes are validated and Base64-encoded immediately;
-- filename, decoded byte count and Base64 are retained in application-owned staged state;
-- RU/EN normal UI displays ready-to-send filename/byte evidence;
-- Run consumes staged Base64 even if native selection is later lost;
-- Run-time fallback stages a still-present native file when needed;
-- browser buffer validation does not depend on realm-specific `instanceof ArrayBuffer`;
-- later job-local failures expose explicit classes, including `job_directory_not_writable`, `payload_temp_create_failed`, decode/write/chmod/move and state-record failures.
-
-## `_16` source/publication acceptance — PASS
-
-1. staged browser file-selection contract PASS;
-2. exact 140-byte backend/job-local regression PASS;
-3. job-directory unavailable/not-writable and other preparation attribution PASS;
-4. selected-port/payload direct observation regression PASS;
-5. no-reply does not mean closed / does not gate candidates PASS;
-6. complete Strategy Lab corrective matrix PASS;
-7. FreeBSD-15 package build/inspection qualification PASS;
-8. exact verified source head `f7974f21dc7340b1e1416c24f9e7dade0322f0f3` squash-merged as `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
-9. persistent `v0.4.1_16` testing publication PASS;
-10. package SHA-256 `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`.
-
-Publication-record documentation tail is PR `#246`.
-
-## Owner-live `_16` Generic UDP acceptance — PASS
+## `_16` Generic UDP owner-live acceptance — PASS
 
 Controlled fixture and run:
 
@@ -119,7 +85,40 @@ This closes the application-owned staged file input, exact 140-byte configured U
 
 The earlier browser/upload/filesystem defect hypothesis is not confirmed. Previous repeated size errors are explained by the owner selecting approximately 140 KiB files, outside the `1..4096 bytes` contract.
 
-Remaining independent rows: Enable QUIC OFF/default persistence across reload/revisit and final RU/EN presentation review.
+## `_16` explicit QUIC OFF execution — PASS; persistence pending
+
+The owner supplied a later pair of Extended `www.youtube.com` screenshots using Generic UDP port `53` and `udp-140.bin`.
+
+Observed behavior:
+
+- with **Enable QUIC ON**, Stage 80 executes all four current QUIC candidates and the independent Generic UDP catalog;
+- with **Enable QUIC OFF**, Stage 80 explicitly reports `QUIC: подбор стратегий отключён` and executes no QUIC candidate catalog;
+- the same OFF run still executes all three UDP IDs: `udp-ipfrag-8`, `udp-ipfrag-16`, `udp-ipfrag-32`;
+- the OFF run completes `SUCCESS`, produces stable TLS/HTTP results, and Stage 90 reports successful Zapret2 restoration.
+
+This is **OWNER-LIVE PASS** for the runtime OFF gate itself. It does not prove persistence because the evidence does not show the OFF value surviving a page reload/revisit. Keep persistence as a separate row.
+
+## Selected RU/EN presentation acceptance scope
+
+The owner selected the following visible UI items for implementation and later live acceptance in both languages:
+
+- circular idle ordinary display: remove raw `{` / `}` and do not expose `{"state":"idle"}` as ordinary JSON;
+- circular idle localized state: RU `Состояние: ОЖИДАНИЕ`, EN `State: IDLE`;
+- `Full output (advanced)` / RU `Полный вывод (расширенный)`;
+- `Enter a domain and click Test to check HTTPS connectivity.` / RU `Введите домен и нажмите «Проверка», чтобы проверить HTTPS-соединение.`;
+- `Family` / RU `Семейство`;
+- `Endpoints` / RU `Назначения`;
+- `Outcome` / RU `Результат`;
+- `Restoration` / RU `Восстановление`;
+- `Replay` / RU `Ответы`;
+- `Complete Traffic Strategy profile` / RU `Полный профиль Traffic Strategy`;
+- `Run` / RU `Запуск`;
+- `Test Domain Connectivity` / RU `Тестирование соединения с доменом`;
+- `Blocked Domain` becomes EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`;
+- `Enable QUIC` / RU `Включить QUIC`;
+- no cross-language leakage between RU and EN modes.
+
+Raw machine JSON may remain only in an explicitly advanced/raw area if retained.
 
 ## Scenario matrix
 
@@ -138,14 +137,18 @@ Remaining independent rows: Enable QUIC OFF/default persistence across reload/re
 | 11 | Selected-port/payload direct UDP observation | **OWNER-LIVE PASS** |
 | 12 | No-reply does not mean closed / does not gate candidates | **OWNER-LIVE PASS** |
 | 13 | terminal payload cleanup and Zapret2 restoration PASS. | **STAGE-90 RESTORATION/TEMP PROCESS+RULE CLEANUP OWNER-LIVE PASS; deeper residue remains under global cleanup backlog** |
-| 14 | Enable QUIC OFF/default/persistence | **OFF PRESENTATION PASS; persistence PENDING** |
-| 15 | RU/EN presentation review | PENDING |
-| 16 | Target already accessible | PENDING REGRESSION |
-| 17 | Cancellation/internal-failure containment | PENDING REGRESSION |
-| 18 | Circular lifecycle | PENDING REGRESSION |
-| 19 | Settings Apply guards | PENDING REGRESSION |
-| 20 | Retention/reboot residue | PENDING REGRESSION |
+| 14 | Enable QUIC OFF execution semantics | **OWNER-LIVE PASS** |
+| 15 | Enable QUIC OFF/default persistence across reload/revisit | **PENDING** |
+| 16 | Circular idle ordinary presentation | **PENDING IMPLEMENTATION + RU/EN LIVE ACCEPTANCE** |
+| 17 | RU/EN presentation review | **PENDING IMPLEMENTATION + LIVE ACCEPTANCE** |
+| 18 | Target already accessible | PENDING REGRESSION |
+| 19 | Cancellation/internal-failure containment | PENDING REGRESSION |
+| 20 | Circular lifecycle | PENDING REGRESSION |
+| 21 | Settings Apply guards | PENDING REGRESSION |
+| 22 | Retention/reboot residue | PENDING REGRESSION |
 
 ## Current failure policy
 
 Generic UDP should only be reopened if fresh evidence contradicts the accepted exact-byte path: a valid `1..4096`-byte file cannot become ready/configured, the selected port/payload/binding is wrong, candidate enumeration is suppressed incorrectly, UDP silence is called a closed port, or lifecycle restoration fails.
+
+QUIC OFF execution should only be reopened if fresh evidence shows that OFF still runs QUIC candidates. Persistence remains separately pending until an actual reload/revisit proves the stored setting.

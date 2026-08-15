@@ -44,82 +44,79 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 - Lua initialization, BLOB lazy/common-set, GET-4K discovery and cross-batch keep-warm questions remain closed for the current architecture by accepted measured evidence.
 - `_13` owner-live Standard RUNNING/STOPPED and Extended TLS 1.2/HTTP evidence remains accepted.
 - `_14` established explicit Enable QUIC as the sole QUIC candidate execution gate; Stage-30 measured QUIC reachability remains diagnostic only.
-- `_15` owner-live QUIC observability is positively demonstrated: the normal Stage-80 UI showed all four attempted QUIC candidate IDs while ordinary QUIC remained blocked.
+- `_15` owner-live QUIC ON observability remains accepted: four attempted QUIC IDs are visible while ordinary QUIC is blocked.
 - `_16` source acceptance, exact-head merge and immutable testing-package publication are complete.
-- `_16` Generic UDP browser-to-job path is now **OWNER-LIVE PASS** with exact 140-byte payload evidence.
+- `_16` Generic UDP browser-to-job path is **OWNER-LIVE PASS** with exact 140-byte payload evidence.
+- `_16` Enable QUIC OFF **execution semantics are OWNER-LIVE PASS**: OFF suppresses QUIC candidate execution while independent UDP testing remains active.
+- Enable QUIC OFF/default **persistence across reload/revisit is not yet proven** and remains pending.
 
-## Generic UDP current conclusion
+## Current owner-live evidence
 
-Generic UDP does not use a multipart upload directory. The product path is:
-
-`browser File -> ArrayBuffer -> Base64 start POST -> PHP/API -> configd -> launcher -> private job-local udp-payload.bin/udp-port -> Python Extended`.
-
-The product contract is exact decoded size **`1..4096 bytes`**, not KiB.
-
-The owner later identified that the repeated pre-PASS size errors came from selecting files around **140 KiB**. A controlled Windows fixture was then created and filesystem-verified as exactly `140` bytes. With that file, `_16` behaved correctly.
-
-Durable owner-live PASS evidence:
+Generic UDP PASS:
 [`verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md).
 
-The earlier `_15` failure record remains historical chronology, but its then-current suspicion of a browser/upload/filesystem defect is superseded by the exact-byte `_16` result:
-[`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
+QUIC OFF/UI follow-up:
+[`verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`](verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md).
 
-## `_16` owner-live Generic UDP — PASS
+The latest owner screenshots show both sides of the explicit QUIC gate on `www.youtube.com` in Extended mode with the same Generic UDP input:
 
-Controlled scenario:
+- QUIC ON: Stage 80 runs all four current QUIC candidates;
+- QUIC OFF: Stage 80 reports QUIC strategy search disabled and still runs `udp-ipfrag-8`, `udp-ipfrag-16`, `udp-ipfrag-32`;
+- the OFF run completes `SUCCESS` with stable TLS/HTTP candidates and successful Stage-90 restoration.
 
-- job: `job.j09XUc`;
-- target: `rutracker.org`;
-- mode: Extended;
-- Generic UDP port: `53`;
-- payload: `udp-140.bin`, exact `140` bytes;
-- Enable QUIC: OFF.
+This closes the runtime ON/OFF behavior, but not persistence after reload/revisit.
 
-Observed:
+## Selected UI/RU-EN implementation boundary
 
-- GUI immediately showed the payload as ready to send with exact 140-byte count;
-- Stage 80 showed port `53`, payload `140` bytes and endpoint `172.67.182.196`;
-- direct control reply was not observed;
-- wording explicitly stated that no reply does not mean the UDP port is closed;
-- candidate search still executed all three current UDP candidates: `udp-ipfrag-8`, `udp-ipfrag-16`, `udp-ipfrag-32`;
-- no working UDP candidate was found, which is a valid negative search result;
-- QUIC OFF was presented as QUIC strategy search disabled;
-- Stage 90 visibly removed temporary processes/rules and restored the original Zapret2 service to running/healthy state;
-- overall result: `SUCCESS`.
+The owner selected a focused presentation cleanup. These are required implementation tasks:
 
-The earlier permissions theory is therefore **not a confirmed product defect for this scenario**. `_16` retains precise server-side failure classes for any genuine later storage/permissions error if one appears in future evidence.
+### Circular idle presentation
 
-Canonical specialist contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
+- ordinary UI must not display the raw JSON braces `{` / `}` for the idle circular state;
+- ordinary `{"state":"idle"}` must become localized text;
+- RU target: `Состояние: ОЖИДАНИЕ`;
+- EN target: `State: IDLE`;
+- raw machine JSON may exist only under an explicitly advanced/raw presentation if retained.
 
-## `_16` automated and publication verification — PASS
+### RU/EN strings to close
 
-- source PR `#245` exact verified head: `f7974f21dc7340b1e1416c24f9e7dade0322f0f3`;
-- staged-browser Generic UDP contract: PASS;
-- exact 140-byte backend/job-local regression: PASS;
-- precise server preparation failure attribution: PASS;
-- complete Strategy Lab corrective matrix: PASS;
-- FreeBSD-15 package build/inspection qualification: PASS;
-- exact-head source merge: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
-- publisher FreeBSD-15 build/manifest/digest verification: PASS;
-- release/tag `v0.4.1_16` points exactly to the candidate-defining source merge;
-- asset `os-zapret2-restyle-0.4.1_16.pkg` is uploaded and verified;
-- SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`.
+- `Full output (advanced)` -> RU `Полный вывод (расширенный)`;
+- `Enter a domain and click Test to check HTTPS connectivity.` -> RU `Введите домен и нажмите «Проверка», чтобы проверить HTTPS-соединение.`;
+- `Family` -> RU `Семейство`;
+- `Endpoints` -> RU `Назначения`;
+- `Outcome` -> RU `Результат`;
+- `Restoration` -> RU `Восстановление`;
+- `Replay` -> RU `Ответы`;
+- `Complete Traffic Strategy profile` -> RU `Полный профиль Traffic Strategy`;
+- `Run` -> RU `Запуск`;
+- `Test Domain Connectivity` -> RU `Тестирование соединения с доменом`;
+- `Blocked Domain` becomes EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`;
+- `Enable QUIC` -> RU `Включить QUIC`.
 
-PR `#246` completed the required bounded publication-record documentation tail after the publisher's automatic Draft-PR step was blocked by repository GitHub Actions settings. Package identity/bytes were not changed.
+English mode must continue to show the corresponding English strings. Final acceptance must inspect both language modes and verify no cross-language leakage.
+
+Obvious spelling slips in the conversational request are normalized to the intended product terms (`Run`, `QUIC`, `Ответы`, `Включить`).
 
 ## Current owner-live boundary
 
-Generic UDP is closed as accepted for the tested `_16` scenario. Do not repeat it without new contradictory evidence.
+Accepted and closed for the tested scenarios:
 
-Next selected Strategy Lab rows:
+- Generic UDP exact-byte path;
+- selected port/payload direct observation and no-reply semantics;
+- real QUIC ON execution;
+- QUIC OFF execution semantics;
+- visible Stage-90 restoration.
 
-1. Enable QUIC OFF/default persistence across reload/revisit;
-2. remaining RU/EN presentation review;
-3. then the next risk-selected regression items from `ROADMAP.md`.
+Current selected work:
+
+1. prove Enable QUIC OFF/default persistence across reload/revisit;
+2. implement the circular-idle and RU/EN presentation cleanup above;
+3. live-check both RU and EN after implementation;
+4. continue the next risk-selected regressions from `ROADMAP.md`.
 
 ## Documentation authority note
 
-The owner’s latest instruction is current truth. Earlier failure hypotheses remain historical evidence of what was believed at that time, but they do not override the exact-byte live PASS.
+The owner’s latest instruction is current truth. Earlier hypotheses remain historical evidence only and do not override newer controlled owner-live results.
 
 ## Current architecture entry points
 
