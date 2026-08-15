@@ -10,90 +10,90 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-15
-**Current source-candidate identity:** `v0.4.1_14`
+**Current handoff identity:** `v0.4.1_14`
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
-- source candidate: `PLUGIN_REVISION=14`;
-- current published testing package remains `os-zapret2-restyle-0.4.1_13.pkg` / `v0.4.1_13` until `_14` source is merged and the testing publisher completes;
-- `_13` package SHA-256: `7a2f864aa14ba2170ca378954ab5421092b76aca79b7b1765b976de2f024797b`;
-- required ABI: `FreeBSD:15:amd64`.
+- `PLUGIN_REVISION=14`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_14.pkg` / `v0.4.1_14`;
+- testing-package SHA-256: `b2df12f0af8ec6057f0df87e5289f89bc087664d7a0e2529c5e362e59db53d03`;
+- source merge and testing-tag target: `df20ed2ebe7f6c37c4189008e06e80700ae89ce4`;
+- publication workflow run: `31875178597`;
+- required ABI: `FreeBSD:15:amd64`;
+- stable Pages/pkg repository promoted by this testing publication: **no**.
+
+Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_14.md`](verification/evidence/testing-publications/v0.4.1_14.md).
 
 Resolve the exact current `main` SHA at execution time under `GH-004`.
 
-## Established baseline
-
-`v0.4.1_13` Model-C-only production and its selected owner-live gates are complete:
-
-- normal Stage 60 uses Model C only; automatic Model B/A production replay is removed;
-- Standard RUNNING paths cover exhaustive no-candidate, exhaustive success and early success;
-- initial Zapret2 STOPPED behavior is owner-accepted PASS;
-- Extended TLS 1.2 and HTTP branches executed truthfully on `job.TJlWoY`;
-- the `_13` observation that closed QUIC was capability-skipped is retained only as historical evidence and **is superseded as product behavior by the owner’s `_14` instruction**.
-
-Accepted evidence remains under `docs/verification/evidence/`.
-
-## `_14` current source task — explicit Enable QUIC + Generic UDP input UX
+## What `_14` changes
 
 The owner changed the Strategy Lab QUIC contract on 2026-08-15.
 
 ### Enable QUIC
 
-The Diagnostics Strategy Lab UI must contain **Enable QUIC** directly below **Generic UDP (optional)** in Extended mode.
+Diagnostics / Strategy Lab Extended mode contains **Enable QUIC** directly below **Generic UDP (optional)**.
 
 Current contract:
 
-- checkbox unchecked → QUIC candidate testing is inactive;
-- checkbox checked → QUIC candidate testing is active;
+- unchecked → QUIC candidate testing is inactive;
+- checked → QUIC candidate testing is active;
 - default is unchecked;
 - the checkbox state is persisted in OPNsense configuration and survives page reloads;
-- the selected value is copied into each job at launch so an in-flight job has immutable execution intent;
-- **this checkbox is the sole decision gate for running QUIC candidate tests**;
-- Stage-30 `quic_ipv4` control probing may remain as diagnostic evidence, but its result must never enable, disable or skip QUIC candidate testing;
-- when Enable QUIC is ON, Stage 80 runs QUIC candidates even when the control probe says QUIC/IPv4 is blocked;
-- when Enable QUIC is OFF, Stage 80 reports QUIC explicitly skipped because it is disabled.
+- the resolved choice is copied into each job at launch;
+- **the checkbox is the sole decision gate for QUIC candidate execution**;
+- Stage-30 `quic_ipv4` probing remains diagnostic only and never enables/disables/skips QUIC candidate testing;
+- Enable QUIC ON runs candidates even when the ordinary QUIC control probe is blocked;
+- Enable QUIC OFF reports an explicit `disabled` skip.
 
-Canonical specialist contract: [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md).
+Canonical contract: [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md).
 
 ### Generic UDP input UX
 
-The Generic UDP payload contract remains intentionally bounded to **1–4096 decoded bytes**. A 2–3 MB file is invalid and must not be accepted merely to make the button react.
+The Generic UDP payload remains intentionally bounded to **1–4096 decoded bytes**.
 
-The `_14` requirement is instead to remove the apparent no-op:
+- port and file must be supplied together;
+- file size is checked before the previous result is cleared or the UI enters running state;
+- a 2–3 MB file is rejected immediately with a visible `1–4096` size error;
+- backend Base64/decoded-size validation remains authoritative;
+- valid Extended Generic UDP still requires port `1..65535` plus payload `1..4096` bytes.
 
-- validate the port/file pair and payload size before clearing the previous result or entering running state;
-- for a file outside 1–4096 bytes show an explicit visible size error immediately;
-- retain authoritative API/backend validation against bypass attempts;
-- valid Extended Generic UDP still requires both a destination port and a payload file.
+Canonical contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
 
-Canonical input contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
+## `_14` source/publication acceptance — PASS
 
-## `_14` acceptance boundary
+- source PR `#237` latest verified head: `b476131bdd68c51288a0f89478fddd0382c0b5c9`;
+- complete Strategy Lab corrective matrix: PASS;
+- FreeBSD 15 package build/inspection qualification: PASS;
+- exact-head squash merge: `df20ed2ebe7f6c37c4189008e06e80700ae89ce4`;
+- publisher FreeBSD 15 build and manifest/digest verification: PASS;
+- prerelease `v0.4.1_14`: published and verified;
+- tag target: exactly `df20ed2ebe7f6c37c4189008e06e80700ae89ce4`;
+- package asset: `os-zapret2-restyle-0.4.1_14.pkg`;
+- package digest: `b2df12f0af8ec6057f0df87e5289f89bc087664d7a0e2529c5e362e59db53d03`.
 
-Before `_14` can replace `_13` as the testing handoff:
+The publisher could not create its Draft publication-record PR because the repository setting currently forbids GitHub Actions from creating/approving pull requests. It had already pushed the machine publication record. The same required Draft tail was therefore opened through the GitHub connector as PR `#238`; no package bytes or release identity were changed.
 
-1. focused QUIC/UDP/UI/backend contracts must pass;
-2. the complete required project corrective matrix must pass;
-3. FreeBSD 15 package qualification must pass;
-4. the exact verified source head must be squash-merged;
-5. persistent testing package `v0.4.1_14` must be published from the candidate-defining source merge;
-6. the publisher-created publication-record tail must be reconciled and merged;
-7. owner-live verification must then confirm:
-   - Enable QUIC default OFF and persistence across reload;
-   - OFF → QUIC skipped for `disabled`;
-   - ON on the owner’s blocked-QUIC path → QUIC candidates actually execute and return truthful `working` or `not_found`, not capability skip;
-   - oversized UDP payload → visible 1–4096-byte error without starting/resetting the job UI;
-   - valid configured Generic UDP → Stage 80 actually executes UDP and returns truthful `working` or `not_found`.
+## Immediate next task — owner-live `_14`
 
-## Current task reading
+After installing the published `_14` testing package, verify the new behavior rather than repeating the completed `_13` Model-C baseline:
 
-For this source task read completely:
+1. Enable QUIC defaults OFF and persists checked/unchecked across Diagnostics reload;
+2. Enable QUIC OFF → QUIC `skipped`, reason `disabled`;
+3. Enable QUIC ON while the ISP blocks ordinary QUIC → Stage 80 actually tests QUIC candidates (`tested > 0`) and returns truthful `working` or `not_found`, never capability-skip;
+4. selecting a 2–3 MB Generic UDP payload shows the visible `1–4096` error and starts no new job;
+5. valid UDP port + `1..4096`-byte payload causes actual UDP candidate execution and truthful `working` or `not_found`.
+
+One Extended job may cover items 3 and 5 simultaneously.
+
+## Established baseline retained
+
+`v0.4.1_13` remains accepted historical live evidence for Model-C-only Standard RUNNING paths, initial STOPPED restoration, and Extended TLS 1.2/HTTP execution. Its old closed-QUIC capability skip is historical evidence only and is superseded by the `_14` product contract.
+
+For current live verification read:
 
 1. [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md);
 2. [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md);
-3. [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md) with the explicit rule that older capability-gating language is historical wherever it conflicts with the specialist `_14` contract;
-4. [`verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`](verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md).
-
-For GitHub/package delivery use `CHAT_RULES.md` and `GITHUB_PUBLICATION.md`; a package-affecting source patch automatically continues through persistent testing-package publication and its publication-record tail.
+3. [`verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`](verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md).
