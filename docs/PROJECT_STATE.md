@@ -21,14 +21,17 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
-- current source candidate: `_15`;
-- current published/owner-installed testing package remains `_14` until `_15` is merged and persistently published;
-- `_14` published package/tag: `os-zapret2-restyle-0.4.1_14.pkg` / `v0.4.1_14`;
-- `_14` package SHA-256: `b2df12f0af8ec6057f0df87e5289f89bc087664d7a0e2529c5e362e59db53d03`;
-- `_14` source/tag target: `df20ed2ebe7f6c37c4189008e06e80700ae89ce4`;
-- latest full Web/pkg release: `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
+- packaged source revision: `_15`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_15.pkg` / `v0.4.1_15`;
+- testing-package SHA-256: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`;
+- source merge/testing-tag target: `a219161c901c663b56cac6757364d3bbd32766c7`;
+- publication workflow run: `31879283227`;
+- latest full Web/pkg release remains `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
+- stable Pages/pkg repository was not promoted by `_15`;
 - internal service key: `zapret`.
+
+Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_15.md`](verification/evidence/testing-publications/v0.4.1_15.md).
 
 The exact `main` SHA is resolved at execution time under `GH-004`.
 
@@ -39,72 +42,73 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 - Automatic normal-production Model B/A replay remains removed.
 - Lua initialization, BLOB lazy/common-set, GET-4K discovery and cross-batch keep-warm questions remain closed for the current architecture by accepted measured evidence.
 - `_13` owner-live Standard RUNNING/STOPPED and Extended TLS 1.2/HTTP evidence remains accepted.
-- `_14` implemented the owner rule that Enable QUIC is the sole QUIC candidate execution gate; Stage-30 measured QUIC reachability is diagnostic only.
-- `_14` source acceptance/publication/reconciliation are complete and `_14` is installed on the owner OPNsense.
+- `_14` established explicit Enable QUIC as the sole QUIC candidate execution gate; Stage-30 measured QUIC reachability remains diagnostic only.
+- `_15` source acceptance, exact-head merge and immutable testing-package publication are complete.
 
-## Owner-live `_14` findings that define `_15`
+## Why `_15` was selected
 
-Two Extended live runs (`telegram.org`, `rutracker.org`) with Enable QUIC ON showed a blocked ordinary QUIC control probe and Stage-80 `QUIC=not_found` rather than capability skip. This is positive evidence that the old capability gate is gone, but the ordinary output did not show the actual `tested` set.
+Owner-live `_14` Extended runs on `telegram.org` and `rutracker.org` with Enable QUIC ON showed blocked ordinary QUIC but Stage-80 `not_found` rather than capability skip. That proved the old execution gate was gone but did not expose the actual `tested` set. The same cycle exposed raw RU/EN protocol wording, English-only help at the GUI boundary, a nominal 140-byte Generic UDP rejection, and no direct selected-port/payload UDP observation.
 
-The owner then selected one corrective package scope:
+The owner selected one corrective package scope covering those findings. The full plan and all post-publication checks remain recorded in `ROADMAP.md`, `START_HERE.md`, both specialist contracts and the live OPNsense matrix.
 
-1. expose real QUIC candidate count/names so enabled live execution can be proven without unpacking telemetry;
-2. present Stage-30 QUIC measured state and QUIC-search choice separately in natural RU/EN;
-3. replace raw Stage-80 `QUIC=not_found, UDP=skipped` presentation with natural RU/EN while preserving structured machine enums;
-4. localize the Enable QUIC help text in RU/EN;
-5. fix the owner-reported nominal 140-byte Generic UDP rejection and add exact regression coverage;
-6. verify the selected UDP destination port using the exact supplied payload, expose direct reply/no-reply evidence, and never equate silence with a closed port or use it as a bypass-search gate.
-
-These items are now implemented in source candidate `_15` and remain subject to exact-head CI/package qualification, merge, persistent testing publication and owner-live verification.
-
-## `_15` implementation contract
+## `_15` implemented contract
 
 ### QUIC
 
-- `_14` execution semantics are preserved: OFF means no candidates; ON means candidate execution regardless of control-probe result.
-- Stage 30 derives human presentation from structured `network.json` plus immutable job-local `quic-enabled` execution intent.
-- Russian UI renders `QUIC открыт` / `QUIC закрыт`; English renders the equivalent open/blocked state.
-- Stage 30 separately states whether QUIC strategy search is enabled/disabled; Standard mode explicitly says the QUIC search belongs to Extended mode.
+- Enable QUIC OFF means no candidates; ON means candidate execution regardless of Stage-30 control-probe result.
+- Stage 30 derives human presentation from structured `network.json` plus immutable job-local `quic-enabled` intent.
+- Russian renders `QUIC открыт` / `QUIC закрыт`; English renders the equivalent open/blocked state.
+- Stage 30 separately states whether QUIC strategy search is enabled/disabled or belongs to Extended mode.
 - Stage 80 uses the actual structured `tested` array and displays candidate count and IDs.
-- Current QUIC catalog remains `quic-fake-1`, `quic-fake-2`, `quic-ipfrag-8`, `quic-ipfrag-16`.
-- Raw `working`, `not_found`, `skipped`, `disabled` remain machine evidence, not ordinary user-facing Stage-80 wording.
-- Enable QUIC help text is bound through the same deterministic RU/EN UI language selection used by other Strategy Lab guidance.
+- Current catalog remains `quic-fake-1`, `quic-fake-2`, `quic-ipfrag-8`, `quic-ipfrag-16`.
+- Raw `working`, `not_found`, `skipped`, `disabled` remain machine evidence rather than primary ordinary Stage-80 wording.
+- Enable QUIC help uses deterministic RU/EN presentation.
 
 Canonical contract: [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md).
 
 ### Generic UDP
 
-- decoded payload contract remains `1..4096` bytes, destination port remains `1..65535`, and port/file remain an atomic pair;
-- browser transport is `readAsArrayBuffer -> Uint8Array.byteLength -> Base64`, removing browser `File.size` and Data-URL parsing as validation owners;
+- decoded payload remains `1..4096` bytes, port remains `1..65535`, and port/file are an atomic pair;
+- browser transport is `readAsArrayBuffer -> Uint8Array.byteLength -> Base64`;
 - strict API/backend Base64 and decoded-size checks remain authoritative;
-- an exact 140-byte binary payload has regression coverage through job-local decode/metadata;
-- configured UDP performs a direct request/response observation against each fixed search-epoch selected IP using the exact configured port and job-local payload;
+- exact 140-byte binary payload has regression coverage through job-local decode/metadata;
+- configured UDP performs direct request/response observation against each fixed search-epoch selected IP using the exact configured port and job-local payload;
 - control evidence records endpoint/IP, port, payload bytes, reply observed, timeout/return state and duration;
 - no reply means only `reply_observed=false`; it never means `port closed` and never suppresses the candidate loop;
-- Stage 80 exposes the selected port, payload bytes, selected endpoint/IP, control observation and actual UDP candidate count/IDs in RU/EN.
+- Stage 80 exposes selected port, payload bytes, selected endpoint/IP, control observation and actual UDP candidate count/IDs in RU/EN.
 
 Canonical contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
 
-## `_15` verification boundary
+## `_15` automated and publication verification — PASS
 
-Source acceptance requires:
+- source PR `#241` exact verified head: `ecf3d5269574988e56707c68b6eb9696d936b1ca`;
+- complete Strategy Lab corrective matrix: PASS;
+- FreeBSD-15 package qualification: PASS;
+- exact-head source merge: `a219161c901c663b56cac6757364d3bbd32766c7`;
+- publisher FreeBSD-15 build/manifest/digest verification: PASS;
+- release/tag `v0.4.1_15` points exactly to the candidate-defining source merge;
+- asset `os-zapret2-restyle-0.4.1_15.pkg` is uploaded and verified;
+- SHA-256: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`.
 
-1. protocol-presentation Python compile/unit contract;
-2. exact 140-byte UDP binary regression;
-3. browser ArrayBuffer/Base64 contract and pre-start decoded-size validation;
-4. exact selected-IP/port/payload direct UDP control regression;
-5. explicit non-gating UDP-silence semantics;
-6. blocked-control QUIC candidate execution regression;
-7. complete Strategy Lab corrective matrix;
-8. FreeBSD-15 package build/inspection qualification;
-9. exact verified-head merge;
-10. persistent `v0.4.1_15` testing publication and bounded publication-record documentation reconciliation.
+The publisher's only failed step was automatic Draft PR creation because the repository setting forbids GitHub Actions from creating or approving pull requests. The machine-generated record branch/evidence was already pushed; Draft PR `#242` was opened through the GitHub connector to complete the same required docs-only tail. Package identity/bytes were not changed.
 
-After publication, owner-live checks are limited to materially changed `_15` behavior: RU/EN help and Stage-30/80 text, QUIC `tested > 0` candidate names on Enable QUIC ON, natural disabled wording on OFF, accepted 140-byte UDP payload, direct UDP observation plus actual candidate count/names, and clean Stage-90 restoration/resource cleanup.
+## Current owner-live boundary
+
+After installing `_15`, verify only the materially changed paths rather than repeating accepted Model-C baseline work:
+
+1. RU and EN Diagnostics show localized Enable QUIC/Generic UDP help;
+2. Enable QUIC ON with ordinary QUIC blocked → Stage 30 shows blocked/closed plus search enabled; Stage 80 shows `tested > 0` and attempted IDs;
+3. Enable QUIC OFF → natural localized disabled wording;
+4. exact/small Generic UDP payload including a 140-byte sample starts normally;
+5. configured UDP shows selected port, payload bytes, endpoint/IP, direct reply/no-reply observation and actual candidate count/IDs;
+6. no-reply wording never claims the port is closed;
+7. Stage-90 restoration and temporary process/firewall/socket cleanup remain PASS.
+
+One Extended run may cover enabled QUIC and configured UDP simultaneously.
 
 ## Documentation authority note
 
-The owner’s latest instruction is current truth. Historical `_14` screenshots retain their evidentiary value but do not define the desired `_15` presentation. No historical evidence is rewritten to look like the corrected package.
+The owner’s latest instruction is current truth. Historical `_14` screenshots retain their evidentiary value but do not define the desired `_15` presentation. Historical evidence is not rewritten to look like the corrected package.
 
 ## Current architecture entry points
 

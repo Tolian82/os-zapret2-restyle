@@ -1,16 +1,19 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED; `v0.4.1_15` CORRECTIVE SOURCE CANDIDATE IMPLEMENTED, SOURCE/PACKAGE QUALIFICATION PENDING.**
+Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` SOURCE/PACKAGE ACCEPTED AND PUBLISHED, OWNER-LIVE CORRECTIVE VERIFICATION PENDING.**
 
 Only FreeBSD 15 amd64 packages are valid. Source tests/CI do not replace selected owner-live evidence.
 
 ## Current package/source boundary
 
-- latest owner-installed testing package: `os-zapret2-restyle-0.4.1_14.pkg`;
-- current published testing tag: `v0.4.1_14`;
-- `_14` tag target: `df20ed2ebe7f6c37c4189008e06e80700ae89ce4`;
-- `_14` package SHA-256: `b2df12f0af8ec6057f0df87e5289f89bc087664d7a0e2529c5e362e59db53d03`;
-- current source candidate: `v0.4.1_15`, not yet a published package at this source-document boundary.
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_15.pkg` / `v0.4.1_15`;
+- `_15` source merge/tag target: `a219161c901c663b56cac6757364d3bbd32766c7`;
+- `_15` package SHA-256: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`;
+- publication workflow run: `31879283227`;
+- stable Pages/pkg repository promoted: no;
+- owner installation/live verification of `_15`: pending.
+
+Machine publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_15.md`.
 
 Normal Stage 60 remains Model C only; automatic Model B/A production fallback is disabled from `_13`.
 
@@ -55,7 +58,7 @@ Both showed:
 
 `telegram.org` ended `NO_CANDIDATE`; `rutracker.org` ended `SUCCESS` with one stable TLS 1.3 candidate.
 
-These runs prove the old capability skip no longer appears at the normal GUI boundary, but `_14` ordinary output does not expose the actual QUIC `tested` set. Therefore `not_found` alone is not final live proof of real candidate attempts.
+These runs proved the old capability skip no longer appeared at the normal GUI boundary, but `_14` ordinary output did not expose the actual QUIC `tested` set. Therefore `not_found` alone was not final live proof of real candidate attempts.
 
 The same cycle exposed:
 
@@ -66,11 +69,11 @@ The same cycle exposed:
 
 The owner selected these findings as one corrective package scope: `_15`.
 
-## `_15` implemented source behavior awaiting qualification/publication
+## `_15` implemented and automated-accepted behavior
 
 ### A. QUIC execution observability
 
-Source candidate `_15` preserves `_14` execution semantics and adds owner-visible proof:
+`_15` preserves `_14` execution semantics and adds owner-visible proof:
 
 - Stage 30 presents measured `QUIC открыт` / `QUIC закрыт` (or English equivalent) separately from the job-local QUIC-search enabled/disabled choice;
 - Enable QUIC ON still runs candidates regardless of blocked control result;
@@ -81,15 +84,15 @@ Source candidate `_15` preserves `_14` execution semantics and adds owner-visibl
 
 ### B. QUIC help localization
 
-The Enable QUIC explanatory text is now bound through deterministic RU/EN UI language selection. Source acceptance must prove both language strings are present and bound to the displayed control.
+The Enable QUIC explanatory text is bound through deterministic RU/EN UI language selection. Both language strings and displayed-control binding are covered by automated source acceptance.
 
 ### C. Exact Generic UDP input
 
-The browser source now uses:
+Browser source uses:
 
 `readAsArrayBuffer -> Uint8Array.byteLength 1..4096 -> binary Base64 -> strict API/backend decode`.
 
-Browser `File.size` and Data-URL parsing are no longer authoritative validation owners. An exact 140-byte payload has dedicated backend/job-local regression coverage.
+Browser `File.size` and Data-URL parsing are no longer authoritative validation owners. An exact 140-byte payload is covered through Base64 transport/job-local decode metadata.
 
 ### D. Selected-port UDP control observation
 
@@ -100,11 +103,11 @@ Configured Generic UDP performs a bounded direct observation for each fixed sear
 
 Evidence records selected endpoint/IP, port, payload bytes, reply observed/not observed, timeout/return state and duration.
 
-No-reply semantics are deliberately limited: **no reply does not mean the port is closed and does not gate the bypass candidate loop.** Stage 80 then presents actual UDP candidate count/IDs plus winner/no-winner meaning in RU/EN.
+No-reply semantics remain deliberately limited: **no reply does not mean the port is closed and does not gate the bypass candidate loop.** Stage 80 then presents actual UDP candidate count/IDs plus winner/no-winner meaning in RU/EN.
 
-## `_15` source acceptance gate
+## `_15` source/publication acceptance — PASS
 
-Before any owner install request, all of the following must be complete:
+All required pre-live gates completed:
 
 1. exact 140-byte payload regression PASS;
 2. browser ArrayBuffer/exact-byte/Base64 contract PASS;
@@ -114,8 +117,10 @@ Before any owner install request, all of the following must be complete:
 6. Stage-30 and Stage-80 RU/EN protocol presentation regression PASS;
 7. complete Strategy Lab corrective matrix PASS;
 8. FreeBSD-15 package build/inspection qualification PASS;
-9. exact verified-head source merge;
-10. persistent `v0.4.1_15` testing-package publication and publication-record reconciliation.
+9. exact verified source head `ecf3d5269574988e56707c68b6eb9696d936b1ca` squash-merged as `a219161c901c663b56cac6757364d3bbd32766c7`;
+10. `v0.4.1_15` testing package persistently published and verified with SHA-256 `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`.
+
+The publication-record documentation tail is PR `#242`; its machine evidence was generated by the publisher before the repository setting blocked GitHub Actions from creating the Draft PR automatically.
 
 ## Owner-live `_15` matrix after publication
 
@@ -186,13 +191,13 @@ One Extended job may cover C and D simultaneously when Enable QUIC is ON and val
 | 4 | Extended HTTP | **PASS ON `_13`** |
 | 5 | Historical closed-QUIC capability skip | **OBSERVED/PASS FOR `_13`; SUPERSEDED** |
 | 6 | `_14` Enable QUIC ON, blocked control path, no capability skip | **PARTIAL LIVE PASS; selected `_15` observability** |
-| 7 | `_15` QUIC tested count/IDs ordinary output | **SOURCE IMPLEMENTED; CI/PACKAGE/LIVE PENDING** |
-| 8 | `_15` Stage-30/80 RU/EN protocol presentation | **SOURCE IMPLEMENTED; CI/PACKAGE/LIVE PENDING** |
-| 9 | `_15` Enable QUIC RU/EN help | **SOURCE IMPLEMENTED; CI/PACKAGE/LIVE PENDING** |
+| 7 | `_15` QUIC tested count/IDs ordinary output | **AUTOMATED PASS; OWNER-LIVE PENDING** |
+| 8 | `_15` Stage-30/80 RU/EN protocol presentation | **AUTOMATED PASS; OWNER-LIVE PENDING** |
+| 9 | `_15` Enable QUIC RU/EN help | **AUTOMATED PASS; OWNER-LIVE PENDING** |
 | 10 | `_14` nominal 140-byte Generic UDP input | **FAIL OWNER — FALSE SIZE REJECTION REPORTED** |
-| 11 | `_15` exact 140-byte binary input | **SOURCE IMPLEMENTED; CI/PACKAGE/LIVE PENDING** |
-| 12 | `_15` selected-port/payload direct UDP observation | **SOURCE IMPLEMENTED; CI/PACKAGE/LIVE PENDING** |
-| 13 | `_15` no-reply does not mean closed / does not gate candidates | **SOURCE IMPLEMENTED; CI/PACKAGE/LIVE PENDING** |
+| 11 | `_15` exact 140-byte binary input | **AUTOMATED PASS; OWNER-LIVE PENDING** |
+| 12 | `_15` selected-port/payload direct UDP observation | **AUTOMATED PASS; OWNER-LIVE PENDING** |
+| 13 | `_15` no-reply does not mean closed / does not gate candidates | **AUTOMATED PASS; OWNER-LIVE PENDING** |
 | 14 | Enable QUIC OFF/default/persistence owner-live | PENDING |
 | 15 | Oversized Generic UDP owner-live | PENDING |
 | 16 | Target already accessible | PENDING REGRESSION |
@@ -206,7 +211,7 @@ One Extended job may cover C and D simultaneously when Enable QUIC is ON and val
 
 ## Failure policy for `_15`
 
-`_15` fails acceptance if any of the following occur:
+`_15` fails owner-live acceptance if any of the following occur:
 
 - enabled QUIC is suppressed because Stage 30 says QUIC blocked;
 - disabled QUIC launches candidates;

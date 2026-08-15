@@ -49,7 +49,7 @@
     - [x] merge/publish/install `_14`
     - [ ] owner-live: default OFF + persistence
     - [ ] owner-live: OFF → disabled semantics
-  - [ ] **`v0.4.1_15` QUIC/UDP observability and valid-small-UDP correction — current source candidate**
+  - [ ] **`v0.4.1_15` QUIC/UDP observability and valid-small-UDP correction — published, owner-live pending**
     - [x] expose actual QUIC `tested` count and candidate IDs in ordinary Stage-80 RU/EN text
     - [x] Stage-30 RU/EN: `QUIC открыт` / `QUIC закрыт` plus separate QUIC-search enabled/disabled state
     - [x] keep Stage-30 measured QUIC state diagnostic-only; never use it as execution gate
@@ -65,11 +65,11 @@
     - [x] direct UDP no-reply never suppresses the bypass candidate loop
     - [x] expose actual UDP candidate count/IDs and winner/no-winner meaning in Stage-80 RU/EN text
     - [x] focused automated protocol-observability coverage added
-    - [ ] complete Strategy Lab corrective matrix
-    - [ ] FreeBSD-15 package build/inspection qualification
-    - [ ] exact-head source merge
-    - [ ] persistent `v0.4.1_15` testing-package publication
-    - [ ] bounded publication-record docs reconciliation
+    - [x] complete Strategy Lab corrective matrix
+    - [x] FreeBSD-15 package build/inspection qualification
+    - [x] exact-head source merge `a219161c901c663b56cac6757364d3bbd32766c7`
+    - [x] persistent `v0.4.1_15` testing-package publication
+    - [x] bounded publication-record docs reconciliation prepared in PR `#242`
     - [ ] owner-live: localized RU/EN help and Stage-30/80 text
     - [ ] owner-live: Enable QUIC ON on blocked-control path shows `tested > 0` and attempted IDs
     - [ ] owner-live: Enable QUIC OFF shows natural disabled wording
@@ -94,18 +94,20 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — qualify and publish `_15`
+## Current priority — owner-live `_15`
 
-The owner selected the `_14` live findings as one corrective package scope. Source candidate `_15` now implements the complete requested behavior rather than merely registering tasks:
+`v0.4.1_15` is now persistently published from candidate-defining source merge `a219161c901c663b56cac6757364d3bbd32766c7`.
 
-1. QUIC execution is observable through actual attempted count/IDs;
-2. Stage-30 and Stage-80 protocol evidence is human-readable in RU/EN while structured machine states remain intact;
-3. Enable QUIC help is deterministically localized;
-4. Generic UDP uses exact binary-byte browser transport and has an explicit 140-byte regression;
-5. configured UDP performs a non-gating direct control exchange using the selected IP/port/exact payload and exposes what was actually observed;
-6. UDP silence is never translated into the unsupported conclusion that the port is definitely closed.
+Published identity:
 
-The current gate is source acceptance: complete corrective matrix, FreeBSD-15 package qualification, exact-head merge, persistent testing publication and publication-record reconciliation. After publication, owner-live verification is limited to the materially changed `_15` paths listed above rather than repeating accepted Model-C baseline work.
+- tag: `v0.4.1_15`;
+- asset: `os-zapret2-restyle-0.4.1_15.pkg`;
+- SHA-256: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`;
+- stable Pages/pkg repository promoted: no.
+
+Machine evidence: [`verification/evidence/testing-publications/v0.4.1_15.md`](verification/evidence/testing-publications/v0.4.1_15.md).
+
+Next owner-live work is intentionally narrow and follows the unchecked `_15` items above: RU/EN help/presentation, real QUIC attempt count/IDs, Enable QUIC OFF wording, valid 140-byte Generic UDP input, direct selected-port/payload UDP observation, non-closed wording on no reply, and clean Stage-90 restoration/resource cleanup.
 
 ## Deferred research — retain, do not activate by inertia
 
