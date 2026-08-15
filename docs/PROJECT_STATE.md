@@ -21,16 +21,19 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
-- current source candidate: `_16`;
-- package metadata in current source candidate: `PLUGIN_REVISION=16`;
-- last published/owner-installed testing package/tag: `os-zapret2-restyle-0.4.1_15.pkg` / `v0.4.1_15`;
-- `_15` testing-package SHA-256: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`;
-- `_15` candidate-defining source/tag target: `a219161c901c663b56cac6757364d3bbd32766c7`;
+- packaged source revision: `_16`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_16.pkg` / `v0.4.1_16`;
+- testing-package SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
+- source merge/testing-tag target: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
+- publication workflow run: `31882091770`;
 - latest full Web/pkg release remains `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
+- stable Pages/pkg repository was not promoted by `_16`;
 - internal service key: `zapret`.
 
-The exact `main` SHA is resolved at execution time under `GH-004`. `_16` is not considered published until source acceptance, exact-head merge and persistent testing-package publication complete.
+Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_16.md`](verification/evidence/testing-publications/v0.4.1_16.md).
+
+The exact `main` SHA is resolved at execution time under `GH-004`.
 
 ## Locked current product facts
 
@@ -40,9 +43,10 @@ The exact `main` SHA is resolved at execution time under `GH-004`. `_16` is not 
 - Lua initialization, BLOB lazy/common-set, GET-4K discovery and cross-batch keep-warm questions remain closed for the current architecture by accepted measured evidence.
 - `_13` owner-live Standard RUNNING/STOPPED and Extended TLS 1.2/HTTP evidence remains accepted.
 - `_14` established explicit Enable QUIC as the sole QUIC candidate execution gate; Stage-30 measured QUIC reachability remains diagnostic only.
-- `_15` source/publication acceptance is complete.
+- `_15` source/publication acceptance remains complete.
 - `_15` owner-live QUIC observability is positively demonstrated: the normal Stage-80 UI showed all four attempted QUIC candidate IDs while ordinary QUIC remained blocked.
 - `_15` Generic UDP owner-live acceptance failed: a valid selected small file did not reach configured UDP.
+- `_16` source acceptance, exact-head merge and immutable testing-package publication are complete; owner-live Generic UDP correction verification is the current gate.
 
 ## Generic UDP trace result
 
@@ -50,14 +54,14 @@ The product does not upload the selected payload through a multipart upload dire
 
 `browser File -> ArrayBuffer -> Base64 start POST -> PHP/API -> configd -> launcher -> private job-local udp-payload.bin/udp-port -> Python Extended`.
 
-The `_15` browser implementation had no durable application-owned prepared payload. The Run handler sampled `input.files[0]` and only then attempted `FileReader`. Therefore a lost/reset native file selection can trigger port+file validation before the API call and before any job-local file exists.
+The `_15` browser implementation had no durable application-owned prepared payload. The Run handler sampled `input.files[0]` and only then attempted `FileReader`. Therefore a lost/reset native file selection could trigger port+file validation before the API call and before any job-local file existed.
 
-This explains why the owner's directory-permissions theory cannot be the **first** cause of the observed empty native file control/no-configured-job state. Filesystem permissions remain a valid later-stage hypothesis if a payload reaches the launcher.
+This explains why the owner's directory-permissions theory cannot be the **first** cause of the observed empty native file control/no-configured-job state. Filesystem permissions remain a valid later-stage failure mode if a payload reaches the launcher.
 
 Durable owner-live failure evidence:
 [`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
 
-## `_16` implemented source contract
+## `_16` implemented contract
 
 ### Browser-owned payload staging
 
@@ -86,29 +90,38 @@ The API/configd transport remains Base64-in-POST. After the job directory exists
 
 Canonical specialist contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
 
-## Current verification boundary
+## `_16` automated and publication verification — PASS
 
-Source candidate `_16` must pass:
+- source PR `#245` exact verified head: `f7974f21dc7340b1e1416c24f9e7dade0322f0f3`;
+- staged-browser Generic UDP contract: PASS;
+- exact 140-byte backend/job-local regression: PASS;
+- precise server preparation failure attribution: PASS;
+- complete Strategy Lab corrective matrix: PASS;
+- FreeBSD-15 package build/inspection qualification: PASS;
+- exact-head source merge: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
+- publisher FreeBSD-15 build/manifest/digest verification: PASS;
+- release/tag `v0.4.1_16` points exactly to the candidate-defining source merge;
+- asset `os-zapret2-restyle-0.4.1_16.pkg` is uploaded and verified;
+- SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`.
 
-1. browser-owned staging/source-contract regression;
-2. exact 140-byte backend/job-local regression;
-3. precise job-local preparation error attribution regression;
-4. complete Strategy Lab corrective matrix;
-5. FreeBSD-15 package qualification;
-6. exact-head source merge;
-7. persistent `v0.4.1_16` testing publication and publication-record reconciliation.
+The publisher's only failed step was automatic Draft PR creation because the repository setting forbids GitHub Actions from creating or approving pull requests. The machine-generated record branch/evidence was already pushed; Draft PR `#246` completes the same required docs-only tail. Package identity/bytes were not changed.
 
-Owner-live after publication is narrow:
+## Current owner-live boundary
 
-- file selection must immediately show application-owned ready state and exact byte count;
-- a 140-byte sample must start a new configured-UDP job;
-- Stage 80 must show port/payload/IP/control observation and actual UDP candidate IDs;
-- if a server-side permission/storage error occurs, its preparation class must be visible;
-- Stage-90 restoration and temporary process/firewall/socket/payload cleanup must PASS.
+After installing `_16`, verify only the materially changed Generic UDP path:
+
+1. selecting a valid file immediately shows application-owned ready state, filename and exact decoded byte count;
+2. a 140-byte sample starts a new configured-UDP job;
+3. configured UDP Stage 80 shows selected port, payload bytes, endpoint/IP, direct reply/no-reply observation and actual candidate count/IDs;
+4. no-reply wording never claims the port is closed;
+5. if server-side permission/storage preparation fails, the UI/API exposes its preparation class;
+6. Stage-90 restoration and temporary process/firewall/socket/payload cleanup remain PASS.
+
+Remaining independent rows after Generic UDP are Enable QUIC OFF/default persistence and final RU/EN presentation review.
 
 ## Documentation authority note
 
-The owner’s latest instruction is current truth. Historical `_15` automated assertions remain evidence of what source tests proved, but they no longer count as proof of the live browser-to-job path.
+The owner’s latest instruction is current truth. Historical `_15` automated assertions remain evidence of what source tests proved, but they do not count as proof of the live browser-to-job path.
 
 ## Current architecture entry points
 
