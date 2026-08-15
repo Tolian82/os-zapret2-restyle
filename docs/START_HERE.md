@@ -10,7 +10,7 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-15
-**Current handoff identity:** `v0.4.1_15`
+**Current handoff identity:** `v0.4.1_15` owner-live Generic UDP failure investigation
 
 ## Current identity
 
@@ -94,19 +94,26 @@ Canonical contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRA
 
 The publisher again could not create its Draft publication-record PR because the repository setting forbids GitHub Actions from creating/approving pull requests. It had already pushed the machine publication record. The same required Draft tail was opened through the GitHub connector as PR `#242`; package identity/bytes were not changed.
 
-## Immediate next task — owner-live `_15`
+## Latest owner-live `_15` finding — Generic UDP still FAIL
 
-Do not repeat already accepted broad Model-C baseline work. Verify only materially changed `_15` paths:
+The owner installed `_15` and repeated an Extended `rutracker.org` check with Generic UDP port `53` and Enable QUIC ON. QUIC attempt observability worked, but Generic UDP still did not become configured: attaching a small file did not produce a usable selected/uploaded payload and Stage 80 reported UDP as not configured.
 
-1. Russian and English Diagnostics show localized Enable QUIC/Generic UDP help;
-2. Extended + Enable QUIC ON with ordinary QUIC blocked → Stage 30 says QUIC blocked/closed **and** strategy search enabled, while Stage 80 shows `tested > 0` plus attempted QUIC IDs;
-3. Enable QUIC OFF → Stage 80 says search disabled in natural RU/EN text;
-4. exact/small Generic UDP payload, including a 140-byte sample, starts normally;
-5. configured UDP Stage 80 shows selected port, payload bytes, endpoint/IP, direct reply observed/not observed, actual candidate count/IDs, and truthful winner/no-winner result;
-6. no-reply UDP wording never claims the port is closed;
-7. Stage 90 restoration and temporary process/firewall/socket cleanup remain PASS.
+This is now a confirmed owner-live product defect. The current investigation hypothesis is that the file may not reach the backend/job-local payload path at all. Possible filesystem ownership/permissions on the Strategy Lab runtime/job directory are specifically retained as a hypothesis, **not** as a proven root cause.
 
-One Extended job may cover enabled QUIC and configured UDP simultaneously.
+Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
+
+The next implementation decision must follow an end-to-end trace of browser selection → ArrayBuffer/Base64 → API/configd → launcher job-local `udp-payload.bin`/`udp-port` creation and permissions → Python configured-UDP detection. Do not close the 140-byte/Generic UDP row from automated tests alone.
+
+## Remaining owner-live `_15` work
+
+Do not repeat already accepted broad Model-C baseline work. Preserve/finish the materially changed `_15` checks:
+
+1. RU/EN Diagnostics localization checks not yet explicitly accepted;
+2. Enable QUIC OFF → natural localized disabled wording;
+3. investigate and correct the confirmed Generic UDP live file-selection/upload failure before retrying 140-byte acceptance;
+4. after correction, configured UDP must show selected port, payload bytes, endpoint/IP, direct reply/no-reply observation and actual candidate count/IDs;
+5. no-reply UDP wording must never claim the port is closed;
+6. Stage 90 restoration and temporary process/firewall/socket cleanup remain mandatory.
 
 ## Established baseline retained
 

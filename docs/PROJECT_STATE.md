@@ -44,6 +44,8 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 - `_13` owner-live Standard RUNNING/STOPPED and Extended TLS 1.2/HTTP evidence remains accepted.
 - `_14` established explicit Enable QUIC as the sole QUIC candidate execution gate; Stage-30 measured QUIC reachability remains diagnostic only.
 - `_15` source acceptance, exact-head merge and immutable testing-package publication are complete.
+- `_15` owner-live QUIC attempt observability is now demonstrated in normal output: the owner screenshot shows four attempted QUIC candidate IDs while the control probe remains closed.
+- `_15` Generic UDP owner-live acceptance is **not** complete: the real file-selection/upload path still fails to reach a configured UDP state.
 
 ## Why `_15` was selected
 
@@ -69,13 +71,19 @@ Canonical contract: [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/S
 ### Generic UDP
 
 - decoded payload remains `1..4096` bytes, port remains `1..65535`, and port/file are an atomic pair;
-- browser transport is `readAsArrayBuffer -> Uint8Array.byteLength -> Base64`;
+- browser transport is intended to be `readAsArrayBuffer -> Uint8Array.byteLength -> Base64`;
 - strict API/backend Base64 and decoded-size checks remain authoritative;
-- exact 140-byte binary payload has regression coverage through job-local decode/metadata;
+- exact 140-byte binary payload has automated regression coverage through job-local decode/metadata;
 - configured UDP performs direct request/response observation against each fixed search-epoch selected IP using the exact configured port and job-local payload;
 - control evidence records endpoint/IP, port, payload bytes, reply observed, timeout/return state and duration;
 - no reply means only `reply_observed=false`; it never means `port closed` and never suppresses the candidate loop;
 - Stage 80 exposes selected port, payload bytes, selected endpoint/IP, control observation and actual UDP candidate count/IDs in RU/EN.
+
+The live `_15` finding now overrides any inference that automated exact-byte coverage proves the complete browser-to-job handoff: the owner reports that attaching a valid small file still does not produce configured UDP. The observed GUI remains without a usable selected file and Stage 80 says UDP is not configured.
+
+Current root cause is **unknown**. Investigation must trace browser selection/read, Base64 request payload, PHP/API validation/configd forwarding, launcher creation of `udp-payload.bin`/`udp-port`, and filesystem ownership/permissions. The owner's suspicion that the file may simply not be uploaded/saved because of directory permissions is recorded as a hypothesis only.
+
+Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
 
 Canonical contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
 
@@ -94,17 +102,22 @@ The publisher's only failed step was automatic Draft PR creation because the rep
 
 ## Current owner-live boundary
 
-After installing `_15`, verify only the materially changed paths rather than repeating accepted Model-C baseline work:
+Do not repeat accepted Model-C baseline work. Current owner-live state is split:
 
-1. RU and EN Diagnostics show localized Enable QUIC/Generic UDP help;
-2. Enable QUIC ON with ordinary QUIC blocked → Stage 30 shows blocked/closed plus search enabled; Stage 80 shows `tested > 0` and attempted IDs;
-3. Enable QUIC OFF → natural localized disabled wording;
-4. exact/small Generic UDP payload including a 140-byte sample starts normally;
-5. configured UDP shows selected port, payload bytes, endpoint/IP, direct reply/no-reply observation and actual candidate count/IDs;
-6. no-reply wording never claims the port is closed;
-7. Stage-90 restoration and temporary process/firewall/socket cleanup remain PASS.
+- **QUIC attempt observability:** positive live evidence exists for Enable QUIC ON with blocked control path; normal Stage 80 shows four tested IDs.
+- **Generic UDP input:** FAIL — selected/attached file does not reach configured UDP in the live GUI flow.
 
-One Extended run may cover enabled QUIC and configured UDP simultaneously.
+Next work is investigation, not another blind retry. Required trace:
+
+1. browser input/change event and actual selected `File` object;
+2. ArrayBuffer read and byte count;
+3. Base64 present in the start request;
+4. PHP/API validation and configd forwarding;
+5. launcher creation and permissions of private job-local `udp-payload.bin` and `udp-port`;
+6. Python detection of configured UDP;
+7. terminal cleanup.
+
+After the cause is corrected, rerun the 140-byte/small-payload owner-live row and verify selected port/payload/IP, direct reply/no-reply, actual candidate IDs, truthful result wording, and Stage-90 cleanup/restoration.
 
 ## Documentation authority note
 
