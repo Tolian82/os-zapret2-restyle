@@ -24,7 +24,9 @@ require "${VIEW}" "${RU_SECOND}"
 require "${VIEW}" "testDomainTitle:'Тестирование соединения с доменом'"
 require "${VIEW}" "testDomainHelp:'Введите домен и нажмите «Проверка», чтобы проверить HTTPS-соединение.'"
 require "${VIEW}" "testAction:'Проверка'"
+require "${VIEW}" "strategyLabTitle:'Лаборатория стратегий'"
 require "${VIEW}" "blockedDomain:'Заблокированный домен / IP'"
+require "${VIEW}" "genericUdpLabel:'UDP порт (опционально)'"
 require "${VIEW}" "runAction:'Запуск'"
 require "${VIEW}" "enableQuic:'Включить QUIC'"
 require "${VIEW}" "family:'Семейство'"
@@ -37,11 +39,29 @@ require "${VIEW}" "fullOutput:'Полный вывод (расширенный)'
 require "${VIEW}" "stateLabel:'Состояние'"
 require "${VIEW}" "testDomainTitle:'Test Domain Connectivity'"
 require "${VIEW}" "testDomainHelp:'Enter a domain and click Test to check HTTPS connectivity.'"
+require "${VIEW}" "strategyLabTitle:'Strategy Lab'"
 require "${VIEW}" "blockedDomain:'Blocked Domain / IP'"
+require "${VIEW}" "genericUdpLabel:'Generic UDP (optional)'"
 require "${VIEW}" "completeProfile:'Complete Traffic Strategy profile'"
 require "${VIEW}" "fullOutput:'Full output (advanced)'"
 require "${VIEW}" "stateLabel:'State'"
 require "${VIEW}" 'applyStaticLocalization();'
+require "${VIEW}" "strategyBox.find('.content-box-header h3').first().text(ui.strategyLabTitle);"
+require "${VIEW}" "\$('#strategyLabUdpRow').find('td').first().text(ui.genericUdpLabel);"
+
+# The three Strategy Lab left-side controls must share one aligned column after
+# the owner-requested small left shift, while the long RU domain label stays on one line.
+require "${VIEW}" 'id="strategyLabInputsTable"'
+require "${VIEW}" 'td.strategy-lab-label'
+require "${VIEW}" 'width:190px;'
+require "${VIEW}" 'min-width:190px;'
+require "${VIEW}" 'white-space:nowrap;'
+require "${VIEW}" 'font-size:12px;'
+require "${VIEW}" 'td.strategy-lab-value'
+require "${VIEW}" '<td class="strategy-lab-label">{{ lang._('
+require "${VIEW}" '<td class="strategy-lab-value"><input type="text" class="form-control" id="strategyLabDomainInput"'
+require "${VIEW}" '<td class="strategy-lab-value"><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort"'
+require "${VIEW}" '<td class="strategy-lab-value"><input type="checkbox" id="strategyLabEnableQuic" disabled/>'
 
 # Ordinary circular status must be human text, not raw JSON/braces.
 require "${VIEW}" "\$('#circularRaw').text(ui.stateLabel + ': ' + label(statusLabels,String(state).toUpperCase()));"
@@ -59,4 +79,4 @@ require "${SETTINGS}" "'enabled' => (string)\$model->strategylab->enablequic ===
 require "${MODEL}" '<enablequic type="BooleanField">'
 require "${MODEL}" '<Default>0</Default>'
 
-echo 'PASS: Strategy Lab diagnostics RU/EN labels, circular idle text, and persisted Enable QUIC contract are deterministic'
+echo 'PASS: Strategy Lab diagnostics RU/EN labels, aligned input column, circular idle text, and persisted Enable QUIC contract are deterministic'
