@@ -21,18 +21,18 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
-- current source candidate: `_23`;
-- current packaged revision: `_22` / `PLUGIN_REVISION=22`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_22.pkg` / `v0.4.1_22`;
-- `_22` testing-package SHA-256: `07a82529a824b84894541d59c1eabddd56500b5efad9205f6bd9e9e6b4f811d9`;
-- `_22` source merge/testing-tag target: `71baa9d0e7cd3e04535ff9b9ba87aefe8f4e8cfe`;
-- `_22` publication workflow run: `31903303820`;
+- current source/package revision: `_23` / `PLUGIN_REVISION=23`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_23.pkg` / `v0.4.1_23`;
+- `_23` testing-package SHA-256: `37bd4c19bacc48f17aeb4e497c1058e675df067adf2ecd00334708e995bcb283`;
+- `_23` source merge/testing-tag target: `3cd3ecc8b9976b1ec8000e2eccfa48f6898d1e73`;
+- `_23` exact-head source CI run: `31909623049`;
+- `_23` publication workflow run: `31909994148`;
 - latest full Web/pkg release remains `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
-- stable Pages/pkg repository was not promoted by `_22`;
+- stable Pages/pkg repository was not promoted by `_23`;
 - internal service key: `zapret`.
 
-Machine `_22` publication evidence: [`verification/evidence/testing-publications/v0.4.1_22.md`](verification/evidence/testing-publications/v0.4.1_22.md).
+Machine `_23` publication evidence: [`verification/evidence/testing-publications/v0.4.1_23.md`](verification/evidence/testing-publications/v0.4.1_23.md).
 
 The exact `main` SHA is resolved at execution time under `GH-004`.
 
@@ -51,7 +51,7 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 - Settings Apply validation/guards and post-Apply service-state correctness are **COMPLETE by owner confirmation**.
 - `_21` Laboratory native perimeter/grid and Russian cross-page navigation localization are **OWNER-LIVE PASS**.
 - the current Strategy Lab / Laboratory Russian-presentation task is **CLOSED by owner instruction**; GitHub issue `#155` is completed.
-- Enable QUIC OFF/default persistence across an actual reload/revisit is still live-pending; `_22` preserves the existing source persistence contract.
+- Enable QUIC OFF/default persistence across an actual reload/revisit is still live-pending; `_23` preserves the existing source persistence contract.
 
 Owner-live `_21` presentation evidence: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md).
 
@@ -81,52 +81,63 @@ Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-
 
 Source patch record: [`patches/v0.4.1_21.md`](patches/v0.4.1_21.md).
 
-## `_22` implementation / delivery status — Laboratory IPv4 targets + optional Host / SNI
+## `_22` implementation status — Laboratory IPv4 targets + optional Host / SNI
 
-The owner selected IP-address targets as the next Laboratory product task. The IPv4-first implementation has passed exact-head source qualification, been squash-merged, built under FreeBSD 15, and published as the persistent testing candidate `v0.4.1_22`.
+`_22` established the IPv4-first target/runtime architecture:
 
-Implemented boundary:
-
-1. PHP/API and shell target handling accept either a domain or canonical IPv4; IPv6 target input remains deliberately unsupported in this first patch;
+1. PHP/API and shell target handling accept either a domain or canonical IPv4; IPv6 target input remains deliberately unsupported in this first scope;
 2. an IPv4 target exposes an optional `Host / SNI` service-identity field, persisted per job separately from the destination IP;
 3. Stage 00 keeps `target_type=ip`; when Host/SNI exists, the endpoint identity is the hostname while the actual destination remains the entered IPv4;
 4. Stage 40 skips DNS for IP targets and performs a real TLS 1.3 request pinned to the entered IP; it no longer treats TCP/443 reachability as TLS evidence;
 5. the search epoch for IP + Host/SNI binds `endpoint=<service hostname>` to `selected_ip=<entered IPv4>`;
 6. Stage-50/60 IP candidate specs remove hostlist target binding because firewall routing is already destination-IP scoped; Model-C ownership/attribution is otherwise unchanged;
 7. candidate TLS 1.3/TLS 1.2/HTTP probes use protocol-aware requests against the selected IP; the prior IP plain-TCP candidate shortcut cannot create a false TLS PASS;
-8. QUIC uses Host/SNI when supplied; bare-IP QUIC is unsupported rather than falsely successful because hostname verification is unavailable;
-9. Generic UDP remains direct-IP and does not require Host/SNI;
-10. final IP profiles use the existing `--ipset-ip=<target>` selector and normal three-attempt exact profile replay;
-11. temporary circular browser validation remains domain-only;
-12. Model C, budgets, lifecycle lock, cleanup and Stage-90 exact restoration are unchanged.
-
-Delivery proof:
-
-- source PR: `#262`;
-- exact latest source head complete CI + FreeBSD-15 package qualification: PASS;
-- exact source squash merge/tag target: `71baa9d0e7cd3e04535ff9b9ba87aefe8f4e8cfe`;
-- tag/release: `v0.4.1_22`;
-- package: `os-zapret2-restyle-0.4.1_22.pkg`;
-- SHA-256: `07a82529a824b84894541d59c1eabddd56500b5efad9205f6bd9e9e6b4f811d9`;
-- publication workflow run: `31903303820`;
-- stable Pages/pkg repository promoted: no.
-
-The publisher completed package/release verification and machine-evidence creation. GitHub Actions policy blocked only the final automatic PR-creation step, so publication-record PR `#263` was opened manually from the workflow-created branch; this is documentation-only and does not alter the published package or source identity.
-
-Focused regression: `scripts/test-strategy-lab-ip-targets.sh`, included automatically by the existing Strategy Lab corrective matrix.
+8. Generic UDP remains direct-IP and does not require Host/SNI;
+9. final IP profiles use `--ipset-ip=<target>` and normal exact three-attempt profile replay;
+10. temporary circular browser validation remains domain-only;
+11. Model C, budgets, lifecycle lock, cleanup and Stage-90 exact restoration are unchanged.
 
 Source patch record: [`patches/v0.4.1_22.md`](patches/v0.4.1_22.md).
 
+## `_23` implementation / delivery status — truthful result classification
+
+`_23` is exact-head qualified, source-merged and persistently published. It preserves the `_22` target architecture and corrects three owner-live classification defects:
+
+1. authenticated/intercepted HTTP `4xx`/`5xx` is retained as valid DPI-path evidence after exact profile replay, fixed search epoch endpoint success and firewall interception; an application error such as `502` does not erase an otherwise stable finalist at Stage 85;
+2. enabled QUIC on bare IPv4 without Host/SNI is short-circuited before candidate execution with `status=skipped`, `reason=host_sni_required`, `tested=[]`;
+3. bare-IPv4 `curl` exit `60` is classified as incomplete TLS service identity; an otherwise-empty result becomes `PARTIAL` with explicit Host/SNI guidance instead of false `NO_CANDIDATE`;
+4. a later run with Host/SNI clears that missing-identity condition;
+5. Generic UDP remains independent and valid for bare IPv4;
+6. Model C, fixed search epochs, candidate catalogs, budgets, cleanup and mandatory Stage-90 restoration remain unchanged.
+
+Delivery proof:
+
+- source PR: `#264`;
+- exact final source head: `e26156fff27ba3c05bcb91972d2ba47085b1e995`;
+- exact-head source CI + FreeBSD-15 qualification: `31909623049`, PASS;
+- source squash merge/testing-tag target: `3cd3ecc8b9976b1ec8000e2eccfa48f6898d1e73`;
+- tag/release: `v0.4.1_23`;
+- package: `os-zapret2-restyle-0.4.1_23.pkg`;
+- SHA-256: `37bd4c19bacc48f17aeb4e497c1058e675df067adf2ecd00334708e995bcb283`;
+- publication workflow run: `31909994148`;
+- stable Pages/pkg repository promoted: no.
+
+The publisher completed FreeBSD build, manifest/digest verification, release publication and release/tag verification. GitHub Actions policy blocked only the final automatic PR-creation step, so publication-record PR `#265` was opened manually from the workflow-created branch; this documentation-only tail does not alter the published package or source identity.
+
+Focused regression: `scripts/test-strategy-lab-truthful-results.sh`, included automatically by the Strategy Lab corrective matrix.
+
+Source patch record: [`patches/v0.4.1_23.md`](patches/v0.4.1_23.md).
+
 ## Current verification boundary
 
-Owner-live `_22` verification is now the selected next boundary:
+Owner-live `_23` verification is now the selected next boundary:
 
-1. ordinary domain regression after IP support;
-2. bare canonical IPv4 accepted with no false TCP-connect → TLS PASS;
-3. IPv4 + real Host/SNI pinned to the entered destination IP;
-4. final working IP profile contains `--ipset-ip=<entered IPv4>` and exact profile replay passes;
-5. Extended Generic UDP works against IPv4 without Host/SNI;
-6. QUIC uses Host/SNI when supplied and bare-IP QUIC cannot falsely pass;
+1. `rutracker.net`, Standard: Stage-60/70 stable intercepted evidence survives Stage 85 when the final HTTP application response is `4xx`/`5xx`;
+2. `rutracker.org`, Standard: existing successful domain behavior remains unchanged;
+3. bare canonical IPv4 with certificate-verification failure ends `PARTIAL` with Host/SNI guidance instead of `NO_CANDIDATE`;
+4. IPv4 + real Host/SNI stays pinned to the entered destination IP;
+5. final working IP profile contains `--ipset-ip=<entered IPv4>` and exact replay passes;
+6. Extended bare IPv4 with QUIC enabled reports QUIC `SKIPPED` / Host-SNI-required with zero tested QUIC candidates while Generic UDP remains independent;
 7. Stage 90 restores the exact original Zapret2 state and cleans temporary runtime/rules.
 
 Enable QUIC OFF/default persistence reload/revisit proof remains separate.

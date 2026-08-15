@@ -1,17 +1,17 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU PRESENTATION OWNER-LIVE PARTIAL; `v0.4.1_18` LABEL/ONE-LINE OWNER-LIVE PARTIAL; `v0.4.1_19` TEXT/MODE/STATUS OWNER-LIVE PARTIAL; `v0.4.1_20` FIELD-GRID/MODE CORRECTIVE PUBLISHED BUT FRAME/NAVIGATION OWNER-LIVE REJECTED; `v0.4.1_21` NATIVE FRAME + CROSS-PAGE NAVIGATION LOCALIZATION OWNER-LIVE PASS; `v0.4.1_22` IPV4 TARGET + OPTIONAL HOST/SNI PUBLISHED; `v0.4.1_23` TRUTHFUL-RESULT CORRECTIVE SOURCE CANDIDATE.**
+Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU PRESENTATION OWNER-LIVE PARTIAL; `v0.4.1_18` LABEL/ONE-LINE OWNER-LIVE PARTIAL; `v0.4.1_19` TEXT/MODE/STATUS OWNER-LIVE PARTIAL; `v0.4.1_20` FIELD-GRID/MODE CORRECTIVE PUBLISHED BUT FRAME/NAVIGATION OWNER-LIVE REJECTED; `v0.4.1_21` NATIVE FRAME + CROSS-PAGE NAVIGATION LOCALIZATION OWNER-LIVE PASS; `v0.4.1_22` IPV4 TARGET + OPTIONAL HOST/SNI PUBLISHED; `v0.4.1_23` TRUTHFUL-RESULT CORRECTIVE PUBLISHED, OWNER-LIVE VERIFICATION NEXT.**
 
 Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected owner-live evidence.
 
 ## Current package/source boundary
 
-- current source candidate: `v0.4.1_23` / `PLUGIN_REVISION=23`;
-- current packaged revision: `v0.4.1_22` / `PLUGIN_REVISION=22`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_22.pkg` / `v0.4.1_22`;
-- `_22` source/tag target: `71baa9d0e7cd3e04535ff9b9ba87aefe8f4e8cfe`;
-- `_22` package SHA-256: `07a82529a824b84894541d59c1eabddd56500b5efad9205f6bd9e9e6b4f811d9`;
-- `_22` publication workflow run: `31903303820`;
+- current source/package revision: `v0.4.1_23` / `PLUGIN_REVISION=23`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_23.pkg` / `v0.4.1_23`;
+- `_23` source/tag target: `3cd3ecc8b9976b1ec8000e2eccfa48f6898d1e73`;
+- `_23` package SHA-256: `37bd4c19bacc48f17aeb4e497c1058e675df067adf2ecd00334708e995bcb283`;
+- `_23` exact-head source CI run: `31909623049`;
+- `_23` publication workflow run: `31909994148`;
 - stable Pages/pkg repository promoted: no;
 - owner-live `_16` Generic UDP verification: **PASS**;
 - owner-live `_16` QUIC OFF execution semantics: **PASS**;
@@ -20,9 +20,10 @@ Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected ow
 - `_20` common 25% field grid and mode-label direction remain accepted;
 - `_20` owner-live perimeter/navigation: **REJECTED — normal OPNsense outer frame missing; Russian submenu reverts to English after navigating to Strategy**;
 - `_21` native-frame ownership + both-page RU/EN navigation corrective: **OWNER-LIVE PASS**;
-- `_22` IPv4/domain target implementation: **SOURCE/CI/FREEBSD/PUBLICATION PASS; OWNER-LIVE FINDINGS SELECTED `_23` CORRECTIVE**.
+- `_22` IPv4/domain target implementation: **SOURCE/CI/FREEBSD/PUBLICATION PASS; OWNER-LIVE FINDINGS SELECTED `_23` CORRECTIVE**;
+- `_23` truthful-result corrective: **SOURCE/CI/FREEBSD/PUBLICATION PASS; OWNER-LIVE VERIFICATION PENDING**.
 
-Machine `_22` publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_22.md`.
+Machine `_23` publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_23.md`.
 Owner-live Generic UDP evidence: `docs/verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`.
 Owner-live QUIC OFF/UI follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`.
 Owner-live `_17` RU follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md`.
@@ -114,9 +115,9 @@ Delivery proof:
 - stable Pages/pkg repository promotion: no;
 - owner-live native perimeter/grid and Russian cross-page menu persistence: accepted.
 
-## `_22` — IPv4 + optional Host / SNI, published for owner-live verification
+## `_22` — IPv4 + optional Host / SNI architecture
 
-The owner selected Laboratory IP-address testing after `_21` acceptance. `_22` implements the audited IPv4-first contract rather than merely relaxing an input validator:
+The owner selected Laboratory IP-address testing after `_21` acceptance. `_22` implemented the audited IPv4-first contract rather than merely relaxing an input validator:
 
 - the main target accepts a domain or canonical IPv4;
 - an IPv4 target may carry a separate `Host / SNI` service identity;
@@ -124,35 +125,37 @@ The owner selected Laboratory IP-address testing after `_21` acceptance. `_22` i
 - IP + Host/SNI keeps service hostname and destination IPv4 separate in the search epoch;
 - TLS candidate success cannot come from a plain TCP-connect surrogate;
 - Stage-50/60 IP candidates are destination-IP/firewall scoped without hostlist target binding;
-- TLS 1.3, TLS 1.2 and HTTP use protocol-aware fixed-IP probes; QUIC uses Host/SNI when present;
-- bare-IP QUIC is unsupported rather than reported as a false PASS because hostname verification is unavailable;
+- TLS 1.3, TLS 1.2 and HTTP use protocol-aware fixed-IP probes;
 - Generic UDP remains direct-IP and does not require Host/SNI;
 - final IP profiles use `--ipset-ip=<target>` and the normal exact three-attempt replay;
 - circular browser validation remains domain-only;
 - Model C, source-port attribution, adaptive budgets, lifecycle, cleanup and Stage-90 restoration remain unchanged;
 - IPv6 target support remains deferred for a later explicit contract.
 
-Delivery proof:
+`_22` delivery proof remains: source PR `#262`, source/tag target `71baa9d0e7cd3e04535ff9b9ba87aefe8f4e8cfe`, package `os-zapret2-restyle-0.4.1_22.pkg`, SHA-256 `07a82529a824b84894541d59c1eabddd56500b5efad9205f6bd9e9e6b4f811d9`, publication run `31903303820`.
 
-- source PR: `#262`;
-- exact latest-head full CI: PASS;
-- FreeBSD-15 package qualification: PASS;
-- exact source squash merge/tag target: `71baa9d0e7cd3e04535ff9b9ba87aefe8f4e8cfe`;
-- persistent testing package/tag: `os-zapret2-restyle-0.4.1_22.pkg` / `v0.4.1_22`;
-- package SHA-256: `07a82529a824b84894541d59c1eabddd56500b5efad9205f6bd9e9e6b4f811d9`;
-- publication workflow: `31903303820`;
-- stable Pages/pkg repository promotion: no.
+## `_23` — truthful result-classification corrective, published
 
-The generic publisher successfully built and verified the release and created the machine-evidence/publication-record branch. Repository Actions token policy blocked only its final automatic PR-creation step; publication-record PR `#263` was opened manually from that exact branch.
-
-## `_23` — truthful result-classification corrective source candidate
-
-`_23` preserves the `_22` target/runtime architecture and corrects owner-live result semantics before the next published package:
+`_23` preserves the `_22` target/runtime architecture and corrects owner-live result semantics:
 
 - authenticated/intercepted HTTP 4xx/5xx remains valid DPI-path evidence instead of deleting Stage-70-stable finalists at Stage 85;
-- bare-IPv4 QUIC without Host/SNI is skipped before candidate execution and reported truthfully;
-- bare-IPv4 curl exit 60 is classified as missing TLS service identity and an otherwise-empty final result becomes PARTIAL with Host/SNI guidance;
-- Model C, search epochs, catalogs, budgets, Generic UDP and mandatory Stage-90 restoration remain unchanged.
+- bare-IPv4 QUIC without Host/SNI is skipped before candidate execution with `tested=[]` and truthful Host/SNI-required presentation;
+- bare-IPv4 curl exit 60 is classified as missing TLS service identity and an otherwise-empty final result becomes `PARTIAL` with Host/SNI guidance;
+- Generic UDP remains independent for bare IPv4;
+- Model C, search epochs, catalogs, budgets and mandatory Stage-90 restoration remain unchanged.
+
+Delivery proof:
+
+- source PR: `#264`;
+- exact final source head: `e26156fff27ba3c05bcb91972d2ba47085b1e995`;
+- exact-head complete CI + FreeBSD-15 qualification: `31909623049`, PASS;
+- source squash merge/tag target: `3cd3ecc8b9976b1ec8000e2eccfa48f6898d1e73`;
+- persistent testing package/tag: `os-zapret2-restyle-0.4.1_23.pkg` / `v0.4.1_23`;
+- package SHA-256: `37bd4c19bacc48f17aeb4e497c1058e675df067adf2ecd00334708e995bcb283`;
+- publication workflow: `31909994148`;
+- stable Pages/pkg repository promotion: no.
+
+The publisher completed package build, digest/manifest verification, release publication and release/tag verification. GitHub Actions policy blocked only automatic publication-record PR creation, so documentation-only PR `#265` was opened manually from the workflow-created branch.
 
 ## Scenario matrix
 
@@ -184,22 +187,23 @@ The generic publisher successfully built and verified the release and created th
 | 24 | `_21` OPNsense-owned Laboratory perimeter | **OWNER-LIVE PASS** |
 | 25 | `_21` Russian submenu persistence across Laboratory ↔ Strategy | **OWNER-LIVE PASS** |
 | 26 | Target already accessible | **COMPLETE — OWNER CONFIRMED** |
-| 27 | `_22` ordinary domain regression after IP support | **PENDING OWNER-LIVE ON `_23` CORRECTIVE** |
-| 28 | `_22` canonical bare IPv4 target, no false TCP→TLS PASS | **PENDING OWNER-LIVE ON `_23` CORRECTIVE** |
-| 29 | `_22` IPv4 target + real Host/SNI pinned to entered IP | **PENDING OWNER-LIVE ON `_23` CORRECTIVE** |
-| 30 | `_22` final IP profile contains `--ipset-ip=<entered IPv4>` and exact replay | **PENDING OWNER-LIVE ON `_23` CORRECTIVE** |
-| 31 | `_22` Extended Generic UDP against IPv4 without Host/SNI | **PENDING OWNER-LIVE ON `_23` CORRECTIVE** |
-| 32 | `_22` QUIC with Host/SNI; bare-IP QUIC no false PASS | **PENDING OWNER-LIVE ON `_23` CORRECTIVE** |
-| 33 | `_22` Stage-90 cleanup/restoration after IP run | **PENDING OWNER-LIVE ON `_23` CORRECTIVE** |
-| 34 | Cancellation/internal-failure containment | PENDING REGRESSION |
-| 35 | Circular lifecycle | PENDING REGRESSION |
-| 36 | Retention/reboot residue | PENDING REGRESSION |
+| 27 | `_23` `rutracker.net` stable intercepted finalist survives Stage 85 with HTTP 4xx/5xx | **PENDING OWNER-LIVE** |
+| 28 | `_23` ordinary-domain regression (`rutracker.org`) | **PENDING OWNER-LIVE** |
+| 29 | `_23` bare IPv4 certificate-identity failure → PARTIAL + Host/SNI guidance | **PENDING OWNER-LIVE** |
+| 30 | `_23` IPv4 target + real Host/SNI pinned to entered IP | **PENDING OWNER-LIVE** |
+| 31 | `_23` final IP profile contains `--ipset-ip=<entered IPv4>` and exact replay | **PENDING OWNER-LIVE** |
+| 32 | `_23` Extended Generic UDP against IPv4 without Host/SNI | **PENDING OWNER-LIVE** |
+| 33 | `_23` bare-IP QUIC skipped with zero tested candidates; Host/SNI QUIC remains valid | **PENDING OWNER-LIVE** |
+| 34 | `_23` Stage-90 cleanup/restoration after IP run | **PENDING OWNER-LIVE** |
+| 35 | Cancellation/internal-failure containment | PENDING REGRESSION |
+| 36 | Circular lifecycle | PENDING REGRESSION |
+| 37 | Retention/reboot residue | PENDING REGRESSION |
 
 Settings Apply validation/guards and post-Apply service-state correctness are separately marked complete in the master roadmap by owner confirmation; they are not Strategy Lab execution rows.
 
 ## Current product plan
 
-Qualify, merge and persistently publish source candidate `v0.4.1_23`, then repeat the selected owner-live IPv4/domain rows against that exact package before marking the target-support task complete.
+Run the selected owner-live domain/IPv4 truthful-result rows against the exact published `v0.4.1_23` package before marking Laboratory target support complete.
 
 ## Current failure policy
 
