@@ -10,19 +10,23 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-15
-**Current handoff identity:** `v0.4.1_16` Generic UDP browser-to-job correction
+**Current handoff identity:** `v0.4.1_16`
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
-- current source candidate: `PLUGIN_REVISION=16`;
-- last published/owner-tested package: `os-zapret2-restyle-0.4.1_15.pkg` / `v0.4.1_15`;
-- `_15` SHA-256: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`;
-- `_15` candidate-defining source/tag target: `a219161c901c663b56cac6757364d3bbd32766c7`;
-- required ABI: `FreeBSD:15:amd64`.
+- `PLUGIN_REVISION=16`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_16.pkg` / `v0.4.1_16`;
+- testing-package SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
+- source merge and testing-tag target: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
+- publication workflow run: `31882091770`;
+- required ABI: `FreeBSD:15:amd64`;
+- stable Pages/pkg repository promoted by this testing publication: **no**.
 
-Resolve the exact current `main` SHA at execution time under `GH-004`. `_16` is a source candidate until exact-head acceptance, merge and persistent testing publication complete.
+Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_16.md`](verification/evidence/testing-publications/v0.4.1_16.md).
+
+Resolve the exact current `main` SHA at execution time under `GH-004`.
 
 ## Why `_16` exists
 
@@ -52,30 +56,40 @@ Source tracing found that `_15` did not own the prepared browser payload. The Ru
 - Run uses the staged Base64 instead of depending exclusively on native `input.files[0]` still being populated;
 - a defensive Run-time fallback stages a currently visible native `File` before starting;
 - browser ArrayBuffer validation no longer relies on realm-specific `instanceof ArrayBuffer`;
-- job-local UDP preparation now publishes precise failure classes including unavailable/not-writable job directory, temporary-file creation, decode, chmod/move and state-record failures;
+- job-local UDP preparation publishes precise failure classes including unavailable/not-writable job directory, temporary-file creation, decode, chmod/move and state-record failures;
 - existing exact port/payload direct observation, candidate enumeration, no-reply semantics and cleanup remain unchanged.
 
 Canonical specialist contract:
 [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
 
-## Acceptance boundary
+## `_16` automated/publication acceptance — PASS
 
-Before owner install:
+- source PR `#245` latest verified head: `f7974f21dc7340b1e1416c24f9e7dade0322f0f3`;
+- focused staged-browser Generic UDP contract: PASS;
+- exact 140-byte backend/job-local regression: PASS;
+- explicit server preparation failure attribution: PASS;
+- complete Strategy Lab corrective matrix: PASS;
+- FreeBSD-15 package build/inspection qualification: PASS;
+- exact-head source merge: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
+- prerelease `v0.4.1_16`: published and verified;
+- package asset: `os-zapret2-restyle-0.4.1_16.pkg`;
+- SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
+- tag target: exactly the candidate-defining source merge;
+- stable Pages/pkg repository: unchanged.
 
-1. focused staged-browser UDP contract PASS;
-2. exact 140-byte backend/job-local regression PASS;
-3. explicit job-local failure attribution PASS;
-4. full Strategy Lab corrective matrix PASS;
-5. FreeBSD-15 package qualification PASS;
-6. exact-head merge and persistent `v0.4.1_16` testing publication;
-7. bounded publication-record docs reconciliation.
+The publisher again could not create its Draft publication-record PR because the repository setting forbids GitHub Actions from creating or approving pull requests. The publisher had already pushed the machine evidence branch, so PR `#246` completes the same bounded docs-only tail without altering package identity or bytes.
 
-Owner-live after publication:
+## Immediate next task — owner-live `_16`
 
-- selecting a valid file immediately shows name and exact bytes as ready;
-- 140-byte sample starts a **new** configured-UDP job;
-- Stage 80 shows selected port/payload/IP, direct observation and actual UDP candidate IDs;
-- any later filesystem preparation failure is explicitly attributed rather than appearing as an unexplained unconfigured request;
-- Stage 90 cleanup/restoration remains PASS.
+Do not repeat accepted Model-C or QUIC baseline work. Verify the corrected Generic UDP handoff:
 
-Do not repeat accepted Model-C baseline work or reopen closed BLOB/Lua/discovery/model-selection experiments.
+1. selecting a valid file immediately shows its filename and exact decoded byte count as **ready to send**;
+2. a 140-byte sample shows `140` bytes and starts a **new** configured-UDP job;
+3. Stage 80 shows selected port/payload/IP, direct reply/no-reply observation and actual UDP candidate IDs;
+4. if a later server-side filesystem preparation error occurs, the UI/API identifies its preparation class instead of silently treating UDP as unconfigured;
+5. no-reply wording never claims the UDP port is closed;
+6. Stage-90 restoration and temporary process/firewall/socket/payload cleanup remain PASS.
+
+Remaining independent rows after that are Enable QUIC OFF/default persistence and final RU/EN presentation review.
+
+Do not reopen closed BLOB/Lua/discovery/model-selection experiments without new architecture or fresh contradicting evidence.

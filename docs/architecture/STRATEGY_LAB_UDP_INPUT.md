@@ -3,7 +3,7 @@
 **Status:** CURRENT SPECIALIST ARCHITECTURE
 **Updated:** 2026-08-15
 **Direct UDP/control-observation implementation:** `v0.4.1_15`
-**Browser handoff correction source candidate:** `v0.4.1_16`
+**Browser handoff correction published in:** `v0.4.1_16`
 
 ## Purpose
 
@@ -17,7 +17,7 @@ Generic UDP does **not** use a multipart upload directory.
 
 The selected local file is read in the browser, converted to Base64, and sent in the normal Strategy Lab start POST. Only after the API/configd launcher accepts that request is the payload decoded into the private job-local `udp-payload.bin` file.
 
-Therefore a GUI state where the selected file is already absent and no new configured-UDP job is created cannot be caused first by permissions on `udp-payload.bin`: that filesystem boundary has not yet been reached. Permissions remain a valid later-stage failure possibility and now have explicit diagnostics.
+Therefore a GUI state where the selected file is already absent and no new configured-UDP job is created cannot be caused first by permissions on `udp-payload.bin`: that filesystem boundary has not yet been reached. Permissions remain a valid later-stage failure possibility and `_16` has explicit diagnostics for that boundary.
 
 ## Supported request
 
@@ -34,7 +34,7 @@ An exact 140-byte file is valid. Multi-megabyte files are deliberately invalid.
 
 ## `_16` browser-owned staging
 
-The browser now owns a prepared payload state independently of the native file-input display:
+The browser owns a prepared payload state independently of the native file-input display:
 
 `file input change -> capture File -> FileReader.readAsArrayBuffer -> Uint8Array.byteLength -> binary Base64 -> application-owned staged state -> Run -> start API`.
 
@@ -76,7 +76,7 @@ Both use mode `0600`. Public `status.json` stores only `configured`, port and de
 
 ## `_16` server-side failure attribution
 
-The job-local preparation layer now records a precise non-payload error code before returning failure. This distinguishes a later filesystem/backend failure from the earlier browser-selection failure.
+The job-local preparation layer records a precise non-payload error code before returning failure. This distinguishes a later filesystem/backend failure from the earlier browser-selection failure.
 
 Current classes include:
 
@@ -117,9 +117,9 @@ Every executed candidate is appended to structured `tested`. Ordinary RU/EN Stag
 
 `udp-payload.bin` and `udp-port` are removed during normal restoration and error/cancel/stale-worker cleanup. Terminal evidence may retain metadata/control results but not payload bytes.
 
-## `_16` automated acceptance
+## `_16` automated/publication acceptance — PASS
 
-Source acceptance must prove:
+Repository acceptance proves:
 
 1. the file input has a `change` handler;
 2. selection is immediately read and stored in application-owned state;
@@ -129,11 +129,23 @@ Source acceptance must prove:
 6. exact 140-byte backend decode remains PASS;
 7. missing/unwritable job-directory and other server preparation failures are attributed by explicit code;
 8. direct selected-port/payload observation and non-gating UDP-silence semantics remain intact;
-9. complete Strategy Lab corrective matrix and FreeBSD-15 package qualification PASS.
+9. complete Strategy Lab corrective matrix PASS;
+10. FreeBSD-15 package qualification PASS.
+
+Published testing identity:
+
+- tag: `v0.4.1_16`;
+- candidate/tag target: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
+- package: `os-zapret2-restyle-0.4.1_16.pkg`;
+- SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
+- publication workflow run: `31882091770`;
+- stable Pages/pkg repository promoted: no.
+
+Machine publication evidence: [`../verification/evidence/testing-publications/v0.4.1_16.md`](../verification/evidence/testing-publications/v0.4.1_16.md).
 
 ## Owner-live `_16` acceptance
 
-After persistent `_16` publication:
+After installing the published `_16` testing package:
 
 - selecting a valid small payload must immediately show an application-owned `ready to send` line with the exact decoded byte count;
 - a 140-byte sample must show `140` bytes and a new Strategy Lab job must start with configured UDP;

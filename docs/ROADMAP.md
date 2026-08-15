@@ -42,8 +42,8 @@
     - [x] owner-live QUIC ON with blocked control path shows all four attempted IDs
     - [x] RU/EN protocol presentation source contract
     - [x] selected-port/payload direct UDP control observation source contract
-    - [x] owner-live Generic UDP file-selection path still FAIL; durable evidence recorded
-  - [ ] **`v0.4.1_16` Generic UDP browser-to-job handoff correction — current source candidate**
+    - [x] owner-live Generic UDP file-selection path FAIL; durable evidence recorded
+  - [ ] **`v0.4.1_16` Generic UDP browser-to-job handoff correction — published, owner-live pending**
     - [x] trace actual product transport: browser Base64 POST, not multipart upload directory
     - [x] identify `_15` browser ownership weakness: Run sampled native `input.files[0]` instead of retaining prepared payload
     - [x] stage selected file immediately on `change`
@@ -56,11 +56,11 @@
     - [x] add explicit job-local preparation error attribution including unavailable/not-writable job directory, temp-create, decode, chmod/move and state-record classes
     - [x] preserve exact port/payload control observation, no-reply semantics, candidate enumeration and cleanup
     - [x] extend focused Generic UDP regression contract
-    - [ ] complete Strategy Lab corrective matrix
-    - [ ] FreeBSD-15 package build/inspection qualification
-    - [ ] exact-head source merge
-    - [ ] persistent `v0.4.1_16` testing-package publication
-    - [ ] bounded publication-record docs reconciliation
+    - [x] complete Strategy Lab corrective matrix
+    - [x] FreeBSD-15 package build/inspection qualification
+    - [x] exact-head source merge `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`
+    - [x] persistent `v0.4.1_16` testing-package publication
+    - [x] publication-record evidence generated; bounded docs reconciliation in PR `#246`
     - [ ] owner-live: selecting valid file immediately shows ready state + exact byte count
     - [ ] owner-live: exact 140-byte payload starts a new configured-UDP job
     - [ ] owner-live: Stage 80 shows selected port/payload/endpoints, direct observation and actual UDP candidate IDs
@@ -86,13 +86,25 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — qualify and publish `v0.4.1_16`
+## Current priority — owner-live `v0.4.1_16`
 
-The `_15` live failure is no longer being treated as an unspecified “upload folder” issue. Source tracing established that there is no server upload directory at the failing point: selected bytes are supposed to be read in the browser and Base64-encoded into the ordinary start POST. `_15` did not persist a prepared browser payload; Run depended on the native file control still exposing `input.files[0]`.
+`v0.4.1_16` is persistently published from candidate-defining source merge `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`.
 
-`_16` corrects that boundary by staging exact validated bytes at selection time and making the prepared state visible before Run. It also adds server-side preparation error classes so a real later owner/mode/permissions failure can be distinguished if one occurs.
+Published identity:
 
-Current gate: full corrective matrix → FreeBSD-15 package qualification → exact-head source merge → persistent testing publication → bounded publication record. Then owner-live checks only the materially changed UDP handoff rather than repeating accepted Model-C/QUIC baseline work.
+- tag: `v0.4.1_16`;
+- asset: `os-zapret2-restyle-0.4.1_16.pkg`;
+- SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
+- publication workflow run: `31882091770`;
+- stable Pages/pkg repository promoted: no.
+
+Machine evidence: [`verification/evidence/testing-publications/v0.4.1_16.md`](verification/evidence/testing-publications/v0.4.1_16.md).
+
+The `_15` live failure is no longer treated as an unspecified “upload folder” issue. Source tracing established that there is no server upload directory at the failing point: selected bytes are read in the browser and Base64-encoded into the ordinary start POST. `_15` did not retain a prepared browser payload; Run depended on native `input.files[0]` still being populated.
+
+`_16` corrects that boundary by staging exact validated bytes at selection time and making the prepared state visible before Run. It also adds server-side preparation error classes so a real later owner/mode/permissions failure is distinguishable if one occurs.
+
+Next owner-live work is intentionally narrow and follows the unchecked `_16` items above. Do not repeat accepted Model-C/QUIC baseline work.
 
 Durable `_15` failure evidence: [`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
 
