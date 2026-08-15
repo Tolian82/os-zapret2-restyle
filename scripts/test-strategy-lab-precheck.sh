@@ -260,15 +260,19 @@ printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="30" and .status=
 printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="90" and .status=="PASS")' >/dev/null ||
     fail "IPv4 control failure did not restore service state"
 
-# Bare IPv4 is rejected because Strategy Lab requires domain, DNS, SNI, and HTTPS semantics.
+# Canonical bare IPv4 is accepted and uses a real TLS 1.3 baseline without DNS.
 unset MOCK_IPV4_CONTROL_STATUS
-set +e
-ip_result=$(launcher start 203.0.113.9 standard ru 2>&1)
-ip_status=$?
-set -e
-[ "${ip_status}" -eq 64 ] || fail "bare IPv4 target was accepted"
-printf '%s\n' "${ip_result}" | grep -Fq 'invalid target' ||
-    fail "bare IPv4 rejection reason is missing"
+MOCK_TLS_PASS_HOST=203.0.113.10
+export MOCK_TLS_PASS_HOST
+result=$(run_job 203.0.113.10 ru)
+printf '%s\n' "${result}" | jq -e '.target=="203.0.113.10" and .target_type=="ip" and .endpoints==["203.0.113.10"]' >/dev/null ||
+    fail "bare IPv4 target was not normalized and classified"
+printf '%s\n' "${result}" | jq -e '.outcome=="TARGET_ACCESSIBLE" and .baseline.dns_a=="SKIPPED" and .baseline.all_accessible==true' >/dev/null ||
+    fail "bare IPv4 target did not use DNS-free direct accessibility semantics"
+printf '%s\n' "${result}" | jq -e '.baseline.endpoints[0].transport=="tls13-ipv4" and .baseline.endpoints[0].status=="PASS"' >/dev/null ||
+    fail "bare IPv4 baseline was not a real TLS 1.3 probe"
+[ "$(cat "${STATE_FILE}")" = RUNNING ] || fail "service was not restored after bare IPv4 baseline"
+unset MOCK_TLS_PASS_HOST
 
 # Stage budget is enforced independently from individual operation limits.
 unset MOCK_NC_STATUS

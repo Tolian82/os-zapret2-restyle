@@ -48,10 +48,10 @@ $(document).ready(function () {
         error:'Circular validation ended with an error.', restore_failed:'Zapret2 restoration could not be proven; retry is blocked.'
     };
     var strategyLabGuidance = isRussian ? [
-        'Введите домен, который в настоящее время блокируется вашим интернет-провайдером, и нажмите «Запустить». Основной режим проверки ограничен 150 секундами, расширенный — 270 секундами. После завершения будут показаны стабильные стратегии, которые обеспечили доступ к сайту.',
+        'Введите домен или IPv4-адрес, который в настоящее время блокируется вашим интернет-провайдером, и нажмите «Запустить». Для IP-цели при необходимости укажите Host / SNI реального сервиса. Основной режим проверки ограничен 150 секундами, расширенный — 270 секундами. После завершения будут показаны стабильные стратегии, которые обеспечили доступ к цели.',
         'Изучите результат и добавьте необходимый профиль в используемую стратегию на странице «Настройки».'
     ] : [
-        'Enter a domain that is currently blocked by your ISP and click “Run.” Standard mode is limited to 150 seconds and extended mode to 270 seconds. Stable strategies that successfully provide access to the site will be reported after completion.',
+        'Enter a domain or IPv4 address that is currently blocked by your ISP and click “Run.” For an IP target, provide the real service Host / SNI when needed. Standard mode is limited to 150 seconds and extended mode to 270 seconds. Stable strategies that successfully provide access to the target will be reported after completion.',
         'Review the results and add the required profile to the strategy currently in use on the “Settings” page.'
     ];
     var ui = isRussian ? {
@@ -66,7 +66,9 @@ $(document).ready(function () {
         progress:'Прогресс', restorationPass:'Успешно', requestFailed:'Ошибка запроса: ',
         statusRetry:'Статус Strategy Lab временно недоступен. Повторная попытка…', statusFailed:'Не удалось получить актуальный статус Strategy Lab.',
         testDomainTitle:'Тестирование соединения с доменом', testDomainHelp:'Введите домен и нажмите «Проверка», чтобы проверить HTTPS-соединение.',
-        testAction:'Проверка', strategyLabTitle:'Лаборатория стратегий', blockedDomain:'Заблокированный домен / IP', genericUdpLabel:'UDP порт (опционально)', runAction:'Запуск', enableQuic:'Включить QUIC',
+        testAction:'Проверка', strategyLabTitle:'Лаборатория стратегий', blockedDomain:'Заблокированный домен / IP', serviceHostLabel:'Host / SNI (опционально)',
+        serviceHostHelp:'Для IPv4-цели укажите имя сервиса, если TLS/HTTP/QUIC должны использовать отдельный Host / SNI.',
+        genericUdpLabel:'UDP порт (опционально)', runAction:'Запуск', enableQuic:'Включить QUIC',
         modeLabel:'Режим', navStrategy:'Стратегия', navLaboratory:'Лаборатория',
         family:'Семейство', endpoints:'Назначения', outcome:'Результат', restoration:'Восстановление', replay:'Ответы',
         completeProfile:'Полный профиль Стратегий Трафика', fullOutput:'Полный вывод (расширенный)', stateLabel:'Состояние'
@@ -82,7 +84,9 @@ $(document).ready(function () {
         progress:'Progress', restorationPass:'Pass', requestFailed:'Request failed: ',
         statusRetry:'Strategy Lab status is temporarily unavailable. Retrying…', statusFailed:'The current Strategy Lab status could not be read.',
         testDomainTitle:'Test Domain Connectivity', testDomainHelp:'Enter a domain and click Test to check HTTPS connectivity.',
-        testAction:'Test', strategyLabTitle:'Strategy Lab', blockedDomain:'Blocked Domain / IP', genericUdpLabel:'Generic UDP (optional)', runAction:'Run', enableQuic:'Enable QUIC',
+        testAction:'Test', strategyLabTitle:'Strategy Lab', blockedDomain:'Blocked Domain / IP', serviceHostLabel:'Host / SNI (optional)',
+        serviceHostHelp:'For an IPv4 target, provide the service name when TLS/HTTP/QUIC must use a separate Host / SNI identity.',
+        genericUdpLabel:'Generic UDP (optional)', runAction:'Run', enableQuic:'Enable QUIC',
         modeLabel:'Mode', navStrategy:'Strategy', navLaboratory:'Laboratory',
         family:'Family', endpoints:'Endpoints', outcome:'Outcome', restoration:'Restoration', replay:'Replay',
         completeProfile:'Complete Traffic Strategy profile', fullOutput:'Full output (advanced)', stateLabel:'State'
@@ -100,6 +104,8 @@ $(document).ready(function () {
         setButtonText('#testDomainBtn', ui.testAction);
         $('#testDomainResult').text(ui.testDomainHelp);
         $('#strategyLabDomainInput').closest('tr').find('td').first().text(ui.blockedDomain);
+        $('#strategyLabServiceHostRow').find('td').first().text(ui.serviceHostLabel);
+        $('#strategyLabServiceHostHelp').text(ui.serviceHostHelp);
         $('#strategyLabUdpRow').find('td').first().text(ui.genericUdpLabel);
         setButtonText('#strategyLabBtn', ui.runAction);
         $('#strategyLabQuicRow').find('td').first().text(ui.enableQuic);
@@ -148,13 +154,28 @@ $(document).ready(function () {
         $('#strategyLabBtn_progress').toggleClass('fa fa-spinner fa-pulse', busy);
         $('#strategyLabBtn').prop('disabled', busy); $('#strategyLabCancelBtn').prop('disabled', !busy || !activeJobId);
         $('#strategyLabEnableQuic').prop('disabled', busy || !quicPreferenceReady || quicPreferenceSaving);
-        $('#strategyLabUdpPayload,#strategyLabUdpPort').prop('disabled', busy);
+        $('#strategyLabUdpPayload,#strategyLabUdpPort,#strategyLabServiceHostInput').prop('disabled', busy);
     }
     function stopPolling() { if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; } }
     function schedulePoll(callback) { stopPolling(); pollTimer = setTimeout(callback, 1000); }
     function toggleExtendedInput() {
         var extended = $('#strategyLabMode').val() === 'extended';
         $('#strategyLabUdpRow,#strategyLabQuicRow').toggle(extended);
+    }
+    function isIpv4Target(value) {
+        var parts=String(value || '').split('.');
+        if (parts.length !== 4) return false;
+        for (var index=0;index<parts.length;index++) {
+            if (!/^(0|[1-9][0-9]{0,2})$/.test(parts[index])) return false;
+            var number=Number(parts[index]);
+            if (number < 0 || number > 255) return false;
+        }
+        return true;
+    }
+    function toggleServiceIdentity() {
+        var isIp=isIpv4Target($('#strategyLabDomainInput').val().trim());
+        $('#strategyLabServiceHostRow').toggle(isIp);
+        if (!isIp) $('#strategyLabServiceHostInput').val('');
     }
     function showInputError(message) {
         $('#strategyLabMessage').addClass('text-danger').text(message);
@@ -372,8 +393,8 @@ $(document).ready(function () {
             $('#testDomainResult').text(data.status === 'ok' ? data.result : (isRussian ? 'Ошибка: ' : 'Error: ') + (data.message || (isRussian ? 'Неизвестная ошибка' : 'Unknown error')));
         });
     });
-    function startStrategyLab(target, mode, enableQuic, udpPort, udpPayloadBase64) {
-        apiPost('/api/zapret/strategy_lab/start', {target:target,mode:mode,language:isRussian?'ru':'en',enable_quic:enableQuic,udp_port:udpPort,udp_payload_base64:udpPayloadBase64}, function (data) {
+    function startStrategyLab(target, serviceHost, mode, enableQuic, udpPort, udpPayloadBase64) {
+        apiPost('/api/zapret/strategy_lab/start', {target:target,service_host:serviceHost,mode:mode,language:isRussian?'ru':'en',enable_quic:enableQuic,udp_port:udpPort,udp_payload_base64:udpPayloadBase64}, function (data) {
             if (data.status === 'busy' && /^job\.[A-Za-z0-9]+$/.test(String(data.job_id || ''))) {
                 activeJobId=data.job_id; $('#strategyLabJob').text(activeJobId); setBusy(true); pollStatus(); return;
             }
@@ -387,6 +408,7 @@ $(document).ready(function () {
         });
     }
     $('#strategyLabMode').change(toggleExtendedInput);
+    $('#strategyLabDomainInput').on('input', toggleServiceIdentity);
     $('#strategyLabEnableQuic').change(function () {
         var enabled=$(this).prop('checked'), previous=!enabled;
         saveQuicPreference(enabled, previous);
@@ -397,6 +419,7 @@ $(document).ready(function () {
     });
     $('#strategyLabBtn').click(function () {
         var target=$('#strategyLabDomainInput').val().trim(), mode=$('#strategyLabMode').val(); if (!target) return;
+        var serviceHost=isIpv4Target(target)?$('#strategyLabServiceHostInput').val().trim():'';
         var enableQuic=$('#strategyLabEnableQuic').prop('checked')?'1':'0';
         var udpPort='', nativeFile=null, fileInput=null;
         if (mode === 'extended') {
@@ -411,7 +434,7 @@ $(document).ready(function () {
             $('#strategyLabShortlistBox,#strategyLabResultBox,#circularControls').hide(); $('#strategyLabRaw').text(''); $('#strategyLabMessage').text(ui.running); setBusy(true);
             $('#strategyLabState').text(label(statusLabels,'QUEUED'));
             renderProgress({current_stage:'00',progress:{percent:0,stage_key:'target_initialization'}});
-            startStrategyLab(target,mode,enableQuic,udpPort,payloadBase64);
+            startStrategyLab(target,serviceHost,mode,enableQuic,udpPort,payloadBase64);
         }
         if (mode !== 'extended' || !udpPort) { beginStart(''); return; }
         if (udpPayloadSelection.ready) { beginStart(udpPayloadSelection.base64); return; }
@@ -446,7 +469,7 @@ $(document).ready(function () {
     $('#circularStopBtn').click(function(){apiPost('/api/zapret/circular/stop',{},function(){pollCircular();});});
 
     loadQuicPreference(); discoverActive(0);
-    toggleExtendedInput(); pollCircular();
+    toggleExtendedInput(); toggleServiceIdentity(); pollCircular();
 });
 </script>
 <style>
@@ -485,7 +508,8 @@ $(document).ready(function () {
 <div class="content-box __mb"><div class="content-box-header"><h3>{{ lang._('Test Domain Connectivity') }}</h3></div>
 <div class="content-box-main"><div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="testDomainTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Domain') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="testDomainInput" placeholder="example.com"/></td><td style="width:150px;"><button class="btn btn-primary" id="testDomainBtn" type="button">{{ lang._('Test') }} <i id="testDomainBtn_progress"></i></button></td></tr></tbody></table></div><pre id="testDomainResult" style="max-height:300px;overflow-y:auto;white-space:pre-wrap;">{{ lang._('Enter a domain and click Test to check HTTPS connectivity.') }}</pre></div></div>
 <div class="content-box"><div class="content-box-header"><h3>{{ lang._('Strategy Lab') }}</h3></div><div class="content-box-main">
-<div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="strategyLabInputsTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Blocked Domain') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org"/></td><td id="strategyLabModeCell"><div class="strategy-lab-mode-control"><span id="strategyLabModeLabel">Mode:</span><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></div></td><td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td></tr>
+<div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="strategyLabInputsTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Blocked Domain / IP') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org / 203.0.113.10"/></td><td id="strategyLabModeCell"><div class="strategy-lab-mode-control"><span id="strategyLabModeLabel">Mode:</span><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></div></td><td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td></tr>
+<tr id="strategyLabServiceHostRow" style="display:none;"><td class="zapret-field-label">Host / SNI (optional)</td><td class="zapret-field-value"><input type="text" class="form-control" id="strategyLabServiceHostInput" placeholder="example.com"/></td><td colspan="2"><small id="strategyLabServiceHostHelp"></small></td></tr>
 <tr id="strategyLabUdpRow" style="display:none;"><td class="zapret-field-label">{{ lang._('Generic UDP (optional)') }}</td><td class="zapret-field-value"><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td><td colspan="2"><input type="file" class="form-control" id="strategyLabUdpPayload"/> <small id="strategyLabUdpHelp"></small><br/><small id="strategyLabUdpPayloadState" class="text-muted"></small></td></tr>
 <tr id="strategyLabQuicRow" style="display:none;"><td class="zapret-field-label">{{ lang._('Enable QUIC') }}</td><td class="zapret-field-value"><input type="checkbox" id="strategyLabEnableQuic" disabled/></td><td colspan="2"><small id="strategyLabQuicHelp"></small></td></tr></tbody></table></div>
 <div id="strategyLabSummary"></div><p><strong>Job:</strong> <code id="strategyLabJob">—</code> &nbsp; <strong>{{ lang._('Status') }}:</strong> <span id="strategyLabState">idle</span></p><p id="strategyLabMessage"></p>

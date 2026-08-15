@@ -52,9 +52,9 @@ class StrategyLabController extends ApiControllerBase
         return preg_match(self::JOB_PATTERN, $jobId) ? $jobId : '';
     }
 
-    private function domainTarget(): string
+    private function domainValue(string $value): string
     {
-        $target = strtolower(trim((string)$this->request->getPost('target', 'striptags', '')));
+        $target = strtolower(trim($value));
         if (substr($target, -1) === '.') {
             $target = substr($target, 0, -1);
         }
@@ -80,6 +80,35 @@ class StrategyLabController extends ApiControllerBase
         }
 
         return $target;
+    }
+
+    private function targetContract(): array
+    {
+        $raw = strtolower(trim((string)$this->request->getPost('target', 'striptags', '')));
+        if ($raw === '') {
+            return ['target' => '', 'type' => ''];
+        }
+        if (filter_var($raw, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
+            return ['target' => $raw, 'type' => 'ip'];
+        }
+        $domain = $this->domainValue($raw);
+        return $domain !== '' ? ['target' => $domain, 'type' => 'domain'] : ['target' => '', 'type' => ''];
+    }
+
+    private function serviceHost(string $targetType): array
+    {
+        $raw = trim((string)$this->request->getPost('service_host', 'striptags', ''));
+        if ($raw === '') {
+            return ['status' => 'ok', 'value' => ''];
+        }
+        if ($targetType !== 'ip') {
+            return ['status' => 'error', 'message' => 'Host / SNI is valid only for an IPv4 Strategy Lab target.'];
+        }
+        $value = $this->domainValue($raw);
+        if ($value === '') {
+            return ['status' => 'error', 'message' => 'Invalid Strategy Lab Host / SNI.'];
+        }
+        return ['status' => 'ok', 'value' => $value];
     }
 
     private function udpInput(string $mode): array
@@ -137,13 +166,19 @@ class StrategyLabController extends ApiControllerBase
             return ['status' => 'error', 'message' => 'POST required.'];
         }
 
-        $target = $this->domainTarget();
+        $targetContract = $this->targetContract();
+        $target = $targetContract['target'];
+        $targetType = $targetContract['type'];
         $mode = trim((string)$this->request->getPost('mode', 'striptags', 'standard'));
         $language = trim((string)$this->request->getPost('language', 'striptags', 'en'));
         $enableQuic = trim((string)$this->request->getPost('enable_quic', 'striptags', '0'));
 
         if ($target === '') {
-            return ['status' => 'error', 'message' => 'Invalid Strategy Lab domain.'];
+            return ['status' => 'error', 'message' => 'Invalid Strategy Lab domain or IPv4 address.'];
+        }
+        $serviceHost = $this->serviceHost($targetType);
+        if ($serviceHost['status'] !== 'ok') {
+            return $serviceHost;
         }
         if (!in_array($mode, ['standard', 'extended'], true)) {
             return ['status' => 'error', 'message' => 'Invalid Strategy Lab mode.'];
@@ -166,7 +201,8 @@ class StrategyLabController extends ApiControllerBase
             $language,
             $enableQuic,
             $udpInput['port'],
-            $udpInput['payload']
+            $udpInput['payload'],
+            $serviceHost['value'] !== '' ? $serviceHost['value'] : '-'
         ]);
     }
 

@@ -8,9 +8,9 @@ MODEL="${MODEL:-${ROOT_DIR}/src/opnsense/mvc/app/models/OPNsense/Zapret/Zapret.x
 MENU="${MENU:-${ROOT_DIR}/src/opnsense/mvc/app/models/OPNsense/Zapret/Menu/Menu.xml}"
 fail(){ echo "FAIL: $*" >&2; exit 1; }
 require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
-EN_FIRST='Enter a domain that is currently blocked by your ISP and click “Run.” Standard mode is limited to 150 seconds and extended mode to 270 seconds. Stable strategies that successfully provide access to the site will be reported after completion.'
+EN_FIRST='Enter a domain or IPv4 address that is currently blocked by your ISP and click “Run.” For an IP target, provide the real service Host / SNI when needed. Standard mode is limited to 150 seconds and extended mode to 270 seconds. Stable strategies that successfully provide access to the target will be reported after completion.'
 EN_SECOND='Review the results and add the required profile to the strategy currently in use on the “Settings” page.'
-RU_FIRST='Введите домен, который в настоящее время блокируется вашим интернет-провайдером, и нажмите «Запустить». Основной режим проверки ограничен 150 секундами, расширенный — 270 секундами. После завершения будут показаны стабильные стратегии, которые обеспечили доступ к сайту.'
+RU_FIRST='Введите домен или IPv4-адрес, который в настоящее время блокируется вашим интернет-провайдером, и нажмите «Запустить». Для IP-цели при необходимости укажите Host / SNI реального сервиса. Основной режим проверки ограничен 150 секундами, расширенный — 270 секундами. После завершения будут показаны стабильные стратегии, которые обеспечили доступ к цели.'
 RU_SECOND='Изучите результат и добавьте необходимый профиль в используемую стратегию на странице «Настройки».'
 
 require "${VIEW}" "document.documentElement.lang || ''"
@@ -28,6 +28,8 @@ require "${VIEW}" "testDomainHelp:'Введите домен и нажмите �
 require "${VIEW}" "testAction:'Проверка'"
 require "${VIEW}" "strategyLabTitle:'Лаборатория стратегий'"
 require "${VIEW}" "blockedDomain:'Заблокированный домен / IP'"
+require "${VIEW}" "serviceHostLabel:'Host / SNI (опционально)'"
+require "${VIEW}" "serviceHostHelp:'Для IPv4-цели укажите имя сервиса, если TLS/HTTP/QUIC должны использовать отдельный Host / SNI.'"
 require "${VIEW}" "genericUdpLabel:'UDP порт (опционально)'"
 require "${VIEW}" "runAction:'Запуск'"
 require "${VIEW}" "enableQuic:'Включить QUIC'"
@@ -46,6 +48,8 @@ require "${VIEW}" "testDomainTitle:'Test Domain Connectivity'"
 require "${VIEW}" "testDomainHelp:'Enter a domain and click Test to check HTTPS connectivity.'"
 require "${VIEW}" "strategyLabTitle:'Strategy Lab'"
 require "${VIEW}" "blockedDomain:'Blocked Domain / IP'"
+require "${VIEW}" "serviceHostLabel:'Host / SNI (optional)'"
+require "${VIEW}" "serviceHostHelp:'For an IPv4 target, provide the service name when TLS/HTTP/QUIC must use a separate Host / SNI identity.'"
 require "${VIEW}" "genericUdpLabel:'Generic UDP (optional)'"
 require "${VIEW}" "modeLabel:'Mode'"
 require "${VIEW}" "navStrategy:'Strategy'"
@@ -58,6 +62,8 @@ require "${VIEW}" "IDLE:'ожидание'"
 require "${VIEW}" "IDLE:'idle'"
 require "${VIEW}" 'applyStaticLocalization();'
 require "${VIEW}" "strategyBox.find('.content-box-header h3').first().text(ui.strategyLabTitle);"
+require "${VIEW}" "\$('#strategyLabServiceHostRow').find('td').first().text(ui.serviceHostLabel);"
+require "${VIEW}" "\$('#strategyLabServiceHostHelp').text(ui.serviceHostHelp);"
 require "${VIEW}" "\$('#strategyLabUdpRow').find('td').first().text(ui.genericUdpLabel);"
 require "${VIEW}" "\$('#strategyLabModeLabel').text(ui.modeLabel + ':');"
 require "${VIEW}" "\$('#strategyLabMode option[value=\"standard\"]').text(modeLabels.standard);"
@@ -65,6 +71,13 @@ require "${VIEW}" "\$('#strategyLabMode option[value=\"extended\"]').text(modeLa
 require "${VIEW}" "\$('#strategyLabState,#circularState').text(label(statusLabels,'IDLE'));"
 require "${VIEW}" "\$('a[href=\"/ui/zapret\"]').text(ui.navStrategy);"
 require "${VIEW}" "\$('a[href=\"/ui/zapret/diagnostics\"]').text(ui.navLaboratory);"
+
+# IPv4 input remains conditional so domain UI keeps the accepted compact layout.
+require "${VIEW}" 'id="strategyLabServiceHostRow" style="display:none;"'
+require "${VIEW}" 'id="strategyLabServiceHostInput" placeholder="example.com"'
+require "${VIEW}" "\$('#strategyLabDomainInput').on('input', toggleServiceIdentity);"
+require "${VIEW}" "\$('#strategyLabServiceHostRow').toggle(isIp);"
+require "${VIEW}" 'service_host:serviceHost'
 
 # Owner-live _20 showed that neutralizing .page-content-main removed the normal
 # OPNsense perimeter itself. Laboratory now renders content boxes directly in
@@ -84,6 +97,7 @@ require "${VIEW}" 'width:25%;'
 require "${VIEW}" 'class="zapret-field-label">'
 require "${VIEW}" 'class="zapret-field-value"><input type="text" class="form-control" id="testDomainInput"'
 require "${VIEW}" 'class="zapret-field-value"><input type="text" class="form-control" id="strategyLabDomainInput"'
+require "${VIEW}" 'class="zapret-field-value"><input type="text" class="form-control" id="strategyLabServiceHostInput"'
 require "${VIEW}" 'class="zapret-field-value"><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort"'
 require "${VIEW}" 'class="zapret-field-value"><input type="checkbox" id="strategyLabEnableQuic" disabled/>'
 if grep -Fq 'width:250px;' "${VIEW}" || grep -Fq 'min-width:250px;' "${VIEW}"; then
@@ -127,4 +141,4 @@ require "${SETTINGS}" "'enabled' => (string)\$model->strategylab->enablequic ===
 require "${MODEL}" '<enablequic type="BooleanField">'
 require "${MODEL}" '<Default>0</Default>'
 
-echo 'PASS: Laboratory uses the OPNsense-owned page perimeter, accepted 25% field grid and matched mode typography; Strategy/Laboratory navigation stays deterministic RU/EN on both plugin pages; persistence contracts remain guarded'
+echo 'PASS: Laboratory guidance and UI support domain or IPv4 targets with conditional Host/SNI while preserving the OPNsense-owned perimeter, accepted 25% grid, navigation localization, and persistence contracts'

@@ -26,8 +26,18 @@ printf '%s\n' telegram.org web.telegram.org > "${TMP}/expected"
 cmp -s "${TMP}/expected" "${TMP}/endpoints" ||
     fail 'Telegram endpoint expansion is incorrect'
 
+[ "$(strategy_lab_normalize_target 203.0.113.9)" = 203.0.113.9 ] ||
+    fail 'canonical IPv4 target normalization is incorrect'
+[ "$(strategy_lab_target_type 203.0.113.9)" = ip ] ||
+    fail 'IPv4 target type is incorrect'
+strategy_lab_write_endpoints 203.0.113.9 ip "${TMP}/ip-endpoint"
+printf '%s\n' 203.0.113.9 > "${TMP}/ip-expected"
+cmp -s "${TMP}/ip-expected" "${TMP}/ip-endpoint" ||
+    fail 'bare IPv4 endpoint contract is incorrect'
+
 for invalid in \
-    203.0.113.9 \
+    203.0.113.009 \
+    999.0.0.1 \
     2001:db8::1 \
     example.com:443 \
     https://example.com \
@@ -39,26 +49,32 @@ for invalid in \
     example.123
  do
     if strategy_lab_normalize_target "${invalid}" >/dev/null 2>&1; then
-        fail "invalid or implicit target was accepted: ${invalid}"
+        fail "invalid or unsupported target was accepted: ${invalid}"
     fi
  done
 
-if strategy_lab_write_endpoints 203.0.113.9 ip "${TMP}/ip-endpoint"; then
-    fail 'backend-only implicit IP endpoint contract remains active'
+if strategy_lab_normalize_service_host 203.0.113.9 >/dev/null 2>&1; then
+    fail 'IP literal was accepted as service Host / SNI'
 fi
+[ "$(strategy_lab_normalize_service_host 'Example.COM.')" = example.com ] ||
+    fail 'service Host / SNI domain normalization is incorrect'
 
-grep -Fq 'private function domainTarget(): string' "${CONTROLLER}" ||
-    fail 'API domain validator is missing'
-grep -Fq 'FILTER_VALIDATE_IP' "${CONTROLLER}" ||
-    fail 'API does not explicitly reject IP literals'
-grep -Fq 'Invalid Strategy Lab domain.' "${CONTROLLER}" ||
-    fail 'API domain-specific rejection is missing'
+grep -Fq 'private function targetContract(): array' "${CONTROLLER}" ||
+    fail 'API domain-or-IPv4 target classifier is missing'
+grep -Fq 'FILTER_VALIDATE_IP, FILTER_FLAG_IPV4' "${CONTROLLER}" ||
+    fail 'API does not explicitly accept canonical IPv4 targets'
+grep -Fq "getPost('service_host'" "${CONTROLLER}" ||
+    fail 'API optional Host / SNI contract is missing'
+grep -Fq 'Invalid Strategy Lab domain or IPv4 address.' "${CONTROLLER}" ||
+    fail 'API domain-or-IPv4 rejection is missing'
 ! grep -Fq 'TARGET_PATTERN' "${CONTROLLER}" ||
     fail 'old colon-permitting generic target pattern remains active'
-grep -Fq "{{ lang._('Blocked Domain') }}" "${VIEW}" ||
-    fail 'GUI does not describe the accepted target as a domain'
-grep -Fq 'placeholder="rutracker.org"' "${VIEW}" ||
-    fail 'GUI domain example is missing'
+grep -Fq "{{ lang._('Blocked Domain / IP') }}" "${VIEW}" ||
+    fail 'GUI does not describe the accepted target as domain or IP'
+grep -Fq 'id="strategyLabServiceHostInput"' "${VIEW}" ||
+    fail 'GUI optional Host / SNI input is missing'
+grep -Fq 'placeholder="rutracker.org / 203.0.113.10"' "${VIEW}" ||
+    fail 'GUI domain/IP example is missing'
 
 sh -n "${MODULE}"
-echo 'PASS: Strategy Lab accepts normalized domains only and rejects implicit IP/port/URL targets'
+echo 'PASS: Strategy Lab accepts normalized domains or canonical IPv4 targets and rejects URLs, ports, IPv6, and invalid target identities'

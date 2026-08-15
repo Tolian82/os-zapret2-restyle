@@ -189,8 +189,8 @@ case "${ACTION}" in
                 total=$(strategy_lab_baseline_total_count "${BASELINE_FILE}")
                 failed=$(strategy_lab_baseline_failed_count "${BASELINE_FILE}")
                 if [ "${TARGET_TYPE}" = ip ]; then
-                    msg='PASS — Direct TCP/443 connection to the IP target failed.'
-                    [ "${LANGUAGE}" != ru ] || msg='PASS — Прямое TCP/443-подключение к IP-цели не установлено.'
+                    msg='PASS — Direct TLS 1.3 connection to the IP target failed.'
+                    [ "${LANGUAGE}" != ru ] || msg='PASS — Прямое TLS 1.3-соединение с IP-целью не установлено.'
                 elif [ "${failed}" -eq "${total}" ]; then
                     msg='PASS — DNS: OK; direct TLS 1.3 connection failed.'
                     [ "${LANGUAGE}" != ru ] || msg='PASS — DNS: OK; прямое TLS 1.3-соединение не установлено.'
