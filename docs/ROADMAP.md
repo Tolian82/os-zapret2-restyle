@@ -73,22 +73,25 @@
     - [x] `_18` source/publication: `Generic UDP (optional)` / RU `UDP порт (опционально)`
     - [x] `_18` source/publication: one-line RU `Заблокированный домен / IP`
     - [x] `_18` owner-live confirms title/UDP translation and one-line blocked-domain label
-    - [ ] `_19` owner-selected corrective
-      - [x] source: remove `_18` 12 px label workaround; restore normal UI typography
-      - [x] source: explicit fixed label/value columns for domain / Generic UDP / Enable QUIC
-      - [x] source: RU mode values `Стандартный` / `Расширенный`; EN `Standard` / `Extended`
-      - [x] source: right-aligned `Режим:` / `Mode:` before mode selector
-      - [x] source: RU idle `ожидание`; EN idle `idle`
-      - [x] source: sidebar EN `Strategy` / `Laboratory`, RU `Стратегия` / `Лаборатория`
-      - [x] focused regression preserves circular ordinary-state and Enable QUIC persistence source contracts
-      - [x] latest-head full CI + FreeBSD-15 package qualification
-      - [x] exact-head source merge and persistent `v0.4.1_19` testing publication
-      - [ ] owner-live RU layout/typography/mode/status/sidebar acceptance
-      - [ ] owner-live EN mode/status/sidebar and no RU/EN leakage
+    - [x] `_19` source/publication: normal label typography, mode/status/sidebar RU/EN strings, shared Laboratory value-column attempt
+    - [x] `_19` owner-live confirms RU `Режим:`, `Расширенный`, `Статус: ожидание`
+    - [x] `_19` owner-live rejects remaining perimeter/value-grid/mode-font layout and selects `_20`
+    - [ ] `_20` native OPNsense layout corrective
+      - [x] source: both Diagnostics input tables use one shared native-style `25%` field-label column
+      - [x] source: target / Generic UDP / Enable QUIC use the same normal value-column position
+      - [x] source: remove the rejected fixed `_19` `250px` Laboratory label column
+      - [x] source: preserve one-line target label with normal UI typography
+      - [x] source: synchronize `Режим:` / `Mode:` computed font size and line height from the target field label
+      - [x] source: neutralize nested Laboratory page/container/row/column perimeter spacing
+      - [x] focused regression preserves RU/EN, circular idle and Enable QUIC persistence source contracts
+      - [ ] latest-head full CI + FreeBSD-15 package qualification
+      - [ ] exact-head source merge and persistent `v0.4.1_20` testing publication
+      - [ ] owner-live visual acceptance: native perimeter, common field grid, matched mode-label typography
+    - [ ] owner-live EN/no-language-leakage completion if still needed after `_20`
     - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit
   - [x] already-accessible target — completed by owner confirmation
   - [ ] cancellation/internal-failure containment
-- [ ] **Laboratory target support: test IP addresses as well as domains — NEXT PLAN after `_19` UI acceptance**
+- [ ] **Laboratory target support: test IP addresses as well as domains — NEXT PLAN after `_20` UI acceptance**
 - [ ] Circular lifecycle coverage
   - [ ] start/stop/TTL
   - [ ] stale-session recovery
@@ -104,9 +107,11 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — live-check published `_19`, then add IP targets to Laboratory
+## Current priority — qualify/publish `_20`, visually verify it, then add IP targets to Laboratory
 
-Current published testing identity:
+Current source candidate: `v0.4.1_20` (`PLUGIN_REVISION=20`).
+
+Last published testing identity:
 
 - tag: `v0.4.1_19`;
 - asset: `os-zapret2-restyle-0.4.1_19.pkg`;
@@ -115,17 +120,18 @@ Current published testing identity:
 - publication workflow run: `31892344832`;
 - stable Pages/pkg repository promoted: no.
 
-`_19` source, complete corrective matrix, focused Laboratory regression, FreeBSD-15 qualification, exact-head merge and persistent testing publication are complete. The remaining `_19` boundary is owner-live presentation acceptance only.
+`_19` automated/package acceptance is complete. Owner-live comparison selected `_20` because the Laboratory page still has a larger perimeter inset than ordinary OPNsense pages, the field value column is not on the normal platform form grid, and `Режим:` must be explicitly typography-matched to the target label.
 
-Current owner-live acceptance sequence:
+After `_20` publication/install:
 
-1. RU layout/typography/mode/status/sidebar;
-2. EN/no-leakage mode/status/sidebar;
-3. Enable QUIC OFF/default persistence reload/revisit proof;
-4. **next engineering plan: make Laboratory accept/test IP addresses as well as domains**;
-5. continue the remaining backlog above.
+1. one visual comparison of Laboratory against Strategy/native OPNsense perimeter and field grid;
+2. confirm `Режим:` typography matches the target label;
+3. no Strategy Lab execution rerun is needed for this visual-only corrective;
+4. Enable QUIC OFF/default persistence reload/revisit proof remains separate;
+5. **next engineering plan: make Laboratory accept/test IP addresses as well as domains**;
+6. continue the remaining backlog above.
 
-Owner-live `_18` corrective evidence: [`verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md).
+Owner-live `_19` corrective evidence: [`verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md).
 Machine `_19` publication evidence: [`verification/evidence/testing-publications/v0.4.1_19.md`](verification/evidence/testing-publications/v0.4.1_19.md).
 
 ## Deferred research — retain, do not activate by inertia
