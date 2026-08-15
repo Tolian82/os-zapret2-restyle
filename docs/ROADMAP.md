@@ -51,22 +51,32 @@
     - [x] `_19` source/publication: normal label typography, mode/status/sidebar RU/EN strings
     - [x] `_19` owner-live confirms RU `Режим:`, `Расширенный`, `Статус: ожидание`
     - [x] `_19` owner-live rejects remaining perimeter/value-grid/mode-font layout and selects `_20`
-    - [ ] `_20` native OPNsense layout corrective
+    - [x] `_20` source/CI/FreeBSD/testing publication
       - [x] source: both Diagnostics input tables use one shared native-style `25%` field-label column
       - [x] source: target / Generic UDP / Enable QUIC use the same normal value-column position
       - [x] source: remove the rejected fixed `_19` `250px` Laboratory label column
       - [x] source: preserve one-line target label with normal UI typography
       - [x] source: synchronize `Режим:` / `Mode:` computed font size and line height from the target field label
-      - [x] source: neutralize nested Laboratory page/container/row/column perimeter spacing
+      - [x] source: attempted nested Laboratory perimeter neutralization
       - [x] focused regression preserves RU/EN, circular idle and Enable QUIC persistence source contracts
       - [x] latest-head full CI + FreeBSD-15 package qualification
       - [x] exact-head source merge and persistent `v0.4.1_20` testing publication
-      - [ ] owner-live visual acceptance: native perimeter, common field grid, matched mode-label typography
-    - [ ] owner-live EN/no-language-leakage completion if still needed after `_20`
+      - [x] owner-live: accepted common field grid/mode text direction, but rejected missing native perimeter and cross-page navigation localization
+    - [ ] `_21` native frame ownership + persistent cross-page menu localization
+      - [x] source: remove redundant Laboratory `page-content-main/container-fluid/row/column` wrapper
+      - [x] source: remove Laboratory `.page-content-main` margin/padding overrides
+      - [x] source: render Laboratory as normal OPNsense `content-box` blocks inside the platform-owned frame
+      - [x] source: preserve accepted shared 25% form grid and mode-label typography synchronization
+      - [x] source: apply RU/EN `Стратегия` / `Лаборатория` navigation on Strategy as well as Laboratory
+      - [x] focused regression updated for native frame ownership and both-page navigation localization
+      - [ ] latest-head full CI + FreeBSD-15 package qualification
+      - [ ] exact-head source merge and persistent `v0.4.1_21` testing publication
+      - [ ] owner-live visual acceptance: native perimeter + Russian menu persistence across Laboratory ↔ Strategy
+    - [ ] owner-live EN/no-language-leakage completion if still needed after `_21`
     - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit
   - [x] already-accessible target — completed by owner confirmation
   - [ ] cancellation/internal-failure containment
-- [ ] **Laboratory target support: test IP addresses as well as domains — NEXT PLAN after `_20` UI acceptance**
+- [ ] **Laboratory target support: test IP addresses as well as domains — NEXT PLAN after `_21` UI acceptance**
 - [ ] Circular lifecycle coverage
   - [ ] start/stop/TTL
   - [ ] stale-session recovery
@@ -82,11 +92,11 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — visually verify published `_20`, then add IP targets to Laboratory
+## Current priority — qualify/publish `_21`, visually verify it, then add IP targets to Laboratory
 
-Current source candidate: `v0.4.1_20` (`PLUGIN_REVISION=20`).
+Current source candidate: `v0.4.1_21` (`PLUGIN_REVISION=21`).
 
-Current published testing identity:
+Last published testing identity:
 
 - tag: `v0.4.1_20`;
 - asset: `os-zapret2-restyle-0.4.1_20.pkg`;
@@ -95,18 +105,26 @@ Current published testing identity:
 - publication workflow run: `31896330680`;
 - stable Pages/pkg repository promoted: no.
 
-`_20` source, focused layout/localization/persistence test, complete corrective matrix, FreeBSD-15 qualification, exact-head source merge and persistent testing publication are complete. The remaining `_20` boundary is visual owner-live acceptance only.
+Owner-live `_20` comparison showed that the perimeter-neutralization approach removed the platform-owned OPNsense frame itself, and that Russian submenu localization was only reapplied on Laboratory. `_21` corrects the ownership model rather than adding another spacing workaround: OPNsense owns the page frame, while both plugin pages apply the same active-language submenu labels.
 
-After `_20` install:
+Before `_21` completion:
 
-1. compare Laboratory against Strategy/native OPNsense perimeter and field grid;
-2. confirm `Режим:` typography matches the target label;
-3. no Strategy Lab execution rerun is needed for this visual-only corrective;
-4. Enable QUIC OFF/default persistence reload/revisit proof remains separate;
-5. **next engineering plan: make Laboratory accept/test IP addresses as well as domains**;
-6. continue the remaining backlog above.
+1. focused native-frame/localization/persistence regression;
+2. applicable complete corrective matrix and FreeBSD-15 package qualification;
+3. exact-head source merge and persistent testing publication;
+4. bounded publication-record reconciliation.
 
-Owner-live `_19` corrective evidence: [`verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md).
+After `_21` install:
+
+1. confirm Laboratory perimeter matches Strategy/native OPNsense;
+2. switch Laboratory ↔ Strategy under Russian UI and confirm `Стратегия` / `Лаборатория` stays Russian;
+3. confirm accepted common field grid and `Режим:` typography remain intact;
+4. no Strategy Lab execution rerun is required for this UI-only corrective;
+5. Enable QUIC OFF/default persistence reload/revisit proof remains separate;
+6. **next engineering plan: make Laboratory accept/test IP addresses as well as domains**;
+7. continue the remaining backlog above.
+
+Owner-live `_20` corrective evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md).
 Machine `_20` publication evidence: [`verification/evidence/testing-publications/v0.4.1_20.md`](verification/evidence/testing-publications/v0.4.1_20.md).
 
 ## Deferred research — retain, do not activate by inertia
