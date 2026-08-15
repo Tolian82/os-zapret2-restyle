@@ -21,11 +21,12 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
-- current packaged revision: `_21` / `PLUGIN_REVISION=21`;
+- current **published** packaged revision remains `_21` / `PLUGIN_REVISION=21` on `main`;
 - current published testing package/tag: `os-zapret2-restyle-0.4.1_21.pkg` / `v0.4.1_21`;
 - `_21` testing-package SHA-256: `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
 - `_21` source merge/testing-tag target: `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
 - `_21` publication workflow run: `31898795618`;
+- next package-affecting source scope uses `PLUGIN_REVISION=22` for Laboratory IPv4 targets and is not yet published;
 - latest full Web/pkg release remains `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
 - stable Pages/pkg repository was not promoted by `_21`;
@@ -85,26 +86,28 @@ Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-
 
 Source patch record: [`patches/v0.4.1_21.md`](patches/v0.4.1_21.md).
 
-## Current engineering boundary — Laboratory IP target support
+## `_22` source state — Laboratory IPv4 targets + optional Host / SNI
 
-The owner selected IP-address targets as the next Laboratory product task and closed the current presentation/localization work.
+The owner selected IP-address targets as the next Laboratory product task. The source implementation uses the audited IPv4-first contract and is now in qualification before merge/publication.
 
-The audit establishes the following implementation boundary:
+Implemented source boundary:
 
-1. the approved architecture already allows domain or IP targets, but current PHP `StrategyLabController` and shell `target.sh` still reject IP literals;
-2. Stage-00/40 handling, IPv4 search-epoch bindings, destination-IP firewall rules and final profile generation already contain partial IP support;
-3. final profile generation already uses `--ipset-ip=<target>` for IP targets;
-4. Generic UDP can operate against a fixed IP without hostname identity;
-5. current TLS candidate probing must be corrected before IP targets are enabled: an IPv4 endpoint currently falls back to a plain TCP connect, which is not valid proof that a TLS/DPI-bypass candidate works;
-6. host/SNI-dependent TLS candidates and QUIC need an explicit service hostname/SNI when the destination is supplied as an IP; destination IP must not silently become service identity;
-7. the existing request layer already supports fixed-IP + hostname identity through curl `--resolve` and OpenSSL `-servername` / hostname verification;
-8. initial product support should be canonical IPv4 first; current search-epoch address canonicalization is IPv4-specific;
-9. bare-IP protocol branches that cannot be validated truthfully must be skipped/unsupported rather than reported PASS;
-10. Model C, lifecycle, budgets, attribution, cleanup and exact restoration remain unchanged.
+1. PHP/API and shell target handling accept either a domain or canonical IPv4; IPv6 target input remains deliberately unsupported in this first patch;
+2. an IPv4 target exposes an optional `Host / SNI` service-identity field, persisted per job separately from the destination IP;
+3. Stage 00 keeps `target_type=ip`; when Host/SNI exists, the endpoint identity is the hostname while the actual destination remains the entered IPv4;
+4. Stage 40 skips DNS for IP targets and performs a real TLS 1.3 request pinned to the entered IP; it no longer treats TCP/443 reachability as TLS evidence;
+5. the search epoch for IP + Host/SNI binds `endpoint=<service hostname>` to `selected_ip=<entered IPv4>`;
+6. Stage-50/60 IP candidate specs remove hostlist target binding because firewall routing is already destination-IP scoped; Model-C ownership/attribution is otherwise unchanged;
+7. candidate TLS 1.3/TLS 1.2/HTTP probes use protocol-aware requests against the selected IP; the prior IP plain-TCP candidate shortcut cannot create a false TLS PASS;
+8. QUIC uses Host/SNI when supplied; bare-IP QUIC is unsupported rather than falsely successful because hostname verification is unavailable;
+9. Generic UDP remains direct-IP and does not require Host/SNI;
+10. final IP profiles use the existing `--ipset-ip=<target>` selector and normal three-attempt exact profile replay;
+11. temporary circular browser validation remains domain-only;
+12. Model C, budgets, lifecycle lock, cleanup and Stage-90 exact restoration are unchanged.
 
-Selected UX/contract direction: keep one `Заблокированный домен / IP` target field, classify domain versus IPv4, and add a conditional/optional `Host / SNI` service-identity field for IP targets so web/TLS/QUIC probes can connect to the fixed IP while preserving the real service hostname. Generic UDP does not require Host/SNI.
+Focused regression: `scripts/test-strategy-lab-ip-targets.sh`, included automatically by the existing Strategy Lab corrective matrix. Complete latest-head CI and FreeBSD-15 package qualification are mandatory before merge.
 
-Detailed audit/owner handoff: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md).
+Source patch record: [`patches/v0.4.1_22.md`](patches/v0.4.1_22.md).
 
 ## Accepted owner-live evidence retained
 
