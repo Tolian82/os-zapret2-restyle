@@ -2,204 +2,143 @@
 
 **Status:** CURRENT SPECIALIST ARCHITECTURE
 **Updated:** 2026-08-15
-**Exact-byte/control-observation implementation published in:** `v0.4.1_15`
-**Current owner-live state:** file-selection/upload path FAIL — investigation required
+**Direct UDP/control-observation implementation:** `v0.4.1_15`
+**Browser handoff correction source candidate:** `v0.4.1_16`
 
 ## Purpose
 
-Expose generic UDP request/response bypass testing through the supported Diagnostics GUI/API without accepting arbitrary server-side file paths, misclassifying UDP silence, or retaining user payload data after the job ends.
+Expose Generic UDP request/response bypass testing through Diagnostics without accepting arbitrary server-side file paths, misclassifying UDP silence, or retaining payload bytes after a job ends.
 
-The owner-live `_13` follow-up exposed an oversized-file apparent no-op; `_14` added visible bounded validation. The first owner-live `_14` follow-up then exposed a second defect: a payload reported as **140 bytes** was rejected by the GUI despite the valid `1..4096` decoded-byte contract. `_15` corrected the intended browser transport/validation ownership and added direct destination-port observation, but the first live `_15` retry proves that the real browser-to-job file path is still not operational.
+The owner-live `_15` retry established that the real browser path still failed even though the backend exact-140-byte regression passed. Source tracing then identified an architectural weakness at the browser boundary: the application did not own a prepared payload. It re-read `input.files[0]` only when **Run** was pressed, so loss/reset of the native file-control selection produced the observed port+file validation failure before API/configd/job-local storage was reached.
+
+## Important transport fact
+
+Generic UDP does **not** use a multipart upload directory.
+
+The selected local file is read in the browser, converted to Base64, and sent in the normal Strategy Lab start POST. Only after the API/configd launcher accepts that request is the payload decoded into the private job-local `udp-payload.bin` file.
+
+Therefore a GUI state where the selected file is already absent and no new configured-UDP job is created cannot be caused first by permissions on `udp-payload.bin`: that filesystem boundary has not yet been reached. Permissions remain a valid later-stage failure possibility and now have explicit diagnostics.
 
 ## Supported request
 
-Generic UDP input is optional and accepted only in `extended` mode.
+Generic UDP is optional and accepted only in `extended` mode.
 
 The request consists of exactly two values:
 
 - UDP destination port: integer `1..65535`;
-- one local browser-selected payload file: decoded size **`1..4096` bytes**.
+- one local browser-selected payload: decoded size **`1..4096` bytes**.
 
 Both values must be present together. Supplying only one is invalid. Standard mode must not carry Generic UDP input.
 
-A 2–3 MB file is deliberately invalid. An exact 140-byte file is valid by contract.
+An exact 140-byte file is valid. Multi-megabyte files are deliberately invalid.
 
-## Intended browser exact-byte transport
+## `_16` browser-owned staging
 
-The intended `_15` browser flow is:
+The browser now owns a prepared payload state independently of the native file-input display:
 
-`selected File -> FileReader.readAsArrayBuffer -> Uint8Array -> byteLength 1..4096 -> binary Base64 -> start API`.
+`file input change -> capture File -> FileReader.readAsArrayBuffer -> Uint8Array.byteLength -> binary Base64 -> application-owned staged state -> Run -> start API`.
 
-Consequences required by the product contract:
+On every file-selection `change` event the application immediately:
 
-- validation is against the exact bytes that will be Base64-encoded;
-- a 140-byte binary file remains 140 decoded bytes through the transport contract;
-- zero bytes and more than 4096 decoded bytes are rejected visibly;
-- invalid decoded size is detected before `beginStart()` clears the previous result, marks the UI busy, or starts a new job;
-- browser validation remains UX defense, while backend strict decode/size validation remains authoritative.
+1. captures the selected `File` object;
+2. starts `readAsArrayBuffer` immediately rather than waiting for Run;
+3. validates the exact decoded byte count `1..4096`;
+4. Base64-encodes those exact bytes;
+5. stores filename, decoded byte count and Base64 in application-owned state;
+6. displays localized positive evidence such as `Файл подготовлен к отправке: <name>, <N> байт` / `Payload ready to send: <name>, <N> bytes`.
 
-Automated source tests prove these intended code-level invariants, but they do **not** prove the complete live browser-to-job handoff.
+The Run handler uses the staged Base64 when it is ready. It no longer depends exclusively on the native control still exposing `input.files[0]` at Run time.
 
-## API and configd boundary
+A defensive fallback remains: if a native `File` is present at Run but the `change` event did not finish staging, Run stages that file first and only starts the job after successful preparation.
 
-`StrategyLabController::startAction()` validates:
+The browser no longer uses a realm-specific `buffer instanceof ArrayBuffer` test; it validates the returned object through `byteLength`, avoiding an unnecessary cross-realm assumption.
 
-- mode is `extended` when UDP input is present;
-- port is decimal and within range;
-- Base64 syntax is canonical;
-- decoded payload is non-empty and no larger than 4096 bytes.
+## API/configd boundary
 
-The validated request is forwarded together with the explicit Strategy Lab QUIC choice. Disabled Generic UDP uses the explicit `- -` sentinel pair.
+`StrategyLabController::startAction()` remains authoritative for:
+
+- Extended-mode requirement when UDP input is present;
+- port range;
+- canonical Base64 syntax;
+- strict Base64 decode;
+- decoded payload size `1..4096`.
+
+The validated Base64 is forwarded as an argument through configd together with the port and explicit Enable QUIC choice. Disabled Generic UDP uses the explicit `- -` sentinel pair.
 
 ## Job-local storage
 
-After the job directory/status document exist, the launcher is intended to:
+After the job directory exists, the launcher decodes the accepted Base64 into:
 
-1. decode payload into private `udp-payload.bin`;
-2. write validated port into private `udp-port`;
-3. set mode `0600` on both files;
-4. record only `configured`, `port`, and `payload_bytes` in public `status.json`.
+- private `udp-payload.bin`;
+- private `udp-port`.
 
-No raw payload or Base64 content is stored in public state. Python extended orchestration reads only these fixed job-local paths; client input cannot choose another server-side path.
+Both use mode `0600`. Public `status.json` stores only `configured`, port and decoded payload byte count; raw payload/Base64 is not retained in public state.
+
+## `_16` server-side failure attribution
+
+The job-local preparation layer now records a precise non-payload error code before returning failure. This distinguishes a later filesystem/backend failure from the earlier browser-selection failure.
+
+Current classes include:
+
+- `job_directory_unavailable`;
+- `job_directory_not_writable`;
+- `payload_temp_create_failed` / `port_temp_create_failed`;
+- `base64_invalid` / `base64_decode_failed`;
+- `payload_size_invalid`;
+- `port_write_failed`;
+- `chmod_failed`;
+- `payload_move_failed` / `port_move_failed`;
+- `state_record_failed`.
+
+The launcher includes that code in its error response. Thus an owner/mode/permissions problem, if it occurs on OPNsense, is directly distinguishable instead of being collapsed into `Invalid Strategy Lab generic UDP input`.
 
 ## Direct destination-port/control observation
 
-For a configured request, `_15` performs a bounded direct UDP observation **before** bypass candidates using the same immutable search-epoch bindings used by candidate execution.
+For a configured request, the existing `_15` logic performs a bounded direct UDP observation before bypass candidates, using the same fixed search-epoch selected IP, the selected destination port and the exact job-local payload bytes.
 
-For each fixed selected endpoint IP it sends:
-
-- the exact selected destination port;
-- the exact job-local payload bytes.
-
-Structured control evidence records:
-
-- endpoint name;
-- selected IPv4 address;
-- destination port;
-- payload byte count;
-- whether any reply bytes were observed;
-- process return state/timeout;
-- duration.
-
-The aggregate result records whether any direct reply was observed.
+Structured evidence records endpoint/IP, destination port, payload byte count, reply observed/not observed, return/timeout state and duration.
 
 ### Non-gating semantics
 
-**UDP silence is not proof that a port is closed.** A valid UDP service can ignore an arbitrary payload.
+**UDP silence is not proof that a port is closed.**
 
-Therefore:
+`reply_observed=false` means only that no reply was observed during the bounded control exchange. It does not suppress the bypass candidate catalog and is never translated into a definitive `port closed` claim.
 
-- `reply_observed=false` means only that no reply was observed in the bounded control exchange;
-- ordinary RU/EN presentation explicitly says that this does not mean the port is closed;
-- the control result never suppresses or short-circuits the bypass candidate catalog;
-- configured UDP continues to candidate testing whether a direct reply was observed or not.
+## Candidate execution and Stage 80
 
-## Candidate execution
-
-Configured UDP candidates receive the exact validated values through the unified candidate runtime:
+Configured UDP candidates receive:
 
 - `STRATEGY_LAB_UDP_PORT` = selected port;
-- `STRATEGY_LAB_UDP_PAYLOAD_FILE` = private job-local payload path.
+- `STRATEGY_LAB_UDP_PAYLOAD_FILE` = private job-local payload.
 
-Each executed candidate is appended to structured `tested`. The branch may finish:
-
-- `working` when a candidate passes; or
-- `not_found` after the catalog completes without a winner.
-
-A valid configured request must not be silently rewritten to an unconfigured skip.
-
-## Stage-80 RU/EN presentation
-
-Raw machine enums remain stable in structured/advanced evidence.
-
-Normal Stage-80 text distinguishes:
-
-- UDP not configured;
-- configured port/payload and selected endpoint IP(s);
-- direct reply observed vs no reply observed;
-- explicit warning that no reply does not prove port closure;
-- number and IDs of actual UDP candidates in `tested`;
-- working candidate ID or natural no-working-strategy wording.
-
-Raw fragments such as `UDP=skipped` / `UDP=not_found` are not the primary normal UI explanation.
+Every executed candidate is appended to structured `tested`. Ordinary RU/EN Stage-80 presentation reports configured port/payload/endpoints, direct observation, actual candidate count/IDs and working/no-working result while raw machine enums remain in structured evidence.
 
 ## Cleanup
 
-Payload and port files are removed:
+`udp-payload.bin` and `udp-port` are removed during normal restoration and error/cancel/stale-worker cleanup. Terminal evidence may retain metadata/control results but not payload bytes.
 
-- during normal terminal restoration;
-- after cancellation, timeout, internal error, or restoration failure;
-- by stale-worker reconciliation;
-- when worker launch fails.
+## `_16` automated acceptance
 
-A terminal job may retain structured UDP result/control evidence but not user payload bytes.
+Source acceptance must prove:
 
-## Automated `_15` verification
+1. the file input has a `change` handler;
+2. selection is immediately read and stored in application-owned state;
+3. exact decoded-byte validation occurs before staging;
+4. the normal Run path uses staged Base64 rather than depending exclusively on `input.files[0]`;
+5. RU/EN ready-to-send filename/byte evidence exists;
+6. exact 140-byte backend decode remains PASS;
+7. missing/unwritable job-directory and other server preparation failures are attributed by explicit code;
+8. direct selected-port/payload observation and non-gating UDP-silence semantics remain intact;
+9. complete Strategy Lab corrective matrix and FreeBSD-15 package qualification PASS.
 
-Repository acceptance for `_15` proved:
+## Owner-live `_16` acceptance
 
-1. exact 140-byte payload survives mocked/Base64 transport and job-local decode with `payload_bytes=140`;
-2. browser source uses `readAsArrayBuffer`, `Uint8Array.byteLength`, and Base64 of the validated exact bytes;
-3. browser no longer rejects by `File.size` as authoritative size owner and no longer parses Data URLs;
-4. zero/>4096 backend bounds and canonical Base64 validation remain intact;
-5. direct control observation uses exact selected IP, destination port and payload bytes;
-6. control evidence records reply/no-reply without introducing a `port_closed` conclusion;
-7. no-reply control evidence does not gate candidate execution;
-8. RU/EN Stage-80 presentation exposes port/payload/endpoints, control observation, actual candidate count/IDs and winner/no-winner meaning.
+After persistent `_16` publication:
 
-Automated `_15` source acceptance and persistent testing-package publication are complete. Machine publication evidence is in [`../verification/evidence/testing-publications/v0.4.1_15.md`](../verification/evidence/testing-publications/v0.4.1_15.md).
-
-## Owner-live `_15` failure — browser-to-job file path
-
-The first owner-live retry on the published `_15` package still fails before configured UDP execution.
-
-Observed/reported live state:
-
-- Strategy Lab is in Extended mode;
-- UDP port `53` is entered;
-- attaching a valid small file does not produce a usable selected/uploaded payload;
-- GUI evidence remains `Не выбран ни один файл` and shows the `1–4096` / port+file validation message;
-- the job can still run through other protocols;
-- Stage 80 reports UDP as not configured.
-
-Therefore the live product contract is currently violated even though automated exact-byte tests pass.
-
-Durable evidence: [`../verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](../verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
-
-### Root cause status
-
-Root cause is **not yet established**.
-
-The owner's current suspicion is that the file may simply never be uploaded/saved. Filesystem ownership/permissions on the Strategy Lab runtime/job directory or payload path are specifically retained as a plausible hypothesis.
-
-Do not encode that hypothesis as fact until live tracing proves it.
-
-### Required investigation order
-
-Trace the same real request end to end before changing code:
-
-1. browser file input `change` event fires;
-2. the expected selected `File` object exists after selection;
-3. `readAsArrayBuffer` completes and yields the real byte count;
-4. Base64 is generated and present in the actual Strategy Lab start request;
-5. `StrategyLabController::startAction()` receives and accepts the payload;
-6. configd/launcher receives the payload argument rather than the disabled `-` sentinel;
-7. the job directory exists with expected owner/mode;
-8. launcher can create/write `udp-payload.bin` and `udp-port` with mode `0600`;
-9. Python sees those job-local files and marks UDP configured;
-10. terminal cleanup removes payload bytes without masking earlier write/permission errors.
-
-If live evidence identifies permissions/ownership as the failure point, fix that exact lifecycle boundary. If the failure is earlier in the browser/API path, do not add unrelated filesystem changes.
-
-## Current owner-live acceptance
-
-The following remains open until the file path is corrected:
-
-- a valid small payload, including a 140-byte sample, starts as configured UDP;
-- configured UDP shows the selected port, decoded payload bytes and selected endpoint/IP;
-- direct control observation shows reply/no-reply truthfully;
-- no-reply wording does not claim the port is closed;
-- actual UDP candidate count/IDs are visible and non-zero when configured search runs;
-- winner/no-winner result is human-readable in the selected RU/EN language;
+- selecting a valid small payload must immediately show an application-owned `ready to send` line with the exact decoded byte count;
+- a 140-byte sample must show `140` bytes and a new Strategy Lab job must start with configured UDP;
+- Stage 80 must show selected port/payload bytes/endpoints, direct reply/no-reply evidence and actual UDP candidate IDs;
+- no-reply wording must not claim the port is closed;
+- if job-local filesystem preparation fails, the UI/API error must identify the preparation class instead of silently reverting to unconfigured UDP;
 - oversized input still fails before a new job starts;
-- Stage-90 restoration/resource cleanup remains PASS.
+- Stage-90 restoration and temporary resource cleanup remain PASS.

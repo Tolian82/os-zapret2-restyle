@@ -46,12 +46,20 @@ export STRATEGY_LAB_PYTHON_BIN STRATEGY_LAB_PYTHON_LAUNCHER
 . "${MODULE}"
 strategy_lab_prepare_directories
 
+STRATEGY_LAB_UDP_INPUT_ERROR=''
+if strategy_lab_udp_input_prepare job.MISSING extended 5353 cGluZw==; then
+    fail 'missing job directory unexpectedly accepted UDP input'
+fi
+[ "${STRATEGY_LAB_UDP_INPUT_ERROR}" = job_directory_unavailable ] ||
+    fail 'missing job directory did not expose precise UDP preparation error'
+
 job=job.ABC123
 jobdir=$(strategy_lab_job_dir "${job}")
 strategy_lab_initialize_state "${job}" udp.example extended en
 
 strategy_lab_udp_input_prepare "${job}" extended 5353 cGluZw== ||
     fail 'valid extended UDP input was rejected'
+[ -z "${STRATEGY_LAB_UDP_INPUT_ERROR}" ] || fail 'valid UDP input left a stale preparation error'
 [ "$(cat "$(strategy_lab_udp_port_file "${job}")")" = 5353 ] ||
     fail 'UDP port was not persisted'
 [ "$(cat "$(strategy_lab_udp_payload_file "${job}")")" = ping ] ||
@@ -105,7 +113,9 @@ expect_rejected()
 {
     description="$1"
     shift
+    STRATEGY_LAB_UDP_INPUT_ERROR=''
     if strategy_lab_udp_input_prepare "${job}" "$@"; then fail "${description}"; fi
+    [ -n "${STRATEGY_LAB_UDP_INPUT_ERROR}" ] || fail "${description}: no precise preparation error was recorded"
     strategy_lab_udp_input_cleanup "${job}"
 }
 
@@ -124,20 +134,32 @@ grep -Fq "\$udpInput['port']" "${CONTROLLER}" || fail 'API does not pass validat
 grep -Fq 'parameters:%s %s %s %s %s %s' "${ACTIONS}" || fail 'configd start action does not carry QUIC plus UDP contract'
 grep -Fq 'strategyLabUdpPort' "${VIEW}" || fail 'GUI UDP port field is missing'
 grep -Fq 'strategyLabUdpPayload' "${VIEW}" || fail 'GUI payload file field is missing'
-grep -Fq 'readAsArrayBuffer(payloadFile)' "${VIEW}" || fail 'GUI does not read selected UDP payload as exact binary bytes'
+grep -Fq 'strategyLabUdpPayloadState' "${VIEW}" || fail 'GUI has no application-owned UDP payload state display'
+grep -Fq 'var udpPayloadSelection = {' "${VIEW}" || fail 'GUI has no durable application-owned UDP payload state'
+grep -Fq "strategyLabUdpPayload').change(function ()" "${VIEW}" || fail 'GUI does not stage UDP payload on native file-selection change'
+grep -Fq 'stageUdpPayloadFile(file);' "${VIEW}" || fail 'GUI file-selection change does not prepare the selected UDP payload'
+grep -Fq 'reader.readAsArrayBuffer(file)' "${VIEW}" || fail 'GUI does not read selected UDP payload as exact binary bytes'
+grep -Fq "typeof buffer.byteLength !== 'number'" "${VIEW}" || fail 'GUI ArrayBuffer validation is tied to a fragile realm-specific instanceof check'
 grep -Fq 'bytes.byteLength<1||bytes.byteLength>udpPayloadMaxBytes' "${VIEW}" || fail 'GUI decoded-byte size validation is missing'
-grep -Fq 'window.btoa(binary)' "${VIEW}" || fail 'GUI does not Base64-encode the validated binary payload'
+grep -Fq 'udpPayloadSelection.base64=udpBytesToBase64(bytes)' "${VIEW}" || fail 'GUI does not retain prepared Base64 in application-owned state'
+grep -Fq 'if (udpPayloadSelection.ready) { beginStart(udpPayloadSelection.base64); return; }' "${VIEW}" || fail 'Run still depends exclusively on native input.files instead of staged payload state'
+grep -Fq 'Payload ready to send' "${VIEW}" || fail 'English ready-to-send payload evidence is missing'
+grep -Fq 'Файл подготовлен к отправке' "${VIEW}" || fail 'Russian ready-to-send payload evidence is missing'
 grep -Fq 'showInputError(ui.udpSize)' "${VIEW}" || fail 'GUI invalid payload rejection is not user-visible'
 ! grep -Fq 'payloadFile.size<1||payloadFile.size>udpPayloadMaxBytes' "${VIEW}" ||
     fail 'GUI still trusts browser File.size for authoritative UDP payload rejection'
 ! grep -Fq 'readAsDataURL(payloadFile)' "${VIEW}" || fail 'GUI still uses Data URL parsing for binary UDP payload transport'
 size_line=$(grep -n 'bytes.byteLength<1||bytes.byteLength>udpPayloadMaxBytes' "${VIEW}" | head -1 | cut -d: -f1)
-start_call_line=$(grep -n 'beginStart(window.btoa(binary))' "${VIEW}" | head -1 | cut -d: -f1)
-[ -n "${size_line}" ] && [ -n "${start_call_line}" ] && [ "${size_line}" -lt "${start_call_line}" ] ||
-    fail 'GUI starts Strategy Lab before validating the decoded UDP payload size'
+stage_line=$(grep -n 'udpPayloadSelection.base64=udpBytesToBase64(bytes)' "${VIEW}" | head -1 | cut -d: -f1)
+[ -n "${size_line}" ] && [ -n "${stage_line}" ] && [ "${size_line}" -lt "${stage_line}" ] ||
+    fail 'GUI stages UDP payload before validating decoded byte size'
 grep -Eq 'for module in .*udp_input.*launch.*query' "${LAUNCHER}" || fail 'launcher does not load UDP input, launch, and query modules in order'
 grep -Fq 'case "$#" in' "${LAUNCH}" || fail 'launcher start contract is not backward compatible'
 grep -Fq 'strategy_lab_udp_input_prepare' "${LAUNCH}" || fail 'launcher does not create job-local UDP input'
+grep -Fq 'STRATEGY_LAB_UDP_INPUT_ERROR' "${LAUNCH}" || fail 'launcher does not expose precise job-local UDP preparation failure'
+grep -Fq 'job_directory_not_writable' "${MODULE}" || fail 'job-local permission failure is not distinguishable from browser/API failures'
+grep -Fq 'payload_temp_create_failed' "${MODULE}" || fail 'job-local payload creation failure has no diagnostic code'
+grep -Fq 'base64_decode_failed' "${MODULE}" || fail 'server-side Base64 decode failure has no diagnostic code'
 
 grep -Fq 'UDP_RUNNER="${UDP_RUNNER:-${SCRIPT_DIR}/strategy_lab_cancellable_udp_runner.sh}"' "${STAGE_ADAPTER}" || fail 'stage adapter does not select UDP runner'
 grep -Fq 'extended udp' "${UDP_RUNNER}" || fail 'UDP runner is not a thin Python extended launcher'
@@ -162,4 +184,4 @@ sh -n "${WORKER}"
 sh -n "${STAGE_ADAPTER}"
 sh -n "${UDP_RUNNER}"
 
-echo 'PASS: Generic UDP input preserves exact binary bytes, accepts 140 bytes, and records direct control-exchange evidence without treating silence as a closed port'
+echo 'PASS: Generic UDP input uses browser-owned staged bytes, accepts 140 bytes, attributes server preparation failures, and preserves direct control-exchange semantics'

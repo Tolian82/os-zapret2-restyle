@@ -21,19 +21,16 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
-- packaged source revision: `_15`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_15.pkg` / `v0.4.1_15`;
-- testing-package SHA-256: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`;
-- source merge/testing-tag target: `a219161c901c663b56cac6757364d3bbd32766c7`;
-- publication workflow run: `31879283227`;
+- current source candidate: `_16`;
+- package metadata in current source candidate: `PLUGIN_REVISION=16`;
+- last published/owner-installed testing package/tag: `os-zapret2-restyle-0.4.1_15.pkg` / `v0.4.1_15`;
+- `_15` testing-package SHA-256: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`;
+- `_15` candidate-defining source/tag target: `a219161c901c663b56cac6757364d3bbd32766c7`;
 - latest full Web/pkg release remains `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
-- stable Pages/pkg repository was not promoted by `_15`;
 - internal service key: `zapret`.
 
-Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_15.md`](verification/evidence/testing-publications/v0.4.1_15.md).
-
-The exact `main` SHA is resolved at execution time under `GH-004`.
+The exact `main` SHA is resolved at execution time under `GH-004`. `_16` is not considered published until source acceptance, exact-head merge and persistent testing-package publication complete.
 
 ## Locked current product facts
 
@@ -43,85 +40,75 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 - Lua initialization, BLOB lazy/common-set, GET-4K discovery and cross-batch keep-warm questions remain closed for the current architecture by accepted measured evidence.
 - `_13` owner-live Standard RUNNING/STOPPED and Extended TLS 1.2/HTTP evidence remains accepted.
 - `_14` established explicit Enable QUIC as the sole QUIC candidate execution gate; Stage-30 measured QUIC reachability remains diagnostic only.
-- `_15` source acceptance, exact-head merge and immutable testing-package publication are complete.
-- `_15` owner-live QUIC attempt observability is now demonstrated in normal output: the owner screenshot shows four attempted QUIC candidate IDs while the control probe remains closed.
-- `_15` Generic UDP owner-live acceptance is **not** complete: the real file-selection/upload path still fails to reach a configured UDP state.
+- `_15` source/publication acceptance is complete.
+- `_15` owner-live QUIC observability is positively demonstrated: the normal Stage-80 UI showed all four attempted QUIC candidate IDs while ordinary QUIC remained blocked.
+- `_15` Generic UDP owner-live acceptance failed: a valid selected small file did not reach configured UDP.
 
-## Why `_15` was selected
+## Generic UDP trace result
 
-Owner-live `_14` Extended runs on `telegram.org` and `rutracker.org` with Enable QUIC ON showed blocked ordinary QUIC but Stage-80 `not_found` rather than capability skip. That proved the old execution gate was gone but did not expose the actual `tested` set. The same cycle exposed raw RU/EN protocol wording, English-only help at the GUI boundary, a nominal 140-byte Generic UDP rejection, and no direct selected-port/payload UDP observation.
+The product does not upload the selected payload through a multipart upload directory. The actual path is:
 
-The owner selected one corrective package scope covering those findings. The full plan and all post-publication checks remain recorded in `ROADMAP.md`, `START_HERE.md`, both specialist contracts and the live OPNsense matrix.
+`browser File -> ArrayBuffer -> Base64 start POST -> PHP/API -> configd -> launcher -> private job-local udp-payload.bin/udp-port -> Python Extended`.
 
-## `_15` implemented contract
+The `_15` browser implementation had no durable application-owned prepared payload. The Run handler sampled `input.files[0]` and only then attempted `FileReader`. Therefore a lost/reset native file selection can trigger port+file validation before the API call and before any job-local file exists.
 
-### QUIC
+This explains why the owner's directory-permissions theory cannot be the **first** cause of the observed empty native file control/no-configured-job state. Filesystem permissions remain a valid later-stage hypothesis if a payload reaches the launcher.
 
-- Enable QUIC OFF means no candidates; ON means candidate execution regardless of Stage-30 control-probe result.
-- Stage 30 derives human presentation from structured `network.json` plus immutable job-local `quic-enabled` intent.
-- Russian renders `QUIC открыт` / `QUIC закрыт`; English renders the equivalent open/blocked state.
-- Stage 30 separately states whether QUIC strategy search is enabled/disabled or belongs to Extended mode.
-- Stage 80 uses the actual structured `tested` array and displays candidate count and IDs.
-- Current catalog remains `quic-fake-1`, `quic-fake-2`, `quic-ipfrag-8`, `quic-ipfrag-16`.
-- Raw `working`, `not_found`, `skipped`, `disabled` remain machine evidence rather than primary ordinary Stage-80 wording.
-- Enable QUIC help uses deterministic RU/EN presentation.
+Durable owner-live failure evidence:
+[`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
 
-Canonical contract: [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md).
+## `_16` implemented source contract
 
-### Generic UDP
+### Browser-owned payload staging
 
-- decoded payload remains `1..4096` bytes, port remains `1..65535`, and port/file are an atomic pair;
-- browser transport is intended to be `readAsArrayBuffer -> Uint8Array.byteLength -> Base64`;
-- strict API/backend Base64 and decoded-size checks remain authoritative;
-- exact 140-byte binary payload has automated regression coverage through job-local decode/metadata;
-- configured UDP performs direct request/response observation against each fixed search-epoch selected IP using the exact configured port and job-local payload;
-- control evidence records endpoint/IP, port, payload bytes, reply observed, timeout/return state and duration;
-- no reply means only `reply_observed=false`; it never means `port closed` and never suppresses the candidate loop;
-- Stage 80 exposes selected port, payload bytes, selected endpoint/IP, control observation and actual UDP candidate count/IDs in RU/EN.
+- file-input `change` immediately captures the selected `File`;
+- exact bytes are read immediately using `FileReader.readAsArrayBuffer`;
+- decoded `Uint8Array.byteLength` remains bounded to `1..4096`;
+- exact validated bytes are Base64-encoded and retained in application-owned state;
+- UI displays localized filename + decoded byte count + ready-to-send state;
+- Run uses staged Base64 and no longer depends exclusively on native `input.files[0]` at click time;
+- if native selection exists but staging was not completed, Run stages it before start as a bounded fallback;
+- ArrayBuffer validation uses the returned `byteLength` contract rather than `instanceof ArrayBuffer`.
 
-The live `_15` finding now overrides any inference that automated exact-byte coverage proves the complete browser-to-job handoff: the owner reports that attaching a valid small file still does not produce configured UDP. The observed GUI remains without a usable selected file and Stage 80 says UDP is not configured.
+### Server-side attribution
 
-Current root cause is **unknown**. Investigation must trace browser selection/read, Base64 request payload, PHP/API validation/configd forwarding, launcher creation of `udp-payload.bin`/`udp-port`, and filesystem ownership/permissions. The owner's suspicion that the file may simply not be uploaded/saved because of directory permissions is recorded as a hypothesis only.
+The API/configd transport remains Base64-in-POST. After the job directory exists, job-local preparation still creates private `udp-payload.bin` and `udp-port` with mode `0600`.
 
-Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
+`_16` adds precise failure classes for later stages, including job directory missing/not writable, temporary file creation, invalid/decode failure, size failure, write/chmod/move failure and state-record failure. The launcher surfaces the class in its error response instead of collapsing all such failures into one generic message.
 
-Canonical contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
+### Existing UDP search behavior retained
 
-## `_15` automated and publication verification — PASS
+- exact selected port/payload direct observation remains non-gating;
+- UDP silence is not proof of a closed port;
+- candidate loop still runs regardless of direct no-reply;
+- Stage 80 still exposes selected port/payload/endpoints, control observation and actual candidate IDs in RU/EN;
+- terminal payload cleanup and Stage-90 semantic restoration remain mandatory.
 
-- source PR `#241` exact verified head: `ecf3d5269574988e56707c68b6eb9696d936b1ca`;
-- complete Strategy Lab corrective matrix: PASS;
-- FreeBSD-15 package qualification: PASS;
-- exact-head source merge: `a219161c901c663b56cac6757364d3bbd32766c7`;
-- publisher FreeBSD-15 build/manifest/digest verification: PASS;
-- release/tag `v0.4.1_15` points exactly to the candidate-defining source merge;
-- asset `os-zapret2-restyle-0.4.1_15.pkg` is uploaded and verified;
-- SHA-256: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`.
+Canonical specialist contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
 
-The publisher's only failed step was automatic Draft PR creation because the repository setting forbids GitHub Actions from creating or approving pull requests. The machine-generated record branch/evidence was already pushed; Draft PR `#242` was opened through the GitHub connector to complete the same required docs-only tail. Package identity/bytes were not changed.
+## Current verification boundary
 
-## Current owner-live boundary
+Source candidate `_16` must pass:
 
-Do not repeat accepted Model-C baseline work. Current owner-live state is split:
+1. browser-owned staging/source-contract regression;
+2. exact 140-byte backend/job-local regression;
+3. precise job-local preparation error attribution regression;
+4. complete Strategy Lab corrective matrix;
+5. FreeBSD-15 package qualification;
+6. exact-head source merge;
+7. persistent `v0.4.1_16` testing publication and publication-record reconciliation.
 
-- **QUIC attempt observability:** positive live evidence exists for Enable QUIC ON with blocked control path; normal Stage 80 shows four tested IDs.
-- **Generic UDP input:** FAIL — selected/attached file does not reach configured UDP in the live GUI flow.
+Owner-live after publication is narrow:
 
-Next work is investigation, not another blind retry. Required trace:
-
-1. browser input/change event and actual selected `File` object;
-2. ArrayBuffer read and byte count;
-3. Base64 present in the start request;
-4. PHP/API validation and configd forwarding;
-5. launcher creation and permissions of private job-local `udp-payload.bin` and `udp-port`;
-6. Python detection of configured UDP;
-7. terminal cleanup.
-
-After the cause is corrected, rerun the 140-byte/small-payload owner-live row and verify selected port/payload/IP, direct reply/no-reply, actual candidate IDs, truthful result wording, and Stage-90 cleanup/restoration.
+- file selection must immediately show application-owned ready state and exact byte count;
+- a 140-byte sample must start a new configured-UDP job;
+- Stage 80 must show port/payload/IP/control observation and actual UDP candidate IDs;
+- if a server-side permission/storage error occurs, its preparation class must be visible;
+- Stage-90 restoration and temporary process/firewall/socket/payload cleanup must PASS.
 
 ## Documentation authority note
 
-The owner’s latest instruction is current truth. Historical `_14` screenshots retain their evidentiary value but do not define the desired `_15` presentation. Historical evidence is not rewritten to look like the corrected package.
+The owner’s latest instruction is current truth. Historical `_15` automated assertions remain evidence of what source tests proved, but they no longer count as proof of the live browser-to-job path.
 
 ## Current architecture entry points
 

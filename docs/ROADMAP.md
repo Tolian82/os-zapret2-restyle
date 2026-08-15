@@ -37,54 +37,38 @@
   - [x] Extended HTTP execution/result semantics
   - [x] historical `_13` closed-QUIC capability-skip observation
   - [x] `v0.4.1_14` explicit Enable QUIC source contract
-    - [x] persisted checkbox in Extended GUI, default OFF
-    - [x] saved checkbox state survives page reload through model-backed API
-    - [x] copy resolved value into immutable job-local state at launch
-    - [x] OFF → explicit `disabled` QUIC skip
-    - [x] ON → run QUIC candidates regardless of Stage-30 `quic_ipv4` control result
-    - [x] remove capability-based execution gate from Python production QUIC runner
-    - [x] remove capability-based execution gate from shell/reference QUIC runner
-    - [x] keep Stage-30 QUIC precheck as diagnostic evidence only
-    - [x] focused automated regression for enabled QUIC with mocked `quic_ipv4=closed`
-    - [x] merge/publish/install `_14`
-    - [ ] owner-live: default OFF + persistence
-    - [ ] owner-live: OFF → disabled semantics
-  - [ ] **`v0.4.1_15` QUIC/UDP observability and Generic UDP live correction — published, live defect open**
-    - [x] expose actual QUIC `tested` count and candidate IDs in ordinary Stage-80 RU/EN text
-    - [x] Stage-30 RU/EN: `QUIC открыт` / `QUIC закрыт` plus separate QUIC-search enabled/disabled state
-    - [x] keep Stage-30 measured QUIC state diagnostic-only; never use it as execution gate
-    - [x] replace raw Stage-80 `working` / `not_found` / `skipped` / `disabled` fragments with natural RU/EN presentation
-    - [x] deterministic RU/EN Enable QUIC help text
-    - [x] preserve raw protocol enums in structured/advanced evidence
-    - [x] replace browser Data-URL/File.size validation ownership with ArrayBuffer exact-byte validation and Base64 encoding
-    - [x] exact 140-byte Generic UDP automated regression through Base64 decode/job-local payload metadata
-    - [x] preserve decoded payload bound `1..4096` and strict backend validation
-    - [x] configured Generic UDP direct control exchange uses exact search-epoch selected IP, destination port and job-local payload
-    - [x] record selected endpoint/IP, port, payload bytes, reply/no-reply, timeout/return state and duration
-    - [x] never interpret UDP silence as definitive `port closed`
-    - [x] direct UDP no-reply never suppresses the bypass candidate loop
-    - [x] expose actual UDP candidate count/IDs and winner/no-winner meaning in Stage-80 RU/EN text
-    - [x] focused automated protocol-observability coverage added
-    - [x] complete Strategy Lab corrective matrix
-    - [x] FreeBSD-15 package build/inspection qualification
-    - [x] exact-head source merge `a219161c901c663b56cac6757364d3bbd32766c7`
-    - [x] persistent `v0.4.1_15` testing-package publication
-    - [x] bounded publication-record docs reconciliation merged
-    - [x] owner-live: Enable QUIC ON on blocked-control path shows four attempted IDs in ordinary Stage-80 output
-    - [x] owner-live: Generic UDP file path still fails to reach configured UDP — defect recorded
-    - [ ] investigate browser file input/change event and selected `File` ownership
-    - [ ] verify ArrayBuffer read, actual byte count and Base64 value before start request
-    - [ ] verify PHP/API receives the Base64 payload and forwards it through configd
-    - [ ] verify launcher creates private job-local `udp-payload.bin` and `udp-port`
-    - [ ] inspect OPNsense runtime/job directory owner/mode/permissions; test the owner's permissions hypothesis
-    - [ ] verify Python Extended stage sees configured UDP when the job-local files exist
-    - [ ] implement the minimal correction at the proven failure point and publish the next package candidate if source changes are required
-    - [ ] owner-live after correction: exact/small UDP payload including 140 bytes starts normally
-    - [ ] owner-live after correction: configured UDP shows selected port/payload/endpoints, control observation and actual candidate count/IDs
+  - [x] `v0.4.1_15` QUIC/UDP observability package published
+    - [x] QUIC attempted count/IDs visible in normal Stage 80
+    - [x] owner-live QUIC ON with blocked control path shows all four attempted IDs
+    - [x] RU/EN protocol presentation source contract
+    - [x] selected-port/payload direct UDP control observation source contract
+    - [x] owner-live Generic UDP file-selection path still FAIL; durable evidence recorded
+  - [ ] **`v0.4.1_16` Generic UDP browser-to-job handoff correction — current source candidate**
+    - [x] trace actual product transport: browser Base64 POST, not multipart upload directory
+    - [x] identify `_15` browser ownership weakness: Run sampled native `input.files[0]` instead of retaining prepared payload
+    - [x] stage selected file immediately on `change`
+    - [x] retain filename, exact decoded byte count and Base64 in application-owned state
+    - [x] display localized ready-to-send filename/byte evidence before Run
+    - [x] Run consumes staged payload even if native file-control selection is later lost/reset
+    - [x] retain defensive Run-time staging fallback when a native File is still present
+    - [x] remove realm-specific `instanceof ArrayBuffer` assumption
+    - [x] retain decoded `1..4096` byte and strict backend Base64 bounds
+    - [x] add explicit job-local preparation error attribution including unavailable/not-writable job directory, temp-create, decode, chmod/move and state-record classes
+    - [x] preserve exact port/payload control observation, no-reply semantics, candidate enumeration and cleanup
+    - [x] extend focused Generic UDP regression contract
+    - [ ] complete Strategy Lab corrective matrix
+    - [ ] FreeBSD-15 package build/inspection qualification
+    - [ ] exact-head source merge
+    - [ ] persistent `v0.4.1_16` testing-package publication
+    - [ ] bounded publication-record docs reconciliation
+    - [ ] owner-live: selecting valid file immediately shows ready state + exact byte count
+    - [ ] owner-live: exact 140-byte payload starts a new configured-UDP job
+    - [ ] owner-live: Stage 80 shows selected port/payload/endpoints, direct observation and actual UDP candidate IDs
+    - [ ] owner-live: any later filesystem preparation failure reports its explicit class
     - [ ] owner-live: no-reply UDP text does not claim the port is closed
     - [ ] owner-live: Enable QUIC OFF shows natural disabled wording
     - [ ] owner-live: remaining RU/EN presentation checks
-    - [ ] owner-live: Stage-90 restoration and temporary process/firewall/socket cleanup PASS for the corrected UDP path
+    - [ ] owner-live: Stage-90 restoration and temporary process/firewall/socket/payload cleanup PASS
   - [ ] already-accessible target
   - [ ] cancellation/internal-failure containment
 - [ ] Circular lifecycle coverage
@@ -102,17 +86,15 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — trace the `_15` Generic UDP live failure
+## Current priority — qualify and publish `v0.4.1_16`
 
-`v0.4.1_15` is correctly published, and the latest owner-live `rutracker.org` Extended run proves the QUIC attempt-observability portion is active: ordinary Stage 80 shows all four attempted QUIC IDs. The same live cycle proves that the Generic UDP browser-to-job path is still broken: attaching a valid small file does not produce a configured UDP request and Stage 80 reports UDP as not configured.
+The `_15` live failure is no longer being treated as an unspecified “upload folder” issue. Source tracing established that there is no server upload directory at the failing point: selected bytes are supposed to be read in the browser and Base64-encoded into the ordinary start POST. `_15` did not persist a prepared browser payload; Run depended on the native file control still exposing `input.files[0]`.
 
-Do **not** guess the root cause or immediately rewrite size validation again. Trace the real path end to end:
+`_16` corrects that boundary by staging exact validated bytes at selection time and making the prepared state visible before Run. It also adds server-side preparation error classes so a real later owner/mode/permissions failure can be distinguished if one occurs.
 
-`file input/change -> selected File -> ArrayBuffer/byteLength -> Base64 start payload -> PHP/API -> configd -> launcher -> job-local udp-payload.bin/udp-port -> filesystem ownership/mode -> Python configured-UDP detection`.
+Current gate: full corrective matrix → FreeBSD-15 package qualification → exact-head source merge → persistent testing publication → bounded publication record. Then owner-live checks only the materially changed UDP handoff rather than repeating accepted Model-C/QUIC baseline work.
 
-The owner's suspicion that the file may not actually be uploaded/saved, potentially because of permissions on the runtime/job directory, is an explicit investigation hypothesis. It becomes a root cause only if live evidence proves it.
-
-Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
+Durable `_15` failure evidence: [`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
 
 ## Deferred research — retain, do not activate by inertia
 
