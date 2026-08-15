@@ -21,12 +21,12 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
+- current source candidate: `_22` / `PLUGIN_REVISION=22` — Laboratory IPv4 targets, currently in source qualification and not yet published;
 - current **published** packaged revision remains `_21` / `PLUGIN_REVISION=21` on `main`;
 - current published testing package/tag: `os-zapret2-restyle-0.4.1_21.pkg` / `v0.4.1_21`;
 - `_21` testing-package SHA-256: `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
 - `_21` source merge/testing-tag target: `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
 - `_21` publication workflow run: `31898795618`;
-- next package-affecting source scope uses `PLUGIN_REVISION=22` for Laboratory IPv4 targets and is not yet published;
 - latest full Web/pkg release remains `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
 - stable Pages/pkg repository was not promoted by `_21`;
