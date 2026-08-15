@@ -10,21 +10,21 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-15
-**Current handoff identity:** `v0.4.1_20` source candidate
+**Current handoff identity:** published testing `v0.4.1_20`
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
-- current source candidate: `PLUGIN_REVISION=20` / `v0.4.1_20`;
-- last published testing package/tag: `os-zapret2-restyle-0.4.1_19.pkg` / `v0.4.1_19`;
-- `_19` testing-package SHA-256: `142ec3f3f5843d6be09d0ad34aa433c00ddf4ef82e75bbb2fd7104fdcc3eb7f8`;
-- `_19` source merge/testing-tag target: `6d06f0c3dfc7a76f0dc7b43ca6ba8cc0d0f83758`;
-- `_19` publication workflow run: `31892344832`;
+- current packaged revision: `PLUGIN_REVISION=20` / `v0.4.1_20`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_20.pkg` / `v0.4.1_20`;
+- `_20` testing-package SHA-256: `5d5fae0a79054ad807a92ca7804d5984d63782927c667962b6395d48627ab64a`;
+- `_20` source merge/testing-tag target: `d732965c143563352e18ac58c209aeb30a6d4feb`;
+- `_20` publication workflow run: `31896330680`;
 - required ABI: `FreeBSD:15:amd64`;
 - stable Pages/pkg repository promoted by testing `_N`: **no**.
 
-Machine `_19` publication evidence: [`verification/evidence/testing-publications/v0.4.1_19.md`](verification/evidence/testing-publications/v0.4.1_19.md).
+Machine `_20` publication evidence: [`verification/evidence/testing-publications/v0.4.1_20.md`](verification/evidence/testing-publications/v0.4.1_20.md).
 
 Resolve the exact current `main` SHA at execution time under `GH-004`.
 
@@ -43,33 +43,27 @@ Accepted owner-live/product facts include:
 
 Enable QUIC OFF/default persistence across an actual reload/revisit remains a separate live acceptance row. `_20` preserves the existing model-backed default/load/save source contract.
 
-## `_19` owner-live follow-up — layout corrective selected
+## `_19` owner-live follow-up
 
-The owner installed published `_19` and supplied a direct comparison between the Laboratory page, the Zapret Strategy page and a native OPNsense settings page.
-
-Visible `_19` presentation items include RU `Режим:`, `Расширенный` and `Статус: ожидание`, but the owner rejected the remaining layout because:
-
-- the Laboratory working area has a larger perimeter inset than ordinary OPNsense pages;
-- the Diagnostics/Laboratory value column does not follow the normal OPNsense form grid;
-- `Режим:` must be guaranteed to use the same actual font size/line height as `Заблокированный домен / IP`.
+Published `_19` showed the requested RU mode/status text, but the owner rejected the remaining Laboratory layout: the working-area perimeter was too large, the value column did not match the normal OPNsense grid, and `Режим:` needed guaranteed typography parity with the target label.
 
 Evidence: [`verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md).
 
-## `_20` selected implementation
+## `_20` published implementation
 
-`_20` is a narrow Laboratory/native-layout corrective package candidate:
+`_20` is source/CI/FreeBSD/package-publication complete:
 
-- both the top Diagnostics domain row and Strategy Lab inputs use one native-style `25%` field-label column;
-- target, Generic UDP and Enable QUIC therefore start on the same normal OPNsense value-column position;
-- the fixed `_19` `250px` Laboratory-only label column is removed;
+- both Diagnostics input tables use one native-style `25%` field-label column;
+- target, Generic UDP and Enable QUIC start on the same normal OPNsense value-column position;
+- the rejected fixed `_19` `250px` Laboratory-only label column is removed;
 - RU `Заблокированный домен / IP` remains one line at normal UI typography;
 - `Режим:` / `Mode:` computed font size and line height are synchronized from the target field-label reference;
-- the nested Laboratory page/container/row/column perimeter is neutralized so it does not add a second inset;
+- nested Laboratory page/container/row/column spacing is neutralized so it does not add a second perimeter inset;
 - `_19` RU/EN strings, Strategy Lab execution, Generic UDP, QUIC and persistence semantics are unchanged.
 
 Source patch record: [`patches/v0.4.1_20.md`](patches/v0.4.1_20.md).
 
-## Immediate acceptance after `_20` publication
+## Immediate owner-live acceptance
 
 1. visually compare Laboratory perimeter with the Strategy/native OPNsense pages;
 2. verify the top domain input and Laboratory target/UDP/QUIC controls use the normal common value column;
