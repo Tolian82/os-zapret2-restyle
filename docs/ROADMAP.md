@@ -54,9 +54,9 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
   - [x] persistent testing package `v0.4.1_13` published and verified
   - [x] owner-live Model-C-only regression
 - [ ] Risk-selected Strategy Lab regression coverage
-  - [ ] initial Zapret2 STOPPED state — **current selected row**
-  - [ ] Extended TLS 1.2
-  - [ ] Extended HTTP
+  - [x] initial Zapret2 STOPPED state
+  - [ ] Extended TLS 1.2 — **current selected row together with HTTP**
+  - [ ] Extended HTTP — **current selected row together with TLS 1.2**
   - [ ] QUIC capability gating
   - [ ] configured Generic UDP
   - [ ] already-accessible target
@@ -77,31 +77,33 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — risk-selected Strategy Lab regression coverage
+## Current priority — Extended TLS 1.2 + HTTP regression
 
-`v0.4.1_13` Model-C-only production is now complete through the selected owner-live gate.
+`v0.4.1_13` Model-C-only production remains complete. Risk-selected Standard lifecycle coverage now includes both initial normal-service states:
 
-Accepted owner-live evidence on the published `_13` package covers three normal Standard paths:
+- initial RUNNING: accepted on the `_13` owner-live Model-C-only matrix;
+- initial STOPPED: `rutracker.org` Standard `job.5b97u9` completed `SUCCESS` with three stable working strategies and left the permanent Zapret2 service STOPPED; the post-job normal `dvtws2|zapret.*supervisor` process query was empty.
 
-- `telegram.org`, `job.6RhNa1`: exhaustive `NO_CANDIDATE`, Model C `16/16`, no automatic fallback, clean `RUNNING -> RUNNING` restoration;
-- `rutracker.org`, `job.PEEjoY`: exhaustive `SUCCESS`, Model C `16/16`, three stable shortlist entries, clean `RUNNING -> RUNNING` restoration;
-- `www.youtube.com`, `job.7Kz5ro`: early `SUCCESS`, Model C stopped at `7/16` on `enough_candidates`, three stable shortlist entries, clean `RUNNING -> RUNNING` restoration.
+The owner explicitly accepted `job.5b97u9` as sufficient for the STOPPED row and stated that deeper telemetry/repeat testing of that same scenario would not add useful evidence. That completed row is not to be reopened by inertia.
 
 Durable evidence:
-[`verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md).
 
-The next selected row is **Standard blocked domain, initial Zapret2 STOPPED**. Required acceptance:
+- [`verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md);
+- [`verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md).
 
-- prove the normal service is STOPPED before the job;
-- execute one normal Standard blocked-domain Strategy Lab job on the unchanged published `_13` package;
-- require a truthful terminal result;
-- require Stage 90 semantic restoration to final service state STOPPED;
-- require unchanged production strategy/configuration;
-- require no temporary process/socket/firewall residue.
+The next selected row is one **Extended blocked-domain run** covering both TLS 1.2 and HTTP in Stage 80. This deliberately changes the tested protocol path instead of repeating already accepted Standard lifecycle behavior.
+
+Required acceptance:
+
+- use the unchanged published `_13` package;
+- execute one normal Extended blocked-domain Strategy Lab job;
+- require a truthful terminal job result;
+- require TLS 1.2 and HTTP to be exercised for available finalists or explicitly reported/skipped according to the implemented result/capability semantics;
+- preserve the normal lifecycle state after completion.
 
 This is regression coverage, not a new package candidate unless the live row exposes an actual defect.
 
-After this row is accepted, continue selecting the next backlog row from current risk/evidence rather than mechanically running every pending scenario.
+After this row is accepted, choose the next backlog row from current risk/evidence rather than mechanically repeating equivalent paths.
 
 ## Deferred research — retain, do not activate by inertia
 
