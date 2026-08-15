@@ -53,10 +53,10 @@ fi
 # save on change, reload from model-backed settings endpoint.
 require "${VIEW}" "apiPost('/api/zapret/strategy_lab_settings/quic', {},"
 require "${VIEW}" "apiPost('/api/zapret/strategy_lab_settings/quic', {enabled:enabled?'1':'0'}"
-require "${VIEW}" "loadQuicPreference();"
+require "${VIEW}" 'loadQuicPreference();'
 require "${SETTINGS}" '$model->strategylab->enablequic = $raw;'
 require "${SETTINGS}" "'enabled' => (string)\$model->strategylab->enablequic === '1'"
 require "${MODEL}" '<enablequic type="BooleanField">'
-require "${MODEL}" '<default>0</default>'
+require "${MODEL}" '<Default>0</Default>'
 
 echo 'PASS: Strategy Lab diagnostics RU/EN labels, circular idle text, and persisted Enable QUIC contract are deterministic'
