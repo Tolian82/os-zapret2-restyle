@@ -1,19 +1,21 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` PUBLISHED/OWNER-TESTED; QUIC OBSERVABILITY LIVE PASS, GENERIC UDP LIVE FAIL; `v0.4.1_16` PUBLISHED, OWNER-LIVE GENERIC UDP CORRECTION PENDING.**
+Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP OWNER-LIVE PASS.**
 
 Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected owner-live evidence.
 
 ## Current package/source boundary
 
+- current source candidate: `v0.4.1_16`;
 - current published testing package/tag: `os-zapret2-restyle-0.4.1_16.pkg` / `v0.4.1_16`;
 - `_16` source/tag target: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
 - `_16` package SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
 - publication workflow run: `31882091770`;
 - stable Pages/pkg repository promoted: no;
-- owner-live `_16` Generic UDP verification: pending.
+- owner-live `_16` Generic UDP verification: **PASS**.
 
 Machine publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_16.md`.
+Owner-live Generic UDP evidence: `docs/verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`.
 
 Normal Stage 60 remains Model C only; automatic Model B/A production fallback remains disabled from `_13`.
 
@@ -29,7 +31,7 @@ Durable evidence: `docs/verification/evidence/2026-08-15-v0.4.1_13-model-c-only-
 
 ## `_14` owner-live observations that selected `_15`
 
-The owner tested Extended `telegram.org` and `rutracker.org` with Enable QUIC ON. The old capability skip disappeared but ordinary output only showed `QUIC=not_found`, which did not prove how many candidates actually ran. The same cycle exposed localization gaps and Generic UDP input problems.
+The owner tested Extended `telegram.org` and `rutracker.org` with Enable QUIC ON. The old capability skip disappeared but ordinary output only showed `QUIC=not_found`, which did not prove how many candidates actually ran. The same cycle exposed localization gaps and Generic UDP input ambiguity.
 
 ## `_15` accepted source and live behavior
 
@@ -46,38 +48,29 @@ Owner-live `_15` evidence is positive: the `rutracker.org` Extended screenshot w
 
 ### Exact 140-byte binary input
 
-Automated `_15` coverage proved exact 140-byte Base64 decode/job-local metadata, but owner-live file selection still failed before configured UDP. Therefore the `_15` live path is **FAIL/SUPERSEDED BY `_16` CORRECTION**.
+Automated `_15` coverage proved exact 140-byte Base64 decode/job-local metadata. The earlier owner-live file-selection report was later clarified: the files being tried were approximately 140 KiB rather than 140 bytes. The product limit is `1..4096 bytes`.
 
 ### Selected-port/payload direct UDP observation
 
-The implemented configured-UDP path uses the exact selected search-epoch IP, destination port and job-local payload, recording reply/no-reply and timing. Its owner-live row remains pending until `_16` proves browser payload handoff.
+The configured-UDP path uses the exact selected search-epoch IP, destination port and job-local payload, recording reply/no-reply and timing. `_16` owner-live evidence now proves this path in the real GUI.
 
 ### No-reply does not mean closed / does not gate candidates
 
-Automated behavior remains accepted: UDP silence is not classified as `port closed` and does not suppress the bypass candidate catalog.
+Owner-live `_16` confirms the intended behavior: UDP silence is not classified as `port closed` and does not suppress the bypass candidate catalog.
 
-## `_15` Generic UDP owner-live failure
+## Historical `_15` Generic UDP report — superseded diagnosis
 
-Durable evidence: `docs/verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`.
+Durable chronology: `docs/verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`.
 
-Observed:
-
-- Extended mode;
-- destination port `53` entered;
-- valid small file selection did not produce a usable configured payload;
-- native UI appeared as `Не выбран ни один файл` / port+file validation;
-- Stage 80 reported UDP not configured;
-- QUIC path in the same page/job family remained functional.
+At the time, the owner reported that Generic UDP file selection did not become configured. That record is retained as historical observation, but its working assumption of a valid small payload/browser or filesystem failure is superseded by the controlled `_16` exact-byte test. The owner identified that earlier files were around 140 KiB and therefore outside the documented 4096-byte limit.
 
 ## `_16` trace result and correction
 
-Source tracing establishes that Generic UDP does **not** use a multipart server upload directory. The path is:
+Source tracing established that Generic UDP does **not** use a multipart server upload directory. The path is:
 
 `browser File -> ArrayBuffer -> Base64 start POST -> API -> configd -> launcher -> job-local udp-payload.bin/udp-port -> Python`.
 
-In `_15`, the application did not retain a prepared browser payload. The Run handler sampled native `input.files[0]` at click time and only then read it. Loss/reset of native selection therefore returned before API/configd/job-local storage.
-
-`_16` changes this boundary:
+`_16` makes the boundary explicit and observable:
 
 - file-input `change` captures and immediately reads the `File`;
 - exact `1..4096` decoded bytes are validated and Base64-encoded immediately;
@@ -85,7 +78,7 @@ In `_15`, the application did not retain a prepared browser payload. The Run han
 - RU/EN normal UI displays ready-to-send filename/byte evidence;
 - Run consumes staged Base64 even if native selection is later lost;
 - Run-time fallback stages a still-present native file when needed;
-- browser buffer validation no longer depends on realm-specific `instanceof ArrayBuffer`;
+- browser buffer validation does not depend on realm-specific `instanceof ArrayBuffer`;
 - later job-local failures expose explicit classes, including `job_directory_not_writable`, `payload_temp_create_failed`, decode/write/chmod/move and state-record failures.
 
 ## `_16` source/publication acceptance — PASS
@@ -103,18 +96,30 @@ In `_15`, the application did not retain a prepared browser payload. The Run han
 
 Publication-record documentation tail is PR `#246`.
 
-## Owner-live `_16` acceptance
+## Owner-live `_16` Generic UDP acceptance — PASS
 
-Required after installing the published package:
+Controlled fixture and run:
 
-- selecting a valid file immediately shows localized ready-to-send filename and exact decoded bytes;
-- exact 140-byte payload starts a new configured-UDP job;
-- Stage 80 shows selected port/payload/endpoints, direct observation and actual UDP candidate IDs;
-- any later filesystem preparation failure identifies its failure class;
-- no-reply wording never claims the port is closed;
-- terminal payload cleanup and Zapret2 restoration PASS.
+- Windows fixture `udp-140.bin` verified by filesystem as exactly `140` bytes;
+- target `rutracker.org`;
+- Extended mode;
+- Generic UDP port `53`;
+- Enable QUIC OFF;
+- job `job.j09XUc`;
+- GUI showed `Файл подготовлен к отправке: udp-140.bin, 140 байт.` before Run;
+- Stage 80 reported payload `140` bytes and endpoint `172.67.182.196`;
+- direct control reply was not observed and the UI explicitly stated that this does not mean the port is closed;
+- actual UDP tested set contained all three IDs: `udp-ipfrag-8`, `udp-ipfrag-16`, `udp-ipfrag-32`;
+- no working UDP strategy was found, which is a valid negative result;
+- QUIC OFF presentation stated that QUIC strategy search was disabled;
+- Stage 90 reported temporary processes/rules removed and original Zapret2 restored/running;
+- final job outcome: `SUCCESS`.
 
-Remaining independent `_15/_16` rows: Enable QUIC OFF/default persistence and final RU/EN presentation review.
+This closes the application-owned staged file input, exact 140-byte configured UDP, selected-port/payload direct UDP observation, and no-reply candidate-execution rows for the tested `_16` scenario.
+
+The earlier browser/upload/filesystem defect hypothesis is not confirmed. Previous repeated size errors are explained by the owner selecting approximately 140 KiB files, outside the `1..4096 bytes` contract.
+
+Remaining independent rows: Enable QUIC OFF/default persistence across reload/revisit and final RU/EN presentation review.
 
 ## Scenario matrix
 
@@ -127,13 +132,13 @@ Remaining independent `_15/_16` rows: Enable QUIC OFF/default persistence and fi
 | 5 | Historical closed-QUIC capability skip | **OBSERVED ON `_13`; SUPERSEDED** |
 | 6 | `_14` Enable QUIC ON / blocked control / no capability skip | **PASS, selected `_15` observability** |
 | 7 | `_15` QUIC tested count/IDs ordinary output | **OWNER-LIVE PASS — 4 IDs** |
-| 8 | `_15` exact/small Generic UDP file input | **OWNER-LIVE FAIL; SUPERSEDED** |
-| 9 | `_16` application-owned staged file input | **AUTOMATED/PACKAGE PASS; OWNER-LIVE PENDING** |
-| 10 | `_16` exact 140-byte configured UDP | **AUTOMATED BACKEND PASS; OWNER-LIVE PENDING** |
-| 11 | selected-port/payload direct UDP observation | **AUTOMATED PASS; OWNER-LIVE PENDING** |
-| 12 | no-reply does not mean closed / does not gate candidates | **AUTOMATED PASS; OWNER-LIVE PENDING** |
-| 13 | terminal payload cleanup and Zapret2 restoration PASS. | **OWNER-LIVE PENDING FOR `_16` UDP PATH** |
-| 14 | Enable QUIC OFF/default/persistence | PENDING |
+| 8 | `_15` earlier Generic UDP owner report | **HISTORICAL; DIAGNOSIS SUPERSEDED BY EXACT-BYTE `_16` PASS** |
+| 9 | `_16` application-owned staged file input | **OWNER-LIVE PASS** |
+| 10 | `_16` exact 140-byte configured UDP | **OWNER-LIVE PASS — `job.j09XUc`** |
+| 11 | Selected-port/payload direct UDP observation | **OWNER-LIVE PASS** |
+| 12 | No-reply does not mean closed / does not gate candidates | **OWNER-LIVE PASS** |
+| 13 | terminal payload cleanup and Zapret2 restoration PASS. | **STAGE-90 RESTORATION/TEMP PROCESS+RULE CLEANUP OWNER-LIVE PASS; deeper residue remains under global cleanup backlog** |
+| 14 | Enable QUIC OFF/default/persistence | **OFF PRESENTATION PASS; persistence PENDING** |
 | 15 | RU/EN presentation review | PENDING |
 | 16 | Target already accessible | PENDING REGRESSION |
 | 17 | Cancellation/internal-failure containment | PENDING REGRESSION |
@@ -141,6 +146,6 @@ Remaining independent `_15/_16` rows: Enable QUIC OFF/default persistence and fi
 | 19 | Settings Apply guards | PENDING REGRESSION |
 | 20 | Retention/reboot residue | PENDING REGRESSION |
 
-## Failure policy for `_16`
+## Current failure policy
 
-`_16` fails owner-live acceptance if a valid selected file cannot become application-owned ready state, a 140-byte payload cannot reach configured UDP, Run again depends exclusively on native file-control retention, job-local permission/storage failure is collapsed into an unexplained unconfigured request, direct observation uses the wrong port/payload/binding, UDP silence is called a closed port, or lifecycle/payload cleanup fails.
+Generic UDP should only be reopened if fresh evidence contradicts the accepted exact-byte path: a valid `1..4096`-byte file cannot become ready/configured, the selected port/payload/binding is wrong, candidate enumeration is suppressed incorrectly, UDP silence is called a closed port, or lifecycle restoration fails.

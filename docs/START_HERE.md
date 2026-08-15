@@ -17,6 +17,7 @@
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
 - `PLUGIN_REVISION=16`;
+- current source candidate: `PLUGIN_REVISION=16` / `v0.4.1_16`;
 - current published testing package/tag: `os-zapret2-restyle-0.4.1_16.pkg` / `v0.4.1_16`;
 - testing-package SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
 - source merge and testing-tag target: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
@@ -30,24 +31,23 @@ Resolve the exact current `main` SHA at execution time under `GH-004`.
 
 ## Why `_16` exists
 
-Published `_15` successfully made real QUIC execution observable, but the owner-live Generic UDP retry still failed before configured UDP execution. With port `53` entered, selecting a valid small local file did not produce a usable configured payload; the native file control appeared empty and Stage 80 reported UDP as not configured.
+Published `_15` made real QUIC execution observable and also exposed ambiguity around Generic UDP file selection. `_16` made the browser handoff explicit and observable by staging the selected bytes immediately and by adding precise backend preparation diagnostics.
 
-Durable live-failure evidence:
+The earlier owner report that Generic UDP still failed is now superseded by controlled exact-byte evidence. The owner later identified the input mistake: the repeatedly selected files were approximately **140 KiB**, while the product contract is **1..4096 bytes**.
+
+Historical `_15` report remains preserved as chronology only:
 [`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
 
-## Trace result
+Current accepted live evidence:
+[`verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md).
 
-The earlier permissions theory is retained only as a possible **later-stage** failure, not the primary explanation for the observed GUI state.
+## Generic UDP transport and `_16` correction
 
 Generic UDP has no multipart upload directory. The product path is:
 
 `local File -> browser ArrayBuffer -> Base64 in normal start POST -> PHP/API -> configd -> launcher -> private job-local udp-payload.bin/udp-port -> Python Extended`.
 
-Source tracing found that `_15` did not own the prepared browser payload. The Run handler sampled `input.files[0]` at click time and only then read/encoded it. If the native selection was cleared/lost, validation returned before API/configd/job-local storage was reached. In that state filesystem permissions cannot be the first failure because no server payload file has yet been created.
-
-## `_16` correction
-
-`_16` makes the browser handoff explicit and observable:
+`_16` makes this browser handoff explicit and observable:
 
 - file-input `change` immediately captures the selected `File`;
 - `readAsArrayBuffer` and exact `1..4096` decoded-byte validation run immediately;
@@ -77,19 +77,33 @@ Canonical specialist contract:
 - tag target: exactly the candidate-defining source merge;
 - stable Pages/pkg repository: unchanged.
 
-The publisher again could not create its Draft publication-record PR because the repository setting forbids GitHub Actions from creating or approving pull requests. The publisher had already pushed the machine evidence branch, so PR `#246` completes the same bounded docs-only tail without altering package identity or bytes.
+The publisher again could not create its Draft publication-record PR because the repository setting forbids GitHub Actions from creating or approving pull requests. PR `#246` completed the bounded docs-only publication tail without altering package identity or bytes.
 
-## Immediate next task — owner-live `_16`
+## `_16` owner-live Generic UDP — PASS
 
-Do not repeat accepted Model-C or QUIC baseline work. Verify the corrected Generic UDP handoff:
+Controlled owner-live verification used an exact Windows-generated `udp-140.bin` fixture whose filesystem size was verified as `140` bytes before selection.
 
-1. selecting a valid file immediately shows its filename and exact decoded byte count as **ready to send**;
-2. a 140-byte sample shows `140` bytes and starts a **new** configured-UDP job;
-3. Stage 80 shows selected port/payload/IP, direct reply/no-reply observation and actual UDP candidate IDs;
-4. if a later server-side filesystem preparation error occurs, the UI/API identifies its preparation class instead of silently treating UDP as unconfigured;
-5. no-reply wording never claims the UDP port is closed;
-6. Stage-90 restoration and temporary process/firewall/socket/payload cleanup remain PASS.
+Observed in Strategy Lab job `job.j09XUc`:
 
-Remaining independent rows after that are Enable QUIC OFF/default persistence and final RU/EN presentation review.
+- target `rutracker.org`, Extended mode, UDP port `53`, Enable QUIC OFF;
+- GUI immediately displayed `udp-140.bin, 140 байт` as ready to send;
+- Stage 80 showed configured UDP on port `53` with payload `140` bytes and endpoint `172.67.182.196`;
+- direct reply was not observed and the UI correctly stated that this does **not** mean the port is closed;
+- three candidates actually ran: `udp-ipfrag-8`, `udp-ipfrag-16`, `udp-ipfrag-32`;
+- no working UDP candidate was found, which is a truthful negative result rather than a test failure;
+- QUIC OFF was presented naturally as strategy search disabled;
+- Stage 90 visibly restored Zapret2 and removed temporary processes/rules.
+
+The earlier suspicion of an upload-folder/browser/filesystem defect is therefore not the current diagnosis for this scenario. The owner identified the actual cause of the repeated size validation failures: previous files were around **140 KiB**, not 140 bytes.
+
+## Immediate next task
+
+Do not repeat accepted Model-C, QUIC-ON, or Generic UDP baseline work without fresh contradictory evidence.
+
+Next selected rows:
+
+1. verify Enable QUIC OFF/default persistence across reload/revisit;
+2. complete the remaining RU/EN presentation review;
+3. then continue the risk-selected regression backlog from `ROADMAP.md`.
 
 Do not reopen closed BLOB/Lua/discovery/model-selection experiments without new architecture or fresh contradicting evidence.
