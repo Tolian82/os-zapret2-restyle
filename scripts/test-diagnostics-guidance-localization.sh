@@ -44,8 +44,8 @@ require "${VIEW}" "stateLabel:'State'"
 require "${VIEW}" 'applyStaticLocalization();'
 
 # Ordinary circular status must be human text, not raw JSON/braces.
-require "${VIEW}" "$('#circularRaw').text(ui.stateLabel + ': ' + label(statusLabels,String(state).toUpperCase()));"
-if grep -Fq "$('#circularRaw').text(JSON.stringify(data,null,2))" "${VIEW}"; then
+require "${VIEW}" "\$('#circularRaw').text(ui.stateLabel + ': ' + label(statusLabels,String(state).toUpperCase()));"
+if grep -Fq "\$('#circularRaw').text(JSON.stringify(data,null,2))" "${VIEW}"; then
     fail 'ordinary circular state still exposes raw JSON'
 fi
 
