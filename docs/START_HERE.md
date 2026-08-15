@@ -79,7 +79,7 @@ The `_13` source and persistent testing-delivery boundaries are complete:
 - tag `v0.4.1_13` points exactly to `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
 - publication branch `publish/v0.4.1_13`: deleted after successful publication.
 
-## `_13` owner-live Model-C-only gate — PASS
+## `_13` owner-live normal Model-C-only gate — PASS
 
 The owner installed `os-zapret2-restyle-0.4.1_13` and supplied complete retained telemetry for three normal Strategy Lab jobs:
 
@@ -91,24 +91,40 @@ All three jobs persisted `model_c_only=true`, empty fallback evidence, verified 
 
 Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md).
 
-## Immediate next task — initial Zapret2 STOPPED regression
+## Initial Zapret2 STOPPED regression — PASS
 
-The selected next risk-based Strategy Lab regression is **Standard blocked domain with initial Zapret2 STOPPED**.
+The owner then ran `rutracker.org` Standard as `job.5b97u9` with the permanent Zapret2 service initially STOPPED.
+
+Observed result:
+
+- Strategy Lab started and completed normally;
+- terminal GUI status: `ЗАВЕРШЕНО`;
+- result: `SUCCESS`;
+- stable working strategies reported: `3`;
+- post-job `configctl zapret status`: `zapret is not running`;
+- post-job `pgrep -af 'dvtws2|zapret.*supervisor'`: no output.
+
+The owner explicitly accepted this row as PASS on the observable path `STOPPED -> Strategy Lab works -> SUCCESS -> STOPPED` and stated that additional telemetry/repetition for this same scenario is unnecessary. Do not reopen this completed row merely to collect deeper duplicate evidence.
+
+Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md).
+
+## Immediate next task — Extended TLS 1.2 + HTTP regression
+
+The next selected risk-based Strategy Lab coverage is one **Extended blocked-domain run** that exercises both TLS 1.2 and plain HTTP in Stage 80.
 
 Acceptance boundary:
 
-- start from a verified STOPPED normal Zapret2 service;
-- run one normal Standard blocked-domain Strategy Lab job with the published `_13` package;
-- terminal result remains truthful;
-- Stage 90 verifies exact restoration to `STOPPED`, not merely successful cleanup;
-- no temporary Strategy Lab process/socket/firewall residue remains;
-- the saved production strategy/configuration remains unchanged.
+- use the unchanged published `_13` package;
+- run one Extended blocked-domain job through the normal GUI path;
+- verify that the Extended job itself completes truthfully;
+- verify that TLS 1.2 and HTTP are either exercised successfully for available candidates or explicitly reported/skipped according to capability/result semantics;
+- preserve the normal lifecycle state after completion.
 
-This is regression coverage only. Do not reopen the closed A/B/C selection, Lua initialization, BLOB startup/common-set, discovery, or cross-batch keep-warm investigations without new architecture or fresh contradicting evidence.
+This is materially different coverage from the completed Standard RUNNING/STOPPED rows. It is not a request to repeat Model-C selection, BLOB/Lua/discovery measurements, or the already accepted STOPPED scenario.
 
 ## Current task reading
 
-For the selected STOPPED-state regression, read completely:
+For the selected Extended TLS 1.2 + HTTP regression, read completely:
 
 1. `docs/architecture/STRATEGY_LAB.md`;
 2. `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
