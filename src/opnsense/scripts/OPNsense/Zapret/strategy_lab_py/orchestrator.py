@@ -461,6 +461,11 @@ class Orchestrator:
         path = self.job_dir / "quic-enabled"
         try:
             value = path.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            # Jobs created before explicit Enable QUIC existed, plus retained
+            # compatibility fixtures, have no immutable flag. Preserve the
+            # historical safe default: no QUIC strategy search.
+            return False
         except OSError as exc:
             raise OrchestrationError("Strategy Lab QUIC execution setting is unavailable") from exc
         if value not in {"0", "1"}:
