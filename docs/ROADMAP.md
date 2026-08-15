@@ -36,7 +36,7 @@
   - [x] Extended TLS 1.2 execution/result semantics
   - [x] Extended HTTP execution/result semantics
   - [x] historical `_13` closed-QUIC capability-skip observation
-  - [ ] **`v0.4.1_14` explicit Enable QUIC — current source task**
+  - [ ] **`v0.4.1_14` explicit Enable QUIC — current owner-live task**
     - [x] persisted checkbox in Extended GUI, default OFF
     - [x] saved checkbox state survives page reload through model-backed API
     - [x] copy resolved value into immutable job-local state at launch
@@ -46,7 +46,11 @@
     - [x] remove capability-based execution gate from shell/reference QUIC runner
     - [x] keep Stage-30 QUIC precheck as diagnostic evidence only
     - [x] focused automated regression for enabled QUIC with mocked `quic_ipv4=closed`
-    - [ ] merge/publish/install `_14`
+    - [x] complete corrective matrix + FreeBSD-15 qualification
+    - [x] exact-head source merge `df20ed2ebe7f6c37c4189008e06e80700ae89ce4`
+    - [x] persistent testing package `v0.4.1_14` published and verified
+    - [x] machine publication evidence recorded
+    - [ ] owner install `_14`
     - [ ] owner-live: default OFF + persistence
     - [ ] owner-live: OFF → `skipped/disabled`
     - [ ] owner-live: ON on blocked-QUIC ISP → candidates execute, truthful `working` or `not_found`
@@ -74,20 +78,33 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — publish and live-verify `_14`
+## Current priority — owner-live `_14`
 
-The owner changed the QUIC product rule after `_13` proved that the old capability gate skips QUIC when the ISP blocks ordinary QUIC. The new rule is intentionally the opposite: a blocked control path is a reason to allow bypass testing when the owner enables it.
+`v0.4.1_14` is now persistently published as a FreeBSD 15 testing package from candidate-defining source merge `df20ed2ebe7f6c37c4189008e06e80700ae89ce4`.
 
-`v0.4.1_14` therefore combines one coherent Strategy Lab input/execution scope:
+Published identity:
 
-1. **Enable QUIC** — explicit persisted opt-in, default OFF, sole QUIC execution gate;
-2. **Generic UDP input UX** — preserve the strict 1–4096-byte payload contract but turn the old apparent no-op for large files into an immediate visible validation error.
+- tag: `v0.4.1_14`;
+- asset: `os-zapret2-restyle-0.4.1_14.pkg`;
+- SHA-256: `b2df12f0af8ec6057f0df87e5289f89bc087664d7a0e2529c5e362e59db53d03`;
+- stable Pages/pkg repository promoted: no.
 
-The Stage-30 QUIC control probe remains useful diagnostic evidence, but it no longer has authority over Stage-80 candidate scheduling.
+Machine evidence: [`verification/evidence/testing-publications/v0.4.1_14.md`](verification/evidence/testing-publications/v0.4.1_14.md).
 
-Source acceptance requires focused tests, the repository corrective matrix, FreeBSD-15 package qualification, exact-head merge and persistent testing-package publication under the normal GitHub delivery contract.
+The owner’s QUIC rule is now implemented: **Enable QUIC is the sole execution gate**. Stage-30 QUIC probing remains diagnostic and cannot suppress Stage-80 bypass candidates.
 
-After `_14` is published, one owner-live Extended cycle may cover both enabled QUIC and valid Generic UDP if both inputs are intentionally configured. Separate quick checks still verify checkbox persistence/default and oversized-file visible rejection.
+Owner-live verification now needs only materially new behavior:
+
+1. install `_14`;
+2. verify checkbox default/persistence;
+3. verify OFF gives `skipped/disabled`;
+4. verify ON on the ISP-blocked ordinary-QUIC path actually runs candidates and gives truthful `working` or `not_found`;
+5. verify a 2–3 MB Generic UDP file gives immediate visible `1–4096` validation without a new job;
+6. verify a valid small Generic UDP payload actually runs the UDP branch.
+
+One Extended run can cover enabled QUIC and valid Generic UDP simultaneously.
+
+The publisher’s automatic Draft-PR creation was blocked by the repository setting that disallows GitHub Actions PR creation. The already-created machine publication branch/evidence was retained, and the mandatory publication-record PR was opened via the GitHub connector; this does not affect published package identity or bytes.
 
 ## Deferred research — retain, do not activate by inertia
 
