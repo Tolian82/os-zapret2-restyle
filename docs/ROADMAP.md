@@ -62,7 +62,7 @@
     - [x] owner-live OFF run reports QUIC strategy search disabled
     - [x] independent Generic UDP candidate execution remains active with QUIC OFF
     - [x] tested OFF job completes SUCCESS and Stage-90 restoration PASS
-  - [ ] Enable QUIC OFF/default persistence across reload/revisit — source persistence contract exists; owner-live reload proof pending
+  - [ ] Enable QUIC OFF/default persistence across reload/revisit — source persistence contract guarded in `_17`; owner-live reload proof pending
   - [ ] **`v0.4.1_17` Strategy Lab / Diagnostics RU-EN presentation cleanup**
     - [x] source: circular idle ordinary display removes raw `{` and `}` / `{"state":"idle"}` JSON
     - [x] source: RU `Состояние: ОЖИДАНИЕ` / EN `State: IDLE`
@@ -80,8 +80,9 @@
     - [x] source: EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`
     - [x] source: `Enable QUIC` / RU `Включить QUIC`
     - [x] focused automated source contract covers RU/EN, circular idle, and persisted QUIC default/load/save
-    - [ ] latest-head full CI + FreeBSD-15 package qualification
-    - [ ] exact-head source merge and persistent `v0.4.1_17` testing publication
+    - [x] latest-head full CI + FreeBSD-15 package qualification
+    - [x] exact-head source merge `ebf071122b2613c4fe56b5af4e5e9f07c99e9122`
+    - [x] persistent `v0.4.1_17` testing publication
     - [ ] live acceptance in Russian mode
     - [ ] live acceptance in English mode
     - [ ] verify no RU/EN cross-language leakage
@@ -103,23 +104,24 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — publish `_17`, then RU/EN + persistence live acceptance
+## Current priority — `_17` owner-live RU/EN + persistence acceptance
 
-Current source candidate: `v0.4.1_17` (`PLUGIN_REVISION=17`).
+Current published testing identity:
 
-Last published testing identity remains `_16` until `_17` publication completes:
-
-- tag: `v0.4.1_16`;
-- asset: `os-zapret2-restyle-0.4.1_16.pkg`;
-- SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
-- source/tag target: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
+- tag: `v0.4.1_17`;
+- asset: `os-zapret2-restyle-0.4.1_17.pkg`;
+- SHA-256: `92d7d3320246380bef53c7d37364895315e12d55b958c8a5fd657ba9ab213dbf`;
+- source/tag target: `ebf071122b2613c4fe56b5af4e5e9f07c99e9122`;
+- publication workflow run: `31887296681`;
 - stable Pages/pkg repository promoted: no.
 
-Generic UDP and explicit QUIC ON/OFF execution semantics remain owner-live accepted. `_17` does not reopen them; it implements the selected visible RU/EN/circular-idle cleanup and preserves the existing persisted Enable QUIC contract.
+Machine evidence: [`verification/evidence/testing-publications/v0.4.1_17.md`](verification/evidence/testing-publications/v0.4.1_17.md).
 
-After publication/install, live acceptance must inspect both language modes and then prove the saved OFF/default QUIC value survives reload/revisit.
+Generic UDP and explicit QUIC ON/OFF execution semantics remain owner-live accepted. `_17` does not reopen them; it publishes the selected visible RU/EN/circular-idle cleanup and preserves the persisted Enable QUIC contract.
 
-Current evidence: [`verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`](verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md).
+Next live acceptance must inspect both language modes and then prove the saved OFF/default QUIC value survives reload/revisit.
+
+Current live predecessor evidence: [`verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`](verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md).
 
 ## Deferred research — retain, do not activate by inertia
 
