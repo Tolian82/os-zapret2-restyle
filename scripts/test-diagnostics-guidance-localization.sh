@@ -65,26 +65,41 @@ require "${VIEW}" "\$('#strategyLabState,#circularState').text(label(statusLabel
 require "${VIEW}" "\$('a[href=\"/ui/zapret\"]').text(ui.navStrategy);"
 require "${VIEW}" "\$('a[href=\"/ui/zapret/diagnostics\"]').text(ui.navLaboratory);"
 
-# Owner-live _18 showed the 12px workaround and perceived alignment as wrong.
-# Preserve normal typography, keep the long label on one line, and use an
-# explicit fixed first/value column so domain, UDP and QUIC start at one x-position.
-require "${VIEW}" 'id="strategyLabInputsTable"'
-require "${VIEW}" 'table-layout:fixed;'
-require "${VIEW}" 'td.strategy-lab-label'
-require "${VIEW}" 'width:250px;'
-require "${VIEW}" 'min-width:250px;'
-require "${VIEW}" 'white-space:nowrap;'
-require "${VIEW}" 'td.strategy-lab-value'
+# Owner-live _19 showed two remaining layout defects: the Laboratory page had a
+# larger outer inset than native OPNsense pages and the input/value column still
+# did not match the normal OPNsense form grid. Both Diagnostics tables now share
+# a 25% label column, and the nested page wrapper is visually neutralized.
+require "${VIEW}" 'class="table table-striped diagnostics-form-table" id="testDomainTable"'
+require "${VIEW}" 'class="table table-striped diagnostics-form-table" id="strategyLabInputsTable"'
+require "${VIEW}" '.diagnostics-form-table > tbody > tr > td.zapret-field-label'
+require "${VIEW}" 'width:25%;'
+require "${VIEW}" 'class="zapret-field-label">{{ lang._('
+require "${VIEW}" 'class="zapret-field-value"><input type="text" class="form-control" id="testDomainInput"'
+require "${VIEW}" 'class="zapret-field-value"><input type="text" class="form-control" id="strategyLabDomainInput"'
+require "${VIEW}" 'class="zapret-field-value"><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort"'
+require "${VIEW}" 'class="zapret-field-value"><input type="checkbox" id="strategyLabEnableQuic" disabled/>'
+if grep -Fq 'width:250px;' "${VIEW}" || grep -Fq 'min-width:250px;' "${VIEW}"; then
+    fail 'fixed 250px Laboratory label column returned; native OPNsense 25% grid is required'
+fi
 if grep -Fq 'font-size:12px;' "${VIEW}"; then
     fail 'blocked-domain label must use normal UI typography; 12px workaround returned'
 fi
-require "${VIEW}" '<td class="strategy-lab-value"><input type="text" class="form-control" id="strategyLabDomainInput"'
-require "${VIEW}" '<td class="strategy-lab-value"><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort"'
-require "${VIEW}" '<td class="strategy-lab-value"><input type="checkbox" id="strategyLabEnableQuic" disabled/>'
+require "${VIEW}" '.page-content-main {'
+require "${VIEW}" 'padding:0 !important;'
+require "${VIEW}" '.page-content-main > .container-fluid {'
+require "${VIEW}" 'padding-left:0 !important;'
+require "${VIEW}" '.page-content-main > .container-fluid > .row > .col-xs-12 {'
+require "${VIEW}" 'padding-right:0 !important;'
+
+# Mode label remains right-aligned next to the selector, and its actual computed
+# font size/line height are copied from the same native field-label reference.
 require "${VIEW}" 'class="strategy-lab-mode-control"'
 require "${VIEW}" 'id="strategyLabModeLabel">Mode:'
 require "${VIEW}" 'justify-content:flex-end;'
 require "${VIEW}" 'text-align:right;'
+require "${VIEW}" "var modeFontReference=\$('#strategyLabInputsTable > tbody > tr > td.zapret-field-label').first();"
+require "${VIEW}" "'font-size':modeFontReference.css('font-size')"
+require "${VIEW}" "'line-height':modeFontReference.css('line-height')"
 
 # Sidebar canonical names are Strategy/Laboratory; the active page also applies
 # deterministic RU/EN text so the requested labels do not depend on gettext wording.
@@ -107,4 +122,4 @@ require "${SETTINGS}" "'enabled' => (string)\$model->strategylab->enablequic ===
 require "${MODEL}" '<enablequic type="BooleanField">'
 require "${MODEL}" '<Default>0</Default>'
 
-echo 'PASS: Laboratory RU/EN mode/status/sidebar labels, normal typography, aligned controls, circular idle text, and persisted Enable QUIC contract are deterministic'
+echo 'PASS: Laboratory uses native OPNsense perimeter/grid alignment, matched mode-label typography, deterministic RU/EN labels, circular idle text, and persisted Enable QUIC contract'
