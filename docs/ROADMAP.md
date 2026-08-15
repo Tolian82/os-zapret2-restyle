@@ -64,11 +64,32 @@
     - [x] owner-live: exact 140-byte payload starts configured-UDP job `job.j09XUc`
     - [x] owner-live: Stage 80 shows port `53`, payload `140` bytes, endpoint `172.67.182.196`, direct no-reply observation and all three UDP candidate IDs
     - [x] owner-live: no-reply text explicitly does not claim the port is closed and candidate search still runs
-    - [x] owner-live: Enable QUIC OFF shows natural disabled wording in the same Stage-80 result
     - [x] owner-live: Stage-90 service restoration and temporary process/rule cleanup visibly PASS
     - [x] owner correction: previous repeated size errors were caused by selecting ~140 KiB files, not a confirmed upload/filesystem defect; contract is `1..4096 bytes`
+  - [x] Enable QUIC OFF execution semantics
+    - [x] owner-live OFF run reports QUIC strategy search disabled
+    - [x] independent Generic UDP candidate execution remains active with QUIC OFF
+    - [x] tested OFF job still completes SUCCESS and Stage-90 restoration PASS
   - [ ] Enable QUIC OFF/default persistence across reload/revisit
-  - [ ] final RU/EN presentation review
+  - [ ] **Strategy Lab / Diagnostics RU-EN presentation cleanup — owner-selected next implementation**
+    - [ ] circular idle ordinary display: remove raw `{` and `}` braces
+    - [ ] circular idle ordinary display: replace raw `{"state":"idle"}` with RU `Состояние: ОЖИДАНИЕ` / EN `State: IDLE`
+    - [ ] keep raw machine JSON only in explicitly advanced/raw presentation if still needed
+    - [ ] localize `Full output (advanced)` / RU `Полный вывод (расширенный)`
+    - [ ] localize `Enter a domain and click Test to check HTTPS connectivity.` / RU `Введите домен и нажмите «Проверка», чтобы проверить HTTPS-соединение.`
+    - [ ] `Family` / RU `Семейство`
+    - [ ] `Endpoints` / RU `Назначения`
+    - [ ] `Outcome` / RU `Результат`
+    - [ ] `Restoration` / RU `Восстановление`
+    - [ ] `Replay` / RU `Ответы`
+    - [ ] `Complete Traffic Strategy profile` / RU `Полный профиль Traffic Strategy`
+    - [ ] `Run` / RU `Запуск`
+    - [ ] `Test Domain Connectivity` / RU `Тестирование соединения с доменом`
+    - [ ] `Blocked Domain` -> EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`
+    - [ ] `Enable QUIC` / RU `Включить QUIC`
+    - [ ] live acceptance in Russian mode
+    - [ ] live acceptance in English mode
+    - [ ] verify no RU/EN cross-language leakage
   - [ ] already-accessible target
   - [ ] cancellation/internal-failure containment
 - [ ] Circular lifecycle coverage
@@ -86,7 +107,7 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — post-UDP owner-live rows
+## Current priority — QUIC persistence + RU/EN presentation
 
 `v0.4.1_16` remains the current published testing package from candidate-defining source merge `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`.
 
@@ -98,15 +119,13 @@ Published identity:
 - publication workflow run: `31882091770`;
 - stable Pages/pkg repository promoted: no.
 
-Machine evidence: [`verification/evidence/testing-publications/v0.4.1_16.md`](verification/evidence/testing-publications/v0.4.1_16.md).
+Generic UDP and explicit QUIC ON/OFF execution semantics are now owner-live accepted for the tested `_16` flows. The latest OFF screenshot proves the runtime gate itself: QUIC candidate search is disabled while configured UDP still runs all three current UDP candidates and the job restores cleanly.
 
-Generic UDP is now owner-live accepted on `_16`. The controlled fixture was created as exactly 140 bytes, displayed as ready to send, and reached configured Stage 80 on port `53`. The job executed `udp-ipfrag-8`, `udp-ipfrag-16`, and `udp-ipfrag-32`; direct UDP no-reply was reported without falsely calling the port closed; Stage 90 restored Zapret2 successfully.
+What is **not** yet proven is persistence of the OFF/default value across a page reload/revisit. Keep that as a separate live row.
 
-The earlier suspicion of an upload-directory/browser/filesystem defect is not the current conclusion for this case. The owner identified that previous files were approximately 140 **KiB**, while the product contract is `1..4096 bytes`.
+The owner has now selected the RU/EN/circular-idle cleanup above as the next implementation scope. The implementation must be reflected in `START_HERE`, `PROJECT_STATE`, this roadmap, and live evidence/matrix, then live-checked in both language modes.
 
-Durable live-pass evidence: [`verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md).
-
-Next selected Strategy Lab rows are Enable QUIC OFF/default persistence and the final RU/EN presentation review. Do not repeat the accepted Generic UDP run without new contradictory evidence.
+Current evidence: [`verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`](verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md).
 
 ## Deferred research — retain, do not activate by inertia
 
