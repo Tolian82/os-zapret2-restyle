@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.4.x`
 
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1
-**Updated:** 2026-08-15
+**Updated:** 2026-08-16
 State-line scope: **`v0.4.x`**
 
 Direct orientation:
@@ -34,6 +34,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
 Machine `_23` publication evidence: [`verification/evidence/testing-publications/v0.4.1_23.md`](verification/evidence/testing-publications/v0.4.1_23.md).
 
+Owner-live `_23` IPv4 / Host-SNI closeout evidence: [`verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md`](verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md).
+
 The exact `main` SHA is resolved at execution time under `GH-004`.
 
 ## Locked current product facts
@@ -51,6 +53,11 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 - Settings Apply validation/guards and post-Apply service-state correctness are **COMPLETE by owner confirmation**.
 - `_21` Laboratory native perimeter/grid and Russian cross-page navigation localization are **OWNER-LIVE PASS**.
 - the current Strategy Lab / Laboratory Russian-presentation task is **CLOSED by owner instruction**; GitHub issue `#155` is completed.
+- `_23` Laboratory domain/IPv4 target support with optional Host/SNI is **OWNER-LIVE PASS / COMPLETE**.
+- `_23` HTTP `4xx`/`5xx` final replay classification is accepted: authenticated/intercepted application errors remain DPI-path evidence rather than false Stage-85 rejection.
+- `_23` bare IPv4 certificate-identity failure is accepted as `PARTIAL` + Host/SNI guidance; bare IPv4 QUIC is skipped with zero tested candidates while Generic UDP remains independent.
+- `_23` IPv4 + Host/SNI fixed-destination behavior, final `--ipset-ip=<target>` exact replay, real Host/SNI QUIC execution, and Stage-90 restoration are owner-live accepted.
+- IPv6 target input remains intentionally deferred as a separate future scope.
 - Enable QUIC OFF/default persistence across an actual reload/revisit is still live-pending; `_23` preserves the existing source persistence contract.
 
 Owner-live `_21` presentation evidence: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md).
@@ -99,9 +106,9 @@ Source patch record: [`patches/v0.4.1_21.md`](patches/v0.4.1_21.md).
 
 Source patch record: [`patches/v0.4.1_22.md`](patches/v0.4.1_22.md).
 
-## `_23` implementation / delivery status — truthful result classification
+## `_23` implementation / delivery / acceptance status — truthful result classification
 
-`_23` is exact-head qualified, source-merged and persistently published. It preserves the `_22` target architecture and corrects three owner-live classification defects:
+`_23` is exact-head qualified, source-merged, persistently published and owner-live accepted. It preserves the `_22` target architecture and corrects three owner-live classification defects:
 
 1. authenticated/intercepted HTTP `4xx`/`5xx` is retained as valid DPI-path evidence after exact profile replay, fixed search epoch endpoint success and firewall interception; an application error such as `502` does not erase an otherwise stable finalist at Stage 85;
 2. enabled QUIC on bare IPv4 without Host/SNI is short-circuited before candidate execution with `status=skipped`, `reason=host_sni_required`, `tested=[]`;
@@ -122,31 +129,32 @@ Delivery proof:
 - publication workflow run: `31909994148`;
 - stable Pages/pkg repository promoted: no.
 
-The publisher completed FreeBSD build, manifest/digest verification, release publication and release/tag verification. GitHub Actions policy blocked only the final automatic PR-creation step, so publication-record PR `#265` was opened manually from the workflow-created branch; this documentation-only tail does not alter the published package or source identity.
+Owner-live acceptance proof:
+
+- `job.9juf8H`: `rutracker.net` Standard `SUCCESS`, three final HTTP-502 strategies retained as `reachable_application_error` / `accepted=true`;
+- `job.TYjdSR`: `rutracker.org` Standard `SUCCESS`, three final strategies;
+- `job.3HeCEP`: bare IPv4 certificate mismatch ends `PARTIAL` with Host/SNI guidance;
+- `job.HNnp5P`: bare IPv4 Extended QUIC is skipped with `host_sni_required` and zero tested candidates while all three Generic UDP candidates execute;
+- `job.W0lKTv`: IPv4 `172.67.182.196` + `rutracker.org` Host/SNI is `SUCCESS`, exact replay is pinned to the entered IP, final profile contains `--ipset-ip=172.67.182.196`, and all four QUIC candidates perform real fixed-IP Host/SNI attempts;
+- selected closeout jobs verify `RUNNING -> RUNNING`, unchanged strategy and clean temporary runtime at Stage 90.
 
 Focused regression: `scripts/test-strategy-lab-truthful-results.sh`, included automatically by the Strategy Lab corrective matrix.
 
 Source patch record: [`patches/v0.4.1_23.md`](patches/v0.4.1_23.md).
+Owner-live closeout evidence: [`verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md`](verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md).
 
 ## Current verification boundary
 
-Owner-live `_23` verification is now the selected next boundary:
+**Laboratory IPv4 / Host-SNI target support is complete and must not be reopened without fresh contradictory evidence.**
 
-1. `rutracker.net`, Standard: Stage-60/70 stable intercepted evidence survives Stage 85 when the final HTTP application response is `4xx`/`5xx`;
-2. `rutracker.org`, Standard: existing successful domain behavior remains unchanged;
-3. bare canonical IPv4 with certificate-verification failure ends `PARTIAL` with Host/SNI guidance instead of `NO_CANDIDATE`;
-4. IPv4 + real Host/SNI stays pinned to the entered destination IP;
-5. final working IP profile contains `--ipset-ip=<entered IPv4>` and exact replay passes;
-6. Extended bare IPv4 with QUIC enabled reports QUIC `SKIPPED` / Host-SNI-required with zero tested QUIC candidates while Generic UDP remains independent;
-7. Stage 90 restores the exact original Zapret2 state and cleans temporary runtime/rules.
-
-Enable QUIC OFF/default persistence reload/revisit proof remains separate.
+The next selected live verification boundary is Enable QUIC OFF/default persistence across an actual Laboratory reload/revisit. Verify that OFF persists after reload/revisit and continues to suppress QUIC candidate execution. A passing result closes that pre-existing backlog row without a package-source change; a failure becomes a new bounded defect.
 
 ## Accepted owner-live evidence retained
 
 - Generic UDP: [`verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md)
 - QUIC OFF execution/UI follow-up: [`verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`](verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md)
 - `_21` Laboratory frame/localization owner-live pass: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md)
+- `_23` IPv4 / Host-SNI owner-live closeout: [`verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md`](verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md)
 
 ## Documentation authority note
 

@@ -9,8 +9,8 @@
 - **Documentation/navigation index:** [`INDEX.md`](INDEX.md)
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
-**Updated:** 2026-08-15
-**Current handoff identity:** `v0.4.1_23` published testing candidate
+**Updated:** 2026-08-16
+**Current handoff identity:** `v0.4.1_23` published testing candidate; Laboratory IPv4 / Host-SNI target support owner-live accepted
 
 ## Current identity
 
@@ -27,11 +27,13 @@
 
 Machine `_23` publication evidence: [`verification/evidence/testing-publications/v0.4.1_23.md`](verification/evidence/testing-publications/v0.4.1_23.md).
 
+Owner-live IPv4 / Host-SNI closeout evidence: [`verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md`](verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md).
+
 Resolve the exact current `main` SHA at execution time under `GH-004`.
 
 ## Accepted current live boundary
 
-Do not repeat accepted Model-C, QUIC-ON, QUIC-OFF execution, Generic UDP, already-accessible-target, Settings Apply, or `_21` Laboratory presentation work without fresh contradictory evidence.
+Do not repeat accepted Model-C, QUIC-ON, QUIC-OFF execution, Generic UDP, already-accessible-target, Settings Apply, `_21` Laboratory presentation, or `_23` Laboratory IPv4 / Host-SNI target-support work without fresh contradictory evidence.
 
 Accepted owner-live/product facts include:
 
@@ -43,7 +45,13 @@ Accepted owner-live/product facts include:
 - Settings Apply validation/guards and post-Apply service-state correctness are complete by owner confirmation;
 - `_21` Laboratory outer frame/perimeter matches normal OPNsense presentation by owner confirmation;
 - `_21` Russian `Стратегия` / `Лаборатория` remains localized across Laboratory ↔ Strategy navigation;
-- the current Strategy Lab / Laboratory Russian-presentation task is closed by owner instruction; future concrete localization regressions are new defects.
+- the current Strategy Lab / Laboratory Russian-presentation task is closed by owner instruction; future concrete localization regressions are new defects;
+- `_23` ordinary-domain regression is owner-live accepted (`rutracker.net`, `rutracker.org`, plus negative `telegram.org` control);
+- `_23` authenticated/intercepted HTTP `4xx`/`5xx` final replay remains valid DPI-path evidence and no longer creates the Stage-85 false negative;
+- `_23` bare IPv4 certificate-identity failure truthfully produces `PARTIAL` + Host/SNI guidance;
+- `_23` bare IPv4 QUIC without Host/SNI is skipped with zero tested candidates while Generic UDP remains independent;
+- `_23` IPv4 + Host/SNI keeps destination fixed to the entered IP, produces `--ipset-ip=<target>` in the exact final profile/replay, and performs real fixed-IP hostname-verified QUIC attempts;
+- selected `_23` closeout jobs all preserve clean Stage-90 semantic restoration.
 
 Enable QUIC OFF/default persistence across an actual reload/revisit remains a separate live acceptance row. `_23` preserves the existing model-backed default/load/save source contract.
 
@@ -95,7 +103,7 @@ Source patch record: [`patches/v0.4.1_21.md`](patches/v0.4.1_21.md).
 
 Source patch record: [`patches/v0.4.1_22.md`](patches/v0.4.1_22.md).
 
-## `_23` implementation / published corrective status
+## `_23` implementation / owner-live acceptance status
 
 `_23` preserves the `_22` domain/IPv4 architecture and corrects the three owner-live result-classification problems found while qualifying `_22`:
 
@@ -117,20 +125,18 @@ Delivery proof:
 - publication workflow run: `31909994148`;
 - stable Pages/pkg repository promoted: no.
 
+Owner-live closeout on the exact published `_23` package is **PASS**. The accepted closeout jobs prove the `rutracker.net` HTTP-502 classifier correction, ordinary-domain regression, bare-IP PARTIAL identity guidance, bare-IP QUIC skip with Generic UDP independence, IPv4 + Host/SNI fixed-destination behavior, final `--ipset-ip=` exact replay, real Host/SNI QUIC execution, and clean Stage-90 restoration.
+
+Owner-live closeout evidence: [`verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md`](verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md).
+
 The publisher completed FreeBSD build, manifest/digest verification, release publication and release/tag verification. GitHub Actions policy blocked only automatic publication-record PR creation, so publication-record PR `#265` was opened manually from the workflow-created branch; this is documentation-only and does not alter the package or source identity.
 
 Source patch record: [`patches/v0.4.1_23.md`](patches/v0.4.1_23.md).
 
-## Immediate live verification boundary
+## Immediate next boundary
 
-Install `v0.4.1_23` and verify the corrected target/result boundary:
+**Laboratory IPv4 / Host-SNI target support is complete.** Do not repeat its owner-live matrix without fresh contradictory evidence.
 
-1. `rutracker.net`, Standard: a Stage-60/70-stable intercepted finalist must survive Stage 85 even if the final HTTP application response is `4xx`/`5xx`;
-2. `rutracker.org`, Standard: the previously successful ordinary-domain path must remain unchanged;
-3. bare canonical IPv4 without Host/SNI: certificate-identity failure must produce `PARTIAL` with Host/SNI guidance rather than false `NO_CANDIDATE`;
-4. IPv4 + real Host/SNI: destination remains pinned to the entered IP while TLS/HTTP identity uses the hostname;
-5. when a working IP result exists, the complete recommended profile contains `--ipset-ip=<entered IPv4>` and exact replay succeeds;
-6. Extended bare IPv4 with QUIC enabled: QUIC is `SKIPPED` / Host-SNI-required with zero tested QUIC candidates; configured Generic UDP remains independent;
-7. Stage 90 restores the exact initial Zapret2 state and leaves no temporary Strategy Lab process/rule residue.
+The next selected live boundary is the already-pending **Enable QUIC OFF/default persistence across an actual Laboratory page reload/revisit**. Verify that the persisted setting survives a real reload/revisit and that OFF still suppresses QUIC candidate execution after the reload. Treat any failure as a new bounded defect; otherwise close that backlog row without changing package source.
 
-Enable QUIC OFF/default persistence across reload/revisit remains a separate live row. Do not reopen closed BLOB/Lua/discovery/model-selection experiments without new architecture or fresh contradicting evidence.
+IPv6 target input remains intentionally deferred as a separate future scope. Do not reopen closed BLOB/Lua/discovery/model-selection experiments without new architecture or fresh contradicting evidence.
