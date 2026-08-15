@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` MODEL-C-ONLY OWNER-LIVE PASS; INITIAL-ZAPRET2-STOPPED PASS; EXTENDED TLS-1.2 + HTTP IS THE CURRENT SELECTED REGRESSION ROW.**
+Overall status: **`v0.4.1_13` MODEL-C-ONLY OWNER-LIVE PASS; INITIAL-ZAPRET2-STOPPED PASS; EXTENDED TLS-1.2 / HTTP / CLOSED-QUIC GATING PASS; CONFIGURED GENERIC UDP IS THE CURRENT SELECTED REGRESSION ROW.**
 
 This matrix is the canonical live-appliance regression inventory. Source tests, GitHub CI
 and FreeBSD package builds do not substitute for selected owner-live evidence. Detailed
@@ -36,7 +36,8 @@ Current authority:
 - `docs/ROADMAP.md`;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
 - `docs/verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`;
-- `docs/verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`.
+- `docs/verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`;
+- `docs/verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md`.
 
 ==================================================
 `v0.4.1_13` MODEL-C-ONLY OWNER-LIVE GATE — PASS
@@ -123,6 +124,47 @@ Durable evidence:
 `docs/verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`.
 
 ==================================================
+EXTENDED TLS 1.2 / HTTP / QUIC CAPABILITY GATING — PASS ON `_13`
+==================================================
+
+### rutracker.org Extended — `job.TJlWoY`
+
+GUI-level result:
+
+- terminal status `ЗАВЕРШЕНО`;
+- terminal outcome `SUCCESS`;
+- stable shortlist count `1`;
+- Stage 80 `PASS`;
+- Stage 80 summary `QUIC=skipped, UDP=skipped`;
+- Stage 90 `PASS`, normal Zapret2 service restored and operational.
+
+Persisted TLS-1.2 result:
+
+- `tls12-multisplit`: executed, runtime ready/stable, firewall interception observed, endpoint probe failed by timeout, `all_pass=false`;
+- `tls12-fake`: executed, runtime ready/stable, firewall interception observed, endpoint probe failed by connection reset, `all_pass=false`;
+- `.extended.protocols.tls12.working=null`.
+
+Persisted HTTP result:
+
+- `http-multisplit`: executed, runtime ready/stable, selected endpoint IP matched the observed remote IP, firewall interception observed, endpoint probe timed out, `all_pass=false`;
+- `http-multidisorder`: executed, runtime ready/stable, selected endpoint IP matched the observed remote IP, firewall interception observed, endpoint probe timed out, `all_pass=false`;
+- `.extended.protocols.http.working=null`.
+
+These are truthful negative target/environment results, not orchestration failures: the protocol
+branches actually ran, their temporary runtimes reached ready/stable state, interception and
+endpoint evidence was produced, Stage 80 completed PASS, and Stage 90 restored normally.
+
+QUIC capability gating is also accepted: Stage 30 classified QUIC/IPv4 as closed, and Stage 80
+explicitly reported `QUIC=skipped` rather than misclassifying a capability absence as a failed
+candidate.
+
+Generic UDP remains open. The same Stage-80 run reported `UDP=skipped` because no request payload
+file was supplied; a port value alone does not constitute a configured Generic UDP request.
+
+Durable evidence:
+`docs/verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md`.
+
+==================================================
 RETAINED ACCEPTED RUNTIME BASELINES
 ==================================================
 
@@ -204,6 +246,8 @@ RETAINED PROGRESSION
   and early-success paths with exact RUNNING restoration.
 - `_13 job.5b97u9` accepted initial-STOPPED behavior: Strategy Lab completed successfully and
   left the permanent service STOPPED; the owner closed the row without redundant deeper replay.
+- `_13 job.TJlWoY` accepted Extended TLS-1.2 and HTTP branch execution with truthful negative
+  results plus explicit closed-QUIC capability gating; configured Generic UDP remains pending.
 
 ==================================================
 SCENARIO MATRIX
@@ -213,9 +257,9 @@ SCENARIO MATRIX
 |---|---|---|---|---|
 | 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result truthful; Stage 90 restores RUNNING; no temporary residue | `2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md` | **PASS ON `_13`** |
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | Strategy Lab starts/completes; final permanent service remains STOPPED; no normal dvtws2/supervisor remains | `2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md` | **PASS ON `_13` — OWNER ACCEPTED** |
-| 3 | Extended TLS 1.2 and HTTP | Available successes replay-verified; unavailable protocols explicitly skipped/reported truthfully | `_23` Extended working path observed; dedicated `_13` formal row pending | **CURRENT SELECTED REGRESSION** |
-| 4 | Extended QUIC | Endpoint-bound/replay-verified when available; otherwise explicit skip | `_25/_26` exercised explicit skip; available-QUIC row remains unselected | **PENDING REGRESSION** |
-| 5 | Generic UDP port and payload | Accepted only in Extended mode; complete profile and cleanup | `PENDING OWNER` | **PENDING REGRESSION** |
+| 3 | Extended TLS 1.2 and HTTP | Both branches execute truthfully; working result may be positive or null; lifecycle restored | `2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md` | **PASS ON `_13`** |
+| 4 | Extended QUIC capability gating | Endpoint-bound/replay-verified when available; otherwise explicit capability skip | `2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md` | **PASS ON `_13` — CLOSED/EXPLICIT SKIP** |
+| 5 | Generic UDP port and payload | Accepted only in Extended mode; complete configured request executes; truthful working/not_found result and cleanup | `PENDING OWNER` | **CURRENT SELECTED REGRESSION** |
 | 6 | Target already accessible | `TARGET_ACCESSIBLE`; search skipped; service state exact | `PENDING OWNER` | **PENDING REGRESSION** |
 | 7 | No working candidate | `NO_CANDIDATE`; shortlist empty; restoration verified | `_13 job.6RhNa1`; retained `_22/_25/_26` evidence | **PASS ON `_13`** |
 | 8 | User cancellation after service stop | Unfinished stages skipped; 90/99 run; original service restored | `PENDING OWNER` | **PENDING REGRESSION** |
@@ -243,7 +287,11 @@ from `job.5b97u9` as sufficient and explicitly declined additional duplicate tel
 checking. That row is PASS and must not be reopened merely because deeper evidence could have been
 collected.
 
-The selected `_13` Model-C-only owner-live gate and initial-STOPPED row are complete. Broader
-pending rows remain risk-selected regression backlog, not an all-or-nothing release checklist.
-The current selected row is Extended TLS 1.2 + HTTP; any source correction is justified only if
-that materially different live row exposes a real defect.
+For scenario 3, a protocol branch is not required to invent a winner. `job.TJlWoY` is PASS because
+TLS 1.2 and HTTP both executed real candidates with ready/stable temporary runtimes and truthful
+negative endpoint results, while the overall Extended job and restoration completed normally.
+
+The selected `_13` Model-C-only owner-live gate, initial-STOPPED row, Extended TLS-1.2/HTTP row and
+closed-QUIC capability-gating row are complete. Broader pending rows remain risk-selected regression
+backlog, not an all-or-nothing release checklist. The current selected row is configured Generic UDP;
+any source correction is justified only if that materially different live row exposes a real defect.

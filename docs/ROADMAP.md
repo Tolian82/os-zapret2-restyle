@@ -55,10 +55,10 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
   - [x] owner-live Model-C-only regression
 - [ ] Risk-selected Strategy Lab regression coverage
   - [x] initial Zapret2 STOPPED state
-  - [ ] Extended TLS 1.2 — **current selected row together with HTTP**
-  - [ ] Extended HTTP — **current selected row together with TLS 1.2**
-  - [ ] QUIC capability gating
-  - [ ] configured Generic UDP
+  - [x] Extended TLS 1.2
+  - [x] Extended HTTP
+  - [x] QUIC capability gating
+  - [ ] configured Generic UDP — **current selected row**
   - [ ] already-accessible target
   - [ ] cancellation/internal-failure containment
 - [ ] Circular lifecycle coverage
@@ -77,29 +77,43 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — Extended TLS 1.2 + HTTP regression
+## Current priority — configured Generic UDP regression
 
-`v0.4.1_13` Model-C-only production remains complete. Risk-selected Standard lifecycle coverage now includes both initial normal-service states:
+`v0.4.1_13` Model-C-only production remains complete. Accepted risk-selected live coverage now includes:
 
-- initial RUNNING: accepted on the `_13` owner-live Model-C-only matrix;
-- initial STOPPED: `rutracker.org` Standard `job.5b97u9` completed `SUCCESS` with three stable working strategies and left the permanent Zapret2 service STOPPED; the post-job normal `dvtws2|zapret.*supervisor` process query was empty.
+- initial normal Zapret2 RUNNING;
+- initial normal Zapret2 STOPPED;
+- Extended TLS 1.2 execution/result semantics;
+- Extended HTTP execution/result semantics;
+- QUIC capability gating when QUIC/IPv4 is closed.
 
-The owner explicitly accepted `job.5b97u9` as sufficient for the STOPPED row and stated that deeper telemetry/repeat testing of that same scenario would not add useful evidence. That completed row is not to be reopened by inertia.
+The Extended protocol evidence came from `rutracker.org` Extended `job.TJlWoY`:
+
+- terminal `SUCCESS`, one stable shortlist entry;
+- Stage 80 `PASS`;
+- TLS 1.2 executed two candidates and truthfully persisted `working=null`;
+- HTTP executed two candidates and truthfully persisted `working=null`;
+- all four temporary candidate runtimes reached ready/stable state and produced interception/endpoint evidence;
+- Stage 30 classified QUIC/IPv4 as closed and Stage 80 reported `QUIC=skipped`;
+- Stage 90 restored the normal Zapret2 service successfully;
+- `UDP=skipped` because Generic UDP was not fully configured with a request payload file.
+
+A protocol row does not require fabricating a successful bypass where the measured target/environment has none. For TLS 1.2 and HTTP, the regression contract is satisfied by real branch execution, truthful candidate outcomes, correct runtime attribution and normal completion/restoration.
 
 Durable evidence:
 
 - [`verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md);
-- [`verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md).
+- [`verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md);
+- [`verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md).
 
-The next selected row is one **Extended blocked-domain run** covering both TLS 1.2 and HTTP in Stage 80. This deliberately changes the tested protocol path instead of repeating already accepted Standard lifecycle behavior.
-
-Required acceptance:
+The next selected row is **configured Generic UDP**. Required acceptance:
 
 - use the unchanged published `_13` package;
-- execute one normal Extended blocked-domain Strategy Lab job;
-- require a truthful terminal job result;
-- require TLS 1.2 and HTTP to be exercised for available finalists or explicitly reported/skipped according to the implemented result/capability semantics;
-- preserve the normal lifecycle state after completion.
+- use Extended mode;
+- supply both a valid UDP port and a 1-4096-byte request payload file so the request is classified as configured;
+- execute the UDP branch rather than `UDP=skipped`;
+- require a truthful `working` or `not_found` result with normal candidate/runtime cleanup;
+- preserve the normal Zapret2 lifecycle state after completion.
 
 This is regression coverage, not a new package candidate unless the live row exposes an actual defect.
 
