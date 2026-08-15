@@ -118,4 +118,10 @@ The new owner instruction is current truth. Any older text saying Stage-30 QUIC 
 
 The four canonical general rule books remain `DOCUMENTATION_RULES.md`, `PROJECT_PRINCIPLES.md`, `CHAT_RULES.md`, and `GITHUB_PUBLICATION.md`. Project patch/package delivery is GitHub-native; a package-affecting source change automatically continues through persistent testing publication and the required publication-record tail. `START_HERE.md` owns the exact revision handoff, this file owns current `v0.4.x` facts, and the version-line ledger preserves chronology.
 
-Completed version-line archives remain under `history/archive/`; current non-archived line is [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
+## Completed version-line archives
+
+- [`v0.1.x archive`](history/archive/v0.1.x.md)
+- [`v0.2.x archive`](history/archive/v0.2.x.md)
+- [`v0.3.x archive`](history/archive/v0.3.x.md)
+
+Current non-archived line: [`v0.4.x working ledger`](history/current/v0.4.x.md).
