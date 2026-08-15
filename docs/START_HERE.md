@@ -17,7 +17,7 @@
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
 - `PLUGIN_REVISION=14`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_14.pkg` / `v0.4.1_14`;
+- current published/owner-installed testing package/tag: `os-zapret2-restyle-0.4.1_14.pkg` / `v0.4.1_14`;
 - testing-package SHA-256: `b2df12f0af8ec6057f0df87e5289f89bc087664d7a0e2529c5e362e59db53d03`;
 - source merge and testing-tag target: `df20ed2ebe7f6c37c4189008e06e80700ae89ce4`;
 - publication workflow run: `31875178597`;
@@ -58,7 +58,7 @@ The Generic UDP payload remains intentionally bounded to **1–4096 decoded byte
 - file size is checked before the previous result is cleared or the UI enters running state;
 - a 2–3 MB file is rejected immediately with a visible `1–4096` size error;
 - backend Base64/decoded-size validation remains authoritative;
-- valid Extended Generic UDP still requires port `1..65535` plus payload `1..4096` bytes.
+- valid Extended Generic UDP requires port `1..65535` plus payload `1..4096` bytes.
 
 Canonical contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
 
@@ -74,26 +74,56 @@ Canonical contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRA
 - package asset: `os-zapret2-restyle-0.4.1_14.pkg`;
 - package digest: `b2df12f0af8ec6057f0df87e5289f89bc087664d7a0e2529c5e362e59db53d03`.
 
-The publisher could not create its Draft publication-record PR because the repository setting currently forbids GitHub Actions from creating/approving pull requests. It had already pushed the machine publication record. The same required Draft tail was therefore opened through the GitHub connector as PR `#238`; no package bytes or release identity were changed.
+The publisher could not create its Draft publication-record PR because the repository setting currently forbids GitHub Actions from creating/approving pull requests. It had already pushed the machine publication record. The publication-record reconciliation was completed through the GitHub connector and merged without changing package bytes or release identity.
 
-## Immediate next task — owner-live `_14`
+## Current owner-live `_14` observations
 
-After installing the published `_14` testing package, verify the new behavior rather than repeating the completed `_13` Model-C baseline:
+The owner installed `_14` and supplied Extended GUI results for `telegram.org` and `rutracker.org` with **Enable QUIC checked**.
 
-1. Enable QUIC defaults OFF and persists checked/unchecked across Diagnostics reload;
-2. Enable QUIC OFF → QUIC `skipped`, reason `disabled`;
-3. Enable QUIC ON while the ISP blocks ordinary QUIC → Stage 80 actually tests QUIC candidates (`tested > 0`) and returns truthful `working` or `not_found`, never capability-skip;
-4. selecting a 2–3 MB Generic UDP payload shows the visible `1–4096` error and starts no new job;
-5. valid UDP port + `1..4096`-byte payload causes actual UDP candidate execution and truthful `working` or `not_found`.
+Both runs show:
 
-One Extended job may cover items 3 and 5 simultaneously.
+- Stage 30: ordinary QUIC/IPv4 control probe is closed;
+- Stage 80: QUIC finishes as `not_found`, not as a capability-based skip;
+- Stage 90 restoration: PASS.
+
+This is positive evidence that the old Stage-30 capability gate no longer suppresses an enabled QUIC branch. It does **not yet close the live QUIC execution gate**, because the ordinary GUI output does not show whether `tested` contains real candidate attempts.
+
+Current source inspection establishes the expected execution path:
+
+- current QUIC catalog: `quic-fake-1`, `quic-fake-2`, `quic-ipfrag-8`, `quic-ipfrag-16`;
+- production QUIC runner appends each executed candidate result to `tested`;
+- enabled live acceptance therefore requires observable `tested > 0` (and preferably attempted candidate count/names), not merely `QUIC=not_found`.
+
+## Immediate follow-up tasks selected by owner-live `_14`
+
+Before calling the `_14` Extended protocol work complete, retain these tasks in the active plan:
+
+1. **Prove real QUIC strategy enumeration:** enabled blocked-control run must show `tested > 0`; expose attempted count/names in ordinary result presentation so telemetry unpacking is not required for the basic proof.
+2. **Correct QUIC state wording/localization:** user-facing Stage 30 must render measured state as natural RU/EN (`QUIC открыт` / `QUIC закрыт`, English equivalent) and separately indicate whether QUIC strategy testing is enabled. A closed control probe must not read as an execution skip.
+3. **Localize Stage-80 QUIC/UDP summary:** raw fragments such as `QUIC=not_found, UDP=skipped` stay permitted in structured/advanced evidence but normal UI must render human-readable RU/EN meanings.
+4. **Localize Enable QUIC help text:** the English-only `When enabled, QUIC candidates are tested even when the control probe reports QUIC as blocked.` must have RU and EN presentation.
+5. **Fix valid-small Generic UDP rejection:** owner reports that a nominal **140-byte** payload is rejected by the visible `1–4096 bytes` size validation even though 140 bytes is valid by contract. Reproduce and trace browser `File.size` → FileReader/Base64 → API transport/decode → job-local payload; add exact 140-byte regression coverage.
+6. **Verify the selected Generic UDP port/control exchange:** use the exact validated payload against the selected destination port and surface what was actually observed. UDP silence is not definitive proof that a port is closed and must not suppress bypass candidate testing.
+
+Canonical details are in:
+
+- [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md);
+- [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md);
+- [`verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`](verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md);
+- [`ROADMAP.md`](ROADMAP.md).
+
+This follow-up registration is documentation-only and does **not** change `VERSION`, `PLUGIN_REVISION`, package bytes or testing-tag identity. A later source implementation of these findings must use a new package candidate.
+
+## Remaining `_14` live checks
+
+In addition to the newly selected corrective scope, the still-open owner-live checks are:
+
+- Enable QUIC default OFF and persistence checked/unchecked across Diagnostics reload;
+- Enable QUIC OFF → explicit `skipped/disabled` behavior;
+- enabled blocked-control QUIC → actual candidate evidence with `tested > 0`;
+- valid corrected Generic UDP input → direct/control observation plus actual UDP candidate execution;
+- lifecycle restoration and temporary-resource cleanup for these paths.
 
 ## Established baseline retained
 
 `v0.4.1_13` remains accepted historical live evidence for Model-C-only Standard RUNNING paths, initial STOPPED restoration, and Extended TLS 1.2/HTTP execution. Its old closed-QUIC capability skip is historical evidence only and is superseded by the `_14` product contract.
-
-For current live verification read:
-
-1. [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md);
-2. [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md);
-3. [`verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`](verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md).
