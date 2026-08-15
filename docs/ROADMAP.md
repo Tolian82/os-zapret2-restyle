@@ -45,7 +45,7 @@
   - [x] **`v0.4.1_16` Generic UDP browser-to-job handoff — OWNER-LIVE PASS**
   - [x] Enable QUIC OFF execution semantics
   - [ ] Enable QUIC OFF/default persistence across reload/revisit — source persistence contract remains guarded; owner-live reload proof pending
-  - [ ] **Strategy Lab / Laboratory RU-EN presentation completion**
+  - [x] **Strategy Lab / Laboratory RU-EN presentation completion — OWNER CLOSED CURRENT SCOPE**
     - [x] `_17` source/publication + RU owner-live partial
     - [x] `_18` title / UDP label / one-line blocked-domain label + owner-live partial
     - [x] `_19` source/publication: normal label typography, mode/status/sidebar RU/EN strings
@@ -62,7 +62,7 @@
       - [x] latest-head full CI + FreeBSD-15 package qualification
       - [x] exact-head source merge and persistent `v0.4.1_20` testing publication
       - [x] owner-live: accepted common field grid/mode text direction, but rejected missing native perimeter and cross-page navigation localization
-    - [ ] `_21` native frame ownership + persistent cross-page menu localization
+    - [x] `_21` native frame ownership + persistent cross-page menu localization
       - [x] source: remove redundant Laboratory `page-content-main/container-fluid/row/column` wrapper
       - [x] source: remove Laboratory `.page-content-main` margin/padding overrides
       - [x] source: render Laboratory as normal OPNsense `content-box` blocks inside the platform-owned frame
@@ -71,12 +71,23 @@
       - [x] focused regression updated for native frame ownership and both-page navigation localization
       - [x] latest-head full CI + FreeBSD-15 package qualification
       - [x] exact-head source merge and persistent `v0.4.1_21` testing publication
-      - [ ] owner-live visual acceptance: native perimeter + Russian menu persistence across Laboratory ↔ Strategy
-    - [ ] owner-live EN/no-language-leakage completion if still needed after `_21`
-    - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit
+      - [x] owner-live visual acceptance: native perimeter + Russian menu persistence across Laboratory ↔ Strategy
+    - [x] additional current-scope language acceptance not required: owner explicitly closed the Russian-presentation task after `_21`; future concrete language regressions are new defects
+    - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit — separate non-presentation row
   - [x] already-accessible target — completed by owner confirmation
   - [ ] cancellation/internal-failure containment
-- [ ] **Laboratory target support: test IP addresses as well as domains — NEXT PLAN after `_21` UI acceptance**
+- [ ] **Laboratory target support: test IPv4 addresses as well as domains — ACTIVE NEXT**
+  - [x] architecture/current-source audit: feature is feasible but not a validator-only change
+  - [x] confirm dormant IP scaffolding in Stage 00/40, search epoch, firewall pinning and final `--ipset-ip=` profile generation
+  - [x] identify unsafe current behavior: IPv4 TLS candidates degrade to plain TCP-connect evidence and must not be allowed to create false PASS results
+  - [x] select IPv4-first contract; do not silently claim IPv6 support in the first patch
+  - [x] select fixed destination IP + explicit/conditional Host/SNI service identity for truthful web/TLS/QUIC validation
+  - [ ] implement domain-or-IPv4 API/shell target classification and persistence
+  - [ ] implement IP-aware candidate target binding without changing Model-C attribution/lifecycle ownership
+  - [ ] make TLS/HTTP/QUIC probes preserve service hostname/SNI while pinning destination IP; skip unsupported bare-IP branches truthfully
+  - [ ] preserve direct-IP Generic UDP behavior
+  - [ ] add focused domain-regression + IPv4/SNI + bare-IP/UDP/error-semantics coverage
+  - [ ] qualify/package/publish next testing revision and perform owner-live IP verification
 - [ ] Circular lifecycle coverage
   - [ ] start/stop/TTL
   - [ ] stale-session recovery
@@ -84,7 +95,7 @@
   - [x] validation/guards
   - [x] service-state correctness after Apply
 - [ ] Diagnostics persistence/reload
-- [ ] RU/EN presentation review beyond the current Laboratory corrective scope
+- [ ] RU/EN presentation review beyond the closed current Laboratory corrective scope
 - [ ] Retention/cleanup boundaries
 - [ ] Reboot/residue verification
 - [ ] OPNsense runtime/service reliability follow-up
@@ -92,7 +103,7 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — owner-live verify published `_21`, then add IP targets to Laboratory
+## Current priority — implement truthful IPv4 targets in Laboratory
 
 Current published testing identity:
 
@@ -103,25 +114,26 @@ Current published testing identity:
 - publication workflow run: `31898795618`;
 - stable Pages/pkg repository promoted: no.
 
-Owner-live `_20` comparison showed that the perimeter-neutralization approach removed the platform-owned OPNsense frame itself, and that Russian submenu localization was only reapplied on Laboratory. Published `_21` corrects the ownership model rather than adding another spacing workaround: OPNsense owns the page frame, while both plugin pages apply the same active-language submenu labels.
+Owner-live `_21` is accepted for the selected Laboratory presentation scope: the normal OPNsense outer frame is restored, the accepted shared field grid remains correct, and Russian `Стратегия` / `Лаборатория` stays localized across page navigation. The current Russian-presentation task is closed; GitHub issue `#155` is completed.
 
-`_21` delivery status:
+Owner-live `_21` evidence: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md).
 
-1. focused native-frame/localization/persistence regression — complete;
-2. applicable complete corrective matrix and FreeBSD-15 package qualification — complete;
-3. exact-head source merge — complete at `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
-4. persistent testing publication — complete, SHA-256 `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
-5. bounded publication-record reconciliation — current documentation tail.
+The selected IP-target direction is **not** to merely allow digits in the existing field. Current code already contains partial IP support, but the normal TLS search would be semantically unsafe if unlocked unchanged because IPv4 candidate probing currently falls back to a plain TCP connection. The next source patch must therefore make destination identity explicit and preserve truthful protocol validation.
 
-After `_21` install:
+Selected first implementation contract:
 
-1. confirm Laboratory perimeter matches Strategy/native OPNsense;
-2. switch Laboratory ↔ Strategy under Russian UI and confirm `Стратегия` / `Лаборатория` stays Russian;
-3. confirm accepted common field grid and `Режим:` typography remain intact;
-4. no Strategy Lab execution rerun is required for this UI-only corrective;
-5. Enable QUIC OFF/default persistence reload/revisit proof remains separate;
-6. **next engineering plan: make Laboratory accept/test IP addresses as well as domains**;
-7. continue the remaining backlog above.
+1. the existing `Заблокированный домен / IP` field accepts either a domain or canonical IPv4;
+2. domains continue through the existing behavior unchanged;
+3. IPv4 skips DNS and is pinned directly for firewall/result attribution;
+4. add a conditional/optional `Host / SNI` identity for an IP target;
+5. with Host/SNI, web/TLS/QUIC connect to the fixed IP while preserving Host, SNI and certificate hostname verification;
+6. Generic UDP remains valid directly against the IP and does not require Host/SNI;
+7. a bare-IP protocol branch that cannot be validated semantically is SKIPPED/unsupported, never a false working strategy;
+8. final IP recommendations use `--ipset-ip=<target>`;
+9. Model C, timeout budgets, lifecycle, cleanup/restoration and deterministic attribution remain unchanged;
+10. IPv6 target support is deferred until an explicit later contract because the current search-epoch implementation is IPv4-specific.
+
+Enable QUIC OFF/default persistence reload/revisit proof remains a separate existing backlog row and is not folded into this IP-target patch.
 
 Owner-live `_20` corrective evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md).
 Machine `_21` publication evidence: [`verification/evidence/testing-publications/v0.4.1_21.md`](verification/evidence/testing-publications/v0.4.1_21.md).
