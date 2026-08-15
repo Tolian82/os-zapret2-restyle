@@ -57,7 +57,7 @@
       - [x] source: remove the rejected fixed `_19` `250px` Laboratory label column
       - [x] source: preserve one-line target label with normal UI typography
       - [x] source: synchronize `Режим:` / `Mode:` computed font size and line height from the target field label
-      - [x] source: attempted nested Laboratory perimeter neutralization
+      - [x] attempted nested Laboratory perimeter neutralization
       - [x] focused regression preserves RU/EN, circular idle and Enable QUIC persistence source contracts
       - [x] latest-head full CI + FreeBSD-15 package qualification
       - [x] exact-head source merge and persistent `v0.4.1_20` testing publication
@@ -76,7 +76,7 @@
     - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit — separate non-presentation row
   - [x] already-accessible target — completed by owner confirmation
   - [ ] cancellation/internal-failure containment
-- [ ] **Laboratory target support: test IPv4 addresses as well as domains — PUBLISHED `_22`, OWNER-LIVE VERIFICATION NEXT**
+- [ ] **Laboratory target support: test IPv4 addresses as well as domains — PUBLISHED `_22`; `_23` TRUTHFUL-RESULT CORRECTIVE SOURCE CANDIDATE**
   - [x] architecture/current-source audit: feature is feasible but not a validator-only change
   - [x] confirm dormant IP scaffolding in Stage 00/40, search epoch, firewall pinning and final `--ipset-ip=` profile generation
   - [x] identify unsafe prior behavior: IPv4 TLS candidates degraded to plain TCP-connect evidence and must not create false PASS results
@@ -87,8 +87,10 @@
   - [x] make TLS/HTTP/QUIC probes preserve service hostname/SNI while pinning destination IP; bare-IP QUIC is unsupported rather than false PASS
   - [x] preserve direct-IP Generic UDP behavior
   - [x] add focused domain-regression + IPv4/SNI + bare-IP/error-semantics coverage
-  - [x] latest-head complete CI + FreeBSD-15 package qualification
+  - [x] latest-head complete CI + FreeBSD-15 package qualification for `_22`
   - [x] exact-head squash merge + persistent `v0.4.1_22` testing publication
+  - [x] owner-live `_22` exposed result-classification corrections now implemented in source candidate `v0.4.1_23`
+  - [ ] qualify, merge and persistently publish `v0.4.1_23`
   - [ ] owner-live ordinary-domain regression
   - [ ] owner-live bare IPv4: accepted and no false TCP-connect → TLS PASS
   - [ ] owner-live IPv4 + real Host/SNI pinned to entered destination
@@ -111,9 +113,11 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — owner-live verify published `v0.4.1_22` IPv4 Laboratory targets
+## Current priority — qualify and publish source candidate `v0.4.1_23`
 
-Current published testing identity:
+Current source candidate: `v0.4.1_23`.
+
+Current published testing identity remains:
 
 - tag: `v0.4.1_22`;
 - asset: `os-zapret2-restyle-0.4.1_22.pkg`;
@@ -126,7 +130,9 @@ Machine publication evidence: [`verification/evidence/testing-publications/v0.4.
 
 Owner-live `_21` remains accepted for the selected Laboratory presentation scope: the normal OPNsense outer frame is restored, the accepted shared field grid remains correct, and Russian `Стратегия` / `Лаборатория` stays localized across page navigation. The current Russian-presentation task is closed; GitHub issue `#155` is completed.
 
-The published `_22` contract is:
+The `_23` correction preserves the `_22` IPv4 target contract while fixing truthful terminal/result classification selected by owner-live evidence: HTTP application 4xx/5xx no longer erases otherwise stable DPI-path evidence, bare-IPv4 QUIC is skipped before execution without Host/SNI, and bare-IPv4 TLS identity failure is reported as partial guidance rather than a misleading empty result.
+
+The published `_22` base contract remains:
 
 1. the existing `Заблокированный домен / IP` field accepts either a domain or canonical IPv4;
 2. domains continue through the existing behavior unchanged;
@@ -140,7 +146,7 @@ The published `_22` contract is:
 10. Model C, timeout budgets, lifecycle, cleanup/restoration and deterministic attribution remain unchanged;
 11. IPv6 target support remains deferred because the current search epoch is IPv4-specific.
 
-Source patch contract: [`patches/v0.4.1_22.md`](patches/v0.4.1_22.md).
+Source patch contracts: [`patches/v0.4.1_22.md`](patches/v0.4.1_22.md), [`patches/v0.4.1_23.md`](patches/v0.4.1_23.md).
 
 Enable QUIC OFF/default persistence reload/revisit proof remains a separate existing backlog row and is not folded into this IP-target patch.
 
