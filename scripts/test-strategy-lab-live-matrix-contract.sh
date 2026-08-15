@@ -41,14 +41,17 @@ candidate_tag="v${version}_${revision}"
 candidate_pkg="os-zapret2-restyle-${version}_${revision}.pkg"
 
 # Current authority follows the package identity that actually exists in source.
-# Never hard-code yesterday's _N as the allowed future source candidate: owner-selected
-# source truth advances first and documentation/tests must reconcile to it.
+# Never pin yesterday's package as the only future source truth.
 require "${STATE}" "current source candidate: \`${candidate_suffix}\`"
 require "${START_HERE}" "Current handoff identity:** \`${candidate_tag}"
 require "${START_HERE}" "current source candidate: \`PLUGIN_REVISION=${revision}\`"
 require "${ROADMAP}" "\`${candidate_tag}\`"
-require "${CURRENT_LEDGER}" "current source candidate: \`${candidate_suffix}\`"
 require "${MATRIX}" "current source candidate: \`${candidate_tag}\`"
+
+# The rolling ledger preserves chronology; the exact _N handoff is owned by START_HERE
+# and PROJECT_STATE, so a package-candidate source PR must not rewrite the whole ledger
+# merely to satisfy a stale literal fixture.
+require "${CURRENT_LEDGER}" '`v0.4.1_15`'
 
 # Rule books remain the authority for state/documentation/publication handling.
 require "${DOC_RULES}" 'DOC-015.'
@@ -60,25 +63,24 @@ require "${GH_RULES}" 'GH-060.'
 require "${GH_RULES}" 'GH-061.'
 require "${STATE}" 'State-line scope: **`v0.4.x`**'
 
-# Current product direction stays Model-C-only; old B/A production fallback must not
-# re-enter through a stale live-matrix fixture.
+# Current product direction stays Model-C-only.
 require "${MODEL_C_OWNER_PY}" 'model_c_only'
 require "${MODEL_C_OWNER_PY}" 'cold_fallback_available'
 require "${CURRENT_LEDGER}" 'Model C is the only normal production Stage-60 runtime'
 require "${CURRENT_LEDGER}" 'cold_fallback_available=false'
 
-# The live matrix must retain accepted history but describe the current selected work.
+# Live matrix retains accepted history and follows the newly selected correction.
 require "${MATRIX}" '`v0.4.1_13` ACCEPTED BASELINE'
 require "${MATRIX}" '`v0.4.1_14` PUBLISHED/INSTALLED'
 require "${MATRIX}" '`_14` owner-live observations that selected `_15`'
 require "${MATRIX}" 'QUIC tested count/IDs ordinary output'
-require "${MATRIX}" 'exact 140-byte binary input'
-require "${MATRIX}" 'selected-port/payload direct UDP observation'
-require "${MATRIX}" 'no-reply does not mean closed / does not gate candidates'
+require "${MATRIX}" 'Exact 140-byte binary input'
+require "${MATRIX}" 'Selected-port/payload direct UDP observation'
+require "${MATRIX}" 'No-reply does not mean closed / does not gate candidates'
+require "${MATRIX}" 'application-owned staged file input'
 require "${MATRIX}" 'terminal payload cleanup and Zapret2 restoration PASS.'
 
-# QUIC specialist contract: owner-selected checkbox is the execution gate and normal
-# output proves real attempts instead of exposing only an opaque not_found enum.
+# QUIC specialist contract remains owner-selected and observable.
 require "${QUIC_DOC}" 'sole product decision that determines whether Stage 80 runs QUIC candidate tests'
 require "${QUIC_DOC}" 'does not produce a capability-based skip'
 require "${QUIC_DOC}" 'number of attempted QUIC candidates'
@@ -89,19 +91,21 @@ require "${QUIC_DOC}" '`QUIC is open`'
 require "${QUIC_DOC}" '`QUIC is blocked`'
 require "${QUIC_DOC}" 'Raw/advanced output still retains the complete machine result.'
 
-# Generic UDP specialist contract: exact decoded bytes, direct observation with the
-# chosen port/payload, and UDP silence must remain non-gating.
+# Generic UDP specialist contract now distinguishes the browser handoff from later
+# job-local storage and makes both observable.
 require "${UDP_DOC}" 'decoded size **`1..4096` bytes**'
 require "${UDP_DOC}" 'An exact 140-byte file is valid'
+require "${UDP_DOC}" 'Generic UDP does **not** use a multipart upload directory.'
 require "${UDP_DOC}" 'FileReader.readAsArrayBuffer'
-require "${UDP_DOC}" 'the exact selected destination port'
-require "${UDP_DOC}" 'the exact job-local payload bytes'
+require "${UDP_DOC}" 'application-owned staged state'
+require "${UDP_DOC}" 'job_directory_not_writable'
+require "${UDP_DOC}" 'the selected destination port'
+require "${UDP_DOC}" 'exact job-local payload bytes'
 require "${UDP_DOC}" '**UDP silence is not proof that a port is closed.**'
-require "${UDP_DOC}" 'never suppresses or short-circuits the bypass candidate catalog'
-require "${UDP_DOC}" 'number and IDs of actual UDP candidates'
+require "${UDP_DOC}" 'does not suppress the bypass candidate catalog'
+require "${UDP_DOC}" 'actual UDP candidate count/IDs'
 
-# Current docs preserve accepted measurement decisions; this source task is a
-# protocol-observability/input correction, not an excuse to reopen unrelated work.
+# Accepted measurement decisions stay closed.
 require "${CURRENT_LEDGER}" 'job.xhdgCU'
 require "${CURRENT_LEDGER}" 'Stage 60: `34209 ms`'
 require "${CURRENT_LEDGER}" '5/5 `model_c_only=true`'
@@ -110,7 +114,7 @@ require "${CURRENT_LEDGER}" 'BLOB startup/RSS/common set: no lazy-BLOB productio
 require "${CURRENT_LEDGER}" 'discovery: retain bounded GET-4K'
 require "${READINESS12_LIVE}" 'OWNER-LIVE PASS / READINESS CORRECTIVE VALIDATED / CROSS-BATCH REUSE CLOSED'
 
-# INDEX remains navigation/integrity only and links to current authority.
+# INDEX remains navigation/integrity only.
 require "${INDEX}" 'DOCUMENTATION_RULES.md'
 require "${INDEX}" 'PROJECT_PRINCIPLES.md'
 require "${INDEX}" 'CHAT_RULES.md'
@@ -121,8 +125,8 @@ require "${INDEX}" 'history/current/v0.4.x.md'
 require "${INDEX}" 'verification/evidence/'
 require "${INDEX}" 'Historical statements remain historical'
 
-# Full-release identity remains historical/current independently from testing _N.
+# Full-release identity remains independent from testing _N.
 require "${RELEASE_DOC}" '# os-zapret2-restyle v0.4.1'
 require "${RELEASE_DOC}" '`os-zapret2-restyle-0.4.1_1.pkg`'
 
-printf 'PASS: live-matrix contract follows current source identity %s (%s), preserves accepted history, Model-C-only direction, and the selected QUIC/UDP live-verification semantics\n' "${candidate_tag}" "${candidate_pkg}"
+printf 'PASS: live-matrix contract follows current source identity %s (%s), preserves accepted history/Model-C-only direction, and selects the staged Generic UDP handoff correction\n' "${candidate_tag}" "${candidate_pkg}"
