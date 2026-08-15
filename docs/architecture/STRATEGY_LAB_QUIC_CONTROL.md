@@ -3,7 +3,7 @@
 **Status:** CURRENT SPECIALIST ARCHITECTURE
 **Updated:** 2026-08-15
 **Execution gate introduced by:** `v0.4.1_14`
-**Owner-visible observability/localization implemented by source candidate:** `v0.4.1_15`
+**Owner-visible observability/localization published in:** `v0.4.1_15`
 
 ## Authority
 
@@ -135,7 +135,7 @@ Normal Stage-80 UI does not expose those raw enums as the primary explanation. I
 
 ## Verification
 
-Repository tests must prove at least:
+Repository tests prove at least:
 
 1. model default OFF and persistent checkbox behavior;
 2. start API validates/forwards only `0|1` and launcher persists immutable per-job intent;
@@ -147,9 +147,11 @@ Repository tests must prove at least:
 8. normal presentation does not leak raw `not_found/skipped/disabled` fragments;
 9. Enable QUIC help exists in deterministic RU/EN presentation.
 
-## Owner-live `_15` acceptance
+Automated `_15` source acceptance and persistent testing-package publication are complete. Machine publication evidence is in [`../verification/evidence/testing-publications/v0.4.1_15.md`](../verification/evidence/testing-publications/v0.4.1_15.md).
 
-After `_15` is persistently published:
+## Current owner-live `_15` acceptance
+
+After installing the published `_15` testing package:
 
 - Enable QUIC ON while ordinary QUIC remains blocked must show `QUIC закрыт`/equivalent plus **search enabled**, not skipped;
 - Stage 80 must show `tested > 0` and attempted candidate IDs;
