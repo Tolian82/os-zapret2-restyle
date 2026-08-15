@@ -69,7 +69,7 @@ Historical A/B/C experiment material is history/proof and does not represent cur
 
 ## Current verification boundary
 
-`_13` automated source acceptance, persistent testing-package publication, normal Model-C-only owner-live regression, and initial-STOPPED lifecycle regression are complete:
+`_13` automated source acceptance, persistent testing-package publication, normal Model-C-only owner-live regression, initial-STOPPED lifecycle regression, Extended TLS 1.2/HTTP execution coverage, and closed-QUIC capability gating are complete:
 
 - PR `#230` exact verified head: `8e1af17ce4ccfaad4851329167b386741d0c9ee8`;
 - focused Model-C production regression proves injected infrastructure failure does not invoke B/A reference paths;
@@ -85,16 +85,24 @@ Historical A/B/C experiment material is history/proof and does not represent cur
 - `telegram.org` `job.6RhNa1`: `NO_CANDIDATE`, Model C `16/16`, graph exhausted, no fallback, verified clean `RUNNING -> RUNNING` restoration;
 - `rutracker.org` `job.PEEjoY`: `SUCCESS`, Model C `16/16`, three stable shortlist entries, no fallback, verified clean `RUNNING -> RUNNING` restoration;
 - `www.youtube.com` `job.7Kz5ro`: `SUCCESS`, Model C early stop at `7/16` with `enough_candidates`, three stable shortlist entries, no fallback, verified clean `RUNNING -> RUNNING` restoration;
-- `rutracker.org` `job.5b97u9` with initial normal Zapret2 STOPPED: Strategy Lab completed `SUCCESS`, reported three stable working strategies, final `configctl zapret status` remained `zapret is not running`, and the post-job `dvtws2|zapret.*supervisor` process query was empty.
+- `rutracker.org` `job.5b97u9` with initial normal Zapret2 STOPPED: Strategy Lab completed `SUCCESS`, reported three stable working strategies, final `configctl zapret status` remained `zapret is not running`, and the post-job `dvtws2|zapret.*supervisor` process query was empty;
+- `rutracker.org` Extended `job.TJlWoY`: terminal `SUCCESS`, Stage 80 `PASS`, Stage 90 `PASS`, one stable shortlist entry;
+- Extended TLS 1.2 on `job.TJlWoY`: two candidates executed (`tls12-multisplit`, `tls12-fake`), both temporary runtimes became ready/stable, traffic interception was observed, both endpoint probes truthfully failed, persisted `working=null`;
+- Extended HTTP on `job.TJlWoY`: two candidates executed (`http-multisplit`, `http-multidisorder`), both temporary runtimes became ready/stable, endpoint binding/interception was observed, both endpoint probes truthfully failed, persisted `working=null`;
+- QUIC on `job.TJlWoY`: Stage 30 classified QUIC/IPv4 as closed and Stage 80 explicitly reported `QUIC=skipped`, accepted as correct capability gating;
+- Generic UDP on `job.TJlWoY`: `UDP=skipped` because no request payload file was supplied; this row remains open.
 
 For `job.5b97u9`, the owner explicitly accepted the observable `STOPPED -> Strategy Lab works -> SUCCESS -> STOPPED` path as sufficient for this selected regression and stated that no additional telemetry/repetition of the same scenario is required. Do not fabricate unobserved firewall/socket/hash evidence and do not reopen the passed row merely to collect it.
+
+For `job.TJlWoY`, `working=null` for TLS 1.2 and HTTP is a truthful target/environment result, not a Strategy Lab defect: the protocol branches actually executed, temporary runtimes became ready/stable, interception/endpoint evidence was collected, Stage 80 completed PASS, and Stage 90 restored normally.
 
 Durable owner-live evidence:
 
 - [`verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md);
-- [`verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md).
+- [`verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md);
+- [`verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md).
 
-The current selected live-regression boundary is now one **Extended blocked-domain run covering TLS 1.2 and HTTP**. This is a materially different protocol-path check rather than a repeat of the completed Standard RUNNING/STOPPED scenarios.
+The current selected live-regression boundary is now **configured Generic UDP**. Both a valid UDP port and a 1-4096-byte request payload file must be supplied so the UDP branch executes instead of returning `skipped`.
 
 ## Current documentation and governance facts
 
