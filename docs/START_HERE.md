@@ -10,85 +10,85 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-15
-**Current handoff identity:** published testing package `v0.4.1_18`
+**Current handoff identity:** `v0.4.1_19` source candidate
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
-- current packaged source revision: `PLUGIN_REVISION=18` / `v0.4.1_18`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_18.pkg` / `v0.4.1_18`;
-- testing-package SHA-256: `1ca82e1405c688a5429e1fd1d68da19906bea613323d8d01090bba85068b34f0`;
-- source merge/testing-tag target: `fa1b924a5c1d646f0daec13aff6e7406a534c6a3`;
-- publication workflow run: `31889449879`;
+- current source candidate: `PLUGIN_REVISION=19` / `v0.4.1_19`;
+- last published testing package/tag: `os-zapret2-restyle-0.4.1_18.pkg` / `v0.4.1_18`;
+- `_18` testing-package SHA-256: `1ca82e1405c688a5429e1fd1d68da19906bea613323d8d01090bba85068b34f0`;
+- `_18` source merge/testing-tag target: `fa1b924a5c1d646f0daec13aff6e7406a534c6a3`;
+- `_18` publication workflow run: `31889449879`;
 - required ABI: `FreeBSD:15:amd64`;
 - stable Pages/pkg repository promoted by testing `_N`: **no**.
 
-Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_18.md`](verification/evidence/testing-publications/v0.4.1_18.md).
+Machine `_18` publication evidence: [`verification/evidence/testing-publications/v0.4.1_18.md`](verification/evidence/testing-publications/v0.4.1_18.md).
 
 Resolve the exact current `main` SHA at execution time under `GH-004`.
 
 ## Accepted current live boundary
 
-Do not repeat accepted Model-C, QUIC-ON, QUIC-OFF execution, or Generic UDP baseline work without fresh contradictory evidence.
+Do not repeat accepted Model-C, QUIC-ON, QUIC-OFF execution, Generic UDP, already-accessible-target, or Settings Apply work without fresh contradictory evidence.
 
-Accepted owner-live evidence includes:
+Accepted owner-live/product facts include:
 
 - Generic UDP exact-byte path on `_16` with `udp-140.bin`, port `53`, all three current UDP candidates and truthful no-reply semantics;
 - Enable QUIC ON with all four current QUIC candidates visible;
 - Enable QUIC OFF execution semantics: OFF suppresses QUIC candidate execution while independent Generic UDP remains active;
-- visible Stage-90 restoration on the tested flows.
+- visible Stage-90 restoration on the tested flows;
+- already-accessible-target behavior is complete by owner confirmation;
+- Settings Apply validation/guards and post-Apply service-state correctness are complete by owner confirmation.
 
-Durable predecessor evidence:
+Enable QUIC OFF/default persistence across an actual reload/revisit remains a separate live acceptance row. `_19` preserves the existing model-backed default/load/save source contract.
 
-- [`verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md)
-- [`verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`](verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md)
+## `_18` owner-live follow-up — corrective selected
 
-Enable QUIC OFF/default persistence across an actual reload/revisit remains a separate live acceptance row. `_18` preserves the regression guard for the existing model-backed default/load/save contract.
+The owner installed published `_18` and supplied a live Russian-mode Laboratory screenshot.
 
-## `_17` live RU follow-up — partial acceptance, corrective selected
+Confirmed working:
 
-The owner installed published `_17` and supplied live Russian-mode Diagnostics screenshots.
+- `Лаборатория стратегий`;
+- `UDP порт (опционально)`;
+- `Заблокированный домен / IP` is on one line.
 
-Confirmed working on the tested screen:
+The same screenshot selected `_19` because:
 
-- `Тестирование соединения с доменом`, HTTPS guidance and `Проверка`;
-- `Заблокированный домен / IP`, `Запуск`, `Включить QUIC`;
-- translated result/stage labels including `Полный профиль Стратегий Трафика`;
-- circular idle ordinary presentation is human text (`Статус: ОЖИДАНИЕ`, `Состояние: ОЖИДАНИЕ`) rather than raw JSON.
+- the `_18` 12 px workaround made the blocked-domain label visibly too small;
+- the owner rejected the resulting field alignment and requires domain / UDP / QUIC controls to use one explicit common x-position with normal typography;
+- RU mode dropdown must show `Стандартный` / `Расширенный`, while EN remains `Standard` / `Extended`;
+- add right-aligned `Режим:` / `Mode:` immediately before the mode selector;
+- RU ordinary idle must show `ожидание`, EN remains `idle`;
+- sidebar entries become EN `Strategy` / `Laboratory`, RU `Стратегия` / `Лаборатория`.
 
-The same screenshots exposed the corrective boundary closed in `_18` source:
+Evidence: [`verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md).
 
-1. `Strategy Lab` remained untranslated;
-2. `Generic UDP (optional)` remained untranslated;
-3. `Заблокированный домен / IP` wrapped to two lines and the owner requested a small left shift shared by the domain input, Generic UDP value control and Enable QUIC control.
+## `_19` selected implementation
 
-Evidence: [`verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md).
+`_19` is a narrow Laboratory presentation/layout corrective package candidate:
 
-## `_18` published corrective
+- remove the 12 px blocked-domain label workaround and use normal UI typography;
+- keep `Заблокированный домен / IP` on one line with an explicit fixed label/value-column contract;
+- align domain input, Generic UDP input and Enable QUIC checkbox at one common value-column x-position;
+- RU mode values: `Стандартный` / `Расширенный`; EN: `Standard` / `Extended`;
+- right-aligned mode label: RU `Режим:` / EN `Mode:`;
+- ordinary idle: RU `ожидание` / EN `idle`;
+- navigation canonical names: `Strategy` / `Laboratory`, with deterministic RU presentation `Стратегия` / `Лаборатория` on the Laboratory page;
+- no Strategy Lab search/runtime semantics are changed;
+- previous circular-idle and Enable QUIC persistence source contracts remain guarded.
 
-Published `_18` contains the narrow Strategy Lab presentation/layout corrective:
+Source patch record: [`patches/v0.4.1_19.md`](patches/v0.4.1_19.md).
 
-- `Strategy Lab` -> RU `Лаборатория стратегий`;
-- `Generic UDP (optional)` -> RU `UDP порт (опционально)`;
-- EN explicitly remains `Strategy Lab` / `Generic UDP (optional)`;
-- domain, Generic UDP and Enable QUIC value controls share one aligned column shifted slightly left from `_17`;
-- RU `Заблокированный домен / IP` is kept on one line with a bounded label-column contract;
-- no Strategy Lab search/runtime semantics were changed;
-- focused regression coverage preserves prior RU/EN, circular idle and Enable QUIC persistence source contracts;
-- latest-head CI, complete corrective matrix and FreeBSD-15 package qualification passed before exact-head source merge;
-- persistent testing package/tag were published and verified from the candidate-defining source merge above.
+## Immediate acceptance after `_19` publication
 
-Source patch record: [`patches/v0.4.1_18.md`](patches/v0.4.1_18.md).
-
-## Immediate owner-live acceptance
-
-1. install `v0.4.1_18`;
-2. verify Russian `Лаборатория стратегий` and `UDP порт (опционально)`;
-3. verify `Заблокированный домен / IP` is one line;
-4. verify domain input, UDP port input and Enable QUIC checkbox are vertically aligned at the same new left position;
-5. verify the same screen in English mode and confirm no RU/EN leakage;
+1. verify RU normal typography and one-line blocked-domain label;
+2. verify domain / UDP / QUIC controls are aligned;
+3. verify `Режим:`, `Стандартный`, `Расширенный`, `Статус: ожидание`;
+4. verify sidebar `Стратегия` / `Лаборатория`;
+5. verify EN `Mode:`, `Standard`, `Extended`, `Status: idle`, `Strategy` / `Laboratory` and no RU leakage;
 6. separately prove Enable QUIC OFF/default persistence across reload/revisit;
-7. continue the risk-selected backlog from `ROADMAP.md`.
+7. next product plan: add Laboratory target support for IP addresses as well as domains;
+8. continue the remaining risk-selected backlog from `ROADMAP.md`.
 
 Do not reopen closed BLOB/Lua/discovery/model-selection experiments without new architecture or fresh contradicting evidence.
