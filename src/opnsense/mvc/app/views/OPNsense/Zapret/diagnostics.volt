@@ -57,7 +57,9 @@ $(document).ready(function () {
         running:'Strategy Lab выполняет проверку.', completed:'Проверка завершена.', cancel:'Остановка запрошена. Выполняется обязательное восстановление Zapret2.',
         failed:'Проверка завершилась с ошибкой.', noCandidates:'Стабильные кандидаты не найдены.', circularReady:'Можно временно проверить найденные стратегии в браузере.',
         udpPair:'Для общей UDP-проверки укажите одновременно порт и payload-файл.', udpSize:'Payload-файл должен иметь размер от 1 до 4096 байт.',
-        udpRead:'Не удалось прочитать payload-файл.', quicSaveFailed:'Не удалось сохранить настройку Enable QUIC.',
+        udpRead:'Не удалось прочитать payload-файл.', udpHelp:'Файл запроса должен иметь размер 1–4096 байт. Для проверки необходимо указать и порт, и файл.',
+        quicHelp:'Если включено, QUIC-стратегии проверяются даже когда контрольная проверка показывает, что QUIC заблокирован.',
+        quicSaveFailed:'Не удалось сохранить настройку Enable QUIC.',
         copy:'Копировать профиль', copied:'Профиль скопирован.', copyFailed:'Не удалось скопировать профиль.',
         progress:'Прогресс', restorationPass:'Успешно', requestFailed:'Ошибка запроса: ',
         statusRetry:'Статус Strategy Lab временно недоступен. Повторная попытка…', statusFailed:'Не удалось получить актуальный статус Strategy Lab.'
@@ -65,7 +67,9 @@ $(document).ready(function () {
         running:'Strategy Lab is running.', completed:'The check is complete.', cancel:'Cancellation requested. Mandatory Zapret2 restoration is running.',
         failed:'The check ended with an error.', noCandidates:'No stable candidates were found.', circularReady:'The candidates can now be tested temporarily in a browser.',
         udpPair:'Generic UDP testing requires both a port and a payload file.', udpSize:'The payload file must contain between 1 and 4096 bytes.',
-        udpRead:'The payload file could not be read.', quicSaveFailed:'The Enable QUIC setting could not be saved.',
+        udpRead:'The payload file could not be read.', udpHelp:'Request payload file, 1–4096 bytes. Both port and file are required.',
+        quicHelp:'When enabled, QUIC candidates are tested even when the control probe reports QUIC as blocked.',
+        quicSaveFailed:'The Enable QUIC setting could not be saved.',
         copy:'Copy profile', copied:'Profile copied.', copyFailed:'The profile could not be copied.',
         progress:'Progress', restorationPass:'Pass', requestFailed:'Request failed: ',
         statusRetry:'Strategy Lab status is temporarily unavailable. Retrying…', statusFailed:'The current Strategy Lab status could not be read.'
@@ -75,6 +79,8 @@ $(document).ready(function () {
     strategyLabGuidance.forEach(function (paragraph, index) {
         $('<p/>').text(paragraph).css('margin-bottom', index === strategyLabGuidance.length - 1 ? 0 : '10px').appendTo(guidance);
     });
+    $('#strategyLabUdpHelp').text(ui.udpHelp);
+    $('#strategyLabQuicHelp').text(ui.quicHelp);
 
     function esc(value) { return $('<div/>').text(value == null ? '' : String(value)).html(); }
     function label(map, key) { return map[key] || key || '—'; }
@@ -288,7 +294,6 @@ $(document).ready(function () {
             udpPort=$('#strategyLabUdpPort').val().trim(); fileInput=document.getElementById('strategyLabUdpPayload');
             payloadFile=fileInput&&fileInput.files?fileInput.files[0]:null;
             if (!!udpPort !== !!payloadFile) { showInputError(ui.udpPair); return; }
-            if (payloadFile && (payloadFile.size<1||payloadFile.size>udpPayloadMaxBytes)) { showInputError(ui.udpSize); return; }
         }
         function beginStart(payloadBase64) {
             clearInputError(); stopPolling(); activeJobId=''; renderedProfiles=[]; $('#strategyLabStages tbody,#strategyLabShortlist tbody').empty();
@@ -299,10 +304,18 @@ $(document).ready(function () {
         }
         if (!payloadFile) { beginStart(''); return; }
         var reader=new FileReader();
-        reader.onload=function(event){var encoded=String((event.target&&event.target.result)||''),delimiter=encoded.indexOf(',');
-            if(delimiter<0||!encoded.substring(delimiter+1)){showInputError(ui.udpRead);return;}
-            beginStart(encoded.substring(delimiter+1));};
-        reader.onerror=function(){showInputError(ui.udpRead);}; reader.readAsDataURL(payloadFile);
+        reader.onload=function(event){
+            var buffer=event.target&&event.target.result;
+            if (!(buffer instanceof ArrayBuffer)) { showInputError(ui.udpRead); return; }
+            var bytes=new Uint8Array(buffer);
+            if (bytes.byteLength<1||bytes.byteLength>udpPayloadMaxBytes) { showInputError(ui.udpSize); return; }
+            var binary='';
+            for (var offset=0;offset<bytes.length;offset+=4096) {
+                binary+=String.fromCharCode.apply(null,bytes.subarray(offset,Math.min(offset+4096,bytes.length)));
+            }
+            beginStart(window.btoa(binary));
+        };
+        reader.onerror=function(){showInputError(ui.udpRead);}; reader.readAsArrayBuffer(payloadFile);
     });
     $('#strategyLabCancelBtn').click(function(){
         if(!activeJobId)return;
@@ -338,8 +351,8 @@ $(document).ready(function () {
 <div class="content-box-main"><div class="table-responsive"><table class="table table-striped"><tbody><tr><td style="width:200px;">{{ lang._('Domain') }}</td><td><input type="text" class="form-control" id="testDomainInput" placeholder="example.com"/></td><td style="width:150px;"><button class="btn btn-primary" id="testDomainBtn" type="button">{{ lang._('Test') }} <i id="testDomainBtn_progress"></i></button></td></tr></tbody></table></div><pre id="testDomainResult" style="max-height:300px;overflow-y:auto;white-space:pre-wrap;">{{ lang._('Enter a domain and click Test to check HTTPS connectivity.') }}</pre></div></div></section></div>
 <div class="row"><section class="col-xs-12"><div class="content-box"><div class="content-box-header"><h3>{{ lang._('Strategy Lab') }}</h3></div><div class="content-box-main">
 <div class="table-responsive"><table class="table table-striped"><tbody><tr><td style="width:200px;">{{ lang._('Blocked Domain') }}</td><td><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org"/></td><td style="width:160px;"><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></td><td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td></tr>
-<tr id="strategyLabUdpRow" style="display:none;"><td>{{ lang._('Generic UDP (optional)') }}</td><td><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td><td colspan="2"><input type="file" class="form-control" id="strategyLabUdpPayload"/> <small>{{ lang._('Request payload file, 1–4096 bytes. Both port and file are required.') }}</small></td></tr>
-<tr id="strategyLabQuicRow" style="display:none;"><td>{{ lang._('Enable QUIC') }}</td><td><input type="checkbox" id="strategyLabEnableQuic" disabled/></td><td colspan="2"><small>{{ lang._('When enabled, QUIC candidates are tested even when the control probe reports QUIC as blocked.') }}</small></td></tr></tbody></table></div>
+<tr id="strategyLabUdpRow" style="display:none;"><td>{{ lang._('Generic UDP (optional)') }}</td><td><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td><td colspan="2"><input type="file" class="form-control" id="strategyLabUdpPayload"/> <small id="strategyLabUdpHelp"></small></td></tr>
+<tr id="strategyLabQuicRow" style="display:none;"><td>{{ lang._('Enable QUIC') }}</td><td><input type="checkbox" id="strategyLabEnableQuic" disabled/></td><td colspan="2"><small id="strategyLabQuicHelp"></small></td></tr></tbody></table></div>
 <div id="strategyLabSummary"></div><p><strong>Job:</strong> <code id="strategyLabJob">—</code> &nbsp; <strong>{{ lang._('Status') }}:</strong> <span id="strategyLabState">idle</span></p><p id="strategyLabMessage"></p>
 <div id="strategyLabProgressBox"><div class="progress" style="margin-bottom:5px;"><div id="strategyLabProgressBar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width:0%;">0%</div></div><p id="strategyLabProgressText"></p></div>
 <div class="table-responsive"><table class="table table-condensed" id="strategyLabStages"><thead><tr><th>#</th><th>{{ lang._('Stage') }}</th><th>{{ lang._('Status') }}</th><th>{{ lang._('Details') }}</th></tr></thead><tbody></tbody></table></div>
