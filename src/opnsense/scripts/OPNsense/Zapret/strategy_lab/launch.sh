@@ -3,7 +3,7 @@
 usage_error()
 {
     echo "ERROR: $1" >&2
-    echo "Usage: strategy_lab_launcher.sh {start TARGET MODE LANGUAGE [ENABLE_QUIC [UDP_PORT UDP_PAYLOAD_BASE64]]|status [JOB_ID]|cancel JOB_ID|result JOB_ID}" >&2
+    echo "Usage: strategy_lab_launcher.sh {start TARGET MODE LANGUAGE [ENABLE_QUIC [UDP_PORT UDP_PAYLOAD_BASE64 [SERVICE_HOST]]]|status [JOB_ID]|cancel JOB_ID|result JOB_ID}" >&2
     exit 64
 }
 
@@ -71,6 +71,7 @@ cleanup_stale_active()
 start_job()
 {
     _strategy_lab_enable_quic=0
+    _strategy_lab_service_host='-'
     case "$#" in
         4)
             _strategy_lab_udp_port='-'
@@ -91,15 +92,30 @@ start_job()
             _strategy_lab_udp_port="$6"
             _strategy_lab_udp_payload="$7"
             ;;
+        8)
+            _strategy_lab_enable_quic="$5"
+            _strategy_lab_udp_port="$6"
+            _strategy_lab_udp_payload="$7"
+            _strategy_lab_service_host="$8"
+            ;;
         *)
-            usage_error "start requires TARGET MODE LANGUAGE and optional ENABLE_QUIC plus UDP_PORT UDP_PAYLOAD_BASE64"
+            usage_error "start requires TARGET MODE LANGUAGE and optional ENABLE_QUIC plus UDP_PORT UDP_PAYLOAD_BASE64 SERVICE_HOST"
             ;;
     esac
     _strategy_lab_target=$(strategy_lab_normalize_target "$2" 2>/dev/null || true)
     _strategy_lab_mode="$3"
     _strategy_lab_language="$4"
+    _strategy_lab_target_type=$(strategy_lab_target_type "${_strategy_lab_target}" 2>/dev/null || true)
 
     [ -n "${_strategy_lab_target}" ] || usage_error "invalid target"
+    [ -n "${_strategy_lab_target_type}" ] || usage_error "invalid target type"
+    if [ "${_strategy_lab_service_host}" = '-' ]; then
+        _strategy_lab_service_host=''
+    else
+        _strategy_lab_service_host=$(strategy_lab_normalize_service_host "${_strategy_lab_service_host}" 2>/dev/null || true)
+        [ -n "${_strategy_lab_service_host}" ] || usage_error "invalid service host"
+        [ "${_strategy_lab_target_type}" = ip ] || usage_error "service host is valid only for an IP target"
+    fi
     strategy_lab_mode_valid "${_strategy_lab_mode}" || usage_error "invalid mode"
     strategy_lab_language_valid "${_strategy_lab_language}" || usage_error "invalid language"
     case "${_strategy_lab_enable_quic}" in 0|1) ;; *) usage_error "invalid Enable QUIC value" ;; esac
@@ -119,6 +135,12 @@ start_job()
     strategy_lab_job_id_valid "${_strategy_lab_job}" || { rm -rf "${_strategy_lab_jobdir}"; emit_error_json "Strategy Lab job id generation failed"; return 1; }
 
     strategy_lab_initialize_state "${_strategy_lab_job}" "${_strategy_lab_target}" "${_strategy_lab_mode}" "${_strategy_lab_language}"
+    printf '%s\n' "${_strategy_lab_service_host}" > "${_strategy_lab_jobdir}/service-host" || {
+        rm -rf "${_strategy_lab_jobdir}"
+        emit_error_json "Strategy Lab service identity could not be persisted"
+        return 1
+    }
+    chmod 0644 "${_strategy_lab_jobdir}/service-host"
     printf '%s\n' "${_strategy_lab_enable_quic}" > "${_strategy_lab_jobdir}/quic-enabled" || {
         rm -rf "${_strategy_lab_jobdir}"
         emit_error_json "Strategy Lab QUIC request could not be persisted"
