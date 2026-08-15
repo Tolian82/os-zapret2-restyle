@@ -2,7 +2,7 @@
 
 **Status:** CURRENT SPECIALIST ARCHITECTURE
 **Updated:** 2026-08-15
-**Exact-byte/control-observation implementation:** `v0.4.1_15` source candidate
+**Exact-byte/control-observation implementation published in:** `v0.4.1_15`
 
 ## Purpose
 
@@ -135,7 +135,7 @@ A terminal job may retain structured UDP result/control evidence but not user pa
 
 ## Verification
 
-Repository acceptance for `_15` includes:
+Repository acceptance for `_15` proves:
 
 1. exact 140-byte payload survives Base64 transport and job-local decode with `payload_bytes=140`;
 2. browser source uses `readAsArrayBuffer`, `Uint8Array.byteLength`, and Base64 of the validated exact bytes;
@@ -146,9 +146,11 @@ Repository acceptance for `_15` includes:
 7. no-reply control evidence does not gate candidate execution;
 8. RU/EN Stage-80 presentation exposes port/payload/endpoints, control observation, actual candidate count/IDs and winner/no-winner meaning.
 
-## Owner-live `_15` acceptance
+Automated `_15` source acceptance and persistent testing-package publication are complete. Machine publication evidence is in [`../verification/evidence/testing-publications/v0.4.1_15.md`](../verification/evidence/testing-publications/v0.4.1_15.md).
 
-After `_15` testing publication:
+## Current owner-live `_15` acceptance
+
+After installing the published `_15` testing package:
 
 - a valid small payload, including a 140-byte sample, must start normally;
 - configured UDP must show the selected port, decoded payload bytes and selected endpoint/IP;
