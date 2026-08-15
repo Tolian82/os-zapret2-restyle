@@ -66,7 +66,7 @@ The owner selected the following Strategy Lab/Diagnostics presentation work for 
    - `Outcome` -> `Результат`;
    - `Restoration` -> `Восстановление`;
    - `Replay` -> `Ответы`;
-   - `Complete Traffic Strategy profile` -> `Полный профиль Traffic Strategy`.
+   - `Complete Traffic Strategy profile` -> `Полный профиль Стратегий Трафика`.
 5. Main labels/actions:
    - `Run` -> `Запуск`;
    - `Test Domain Connectivity` -> `Тестирование соединения с доменом`;
