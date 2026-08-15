@@ -4,7 +4,8 @@
 
 | Project | Current release |
 |---|---|
-| **Stable release** | `v0.5.0` · `os-zapret2-restyle-0.5.0_1.pkg` |
+| **Full Web/pkg release** | `v0.5.0` · `os-zapret2-restyle-0.5.0_1.pkg` |
+| **Current development candidate** | `v0.5.0_1` |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -206,10 +207,10 @@ Removing the plugin stops its managed service before package files disappear. Sa
 
 | Type | Meaning |
 |---|---|
-| **Testing package** | Persistent GitHub `.pkg` used for owner-assisted development/live verification. It does not automatically replace the stable Web/pkg release. |
-| **Full release** | Verified package published through the project package repository and installable/upgradable from the OPNsense Web GUI. |
+| **Testing package** | Persistent GitHub `.pkg` used for owner-assisted development/live verification. It does not automatically replace the Full Web/pkg release. |
+| **Full Web/pkg release** | Verified package published through the project package repository and installable/upgradable from the OPNsense Web GUI. |
 
-Version/product semantics are defined in [`docs/PROJECT_PRINCIPLES.md`](docs/PROJECT_PRINCIPLES.md); GitHub release mechanics are defined in [`docs/GITHUB_PUBLICATION.md`](docs/GITHUB_PUBLICATION.md).
+Version/product semantics are defined by `DEV-027` and the related version rules in [`docs/PROJECT_PRINCIPLES.md`](docs/PROJECT_PRINCIPLES.md). Testing/full-publication mechanics start at `GH-034` in [`docs/GITHUB_PUBLICATION.md`](docs/GITHUB_PUBLICATION.md). Those rule books are the normative source; this README only presents the user-facing release model.
 
 ## Documentation for contributors
 
