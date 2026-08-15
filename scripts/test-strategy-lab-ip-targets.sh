@@ -63,7 +63,9 @@ STRATEGY_LAB_PYTHON_BIN="${PYTHON}" \
 
 "${JQ}" -e '
   .target=="203.0.113.10" and .target_type=="ip" and .all_accessible==true and
-  .endpoints==[{endpoint:"service.example",status:"PASS",exit_code:0,transport:"tls13-ipv4",detail:""}]
+  (.endpoints|length)==1 and .endpoints[0].endpoint=="service.example" and
+  .endpoints[0].status=="PASS" and .endpoints[0].exit_code==0 and
+  .endpoints[0].transport=="tls13-ipv4"
 ' "${WORK}/baseline.json" >/dev/null || {
     cat "${WORK}/baseline.json" >&2
     fail 'IP baseline did not use truthful TLS 1.3 semantics'
@@ -99,6 +101,7 @@ ACTIONS="${ROOT_DIR}/src/opnsense/service/conf/actions.d/actions_zapret.conf"
 LAUNCH="${ZAPRET_DIR}/strategy_lab/launch.sh"
 ENTRY="${ZAPRET_DIR}/strategy_lab_python.py"
 SUPPORT="${ZAPRET_DIR}/strategy_lab_py/ip_target_support.py"
+ADAPTER="${ZAPRET_DIR}/strategy_lab_stage_adapter.sh"
 
 grep -Fq "FILTER_VALIDATE_IP, FILTER_FLAG_IPV4" "${CONTROLLER}" || fail 'API does not accept explicit IPv4 targets'
 grep -Fq "getPost('service_host'" "${CONTROLLER}" || fail 'API Host / SNI handoff is missing'
@@ -109,6 +112,7 @@ grep -Fq 'service-host' "${LAUNCH}" || fail 'launcher does not persist immutable
 grep -Fq 'ip_target_support.install()' "${ENTRY}" || fail 'packaged Python entry point does not install IP target support'
 grep -Fq 'request.curl_request(' "${SUPPORT}" || fail 'IP target support does not use protocol-aware curl probing'
 ! grep -Fq 'tcp_request(selected, spec.port)' "${SUPPORT}" || fail 'IP TLS candidate still falls back to plain TCP proof'
+grep -Fq 'Direct TLS 1.3 connection to the IP target failed.' "${ADAPTER}" || fail 'Stage 40 IP message still describes a plain TCP probe'
 grep -Eq '^PLUGIN_REVISION=[[:space:]]+22$' "${ROOT_DIR}/Makefile" || fail 'package revision is not v0.4.1_22'
 
 sh -n "${TARGET_SH}" "${LAUNCH}" "$0"
