@@ -70,7 +70,7 @@ require "${CURRENT_LEDGER}" 'cold_fallback_available=false'
 # The live matrix must retain accepted history but describe the current selected work.
 require "${MATRIX}" '`v0.4.1_13` ACCEPTED BASELINE'
 require "${MATRIX}" '`v0.4.1_14` PUBLISHED/INSTALLED'
-require "${MATRIX}" 'owner-live `_14` observations that selected `_15`'
+require "${MATRIX}" '`_14` owner-live observations that selected `_15`'
 require "${MATRIX}" 'QUIC tested count/IDs ordinary output'
 require "${MATRIX}" 'exact 140-byte binary input'
 require "${MATRIX}" 'selected-port/payload direct UDP observation'
