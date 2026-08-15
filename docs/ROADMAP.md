@@ -63,47 +63,42 @@
     - [x] independent Generic UDP candidate execution remains active with QUIC OFF
     - [x] tested OFF job completes SUCCESS and Stage-90 restoration PASS
   - [ ] Enable QUIC OFF/default persistence across reload/revisit — source persistence contract remains guarded; owner-live reload proof pending
-  - [ ] **Strategy Lab / Diagnostics RU-EN presentation completion**
+  - [ ] **Strategy Lab / Laboratory RU-EN presentation completion**
     - [x] `_17` source/publication: circular idle ordinary display removes raw `{` / `}` / `{"state":"idle"}` JSON
     - [x] `_17` source/publication: RU `Состояние: ОЖИДАНИЕ` / EN `State: IDLE`
     - [x] `_17` source/publication: raw machine job JSON remains only under explicitly advanced output
-    - [x] `_17` source/publication: `Full output (advanced)` / RU `Полный вывод (расширенный)`
-    - [x] `_17` source/publication: HTTPS connectivity guidance RU/EN
-    - [x] `_17` source/publication: `Family` / `Семейство`
-    - [x] `_17` source/publication: `Endpoints` / `Назначения`
-    - [x] `_17` source/publication: `Outcome` / `Результат`
-    - [x] `_17` source/publication: `Restoration` / `Восстановление`
-    - [x] `_17` source/publication: `Replay` / `Ответы`
-    - [x] `_17` source/publication: `Complete Traffic Strategy profile` / `Полный профиль Стратегий Трафика`
-    - [x] `_17` source/publication: `Run` / `Запуск`
-    - [x] `_17` source/publication: `Test Domain Connectivity` / `Тестирование соединения с доменом`
-    - [x] `_17` source/publication: EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`
-    - [x] `_17` source/publication: `Enable QUIC` / RU `Включить QUIC`
-    - [x] `_17` focused automated source contract covers RU/EN, circular idle, and persisted QUIC default/load/save
+    - [x] `_17` source/publication: deterministic RU/EN result/stage/action labels
     - [x] `_17` latest-head full CI + FreeBSD-15 qualification
     - [x] `_17` exact-head source merge and persistent testing publication
-    - [x] `_17` owner-live Russian review performed; most translations/circular idle PASS, remaining defects selected for `_18`
-    - [x] `_18` owner-selected corrective source/publication
-      - [x] source: `Strategy Lab` / RU `Лаборатория стратегий`
-      - [x] source: `Generic UDP (optional)` / RU `UDP порт (опционально)`
-      - [x] source: one shared aligned value column for domain / Generic UDP / Enable QUIC
-      - [x] source: small left shift and one-line RU `Заблокированный домен / IP`
-      - [x] focused regression contract for new RU/EN labels and alignment while preserving prior contracts
-      - [x] latest-head full CI + FreeBSD-15 package qualification
-      - [x] exact-head source merge and persistent `v0.4.1_18` testing publication
-      - [ ] owner-live RU acceptance of title/UDP label/one-line label/alignment
-      - [ ] owner-live English mode and no RU/EN cross-language leakage
+    - [x] `_17` owner-live Russian review performed; remaining title/UDP/layout defects selected for `_18`
+    - [x] `_18` source/publication: `Strategy Lab` / RU `Лаборатория стратегий`
+    - [x] `_18` source/publication: `Generic UDP (optional)` / RU `UDP порт (опционально)`
+    - [x] `_18` source/publication: one-line RU `Заблокированный домен / IP`
+    - [x] `_18` owner-live confirms title/UDP translation and one-line blocked-domain label
+    - [ ] `_19` owner-selected corrective
+      - [x] source: remove `_18` 12 px label workaround; restore normal UI typography
+      - [x] source: explicit fixed label/value columns for domain / Generic UDP / Enable QUIC
+      - [x] source: RU mode values `Стандартный` / `Расширенный`; EN `Standard` / `Extended`
+      - [x] source: right-aligned `Режим:` / `Mode:` before mode selector
+      - [x] source: RU idle `ожидание`; EN idle `idle`
+      - [x] source: sidebar EN `Strategy` / `Laboratory`, RU `Стратегия` / `Лаборатория`
+      - [x] focused regression preserves circular-idle and Enable QUIC persistence source contracts
+      - [ ] latest-head full CI + FreeBSD-15 package qualification
+      - [ ] exact-head source merge and persistent `v0.4.1_19` testing publication
+      - [ ] owner-live RU layout/typography/mode/status/sidebar acceptance
+      - [ ] owner-live EN mode/status/sidebar and no RU/EN leakage
     - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit
-  - [ ] already-accessible target
+  - [x] already-accessible target — completed by owner confirmation
   - [ ] cancellation/internal-failure containment
+- [ ] **Laboratory target support: test IP addresses as well as domains — NEXT PLAN after `_19` UI acceptance**
 - [ ] Circular lifecycle coverage
   - [ ] start/stop/TTL
   - [ ] stale-session recovery
-- [ ] Settings Apply coverage
-  - [ ] validation/guards
-  - [ ] service-state correctness
+- [x] Settings Apply coverage — completed by owner confirmation
+  - [x] validation/guards
+  - [x] service-state correctness after Apply
 - [ ] Diagnostics persistence/reload
-- [ ] RU/EN presentation review beyond the current Strategy Lab corrective scope
+- [ ] RU/EN presentation review beyond the current Laboratory corrective scope
 - [ ] Retention/cleanup boundaries
 - [ ] Reboot/residue verification
 - [ ] OPNsense runtime/service reliability follow-up
@@ -111,9 +106,11 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — live-check published `_18`, then finish RU/EN + persistence acceptance
+## Current priority — qualify/publish `_19`, live-check it, then add IP targets to Laboratory
 
-Current published testing identity:
+Current source candidate: `v0.4.1_19` (`PLUGIN_REVISION=19`).
+
+Last published testing identity remains `_18` until `_19` publication completes:
 
 - tag: `v0.4.1_18`;
 - asset: `os-zapret2-restyle-0.4.1_18.pkg`;
@@ -122,17 +119,18 @@ Current published testing identity:
 - publication workflow run: `31889449879`;
 - stable Pages/pkg repository promoted: no.
 
-`_17` owner-live Russian screenshots confirmed most deterministic translations and the circular-idle cleanup, but exposed the two remaining English labels plus the blocked-domain wrapping/alignment issue. Published `_18` closes exactly that source scope without reopening Strategy Lab runtime/search semantics.
+`_18` owner-live confirms the two requested labels and the one-line blocked-domain label, but rejects the 12 px typography workaround and resulting alignment. `_19` is the narrow corrective for normal typography, explicit alignment, mode/status translations and sidebar naming.
 
-Current owner-live acceptance:
+After `_19` publication/install:
 
-1. verify `_18` Russian `Лаборатория стратегий`, `UDP порт (опционально)`, one-line blocked-domain label and aligned domain/UDP/QUIC controls;
-2. verify English/no-leakage mode;
-3. separately prove saved Enable QUIC OFF/default persistence across reload/revisit;
-4. then resume the remaining regression/backlog rows above.
+1. RU live acceptance of layout/typography/mode/status/sidebar;
+2. EN/no-leakage live acceptance;
+3. Enable QUIC OFF/default persistence reload/revisit proof;
+4. **next engineering plan: make Laboratory accept/test IP addresses as well as domains**;
+5. continue the remaining backlog above.
 
-Current evidence: [`verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md).
-Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_18.md`](verification/evidence/testing-publications/v0.4.1_18.md).
+Owner-live `_18` corrective evidence: [`verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md).
+Machine `_18` publication evidence: [`verification/evidence/testing-publications/v0.4.1_18.md`](verification/evidence/testing-publications/v0.4.1_18.md).
 
 ## Deferred research — retain, do not activate by inertia
 
