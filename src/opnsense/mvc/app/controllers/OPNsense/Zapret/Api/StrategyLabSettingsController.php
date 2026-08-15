@@ -13,7 +13,7 @@ use OPNsense\Core\Config;
 class StrategyLabSettingsController extends ApiMutableModelControllerBase
 {
     protected static $internalModelName = 'zapret';
-    protected static $internalModelClass = '\\OPNsense\\Zapret\\Zapret';
+    protected static $internalModelClass = '\OPNsense\Zapret\Zapret';
 
     public function quicAction(): array
     {
