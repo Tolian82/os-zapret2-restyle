@@ -103,7 +103,7 @@ require "${UDP_DOC}" 'the selected destination port'
 require "${UDP_DOC}" 'exact job-local payload bytes'
 require "${UDP_DOC}" '**UDP silence is not proof that a port is closed.**'
 require "${UDP_DOC}" 'does not suppress the bypass candidate catalog'
-require "${UDP_DOC}" 'actual UDP candidate count/IDs'
+require "${UDP_DOC}" 'actual candidate count/IDs'
 
 # Accepted measurement decisions stay closed.
 require "${CURRENT_LEDGER}" 'job.xhdgCU'
