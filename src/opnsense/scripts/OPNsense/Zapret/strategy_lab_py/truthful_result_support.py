@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -58,7 +59,7 @@ def mark_bare_ip_tls_identity_requirement(
 ) -> bool:
     """Persist job-local evidence that bare-IP TLS identity could not be verified.
 
-    curl exit 60 means peer-certificate verification failed.  For an IPv4 target without
+    curl exit 60 means peer-certificate verification failed. For an IPv4 target without
     an explicit service Host/SNI this is not evidence that DPI bypass is impossible; the
     user has not supplied the service identity needed for a meaningful HTTPS check.
     """
@@ -106,9 +107,9 @@ def _http_application_response(
 ) -> dict[str, Any] | None:
     """Return accepted evidence for a real intercepted HTTP 4xx/5xx response.
 
-    This intentionally does not special-case 502 or any site.  The transport/TLS/profile
+    This intentionally does not special-case 502 or any site. The transport/TLS/profile
     proof must already be successful, every endpoint must be intercepted, and every curl
-    writeout must contain a real HTTP status in the RFC application-response range.
+    writeout must contain a real HTTP status in the application-response range.
     """
     if protocol not in {"tls13", "tls12", "http"}:
         return None
@@ -165,7 +166,7 @@ def install() -> None:
     original_probe_main = probe.main
 
     def probe_main(argv: Sequence[str] | None = None) -> int:
-        args = list(argv or [])
+        args = list(sys.argv[1:] if argv is None else argv)
         status = original_probe_main(args)
         if args[:1] == ["baseline"] and len(args) == 7:
             job = Path(args[5])
