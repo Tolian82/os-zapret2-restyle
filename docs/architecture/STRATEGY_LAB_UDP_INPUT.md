@@ -4,12 +4,13 @@
 **Updated:** 2026-08-15
 **Direct UDP/control-observation implementation:** `v0.4.1_15`
 **Browser handoff correction published in:** `v0.4.1_16`
+**Owner-live configured-path acceptance:** PASS on `v0.4.1_16`
 
 ## Purpose
 
 Expose Generic UDP request/response bypass testing through Diagnostics without accepting arbitrary server-side file paths, misclassifying UDP silence, or retaining payload bytes after a job ends.
 
-The owner-live `_15` retry established that the real browser path still failed even though the backend exact-140-byte regression passed. Source tracing then identified an architectural weakness at the browser boundary: the application did not own a prepared payload. It re-read `input.files[0]` only when **Run** was pressed, so loss/reset of the native file-control selection produced the observed port+file validation failure before API/configd/job-local storage was reached.
+The final `_16` owner-live result establishes that the configured browser-to-job path works when the payload actually satisfies the documented byte limit. Earlier repeated size failures were caused by selecting files around **140 KiB**, not by a confirmed upload-directory or filesystem-permissions defect.
 
 ## Important transport fact
 
@@ -17,7 +18,7 @@ Generic UDP does **not** use a multipart upload directory.
 
 The selected local file is read in the browser, converted to Base64, and sent in the normal Strategy Lab start POST. Only after the API/configd launcher accepts that request is the payload decoded into the private job-local `udp-payload.bin` file.
 
-Therefore a GUI state where the selected file is already absent and no new configured-UDP job is created cannot be caused first by permissions on `udp-payload.bin`: that filesystem boundary has not yet been reached. Permissions remain a valid later-stage failure possibility and `_16` has explicit diagnostics for that boundary.
+Permissions remain a valid later-stage failure possibility and `_16` has explicit diagnostics for that boundary, but the controlled owner-live PASS did not expose such a failure.
 
 ## Supported request
 
@@ -26,11 +27,11 @@ Generic UDP is optional and accepted only in `extended` mode.
 The request consists of exactly two values:
 
 - UDP destination port: integer `1..65535`;
-- one local browser-selected payload: decoded size **`1..4096` bytes**.
+- one local browser-selected payload: decoded size **`1..4096 bytes`**.
 
 Both values must be present together. Supplying only one is invalid. Standard mode must not carry Generic UDP input.
 
-An exact 140-byte file is valid. Multi-megabyte files are deliberately invalid.
+An exact 140-byte file is valid. A 140 KiB file is deliberately invalid.
 
 ## `_16` browser-owned staging
 
@@ -76,7 +77,7 @@ Both use mode `0600`. Public `status.json` stores only `configured`, port and de
 
 ## `_16` server-side failure attribution
 
-The job-local preparation layer records a precise non-payload error code before returning failure. This distinguishes a later filesystem/backend failure from the earlier browser-selection failure.
+The job-local preparation layer records a precise non-payload error code before returning failure. This distinguishes a later filesystem/backend failure from browser-side validation.
 
 Current classes include:
 
@@ -143,14 +144,29 @@ Published testing identity:
 
 Machine publication evidence: [`../verification/evidence/testing-publications/v0.4.1_16.md`](../verification/evidence/testing-publications/v0.4.1_16.md).
 
-## Owner-live `_16` acceptance
+## Owner-live `_16` acceptance — PASS
 
-After installing the published `_16` testing package:
+Controlled live fixture:
 
-- selecting a valid small payload must immediately show an application-owned `ready to send` line with the exact decoded byte count;
-- a 140-byte sample must show `140` bytes and a new Strategy Lab job must start with configured UDP;
-- Stage 80 must show selected port/payload bytes/endpoints, direct reply/no-reply evidence and actual UDP candidate IDs;
-- no-reply wording must not claim the port is closed;
-- if job-local filesystem preparation fails, the UI/API error must identify the preparation class instead of silently reverting to unconfigured UDP;
-- oversized input still fails before a new job starts;
-- Stage-90 restoration and temporary resource cleanup remain PASS.
+- Windows-created `udp-140.bin` verified as exactly `140` bytes;
+- target `rutracker.org`;
+- Extended mode;
+- port `53`;
+- Enable QUIC OFF;
+- job `job.j09XUc`.
+
+Observed live:
+
+- GUI immediately displayed `Файл подготовлен к отправке: udp-140.bin, 140 байт.`;
+- Stage 80 showed port `53`, payload `140` bytes and endpoint `172.67.182.196`;
+- direct UDP reply was not observed;
+- UI explicitly stated that no reply does not mean the port is closed;
+- all three current UDP candidates executed: `udp-ipfrag-8`, `udp-ipfrag-16`, `udp-ipfrag-32`;
+- no working UDP strategy was found, which is a valid negative result;
+- QUIC OFF was shown naturally as strategy search disabled;
+- Stage 90 visibly restored Zapret2 and removed temporary processes/rules;
+- overall job result was `SUCCESS`.
+
+Durable evidence: [`../verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`](../verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md).
+
+The earlier upload/filesystem suspicion is not a confirmed product defect for this scenario. The repeated size error was explained by the owner selecting files around **140 KiB**, while the contract is `1..4096 bytes`.
