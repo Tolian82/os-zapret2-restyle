@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
 **Status:** CURRENT · COMPLETE CONCISE PLAN
-**Updated:** 2026-08-15
+**Updated:** 2026-08-16
 
 - Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - Exact revision handoff: [`START_HERE.md`](START_HERE.md)
@@ -76,7 +76,7 @@
     - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit — separate non-presentation row
   - [x] already-accessible target — completed by owner confirmation
   - [ ] cancellation/internal-failure containment
-- [ ] **Laboratory target support: test IPv4 addresses as well as domains — `_23` PUBLISHED; OWNER-LIVE CORRECTIVE VERIFICATION NEXT**
+- [x] **Laboratory target support: test IPv4 addresses as well as domains — OWNER-LIVE PASS / COMPLETE ON `_23`**
   - [x] architecture/current-source audit: feature is feasible but not a validator-only change
   - [x] confirm dormant IP scaffolding in Stage 00/40, search epoch, firewall pinning and final `--ipset-ip=` profile generation
   - [x] identify unsafe prior behavior: IPv4 TLS candidates degraded to plain TCP-connect evidence and must not create false PASS results
@@ -94,14 +94,14 @@
   - [x] exact-head complete CI + FreeBSD-15 qualification for `_23` — run `31909623049`
   - [x] squash merge `_23` source — `3cd3ecc8b9976b1ec8000e2eccfa48f6898d1e73`
   - [x] persistently publish `v0.4.1_23` — run `31909994148`, SHA-256 `37bd4c19bacc48f17aeb4e497c1058e675df067adf2ecd00334708e995bcb283`
-  - [ ] owner-live `rutracker.net` Standard: stable intercepted finalist survives Stage 85 with HTTP 4xx/5xx
-  - [ ] owner-live `rutracker.org` ordinary-domain regression
-  - [ ] owner-live bare IPv4: certificate-identity failure reports PARTIAL + Host/SNI guidance
-  - [ ] owner-live IPv4 + real Host/SNI pinned to entered destination
-  - [ ] owner-live final working profile contains `--ipset-ip=<target>` and exact replay passes
-  - [ ] owner-live Extended Generic UDP against IPv4 without Host/SNI
-  - [ ] owner-live bare-IP QUIC is SKIPPED with zero tested candidates; QUIC with Host/SNI remains valid
-  - [ ] owner-live Stage-90 restoration/residue verification after IP run
+  - [x] owner-live `rutracker.net` Standard: stable intercepted finalists survive Stage 85 with HTTP `502` — `job.9juf8H`
+  - [x] owner-live `rutracker.org` ordinary-domain regression — `job.TYjdSR`
+  - [x] owner-live bare IPv4: certificate-identity failure reports `PARTIAL` + Host/SNI guidance — `job.3HeCEP`
+  - [x] owner-live IPv4 + real Host/SNI pinned to entered destination — `job.W0lKTv`
+  - [x] owner-live final working profile contains `--ipset-ip=<target>` and exact replay passes — `job.W0lKTv`
+  - [x] owner-live Extended Generic UDP against IPv4 without Host/SNI — `job.HNnp5P`
+  - [x] owner-live bare-IP QUIC is SKIPPED with zero tested candidates; QUIC with Host/SNI executes the real four-candidate path — `job.HNnp5P` / `job.W0lKTv`
+  - [x] owner-live Stage-90 restoration/residue verification after IP runs — selected closeout jobs PASS
 - [ ] Circular lifecycle coverage
   - [ ] start/stop/TTL
   - [ ] stale-session recovery
@@ -117,9 +117,9 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — owner-live `v0.4.1_23` truthful-result verification
+## Current priority — Enable QUIC OFF/default persistence across reload/revisit
 
-Current published testing identity:
+Current published testing identity remains:
 
 - tag: `v0.4.1_23`;
 - asset: `os-zapret2-restyle-0.4.1_23.pkg`;
@@ -130,10 +130,11 @@ Current published testing identity:
 - stable Pages/pkg repository promoted: no.
 
 Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_23.md`](verification/evidence/testing-publications/v0.4.1_23.md).
+Owner-live IPv4 / Host-SNI closeout evidence: [`verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md`](verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md).
 
-Owner-live `_21` remains accepted for the selected Laboratory presentation scope: the normal OPNsense outer frame is restored, the accepted shared field grid remains correct, and Russian `Стратегия` / `Лаборатория` stays localized across page navigation. The current Russian-presentation task is closed; GitHub issue `#155` is completed.
+Laboratory IPv4 / Host-SNI target support is now complete on the exact published `_23` package. Accepted live evidence covers ordinary-domain positive and negative regressions, the HTTP-502 Stage-85 correction, bare-IP certificate identity guidance, bare-IP QUIC skip, independent Generic UDP, fixed destination + Host/SNI, exact `--ipset-ip=` profile replay, real Host/SNI QUIC attempts, and Stage-90 cleanup/restoration.
 
-The published `_23` corrective preserves the `_22` IPv4 target contract while fixing truthful terminal/result classification selected by owner-live evidence: authenticated/intercepted HTTP 4xx/5xx no longer erases otherwise stable DPI-path evidence, bare-IPv4 QUIC is skipped before execution without Host/SNI, and bare-IPv4 TLS identity failure is reported as PARTIAL guidance rather than a misleading empty result.
+The next selected live boundary is the pre-existing Enable QUIC OFF/default persistence row: perform a real Laboratory page reload/revisit after saving OFF and verify that OFF remains selected and still suppresses QUIC candidate execution. A pass closes that row without source change; a failure becomes a new bounded defect.
 
 The current base target contract remains:
 
@@ -150,8 +151,6 @@ The current base target contract remains:
 11. IPv6 target support remains deferred because the current search epoch is IPv4-specific.
 
 Source patch contracts: [`patches/v0.4.1_22.md`](patches/v0.4.1_22.md), [`patches/v0.4.1_23.md`](patches/v0.4.1_23.md).
-
-Enable QUIC OFF/default persistence reload/revisit proof remains a separate existing backlog row and is not folded into this IP-target patch.
 
 Owner-live `_21` evidence: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md).
 
