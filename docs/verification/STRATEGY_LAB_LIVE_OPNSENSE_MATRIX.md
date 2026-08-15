@@ -1,25 +1,26 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; QUIC PERSISTENCE AND RU/EN PRESENTATION PENDING.**
+Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU/EN PRESENTATION SOURCE CANDIDATE; QUIC PERSISTENCE AND `_17` LIVE PRESENTATION PENDING.**
 
 Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected owner-live evidence.
 
 ## Current package/source boundary
 
-- current source candidate: `v0.4.1_16`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_16.pkg` / `v0.4.1_16`;
+- current source candidate: `v0.4.1_17`;
+- last published testing package/tag: `os-zapret2-restyle-0.4.1_16.pkg` / `v0.4.1_16`;
 - `_16` source/tag target: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
 - `_16` package SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
-- publication workflow run: `31882091770`;
+- `_16` publication workflow run: `31882091770`;
 - stable Pages/pkg repository promoted: no;
 - owner-live `_16` Generic UDP verification: **PASS**;
 - owner-live `_16` QUIC OFF execution semantics: **PASS**;
-- Enable QUIC OFF/default persistence across reload/revisit: **PENDING**;
-- selected RU/EN presentation cleanup: **PENDING IMPLEMENTATION**.
+- Enable QUIC OFF/default persistence across reload/revisit: **PENDING LIVE PROOF**;
+- `_17` selected RU/EN presentation cleanup: **SOURCE IMPLEMENTED; AUTOMATED/PUBLICATION/LIVE ACCEPTANCE IN PROGRESS**.
 
 Machine publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_16.md`.
 Owner-live Generic UDP evidence: `docs/verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`.
 Owner-live QUIC OFF/UI follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`.
+`_17` patch record: `docs/patches/v0.4.1_17.md`.
 
 Normal Stage 60 remains Model C only; automatic Model B/A production fallback remains disabled from `_13`.
 
@@ -98,11 +99,11 @@ Observed behavior:
 
 This is **OWNER-LIVE PASS** for the runtime OFF gate itself. It does not prove persistence because the evidence does not show the OFF value surviving a page reload/revisit. Keep persistence as a separate row.
 
-## Selected RU/EN presentation acceptance scope
+## `_17` RU/EN presentation source acceptance scope
 
-The owner selected the following visible UI items for implementation and later live acceptance in both languages:
+The owner-selected visible UI items are implemented in source candidate `_17` and must later receive live acceptance in both languages:
 
-- circular idle ordinary display: remove raw `{` / `}` and do not expose `{"state":"idle"}` as ordinary JSON;
+- circular idle ordinary display removes raw `{` / `}` and does not expose `{"state":"idle"}` as ordinary JSON;
 - circular idle localized state: RU `Состояние: ОЖИДАНИЕ`, EN `State: IDLE`;
 - `Full output (advanced)` / RU `Полный вывод (расширенный)`;
 - `Enter a domain and click Test to check HTTPS connectivity.` / RU `Введите домен и нажмите «Проверка», чтобы проверить HTTPS-соединение.`;
@@ -114,11 +115,13 @@ The owner selected the following visible UI items for implementation and later l
 - `Complete Traffic Strategy profile` / RU `Полный профиль Стратегий Трафика`;
 - `Run` / RU `Запуск`;
 - `Test Domain Connectivity` / RU `Тестирование соединения с доменом`;
-- `Blocked Domain` becomes EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`;
+- EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`;
 - `Enable QUIC` / RU `Включить QUIC`;
 - no cross-language leakage between RU and EN modes.
 
-Raw machine JSON may remain only in an explicitly advanced/raw area if retained.
+Raw machine job JSON remains under the explicitly advanced Strategy Lab output. The ordinary circular block contains only human-readable localized state.
+
+The focused source test also guards the already implemented Enable QUIC persistence path: model default OFF, settings read/write endpoint, save-on-change and load-on-page-open. This does not replace owner-live reload/revisit proof.
 
 ## Scenario matrix
 
@@ -138,9 +141,9 @@ Raw machine JSON may remain only in an explicitly advanced/raw area if retained.
 | 12 | No-reply does not mean closed / does not gate candidates | **OWNER-LIVE PASS** |
 | 13 | terminal payload cleanup and Zapret2 restoration PASS. | **STAGE-90 RESTORATION/TEMP PROCESS+RULE CLEANUP OWNER-LIVE PASS; deeper residue remains under global cleanup backlog** |
 | 14 | Enable QUIC OFF execution semantics | **OWNER-LIVE PASS** |
-| 15 | Enable QUIC OFF/default persistence across reload/revisit | **PENDING** |
-| 16 | Circular idle ordinary presentation | **PENDING IMPLEMENTATION + RU/EN LIVE ACCEPTANCE** |
-| 17 | RU/EN presentation review | **PENDING IMPLEMENTATION + LIVE ACCEPTANCE** |
+| 15 | Enable QUIC OFF/default persistence across reload/revisit | **SOURCE CONTRACT GUARDED ON `_17`; OWNER-LIVE RELOAD PROOF PENDING** |
+| 16 | Circular idle ordinary presentation | **SOURCE IMPLEMENTED ON `_17`; RU/EN LIVE ACCEPTANCE PENDING** |
+| 17 | RU/EN presentation review | **SOURCE IMPLEMENTED ON `_17`; LIVE ACCEPTANCE PENDING** |
 | 18 | Target already accessible | PENDING REGRESSION |
 | 19 | Cancellation/internal-failure containment | PENDING REGRESSION |
 | 20 | Circular lifecycle | PENDING REGRESSION |
