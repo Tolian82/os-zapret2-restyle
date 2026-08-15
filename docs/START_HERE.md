@@ -10,14 +10,14 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-15
-**Current handoff identity:** published testing `v0.4.1_19`
+**Current handoff identity:** `v0.4.1_20` source candidate
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
-- `PLUGIN_REVISION=19`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_19.pkg` / `v0.4.1_19`;
+- current source candidate: `PLUGIN_REVISION=20` / `v0.4.1_20`;
+- last published testing package/tag: `os-zapret2-restyle-0.4.1_19.pkg` / `v0.4.1_19`;
 - `_19` testing-package SHA-256: `142ec3f3f5843d6be09d0ad34aa433c00ddf4ef82e75bbb2fd7104fdcc3eb7f8`;
 - `_19` source merge/testing-tag target: `6d06f0c3dfc7a76f0dc7b43ca6ba8cc0d0f83758`;
 - `_19` publication workflow run: `31892344832`;
@@ -41,38 +41,42 @@ Accepted owner-live/product facts include:
 - already-accessible-target behavior is complete by owner confirmation;
 - Settings Apply validation/guards and post-Apply service-state correctness are complete by owner confirmation.
 
-Enable QUIC OFF/default persistence across an actual reload/revisit remains a separate live acceptance row. `_19` preserves the existing model-backed default/load/save source contract.
+Enable QUIC OFF/default persistence across an actual reload/revisit remains a separate live acceptance row. `_20` preserves the existing model-backed default/load/save source contract.
 
-## `_18` owner-live follow-up
+## `_19` owner-live follow-up — layout corrective selected
 
-The owner installed published `_18` and confirmed `Лаборатория стратегий`, `UDP порт (опционально)`, and the one-line `Заблокированный домен / IP`. The same screenshot rejected the 12 px typography workaround and field alignment and selected `_19` together with deterministic mode/status/sidebar localization.
+The owner installed published `_19` and supplied a direct comparison between the Laboratory page, the Zapret Strategy page and a native OPNsense settings page.
 
-Evidence: [`verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md).
+Visible `_19` presentation items include RU `Режим:`, `Расширенный` and `Статус: ожидание`, but the owner rejected the remaining layout because:
 
-## `_19` published implementation
+- the Laboratory working area has a larger perimeter inset than ordinary OPNsense pages;
+- the Diagnostics/Laboratory value column does not follow the normal OPNsense form grid;
+- `Режим:` must be guaranteed to use the same actual font size/line height as `Заблокированный домен / IP`.
 
-`_19` is now source/CI/FreeBSD/package-publication complete:
+Evidence: [`verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md).
 
-- removed the 12 px blocked-domain label workaround and restored normal UI typography;
-- kept `Заблокированный домен / IP` on one line through an explicit fixed label/value-column contract;
-- domain input, Generic UDP input and Enable QUIC checkbox use one common value-column x-position;
-- RU mode values: `Стандартный` / `Расширенный`; EN: `Standard` / `Extended`;
-- right-aligned mode label: RU `Режим:` / EN `Mode:`;
-- ordinary idle: RU `ожидание` / EN `idle`;
-- navigation canonical names: `Strategy` / `Laboratory`, with deterministic RU presentation `Стратегия` / `Лаборатория` on the Laboratory page;
-- no Strategy Lab search/runtime semantics changed;
-- circular ordinary-state and Enable QUIC persistence source contracts remain guarded.
+## `_20` selected implementation
 
-Source patch record: [`patches/v0.4.1_19.md`](patches/v0.4.1_19.md).
+`_20` is a narrow Laboratory/native-layout corrective package candidate:
 
-## Immediate owner-live acceptance
+- both the top Diagnostics domain row and Strategy Lab inputs use one native-style `25%` field-label column;
+- target, Generic UDP and Enable QUIC therefore start on the same normal OPNsense value-column position;
+- the fixed `_19` `250px` Laboratory-only label column is removed;
+- RU `Заблокированный домен / IP` remains one line at normal UI typography;
+- `Режим:` / `Mode:` computed font size and line height are synchronized from the target field-label reference;
+- the nested Laboratory page/container/row/column perimeter is neutralized so it does not add a second inset;
+- `_19` RU/EN strings, Strategy Lab execution, Generic UDP, QUIC and persistence semantics are unchanged.
 
-1. verify RU normal typography, one-line blocked-domain label, and domain / UDP / QUIC alignment;
-2. verify `Режим:`, `Стандартный`, `Расширенный`, `Статус: ожидание`;
-3. verify sidebar `Стратегия` / `Лаборатория`;
-4. verify EN `Mode:`, `Standard`, `Extended`, `Status: idle`, `Strategy` / `Laboratory` and no RU leakage;
+Source patch record: [`patches/v0.4.1_20.md`](patches/v0.4.1_20.md).
+
+## Immediate acceptance after `_20` publication
+
+1. visually compare Laboratory perimeter with the Strategy/native OPNsense pages;
+2. verify the top domain input and Laboratory target/UDP/QUIC controls use the normal common value column;
+3. verify `Режим:` has the same visible typography as `Заблокированный домен / IP`;
+4. no Strategy Lab execution rerun is required for this visual-only correction;
 5. separately prove Enable QUIC OFF/default persistence across reload/revisit;
-6. next engineering plan: add Laboratory target support for IP addresses as well as domains;
+6. after `_20` visual acceptance, next engineering plan: add Laboratory target support for IP addresses as well as domains;
 7. continue the remaining risk-selected backlog from `ROADMAP.md`.
 
 Do not reopen closed BLOB/Lua/discovery/model-selection experiments without new architecture or fresh contradicting evidence.
