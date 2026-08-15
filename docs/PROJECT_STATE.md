@@ -21,17 +21,17 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
-- current source candidate: `_19` / `PLUGIN_REVISION=19`;
-- last published testing package/tag: `os-zapret2-restyle-0.4.1_18.pkg` / `v0.4.1_18`;
-- `_18` testing-package SHA-256: `1ca82e1405c688a5429e1fd1d68da19906bea613323d8d01090bba85068b34f0`;
-- `_18` source merge/testing-tag target: `fa1b924a5c1d646f0daec13aff6e7406a534c6a3`;
-- `_18` publication workflow run: `31889449879`;
+- current packaged revision: `_19` / `PLUGIN_REVISION=19`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_19.pkg` / `v0.4.1_19`;
+- `_19` testing-package SHA-256: `142ec3f3f5843d6be09d0ad34aa433c00ddf4ef82e75bbb2fd7104fdcc3eb7f8`;
+- `_19` source merge/testing-tag target: `6d06f0c3dfc7a76f0dc7b43ca6ba8cc0d0f83758`;
+- `_19` publication workflow run: `31892344832`;
 - latest full Web/pkg release remains `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
-- stable Pages/pkg repository was not promoted by `_18`;
+- stable Pages/pkg repository was not promoted by `_19`;
 - internal service key: `zapret`.
 
-Machine `_18` publication evidence: [`verification/evidence/testing-publications/v0.4.1_18.md`](verification/evidence/testing-publications/v0.4.1_18.md).
+Machine `_19` publication evidence: [`verification/evidence/testing-publications/v0.4.1_19.md`](verification/evidence/testing-publications/v0.4.1_19.md).
 
 The exact `main` SHA is resolved at execution time under `GH-004`.
 
@@ -52,57 +52,37 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 
 ## `_18` owner-live Laboratory follow-up
 
-Published `_18` was installed and the owner supplied a live Russian-mode screenshot.
-
-Visible PASS:
-
-- `Лаборатория стратегий`;
-- `UDP порт (опционально)`;
-- one-line `Заблокированный домен / IP`.
-
-Visible defects selecting `_19`:
-
-- blocked-domain label typography became visibly too small because `_18` used a 12 px workaround;
-- owner rejected the resulting field alignment and requires domain / UDP / QUIC controls to use one explicit shared x-position with normal typography;
-- mode selector presentation still needs deterministic RU `Стандартный` / `Расширенный`, EN `Standard` / `Extended`;
-- add right-aligned RU `Режим:` / EN `Mode:` directly before the selector;
-- ordinary RU idle must be `ожидание`, EN remains `idle`;
-- sidebar must be EN `Strategy` / `Laboratory`, RU `Стратегия` / `Лаборатория`.
+Published `_18` owner-live Russian UI confirmed `Лаборатория стратегий`, `UDP порт (опционально)`, and one-line `Заблокированный домен / IP`. The owner rejected the 12 px typography workaround and resulting alignment and selected `_19` together with mode/status/sidebar localization.
 
 Evidence: [`verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md).
 
-## `_19` source implementation
+## `_19` source/package implementation — complete
 
-Implemented in the current source candidate:
+`_19` has passed source validation, the complete Strategy Lab corrective matrix, focused Laboratory localization/layout regression, FreeBSD-15 package qualification, exact-head source merge, and persistent testing publication.
 
-- `PLUGIN_REVISION=19`;
-- normal blocked-domain label typography; the `_18` 12 px override is removed;
+Implemented:
+
+- normal blocked-domain label typography; `_18` 12 px override removed;
 - fixed shared label/value columns for domain / Generic UDP / Enable QUIC;
 - RU mode values `Стандартный` / `Расширенный`; EN `Standard` / `Extended`;
-- right-aligned `Режим:` / `Mode:` adjacent to the mode select;
+- right-aligned `Режим:` / `Mode:` adjacent to the mode selector;
 - RU idle `ожидание`; EN idle `idle`;
-- menu canonical names `Strategy` / `Laboratory`, plus deterministic active Laboratory-page RU/EN text;
-- focused regression covers layout, mode/status/sidebar strings, prior circular idle behavior and Enable QUIC persistence source contract;
+- menu canonical names `Strategy` / `Laboratory`, plus deterministic active Laboratory-page RU `Стратегия` / `Лаборатория`;
+- focused regression retains prior circular ordinary-state behavior and Enable QUIC persistence source contract;
 - Strategy Lab search/runtime semantics are unchanged.
+
+Source PR `#254` merged exact candidate source as `6d06f0c3dfc7a76f0dc7b43ca6ba8cc0d0f83758`. Testing publication `v0.4.1_19` is verified with SHA-256 `142ec3f3f5843d6be09d0ad34aa433c00ddf4ef82e75bbb2fd7104fdcc3eb7f8`.
 
 Source patch record: [`patches/v0.4.1_19.md`](patches/v0.4.1_19.md).
 
-## Current verification boundary
+## Current owner-live verification boundary
 
-Before source merge/publication `_19` must pass:
-
-1. focused Laboratory RU/EN/layout/persistence contract;
-2. complete project + Strategy Lab corrective matrix;
-3. FreeBSD-15 package build/inspection qualification;
-4. exact latest-head merge;
-5. persistent `v0.4.1_19` testing publication and publication-record reconciliation.
-
-After publication/install:
+After `_19` install:
 
 1. RU layout/typography/mode/idle/sidebar live check;
 2. EN mode/idle/sidebar and no-language-leakage live check;
 3. Enable QUIC OFF/default persistence after reload/revisit;
-4. next selected product plan: Laboratory targets must support IP addresses as well as domains;
+4. next selected engineering plan: Laboratory targets must support IP addresses as well as domains;
 5. continue the remaining risk-selected backlog.
 
 ## Accepted owner-live evidence retained
