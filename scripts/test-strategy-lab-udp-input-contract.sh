@@ -77,6 +77,22 @@ strategy_lab_udp_input_cleanup "${job}"
 [ ! -e "$(strategy_lab_udp_port_file "${job}")" ] || fail 'UDP port metadata survived cleanup'
 [ ! -e "$(strategy_lab_udp_payload_file "${job}")" ] || fail 'UDP payload survived cleanup'
 
+# Owner-live regression: a 140-byte binary payload is valid and must survive
+# Base64 transport and job-local decoding byte-for-byte in length.
+strategy_lab_initialize_state "${job}" udp.example extended en
+payload140=$(dd if=/dev/zero bs=140 count=1 2>/dev/null | "${STRATEGY_LAB_BASE64_BIN}" | tr -d '\n')
+strategy_lab_udp_input_prepare "${job}" extended 3478 "${payload140}" ||
+    fail 'exact 140-byte UDP payload was rejected'
+[ "$(wc -c < "$(strategy_lab_udp_payload_file "${job}")" | tr -d ' ')" = 140 ] ||
+    fail 'exact 140-byte UDP payload did not survive job-local decoding'
+"${STRATEGY_LAB_JQ}" -e '
+    .udp_request.configured==true and
+    .udp_request.port==3478 and
+    .udp_request.payload_bytes==140
+' "$(strategy_lab_status_file "${job}")" >/dev/null ||
+    fail '140-byte UDP request metadata is invalid'
+strategy_lab_udp_input_cleanup "${job}"
+
 strategy_lab_initialize_state "${job}" udp.example extended en
 strategy_lab_udp_input_prepare "${job}" extended - - || fail 'disabled generic UDP input was rejected'
 "${STRATEGY_LAB_JQ}" -e '
@@ -108,13 +124,17 @@ grep -Fq "\$udpInput['port']" "${CONTROLLER}" || fail 'API does not pass validat
 grep -Fq 'parameters:%s %s %s %s %s %s' "${ACTIONS}" || fail 'configd start action does not carry QUIC plus UDP contract'
 grep -Fq 'strategyLabUdpPort' "${VIEW}" || fail 'GUI UDP port field is missing'
 grep -Fq 'strategyLabUdpPayload' "${VIEW}" || fail 'GUI payload file field is missing'
-grep -Fq 'payloadFile.size<1||payloadFile.size>udpPayloadMaxBytes' "${VIEW}" || fail 'GUI payload size validation is missing'
-grep -Fq 'showInputError(ui.udpSize)' "${VIEW}" || fail 'GUI oversized payload rejection is not user-visible'
-grep -Fq 'readAsDataURL(payloadFile)' "${VIEW}" || fail 'GUI does not encode the selected payload file'
-size_line=$(grep -n 'payloadFile.size<1||payloadFile.size>udpPayloadMaxBytes' "${VIEW}" | head -1 | cut -d: -f1)
-reset_line=$(grep -n "clearInputError(); stopPolling(); activeJobId=''" "${VIEW}" | head -1 | cut -d: -f1)
-[ -n "${size_line}" ] && [ -n "${reset_line}" ] && [ "${size_line}" -lt "${reset_line}" ] ||
-    fail 'GUI clears/starts Strategy Lab before rejecting an oversized UDP payload'
+grep -Fq 'readAsArrayBuffer(payloadFile)' "${VIEW}" || fail 'GUI does not read selected UDP payload as exact binary bytes'
+grep -Fq 'bytes.byteLength<1||bytes.byteLength>udpPayloadMaxBytes' "${VIEW}" || fail 'GUI decoded-byte size validation is missing'
+grep -Fq 'window.btoa(binary)' "${VIEW}" || fail 'GUI does not Base64-encode the validated binary payload'
+grep -Fq 'showInputError(ui.udpSize)' "${VIEW}" || fail 'GUI invalid payload rejection is not user-visible'
+! grep -Fq 'payloadFile.size<1||payloadFile.size>udpPayloadMaxBytes' "${VIEW}" ||
+    fail 'GUI still trusts browser File.size for authoritative UDP payload rejection'
+! grep -Fq 'readAsDataURL(payloadFile)' "${VIEW}" || fail 'GUI still uses Data URL parsing for binary UDP payload transport'
+size_line=$(grep -n 'bytes.byteLength<1||bytes.byteLength>udpPayloadMaxBytes' "${VIEW}" | head -1 | cut -d: -f1)
+start_call_line=$(grep -n 'beginStart(window.btoa(binary))' "${VIEW}" | head -1 | cut -d: -f1)
+[ -n "${size_line}" ] && [ -n "${start_call_line}" ] && [ "${size_line}" -lt "${start_call_line}" ] ||
+    fail 'GUI starts Strategy Lab before validating the decoded UDP payload size'
 grep -Eq 'for module in .*udp_input.*launch.*query' "${LAUNCHER}" || fail 'launcher does not load UDP input, launch, and query modules in order'
 grep -Fq 'case "$#" in' "${LAUNCH}" || fail 'launcher start contract is not backward compatible'
 grep -Fq 'strategy_lab_udp_input_prepare' "${LAUNCH}" || fail 'launcher does not create job-local UDP input'
@@ -128,6 +148,9 @@ grep -Fq 'port_file = job_dir(job_id) / "udp-port"' "${EXTENDED_PY}" || fail 'Py
 grep -Fq 'payload = job_dir(job_id) / "udp-payload.bin"' "${EXTENDED_PY}" || fail 'Python UDP orchestration does not read private job-local UDP payload'
 grep -Fq '"STRATEGY_LAB_UDP_PORT": str(port)' "${EXTENDED_PY}" || fail 'Python UDP orchestration does not pass validated port to unified candidate'
 grep -Fq '"STRATEGY_LAB_UDP_PAYLOAD_FILE": str(payload)' "${EXTENDED_PY}" || fail 'Python UDP orchestration does not pass job-local payload to unified candidate'
+grep -Fq 'request.udp_response_request(selected_ip, port, payload)' "${EXTENDED_PY}" || fail 'Python UDP orchestration does not perform the direct control exchange with the exact selected port/payload'
+grep -Fq '"reply_observed": bool(execution.stdout)' "${EXTENDED_PY}" || fail 'UDP control exchange does not record reply observation'
+! grep -Fq 'port_closed' "${EXTENDED_PY}" || fail 'UDP silence is incorrectly classified as a closed port'
 ! grep -Fq 'udp_input' "${WORKER}" || fail 'production worker regained UDP input ownership after Python cutover'
 grep -Fq 'strategy_lab_udp_input_cleanup "${JOB_ID}"' "${STAGE_ADAPTER}" || fail 'terminal restoration adapter does not remove UDP payload'
 grep -Fq 'strategy_lab_state_python set-udp-request' "${MODULE}" || fail 'UDP request metadata does not use Python state owner'
@@ -139,4 +162,4 @@ sh -n "${WORKER}"
 sh -n "${STAGE_ADAPTER}"
 sh -n "${UDP_RUNNER}"
 
-echo 'PASS: Generic UDP input remains bounded/private and oversized files are rejected visibly before Strategy Lab state is reset'
+echo 'PASS: Generic UDP input preserves exact binary bytes, accepts 140 bytes, and records direct control-exchange evidence without treating silence as a closed port'

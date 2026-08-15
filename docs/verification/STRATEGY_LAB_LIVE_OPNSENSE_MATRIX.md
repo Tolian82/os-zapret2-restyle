@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED; EXPLICIT QUIC + GENERIC UDP OWNER-LIVE FOLLOW-UP IS OPEN.**
+Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED; `v0.4.1_15` CORRECTIVE SOURCE CANDIDATE IMPLEMENTED, SOURCE/PACKAGE QUALIFICATION PENDING.**
 
 Only FreeBSD 15 amd64 packages are valid. Source tests/CI do not replace selected owner-live evidence.
 
@@ -10,7 +10,7 @@ Only FreeBSD 15 amd64 packages are valid. Source tests/CI do not replace selecte
 - current published testing tag: `v0.4.1_14`;
 - `_14` tag target: `df20ed2ebe7f6c37c4189008e06e80700ae89ce4`;
 - `_14` package SHA-256: `b2df12f0af8ec6057f0df87e5289f89bc087664d7a0e2529c5e362e59db53d03`;
-- `_14` source acceptance/publication record is complete.
+- current source candidate: `v0.4.1_15`, not yet a published package at this source-document boundary.
 
 Normal Stage 60 remains Model C only; automatic Model B/A production fallback is disabled from `_13`.
 
@@ -37,148 +37,144 @@ Durable evidence: `docs/verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-
 `rutracker.org` Extended `job.TJlWoY`:
 
 - terminal `SUCCESS`, Stage 80 PASS, Stage 90 PASS;
-- TLS 1.2 executed `tls12-multisplit` and `tls12-fake`; both returned truthful negative endpoint results, `working=null`;
-- HTTP executed `http-multisplit` and `http-multidisorder`; both returned truthful negative endpoint results, `working=null`;
-- temporary runtimes were ready/stable and produced interception/endpoint evidence;
+- TLS 1.2 and HTTP branches executed with truthful negative endpoint evidence;
 - `_13` Stage 30 classified QUIC/IPv4 closed and Stage 80 capability-skipped QUIC;
-- UDP was skipped because no valid payload file was supplied.
+- UDP was skipped because no valid payload was supplied.
 
-The `_13` QUIC skip remains accurate historical evidence of `_13`. **It is not the current desired product behavior.**
+That `_13` QUIC skip is historical evidence only and is superseded as product behavior.
 
-## `_14` owner-live observations — 2026-08-15 preliminary evidence
+## `_14` owner-live observations that selected `_15`
 
-The owner installed `_14` and supplied GUI screenshots for two Extended runs with **Enable QUIC checked**.
+The owner installed `_14` and supplied Extended screenshots for `telegram.org` and `rutracker.org` with **Enable QUIC checked**.
 
-### `telegram.org`
+Both showed:
 
-Observed GUI facts:
+- ordinary QUIC control probe blocked/closed;
+- Stage 80 `QUIC=not_found, UDP=skipped`, not a capability skip;
+- Stage 90 restoration PASS.
 
-- Enable QUIC: checked;
-- Stage 30: IPv4 available, IPv6 unavailable, QUIC/IPv4 reported closed by the control probe;
-- Stage 80: PASS with `QUIC=not_found, UDP=skipped`;
-- Stage 90: PASS/restored;
-- terminal result: `NO_CANDIDATE`.
+`telegram.org` ended `NO_CANDIDATE`; `rutracker.org` ended `SUCCESS` with one stable TLS 1.3 candidate.
 
-### `rutracker.org`
+These runs prove the old capability skip no longer appears at the normal GUI boundary, but `_14` ordinary output does not expose the actual QUIC `tested` set. Therefore `not_found` alone is not final live proof of real candidate attempts.
 
-Observed GUI facts:
+The same cycle exposed:
 
-- Enable QUIC: checked;
-- Stage 30: IPv4 available, IPv6 unavailable, QUIC/IPv4 reported closed by the control probe;
-- Stage 80: PASS with `QUIC=not_found, UDP=skipped`;
-- Stage 90: PASS/restored;
-- terminal result: `SUCCESS` with one stable TLS 1.3 `seqovl` candidate shown in the result table.
+- raw/internal Stage-30/Stage-80 wording in the Russian UI;
+- English-only Enable QUIC help text;
+- owner-reported false rejection of a nominal 140-byte Generic UDP payload;
+- no ordinary direct selected-port/payload UDP control observation.
 
-### What these two runs prove — and do not prove
+The owner selected these findings as one corrective package scope: `_15`.
 
-They prove an important `_14` semantic change at the normal GUI boundary: **an enabled QUIC run is no longer presented as capability-skipped when the control probe is closed.**
+## `_15` implemented source behavior awaiting qualification/publication
 
-They do **not** yet prove that real QUIC strategies were attempted. `not_found` is consistent with the intended code path, but the screenshots do not expose `tested > 0` or candidate names.
+### A. QUIC execution observability
 
-Current source inspection shows that the production QUIC catalog contains four candidates:
+Source candidate `_15` preserves `_14` execution semantics and adds owner-visible proof:
 
-- `quic-fake-1`;
-- `quic-fake-2`;
-- `quic-ipfrag-8`;
-- `quic-ipfrag-16`.
+- Stage 30 presents measured `QUIC открыт` / `QUIC закрыт` (or English equivalent) separately from the job-local QUIC-search enabled/disabled choice;
+- Enable QUIC ON still runs candidates regardless of blocked control result;
+- Stage 80 reads the actual structured `tested` array and presents attempted count + candidate IDs;
+- current catalog remains `quic-fake-1`, `quic-fake-2`, `quic-ipfrag-8`, `quic-ipfrag-16`;
+- working candidate ID or natural no-working-strategy text is presented in RU/EN;
+- raw `working/not_found/skipped/disabled` remain structured evidence rather than primary normal UI text.
 
-The Python QUIC runner records each executed candidate under `tested`. Therefore row C below stays open until job evidence or improved GUI output proves a non-zero tested count.
+### B. QUIC help localization
 
-### New presentation findings
+The Enable QUIC explanatory text is now bound through deterministic RU/EN UI language selection. Source acceptance must prove both language strings are present and bound to the displayed control.
 
-The same screenshots establish a presentation/localization follow-up:
+### C. Exact Generic UDP input
 
-- Russian Stage 30 currently says `QUIC/IPv4 закрыт по контрольной проверке`; desired user-facing semantics are a simple measured QUIC state (`QUIC открыт` / `QUIC закрыт`) plus a separate indication of whether QUIC strategy testing is enabled;
-- Stage 80 leaks raw machine enums: `QUIC=not_found, UDP=skipped`;
-- the Enable QUIC explanatory text remains English in the Russian UI: `When enabled, QUIC candidates are tested even when the control probe reports QUIC as blocked.`
+The browser source now uses:
 
-All three require RU/EN human-readable presentation while preserving stable raw enums in structured evidence.
+`readAsArrayBuffer -> Uint8Array.byteLength 1..4096 -> binary Base64 -> strict API/backend decode`.
 
-### New Generic UDP defect
+Browser `File.size` and Data-URL parsing are no longer authoritative validation owners. An exact 140-byte payload has dedicated backend/job-local regression coverage.
 
-The owner reports selecting a payload of nominal size **140 bytes**, which should be valid under the `1..4096` contract, but the GUI rejects it with the visible size-range error.
+### D. Selected-port UDP control observation
 
-Status: **LIVE DEFECT / NOT ACCEPTED.**
+Configured Generic UDP performs a bounded direct observation for each fixed search-epoch selected IP using:
 
-The next implementation must reproduce the exact browser/API/backend path and add a valid 140-byte regression test. The selected UDP destination port must also gain truthful direct/control-exchange evidence; lack of a UDP response cannot by itself be called definitive proof that a port is closed and must not suppress bypass candidate testing.
+- the selected destination port;
+- the exact job-local payload.
 
-## `_14` selected live acceptance
+Evidence records selected endpoint/IP, port, payload bytes, reply observed/not observed, timeout/return state and duration.
 
-Canonical QUIC contract: `docs/architecture/STRATEGY_LAB_QUIC_CONTROL.md`.
-Canonical UDP input contract: `docs/architecture/STRATEGY_LAB_UDP_INPUT.md`.
+No-reply semantics are deliberately limited: **no reply does not mean the port is closed and does not gate the bypass candidate loop.** Stage 80 then presents actual UDP candidate count/IDs plus winner/no-winner meaning in RU/EN.
 
-### A. Enable QUIC preference — pending owner completion
+## `_15` source acceptance gate
 
-Required:
+Before any owner install request, all of the following must be complete:
 
-1. default is unchecked on a new setting when no prior explicit preference exists;
-2. check it, reload Diagnostics, it remains checked;
-3. uncheck it, reload Diagnostics, it remains unchecked;
-4. saving the preference does not restart/apply the permanent Zapret2 service.
+1. exact 140-byte payload regression PASS;
+2. browser ArrayBuffer/exact-byte/Base64 contract PASS;
+3. direct selected-IP/port/exact-payload UDP observation regression PASS;
+4. non-gating UDP-silence semantics PASS;
+5. blocked-control Enable QUIC candidate-execution regression PASS;
+6. Stage-30 and Stage-80 RU/EN protocol presentation regression PASS;
+7. complete Strategy Lab corrective matrix PASS;
+8. FreeBSD-15 package build/inspection qualification PASS;
+9. exact verified-head source merge;
+10. persistent `v0.4.1_15` testing-package publication and publication-record reconciliation.
 
-### B. Enable QUIC OFF — pending owner
+## Owner-live `_15` matrix after publication
 
-Use Extended mode with Enable QUIC unchecked.
+### A. Enable QUIC preference
 
-Required Stage-80 QUIC evidence:
+- default OFF on new unset preference;
+- checked/unchecked state persists across Diagnostics reload;
+- saving preference does not restart/apply the permanent Zapret2 service.
 
-- `enabled=false`;
-- `status=skipped`;
-- `reason=disabled`;
-- no QUIC candidate is launched.
+### B. Enable QUIC OFF
 
-The Stage-30 control probe may independently say QUIC closed or available; it must not be the skip reason.
+Extended mode, checkbox OFF:
 
-### C. Enable QUIC ON with ISP-blocked ordinary QUIC — PARTIAL, execution proof still required
+- no QUIC candidates;
+- structured state may remain `skipped/disabled`;
+- ordinary Stage-80 text says strategy search is disabled naturally in selected RU/EN language.
 
-The two current owner runs satisfy the presentation-level condition that closed control QUIC does not cause a capability skip.
-
-Still required:
-
-- Stage 80 must expose or telemetry must prove QUIC `tested > 0`;
-- attempted candidate identities/count must be attributable to the job;
-- terminal QUIC result may truthfully be `working` or `not_found`;
-- normal lifecycle restoration remains successful.
-
-`QUIC=not_found` alone does not close this row.
-
-### D. Oversized Generic UDP payload UX — pending owner completion
-
-Select a multi-megabyte file with a UDP port and press Run.
+### C. Enable QUIC ON with blocked ordinary QUIC
 
 Required:
 
-- visible error states payload must be `1–4096` bytes;
-- no new Strategy Lab job begins;
-- previous completed result is not cleared solely because invalid Run was pressed.
+- Stage 30 says QUIC blocked/closed **and** QUIC strategy search enabled;
+- Stage 80 shows actual tested count greater than zero and attempted IDs;
+- result truthfully shows a working candidate or no working candidate;
+- no capability skip;
+- restoration PASS.
 
-### E. Valid configured Generic UDP — LIVE DEFECT, blocked on valid-small-file rejection
-
-Use Extended mode with:
-
-- valid port `1..65535`;
-- payload file `1..4096` bytes.
-
-Required after correction:
-
-- an exact 140-byte payload is accepted by browser/API/backend size handling;
-- direct/control exchange uses the selected destination port and exact payload and reports truthful observed response state;
-- UDP request is classified configured;
-- Stage 80 actually executes UDP candidates rather than returning unconfigured `skipped`;
-- truthful UDP result may be `working` or `not_found`;
-- temporary UDP payload is cleaned during terminal restoration;
-- normal Zapret2 lifecycle state is restored.
-
-One Extended job may cover C and E simultaneously when Enable QUIC is ON and Generic UDP is valid.
-
-### F. RU/EN Extended QUIC/UDP presentation — pending corrective implementation
+### D. Valid configured Generic UDP / 140-byte regression
 
 Required:
 
-- measured QUIC condition is localized and unambiguous in RU and EN;
-- Enable QUIC explanatory text is localized in RU and EN;
-- Stage-80 QUIC/UDP statuses render human-readable localized meanings rather than raw enums;
-- raw machine enums remain available in structured/advanced output for diagnostics.
+- exact/small payload including 140-byte sample starts normally;
+- displayed payload byte count matches actual decoded size;
+- selected destination port and endpoint/IP are shown;
+- direct control observation says reply/no reply truthfully;
+- no-reply text explicitly avoids claiming the port is closed;
+- actual UDP candidate count/IDs are visible and non-zero;
+- winner/no-winner result is human-readable;
+- terminal payload cleanup and Zapret2 restoration PASS.
+
+### E. Oversized Generic UDP
+
+Required:
+
+- >4096 decoded bytes shows visible `1–4096` error;
+- no new job starts;
+- previous completed result is not cleared solely by invalid Run.
+
+### F. RU/EN presentation
+
+Required in both selected UI languages:
+
+- Enable QUIC help;
+- Stage-30 measured QUIC state + independent search choice;
+- Stage-80 QUIC candidate evidence;
+- Stage-80 Generic UDP control/candidate evidence;
+- no primary raw internal status fragments.
+
+One Extended job may cover C and D simultaneously when Enable QUIC is ON and valid Generic UDP is configured.
 
 ## Scenario matrix
 
@@ -188,35 +184,37 @@ Required:
 | 2 | Standard blocked domain, initial Zapret2 STOPPED | **PASS ON `_13` — OWNER ACCEPTED** |
 | 3 | Extended TLS 1.2 | **PASS ON `_13`** |
 | 4 | Extended HTTP | **PASS ON `_13`** |
-| 5 | Historical closed-QUIC capability skip | **OBSERVED/PASS FOR `_13`; SUPERSEDED AS PRODUCT RULE** |
-| 6 | Enable QUIC persistence/default | **PENDING `_14` OWNER COMPLETION** |
-| 7 | Enable QUIC OFF → explicit disabled skip | **PENDING `_14` OWNER** |
-| 8 | Enable QUIC ON while control QUIC blocked → actual candidate search | **PARTIAL `_14`: no capability skip observed; `tested > 0` NOT YET PROVEN** |
-| 9 | Oversized Generic UDP input → visible pre-start error | **PENDING `_14` OWNER COMPLETION** |
-| 10 | Valid small Generic UDP input / 140-byte payload | **FAIL `_14` OWNER — FALSE SIZE REJECTION REPORTED** |
-| 11 | Configured Generic UDP selected-port/control exchange | **PENDING CORRECTIVE IMPLEMENTATION** |
-| 12 | RU/EN QUIC state/help and Stage-80 QUIC/UDP presentation | **PENDING CORRECTIVE IMPLEMENTATION** |
-| 13 | Target already accessible | PENDING REGRESSION |
-| 14 | User cancellation after service stop | PENDING REGRESSION |
-| 15 | Controlled internal failure / timeout containment | PENDING REGRESSION |
-| 16 | Circular start/stop/stale recovery | PENDING REGRESSION |
-| 17 | Settings Apply guards during Strategy Lab/circular | PENDING REGRESSION |
-| 18 | Diagnostics persistence/reload | PENDING REGRESSION |
-| 19 | RU/EN presentation review | PENDING REGRESSION |
-| 20 | Retention/reboot residue | PENDING REGRESSION |
+| 5 | Historical closed-QUIC capability skip | **OBSERVED/PASS FOR `_13`; SUPERSEDED** |
+| 6 | `_14` Enable QUIC ON, blocked control path, no capability skip | **PARTIAL LIVE PASS; selected `_15` observability** |
+| 7 | `_15` QUIC tested count/IDs ordinary output | **SOURCE IMPLEMENTED; CI/PACKAGE/LIVE PENDING** |
+| 8 | `_15` Stage-30/80 RU/EN protocol presentation | **SOURCE IMPLEMENTED; CI/PACKAGE/LIVE PENDING** |
+| 9 | `_15` Enable QUIC RU/EN help | **SOURCE IMPLEMENTED; CI/PACKAGE/LIVE PENDING** |
+| 10 | `_14` nominal 140-byte Generic UDP input | **FAIL OWNER — FALSE SIZE REJECTION REPORTED** |
+| 11 | `_15` exact 140-byte binary input | **SOURCE IMPLEMENTED; CI/PACKAGE/LIVE PENDING** |
+| 12 | `_15` selected-port/payload direct UDP observation | **SOURCE IMPLEMENTED; CI/PACKAGE/LIVE PENDING** |
+| 13 | `_15` no-reply does not mean closed / does not gate candidates | **SOURCE IMPLEMENTED; CI/PACKAGE/LIVE PENDING** |
+| 14 | Enable QUIC OFF/default/persistence owner-live | PENDING |
+| 15 | Oversized Generic UDP owner-live | PENDING |
+| 16 | Target already accessible | PENDING REGRESSION |
+| 17 | User cancellation after service stop | PENDING REGRESSION |
+| 18 | Controlled internal failure / timeout containment | PENDING REGRESSION |
+| 19 | Circular start/stop/stale recovery | PENDING REGRESSION |
+| 20 | Settings Apply guards during Strategy Lab/circular | PENDING REGRESSION |
+| 21 | Diagnostics persistence/reload | PENDING REGRESSION |
+| 22 | General RU/EN presentation review | PENDING REGRESSION |
+| 23 | Retention/reboot residue | PENDING REGRESSION |
 
-## Failure policy for current follow-up
+## Failure policy for `_15`
 
-The current line fails acceptance if any of the following occur:
+`_15` fails acceptance if any of the following occur:
 
-- checkbox state does not persist or default OFF;
-- an enabled QUIC run is suppressed because Stage 30 says QUIC closed;
-- a disabled QUIC run launches candidates;
-- enabled QUIC returns a user-facing result without any durable way to prove whether candidates were actually attempted;
-- normal RU/EN UI leaks selected raw QUIC/UDP status enums or English-only new help text;
-- a valid 1..4096-byte UDP payload, including the 140-byte regression case, is rejected by size handling;
-- a valid configured UDP request is silently skipped as unconfigured;
-- UDP silence is incorrectly asserted to mean a definitely closed port or is used to suppress bypass testing;
-- lifecycle restoration fails or temporary runtime/payload ownership is violated.
-
-A QUIC or UDP search returning no working strategy is **not** itself a failure: the requirement is truthful execution/result semantics, not manufacturing a bypass that does not work on the measured target/path.
+- enabled QUIC is suppressed because Stage 30 says QUIC blocked;
+- disabled QUIC launches candidates;
+- enabled QUIC ordinary output cannot prove actual attempted count/IDs;
+- Stage-30 measured state is presented as the reason search is enabled/disabled;
+- normal RU/EN UI leaks selected raw QUIC/UDP enums or English-only help;
+- a valid `1..4096` decoded-byte UDP payload, including 140 bytes, is rejected by size handling;
+- direct UDP observation uses a different port/payload/binding than the candidate job;
+- UDP silence is asserted to mean a definitely closed port or suppresses candidate search;
+- configured UDP is silently skipped as unconfigured;
+- lifecycle restoration or temporary payload/runtime cleanup fails.
