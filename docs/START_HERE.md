@@ -10,7 +10,7 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-15
-**Current handoff identity:** `v0.4.1_21` published testing candidate
+**Current handoff identity:** `v0.4.1_21` published / owner-live UI accepted
 
 ## Current identity
 
@@ -30,7 +30,7 @@ Resolve the exact current `main` SHA at execution time under `GH-004`.
 
 ## Accepted current live boundary
 
-Do not repeat accepted Model-C, QUIC-ON, QUIC-OFF execution, Generic UDP, already-accessible-target, or Settings Apply work without fresh contradictory evidence.
+Do not repeat accepted Model-C, QUIC-ON, QUIC-OFF execution, Generic UDP, already-accessible-target, Settings Apply, or `_21` Laboratory presentation work without fresh contradictory evidence.
 
 Accepted owner-live/product facts include:
 
@@ -39,15 +39,20 @@ Accepted owner-live/product facts include:
 - Enable QUIC OFF execution semantics: OFF suppresses QUIC candidate execution while independent Generic UDP remains active;
 - visible Stage-90 restoration on the tested flows;
 - already-accessible-target behavior is complete by owner confirmation;
-- Settings Apply validation/guards and post-Apply service-state correctness are complete by owner confirmation.
+- Settings Apply validation/guards and post-Apply service-state correctness are complete by owner confirmation;
+- `_21` Laboratory outer frame/perimeter matches normal OPNsense presentation by owner confirmation;
+- `_21` Russian `Стратегия` / `Лаборатория` remains localized across Laboratory ↔ Strategy navigation;
+- the current Strategy Lab / Laboratory Russian-presentation task is closed by owner instruction; future concrete localization regressions are new defects.
 
 Enable QUIC OFF/default persistence across an actual reload/revisit remains a separate live acceptance row. `_21` preserves the existing model-backed default/load/save source contract.
 
-## `_20` owner-live UI follow-up — rejected perimeter/navigation
+Owner-live `_21` presentation evidence: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md).
+
+## `_20` owner-live UI follow-up — historical rejected perimeter/navigation
 
 The owner installed `_20` and supplied direct screenshots of Laboratory, Strategy and a native OPNsense page.
 
-Confirmed:
+Confirmed then:
 
 - the `_20` Laboratory page lost the normal OPNsense outer content perimeter/frame;
 - Strategy and the native OPNsense comparison page retained the normal platform spacing;
@@ -58,9 +63,9 @@ Root cause was bounded to presentation code: `_20` neutralized `.page-content-ma
 
 Evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md).
 
-## `_21` implementation / delivery status
+## `_21` implementation / acceptance status
 
-`_21` is source-merged and published for owner-live verification:
+`_21` is source-merged, published and owner-live accepted for the selected presentation scope:
 
 - removes the redundant Laboratory page wrapper and all Laboratory `.page-content-main` spacing overrides;
 - renders Laboratory content boxes directly inside the platform-owned OPNsense page frame, matching the Strategy/native page structure rather than styling away the platform perimeter;
@@ -69,20 +74,27 @@ Evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-own
 - keeps Strategy Lab runtime/search, Generic UDP, QUIC, circular and settings semantics unchanged;
 - focused project validation and FreeBSD-15 package qualification passed before source merge;
 - source was squash-merged as `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
-- testing package `os-zapret2-restyle-0.4.1_21.pkg` was published and verified with SHA-256 `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`.
+- testing package `os-zapret2-restyle-0.4.1_21.pkg` was published and verified with SHA-256 `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
+- owner-live verification accepted the native perimeter/grid and Russian cross-page menu persistence.
 
 Source patch record: [`patches/v0.4.1_21.md`](patches/v0.4.1_21.md).
 
-## Immediate live verification boundary
+## Immediate engineering boundary — Laboratory IP targets
 
-After `_21` install:
+The next selected product task is to let Laboratory accept and test an IP address as well as a domain.
 
-1. visually confirm Laboratory has the same normal outer OPNsense perimeter as Strategy/native pages;
-2. with Russian OPNsense language, switch Laboratory → Strategy → Laboratory and confirm the submenu stays `Стратегия` / `Лаборатория`;
-3. quickly confirm the accepted field grid and `Режим:` typography did not regress;
-4. no Strategy Lab execution rerun is required for this UI-only correction;
-5. separately prove Enable QUIC OFF/default persistence across reload/revisit;
-6. after `_21` UI acceptance, next engineering plan: add Laboratory target support for IP addresses as well as domains;
-7. continue the remaining risk-selected backlog from `ROADMAP.md`.
+The architecture audit has established that this is feasible but must **not** be implemented as a validator-only change:
+
+1. current PHP and shell input boundaries reject IP literals and must classify `domain` versus canonical IPv4;
+2. Stage-00/40 state, IPv4 search-epoch binding, firewall attribution and final `--ipset-ip=<target>` profile generation already contain useful IP scaffolding;
+3. Generic UDP can use a fixed IPv4 target directly;
+4. current TLS candidate code must not be unlocked unchanged because an IPv4 endpoint currently falls back to plain TCP-connect evidence, which is insufficient for a truthful TLS/DPI-bypass PASS;
+5. web/TLS/QUIC IP testing needs destination IP separated from service hostname/SNI and certificate identity; the existing request layer already supports fixed-IP + hostname probing via curl `--resolve` and OpenSSL SNI/hostname verification;
+6. initial implementation should be IPv4-first because current search-epoch canonicalization is IPv4-specific;
+7. add a conditional/optional Host/SNI service identity for IP targets and report semantically unsupported bare-IP protocol branches as skipped/unsupported rather than false PASS;
+8. keep Model C, lifecycle, budgets, cleanup/restoration and deterministic result attribution unchanged;
+9. separately prove Enable QUIC OFF/default persistence across reload/revisit when that backlog row is selected.
+
+Detailed audit/owner handoff: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md).
 
 Do not reopen closed BLOB/Lua/discovery/model-selection experiments without new architecture or fresh contradicting evidence.
