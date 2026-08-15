@@ -1,25 +1,25 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU PRESENTATION OWNER-LIVE PARTIAL; `v0.4.1_18` LABEL/ONE-LINE OWNER-LIVE PARTIAL; `v0.4.1_19` LABORATORY UI CORRECTIVE SOURCE CANDIDATE.**
+Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU PRESENTATION OWNER-LIVE PARTIAL; `v0.4.1_18` LABEL/ONE-LINE OWNER-LIVE PARTIAL; `v0.4.1_19` LABORATORY UI CORRECTIVE PUBLISHED / OWNER-LIVE ACCEPTANCE PENDING.**
 
 Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected owner-live evidence.
 
 ## Current package/source boundary
 
-- current source candidate: `v0.4.1_19` / `PLUGIN_REVISION=19`;
-- last published testing package/tag: `os-zapret2-restyle-0.4.1_18.pkg` / `v0.4.1_18`;
-- `_18` source/tag target: `fa1b924a5c1d646f0daec13aff6e7406a534c6a3`;
-- `_18` package SHA-256: `1ca82e1405c688a5429e1fd1d68da19906bea613323d8d01090bba85068b34f0`;
-- `_18` publication workflow run: `31889449879`;
+- current packaged revision: `v0.4.1_19` / `PLUGIN_REVISION=19`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_19.pkg` / `v0.4.1_19`;
+- `_19` source/tag target: `6d06f0c3dfc7a76f0dc7b43ca6ba8cc0d0f83758`;
+- `_19` package SHA-256: `142ec3f3f5843d6be09d0ad34aa433c00ddf4ef82e75bbb2fd7104fdcc3eb7f8`;
+- `_19` publication workflow run: `31892344832`;
 - stable Pages/pkg repository promoted: no;
 - owner-live `_16` Generic UDP verification: **PASS**;
 - owner-live `_16` QUIC OFF execution semantics: **PASS**;
 - already-accessible target: **COMPLETE BY OWNER CONFIRMATION**;
 - Enable QUIC OFF/default persistence across reload/revisit: **PENDING LIVE PROOF**;
 - `_18` live UI: **PARTIAL — TITLE/UDP/ONE-LINE LABEL PASS; TYPOGRAPHY/ALIGNMENT + MODE/STATUS/NAV SELECTED `_19`**;
-- `_19` Laboratory UI corrective: **SOURCE IMPLEMENTED; AUTOMATED/PUBLICATION/LIVE ACCEPTANCE PENDING**.
+- `_19` Laboratory UI corrective: **SOURCE/CI/FREEBSD/PUBLICATION COMPLETE; OWNER-LIVE RU/EN ACCEPTANCE PENDING**.
 
-Machine `_18` publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_18.md`.
+Machine `_19` publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_19.md`.
 Owner-live Generic UDP evidence: `docs/verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`.
 Owner-live QUIC OFF/UI follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`.
 Owner-live `_17` RU follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md`.
@@ -81,50 +81,36 @@ A later owner-live ON/OFF pair established that Enable QUIC OFF runs no QUIC cat
 
 ## `_17` RU presentation owner-live follow-up — partial
 
-The owner installed published `_17` and supplied Russian-mode Diagnostics screenshots.
-
-Visible PASS included translated domain-connectivity UI, `Заблокированный домен / IP`, `Запуск`, `Включить QUIC`, result/stage labels and human-readable circular idle output. Remaining `Strategy Lab`, `Generic UDP (optional)` and wrapping/alignment defects selected `_18`.
+The owner installed published `_17` and supplied Russian-mode Diagnostics screenshots. Visible PASS included translated domain-connectivity UI, `Заблокированный домен / IP`, `Запуск`, `Включить QUIC`, result/stage labels and human-readable circular idle output. Remaining `Strategy Lab`, `Generic UDP (optional)` and wrapping/alignment defects selected `_18`.
 
 ## `_18` automated/publication acceptance — PASS; owner-live partial
 
-Published `_18` contained:
+Published `_18` contained `Лаборатория стратегий`, RU `UDP порт (опционально)`, explicit English counterparts, and the one-line blocked-domain label. Automated source/FreeBSD/package publication passed. Owner-live `_18` confirms those three visible items, but rejected the forced 12 px typography and perceived alignment, selecting `_19`.
 
-- `Strategy Lab` / RU `Лаборатория стратегий`;
-- `Generic UDP (optional)` / RU `UDP порт (опционально)`;
-- explicit English counterparts;
-- a one-line blocked-domain label and attempted shared value-column layout;
-- focused regression coverage preserving circular-idle and Enable QUIC persistence source contracts.
-
-Automated/package evidence:
-
-- source PR `#252` exact verified head `1f9d5bb8b9f9d4204777f513bedf5e2d1e479396`;
-- complete project/Strategy Lab corrective matrix: PASS;
-- FreeBSD-15 package qualification: PASS;
-- exact candidate-defining source merge/tag target: `fa1b924a5c1d646f0daec13aff6e7406a534c6a3`;
-- published testing asset: `os-zapret2-restyle-0.4.1_18.pkg`;
-- SHA-256: `1ca82e1405c688a5429e1fd1d68da19906bea613323d8d01090bba85068b34f0`.
-
-Owner-live `_18` screenshot confirms:
-
-- `Лаборатория стратегий`: PASS;
-- `UDP порт (опционально)`: PASS;
-- one-line `Заблокированный домен / IP`: PASS.
-
-The owner rejected `_18` as final UI acceptance because the forced 12 px label typography is visibly too small and the perceived domain/UDP/QUIC alignment is wrong. The same handoff selected deterministic mode/status/sidebar localization. This selected `_19`.
-
-## `_19` source acceptance scope
+## `_19` automated/publication acceptance — PASS; owner-live pending
 
 The owner-selected `_19` corrective implements:
 
-- normal UI typography; `_18` `font-size:12px` is removed;
-- an explicit fixed table/label/value-column contract for domain / Generic UDP / Enable QUIC;
+- normal UI typography; `_18` `font-size:12px` removed;
+- explicit fixed table/label/value-column contract for domain / Generic UDP / Enable QUIC;
 - RU mode values `Стандартный` / `Расширенный`; EN `Standard` / `Extended`;
 - right-aligned RU `Режим:` / EN `Mode:` immediately before the selector;
 - ordinary idle RU `ожидание`; EN `idle`;
 - canonical menu entries EN `Strategy` / `Laboratory`, with deterministic RU `Стратегия` / `Лаборатория` on the Laboratory page;
 - focused regression coverage for the new strings/layout while retaining circular ordinary-state and Enable QUIC persistence source contracts.
 
-No Strategy Lab search/runtime semantics change in `_19`.
+Automated/package evidence:
+
+- source PR `#254` exact final head `bb3311ddbaa9d5c054ec757a3fe8b6e1c98ce76d`;
+- complete project/Strategy Lab corrective matrix: PASS;
+- focused Laboratory RU/EN/layout/persistence contract: PASS;
+- FreeBSD-15 package qualification: PASS;
+- exact candidate-defining source merge/tag target: `6d06f0c3dfc7a76f0dc7b43ca6ba8cc0d0f83758`;
+- published testing asset: `os-zapret2-restyle-0.4.1_19.pkg`;
+- SHA-256: `142ec3f3f5843d6be09d0ad34aa433c00ddf4ef82e75bbb2fd7104fdcc3eb7f8`;
+- publication workflow run: `31892344832`.
+
+No Strategy Lab search/runtime semantics changed in `_19`. Owner-live RU/EN presentation acceptance remains pending.
 
 ## Scenario matrix
 
@@ -144,11 +130,11 @@ No Strategy Lab search/runtime semantics change in `_19`.
 | 12 | terminal payload cleanup and Zapret2 restoration PASS. | **OWNER-LIVE STAGE-90 PASS; deeper residue remains global backlog** |
 | 13 | Enable QUIC OFF execution semantics | **OWNER-LIVE PASS** |
 | 14 | Enable QUIC OFF/default persistence across reload/revisit | **SOURCE CONTRACT GUARDED; OWNER-LIVE RELOAD PROOF PENDING** |
-| 15 | Circular idle ordinary presentation | **OWNER-LIVE RU PASS ON `_17`; `_19` changes idle casing/wording by owner request** |
+| 15 | Circular idle ordinary presentation | **OWNER-LIVE RU PASS ON `_17`; `_19` changes idle wording by owner request** |
 | 16 | `_17` RU/EN presentation review | **RU PARTIAL; selected `_18`** |
 | 17 | `_18` title / UDP label / one-line domain label | **OWNER-LIVE PASS FOR THESE THREE ITEMS** |
 | 18 | `_18` typography/alignment | **OWNER-LIVE REJECTED; `_19` SELECTED** |
-| 19 | `_19` normal typography / aligned controls / mode-status-navigation RU/EN | **SOURCE IMPLEMENTED; CI/PUBLICATION/LIVE ACCEPTANCE PENDING** |
+| 19 | `_19` normal typography / aligned controls / mode-status-navigation RU/EN | **PUBLISHED; OWNER-LIVE RU/EN ACCEPTANCE PENDING** |
 | 20 | Target already accessible | **COMPLETE — OWNER CONFIRMED** |
 | 21 | Cancellation/internal-failure containment | PENDING REGRESSION |
 | 22 | Circular lifecycle | PENDING REGRESSION |
