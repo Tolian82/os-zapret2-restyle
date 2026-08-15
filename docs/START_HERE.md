@@ -10,13 +10,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-15
-**Current handoff identity:** published testing `v0.4.1_20`
+**Current handoff identity:** `v0.4.1_20` published testing
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
-- current packaged revision: `PLUGIN_REVISION=20` / `v0.4.1_20`;
+- current source candidate: `PLUGIN_REVISION=20` / `v0.4.1_20`;
 - current published testing package/tag: `os-zapret2-restyle-0.4.1_20.pkg` / `v0.4.1_20`;
 - `_20` testing-package SHA-256: `5d5fae0a79054ad807a92ca7804d5984d63782927c667962b6395d48627ab64a`;
 - `_20` source merge/testing-tag target: `d732965c143563352e18ac58c209aeb30a6d4feb`;
