@@ -21,18 +21,17 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
-- current source candidate: `_18`;
-- package metadata in current source candidate: `PLUGIN_REVISION=18`;
-- last published testing package/tag: `os-zapret2-restyle-0.4.1_17.pkg` / `v0.4.1_17`;
-- `_17` testing-package SHA-256: `92d7d3320246380bef53c7d37364895315e12d55b958c8a5fd657ba9ab213dbf`;
-- `_17` source merge/testing-tag target: `ebf071122b2613c4fe56b5af4e5e9f07c99e9122`;
-- `_17` publication workflow run: `31887296681`;
+- current packaged source revision: `_18` / `PLUGIN_REVISION=18`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_18.pkg` / `v0.4.1_18`;
+- testing-package SHA-256: `1ca82e1405c688a5429e1fd1d68da19906bea613323d8d01090bba85068b34f0`;
+- source merge/testing-tag target: `fa1b924a5c1d646f0daec13aff6e7406a534c6a3`;
+- publication workflow run: `31889449879`;
 - latest full Web/pkg release remains `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
-- stable Pages/pkg repository was not promoted by `_17`;
+- stable Pages/pkg repository was not promoted by `_18`;
 - internal service key: `zapret`.
 
-Machine `_17` publication evidence: [`verification/evidence/testing-publications/v0.4.1_17.md`](verification/evidence/testing-publications/v0.4.1_17.md).
+Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_18.md`](verification/evidence/testing-publications/v0.4.1_18.md).
 
 The exact `main` SHA is resolved at execution time under `GH-004`.
 
@@ -62,46 +61,37 @@ Visible PASS on the tested screen:
 - translated result/stage presentation including `Полный профиль Стратегий Трафика`;
 - ordinary circular idle output is localized human text instead of raw JSON braces.
 
-Visible remaining defects:
+Visible remaining defects selected and corrected in `_18` source:
 
-- `Strategy Lab` is still English;
-- `Generic UDP (optional)` is still English;
-- `Заблокированный домен / IP` wraps to two lines; owner requires the domain input to move slightly left and the Generic UDP value control plus Enable QUIC control to share the same new alignment.
+- `Strategy Lab` was still English;
+- `Generic UDP (optional)` was still English;
+- `Заблокированный домен / IP` wrapped to two lines; owner requested the domain input to move slightly left and the Generic UDP value control plus Enable QUIC control to share the same new alignment.
 
 Evidence: [`verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md).
 
-## `_18` source implementation
+## `_18` published implementation
 
-`_18` is the owner-selected narrow presentation/layout corrective package candidate.
-
-Implemented:
+Published `_18` implements the owner-selected narrow presentation/layout corrective:
 
 - RU `Strategy Lab` -> `Лаборатория стратегий`;
 - RU `Generic UDP (optional)` -> `UDP порт (опционально)`;
 - EN retains `Strategy Lab` / `Generic UDP (optional)`;
-- Strategy Lab domain, Generic UDP and Enable QUIC rows now use one shared label/value-column contract;
+- Strategy Lab domain, Generic UDP and Enable QUIC rows use one shared label/value-column contract;
 - the value controls are shifted slightly left from `_17`;
 - the long RU blocked-domain label is constrained to one line with a bounded 190 px / 12 px label presentation and reduced inter-cell padding;
-- focused diagnostics regression asserts the new RU/EN labels and alignment while retaining `_17` circular idle and Enable QUIC persistence source contracts;
-- Strategy Lab runtime/search semantics are unchanged.
+- focused diagnostics regression asserts the new RU/EN labels and alignment while retaining circular idle and Enable QUIC persistence source contracts;
+- Strategy Lab runtime/search semantics are unchanged;
+- latest-head full project/corrective CI and FreeBSD-15 package qualification passed;
+- exact source merge is `fa1b924a5c1d646f0daec13aff6e7406a534c6a3`;
+- `v0.4.1_18` package/tag/asset were persistently published and verified with the digest above.
 
 Source patch record: [`patches/v0.4.1_18.md`](patches/v0.4.1_18.md).
 
-## Current verification boundary
+## Current owner-live verification boundary
 
-Before `_18` source merge/publication:
-
-1. focused diagnostics RU/EN/layout/persistence contract;
-2. complete project + Strategy Lab corrective matrix;
-3. FreeBSD-15 package build/inspection qualification;
-4. exact latest-head merge;
-5. persistent `v0.4.1_18` testing publication and publication-record reconciliation.
-
-After publication/install:
-
-1. Russian title/UDP-label/one-line domain-label/alignment live check;
-2. English mode and no cross-language leakage;
-3. Enable QUIC OFF/default persistence after reload/revisit;
+1. install `_18` and verify Russian title / UDP label / one-line blocked-domain label / aligned domain-UDP-QUIC controls;
+2. verify English mode and no cross-language leakage;
+3. prove Enable QUIC OFF/default persistence after reload/revisit;
 4. continue the next risk-selected regression from `ROADMAP.md`.
 
 ## Accepted owner-live evidence retained
