@@ -113,7 +113,7 @@ grep -Fq 'ip_target_support.install()' "${ENTRY}" || fail 'packaged Python entry
 grep -Fq 'request.curl_request(' "${SUPPORT}" || fail 'IP target support does not use protocol-aware curl probing'
 ! grep -Fq 'tcp_request(selected, spec.port)' "${SUPPORT}" || fail 'IP TLS candidate still falls back to plain TCP proof'
 grep -Fq 'Direct TLS 1.3 connection to the IP target failed.' "${ADAPTER}" || fail 'Stage 40 IP message still describes a plain TCP probe'
-grep -Eq '^PLUGIN_REVISION=[[:space:]]+22$' "${ROOT_DIR}/Makefile" || fail 'package revision is not v0.4.1_22'
+grep -Eq '^PLUGIN_REVISION=[[:space:]]+23$' "${ROOT_DIR}/Makefile" || fail 'package revision is not v0.4.1_23'
 
 sh -n "${TARGET_SH}" "${LAUNCH}" "$0"
 "${PYTHON}" -m py_compile "${ENTRY}" "${SUPPORT}"
