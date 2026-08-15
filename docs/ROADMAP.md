@@ -83,14 +83,14 @@
     - [x] `_17` latest-head full CI + FreeBSD-15 qualification
     - [x] `_17` exact-head source merge and persistent testing publication
     - [x] `_17` owner-live Russian review performed; most translations/circular idle PASS, remaining defects selected for `_18`
-    - [ ] `_18` owner-selected corrective
+    - [x] `_18` owner-selected corrective source/publication
       - [x] source: `Strategy Lab` / RU `Лаборатория стратегий`
       - [x] source: `Generic UDP (optional)` / RU `UDP порт (опционально)`
       - [x] source: one shared aligned value column for domain / Generic UDP / Enable QUIC
       - [x] source: small left shift and one-line RU `Заблокированный домен / IP`
-      - [x] focused regression contract for new RU/EN labels and alignment while preserving `_17` contracts
-      - [ ] latest-head full CI + FreeBSD-15 package qualification
-      - [ ] exact-head source merge and persistent `v0.4.1_18` testing publication
+      - [x] focused regression contract for new RU/EN labels and alignment while preserving prior contracts
+      - [x] latest-head full CI + FreeBSD-15 package qualification
+      - [x] exact-head source merge and persistent `v0.4.1_18` testing publication
       - [ ] owner-live RU acceptance of title/UDP label/one-line label/alignment
       - [ ] owner-live English mode and no RU/EN cross-language leakage
     - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit
@@ -111,24 +111,28 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — qualify/publish `_18`, then finish live RU/EN + persistence acceptance
+## Current priority — live-check published `_18`, then finish RU/EN + persistence acceptance
 
-Current source candidate: `v0.4.1_18` (`PLUGIN_REVISION=18`).
+Current published testing identity:
 
-Last published testing identity remains `_17` until `_18` publication completes:
-
-- tag: `v0.4.1_17`;
-- asset: `os-zapret2-restyle-0.4.1_17.pkg`;
-- SHA-256: `92d7d3320246380bef53c7d37364895315e12d55b958c8a5fd657ba9ab213dbf`;
-- source/tag target: `ebf071122b2613c4fe56b5af4e5e9f07c99e9122`;
-- publication workflow run: `31887296681`;
+- tag: `v0.4.1_18`;
+- asset: `os-zapret2-restyle-0.4.1_18.pkg`;
+- SHA-256: `1ca82e1405c688a5429e1fd1d68da19906bea613323d8d01090bba85068b34f0`;
+- source/tag target: `fa1b924a5c1d646f0daec13aff6e7406a534c6a3`;
+- publication workflow run: `31889449879`;
 - stable Pages/pkg repository promoted: no.
 
-`_17` owner-live Russian screenshots confirmed most deterministic translations and the circular-idle cleanup, but exposed the two remaining English labels plus the blocked-domain wrapping/alignment issue. `_18` closes exactly that visible scope without reopening Strategy Lab runtime/search semantics.
+`_17` owner-live Russian screenshots confirmed most deterministic translations and the circular-idle cleanup, but exposed the two remaining English labels plus the blocked-domain wrapping/alignment issue. Published `_18` closes exactly that source scope without reopening Strategy Lab runtime/search semantics.
 
-After `_18` publication/install, live acceptance must check the new Russian labels/layout, English/no-leakage mode, and separately prove saved Enable QUIC OFF/default persistence across reload/revisit.
+Current owner-live acceptance:
+
+1. verify `_18` Russian `Лаборатория стратегий`, `UDP порт (опционально)`, one-line blocked-domain label and aligned domain/UDP/QUIC controls;
+2. verify English/no-leakage mode;
+3. separately prove saved Enable QUIC OFF/default persistence across reload/revisit;
+4. then resume the remaining regression/backlog rows above.
 
 Current evidence: [`verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md).
+Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_18.md`](verification/evidence/testing-publications/v0.4.1_18.md).
 
 ## Deferred research — retain, do not activate by inertia
 
