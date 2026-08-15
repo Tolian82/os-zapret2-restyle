@@ -36,7 +36,7 @@
   - [x] Extended TLS 1.2 execution/result semantics
   - [x] Extended HTTP execution/result semantics
   - [x] historical `_13` closed-QUIC capability-skip observation
-  - [ ] **`v0.4.1_14` explicit Enable QUIC — owner-live follow-up**
+  - [x] `v0.4.1_14` explicit Enable QUIC source contract
     - [x] persisted checkbox in Extended GUI, default OFF
     - [x] saved checkbox state survives page reload through model-backed API
     - [x] copy resolved value into immutable job-local state at launch
@@ -48,27 +48,35 @@
     - [x] focused automated regression for enabled QUIC with mocked `quic_ipv4=closed`
     - [x] merge/publish/install `_14`
     - [ ] owner-live: default OFF + persistence
-    - [ ] owner-live: OFF → `skipped/disabled`
-    - [ ] **prove real QUIC enumeration on blocked-control path: persisted/result evidence must show `tested > 0`; `QUIC=not_found` alone is not sufficient**
-    - [ ] expose enough QUIC execution evidence in GUI/result output to make attempted candidate count/names observable without unpacking telemetry
-    - [ ] Stage-30 RU/EN presentation: show measured `QUIC открыт` / `QUIC закрыт` (`QUIC is open` / `QUIC is blocked`) and separately show whether QUIC strategy testing is enabled, so a closed control probe never reads as an execution skip
-    - [ ] localize Enable QUIC help text in RU/EN instead of always showing `When enabled, QUIC candidates are tested even when the control probe reports QUIC as blocked.`
-    - [ ] localize Stage-80 QUIC result semantics; user-facing output must not expose raw `working` / `not_found` / `skipped` / `disabled` enums
-  - [ ] **configured Generic UDP**
-    - [x] retain payload bound `1..4096` bytes
-    - [x] reject missing port/file pair before start
-    - [x] reject oversized browser file visibly before clearing previous result / entering running UI
-    - [x] keep backend authoritative size/Base64 validation
-    - [ ] **DEFECT: owner reports a nominal 140-byte payload is rejected with the 1–4096-byte size error; reproduce and fix browser/API/backend size-contract parity**
-    - [ ] add regression coverage for valid small payloads, including an exact 140-byte file, through browser read → Base64 → API decode → job-local payload
-    - [ ] verify the configured destination port with the supplied payload before/alongside candidate testing and surface the measured direct UDP response state
-    - [ ] UDP port verification must be protocol-aware: absence of a UDP reply is not by itself proof that a port is closed, and a failed direct control exchange must not suppress bypass candidate testing
-    - [ ] localize Stage-80 UDP result semantics; user-facing output must not expose raw `working` / `not_found` / `skipped` enums
-    - [ ] owner-live: 2–3 MB file produces visible `1–4096` error and no new job
-    - [ ] owner-live: valid port + `1..4096` payload executes UDP branch (`working` or `not_found`, not `skipped`)
-  - [ ] **Strategy Lab Extended presentation/localization follow-up**
-    - [ ] RU/EN coverage for new QUIC control text, measured QUIC state, Stage-80 QUIC/UDP summaries and related input/help text
-    - [ ] preserve machine enums in structured/raw evidence while rendering human-readable localized text in the normal UI
+    - [ ] owner-live: OFF → disabled semantics
+  - [ ] **`v0.4.1_15` QUIC/UDP observability and valid-small-UDP correction — current source candidate**
+    - [x] expose actual QUIC `tested` count and candidate IDs in ordinary Stage-80 RU/EN text
+    - [x] Stage-30 RU/EN: `QUIC открыт` / `QUIC закрыт` plus separate QUIC-search enabled/disabled state
+    - [x] keep Stage-30 measured QUIC state diagnostic-only; never use it as execution gate
+    - [x] replace raw Stage-80 `working` / `not_found` / `skipped` / `disabled` fragments with natural RU/EN presentation
+    - [x] deterministic RU/EN Enable QUIC help text
+    - [x] preserve raw protocol enums in structured/advanced evidence
+    - [x] replace browser Data-URL/File.size validation ownership with ArrayBuffer exact-byte validation and Base64 encoding
+    - [x] exact 140-byte Generic UDP regression through Base64 decode/job-local payload metadata
+    - [x] preserve decoded payload bound `1..4096` and strict backend validation
+    - [x] configured Generic UDP direct control exchange uses exact search-epoch selected IP, destination port and job-local payload
+    - [x] record selected endpoint/IP, port, payload bytes, reply/no-reply, timeout/return state and duration
+    - [x] never interpret UDP silence as definitive `port closed`
+    - [x] direct UDP no-reply never suppresses the bypass candidate loop
+    - [x] expose actual UDP candidate count/IDs and winner/no-winner meaning in Stage-80 RU/EN text
+    - [x] focused automated protocol-observability coverage added
+    - [ ] complete Strategy Lab corrective matrix
+    - [ ] FreeBSD-15 package build/inspection qualification
+    - [ ] exact-head source merge
+    - [ ] persistent `v0.4.1_15` testing-package publication
+    - [ ] bounded publication-record docs reconciliation
+    - [ ] owner-live: localized RU/EN help and Stage-30/80 text
+    - [ ] owner-live: Enable QUIC ON on blocked-control path shows `tested > 0` and attempted IDs
+    - [ ] owner-live: Enable QUIC OFF shows natural disabled wording
+    - [ ] owner-live: exact/small UDP payload including 140 bytes starts normally
+    - [ ] owner-live: configured UDP shows selected port/payload/endpoints, control observation and actual candidate count/IDs
+    - [ ] owner-live: no-reply UDP text does not claim the port is closed
+    - [ ] owner-live: Stage-90 restoration and temporary process/firewall/socket cleanup PASS
   - [ ] already-accessible target
   - [ ] cancellation/internal-failure containment
 - [ ] Circular lifecycle coverage
@@ -86,20 +94,18 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — close `_14` owner-live findings before the next protocol patch
+## Current priority — qualify and publish `_15`
 
-`v0.4.1_14` is installed and the owner supplied Extended screenshots for `telegram.org` and `rutracker.org` with **Enable QUIC ON**. Both runs report Stage 30 control QUIC closed and Stage 80 `QUIC=not_found` rather than a capability skip. This is consistent with removal of the old gate, but it does **not** yet close the live execution requirement because the screenshots do not expose a non-zero QUIC attempt count.
+The owner selected the `_14` live findings as one corrective package scope. Source candidate `_15` now implements the complete requested behavior rather than merely registering tasks:
 
-The current QUIC catalog contains four candidates (`quic-fake-1`, `quic-fake-2`, `quic-ipfrag-8`, `quic-ipfrag-16`) and production code records each executed candidate under `tested`. The next implementation must make this execution evidence explicit enough to verify live behavior directly.
+1. QUIC execution is observable through actual attempted count/IDs;
+2. Stage-30 and Stage-80 protocol evidence is human-readable in RU/EN while structured machine states remain intact;
+3. Enable QUIC help is deterministically localized;
+4. Generic UDP uses exact binary-byte browser transport and has an explicit 140-byte regression;
+5. configured UDP performs a non-gating direct control exchange using the selected IP/port/exact payload and exposes what was actually observed;
+6. UDP silence is never translated into the unsupported conclusion that the port is definitely closed.
 
-The same owner-live cycle identified two additional presentation/input defects:
-
-1. raw English/internal QUIC and UDP status fragments still leak into the RU UI and the new Enable QUIC help text is not localized;
-2. a payload reported by the owner as 140 bytes is rejected by the GUI with the size-range error even though the supported contract is 1–4096 bytes.
-
-Generic UDP also needs an explicit destination-port/control-exchange check. Because UDP can legitimately be silent, the implementation must report what was actually observed (`response`, `no response`, or equivalent) rather than equating silence with a definitely closed port. This diagnostic must not become a gate that prevents bypass testing.
-
-These items are now the selected follow-up boundary. A package-affecting implementation will get a new package revision; this documentation-only task registration does not change package identity.
+The current gate is source acceptance: complete corrective matrix, FreeBSD-15 package qualification, exact-head merge, persistent testing publication and publication-record reconciliation. After publication, owner-live verification is limited to the materially changed `_15` paths listed above rather than repeating accepted Model-C baseline work.
 
 ## Deferred research — retain, do not activate by inertia
 
