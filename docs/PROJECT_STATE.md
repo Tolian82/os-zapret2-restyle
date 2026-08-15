@@ -43,50 +43,50 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 - Lua initialization, BLOB lazy/common-set, GET-4K discovery and cross-batch keep-warm questions remain closed for the current architecture by accepted measured evidence.
 - `_13` owner-live Standard RUNNING/STOPPED and Extended TLS 1.2/HTTP evidence remains accepted.
 - `_14` established explicit Enable QUIC as the sole QUIC candidate execution gate; Stage-30 measured QUIC reachability remains diagnostic only.
-- `_15` source/publication acceptance remains complete.
 - `_15` owner-live QUIC observability is positively demonstrated: the normal Stage-80 UI showed all four attempted QUIC candidate IDs while ordinary QUIC remained blocked.
-- `_15` Generic UDP owner-live acceptance failed: a valid selected small file did not reach configured UDP.
-- `_16` source acceptance, exact-head merge and immutable testing-package publication are complete; owner-live Generic UDP correction verification is the current gate.
+- `_16` source acceptance, exact-head merge and immutable testing-package publication are complete.
+- `_16` Generic UDP browser-to-job path is now **OWNER-LIVE PASS** with exact 140-byte payload evidence.
 
-## Generic UDP trace result
+## Generic UDP current conclusion
 
-The product does not upload the selected payload through a multipart upload directory. The actual path is:
+Generic UDP does not use a multipart upload directory. The product path is:
 
 `browser File -> ArrayBuffer -> Base64 start POST -> PHP/API -> configd -> launcher -> private job-local udp-payload.bin/udp-port -> Python Extended`.
 
-The `_15` browser implementation had no durable application-owned prepared payload. The Run handler sampled `input.files[0]` and only then attempted `FileReader`. Therefore a lost/reset native file selection could trigger port+file validation before the API call and before any job-local file existed.
+The product contract is exact decoded size **`1..4096 bytes`**, not KiB.
 
-This explains why the owner's directory-permissions theory cannot be the **first** cause of the observed empty native file control/no-configured-job state. Filesystem permissions remain a valid later-stage failure mode if a payload reaches the launcher.
+The owner later identified that the repeated pre-PASS size errors came from selecting files around **140 KiB**. A controlled Windows fixture was then created and filesystem-verified as exactly `140` bytes. With that file, `_16` behaved correctly.
 
-Durable owner-live failure evidence:
+Durable owner-live PASS evidence:
+[`verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md).
+
+The earlier `_15` failure record remains historical chronology, but its then-current suspicion of a browser/upload/filesystem defect is superseded by the exact-byte `_16` result:
 [`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
 
-## `_16` implemented contract
+## `_16` owner-live Generic UDP — PASS
 
-### Browser-owned payload staging
+Controlled scenario:
 
-- file-input `change` immediately captures the selected `File`;
-- exact bytes are read immediately using `FileReader.readAsArrayBuffer`;
-- decoded `Uint8Array.byteLength` remains bounded to `1..4096`;
-- exact validated bytes are Base64-encoded and retained in application-owned state;
-- UI displays localized filename + decoded byte count + ready-to-send state;
-- Run uses staged Base64 and no longer depends exclusively on native `input.files[0]` at click time;
-- if native selection exists but staging was not completed, Run stages it before start as a bounded fallback;
-- ArrayBuffer validation uses the returned `byteLength` contract rather than `instanceof ArrayBuffer`.
+- job: `job.j09XUc`;
+- target: `rutracker.org`;
+- mode: Extended;
+- Generic UDP port: `53`;
+- payload: `udp-140.bin`, exact `140` bytes;
+- Enable QUIC: OFF.
 
-### Server-side attribution
+Observed:
 
-The API/configd transport remains Base64-in-POST. After the job directory exists, job-local preparation still creates private `udp-payload.bin` and `udp-port` with mode `0600`.
+- GUI immediately showed the payload as ready to send with exact 140-byte count;
+- Stage 80 showed port `53`, payload `140` bytes and endpoint `172.67.182.196`;
+- direct control reply was not observed;
+- wording explicitly stated that no reply does not mean the UDP port is closed;
+- candidate search still executed all three current UDP candidates: `udp-ipfrag-8`, `udp-ipfrag-16`, `udp-ipfrag-32`;
+- no working UDP candidate was found, which is a valid negative search result;
+- QUIC OFF was presented as QUIC strategy search disabled;
+- Stage 90 visibly removed temporary processes/rules and restored the original Zapret2 service to running/healthy state;
+- overall result: `SUCCESS`.
 
-`_16` adds precise failure classes for later stages, including job directory missing/not writable, temporary file creation, invalid/decode failure, size failure, write/chmod/move failure and state-record failure. The launcher surfaces the class in its error response instead of collapsing all such failures into one generic message.
-
-### Existing UDP search behavior retained
-
-- exact selected port/payload direct observation remains non-gating;
-- UDP silence is not proof of a closed port;
-- candidate loop still runs regardless of direct no-reply;
-- Stage 80 still exposes selected port/payload/endpoints, control observation and actual candidate IDs in RU/EN;
-- terminal payload cleanup and Stage-90 semantic restoration remain mandatory.
+The earlier permissions theory is therefore **not a confirmed product defect for this scenario**. `_16` retains precise server-side failure classes for any genuine later storage/permissions error if one appears in future evidence.
 
 Canonical specialist contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
 
@@ -104,24 +104,21 @@ Canonical specialist contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](archit
 - asset `os-zapret2-restyle-0.4.1_16.pkg` is uploaded and verified;
 - SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`.
 
-The publisher's only failed step was automatic Draft PR creation because the repository setting forbids GitHub Actions from creating or approving pull requests. The machine-generated record branch/evidence was already pushed; Draft PR `#246` completes the same required docs-only tail. Package identity/bytes were not changed.
+PR `#246` completed the required bounded publication-record documentation tail after the publisher's automatic Draft-PR step was blocked by repository GitHub Actions settings. Package identity/bytes were not changed.
 
 ## Current owner-live boundary
 
-After installing `_16`, verify only the materially changed Generic UDP path:
+Generic UDP is closed as accepted for the tested `_16` scenario. Do not repeat it without new contradictory evidence.
 
-1. selecting a valid file immediately shows application-owned ready state, filename and exact decoded byte count;
-2. a 140-byte sample starts a new configured-UDP job;
-3. configured UDP Stage 80 shows selected port, payload bytes, endpoint/IP, direct reply/no-reply observation and actual candidate count/IDs;
-4. no-reply wording never claims the port is closed;
-5. if server-side permission/storage preparation fails, the UI/API exposes its preparation class;
-6. Stage-90 restoration and temporary process/firewall/socket/payload cleanup remain PASS.
+Next selected Strategy Lab rows:
 
-Remaining independent rows after Generic UDP are Enable QUIC OFF/default persistence and final RU/EN presentation review.
+1. Enable QUIC OFF/default persistence across reload/revisit;
+2. remaining RU/EN presentation review;
+3. then the next risk-selected regression items from `ROADMAP.md`.
 
 ## Documentation authority note
 
-The owner’s latest instruction is current truth. Historical `_15` automated assertions remain evidence of what source tests proved, but they do not count as proof of the live browser-to-job path.
+The owner’s latest instruction is current truth. Earlier failure hypotheses remain historical evidence of what was believed at that time, but they do not override the exact-byte live PASS.
 
 ## Current architecture entry points
 
