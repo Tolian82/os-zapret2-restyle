@@ -2,6 +2,7 @@
 set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 VIEW="${VIEW:-${ROOT_DIR}/src/opnsense/mvc/app/views/OPNsense/Zapret/diagnostics.volt}"
+GENERAL="${GENERAL:-${ROOT_DIR}/src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt}"
 SETTINGS="${SETTINGS:-${ROOT_DIR}/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLabSettingsController.php}"
 MODEL="${MODEL:-${ROOT_DIR}/src/opnsense/mvc/app/models/OPNsense/Zapret/Zapret.xml}"
 MENU="${MENU:-${ROOT_DIR}/src/opnsense/mvc/app/models/OPNsense/Zapret/Menu/Menu.xml}"
@@ -65,10 +66,17 @@ require "${VIEW}" "\$('#strategyLabState,#circularState').text(label(statusLabel
 require "${VIEW}" "\$('a[href=\"/ui/zapret\"]').text(ui.navStrategy);"
 require "${VIEW}" "\$('a[href=\"/ui/zapret/diagnostics\"]').text(ui.navLaboratory);"
 
-# Owner-live _19 showed two remaining layout defects: the Laboratory page had a
-# larger outer inset than native OPNsense pages and the input/value column still
-# did not match the normal OPNsense form grid. Both Diagnostics tables now share
-# a 25% label column, and the nested page wrapper is visually neutralized.
+# Owner-live _20 showed that neutralizing .page-content-main removed the normal
+# OPNsense perimeter itself. Laboratory now renders content boxes directly in
+# the platform-owned page wrapper, like Strategy, rather than creating and then
+# overriding a second page wrapper.
+require "${VIEW}" '<div class="content-box __mb"><div class="content-box-header">'
+require "${VIEW}" '<div class="content-box"><div class="content-box-header"><h3>{{ lang._('
+if grep -Fq 'class="page-content-main"' "${VIEW}" || grep -Fq '.page-content-main {' "${VIEW}"; then
+    fail 'Laboratory must not create or override page-content-main; OPNsense owns the page perimeter'
+fi
+
+# Both Diagnostics tables retain the accepted common native-style 25% field grid.
 require "${VIEW}" 'class="table table-striped diagnostics-form-table" id="testDomainTable"'
 require "${VIEW}" 'class="table table-striped diagnostics-form-table" id="strategyLabInputsTable"'
 require "${VIEW}" '.diagnostics-form-table > tbody > tr > td.zapret-field-label'
@@ -84,12 +92,6 @@ fi
 if grep -Fq 'font-size:12px;' "${VIEW}"; then
     fail 'blocked-domain label must use normal UI typography; 12px workaround returned'
 fi
-require "${VIEW}" '.page-content-main {'
-require "${VIEW}" 'padding:0 !important;'
-require "${VIEW}" '.page-content-main > .container-fluid {'
-require "${VIEW}" 'padding-left:0 !important;'
-require "${VIEW}" '.page-content-main > .container-fluid > .row > .col-xs-12 {'
-require "${VIEW}" 'padding-right:0 !important;'
 
 # Mode label remains right-aligned next to the selector, and its actual computed
 # font size/line height are copied from the same native field-label reference.
@@ -101,10 +103,13 @@ require "${VIEW}" "var modeFontReference=\$('#strategyLabInputsTable > tbody > t
 require "${VIEW}" "'font-size':modeFontReference.css('font-size')"
 require "${VIEW}" "'line-height':modeFontReference.css('line-height')"
 
-# Sidebar canonical names are Strategy/Laboratory; the active page also applies
-# deterministic RU/EN text so the requested labels do not depend on gettext wording.
+# Sidebar canonical names stay language-neutral in Menu.xml, while both plugin
+# pages deterministically apply RU/EN labels from the active OPNsense HTML lang.
 require "${MENU}" 'General VisibleName="Strategy"'
 require "${MENU}" 'Diagnostics VisibleName="Laboratory"'
+require "${GENERAL}" "document.documentElement.lang || ''"
+require "${GENERAL}" "\$('a[href=\"/ui/zapret\"]').text(isRussian ? 'Стратегия' : 'Strategy');"
+require "${GENERAL}" "\$('a[href=\"/ui/zapret/diagnostics\"]').text(isRussian ? 'Лаборатория' : 'Laboratory');"
 
 # Ordinary circular status must be human text, not raw JSON/braces.
 require "${VIEW}" "\$('#circularRaw').text(ui.stateLabel + ': ' + label(statusLabels,String(state).toUpperCase()));"
@@ -122,4 +127,4 @@ require "${SETTINGS}" "'enabled' => (string)\$model->strategylab->enablequic ===
 require "${MODEL}" '<enablequic type="BooleanField">'
 require "${MODEL}" '<Default>0</Default>'
 
-echo 'PASS: Laboratory uses native OPNsense perimeter/grid alignment, matched mode-label typography, deterministic RU/EN labels, circular idle text, and persisted Enable QUIC contract'
+echo 'PASS: Laboratory uses the OPNsense-owned page perimeter, accepted 25% field grid and matched mode typography; Strategy/Laboratory navigation stays deterministic RU/EN on both plugin pages; persistence contracts remain guarded'

@@ -46,6 +46,8 @@
                 : 'Zapret2 installation failed. See /var/log/zapret2/setup.log for details.',
             setupError: isRussian ? 'Ошибка установки Zapret2' : 'Zapret2 setup error'
         };
+        $('a[href="/ui/zapret"]').text(isRussian ? 'Стратегия' : 'Strategy');
+        $('a[href="/ui/zapret/diagnostics"]').text(isRussian ? 'Лаборатория' : 'Laboratory');
         let runtimePoll = null;
         let runtimeWasBusy = false;
         let currentServiceState = 'error';

@@ -21,8 +21,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
-- current source candidate: `_20` / `PLUGIN_REVISION=20`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_20.pkg` / `v0.4.1_20`;
+- current source candidate: `_21` / `PLUGIN_REVISION=21`;
+- last published testing package/tag: `os-zapret2-restyle-0.4.1_20.pkg` / `v0.4.1_20`;
 - `_20` testing-package SHA-256: `5d5fae0a79054ad807a92ca7804d5984d63782927c667962b6395d48627ab64a`;
 - `_20` source merge/testing-tag target: `d732965c143563352e18ac58c209aeb30a6d4feb`;
 - `_20` publication workflow run: `31896330680`;
@@ -48,42 +48,55 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 - `_16` Enable QUIC OFF execution semantics are **OWNER-LIVE PASS**: OFF suppresses QUIC candidates while independent UDP remains active.
 - already-accessible target is **COMPLETE by owner confirmation**.
 - Settings Apply validation/guards and post-Apply service-state correctness are **COMPLETE by owner confirmation**.
-- Enable QUIC OFF/default persistence across an actual reload/revisit is still live-pending; `_20` preserves the existing source persistence contract.
+- Enable QUIC OFF/default persistence across an actual reload/revisit is still live-pending; `_21` preserves the existing source persistence contract.
 
-## `_19` owner-live Laboratory follow-up — partial
+## `_20` owner-live Laboratory follow-up — perimeter/navigation rejected
 
-Published `_19` was installed and directly compared with the Zapret Strategy page and a native OPNsense settings page. RU `Режим:`, `Расширенный` and `Статус: ожидание` were visible, but the owner rejected final layout acceptance because the Laboratory perimeter was too large, the field value column did not match the normal OPNsense form grid, and `Режим:` needed guaranteed typography parity with the target label.
+The owner installed `_20` and directly compared Laboratory, Strategy and a native OPNsense page.
 
-Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md).
+Confirmed defects:
 
-## `_20` source/package implementation — complete
+- Laboratory has no normal OPNsense outer content perimeter/frame;
+- Strategy/native comparison retains the normal platform spacing;
+- Russian `Стратегия` / `Лаборатория` is visible while Laboratory is active but reverts to `Strategy` / `Laboratory` after navigating to Strategy.
 
-`_20` has passed focused Diagnostics/Laboratory layout/localization/persistence validation, the complete project + Strategy Lab corrective matrix, FreeBSD-15 package qualification, exact-head source merge, and persistent testing publication.
+The accepted `_20` 25% field grid and mode-label typography contract is not the rejected part. The root cause is the redundant Laboratory page wrapper plus `.page-content-main` neutralization, and navigation localization being applied only by Laboratory JavaScript.
 
-Implemented:
+Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md).
 
-- shared native-style `25%` field-label column for both the top domain-connectivity table and Strategy Lab input table;
-- target, Generic UDP and Enable QUIC use the same normal OPNsense value-column position;
-- rejected `_19` fixed `250px` Laboratory label column removed;
-- long RU target label remains one line at normal UI typography;
-- `Режим:` / `Mode:` computed font size and line height are copied from the target field-label computed style;
-- nested Laboratory page/container/row/column margin/padding is neutralized to avoid a second perimeter inset;
-- `_19` RU/EN presentation, Strategy Lab search/runtime, Generic UDP, QUIC and persistence semantics remain unchanged.
+## `_21` source implementation
 
-Source merge/tag target: `d732965c143563352e18ac58c209aeb30a6d4feb`. Published package SHA-256: `5d5fae0a79054ad807a92ca7804d5984d63782927c667962b6395d48627ab64a`.
+Current source candidate:
 
-Source patch record: [`patches/v0.4.1_20.md`](patches/v0.4.1_20.md).
+- `PLUGIN_REVISION=21`;
+- Laboratory no longer creates or overrides `.page-content-main`; OPNsense owns the outer page perimeter;
+- the two Laboratory sections render as normal `content-box` blocks inside that platform wrapper;
+- accepted common `25%` Diagnostics field grid and mode-label computed typography synchronization are retained;
+- canonical menu names remain `Strategy` / `Laboratory`, while both Laboratory and Strategy apply deterministic RU/EN labels from the active OPNsense HTML language;
+- Strategy Lab search/runtime, Generic UDP, QUIC, circular and persistence semantics are unchanged;
+- focused regression guards the corrected frame ownership and cross-page navigation localization while preserving prior accepted UI/persistence contracts.
+
+Source patch record: [`patches/v0.4.1_21.md`](patches/v0.4.1_21.md).
 
 ## Current verification boundary
 
-After `_20` install:
+Before `_21` source merge/publication:
 
-1. one owner-live visual comparison of Laboratory against Strategy/native OPNsense perimeter and field grid;
-2. confirm `Режим:` matches target-label typography;
-3. no Strategy Lab execution rerun is required for this visual-only correction;
-4. separately prove Enable QUIC OFF/default persistence after reload/revisit;
-5. after `_20` acceptance, next selected engineering plan: Laboratory targets must support IP addresses as well as domains;
-6. continue the remaining risk-selected backlog.
+1. focused Diagnostics/Laboratory native-frame/localization/persistence contract;
+2. applicable complete project + Strategy Lab corrective matrix;
+3. FreeBSD-15 package build/inspection qualification;
+4. exact latest-head merge;
+5. persistent `v0.4.1_21` testing publication and publication-record reconciliation.
+
+After `_21` install:
+
+1. Laboratory outer perimeter matches Strategy/native OPNsense page spacing;
+2. Russian navigation stays `Стратегия` / `Лаборатория` across Laboratory ↔ Strategy navigation;
+3. accepted common field grid and `Режим:` typography remain intact;
+4. no Strategy Lab execution rerun is required for this UI-only correction;
+5. Enable QUIC OFF/default persistence reload/revisit proof remains separate;
+6. after `_21` UI acceptance, next selected engineering plan: Laboratory targets must support IP addresses as well as domains;
+7. continue the remaining risk-selected backlog.
 
 ## Accepted owner-live evidence retained
 

@@ -10,14 +10,14 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-15
-**Current handoff identity:** `v0.4.1_20` published testing
+**Current handoff identity:** `v0.4.1_21` source candidate
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
-- current source candidate: `PLUGIN_REVISION=20` / `v0.4.1_20`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_20.pkg` / `v0.4.1_20`;
+- current source candidate: `PLUGIN_REVISION=21` / `v0.4.1_21`;
+- last published testing package/tag: `os-zapret2-restyle-0.4.1_20.pkg` / `v0.4.1_20`;
 - `_20` testing-package SHA-256: `5d5fae0a79054ad807a92ca7804d5984d63782927c667962b6395d48627ab64a`;
 - `_20` source merge/testing-tag target: `d732965c143563352e18ac58c209aeb30a6d4feb`;
 - `_20` publication workflow run: `31896330680`;
@@ -41,36 +41,53 @@ Accepted owner-live/product facts include:
 - already-accessible-target behavior is complete by owner confirmation;
 - Settings Apply validation/guards and post-Apply service-state correctness are complete by owner confirmation.
 
-Enable QUIC OFF/default persistence across an actual reload/revisit remains a separate live acceptance row. `_20` preserves the existing model-backed default/load/save source contract.
+Enable QUIC OFF/default persistence across an actual reload/revisit remains a separate live acceptance row. `_21` preserves the existing model-backed default/load/save source contract.
 
-## `_19` owner-live follow-up
+## `_20` owner-live UI follow-up — rejected perimeter/navigation
 
-Published `_19` showed the requested RU mode/status text, but the owner rejected the remaining Laboratory layout: the working-area perimeter was too large, the value column did not match the normal OPNsense grid, and `Режим:` needed guaranteed typography parity with the target label.
+The owner installed `_20` and supplied direct screenshots of Laboratory, Strategy and a native OPNsense page.
 
-Evidence: [`verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md).
+Confirmed:
 
-## `_20` published implementation
+- the `_20` Laboratory page has lost the normal OPNsense outer content perimeter/frame;
+- Strategy and the native OPNsense comparison page retain that normal platform spacing;
+- on Laboratory with Russian OPNsense language the submenu is `Стратегия` / `Лаборатория`;
+- after navigating to Strategy the same submenu reverts to English `Strategy` / `Laboratory`.
 
-`_20` is source/CI/FreeBSD/package-publication complete:
+Root cause is bounded to presentation code: `_20` neutralizes `.page-content-main` globally inside `diagnostics.volt`, affecting the platform-owned wrapper, while deterministic submenu localization exists only on Laboratory and not on Strategy.
 
-- both Diagnostics input tables use one native-style `25%` field-label column;
-- target, Generic UDP and Enable QUIC start on the same normal OPNsense value-column position;
-- the rejected fixed `_19` `250px` Laboratory-only label column is removed;
-- RU `Заблокированный домен / IP` remains one line at normal UI typography;
-- `Режим:` / `Mode:` computed font size and line height are synchronized from the target field-label reference;
-- nested Laboratory page/container/row/column spacing is neutralized so it does not add a second perimeter inset;
-- `_19` RU/EN strings, Strategy Lab execution, Generic UDP, QUIC and persistence semantics are unchanged.
+Evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md).
 
-Source patch record: [`patches/v0.4.1_20.md`](patches/v0.4.1_20.md).
+## `_21` source implementation
 
-## Immediate owner-live acceptance
+Current `_21` candidate:
 
-1. visually compare Laboratory perimeter with the Strategy/native OPNsense pages;
-2. verify the top domain input and Laboratory target/UDP/QUIC controls use the normal common value column;
-3. verify `Режим:` has the same visible typography as `Заблокированный домен / IP`;
-4. no Strategy Lab execution rerun is required for this visual-only correction;
+- removes the redundant Laboratory page wrapper and all Laboratory `.page-content-main` spacing overrides;
+- renders Laboratory content boxes directly inside the platform-owned OPNsense page frame, matching the Strategy/native page structure rather than styling away the platform perimeter;
+- preserves the accepted shared `25%` Diagnostics field grid and `Режим:` / `Mode:` typography synchronization;
+- makes Strategy apply the same active-language submenu labels as Laboratory, so Russian stays `Стратегия` / `Лаборатория` on both pages and English stays `Strategy` / `Laboratory`;
+- keeps Strategy Lab runtime/search, Generic UDP, QUIC, circular and settings semantics unchanged.
+
+Source patch record: [`patches/v0.4.1_21.md`](patches/v0.4.1_21.md).
+
+## Immediate delivery / verification boundary
+
+Before `_21` is complete:
+
+1. focused Laboratory native-frame/localization/persistence regression;
+2. applicable complete project + Strategy Lab corrective matrix;
+3. FreeBSD-15 package build/inspection qualification;
+4. exact latest-head source merge;
+5. persistent `v0.4.1_21` testing publication and bounded publication-record reconciliation.
+
+After `_21` install:
+
+1. visually confirm Laboratory has the same normal outer OPNsense perimeter as Strategy/native pages;
+2. with Russian OPNsense language, switch Laboratory → Strategy → Laboratory and confirm the submenu stays `Стратегия` / `Лаборатория`;
+3. quickly confirm the accepted field grid and `Режим:` typography did not regress;
+4. no Strategy Lab execution rerun is required for this UI-only correction;
 5. separately prove Enable QUIC OFF/default persistence across reload/revisit;
-6. after `_20` visual acceptance, next engineering plan: add Laboratory target support for IP addresses as well as domains;
+6. after `_21` UI acceptance, next engineering plan: add Laboratory target support for IP addresses as well as domains;
 7. continue the remaining risk-selected backlog from `ROADMAP.md`.
 
 Do not reopen closed BLOB/Lua/discovery/model-selection experiments without new architecture or fresh contradicting evidence.
