@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1 / 0.4.1_1` PUBLISHED; `_26` OWNER-LIVE PASS REMAINS THE SELECTED UNCHANGED RUNTIME BASIS; `_22` REMAINS THE ACCEPTED MODEL-B FALLBACK BASELINE.**
+Overall status: **`v0.4.1_13` MODEL-C-ONLY OWNER-LIVE PASS; INITIAL-ZAPRET2-STOPPED IS THE CURRENT SELECTED REGRESSION ROW.**
 
 This matrix is the canonical live-appliance regression inventory. Source tests, GitHub CI
 and FreeBSD package builds do not substitute for selected owner-live evidence. Detailed
@@ -15,97 +15,93 @@ TEST / RELEASE RECORD
 ==================================================
 
 - Tester: repository owner
-- Latest completed live test date: `2026-08-12`
-- OPNsense: `26.7.1_1`; FreeBSD 15 amd64
+- Latest completed live test date: `2026-08-15`
+- OPNsense / package architecture: FreeBSD 15 amd64
 - Current published release package: `os-zapret2-restyle-0.4.1_1.pkg`
 - Current published release tag: `v0.4.1`
-- Latest owner-tested runtime package: `os-zapret2-restyle-0.4.0_26.pkg`
-- v0.4.1 release merge: `c53e1c1656517fa764f97a175bb82eea02dbc374`
-- v0.4.1 package digest: `sha256:cb481b37ed5ef6b57360ecbe7f1678b75d2d8e6520beb92e3d624b1bc9eb837e`
-- `_26` runtime commit: `8ada9cba28916fff506f19b34f5ef3de16e2008e`
-- Preferred Stage-60 model: `C-warm-bucket-source-port-dispatch`
-- Immediate fallback/reference: `B-warm-worker-parallel-batched`
-- Final fallback: cold Model A
+- Latest owner-tested runtime package: `os-zapret2-restyle-0.4.1_13.pkg`
+- Current testing tag: `v0.4.1_13`
+- `_13` source/testing-tag target: `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`
+- `_13` testing-package digest: `sha256:7a2f864aa14ba2170ca378954ab5421092b76aca79b7b1765b976de2f024797b`
+- Normal Stage-60 production model: `C-warm-bucket-source-port-dispatch`
+- Automatic production Model B/A fallback: disabled from `_13`
+- Model B/A: explicit reference/benchmark/test tooling only
 - Candidate width: at most 3, not CPU-count gated
 - Pinned endpoints inside one candidate: sequential
 
-Current release authority:
+Current authority:
 
-- `docs/releases/v0.4.1.md`;
-- `docs/verification/evidence/2026-08-12-v0.4.1-release-publication.md`;
+- `docs/START_HERE.md`;
 - `docs/PROJECT_STATE.md`;
-- `docs/decisions/DEC-2026-08-09-risk-based-live-release-gates.md`.
-
-Current runtime evidence authority:
-
-- `docs/patches/v0.4.0_26.md`;
-- `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`;
-- `docs/verification/evidence/2026-08-12-v0.4.0_26-publication.md`;
-- `docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`;
-- `docs/verification/evidence/2026-08-12-v0.4.0_25-source-port-live-pass.md`;
-- `docs/verification/evidence/2026-08-11-v0.4.0_22-production-model-b-live.md`.
-
-The published `0.4.1_1` package has not yet been separately claimed as installed on the
-owner appliance. The release-preparation patch changed version/release metadata and
-version-aware contracts, not Strategy Lab runtime semantics, so the accepted `_26` appliance
-run remains the truthful selected live basis.
+- `docs/ROADMAP.md`;
+- `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
+- `docs/verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`.
 
 ==================================================
-`v0.4.1` RELEASE-SELECTED LIVE BASIS — PASS ON `_26`
+`v0.4.1_13` MODEL-C-ONLY OWNER-LIVE GATE — PASS
 ==================================================
 
-### Extended telegram.org — `job.xhdgCU`
+The owner installed `os-zapret2-restyle-0.4.1_13` and supplied retained telemetry for three
+normal Standard Strategy Lab jobs.
 
-Published testing package `os-zapret2-restyle-0.4.0_26` completed the selected production-
-wiring gate inherited by v0.4.1.
+### telegram.org — `job.6RhNa1`
 
-`adaptive-budget.json` recorded `policy=eligible-work-v1` with the actual work matrix:
-
-- mode Extended;
-- endpoint count `2`;
-- IPv4 true;
-- IPv6 false;
-- TLS 1.3 true;
-- Extended TCP true;
-- QUIC/IPv4 false;
-- Generic UDP false.
-
-The independent public state matched the same capabilities: IPv4 available, IPv6
-unavailable, QUIC/IPv4 closed, QUIC/IPv6 skipped and UDP request unconfigured.
-
-Because no optional branch was eligible, all additions were zero. Effective budgets were
-exactly Standard `150 s`, Extended `120 s`, search/job parent `270 s`, Stage 80 `120 s`.
-`status.json` persisted the same `150/120/270/120` values with deadlines anchored to the
-original job start. `timing-telemetry.json` recorded `phase=budget_adaptation`, `stage=30`,
-`outcome=pass` with the same plan.
-
-Stage 60:
-
-- `execution_model=C-warm-bucket-source-port-dispatch`;
-- 16/16 candidates completed;
-- zero winners;
+- outcome `NO_CANDIDATE`;
+- direct TLS baseline inaccessible;
+- Model C Stage 60 completed `16/16` candidates;
+- zero shortlist entries;
 - `stopped_reason=graph_exhausted`;
-- `.parallel.fallbacks=[]`;
-- Stage 60 duration `34209 ms`.
+- Stage 60 `37186 ms`;
+- persisted `model_c_only=true` and `.fallbacks=[]`;
+- Stage-90 semantic restoration verified `RUNNING -> RUNNING`;
+- strategy unchanged and temporary runtime clean.
 
-The source-port lease wrapper remained active with
-`policy=preferred-free-else-alternate` and `foreign_port_action=skip-only`.
+### rutracker.org — `job.PEEjoY`
 
-Final result:
+- outcome `SUCCESS`;
+- direct TLS baseline inaccessible;
+- Model C Stage 60 completed `16/16` candidates;
+- `stopped_reason=graph_exhausted`;
+- stable shortlist: `03-seqovl`, `seqovl-host`, `seqovl-midsld`;
+- Stage 60 `26191 ms`;
+- persisted `model_c_only=true` and `.fallbacks=[]`;
+- Stage-90 semantic restoration verified `RUNNING -> RUNNING`;
+- strategy unchanged and temporary runtime clean.
 
-- Stage 80 PASS, QUIC/UDP correctly skipped by capability/input;
-- Stage 90 `6924 ms`, PASS;
-- total job `114644 ms`;
-- Stage 99 `NO_CANDIDATE`;
-- post-job `configctl zapret status` RUNNING, pid `78016` at observation time;
-- post-job rules `19128-19130` absent.
+### www.youtube.com — `job.7Kz5ro`
+
+- outcome `SUCCESS`;
+- direct TLS baseline inaccessible in the measured environment;
+- Model C Stage 60 stopped after `7/16` candidates;
+- `stopped_reason=enough_candidates`;
+- stable shortlist count `3`: `multidisorder-midsld`, `seqovl-midsld`, `golden-owner-multisplit-fake-tls-7`;
+- Stage 60 `7173 ms`;
+- persisted `model_c_only=true` and `.fallbacks=[]`;
+- Stage-90 semantic restoration verified `RUNNING -> RUNNING`;
+- strategy unchanged and temporary runtime clean.
+
+These three jobs jointly prove the selected `_13` normal-production paths for exhaustive
+no-candidate, exhaustive success, and early success without automatic Model B/A replay.
 
 Durable evidence:
-`docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`.
+`docs/verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`.
 
 ==================================================
 RETAINED ACCEPTED RUNTIME BASELINES
 ==================================================
+
+### `_26` adaptive-budget production-wiring basis — Extended telegram.org `job.xhdgCU`
+
+- Model C `16/16`, zero winners, `graph_exhausted`;
+- `.parallel.fallbacks=[]`;
+- Stage 60 `34209 ms`;
+- Stage 80 PASS with unsupported optional protocols skipped;
+- Stage 90 `6924 ms`, PASS;
+- total job `114644 ms`;
+- post-job normal Zapret2 RUNNING and no `19128-19130` residue.
+
+Durable evidence:
+`docs/verification/evidence/2026-08-12-v0.4.0_26-adaptive-budget-live-pass.md`.
 
 ### `_25` source-port corrective — Extended telegram.org `job.5yGde5`
 
@@ -131,7 +127,7 @@ The same `_23` cycle exposed `job.G0wC5l` shared-port collision amplification at
 that defect is closed by `_25` and is retained as historical evidence rather than current
 behavior.
 
-### `_22` accepted Model-B fallback/reference
+### `_22` accepted Model-B reference
 
 Standard `telegram.org`, `job.KpLHgb`:
 
@@ -163,8 +159,13 @@ RETAINED PROGRESSION
 - `_25` corrected source-port leasing and fallback ownership (`_24` intentionally skipped).
 - `_26` implemented workload-derived finite parent budgets and passed owner-live
   production-wiring verification.
-- v0.4.1 promoted the accepted testing line through exact release-preparation, semantic tag,
+- `v0.4.1` promoted the accepted testing line through exact release-preparation, semantic tag,
   FreeBSD 15 package/checksum, GitHub Release and Pages/pkg repository publication.
+- `_3/_4` closed BLOB startup/RSS/common-set optimization from measured negative evidence.
+- `_12` closed the selected warm/readiness repeat verification.
+- `_13` made normal Stage 60 Model-C-only and removed automatic Model B/A production replay.
+- `_13` owner-live telemetry on 2026-08-15 accepted exhaustive no-winner, exhaustive success,
+  and early-success paths with exact RUNNING restoration.
 
 ==================================================
 SCENARIO MATRIX
@@ -172,13 +173,13 @@ SCENARIO MATRIX
 
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
-| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result truthful; Stage 90 restores RUNNING; no temporary residue | `2026-08-08-v0.3.3_27-scenario-01-pass.md`; later `_22/_23/_25/_26` also exercise RUNNING restoration | **PASS ON `_27` — v0.4.0 historical mandatory row** |
-| 2 | Standard blocked domain, initial Zapret2 STOPPED | Final service remains STOPPED; restoration verified | `PENDING OWNER` | **PENDING REGRESSION** |
+| 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result truthful; Stage 90 restores RUNNING; no temporary residue | `2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md` | **PASS ON `_13`** |
+| 2 | Standard blocked domain, initial Zapret2 STOPPED | Final service remains STOPPED; restoration verified | `PENDING OWNER` | **CURRENT SELECTED REGRESSION** |
 | 3 | Extended TLS 1.2 and HTTP | Available successes replay-verified; unavailable protocols explicitly skipped | `_23` Extended working path observed; dedicated formal row unselected | **PENDING REGRESSION** |
 | 4 | Extended QUIC | Endpoint-bound/replay-verified when available; otherwise explicit skip | `_25/_26` exercised explicit skip; available-QUIC row remains unselected | **PENDING REGRESSION** |
 | 5 | Generic UDP port and payload | Accepted only in Extended mode; complete profile and cleanup | `PENDING OWNER` | **PENDING REGRESSION** |
 | 6 | Target already accessible | `TARGET_ACCESSIBLE`; search skipped; service state exact | `PENDING OWNER` | **PENDING REGRESSION** |
-| 7 | No working candidate | `NO_CANDIDATE`; shortlist empty; restoration verified | `_22`; `_25 job.5yGde5`; `_26 job.xhdgCU` | **PASS ON `_26` — v0.4.1 selected live basis** |
+| 7 | No working candidate | `NO_CANDIDATE`; shortlist empty; restoration verified | `_13 job.6RhNa1`; retained `_22/_25/_26` evidence | **PASS ON `_13`** |
 | 8 | User cancellation after service stop | Unfinished stages skipped; 90/99 run; original service restored | `PENDING OWNER` | **PENDING REGRESSION** |
 | 9 | Hard whole-worker timeout | `TIMEOUT`; results persist; restoration verified | `_23 job.G0wC5l` observed timeout with exact restoration; dedicated formal row unselected | **PENDING REGRESSION** |
 | 10 | Controlled internal failure | `ERROR`; truthful stage; restoration verified | `PENDING OWNER` | **PENDING REGRESSION** |
@@ -199,7 +200,7 @@ A selected live path fails if restoration is unverified, saved strategy changes
 unexpectedly, temporary workers/rules remain, lifecycle ownership is violated, a result is
 falsely classified, or an adaptive plan does not match measured capabilities.
 
-For v0.4.1, publication gates are complete. The unchanged runtime used accepted `_26`
-owner-live evidence as its selected live basis. Broader pending rows remain risk-selected
-regression backlog, not an all-or-nothing release checklist. Any later runtime-affecting
-change must select and execute its own appropriate live gate.
+The selected `_13` Model-C-only owner-live gate is complete. Broader pending rows remain
+risk-selected regression backlog, not an all-or-nothing release checklist. The current selected
+row is initial Zapret2 STOPPED; any source correction is justified only if that live row exposes
+a real defect.

@@ -69,7 +69,7 @@ Historical A/B/C experiment material is history/proof and does not represent cur
 
 ## Current verification boundary
 
-`_13` automated source acceptance and persistent testing-package publication are complete:
+`_13` automated source acceptance, persistent testing-package publication, and owner-live Model-C-only regression are complete:
 
 - PR `#230` exact verified head: `8e1af17ce4ccfaad4851329167b386741d0c9ee8`;
 - focused Model-C production regression proves injected infrastructure failure does not invoke B/A reference paths;
@@ -80,9 +80,16 @@ Historical A/B/C experiment material is history/proof and does not represent cur
 - testing publication workflow run: `31838633599`;
 - prerelease `v0.4.1_13` and package asset published and verified;
 - tag target matches the `_13` source merge exactly;
-- temporary publication branch was removed after success.
+- temporary publication branch was removed after success;
+- installed owner package confirmed as `os-zapret2-restyle-0.4.1_13` on `FreeBSD:15:amd64`;
+- `telegram.org` `job.6RhNa1`: `NO_CANDIDATE`, Model C `16/16`, graph exhausted, no fallback, verified clean `RUNNING -> RUNNING` restoration;
+- `rutracker.org` `job.PEEjoY`: `SUCCESS`, Model C `16/16`, three stable shortlist entries, no fallback, verified clean `RUNNING -> RUNNING` restoration;
+- `www.youtube.com` `job.7Kz5ro`: `SUCCESS`, Model C early stop at `7/16` with `enough_candidates`, three stable shortlist entries, no fallback, verified clean `RUNNING -> RUNNING` restoration.
 
-Owner-live `_13` is now the remaining gate: one selected normal Model-C-only OPNsense run must verify correct result handling, no automatic B/A replay, semantic restoration and absence of temporary IPFW/process/socket residue.
+Durable owner-live evidence:
+[`verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md).
+
+The current selected live-regression boundary is now **Standard blocked domain with initial Zapret2 STOPPED**. Required proof is exact semantic restoration to STOPPED, unchanged production strategy/configuration, truthful terminal result, and absence of temporary Strategy Lab process/socket/firewall residue.
 
 ## Current documentation and governance facts
 
