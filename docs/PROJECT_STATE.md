@@ -22,6 +22,7 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - primary branch: `main`;
 - project version: `0.4.1`;
 - packaged source revision: `_16`;
+- current source candidate: `_16`;
 - current published testing package/tag: `os-zapret2-restyle-0.4.1_16.pkg` / `v0.4.1_16`;
 - testing-package SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
 - source merge/testing-tag target: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
