@@ -10,21 +10,21 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-15
-**Current handoff identity:** `v0.4.1_21` source candidate
+**Current handoff identity:** `v0.4.1_21` published testing candidate
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
-- current source candidate: `PLUGIN_REVISION=21` / `v0.4.1_21`;
-- last published testing package/tag: `os-zapret2-restyle-0.4.1_20.pkg` / `v0.4.1_20`;
-- `_20` testing-package SHA-256: `5d5fae0a79054ad807a92ca7804d5984d63782927c667962b6395d48627ab64a`;
-- `_20` source merge/testing-tag target: `d732965c143563352e18ac58c209aeb30a6d4feb`;
-- `_20` publication workflow run: `31896330680`;
+- current packaged revision: `PLUGIN_REVISION=21` / `v0.4.1_21`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_21.pkg` / `v0.4.1_21`;
+- `_21` testing-package SHA-256: `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
+- `_21` source merge/testing-tag target: `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
+- `_21` publication workflow run: `31898795618`;
 - required ABI: `FreeBSD:15:amd64`;
 - stable Pages/pkg repository promoted by testing `_N`: **no**.
 
-Machine `_20` publication evidence: [`verification/evidence/testing-publications/v0.4.1_20.md`](verification/evidence/testing-publications/v0.4.1_20.md).
+Machine `_21` publication evidence: [`verification/evidence/testing-publications/v0.4.1_21.md`](verification/evidence/testing-publications/v0.4.1_21.md).
 
 Resolve the exact current `main` SHA at execution time under `GH-004`.
 
@@ -49,36 +49,31 @@ The owner installed `_20` and supplied direct screenshots of Laboratory, Strateg
 
 Confirmed:
 
-- the `_20` Laboratory page has lost the normal OPNsense outer content perimeter/frame;
-- Strategy and the native OPNsense comparison page retain that normal platform spacing;
-- on Laboratory with Russian OPNsense language the submenu is `Стратегия` / `Лаборатория`;
-- after navigating to Strategy the same submenu reverts to English `Strategy` / `Laboratory`.
+- the `_20` Laboratory page lost the normal OPNsense outer content perimeter/frame;
+- Strategy and the native OPNsense comparison page retained the normal platform spacing;
+- on Laboratory with Russian OPNsense language the submenu was `Стратегия` / `Лаборатория`;
+- after navigating to Strategy the same submenu reverted to English `Strategy` / `Laboratory`.
 
-Root cause is bounded to presentation code: `_20` neutralizes `.page-content-main` globally inside `diagnostics.volt`, affecting the platform-owned wrapper, while deterministic submenu localization exists only on Laboratory and not on Strategy.
+Root cause was bounded to presentation code: `_20` neutralized `.page-content-main` inside `diagnostics.volt`, affecting the platform-owned wrapper, while deterministic submenu localization existed only on Laboratory and not on Strategy.
 
 Evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md).
 
-## `_21` source implementation
+## `_21` implementation / delivery status
 
-Current `_21` candidate:
+`_21` is source-merged and published for owner-live verification:
 
 - removes the redundant Laboratory page wrapper and all Laboratory `.page-content-main` spacing overrides;
 - renders Laboratory content boxes directly inside the platform-owned OPNsense page frame, matching the Strategy/native page structure rather than styling away the platform perimeter;
 - preserves the accepted shared `25%` Diagnostics field grid and `Режим:` / `Mode:` typography synchronization;
 - makes Strategy apply the same active-language submenu labels as Laboratory, so Russian stays `Стратегия` / `Лаборатория` on both pages and English stays `Strategy` / `Laboratory`;
-- keeps Strategy Lab runtime/search, Generic UDP, QUIC, circular and settings semantics unchanged.
+- keeps Strategy Lab runtime/search, Generic UDP, QUIC, circular and settings semantics unchanged;
+- focused project validation and FreeBSD-15 package qualification passed before source merge;
+- source was squash-merged as `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
+- testing package `os-zapret2-restyle-0.4.1_21.pkg` was published and verified with SHA-256 `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`.
 
 Source patch record: [`patches/v0.4.1_21.md`](patches/v0.4.1_21.md).
 
-## Immediate delivery / verification boundary
-
-Before `_21` is complete:
-
-1. focused Laboratory native-frame/localization/persistence regression;
-2. applicable complete project + Strategy Lab corrective matrix;
-3. FreeBSD-15 package build/inspection qualification;
-4. exact latest-head source merge;
-5. persistent `v0.4.1_21` testing publication and bounded publication-record reconciliation.
+## Immediate live verification boundary
 
 After `_21` install:
 
