@@ -1,83 +1,85 @@
 # os-zapret2-restyle
 
-> Native OPNsense plugin for managing **bol-van/zapret2**, building DPI-bypass strategies and safely testing them directly on the firewall.
+> Native OPNsense plugin for **bol-van/zapret2**: manage the runtime, build DPI-bypass profiles, and automatically search for strategies that actually work from your firewall.
 
-| Project | Current state |
+| Project | Current release |
 |---|---|
-| **Full Web/pkg release** | `v0.4.1` · package `os-zapret2-restyle-0.4.1_1.pkg` |
-| **Current development candidate** | `os-zapret2-restyle-0.4.1_12.pkg` |
+| **Stable release** | `v0.5.0` · `os-zapret2-restyle-0.5.0_1.pkg` |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
 | **License** | MIT |
 
-The project is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. It provides a native Web GUI, transactional runtime management, structured traffic strategies and **Strategy Lab** — an automated search/verification pipeline for DPI-bypass candidates.
+`os-zapret2-restyle` is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. It keeps the normal OPNsense workflow while adding safe lifecycle management, editable Zapret2 traffic strategies, managed target lists, upstream runtime installation/update controls, and a built-in **Strategy Lab** for finding working DPI-bypass profiles.
 
----
+## Strategy Lab — find a working bypass strategy instead of guessing
 
-## What you get
+**Strategy Lab is the flagship feature of the project.** Give it a blocked domain or IPv4 address and it automatically tests real Zapret2 strategy families from the OPNsense firewall, verifies stable winners, and returns complete profiles ready to copy into **Traffic Strategy**.
 
-### 🧩 Native OPNsense integration
+The Laboratory is designed around one practical question:
+
+> **Which Zapret2 strategy actually works for this target, on this ISP, from this exact OPNsense installation?**
+
+What it does:
+
+- accepts a blocked **domain or IPv4 address**;
+- supports optional **Host / SNI** for fixed-IP HTTPS/TLS/QUIC testing;
+- measures a clean baseline before trying bypass candidates;
+- runs deterministic native Zapret2 candidate families under the production **Model C** execution architecture;
+- attributes candidate traffic to exact controlled source ports and temporary firewall rules;
+- checks stability and replays finalists before recommending them;
+- keeps HTTP application errors such as `4xx`/`5xx` separate from DPI-path reachability, so a reachable server is not falsely discarded just because the application returned an error;
+- supports **Extended** protocol checks for TLS 1.2, HTTP, QUIC and optional Generic UDP;
+- treats bare-IP QUIC truthfully: without Host/SNI it is skipped rather than reported as tested;
+- can test Generic UDP independently against an IPv4 destination;
+- emits complete final profiles, including `--ipset-ip=<target>` for fixed-IP strategies;
+- supports Russian and English UI/status presentation;
+- always performs bounded cleanup and restores the original Zapret2 service state after success, failure or cancellation.
+
+The result is not a synthetic recommendation. Strategy Lab executes candidates on the real appliance and reports the strategies that survived the selected verification path.
+
+## Native OPNsense integration
 
 - OPNsense MVC/API/configd integration rather than an external control panel.
-- Start/stop/status management for the Zapret2 runtime.
-- Automatic runtime startup, supervisor ownership and managed `ipfw` divert rules.
-- State-preserving plugin upgrades: a running service returns running; a stopped service stays stopped.
-- Runtime health checks that validate the complete managed state rather than only one process.
+- Start/stop/status management for Zapret2.
+- Managed supervisor ownership and `ipfw` divert rules.
+- Transactional configuration changes with health verification.
+- State-preserving package upgrades: a running service returns running; a stopped service stays stopped.
+- Runtime checks validate the complete managed state instead of only one process.
 
-### 🧠 Traffic Strategy editor
+## Traffic Strategy editor
 
-The Settings page provides one multiline strategy editor with native Zapret2 syntax plus project shorthand for managed target lists:
+The Settings page provides one multiline editor using native Zapret2 syntax plus project-managed target placeholders:
 
 ```text
 <HOSTLIST:name>
 <IPSET:name>
 ```
 
-Profiles are separated with Zapret2's normal:
+Profiles are separated with the normal Zapret2 boundary:
 
 ```text
 --new
 ```
 
-The backend validates and normalizes configuration before it becomes active. Apply is transactional: an invalid or unhealthy candidate does not replace a working configuration.
+The backend expands managed targets while preserving the rest of the user-authored Zapret2 profile. Apply is transactional: invalid or unhealthy candidate configuration does not silently replace a working runtime.
 
-### 🧪 Strategy Lab
+## Zapret2 Service manager
 
-Strategy Lab is the project's automated DPI-bypass strategy search engine. It runs from Diagnostics and is designed to answer a practical question: **which Zapret2 strategy actually works for the target from this OPNsense installation?**
-
-Current capabilities include:
-
-- clean baseline and network/capability checks before candidate testing;
-- deterministic native Zapret2 candidate planning;
-- Python-owned job orchestration and persistent progress/state;
-- isolated temporary `dvtws2` candidate workers;
-- exact source-port-qualified traffic attribution;
-- bounded time budgets, cancellation and cleanup;
-- stability/final-result verification;
-- exact restoration of the pre-test Zapret2 service state;
-- Russian and English user-facing progress/result text.
-
-The current development line has selected **Model C** as the normal production Stage-60 architecture. The remaining development transition is to remove the old automatic Model-B/Model-A fallback from the production path; those models remain useful as benchmark/reference tooling.
-
-### 🔄 Zapret2 Service manager
-
-The Settings page also contains **Zapret2 Service / Служба Zapret2** for the upstream runtime itself. It can:
+The GUI contains **Zapret2 Service / Служба Zapret2** for managing the upstream bol-van/zapret2 runtime independently from the OPNsense plugin package. It can:
 
 - show the installed upstream release;
-- show the latest stable upstream releases;
-- install the runtime for the first time;
+- show recent stable upstream releases;
+- install Zapret2 for the first time;
 - update, reinstall or downgrade to a selected release;
 - preserve the previous running/stopped state;
-- roll back automatically if activation fails.
+- roll back if activation fails.
 
 No OPNsense reboot is required after a successful managed operation.
 
----
-
 ## Installation from the OPNsense Web GUI
 
-The supported full-release channel is the project-owned FreeBSD pkg repository on GitHub Pages. Register it once on the firewall:
+The stable release is published through the project-owned FreeBSD package repository on GitHub Pages. Register it once:
 
 ```sh
 fetch -o /usr/local/etc/pkg/repos/zapret2-restyle.conf \
@@ -87,28 +89,20 @@ pkg update -f
 
 Then open **System → Firmware → Plugins** and install **`os-zapret2-restyle`**.
 
-The repository is transported over HTTPS and currently uses the approved unsigned pkg configuration `signature_type: "none"`.
-
-> **Full release vs testing package**
->
-> The Web/pkg repository carries the full project release. Newer `_N` packages may also be published on GitHub for owner-assisted development testing; those testing candidates do **not** automatically replace the Web/pkg release.
-
----
+The repository is transported over HTTPS and uses the project-approved unsigned pkg configuration `signature_type: "none"`.
 
 ## First setup
 
 1. Open **Services → Zapret2 → Settings**.
-2. Open **Zapret2 Service / Служба Zapret2**.
-3. Select an upstream bol-van/zapret2 release and click **Apply**.
-4. Configure target lists and the **Traffic Strategy**.
-5. Apply the settings.
-6. Use **Diagnostics → Strategy Lab** when you need to search for a working bypass strategy for a blocked domain.
+2. Open **Zapret2 Service / Служба Zapret2** and install/select an upstream bol-van/zapret2 release.
+3. Configure your managed targets and **Traffic Strategy**.
+4. Apply the settings.
+5. Open **Services → Zapret2 → Laboratory** when you need to find a working bypass strategy for a blocked target.
+6. Review a stable Laboratory result and add the required profile to the Traffic Strategy currently in use.
 
-The plugin package and upstream bol-van/zapret2 runtime have separate lifecycles intentionally: plugin installation remains quick, while the desired upstream release is selected/compiled through the managed service backend.
+The plugin package and the upstream bol-van/zapret2 runtime intentionally have separate lifecycles.
 
----
-
-## Example strategy
+## Example Traffic Strategy
 
 ```text
 --filter-tcp=80
@@ -137,18 +131,7 @@ The plugin package and upstream bol-van/zapret2 runtime have separate lifecycles
 --lua-desync=fake:blob=stun:repeats=6
 ```
 
-### Target placeholders
-
-Supported managed placeholders are intentionally limited to:
-
-```text
-<HOSTLIST:name>
-<IPSET:name>
-```
-
-A profile may contain several target placeholders. The backend expands them into concrete runtime profiles while preserving the remaining Zapret2 arguments and user-authored `--new` boundaries.
-
-### Domain targets
+### Managed domain targets
 
 Enter one domain per line:
 
@@ -157,9 +140,7 @@ youtube.com
 *.youtube.com
 ```
 
-Both forms are normalized to the managed domain form. Invalid names, IP addresses and unrelated text are rejected.
-
-### IPv4 targets
+### Managed IPv4 targets
 
 Enter one IPv4 address or CIDR network per line:
 
@@ -168,26 +149,20 @@ Enter one IPv4 address or CIDR network per line:
 149.154.160.0/20
 ```
 
-IPv6 target-list management is not currently implemented.
-
----
+IPv6 target-list management and IPv6 Laboratory target input are not currently implemented.
 
 ## Safe Apply and runtime lifecycle
 
-Configuration changes use a transactional path:
+Configuration activation follows a transactional path:
 
 1. normalize and validate model input;
 2. build candidate target files and runtime arguments;
-3. validate the candidate;
-4. switch runtime state atomically;
+3. validate the candidate configuration;
+4. switch runtime state;
 5. verify firewall/process health;
 6. keep or restore the previous working state if activation fails.
 
-Runtime lifecycle operations are serialized. The plugin manages its own PID/state files, supervisor ownership and firewall rules so stale callbacks cannot tear down a replacement runtime.
-
-Before `dvtws2` starts, required FreeBSD firewall prerequisites are prepared automatically, including `ipdivert`/`ipfw` support required by the managed divert path.
-
----
+Lifecycle operations are serialized. The plugin owns its PID/state files, supervisor state and temporary firewall rules so stale callbacks cannot tear down a replacement runtime.
 
 ## Upstream runtime management from shell
 
@@ -198,7 +173,7 @@ The Web GUI uses the same authoritative backend available to administrators:
 /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh
 /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install
 
-# Show the latest stable upstream releases.
+# Show recent stable upstream releases.
 /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh show
 
 # Install/reinstall/upgrade/downgrade to an exact release.
@@ -208,68 +183,46 @@ The Web GUI uses the same authoritative backend available to administrators:
 /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh --help
 ```
 
-The GUI wraps this backend in a transactional activation layer that records the previous upstream checkout, binaries, runtime marker, and service state and restores them if requested activation fails.
-
----
-
-## Useful runtime files
+## Useful runtime paths
 
 ```text
 /var/db/zapret2-restyle/runtime.release
 /var/db/zapret2-restyle/releases.cache
 /var/db/zapret2-restyle/setup.status
 /var/run/zapret2-execution.status
-/var/log/zapret2/setup.log
+/var/run/zapret2-restyle/strategy-lab/
+/var/log/zapret2/strategy-lab/
 /var/log/zapret2/dvtws2.log
 /var/log/zapret2/supervisor.log
 ```
 
-`dvtws2` drops privileges to UID/GID `65534`; managed runtime Lua/BLOB files and directories are normalized to readable/executable permissions appropriate for that privilege boundary.
-
----
+`dvtws2` drops privileges to UID/GID `65534`; managed Lua/BLOB files and runtime directories are normalized to permissions appropriate for that boundary.
 
 ## Removal policy
 
-Removing the OPNsense plugin stops its managed service before package files disappear. By policy the following are preserved for later reinstall or investigation:
-
-- saved OPNsense configuration;
-- downloaded bol-van/zapret2 runtime;
-- setup/runtime logs;
-- shared dependencies.
-
----
+Removing the plugin stops its managed service before package files disappear. Saved OPNsense configuration, downloaded upstream runtime, setup/runtime logs and shared dependencies are preserved for later reinstall or investigation.
 
 ## Release model
 
 | Type | Meaning |
 |---|---|
-| **Testing package** | Persistent GitHub `.pkg` used for development/live verification. It does not replace the full Web/pkg release. |
-| **Full release** | Verified package published through the project pkg repository and ready for install/update through the OPNsense Web GUI. |
+| **Testing package** | Persistent GitHub `.pkg` used for owner-assisted development/live verification. It does not automatically replace the stable Web/pkg release. |
+| **Full release** | Verified package published through the project package repository and installable/upgradable from the OPNsense Web GUI. |
 
-Canonical version/product semantics are in [`docs/PROJECT_PRINCIPLES.md`](docs/PROJECT_PRINCIPLES.md) (`DEV-027`–`DEV-040`); GitHub mechanics are in [`docs/GITHUB_PUBLICATION.md`](docs/GITHUB_PUBLICATION.md) (`GH-034`–`GH-052`). This README describes the user-visible result rather than redefining release policy.
-
----
+Version/product semantics are defined in [`docs/PROJECT_PRINCIPLES.md`](docs/PROJECT_PRINCIPLES.md); GitHub release mechanics are defined in [`docs/GITHUB_PUBLICATION.md`](docs/GITHUB_PUBLICATION.md).
 
 ## Documentation for contributors
 
-Engineering documentation uses a bounded three-level memory model and exactly four canonical general rule books. For a cold start, follow the repository bootstrap order:
+Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-1. [`AGENTS.md`](AGENTS.md)
-2. [`docs/START_HERE.md`](docs/START_HERE.md)
-3. [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
-4. [`docs/DOCUMENTATION_RULES.md`](docs/DOCUMENTATION_RULES.md) — `DOC-*`
-5. [`docs/PROJECT_PRINCIPLES.md`](docs/PROJECT_PRINCIPLES.md) — `DEV-*`
-6. [`docs/CHAT_RULES.md`](docs/CHAT_RULES.md) — `CHAT-*`
-7. [`docs/GITHUB_PUBLICATION.md`](docs/GITHUB_PUBLICATION.md) — `GH-*`
-8. [`docs/ROADMAP.md`](docs/ROADMAP.md)
-9. [`docs/INDEX.md`](docs/INDEX.md)
-10. task-specific documents selected by `START_HERE.md`
+Useful entry points:
 
-Rule IDs are persistent cross-document identities. The four canonical books contain explicit inbound/outbound reference registries, checked by CI, so a rule change cannot silently leave stale current references.
-
-Use `INDEX.md` to reach the current version-line ledger, completed archives, architecture, requirements, decisions, audits, devlogs, patch records and verification evidence only when that detail is needed.
-
----
+- [`docs/START_HERE.md`](docs/START_HERE.md)
+- [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
+- [`docs/ROADMAP.md`](docs/ROADMAP.md)
+- [`docs/INDEX.md`](docs/INDEX.md)
+- [`docs/architecture/`](docs/architecture/)
+- [`docs/verification/`](docs/verification/)
 
 ## Acknowledgements
 
