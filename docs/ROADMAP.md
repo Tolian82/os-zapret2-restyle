@@ -46,15 +46,15 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
 - [x] Context-first/SHA-scoped documentation cold-start optimization
 - [x] Internal Markdown link/anchor integrity validation
 - [x] GitHub-native patch/package delivery with candidate-defining source verification and mandatory publication-record tail
-- [ ] Model-C-only production (`v0.4.1_13`)
+- [x] Model-C-only production (`v0.4.1_13`)
   - [x] remove automatic B/A production fallback from the normal packaged Stage-60 path
   - [x] keep explicit Model B/A reference/benchmark/test overrides
   - [x] exact-head corrective matrix + FreeBSD-15 qualification
   - [x] exact verified head squash-merged to `main`
   - [x] persistent testing package `v0.4.1_13` published and verified
-  - [ ] owner-live Model-C-only regression
+  - [x] owner-live Model-C-only regression
 - [ ] Risk-selected Strategy Lab regression coverage
-  - [ ] initial Zapret2 STOPPED state
+  - [ ] initial Zapret2 STOPPED state — **current selected row**
   - [ ] Extended TLS 1.2
   - [ ] Extended HTTP
   - [ ] QUIC capability gating
@@ -77,26 +77,31 @@ This is the concise master plan defined by `DOC-031`–`DOC-033`. Version and re
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — finish `v0.4.1_13`
+## Current priority — risk-selected Strategy Lab regression coverage
 
-Model selection is closed. Normal production Stage 60 is Model-C-only in source merge `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`, while Model B/A remain explicit reference tooling.
+`v0.4.1_13` Model-C-only production is now complete through the selected owner-live gate.
 
-Completed delivery gates:
+Accepted owner-live evidence on the published `_13` package covers three normal Standard paths:
 
-- complete Strategy Lab corrective matrix PASS on exact PR head `8e1af17ce4ccfaad4851329167b386741d0c9ee8`;
-- FreeBSD 15 package build/inspection qualification PASS on the same head;
-- squash merge to `main` complete;
-- source CI run `31819116248` complete successfully;
-- persistent testing prerelease `v0.4.1_13` published from the exact source merge;
-- publication workflow run `31838633599` complete successfully;
-- package `os-zapret2-restyle-0.4.1_13.pkg` verified as `FreeBSD:15:amd64`, SHA-256 `7a2f864aa14ba2170ca378954ab5421092b76aca79b7b1765b976de2f024797b`.
+- `telegram.org`, `job.6RhNa1`: exhaustive `NO_CANDIDATE`, Model C `16/16`, no automatic fallback, clean `RUNNING -> RUNNING` restoration;
+- `rutracker.org`, `job.PEEjoY`: exhaustive `SUCCESS`, Model C `16/16`, three stable shortlist entries, clean `RUNNING -> RUNNING` restoration;
+- `www.youtube.com`, `job.7Kz5ro`: early `SUCCESS`, Model C stopped at `7/16` on `enough_candidates`, three stable shortlist entries, clean `RUNNING -> RUNNING` restoration.
 
-Remaining live gate:
+Durable evidence:
+[`verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md).
 
-- perform one selected owner-live normal Model-C-only regression on OPNsense using the published `_13` package;
-- verify correct result handling, explicit no-fallback behavior, Stage-90 restoration, and absence of temporary IPFW/process/socket residue.
+The next selected row is **Standard blocked domain, initial Zapret2 STOPPED**. Required acceptance:
 
-After the selected `_13` owner-live PASS, move to the accepted risk-selected Strategy Lab regression backlog rather than reopening historical A/B/C selection or closed Lua/BLOB/discovery/lifecycle experiments.
+- prove the normal service is STOPPED before the job;
+- execute one normal Standard blocked-domain Strategy Lab job on the unchanged published `_13` package;
+- require a truthful terminal result;
+- require Stage 90 semantic restoration to final service state STOPPED;
+- require unchanged production strategy/configuration;
+- require no temporary process/socket/firewall residue.
+
+This is regression coverage, not a new package candidate unless the live row exposes an actual defect.
+
+After this row is accepted, continue selecting the next backlog row from current risk/evidence rather than mechanically running every pending scenario.
 
 ## Deferred research — retain, do not activate by inertia
 
