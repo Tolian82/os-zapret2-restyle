@@ -75,7 +75,7 @@ require "${MATRIX}" 'QUIC tested count/IDs ordinary output'
 require "${MATRIX}" 'exact 140-byte binary input'
 require "${MATRIX}" 'selected-port/payload direct UDP observation'
 require "${MATRIX}" 'no-reply does not mean closed / does not gate candidates'
-require "${MATRIX}" 'Stage-90 restoration and temporary process/firewall/socket cleanup PASS'
+require "${MATRIX}" 'terminal payload cleanup and Zapret2 restoration PASS.'
 
 # QUIC specialist contract: owner-selected checkbox is the execution gate and normal
 # output proves real attempts instead of exposing only an opaque not_found enum.
