@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import endpoint_epoch, search
+from . import endpoint_epoch, request, search
 
 EX_OK = 0
 EX_USAGE = 64
@@ -306,6 +306,42 @@ def _udp_input(job_id: str) -> tuple[int | None, Path | None, str | None]:
     return port, payload, None
 
 
+def _udp_control(
+    epoch: endpoint_epoch.SearchEpoch,
+    port: int,
+    payload: Path,
+) -> dict[str, Any]:
+    """Record one direct request/response observation per fixed endpoint binding.
+
+    UDP silence is evidence only: it is never interpreted as a closed port and
+    never suppresses the bypass candidate loop that follows.
+    """
+    payload_bytes = payload.stat().st_size
+    attempts: list[dict[str, Any]] = []
+    for binding in epoch.bindings:
+        endpoint = str(binding["endpoint"])
+        selected_ip = str(binding["selected_ip"])
+        execution = request.udp_response_request(selected_ip, port, payload)
+        attempts.append(
+            {
+                "endpoint": endpoint,
+                "selected_ip": selected_ip,
+                "port": port,
+                "payload_bytes": payload_bytes,
+                "reply_observed": bool(execution.stdout),
+                "returncode": execution.returncode,
+                "timed_out": execution.timed_out,
+                "duration_ms": execution.duration_ms,
+            }
+        )
+    return {
+        "port": port,
+        "payload_bytes": payload_bytes,
+        "reply_observed": any(bool(item["reply_observed"]) for item in attempts),
+        "attempts": attempts,
+    }
+
+
 def udp(job_id: str, endpoints_file: str, result_file: str) -> int:
     if not JOB_RE.fullmatch(job_id):
         return EX_USAGE
@@ -318,6 +354,8 @@ def udp(job_id: str, endpoints_file: str, result_file: str) -> int:
         "search_epoch_id": epoch.epoch_id,
         "status": "pending",
         "port": None,
+        "payload_bytes": None,
+        "control": None,
         "tested": [],
         "working": None,
     }
@@ -330,6 +368,8 @@ def udp(job_id: str, endpoints_file: str, result_file: str) -> int:
         return EX_OK
     assert port is not None and payload is not None
     result["port"] = port
+    result["payload_bytes"] = payload.stat().st_size
+    result["control"] = _udp_control(epoch, port, payload)
     _atomic_json(output, result)
 
     catalog_path = Path(os.environ.get("STRATEGY_LAB_UDP_CATALOG", str(module_dir() / "catalog/udp.tsv")))
