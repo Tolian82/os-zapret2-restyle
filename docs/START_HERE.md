@@ -79,24 +79,40 @@ The `_13` source and persistent testing-delivery boundaries are complete:
 - tag `v0.4.1_13` points exactly to `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
 - publication branch `publish/v0.4.1_13`: deleted after successful publication.
 
-## Immediate remaining `_13` live gate
+## `_13` owner-live Model-C-only gate — PASS
 
-Run one selected normal Model-C-only Strategy Lab regression on OPNsense with the published `_13` package and verify:
+The owner installed `os-zapret2-restyle-0.4.1_13` and supplied complete retained telemetry for three normal Strategy Lab jobs:
 
-- correct result handling;
-- no automatic Model B/A replay;
-- Stage-90 semantic restoration PASS;
-- no temporary IPFW/process/socket residue.
+- `telegram.org`, `job.6RhNa1`: `NO_CANDIDATE`, Stage 60 `16/16`, `graph_exhausted`, zero shortlist, no B/A replay;
+- `rutracker.org`, `job.PEEjoY`: `SUCCESS`, Stage 60 `16/16`, `graph_exhausted`, stable shortlist `03-seqovl`, `seqovl-host`, `seqovl-midsld`;
+- `www.youtube.com`, `job.7Kz5ro`: `SUCCESS`, Stage 60 early stop at `7/16`, `enough_candidates`, stable shortlist count `3`.
 
-After the selected `_13` owner-live PASS, return to [`ROADMAP.md`](ROADMAP.md) and take the next accepted risk-selected product task. Do not reopen A/B/C selection or closed measurement experiments by inertia.
+All three jobs persisted `model_c_only=true`, empty fallback evidence, verified `RUNNING -> RUNNING` restoration, unchanged strategy, and clean temporary runtime state. No package/source correction is justified.
+
+Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md).
+
+## Immediate next task — initial Zapret2 STOPPED regression
+
+The selected next risk-based Strategy Lab regression is **Standard blocked domain with initial Zapret2 STOPPED**.
+
+Acceptance boundary:
+
+- start from a verified STOPPED normal Zapret2 service;
+- run one normal Standard blocked-domain Strategy Lab job with the published `_13` package;
+- terminal result remains truthful;
+- Stage 90 verifies exact restoration to `STOPPED`, not merely successful cleanup;
+- no temporary Strategy Lab process/socket/firewall residue remains;
+- the saved production strategy/configuration remains unchanged.
+
+This is regression coverage only. Do not reopen the closed A/B/C selection, Lua initialization, BLOB startup/common-set, discovery, or cross-batch keep-warm investigations without new architecture or fresh contradicting evidence.
 
 ## Current task reading
 
-For Model-C-only production/live work, read completely:
+For the selected STOPPED-state regression, read completely:
 
-1. `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
-2. `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
-3. `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`.
+1. `docs/architecture/STRATEGY_LAB.md`;
+2. `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
+3. `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`.
 
 For any GitHub patch/package delivery, the canonical procedure is in `docs/CHAT_RULES.md` and `docs/GITHUB_PUBLICATION.md`; the package path is `GH-034`–`GH-038` plus `GH-060`–`GH-061`.
 
