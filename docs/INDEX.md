@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Engineering memory index
 
 **Status:** NAVIGATION / INTEGRITY MAP · NOT A CURRENT-STATE NARRATIVE
-**Updated:** 2026-08-14
+**Updated:** 2026-08-15
 
 This file answers only: **where should I look?** Its role is defined by `DOC-019`–`DOC-020`.
 
@@ -24,6 +24,8 @@ Read completely in this order (`DOC-016`):
 
 - **[`v0.4.x working ledger`](history/current/v0.4.x.md)** — richer current-line chronology and proof links.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) / [`architecture/`](architecture/) — current technical architecture and subsystem contracts.
+- [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md) — current explicit/persisted Enable QUIC execution contract; supersedes older capability-gating product language.
+- [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md) — Generic UDP browser/API/job-local payload and validation contract.
 - [`REQUIREMENTS.md`](REQUIREMENTS.md) — product requirements.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributor entry points and local check examples.
 - [`USER_GUIDE_STRATEGY_LAB.md`](USER_GUIDE_STRATEGY_LAB.md) — user-facing Strategy Lab guide.
