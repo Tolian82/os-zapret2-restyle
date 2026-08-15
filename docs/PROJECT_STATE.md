@@ -22,16 +22,16 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - primary branch: `main`;
 - project version: `0.4.1`;
 - current source candidate: `_20` / `PLUGIN_REVISION=20`;
-- last published testing package/tag: `os-zapret2-restyle-0.4.1_19.pkg` / `v0.4.1_19`;
-- `_19` testing-package SHA-256: `142ec3f3f5843d6be09d0ad34aa433c00ddf4ef82e75bbb2fd7104fdcc3eb7f8`;
-- `_19` source merge/testing-tag target: `6d06f0c3dfc7a76f0dc7b43ca6ba8cc0d0f83758`;
-- `_19` publication workflow run: `31892344832`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_20.pkg` / `v0.4.1_20`;
+- `_20` testing-package SHA-256: `5d5fae0a79054ad807a92ca7804d5984d63782927c667962b6395d48627ab64a`;
+- `_20` source merge/testing-tag target: `d732965c143563352e18ac58c209aeb30a6d4feb`;
+- `_20` publication workflow run: `31896330680`;
 - latest full Web/pkg release remains `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
-- stable Pages/pkg repository was not promoted by `_19`;
+- stable Pages/pkg repository was not promoted by `_20`;
 - internal service key: `zapret`.
 
-Machine `_19` publication evidence: [`verification/evidence/testing-publications/v0.4.1_19.md`](verification/evidence/testing-publications/v0.4.1_19.md).
+Machine `_20` publication evidence: [`verification/evidence/testing-publications/v0.4.1_20.md`](verification/evidence/testing-publications/v0.4.1_20.md).
 
 The exact `main` SHA is resolved at execution time under `GH-004`.
 
@@ -52,43 +52,31 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 
 ## `_19` owner-live Laboratory follow-up — partial
 
-Published `_19` was installed and directly compared with the Zapret Strategy page and a native OPNsense settings page.
-
-Visible presentation improvements include RU `Режим:`, `Расширенный` and `Статус: ожидание`. The owner rejected `_19` as final layout acceptance because:
-
-- the Laboratory page has a visibly larger working-area perimeter inset than ordinary OPNsense pages;
-- the Diagnostics/Laboratory field value column remains displaced from the normal OPNsense form grid;
-- `Режим:` must be guaranteed to use the same actual font size/line height as `Заблокированный домен / IP`.
+Published `_19` was installed and directly compared with the Zapret Strategy page and a native OPNsense settings page. RU `Режим:`, `Расширенный` and `Статус: ожидание` were visible, but the owner rejected final layout acceptance because the Laboratory perimeter was too large, the field value column did not match the normal OPNsense form grid, and `Режим:` needed guaranteed typography parity with the target label.
 
 Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md).
 
-## `_20` source implementation
+## `_20` source/package implementation — complete
 
-Implemented in the current source candidate:
+`_20` has passed focused Diagnostics/Laboratory layout/localization/persistence validation, the complete project + Strategy Lab corrective matrix, FreeBSD-15 package qualification, exact-head source merge, and persistent testing publication.
 
-- `PLUGIN_REVISION=20`;
+Implemented:
+
 - shared native-style `25%` field-label column for both the top domain-connectivity table and Strategy Lab input table;
 - target, Generic UDP and Enable QUIC use the same normal OPNsense value-column position;
 - rejected `_19` fixed `250px` Laboratory label column removed;
 - long RU target label remains one line at normal UI typography;
 - `Режим:` / `Mode:` computed font size and line height are copied from the target field-label computed style;
 - nested Laboratory page/container/row/column margin/padding is neutralized to avoid a second perimeter inset;
-- `_19` RU/EN presentation, Strategy Lab search/runtime, Generic UDP, QUIC and persistence semantics remain unchanged;
-- focused regression guards the new native perimeter/grid/typography contract and prior presentation/persistence contracts.
+- `_19` RU/EN presentation, Strategy Lab search/runtime, Generic UDP, QUIC and persistence semantics remain unchanged.
+
+Source merge/tag target: `d732965c143563352e18ac58c209aeb30a6d4feb`. Published package SHA-256: `5d5fae0a79054ad807a92ca7804d5984d63782927c667962b6395d48627ab64a`.
 
 Source patch record: [`patches/v0.4.1_20.md`](patches/v0.4.1_20.md).
 
 ## Current verification boundary
 
-Before source merge/publication `_20` must pass:
-
-1. focused Diagnostics/Laboratory native-layout/localization/persistence contract;
-2. complete project + Strategy Lab corrective matrix;
-3. FreeBSD-15 package build/inspection qualification;
-4. exact latest-head merge;
-5. persistent `v0.4.1_20` testing publication and publication-record reconciliation.
-
-After publication/install:
+After `_20` install:
 
 1. one owner-live visual comparison of Laboratory against Strategy/native OPNsense perimeter and field grid;
 2. confirm `Режим:` matches target-label typography;
