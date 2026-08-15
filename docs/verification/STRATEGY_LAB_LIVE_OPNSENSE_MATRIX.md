@@ -1,12 +1,13 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU PRESENTATION OWNER-LIVE PARTIAL; `v0.4.1_18` LABEL/ONE-LINE OWNER-LIVE PARTIAL; `v0.4.1_19` TEXT/MODE/STATUS OWNER-LIVE PARTIAL; `v0.4.1_20` FIELD-GRID/MODE CORRECTIVE PUBLISHED BUT FRAME/NAVIGATION OWNER-LIVE REJECTED; `v0.4.1_21` NATIVE FRAME + CROSS-PAGE NAVIGATION LOCALIZATION PUBLISHED, OWNER-LIVE PENDING.**
+Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU PRESENTATION OWNER-LIVE PARTIAL; `v0.4.1_18` LABEL/ONE-LINE OWNER-LIVE PARTIAL; `v0.4.1_19` TEXT/MODE/STATUS OWNER-LIVE PARTIAL; `v0.4.1_20` FIELD-GRID/MODE CORRECTIVE PUBLISHED BUT FRAME/NAVIGATION OWNER-LIVE REJECTED; `v0.4.1_21` NATIVE FRAME + CROSS-PAGE NAVIGATION LOCALIZATION OWNER-LIVE PASS; `v0.4.1_22` IPV4 TARGET + OPTIONAL HOST/SNI SOURCE CANDIDATE IN QUALIFICATION.**
 
 Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected owner-live evidence.
 
 ## Current package/source boundary
 
-- current packaged revision: `v0.4.1_21` / `PLUGIN_REVISION=21`;
+- current source candidate: `v0.4.1_22` / `PLUGIN_REVISION=22` — Laboratory IPv4 targets + optional Host / SNI, source qualification in progress and not yet published;
+- current published packaged revision remains `v0.4.1_21` / `PLUGIN_REVISION=21`;
 - current published testing package/tag: `os-zapret2-restyle-0.4.1_21.pkg` / `v0.4.1_21`;
 - `_21` source/tag target: `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
 - `_21` package SHA-256: `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
@@ -18,7 +19,8 @@ Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected ow
 - Enable QUIC OFF/default persistence across reload/revisit: **PENDING LIVE PROOF**;
 - `_20` common 25% field grid and mode-label direction remain accepted;
 - `_20` owner-live perimeter/navigation: **REJECTED — normal OPNsense outer frame missing; Russian submenu reverts to English after navigating to Strategy**;
-- `_21` native-frame ownership + both-page RU/EN navigation corrective: **SOURCE/CI/FREEBSD/PUBLICATION COMPLETE; OWNER-LIVE VISUAL ACCEPTANCE PENDING**.
+- `_21` native-frame ownership + both-page RU/EN navigation corrective: **OWNER-LIVE PASS**;
+- `_22` IPv4/domain target source implementation: **SOURCE IMPLEMENTED; CI/FREEBSD/PUBLICATION/OWNER-LIVE ACCEPTANCE PENDING**.
 
 Machine `_21` publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_21.md`.
 Owner-live Generic UDP evidence: `docs/verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`.
@@ -27,7 +29,9 @@ Owner-live `_17` RU follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_17-
 Owner-live `_18` Laboratory UI follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md`.
 Owner-live `_19` layout follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md`.
 Owner-live `_20` frame/navigation follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`.
+Owner-live `_21` frame/localization pass: `docs/verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`.
 `_21` patch record: `docs/patches/v0.4.1_21.md`.
+`_22` source patch record: `docs/patches/v0.4.1_22.md`.
 
 Normal Stage 60 remains Model C only; automatic Model B/A production fallback remains disabled from `_13`.
 
@@ -85,9 +89,9 @@ A later owner-live ON/OFF pair established that Enable QUIC OFF runs no QUIC cat
 
 Durable `_20` owner-live evidence: `docs/verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`.
 
-## `_21` selected corrective — published
+## `_21` corrective — published and owner-live accepted
 
-Published `_21` corrects the confirmed presentation root causes without reopening Strategy Lab execution behavior:
+Published `_21` corrected the confirmed presentation root causes without reopening Strategy Lab execution behavior:
 
 - Laboratory no longer creates or overrides its own `.page-content-main`; the OPNsense-owned page wrapper retains the normal outer perimeter;
 - Laboratory sections render directly as normal `content-box` blocks inside the platform frame, matching the structural pattern used by Strategy;
@@ -106,9 +110,28 @@ Delivery proof:
 - persistent testing package: `os-zapret2-restyle-0.4.1_21.pkg`;
 - package SHA-256: `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
 - publication workflow: `31898795618`;
-- stable Pages/pkg repository promotion: no.
+- stable Pages/pkg repository promotion: no;
+- owner-live native perimeter/grid and Russian cross-page menu persistence: accepted.
 
-No Strategy Lab execution rerun is required for owner-live `_21` acceptance because the selected changes are presentation-only.
+## `_22` selected source candidate — IPv4 + optional Host / SNI
+
+The owner selected Laboratory IP-address testing after `_21` acceptance. `_22` implements the audited IPv4-first contract rather than merely relaxing an input validator:
+
+- the main target accepts a domain or canonical IPv4;
+- an IPv4 target may carry a separate `Host / SNI` service identity;
+- Stage 40 skips DNS for IP and performs a real TLS 1.3 request pinned to the user-entered destination IP;
+- IP + Host/SNI keeps service hostname and destination IPv4 separate in the search epoch;
+- TLS candidate success cannot come from a plain TCP-connect surrogate;
+- Stage-50/60 IP candidates are destination-IP/firewall scoped without hostlist target binding;
+- TLS 1.3, TLS 1.2 and HTTP use protocol-aware fixed-IP probes; QUIC uses Host/SNI when present;
+- bare-IP QUIC is unsupported rather than reported as a false PASS because hostname verification is unavailable;
+- Generic UDP remains direct-IP and does not require Host/SNI;
+- final IP profiles use `--ipset-ip=<target>` and the normal exact three-attempt replay;
+- circular browser validation remains domain-only;
+- Model C, source-port attribution, adaptive budgets, lifecycle, cleanup and Stage-90 restoration remain unchanged;
+- IPv6 target support remains deferred for a later explicit contract.
+
+Owner-live `_22` verification begins only after exact-head source merge and persistent testing publication.
 
 ## Scenario matrix
 
@@ -137,21 +160,28 @@ No Strategy Lab execution rerun is required for owner-live `_21` acceptance beca
 | 21 | `_20` common 25% field grid / mode-label typography direction | **PUBLISHED; RETAINED BY `_21`** |
 | 22 | `_20` normal OPNsense outer perimeter | **OWNER-LIVE REJECTED; `_21` SELECTED** |
 | 23 | `_20` Russian submenu across Laboratory → Strategy | **OWNER-LIVE REJECTED; `_21` SELECTED** |
-| 24 | `_21` OPNsense-owned Laboratory perimeter | **PUBLISHED; OWNER-LIVE PENDING** |
-| 25 | `_21` Russian submenu persistence across Laboratory ↔ Strategy | **PUBLISHED; OWNER-LIVE PENDING** |
+| 24 | `_21` OPNsense-owned Laboratory perimeter | **OWNER-LIVE PASS** |
+| 25 | `_21` Russian submenu persistence across Laboratory ↔ Strategy | **OWNER-LIVE PASS** |
 | 26 | Target already accessible | **COMPLETE — OWNER CONFIRMED** |
-| 27 | Cancellation/internal-failure containment | PENDING REGRESSION |
-| 28 | Circular lifecycle | PENDING REGRESSION |
-| 29 | Retention/reboot residue | PENDING REGRESSION |
+| 27 | `_22` ordinary domain regression after IP support | **PENDING OWNER-LIVE AFTER PUBLICATION** |
+| 28 | `_22` canonical bare IPv4 target, no false TCP→TLS PASS | **PENDING OWNER-LIVE AFTER PUBLICATION** |
+| 29 | `_22` IPv4 target + real Host/SNI pinned to entered IP | **PENDING OWNER-LIVE AFTER PUBLICATION** |
+| 30 | `_22` final IP profile contains `--ipset-ip=<entered IPv4>` and exact replay | **PENDING OWNER-LIVE AFTER PUBLICATION** |
+| 31 | `_22` Extended Generic UDP against IPv4 without Host/SNI | **PENDING OWNER-LIVE AFTER PUBLICATION** |
+| 32 | `_22` QUIC with Host/SNI; bare-IP QUIC no false PASS | **PENDING OWNER-LIVE AFTER PUBLICATION** |
+| 33 | `_22` Stage-90 cleanup/restoration after IP run | **PENDING OWNER-LIVE AFTER PUBLICATION** |
+| 34 | Cancellation/internal-failure containment | PENDING REGRESSION |
+| 35 | Circular lifecycle | PENDING REGRESSION |
+| 36 | Retention/reboot residue | PENDING REGRESSION |
 
 Settings Apply validation/guards and post-Apply service-state correctness are separately marked complete in the master roadmap by owner confirmation; they are not Strategy Lab execution rows.
 
-## Next product plan
+## Current product plan
 
-After `_21` UI acceptance, add **Laboratory target support for IP addresses as well as domains**.
+Qualify the exact `_22` head, require FreeBSD-15 package qualification, squash-merge it, publish persistent testing candidate `v0.4.1_22`, complete the mandatory publication-record documentation tail, then execute the `_22` owner-live rows above.
 
 ## Current failure policy
 
 Generic UDP should only be reopened if fresh evidence contradicts the accepted exact-byte path. QUIC OFF execution should only be reopened if fresh evidence shows OFF still runs QUIC candidates; persistence remains pending until an actual reload/revisit proves the stored setting.
 
-After `_21` owner-live acceptance, the Laboratory presentation row should only be reopened for a concrete regression in the native perimeter/grid, requested typography, mode/status/sidebar localization, or language leakage.
+The closed `_21` Laboratory presentation row should only be reopened for a concrete regression in the native perimeter/grid, requested typography, mode/status/sidebar localization, or language leakage. `_22` IP-target behavior is accepted only after protocol-truthful owner-live evidence from the published testing package.
