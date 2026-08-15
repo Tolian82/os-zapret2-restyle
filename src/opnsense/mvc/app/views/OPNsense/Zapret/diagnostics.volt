@@ -4,6 +4,7 @@ $(document).ready(function () {
     var activeJobId = '', pollTimer = null, circularTimer = null, renderedProfiles = [];
     var udpPayloadMaxBytes = 4096, discoveryRetryLimit = 5;
     var strategyLabBusy = false, quicPreferenceReady = false, quicPreferenceSaving = false;
+    var udpPayloadSelection = {generation:0, ready:false, reading:false, fileName:'', bytes:0, base64:''};
     var isRussian = ((document.documentElement.lang || '').toLowerCase().indexOf('ru') === 0);
     var stageLabels = isRussian ? {
         target_initialization:'Подготовка цели', lifecycle_snapshot:'Снимок состояния', service_stop:'Остановка службы',
@@ -57,7 +58,8 @@ $(document).ready(function () {
         running:'Strategy Lab выполняет проверку.', completed:'Проверка завершена.', cancel:'Остановка запрошена. Выполняется обязательное восстановление Zapret2.',
         failed:'Проверка завершилась с ошибкой.', noCandidates:'Стабильные кандидаты не найдены.', circularReady:'Можно временно проверить найденные стратегии в браузере.',
         udpPair:'Для общей UDP-проверки укажите одновременно порт и payload-файл.', udpSize:'Payload-файл должен иметь размер от 1 до 4096 байт.',
-        udpRead:'Не удалось прочитать payload-файл.', udpHelp:'Файл запроса должен иметь размер 1–4096 байт. Для проверки необходимо указать и порт, и файл.',
+        udpRead:'Не удалось прочитать payload-файл.', udpReading:'Чтение выбранного payload-файла…', udpReady:'Файл подготовлен к отправке', udpBytes:'байт',
+        udpNotReady:'Payload-файл выбран, но ещё не подготовлен к отправке.', udpHelp:'Файл запроса должен иметь размер 1–4096 байт. Для проверки необходимо указать и порт, и файл.',
         quicHelp:'Если включено, QUIC-стратегии проверяются даже когда контрольная проверка показывает, что QUIC заблокирован.',
         quicSaveFailed:'Не удалось сохранить настройку Enable QUIC.',
         copy:'Копировать профиль', copied:'Профиль скопирован.', copyFailed:'Не удалось скопировать профиль.',
@@ -67,7 +69,8 @@ $(document).ready(function () {
         running:'Strategy Lab is running.', completed:'The check is complete.', cancel:'Cancellation requested. Mandatory Zapret2 restoration is running.',
         failed:'The check ended with an error.', noCandidates:'No stable candidates were found.', circularReady:'The candidates can now be tested temporarily in a browser.',
         udpPair:'Generic UDP testing requires both a port and a payload file.', udpSize:'The payload file must contain between 1 and 4096 bytes.',
-        udpRead:'The payload file could not be read.', udpHelp:'Request payload file, 1–4096 bytes. Both port and file are required.',
+        udpRead:'The payload file could not be read.', udpReading:'Reading the selected payload file…', udpReady:'Payload ready to send', udpBytes:'bytes',
+        udpNotReady:'A payload file is selected but is not ready to send yet.', udpHelp:'Request payload file, 1–4096 bytes. Both port and file are required.',
         quicHelp:'When enabled, QUIC candidates are tested even when the control probe reports QUIC as blocked.',
         quicSaveFailed:'The Enable QUIC setting could not be saved.',
         copy:'Copy profile', copied:'Profile copied.', copyFailed:'The profile could not be copied.',
@@ -104,6 +107,7 @@ $(document).ready(function () {
         $('#strategyLabBtn_progress').toggleClass('fa fa-spinner fa-pulse', busy);
         $('#strategyLabBtn').prop('disabled', busy); $('#strategyLabCancelBtn').prop('disabled', !busy || !activeJobId);
         $('#strategyLabEnableQuic').prop('disabled', busy || !quicPreferenceReady || quicPreferenceSaving);
+        $('#strategyLabUdpPayload,#strategyLabUdpPort').prop('disabled', busy);
     }
     function stopPolling() { if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; } }
     function schedulePoll(callback) { stopPolling(); pollTimer = setTimeout(callback, 1000); }
@@ -116,6 +120,66 @@ $(document).ready(function () {
     }
     function clearInputError() {
         $('#strategyLabMessage').removeClass('text-danger');
+    }
+    function renderUdpPayloadSelection(kind, message) {
+        var state=$('#strategyLabUdpPayloadState');
+        state.removeClass('text-danger text-success text-muted');
+        if (kind === 'error') state.addClass('text-danger');
+        else if (kind === 'ready') state.addClass('text-success');
+        else state.addClass('text-muted');
+        state.text(message || '');
+    }
+    function resetUdpPayloadSelection() {
+        udpPayloadSelection.generation += 1;
+        udpPayloadSelection.ready=false; udpPayloadSelection.reading=false;
+        udpPayloadSelection.fileName=''; udpPayloadSelection.bytes=0; udpPayloadSelection.base64='';
+        renderUdpPayloadSelection('', '');
+    }
+    function udpBytesToBase64(bytes) {
+        var binary='';
+        for (var offset=0;offset<bytes.length;offset+=4096) {
+            binary+=String.fromCharCode.apply(null,bytes.subarray(offset,Math.min(offset+4096,bytes.length)));
+        }
+        return window.btoa(binary);
+    }
+    function stageUdpPayloadFile(file, done) {
+        var generation=udpPayloadSelection.generation+1;
+        udpPayloadSelection.generation=generation;
+        udpPayloadSelection.ready=false; udpPayloadSelection.reading=!!file;
+        udpPayloadSelection.fileName=file&&file.name?String(file.name):'';
+        udpPayloadSelection.bytes=0; udpPayloadSelection.base64='';
+        if (!file) {
+            renderUdpPayloadSelection('', '');
+            if (done) done(false);
+            return;
+        }
+        renderUdpPayloadSelection('info', ui.udpReading + ' ' + udpPayloadSelection.fileName);
+        var reader=new FileReader();
+        reader.onload=function(event){
+            if (generation !== udpPayloadSelection.generation) return;
+            var buffer=event.target&&event.target.result;
+            if (!buffer || typeof buffer.byteLength !== 'number') {
+                udpPayloadSelection.reading=false; renderUdpPayloadSelection('error', ui.udpRead); showInputError(ui.udpRead); if (done) done(false); return;
+            }
+            var bytes=new Uint8Array(buffer);
+            if (bytes.byteLength<1||bytes.byteLength>udpPayloadMaxBytes) {
+                udpPayloadSelection.reading=false; renderUdpPayloadSelection('error', ui.udpSize); showInputError(ui.udpSize); if (done) done(false); return;
+            }
+            try {
+                udpPayloadSelection.base64=udpBytesToBase64(bytes);
+            } catch (error) {
+                udpPayloadSelection.reading=false; renderUdpPayloadSelection('error', ui.udpRead); showInputError(ui.udpRead); if (done) done(false); return;
+            }
+            udpPayloadSelection.bytes=bytes.byteLength; udpPayloadSelection.ready=true; udpPayloadSelection.reading=false;
+            renderUdpPayloadSelection('ready', ui.udpReady + ': ' + udpPayloadSelection.fileName + ', ' + udpPayloadSelection.bytes + ' ' + ui.udpBytes + '.');
+            clearInputError();
+            if (done) done(true);
+        };
+        reader.onerror=function(){
+            if (generation !== udpPayloadSelection.generation) return;
+            udpPayloadSelection.reading=false; renderUdpPayloadSelection('error', ui.udpRead); showInputError(ui.udpRead); if (done) done(false);
+        };
+        reader.readAsArrayBuffer(file);
     }
     function loadQuicPreference() {
         apiPost('/api/zapret/strategy_lab_settings/quic', {}, function (data) {
@@ -286,14 +350,20 @@ $(document).ready(function () {
         var enabled=$(this).prop('checked'), previous=!enabled;
         saveQuicPreference(enabled, previous);
     });
+    $('#strategyLabUdpPayload').change(function () {
+        var file=(this.files&&this.files.length)?this.files[0]:null;
+        stageUdpPayloadFile(file);
+    });
     $('#strategyLabBtn').click(function () {
         var target=$('#strategyLabDomainInput').val().trim(), mode=$('#strategyLabMode').val(); if (!target) return;
         var enableQuic=$('#strategyLabEnableQuic').prop('checked')?'1':'0';
-        var udpPort='', payloadFile=null, fileInput=null;
+        var udpPort='', nativeFile=null, fileInput=null;
         if (mode === 'extended') {
             udpPort=$('#strategyLabUdpPort').val().trim(); fileInput=document.getElementById('strategyLabUdpPayload');
-            payloadFile=fileInput&&fileInput.files?fileInput.files[0]:null;
-            if (!!udpPort !== !!payloadFile) { showInputError(ui.udpPair); return; }
+            nativeFile=fileInput&&fileInput.files&&fileInput.files.length?fileInput.files[0]:null;
+            var hasPayload=udpPayloadSelection.ready||udpPayloadSelection.reading||!!nativeFile;
+            if (!!udpPort !== !!hasPayload) { showInputError(ui.udpPair); return; }
+            if (udpPayloadSelection.reading) { showInputError(ui.udpNotReady); return; }
         }
         function beginStart(payloadBase64) {
             clearInputError(); stopPolling(); activeJobId=''; renderedProfiles=[]; $('#strategyLabStages tbody,#strategyLabShortlist tbody').empty();
@@ -302,20 +372,12 @@ $(document).ready(function () {
             renderProgress({current_stage:'00',progress:{percent:0,stage_key:'target_initialization'}});
             startStrategyLab(target,mode,enableQuic,udpPort,payloadBase64);
         }
-        if (!payloadFile) { beginStart(''); return; }
-        var reader=new FileReader();
-        reader.onload=function(event){
-            var buffer=event.target&&event.target.result;
-            if (!(buffer instanceof ArrayBuffer)) { showInputError(ui.udpRead); return; }
-            var bytes=new Uint8Array(buffer);
-            if (bytes.byteLength<1||bytes.byteLength>udpPayloadMaxBytes) { showInputError(ui.udpSize); return; }
-            var binary='';
-            for (var offset=0;offset<bytes.length;offset+=4096) {
-                binary+=String.fromCharCode.apply(null,bytes.subarray(offset,Math.min(offset+4096,bytes.length)));
-            }
-            beginStart(window.btoa(binary));
-        };
-        reader.onerror=function(){showInputError(ui.udpRead);}; reader.readAsArrayBuffer(payloadFile);
+        if (mode !== 'extended' || !udpPort) { beginStart(''); return; }
+        if (udpPayloadSelection.ready) { beginStart(udpPayloadSelection.base64); return; }
+        if (!nativeFile) { showInputError(ui.udpPair); return; }
+        stageUdpPayloadFile(nativeFile, function (ready) {
+            if (ready && udpPayloadSelection.ready) beginStart(udpPayloadSelection.base64);
+        });
     });
     $('#strategyLabCancelBtn').click(function(){
         if(!activeJobId)return;
@@ -351,7 +413,7 @@ $(document).ready(function () {
 <div class="content-box-main"><div class="table-responsive"><table class="table table-striped"><tbody><tr><td style="width:200px;">{{ lang._('Domain') }}</td><td><input type="text" class="form-control" id="testDomainInput" placeholder="example.com"/></td><td style="width:150px;"><button class="btn btn-primary" id="testDomainBtn" type="button">{{ lang._('Test') }} <i id="testDomainBtn_progress"></i></button></td></tr></tbody></table></div><pre id="testDomainResult" style="max-height:300px;overflow-y:auto;white-space:pre-wrap;">{{ lang._('Enter a domain and click Test to check HTTPS connectivity.') }}</pre></div></div></section></div>
 <div class="row"><section class="col-xs-12"><div class="content-box"><div class="content-box-header"><h3>{{ lang._('Strategy Lab') }}</h3></div><div class="content-box-main">
 <div class="table-responsive"><table class="table table-striped"><tbody><tr><td style="width:200px;">{{ lang._('Blocked Domain') }}</td><td><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org"/></td><td style="width:160px;"><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></td><td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td></tr>
-<tr id="strategyLabUdpRow" style="display:none;"><td>{{ lang._('Generic UDP (optional)') }}</td><td><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td><td colspan="2"><input type="file" class="form-control" id="strategyLabUdpPayload"/> <small id="strategyLabUdpHelp"></small></td></tr>
+<tr id="strategyLabUdpRow" style="display:none;"><td>{{ lang._('Generic UDP (optional)') }}</td><td><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td><td colspan="2"><input type="file" class="form-control" id="strategyLabUdpPayload"/> <small id="strategyLabUdpHelp"></small><br/><small id="strategyLabUdpPayloadState" class="text-muted"></small></td></tr>
 <tr id="strategyLabQuicRow" style="display:none;"><td>{{ lang._('Enable QUIC') }}</td><td><input type="checkbox" id="strategyLabEnableQuic" disabled/></td><td colspan="2"><small id="strategyLabQuicHelp"></small></td></tr></tbody></table></div>
 <div id="strategyLabSummary"></div><p><strong>Job:</strong> <code id="strategyLabJob">—</code> &nbsp; <strong>{{ lang._('Status') }}:</strong> <span id="strategyLabState">idle</span></p><p id="strategyLabMessage"></p>
 <div id="strategyLabProgressBox"><div class="progress" style="margin-bottom:5px;"><div id="strategyLabProgressBar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width:0%;">0%</div></div><p id="strategyLabProgressText"></p></div>
