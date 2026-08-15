@@ -69,8 +69,8 @@
       - [x] source: preserve accepted shared 25% form grid and mode-label typography synchronization
       - [x] source: apply RU/EN `Стратегия` / `Лаборатория` navigation on Strategy as well as Laboratory
       - [x] focused regression updated for native frame ownership and both-page navigation localization
-      - [ ] latest-head full CI + FreeBSD-15 package qualification
-      - [ ] exact-head source merge and persistent `v0.4.1_21` testing publication
+      - [x] latest-head full CI + FreeBSD-15 package qualification
+      - [x] exact-head source merge and persistent `v0.4.1_21` testing publication
       - [ ] owner-live visual acceptance: native perimeter + Russian menu persistence across Laboratory ↔ Strategy
     - [ ] owner-live EN/no-language-leakage completion if still needed after `_21`
     - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit
@@ -92,27 +92,26 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — qualify/publish `_21`, visually verify it, then add IP targets to Laboratory
+## Current priority — owner-live verify published `_21`, then add IP targets to Laboratory
 
-Current source candidate: `v0.4.1_21` (`PLUGIN_REVISION=21`).
+Current published testing identity:
 
-Last published testing identity:
-
-- tag: `v0.4.1_20`;
-- asset: `os-zapret2-restyle-0.4.1_20.pkg`;
-- SHA-256: `5d5fae0a79054ad807a92ca7804d5984d63782927c667962b6395d48627ab64a`;
-- source/tag target: `d732965c143563352e18ac58c209aeb30a6d4feb`;
-- publication workflow run: `31896330680`;
+- tag: `v0.4.1_21`;
+- asset: `os-zapret2-restyle-0.4.1_21.pkg`;
+- SHA-256: `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
+- source/tag target: `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
+- publication workflow run: `31898795618`;
 - stable Pages/pkg repository promoted: no.
 
-Owner-live `_20` comparison showed that the perimeter-neutralization approach removed the platform-owned OPNsense frame itself, and that Russian submenu localization was only reapplied on Laboratory. `_21` corrects the ownership model rather than adding another spacing workaround: OPNsense owns the page frame, while both plugin pages apply the same active-language submenu labels.
+Owner-live `_20` comparison showed that the perimeter-neutralization approach removed the platform-owned OPNsense frame itself, and that Russian submenu localization was only reapplied on Laboratory. Published `_21` corrects the ownership model rather than adding another spacing workaround: OPNsense owns the page frame, while both plugin pages apply the same active-language submenu labels.
 
-Before `_21` completion:
+`_21` delivery status:
 
-1. focused native-frame/localization/persistence regression;
-2. applicable complete corrective matrix and FreeBSD-15 package qualification;
-3. exact-head source merge and persistent testing publication;
-4. bounded publication-record reconciliation.
+1. focused native-frame/localization/persistence regression — complete;
+2. applicable complete corrective matrix and FreeBSD-15 package qualification — complete;
+3. exact-head source merge — complete at `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
+4. persistent testing publication — complete, SHA-256 `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
+5. bounded publication-record reconciliation — current documentation tail.
 
 After `_21` install:
 
@@ -125,7 +124,7 @@ After `_21` install:
 7. continue the remaining backlog above.
 
 Owner-live `_20` corrective evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md).
-Machine `_20` publication evidence: [`verification/evidence/testing-publications/v0.4.1_20.md`](verification/evidence/testing-publications/v0.4.1_20.md).
+Machine `_21` publication evidence: [`verification/evidence/testing-publications/v0.4.1_21.md`](verification/evidence/testing-publications/v0.4.1_21.md).
 
 ## Deferred research — retain, do not activate by inertia
 

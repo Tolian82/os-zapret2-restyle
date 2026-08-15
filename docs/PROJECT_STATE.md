@@ -21,17 +21,17 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
-- current source candidate: `_21` / `PLUGIN_REVISION=21`;
-- last published testing package/tag: `os-zapret2-restyle-0.4.1_20.pkg` / `v0.4.1_20`;
-- `_20` testing-package SHA-256: `5d5fae0a79054ad807a92ca7804d5984d63782927c667962b6395d48627ab64a`;
-- `_20` source merge/testing-tag target: `d732965c143563352e18ac58c209aeb30a6d4feb`;
-- `_20` publication workflow run: `31896330680`;
+- current packaged revision: `_21` / `PLUGIN_REVISION=21`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_21.pkg` / `v0.4.1_21`;
+- `_21` testing-package SHA-256: `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
+- `_21` source merge/testing-tag target: `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
+- `_21` publication workflow run: `31898795618`;
 - latest full Web/pkg release remains `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
-- stable Pages/pkg repository was not promoted by `_20`;
+- stable Pages/pkg repository was not promoted by `_21`;
 - internal service key: `zapret`.
 
-Machine `_20` publication evidence: [`verification/evidence/testing-publications/v0.4.1_20.md`](verification/evidence/testing-publications/v0.4.1_20.md).
+Machine `_21` publication evidence: [`verification/evidence/testing-publications/v0.4.1_21.md`](verification/evidence/testing-publications/v0.4.1_21.md).
 
 The exact `main` SHA is resolved at execution time under `GH-004`.
 
@@ -56,37 +56,31 @@ The owner installed `_20` and directly compared Laboratory, Strategy and a nativ
 
 Confirmed defects:
 
-- Laboratory has no normal OPNsense outer content perimeter/frame;
-- Strategy/native comparison retains the normal platform spacing;
-- Russian `Стратегия` / `Лаборатория` is visible while Laboratory is active but reverts to `Strategy` / `Laboratory` after navigating to Strategy.
+- Laboratory had no normal OPNsense outer content perimeter/frame;
+- Strategy/native comparison retained the normal platform spacing;
+- Russian `Стратегия` / `Лаборатория` was visible while Laboratory was active but reverted to `Strategy` / `Laboratory` after navigating to Strategy.
 
-The accepted `_20` 25% field grid and mode-label typography contract is not the rejected part. The root cause is the redundant Laboratory page wrapper plus `.page-content-main` neutralization, and navigation localization being applied only by Laboratory JavaScript.
+The accepted `_20` 25% field grid and mode-label typography contract was not the rejected part. The root cause was the redundant Laboratory page wrapper plus `.page-content-main` neutralization, and navigation localization being applied only by Laboratory JavaScript.
 
 Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md).
 
-## `_21` source implementation
+## `_21` implementation / delivery status
 
-Current source candidate:
+`_21` is source-merged and published for owner-live verification:
 
-- `PLUGIN_REVISION=21`;
 - Laboratory no longer creates or overrides `.page-content-main`; OPNsense owns the outer page perimeter;
 - the two Laboratory sections render as normal `content-box` blocks inside that platform wrapper;
 - accepted common `25%` Diagnostics field grid and mode-label computed typography synchronization are retained;
 - canonical menu names remain `Strategy` / `Laboratory`, while both Laboratory and Strategy apply deterministic RU/EN labels from the active OPNsense HTML language;
 - Strategy Lab search/runtime, Generic UDP, QUIC, circular and persistence semantics are unchanged;
-- focused regression guards the corrected frame ownership and cross-page navigation localization while preserving prior accepted UI/persistence contracts.
+- focused regression guards the corrected frame ownership and cross-page navigation localization while preserving prior accepted UI/persistence contracts;
+- complete applicable project validation and FreeBSD-15 package qualification passed before merge;
+- exact source was squash-merged as `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
+- persistent testing package `os-zapret2-restyle-0.4.1_21.pkg` is published with SHA-256 `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`.
 
 Source patch record: [`patches/v0.4.1_21.md`](patches/v0.4.1_21.md).
 
 ## Current verification boundary
-
-Before `_21` source merge/publication:
-
-1. focused Diagnostics/Laboratory native-frame/localization/persistence contract;
-2. applicable complete project + Strategy Lab corrective matrix;
-3. FreeBSD-15 package build/inspection qualification;
-4. exact latest-head merge;
-5. persistent `v0.4.1_21` testing publication and publication-record reconciliation.
 
 After `_21` install:
 
