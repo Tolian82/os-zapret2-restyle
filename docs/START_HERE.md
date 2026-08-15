@@ -108,23 +108,44 @@ The owner explicitly accepted this row as PASS on the observable path `STOPPED -
 
 Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md).
 
-## Immediate next task — Extended TLS 1.2 + HTTP regression
+## Extended TLS 1.2 + HTTP + QUIC capability gating — PASS
 
-The next selected risk-based Strategy Lab coverage is one **Extended blocked-domain run** that exercises both TLS 1.2 and plain HTTP in Stage 80.
+The owner ran `rutracker.org` in Extended mode as `job.TJlWoY`.
+
+Observed result:
+
+- terminal outcome: `SUCCESS`;
+- stable shortlist count: `1`;
+- Stage 80: `PASS`;
+- TLS 1.2 executed two candidates; both produced truthful negative endpoint results and persisted `working=null`;
+- HTTP executed two candidates; both produced truthful negative endpoint results and persisted `working=null`;
+- all four temporary runtimes became ready/stable and produced interception/endpoint evidence;
+- Stage 30 classified QUIC/IPv4 as closed and Stage 80 reported `QUIC=skipped`;
+- Stage 80 reported `UDP=skipped` because no request payload file was supplied;
+- Stage 90 restored normal Zapret2 successfully.
+
+A protocol-regression PASS does not require inventing a working bypass for a target/environment where the measured candidates do not work. Here the TLS-1.2 and HTTP branches demonstrably executed, attributed traffic correctly and returned truthful `working=null` results, while QUIC was explicitly capability-gated.
+
+Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md).
+
+## Immediate next task — configured Generic UDP regression
+
+The next selected risk-based Strategy Lab coverage is **configured Generic UDP**.
 
 Acceptance boundary:
 
-- use the unchanged published `_13` package;
-- run one Extended blocked-domain job through the normal GUI path;
-- verify that the Extended job itself completes truthfully;
-- verify that TLS 1.2 and HTTP are either exercised successfully for available candidates or explicitly reported/skipped according to capability/result semantics;
-- preserve the normal lifecycle state after completion.
+- keep the unchanged published `_13` package;
+- use Extended mode;
+- supply both a valid UDP port and a 1-4096-byte request payload file so the UDP request is actually configured;
+- require Stage 80 to execute the UDP branch rather than report `UDP=skipped`;
+- accept a truthful UDP `working` or `not_found` result;
+- preserve normal Zapret2 lifecycle state after completion.
 
-This is materially different coverage from the completed Standard RUNNING/STOPPED rows. It is not a request to repeat Model-C selection, BLOB/Lua/discovery measurements, or the already accepted STOPPED scenario.
+This is materially different coverage from the completed Standard lifecycle and Extended TCP/QUIC-gating rows. It is not a request to repeat Model-C selection, BLOB/Lua/discovery measurements, STOPPED behavior, TLS 1.2, HTTP or closed-QUIC gating.
 
 ## Current task reading
 
-For the selected Extended TLS 1.2 + HTTP regression, read completely:
+For the selected Generic UDP regression, read completely:
 
 1. `docs/architecture/STRATEGY_LAB.md`;
 2. `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
