@@ -21,18 +21,17 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
-- current source candidate: `_22` / `PLUGIN_REVISION=22` — Laboratory IPv4 targets, currently in source qualification and not yet published;
-- current **published** packaged revision remains `_21` / `PLUGIN_REVISION=21` on `main`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_21.pkg` / `v0.4.1_21`;
-- `_21` testing-package SHA-256: `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
-- `_21` source merge/testing-tag target: `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
-- `_21` publication workflow run: `31898795618`;
+- current packaged revision: `_22` / `PLUGIN_REVISION=22`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_22.pkg` / `v0.4.1_22`;
+- `_22` testing-package SHA-256: `07a82529a824b84894541d59c1eabddd56500b5efad9205f6bd9e9e6b4f811d9`;
+- `_22` source merge/testing-tag target: `71baa9d0e7cd3e04535ff9b9ba87aefe8f4e8cfe`;
+- `_22` publication workflow run: `31903303820`;
 - latest full Web/pkg release remains `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
-- stable Pages/pkg repository was not promoted by `_21`;
+- stable Pages/pkg repository was not promoted by `_22`;
 - internal service key: `zapret`.
 
-Machine `_21` publication evidence: [`verification/evidence/testing-publications/v0.4.1_21.md`](verification/evidence/testing-publications/v0.4.1_21.md).
+Machine `_22` publication evidence: [`verification/evidence/testing-publications/v0.4.1_22.md`](verification/evidence/testing-publications/v0.4.1_22.md).
 
 The exact `main` SHA is resolved at execution time under `GH-004`.
 
@@ -51,7 +50,7 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 - Settings Apply validation/guards and post-Apply service-state correctness are **COMPLETE by owner confirmation**.
 - `_21` Laboratory native perimeter/grid and Russian cross-page navigation localization are **OWNER-LIVE PASS**.
 - the current Strategy Lab / Laboratory Russian-presentation task is **CLOSED by owner instruction**; GitHub issue `#155` is completed.
-- Enable QUIC OFF/default persistence across an actual reload/revisit is still live-pending; `_21` preserves the existing source persistence contract.
+- Enable QUIC OFF/default persistence across an actual reload/revisit is still live-pending; `_22` preserves the existing source persistence contract.
 
 Owner-live `_21` presentation evidence: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md).
 
@@ -77,20 +76,15 @@ Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-
 - the two Laboratory sections render as normal `content-box` blocks inside that platform wrapper;
 - accepted common `25%` Diagnostics field grid and mode-label computed typography synchronization are retained;
 - canonical menu names remain `Strategy` / `Laboratory`, while both Laboratory and Strategy apply deterministic RU/EN labels from the active OPNsense HTML language;
-- Strategy Lab search/runtime, Generic UDP, QUIC, circular and persistence semantics are unchanged;
-- focused regression guards the corrected frame ownership and cross-page navigation localization while preserving prior accepted UI/persistence contracts;
-- complete applicable project validation and FreeBSD-15 package qualification passed before merge;
-- exact source was squash-merged as `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
-- persistent testing package `os-zapret2-restyle-0.4.1_21.pkg` is published with SHA-256 `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
 - owner-live verification accepted the corrected native perimeter and `Стратегия` / `Лаборатория` persistence.
 
 Source patch record: [`patches/v0.4.1_21.md`](patches/v0.4.1_21.md).
 
-## `_22` source state — Laboratory IPv4 targets + optional Host / SNI
+## `_22` implementation / delivery status — Laboratory IPv4 targets + optional Host / SNI
 
-The owner selected IP-address targets as the next Laboratory product task. The source implementation uses the audited IPv4-first contract and is now in qualification before merge/publication.
+The owner selected IP-address targets as the next Laboratory product task. The IPv4-first implementation has passed exact-head source qualification, been squash-merged, built under FreeBSD 15, and published as the persistent testing candidate `v0.4.1_22`.
 
-Implemented source boundary:
+Implemented boundary:
 
 1. PHP/API and shell target handling accept either a domain or canonical IPv4; IPv6 target input remains deliberately unsupported in this first patch;
 2. an IPv4 target exposes an optional `Host / SNI` service-identity field, persisted per job separately from the destination IP;
@@ -105,9 +99,36 @@ Implemented source boundary:
 11. temporary circular browser validation remains domain-only;
 12. Model C, budgets, lifecycle lock, cleanup and Stage-90 exact restoration are unchanged.
 
-Focused regression: `scripts/test-strategy-lab-ip-targets.sh`, included automatically by the existing Strategy Lab corrective matrix. Complete latest-head CI and FreeBSD-15 package qualification are mandatory before merge.
+Delivery proof:
+
+- source PR: `#262`;
+- exact latest source head complete CI + FreeBSD-15 package qualification: PASS;
+- exact source squash merge/tag target: `71baa9d0e7cd3e04535ff9b9ba87aefe8f4e8cfe`;
+- tag/release: `v0.4.1_22`;
+- package: `os-zapret2-restyle-0.4.1_22.pkg`;
+- SHA-256: `07a82529a824b84894541d59c1eabddd56500b5efad9205f6bd9e9e6b4f811d9`;
+- publication workflow run: `31903303820`;
+- stable Pages/pkg repository promoted: no.
+
+The publisher completed package/release verification and machine-evidence creation. GitHub Actions policy blocked only the final automatic PR-creation step, so publication-record PR `#263` was opened manually from the workflow-created branch; this is documentation-only and does not alter the published package or source identity.
+
+Focused regression: `scripts/test-strategy-lab-ip-targets.sh`, included automatically by the existing Strategy Lab corrective matrix.
 
 Source patch record: [`patches/v0.4.1_22.md`](patches/v0.4.1_22.md).
+
+## Current verification boundary
+
+Owner-live `_22` verification is now the selected next boundary:
+
+1. ordinary domain regression after IP support;
+2. bare canonical IPv4 accepted with no false TCP-connect → TLS PASS;
+3. IPv4 + real Host/SNI pinned to the entered destination IP;
+4. final working IP profile contains `--ipset-ip=<entered IPv4>` and exact profile replay passes;
+5. Extended Generic UDP works against IPv4 without Host/SNI;
+6. QUIC uses Host/SNI when supplied and bare-IP QUIC cannot falsely pass;
+7. Stage 90 restores the exact original Zapret2 state and cleans temporary runtime/rules.
+
+Enable QUIC OFF/default persistence reload/revisit proof remains separate.
 
 ## Accepted owner-live evidence retained
 

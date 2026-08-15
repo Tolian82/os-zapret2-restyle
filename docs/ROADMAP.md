@@ -76,7 +76,7 @@
     - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit — separate non-presentation row
   - [x] already-accessible target — completed by owner confirmation
   - [ ] cancellation/internal-failure containment
-- [ ] **Laboratory target support: test IPv4 addresses as well as domains — ACTIVE `_22`**
+- [ ] **Laboratory target support: test IPv4 addresses as well as domains — PUBLISHED `_22`, OWNER-LIVE VERIFICATION NEXT**
   - [x] architecture/current-source audit: feature is feasible but not a validator-only change
   - [x] confirm dormant IP scaffolding in Stage 00/40, search epoch, firewall pinning and final `--ipset-ip=` profile generation
   - [x] identify unsafe prior behavior: IPv4 TLS candidates degraded to plain TCP-connect evidence and must not create false PASS results
@@ -87,9 +87,15 @@
   - [x] make TLS/HTTP/QUIC probes preserve service hostname/SNI while pinning destination IP; bare-IP QUIC is unsupported rather than false PASS
   - [x] preserve direct-IP Generic UDP behavior
   - [x] add focused domain-regression + IPv4/SNI + bare-IP/error-semantics coverage
-  - [ ] latest-head complete CI + FreeBSD-15 package qualification
-  - [ ] exact-head squash merge + persistent `v0.4.1_22` testing publication
-  - [ ] owner-live domain-regression + IPv4/Host-SNI + Generic UDP/restoration verification
+  - [x] latest-head complete CI + FreeBSD-15 package qualification
+  - [x] exact-head squash merge + persistent `v0.4.1_22` testing publication
+  - [ ] owner-live ordinary-domain regression
+  - [ ] owner-live bare IPv4: accepted and no false TCP-connect → TLS PASS
+  - [ ] owner-live IPv4 + real Host/SNI pinned to entered destination
+  - [ ] owner-live final working profile contains `--ipset-ip=<target>` and exact replay passes
+  - [ ] owner-live Extended Generic UDP against IPv4 without Host/SNI
+  - [ ] owner-live QUIC Host/SNI behavior and bare-IP no-false-PASS behavior
+  - [ ] owner-live Stage-90 restoration/residue verification after IP run
 - [ ] Circular lifecycle coverage
   - [ ] start/stop/TTL
   - [ ] stale-session recovery
@@ -105,22 +111,22 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — qualify and publish `v0.4.1_22` IPv4 Laboratory targets
+## Current priority — owner-live verify published `v0.4.1_22` IPv4 Laboratory targets
 
-Current published testing identity remains:
+Current published testing identity:
 
-- tag: `v0.4.1_21`;
-- asset: `os-zapret2-restyle-0.4.1_21.pkg`;
-- SHA-256: `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
-- source/tag target: `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
-- publication workflow run: `31898795618`;
+- tag: `v0.4.1_22`;
+- asset: `os-zapret2-restyle-0.4.1_22.pkg`;
+- SHA-256: `07a82529a824b84894541d59c1eabddd56500b5efad9205f6bd9e9e6b4f811d9`;
+- source/tag target: `71baa9d0e7cd3e04535ff9b9ba87aefe8f4e8cfe`;
+- publication workflow run: `31903303820`;
 - stable Pages/pkg repository promoted: no.
 
-Owner-live `_21` is accepted for the selected Laboratory presentation scope: the normal OPNsense outer frame is restored, the accepted shared field grid remains correct, and Russian `Стратегия` / `Лаборатория` stays localized across page navigation. The current Russian-presentation task is closed; GitHub issue `#155` is completed.
+Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_22.md`](verification/evidence/testing-publications/v0.4.1_22.md).
 
-Owner-live `_21` evidence: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md).
+Owner-live `_21` remains accepted for the selected Laboratory presentation scope: the normal OPNsense outer frame is restored, the accepted shared field grid remains correct, and Russian `Стратегия` / `Лаборатория` stays localized across page navigation. The current Russian-presentation task is closed; GitHub issue `#155` is completed.
 
-The `_22` source scope implements the selected contract rather than merely relaxing the input validator:
+The published `_22` contract is:
 
 1. the existing `Заблокированный домен / IP` field accepts either a domain or canonical IPv4;
 2. domains continue through the existing behavior unchanged;
@@ -138,8 +144,7 @@ Source patch contract: [`patches/v0.4.1_22.md`](patches/v0.4.1_22.md).
 
 Enable QUIC OFF/default persistence reload/revisit proof remains a separate existing backlog row and is not folded into this IP-target patch.
 
-Owner-live `_20` corrective evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md).
-Machine `_21` publication evidence: [`verification/evidence/testing-publications/v0.4.1_21.md`](verification/evidence/testing-publications/v0.4.1_21.md).
+Owner-live `_21` evidence: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md).
 
 ## Deferred research — retain, do not activate by inertia
 
