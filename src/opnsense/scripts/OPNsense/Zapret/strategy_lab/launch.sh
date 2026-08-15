@@ -128,8 +128,9 @@ start_job()
     if ! strategy_lab_udp_input_prepare "${_strategy_lab_job}" "${_strategy_lab_mode}" \
         "${_strategy_lab_udp_port}" "${_strategy_lab_udp_payload}"
     then
+        _strategy_lab_udp_error="${STRATEGY_LAB_UDP_INPUT_ERROR:-unknown}"
         rm -rf "${_strategy_lab_jobdir}"
-        emit_error_json "Invalid Strategy Lab generic UDP input"
+        emit_error_json "Strategy Lab generic UDP payload preparation failed: ${_strategy_lab_udp_error}"
         return 1
     fi
 
