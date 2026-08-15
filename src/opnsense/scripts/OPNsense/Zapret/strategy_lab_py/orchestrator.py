@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from . import resources, state as state_persistence, telemetry
+from . import protocol_presentation, resources, state as state_persistence, telemetry
 
 EX_OK = 0
 EX_USAGE = 64
@@ -455,6 +455,18 @@ class Orchestrator:
     def _operation_limit(self, stage: str) -> int:
         return _positive_env(STAGE_LIMIT_ENV[stage])
 
+    def _quic_enabled(self) -> bool:
+        if self.mode != "extended":
+            return False
+        path = self.job_dir / "quic-enabled"
+        try:
+            value = path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise OrchestrationError("Strategy Lab QUIC execution setting is unavailable") from exc
+        if value not in {"0", "1"}:
+            raise OrchestrationError("Strategy Lab QUIC execution setting is invalid")
+        return value == "1"
+
     def _handle_result(self, stage: str, result: AdapterResult) -> str | None:
         if result.kind == "pass":
             self._pass(stage, result.message)
@@ -474,6 +486,17 @@ class Orchestrator:
         if stage in STAGE_LIMIT_ENV:
             timeout = self.budget.timeout_for(stage, self._operation_limit(stage))
         result = self._run_adapter(stage, operation_timeout=timeout, cancel_interruptible=stage not in {"00", "10", "20"})
+        if stage == "30" and result.kind == "pass":
+            try:
+                message = protocol_presentation.stage30_message(
+                    self.language,
+                    self.mode,
+                    self._quic_enabled(),
+                    _load_json(self.job_dir / "network.json"),
+                )
+            except protocol_presentation.ProtocolPresentationError as exc:
+                raise OrchestrationError(f"Strategy Lab network presentation is invalid: {exc}") from exc
+            result = AdapterResult(kind="pass", message=message, initial_state=result.initial_state)
         return self._handle_result(stage, result)
 
     def _run_stage80(self) -> str | None:
@@ -488,14 +511,12 @@ class Orchestrator:
             result = self._run_adapter(action, operation_timeout=timeout)
             if result.kind != "pass":
                 return self._handle_result("80", result)
-        quic = _load_json(self.job_dir / "quic.json").get("status", "")
-        udp = _load_json(self.job_dir / "udp.json").get("status", "")
-        if not isinstance(quic, str) or not isinstance(udp, str):
-            raise OrchestrationError("Strategy Lab extended status summary is invalid")
-        if self.language == "ru":
-            message = f"PASS — Расширенная проверка завершена; QUIC={quic}, UDP={udp}."
-        else:
-            message = f"PASS — Extended testing completed; QUIC={quic}, UDP={udp}."
+        quic = _load_json(self.job_dir / "quic.json")
+        udp = _load_json(self.job_dir / "udp.json")
+        try:
+            message = protocol_presentation.stage80_message(self.language, quic, udp)
+        except protocol_presentation.ProtocolPresentationError as exc:
+            raise OrchestrationError(f"Strategy Lab extended presentation is invalid: {exc}") from exc
         self._pass("80", message)
         return None
 
@@ -573,9 +594,6 @@ class Orchestrator:
         message = terminal_message(self.language, self.mode, outcome, canceled, count)
         self.current_stage = "99"
         self._update_stage("99", report_status, message)
-        # Circular eligibility belongs to the terminal snapshot. Calculate and
-        # persist it before publishing the terminal job state, otherwise result
-        # readers can observe completed SUCCESS with stale not_evaluated fields.
         try:
             self._run_adapter(
                 "eligibility",
