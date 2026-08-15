@@ -10,114 +10,72 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-15
-**Current handoff identity:** `v0.4.1_15` owner-live Generic UDP failure investigation
+**Current handoff identity:** `v0.4.1_16` Generic UDP browser-to-job correction
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
-- `PLUGIN_REVISION=15`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_15.pkg` / `v0.4.1_15`;
-- testing-package SHA-256: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`;
-- source merge and testing-tag target: `a219161c901c663b56cac6757364d3bbd32766c7`;
-- publication workflow run: `31879283227`;
-- required ABI: `FreeBSD:15:amd64`;
-- stable Pages/pkg repository promoted by this testing publication: **no**.
+- current source candidate: `PLUGIN_REVISION=16`;
+- last published/owner-tested package: `os-zapret2-restyle-0.4.1_15.pkg` / `v0.4.1_15`;
+- `_15` SHA-256: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`;
+- `_15` candidate-defining source/tag target: `a219161c901c663b56cac6757364d3bbd32766c7`;
+- required ABI: `FreeBSD:15:amd64`.
 
-Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_15.md`](verification/evidence/testing-publications/v0.4.1_15.md).
+Resolve the exact current `main` SHA at execution time under `GH-004`. `_16` is a source candidate until exact-head acceptance, merge and persistent testing publication complete.
 
-Resolve the exact current `main` SHA at execution time under `GH-004`.
+## Why `_16` exists
 
-## What `_15` changes
+Published `_15` successfully made real QUIC execution observable, but the owner-live Generic UDP retry still failed before configured UDP execution. With port `53` entered, selecting a valid small local file did not produce a usable configured payload; the native file control appeared empty and Stage 80 reported UDP as not configured.
 
-Owner-live `_14` Extended checks on `telegram.org` and `rutracker.org` proved that Enable QUIC no longer capability-skips when the ordinary control probe is blocked, but exposed four remaining product-quality gaps:
+Durable live-failure evidence:
+[`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
 
-1. ordinary output did not prove how many QUIC strategies were really attempted;
-2. Stage 30 and Stage 80 exposed raw/internal wording instead of clear RU/EN protocol evidence;
-3. an owner-selected nominal 140-byte Generic UDP payload was rejected even though the contract allows `1..4096` decoded bytes;
-4. Generic UDP did not expose a direct request/response observation for the selected destination port/payload.
+## Trace result
 
-`_15` implements the owner-selected corrective scope with code, regression tests and current documentation.
+The earlier permissions theory is retained only as a possible **later-stage** failure, not the primary explanation for the observed GUI state.
 
-### QUIC execution observability
+Generic UDP has no multipart upload directory. The product path is:
 
-The `_14` execution rule is preserved:
+`local File -> browser ArrayBuffer -> Base64 in normal start POST -> PHP/API -> configd -> launcher -> private job-local udp-payload.bin/udp-port -> Python Extended`.
 
-- Enable QUIC OFF → no QUIC candidates;
-- Enable QUIC ON → candidate enumeration runs independently of Stage-30 measured QUIC reachability;
-- Stage-30 control probing remains diagnostic only.
+Source tracing found that `_15` did not own the prepared browser payload. The Run handler sampled `input.files[0]` at click time and only then read/encoded it. If the native selection was cleared/lost, validation returned before API/configd/job-local storage was reached. In that state filesystem permissions cannot be the first failure because no server payload file has yet been created.
 
-`_15` adds ordinary user-facing evidence:
+## `_16` correction
 
-- Stage 30 says `QUIC открыт` / `QUIC закрыт` in Russian and the English equivalent;
-- Stage 30 separately says whether QUIC strategy search is enabled, disabled, or belongs to Extended mode;
-- Stage 80 renders candidate count and candidate IDs from the actual `tested` array;
-- `working` / `not_found` / `skipped` remain structured machine states but are not primary untranslated Stage-80 UI fragments;
-- Enable QUIC help has deterministic RU/EN presentation.
+`_16` makes the browser handoff explicit and observable:
 
-Current catalog remains `quic-fake-1`, `quic-fake-2`, `quic-ipfrag-8`, `quic-ipfrag-16`.
+- file-input `change` immediately captures the selected `File`;
+- `readAsArrayBuffer` and exact `1..4096` decoded-byte validation run immediately;
+- validated bytes are Base64-encoded and retained in application-owned staged state;
+- RU/EN UI shows filename plus exact byte count and a clear `ready to send` state;
+- Run uses the staged Base64 instead of depending exclusively on native `input.files[0]` still being populated;
+- a defensive Run-time fallback stages a currently visible native `File` before starting;
+- browser ArrayBuffer validation no longer relies on realm-specific `instanceof ArrayBuffer`;
+- job-local UDP preparation now publishes precise failure classes including unavailable/not-writable job directory, temporary-file creation, decode, chmod/move and state-record failures;
+- existing exact port/payload direct observation, candidate enumeration, no-reply semantics and cleanup remain unchanged.
 
-Canonical contract: [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md).
+Canonical specialist contract:
+[`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
 
-### Generic UDP exact bytes and control observation
+## Acceptance boundary
 
-The payload contract remains **1–4096 decoded bytes** with port `1..65535` and port/file supplied together.
+Before owner install:
 
-Browser transport is now:
+1. focused staged-browser UDP contract PASS;
+2. exact 140-byte backend/job-local regression PASS;
+3. explicit job-local failure attribution PASS;
+4. full Strategy Lab corrective matrix PASS;
+5. FreeBSD-15 package qualification PASS;
+6. exact-head merge and persistent `v0.4.1_16` testing publication;
+7. bounded publication-record docs reconciliation.
 
-`FileReader.readAsArrayBuffer → Uint8Array.byteLength validation → Base64 → strict API decode → private job-local udp-payload.bin`.
+Owner-live after publication:
 
-Consequences:
+- selecting a valid file immediately shows name and exact bytes as ready;
+- 140-byte sample starts a **new** configured-UDP job;
+- Stage 80 shows selected port/payload/IP, direct observation and actual UDP candidate IDs;
+- any later filesystem preparation failure is explicitly attributed rather than appearing as an unexplained unconfigured request;
+- Stage 90 cleanup/restoration remains PASS.
 
-- exact 140-byte binary payload is valid and regression-tested;
-- zero bytes and more than 4096 decoded bytes remain invalid;
-- the UI does not clear the previous result or start a job before decoded-byte validation succeeds;
-- backend strict Base64/decoded-size validation remains authoritative.
-
-Configured Generic UDP performs a direct control exchange using the same selected endpoint IP, destination port and exact job-local payload. Evidence records endpoint/IP, port, payload byte count, reply observed/not observed, timeout and duration. Lack of a reply is explicitly **not** classified as a closed port and **does not gate** subsequent bypass candidate search.
-
-Stage 80 reports actual UDP candidate count/IDs and winner/no-winner meaning in RU/EN.
-
-Canonical contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
-
-## `_15` source/publication acceptance — PASS
-
-- source PR `#241` latest verified head: `ecf3d5269574988e56707c68b6eb9696d936b1ca`;
-- complete Strategy Lab corrective matrix: PASS;
-- FreeBSD 15 package build/inspection qualification: PASS;
-- exact-head squash merge: `a219161c901c663b56cac6757364d3bbd32766c7`;
-- publisher FreeBSD 15 build and manifest/digest verification: PASS;
-- prerelease `v0.4.1_15`: published and verified;
-- tag target: exactly `a219161c901c663b56cac6757364d3bbd32766c7`;
-- package asset: `os-zapret2-restyle-0.4.1_15.pkg`;
-- package digest: `e25c47519844623f6e1fcfe4d45a517960d06d0939f5cf004112a02186a5701f`.
-
-The publisher again could not create its Draft publication-record PR because the repository setting forbids GitHub Actions from creating/approving pull requests. It had already pushed the machine publication record. The same required Draft tail was opened through the GitHub connector as PR `#242`; package identity/bytes were not changed.
-
-## Latest owner-live `_15` finding — Generic UDP still FAIL
-
-The owner installed `_15` and repeated an Extended `rutracker.org` check with Generic UDP port `53` and Enable QUIC ON. QUIC attempt observability worked, but Generic UDP still did not become configured: attaching a small file did not produce a usable selected/uploaded payload and Stage 80 reported UDP as not configured.
-
-This is now a confirmed owner-live product defect. The current investigation hypothesis is that the file may not reach the backend/job-local payload path at all. Possible filesystem ownership/permissions on the Strategy Lab runtime/job directory are specifically retained as a hypothesis, **not** as a proven root cause.
-
-Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md`](verification/evidence/2026-08-15-v0.4.1_15-generic-udp-file-selection-owner-live-fail.md).
-
-The next implementation decision must follow an end-to-end trace of browser selection → ArrayBuffer/Base64 → API/configd → launcher job-local `udp-payload.bin`/`udp-port` creation and permissions → Python configured-UDP detection. Do not close the 140-byte/Generic UDP row from automated tests alone.
-
-## Remaining owner-live `_15` work
-
-Do not repeat already accepted broad Model-C baseline work. Preserve/finish the materially changed `_15` checks:
-
-1. RU/EN Diagnostics localization checks not yet explicitly accepted;
-2. Enable QUIC OFF → natural localized disabled wording;
-3. investigate and correct the confirmed Generic UDP live file-selection/upload failure before retrying 140-byte acceptance;
-4. after correction, configured UDP must show selected port, payload bytes, endpoint/IP, direct reply/no-reply observation and actual candidate count/IDs;
-5. no-reply UDP wording must never claim the port is closed;
-6. Stage 90 restoration and temporary process/firewall/socket cleanup remain mandatory.
-
-## Established baseline retained
-
-- `v0.4.1_13`: accepted Model-C-only Standard RUNNING/STOPPED and Extended TLS 1.2/HTTP evidence.
-- `v0.4.1_14`: accepted explicit Enable QUIC as the sole execution gate; owner-live blocked-control runs selected the `_15` observability/input correction.
-
-Historical evidence remains evidence of what those packages did; it is not rewritten to look like `_15` behavior.
+Do not repeat accepted Model-C baseline work or reopen closed BLOB/Lua/discovery/model-selection experiments.
