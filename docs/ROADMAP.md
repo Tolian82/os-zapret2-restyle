@@ -54,42 +54,38 @@
     - [x] retain decoded `1..4096` **byte** and strict backend Base64 bounds
     - [x] add explicit job-local preparation error attribution including unavailable/not-writable job directory, temp-create, decode, chmod/move and state-record classes
     - [x] preserve exact port/payload control observation, no-reply semantics, candidate enumeration and cleanup
-    - [x] extend focused Generic UDP regression contract
-    - [x] complete Strategy Lab corrective matrix
-    - [x] FreeBSD-15 package build/inspection qualification
-    - [x] exact-head source merge `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`
+    - [x] complete Strategy Lab corrective matrix and FreeBSD-15 qualification
     - [x] persistent `v0.4.1_16` testing-package publication
-    - [x] publication-record evidence generated; bounded docs reconciliation in PR `#246`
-    - [x] owner-live: exact `udp-140.bin` fixture verified as **140 bytes** and immediately shown ready to send
-    - [x] owner-live: exact 140-byte payload starts configured-UDP job `job.j09XUc`
-    - [x] owner-live: Stage 80 shows port `53`, payload `140` bytes, endpoint `172.67.182.196`, direct no-reply observation and all three UDP candidate IDs
-    - [x] owner-live: no-reply text explicitly does not claim the port is closed and candidate search still runs
-    - [x] owner-live: Stage-90 service restoration and temporary process/rule cleanup visibly PASS
-    - [x] owner correction: previous repeated size errors were caused by selecting ~140 KiB files, not a confirmed upload/filesystem defect; contract is `1..4096 bytes`
+    - [x] owner-live exact 140-byte configured UDP and Stage-90 restoration PASS
+    - [x] owner correction: previous repeated size errors were ~140 KiB files; contract is `1..4096 bytes`
   - [x] Enable QUIC OFF execution semantics
     - [x] owner-live OFF run reports QUIC strategy search disabled
     - [x] independent Generic UDP candidate execution remains active with QUIC OFF
-    - [x] tested OFF job still completes SUCCESS and Stage-90 restoration PASS
-  - [ ] Enable QUIC OFF/default persistence across reload/revisit
-  - [ ] **Strategy Lab / Diagnostics RU-EN presentation cleanup — owner-selected next implementation**
-    - [ ] circular idle ordinary display: remove raw `{` and `}` braces
-    - [ ] circular idle ordinary display: replace raw `{"state":"idle"}` with RU `Состояние: ОЖИДАНИЕ` / EN `State: IDLE`
-    - [ ] keep raw machine JSON only in explicitly advanced/raw presentation if still needed
-    - [ ] localize `Full output (advanced)` / RU `Полный вывод (расширенный)`
-    - [ ] localize `Enter a domain and click Test to check HTTPS connectivity.` / RU `Введите домен и нажмите «Проверка», чтобы проверить HTTPS-соединение.`
-    - [ ] `Family` / RU `Семейство`
-    - [ ] `Endpoints` / RU `Назначения`
-    - [ ] `Outcome` / RU `Результат`
-    - [ ] `Restoration` / RU `Восстановление`
-    - [ ] `Replay` / RU `Ответы`
-    - [ ] `Complete Traffic Strategy profile` / RU `Полный профиль Стратегий Трафика`
-    - [ ] `Run` / RU `Запуск`
-    - [ ] `Test Domain Connectivity` / RU `Тестирование соединения с доменом`
-    - [ ] `Blocked Domain` -> EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`
-    - [ ] `Enable QUIC` / RU `Включить QUIC`
+    - [x] tested OFF job completes SUCCESS and Stage-90 restoration PASS
+  - [ ] Enable QUIC OFF/default persistence across reload/revisit — source persistence contract exists; owner-live reload proof pending
+  - [ ] **`v0.4.1_17` Strategy Lab / Diagnostics RU-EN presentation cleanup**
+    - [x] source: circular idle ordinary display removes raw `{` and `}` / `{"state":"idle"}` JSON
+    - [x] source: RU `Состояние: ОЖИДАНИЕ` / EN `State: IDLE`
+    - [x] source: raw machine job JSON remains only under explicitly advanced output
+    - [x] source: `Full output (advanced)` / RU `Полный вывод (расширенный)`
+    - [x] source: HTTPS connectivity guidance RU/EN
+    - [x] source: `Family` / `Семейство`
+    - [x] source: `Endpoints` / `Назначения`
+    - [x] source: `Outcome` / `Результат`
+    - [x] source: `Restoration` / `Восстановление`
+    - [x] source: `Replay` / `Ответы`
+    - [x] source: `Complete Traffic Strategy profile` / `Полный профиль Стратегий Трафика`
+    - [x] source: `Run` / `Запуск`
+    - [x] source: `Test Domain Connectivity` / `Тестирование соединения с доменом`
+    - [x] source: EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`
+    - [x] source: `Enable QUIC` / RU `Включить QUIC`
+    - [x] focused automated source contract covers RU/EN, circular idle, and persisted QUIC default/load/save
+    - [ ] latest-head full CI + FreeBSD-15 package qualification
+    - [ ] exact-head source merge and persistent `v0.4.1_17` testing publication
     - [ ] live acceptance in Russian mode
     - [ ] live acceptance in English mode
     - [ ] verify no RU/EN cross-language leakage
+    - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit
   - [ ] already-accessible target
   - [ ] cancellation/internal-failure containment
 - [ ] Circular lifecycle coverage
@@ -107,23 +103,21 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — QUIC persistence + RU/EN presentation
+## Current priority — publish `_17`, then RU/EN + persistence live acceptance
 
-`v0.4.1_16` remains the current published testing package from candidate-defining source merge `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`.
+Current source candidate: `v0.4.1_17` (`PLUGIN_REVISION=17`).
 
-Published identity:
+Last published testing identity remains `_16` until `_17` publication completes:
 
 - tag: `v0.4.1_16`;
 - asset: `os-zapret2-restyle-0.4.1_16.pkg`;
 - SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
-- publication workflow run: `31882091770`;
+- source/tag target: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
 - stable Pages/pkg repository promoted: no.
 
-Generic UDP and explicit QUIC ON/OFF execution semantics are now owner-live accepted for the tested `_16` flows. The latest OFF screenshot proves the runtime gate itself: QUIC candidate search is disabled while configured UDP still runs all three current UDP candidates and the job restores cleanly.
+Generic UDP and explicit QUIC ON/OFF execution semantics remain owner-live accepted. `_17` does not reopen them; it implements the selected visible RU/EN/circular-idle cleanup and preserves the existing persisted Enable QUIC contract.
 
-What is **not** yet proven is persistence of the OFF/default value across a page reload/revisit. Keep that as a separate live row.
-
-The owner has now selected the RU/EN/circular-idle cleanup above as the next implementation scope. The implementation must be reflected in `START_HERE`, `PROJECT_STATE`, this roadmap, and live evidence/matrix, then live-checked in both language modes.
+After publication/install, live acceptance must inspect both language modes and then prove the saved OFF/default QUIC value survives reload/revisit.
 
 Current evidence: [`verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`](verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md).
 
