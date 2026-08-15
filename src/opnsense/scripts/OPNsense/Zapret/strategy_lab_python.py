@@ -16,6 +16,7 @@ from strategy_lab_py import model_c_lifecycle_measurement
 from strategy_lab_py import model_b_parallel_attribution as model_b_parallel
 from strategy_lab_py import stage60_model_c_production as stage60_parallel
 from strategy_lab_py import stage60_source_port_lease
+from strategy_lab_py import truthful_result_support
 
 
 def _prepare_model_c_lifecycle_runtime_permissions(args: list[str]) -> None:
@@ -43,6 +44,7 @@ def _prepare_model_c_lifecycle_runtime_permissions(args: list[str]) -> None:
 
 def main() -> int:
     ip_target_support.install()
+    truthful_result_support.install()
     args = list(sys.argv[1:])
     if args[:1] == ["lua-init-measure"]:
         return lua_initialization_measurement.main(args[1:])
