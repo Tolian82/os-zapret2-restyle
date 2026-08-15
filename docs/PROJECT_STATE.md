@@ -22,15 +22,19 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - primary branch: `main`;
 - project version: `0.4.1`;
 - current source candidate: `_17`;
-- package metadata in current source candidate: `PLUGIN_REVISION=17`;
-- last published testing package/tag: `os-zapret2-restyle-0.4.1_16.pkg` / `v0.4.1_16`;
-- `_16` testing-package SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
-- `_16` source/tag target: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
+- package metadata: `PLUGIN_REVISION=17`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_17.pkg` / `v0.4.1_17`;
+- testing-package SHA-256: `92d7d3320246380bef53c7d37364895315e12d55b958c8a5fd657ba9ab213dbf`;
+- source merge/testing-tag target: `ebf071122b2613c4fe56b5af4e5e9f07c99e9122`;
+- publication workflow run: `31887296681`;
 - latest full Web/pkg release remains `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
+- stable Pages/pkg repository was not promoted by `_17`;
 - internal service key: `zapret`.
 
-`_17` is a source candidate until latest-head CI, FreeBSD-15 qualification, exact-head merge and persistent testing publication complete.
+Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_17.md`](verification/evidence/testing-publications/v0.4.1_17.md).
+
+The exact `main` SHA is resolved at execution time under `GH-004`.
 
 ## Locked current product facts
 
@@ -43,11 +47,11 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - `_15` owner-live QUIC ON observability remains accepted: four attempted QUIC IDs are visible while ordinary QUIC is blocked.
 - `_16` Generic UDP browser-to-job path is **OWNER-LIVE PASS** with exact 140-byte payload evidence.
 - `_16` Enable QUIC OFF execution semantics are **OWNER-LIVE PASS**: OFF suppresses QUIC candidates while independent UDP remains active.
-- Enable QUIC OFF/default persistence across an actual reload/revisit is still live-pending; the persisted source contract already exists and is preserved by `_17`.
+- Enable QUIC OFF/default persistence across an actual reload/revisit is still live-pending; `_17` preserves and regression-guards its source persistence contract.
 
-## `_17` source implementation
+## `_17` published implementation — automated acceptance PASS
 
-`_17` is the owner-selected Strategy Lab / Diagnostics presentation package candidate.
+`_17` is the owner-selected Strategy Lab / Diagnostics presentation package.
 
 Implemented deterministic RU/EN presentation:
 
@@ -65,7 +69,19 @@ Implemented deterministic RU/EN presentation:
 - EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`;
 - `Enable QUIC` / `Включить QUIC`.
 
-The same focused regression contract asserts that Enable QUIC still uses the model-backed settings endpoint, persists `0/1`, reloads the saved value on page open, and has model default `0` (OFF). This is source evidence only; live reload/revisit remains an owner-live acceptance row.
+The focused regression contract also asserts that Enable QUIC uses the model-backed settings endpoint, persists `0/1`, reloads the saved value on page open, and has model default `0` (OFF). This remains source evidence until owner-live reload/revisit proof.
+
+Source/publication acceptance:
+
+- source PR `#250` exact verified head `9bae088ddd0d26a131cac3fb54b17fa761963c75`;
+- complete Strategy Lab corrective matrix: PASS;
+- focused diagnostics localization/circular/persistence contract: PASS;
+- FreeBSD-15 package build/inspection: PASS;
+- exact source merge: `ebf071122b2613c4fe56b5af4e5e9f07c99e9122`;
+- publisher FreeBSD-15 build/manifest/digest verification: PASS;
+- release/tag `v0.4.1_17` points exactly to the candidate-defining source merge;
+- asset `os-zapret2-restyle-0.4.1_17.pkg` uploaded and verified;
+- SHA-256 `92d7d3320246380bef53c7d37364895315e12d55b958c8a5fd657ba9ab213dbf`.
 
 Source patch record: [`patches/v0.4.1_17.md`](patches/v0.4.1_17.md).
 
@@ -74,17 +90,9 @@ Source patch record: [`patches/v0.4.1_17.md`](patches/v0.4.1_17.md).
 - Generic UDP: [`verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md)
 - QUIC OFF execution/UI follow-up: [`verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`](verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md)
 
-## Current verification boundary
+## Current owner-live boundary
 
-Before source merge/publication `_17` must pass:
-
-1. focused diagnostics localization/circular/persistence contract;
-2. complete Strategy Lab corrective matrix and normal project validation;
-3. FreeBSD-15 package build/inspection qualification;
-4. exact latest-head merge;
-5. persistent `v0.4.1_17` testing publication and publication-record reconciliation.
-
-After publication/install, owner-live acceptance is intentionally narrow:
+After `_17` install:
 
 1. Russian visible presentation;
 2. English visible presentation and no language leakage;
