@@ -48,13 +48,17 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 - `_16` Enable QUIC OFF execution semantics are **OWNER-LIVE PASS**: OFF suppresses QUIC candidates while independent UDP remains active.
 - already-accessible target is **COMPLETE by owner confirmation**.
 - Settings Apply validation/guards and post-Apply service-state correctness are **COMPLETE by owner confirmation**.
+- `_21` Laboratory native perimeter/grid and Russian cross-page navigation localization are **OWNER-LIVE PASS**.
+- the current Strategy Lab / Laboratory Russian-presentation task is **CLOSED by owner instruction**; GitHub issue `#155` is completed.
 - Enable QUIC OFF/default persistence across an actual reload/revisit is still live-pending; `_21` preserves the existing source persistence contract.
 
-## `_20` owner-live Laboratory follow-up — perimeter/navigation rejected
+Owner-live `_21` presentation evidence: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md).
+
+## `_20` owner-live Laboratory follow-up — historical rejected perimeter/navigation
 
 The owner installed `_20` and directly compared Laboratory, Strategy and a native OPNsense page.
 
-Confirmed defects:
+Confirmed defects at `_20`:
 
 - Laboratory had no normal OPNsense outer content perimeter/frame;
 - Strategy/native comparison retained the normal platform spacing;
@@ -64,9 +68,9 @@ The accepted `_20` 25% field grid and mode-label typography contract was not the
 
 Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md).
 
-## `_21` implementation / delivery status
+## `_21` implementation / acceptance status
 
-`_21` is source-merged and published for owner-live verification:
+`_21` is source-merged, published and owner-live accepted for the selected presentation scope:
 
 - Laboratory no longer creates or overrides `.page-content-main`; OPNsense owns the outer page perimeter;
 - the two Laboratory sections render as normal `content-box` blocks inside that platform wrapper;
@@ -76,26 +80,37 @@ Durable evidence: [`verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-
 - focused regression guards the corrected frame ownership and cross-page navigation localization while preserving prior accepted UI/persistence contracts;
 - complete applicable project validation and FreeBSD-15 package qualification passed before merge;
 - exact source was squash-merged as `02cbd27d3c6a533bdaa9b44bf90e9510c8a4af29`;
-- persistent testing package `os-zapret2-restyle-0.4.1_21.pkg` is published with SHA-256 `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`.
+- persistent testing package `os-zapret2-restyle-0.4.1_21.pkg` is published with SHA-256 `17d74cfe804bdcc3984961185d0b29ef1c15329b6079dcf1ea2417ea16e3848a`;
+- owner-live verification accepted the corrected native perimeter and `Стратегия` / `Лаборатория` persistence.
 
 Source patch record: [`patches/v0.4.1_21.md`](patches/v0.4.1_21.md).
 
-## Current verification boundary
+## Current engineering boundary — Laboratory IP target support
 
-After `_21` install:
+The owner selected IP-address targets as the next Laboratory product task and closed the current presentation/localization work.
 
-1. Laboratory outer perimeter matches Strategy/native OPNsense page spacing;
-2. Russian navigation stays `Стратегия` / `Лаборатория` across Laboratory ↔ Strategy navigation;
-3. accepted common field grid and `Режим:` typography remain intact;
-4. no Strategy Lab execution rerun is required for this UI-only correction;
-5. Enable QUIC OFF/default persistence reload/revisit proof remains separate;
-6. after `_21` UI acceptance, next selected engineering plan: Laboratory targets must support IP addresses as well as domains;
-7. continue the remaining risk-selected backlog.
+The audit establishes the following implementation boundary:
+
+1. the approved architecture already allows domain or IP targets, but current PHP `StrategyLabController` and shell `target.sh` still reject IP literals;
+2. Stage-00/40 handling, IPv4 search-epoch bindings, destination-IP firewall rules and final profile generation already contain partial IP support;
+3. final profile generation already uses `--ipset-ip=<target>` for IP targets;
+4. Generic UDP can operate against a fixed IP without hostname identity;
+5. current TLS candidate probing must be corrected before IP targets are enabled: an IPv4 endpoint currently falls back to a plain TCP connect, which is not valid proof that a TLS/DPI-bypass candidate works;
+6. host/SNI-dependent TLS candidates and QUIC need an explicit service hostname/SNI when the destination is supplied as an IP; destination IP must not silently become service identity;
+7. the existing request layer already supports fixed-IP + hostname identity through curl `--resolve` and OpenSSL `-servername` / hostname verification;
+8. initial product support should be canonical IPv4 first; current search-epoch address canonicalization is IPv4-specific;
+9. bare-IP protocol branches that cannot be validated truthfully must be skipped/unsupported rather than reported PASS;
+10. Model C, lifecycle, budgets, attribution, cleanup and exact restoration remain unchanged.
+
+Selected UX/contract direction: keep one `Заблокированный домен / IP` target field, classify domain versus IPv4, and add a conditional/optional `Host / SNI` service-identity field for IP targets so web/TLS/QUIC probes can connect to the fixed IP while preserving the real service hostname. Generic UDP does not require Host/SNI.
+
+Detailed audit/owner handoff: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md).
 
 ## Accepted owner-live evidence retained
 
 - Generic UDP: [`verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md)
 - QUIC OFF execution/UI follow-up: [`verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`](verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md)
+- `_21` Laboratory frame/localization owner-live pass: [`verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_21-laboratory-frame-localization-owner-live-pass.md)
 
 ## Documentation authority note
 
