@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` MODEL-C-ONLY OWNER-LIVE PASS; INITIAL-ZAPRET2-STOPPED IS THE CURRENT SELECTED REGRESSION ROW.**
+Overall status: **`v0.4.1_13` MODEL-C-ONLY OWNER-LIVE PASS; INITIAL-ZAPRET2-STOPPED PASS; EXTENDED TLS-1.2 + HTTP IS THE CURRENT SELECTED REGRESSION ROW.**
 
 This matrix is the canonical live-appliance regression inventory. Source tests, GitHub CI
 and FreeBSD package builds do not substitute for selected owner-live evidence. Detailed
@@ -35,7 +35,8 @@ Current authority:
 - `docs/PROJECT_STATE.md`;
 - `docs/ROADMAP.md`;
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md`;
-- `docs/verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`.
+- `docs/verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`;
+- `docs/verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`.
 
 ==================================================
 `v0.4.1_13` MODEL-C-ONLY OWNER-LIVE GATE — PASS
@@ -85,6 +86,41 @@ no-candidate, exhaustive success, and early success without automatic Model B/A 
 
 Durable evidence:
 `docs/verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`.
+
+==================================================
+INITIAL ZAPRET2 STOPPED — PASS ON `_13`
+==================================================
+
+### rutracker.org Standard — `job.5b97u9`
+
+The permanent Zapret2 service was initially STOPPED. Strategy Lab started normally and the
+GUI reported:
+
+- status `ЗАВЕРШЕНО`;
+- outcome `SUCCESS`;
+- stable working strategies: `3`.
+
+Immediate post-job observation:
+
+```text
+root@OPNsense:~ # configctl zapret status
+zapret is not running
+root@OPNsense:~ # pgrep -af 'dvtws2|zapret.*supervisor'
+```
+
+The process query produced no output. The observed lifecycle path is therefore:
+
+`STOPPED -> Strategy Lab runs -> SUCCESS -> STOPPED`
+
+with no normal `dvtws2` or Zapret2 supervisor left running.
+
+The owner explicitly accepted this result as sufficient for the selected STOPPED regression
+and stated that further telemetry, repeat execution or deeper duplicate checking of this same
+scenario is unnecessary. Do not fabricate unobserved firewall/socket/hash evidence; the row is
+accepted on the observable lifecycle/result evidence above.
+
+Durable evidence:
+`docs/verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`.
 
 ==================================================
 RETAINED ACCEPTED RUNTIME BASELINES
@@ -166,6 +202,8 @@ RETAINED PROGRESSION
 - `_13` made normal Stage 60 Model-C-only and removed automatic Model B/A production replay.
 - `_13` owner-live telemetry on 2026-08-15 accepted exhaustive no-winner, exhaustive success,
   and early-success paths with exact RUNNING restoration.
+- `_13 job.5b97u9` accepted initial-STOPPED behavior: Strategy Lab completed successfully and
+  left the permanent service STOPPED; the owner closed the row without redundant deeper replay.
 
 ==================================================
 SCENARIO MATRIX
@@ -174,8 +212,8 @@ SCENARIO MATRIX
 | # | Scenario | Required expected result | Evidence location | Result |
 |---|---|---|---|---|
 | 1 | Standard blocked domain, initial Zapret2 RUNNING | Terminal result truthful; Stage 90 restores RUNNING; no temporary residue | `2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md` | **PASS ON `_13`** |
-| 2 | Standard blocked domain, initial Zapret2 STOPPED | Final service remains STOPPED; restoration verified | `PENDING OWNER` | **CURRENT SELECTED REGRESSION** |
-| 3 | Extended TLS 1.2 and HTTP | Available successes replay-verified; unavailable protocols explicitly skipped | `_23` Extended working path observed; dedicated formal row unselected | **PENDING REGRESSION** |
+| 2 | Standard blocked domain, initial Zapret2 STOPPED | Strategy Lab starts/completes; final permanent service remains STOPPED; no normal dvtws2/supervisor remains | `2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md` | **PASS ON `_13` — OWNER ACCEPTED** |
+| 3 | Extended TLS 1.2 and HTTP | Available successes replay-verified; unavailable protocols explicitly skipped/reported truthfully | `_23` Extended working path observed; dedicated `_13` formal row pending | **CURRENT SELECTED REGRESSION** |
 | 4 | Extended QUIC | Endpoint-bound/replay-verified when available; otherwise explicit skip | `_25/_26` exercised explicit skip; available-QUIC row remains unselected | **PENDING REGRESSION** |
 | 5 | Generic UDP port and payload | Accepted only in Extended mode; complete profile and cleanup | `PENDING OWNER` | **PENDING REGRESSION** |
 | 6 | Target already accessible | `TARGET_ACCESSIBLE`; search skipped; service state exact | `PENDING OWNER` | **PENDING REGRESSION** |
@@ -196,11 +234,16 @@ SCENARIO MATRIX
 FAILURE / RELEASE POLICY
 ==================================================
 
-A selected live path fails if restoration is unverified, saved strategy changes
+A selected live path normally fails if restoration is unverified, saved strategy changes
 unexpectedly, temporary workers/rules remain, lifecycle ownership is violated, a result is
 falsely classified, or an adaptive plan does not match measured capabilities.
 
-The selected `_13` Model-C-only owner-live gate is complete. Broader pending rows remain
-risk-selected regression backlog, not an all-or-nothing release checklist. The current selected
-row is initial Zapret2 STOPPED; any source correction is justified only if that live row exposes
-a real defect.
+For scenario 2 specifically, the owner accepted the observable STOPPED lifecycle/result evidence
+from `job.5b97u9` as sufficient and explicitly declined additional duplicate telemetry or repeat
+checking. That row is PASS and must not be reopened merely because deeper evidence could have been
+collected.
+
+The selected `_13` Model-C-only owner-live gate and initial-STOPPED row are complete. Broader
+pending rows remain risk-selected regression backlog, not an all-or-nothing release checklist.
+The current selected row is Extended TLS 1.2 + HTTP; any source correction is justified only if
+that materially different live row exposes a real defect.
