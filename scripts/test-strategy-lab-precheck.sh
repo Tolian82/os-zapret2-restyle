@@ -206,7 +206,7 @@ run_job()
     launcher result "${job}"
 }
 
-# IPv4 only, QUIC closed, two required Telegram endpoints, clean TLS failure.
+# IPv4 only, QUIC control probe closed, two required Telegram endpoints, clean TLS failure.
 unset MOCK_IPV6_ROUTE MOCK_QUIC_STATUS MOCK_TLS_PASS_HOST MOCK_DNS_FAIL_HOST MOCK_IPV4_CONTROL_STATUS MOCK_NC_STATUS
 result=$(run_job 'Telegram.ORG.' en)
 printf '%s\n' "${result}" | jq -e '.target=="telegram.org" and .target_type=="domain"' >/dev/null ||
@@ -215,7 +215,7 @@ printf '%s\n' "${result}" | jq -e '.endpoints==["telegram.org","web.telegram.org
     fail "Telegram endpoint contract is incorrect"
 printf '%s\n' "${result}" | jq -e '.network=={ipv4:"available",ipv6:"unavailable",quic_ipv4:"closed",quic_ipv6:"skipped"}' >/dev/null ||
     fail "IPv4-only network classification is incorrect"
-printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="30" and .message=="PASS — IPv4 is available; IPv6 is unavailable; QUIC/IPv4 is blocked; IPv6 and QUIC tests have been excluded.")' >/dev/null ||
+printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="30" and .message=="PASS — IPv4 is available; IPv6 is unavailable; QUIC/IPv4 is blocked by the control probe; IPv6 tests have been excluded.")' >/dev/null ||
     fail "IPv4-only English summary is incorrect"
 printf '%s\n' "${result}" | jq -e '.baseline.dns_a=="PASS" and (.baseline.endpoints|length)==2 and ([.baseline.endpoints[].status]|all(.=="FAIL"))' >/dev/null ||
     fail "clean Telegram baseline is incorrect"
