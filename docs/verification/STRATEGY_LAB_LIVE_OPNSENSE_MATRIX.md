@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU PRESENTATION OWNER-LIVE PARTIAL; `v0.4.1_18` LABEL/ONE-LINE OWNER-LIVE PARTIAL; `v0.4.1_19` TEXT/MODE/STATUS OWNER-LIVE PARTIAL; `v0.4.1_20` FIELD-GRID/MODE CORRECTIVE PUBLISHED BUT FRAME/NAVIGATION OWNER-LIVE REJECTED; `v0.4.1_21` NATIVE FRAME + CROSS-PAGE NAVIGATION LOCALIZATION OWNER-LIVE PASS; `v0.4.1_22` IPV4 TARGET + OPTIONAL HOST/SNI PUBLISHED; `v0.4.1_23` TRUTHFUL-RESULT CORRECTIVE PUBLISHED, OWNER-LIVE VERIFICATION NEXT.**
+Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU PRESENTATION OWNER-LIVE PARTIAL; `v0.4.1_18` LABEL/ONE-LINE OWNER-LIVE PARTIAL; `v0.4.1_19` TEXT/MODE/STATUS OWNER-LIVE PARTIAL; `v0.4.1_20` FIELD-GRID/MODE CORRECTIVE PUBLISHED BUT FRAME/NAVIGATION OWNER-LIVE REJECTED; `v0.4.1_21` NATIVE FRAME + CROSS-PAGE NAVIGATION LOCALIZATION OWNER-LIVE PASS; `v0.4.1_22` IPV4 TARGET + OPTIONAL HOST/SNI PUBLISHED; `v0.4.1_23` TRUTHFUL-RESULT + IPV4/HOST-SNI OWNER-LIVE PASS.**
 
 Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected owner-live evidence.
 
@@ -21,9 +21,10 @@ Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected ow
 - `_20` owner-live perimeter/navigation: **REJECTED — normal OPNsense outer frame missing; Russian submenu reverts to English after navigating to Strategy**;
 - `_21` native-frame ownership + both-page RU/EN navigation corrective: **OWNER-LIVE PASS**;
 - `_22` IPv4/domain target implementation: **SOURCE/CI/FREEBSD/PUBLICATION PASS; OWNER-LIVE FINDINGS SELECTED `_23` CORRECTIVE**;
-- `_23` truthful-result corrective: **SOURCE/CI/FREEBSD/PUBLICATION PASS; OWNER-LIVE VERIFICATION PENDING**.
+- `_23` truthful-result + domain/IPv4/Host-SNI closeout: **SOURCE/CI/FREEBSD/PUBLICATION + OWNER-LIVE PASS; TARGET-SUPPORT TASK COMPLETE**.
 
 Machine `_23` publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_23.md`.
+Owner-live `_23` IPv4 / Host-SNI closeout: `docs/verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md`.
 Owner-live Generic UDP evidence: `docs/verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`.
 Owner-live QUIC OFF/UI follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`.
 Owner-live `_17` RU follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md`.
@@ -134,7 +135,7 @@ The owner selected Laboratory IP-address testing after `_21` acceptance. `_22` i
 
 `_22` delivery proof remains: source PR `#262`, source/tag target `71baa9d0e7cd3e04535ff9b9ba87aefe8f4e8cfe`, package `os-zapret2-restyle-0.4.1_22.pkg`, SHA-256 `07a82529a824b84894541d59c1eabddd56500b5efad9205f6bd9e9e6b4f811d9`, publication run `31903303820`.
 
-## `_23` — truthful result-classification corrective, published
+## `_23` — truthful result-classification corrective, published and owner-live accepted
 
 `_23` preserves the `_22` target/runtime architecture and corrects owner-live result semantics:
 
@@ -154,6 +155,17 @@ Delivery proof:
 - package SHA-256: `37bd4c19bacc48f17aeb4e497c1058e675df067adf2ecd00334708e995bcb283`;
 - publication workflow: `31909994148`;
 - stable Pages/pkg repository promotion: no.
+
+Owner-live closeout on the exact published package is PASS:
+
+- `job.9juf8H`: `rutracker.net` Standard `SUCCESS`, three HTTP-502 final strategies retained as accepted reachable application errors;
+- `job.TYjdSR`: `rutracker.org` Standard `SUCCESS`, three final strategies;
+- `job.3HeCEP`: bare IPv4 certificate identity failure becomes `PARTIAL` with Host/SNI guidance;
+- `job.HNnp5P`: bare-IP QUIC is skipped with `host_sni_required` and zero tested QUIC candidates while all three Generic UDP candidates execute;
+- `job.W0lKTv`: `172.67.182.196` + Host/SNI `rutracker.org` is `SUCCESS`, exact replay stays pinned to the entered IP, final profile contains `--ipset-ip=172.67.182.196`, and all four QUIC candidates execute with fixed-IP + Host/SNI verification;
+- selected closeout jobs verify clean `RUNNING -> RUNNING` Stage-90 restoration, unchanged strategy and clean temporary runtime.
+
+Durable closeout evidence: `docs/verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md`.
 
 The publisher completed package build, digest/manifest verification, release publication and release/tag verification. GitHub Actions policy blocked only automatic publication-record PR creation, so documentation-only PR `#265` was opened manually from the workflow-created branch.
 
@@ -187,14 +199,14 @@ The publisher completed package build, digest/manifest verification, release pub
 | 24 | `_21` OPNsense-owned Laboratory perimeter | **OWNER-LIVE PASS** |
 | 25 | `_21` Russian submenu persistence across Laboratory ↔ Strategy | **OWNER-LIVE PASS** |
 | 26 | Target already accessible | **COMPLETE — OWNER CONFIRMED** |
-| 27 | `_23` `rutracker.net` stable intercepted finalist survives Stage 85 with HTTP 4xx/5xx | **PENDING OWNER-LIVE** |
-| 28 | `_23` ordinary-domain regression (`rutracker.org`) | **PENDING OWNER-LIVE** |
-| 29 | `_23` bare IPv4 certificate-identity failure → PARTIAL + Host/SNI guidance | **PENDING OWNER-LIVE** |
-| 30 | `_23` IPv4 target + real Host/SNI pinned to entered IP | **PENDING OWNER-LIVE** |
-| 31 | `_23` final IP profile contains `--ipset-ip=<entered IPv4>` and exact replay | **PENDING OWNER-LIVE** |
-| 32 | `_23` Extended Generic UDP against IPv4 without Host/SNI | **PENDING OWNER-LIVE** |
-| 33 | `_23` bare-IP QUIC skipped with zero tested candidates; Host/SNI QUIC remains valid | **PENDING OWNER-LIVE** |
-| 34 | `_23` Stage-90 cleanup/restoration after IP run | **PENDING OWNER-LIVE** |
+| 27 | `_23` `rutracker.net` stable intercepted finalist survives Stage 85 with HTTP 4xx/5xx | **OWNER-LIVE PASS — `job.9juf8H`, HTTP 502 retained** |
+| 28 | `_23` ordinary-domain regression (`rutracker.org`) | **OWNER-LIVE PASS — `job.TYjdSR`** |
+| 29 | `_23` bare IPv4 certificate-identity failure → PARTIAL + Host/SNI guidance | **OWNER-LIVE PASS — `job.3HeCEP`** |
+| 30 | `_23` IPv4 target + real Host/SNI pinned to entered IP | **OWNER-LIVE PASS — `job.W0lKTv`** |
+| 31 | `_23` final IP profile contains `--ipset-ip=<entered IPv4>` and exact replay | **OWNER-LIVE PASS — `job.W0lKTv`** |
+| 32 | `_23` Extended Generic UDP against IPv4 without Host/SNI | **OWNER-LIVE PASS — `job.HNnp5P`, 3 UDP candidates** |
+| 33 | `_23` bare-IP QUIC skipped with zero tested candidates; Host/SNI QUIC remains valid | **OWNER-LIVE PASS — `job.HNnp5P` skip / `job.W0lKTv` 4 real attempts** |
+| 34 | `_23` Stage-90 cleanup/restoration after IP run | **OWNER-LIVE PASS — selected closeout jobs clean** |
 | 35 | Cancellation/internal-failure containment | PENDING REGRESSION |
 | 36 | Circular lifecycle | PENDING REGRESSION |
 | 37 | Retention/reboot residue | PENDING REGRESSION |
@@ -203,10 +215,12 @@ Settings Apply validation/guards and post-Apply service-state correctness are se
 
 ## Current product plan
 
-Run the selected owner-live domain/IPv4 truthful-result rows against the exact published `v0.4.1_23` package before marking Laboratory target support complete.
+Laboratory domain/IPv4/Host-SNI target support is complete on the exact published `v0.4.1_23` package. Do not repeat rows 27–34 without fresh contradictory evidence.
+
+The next selected live row is Enable QUIC OFF/default persistence across an actual page reload/revisit. A passing reload proof closes that pre-existing row without product-source change; a failure becomes a new bounded defect.
 
 ## Current failure policy
 
 Generic UDP should only be reopened if fresh evidence contradicts the accepted exact-byte path. QUIC OFF execution should only be reopened if fresh evidence shows OFF still runs QUIC candidates; persistence remains pending until an actual reload/revisit proves the stored setting.
 
-The closed `_21` Laboratory presentation row should only be reopened for a concrete regression in the native perimeter/grid, requested typography, mode/status/sidebar localization, or language leakage. `_23` must preserve the `_22` IP-target architecture while correcting the selected truthful-result semantics.
+The closed `_21` Laboratory presentation row should only be reopened for a concrete regression in the native perimeter/grid, requested typography, mode/status/sidebar localization, or language leakage. The now-closed `_23` IPv4/Host-SNI target-support row should only be reopened for fresh contradictory evidence.
