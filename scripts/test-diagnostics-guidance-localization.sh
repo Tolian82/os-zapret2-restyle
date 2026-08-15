@@ -73,7 +73,7 @@ require "${VIEW}" 'class="table table-striped diagnostics-form-table" id="testDo
 require "${VIEW}" 'class="table table-striped diagnostics-form-table" id="strategyLabInputsTable"'
 require "${VIEW}" '.diagnostics-form-table > tbody > tr > td.zapret-field-label'
 require "${VIEW}" 'width:25%;'
-require "${VIEW}" 'class="zapret-field-label">{{ lang._('
+require "${VIEW}" 'class="zapret-field-label">'
 require "${VIEW}" 'class="zapret-field-value"><input type="text" class="form-control" id="testDomainInput"'
 require "${VIEW}" 'class="zapret-field-value"><input type="text" class="form-control" id="strategyLabDomainInput"'
 require "${VIEW}" 'class="zapret-field-value"><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort"'
