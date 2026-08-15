@@ -135,15 +135,11 @@ env ${COMMON_ENV} \
 grep -Fq 'tls12|tls12-multisplit|' "${LOG}" || fail 'TLS 1.2 candidate protocol environment missing'
 grep -Fq 'http|http-multisplit|' "${LOG}" || fail 'HTTP candidate protocol environment missing'
 
+# The control probe may report QUIC blocked; explicit Enable QUIC must still run candidates.
 printf '%s\n' '{"quic_ipv4":"closed"}' > "${TMP}/network-closed.json"
 env ${COMMON_ENV} MODULE_DIR="${SCRIPT_DIR}/strategy_lab" STRATEGY_LAB_QUIC_CANDIDATE_RUNNER="${FAKE}" \
   sh "${LAUNCHER}" extended quic "${JOB}" "${TMP}/endpoints.txt" "${TMP}/network-closed.json" "${TMP}/quic-closed.json"
-"${JQ}" -e '.status=="skipped" and .reason=="quic_ipv4_closed" and (.tested|length)==0' "${TMP}/quic-closed.json" >/dev/null || fail 'Python QUIC capability skip contract failed'
-
-printf '%s\n' '{"quic_ipv4":"available"}' > "${TMP}/network.json"
-env ${COMMON_ENV} MODULE_DIR="${SCRIPT_DIR}/strategy_lab" STRATEGY_LAB_QUIC_CANDIDATE_RUNNER="${FAKE}" \
-  sh "${LAUNCHER}" extended quic "${JOB}" "${TMP}/endpoints.txt" "${TMP}/network.json" "${TMP}/quic.json"
-"${JQ}" -e '.status=="working" and .working.id=="quic-fake-2" and (.tested|length)==2' "${TMP}/quic.json" >/dev/null || fail 'Python QUIC ordering contract failed'
+"${JQ}" -e '.enabled==true and .status=="working" and .working.id=="quic-fake-2" and (.tested|length)==2' "${TMP}/quic-closed.json" >/dev/null || fail 'Python QUIC search was still gated by the blocked control probe'
 grep -Fq 'quic|quic-fake-1|' "${LOG}" || fail 'QUIC candidate protocol environment missing'
 
 env ${COMMON_ENV} MODULE_DIR="${SCRIPT_DIR}/strategy_lab" STRATEGY_LAB_UDP_CANDIDATE_RUNNER="${FAKE}" \
@@ -162,4 +158,4 @@ PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_CANDIDATE_PROTOCOL=http "${PYTHON}" -c '
 PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_CANDIDATE_PROTOCOL=quic "${PYTHON}" -c 'from strategy_lab_py.candidate import _protocol_spec; s=_protocol_spec(); assert (s.protocol,s.transport,s.port,s.l7)==("quic","udp",443,"quic")'
 PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_CANDIDATE_PROTOCOL=udp STRATEGY_LAB_UDP_PORT=3478 STRATEGY_LAB_UDP_PAYLOAD_FILE="${TMP}/payload.bin" "${PYTHON}" -c 'from strategy_lab_py.candidate import _protocol_spec; s=_protocol_spec(); assert (s.protocol,s.transport,s.port)==("udp","udp",3478)'
 
-echo 'PASS: Python 3.13 keeps Stage-50 evidence as native-graph priority without gating Stage-60 reachability and preserves stability/extended contracts'
+echo 'PASS: Python 3.13 preserves adaptive/stability/extended contracts and runs QUIC independently of control-probe reachability'

@@ -217,27 +217,22 @@ def quic(job_id: str, endpoints_file: str, network_file: str, result_file: str) 
     if not JOB_RE.fullmatch(job_id):
         return EX_USAGE
     endpoints = Path(endpoints_file)
-    network_path = Path(network_file)
-    if not endpoints.is_file() or not network_path.is_file():
+    if not endpoints.is_file():
         return EX_USAGE
+    # network_file is retained only for the compatibility CLI signature. QUIC
+    # execution is intentionally independent of measured QUIC reachability;
+    # the per-job Enable QUIC request is the sole execution gate.
+    _ = network_file
     output = Path(result_file)
     epoch = _search_epoch(job_id, endpoints)
-    capability = _load_json(network_path).get("quic_ipv4", "unknown")
-    if not isinstance(capability, str):
-        raise RuntimeError("Strategy Lab QUIC capability is invalid")
     result: dict[str, Any] = {
         "search_epoch_id": epoch.epoch_id,
-        "capability": capability,
+        "enabled": True,
         "status": "pending",
         "tested": [],
         "working": None,
     }
     _atomic_json(output, result)
-    if capability != "available":
-        result["status"] = "skipped"
-        result["reason"] = f"quic_ipv4_{capability}"
-        _atomic_json(output, result)
-        return EX_OK
 
     catalog_path = Path(os.environ.get("STRATEGY_LAB_QUIC_CATALOG", str(module_dir() / "catalog/quic.tsv")))
     args_dir = Path(os.environ.get("STRATEGY_LAB_QUIC_ARGS_DIR", str(module_dir() / "catalog/quic")))

@@ -140,6 +140,7 @@ class StrategyLabController extends ApiControllerBase
         $target = $this->domainTarget();
         $mode = trim((string)$this->request->getPost('mode', 'striptags', 'standard'));
         $language = trim((string)$this->request->getPost('language', 'striptags', 'en'));
+        $enableQuic = trim((string)$this->request->getPost('enable_quic', 'striptags', '0'));
 
         if ($target === '') {
             return ['status' => 'error', 'message' => 'Invalid Strategy Lab domain.'];
@@ -149,6 +150,9 @@ class StrategyLabController extends ApiControllerBase
         }
         if (!in_array($language, ['en', 'ru'], true)) {
             $language = 'en';
+        }
+        if (!in_array($enableQuic, ['0', '1'], true)) {
+            return ['status' => 'error', 'message' => 'Invalid Strategy Lab QUIC setting.'];
         }
 
         $udpInput = $this->udpInput($mode);
@@ -160,6 +164,7 @@ class StrategyLabController extends ApiControllerBase
             $target,
             $mode,
             $language,
+            $enableQuic,
             $udpInput['port'],
             $udpInput['payload']
         ]);

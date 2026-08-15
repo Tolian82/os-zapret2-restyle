@@ -7,7 +7,7 @@ STRATEGY_LAB_QUIC_CANDIDATE_TIMEOUT="${STRATEGY_LAB_QUIC_CANDIDATE_TIMEOUT:-5}"
 
 strategy_lab_quic_initialize()
 {
-    "${STRATEGY_LAB_JQ}" -nc --arg capability "$2" '{capability:$capability,status:"pending",tested:[],working:null}' | strategy_lab_atomic_write "$1"
+    "${STRATEGY_LAB_JQ}" -nc '{enabled:true,status:"pending",tested:[],working:null}' | strategy_lab_atomic_write "$1"
 }
 
 strategy_lab_quic_append()
@@ -21,14 +21,8 @@ strategy_lab_quic_append()
 
 strategy_lab_quic_run()
 {
-    _slqr_job="$1"; _slqr_endpoints="$2"; _slqr_network="$3"; _slqr_output="$4"
-    _slqr_capability=$("${STRATEGY_LAB_JQ}" -r '.quic_ipv4 // "unknown"' "${_slqr_network}")
-    strategy_lab_quic_initialize "${_slqr_output}" "${_slqr_capability}" || return 1
-    if [ "${_slqr_capability}" != available ]; then
-        _slqr_tmp="${_slqr_output}.tmp.$$"
-        "${STRATEGY_LAB_JQ}" --arg reason "quic_ipv4_${_slqr_capability}" '.status="skipped"|.reason=$reason' "${_slqr_output}" > "${_slqr_tmp}" || return 1
-        mv -f "${_slqr_tmp}" "${_slqr_output}"; return 0
-    fi
+    _slqr_job="$1"; _slqr_endpoints="$2"; _slqr_output="$4"
+    strategy_lab_quic_initialize "${_slqr_output}" || return 1
     _slqr_work=$(strategy_lab_job_dir "${_slqr_job}")/quic; mkdir -p "${_slqr_work}" || return 1; _slqr_tab=$(printf '\t')
     while IFS="${_slqr_tab}" read -r _slqr_id _slqr_family _slqr_hostlist _slqr_args_name; do
         [ -n "${_slqr_id}" ] || continue

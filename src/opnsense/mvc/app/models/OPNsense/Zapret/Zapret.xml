@@ -40,6 +40,12 @@
                 <Required>N</Required>
             </extraargs>
         </strategy>
+        <strategylab>
+            <enablequic type="BooleanField">
+                <Default>0</Default>
+                <Required>Y</Required>
+            </enablequic>
+        </strategylab>
         <hostlist>
             <mode type="OptionField">
                 <Default>all</Default>

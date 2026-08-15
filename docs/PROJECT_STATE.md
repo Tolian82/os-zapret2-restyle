@@ -4,8 +4,6 @@
 **Updated:** 2026-08-15
 State-line scope: **`v0.4.x`**
 
-This file contains current facts only (`DOC-026`–`DOC-030`).
-
 Direct orientation:
 
 - exact revision handoff: [`START_HERE.md`](START_HERE.md);
@@ -16,122 +14,109 @@ Direct orientation:
 - master plan: [`ROADMAP.md`](ROADMAP.md);
 - current-line chronology/proof: [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
 
+Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+
 ## Repository and package facts
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
-- packaged source revision: `_13`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_13.pkg` / `v0.4.1_13`;
-- testing-package SHA-256: `7a2f864aa14ba2170ca378954ab5421092b76aca79b7b1765b976de2f024797b`;
-- `_13` source merge and testing-tag target: `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
+- current source candidate: `_14`;
+- current published testing package remains `_13` until `_14` is merged and persistently published;
+- `_13` published package/tag: `os-zapret2-restyle-0.4.1_13.pkg` / `v0.4.1_13`;
+- `_13` package SHA-256: `7a2f864aa14ba2170ca378954ab5421092b76aca79b7b1765b976de2f024797b`;
+- `_13` source/tag target: `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
 - latest full Web/pkg release: `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
 - required ABI: `FreeBSD:15:amd64`;
 - internal service key: `zapret`.
 
-The exact `main` SHA is resolved at execution time under `GH-004`. The `_13` testing prerelease is persistent GitHub delivery only and does not update the stable Pages/pkg repository (`GH-034`–`GH-038`).
+The exact `main` SHA is resolved at execution time under `GH-004`.
 
 ## Current product facts
 
-- DNS is fixed/currently working. Historical DNS failures are not a current blocker without fresh direct reproducible evidence.
-- Model C is the selected and only normal production Stage-60 runtime. A/B/C model selection is closed.
-- source `_13` removes automatic normal-production `Model C -> Model B -> Model A cold` replay;
-- Model-C infrastructure/selector/rendering/readiness/attribution/cleanup failure is an explicit bounded structural Stage-60 failure, not candidate PASS/FAIL and not a fallback trigger;
-- Model B remains explicit warm/reference/benchmark tooling; Model A remains explicit cold correctness/reference tooling;
-- legacy B->A fallback semantics may remain inside explicit reference/measurement modules, but are not reachable from the normal packaged Stage-60 production entry point;
-- Lua initialization, BLOB lazy-loading/common-set, bounded GET-4K discovery, and cross-batch keep-warm questions are closed for the current architecture by accepted measured evidence.
+- DNS is fixed/currently working; old DNS failures are closed absent fresh direct evidence.
+- Model C is the only normal production Stage-60 runtime; A/B/C selection is closed.
+- `_13` removed automatic normal-production Model B/A replay.
+- Lua initialization, BLOB lazy/common-set, GET-4K discovery and cross-batch keep-warm questions remain closed for the current architecture by accepted measured evidence.
+- `_13` owner-live Standard RUNNING and STOPPED behavior is accepted.
+- `_13 job.TJlWoY` accepted truthful Extended TLS 1.2 and HTTP branch execution.
+- `_13 job.TJlWoY` also demonstrated the **old** closed-QUIC capability skip. The owner has now superseded that behavior: being blocked is a reason to test bypass, not a reason to suppress the test.
 
-Detailed measurements and proof links remain in the current `v0.4.x` ledger.
+## Current `_14` source contract
 
-## Current architecture and safety facts
+`v0.4.1_14` is one source/UI/backend scope with two related corrections.
 
-Normal Stage 60 routes through `strategy_lab_py/stage60_model_c_production.py`, which reuses the proven Model-C bucket engine while preserving:
+### Explicit Enable QUIC
 
-- adaptive-search planner semantics;
-- immutable CandidateSpec and job-scoped ResourceInventory identity;
-- exact source-port-qualified attribution/leasing;
-- profile-compatible physical segmentation inside logical planner batches;
-- bounded readiness;
-- finite adaptive budgets;
-- bounded GET-4K discovery;
-- cleanup/cancellation containment;
-- Stage-90 semantic restoration.
+- Diagnostics Extended mode adds `Enable QUIC` directly below `Generic UDP (optional)`.
+- It is a persisted Boolean Strategy Lab preference, default OFF.
+- The selected value is copied into job-local state at launch.
+- OFF means Stage 80 records QUIC skipped for `disabled` and launches no QUIC candidate.
+- ON means Stage 80 runs QUIC candidates.
+- Stage-30 `quic_ipv4` probing remains diagnostic only.
+- **No measured QUIC capability value may decide whether QUIC candidates run.**
+- In particular, `quic_ipv4=closed` with Enable QUIC ON must still execute candidates and finish with truthful `working` or `not_found`.
 
-The production owner deliberately converts Model-C infrastructure failure into a structural `Stage60ParallelError` that is not `WarmInfrastructureError`; this prevents the legacy Model-B/cold-Model-A replay handler from consuming normal production failures.
+Canonical contract: [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md).
 
-Current architecture entry points:
+### Generic UDP apparent no-op correction
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md);
-- [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md);
-- [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md).
+- Generic UDP payload remains bounded to decoded size `1..4096` bytes.
+- The previously attempted 2–3 MB files are invalid by design.
+- The browser now validates pair/size before clearing previous result or entering running state.
+- Oversized input produces an immediate visible size error.
+- API/backend strict validation remains authoritative.
 
-Historical A/B/C experiment material is history/proof and does not represent current production choice.
+Canonical contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
 
-## Current verification boundary
+## Current implementation boundary
 
-`_13` automated source acceptance, persistent testing-package publication, normal Model-C-only owner-live regression, initial-STOPPED lifecycle regression, Extended TLS 1.2/HTTP execution coverage, and closed-QUIC capability gating are complete:
+The `_14` source branch implements:
 
-- PR `#230` exact verified head: `8e1af17ce4ccfaad4851329167b386741d0c9ee8`;
-- focused Model-C production regression proves injected infrastructure failure does not invoke B/A reference paths;
-- full Strategy Lab corrective matrix: PASS;
-- FreeBSD-15 package build/inspection qualification: PASS;
-- source CI run: `31819116248`;
-- verified head squash-merged as `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
-- testing publication workflow run: `31838633599`;
-- prerelease `v0.4.1_13` and package asset published and verified;
-- tag target matches the `_13` source merge exactly;
-- temporary publication branch was removed after success;
-- installed owner package confirmed as `os-zapret2-restyle-0.4.1_13` on `FreeBSD:15:amd64`;
-- `telegram.org` `job.6RhNa1`: `NO_CANDIDATE`, Model C `16/16`, graph exhausted, no fallback, verified clean `RUNNING -> RUNNING` restoration;
-- `rutracker.org` `job.PEEjoY`: `SUCCESS`, Model C `16/16`, three stable shortlist entries, no fallback, verified clean `RUNNING -> RUNNING` restoration;
-- `www.youtube.com` `job.7Kz5ro`: `SUCCESS`, Model C early stop at `7/16` with `enough_candidates`, three stable shortlist entries, no fallback, verified clean `RUNNING -> RUNNING` restoration;
-- `rutracker.org` `job.5b97u9` with initial normal Zapret2 STOPPED: Strategy Lab completed `SUCCESS`, reported three stable working strategies, final `configctl zapret status` remained `zapret is not running`, and the post-job `dvtws2|zapret.*supervisor` process query was empty;
-- `rutracker.org` Extended `job.TJlWoY`: terminal `SUCCESS`, Stage 80 `PASS`, Stage 90 `PASS`, one stable shortlist entry;
-- Extended TLS 1.2 on `job.TJlWoY`: two candidates executed (`tls12-multisplit`, `tls12-fake`), both temporary runtimes became ready/stable, traffic interception was observed, both endpoint probes truthfully failed, persisted `working=null`;
-- Extended HTTP on `job.TJlWoY`: two candidates executed (`http-multisplit`, `http-multidisorder`), both temporary runtimes became ready/stable, endpoint binding/interception was observed, both endpoint probes truthfully failed, persisted `working=null`;
-- QUIC on `job.TJlWoY`: Stage 30 classified QUIC/IPv4 as closed and Stage 80 explicitly reported `QUIC=skipped`, accepted as correct capability gating;
-- Generic UDP on `job.TJlWoY`: `UDP=skipped` because no request payload file was supplied; this row remains open.
+- `PLUGIN_REVISION=14`;
+- model-backed `strategylab.enablequic` with default `0`;
+- persistent Strategy Lab settings API;
+- GUI load/save checkbox state;
+- explicit `enable_quic` start parameter;
+- immutable job-local `quic-enabled` execution intent;
+- Stage-80 checkbox-only QUIC gate;
+- removal of capability gating from both Python production and shell/reference QUIC runners;
+- Stage-30 presentation that reports blocked QUIC as a control-probe fact without claiming QUIC tests were excluded;
+- pre-start visible Generic UDP pair/size validation;
+- focused regression tests proving blocked-control-probe QUIC still executes when enabled and oversized UDP input is rejected before UI reset.
 
-For `job.5b97u9`, the owner explicitly accepted the observable `STOPPED -> Strategy Lab works -> SUCCESS -> STOPPED` path as sufficient for this selected regression and stated that no additional telemetry/repetition of the same scenario is required. Do not fabricate unobserved firewall/socket/hash evidence and do not reopen the passed row merely to collect it.
+## Verification boundary
 
-For `job.TJlWoY`, `working=null` for TLS 1.2 and HTTP is a truthful target/environment result, not a Strategy Lab defect: the protocol branches actually executed, temporary runtimes became ready/stable, interception/endpoint evidence was collected, Stage 80 completed PASS, and Stage 90 restored normally.
-
-Durable owner-live evidence:
+Already accepted historical `_13` live evidence remains durable under:
 
 - [`verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md);
 - [`verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md);
 - [`verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md).
 
-The current selected live-regression boundary is now **configured Generic UDP**. Both a valid UDP port and a 1-4096-byte request payload file must be supplied so the UDP branch executes instead of returning `skipped`.
+Current `_14` verification is not yet complete until:
 
-## Current documentation and governance facts
+1. latest-head source CI passes;
+2. FreeBSD-15 package qualification passes;
+3. exact verified head is merged;
+4. persistent `v0.4.1_14` testing package is published from the candidate-defining source merge;
+5. publication-record docs tail is reconciled/merged;
+6. owner installs `_14` and verifies the explicit QUIC and Generic UDP behaviors described in `START_HERE.md`.
 
-- exactly four canonical general rule books exist: `DOCUMENTATION_RULES.md`, `PROJECT_PRINCIPLES.md`, `CHAT_RULES.md`, and `GITHUB_PUBLICATION.md`;
-- `GITHUB_PUBLICATION.md` is the fourth book, **Правила работы с GitHub**, despite the retained historical filename;
-- owner shorthand `сделай патч` / `сделай пакет` / `выложи пакет` is GitHub-native delivery, not a request for chat-generated files;
-- project patch/package delivery never uses chat/sandbox `.pkg`, `.zip`, `.tar.*`, `.patch`, `.diff`, Actions artifacts, or equivalent transport files as the completion result;
-- a patch that creates a new package candidate automatically continues after exact-head source merge to persistent GitHub testing-package publication without a second owner confirmation;
-- testing publication is pinned to the candidate-defining merged source commit: the source must be an ancestor of `main` and its parent must have a different package identity, so a later same-identity docs/governance commit cannot be published accidentally;
-- successful testing publication creates a machine-evidence Draft `publication-record/...` PR; that bounded docs-only tail must be reconciled, validated, exact-head squash-merged, verified on `main`, and cleaned before the package/patch command is complete;
-- rule IDs are permanent identities and are not cascade-renumbered when rules are inserted or reorganized;
-- cancelled/replaced rules remain physically at their permanent IDs with explicit lifecycle markers; those IDs are never recycled;
-- creating, refining, cancelling, and replacing rules has an explicit semantic decision boundary in `DOC-054`;
-- each canonical book contains explicit inbound/outbound cross-reference registries and CI validates them against active rule bodies and lifecycle state;
-- local Markdown links and local Markdown heading fragments are validated by CI;
-- `START_HERE.md` is the exact `_N` handoff;
-- current work follows one state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`; ledgers/decisions/devlogs/evidence preserve chronology and proof but are not parallel owners of current state;
-- zero-memory recovery is context-first: handoff/state, then all four rule books, plan/index, then selected specialists;
-- Level-1 material already read for an unchanged exact repository state may be reused; advancing `main` requires affected current/mandatory material to be reread;
-- the former mandatory broad GitHub reconciliation rule is cancelled; consistency work uses targeted rule dependencies, reference/link validation, and scope/risk expansion instead of a mandatory repository-wide audit for every canon change;
-- pure documentation PRs use focused documentation/governance integrity validation rather than mechanically running the complete product matrix; product/package changes retain full validation as applicable;
-- this file is current state for `v0.4.x`;
-- `ROADMAP.md` is the complete concise master plan;
-- `INDEX.md` is the global navigation/integrity map;
-- [`history/current/v0.4.x.md`](history/current/v0.4.x.md) is the current Level-2 chronology;
-- obsolete duplicate quick-reference files `GITHUB_WORKFLOW.md`, `DEVELOPMENT_GUIDE.md`, and `WORKING_CONVENTIONS.md` have been removed after reference migration;
-- active/new documentation uses clean standard Markdown; old Level-3 historical formatting is preserved unless deliberately migrated separately.
+## Documentation authority note
 
-The normative mechanics behind these facts live only in the corresponding rule books and are not duplicated here.
+The new owner instruction is current truth. Any older text saying Stage-30 QUIC availability decides whether Stage-80 QUIC candidate testing runs is historical/superseded. The specialist `_14` QUIC contract has current authority while older historical evidence remains unchanged as evidence of what `_13` actually did.
+
+## Current architecture entry points
+
+- [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md)
+- [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md)
+- [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md)
+- [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md)
+
+## Current documentation/governance facts
+
+The four canonical general rule books remain `DOCUMENTATION_RULES.md`, `PROJECT_PRINCIPLES.md`, `CHAT_RULES.md`, and `GITHUB_PUBLICATION.md`. Project patch/package delivery is GitHub-native; a package-affecting source change automatically continues through persistent testing publication and the required publication-record tail. `START_HERE.md` owns the exact revision handoff, this file owns current `v0.4.x` facts, and the version-line ledger preserves chronology.
 
 ## Completed version-line archives
 

@@ -3,7 +3,7 @@
 usage_error()
 {
     echo "ERROR: $1" >&2
-    echo "Usage: strategy_lab_launcher.sh {start TARGET MODE LANGUAGE [UDP_PORT UDP_PAYLOAD_BASE64]|status [JOB_ID]|cancel JOB_ID|result JOB_ID}" >&2
+    echo "Usage: strategy_lab_launcher.sh {start TARGET MODE LANGUAGE [ENABLE_QUIC [UDP_PORT UDP_PAYLOAD_BASE64]]|status [JOB_ID]|cancel JOB_ID|result JOB_ID}" >&2
     exit 64
 }
 
@@ -70,17 +70,29 @@ cleanup_stale_active()
 
 start_job()
 {
+    _strategy_lab_enable_quic=0
     case "$#" in
         4)
             _strategy_lab_udp_port='-'
             _strategy_lab_udp_payload='-'
             ;;
+        5)
+            _strategy_lab_enable_quic="$5"
+            _strategy_lab_udp_port='-'
+            _strategy_lab_udp_payload='-'
+            ;;
         6)
+            # Backward-compatible legacy form: TARGET MODE LANGUAGE UDP_PORT UDP_PAYLOAD_BASE64.
             _strategy_lab_udp_port="$5"
             _strategy_lab_udp_payload="$6"
             ;;
+        7)
+            _strategy_lab_enable_quic="$5"
+            _strategy_lab_udp_port="$6"
+            _strategy_lab_udp_payload="$7"
+            ;;
         *)
-            usage_error "start requires TARGET MODE LANGUAGE and optional UDP_PORT UDP_PAYLOAD_BASE64"
+            usage_error "start requires TARGET MODE LANGUAGE and optional ENABLE_QUIC plus UDP_PORT UDP_PAYLOAD_BASE64"
             ;;
     esac
     _strategy_lab_target=$(strategy_lab_normalize_target "$2" 2>/dev/null || true)
@@ -90,6 +102,7 @@ start_job()
     [ -n "${_strategy_lab_target}" ] || usage_error "invalid target"
     strategy_lab_mode_valid "${_strategy_lab_mode}" || usage_error "invalid mode"
     strategy_lab_language_valid "${_strategy_lab_language}" || usage_error "invalid language"
+    case "${_strategy_lab_enable_quic}" in 0|1) ;; *) usage_error "invalid Enable QUIC value" ;; esac
     [ -x "${WORKER_SCRIPT}" ] || { emit_error_json "Strategy Lab worker is unavailable"; return 1; }
     [ -x "${TRANSACTION_SCRIPT}" ] || { emit_error_json "Strategy Lab lifecycle transaction is unavailable"; return 1; }
     [ -x "${DAEMON_BIN}" ] || { emit_error_json "Strategy Lab daemon launcher is unavailable"; return 1; }
@@ -106,6 +119,12 @@ start_job()
     strategy_lab_job_id_valid "${_strategy_lab_job}" || { rm -rf "${_strategy_lab_jobdir}"; emit_error_json "Strategy Lab job id generation failed"; return 1; }
 
     strategy_lab_initialize_state "${_strategy_lab_job}" "${_strategy_lab_target}" "${_strategy_lab_mode}" "${_strategy_lab_language}"
+    printf '%s\n' "${_strategy_lab_enable_quic}" > "${_strategy_lab_jobdir}/quic-enabled" || {
+        rm -rf "${_strategy_lab_jobdir}"
+        emit_error_json "Strategy Lab QUIC request could not be persisted"
+        return 1
+    }
+    chmod 0644 "${_strategy_lab_jobdir}/quic-enabled"
     if ! strategy_lab_udp_input_prepare "${_strategy_lab_job}" "${_strategy_lab_mode}" \
         "${_strategy_lab_udp_port}" "${_strategy_lab_udp_payload}"
     then

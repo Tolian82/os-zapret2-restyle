@@ -67,38 +67,29 @@ strategy_lab_udp_input_prepare "${job}" extended 5353 cGluZw== ||
 ' "$(strategy_lab_status_file "${job}")" >/dev/null ||
     fail 'public UDP request metadata is invalid'
 
-# The shell export helper remains a compatibility contract through Patch 7 even
-# though the Patch-6 production UDP runner no longer consumes it.
 strategy_lab_udp_input_export "${job}" ||
     fail 'valid job-local UDP input was not exported'
-[ "${STRATEGY_LAB_UDP_PORT}" = 5353 ] ||
-    fail 'exported UDP port is invalid'
+[ "${STRATEGY_LAB_UDP_PORT}" = 5353 ] || fail 'exported UDP port is invalid'
 [ "${STRATEGY_LAB_UDP_PAYLOAD_FILE}" = "$(strategy_lab_udp_payload_file "${job}")" ] ||
     fail 'compatibility export returned a non-job-local payload path'
 
 strategy_lab_udp_input_cleanup "${job}"
-[ ! -e "$(strategy_lab_udp_port_file "${job}")" ] ||
-    fail 'UDP port metadata survived cleanup'
-[ ! -e "$(strategy_lab_udp_payload_file "${job}")" ] ||
-    fail 'UDP payload survived cleanup'
+[ ! -e "$(strategy_lab_udp_port_file "${job}")" ] || fail 'UDP port metadata survived cleanup'
+[ ! -e "$(strategy_lab_udp_payload_file "${job}")" ] || fail 'UDP payload survived cleanup'
 
 strategy_lab_initialize_state "${job}" udp.example extended en
-strategy_lab_udp_input_prepare "${job}" extended - - ||
-    fail 'disabled generic UDP input was rejected'
+strategy_lab_udp_input_prepare "${job}" extended - - || fail 'disabled generic UDP input was rejected'
 "${STRATEGY_LAB_JQ}" -e '
     .udp_request.configured==false and
     .udp_request.port==null and
     .udp_request.payload_bytes==0
-' "$(strategy_lab_status_file "${job}")" >/dev/null ||
-    fail 'disabled UDP request metadata is invalid'
+' "$(strategy_lab_status_file "${job}")" >/dev/null || fail 'disabled UDP request metadata is invalid'
 
 expect_rejected()
 {
     description="$1"
     shift
-    if strategy_lab_udp_input_prepare "${job}" "$@"; then
-        fail "${description}"
-    fi
+    if strategy_lab_udp_input_prepare "${job}" "$@"; then fail "${description}"; fi
     strategy_lab_udp_input_cleanup "${job}"
 }
 
@@ -107,62 +98,39 @@ expect_rejected 'missing UDP payload was accepted' extended 53 -
 expect_rejected 'missing UDP port was accepted' extended - cGluZw==
 expect_rejected 'out-of-range UDP port was accepted' extended 65536 cGluZw==
 expect_rejected 'noncanonical Base64 payload was accepted' extended 53 'cGluZw='
-
-oversize=$(dd if=/dev/zero bs=4097 count=1 2>/dev/null |
-    "${STRATEGY_LAB_BASE64_BIN}" | tr -d '\n')
+oversize=$(dd if=/dev/zero bs=4097 count=1 2>/dev/null | "${STRATEGY_LAB_BASE64_BIN}" | tr -d '\n')
 expect_rejected 'oversized UDP payload was accepted' extended 53 "${oversize}"
 
-grep -Fq 'UDP_PAYLOAD_MAX_BYTES = 4096' "${CONTROLLER}" ||
-    fail 'API payload size limit is missing'
-grep -Fq 'base64_decode($payload, true)' "${CONTROLLER}" ||
-    fail 'API strict Base64 decoding is missing'
-grep -Fq "Generic UDP requires both a port and a payload file." "${CONTROLLER}" ||
-    fail 'API pair validation is missing'
-grep -Fq "\$udpInput['port']" "${CONTROLLER}" ||
-    fail 'API does not pass validated UDP input to configd'
-grep -Fq 'parameters:%s %s %s %s %s' "${ACTIONS}" ||
-    fail 'configd start action does not carry the UDP contract'
-grep -Fq 'strategyLabUdpPort' "${VIEW}" ||
-    fail 'GUI UDP port field is missing'
-grep -Fq 'strategyLabUdpPayload' "${VIEW}" ||
-    fail 'GUI payload file field is missing'
-grep -Fq 'readAsDataURL(payloadFile)' "${VIEW}" ||
-    fail 'GUI does not encode the selected payload file'
-grep -Eq 'for module in .*udp_input.*launch.*query' "${LAUNCHER}" ||
-    fail 'launcher does not load the UDP input, launch, and query modules in order'
-grep -Fq 'case "$#" in' "${LAUNCH}" ||
-    fail 'launcher start contract is not backward compatible'
-grep -Fq 'strategy_lab_udp_input_prepare' "${LAUNCH}" ||
-    fail 'launcher does not create job-local UDP input'
+grep -Fq 'UDP_PAYLOAD_MAX_BYTES = 4096' "${CONTROLLER}" || fail 'API payload size limit is missing'
+grep -Fq 'base64_decode($payload, true)' "${CONTROLLER}" || fail 'API strict Base64 decoding is missing'
+grep -Fq "Generic UDP requires both a port and a payload file." "${CONTROLLER}" || fail 'API pair validation is missing'
+grep -Fq "\$udpInput['port']" "${CONTROLLER}" || fail 'API does not pass validated UDP input to configd'
+grep -Fq 'parameters:%s %s %s %s %s %s' "${ACTIONS}" || fail 'configd start action does not carry QUIC plus UDP contract'
+grep -Fq 'strategyLabUdpPort' "${VIEW}" || fail 'GUI UDP port field is missing'
+grep -Fq 'strategyLabUdpPayload' "${VIEW}" || fail 'GUI payload file field is missing'
+grep -Fq 'payloadFile.size<1||payloadFile.size>udpPayloadMaxBytes' "${VIEW}" || fail 'GUI payload size validation is missing'
+grep -Fq 'showInputError(ui.udpSize)' "${VIEW}" || fail 'GUI oversized payload rejection is not user-visible'
+grep -Fq 'readAsDataURL(payloadFile)' "${VIEW}" || fail 'GUI does not encode the selected payload file'
+size_line=$(grep -n 'payloadFile.size<1||payloadFile.size>udpPayloadMaxBytes' "${VIEW}" | head -1 | cut -d: -f1)
+reset_line=$(grep -n "clearInputError(); stopPolling(); activeJobId=''" "${VIEW}" | head -1 | cut -d: -f1)
+[ -n "${size_line}" ] && [ -n "${reset_line}" ] && [ "${size_line}" -lt "${reset_line}" ] ||
+    fail 'GUI clears/starts Strategy Lab before rejecting an oversized UDP payload'
+grep -Eq 'for module in .*udp_input.*launch.*query' "${LAUNCHER}" || fail 'launcher does not load UDP input, launch, and query modules in order'
+grep -Fq 'case "$#" in' "${LAUNCH}" || fail 'launcher start contract is not backward compatible'
+grep -Fq 'strategy_lab_udp_input_prepare' "${LAUNCH}" || fail 'launcher does not create job-local UDP input'
 
-# Patch 6 moves production UDP input consumption into Python extended
-# orchestration. The stage adapter selects the thin UDP runner, Python reads the
-# private job-local metadata/payload directly, and terminal restoration still
-# owns cleanup of those private files.
-grep -Fq 'UDP_RUNNER="${UDP_RUNNER:-${SCRIPT_DIR}/strategy_lab_cancellable_udp_runner.sh}"' "${STAGE_ADAPTER}" ||
-    fail 'stage adapter does not select the UDP runner'
-grep -Fq 'extended udp' "${UDP_RUNNER}" ||
-    fail 'UDP runner is not a thin Python extended launcher'
-! grep -Fq 'udp_input' "${UDP_RUNNER}" ||
-    fail 'UDP runner regained shell UDP input ownership after Patch 6'
-grep -Fq 'status_path = job_dir(job_id) / "status.json"' "${EXTENDED_PY}" ||
-    fail 'Python UDP orchestration does not read job-local status metadata'
-grep -Fq 'udp_request = status.get("udp_request", {})' "${EXTENDED_PY}" ||
-    fail 'Python UDP orchestration does not inspect validated UDP request metadata'
-grep -Fq 'port_file = job_dir(job_id) / "udp-port"' "${EXTENDED_PY}" ||
-    fail 'Python UDP orchestration does not read the private job-local UDP port'
-grep -Fq 'payload = job_dir(job_id) / "udp-payload.bin"' "${EXTENDED_PY}" ||
-    fail 'Python UDP orchestration does not read the private job-local UDP payload'
-grep -Fq '"STRATEGY_LAB_UDP_PORT": str(port)' "${EXTENDED_PY}" ||
-    fail 'Python UDP orchestration does not pass validated port to the unified candidate'
-grep -Fq '"STRATEGY_LAB_UDP_PAYLOAD_FILE": str(payload)' "${EXTENDED_PY}" ||
-    fail 'Python UDP orchestration does not pass the job-local payload to the unified candidate'
-! grep -Fq 'udp_input' "${WORKER}" ||
-    fail 'production worker regained UDP input ownership after the Python cutover'
-grep -Fq 'strategy_lab_udp_input_cleanup "${JOB_ID}"' "${STAGE_ADAPTER}" ||
-    fail 'terminal restoration adapter does not remove the UDP payload'
-grep -Fq 'strategy_lab_state_python set-udp-request' "${MODULE}" ||
-    fail 'UDP request metadata does not use the Python state owner'
+grep -Fq 'UDP_RUNNER="${UDP_RUNNER:-${SCRIPT_DIR}/strategy_lab_cancellable_udp_runner.sh}"' "${STAGE_ADAPTER}" || fail 'stage adapter does not select UDP runner'
+grep -Fq 'extended udp' "${UDP_RUNNER}" || fail 'UDP runner is not a thin Python extended launcher'
+! grep -Fq 'udp_input' "${UDP_RUNNER}" || fail 'UDP runner regained shell UDP input ownership after Python cutover'
+grep -Fq 'status_path = job_dir(job_id) / "status.json"' "${EXTENDED_PY}" || fail 'Python UDP orchestration does not read job-local status metadata'
+grep -Fq 'udp_request = status.get("udp_request", {})' "${EXTENDED_PY}" || fail 'Python UDP orchestration does not inspect validated UDP request metadata'
+grep -Fq 'port_file = job_dir(job_id) / "udp-port"' "${EXTENDED_PY}" || fail 'Python UDP orchestration does not read private job-local UDP port'
+grep -Fq 'payload = job_dir(job_id) / "udp-payload.bin"' "${EXTENDED_PY}" || fail 'Python UDP orchestration does not read private job-local UDP payload'
+grep -Fq '"STRATEGY_LAB_UDP_PORT": str(port)' "${EXTENDED_PY}" || fail 'Python UDP orchestration does not pass validated port to unified candidate'
+grep -Fq '"STRATEGY_LAB_UDP_PAYLOAD_FILE": str(payload)' "${EXTENDED_PY}" || fail 'Python UDP orchestration does not pass job-local payload to unified candidate'
+! grep -Fq 'udp_input' "${WORKER}" || fail 'production worker regained UDP input ownership after Python cutover'
+grep -Fq 'strategy_lab_udp_input_cleanup "${JOB_ID}"' "${STAGE_ADAPTER}" || fail 'terminal restoration adapter does not remove UDP payload'
+grep -Fq 'strategy_lab_state_python set-udp-request' "${MODULE}" || fail 'UDP request metadata does not use Python state owner'
 
 sh -n "${MODULE}"
 sh -n "${LAUNCHER}"
@@ -171,4 +139,4 @@ sh -n "${WORKER}"
 sh -n "${STAGE_ADAPTER}"
 sh -n "${UDP_RUNNER}"
 
-echo 'PASS: validated generic UDP GUI/API input stays private job-local state, is consumed by Python extended orchestration, and is always cleaned'
+echo 'PASS: Generic UDP input remains bounded/private and oversized files are rejected visibly before Strategy Lab state is reset'
