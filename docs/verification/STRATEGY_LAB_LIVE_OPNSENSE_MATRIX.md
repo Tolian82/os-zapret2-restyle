@@ -1,26 +1,29 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU/EN PRESENTATION PUBLISHED; QUIC PERSISTENCE AND `_17` LIVE PRESENTATION PENDING.**
+Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU PRESENTATION OWNER-LIVE PARTIAL; `v0.4.1_18` RU LABEL/LAYOUT CORRECTIVE SOURCE CANDIDATE.**
 
 Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected owner-live evidence.
 
 ## Current package/source boundary
 
-- current source candidate: `v0.4.1_17`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_17.pkg` / `v0.4.1_17`;
+- current source candidate: `v0.4.1_18`;
+- package metadata in current source candidate: `PLUGIN_REVISION=18`;
+- last published testing package/tag: `os-zapret2-restyle-0.4.1_17.pkg` / `v0.4.1_17`;
 - `_17` source/tag target: `ebf071122b2613c4fe56b5af4e5e9f07c99e9122`;
 - `_17` package SHA-256: `92d7d3320246380bef53c7d37364895315e12d55b958c8a5fd657ba9ab213dbf`;
 - `_17` publication workflow run: `31887296681`;
 - stable Pages/pkg repository promoted: no;
 - owner-live `_16` Generic UDP verification: **PASS**;
 - owner-live `_16` QUIC OFF execution semantics: **PASS**;
+- `_17` owner-live Russian presentation: **PARTIAL — MOST LABELS/CIRCULAR IDLE PASS; TWO ENGLISH LABELS + LAYOUT DEFECT SELECTED `_18`**;
 - Enable QUIC OFF/default persistence across reload/revisit: **PENDING LIVE PROOF**;
-- `_17` selected RU/EN presentation cleanup: **SOURCE/AUTOMATED/PUBLICATION PASS; LIVE RU/EN ACCEPTANCE PENDING**.
+- `_18` title/UDP-label/aligned-input corrective: **SOURCE IMPLEMENTED; AUTOMATED/PUBLICATION/LIVE ACCEPTANCE PENDING**.
 
-Machine publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_17.md`.
+Machine `_17` publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_17.md`.
 Owner-live Generic UDP evidence: `docs/verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`.
 Owner-live QUIC OFF/UI follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`.
-`_17` patch record: `docs/patches/v0.4.1_17.md`.
+Owner-live `_17` RU follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md`.
+`_18` patch record: `docs/patches/v0.4.1_18.md`.
 
 Normal Stage 60 remains Model C only; automatic Model B/A production fallback remains disabled from `_13`.
 
@@ -99,37 +102,39 @@ Observed behavior:
 
 This is **OWNER-LIVE PASS** for the runtime OFF gate itself. It does not prove persistence because the evidence does not show the OFF value surviving a page reload/revisit. Keep persistence as a separate row.
 
-## `_17` RU/EN presentation automated/publication acceptance — PASS
+## `_17` RU presentation owner-live follow-up — partial
 
-The owner-selected visible UI items are implemented and published in `_17`; they still require live acceptance in both languages:
+The owner installed published `_17` and supplied Russian-mode Diagnostics screenshots.
 
-- circular idle ordinary display removes raw `{` / `}` and does not expose `{"state":"idle"}` as ordinary JSON;
-- circular idle localized state: RU `Состояние: ОЖИДАНИЕ`, EN `State: IDLE`;
-- `Full output (advanced)` / RU `Полный вывод (расширенный)`;
-- `Enter a domain and click Test to check HTTPS connectivity.` / RU `Введите домен и нажмите «Проверка», чтобы проверить HTTPS-соединение.`;
-- `Family` / RU `Семейство`;
-- `Endpoints` / RU `Назначения`;
-- `Outcome` / RU `Результат`;
-- `Restoration` / RU `Восстановление`;
-- `Replay` / RU `Ответы`;
-- `Complete Traffic Strategy profile` / RU `Полный профиль Стратегий Трафика`;
-- `Run` / RU `Запуск`;
-- `Test Domain Connectivity` / RU `Тестирование соединения с доменом`;
-- EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`;
-- `Enable QUIC` / RU `Включить QUIC`;
-- no cross-language leakage between RU and EN modes.
+Visible PASS:
 
-Raw machine job JSON remains under the explicitly advanced Strategy Lab output. The ordinary circular block contains only human-readable localized state.
+- translated domain-connectivity title/help/action;
+- `Заблокированный домен / IP`, `Запуск`, `Включить QUIC`;
+- translated result/stage labels including `Полный профиль Стратегий Трафика`;
+- ordinary circular idle output is localized text and no raw JSON braces are shown.
 
-Automated/source/package acceptance:
+Visible defects selecting `_18`:
 
-- source PR `#250` latest verified head `9bae088ddd0d26a131cac3fb54b17fa761963c75`;
-- corrective matrix and focused RU/EN/circular/persistence contract PASS;
-- FreeBSD-15 package qualification PASS;
-- exact source merge/tag target `ebf071122b2613c4fe56b5af4e5e9f07c99e9122`;
-- testing package `os-zapret2-restyle-0.4.1_17.pkg`, SHA-256 `92d7d3320246380bef53c7d37364895315e12d55b958c8a5fd657ba9ab213dbf`, published/verified.
+- `Strategy Lab` remains English;
+- `Generic UDP (optional)` remains English;
+- `Заблокированный домен / IP` wraps to two lines;
+- owner requires the domain input to move slightly left and the Generic UDP value control plus Enable QUIC control to align at the same new left position.
 
-The focused source test also guards the already implemented Enable QUIC persistence path: model default OFF, settings read/write endpoint, save-on-change and load-on-page-open. This does not replace owner-live reload/revisit proof.
+This is not a runtime/search failure. It is a narrow presentation/layout follow-up.
+
+## `_18` source acceptance scope
+
+The owner-selected `_18` corrective implements:
+
+- `Strategy Lab` / RU `Лаборатория стратегий`;
+- `Generic UDP (optional)` / RU `UDP порт (опционально)`;
+- explicit English counterparts retained;
+- one shared left-side label/value-column layout for domain / Generic UDP / Enable QUIC;
+- a small value-control left shift relative to `_17`;
+- one-line RU `Заблокированный домен / IP` via bounded label width/font/padding;
+- focused regression coverage for these strings/layout plus preservation of the prior circular-idle and Enable QUIC persistence source contracts.
+
+Owner-live acceptance after publication must verify the Russian title/UDP label/one-line domain label/alignment and then English/no-leakage mode. Enable QUIC reload/revisit persistence remains separately pending.
 
 ## Scenario matrix
 
@@ -149,17 +154,20 @@ The focused source test also guards the already implemented Enable QUIC persiste
 | 12 | No-reply does not mean closed / does not gate candidates | **OWNER-LIVE PASS** |
 | 13 | terminal payload cleanup and Zapret2 restoration PASS. | **STAGE-90 RESTORATION/TEMP PROCESS+RULE CLEANUP OWNER-LIVE PASS; deeper residue remains under global cleanup backlog** |
 | 14 | Enable QUIC OFF execution semantics | **OWNER-LIVE PASS** |
-| 15 | Enable QUIC OFF/default persistence across reload/revisit | **SOURCE CONTRACT GUARDED ON `_17`; OWNER-LIVE RELOAD PROOF PENDING** |
-| 16 | Circular idle ordinary presentation | **PUBLISHED ON `_17`; RU/EN LIVE ACCEPTANCE PENDING** |
-| 17 | RU/EN presentation review | **PUBLISHED ON `_17`; LIVE ACCEPTANCE PENDING** |
-| 18 | Target already accessible | PENDING REGRESSION |
-| 19 | Cancellation/internal-failure containment | PENDING REGRESSION |
-| 20 | Circular lifecycle | PENDING REGRESSION |
-| 21 | Settings Apply guards | PENDING REGRESSION |
-| 22 | Retention/reboot residue | PENDING REGRESSION |
+| 15 | Enable QUIC OFF/default persistence across reload/revisit | **SOURCE CONTRACT GUARDED; OWNER-LIVE RELOAD PROOF PENDING** |
+| 16 | Circular idle ordinary presentation | **OWNER-LIVE RU PASS ON `_17`; EN LIVE CHECK PENDING** |
+| 17 | `_17` RU/EN presentation review | **RU PARTIAL: MOST LABELS PASS; TWO ENGLISH LABELS/LAYOUT SELECTED `_18`** |
+| 18 | `_18` Strategy Lab title / Generic UDP label / aligned controls | **SOURCE IMPLEMENTED; CI/PUBLICATION/LIVE ACCEPTANCE PENDING** |
+| 19 | Target already accessible | PENDING REGRESSION |
+| 20 | Cancellation/internal-failure containment | PENDING REGRESSION |
+| 21 | Circular lifecycle | PENDING REGRESSION |
+| 22 | Settings Apply guards | PENDING REGRESSION |
+| 23 | Retention/reboot residue | PENDING REGRESSION |
 
 ## Current failure policy
 
 Generic UDP should only be reopened if fresh evidence contradicts the accepted exact-byte path: a valid `1..4096`-byte file cannot become ready/configured, the selected port/payload/binding is wrong, candidate enumeration is suppressed incorrectly, UDP silence is called a closed port, or lifecycle restoration fails.
 
 QUIC OFF execution should only be reopened if fresh evidence shows that OFF still runs QUIC candidates. Persistence remains separately pending until an actual reload/revisit proves the stored setting.
+
+The `_18` presentation row should only be reopened after acceptance if the requested Russian labels/layout regress or English mode leaks Russian text.
