@@ -14,6 +14,8 @@ Direct orientation:
 - master plan: [`ROADMAP.md`](ROADMAP.md);
 - current-line chronology/proof: [`history/current/v0.4.x.md`](history/current/v0.4.x.md).
 
+Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+
 ## Repository and package facts
 
 - repository: `Tolian82/os-zapret2-restyle`;
