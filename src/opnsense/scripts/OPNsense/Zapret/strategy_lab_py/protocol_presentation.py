@@ -46,10 +46,7 @@ def stage30_message(
     ru = language == "ru"
     if ru:
         parts = ["PASS — IPv4 доступен"]
-        if ipv6 == "available":
-            parts.append("IPv6 доступен")
-        else:
-            parts.append("IPv6 недоступен")
+        parts.append("IPv6 доступен" if ipv6 == "available" else "IPv6 недоступен")
         parts.append("QUIC открыт" if quic == "available" else "QUIC закрыт")
         if mode != "extended":
             parts.append("подбор QUIC-стратегий выполняется только в расширенном режиме")
@@ -63,10 +60,7 @@ def stage30_message(
         return "; ".join(parts) + "."
 
     parts = ["PASS — IPv4 is available"]
-    if ipv6 == "available":
-        parts.append("IPv6 is available")
-    else:
-        parts.append("IPv6 is unavailable")
+    parts.append("IPv6 is available" if ipv6 == "available" else "IPv6 is unavailable")
     parts.append("QUIC is open" if quic == "available" else "QUIC is blocked")
     if mode != "extended":
         parts.append("QUIC strategy search runs only in Extended mode")
@@ -83,8 +77,10 @@ def stage30_message(
 def _quic_summary(language: str, result: dict[str, Any]) -> str:
     ru = language == "ru"
     status = result.get("status")
-    if status == "skipped" and result.get("reason") == "disabled":
-        return "QUIC: подбор стратегий отключён" if ru else "QUIC: strategy search is disabled"
+    if status == "skipped":
+        if result.get("reason") == "disabled":
+            return "QUIC: подбор стратегий отключён" if ru else "QUIC: strategy search is disabled"
+        return "QUIC: проверка не выполнялась" if ru else "QUIC: testing was not performed"
     if status not in {"working", "not_found"}:
         raise ProtocolPresentationError("unexpected QUIC result status")
     ids = _tested_ids(result)
