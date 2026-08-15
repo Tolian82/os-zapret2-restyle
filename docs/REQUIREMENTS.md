@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Requirements
 
 Project: **os-zapret2-restyle**
-Version line: **0.4.x**
+Version line: **0.5.x**
 
 ## Project identity
 
@@ -90,7 +90,17 @@ One IPv4 address or IPv4 CIDR network per line:
 
 IPSET fields reject domains, malformed addresses, invalid prefixes, and unrelated text.
 
-IPv6 target lists remain outside the approved target-list contract. Strategy Lab accepts a normalized domain only; IPv6 is detected only as an optional network capability and is not accepted as a Strategy Lab target.
+IPv6 target lists remain outside the approved target-list contract.
+
+### Strategy Lab target identity
+
+Strategy Lab accepts either a normalized domain or a canonical IPv4 address.
+
+For an IPv4 target, an optional separate **Host / SNI** service identity may be supplied. The entered IPv4 remains the fixed destination used for routing, interception, attribution and final `--ipset-ip=<target>` selection, while the service hostname is used for TLS/HTTP/QUIC identity and certificate verification.
+
+Bare IPv4 TLS certificate-identity failure is not proof that DPI bypass failed. When HTTPS identity cannot be established without a service name, Strategy Lab must return truthful `PARTIAL` guidance asking for Host/SNI rather than a misleading empty `NO_CANDIDATE` result.
+
+IPv6 is detected as an optional network capability but is not currently accepted as a Strategy Lab target. IPv6 Laboratory target support requires a separate explicit architecture scope.
 
 ### Normalization
 
@@ -132,12 +142,13 @@ Invalid user input remains visible for correction.
 
 ## Strategy Lab adaptive search
 
-The approved post-migration Strategy Lab search target is defined by `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and `docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md`.
+The current Strategy Lab architecture is defined by [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md), [`architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`](architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md), [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md), [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md), and [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
 
-Product requirements for the redesign:
+Product requirements:
 
 - search candidates use native `bol-van/zapret2` semantics only; classic zapret/nfqws1 strategy syntax is not a candidate source;
-- Python remains the automated planner/search/result owner and shell remains limited to audited OPNsense/FreeBSD system adapters;
+- Python is the automated planner/search/result owner and shell is limited to audited OPNsense/FreeBSD system adapters;
+- **Model C is the only normal production Stage-60 execution model**; Model A and Model B remain explicit reference/benchmark/test paths and are not automatic production fallbacks;
 - a simple Stage-50 representative result is evidence, not an allow/deny gate for all related Stage-60 candidates;
 - each candidate has an explicit reproducible `CandidateSpec` including ordered Lua actions, technique arguments, optional ranges and resource dependencies;
 - installed Lua and fake-file resources are captured in a job-scoped `ResourceInventory` rather than assumed from a fixed release-specific list;
@@ -145,14 +156,20 @@ Product requirements for the redesign:
 - a reported bypass candidate contains at least one native Zapret2 Lua action; a no-action profile is baseline/pass-through evidence;
 - `--out-range=-d10` is not a global Strategy Lab requirement; output range is candidate data and may be another valid value or absent when the native strategy does not need it;
 - known native/owner-proven Zapret2 strategies are retained as golden representation and search-reachability regressions, not universal provider presets;
-- the primary search budget is IPv4/TCP/TLS; IPv6 is capability-gated/lower priority;
-- QUIC is limited to the fixed IPv4 UDP/443 capability/precheck signal and does not have an adaptive Strategy Lab bypass-search branch;
+- normal adaptive discovery is centered on IPv4/TCP/TLS while preserving the current domain and fixed-IPv4 target contracts;
+- candidate execution must retain deterministic endpoint attribution, controlled source-port leasing, temporary firewall ownership and bounded cleanup;
 - mass discovery and finalist validation are separate evidence levels;
 - strict stability remains 3/3 but stops immediately after a failure makes 3/3 impossible;
 - the best two to three candidates normally receive finalist validation and form the early-stop target; a smaller truthful result remains valid;
 - finalist validation uses a real bounded GET and records whether at least 16 KiB of body data was obtained; a valid shorter resource is `inconclusive` for the 16-KiB depth criterion rather than falsely reported as PASS;
-- operation, candidate, stage and job deadlines must form a measured containing hierarchy and must be reviewed from timing telemetry rather than copied indefinitely as constants;
-- a warm/multiple-dvtws2 execution model is not a requirement until the A/B/C experiment plan proves deterministic candidate attribution, cold-result equivalence, isolation, cleanup/restoration and material performance value.
+- authenticated/intercepted HTTP `4xx`/`5xx` is application-layer status, not automatic DPI-path failure; such a response may remain accepted reachability evidence when endpoint/profile/interception proof succeeds;
+- operation, candidate, stage and job deadlines form a measured containing hierarchy and must be reviewed from timing telemetry rather than copied indefinitely as constants;
+- **Enable QUIC** is an explicit persisted setting, defaults OFF, and is the product decision that determines whether Extended Stage 80 runs the QUIC candidate catalog;
+- QUIC capability/precheck evidence is diagnostic and does not silently override the explicit Enable QUIC choice;
+- for a fixed IPv4 target with Host/SNI, QUIC attempts must connect to the fixed IP while verifying the supplied hostname; bare IPv4 QUIC without Host/SNI is skipped before candidate execution rather than falsely reported as tested;
+- Generic UDP is an optional Extended protocol path with explicit destination port and exact payload bytes, remains independent from Host/SNI/QUIC, and UDP silence is not proof that a port is closed;
+- complete fixed-IP recommendations include `--ipset-ip=<entered IPv4>` and undergo the same exact finalist replay discipline;
+- all terminal paths require bounded temporary-runtime cleanup and exact Stage-90 restoration of the original Zapret2 service/configuration state.
 
 ## Service lifecycle
 
@@ -178,6 +195,7 @@ Product requirements for the redesign:
 - The repository selector presents at most the four current stable releases returned by `setup.sh show`. Drafts, prereleases, malformed tags, and arbitrary user values must not be accepted.
 - Runtime Apply starts `setup.sh install VERSION` asynchronously through configd, disables conflicting controls while the operation is active, polls read-only status, and points the user to `/var/log/zapret2/setup.log` after failure.
 - The GUI follows the language selected in OPNsense. English is the default; custom Zapret2 labels and operation messages also provide Russian text. The plugin must not introduce its own language selector.
+- Laboratory uses the native OPNsense content frame/grid and exposes domain-or-IPv4 target input, conditional Host/SNI, Standard/Extended mode, persisted Enable QUIC, optional Generic UDP input, progress/status, stable result profiles and exact evidence without requiring a separate UI application.
 
 ## Packaging
 
@@ -220,9 +238,9 @@ Runtime files, live configuration, logs, PID files, downloaded engine trees, and
 
 ## Current implementation and verification state
 
-Current facts do not live in this requirements contract. Read [`PROJECT_STATE.md`](PROJECT_STATE.md) for the current `v0.4.x` state, [`START_HERE.md`](START_HERE.md) for the exact `_N` handoff, and [`history/current/v0.4.x.md`](history/current/v0.4.x.md) for current-line chronology and proof.
+Current facts do not live in this requirements contract. Read [`PROJECT_STATE.md`](PROJECT_STATE.md) for the current `v0.5.x` state, [`START_HERE.md`](START_HERE.md) for the exact candidate/release handoff, and [`history/current/v0.5.x.md`](history/current/v0.5.x.md) for current-line chronology and proof.
 
-Historical audit, devlog, release, and patch records remain evidence only and do not override current specialist authority/current state (`DOC-004`–`DOC-005`).
+The completed `v0.4.x` final-state archive is [`history/archive/v0.4.x.md`](history/archive/v0.4.x.md). Historical audit, devlog, release, patch and evidence records remain history/proof only and do not override current specialist authority/current state (`DOC-004`–`DOC-005`).
 
 ## BLOB requirement interpretation
 
