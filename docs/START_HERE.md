@@ -17,6 +17,7 @@
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
 - `PLUGIN_REVISION=16`;
+- current source candidate: `PLUGIN_REVISION=16` / `v0.4.1_16`;
 - current published testing package/tag: `os-zapret2-restyle-0.4.1_16.pkg` / `v0.4.1_16`;
 - testing-package SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
 - source merge and testing-tag target: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
