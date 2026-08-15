@@ -18,12 +18,12 @@ $(document).ready(function () {
         shortlist:'Final shortlist', restore:'Zapret2 restoration', report:'Final report'
     };
     var statusLabels = isRussian ? {
-        IDLE:'ОЖИДАНИЕ', QUEUED:'В ОЧЕРЕДИ', PREPARING:'ПОДГОТОВКА', PENDING:'ОЖИДАНИЕ', RUNNING:'ВЫПОЛНЯЕТСЯ',
+        IDLE:'ожидание', QUEUED:'В ОЧЕРЕДИ', PREPARING:'ПОДГОТОВКА', PENDING:'ОЖИДАНИЕ', RUNNING:'ВЫПОЛНЯЕТСЯ',
         CANCEL_REQUESTED:'ОСТАНОВКА ЗАПРОШЕНА', STOP_REQUESTED:'ОСТАНОВКА ЗАПРОШЕНА', COMPLETED:'ЗАВЕРШЕНО',
         PASS:'УСПЕШНО', FAIL:'ОШИБКА', FAILED:'ОШИБКА', ERROR:'ОШИБКА', TIMEOUT:'ТАЙМ-АУТ', SKIPPED:'ПРОПУЩЕНО',
         CANCELLED:'ОТМЕНЕНО', RESTORE_FAILED:'ВОССТАНОВЛЕНИЕ НЕ ВЫПОЛНЕНО'
     } : {
-        IDLE:'IDLE', QUEUED:'QUEUED', PREPARING:'PREPARING', PENDING:'PENDING', RUNNING:'RUNNING',
+        IDLE:'idle', QUEUED:'QUEUED', PREPARING:'PREPARING', PENDING:'PENDING', RUNNING:'RUNNING',
         CANCEL_REQUESTED:'CANCELLATION REQUESTED', STOP_REQUESTED:'STOP REQUESTED', COMPLETED:'COMPLETED', PASS:'PASS',
         FAIL:'FAIL', FAILED:'FAILED', ERROR:'ERROR', TIMEOUT:'TIMEOUT', SKIPPED:'SKIPPED', CANCELLED:'CANCELED',
         RESTORE_FAILED:'RESTORE FAILED'
@@ -35,7 +35,7 @@ $(document).ready(function () {
         SUCCESS:'Success', NO_CANDIDATE:'No working candidate', TARGET_ACCESSIBLE:'Target accessible without bypass',
         PARTIAL:'Partial result', TIMEOUT:'Timeout', ERROR:'Error', RESTORE_FAILED:'Restoration failed'
     };
-    var modeLabels = isRussian ? {standard:'Основной', extended:'Расширенный'} : {standard:'Standard', extended:'Extended'};
+    var modeLabels = isRussian ? {standard:'Стандартный', extended:'Расширенный'} : {standard:'Standard', extended:'Extended'};
     var circularMessages = isRussian ? {
         idle:'Временная циклическая проверка не запущена.', queued:'Циклическая проверка поставлена в очередь.',
         preparing:'Выполняется подготовка временной циклической проверки.', running:'Временная циклическая проверка активна.',
@@ -67,6 +67,7 @@ $(document).ready(function () {
         statusRetry:'Статус Strategy Lab временно недоступен. Повторная попытка…', statusFailed:'Не удалось получить актуальный статус Strategy Lab.',
         testDomainTitle:'Тестирование соединения с доменом', testDomainHelp:'Введите домен и нажмите «Проверка», чтобы проверить HTTPS-соединение.',
         testAction:'Проверка', strategyLabTitle:'Лаборатория стратегий', blockedDomain:'Заблокированный домен / IP', genericUdpLabel:'UDP порт (опционально)', runAction:'Запуск', enableQuic:'Включить QUIC',
+        modeLabel:'Режим', navStrategy:'Стратегия', navLaboratory:'Лаборатория',
         family:'Семейство', endpoints:'Назначения', outcome:'Результат', restoration:'Восстановление', replay:'Ответы',
         completeProfile:'Полный профиль Стратегий Трафика', fullOutput:'Полный вывод (расширенный)', stateLabel:'Состояние'
     } : {
@@ -82,6 +83,7 @@ $(document).ready(function () {
         statusRetry:'Strategy Lab status is temporarily unavailable. Retrying…', statusFailed:'The current Strategy Lab status could not be read.',
         testDomainTitle:'Test Domain Connectivity', testDomainHelp:'Enter a domain and click Test to check HTTPS connectivity.',
         testAction:'Test', strategyLabTitle:'Strategy Lab', blockedDomain:'Blocked Domain / IP', genericUdpLabel:'Generic UDP (optional)', runAction:'Run', enableQuic:'Enable QUIC',
+        modeLabel:'Mode', navStrategy:'Strategy', navLaboratory:'Laboratory',
         family:'Family', endpoints:'Endpoints', outcome:'Outcome', restoration:'Restoration', replay:'Replay',
         completeProfile:'Complete Traffic Strategy profile', fullOutput:'Full output (advanced)', stateLabel:'State'
     };
@@ -101,6 +103,12 @@ $(document).ready(function () {
         $('#strategyLabUdpRow').find('td').first().text(ui.genericUdpLabel);
         setButtonText('#strategyLabBtn', ui.runAction);
         $('#strategyLabQuicRow').find('td').first().text(ui.enableQuic);
+        $('#strategyLabModeLabel').text(ui.modeLabel + ':');
+        $('#strategyLabMode option[value="standard"]').text(modeLabels.standard);
+        $('#strategyLabMode option[value="extended"]').text(modeLabels.extended);
+        $('#strategyLabState,#circularState').text(label(statusLabels,'IDLE'));
+        $('a[href="/ui/zapret"]').text(ui.navStrategy);
+        $('a[href="/ui/zapret/diagnostics"]').text(ui.navLaboratory);
         $('#strategyLabResultOutcome').prev('strong').text(ui.outcome + ':');
         $('#strategyLabResultRestoration').prev('strong').text(ui.restoration + ':');
         var headers=$('#strategyLabShortlist thead th');
@@ -440,15 +448,35 @@ $(document).ready(function () {
 });
 </script>
 <style>
+#strategyLabInputsTable {
+    table-layout:fixed;
+}
 #strategyLabInputsTable > tbody > tr > td.strategy-lab-label {
-    width:190px;
-    min-width:190px;
+    width:250px;
+    min-width:250px;
     white-space:nowrap;
-    font-size:12px;
-    padding-right:2px;
+    vertical-align:middle;
 }
 #strategyLabInputsTable > tbody > tr > td.strategy-lab-value {
-    padding-left:2px;
+    vertical-align:middle;
+}
+#strategyLabModeCell {
+    width:260px;
+}
+.strategy-lab-mode-control {
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:8px;
+}
+#strategyLabModeLabel {
+    flex:0 0 auto;
+    text-align:right;
+    white-space:nowrap;
+}
+#strategyLabMode {
+    width:160px;
+    flex:0 0 160px;
 }
 </style>
 
@@ -456,7 +484,7 @@ $(document).ready(function () {
 <div class="row"><section class="col-xs-12"><div class="content-box"><div class="content-box-header"><h3>{{ lang._('Test Domain Connectivity') }}</h3></div>
 <div class="content-box-main"><div class="table-responsive"><table class="table table-striped"><tbody><tr><td style="width:200px;">{{ lang._('Domain') }}</td><td><input type="text" class="form-control" id="testDomainInput" placeholder="example.com"/></td><td style="width:150px;"><button class="btn btn-primary" id="testDomainBtn" type="button">{{ lang._('Test') }} <i id="testDomainBtn_progress"></i></button></td></tr></tbody></table></div><pre id="testDomainResult" style="max-height:300px;overflow-y:auto;white-space:pre-wrap;">{{ lang._('Enter a domain and click Test to check HTTPS connectivity.') }}</pre></div></div></section></div>
 <div class="row"><section class="col-xs-12"><div class="content-box"><div class="content-box-header"><h3>{{ lang._('Strategy Lab') }}</h3></div><div class="content-box-main">
-<div class="table-responsive"><table class="table table-striped" id="strategyLabInputsTable"><tbody><tr><td class="strategy-lab-label">{{ lang._('Blocked Domain') }}</td><td class="strategy-lab-value"><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org"/></td><td style="width:160px;"><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></td><td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td></tr>
+<div class="table-responsive"><table class="table table-striped" id="strategyLabInputsTable"><tbody><tr><td class="strategy-lab-label">{{ lang._('Blocked Domain') }}</td><td class="strategy-lab-value"><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org"/></td><td id="strategyLabModeCell"><div class="strategy-lab-mode-control"><span id="strategyLabModeLabel">Mode:</span><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></div></td><td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td></tr>
 <tr id="strategyLabUdpRow" style="display:none;"><td class="strategy-lab-label">{{ lang._('Generic UDP (optional)') }}</td><td class="strategy-lab-value"><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td><td colspan="2"><input type="file" class="form-control" id="strategyLabUdpPayload"/> <small id="strategyLabUdpHelp"></small><br/><small id="strategyLabUdpPayloadState" class="text-muted"></small></td></tr>
 <tr id="strategyLabQuicRow" style="display:none;"><td class="strategy-lab-label">{{ lang._('Enable QUIC') }}</td><td class="strategy-lab-value"><input type="checkbox" id="strategyLabEnableQuic" disabled/></td><td colspan="2"><small id="strategyLabQuicHelp"></small></td></tr></tbody></table></div>
 <div id="strategyLabSummary"></div><p><strong>Job:</strong> <code id="strategyLabJob">—</code> &nbsp; <strong>{{ lang._('Status') }}:</strong> <span id="strategyLabState">idle</span></p><p id="strategyLabMessage"></p>
