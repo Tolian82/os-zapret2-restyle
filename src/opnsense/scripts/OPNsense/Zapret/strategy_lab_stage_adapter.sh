@@ -144,18 +144,18 @@ case "${ACTION}" in
                 QUIC_STATE=$("${STRATEGY_LAB_JQ}" -r '.quic_ipv4' "${NETWORK_FILE}")
                 if [ "${LANGUAGE}" = ru ]; then
                     case "${IPV6_STATE}:${QUIC_STATE}" in
-                        unavailable:closed) msg='PASS — IPv4 доступен; IPv6 недоступен; QUIC/IPv4 закрыт; проверки IPv6 и QUIC исключены.' ;;
+                        unavailable:closed) msg='PASS — IPv4 доступен; IPv6 недоступен; QUIC/IPv4 закрыт по контрольной проверке; проверки IPv6 исключены.' ;;
                         available:available) msg='PASS — IPv4, IPv6 и QUIC/IPv4 доступны.' ;;
                         unavailable:available) msg='PASS — IPv4 и QUIC/IPv4 доступны; IPv6 недоступен; проверки IPv6 исключены.' ;;
-                        available:closed) msg='PASS — IPv4 и IPv6 доступны; QUIC/IPv4 закрыт; проверки QUIC исключены.' ;;
+                        available:closed) msg='PASS — IPv4 и IPv6 доступны; QUIC/IPv4 закрыт по контрольной проверке.' ;;
                         *) error 'Unexpected network capability classification.' ;;
                     esac
                 else
                     case "${IPV6_STATE}:${QUIC_STATE}" in
-                        unavailable:closed) msg='PASS — IPv4 is available; IPv6 is unavailable; QUIC/IPv4 is blocked; IPv6 and QUIC tests have been excluded.' ;;
+                        unavailable:closed) msg='PASS — IPv4 is available; IPv6 is unavailable; QUIC/IPv4 is blocked by the control probe; IPv6 tests have been excluded.' ;;
                         available:available) msg='PASS — IPv4, IPv6, and QUIC/IPv4 are available.' ;;
                         unavailable:available) msg='PASS — IPv4 and QUIC/IPv4 are available; IPv6 is unavailable; IPv6 tests have been excluded.' ;;
-                        available:closed) msg='PASS — IPv4 and IPv6 are available; QUIC/IPv4 is blocked; QUIC tests have been excluded.' ;;
+                        available:closed) msg='PASS — IPv4 and IPv6 are available; QUIC/IPv4 is blocked by the control probe.' ;;
                         *) error 'Unexpected network capability classification.' ;;
                     esac
                 fi
@@ -267,8 +267,18 @@ case "${ACTION}" in
         ;;
     80-quic)
         QUIC_FILE="${JOB_DIR}/quic.json"
-        if run_timed "${QUIC_RUNNER}" "${JOB_ID}" "${ENDPOINTS_FILE}" "${JOB_DIR}/network.json" "${QUIC_FILE}"; then status=0; else status=$?; fi
-        [ "${status}" -eq 0 ] || error 'QUIC testing failed internally.'
+        QUIC_ENABLED=$(cat "${JOB_DIR}/quic-enabled" 2>/dev/null || printf '0')
+        case "${QUIC_ENABLED}" in
+            0)
+                "${STRATEGY_LAB_JQ}" -nc '{enabled:false,status:"skipped",reason:"disabled",tested:[],working:null}' > "${QUIC_FILE}" ||
+                    error 'QUIC disabled result could not be produced.'
+                ;;
+            1)
+                if run_timed "${QUIC_RUNNER}" "${JOB_ID}" "${ENDPOINTS_FILE}" "${JOB_DIR}/network.json" "${QUIC_FILE}"; then status=0; else status=$?; fi
+                [ "${status}" -eq 0 ] || error 'QUIC testing failed internally.'
+                ;;
+            *) error 'Strategy Lab Enable QUIC job setting is invalid.' ;;
+        esac
         [ -r "${QUIC_FILE}" ] || error 'QUIC result was not produced.'
         strategy_lab_set_quic_result "${JOB_ID}" "${QUIC_FILE}" || error 'QUIC result could not be recorded.'
         pass ''
