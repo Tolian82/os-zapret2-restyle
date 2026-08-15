@@ -21,90 +21,82 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.4.1`;
-- current source candidate: `_14`;
-- current published testing package remains `_13` until `_14` is merged and persistently published;
-- `_13` published package/tag: `os-zapret2-restyle-0.4.1_13.pkg` / `v0.4.1_13`;
-- `_13` package SHA-256: `7a2f864aa14ba2170ca378954ab5421092b76aca79b7b1765b976de2f024797b`;
-- `_13` source/tag target: `45ce19f8e4b37df31ea97af8b8d7900a866f81f5`;
-- latest full Web/pkg release: `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
+- packaged source revision: `_14`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_14.pkg` / `v0.4.1_14`;
+- testing-package SHA-256: `b2df12f0af8ec6057f0df87e5289f89bc087664d7a0e2529c5e362e59db53d03`;
+- `_14` source merge and testing-tag target: `df20ed2ebe7f6c37c4189008e06e80700ae89ce4`;
+- publication workflow run: `31875178597`;
+- latest full Web/pkg release remains `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
+- stable Pages/pkg repository was not promoted by `_14`;
 - required ABI: `FreeBSD:15:amd64`;
 - internal service key: `zapret`.
 
-The exact `main` SHA is resolved at execution time under `GH-004`.
+Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_14.md`](verification/evidence/testing-publications/v0.4.1_14.md).
 
 ## Current product facts
 
 - DNS is fixed/currently working; old DNS failures are closed absent fresh direct evidence.
 - Model C is the only normal production Stage-60 runtime; A/B/C selection is closed.
-- `_13` removed automatic normal-production Model B/A replay.
+- automatic normal-production Model B/A replay remains removed.
 - Lua initialization, BLOB lazy/common-set, GET-4K discovery and cross-batch keep-warm questions remain closed for the current architecture by accepted measured evidence.
-- `_13` owner-live Standard RUNNING and STOPPED behavior is accepted.
-- `_13 job.TJlWoY` accepted truthful Extended TLS 1.2 and HTTP branch execution.
-- `_13 job.TJlWoY` also demonstrated the **old** closed-QUIC capability skip. The owner has now superseded that behavior: being blocked is a reason to test bypass, not a reason to suppress the test.
+- `_13` owner-live Standard RUNNING/STOPPED and Extended TLS 1.2/HTTP behavior remains accepted historical evidence.
+- the `_13` closed-QUIC capability skip is superseded as current product behavior by `_14`.
 
-## Current `_14` source contract
-
-`v0.4.1_14` is one source/UI/backend scope with two related corrections.
+## Current `_14` product contract
 
 ### Explicit Enable QUIC
 
 - Diagnostics Extended mode adds `Enable QUIC` directly below `Generic UDP (optional)`.
 - It is a persisted Boolean Strategy Lab preference, default OFF.
-- The selected value is copied into job-local state at launch.
-- OFF means Stage 80 records QUIC skipped for `disabled` and launches no QUIC candidate.
-- ON means Stage 80 runs QUIC candidates.
-- Stage-30 `quic_ipv4` probing remains diagnostic only.
-- **No measured QUIC capability value may decide whether QUIC candidates run.**
-- In particular, `quic_ipv4=closed` with Enable QUIC ON must still execute candidates and finish with truthful `working` or `not_found`.
+- The resolved value is copied into immutable job-local execution intent at launch.
+- OFF → Stage 80 records QUIC `skipped`, reason `disabled`, and launches no QUIC candidate.
+- ON → Stage 80 runs QUIC candidates.
+- Stage-30 `quic_ipv4` probing is diagnostic only.
+- **No measured QUIC capability value decides whether candidates run.**
+- `quic_ipv4=closed` with Enable QUIC ON still executes the QUIC catalog and truthfully returns `working` or `not_found`.
 
 Canonical contract: [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md).
 
-### Generic UDP apparent no-op correction
+### Generic UDP input UX
 
-- Generic UDP payload remains bounded to decoded size `1..4096` bytes.
-- The previously attempted 2–3 MB files are invalid by design.
-- The browser now validates pair/size before clearing previous result or entering running state.
-- Oversized input produces an immediate visible size error.
-- API/backend strict validation remains authoritative.
+- decoded payload bound remains `1..4096` bytes;
+- port and file must be supplied together;
+- browser pair/size validation happens before clearing the previous result or entering running state;
+- oversized input produces an immediate visible size error;
+- API/backend strict Base64/decoded-size validation remains authoritative;
+- a valid configured UDP request executes Stage-80 UDP candidates and may truthfully return `working` or `not_found`.
 
 Canonical contract: [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md).
 
-## Current implementation boundary
+## `_14` automated and publication verification — PASS
 
-The `_14` source branch implements:
+- source PR `#237` latest verified head: `b476131bdd68c51288a0f89478fddd0382c0b5c9`;
+- complete Strategy Lab corrective matrix: PASS;
+- FreeBSD-15 package qualification: PASS;
+- exact-head source merge: `df20ed2ebe7f6c37c4189008e06e80700ae89ce4`;
+- publisher run `31875178597`: FreeBSD 15 build, package manifest/digest verification, prerelease publication, release/tag/asset verification all PASS;
+- release/tag `v0.4.1_14` points exactly to the candidate-defining source merge;
+- asset `os-zapret2-restyle-0.4.1_14.pkg` is uploaded and verified;
+- SHA-256: `b2df12f0af8ec6057f0df87e5289f89bc087664d7a0e2529c5e362e59db53d03`.
 
-- `PLUGIN_REVISION=14`;
-- model-backed `strategylab.enablequic` with default `0`;
-- persistent Strategy Lab settings API;
-- GUI load/save checkbox state;
-- explicit `enable_quic` start parameter;
-- immutable job-local `quic-enabled` execution intent;
-- Stage-80 checkbox-only QUIC gate;
-- removal of capability gating from both Python production and shell/reference QUIC runners;
-- Stage-30 presentation that reports blocked QUIC as a control-probe fact without claiming QUIC tests were excluded;
-- pre-start visible Generic UDP pair/size validation;
-- focused regression tests proving blocked-control-probe QUIC still executes when enabled and oversized UDP input is rejected before UI reset.
+The publisher's only failed step was automatic PR creation because the repository setting currently forbids GitHub Actions from creating or approving pull requests. The machine-generated publication-record branch/evidence was already pushed. Draft PR `#238` was opened through the GitHub connector to complete the same required docs-only tail; package identity/bytes were not changed.
 
-## Verification boundary
+## Current live boundary
 
-Already accepted historical `_13` live evidence remains durable under:
+Owner-live `_14` verification is now selected:
 
-- [`verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-model-c-only-owner-live-pass.md);
-- [`verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-initial-stopped-owner-live-pass.md);
-- [`verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_13-extended-tcp-quic-owner-live-pass.md).
+1. checkbox default OFF and persistence across reload;
+2. OFF → QUIC `skipped/disabled`;
+3. ON while ordinary QUIC remains ISP-blocked → QUIC candidates actually execute, with truthful `working` or `not_found`;
+4. 2–3 MB UDP payload → visible `1–4096` error and no new job;
+5. valid port + `1..4096` payload → actual UDP candidate execution, not unconfigured skip;
+6. normal lifecycle restoration remains successful.
 
-Current `_14` verification is not yet complete until:
-
-1. latest-head source CI passes;
-2. FreeBSD-15 package qualification passes;
-3. exact verified head is merged;
-4. persistent `v0.4.1_14` testing package is published from the candidate-defining source merge;
-5. publication-record docs tail is reconciled/merged;
-6. owner installs `_14` and verifies the explicit QUIC and Generic UDP behaviors described in `START_HERE.md`.
+One Extended run can cover enabled QUIC and configured UDP simultaneously.
 
 ## Documentation authority note
 
-The new owner instruction is current truth. Any older text saying Stage-30 QUIC availability decides whether Stage-80 QUIC candidate testing runs is historical/superseded. The specialist `_14` QUIC contract has current authority while older historical evidence remains unchanged as evidence of what `_13` actually did.
+The owner’s new QUIC instruction is current truth. Older language saying Stage-30 QUIC availability decides whether Stage-80 QUIC candidate testing runs is historical/superseded. Historical evidence remains unchanged as evidence of what earlier packages actually did.
 
 ## Current architecture entry points
 
@@ -116,7 +108,7 @@ The new owner instruction is current truth. Any older text saying Stage-30 QUIC 
 
 ## Current documentation/governance facts
 
-The four canonical general rule books remain `DOCUMENTATION_RULES.md`, `PROJECT_PRINCIPLES.md`, `CHAT_RULES.md`, and `GITHUB_PUBLICATION.md`. Project patch/package delivery is GitHub-native; a package-affecting source change automatically continues through persistent testing publication and the required publication-record tail. `START_HERE.md` owns the exact revision handoff, this file owns current `v0.4.x` facts, and the version-line ledger preserves chronology.
+The four canonical general rule books remain `DOCUMENTATION_RULES.md`, `PROJECT_PRINCIPLES.md`, `CHAT_RULES.md`, and `GITHUB_PUBLICATION.md`. Project patch/package delivery is GitHub-native; `START_HERE.md` owns the exact revision handoff, this file owns current `v0.4.x` facts, and the version-line ledger preserves chronology.
 
 ## Completed version-line archives
 
