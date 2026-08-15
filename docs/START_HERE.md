@@ -10,21 +10,21 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-15
-**Current handoff identity:** `v0.4.1_18` source candidate
+**Current handoff identity:** published testing package `v0.4.1_18`
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.4.1`;
-- current source candidate: `PLUGIN_REVISION=18` / `v0.4.1_18`;
-- last published testing package/tag: `os-zapret2-restyle-0.4.1_17.pkg` / `v0.4.1_17`;
-- `_17` testing-package SHA-256: `92d7d3320246380bef53c7d37364895315e12d55b958c8a5fd657ba9ab213dbf`;
-- `_17` source merge/testing-tag target: `ebf071122b2613c4fe56b5af4e5e9f07c99e9122`;
-- `_17` publication workflow run: `31887296681`;
+- current packaged source revision: `PLUGIN_REVISION=18` / `v0.4.1_18`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_18.pkg` / `v0.4.1_18`;
+- testing-package SHA-256: `1ca82e1405c688a5429e1fd1d68da19906bea613323d8d01090bba85068b34f0`;
+- source merge/testing-tag target: `fa1b924a5c1d646f0daec13aff6e7406a534c6a3`;
+- publication workflow run: `31889449879`;
 - required ABI: `FreeBSD:15:amd64`;
 - stable Pages/pkg repository promoted by testing `_N`: **no**.
 
-Machine `_17` publication evidence: [`verification/evidence/testing-publications/v0.4.1_17.md`](verification/evidence/testing-publications/v0.4.1_17.md).
+Machine publication evidence: [`verification/evidence/testing-publications/v0.4.1_18.md`](verification/evidence/testing-publications/v0.4.1_18.md).
 
 Resolve the exact current `main` SHA at execution time under `GH-004`.
 
@@ -44,7 +44,7 @@ Durable predecessor evidence:
 - [`verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`](verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md)
 - [`verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`](verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md)
 
-Enable QUIC OFF/default persistence across an actual reload/revisit remains a separate live acceptance row. `_18` preserves the `_17` regression guard for the existing model-backed default/load/save contract.
+Enable QUIC OFF/default persistence across an actual reload/revisit remains a separate live acceptance row. `_18` preserves the regression guard for the existing model-backed default/load/save contract.
 
 ## `_17` live RU follow-up — partial acceptance, corrective selected
 
@@ -57,7 +57,7 @@ Confirmed working on the tested screen:
 - translated result/stage labels including `Полный профиль Стратегий Трафика`;
 - circular idle ordinary presentation is human text (`Статус: ОЖИДАНИЕ`, `Состояние: ОЖИДАНИЕ`) rather than raw JSON.
 
-The same screenshots exposed the current corrective boundary:
+The same screenshots exposed the corrective boundary closed in `_18` source:
 
 1. `Strategy Lab` remained untranslated;
 2. `Generic UDP (optional)` remained untranslated;
@@ -65,27 +65,30 @@ The same screenshots exposed the current corrective boundary:
 
 Evidence: [`verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md).
 
-## `_18` selected implementation
+## `_18` published corrective
 
-`_18` is a narrow Strategy Lab presentation/layout corrective package candidate:
+Published `_18` contains the narrow Strategy Lab presentation/layout corrective:
 
 - `Strategy Lab` -> RU `Лаборатория стратегий`;
 - `Generic UDP (optional)` -> RU `UDP порт (опционально)`;
 - EN explicitly remains `Strategy Lab` / `Generic UDP (optional)`;
 - domain, Generic UDP and Enable QUIC value controls share one aligned column shifted slightly left from `_17`;
 - RU `Заблокированный домен / IP` is kept on one line with a bounded label-column contract;
-- no Strategy Lab search/runtime semantics are changed;
-- focused regression coverage also preserves prior `_17` RU/EN, circular idle and Enable QUIC persistence source contracts.
+- no Strategy Lab search/runtime semantics were changed;
+- focused regression coverage preserves prior RU/EN, circular idle and Enable QUIC persistence source contracts;
+- latest-head CI, complete corrective matrix and FreeBSD-15 package qualification passed before exact-head source merge;
+- persistent testing package/tag were published and verified from the candidate-defining source merge above.
 
 Source patch record: [`patches/v0.4.1_18.md`](patches/v0.4.1_18.md).
 
-## Immediate acceptance after `_18` publication
+## Immediate owner-live acceptance
 
-1. verify Russian `Лаборатория стратегий` and `UDP порт (опционально)`;
-2. verify `Заблокированный домен / IP` is one line;
-3. verify domain input, UDP port input and Enable QUIC checkbox are vertically aligned at the same new left position;
-4. verify the same screen in English mode and confirm no RU/EN leakage;
-5. separately prove Enable QUIC OFF/default persistence across reload/revisit;
-6. continue the risk-selected backlog from `ROADMAP.md`.
+1. install `v0.4.1_18`;
+2. verify Russian `Лаборатория стратегий` and `UDP порт (опционально)`;
+3. verify `Заблокированный домен / IP` is one line;
+4. verify domain input, UDP port input and Enable QUIC checkbox are vertically aligned at the same new left position;
+5. verify the same screen in English mode and confirm no RU/EN leakage;
+6. separately prove Enable QUIC OFF/default persistence across reload/revisit;
+7. continue the risk-selected backlog from `ROADMAP.md`.
 
 Do not reopen closed BLOB/Lua/discovery/model-selection experiments without new architecture or fresh contradicting evidence.
