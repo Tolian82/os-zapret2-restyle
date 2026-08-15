@@ -1,13 +1,13 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU PRESENTATION OWNER-LIVE PARTIAL; `v0.4.1_18` LABEL/ONE-LINE OWNER-LIVE PARTIAL; `v0.4.1_19` TEXT/MODE/STATUS PUBLISHED + OWNER-LIVE PARTIAL; `v0.4.1_20` NATIVE LABORATORY LAYOUT PUBLISHED / OWNER-LIVE VISUAL ACCEPTANCE PENDING.**
+Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU PRESENTATION OWNER-LIVE PARTIAL; `v0.4.1_18` LABEL/ONE-LINE OWNER-LIVE PARTIAL; `v0.4.1_19` TEXT/MODE/STATUS OWNER-LIVE PARTIAL; `v0.4.1_20` FIELD-GRID/MODE CORRECTIVE PUBLISHED BUT FRAME/NAVIGATION OWNER-LIVE REJECTED; `v0.4.1_21` NATIVE FRAME + CROSS-PAGE NAVIGATION LOCALIZATION SOURCE CANDIDATE.**
 
 Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected owner-live evidence.
 
 ## Current package/source boundary
 
-- current source candidate: `v0.4.1_20` / `PLUGIN_REVISION=20`;
-- current published testing package/tag: `os-zapret2-restyle-0.4.1_20.pkg` / `v0.4.1_20`;
+- current source candidate: `v0.4.1_21` / `PLUGIN_REVISION=21`;
+- last published testing package/tag: `os-zapret2-restyle-0.4.1_20.pkg` / `v0.4.1_20`;
 - `_20` source/tag target: `d732965c143563352e18ac58c209aeb30a6d4feb`;
 - `_20` package SHA-256: `5d5fae0a79054ad807a92ca7804d5984d63782927c667962b6395d48627ab64a`;
 - `_20` publication workflow run: `31896330680`;
@@ -16,8 +16,9 @@ Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected ow
 - owner-live `_16` QUIC OFF execution semantics: **PASS**;
 - already-accessible target: **COMPLETE BY OWNER CONFIRMATION**;
 - Enable QUIC OFF/default persistence across reload/revisit: **PENDING LIVE PROOF**;
-- `_19` live UI: **PARTIAL — RU MODE/IDLE VISIBLE; PERIMETER/VALUE GRID/MODE FONT REJECTED; `_20` SELECTED**;
-- `_20` native Laboratory layout corrective: **SOURCE/CI/FREEBSD/PUBLICATION COMPLETE; OWNER-LIVE VISUAL ACCEPTANCE PENDING**.
+- `_20` common 25% field grid and mode-label direction remain accepted;
+- `_20` owner-live perimeter/navigation: **REJECTED — normal OPNsense outer frame missing; Russian submenu reverts to English after navigating to Strategy**;
+- `_21` native-frame ownership + both-page RU/EN navigation corrective: **SOURCE CANDIDATE; AUTOMATED/FREEBSD/PUBLICATION PENDING**.
 
 Machine `_20` publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_20.md`.
 Owner-live Generic UDP evidence: `docs/verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`.
@@ -25,7 +26,8 @@ Owner-live QUIC OFF/UI follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_
 Owner-live `_17` RU follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md`.
 Owner-live `_18` Laboratory UI follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_18-laboratory-ui-owner-live-followup.md`.
 Owner-live `_19` layout follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_19-laboratory-layout-owner-live-followup.md`.
-`_20` patch record: `docs/patches/v0.4.1_20.md`.
+Owner-live `_20` frame/navigation follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`.
+`_21` patch record: `docs/patches/v0.4.1_21.md`.
 
 Normal Stage 60 remains Model C only; automatic Model B/A production fallback remains disabled from `_13`.
 
@@ -41,7 +43,7 @@ Durable evidence: `docs/verification/evidence/2026-08-15-v0.4.1_13-model-c-only-
 
 ## `_14` owner-live observations that selected `_15`
 
-This historical section is retained as an accepted contract anchor, not as current product direction.
+This historical section remains an accepted contract anchor, not current product direction.
 
 ### QUIC tested count/IDs ordinary output
 
@@ -75,34 +77,35 @@ The accepted `_16` owner-live flow reached Stage 90 with temporary process/rule 
 
 A later owner-live ON/OFF pair established that Enable QUIC OFF runs no QUIC catalog while independent Generic UDP continues. Persistence after page reload/revisit remains a separate pending row.
 
-## `_17` through `_19` presentation follow-up
+## `_17` through `_20` presentation follow-up
 
-`_17` owner-live Russian screenshots confirmed most deterministic translations and human-readable circular idle output. `_18` fixed `Лаборатория стратегий`, `UDP порт (опционально)` and the one-line target label; owner-live accepted those three items but rejected the 12 px workaround. `_19` restored normal typography and added RU/EN mode/status/navigation strings. Owner-live `_19` confirmed RU `Режим:`, `Расширенный` and `Статус: ожидание`, but rejected the remaining perimeter/value-grid/mode-font layout and selected `_20`.
+`_17` owner-live Russian screenshots confirmed most deterministic translations and human-readable circular idle output. `_18` fixed `Лаборатория стратегий`, `UDP порт (опционально)` and the one-line target label; owner-live accepted those items but rejected the 12 px workaround. `_19` restored normal typography and added RU/EN mode/status/navigation strings. Owner-live `_19` confirmed RU `Режим:`, `Расширенный` and `Статус: ожидание`, but rejected the remaining perimeter/value-grid/mode-font layout and selected `_20`.
 
-## `_20` automated/publication acceptance — PASS; owner-live visual pending
+`_20` passed automated validation, FreeBSD-15 package qualification and persistent testing publication. Its shared native-style 25% label grid, common value-column positioning and mode-label typography synchronization remain the accepted direction. Owner-live `_20` then exposed two separate presentation defects: the `.page-content-main` neutralization removed the platform-owned outer OPNsense perimeter itself, and deterministic submenu RU/EN rewriting existed only on Laboratory, so a full navigation to Strategy restored the English `Menu.xml` fallback labels.
 
-The owner-selected `_20` corrective implements:
+Durable `_20` owner-live evidence: `docs/verification/evidence/2026-08-15-v0.4.1_20-laboratory-frame-menu-owner-live-followup.md`.
 
-- one shared native-style `25%` label column for both the top Diagnostics domain row and Strategy Lab input rows;
-- target, Generic UDP and Enable QUIC controls therefore share the normal OPNsense value-column position;
-- removal of the rejected `_19` fixed `250px` Laboratory label column;
-- normal one-line target-label typography retained;
-- computed `Режим:` / `Mode:` font size and line height synchronized from the target field-label reference;
-- nested Laboratory page/container/row/column margin/padding neutralized so it cannot create a second perimeter inset;
-- `_19` localization, Strategy Lab runtime/search, Generic UDP, QUIC and Enable QUIC persistence semantics unchanged.
+## `_21` selected corrective
 
-Automated/package evidence:
+The `_21` source candidate corrects the confirmed presentation root causes without reopening Strategy Lab execution behavior:
 
-- source PR `#256` exact verified head `05ec64a54b83694f82132b3a48a9bfcc7ac7c74d`;
-- complete project/Strategy Lab corrective matrix: PASS;
-- focused Laboratory native-layout/localization/persistence contract: PASS;
-- FreeBSD-15 package qualification: PASS;
-- exact candidate-defining source merge/tag target: `d732965c143563352e18ac58c209aeb30a6d4feb`;
-- published testing asset: `os-zapret2-restyle-0.4.1_20.pkg`;
-- SHA-256: `5d5fae0a79054ad807a92ca7804d5984d63782927c667962b6395d48627ab64a`;
-- publication workflow run: `31896330680`.
+- Laboratory no longer creates or overrides its own `.page-content-main`; the OPNsense-owned page wrapper retains the normal outer perimeter;
+- Laboratory sections render directly as normal `content-box` blocks inside the platform frame, matching the structural pattern used by Strategy;
+- the accepted common `25%` Diagnostics field grid remains unchanged;
+- computed `Режим:` / `Mode:` font size and line height remain synchronized from the target field-label reference;
+- canonical `Menu.xml` names remain `Strategy` / `Laboratory` as fallback;
+- both Laboratory and Strategy apply deterministic active-language submenu labels, so Russian remains `Стратегия` / `Лаборатория` across page navigation and English remains `Strategy` / `Laboratory`;
+- Strategy Lab runtime/search, Generic UDP, QUIC, circular and persistence behavior is unchanged.
 
-No Strategy Lab execution rerun is required for `_20` acceptance; the selected proof is visual comparison against Strategy/native OPNsense page layout.
+Required source-delivery proof before `_21` completion:
+
+- focused native-frame/localization/persistence regression;
+- complete applicable project/Strategy Lab corrective matrix;
+- FreeBSD-15 package qualification;
+- exact-head source merge;
+- persistent `v0.4.1_21` testing publication and bounded publication-record reconciliation.
+
+No Strategy Lab execution rerun is required for owner-live `_21` acceptance because the selected changes are presentation-only.
 
 ## Scenario matrix
 
@@ -124,24 +127,28 @@ No Strategy Lab execution rerun is required for `_20` acceptance; the selected p
 | 14 | Enable QUIC OFF/default persistence across reload/revisit | **SOURCE CONTRACT GUARDED; OWNER-LIVE RELOAD PROOF PENDING** |
 | 15 | Circular idle ordinary presentation | **OWNER-LIVE RU PASS ON `_17`; later idle wording retained** |
 | 16 | `_17` RU/EN presentation review | **RU PARTIAL; selected `_18`** |
-| 17 | `_18` title / UDP label / one-line domain label | **OWNER-LIVE PASS FOR THESE THREE ITEMS** |
+| 17 | `_18` title / UDP label / one-line domain label | **OWNER-LIVE PASS FOR THESE ITEMS** |
 | 18 | `_18` typography/alignment | **OWNER-LIVE REJECTED; `_19` SELECTED** |
 | 19 | `_19` mode/status strings | **OWNER-LIVE RU VISIBLE/PASS FOR OBSERVED ITEMS** |
 | 20 | `_19` perimeter/value-grid/mode-font layout | **OWNER-LIVE REJECTED; `_20` SELECTED** |
-| 21 | `_20` native perimeter/common form grid/matched mode typography | **PUBLISHED; OWNER-LIVE VISUAL ACCEPTANCE PENDING** |
-| 22 | Target already accessible | **COMPLETE — OWNER CONFIRMED** |
-| 23 | Cancellation/internal-failure containment | PENDING REGRESSION |
-| 24 | Circular lifecycle | PENDING REGRESSION |
-| 25 | Retention/reboot residue | PENDING REGRESSION |
+| 21 | `_20` common 25% field grid / mode-label typography direction | **PUBLISHED; RETAINED BY `_21`** |
+| 22 | `_20` normal OPNsense outer perimeter | **OWNER-LIVE REJECTED; `_21` SELECTED** |
+| 23 | `_20` Russian submenu across Laboratory → Strategy | **OWNER-LIVE REJECTED; `_21` SELECTED** |
+| 24 | `_21` OPNsense-owned Laboratory perimeter | **SOURCE CANDIDATE; OWNER-LIVE PENDING AFTER PUBLICATION** |
+| 25 | `_21` Russian submenu persistence across Laboratory ↔ Strategy | **SOURCE CANDIDATE; OWNER-LIVE PENDING AFTER PUBLICATION** |
+| 26 | Target already accessible | **COMPLETE — OWNER CONFIRMED** |
+| 27 | Cancellation/internal-failure containment | PENDING REGRESSION |
+| 28 | Circular lifecycle | PENDING REGRESSION |
+| 29 | Retention/reboot residue | PENDING REGRESSION |
 
 Settings Apply validation/guards and post-Apply service-state correctness are separately marked complete in the master roadmap by owner confirmation; they are not Strategy Lab execution rows.
 
 ## Next product plan
 
-After `_20` UI acceptance, add **Laboratory target support for IP addresses as well as domains**.
+After `_21` UI acceptance, add **Laboratory target support for IP addresses as well as domains**.
 
 ## Current failure policy
 
 Generic UDP should only be reopened if fresh evidence contradicts the accepted exact-byte path. QUIC OFF execution should only be reopened if fresh evidence shows OFF still runs QUIC candidates; persistence remains pending until an actual reload/revisit proves the stored setting.
 
-After `_20` owner-live acceptance, the Laboratory presentation row should only be reopened for a concrete regression in the native perimeter/grid, requested typography, mode/status/sidebar localization, or language leakage.
+After `_21` owner-live acceptance, the Laboratory presentation row should only be reopened for a concrete regression in the native perimeter/grid, requested typography, mode/status/sidebar localization, or language leakage.
