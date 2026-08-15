@@ -1,25 +1,24 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU PRESENTATION OWNER-LIVE PARTIAL; `v0.4.1_18` RU LABEL/LAYOUT CORRECTIVE SOURCE CANDIDATE.**
+Overall status: **`v0.4.1_13` ACCEPTED BASELINE; `v0.4.1_14` PUBLISHED/INSTALLED HISTORICAL INPUT; `v0.4.1_15` QUIC OBSERVABILITY OWNER-LIVE PASS; `v0.4.1_16` GENERIC UDP + QUIC OFF EXECUTION OWNER-LIVE PASS; `v0.4.1_17` RU PRESENTATION OWNER-LIVE PARTIAL; `v0.4.1_18` RU LABEL/LAYOUT CORRECTIVE PUBLISHED — LIVE ACCEPTANCE PENDING.**
 
 Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace selected owner-live evidence.
 
 ## Current package/source boundary
 
-- current source candidate: `v0.4.1_18`;
-- package metadata in current source candidate: `PLUGIN_REVISION=18`;
-- last published testing package/tag: `os-zapret2-restyle-0.4.1_17.pkg` / `v0.4.1_17`;
-- `_17` source/tag target: `ebf071122b2613c4fe56b5af4e5e9f07c99e9122`;
-- `_17` package SHA-256: `92d7d3320246380bef53c7d37364895315e12d55b958c8a5fd657ba9ab213dbf`;
-- `_17` publication workflow run: `31887296681`;
+- current packaged source revision: `v0.4.1_18` / `PLUGIN_REVISION=18`;
+- current published testing package/tag: `os-zapret2-restyle-0.4.1_18.pkg` / `v0.4.1_18`;
+- source/tag target: `fa1b924a5c1d646f0daec13aff6e7406a534c6a3`;
+- package SHA-256: `1ca82e1405c688a5429e1fd1d68da19906bea613323d8d01090bba85068b34f0`;
+- publication workflow run: `31889449879`;
 - stable Pages/pkg repository promoted: no;
 - owner-live `_16` Generic UDP verification: **PASS**;
 - owner-live `_16` QUIC OFF execution semantics: **PASS**;
 - `_17` owner-live Russian presentation: **PARTIAL — MOST LABELS/CIRCULAR IDLE PASS; TWO ENGLISH LABELS + LAYOUT DEFECT SELECTED `_18`**;
 - Enable QUIC OFF/default persistence across reload/revisit: **PENDING LIVE PROOF**;
-- `_18` title/UDP-label/aligned-input corrective: **SOURCE IMPLEMENTED; AUTOMATED/PUBLICATION/LIVE ACCEPTANCE PENDING**.
+- `_18` title/UDP-label/aligned-input corrective: **SOURCE/AUTOMATED/FREEBSD-15/PUBLICATION PASS; OWNER-LIVE RU/EN ACCEPTANCE PENDING**.
 
-Machine `_17` publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_17.md`.
+Machine `_18` publication evidence: `docs/verification/evidence/testing-publications/v0.4.1_18.md`.
 Owner-live Generic UDP evidence: `docs/verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`.
 Owner-live QUIC OFF/UI follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`.
 Owner-live `_17` RU follow-up: `docs/verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md`.
@@ -113,18 +112,18 @@ Visible PASS:
 - translated result/stage labels including `Полный профиль Стратегий Трафика`;
 - ordinary circular idle output is localized text and no raw JSON braces are shown.
 
-Visible defects selecting `_18`:
+Visible defects that selected `_18`:
 
-- `Strategy Lab` remains English;
-- `Generic UDP (optional)` remains English;
-- `Заблокированный домен / IP` wraps to two lines;
-- owner requires the domain input to move slightly left and the Generic UDP value control plus Enable QUIC control to align at the same new left position.
+- `Strategy Lab` remained English;
+- `Generic UDP (optional)` remained English;
+- `Заблокированный домен / IP` wrapped to two lines;
+- owner required the domain input to move slightly left and the Generic UDP value control plus Enable QUIC control to align at the same new left position.
 
 This is not a runtime/search failure. It is a narrow presentation/layout follow-up.
 
-## `_18` source acceptance scope
+## `_18` automated/publication acceptance — PASS
 
-The owner-selected `_18` corrective implements:
+Published `_18` contains:
 
 - `Strategy Lab` / RU `Лаборатория стратегий`;
 - `Generic UDP (optional)` / RU `UDP порт (опционально)`;
@@ -134,7 +133,17 @@ The owner-selected `_18` corrective implements:
 - one-line RU `Заблокированный домен / IP` via bounded label width/font/padding;
 - focused regression coverage for these strings/layout plus preservation of the prior circular-idle and Enable QUIC persistence source contracts.
 
-Owner-live acceptance after publication must verify the Russian title/UDP label/one-line domain label/alignment and then English/no-leakage mode. Enable QUIC reload/revisit persistence remains separately pending.
+Automated/package evidence:
+
+- source PR `#252` exact verified head `1f9d5bb8b9f9d4204777f513bedf5e2d1e479396`;
+- complete project/Strategy Lab corrective matrix: PASS;
+- focused diagnostics RU/EN/layout/persistence test: PASS;
+- FreeBSD-15 package qualification: PASS;
+- exact candidate-defining source merge/tag target: `fa1b924a5c1d646f0daec13aff6e7406a534c6a3`;
+- published testing asset: `os-zapret2-restyle-0.4.1_18.pkg`;
+- SHA-256: `1ca82e1405c688a5429e1fd1d68da19906bea613323d8d01090bba85068b34f0`.
+
+Owner-live acceptance must now verify the Russian title/UDP label/one-line domain label/alignment and then English/no-leakage mode. Enable QUIC reload/revisit persistence remains separately pending.
 
 ## Scenario matrix
 
@@ -157,7 +166,7 @@ Owner-live acceptance after publication must verify the Russian title/UDP label/
 | 15 | Enable QUIC OFF/default persistence across reload/revisit | **SOURCE CONTRACT GUARDED; OWNER-LIVE RELOAD PROOF PENDING** |
 | 16 | Circular idle ordinary presentation | **OWNER-LIVE RU PASS ON `_17`; EN LIVE CHECK PENDING** |
 | 17 | `_17` RU/EN presentation review | **RU PARTIAL: MOST LABELS PASS; TWO ENGLISH LABELS/LAYOUT SELECTED `_18`** |
-| 18 | `_18` Strategy Lab title / Generic UDP label / aligned controls | **SOURCE IMPLEMENTED; CI/PUBLICATION/LIVE ACCEPTANCE PENDING** |
+| 18 | `_18` Strategy Lab title / Generic UDP label / aligned controls | **PUBLISHED; OWNER-LIVE RU/EN ACCEPTANCE PENDING** |
 | 19 | Target already accessible | PENDING REGRESSION |
 | 20 | Cancellation/internal-failure containment | PENDING REGRESSION |
 | 21 | Circular lifecycle | PENDING REGRESSION |
