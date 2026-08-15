@@ -64,7 +64,11 @@ $(document).ready(function () {
         quicSaveFailed:'Не удалось сохранить настройку Enable QUIC.',
         copy:'Копировать профиль', copied:'Профиль скопирован.', copyFailed:'Не удалось скопировать профиль.',
         progress:'Прогресс', restorationPass:'Успешно', requestFailed:'Ошибка запроса: ',
-        statusRetry:'Статус Strategy Lab временно недоступен. Повторная попытка…', statusFailed:'Не удалось получить актуальный статус Strategy Lab.'
+        statusRetry:'Статус Strategy Lab временно недоступен. Повторная попытка…', statusFailed:'Не удалось получить актуальный статус Strategy Lab.',
+        testDomainTitle:'Тестирование соединения с доменом', testDomainHelp:'Введите домен и нажмите «Проверка», чтобы проверить HTTPS-соединение.',
+        testAction:'Проверка', blockedDomain:'Заблокированный домен / IP', runAction:'Запуск', enableQuic:'Включить QUIC',
+        family:'Семейство', endpoints:'Назначения', outcome:'Результат', restoration:'Восстановление', replay:'Ответы',
+        completeProfile:'Полный профиль Стратегий Трафика', fullOutput:'Полный вывод (расширенный)', stateLabel:'Состояние'
     } : {
         running:'Strategy Lab is running.', completed:'The check is complete.', cancel:'Cancellation requested. Mandatory Zapret2 restoration is running.',
         failed:'The check ended with an error.', noCandidates:'No stable candidates were found.', circularReady:'The candidates can now be tested temporarily in a browser.',
@@ -75,8 +79,31 @@ $(document).ready(function () {
         quicSaveFailed:'The Enable QUIC setting could not be saved.',
         copy:'Copy profile', copied:'Profile copied.', copyFailed:'The profile could not be copied.',
         progress:'Progress', restorationPass:'Pass', requestFailed:'Request failed: ',
-        statusRetry:'Strategy Lab status is temporarily unavailable. Retrying…', statusFailed:'The current Strategy Lab status could not be read.'
+        statusRetry:'Strategy Lab status is temporarily unavailable. Retrying…', statusFailed:'The current Strategy Lab status could not be read.',
+        testDomainTitle:'Test Domain Connectivity', testDomainHelp:'Enter a domain and click Test to check HTTPS connectivity.',
+        testAction:'Test', blockedDomain:'Blocked Domain / IP', runAction:'Run', enableQuic:'Enable QUIC',
+        family:'Family', endpoints:'Endpoints', outcome:'Outcome', restoration:'Restoration', replay:'Replay',
+        completeProfile:'Complete Traffic Strategy profile', fullOutput:'Full output (advanced)', stateLabel:'State'
     };
+
+    function setButtonText(selector, text) {
+        var button=$(selector), icons=button.find('i').detach();
+        button.empty().text(text + ' '); if (icons.length) button.append(icons);
+    }
+    function applyStaticLocalization() {
+        var testBox=$('#testDomainInput').closest('.content-box');
+        testBox.find('.content-box-header h3').first().text(ui.testDomainTitle);
+        setButtonText('#testDomainBtn', ui.testAction);
+        $('#testDomainResult').text(ui.testDomainHelp);
+        $('#strategyLabDomainInput').closest('tr').find('td').first().text(ui.blockedDomain);
+        setButtonText('#strategyLabBtn', ui.runAction);
+        $('#strategyLabQuicRow').find('td').first().text(ui.enableQuic);
+        $('#strategyLabResultOutcome').prev('strong').text(ui.outcome + ':');
+        $('#strategyLabResultRestoration').prev('strong').text(ui.restoration + ':');
+        var headers=$('#strategyLabShortlist thead th');
+        headers.eq(3).text(ui.family); headers.eq(4).text(ui.endpoints); headers.eq(5).text(ui.replay); headers.eq(6).text(ui.completeProfile);
+        $('#strategyLabRaw').closest('details').find('summary').first().text(ui.fullOutput);
+    }
 
     var guidance = $('#strategyLabSummary').empty();
     strategyLabGuidance.forEach(function (paragraph, index) {
@@ -84,6 +111,7 @@ $(document).ready(function () {
     });
     $('#strategyLabUdpHelp').text(ui.udpHelp);
     $('#strategyLabQuicHelp').text(ui.quicHelp);
+    applyStaticLocalization();
 
     function esc(value) { return $('<div/>').text(value == null ? '' : String(value)).html(); }
     function label(map, key) { return map[key] || key || '—'; }
@@ -395,7 +423,8 @@ $(document).ready(function () {
                 $('#circularMessage').text(data.message || ''); return;
             }
             var state=data.state; $('#circularState').text(label(statusLabels,String(state).toUpperCase()));
-            $('#circularMessage').text(circularMessages[state] || data.message || ''); $('#circularRaw').text(JSON.stringify(data,null,2));
+            $('#circularMessage').text(circularMessages[state] || data.message || '');
+            $('#circularRaw').text(ui.stateLabel + ': ' + label(statusLabels,String(state).toUpperCase()));
             var live=['queued','preparing','running','stop_requested'].indexOf(state)!==-1; $('#circularStartBtn').prop('disabled',live); $('#circularStopBtn').prop('disabled',!live);
             if(live)circularTimer=setTimeout(pollCircular,1000);
         });
