@@ -62,30 +62,37 @@
     - [x] owner-live OFF run reports QUIC strategy search disabled
     - [x] independent Generic UDP candidate execution remains active with QUIC OFF
     - [x] tested OFF job completes SUCCESS and Stage-90 restoration PASS
-  - [ ] Enable QUIC OFF/default persistence across reload/revisit — source persistence contract guarded in `_17`; owner-live reload proof pending
-  - [ ] **`v0.4.1_17` Strategy Lab / Diagnostics RU-EN presentation cleanup**
-    - [x] source: circular idle ordinary display removes raw `{` and `}` / `{"state":"idle"}` JSON
-    - [x] source: RU `Состояние: ОЖИДАНИЕ` / EN `State: IDLE`
-    - [x] source: raw machine job JSON remains only under explicitly advanced output
-    - [x] source: `Full output (advanced)` / RU `Полный вывод (расширенный)`
-    - [x] source: HTTPS connectivity guidance RU/EN
-    - [x] source: `Family` / `Семейство`
-    - [x] source: `Endpoints` / `Назначения`
-    - [x] source: `Outcome` / `Результат`
-    - [x] source: `Restoration` / `Восстановление`
-    - [x] source: `Replay` / `Ответы`
-    - [x] source: `Complete Traffic Strategy profile` / `Полный профиль Стратегий Трафика`
-    - [x] source: `Run` / `Запуск`
-    - [x] source: `Test Domain Connectivity` / `Тестирование соединения с доменом`
-    - [x] source: EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`
-    - [x] source: `Enable QUIC` / RU `Включить QUIC`
-    - [x] focused automated source contract covers RU/EN, circular idle, and persisted QUIC default/load/save
-    - [x] latest-head full CI + FreeBSD-15 package qualification
-    - [x] exact-head source merge `ebf071122b2613c4fe56b5af4e5e9f07c99e9122`
-    - [x] persistent `v0.4.1_17` testing publication
-    - [ ] live acceptance in Russian mode
-    - [ ] live acceptance in English mode
-    - [ ] verify no RU/EN cross-language leakage
+  - [ ] Enable QUIC OFF/default persistence across reload/revisit — source persistence contract remains guarded; owner-live reload proof pending
+  - [ ] **Strategy Lab / Diagnostics RU-EN presentation completion**
+    - [x] `_17` source/publication: circular idle ordinary display removes raw `{` / `}` / `{"state":"idle"}` JSON
+    - [x] `_17` source/publication: RU `Состояние: ОЖИДАНИЕ` / EN `State: IDLE`
+    - [x] `_17` source/publication: raw machine job JSON remains only under explicitly advanced output
+    - [x] `_17` source/publication: `Full output (advanced)` / RU `Полный вывод (расширенный)`
+    - [x] `_17` source/publication: HTTPS connectivity guidance RU/EN
+    - [x] `_17` source/publication: `Family` / `Семейство`
+    - [x] `_17` source/publication: `Endpoints` / `Назначения`
+    - [x] `_17` source/publication: `Outcome` / `Результат`
+    - [x] `_17` source/publication: `Restoration` / `Восстановление`
+    - [x] `_17` source/publication: `Replay` / `Ответы`
+    - [x] `_17` source/publication: `Complete Traffic Strategy profile` / `Полный профиль Стратегий Трафика`
+    - [x] `_17` source/publication: `Run` / `Запуск`
+    - [x] `_17` source/publication: `Test Domain Connectivity` / `Тестирование соединения с доменом`
+    - [x] `_17` source/publication: EN `Blocked Domain / IP`, RU `Заблокированный домен / IP`
+    - [x] `_17` source/publication: `Enable QUIC` / RU `Включить QUIC`
+    - [x] `_17` focused automated source contract covers RU/EN, circular idle, and persisted QUIC default/load/save
+    - [x] `_17` latest-head full CI + FreeBSD-15 qualification
+    - [x] `_17` exact-head source merge and persistent testing publication
+    - [x] `_17` owner-live Russian review performed; most translations/circular idle PASS, remaining defects selected for `_18`
+    - [ ] `_18` owner-selected corrective
+      - [x] source: `Strategy Lab` / RU `Лаборатория стратегий`
+      - [x] source: `Generic UDP (optional)` / RU `UDP порт (опционально)`
+      - [x] source: one shared aligned value column for domain / Generic UDP / Enable QUIC
+      - [x] source: small left shift and one-line RU `Заблокированный домен / IP`
+      - [x] focused regression contract for new RU/EN labels and alignment while preserving `_17` contracts
+      - [ ] latest-head full CI + FreeBSD-15 package qualification
+      - [ ] exact-head source merge and persistent `v0.4.1_18` testing publication
+      - [ ] owner-live RU acceptance of title/UDP label/one-line label/alignment
+      - [ ] owner-live English mode and no RU/EN cross-language leakage
     - [ ] owner-live Enable QUIC OFF/default persistence after reload/revisit
   - [ ] already-accessible target
   - [ ] cancellation/internal-failure containment
@@ -96,7 +103,7 @@
   - [ ] validation/guards
   - [ ] service-state correctness
 - [ ] Diagnostics persistence/reload
-- [ ] RU/EN presentation review
+- [ ] RU/EN presentation review beyond the current Strategy Lab corrective scope
 - [ ] Retention/cleanup boundaries
 - [ ] Reboot/residue verification
 - [ ] OPNsense runtime/service reliability follow-up
@@ -104,9 +111,11 @@
 - [ ] Additional BLOB repository GUI
   - [ ] wait for owner-supplied/approved technical contract
 
-## Current priority — `_17` owner-live RU/EN + persistence acceptance
+## Current priority — qualify/publish `_18`, then finish live RU/EN + persistence acceptance
 
-Current published testing identity:
+Current source candidate: `v0.4.1_18` (`PLUGIN_REVISION=18`).
+
+Last published testing identity remains `_17` until `_18` publication completes:
 
 - tag: `v0.4.1_17`;
 - asset: `os-zapret2-restyle-0.4.1_17.pkg`;
@@ -115,13 +124,11 @@ Current published testing identity:
 - publication workflow run: `31887296681`;
 - stable Pages/pkg repository promoted: no.
 
-Machine evidence: [`verification/evidence/testing-publications/v0.4.1_17.md`](verification/evidence/testing-publications/v0.4.1_17.md).
+`_17` owner-live Russian screenshots confirmed most deterministic translations and the circular-idle cleanup, but exposed the two remaining English labels plus the blocked-domain wrapping/alignment issue. `_18` closes exactly that visible scope without reopening Strategy Lab runtime/search semantics.
 
-Generic UDP and explicit QUIC ON/OFF execution semantics remain owner-live accepted. `_17` does not reopen them; it publishes the selected visible RU/EN/circular-idle cleanup and preserves the persisted Enable QUIC contract.
+After `_18` publication/install, live acceptance must check the new Russian labels/layout, English/no-leakage mode, and separately prove saved Enable QUIC OFF/default persistence across reload/revisit.
 
-Next live acceptance must inspect both language modes and then prove the saved OFF/default QUIC value survives reload/revisit.
-
-Current live predecessor evidence: [`verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md`](verification/evidence/2026-08-15-v0.4.1_16-quic-off-owner-live-pass-ui-followup.md).
+Current evidence: [`verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md`](verification/evidence/2026-08-15-v0.4.1_17-ru-presentation-owner-live-followup.md).
 
 ## Deferred research — retain, do not activate by inertia
 
