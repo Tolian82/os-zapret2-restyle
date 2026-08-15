@@ -93,7 +93,7 @@ require "${QUIC_DOC}" 'Raw/advanced output still retains the complete machine re
 
 # Generic UDP specialist contract now distinguishes the browser handoff from later
 # job-local storage and makes both observable.
-require "${UDP_DOC}" 'decoded size **`1..4096` bytes**'
+require "${UDP_DOC}" 'decoded size **`1..4096 bytes`**'
 require "${UDP_DOC}" 'An exact 140-byte file is valid'
 require "${UDP_DOC}" 'Generic UDP does **not** use a multipart upload directory.'
 require "${UDP_DOC}" 'FileReader.readAsArrayBuffer'
