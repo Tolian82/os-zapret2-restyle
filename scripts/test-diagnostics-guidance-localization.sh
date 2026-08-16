@@ -31,6 +31,8 @@ require "${VIEW}" "blockedDomain:'Заблокированный домен / IP
 require "${VIEW}" "serviceHostLabel:'Host / SNI (опционально)'"
 require "${VIEW}" "serviceHostHelp:'Для IPv4-цели укажите имя сервиса, если TLS/HTTP/QUIC должны использовать отдельный Host / SNI.'"
 require "${VIEW}" "genericUdpLabel:'UDP порт (опционально)'"
+require "${VIEW}" "chooseFile:'Выбрать файл'"
+require "${VIEW}" "noFileSelected:'Файл не выбран'"
 require "${VIEW}" "runAction:'Запуск'"
 require "${VIEW}" "enableQuic:'Включить QUIC'"
 require "${VIEW}" "modeLabel:'Режим'"
@@ -51,6 +53,8 @@ require "${VIEW}" "blockedDomain:'Blocked Domain / IP'"
 require "${VIEW}" "serviceHostLabel:'Host / SNI (optional)'"
 require "${VIEW}" "serviceHostHelp:'For an IPv4 target, provide the service name when TLS/HTTP/QUIC must use a separate Host / SNI identity.'"
 require "${VIEW}" "genericUdpLabel:'Generic UDP (optional)'"
+require "${VIEW}" "chooseFile:'Choose file'"
+require "${VIEW}" "noFileSelected:'No file selected'"
 require "${VIEW}" "modeLabel:'Mode'"
 require "${VIEW}" "navStrategy:'Strategy'"
 require "${VIEW}" "navLaboratory:'Laboratory'"
@@ -65,12 +69,31 @@ require "${VIEW}" "strategyBox.find('.content-box-header h3').first().text(ui.st
 require "${VIEW}" "\$('#strategyLabServiceHostRow').find('td').first().text(ui.serviceHostLabel);"
 require "${VIEW}" "\$('#strategyLabServiceHostHelp').text(ui.serviceHostHelp);"
 require "${VIEW}" "\$('#strategyLabUdpRow').find('td').first().text(ui.genericUdpLabel);"
+require "${VIEW}" "\$('#strategyLabUdpPayloadButton').text(ui.chooseFile);"
+require "${VIEW}" "\$('#strategyLabUdpPayloadName').text(udpPayloadSelection.fileName || ui.noFileSelected);"
 require "${VIEW}" "\$('#strategyLabModeLabel').text(ui.modeLabel + ':');"
 require "${VIEW}" "\$('#strategyLabMode option[value=\"standard\"]').text(modeLabels.standard);"
 require "${VIEW}" "\$('#strategyLabMode option[value=\"extended\"]').text(modeLabels.extended);"
 require "${VIEW}" "\$('#strategyLabState,#circularState').text(label(statusLabels,'IDLE'));"
 require "${VIEW}" "\$('a[href=\"/ui/zapret\"]').text(ui.navStrategy);"
 require "${VIEW}" "\$('a[href=\"/ui/zapret/diagnostics\"]').text(ui.navLaboratory);"
+
+# Browser-native file inputs localize their own chrome from the browser/OS rather
+# than the selected OPNsense language. Keep the real input hidden and expose a
+# deterministic RU/EN button + filename surface owned by the Laboratory.
+require "${VIEW}" 'id="strategyLabUdpPayloadButton" aria-controls="strategyLabUdpPayload">Choose file</button>'
+require "${VIEW}" 'id="strategyLabUdpPayloadName" class="text-muted" aria-live="polite">No file selected</span>'
+require "${VIEW}" 'type="file" class="strategy-lab-native-file-input" id="strategyLabUdpPayload"'
+require "${VIEW}" '.strategy-lab-native-file-input {'
+require "${VIEW}" "function renderUdpPayloadFileName(fileName)"
+require "${VIEW}" "\$('#strategyLabUdpPayloadName').text(fileName || ui.noFileSelected);"
+require "${VIEW}" 'renderUdpPayloadFileName(udpPayloadSelection.fileName);'
+require "${VIEW}" "\$('#strategyLabUdpPayloadButton').click(function () {"
+require "${VIEW}" "if (input) input.click();"
+require "${VIEW}" "\$('#strategyLabUdpPayload,#strategyLabUdpPayloadButton,#strategyLabUdpPort,#strategyLabServiceHostInput').prop('disabled', busy);"
+if grep -Fq '<input type="file" class="form-control" id="strategyLabUdpPayload"' "${VIEW}"; then
+    fail 'browser-native visible file-picker chrome returned; localized Laboratory-owned control is required'
+fi
 
 # IPv4 input remains conditional so domain UI keeps the accepted compact layout.
 require "${VIEW}" 'id="strategyLabServiceHostRow" style="display:none;"'
@@ -141,4 +164,4 @@ require "${SETTINGS}" "'enabled' => (string)\$model->strategylab->enablequic ===
 require "${MODEL}" '<enablequic type="BooleanField">'
 require "${MODEL}" '<Default>0</Default>'
 
-echo 'PASS: Laboratory guidance and UI support domain or IPv4 targets with conditional Host/SNI while preserving the OPNsense-owned perimeter, accepted 25% grid, navigation localization, and persistence contracts'
+echo 'PASS: Laboratory guidance and UI support domain or IPv4 targets with conditional Host/SNI, deterministic RU/EN file-picker chrome, accepted OPNsense layout, and persistence contracts'

@@ -19,20 +19,18 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.0`;
-- package revision: `_1`;
-- current stable Web/pkg release/tag: `v0.5.0`;
-- current stable package: `os-zapret2-restyle-0.5.0_1.pkg`;
-- package SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
+- active package revision: `_2`;
+- package candidate: `os-zapret2-restyle-0.5.0_2.pkg`;
+- current stable Web/pkg release/tag remains `v0.5.0`;
+- current stable package remains `os-zapret2-restyle-0.5.0_1.pkg`;
+- stable package SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
 - required ABI: `FreeBSD:15:amd64`;
-- release-preparation merge/tag target: `d5afa6b1f4cfd7bc00e8e95d6896af8a1456fb24`;
-- exact-head pre-merge CI / FreeBSD-15 qualification: `31915884270`, PASS;
-- release trigger: `31916249900`, PASS;
-- full release workflow: `31916256043`, PASS;
-- stable GitHub Release assets: package + `SHA256SUMS`;
-- stable GitHub Pages/pkg repository: deployed from release commit `d5afa6b1f4cfd7bc00e8e95d6896af8a1456fb24`;
+- stable release-preparation merge/tag target: `d5afa6b1f4cfd7bc00e8e95d6896af8a1456fb24`;
+- stable full release workflow: `31916256043`, PASS;
+- stable GitHub Pages/pkg repository remains the `v0.5.0_1` release repository;
 - internal service key: `zapret`.
 
-Full release evidence: [`verification/evidence/2026-08-16-v0.5.0-release-publication.md`](verification/evidence/2026-08-16-v0.5.0-release-publication.md).
+Stable release evidence: [`verification/evidence/2026-08-16-v0.5.0-release-publication.md`](verification/evidence/2026-08-16-v0.5.0-release-publication.md).
 
 The exact `main` SHA is resolved at execution time under `GH-004`.
 
@@ -52,34 +50,38 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 - Enable QUIC is explicit, persisted, defaults OFF, and its reload/revisit persistence is owner-live accepted.
 - Strategy Lab cleanup/restoration remains mandatory and selected live jobs preserve exact initial service state.
 - Settings Apply validation/guards and post-Apply service-state correctness remain accepted.
-- Laboratory native OPNsense layout and RU/EN presentation remain accepted.
+- The native OPNsense Laboratory layout and the deterministic Strategy Lab RU/EN text localization contract remain accepted.
 - `v0.5.0` is the stable promotion of the owner-live accepted `v0.4.x` runtime boundary; release preparation introduced no new runtime behavior.
 
-## Release acceptance
+## Completed stable release boundary
 
-The full `v0.5.0_1` release boundary is complete:
+The full `v0.5.0_1` release boundary remains complete:
 
-- source/metadata/documentation release preparation qualified on the exact PR head;
-- FreeBSD 15 package qualification passed;
-- exact release-preparation merge completed;
-- semantic `v0.5.0` tag points to that merge;
-- stable GitHub Release published `os-zapret2-restyle-0.5.0_1.pkg` and `SHA256SUMS`;
-- full release package digest is `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
-- Pages release artifact contains the same package bytes plus `meta.conf`, `data.pkg`, `packagesite.pkg`, `SHA256SUMS`, and `zapret2-restyle.conf`;
-- Pages deployment succeeded and GitHub reports the project Pages site public and HTTPS-enforced.
-
-Key owner-live evidence:
-
-- [`verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md`](verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md)
-- [`verification/evidence/2026-08-16-v0.4.1_23-quic-preference-persistence-owner-live-pass.md`](verification/evidence/2026-08-16-v0.4.1_23-quic-preference-persistence-owner-live-pass.md)
+- exact-head project CI and FreeBSD 15 package qualification passed;
+- semantic `v0.5.0` tag points to the exact release-preparation merge;
+- stable GitHub Release published package and checksum;
+- stable Pages/pkg repository was deployed and verified.
 
 Release notes: [`releases/v0.5.0.md`](releases/v0.5.0.md).
 
+## Active `v0.5.0_2` corrective
+
+Fresh owner GUI evidence after the release shows one remaining localization leak in Strategy Lab Extended mode: with English OPNsense localization, the visible Generic UDP file picker displays Russian browser/OS strings (`Выбор файла`, `Не выбран ни один файл`).
+
+The defect is isolated to the browser-native visible chrome of `<input type="file">`; Generic UDP file reading/upload behavior itself is not implicated.
+
+Selected correction:
+
+- retain the native file input only as the underlying file-selection owner;
+- hide its browser/OS-owned visible chrome;
+- render Laboratory-owned `Choose file` / `No file selected` and `Выбрать файл` / `Файл не выбран` surfaces according to the same OPNsense HTML language used by Strategy Lab;
+- show the real selected filename after selection;
+- preserve the existing 1–4096-byte payload validation, browser FileReader/Base64 staging, busy-state guard and API request contract;
+- add regression coverage that fails if the visible native `form-control` file picker returns.
+
 ## Current boundary
 
-**No new development task is selected after the successful `v0.5.0` release.**
-
-The roadmap retains future regression/product directions. The next active boundary is whichever item the owner explicitly selects, or a new concrete defect. Accepted work is not reopened by inertia.
+Qualify, merge and publish `v0.5.0_2` as a testing corrective package. The stable Pages/pkg repository is not promoted by this patch. After package publication, focused owner-live verification is limited to confirming that the file button/empty filename text follows RU/EN OPNsense localization and that file selection still works.
 
 ## Completed version-line archives
 
