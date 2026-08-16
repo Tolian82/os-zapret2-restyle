@@ -53,7 +53,7 @@ SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`.
 
 Full release evidence: [`verification/evidence/2026-08-16-v0.5.0-release-publication.md`](verification/evidence/2026-08-16-v0.5.0-release-publication.md).
 
-## `v0.5.0_2` file-picker localization corrective
+## `v0.5.0_2` file-picker localization corrective — COMPLETE
 
 Fresh owner evidence selected a concrete post-release defect: the visible Generic UDP browser-native file picker could show Russian browser/OS labels while OPNsense/Strategy Lab was set to English.
 
@@ -66,8 +66,8 @@ Fresh owner evidence selected a concrete post-release defect: the visible Generi
 - [x] FreeBSD 15 package qualification — run `31917466421`
 - [x] exact squash merge for `v0.5.0_2` — `1ae952185dbae80ec34c0a89b441feddbe8b403a`
 - [x] persistent GitHub testing-package publication — `v0.5.0_2`, workflow `31917806438`
-- [ ] bounded publication-record PR completion
-- [ ] focused owner-live RU/EN file-picker verification
+- [x] bounded publication-record reconciliation — PR `#270` merged, generated evidence state closed afterward
+- [x] focused owner-live RU/EN file-picker verification — **OWNER-LIVE PASS**
 
 Testing package: `os-zapret2-restyle-0.5.0_2.pkg`.
 
@@ -75,13 +75,15 @@ SHA-256: `d89bc45162ca760320cf59e4a861b2b8ef7bc30bcb05f4338b2078c57b4980f5`.
 
 Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_2.md`](verification/evidence/testing-publications/v0.5.0_2.md).
 
-Publisher run `31917806438` published and verified the package successfully. Its final failure is only the repository policy that prevents GitHub Actions from opening a pull request; the generated publication-record branch is being completed manually. The stable Pages/pkg repository remains on `v0.5.0_1`.
+Owner-live evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md`](verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md).
+
+The stable Pages/pkg repository remains on `v0.5.0_1`; `_2` was not automatically promoted.
 
 ## Remaining regression / future backlog
 
-These rows remain useful coverage or future product directions. They are **not** silently active work and are not release debt for the completed `v0.5.0` release.
+These rows remain useful coverage or future product directions. They are **not** silently release debt for the completed stable `v0.5.0` release.
 
-- [ ] cancellation/internal-failure containment regression
+- [ ] **cancellation/internal-failure containment regression — NEXT SELECTED WORK**
 - [ ] circular lifecycle start/stop/TTL and stale-session recovery
 - [ ] broader Diagnostics persistence/reload regression
 - [ ] retention/cleanup boundary regression
@@ -102,6 +104,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Complete the `_2` publication-record tail, then verify the localized Strategy Lab file picker on the live OPNsense appliance.**
+**Run an evidence-first Strategy Lab cancellation/internal-failure containment regression.** Verify that cancellation and controlled internal failures still execute mandatory restoration, restore the exact pre-job Zapret2 state/configuration, remove temporary firewall/runtime/process residue, and report truthful terminal states. Patch only confirmed defects.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
