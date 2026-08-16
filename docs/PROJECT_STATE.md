@@ -20,8 +20,7 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - primary branch: `main`;
 - project version: `0.5.0`;
 - active package revision: `_2`;
-- package candidate: `os-zapret2-restyle-0.5.0_2.pkg`;
-- testing prerelease/tag: `v0.5.0_2`;
+- owner-live accepted testing corrective: `os-zapret2-restyle-0.5.0_2.pkg` / `v0.5.0_2`;
 - testing source/tag target: `1ae952185dbae80ec34c0a89b441feddbe8b403a`;
 - testing package SHA-256: `d89bc45162ca760320cf59e4a861b2b8ef7bc30bcb05f4338b2078c57b4980f5`;
 - testing publication workflow: `31917806438`;
@@ -35,6 +34,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - internal service key: `zapret`.
 
 Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_2.md`](verification/evidence/testing-publications/v0.5.0_2.md).
+
+Owner-live `_2` evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md`](verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md).
 
 Stable release evidence: [`verification/evidence/2026-08-16-v0.5.0-release-publication.md`](verification/evidence/2026-08-16-v0.5.0-release-publication.md).
 
@@ -57,40 +58,34 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 - Strategy Lab cleanup/restoration remains mandatory and selected live jobs preserve exact initial service state.
 - Settings Apply validation/guards and post-Apply service-state correctness remain accepted.
 - The native OPNsense Laboratory layout and deterministic Strategy Lab RU/EN text localization contract remain accepted.
-- `v0.5.0` is the stable promotion of the owner-live accepted `v0.4.x` runtime boundary; release preparation introduced no new runtime behavior.
+- Strategy Lab owns the visible Generic UDP file-picker labels; browser/OS-native file-input chrome is not exposed.
+- Owner-live verification confirms the `_2` RU/EN file-picker presentation and selected-filename/file-selection path work as intended.
+- `v0.5.0` remains the stable Web/pkg release; the owner-live accepted `_2` corrective is not automatically promoted to the stable Pages/pkg repository.
 
-## Completed stable release boundary
+## Completed `v0.5.0_2` corrective
 
-The full `v0.5.0_1` release boundary remains complete:
+The post-release file-picker localization defect is closed.
 
-- exact-head project CI and FreeBSD 15 package qualification passed;
-- semantic `v0.5.0` tag points to the exact release-preparation merge;
-- stable GitHub Release published package and checksum;
-- stable Pages/pkg repository was deployed and verified.
+Completed boundary:
 
-Release notes: [`releases/v0.5.0.md`](releases/v0.5.0.md).
+- browser-native visible file-input chrome identified as the localization leak;
+- Laboratory-owned EN `Choose file` / `No file selected` and RU `Выбрать файл` / `Файл не выбран` presentation implemented;
+- actual selected filename remains visible;
+- FileReader/Base64 staging, 1–4096-byte validation, busy-state behavior and Generic UDP API semantics preserved;
+- regression coverage added;
+- exact-head source CI and FreeBSD-15 package qualification passed in run `31917466421`;
+- source PR `#269` squash-merged as `1ae952185dbae80ec34c0a89b441feddbe8b403a`;
+- prerelease `v0.5.0_2` published and verified with SHA-256 `d89bc45162ca760320cf59e4a861b2b8ef7bc30bcb05f4338b2078c57b4980f5`;
+- publication-record reconciliation completed through PR `#270` and its evidence-state closure;
+- owner confirmed the live `_2` result works as intended.
 
-## `v0.5.0_2` file-picker localization corrective
-
-Owner GUI evidence after the release exposed one localization leak in Strategy Lab Extended mode: under English OPNsense localization, the visible Generic UDP native file picker showed Russian browser/OS strings (`Выбор файла`, `Не выбран ни один файл`).
-
-The correction is now source-qualified, merged and published as a testing package:
-
-- browser-native file-input chrome is hidden while the real input remains the underlying selection mechanism;
-- visible Strategy Lab-owned labels are EN `Choose file` / `No file selected` and RU `Выбрать файл` / `Файл не выбран`;
-- the real filename is displayed after selection;
-- FileReader/Base64 staging, 1–4096-byte validation, busy-state behavior and Generic UDP API semantics remain unchanged;
-- localization regression coverage forbids return of the old visible native file picker;
-- source PR `#269` exact final head `4674da5da39a642cf3761662e3599497d68c0522` passed complete applicable CI plus FreeBSD-15 package qualification in run `31917466421`;
-- exact squash merge/source target is `1ae952185dbae80ec34c0a89b441feddbe8b403a`;
-- testing prerelease `v0.5.0_2` contains `os-zapret2-restyle-0.5.0_2.pkg`, SHA-256 `d89bc45162ca760320cf59e4a861b2b8ef7bc30bcb05f4338b2078c57b4980f5`;
-- stable Pages/pkg repository promoted: **no**.
-
-Publisher run `31917806438` successfully built, verified, published and re-verified the package/tag contract. Its terminal FAILURE is limited to the GitHub Actions account being forbidden from creating the publication-record PR; the generated record branch/file exists and this documentation-only PR completes that required tail.
+No further package correction belongs to this scope.
 
 ## Current boundary
 
-Complete the bounded publication-record merge, then perform focused owner-live verification of the RU/EN file-picker presentation and successful filename/file selection path. Do not mark `_2` owner-live accepted until the appliance check is confirmed.
+Next selected work is **Strategy Lab cancellation/internal-failure containment regression**.
+
+Begin with evidence and controlled failure/cancellation scenarios. Verify mandatory restoration, exact pre-job service/configuration preservation, temporary runtime/firewall/process cleanup, truthful terminal/result states and safe cancellation semantics. Only a demonstrated defect should produce a package-affecting corrective patch.
 
 ## Completed version-line archives
 

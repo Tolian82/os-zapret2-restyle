@@ -10,14 +10,14 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-16
-**Current handoff identity:** `v0.5.0_2` Strategy Lab file-picker localization corrective
+**Current handoff identity:** `v0.5.0_2` owner-live accepted; next reliability regression selected
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.0`;
 - `PLUGIN_REVISION=2`;
-- testing corrective: `v0.5.0_2` / `os-zapret2-restyle-0.5.0_2.pkg`;
+- owner-live accepted testing corrective: `v0.5.0_2` / `os-zapret2-restyle-0.5.0_2.pkg`;
 - testing source/tag target: `1ae952185dbae80ec34c0a89b441feddbe8b403a`;
 - testing package SHA-256: `d89bc45162ca760320cf59e4a861b2b8ef7bc30bcb05f4338b2078c57b4980f5`;
 - testing publication workflow: `31917806438`;
@@ -28,13 +28,15 @@
 
 Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_2.md`](verification/evidence/testing-publications/v0.5.0_2.md).
 
+Owner-live corrective evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md`](verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md).
+
 Stable release evidence: [`verification/evidence/2026-08-16-v0.5.0-release-publication.md`](verification/evidence/2026-08-16-v0.5.0-release-publication.md).
 
 Resolve the exact current `main` SHA at execution time under `GH-004`.
 
-## Accepted stable product boundary
+## Accepted product boundary
 
-The completed `v0.4.x` line is promoted into stable `v0.5.0`. Accepted owner-live/product facts remain locked unless fresh evidence contradicts them.
+The completed `v0.4.x` line and the post-release `_2` corrective are accepted owner-live unless fresh evidence contradicts them.
 
 Key facts include:
 
@@ -49,32 +51,20 @@ Key facts include:
 - Generic UDP remains independent;
 - Enable QUIC defaults OFF, is explicit/persisted, and its reload/revisit persistence is owner-live accepted;
 - Strategy Lab cleanup/restoration remains mandatory;
-- Settings Apply validation/guards and post-Apply service-state correctness remain accepted.
+- Settings Apply validation/guards and post-Apply service-state correctness remain accepted;
+- Strategy Lab owns its visible Generic UDP file-picker labels, so RU/EN presentation follows OPNsense language rather than browser/OS native file-input chrome;
+- the owner verified the `_2` localized picker and file-selection path on the live appliance.
 
-## `v0.5.0_2` corrective state
+## Closed `v0.5.0_2` corrective
 
-Fresh owner GUI evidence showed that in English OPNsense localization the visible browser-native Generic UDP file input displayed Russian browser/OS chrome (`Выбор файла`, `Не выбран ни один файл`).
+The English localization leak (`Выбор файла` / `Не выбран ни один файл` rendered by the browser/OS) was corrected by hiding the visible native file-input chrome and rendering Laboratory-owned picker text.
 
-The source correction is merged and the testing package is published:
-
-1. the real file input remains the selection owner but its browser-native chrome is hidden;
-2. Strategy Lab owns the visible button and selected-filename surface;
-3. English strings are `Choose file` / `No file selected`;
-4. Russian strings are `Выбрать файл` / `Файл не выбран`;
-5. the actual selected filename is shown after selection;
-6. FileReader, 1–4096-byte validation, Base64 staging, busy-state disabling and Generic UDP request semantics are unchanged;
-7. the regression contract rejects return of the old visible native file picker.
-
-Exact-head source qualification passed in CI run `31917466421`, including the FreeBSD-15 package build. Source PR `#269` squash-merged as `1ae952185dbae80ec34c0a89b441feddbe8b403a`.
-
-Testing prerelease `v0.5.0_2` was then built, manifest-verified and published by workflow `31917806438` with SHA-256 `d89bc45162ca760320cf59e4a861b2b8ef7bc30bcb05f4338b2078c57b4980f5`. The workflow's only final failure was the known GitHub Actions policy restriction preventing the bot from opening its documentation PR; package publication and release/tag verification had already passed. This publication-record branch completes that bounded documentation tail manually.
+The source correction, full CI/FreeBSD-15 qualification, testing-package publication, publication-record tail and focused owner-live check are complete. The owner confirmed that `v0.5.0_2` works as intended. No further source change belongs to this scope.
 
 ## Immediate next action
 
-Finish the documentation-only publication-record PR, then perform the focused owner-live visual check on OPNsense:
+Start the next selected reliability regression: **Strategy Lab cancellation/internal-failure containment**.
 
-- English: `Choose file` / `No file selected`;
-- Russian: `Выбрать файл` / `Файл не выбран`;
-- after selection, the real filename is displayed and the Generic UDP file path remains usable.
+The goal is evidence first, not an assumed patch: exercise cancellation and controlled internal-failure paths, then verify that Strategy Lab always reaches mandatory restoration, leaves no temporary runtime/firewall/process residue, preserves the pre-job Zapret2 service/configuration state, and reports the terminal state truthfully. Only confirmed defects should advance to a package revision.
 
-Do not claim owner-live PASS for this corrective until that focused appliance check is confirmed.
+Do not reactivate closed Model A/B/C, BLOB/Lua/discovery or timeout research without fresh evidence or a new owner instruction.
