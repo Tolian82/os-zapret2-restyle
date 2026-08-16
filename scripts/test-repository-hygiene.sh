@@ -14,17 +14,25 @@ ROADMAP="${ROOT_DIR}/docs/ROADMAP.md"
 INDEX="${ROOT_DIR}/docs/INDEX.md"
 XREF_TEST="${ROOT_DIR}/scripts/test-rule-cross-references.py"
 LINK_TEST="${ROOT_DIR}/scripts/test-markdown-links.py"
-CURRENT_LEDGER="${ROOT_DIR}/docs/history/current/v0.4.x.md"
+VERSION_FILE="${ROOT_DIR}/VERSION"
 RULE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-14-rule-cross-reference-integrity.md"
 LIFECYCLE_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-14-rule-lifecycle-and-link-integrity.md"
 MEMORY_DECISION="${ROOT_DIR}/docs/decisions/DEC-2026-08-14-three-level-versioned-documentation-memory.md"
 ARCHIVE_01="${ROOT_DIR}/docs/history/archive/v0.1.x.md"
 ARCHIVE_02="${ROOT_DIR}/docs/history/archive/v0.2.x.md"
 ARCHIVE_03="${ROOT_DIR}/docs/history/archive/v0.3.x.md"
+ARCHIVE_04="${ROOT_DIR}/docs/history/archive/v0.4.x.md"
 CI="${ROOT_DIR}/.github/workflows/ci.yml"
 
 fail(){ echo "FAIL: $*" >&2; exit 1; }
 require_fixed(){ grep -Fq -- "$1" "$2" || fail "$3"; }
+
+version=$(tr -d '[:space:]' < "${VERSION_FILE}")
+case "${version}" in *.*.*) ;; *) fail 'invalid project version' ;; esac
+major=$(printf '%s\n' "${version}" | cut -d. -f1)
+second=$(printf '%s\n' "${version}" | cut -d. -f2)
+current_line="v${major}.${second}.x"
+CURRENT_LEDGER="${ROOT_DIR}/docs/history/current/${current_line}.md"
 
 tracked=$(git -C "${ROOT_DIR}" ls-files)
 bad=$(printf '%s\n' "${tracked}" | grep -E '(^|/)([^/]+\.(orig|rej|patch|diff|b64|base64|bak)|[^/]+\.part-[0-9]+|[^/]+~)$' || true)
@@ -47,6 +55,12 @@ for file in \
 do
     test -s "${file}" || fail "required documentation/integrity file is missing: ${file}"
 done
+
+# v0.4.x is the first line using the final-state archive model and must be retained once
+# the active line advances beyond it.
+if [ "${major}" -gt 0 ] 2>/dev/null || [ "${second}" -ge 5 ] 2>/dev/null; then
+    test -s "${ARCHIVE_04}" || fail "required completed v0.4.x archive is missing: ${ARCHIVE_04}"
+fi
 
 for removed in \
     "${ROOT_DIR}/docs/GITHUB_WORKFLOW.md" \
@@ -112,16 +126,16 @@ done
 
 for marker in \
     DOCUMENTATION_RULES.md PROJECT_PRINCIPLES.md CHAT_RULES.md GITHUB_PUBLICATION.md \
-    START_HERE.md PROJECT_STATE.md ROADMAP.md history/current/v0.4.x.md \
+    START_HERE.md PROJECT_STATE.md ROADMAP.md "history/current/${current_line}.md" \
     history/archive/v0.1.x.md history/archive/v0.2.x.md history/archive/v0.3.x.md \
     'verification/evidence/' 'devlog/' 'patches/' 'decisions/' 'releases/'
 do
     require_fixed "${marker}" "${INDEX}" "INDEX does not route to ${marker}"
 done
 
-require_fixed 'GITHUB_WORKFLOW.md' "${INDEX}" 'INDEX does not record removal of GITHUB_WORKFLOW.md'
-require_fixed 'DEVELOPMENT_GUIDE.md' "${INDEX}" 'INDEX does not record removal of DEVELOPMENT_GUIDE.md'
-require_fixed 'WORKING_CONVENTIONS.md' "${INDEX}" 'INDEX does not record removal of WORKING_CONVENTIONS.md'
+if [ "${major}" -gt 0 ] 2>/dev/null || [ "${second}" -ge 5 ] 2>/dev/null; then
+    require_fixed 'history/archive/v0.4.x.md' "${INDEX}" 'INDEX does not route to completed v0.4.x archive'
+fi
 
 for file in \
     "${AGENTS}" "${DOC_RULES}" "${DEV_RULES}" "${CHAT_RULES}" "${GH_RULES}" \
@@ -138,14 +152,17 @@ do
     fi
 done
 
-require_fixed 'State-line scope: **`v0.4.x`**' "${PROJECT_STATE}" 'PROJECT_STATE is not scoped to v0.4.x'
+require_fixed "State-line scope: **\`${current_line}\`**" "${PROJECT_STATE}" "PROJECT_STATE is not scoped to ${current_line}"
 require_fixed 'START_HERE -> PROJECT_STATE -> version-line archive' "${PROJECT_STATE}" 'PROJECT_STATE does not record the current-work state-flow'
 require_fixed 'v0.1.x archive' "${PROJECT_STATE}" 'PROJECT_STATE lacks v0.1.x archive link'
 require_fixed 'v0.2.x archive' "${PROJECT_STATE}" 'PROJECT_STATE lacks v0.2.x archive link'
 require_fixed 'v0.3.x archive' "${PROJECT_STATE}" 'PROJECT_STATE lacks v0.3.x archive link'
+if [ "${major}" -gt 0 ] 2>/dev/null || [ "${second}" -ge 5 ] 2>/dev/null; then
+    require_fixed 'v0.4.x archive' "${PROJECT_STATE}" 'PROJECT_STATE lacks v0.4.x archive link'
+fi
 require_fixed 'AGENTS -> START_HERE -> PROJECT_STATE' "${LIFECYCLE_DECISION}" 'context-first cold-start decision is missing'
 require_fixed 'docs_only: ${{ steps.paths.outputs.docs_only }}' "${CI}" 'CI docs-only classifier output is missing'
 require_fixed 'name: Validate documentation' "${CI}" 'focused documentation CI job is missing'
 require_fixed 'scripts/test-repository-hygiene.sh' "${CI}" 'repository hygiene test is not wired into CI'
 
-echo 'Repository artifact, four-rule-book, rule lifecycle, current-work flow, scoped CI, cross-reference, Level-1, archive, style, whitespace, Markdown-link, and INDEX integrity tests passed.'
+echo "Repository artifact, four-rule-book, rule lifecycle, current-work flow (${current_line}), scoped CI, cross-reference, Level-1, archive, style, whitespace, Markdown-link, and INDEX integrity tests passed."

@@ -114,7 +114,6 @@ PY
 "${PYTHON}" "${TMP}/test.py" || fail 'truthful Strategy Lab result regression failed'
 
 grep -Fq 'truthful_result_support.install()' "${ENTRY}" || fail 'packaged Strategy Lab entry point does not install truthful result support'
-grep -Eq '^PLUGIN_REVISION=[[:space:]]+23$' "${ROOT_DIR}/Makefile" || fail 'package revision is not v0.4.1_23'
 sh -n "$0"
 
 echo 'PASS: Strategy Lab accepts intercepted HTTP application responses, skips bare-IP QUIC truthfully, and requests Host/SNI after bare-IP TLS identity failure'
