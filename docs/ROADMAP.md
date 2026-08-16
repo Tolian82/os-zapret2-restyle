@@ -53,23 +53,29 @@ SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`.
 
 Full release evidence: [`verification/evidence/2026-08-16-v0.5.0-release-publication.md`](verification/evidence/2026-08-16-v0.5.0-release-publication.md).
 
-## Active `v0.5.0_2` corrective
+## `v0.5.0_2` file-picker localization corrective
 
-Fresh owner evidence selected a concrete post-release defect: the visible Generic UDP browser-native file picker can show Russian browser/OS labels while OPNsense/Strategy Lab is set to English.
+Fresh owner evidence selected a concrete post-release defect: the visible Generic UDP browser-native file picker could show Russian browser/OS labels while OPNsense/Strategy Lab was set to English.
 
 - [x] identify browser-native `<input type="file">` chrome as the localization leak
 - [x] keep the real native input only as the hidden file-selection mechanism
 - [x] add Strategy Lab-owned RU/EN picker button and filename text
 - [x] preserve selected filename, busy-state disabling, FileReader/Base64 staging and 1–4096-byte validation
 - [x] add regression coverage forbidding return of the visible native `form-control` file picker
-- [ ] exact-head complete CI
-- [ ] FreeBSD 15 package qualification
-- [ ] exact squash merge for `v0.5.0_2`
-- [ ] persistent GitHub testing-package publication
+- [x] exact-head complete CI — run `31917466421`
+- [x] FreeBSD 15 package qualification — run `31917466421`
+- [x] exact squash merge for `v0.5.0_2` — `1ae952185dbae80ec34c0a89b441feddbe8b403a`
+- [x] persistent GitHub testing-package publication — `v0.5.0_2`, workflow `31917806438`
 - [ ] bounded publication-record PR completion
 - [ ] focused owner-live RU/EN file-picker verification
 
-The stable Pages/pkg repository remains on `v0.5.0_1`; this corrective does not automatically promote a new stable release.
+Testing package: `os-zapret2-restyle-0.5.0_2.pkg`.
+
+SHA-256: `d89bc45162ca760320cf59e4a861b2b8ef7bc30bcb05f4338b2078c57b4980f5`.
+
+Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_2.md`](verification/evidence/testing-publications/v0.5.0_2.md).
+
+Publisher run `31917806438` published and verified the package successfully. Its final failure is only the repository policy that prevents GitHub Actions from opening a pull request; the generated publication-record branch is being completed manually. The stable Pages/pkg repository remains on `v0.5.0_1`.
 
 ## Remaining regression / future backlog
 
@@ -96,6 +102,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Complete and publish the `v0.5.0_2` Strategy Lab file-picker localization corrective, then perform the focused RU/EN visual check.**
+**Complete the `_2` publication-record tail, then verify the localized Strategy Lab file picker on the live OPNsense appliance.**
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
