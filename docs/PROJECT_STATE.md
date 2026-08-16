@@ -20,7 +20,7 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - primary branch: `main`;
 - project version: `0.5.0`;
 - active package revision: `_2`;
-- active corrective candidate: `os-zapret2-restyle-0.5.0_2.pkg`;
+- package candidate: `os-zapret2-restyle-0.5.0_2.pkg`;
 - current stable Web/pkg release/tag remains `v0.5.0`;
 - current stable package remains `os-zapret2-restyle-0.5.0_1.pkg`;
 - stable package SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
