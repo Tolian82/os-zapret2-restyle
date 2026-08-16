@@ -17,12 +17,16 @@
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.0`;
 - `PLUGIN_REVISION=2`;
-- active corrective candidate: `v0.5.0_2` / `os-zapret2-restyle-0.5.0_2.pkg`;
+- testing corrective: `v0.5.0_2` / `os-zapret2-restyle-0.5.0_2.pkg`;
+- testing source/tag target: `1ae952185dbae80ec34c0a89b441feddbe8b403a`;
+- testing package SHA-256: `d89bc45162ca760320cf59e4a861b2b8ef7bc30bcb05f4338b2078c57b4980f5`;
+- testing publication workflow: `31917806438`;
 - current stable Web/pkg release remains `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - stable package SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
 - required ABI: `FreeBSD:15:amd64`;
-- stable release-preparation merge/tag target: `d5afa6b1f4cfd7bc00e8e95d6896af8a1456fb24`;
-- stable full release workflow: `31916256043`, PASS.
+- stable Pages/pkg repository remains on `_1`; `_2` did **not** promote it.
+
+Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_2.md`](verification/evidence/testing-publications/v0.5.0_2.md).
 
 Stable release evidence: [`verification/evidence/2026-08-16-v0.5.0-release-publication.md`](verification/evidence/2026-08-16-v0.5.0-release-publication.md).
 
@@ -47,24 +51,30 @@ Key facts include:
 - Strategy Lab cleanup/restoration remains mandatory;
 - Settings Apply validation/guards and post-Apply service-state correctness remain accepted.
 
-## Fresh defect selected after `v0.5.0`
+## `v0.5.0_2` corrective state
 
-The owner supplied direct GUI evidence that in English OPNsense localization the visible browser-native Generic UDP file input still displays Russian browser/OS chrome (`Выбор файла`, `Не выбран ни один файл`).
+Fresh owner GUI evidence showed that in English OPNsense localization the visible browser-native Generic UDP file input displayed Russian browser/OS chrome (`Выбор файла`, `Не выбран ни один файл`).
 
-Root cause: the visible `<input type="file">` delegates its button/empty-selection labels to browser/OS localization, so those labels are not controlled by Strategy Lab's deterministic RU/EN UI localization.
+The source correction is merged and the testing package is published:
 
-`v0.5.0_2` corrects that boundary without changing Generic UDP upload semantics:
+1. the real file input remains the selection owner but its browser-native chrome is hidden;
+2. Strategy Lab owns the visible button and selected-filename surface;
+3. English strings are `Choose file` / `No file selected`;
+4. Russian strings are `Выбрать файл` / `Файл не выбран`;
+5. the actual selected filename is shown after selection;
+6. FileReader, 1–4096-byte validation, Base64 staging, busy-state disabling and Generic UDP request semantics are unchanged;
+7. the regression contract rejects return of the old visible native file picker.
 
-1. keep the real file input as the file-selection owner but hide its browser-native chrome;
-2. expose a Laboratory-owned button and selected-filename surface;
-3. localize them deterministically from the same active OPNsense HTML language used by the rest of Strategy Lab;
-4. English strings: `Choose file` / `No file selected`;
-5. Russian strings: `Выбрать файл` / `Файл не выбран`;
-6. preserve current file reading, 1–4096-byte validation, Base64 staging, busy-state disabling and Generic UDP request contract;
-7. add a regression contract preventing the visible native `form-control` file picker from returning.
+Exact-head source qualification passed in CI run `31917466421`, including the FreeBSD-15 package build. Source PR `#269` squash-merged as `1ae952185dbae80ec34c0a89b441feddbe8b403a`.
+
+Testing prerelease `v0.5.0_2` was then built, manifest-verified and published by workflow `31917806438` with SHA-256 `d89bc45162ca760320cf59e4a861b2b8ef7bc30bcb05f4338b2078c57b4980f5`. The workflow's only final failure was the known GitHub Actions policy restriction preventing the bot from opening its documentation PR; package publication and release/tag verification had already passed. This publication-record branch completes that bounded documentation tail manually.
 
 ## Immediate next action
 
-Qualify the exact `v0.5.0_2` source head with full applicable CI and FreeBSD-15 package build, squash-merge the exact verified head, publish the testing package from the candidate-defining merge, complete the bounded publication-record tail, and then request only the focused owner-live RU/EN visual verification if still needed.
+Finish the documentation-only publication-record PR, then perform the focused owner-live visual check on OPNsense:
 
-The stable Pages/pkg repository remains on `v0.5.0_1`; this corrective does not silently promote a new stable release.
+- English: `Choose file` / `No file selected`;
+- Russian: `Выбрать файл` / `Файл не выбран`;
+- after selection, the real filename is displayed and the Generic UDP file path remains usable.
+
+Do not claim owner-live PASS for this corrective until that focused appliance check is confirmed.
