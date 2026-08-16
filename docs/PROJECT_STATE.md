@@ -18,13 +18,23 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
-- project version candidate: `0.5.0`;
+- project version: `0.5.0`;
 - package revision: `_1`;
-- package candidate: `os-zapret2-restyle-0.5.0_1.pkg`;
+- current stable Web/pkg release/tag: `v0.5.0`;
+- current stable package: `os-zapret2-restyle-0.5.0_1.pkg`;
+- package SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
 - required ABI: `FreeBSD:15:amd64`;
-- release transition is explicitly owner-authorized;
-- previous stable Web/pkg release remains `v0.4.1` until the `v0.5.0` release workflow completes;
+- release-preparation merge/tag target: `d5afa6b1f4cfd7bc00e8e95d6896af8a1456fb24`;
+- exact-head pre-merge CI / FreeBSD-15 qualification: `31915884270`, PASS;
+- release trigger: `31916249900`, PASS;
+- full release workflow: `31916256043`, PASS;
+- stable GitHub Release assets: package + `SHA256SUMS`;
+- stable GitHub Pages/pkg repository: deployed from release commit `d5afa6b1f4cfd7bc00e8e95d6896af8a1456fb24`;
 - internal service key: `zapret`.
+
+Full release evidence: [`verification/evidence/2026-08-16-v0.5.0-release-publication.md`](verification/evidence/2026-08-16-v0.5.0-release-publication.md).
+
+The exact `main` SHA is resolved at execution time under `GH-004`.
 
 ## Locked product facts carried into `v0.5.x`
 
@@ -43,10 +53,20 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - Strategy Lab cleanup/restoration remains mandatory and selected live jobs preserve exact initial service state.
 - Settings Apply validation/guards and post-Apply service-state correctness remain accepted.
 - Laboratory native OPNsense layout and RU/EN presentation remain accepted.
+- `v0.5.0` is the stable promotion of the owner-live accepted `v0.4.x` runtime boundary; release preparation introduced no new runtime behavior.
 
-## Release basis
+## Release acceptance
 
-`v0.5.0_1` promotes the completed `v0.4.x` feature line; the release-preparation patch changes version/release metadata and documentation only.
+The full `v0.5.0_1` release boundary is complete:
+
+- source/metadata/documentation release preparation qualified on the exact PR head;
+- FreeBSD 15 package qualification passed;
+- exact release-preparation merge completed;
+- semantic `v0.5.0` tag points to that merge;
+- stable GitHub Release published `os-zapret2-restyle-0.5.0_1.pkg` and `SHA256SUMS`;
+- full release package digest is `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
+- Pages release artifact contains the same package bytes plus `meta.conf`, `data.pkg`, `packagesite.pkg`, `SHA256SUMS`, and `zapret2-restyle.conf`;
+- Pages deployment succeeded and GitHub reports the project Pages site public and HTTPS-enforced.
 
 Key owner-live evidence:
 
@@ -57,16 +77,9 @@ Release notes: [`releases/v0.5.0.md`](releases/v0.5.0.md).
 
 ## Current boundary
 
-The active boundary is full release qualification/publication for `v0.5.0_1`:
+**No new development task is selected after the successful `v0.5.0` release.**
 
-- exact-head complete CI;
-- FreeBSD 15 package qualification;
-- exact release-preparation squash merge;
-- immutable tag `v0.5.0` at that merge;
-- stable GitHub Release package/checksum assets;
-- matching GitHub Pages `FreeBSD:15:amd64` pkg repository.
-
-No new runtime behavior is part of this transition.
+The roadmap retains future regression/product directions. The next active boundary is whichever item the owner explicitly selects, or a new concrete defect. Accepted work is not reopened by inertia.
 
 ## Completed version-line archives
 
