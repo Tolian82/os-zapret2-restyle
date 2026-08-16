@@ -10,35 +10,32 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-16
-**Current handoff identity:** stable `v0.5.0` / package `0.5.0_1` released
+**Current handoff identity:** `v0.5.0_2` Strategy Lab file-picker localization corrective
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.0`;
-- `PLUGIN_REVISION=1`;
-- current stable Web/pkg release: `v0.5.0`;
-- current stable package: `os-zapret2-restyle-0.5.0_1.pkg`;
-- package SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
+- active package revision: `_2`;
+- active corrective candidate: `v0.5.0_2` / `os-zapret2-restyle-0.5.0_2.pkg`;
+- current stable Web/pkg release remains `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
+- stable package SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
 - required ABI: `FreeBSD:15:amd64`;
-- release-preparation merge/tag target: `d5afa6b1f4cfd7bc00e8e95d6896af8a1456fb24`;
-- exact-head release-preparation CI: `31915884270`, PASS including FreeBSD-15 qualification;
-- release trigger: `31916249900`, PASS;
-- full release workflow: `31916256043`, PASS;
-- GitHub Pages/pkg repository: published from the same release commit.
+- stable release-preparation merge/tag target: `d5afa6b1f4cfd7bc00e8e95d6896af8a1456fb24`;
+- stable full release workflow: `31916256043`, PASS.
 
-Full release evidence: [`verification/evidence/2026-08-16-v0.5.0-release-publication.md`](verification/evidence/2026-08-16-v0.5.0-release-publication.md).
+Stable release evidence: [`verification/evidence/2026-08-16-v0.5.0-release-publication.md`](verification/evidence/2026-08-16-v0.5.0-release-publication.md).
 
 Resolve the exact current `main` SHA at execution time under `GH-004`.
 
 ## Accepted stable product boundary
 
-The completed `v0.4.x` line is now promoted into stable `v0.5.0`.
+The completed `v0.4.x` line is promoted into stable `v0.5.0`. Accepted owner-live/product facts remain locked unless fresh evidence contradicts them.
 
-Accepted owner-live/product facts include:
+Key facts include:
 
 - Model C is the only normal production Stage-60 runtime;
-- Strategy Lab domain and IPv4 targets are complete;
+- Strategy Lab supports domain and canonical IPv4 targets;
 - optional Host/SNI keeps service identity separate from a fixed IPv4 destination;
 - fixed-IP final profiles include `--ipset-ip=<target>` and exact replay;
 - authenticated/intercepted HTTP `4xx`/`5xx` remains valid DPI-path evidence;
@@ -46,34 +43,28 @@ Accepted owner-live/product facts include:
 - bare-IP QUIC without Host/SNI is skipped before execution;
 - Host/SNI QUIC performs real fixed-IP hostname-verified attempts;
 - Generic UDP remains independent;
-- Russian/English Laboratory presentation and native OPNsense layout are accepted;
-- selected jobs preserve clean Stage-90 restoration;
 - Enable QUIC defaults OFF, is explicit/persisted, and its reload/revisit persistence is owner-live accepted;
+- Strategy Lab cleanup/restoration remains mandatory;
 - Settings Apply validation/guards and post-Apply service-state correctness remain accepted.
 
-Owner-live evidence:
+## Fresh defect selected after `v0.5.0`
 
-- [`verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md`](verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md)
-- [`verification/evidence/2026-08-16-v0.4.1_23-quic-preference-persistence-owner-live-pass.md`](verification/evidence/2026-08-16-v0.4.1_23-quic-preference-persistence-owner-live-pass.md)
+The owner supplied direct GUI evidence that in English OPNsense localization the visible browser-native Generic UDP file input still displays Russian browser/OS chrome (`Выбор файла`, `Не выбран ни один файл`).
 
-## `v0.5.0` publication boundary
+Root cause: the visible `<input type="file">` delegates its button/empty-selection labels to browser/OS localization, so those labels are not controlled by Strategy Lab's deterministic RU/EN UI localization.
 
-The owner-authorized second-component transition is complete:
+`v0.5.0_2` corrects that boundary without changing Generic UDP upload semantics:
 
-1. `VERSION` advanced from `0.4.1` to `0.5.0`;
-2. `PLUGIN_REVISION` reset from `23` to `1`;
-3. the completed `v0.4.x` state was archived and `v0.5.x` initialized;
-4. README passed the release review and presents Strategy Lab as the project flagship feature;
-5. exact-head project CI and real FreeBSD-15 package qualification passed;
-6. release preparation merged exactly as `v0.5.0_1: Prepare release v0.5.0`;
-7. immutable semantic tag `v0.5.0` points to that exact merge;
-8. stable GitHub Release contains the package and checksum;
-9. matching `FreeBSD:15:amd64` GitHub Pages/pkg repository was built and deployed from the same commit.
-
-Release notes: [`releases/v0.5.0.md`](releases/v0.5.0.md).
+1. keep the real file input as the file-selection owner but hide its browser-native chrome;
+2. expose a Laboratory-owned button and selected-filename surface;
+3. localize them deterministically from the same active OPNsense HTML language used by the rest of Strategy Lab;
+4. English strings: `Choose file` / `No file selected`;
+5. Russian strings: `Выбрать файл` / `Файл не выбран`;
+6. preserve current file reading, 1–4096-byte validation, Base64 staging, busy-state disabling and Generic UDP request contract;
+7. add a regression contract preventing the visible native `form-control` file picker from returning.
 
 ## Immediate next action
 
-**The `v0.5.0` release is complete. No new engineering scope is selected by this handoff.**
+Qualify the exact `v0.5.0_2` source head with full applicable CI and FreeBSD-15 package build, squash-merge the exact verified head, publish the testing package from the candidate-defining merge, complete the bounded publication-record tail, and then request only the focused owner-live RU/EN visual verification if still needed.
 
-Continue only from the next explicit owner-selected roadmap/backlog item or a fresh concrete defect. Do not reopen accepted Model-C, Laboratory IPv4/Host-SNI, QUIC persistence, BLOB/Lua/discovery, or presentation work without new contradictory evidence or an explicit new scope.
+The stable Pages/pkg repository remains on `v0.5.0_1`; this corrective does not silently promote a new stable release.
