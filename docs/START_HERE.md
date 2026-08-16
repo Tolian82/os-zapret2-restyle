@@ -16,7 +16,7 @@
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.0`;
-- active package revision: `_2`;
+- `PLUGIN_REVISION=2`;
 - active corrective candidate: `v0.5.0_2` / `os-zapret2-restyle-0.5.0_2.pkg`;
 - current stable Web/pkg release remains `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - stable package SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
