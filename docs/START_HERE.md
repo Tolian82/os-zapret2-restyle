@@ -10,26 +10,32 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-16
-**Current handoff identity:** `v0.5.0_1` full-release preparation
+**Current handoff identity:** stable `v0.5.0` / package `0.5.0_1` released
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.0`;
 - `PLUGIN_REVISION=1`;
-- release candidate: `v0.5.0_1` / `os-zapret2-restyle-0.5.0_1.pkg`;
-- target ABI: `FreeBSD:15:amd64`;
-- previous stable Web/pkg release: `v0.4.1` / `os-zapret2-restyle-0.4.1_1.pkg`;
-- owner-authorized second-component transition: `v0.4.x -> v0.5.x`;
-- exact release-preparation merge must use subject `v0.5.0_1: Prepare release v0.5.0`.
+- current stable Web/pkg release: `v0.5.0`;
+- current stable package: `os-zapret2-restyle-0.5.0_1.pkg`;
+- package SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
+- required ABI: `FreeBSD:15:amd64`;
+- release-preparation merge/tag target: `d5afa6b1f4cfd7bc00e8e95d6896af8a1456fb24`;
+- exact-head release-preparation CI: `31915884270`, PASS including FreeBSD-15 qualification;
+- release trigger: `31916249900`, PASS;
+- full release workflow: `31916256043`, PASS;
+- GitHub Pages/pkg repository: published from the same release commit.
 
-The exact current `main` SHA is resolved at execution time under `GH-004`.
+Full release evidence: [`verification/evidence/2026-08-16-v0.5.0-release-publication.md`](verification/evidence/2026-08-16-v0.5.0-release-publication.md).
 
-## Accepted release basis
+Resolve the exact current `main` SHA at execution time under `GH-004`.
 
-The completed `v0.4.x` line is the live-tested runtime basis for `v0.5.0`.
+## Accepted stable product boundary
 
-Accepted owner-live product facts include:
+The completed `v0.4.x` line is now promoted into stable `v0.5.0`.
+
+Accepted owner-live/product facts include:
 
 - Model C is the only normal production Stage-60 runtime;
 - Strategy Lab domain and IPv4 targets are complete;
@@ -42,29 +48,32 @@ Accepted owner-live product facts include:
 - Generic UDP remains independent;
 - Russian/English Laboratory presentation and native OPNsense layout are accepted;
 - selected jobs preserve clean Stage-90 restoration;
-- **Enable QUIC preference persistence across a real Laboratory reload/revisit is owner-live accepted and closed**.
+- Enable QUIC defaults OFF, is explicit/persisted, and its reload/revisit persistence is owner-live accepted;
+- Settings Apply validation/guards and post-Apply service-state correctness remain accepted.
 
-Owner-live closeout evidence:
+Owner-live evidence:
 
 - [`verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md`](verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md)
 - [`verification/evidence/2026-08-16-v0.4.1_23-quic-preference-persistence-owner-live-pass.md`](verification/evidence/2026-08-16-v0.4.1_23-quic-preference-persistence-owner-live-pass.md)
 
-## Release scope
+## `v0.5.0` publication boundary
 
-The `v0.5.0_1` release-preparation change is metadata/documentation only. It does not alter the accepted `_23` runtime behavior.
+The owner-authorized second-component transition is complete:
 
-It must:
-
-1. advance `VERSION` from `0.4.1` to `0.5.0`;
-2. reset `PLUGIN_REVISION` from `23` to `1`;
-3. complete the `v0.4.x` final-state archive and initialize `v0.5.x` current state;
-4. complete the README release gate and prominently present Strategy Lab as a primary project feature;
-5. pass complete applicable CI and FreeBSD-15 package qualification;
-6. merge only the exact verified head with subject `v0.5.0_1: Prepare release v0.5.0`;
-7. verify immutable tag `v0.5.0`, stable GitHub Release assets, checksum and the deployed `FreeBSD:15:amd64` Pages/pkg repository.
+1. `VERSION` advanced from `0.4.1` to `0.5.0`;
+2. `PLUGIN_REVISION` reset from `23` to `1`;
+3. the completed `v0.4.x` state was archived and `v0.5.x` initialized;
+4. README passed the release review and presents Strategy Lab as the project flagship feature;
+5. exact-head project CI and real FreeBSD-15 package qualification passed;
+6. release preparation merged exactly as `v0.5.0_1: Prepare release v0.5.0`;
+7. immutable semantic tag `v0.5.0` points to that exact merge;
+8. stable GitHub Release contains the package and checksum;
+9. matching `FreeBSD:15:amd64` GitHub Pages/pkg repository was built and deployed from the same commit.
 
 Release notes: [`releases/v0.5.0.md`](releases/v0.5.0.md).
 
 ## Immediate next action
 
-Complete exact-head release qualification, merge the release-preparation PR, then verify the full `v0.5.0` GitHub Release and Web/pkg repository publication. Do not claim the full release complete until the package repository is deployed and the release assets/tag identity are verified.
+**The `v0.5.0` release is complete. No new engineering scope is selected by this handoff.**
+
+Continue only from the next explicit owner-selected roadmap/backlog item or a fresh concrete defect. Do not reopen accepted Model-C, Laboratory IPv4/Host-SNI, QUIC persistence, BLOB/Lua/discovery, or presentation work without new contradictory evidence or an explicit new scope.

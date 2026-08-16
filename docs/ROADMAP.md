@@ -31,7 +31,7 @@
 - [x] Selected Stage-90 restoration/residue owner-live coverage
 - [x] `v0.4.x` owner-live feature closeout
 
-## `v0.5.0_1` release transition
+## `v0.5.0_1` release transition — COMPLETE
 
 - [x] owner explicitly selected second-component transition `v0.4.x -> v0.5.x`
 - [x] close Enable QUIC preference persistence from owner confirmation
@@ -40,16 +40,22 @@
 - [x] roll current documentation to `v0.5.x`
 - [x] archive final `v0.4.x` line
 - [x] complete README release review and feature presentation
-- [ ] exact-head complete CI
-- [ ] FreeBSD 15 package qualification
-- [ ] exact squash merge `v0.5.0_1: Prepare release v0.5.0`
-- [ ] immutable stable tag `v0.5.0`
-- [ ] stable GitHub Release package/checksum publication
-- [ ] matching Pages/pkg repository deployment and verification
+- [x] exact-head complete CI — run `31915884270`
+- [x] FreeBSD 15 package qualification — run `31915884270`
+- [x] exact squash merge `v0.5.0_1: Prepare release v0.5.0` — `d5afa6b1f4cfd7bc00e8e95d6896af8a1456fb24`
+- [x] immutable stable tag `v0.5.0` points to the exact release merge
+- [x] stable GitHub Release package/checksum publication — workflow `31916256043`
+- [x] matching Pages/pkg repository deployment and verification — workflow `31916256043`
+
+Stable package: `os-zapret2-restyle-0.5.0_1.pkg`.
+
+SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`.
+
+Full release evidence: [`verification/evidence/2026-08-16-v0.5.0-release-publication.md`](verification/evidence/2026-08-16-v0.5.0-release-publication.md).
 
 ## Remaining regression / future backlog
 
-These rows remain useful coverage or future product directions. They are not silently release-blocking unless explicitly selected under the risk-based release policy.
+These rows remain useful coverage or future product directions. They are **not** silently active work and are not release debt for the completed `v0.5.0` release.
 
 - [ ] cancellation/internal-failure containment regression
 - [ ] circular lifecycle start/stop/TTL and stale-session recovery
@@ -72,6 +78,6 @@ These rows remain useful coverage or future product directions. They are not sil
 
 ## Current priority
 
-**Complete and verify the full `v0.5.0_1` release.**
+**`v0.5.0` is released. Await the owner's next selected roadmap/backlog item or a fresh concrete defect.**
 
 Release notes: [`releases/v0.5.0.md`](releases/v0.5.0.md).
