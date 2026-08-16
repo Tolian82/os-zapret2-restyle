@@ -1,6 +1,6 @@
 # Strategy Lab live OPNsense verification matrix
 
-Overall status: **`v0.4.x` selected owner-live scope closed; `v0.5.0_1` release preparation uses that accepted runtime basis.**
+Overall status: **`v0.4.x` selected owner-live scope closed and promoted into stable `v0.5.0` / `0.5.0_1`.**
 
 Only FreeBSD 15 amd64 packages are valid. Source/CI does not replace owner-live evidence for rows that require appliance behavior.
 
@@ -48,6 +48,10 @@ These rows remain useful future regression coverage and are not silently promote
 - broader retention/reboot residue coverage;
 - broader Diagnostics persistence/reload coverage.
 
-## Release use
+## Stable release use
 
-The owner explicitly selected `v0.5.0_1` after the current selected owner-live scope was closed. The release-preparation patch changes version/release metadata and documentation only; it does not introduce new runtime behavior requiring a replacement live matrix.
+The owner explicitly selected `v0.5.0_1` after the selected owner-live scope was closed. Release preparation introduced no new runtime behavior, and the exact accepted runtime boundary was successfully published as stable `v0.5.0` with the matching FreeBSD 15 package and Pages/pkg repository.
+
+This matrix remains the accepted stable-release live evidence. A version-line promotion alone does not require repeating these owner-live rows; reopen them only for fresh contradictory evidence or an explicit new regression scope.
+
+Full release evidence: `docs/verification/evidence/2026-08-16-v0.5.0-release-publication.md`.
