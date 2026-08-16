@@ -53,6 +53,24 @@ SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`.
 
 Full release evidence: [`verification/evidence/2026-08-16-v0.5.0-release-publication.md`](verification/evidence/2026-08-16-v0.5.0-release-publication.md).
 
+## Active `v0.5.0_2` corrective
+
+Fresh owner evidence selected a concrete post-release defect: the visible Generic UDP browser-native file picker can show Russian browser/OS labels while OPNsense/Strategy Lab is set to English.
+
+- [x] identify browser-native `<input type="file">` chrome as the localization leak
+- [x] keep the real native input only as the hidden file-selection mechanism
+- [x] add Strategy Lab-owned RU/EN picker button and filename text
+- [x] preserve selected filename, busy-state disabling, FileReader/Base64 staging and 1–4096-byte validation
+- [x] add regression coverage forbidding return of the visible native `form-control` file picker
+- [ ] exact-head complete CI
+- [ ] FreeBSD 15 package qualification
+- [ ] exact squash merge for `v0.5.0_2`
+- [ ] persistent GitHub testing-package publication
+- [ ] bounded publication-record PR completion
+- [ ] focused owner-live RU/EN file-picker verification
+
+The stable Pages/pkg repository remains on `v0.5.0_1`; this corrective does not automatically promote a new stable release.
+
 ## Remaining regression / future backlog
 
 These rows remain useful coverage or future product directions. They are **not** silently active work and are not release debt for the completed `v0.5.0` release.
@@ -64,7 +82,7 @@ These rows remain useful coverage or future product directions. They are **not**
 - [ ] reboot/residue verification
 - [ ] OPNsense runtime/service reliability follow-up as new evidence requires
 - [ ] package/runtime version visibility follow-up
-- [ ] RU/EN review beyond already closed Laboratory presentation scope
+- [ ] RU/EN review beyond explicitly selected localization defects
 - [ ] IPv6 Laboratory target support — requires a separate explicit architecture scope
 - [ ] Additional BLOB repository GUI — wait for owner-supplied/approved technical contract
 
@@ -78,6 +96,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**`v0.5.0` is released. Await the owner's next selected roadmap/backlog item or a fresh concrete defect.**
+**Complete and publish the `v0.5.0_2` Strategy Lab file-picker localization corrective, then perform the focused RU/EN visual check.**
 
-Release notes: [`releases/v0.5.0.md`](releases/v0.5.0.md).
+Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
