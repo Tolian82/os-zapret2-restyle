@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
 **Status:** CURRENT · COMPLETE CONCISE PLAN
-**Updated:** 2026-08-16
+**Updated:** 2026-08-19
 
 - Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - Exact handoff: [`START_HERE.md`](START_HERE.md)
@@ -79,11 +79,25 @@ Owner-live evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-own
 
 The stable Pages/pkg repository remains on `v0.5.0_1`; `_2` was not automatically promoted.
 
+## Telegram voice / UDP DPI-bypass research — CURRENT
+
+Owner-selected research boundary: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
+
+- [ ] establish the actual Telegram call setup/media traffic model after ordinary Telegram TCP reachability is already provided through an external proxy
+- [ ] inspect `Waujito/youtubeUnblock` behavior behind the observed “add Telegram domains and calls work” result
+- [ ] inspect `remittor/zapret-openwrt` STUN4ALL and UDP/443-drop examples and explain their packet selectors/mechanics
+- [ ] verify native `bol-van/zapret2` STUN/UDP/Lua/fake semantics from current source/manual/discussions
+- [ ] search additional primary/protocol/operator evidence for Telegram calls, relays/P2P, STUN, UDP ports, QUIC/fallback and provider DPI behavior
+- [ ] separate universal protocol handling from provider-specific bypass strategy selection
+- [ ] compare static helper, Strategy Lab service-aware discovery, Generic UDP extension, scoped firewall fallback, no-separate-strategy and hybrid product shapes
+- [ ] define a reliable live OPNsense/MTS-MGTS verification method and collateral-risk boundary
+- [ ] document the recommended OPNsense integration before any implementation is selected
+
 ## Remaining regression / future backlog
 
 These rows remain useful coverage or future product directions. They are **not** silently release debt for the completed stable `v0.5.0` release.
 
-- [ ] **cancellation/internal-failure containment regression — NEXT SELECTED WORK**
+- [ ] cancellation/internal-failure containment regression
 - [ ] circular lifecycle start/stop/TTL and stale-session recovery
 - [ ] broader Diagnostics persistence/reload regression
 - [ ] retention/cleanup boundary regression
@@ -104,6 +118,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Run an evidence-first Strategy Lab cancellation/internal-failure containment regression.** Verify that cancellation and controlled internal failures still execute mandatory restoration, restore the exact pre-job Zapret2 state/configuration, remove temporary firewall/runtime/process residue, and report truthful terminal states. Patch only confirmed defects.
+**Complete the Telegram voice / UDP DPI-bypass research before implementation.** Determine what Telegram calls actually send over UDP, what the cited STUN fake and UDP/443-drop workarounds really do, what Zapret2-native mechanisms apply, which behavior is provider-specific, and which OPNsense plugin design is safest and testable. Record the recommendation and live verification method before selecting a source change.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
