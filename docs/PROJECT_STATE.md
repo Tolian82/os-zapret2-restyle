@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1
-**Updated:** 2026-08-16
+**Updated:** 2026-08-19
 State-line scope: **`v0.5.x`**
 
 Direct orientation:
@@ -81,11 +81,20 @@ Completed boundary:
 
 No further package correction belongs to this scope.
 
-## Current boundary
+## Current research boundary
 
-Next selected work is **Strategy Lab cancellation/internal-failure containment regression**.
+The owner selected **Telegram voice / UDP DPI-bypass research** as the current task on 2026-08-19. This supersedes the previously selected cancellation/internal-failure regression as the immediate work while leaving that regression in backlog.
 
-Begin with evidence and controlled failure/cancellation scenarios. Verify mandatory restoration, exact pre-job service/configuration preservation, temporary runtime/firewall/process cleanup, truthful terminal/result states and safe cancellation semantics. Only a demonstrated defect should produce a package-affecting corrective patch.
+Research authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
+
+Current facts/constraints for this research:
+
+- ordinary Telegram TCP/service traffic is already routed through an external proxy and is outside the target bypass problem;
+- the target is Telegram voice-call setup/media over UDP where the provider does not hard-drop all UDP but DPI still prevents reliable calling;
+- the existing Generic UDP and QUIC capabilities are inputs to the investigation, not predetermined solutions;
+- owner-provided evidence includes `Waujito/youtubeUnblock`, `remittor/zapret-openwrt`, an all-STUN Zapret2 fake example, a global UDP/443-drop example, and the primary `bol-van/zapret2` repository/manual/discussions;
+- no Telegram-specific voice strategy, universal STUN policy, UDP/443 drop, new Strategy Lab branch or source change is approved yet;
+- the research must establish protocol behavior, provider dependence, collateral impact, a recommended OPNsense integration and a live verification method before implementation is selected.
 
 ## Completed version-line archives
 
