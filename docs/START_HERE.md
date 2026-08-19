@@ -10,7 +10,7 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-08-19
-**Current handoff identity:** `v0.5.0_2` owner-live accepted; Telegram voice / UDP research selected by owner
+**Current handoff identity:** `v0.5.0_2` owner-live accepted; Telegram voice / UDP research complete, recommendation ready for owner review
 
 ## Current identity
 
@@ -61,27 +61,28 @@ The English localization leak (`Выбор файла` / `Не выбран ни
 
 The source correction, full CI/FreeBSD-15 qualification, testing-package publication, publication-record tail and focused owner-live check are complete. The owner confirmed that `v0.5.0_2` works as intended. No further source change belongs to this scope.
 
-## Owner-selected current research
+## Telegram voice / UDP research — conclusion ready
 
-The owner has selected **Telegram voice / UDP DPI-bypass research** as the new current task, superseding the previously selected cancellation/internal-failure regression as the immediate next action.
+The owner-selected research is complete and recorded in [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
 
-Task authority and starting evidence: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
+Current conclusion:
 
-Scope:
+- modern Telegram calls use Telegram API signaling plus a separately negotiated WebRTC-based transport; STUN/TURN endpoint IP and port are supplied dynamically, and UDP P2P/reflector paths are supported;
+- current upstream Zapret2 ships an official `50-stun4all` helper using native `--payload=stun` plus a 16-zero-byte fake with `repeats=2`;
+- the technique is a well-founded baseline for stateful-DPI STUN interference, but Zapret2 itself does not claim it defeats stateless DPI or direct media/IP blocking;
+- global UDP/443 drop is a QUIC fallback technique, not the recommended Telegram Voice default;
+- Linux/OpenWrt can signature-filter STUN in the kernel, while FreeBSD `ipfw` cannot filter raw payload, so OPNsense must use a bounded interception design rather than copy `50-stun4all` literally;
+- recommended first PoC: disable Telegram P2P for the test, verify the failed call's STUN destination with a WAN capture, then divert all UDP ports **only to plugin-managed Telegram IPv4 ranges** to the existing `dvtws2` socket and apply the official STUN baseline inside `dvtws2`;
+- current Generic UDP Strategy Lab must not claim automatic Telegram-call success; if provider-specific tuning is later required, use an assisted real-call workflow rather than a synthetic UDP PASS.
 
-- ordinary Telegram TCP/service reachability is already routed through an external proxy and is not the target of this work;
-- determine how Telegram call setup/media uses UDP and what provider DPI actually blocks;
-- investigate STUN-focused Zapret2-native desynchronization, UDP/443 suppression/fallback and other current mechanisms;
-- establish what is universal versus provider-specific;
-- decide whether the plugin needs a static helper, a new Strategy Lab service-aware search branch, a Generic UDP extension, a narrowly scoped firewall fallback, or another bounded design;
-- produce a documented recommendation and live-verification plan before implementation is selected.
-
-The owner-provided `youtubeUnblock`, `zapret-openwrt`, Zapret2 repository/manual/discussions links and the supplied STUN/UDP-443 examples are recorded in the research document and must be investigated rather than treated as already-approved presets.
+No Telegram Voice product/source implementation is approved yet. The research recommendation must be owner-reviewed first.
 
 ## Immediate next action
 
-Perform the research defined in [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md): inspect the supplied projects/current Zapret2 source/manual/discussions and additional protocol/operator evidence, then document the Telegram voice traffic model, workaround mechanics, provider-dependence, recommended OPNsense integration and a reliable live test method.
+Owner review of [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
 
-Do **not** implement a Telegram voice source change or declare a universal strategy until that evidence is complete and the resulting architecture direction is owner-reviewed.
+If the owner accepts the recommendation, perform **Phase A live observation** on OPNsense/MTS-MGTS before source implementation: set Telegram P2P to Nobody/disabled for the test, reproduce a failed call, capture STUN destination IP/port and establish whether the failure occurs on Telegram-range STUN or later encrypted media.
 
-The previously selected Strategy Lab cancellation/internal-failure containment regression remains useful backlog work but is no longer the immediate task.
+Only if that evidence matches the research model should the next source patch implement the deliberately small Telegram-IP-scoped STUN PoC.
+
+The previously selected Strategy Lab cancellation/internal-failure containment regression remains useful backlog work but is not the immediate task.
