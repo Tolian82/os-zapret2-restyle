@@ -81,20 +81,40 @@ Completed boundary:
 
 No further package correction belongs to this scope.
 
-## Current research boundary
+## Telegram voice / UDP research state
 
-The owner selected **Telegram voice / UDP DPI-bypass research** as the current task on 2026-08-19. This supersedes the previously selected cancellation/internal-failure regression as the immediate work while leaving that regression in backlog.
+The owner selected **Telegram voice / UDP DPI-bypass research** on 2026-08-19. The research conclusion is complete and awaiting owner review before source implementation.
 
 Research authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
 
-Current facts/constraints for this research:
+Established research facts:
 
 - ordinary Telegram TCP/service traffic is already routed through an external proxy and is outside the target bypass problem;
-- the target is Telegram voice-call setup/media over UDP where the provider does not hard-drop all UDP but DPI still prevents reliable calling;
-- the existing Generic UDP and QUIC capabilities are inputs to the investigation, not predetermined solutions;
-- owner-provided evidence includes `Waujito/youtubeUnblock`, `remittor/zapret-openwrt`, an all-STUN Zapret2 fake example, a global UDP/443-drop example, and the primary `bol-van/zapret2` repository/manual/discussions;
-- no Telegram-specific voice strategy, universal STUN policy, UDP/443 drop, new Strategy Lab branch or source change is approved yet;
-- the research must establish protocol behavior, provider dependence, collateral impact, a recommended OPNsense integration and a live verification method before implementation is selected.
+- modern Telegram calls use Telegram API signaling plus a separately negotiated WebRTC-based transport; Telegram exposes STUN/TURN endpoint IP+port and UDP P2P/reflector capabilities;
+- current upstream Zapret2 provides official native `50-stun4all` handling with `--payload=stun` and `--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2`;
+- this is a justified baseline for **stateful** DPI interference with STUN, not a universal guarantee against stateless DPI, relay-IP blocking or post-STUN encrypted-media shaping;
+- global UDP/443 drop is generic QUIC suppression and is rejected as the Telegram Voice default;
+- FreeBSD `ipfw` cannot raw-payload-filter STUN before userspace, unlike Linux nftables/iptables selectors used by `50-stun4all`;
+- current production firewall compilation is port-based (`--filter-tcp`/`--filter-udp` -> `ipfw divert`), so a payload-only STUN profile cannot see dynamic-port Telegram traffic without a new bounded firewall path;
+- FreeBSD 15 `ipfw` lookup tables can bound that path by Telegram destination ranges;
+- recommended first PoC is Telegram-IP-scoped, all-destination-port UDP interception to the existing dvtws2 socket plus the official STUN fake profile, with Telegram P2P disabled during validation;
+- existing Generic UDP Strategy Lab is not a truthful automated Telegram-call tester because a synthetic UDP/STUN response cannot prove two-way voice;
+- if provider-specific tuning becomes necessary, the recommended future shape is an assisted real-call Telegram Voice Lab rather than synthetic automatic PASS/FAIL.
+
+No Telegram-specific voice strategy/source patch, global STUN interception, UDP/443 drop or Strategy Lab branch is approved yet.
+
+## Immediate next boundary
+
+Owner review of the research conclusion. If accepted, perform Phase A live observation on the owner's OPNsense/MTS-MGTS path before code:
+
+- disable Telegram P2P for the test;
+- reproduce a failed call;
+- capture STUN destination IP/port and determine whether it is in Telegram-managed ranges;
+- distinguish STUN failure from later encrypted-media failure.
+
+Only if the capture supports the model should the next source patch implement the small Telegram-IP-scoped STUN PoC described in the research document.
+
+The previously selected cancellation/internal-failure containment regression remains backlog work.
 
 ## Completed version-line archives
 
