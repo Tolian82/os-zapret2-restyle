@@ -79,19 +79,36 @@ Owner-live evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-own
 
 The stable Pages/pkg repository remains on `v0.5.0_1`; `_2` was not automatically promoted.
 
-## Telegram voice / UDP DPI-bypass research — CURRENT
+## Telegram voice / UDP DPI-bypass research — CONCLUSION READY
 
-Owner-selected research boundary: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
+Owner-selected research authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
 
-- [ ] establish the actual Telegram call setup/media traffic model after ordinary Telegram TCP reachability is already provided through an external proxy
-- [ ] inspect `Waujito/youtubeUnblock` behavior behind the observed “add Telegram domains and calls work” result
-- [ ] inspect `remittor/zapret-openwrt` STUN4ALL and UDP/443-drop examples and explain their packet selectors/mechanics
-- [ ] verify native `bol-van/zapret2` STUN/UDP/Lua/fake semantics from current source/manual/discussions
-- [ ] search additional primary/protocol/operator evidence for Telegram calls, relays/P2P, STUN, UDP ports, QUIC/fallback and provider DPI behavior
-- [ ] separate universal protocol handling from provider-specific bypass strategy selection
-- [ ] compare static helper, Strategy Lab service-aware discovery, Generic UDP extension, scoped firewall fallback, no-separate-strategy and hybrid product shapes
-- [ ] define a reliable live OPNsense/MTS-MGTS verification method and collateral-risk boundary
-- [ ] document the recommended OPNsense integration before any implementation is selected
+- [x] establish the actual Telegram call setup/media traffic model after ordinary Telegram TCP reachability is already provided through an external proxy
+- [x] inspect `Waujito/youtubeUnblock` behavior behind the observed “add Telegram domains and calls work” result
+- [x] inspect `remittor/zapret-openwrt` STUN4ALL and UDP/443-drop examples and explain their mechanics/boundaries
+- [x] verify native `bol-van/zapret2` STUN/UDP/Lua/fake semantics from current source/manual/discussions
+- [x] search additional primary/protocol/operator evidence for Telegram calls, relays/P2P, STUN, UDP ports, QUIC/fallback and provider DPI behavior
+- [x] separate universal STUN recognition from provider-specific DPI-bypass effectiveness
+- [x] compare static helper, Strategy Lab service-aware discovery, Generic UDP extension, scoped firewall fallback, no-separate-strategy and hybrid product shapes
+- [x] define a reliable live OPNsense/MTS-MGTS verification method and collateral-risk boundary
+- [x] document recommended OPNsense integration before implementation selection
+
+Research recommendation:
+
+- use a **hybrid** path;
+- first perform a live failed-call STUN capture with Telegram P2P disabled;
+- if STUN goes to Telegram-managed IPv4 ranges, PoC a Telegram-IP-scoped all-port UDP `ipfw` divert to the existing dvtws2 socket plus the official native Zapret2 zero-fake/repeats=2 STUN profile;
+- keep global UDP/443 drop out of Telegram Voice;
+- do not reuse Generic UDP as an automatic call-success detector;
+- add an assisted real-call strategy workflow only if the upstream baseline demonstrably fails and provider-specific tuning becomes necessary.
+
+### Awaiting owner decision / live evidence
+
+- [ ] owner accepts/rejects the research recommendation
+- [ ] Phase A: live OPNsense failed-call capture with P2P disabled
+- [ ] verify STUN destination IP/port and whether it is inside Telegram managed ranges
+- [ ] distinguish STUN-establishment failure from post-STUN encrypted-media failure
+- [ ] only if supported by evidence, implement the small Telegram-IP-scoped STUN PoC
 
 ## Remaining regression / future backlog
 
@@ -118,6 +135,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Complete the Telegram voice / UDP DPI-bypass research before implementation.** Determine what Telegram calls actually send over UDP, what the cited STUN fake and UDP/443-drop workarounds really do, what Zapret2-native mechanisms apply, which behavior is provider-specific, and which OPNsense plugin design is safest and testable. Record the recommendation and live verification method before selecting a source change.
+**Owner review of the completed Telegram voice / UDP research.** If accepted, the next action is live packet evidence before source code: reproduce the failed call with P2P disabled, identify STUN destination/behavior, and only then select the bounded Telegram-IP-scoped STUN PoC.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
