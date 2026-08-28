@@ -94,4 +94,3 @@ Future validation must use P2P disabled on both clients and compare helper OFF/O
 This handoff is documentation-only. The Phase B source PoC remains a separate explicit task.
 
 The previously selected Strategy Lab cancellation/internal-failure containment regression remains useful backlog work but is not the immediate task.
-

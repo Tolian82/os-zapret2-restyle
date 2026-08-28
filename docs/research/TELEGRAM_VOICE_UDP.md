@@ -1,13 +1,13 @@
 # Telegram voice / UDP DPI-bypass research
 
-**Status:** RESEARCH COMPLETE · PHASE A OWNER-LIVE COMPLETE · PHASE B POC EVIDENCE GATE NEXT  
-**Opened:** 2026-08-19  
-**Research conclusion:** 2026-08-19  
-**Phase A owner-live observation:** 2026-08-28  
-**Updated:** 2026-08-28  
-**Owner instruction:** Telegram voice/call traffic over UDP is the current selected research task.  
-**Pinned starting `main`:** `62e9a62e484d7a983b9b3f91ec672bbe96f684f3`  
-**Research-boundary merge:** `9bc225ea457583ffec696e393c8ba697798369f6`  
+**Status:** RESEARCH COMPLETE · PHASE A OWNER-LIVE COMPLETE · PHASE B POC EVIDENCE GATE NEXT
+**Opened:** 2026-08-19
+**Research conclusion:** 2026-08-19
+**Phase A owner-live observation:** 2026-08-28
+**Updated:** 2026-08-28
+**Owner instruction:** Telegram voice/call traffic over UDP is the current selected research task.
+**Pinned starting `main`:** `62e9a62e484d7a983b9b3f91ec672bbe96f684f3`
+**Research-boundary merge:** `9bc225ea457583ffec696e393c8ba697798369f6`
 **Package identity:** `VERSION=0.5.0`, `PLUGIN_REVISION=2` — research/docs only, no metadata change.
 
 ## Executive conclusion
@@ -484,4 +484,3 @@ Phase A is complete and justifies a deliberately small **Phase B UDP-path PoC** 
 The PoC must be selected as a separate source task. This documentation transition records the live result only and does not change code, package metadata or runtime behavior.
 
 During the future A/B/C run, working sound is expected to survive in A or C through TCP fallback. The acceptance signal is the appearance of inbound TURN/STUN and sustained bidirectional Telegram UDP in B, followed by their disappearance after rollback.
-

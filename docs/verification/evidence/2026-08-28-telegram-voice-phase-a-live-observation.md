@@ -1,8 +1,8 @@
 # Telegram voice / UDP — Phase A live observation
 
-**Status:** OWNER-LIVE EVIDENCE · PHASE A COMPLETE  
-**Observed:** 2026-08-28  
-**Appliance package:** `os-zapret2-restyle-0.5.0_2`  
+**Status:** OWNER-LIVE EVIDENCE · PHASE A COMPLETE
+**Observed:** 2026-08-28
+**Appliance package:** `os-zapret2-restyle-0.5.0_2`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../../research/TELEGRAM_VOICE_UDP.md)
 
 ## Scope and privacy boundary

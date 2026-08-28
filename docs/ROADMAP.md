@@ -139,4 +139,3 @@ These rows remain useful coverage or future product directions. They are **not**
 **Prepare/select the bounded Phase B Telegram-IP-scoped STUN PoC as a separate source task.** The live baseline is complete: the call remained audible through TCP fallback while both observed Telegram UDP relay candidates received no reply. Future PASS/FAIL must therefore be based on UDP packets and helper/profile counters, not sound alone.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
-
