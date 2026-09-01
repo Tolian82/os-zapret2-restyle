@@ -259,11 +259,13 @@ orchestrator_build_release()
         blobs running "resolving blob declarations" || return 1
     _orchestrator_build_blob_args="${_orchestrator_build_workspace}/blob-args.conf"
     _orchestrator_build_loaded_blobs="${_orchestrator_build_workspace}/loaded-blobs.txt"
+    _orchestrator_build_user_traffic="${_orchestrator_build_release}/${TELEGRAM_VOICE_USER_TRAFFIC_FILE_NAME}"
     _orchestrator_build_traffic="${_orchestrator_build_release}/traffic.conf"
+    _orchestrator_build_voice_state="${_orchestrator_build_release}/${TELEGRAM_VOICE_STATE_FILE_NAME}"
     : > "${_orchestrator_build_error}"
     blobs_resolve_file \
         "${_orchestrator_build_targets}" \
-        "${_orchestrator_build_traffic}" \
+        "${_orchestrator_build_user_traffic}" \
         "${_orchestrator_build_blob_args}" \
         "${_orchestrator_build_loaded_blobs}" \
         "${_orchestrator_build_zapret_dir}/files/fake" \
@@ -273,6 +275,22 @@ orchestrator_build_release()
                 "${_orchestrator_build_total}" blobs \
                 "${_orchestrator_build_error}" \
                 "blob declaration resolution failed"
+            return 1
+        }
+    : > "${_orchestrator_build_error}"
+    telegram_voice_build_effective_traffic \
+        "${TELEGRAM_VOICE_MARKER_FILE}" \
+        "${_orchestrator_build_managed_source}/ipset-telegram.txt" \
+        "${_orchestrator_build_managed_reference}/ipset-telegram.txt" \
+        "${_orchestrator_build_user_traffic}" \
+        "${_orchestrator_build_traffic}" \
+        "${_orchestrator_build_voice_state}" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 4 \
+                "${_orchestrator_build_total}" blobs \
+                "${_orchestrator_build_error}" \
+                "Telegram Voice profile generation failed"
             return 1
         }
     _orchestrator_build_extra_input="${_orchestrator_build_workspace}/extra.input.conf"
@@ -305,7 +323,7 @@ orchestrator_build_release()
     _orchestrator_build_udp="${_orchestrator_build_release}/udp-ports.txt"
     : > "${_orchestrator_build_error}"
     ports_extract_file \
-        "${_orchestrator_build_traffic}" \
+        "${_orchestrator_build_user_traffic}" \
         "${_orchestrator_build_tcp}" \
         "${_orchestrator_build_udp}" \
         2>"${_orchestrator_build_error}" || {
@@ -354,7 +372,7 @@ orchestrator_build_release()
     : > "${_orchestrator_build_error}"
     validator_validate_build_mapped \
         "${_orchestrator_build_args}" \
-        "${_orchestrator_build_traffic}" \
+        "${_orchestrator_build_user_traffic}" \
         "${_orchestrator_build_tcp}" \
         "${_orchestrator_build_udp}" \
         "${_orchestrator_build_zapret_dir}" \
@@ -390,6 +408,7 @@ orchestrator_cleanup_runtime()
     firewall_remove_rules \
         "${_orchestrator_cleanup_rule_base}" \
         "${_orchestrator_cleanup_rule_max}"
+    firewall_remove_telegram_voice_tables
     launcher_stop "${_orchestrator_cleanup_child}" 5
 }
 
@@ -399,12 +418,16 @@ orchestrator_runtime_is_complete()
     _orchestrator_complete_monitor="$2"
     _orchestrator_complete_rule_base="$3"
     _orchestrator_complete_rule_max="$4"
+    _orchestrator_complete_active_dir="$5"
 
     launcher_is_running "${_orchestrator_complete_child}" &&
     supervisor_is_running "${_orchestrator_complete_monitor}" &&
     firewall_rules_present \
         "${_orchestrator_complete_rule_base}" \
-        "${_orchestrator_complete_rule_max}"
+        "${_orchestrator_complete_rule_max}" &&
+    firewall_telegram_voice_runtime_complete \
+        "${_orchestrator_complete_active_dir}/${TELEGRAM_VOICE_STATE_FILE_NAME}" \
+        "${_orchestrator_complete_rule_base}"
 }
 
 orchestrator_native_start()
@@ -431,7 +454,8 @@ orchestrator_native_start()
         "${_orchestrator_start_child_pid}" \
         "${_orchestrator_start_supervisor_monitor}" \
         "${_orchestrator_start_rule_base}" \
-        "${_orchestrator_start_rule_max}"; then
+        "${_orchestrator_start_rule_max}" \
+        "${_orchestrator_start_active_dir}"; then
         launcher_status "${_orchestrator_start_child_pid}"
         return 0
     fi
@@ -553,13 +577,15 @@ orchestrator_native_start()
         return 1
     }
 
-    if ! firewall_install_port_rules \
+    if ! firewall_install_runtime_rules \
         "${_orchestrator_start_active_dir}/tcp-ports.txt" \
         "${_orchestrator_start_active_dir}/udp-ports.txt" \
         "${_orchestrator_start_wan}" \
         "${DIVERT_PORT}" \
         "${_orchestrator_start_rule_base}" \
-        "${_orchestrator_start_rule_max}"; then
+        "${_orchestrator_start_rule_max}" \
+        "${_orchestrator_start_active_dir}/${TELEGRAM_VOICE_STATE_FILE_NAME}" \
+        "${_orchestrator_start_active_dir}/managed/ipset-telegram.txt"; then
         orchestrator_cleanup_runtime \
             "${_orchestrator_start_child_pid}" \
             "${_orchestrator_start_supervisor_daemon}" \
@@ -646,6 +672,9 @@ orchestrator_restore_previous_runtime()
         "${_orchestrator_restore_backup}" || return 1
 
     if [ "${_orchestrator_restore_old_complete}" = "1" ]; then
+        firewall_restore_telegram_voice_table \
+            "${_orchestrator_restore_active_dir}/${TELEGRAM_VOICE_STATE_FILE_NAME}" \
+            "${_orchestrator_restore_active_dir}/managed/ipset-telegram.txt" || return 1
         launcher_start_once \
             "${_orchestrator_restore_dvtws_bin}" \
             "${_orchestrator_restore_active_dir}/dvtws.args" \
@@ -667,6 +696,7 @@ orchestrator_restore_previous_runtime()
         firewall_remove_rules \
             "${_orchestrator_restore_rule_base}" \
             "${_orchestrator_restore_rule_max}"
+        firewall_remove_telegram_voice_tables
     fi
 }
 
@@ -804,7 +834,8 @@ orchestrator_native_reconfigure()
         "${_orchestrator_reconfigure_child_pid}" \
         "${_orchestrator_reconfigure_supervisor_monitor}" \
         "${_orchestrator_reconfigure_rule_base}" \
-        "${_orchestrator_reconfigure_rule_max}"; then
+        "${_orchestrator_reconfigure_rule_max}" \
+        "${_orchestrator_reconfigure_active_dir}"; then
         _orchestrator_reconfigure_old_complete=1
     fi
 
@@ -878,13 +909,15 @@ orchestrator_native_reconfigure()
         "${_orchestrator_reconfigure_stage_file}" 11 \
         "${_orchestrator_reconfigure_total}" firewall running \
         "replacing divert rules" || true
-    if ! firewall_install_port_rules \
+    if ! firewall_install_runtime_rules \
         "${_orchestrator_reconfigure_active_dir}/tcp-ports.txt" \
         "${_orchestrator_reconfigure_active_dir}/udp-ports.txt" \
         "${_orchestrator_reconfigure_wan}" \
         "${DIVERT_PORT}" \
         "${_orchestrator_reconfigure_rule_base}" \
-        "${_orchestrator_reconfigure_rule_max}"; then
+        "${_orchestrator_reconfigure_rule_max}" \
+        "${_orchestrator_reconfigure_active_dir}/${TELEGRAM_VOICE_STATE_FILE_NAME}" \
+        "${_orchestrator_reconfigure_active_dir}/managed/ipset-telegram.txt"; then
         orchestrator_reconfigure_failure \
             "${_orchestrator_reconfigure_stage_file}" 11 \
             "${_orchestrator_reconfigure_total}" firewall \
@@ -980,6 +1013,7 @@ orchestrator_native_stop()
     firewall_remove_rules \
         "${_orchestrator_stop_rule_base}" \
         "${_orchestrator_stop_rule_max}"
+    firewall_remove_telegram_voice_tables
 
     orchestrator_stage "${_orchestrator_stop_stage}" 3 3 launcher running \
         "stopping dvtws2" || return 1
@@ -996,12 +1030,14 @@ orchestrator_native_status()
     _orchestrator_status_monitor="$2"
     _orchestrator_status_rule_base="$3"
     _orchestrator_status_rule_max="$4"
+    _orchestrator_status_active_dir="$5"
 
     if orchestrator_runtime_is_complete \
         "${_orchestrator_status_child}" \
         "${_orchestrator_status_monitor}" \
         "${_orchestrator_status_rule_base}" \
-        "${_orchestrator_status_rule_max}"; then
+        "${_orchestrator_status_rule_max}" \
+        "${_orchestrator_status_active_dir}"; then
         launcher_status "${_orchestrator_status_child}"
         return 0
     fi
@@ -1032,6 +1068,7 @@ orchestrator_runtime_failure()
     firewall_remove_rules \
         "${_orchestrator_failure_rule_base}" \
         "${_orchestrator_failure_rule_max}"
+    firewall_remove_telegram_voice_tables
     launcher_stop "${_orchestrator_failure_child}" 1
     rm -f \
         "${_orchestrator_failure_supervisor_daemon}" \

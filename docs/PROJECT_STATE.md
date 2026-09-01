@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1
-**Updated:** 2026-08-28
+**Updated:** 2026-09-01
 State-line scope: **`v0.5.x`**
 
 Direct orientation:
@@ -19,7 +19,9 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.0`;
-- active package revision: `_2`;
+- current source candidate revision: `_3`;
+- package candidate: `os-zapret2-restyle-0.5.0_3.pkg`;
+- last owner-live accepted package revision: `_2`;
 - owner-live accepted testing corrective: `os-zapret2-restyle-0.5.0_2.pkg` / `v0.5.0_2`;
 - testing source/tag target: `1ae952185dbae80ec34c0a89b441feddbe8b403a`;
 - testing package SHA-256: `d89bc45162ca760320cf59e4a861b2b8ef7bc30bcb05f4338b2078c57b4980f5`;
@@ -83,7 +85,7 @@ No further package correction belongs to this scope.
 
 ## Telegram voice / UDP research state
 
-The owner-selected research conclusion is complete, and Phase A owner-live observation completed on 2026-08-28.
+The owner-selected research conclusion and Phase A owner-live observation are complete. The bounded Phase B source PoC is implemented in the `0.5.0_3` candidate and awaits owner-live packet qualification.
 
 Research authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
 
@@ -101,17 +103,26 @@ Established durable facts:
 - Phase A localizes failure no later than relay establishment but does not prove whether the upstream mechanism is stateful DPI, stateless filtering/IP blocking or another blackhole;
 - existing Generic UDP Strategy Lab remains unsuitable as a truthful automatic call tester.
 
-No Telegram-specific voice strategy/source patch, global STUN interception, UDP/443 drop, reflector classifier or Strategy Lab branch has been implemented or approved in this documentation-only transition.
+Implemented Phase B boundary:
+
+- temporary `/var/run` request marker, so reboot returns the PoC to OFF;
+- plugin-owned `zapret2_tgvoice` and staging IPFW tables populated from the normalized managed Telegram IPv4 set;
+- all-port outbound UDP diversion only to `table(zapret2_tgvoice)` through the existing divert socket;
+- first/high-priority `--filter-l3=ipv4`, `--filter-udp=*`, `--filter-l7=stun`, Telegram-IPSET profile with `--payload=stun` and the upstream 16-zero-byte fake/repeats=2 action;
+- transactional table swap and ordinary runtime/tree/rule rollback integration;
+- `configctl zapret telegram_voice_enable|status|disable` control and dedicated IPFW packet/byte status;
+- regression coverage proving OFF leaves the user strategy unchanged, ON remains destination-scoped, and failed rule replacement restores the previous table.
+
+No production GUI, global STUN/all-Internet UDP interception, UDP/443 drop, reflector classifier or Telegram-specific Strategy Lab branch was added.
 
 ## Immediate next boundary
 
-The next eligible source scope is a separately authorized Phase B Telegram-IP-scoped STUN PoC:
+The next boundary is owner-live qualification of the exact `0.5.0_3` candidate:
 
-- plugin-owned Telegram IPv4 `ipfw` table;
-- all destination-port UDP divert only to that table through the existing dvtws2 socket;
-- official STUN zero-fake/repeats=2 profile;
-- explicit firewall/profile counters and exact disable cleanup;
-- P2P-disabled helper OFF/ON/OFF live comparison.
+- keep P2P disabled on both Telegram clients and the existing TCP/SOCKS proxy unchanged;
+- record dedicated helper status/counters before, during and after the call;
+- capture the Telegram-range UDP path with the helper ON;
+- complete an OFF/ON/OFF cycle and verify exact rule/table/profile cleanup.
 
 Acceptance is packet-based: Phase B must create inbound TURN/STUN and sustained bidirectional Telegram UDP that are absent from baseline and disappear again after rollback. A still-audible call without that UDP evidence is not a pass because TCP fallback is already working.
 

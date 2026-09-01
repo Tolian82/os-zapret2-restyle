@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
 **Status:** CURRENT · COMPLETE CONCISE PLAN
-**Updated:** 2026-08-28
+**Updated:** 2026-09-01
 
 - Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - Exact handoff: [`START_HERE.md`](START_HERE.md)
@@ -79,7 +79,7 @@ Owner-live evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-own
 
 The stable Pages/pkg repository remains on `v0.5.0_1`; `_2` was not automatically promoted.
 
-## Telegram voice / UDP DPI-bypass — PHASE A COMPLETE
+## Telegram voice / UDP DPI-bypass — PHASE B SOURCE COMPLETE, LIVE GATE OPEN
 
 Owner-selected authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
 
@@ -98,18 +98,19 @@ Owner-selected authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_V
 
 Phase A evidence: [`verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md`](verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md).
 
-### Phase B — next separately authorized evidence gate
+### Phase B — source PoC implemented, owner-live evidence pending
 
-- [ ] implement the small plugin-owned Telegram IPv4 `ipfw` table
-- [ ] divert all destination-port UDP only toward that table through the existing dvtws2 socket
-- [ ] add the official STUN zero-fake/repeats=2 profile with deterministic ordering
-- [ ] expose enough temporary control/counters for a bounded owner-live PoC without adding the production GUI
+- [x] implement the small plugin-owned Telegram IPv4 `ipfw` table with atomic staging/swap
+- [x] divert all destination-port UDP only toward that table through the existing dvtws2 socket
+- [x] add the official STUN zero-fake/repeats=2 profile with deterministic first-profile ordering and both L7/profile and payload/Lua guards
+- [x] expose temporary configd control and IPFW packet/byte counters without adding the production GUI
 - [ ] run P2P-disabled helper OFF/ON/OFF comparison
 - [ ] require inbound TURN/STUN plus sustained bidirectional Telegram UDP for PASS
-- [ ] verify exact rule/table/profile cleanup on disable
+- [x] cover exact rule/table/profile cleanup and failed-install table rollback synthetically
+- [ ] verify exact rule/table/profile cleanup on the owner-live appliance
 - [ ] investigate Telegram Reflector handling only if restored TURN replies are insufficient
 
-The Phase B source patch is not part of the current documentation-only transition.
+The Phase B implementation is the `v0.5.0_3` source candidate. It remains default OFF and is not product-accepted before the packet-based live gate.
 
 ## Remaining regression / future backlog
 
@@ -136,6 +137,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Prepare/select the bounded Phase B Telegram-IP-scoped STUN PoC as a separate source task.** The live baseline is complete: the call remained audible through TCP fallback while both observed Telegram UDP relay candidates received no reply. Future PASS/FAIL must therefore be based on UDP packets and helper/profile counters, not sound alone.
+**Install and owner-live qualify the exact `0.5.0_3` Phase B candidate with a P2P-disabled OFF/ON/OFF call cycle.** The live baseline is complete and the bounded PoC is implemented; PASS/FAIL must be based on helper counters, inbound TURN/STUN and sustained bidirectional Telegram UDP, not sound alone.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).

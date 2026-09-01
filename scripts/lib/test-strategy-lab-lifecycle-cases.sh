@@ -106,7 +106,7 @@ SERVICE_BACKEND="${SERVICE_ROOT}/backend"
 SERVICE_WORKER="${SERVICE_ROOT}/strategy_lab_worker.sh"
 SERVICE_LOCK="${TMP_ROOT}/real-service.lock"
 mkdir -p "${SERVICE_BACKEND}"
-for module in common config parser registry storage targets target_mode profile_normalizer profile_pipeline exclude blobs ports firewall generator validator atomic stage launcher supervisor
+for module in common config parser registry storage targets telegram_voice target_mode profile_normalizer profile_pipeline exclude blobs ports firewall generator validator atomic stage launcher supervisor
 do
     : > "${SERVICE_BACKEND}/${module}.sh"
 done
