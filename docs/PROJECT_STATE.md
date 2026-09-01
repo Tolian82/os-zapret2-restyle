@@ -21,11 +21,12 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - project version: `0.5.0`;
 - current source candidate revision: `_3`;
 - package candidate: `os-zapret2-restyle-0.5.0_3.pkg`;
+- published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
+- testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
+- testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
+- testing publication workflow: `33536081824`, PASS on attempt 2;
 - last owner-live accepted package revision: `_2`;
 - owner-live accepted testing corrective: `os-zapret2-restyle-0.5.0_2.pkg` / `v0.5.0_2`;
-- testing source/tag target: `1ae952185dbae80ec34c0a89b441feddbe8b403a`;
-- testing package SHA-256: `d89bc45162ca760320cf59e4a861b2b8ef7bc30bcb05f4338b2078c57b4980f5`;
-- testing publication workflow: `31917806438`;
 - current stable Web/pkg release/tag remains `v0.5.0`;
 - current stable package remains `os-zapret2-restyle-0.5.0_1.pkg`;
 - stable package SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
@@ -35,7 +36,7 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - stable GitHub Pages/pkg repository remains the `v0.5.0_1` release repository;
 - internal service key: `zapret`.
 
-Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_2.md`](verification/evidence/testing-publications/v0.5.0_2.md).
+Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_3.md`](verification/evidence/testing-publications/v0.5.0_3.md).
 
 Owner-live `_2` evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md`](verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md).
 
@@ -62,7 +63,7 @@ The exact `main` SHA is resolved at execution time under `GH-004`.
 - The native OPNsense Laboratory layout and deterministic Strategy Lab RU/EN text localization contract remain accepted.
 - Strategy Lab owns the visible Generic UDP file-picker labels; browser/OS-native file-input chrome is not exposed.
 - Owner-live verification confirms the `_2` RU/EN file-picker presentation and selected-filename/file-selection path work as intended.
-- `v0.5.0` remains the stable Web/pkg release; the owner-live accepted `_2` corrective is not automatically promoted to the stable Pages/pkg repository.
+- `v0.5.0` remains the stable Web/pkg release; neither the owner-live accepted `_2` corrective nor the published-but-unaccepted `_3` candidate promoted the stable Pages/pkg repository.
 
 ## Completed `v0.5.0_2` corrective
 
@@ -85,7 +86,7 @@ No further package correction belongs to this scope.
 
 ## Telegram voice / UDP research state
 
-The owner-selected research conclusion and Phase A owner-live observation are complete. The bounded Phase B source PoC is implemented in the `0.5.0_3` candidate and awaits owner-live packet qualification.
+The owner-selected research conclusion and Phase A owner-live observation are complete. The bounded Phase B PoC is published as the `v0.5.0_3` testing candidate and awaits owner-live packet qualification.
 
 Research authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
 
@@ -115,9 +116,17 @@ Implemented Phase B boundary:
 
 No production GUI, global STUN/all-Internet UDP interception, UDP/443 drop, reflector classifier or Telegram-specific Strategy Lab branch was added.
 
+Source/delivery qualification:
+
+- source PR `#277`, exact final head `07d3273adbbfafce7ca0da36d27de6a4c7cc4c7e`, passed full CI and FreeBSD-15 package qualification in run `33535094879`;
+- exact squash merge and immutable testing tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
+- prerelease `v0.5.0_3` contains `os-zapret2-restyle-0.5.0_3.pkg`, SHA-256 `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
+- publisher run `33536081824` completed successfully on attempt 2 after manual Draft PR `#278` creation worked around the repository policy blocking bot-created PRs; the temporary publisher branch was removed;
+- stable Pages/pkg repository promoted: **no**.
+
 ## Immediate next boundary
 
-The next boundary is owner-live qualification of the exact `0.5.0_3` candidate:
+The next boundary is owner-live qualification of the exact published `v0.5.0_3` candidate:
 
 - keep P2P disabled on both Telegram clients and the existing TCP/SOCKS proxy unchanged;
 - record dedicated helper status/counters before, during and after the call;
