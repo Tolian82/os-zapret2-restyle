@@ -17,16 +17,17 @@
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.0`;
 - `PLUGIN_REVISION=3`;
-- owner-live accepted testing corrective: `v0.5.0_2` / `os-zapret2-restyle-0.5.0_2.pkg`;
-- testing source/tag target: `1ae952185dbae80ec34c0a89b441feddbe8b403a`;
-- testing package SHA-256: `d89bc45162ca760320cf59e4a861b2b8ef7bc30bcb05f4338b2078c57b4980f5`;
-- testing publication workflow: `31917806438`;
+- published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
+- testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
+- testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
+- testing publication workflow: `33536081824`, PASS on attempt 2;
+- last owner-live accepted testing corrective: `v0.5.0_2` / `os-zapret2-restyle-0.5.0_2.pkg`;
 - current stable Web/pkg release remains `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - stable package SHA-256: `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
 - required ABI: `FreeBSD:15:amd64`;
-- stable Pages/pkg repository remains on `_1`; `_2` did **not** promote it.
+- stable Pages/pkg repository remains on `_1`; neither `_2` nor `_3` promoted it.
 
-Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_2.md`](verification/evidence/testing-publications/v0.5.0_2.md).
+Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_3.md`](verification/evidence/testing-publications/v0.5.0_3.md).
 
 Owner-live corrective evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md`](verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md).
 
@@ -87,9 +88,11 @@ Temporary control is deliberately CLI/configd-only:
 
 The request marker lives under `/var/run`, so reboot defaults the experiment to OFF. Enable/disable use the normal lifecycle lock and transactional reconfigure path; table replacement is staged and swapped atomically, and rollback restores the previous table/rules/runtime. No production GUI, global UDP/443 drop, all-Internet UDP interception or reflector-specific action was added. Raw PCAP data remains excluded from the repository.
 
+Source PR `#277` passed exact-head full CI and FreeBSD-15 package qualification in run `33535094879`, then squash-merged as `34adca978b3b6769972591872209c166ec9c6eb6`. Generic publisher run `33536081824` published and re-verified prerelease `v0.5.0_3`; attempt 2 completed the manual record-PR fallback and removed the temporary publisher branch.
+
 ## Immediate next action
 
-The next action is owner-live qualification of the `v0.5.0_3` Phase B candidate:
+The next action is owner-live qualification of the exact published [`v0.5.0_3` package](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.0_3/os-zapret2-restyle-0.5.0_3.pkg):
 
 - install the exact candidate package and keep Telegram P2P disabled on both clients;
 - record helper OFF baseline, then enable and read the dedicated IPFW packet/byte counters;

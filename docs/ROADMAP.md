@@ -104,13 +104,17 @@ Phase A evidence: [`verification/evidence/2026-08-28-telegram-voice-phase-a-live
 - [x] divert all destination-port UDP only toward that table through the existing dvtws2 socket
 - [x] add the official STUN zero-fake/repeats=2 profile with deterministic first-profile ordering and both L7/profile and payload/Lua guards
 - [x] expose temporary configd control and IPFW packet/byte counters without adding the production GUI
+- [x] pass exact-head full CI and FreeBSD-15 package qualification — run `33535094879`
+- [x] squash-merge source PR `#277` — `34adca978b3b6769972591872209c166ec9c6eb6`
+- [x] publish and verify testing package `v0.5.0_3` — workflow `33536081824`
+- [x] complete bounded publication-record tail through PR `#279`
 - [ ] run P2P-disabled helper OFF/ON/OFF comparison
 - [ ] require inbound TURN/STUN plus sustained bidirectional Telegram UDP for PASS
 - [x] cover exact rule/table/profile cleanup and failed-install table rollback synthetically
 - [ ] verify exact rule/table/profile cleanup on the owner-live appliance
 - [ ] investigate Telegram Reflector handling only if restored TURN replies are insufficient
 
-The Phase B implementation is the `v0.5.0_3` source candidate. It remains default OFF and is not product-accepted before the packet-based live gate.
+The Phase B implementation is published as the default-OFF `v0.5.0_3` testing candidate. Package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`. Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_3.md`](verification/evidence/testing-publications/v0.5.0_3.md). It is not product-accepted before the packet-based live gate, and the stable Pages/pkg repository remains on `v0.5.0_1`.
 
 ## Remaining regression / future backlog
 
@@ -137,6 +141,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Install and owner-live qualify the exact `0.5.0_3` Phase B candidate with a P2P-disabled OFF/ON/OFF call cycle.** The live baseline is complete and the bounded PoC is implemented; PASS/FAIL must be based on helper counters, inbound TURN/STUN and sustained bidirectional Telegram UDP, not sound alone.
+**Install and owner-live qualify the exact published `v0.5.0_3` Phase B candidate with a P2P-disabled OFF/ON/OFF call cycle.** The live baseline is complete and the bounded PoC is implemented; PASS/FAIL must be based on helper counters, inbound TURN/STUN and sustained bidirectional Telegram UDP, not sound alone.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
