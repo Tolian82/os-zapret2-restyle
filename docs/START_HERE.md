@@ -10,7 +10,7 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-09-01
-**Current handoff identity:** Telegram voice / UDP Phase B source PoC implemented as the `v0.5.0_3` candidate; owner-live OFF/ON/OFF packet validation is the next evidence gate
+**Current handoff identity:** `v0.5.0_3` — Telegram voice / UDP Phase B source PoC implemented; owner-live OFF/ON/OFF packet validation is the next evidence gate
 
 ## Current identity
 

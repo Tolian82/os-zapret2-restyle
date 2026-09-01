@@ -20,6 +20,7 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - primary branch: `main`;
 - project version: `0.5.0`;
 - current source candidate revision: `_3`;
+- package candidate: `os-zapret2-restyle-0.5.0_3.pkg`;
 - last owner-live accepted package revision: `_2`;
 - owner-live accepted testing corrective: `os-zapret2-restyle-0.5.0_2.pkg` / `v0.5.0_2`;
 - testing source/tag target: `1ae952185dbae80ec34c0a89b441feddbe8b403a`;

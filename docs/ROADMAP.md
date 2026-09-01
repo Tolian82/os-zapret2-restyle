@@ -110,7 +110,7 @@ Phase A evidence: [`verification/evidence/2026-08-28-telegram-voice-phase-a-live
 - [ ] verify exact rule/table/profile cleanup on the owner-live appliance
 - [ ] investigate Telegram Reflector handling only if restored TURN replies are insufficient
 
-The Phase B implementation is the `0.5.0_3` source candidate. It remains default OFF and is not product-accepted before the packet-based live gate.
+The Phase B implementation is the `v0.5.0_3` source candidate. It remains default OFF and is not product-accepted before the packet-based live gate.
 
 ## Remaining regression / future backlog
 
