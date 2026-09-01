@@ -107,7 +107,7 @@ Phase A evidence: [`verification/evidence/2026-08-28-telegram-voice-phase-a-live
 - [x] pass exact-head full CI and FreeBSD-15 package qualification — run `33535094879`
 - [x] squash-merge source PR `#277` — `34adca978b3b6769972591872209c166ec9c6eb6`
 - [x] publish and verify testing package `v0.5.0_3` — workflow `33536081824`
-- [x] complete bounded publication-record tail through PR `#278`
+- [x] complete bounded publication-record tail through PR `#279`
 - [ ] run P2P-disabled helper OFF/ON/OFF comparison
 - [ ] require inbound TURN/STUN plus sustained bidirectional Telegram UDP for PASS
 - [x] cover exact rule/table/profile cleanup and failed-install table rollback synthetically

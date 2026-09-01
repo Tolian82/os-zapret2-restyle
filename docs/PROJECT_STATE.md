@@ -121,7 +121,7 @@ Source/delivery qualification:
 - source PR `#277`, exact final head `07d3273adbbfafce7ca0da36d27de6a4c7cc4c7e`, passed full CI and FreeBSD-15 package qualification in run `33535094879`;
 - exact squash merge and immutable testing tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - prerelease `v0.5.0_3` contains `os-zapret2-restyle-0.5.0_3.pkg`, SHA-256 `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
-- publisher run `33536081824` completed successfully on attempt 2 after manual Draft PR `#278` creation worked around the repository policy blocking bot-created PRs; the temporary publisher branch was removed;
+- publisher run `33536081824` completed successfully on attempt 2 after manual publication-record PR `#279` creation worked around the repository policy blocking bot-created PRs; the temporary publisher branch was removed;
 - stable Pages/pkg repository promoted: **no**.
 
 ## Immediate next boundary
