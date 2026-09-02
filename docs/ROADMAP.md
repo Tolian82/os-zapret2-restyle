@@ -92,9 +92,10 @@ Owner-selected authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_V
 - [x] complete the clean remote-participant P2P-disabled helper OFF/ON/OFF live comparison
 - [x] prove helper scope/counters, exact two-fake on-wire order, STUN-only action and live cleanup
 - [x] measure the provider/network gate: 0 inbound TURN/STUN and no sustained bidirectional Telegram UDP — **FAIL**
-- [ ] inspect/document exact current Zapret2 UDP/IP-fragmentation semantics and FreeBSD applicability
-- [ ] define one bounded Telegram-destination-scoped fragmentation candidate and on-wire acceptance contract
-- [ ] implement/package that candidate only after the design boundary is complete
+- [x] inspect/document exact Zapret2 UDP/IP-fragmentation semantics and FreeBSD divert applicability
+- [x] define one ordered position-8, Telegram-destination-scoped fragmentation candidate and on-wire acceptance contract
+- [ ] pin the exact Zapret2 tag/commit installed on the owner appliance
+- [ ] implement/package the minimal `0.5.0_4` candidate after the runtime pin
 - [ ] investigate Telegram Reflector handling only if a future candidate restores TURN replies but sustained UDP still fails
 
 Phase A evidence: [`verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md`](verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md).
@@ -128,6 +129,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Research and specify the bounded Telegram-scoped UDP/IP-fragmentation candidate.** The `v0.5.0_3` zero-fake runtime/lifecycle passed, but its provider/network gate failed; no new package should be built until exact Zapret2/FreeBSD fragment semantics and on-wire acceptance evidence are defined.
+**Pin the owner's installed Zapret2 runtime, then implement the minimal ordered position-8 IPv4-fragmentation candidate as `0.5.0_4`.** Exact upstream/FreeBSD semantics and on-wire acceptance are now defined; keep the existing Telegram scope and default-OFF lifecycle.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
