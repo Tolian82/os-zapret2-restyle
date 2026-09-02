@@ -176,7 +176,7 @@ telegram_voice_status_service()
         "telegram_voice_poc.effective=${_telegram_voice_status_effective}" \
         "telegram_voice_poc.service=${_telegram_voice_status_service}" \
         "telegram_voice_poc.active_profile=${_telegram_voice_status_profile}" \
-        'telegram_voice_poc.strategy=stun-zero-fake-repeats-2' \
+        'telegram_voice_poc.strategy=stun-ipfrag-pos-8-ordered' \
         'telegram_voice_poc.scope=telegram-ipv4-all-udp-ports' \
         "telegram_voice_poc.table=${TELEGRAM_VOICE_TABLE}" \
         "telegram_voice_poc.table_present=${_telegram_voice_status_table_present}" \

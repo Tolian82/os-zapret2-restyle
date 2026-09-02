@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Temporary Telegram Voice Phase B proof-of-concept support.
+# Temporary Telegram Voice ordered-fragmentation proof-of-concept support.
 #
 # The request marker is intentionally stored under /var/run: the experiment is
 # opt-in, survives ordinary service reconfigure operations, and returns to OFF
@@ -102,7 +102,8 @@ telegram_voice_build_effective_traffic()
                 '--filter-l7=stun' \
                 "--ipset=${_telegram_voice_build_ipset_reference}" \
                 '--payload=stun' \
-                '--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2' \
+                '--lua-desync=send:ipfrag:ipfrag_pos_udp=8' \
+                '--lua-desync=drop' \
                 '--new'
             cat "${_telegram_voice_build_user_traffic}"
         } > "${_telegram_voice_build_traffic_tmp}" || {

@@ -1,17 +1,18 @@
 # Telegram voice / UDP DPI-bypass research
 
-**Status:** RESEARCH COMPLETE · PHASE A COMPLETE · PHASE B ZERO-FAKE NETWORK FAIL · ORDERED-IPFRAG CANDIDATE DESIGNED · LIVE RUNTIME PIN PENDING
+**Status:** RESEARCH COMPLETE · PHASE A COMPLETE · PHASE B ZERO-FAKE NETWORK FAIL · LIVE RUNTIME PIN CONFIRMED · `0.5.0_4` ORDERED-IPFRAG SOURCE CANDIDATE
 **Opened:** 2026-08-19
 **Research conclusion:** 2026-08-19
 **Phase A owner-live observation:** 2026-08-28
 **Phase B source PoC:** 2026-09-01
 **Phase B owner-live result:** 2026-09-02
 **Ordered IPv4-fragmentation design:** 2026-09-02
+**Installed runtime pin:** Zapret2 `v1.0.4` / `2c21faa80e1acb71ddceb8b49176f266b7d33f05`
 **Updated:** 2026-09-02
 **Owner instruction:** Telegram voice/call traffic over UDP is the current selected research task.
 **Pinned starting `main`:** `62e9a62e484d7a983b9b3f91ec672bbe96f684f3`
 **Research-boundary merge:** `9bc225ea457583ffec696e393c8ba697798369f6`
-**Package identity:** `VERSION=0.5.0`, `PLUGIN_REVISION=3` — bounded Phase B runtime/lifecycle passed; zero-fake provider/network gate failed.
+**Package identity:** `VERSION=0.5.0`, `PLUGIN_REVISION=4` — ordered-ipfrag source candidate; CI, publication and owner-live network qualification pending.
 
 ## Executive conclusion
 
@@ -21,7 +22,9 @@ Phase A established that **audible call success is not proof that Telegram UDP w
 
 Phase B then tested the exact official zero-fake/repeats=2 hypothesis on the same provider path. A clean remote-participant OFF/ON/OFF comparison proved that the plugin intercepted the intended Telegram-destination UDP, selected STUN, and emitted exactly two valid 16-zero-byte datagrams before each of 9 TURN Allocate requests. The ON state still received zero TURN/STUN replies and produced no sustained bidirectional Telegram UDP. Runtime/lifecycle qualification passed, but provider/network effectiveness failed. This directly falsifies the usefulness of the exact zero-fake baseline on the tested path without identifying the provider's internal mechanism.
 
-The next bounded candidate is now source-designed from Zapret2's own UDP fragmentation path: re-send each selected original STUN datagram as two ordered IPv4 fragments at UDP position 8, then drop the unfragmented original. Position 8 places only the UDP header in the first fragment and the full STUN payload in the second, removing the complete UDP-plus-cookie signature from every individual packet. The existing Telegram IPv4 table/rule remains the interception boundary; no global UDP path is required.
+All Phase A/B calls retained the owner's normal Traffic Strategy and Telegram TCP redirection through a router-local proxy path to an external HTTP proxy. The concurrent Telegram UDP profile covered only ports `80,443,5222,8888` with MTProto payload selection, while the observed TURN/reflector endpoints used `596–599` and `1400`. It therefore did not process the observed STUN/reflector packets, but the concurrent TCP proxy path explains why sound cannot prove UDP success.
+
+The owner subsequently pinned the installed Zapret2 runtime to `v1.0.4`, commit `2c21faa80e1acb71ddceb8b49176f266b7d33f05`, and confirmed its native fragmentation-only loop. The next bounded candidate is implemented in the `0.5.0_4` source: re-send each selected original STUN datagram as two ordered IPv4 fragments at UDP position 8, then drop the unfragmented original. Position 8 places only the UDP header in the first fragment and the full STUN payload in the second, removing the complete UDP-plus-cookie signature from every individual packet. The existing Telegram IPv4 table/rule remains the interception boundary; no global UDP path is required.
 
 The most credible current anti-DPI mechanism for the observed Russian-provider call failures is **STUN desynchronization during NAT/ICE connectivity establishment**. This is not a speculative community trick: current upstream `bol-van/zapret2` ships `init.d/custom.d.examples.linux/50-stun4all`, which recognizes STUN in the Linux firewall on all addresses/ports and applies native Zapret2:
 
@@ -382,7 +385,7 @@ The failure means that increasing fake repeats is not evidence-based. It also do
 
 #### Primary-source basis
 
-The installed-runtime line used by this project is release-based: `setup.sh` selects a stable `bol-van/zapret2` tag and builds it on the appliance. The previously pinned Zapret2 v1.0.4 source commit `2c21faa80e1acb71ddceb8b49176f266b7d33f05` and current upstream commit `0b8182d24a887059a628d7266577c4ba8e9b8f2d` expose the same native pattern:
+The appliance now confirms the release-based install selected Zapret2 `v1.0.4` at exact commit `2c21faa80e1acb71ddceb8b49176f266b7d33f05`. That installed source and current upstream commit `0b8182d24a887059a628d7266577c4ba8e9b8f2d` expose the same native pattern:
 
 ```text
 --lua-desync=send:ipfrag:ipfrag_pos_udp=8
@@ -399,7 +402,7 @@ Primary references:
 
 Upstream's own `blockcheck2` tests ordered fragmentation alone before a later fake-plus-fragment combination. The project should preserve that isolation: the first next candidate is fragmentation alone, not a mixture with the already-failed zero fake.
 
-Before packaged implementation, the owner must record the exact installed runtime tag/commit and confirm that its `90-quic.sh` contains the native `send:ipfrag` pattern. This prevents a stale runtime assumption.
+The owner-live runtime pin is recorded in [`2026-09-02-telegram-voice-ipfrag-runtime-pin.md`](../verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md). Its `90-quic.sh` line 30 contains fragmentation-only `send:ipfrag:ipfrag_pos_udp=$pos` followed by `drop`; line 34 also contains the later combined fake-plus-fragment family, which is intentionally excluded from this candidate.
 
 #### Exact candidate profile
 
@@ -463,13 +466,14 @@ The `send` plus `drop` pattern intentionally removes the original. If fragment g
 
 #### Minimal packaged-source boundary
 
-If the live runtime pin matches the documented primitive, the next packaged change should:
+The `0.5.0_4` source candidate implements the bounded change:
 
-- keep `VERSION=0.5.0` and increment `PLUGIN_REVISION: 3 -> 4`;
-- replace only the helper action/profile identity from zero fake to ordered `ipfrag_pos_udp=8`;
-- keep the existing configd enable/status/disable control, marker, tables, rule and rollback semantics;
-- update status to report an unambiguous strategy such as `stun-ipfrag-pos-8-ordered`;
-- extend the focused regression contract to require `send:ipfrag` before `drop`, forbid the old zero-fake action in the active helper profile, and preserve first-profile ordering/scope/cleanup tests.
+- keeps `VERSION=0.5.0` and increments `PLUGIN_REVISION: 3 -> 4`;
+- replaces only the helper action/profile identity from zero fake to ordered `ipfrag_pos_udp=8` followed by `drop`;
+- keeps the existing configd enable/status/disable control, marker, tables, rule and rollback semantics;
+- reports strategy `stun-ipfrag-pos-8-ordered`;
+- requires `send:ipfrag` before `drop`, forbids the old zero-fake action in the helper profile, and preserves its first-profile ordering/scope/cleanup contract;
+- proves that the normal user Traffic Strategy remains byte-for-byte identical behind the temporary helper.
 
 Do not add a second persistent mode selector merely to retain the failed strategy in the same package. The immutable `v0.5.0_3` package already preserves zero-fake reproduction; replacing the temporary candidate is smaller and keeps mutable state single-purpose.
 
@@ -496,6 +500,48 @@ Interpretation remains split:
 - correct fragments but no inbound TURN: network strategy failure, compatible with fragment dropping or destination-IP/path blocking;
 - inbound TURN but no sustained UDP while reflector stays unanswered: separate reflector/post-allocation research boundary;
 - inbound TURN plus sustained bidirectional UDP: candidate network success, still requiring a repeat cycle before product acceptance.
+
+#### Phase B2 owner-live runbook
+
+Use the exact published `0.5.0_4` testing package. Keep P2P disabled on both clients, use a participant outside the local network, and leave the normal Traffic Strategy plus Telegram TCP external-proxy redirect unchanged.
+
+Use separate LAN and WAN capture shells. The LAN capture may select ordinary UDP from the test client because it observes the unfragmented original before the outbound helper:
+
+```csh
+set CLIENT_IP = 192.168.1.107
+set LAN_IF = vtnet0
+set LAN_CAP = "/tmp/telegram-voice-phase-b2-ipfrag-lan-`date -u +%Y%m%dT%H%M%SZ`.pcap"
+tcpdump -ni "$LAN_IF" -s 256 -U -w "$LAN_CAP" \
+  "host $CLIENT_IP and udp and not udp port 5353"
+```
+
+The WAN capture must select IPv4 protocol 17 rather than the `udp`/STUN-cookie payload expression, so it retains non-initial fragments:
+
+```csh
+set WAN_IF = `route -n get 1.1.1.1 | awk '/interface:/ {print $2}'`
+set WAN_CAP = "/tmp/telegram-voice-phase-b2-ipfrag-wan-`date -u +%Y%m%dT%H%M%SZ`.pcap"
+tcpdump -ni "$WAN_IF" -s 256 -U -w "$WAN_CAP" \
+  'ip proto 17 and (net 91.108.0.0/16 or net 149.154.160.0/20 or net 91.105.192.0/23 or net 185.76.151.0/24)'
+```
+
+Run one helper-OFF baseline and one helper-ON call, stopping each capture with `Ctrl-C`. For the ON state record status before and during the call, the first nine lines of effective traffic, and rule `19000`:
+
+```csh
+configctl zapret telegram_voice_enable
+configctl zapret telegram_voice_status
+sed -n '1,9p' /usr/local/etc/zapret2/runtime-v2/traffic.conf
+/sbin/ipfw show 19000
+```
+
+After the call always disable and verify cleanup:
+
+```csh
+configctl zapret telegram_voice_disable
+configctl zapret telegram_voice_status
+/sbin/ipfw show 19000
+```
+
+Keep raw PCAPs private. Record SHA-256, sizes, call outcome, helper counter snapshots and whether two ordered fragments/no original/inbound TURN/sustained UDP were observed.
 
 ### Phase C — product GUI only after a future strategy passes
 
@@ -639,15 +685,10 @@ Community reports are evidence of observed deployments only; they do not overrid
 
 ## Recommended next project action
 
-The ordered IPv4-fragmentation candidate is now specified from pinned upstream source. Before source mutation, record the appliance's installed Zapret2 tag/commit and verify that its `blockcheck2.d/standard/90-quic.sh` contains `send:ipfrag:ipfrag_pos_udp`.
+The runtime pin and minimal `0.5.0_4` source mutation are complete. The immediate delivery sequence is exact-head full CI plus FreeBSD-15 package qualification, exact-head squash merge, then generic testing publication of the candidate-defining merge.
 
-If that live runtime pin matches, implement the minimal `0.5.0_4` candidate by replacing only the failed zero-fake helper action with:
+The owner-live comparison must retain the normal user Traffic Strategy and Telegram TCP external-proxy redirection, keep P2P disabled on both clients, and use IPv4 protocol/network filtering rather than a STUN-cookie BPF so both fragments are visible.
 
-```text
---lua-desync=send:ipfrag:ipfrag_pos_udp=8
---lua-desync=drop
-```
-
-Retain the existing Telegram IPv4 table/rule, default-OFF CLI control and rollback lifecycle. The owner-live capture must use IPv4 protocol/network filtering rather than a STUN-cookie BPF so both fragments are visible.
+Retain the existing Telegram IPv4 table/rule, default-OFF CLI control and rollback lifecycle. Require exact two-fragment replacement, no unfragmented original, inbound TURN/STUN and sustained bidirectional Telegram UDP.
 
 Do not add fake-plus-fragment combinations, reverse order, alternate positions, reflector handling, global UDP/443 drop, global all-UDP interception or a product GUI before the ordered position-8 candidate is measured. Correct fragments without a reply remain a network FAIL and may indicate that the provider/path drops Telegram destinations or IPv4 fragments independent of STUN parsing.

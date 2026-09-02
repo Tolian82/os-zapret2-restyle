@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Engineering memory index
 
 **Status:** NAVIGATION / INTEGRITY MAP · NOT A CURRENT-STATE NARRATIVE
-**Updated:** 2026-08-19
+**Updated:** 2026-09-02
 
 ## Level 1 — mandatory cold start
 
@@ -21,7 +21,7 @@ Read completely in this order (`DOC-016`):
 ## Level 2 — current line and specialist detail
 
 - **[`v0.5.x working ledger`](history/current/v0.5.x.md)** — current-line chronology and release handoff.
-- **[`Telegram voice / UDP DPI-bypass research`](research/TELEGRAM_VOICE_UDP.md)** — Phase A evidence, Phase B `0.5.0_3` scoped STUN PoC design/control/runbook, and packet-based owner-live acceptance criteria.
+- **[`Telegram voice / UDP DPI-bypass research`](research/TELEGRAM_VOICE_UDP.md)** — Phase A/B evidence, failed `0.5.0_3` zero-fake baseline, installed Zapret2 runtime pin, `0.5.0_4` ordered-fragmentation source candidate and fragment-aware owner-live acceptance criteria.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) / [`architecture/`](architecture/) — current technical architecture.
 - [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md) — Strategy Lab architecture entry point.
 - [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md) — accepted production execution model.

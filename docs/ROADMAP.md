@@ -79,7 +79,7 @@ Owner-live evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-own
 
 The stable Pages/pkg repository remains on `v0.5.0_1`; `_2` was not automatically promoted.
 
-## Telegram voice / UDP DPI-bypass — ZERO-FAKE BASELINE MEASURED / NETWORK FAIL
+## Telegram voice / UDP DPI-bypass — ORDERED-FRAGMENTATION SOURCE CANDIDATE
 
 Owner-selected authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
 
@@ -94,15 +94,22 @@ Owner-selected authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_V
 - [x] measure the provider/network gate: 0 inbound TURN/STUN and no sustained bidirectional Telegram UDP — **FAIL**
 - [x] inspect/document exact Zapret2 UDP/IP-fragmentation semantics and FreeBSD divert applicability
 - [x] define one ordered position-8, Telegram-destination-scoped fragmentation candidate and on-wire acceptance contract
-- [ ] pin the exact Zapret2 tag/commit installed on the owner appliance
-- [ ] implement/package the minimal `0.5.0_4` candidate after the runtime pin
-- [ ] investigate Telegram Reflector handling only if a future candidate restores TURN replies but sustained UDP still fails
+- [x] pin the exact owner-installed Zapret2 runtime: `v1.0.4` / `2c21faa80e1acb71ddceb8b49176f266b7d33f05`
+- [x] confirm the runtime's native fragmentation-only `send:ipfrag ... -> drop` path
+- [x] implement the minimal `0.5.0_4` source candidate and focused regression contract
+- [x] preserve the existing normal Traffic Strategy and byte-for-byte user-profile tail behind the helper
+- [ ] pass exact-head full CI and FreeBSD-15 package qualification
+- [ ] publish and verify the default-OFF `v0.5.0_4` testing package
+- [ ] run the fragment-aware P2P-disabled remote-participant OFF/ON/OFF live comparison
+- [ ] investigate Telegram Reflector handling only if the candidate restores TURN replies but sustained UDP still fails
 
 Phase A evidence: [`verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md`](verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md).
 
 Phase B evidence: [`verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md`](verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md).
 
-The `v0.5.0_3` candidate remains default OFF and is not product-accepted. Its runtime/lifecycle passed, but the official zero-fake/repeats=2 strategy did not restore the Telegram UDP path. Stable Pages/pkg publication remains on `v0.5.0_1`.
+Installed-runtime evidence: [`verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md`](verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md).
+
+The `v0.5.0_3` zero-fake candidate remains default OFF and is not product-accepted. Its runtime/lifecycle passed, but the strategy did not restore the Telegram UDP path. The `_4` source candidate replaces only that action with ordered position-8 fragmentation; it is not network-qualified or published yet. Stable Pages/pkg publication remains on `v0.5.0_1`.
 
 ## Remaining regression / future backlog
 
@@ -129,6 +136,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Pin the owner's installed Zapret2 runtime, then implement the minimal ordered position-8 IPv4-fragmentation candidate as `0.5.0_4`.** Exact upstream/FreeBSD semantics and on-wire acceptance are now defined; keep the existing Telegram scope and default-OFF lifecycle.
+**Qualify, merge and publish the exact `0.5.0_4` ordered position-8 IPv4-fragmentation source candidate, then run the fragment-aware owner-live OFF/ON/OFF call test.** Keep the normal user strategy, Telegram TCP external-proxy redirect, existing Telegram scope and default-OFF lifecycle unchanged.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).

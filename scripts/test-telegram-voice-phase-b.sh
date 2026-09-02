@@ -25,6 +25,7 @@ EMPTY_IPSET="${TEST_ROOT}/ipset-empty.txt"
 USER_TRAFFIC="${TEST_ROOT}/traffic-user.conf"
 EFFECTIVE="${TEST_ROOT}/traffic.conf"
 STATE="${TEST_ROOT}/telegram-voice-poc.state"
+HELPER_PROFILE="${TEST_ROOT}/telegram-voice-helper.conf"
 IPSET_REFERENCE="/usr/local/etc/zapret2/runtime-v2/managed/ipset-telegram.txt"
 
 printf '%s\n' '91.108.4.0/22' '149.154.160.0/20' > "${IPSET}"
@@ -50,17 +51,31 @@ telegram_voice_build_effective_traffic \
     "${USER_TRAFFIC}" "${EFFECTIVE}" "${STATE}" ||
     fail 'enabled profile build failed'
 grep -qx enabled "${STATE}" || fail 'enabled state was not recorded'
-grep -Fqx -- '--filter-l3=ipv4' "${EFFECTIVE}" || fail 'IPv4 filter is missing'
-grep -Fqx -- '--filter-udp=*' "${EFFECTIVE}" || fail 'all-port UDP profile filter is missing'
-grep -Fqx -- '--filter-l7=stun' "${EFFECTIVE}" || fail 'STUN profile selector is missing'
-grep -Fqx -- '--payload=stun' "${EFFECTIVE}" || fail 'STUN Lua payload guard is missing'
-grep -Fqx -- "--ipset=${IPSET_REFERENCE}" "${EFFECTIVE}" ||
+sed -n '1,9p' "${EFFECTIVE}" > "${HELPER_PROFILE}"
+grep -Fqx -- '--filter-l3=ipv4' "${HELPER_PROFILE}" || fail 'IPv4 filter is missing'
+grep -Fqx -- '--filter-udp=*' "${HELPER_PROFILE}" || fail 'all-port UDP profile filter is missing'
+grep -Fqx -- '--filter-l7=stun' "${HELPER_PROFILE}" || fail 'STUN profile selector is missing'
+grep -Fqx -- '--payload=stun' "${HELPER_PROFILE}" || fail 'STUN Lua payload guard is missing'
+grep -Fqx -- "--ipset=${IPSET_REFERENCE}" "${HELPER_PROFILE}" ||
     fail 'managed Telegram IP set reference is missing'
-grep -Fqx -- '--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2' \
-    "${EFFECTIVE}" || fail 'upstream zero-fake baseline changed'
+grep -Fqx -- '--lua-desync=send:ipfrag:ipfrag_pos_udp=8' \
+    "${HELPER_PROFILE}" || fail 'ordered position-8 IP fragmentation action is missing'
+grep -Fqx -- '--lua-desync=drop' "${HELPER_PROFILE}" ||
+    fail 'unfragmented original is not dropped'
+if grep -Fqx -- '--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2' \
+    "${HELPER_PROFILE}"; then
+    fail 'failed zero-fake action survived in the active helper profile'
+fi
+send_line=$(grep -n -F -- '--lua-desync=send:ipfrag:ipfrag_pos_udp=8' \
+    "${HELPER_PROFILE}" | cut -d: -f1)
+drop_line=$(grep -n -F -- '--lua-desync=drop' "${HELPER_PROFILE}" | cut -d: -f1)
+[ "${send_line}" -lt "${drop_line}" ] ||
+    fail 'fragment send action does not precede original drop'
 helper_line=$(grep -n -F -- '--name=telegram-voice-poc' "${EFFECTIVE}" | cut -d: -f1)
 user_line=$(grep -n -F -- '--filter-tcp=443' "${EFFECTIVE}" | cut -d: -f1)
 [ "${helper_line}" -lt "${user_line}" ] || fail 'STUN helper is not the first profile'
+sed '1,9d' "${EFFECTIVE}" | cmp -s - "${USER_TRAFFIC}" ||
+    fail 'enabled PoC changed the user strategy'
 
 if telegram_voice_build_effective_traffic \
     "${MARKER}" "${EMPTY_IPSET}" "${IPSET_REFERENCE}" \
@@ -212,6 +227,11 @@ grep -Fq 'telegram_voice_build_effective_traffic' "${ORCHESTRATOR}" ||
 grep -Fq 'firewall_install_runtime_rules' "${ORCHESTRATOR}" ||
     fail 'orchestrator does not install scoped runtime rules'
 grep -Fq 'telegram_voice' "${SERVICE}" || fail 'service control surface is missing'
+grep -Fq "'telegram_voice_poc.strategy=stun-ipfrag-pos-8-ordered'" "${SERVICE}" ||
+    fail 'service status does not identify the ordered fragmentation strategy'
+if grep -Fq "'telegram_voice_poc.strategy=stun-zero-fake-repeats-2'" "${SERVICE}"; then
+    fail 'service status still identifies the failed zero-fake strategy'
+fi
 grep -Fq '[telegram_voice_enable]' "${ACTIONS}" || fail 'enable action is missing'
 grep -Fq '[telegram_voice_disable]' "${ACTIONS}" || fail 'disable action is missing'
 grep -Fq '[telegram_voice_status]' "${ACTIONS}" || fail 'status action is missing'
@@ -221,4 +241,4 @@ sh -n "${BACKEND}/firewall.sh"
 sh -n "${ORCHESTRATOR}"
 sh -n "${SERVICE}"
 
-echo 'PASS: Telegram Voice Phase B is opt-in, Telegram-IP scoped, observable, and rollback-safe'
+echo 'PASS: Telegram Voice ordered fragmentation is opt-in, Telegram-IP scoped, ordered, and rollback-safe'

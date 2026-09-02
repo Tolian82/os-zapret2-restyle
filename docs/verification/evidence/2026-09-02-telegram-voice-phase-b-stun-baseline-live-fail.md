@@ -10,7 +10,20 @@
 
 This record preserves the reproducible, non-sensitive result of the owner's live Phase B comparison. Raw PCAP files are intentionally excluded because they contain private addressing, ephemeral ports and external-proxy metadata. Client/private source addresses, source ports and the external proxy endpoint are redacted here.
 
-The selected comparison used a Windows 11 client, a call participant outside the local network, Telegram Peer-to-Peer disabled on both participants, and the existing TCP/SOCKS proxy unchanged.
+The selected comparison used a Windows 11 client, a call participant outside the local network, Telegram Peer-to-Peer disabled on both participants, and the existing Telegram TCP proxy path unchanged.
+
+## Concurrent normal traffic configuration
+
+All Phase A and Phase B calls were made while the owner's normal Traffic Strategy remained enabled. The relevant concurrent profiles were:
+
+- YouTube host-list TCP/80 HTTP and TCP/443 TLS desynchronization profiles;
+- a Telegram IPSET TCP plus UDP profile limited to ports `80,443,5222,8888`, selected as MTProto/`mtproto_initial` and using the owner's existing fake chain;
+- the user host-list TCP/443 TLS profile;
+- Telegram TCP redirection through a router-local proxy path to an external HTTP proxy. The external endpoint remains redacted.
+
+This does not invalidate the UDP comparison. The observed TURN and reflector destination ports were `596–599` and `1400`, outside the concurrent Telegram UDP port filter, and the MTProto payload guard does not select STUN. The temporary helper was prepended as its own first profile and the normal user strategy remained behind it unchanged.
+
+The concurrent TCP/proxy path does affect interpretation of sound: a call can remain audible while the captured Telegram UDP path is still outbound-only. Packet direction, not audio alone, remains the acceptance signal.
 
 | State | Capture | SHA-256 | Size | Frames | Duration |
 |---|---|---|---:|---:|---:|
