@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
 **Status:** CURRENT · COMPLETE CONCISE PLAN
-**Updated:** 2026-09-01
+**Updated:** 2026-09-02
 
 - Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - Exact handoff: [`START_HERE.md`](START_HERE.md)
@@ -79,42 +79,29 @@ Owner-live evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-own
 
 The stable Pages/pkg repository remains on `v0.5.0_1`; `_2` was not automatically promoted.
 
-## Telegram voice / UDP DPI-bypass — PHASE B SOURCE COMPLETE, LIVE GATE OPEN
+## Telegram voice / UDP DPI-bypass — ZERO-FAKE BASELINE MEASURED / NETWORK FAIL
 
 Owner-selected authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
 
 - [x] establish Telegram signaling versus WebRTC/STUN/TURN/P2P/reflector traffic model
 - [x] inspect `Waujito/youtubeUnblock`, `remittor/zapret-openwrt` and native `bol-van/zapret2` behavior/boundaries
 - [x] separate universal STUN recognition from provider-specific DPI-bypass effectiveness
-- [x] reject global UDP/443 drop and global all-UDP userspace interception as Telegram Voice defaults
-- [x] define the bounded Telegram-IP-scoped hybrid architecture
-- [x] owner authorized and completed Phase A with P2P disabled on both clients
-- [x] identify live Telegram-range TURN and reflector destinations/ports
-- [x] establish that both observed UDP candidates were outbound-only
-- [x] establish that working two-way sound was masked by concurrent TCP/SOCKS fallback
-- [x] record that the exact upstream DPI/filtering mechanism remains unclassified
-- [x] record the separate Telegram Reflector Hello versus Zapret2 STUN-classification boundary
-- [x] preserve redacted owner-live evidence without committing the raw PCAP
+- [x] reject global UDP/443 drop and global all-UDP userspace interception as defaults
+- [x] complete P2P-disabled Phase A and preserve redacted evidence without raw PCAP
+- [x] implement/publish the default-OFF Telegram-IPv4-scoped `v0.5.0_3` STUN zero-fake PoC
+- [x] complete the clean remote-participant P2P-disabled helper OFF/ON/OFF live comparison
+- [x] prove helper scope/counters, exact two-fake on-wire order, STUN-only action and live cleanup
+- [x] measure the provider/network gate: 0 inbound TURN/STUN and no sustained bidirectional Telegram UDP — **FAIL**
+- [ ] inspect/document exact current Zapret2 UDP/IP-fragmentation semantics and FreeBSD applicability
+- [ ] define one bounded Telegram-destination-scoped fragmentation candidate and on-wire acceptance contract
+- [ ] implement/package that candidate only after the design boundary is complete
+- [ ] investigate Telegram Reflector handling only if a future candidate restores TURN replies but sustained UDP still fails
 
 Phase A evidence: [`verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md`](verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md).
 
-### Phase B — source PoC implemented, owner-live evidence pending
+Phase B evidence: [`verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md`](verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md).
 
-- [x] implement the small plugin-owned Telegram IPv4 `ipfw` table with atomic staging/swap
-- [x] divert all destination-port UDP only toward that table through the existing dvtws2 socket
-- [x] add the official STUN zero-fake/repeats=2 profile with deterministic first-profile ordering and both L7/profile and payload/Lua guards
-- [x] expose temporary configd control and IPFW packet/byte counters without adding the production GUI
-- [x] pass exact-head full CI and FreeBSD-15 package qualification — run `33535094879`
-- [x] squash-merge source PR `#277` — `34adca978b3b6769972591872209c166ec9c6eb6`
-- [x] publish and verify testing package `v0.5.0_3` — workflow `33536081824`
-- [x] complete bounded publication-record tail through PR `#279`
-- [ ] run P2P-disabled helper OFF/ON/OFF comparison
-- [ ] require inbound TURN/STUN plus sustained bidirectional Telegram UDP for PASS
-- [x] cover exact rule/table/profile cleanup and failed-install table rollback synthetically
-- [ ] verify exact rule/table/profile cleanup on the owner-live appliance
-- [ ] investigate Telegram Reflector handling only if restored TURN replies are insufficient
-
-The Phase B implementation is published as the default-OFF `v0.5.0_3` testing candidate. Package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`. Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_3.md`](verification/evidence/testing-publications/v0.5.0_3.md). It is not product-accepted before the packet-based live gate, and the stable Pages/pkg repository remains on `v0.5.0_1`.
+The `v0.5.0_3` candidate remains default OFF and is not product-accepted. Its runtime/lifecycle passed, but the official zero-fake/repeats=2 strategy did not restore the Telegram UDP path. Stable Pages/pkg publication remains on `v0.5.0_1`.
 
 ## Remaining regression / future backlog
 
@@ -141,6 +128,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Install and owner-live qualify the exact published `v0.5.0_3` Phase B candidate with a P2P-disabled OFF/ON/OFF call cycle.** The live baseline is complete and the bounded PoC is implemented; PASS/FAIL must be based on helper counters, inbound TURN/STUN and sustained bidirectional Telegram UDP, not sound alone.
+**Research and specify the bounded Telegram-scoped UDP/IP-fragmentation candidate.** The `v0.5.0_3` zero-fake runtime/lifecycle passed, but its provider/network gate failed; no new package should be built until exact Zapret2/FreeBSD fragment semantics and on-wire acceptance evidence are defined.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
