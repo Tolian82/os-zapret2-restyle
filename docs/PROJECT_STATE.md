@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1
-**Updated:** 2026-09-01
+**Updated:** 2026-09-02
 State-line scope: **`v0.5.x`**
 
 Direct orientation:
@@ -86,58 +86,38 @@ No further package correction belongs to this scope.
 
 ## Telegram voice / UDP research state
 
-The owner-selected research conclusion and Phase A owner-live observation are complete. The bounded Phase B PoC is published as the `v0.5.0_3` testing candidate and awaits owner-live packet qualification.
+The research, Phase A observation and bounded Phase B zero-fake experiment are complete. The `v0.5.0_3` runtime/lifecycle behaved as designed, but the strategy failed its provider/network acceptance gate.
 
 Research authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
 
-Owner-live evidence: [`verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md`](verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md).
+Evidence:
+
+- [Phase A live observation](verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md);
+- [Phase B STUN baseline live result](verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md).
 
 Established durable facts:
 
 - ordinary Telegram TCP/service traffic remains routed through the owner's existing external proxy and is outside the target bypass problem;
-- modern Telegram calls use Telegram API signaling plus separately negotiated WebRTC transport with dynamic STUN/TURN endpoint IP+port and UDP P2P/reflector capabilities;
-- current upstream Zapret2 provides the native `--payload=stun` plus 16-zero-byte fake/repeats=2 baseline for stateful-DPI STUN interference;
-- FreeBSD `ipfw` cannot raw-payload-filter STUN before userspace, so OPNsense cannot safely copy Linux `50-stun4all` as global all-UDP interception;
-- with P2P disabled on both same-LAN clients, Phase A observed TURN Allocate to `91.108.9.100:1400` and Telegram Reflector Hello to `91.108.9.40:597`, both outbound-only;
-- the same call established with two-way audio and no perceived delay while Telegram TCP/SOCKS stayed bidirectional, so audible success masked the broken observed UDP route;
-- the captured 40-byte Telegram Reflector Hello is not STUN and will not be selected by the official `--payload=stun` profile;
-- Phase A localizes failure no later than relay establishment but does not prove whether the upstream mechanism is stateful DPI, stateless filtering/IP blocking or another blackhole;
-- existing Generic UDP Strategy Lab remains unsuitable as a truthful automatic call tester.
+- Telegram API signaling is separate from dynamically negotiated WebRTC STUN/TURN, P2P and reflector transport;
+- FreeBSD `ipfw` cannot raw-payload-filter STUN before userspace, so a global copy of Linux `50-stun4all` remains unacceptable;
+- the `v0.5.0_3` helper correctly limited all-port UDP diversion to 14 managed Telegram IPv4 ranges and selected only STUN for its Lua fake action;
+- a clean P2P-disabled remote-participant OFF run produced 9 TURN Allocate requests and 90 Reflector Hello packets, all outbound-only;
+- the matching ON run emitted exactly two valid 16-zero-byte fakes before every one of 9 TURN requests while leaving 90 non-STUN reflector packets unchanged;
+- ON still produced no inbound TURN/STUN and no sustained bidirectional Telegram UDP;
+- live disable removed the helper table/profile/rule state and restored the ordinary rule layout while the service stayed running;
+- the official zero-fake/repeats=2 baseline therefore passed runtime/lifecycle qualification but failed provider/network effectiveness;
+- the exact provider mechanism remains unclassified: destination-IP/direction filtering, relay policy, payload inspection unaffected by the fake, or another path blackhole remain possible;
+- audible success remains non-probative because the TCP/SOCKS fallback can mask UDP failure.
 
-Implemented Phase B boundary:
-
-- temporary `/var/run` request marker, so reboot returns the PoC to OFF;
-- plugin-owned `zapret2_tgvoice` and staging IPFW tables populated from the normalized managed Telegram IPv4 set;
-- all-port outbound UDP diversion only to `table(zapret2_tgvoice)` through the existing divert socket;
-- first/high-priority `--filter-l3=ipv4`, `--filter-udp=*`, `--filter-l7=stun`, Telegram-IPSET profile with `--payload=stun` and the upstream 16-zero-byte fake/repeats=2 action;
-- transactional table swap and ordinary runtime/tree/rule rollback integration;
-- `configctl zapret telegram_voice_enable|status|disable` control and dedicated IPFW packet/byte status;
-- regression coverage proving OFF leaves the user strategy unchanged, ON remains destination-scoped, and failed rule replacement restores the previous table.
-
-No production GUI, global STUN/all-Internet UDP interception, UDP/443 drop, reflector classifier or Telegram-specific Strategy Lab branch was added.
-
-Source/delivery qualification:
-
-- source PR `#277`, exact final head `07d3273adbbfafce7ca0da36d27de6a4c7cc4c7e`, passed full CI and FreeBSD-15 package qualification in run `33535094879`;
-- exact squash merge and immutable testing tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
-- prerelease `v0.5.0_3` contains `os-zapret2-restyle-0.5.0_3.pkg`, SHA-256 `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
-- publisher run `33536081824` completed successfully on attempt 2 after manual publication-record PR `#279` creation worked around the repository policy blocking bot-created PRs; the temporary publisher branch was removed;
-- stable Pages/pkg repository promoted: **no**.
+No production GUI, global STUN/all-Internet UDP interception, UDP/443 drop or reflector action is accepted. The `v0.5.0_3` helper remains a default-OFF experimental control, not a product feature.
 
 ## Immediate next boundary
 
-The next boundary is owner-live qualification of the exact published `v0.5.0_3` candidate:
+Inspect the exact current Zapret2 UDP/IP-fragmentation primitive and define a bounded, Telegram-destination-scoped next experiment before packaged-source implementation.
 
-- keep P2P disabled on both Telegram clients and the existing TCP/SOCKS proxy unchanged;
-- record dedicated helper status/counters before, during and after the call;
-- capture the Telegram-range UDP path with the helper ON;
-- complete an OFF/ON/OFF cycle and verify exact rule/table/profile cleanup.
+The design must specify FreeBSD/on-wire fragment behavior, counters, cleanup and the same P2P-disabled OFF/ON/OFF acceptance gate. It must explicitly state that fragmentation can test payload-aware filtering but cannot bypass a pure Telegram destination-IP block.
 
-Acceptance is packet-based: Phase B must create inbound TURN/STUN and sustained bidirectional Telegram UDP that are absent from baseline and disappear again after rollback. A still-audible call without that UDP evidence is not a pass because TCP fallback is already working.
-
-Do not add a Telegram Reflector action in the first PoC. Investigate that protocol separately only if TURN replies are restored but the UDP call path still fails.
-
-The cancellation/internal-failure containment regression remains backlog work.
+Do not tune repeats or manipulate Telegram Reflector Hello before this discrimination step. The cancellation/internal-failure containment regression remains backlog work.
 
 ## Completed version-line archives
 
