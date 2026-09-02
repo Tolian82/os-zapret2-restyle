@@ -10,7 +10,7 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-09-02
-**Current handoff identity:** `v0.5.0_3` — Telegram Voice STUN zero-fake PoC tested owner-live; runtime/lifecycle passed, provider/network effectiveness failed; bounded fragmentation research is next
+**Current handoff identity:** `v0.5.0_3` — zero-fake network gate failed; ordered Telegram-scoped IPv4-fragmentation candidate designed; installed Zapret2 runtime pin is the next gate
 
 ## Current identity
 
@@ -90,14 +90,27 @@ Therefore the implementation/lifecycle boundary passed, but the mandatory provid
 
 ## Immediate next action
 
-Research the exact current Zapret2 UDP/IP-fragmentation primitive and define one bounded next candidate before changing packaged source:
+Pin the exact Zapret2 runtime installed on the owner's appliance:
 
-- retain the Telegram IPv4 destination table and avoid global all-UDP interception;
-- keep the candidate default OFF and CLI/assisted-live only;
-- define on-wire fragment evidence, helper counters and exact cleanup before implementation;
-- repeat the same P2P-disabled remote-participant OFF/ON/OFF comparison;
-- require inbound TURN/STUN and sustained bidirectional Telegram UDP for network success.
+```csh
+git -C /usr/local/etc/zapret2 describe --tags --exact-match
+git -C /usr/local/etc/zapret2 rev-parse HEAD
+grep -Fn -- 'send:ipfrag:ipfrag_pos_udp' /usr/local/etc/zapret2/blockcheck2.d/standard/90-quic.sh
+```
 
-Do not tune fake repeats blindly, add a Telegram Reflector action, or add global UDP/443 blocking. The current evidence cannot distinguish pure destination-IP blocking from payload-aware filtering that ignores the zero fake, and fragmentation cannot repair a pure IP block.
+The pinned Zapret2 v1.0.4 source and current upstream both define the next candidate as:
+
+```text
+--lua-desync=send:ipfrag:ipfrag_pos_udp=8
+--lua-desync=drop
+```
+
+If the installed runtime confirms that primitive, the next packaged-source scope is `0.5.0_4`: replace only the failed helper action with ordered position-8 IPv4 fragmentation while preserving the existing Telegram IPv4 table/rule, default-OFF control, counters and rollback lifecycle.
+
+The WAN capture for that experiment must use `ip proto 17` plus Telegram network ranges, not a direct STUN-cookie BPF, because the first fragment has only the UDP header and the second has the STUN payload.
+
+Success still requires correct on-wire fragment pairs, an inbound TURN/STUN response and sustained bidirectional Telegram UDP. Correct fragments without a reply are a network failure and cannot distinguish dropped fragments from pure Telegram destination/path blocking.
+
+Do not add fake-plus-fragment combinations, reverse order, alternate positions, reflector handling, global UDP/443 blocking, global all-UDP interception or a production GUI before this single candidate is measured.
 
 The previously selected Strategy Lab cancellation/internal-failure containment regression remains useful backlog work but is not the immediate task.

@@ -107,17 +107,21 @@ Established durable facts:
 - live disable removed the helper table/profile/rule state and restored the ordinary rule layout while the service stayed running;
 - the official zero-fake/repeats=2 baseline therefore passed runtime/lifecycle qualification but failed provider/network effectiveness;
 - the exact provider mechanism remains unclassified: destination-IP/direction filtering, relay policy, payload inspection unaffected by the fake, or another path blackhole remain possible;
+- the next bounded candidate is ordered IPv4 fragmentation at UDP position 8 using Zapret2 `send:ipfrag` followed by `drop`;
+- position 8 splits the UDP header from the complete STUN payload, while the existing Telegram IPv4 table/rule keeps interception bounded;
 - audible success remains non-probative because the TCP/SOCKS fallback can mask UDP failure.
 
 No production GUI, global STUN/all-Internet UDP interception, UDP/443 drop or reflector action is accepted. The `v0.5.0_3` helper remains a default-OFF experimental control, not a product feature.
 
 ## Immediate next boundary
 
-Inspect the exact current Zapret2 UDP/IP-fragmentation primitive and define a bounded, Telegram-destination-scoped next experiment before packaged-source implementation.
+Record the exact installed Zapret2 tag/commit and confirm its native `send:ipfrag:ipfrag_pos_udp` support. The candidate design is pinned in [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
 
-The design must specify FreeBSD/on-wire fragment behavior, counters, cleanup and the same P2P-disabled OFF/ON/OFF acceptance gate. It must explicitly state that fragmentation can test payload-aware filtering but cannot bypass a pure Telegram destination-IP block.
+If the live runtime matches, the next packaged-source scope is `0.5.0_4`: replace the temporary helper's failed zero-fake action with ordered IPv4 fragmentation at UDP position 8, followed by dropping the unfragmented original. Preserve the existing table/rule, default-OFF CLI surface, counters and transactional cleanup.
 
-Do not tune repeats or manipulate Telegram Reflector Hello before this discrimination step. The cancellation/internal-failure containment regression remains backlog work.
+The WAN capture must retain all Telegram-range `ip proto 17` fragments. Acceptance requires exact fragment pairs, no unfragmented copy, inbound TURN/STUN, sustained bidirectional Telegram UDP and cleanup. Correct fragments without a reply remain a network failure and cannot bypass a pure destination-IP block.
+
+Do not add combined fake/fragment variants, disorder, alternate positions, reflector handling or a GUI before this candidate is measured. The cancellation/internal-failure containment regression remains backlog work.
 
 ## Completed version-line archives
 
