@@ -1,7 +1,7 @@
 # Strategy Lab generic UDP input contract
 
 **Status:** CURRENT SPECIALIST ARCHITECTURE
-**Updated:** 2026-08-15
+**Updated:** 2026-09-03
 **Direct UDP/control-observation implementation:** `v0.4.1_15`
 **Browser handoff correction published in:** `v0.4.1_16`
 **Owner-live configured-path acceptance:** PASS on `v0.4.1_16`
@@ -104,6 +104,18 @@ Structured evidence records endpoint/IP, destination port, payload byte count, r
 **UDP silence is not proof that a port is closed.**
 
 `reply_observed=false` means only that no reply was observed during the bounded control exchange. It does not suppress the bypass candidate catalog and is never translated into a definitive `port closed` claim.
+
+## Telegram Voice boundary
+
+Generic UDP remains a raw exact-payload request/reply tool. It is not a Telegram call oracle:
+
+- its IPFW rule is `from me`, while the selected official tgcalls emulator runs as a forwarded LAN companion;
+- it treats any non-empty UDP reply as a candidate response and does not parse/correlate a STUN transaction;
+- a TURN/STUN reply does not prove Telegram reflector readiness or bidirectional WebRTC media;
+- a captured 40-byte Reflector Hello cannot be blindly replayed as a valid call because its tags and peer state are per run;
+- the current UDP catalog stops after a synthetic success and has no `MEDIA_PASS` state.
+
+The Telegram Voice design may reuse Generic UDP lifecycle, fixed-endpoint epochs, profile assembly, counters, restoration and result storage, but it requires a separate runner or explicit external-probe mode with a narrowly attributed forwarded-flow rule and protocol-aware oracles. Pre/post-NAT source visibility is an explicit implementation gate. The current contract is defined in [`TELEGRAM_VOICE_EMULATION_LAB.md`](TELEGRAM_VOICE_EMULATION_LAB.md).
 
 ## Candidate execution and Stage 80
 

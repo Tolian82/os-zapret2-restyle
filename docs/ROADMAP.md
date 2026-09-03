@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
 **Status:** CURRENT · COMPLETE CONCISE PLAN
-**Updated:** 2026-09-02
+**Updated:** 2026-09-03
 
 - Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - Exact handoff: [`START_HERE.md`](START_HERE.md)
@@ -79,9 +79,11 @@ Owner-live evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-own
 
 The stable Pages/pkg repository remains on `v0.5.0_1`; `_2` was not automatically promoted.
 
-## Telegram voice / UDP DPI-bypass — ZERO-FAKE BASELINE MEASURED / NETWORK FAIL
+## Telegram voice / UDP DPI-bypass — PHASE C EMULATION ORACLE SELECTED
 
 Owner-selected authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
+
+Current architecture: [`architecture/TELEGRAM_VOICE_EMULATION_LAB.md`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md).
 
 - [x] establish Telegram signaling versus WebRTC/STUN/TURN/P2P/reflector traffic model
 - [x] inspect `Waujito/youtubeUnblock`, `remittor/zapret-openwrt` and native `bol-van/zapret2` behavior/boundaries
@@ -94,15 +96,25 @@ Owner-selected authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_V
 - [x] measure the provider/network gate: 0 inbound TURN/STUN and no sustained bidirectional Telegram UDP — **FAIL**
 - [x] inspect/document exact Zapret2 UDP/IP-fragmentation semantics and FreeBSD divert applicability
 - [x] define one ordered position-8, Telegram-destination-scoped fragmentation candidate and on-wire acceptance contract
-- [ ] pin the exact Zapret2 tag/commit installed on the owner appliance
-- [ ] implement/package the minimal `0.5.0_4` candidate after the runtime pin
-- [ ] investigate Telegram Reflector handling only if a future candidate restores TURN replies but sustained UDP still fails
+- [x] pin the owner appliance to Zapret2 `v1.0.4` / `2c21faa80e1acb71ddceb8b49176f266b7d33f05`
+- [x] preserve the prepared STUN-only `_4` source branch without opening/publishing it
+- [x] identify official pinned `tgcalls_cli` as an account-free real-reflector media oracle
+- [x] define the separate `WIRE_OK`, `TURN_REPLY`, `REFLECTOR_READY`, `MEDIA_PASS` and `CALL_PASS` gates
+- [x] select fixed-endpoint, fresh-flow and independent-unblocked-control experimental discipline
+- [ ] build and digest-pin the Linux/WSL2 tgcalls companion outside the OPNsense package
+- [ ] prove one fixed reflector with `MEDIA_PASS` on an independent unblocked path and capture wire-equivalence ground truth
+- [ ] measure the same fixed endpoint through the blocked provider with no desynchronization
+- [ ] verify PF/NAT/IPFW source visibility and add an exact-flow/exact-reflector/exact-port candidate runner with transactional cleanup
+- [ ] test reflector fragmentation: position 8 ordered, position 8 reverse, then evidence-driven alternate positions
+- [ ] add a transaction-correlated 28-byte TURN Allocate probe as the secondary oracle
+- [ ] repeat any media winner across runs/endpoints and complete one final remote P2P-disabled real call
+- [ ] rework, replace or close the paused `_4` branch from Phase C evidence before choosing a package/GUI scope
 
 Phase A evidence: [`verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md`](verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md).
 
 Phase B evidence: [`verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md`](verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md).
 
-The `v0.5.0_3` candidate remains default OFF and is not product-accepted. Its runtime/lifecycle passed, but the official zero-fake/repeats=2 strategy did not restore the Telegram UDP path. Stable Pages/pkg publication remains on `v0.5.0_1`.
+The `v0.5.0_3` candidate remains default OFF and is not product-accepted. Its runtime/lifecycle passed, but zero-fake/repeats=2 did not restore TURN or sustained Telegram UDP. Because that profile selected only STUN, it did not test the separate Reflector Hello path. The remote `_4` branch is unpublished experimental work, not the current package identity. Stable Pages/pkg publication remains on `v0.5.0_1`.
 
 ## Remaining regression / future backlog
 
@@ -129,6 +141,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Pin the owner's installed Zapret2 runtime, then implement the minimal ordered position-8 IPv4-fragmentation candidate as `0.5.0_4`.** Exact upstream/FreeBSD semantics and on-wire acceptance are now defined; keep the existing Telegram scope and default-OFF lifecycle.
+**Build and control-validate the pinned official tgcalls real-reflector companion, then use it to measure a narrowly scoped reflector strategy matrix through OPNsense.** Do not publish the prepared STUN-only `_4` candidate until the automatic oracle determines whether it is relevant, incomplete or ineffective.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).

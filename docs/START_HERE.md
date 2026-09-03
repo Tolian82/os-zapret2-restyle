@@ -9,8 +9,8 @@
 - **Documentation/navigation index:** [`INDEX.md`](INDEX.md)
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
-**Updated:** 2026-09-02
-**Current handoff identity:** `v0.5.0_3` — zero-fake network gate failed; ordered Telegram-scoped IPv4-fragmentation candidate designed; installed Zapret2 runtime pin is the next gate
+**Updated:** 2026-09-03
+**Current handoff identity:** `v0.5.0_3` — Phase A/B complete; installed Zapret2 fragmentation capability confirmed; unpublished `_4` candidate paused; Phase C Telegram traffic-emulation oracle selected
 
 ## Current identity
 
@@ -28,6 +28,8 @@
 - stable Pages/pkg repository remains on `_1`; neither `_2` nor `_3` promoted it.
 
 Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_3.md`](verification/evidence/testing-publications/v0.5.0_3.md).
+
+Installed Zapret2 runtime pin: [`verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md`](verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md).
 
 Owner-live corrective evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md`](verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md).
 
@@ -62,55 +64,42 @@ The English localization leak (`Выбор файла` / `Не выбран ни
 
 The source correction, full CI/FreeBSD-15 qualification, testing-package publication, publication-record tail and focused owner-live check are complete. The owner confirmed that `v0.5.0_2` works as intended. No further source change belongs to this scope.
 
-## Telegram voice / UDP — Phase B zero-fake baseline measured
+## Telegram voice / UDP — measured state and selected Phase C
 
-The owner-selected research is recorded in [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md). Phase A evidence is [`verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md`](verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md); the completed Phase B comparison is [`verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md`](verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md).
+Read these two specialist authorities completely before further Telegram Voice mutation:
 
-Durable Phase A result:
+- [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md) — research, Phase A/B interpretation and protocol evidence;
+- [`architecture/TELEGRAM_VOICE_EMULATION_LAB.md`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md) — current emulator/oracle architecture, result taxonomy, strategy order and exact implementation sequence.
 
-- with P2P disabled on both clients, Telegram-range TURN Allocate and Reflector Hello candidates remained outbound-only;
-- calls could still have two-way sound through the concurrent TCP/SOCKS fallback;
-- Telegram Reflector Hello is a separate 40-byte non-STUN protocol packet.
+Established live facts:
 
-The published default-OFF `v0.5.0_3` PoC adds a Telegram-IPv4-scoped all-port UDP IPFW rule and a first-priority Zapret2 STUN profile using two 16-zero-byte fakes before the original request. Its temporary controls remain:
+- with P2P disabled, the client sent a 28-byte TURN Allocate request to Telegram port `1400` and a separate 40-byte non-STUN Reflector Hello to ports `596–599`;
+- both families were outbound-only on the tested provider path;
+- a separate generic STUN endpoint at `141.101.90.1:3478` replied bidirectionally, so this is not a universal UDP/STUN outage;
+- working two-way sound was masked by the existing Telegram TCP path through the router-local and external proxy chain;
+- the normal Telegram UDP strategy covered only `80,443,5222,8888`, so it did not process the observed voice endpoints;
+- `v0.5.0_3` correctly emitted two zero16 fakes before every STUN request but restored no reply; runtime/lifecycle passed and provider effectiveness failed;
+- the same STUN-only profile left every Reflector Hello unchanged, so Phase B did not test any reflector-specific bypass;
+- the appliance runs Zapret2 `v1.0.4` at `2c21faa80e1acb71ddceb8b49176f266b7d33f05`, and native ordered/reverse IPv4 fragmentation is available;
+- offline packet transformation can prove only `WIRE_OK`; it cannot predict the provider response.
 
-- `configctl zapret telegram_voice_enable`;
-- `configctl zapret telegram_voice_status`;
-- `configctl zapret telegram_voice_disable`.
-
-The clean P2P-disabled remote-participant OFF/ON/OFF comparison established:
-
-- helper OFF: 9 TURN Allocate requests and 90 Reflector Hello packets, all outbound-only;
-- helper ON: the table/profile/rule became active, the helper counter incremented, and every one of 9 TURN requests was preceded on WAN by exactly two valid 16-zero-byte datagrams;
-- the 90 non-STUN reflector packets remained unchanged, confirming correct L7 discrimination;
-- helper ON still produced 0 inbound TURN/STUN packets and no sustained bidirectional Telegram UDP;
-- disable removed the helper table/profile/rule state and restored the ordinary rule layout while the service remained running.
-
-Therefore the implementation/lifecycle boundary passed, but the mandatory provider/network gate failed. The upstream zero-fake/repeats=2 baseline is ineffective on the tested path and is not product-accepted. It remains default OFF and no production GUI is authorized.
+The remote branch `v0.5.0_4-telegram-voice-ipfrag` at `3ecdd1b3326fe7655e1d7df9edd51808e2a68dc9` contains a prepared STUN-only ordered-position-8 candidate. It has no PR, exact-head CI, merge, package or live result. Preserve it as unique experimental work, but do not merge or publish it as-is. Phase C evidence decides whether it is rebased/reworked, replaced or rejected.
 
 ## Immediate next action
 
-Pin the exact Zapret2 runtime installed on the owner's appliance:
+Build the Phase C automatic oracle around official `TelegramMessenger/tgcalls` commit `78d07f3e46a4bb12b611ccc2816ff59ca63a83fb`:
 
-```csh
-git -C /usr/local/etc/zapret2 describe --tags --exact-match
-git -C /usr/local/etc/zapret2 rev-parse HEAD
-grep -Fn -- 'send:ipfrag:ipfrag_pos_udp' /usr/local/etc/zapret2/blockcheck2.d/standard/90-quic.sh
-```
+1. create a reproducible Linux/WSL2 companion artifact outside the OPNsense package and record its digest;
+2. use `tgcalls_cli --mode reflector` with one fixed Telegram reflector `IP:596–599` and obtain `MEDIA_PASS` on an independently unblocked path;
+3. capture that control run and confirm wire equivalence to the real 40-byte Hello/retry/media framing;
+4. run a no-desync baseline through the blocked provider against the same endpoint;
+5. verify whether WAN-out IPFW sees the pre- or post-NAT source, then add a temporary exact-flow/exact-destination/exact-port runner with transactional cleanup;
+6. test reflector fragmentation in bounded order: position 8 ordered, position 8 reverse, then evidence-driven alternate positions; test fake-plus-fragment only after standalone families;
+7. add the correlated 28-byte TURN Allocate probe as a secondary oracle;
+8. repeat any media winner, then perform one final real remote-participant P2P-disabled call.
 
-The pinned Zapret2 v1.0.4 source and current upstream both define the next candidate as:
+Use the result classes `WIRE_OK`, `TURN_REPLY`, `REFLECTOR_READY`, `MEDIA_PASS`, `CALL_PASS`, `NO_REPLY_UNKNOWN`, `NETWORK_FAIL` and `RESTORE_FAILED` exactly as defined in the architecture document. A silent endpoint without a recent exact-endpoint control is inconclusive. An arbitrary UDP reply is not success. Audio without sustained UDP is not success.
 
-```text
---lua-desync=send:ipfrag:ipfrag_pos_udp=8
---lua-desync=drop
-```
-
-If the installed runtime confirms that primitive, the next packaged-source scope is `0.5.0_4`: replace only the failed helper action with ordered position-8 IPv4 fragmentation while preserving the existing Telegram IPv4 table/rule, default-OFF control, counters and rollback lifecycle.
-
-The WAN capture for that experiment must use `ip proto 17` plus Telegram network ranges, not a direct STUN-cookie BPF, because the first fragment has only the UDP header and the second has the STUN payload.
-
-Success still requires correct on-wire fragment pairs, an inbound TURN/STUN response and sustained bidirectional Telegram UDP. Correct fragments without a reply are a network failure and cannot distinguish dropped fragments from pure Telegram destination/path blocking.
-
-Do not add fake-plus-fragment combinations, reverse order, alternate positions, reflector handling, global UDP/443 blocking, global all-UDP interception or a production GUI before this single candidate is measured.
+Do not bundle `tgcalls`/Bazel/Linux into the OPNsense package, intercept all Internet UDP, globally drop UDP/443, expose a production GUI, increase fake repeats blindly, or publish `_4` before this oracle is established.
 
 The previously selected Strategy Lab cancellation/internal-failure containment regression remains useful backlog work but is not the immediate task.

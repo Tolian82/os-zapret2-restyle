@@ -116,3 +116,7 @@ Call establishment or good sound by itself is not a PASS because Phase A already
 ## Repository impact
 
 This evidence record is documentation-only. It adds no raw capture, source change, runtime rule, strategy, GUI, package revision or release artifact.
+
+## Subsequent research boundary
+
+Phase B later proved that the STUN zero-fake helper acted correctly but restored no TURN reply, while the reflector packets remained completely untouched. Official pinned `tgcalls_cli` can exercise a real reflector and bidirectional media without Telegram API signaling or TCP fallback. The current Phase C plan therefore measures reflector strategies independently rather than continuing to assume that reflector work must wait for TURN success. See [`TELEGRAM_VOICE_EMULATION_LAB.md`](../../architecture/TELEGRAM_VOICE_EMULATION_LAB.md).
