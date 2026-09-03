@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1
-**Updated:** 2026-09-02
+**Updated:** 2026-09-03
 State-line scope: **`v0.5.x`**
 
 Direct orientation:
@@ -86,42 +86,45 @@ No further package correction belongs to this scope.
 
 ## Telegram voice / UDP research state
 
-The research, Phase A observation and bounded Phase B zero-fake experiment are complete. The `v0.5.0_3` runtime/lifecycle behaved as designed, but the strategy failed its provider/network acceptance gate.
+Research, Phase A observation, Phase B zero-fake measurement and the installed-runtime capability pin are complete. The current selected work is Phase C: construct a truthful automatic traffic emulator/oracle before publishing another package candidate.
 
-Research authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
+Authorities:
 
-Evidence:
-
+- [research and interpretation](research/TELEGRAM_VOICE_UDP.md);
+- [current Phase C emulator/oracle architecture](architecture/TELEGRAM_VOICE_EMULATION_LAB.md);
 - [Phase A live observation](verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md);
-- [Phase B STUN baseline live result](verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md).
+- [Phase B STUN baseline live result](verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md);
+- [installed Zapret2 runtime pin](verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md).
 
 Established durable facts:
 
-- ordinary Telegram TCP/service traffic remains routed through the owner's existing external proxy and is outside the target bypass problem;
-- Telegram API signaling is separate from dynamically negotiated WebRTC STUN/TURN, P2P and reflector transport;
-- FreeBSD `ipfw` cannot raw-payload-filter STUN before userspace, so a global copy of Linux `50-stun4all` remains unacceptable;
-- the `v0.5.0_3` helper correctly limited all-port UDP diversion to 14 managed Telegram IPv4 ranges and selected only STUN for its Lua fake action;
-- a clean P2P-disabled remote-participant OFF run produced 9 TURN Allocate requests and 90 Reflector Hello packets, all outbound-only;
-- the matching ON run emitted exactly two valid 16-zero-byte fakes before every one of 9 TURN requests while leaving 90 non-STUN reflector packets unchanged;
-- ON still produced no inbound TURN/STUN and no sustained bidirectional Telegram UDP;
-- live disable removed the helper table/profile/rule state and restored the ordinary rule layout while the service stayed running;
-- the official zero-fake/repeats=2 baseline therefore passed runtime/lifecycle qualification but failed provider/network effectiveness;
-- the exact provider mechanism remains unclassified: destination-IP/direction filtering, relay policy, payload inspection unaffected by the fake, or another path blackhole remain possible;
-- the next bounded candidate is ordered IPv4 fragmentation at UDP position 8 using Zapret2 `send:ipfrag` followed by `drop`;
-- position 8 splits the UDP header from the complete STUN payload, while the existing Telegram IPv4 table/rule keeps interception bounded;
-- audible success remains non-probative because the TCP/SOCKS fallback can mask UDP failure.
+- ordinary Telegram TCP/service traffic remains routed through the owner's local/external proxy path and is outside the UDP bypass target;
+- Telegram signaling is separate from dynamically negotiated WebRTC STUN/TURN, P2P and reflector transport;
+- the clean P2P-disabled client emitted nine 28-byte TURN Allocate requests on port `1400` and ninety 40-byte non-STUN Reflector Hello packets on `596–599`; both families were outbound-only;
+- a separate non-Telegram STUN endpoint at `141.101.90.1:3478` replied bidirectionally, so UDP/STUN was not universally blocked on the WAN path;
+- audible two-way sound did not prove UDP because the concurrent TCP proxy fallback stayed available;
+- the normal Telegram UDP strategy covered only `80,443,5222,8888`, so it did not intercept either captured voice family;
+- `v0.5.0_3` correctly limited all-port UDP diversion to 14 managed Telegram IPv4 ranges, emitted exactly two valid zero16 fakes before every STUN request, left every reflector packet unchanged, and cleaned up correctly;
+- that zero-fake profile passed runtime/lifecycle qualification but failed provider effectiveness: no TURN reply and no sustained bidirectional Telegram UDP;
+- because the helper selected only STUN, Phase B does not test or disprove a reflector-specific desynchronization strategy;
+- the provider mechanism remains unclassified: destination-IP/direction/routing policy, stateless payload filtering, fragment policy, relay policy or another blackhole remain possible;
+- the appliance runtime is Zapret2 `v1.0.4` at `2c21faa80e1acb71ddceb8b49176f266b7d33f05` and supports native ordered and reverse IPv4 fragmentation;
+- offline packet replay/transformation can predict exact wire output only; a control-proven live endpoint is required for a network verdict;
+- official `tgcalls_cli` can emulate caller/callee signaling locally and route bidirectional WebRTC media through a real Telegram UDP reflector with TCP disabled.
 
-No production GUI, global STUN/all-Internet UDP interception, UDP/443 drop or reflector action is accepted. The `v0.5.0_3` helper remains a default-OFF experimental control, not a product feature.
+The remote branch `v0.5.0_4-telegram-voice-ipfrag` at `3ecdd1b3326fe7655e1d7df9edd51808e2a68dc9` is one commit ahead of its `1bdb3eccf3b96707d6c314a0c364ca14ac2a190c` base. It contains a STUN-only ordered-position-8 implementation but has no PR, exact-head CI, merge, package publication or live result. It is preserved as unique experimental work and must be reworked from the future Phase C evidence rather than merged as-is.
+
+No production GUI, global STUN/all-Internet UDP interception, global UDP/443 drop or blind fake-repeat widening is accepted. The `v0.5.0_3` helper remains default OFF and non-product.
 
 ## Immediate next boundary
 
-Record the exact installed Zapret2 tag/commit and confirm its native `send:ipfrag:ipfrag_pos_udp` support. The candidate design is pinned in [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
+Pin official `TelegramMessenger/tgcalls` commit `78d07f3e46a4bb12b611ccc2816ff59ca63a83fb` into a reproducible Linux/WSL2 companion artifact. Prove one fixed Telegram reflector `IP:596–599` on an independently unblocked path, then measure the same endpoint through the blocked provider.
 
-If the live runtime matches, the next packaged-source scope is `0.5.0_4`: replace the temporary helper's failed zero-fake action with ordered IPv4 fragmentation at UDP position 8, followed by dropping the unfragmented original. Preserve the existing table/rule, default-OFF CLI surface, counters and transactional cleanup.
+After the oracle is valid, verify the PF/NAT/IPFW source identity and add a narrow temporary forwarded-flow IPFW/dvtws2 runner scoped to one reflector address and one port, plus the exact observable probe source tuple where available. Test the reflector family in this order: baseline, ordered position 8, reverse position 8, then evidence-driven alternate positions. Add a transaction-correlated 28-byte TURN Allocate probe as a secondary oracle.
 
-The WAN capture must retain all Telegram-range `ip proto 17` fragments. Acceptance requires exact fragment pairs, no unfragmented copy, inbound TURN/STUN, sustained bidirectional Telegram UDP and cleanup. Correct fragments without a reply remain a network failure and cannot bypass a pure destination-IP block.
+Candidate outcomes use the explicit hierarchy `WIRE_OK -> TURN_REPLY/REFLECTOR_READY -> MEDIA_PASS -> CALL_PASS`. Silence without a fresh exact-endpoint control is `NO_REPLY_UNKNOWN`; restoration failure overrides every useful intermediate result. Repeat a winner before one final real remote P2P-disabled call.
 
-Do not add combined fake/fragment variants, disorder, alternate positions, reflector handling or a GUI before this candidate is measured. The cancellation/internal-failure containment regression remains backlog work.
+Only after that result may the project rebase/rework, replace or close the paused `_4` branch and select a new package/GUI scope. The cancellation/internal-failure containment regression remains backlog work.
 
 ## Completed version-line archives
 
