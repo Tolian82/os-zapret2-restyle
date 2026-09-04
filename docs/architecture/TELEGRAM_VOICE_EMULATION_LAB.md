@@ -1,12 +1,13 @@
 # Telegram Voice traffic emulation and strategy oracle
 
-**Status:** CURRENT DESIGN · PHASE C ENVIRONMENT SELECTED · COMPANION BUILD PIN NOT YET VALIDATED
+**Status:** CURRENT DESIGN · COMPANION BUILD/RUNTIME GATE PASS · FIXED-REFLECTOR CONTROL NEXT
 **Updated:** 2026-09-04
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
 **Phase A evidence:** [`2026-08-28-telegram-voice-phase-a-live-observation.md`](../verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md)
 **Phase B evidence:** [`2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md`](../verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md)
 **Installed Zapret2 pin:** [`2026-09-02-telegram-voice-ipfrag-runtime-pin.md`](../verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md)
+**Companion build/runtime evidence:** [`2026-09-04-telegram-voice-companion-build-runtime-pass.md`](../verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md)
 
 ## Purpose
 
@@ -31,6 +32,8 @@ The selected design is a three-tier live oracle supported by an offline wire pre
 | Tier 3 | one real P2P-disabled remote Telegram call | end-to-end product behavior | universal behavior across providers/endpoints |
 
 Tier 2 is the primary automatic strategy oracle. Tier 1 is a fast discriminator and diagnostic probe. Tier 3 is the final acceptance row, not the search loop.
+
+The Phase C companion now has a build-validated executable and has passed its bounded local P2P runtime self-test. That result proves the binary and its media/statistics exit gate work; it is not `MEDIA_PASS` because no Telegram reflector or external network path participated. The next gate is one fixed-reflector control epoch.
 
 The previous plan to publish and immediately live-test one STUN-only ordered-fragment candidate is paused. The remote branch `v0.5.0_4-telegram-voice-ipfrag` at `3ecdd1b3326fe7655e1d7df9edd51808e2a68dc9` contains one prepared candidate, but it has no PR, exact-head CI, merge, package publication, or owner-live result. It must not be merged as-is. After Phase C evidence, it will be rebased/reworked, replaced, or rejected.
 
@@ -134,7 +137,7 @@ A captured Hello is a format/timing fixture, not a reusable live credential. Bli
 
 ## Authoritative reflector emulator
 
-Use the official [`TelegramMessenger/tgcalls`](https://github.com/TelegramMessenger/tgcalls) CLI as the protocol implementation authority. The research/source pin remains commit `78d07f3e46a4bb12b611ccc2816ff59ca63a83fb`.
+Use the official [`TelegramMessenger/tgcalls`](https://github.com/TelegramMessenger/tgcalls) CLI as the protocol implementation authority. The build-validated executable pin is `e3069322a3d1e16ecb11a5e302242e59ddd7f09e`, selected by the pinned outer Telegram-iOS workspace `6ad963e5b62d354da79040f388ae2b9132fb17b8`.
 
 Why it is the current authority:
 
@@ -148,32 +151,33 @@ Why it is the current authority:
 
 Current limitation: the renderer discards received audio. Exit 0 proves bidirectional media transport and WebRTC state, not waveform identity or human-audible quality. The result name must therefore be `MEDIA_PASS`, not `AUDIO_PASS`.
 
-Pinned source:
+Build-validated source:
 
-- [CLI purpose and reflector invocation](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/CLAUDE.md#L105-L122);
-- [UDP-only reflector server and 440 Hz source](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/tools/cli/main.cpp#L88-L132);
-- [local peer tags, signaling bridge, two instances and exit gate](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/tools/cli/main.cpp#L342-L670);
-- [upstream container recipe](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/Dockerfile), which requires an outer Telegram-iOS build workspace;
-- [official reflector-list runner](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/tools/cli/run-test.sh);
-- [reflector Hello/retry logic](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/tgcalls/v2/ReflectorPort.cpp#L317-L370);
-- [reflector framing and receive validation](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/tgcalls/v2/ReflectorPort.cpp#L596-L770).
+- [outer Telegram-iOS workspace](https://github.com/TelegramMessenger/Telegram-iOS/tree/6ad963e5b62d354da79040f388ae2b9132fb17b8);
+- [UDP-only reflector server, generated audio, local signaling and exit gate](https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tools/cli/main.cpp);
+- [official reflector-list runner](https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tools/cli/run-test.sh);
+- [reflector Hello/retry and framing implementation](https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tgcalls/v2/ReflectorPort.cpp);
+- [later research commit](https://github.com/TelegramMessenger/tgcalls/compare/e3069322a3d1e16ecb11a5e302242e59ddd7f09e...78d07f3e46a4bb12b611ccc2816ff59ca63a83fb), retained as source research but not claimed as the built executable.
 
-### Reproducible companion build gate
+### Reproducible companion build gate — passed
 
-The Dockerfile stored in the standalone tgcalls repository is not a standalone tgcalls build context. Its commands write Bazel into `build-input/` and build the target `//submodules/TgVoipWebrtc/tgcalls/tools/cli:tgcalls_cli`; both paths belong to the outer Telegram-iOS workspace. A checkout containing only `TelegramMessenger/tgcalls` cannot satisfy that recipe.
+The standalone tgcalls Dockerfile is not a standalone build context: it refers to outer `build-input/` and `//submodules/TgVoipWebrtc/...` paths. The working TOS recipe therefore builds from the complete pinned Telegram-iOS workspace and its exact tgcalls gitlink.
 
-Consequently, `78d07f...` is currently a research/source pin, not yet a proven image pin. Before any TOS project is called reproducible, the implementation must:
+Recorded build identity:
 
-1. select and record one exact outer Telegram-iOS commit;
-2. record the exact tgcalls gitlink/overlay commit used inside it;
-3. initialize or otherwise pin every required outer dependency;
-4. build the CLI from that complete context on `linux/amd64`;
-5. verify the resulting CLI still has the required UDP-only reflector mode and exit gate;
-6. record the outer commit, tgcalls commit, Dockerfile blob, Bazel version and checksum, image digest and binary digest.
+| Item | Immutable value |
+|---|---|
+| Telegram-iOS | `6ad963e5b62d354da79040f388ae2b9132fb17b8` |
+| tgcalls | `e3069322a3d1e16ecb11a5e302242e59ddd7f09e` |
+| Ubuntu image | `sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517` |
+| Bazel | `8.4.2`, SHA-256 `4dc8e99dfa802e252dac176d08201fd15c542ae78c448c8a89974b6f387c282c` |
+| `tgcalls_cli` | SHA-256 `c2bd9e8b55d5542e4471154c832efc4cf0cdd483669dbeb747c706afbe53b11a` |
 
-Do not use an unversioned third-party image and do not publish a TOS Compose file pointing at a nonexistent upstream image. The first artifact can be built on TNAS, but only after this gate is resolved.
+The canonical host-network recipe is [`tools/telegram-voice-lab/compose.tos.yml`](../../tools/telegram-voice-lab/compose.tos.yml). It pins the exact Ubuntu digest and records the bounded Linux/OpenH264/WebRTC/CRC32C/FFmpeg/header fixes needed by this outer workspace. The full build evidence and recipe checksums are in [`2026-09-04-telegram-voice-companion-build-runtime-pass.md`](../verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md).
 
-The first implementation should use a reproducible Linux container/WSL2 companion behind OPNsense. Do not add Bazel, WebRTC, an Ubuntu image, or the `tgcalls` runtime to the OPNsense plugin package.
+The owner then ran a five-second `--mode p2p` self-test. Both sides reached `Established` at 0.021 seconds, each produced five bitrate records, BWE was non-zero, no error was reported, and the process exited 0. This is the accepted local build/runtime gate only. Changing either source pin, the image digest, or the recorded build recipe requires a new binary digest and repeat qualification.
+
+The companion remains a reproducible Linux container outside the OPNsense package. Do not add Bazel, WebRTC, an Ubuntu image, or the `tgcalls` runtime to the plugin package.
 
 After the tgcalls control capture establishes exact wire behavior, a lightweight native OPNsense/Python two-socket reflector probe may be investigated for fast screening. It would need fresh paired tags, Hello validation, framed payload in both directions and exact transaction/state isolation. Until byte-for-byte equivalence is proven, it is only a hypothesis. Even when valid it can provide at most `REFLECTOR_READY` plus a framed-data result; pinned tgcalls remains the `MEDIA_PASS` authority.
 
@@ -351,34 +355,36 @@ Only this row is `CALL_PASS`. Audio without sustained UDP remains fallback evide
 
 ## Implementation sequence
 
-1. Resolve the reproducible build gate: pin an outer Telegram-iOS workspace plus its exact tgcalls source, then record image and binary digests.
-2. Create the TOS 7 project with `network_mode: host`; do not add DHCP, address, default-route or `NET_ADMIN` setup to the container.
-3. Implement and dry-run the owner-side exact-`/32` route transaction, including pre-state and rollback verification.
-4. Obtain one unblocked-control `MEDIA_PASS` against a fixed reflector and capture LAN/WAN ground truth.
-5. Compare the generated Hello size, marker, retry cadence, endpoint ports and later media framing with the real-call Phase A fixture.
-6. Route that same reflector through OPNsense and run a provider-path no-desync baseline.
-7. Add the narrowly scoped forwarded-flow IPFW/dvtws2 candidate runner with verified pre/post-NAT attribution and transactional cleanup.
-8. Add ordered/reverse position-8 reflector fragmentation and the semantic result taxonomy.
-9. Execute the bounded matrix, repeating winners as specified.
-10. Add the router-native semantic TURN probe and use it as a secondary discriminator.
-11. Run one final real P2P-disabled remote Telegram call.
-12. Rebase/rework, replace, or close `v0.5.0_4-telegram-voice-ipfrag` from the resulting evidence; only then choose a package candidate and GUI scope.
+1. [x] Resolve the reproducible build gate: pin the outer Telegram-iOS workspace and exact tgcalls source, then record the recipe, image and binary digests.
+2. [x] Create and runtime-qualify the TOS 7 project with `network_mode: host`, without container DHCP, address/default-route mutation, `NET_ADMIN`, or privileged mode.
+3. [ ] Select one current fixed reflector and record the ordinary TNAS route pre-state.
+4. [ ] Obtain one exact-endpoint control `MEDIA_PASS` with a fresh reflector process and capture ground truth.
+5. [ ] Compare Hello size, marker, retry cadence, endpoint ports and later media framing with the real-call Phase A fixture.
+6. [ ] Implement and dry-run the exact-`/32` route transaction through OPNsense, including rollback verification.
+7. [ ] Run the provider-path no-desynchronization baseline against the same endpoint.
+8. [ ] Add the narrowly scoped forwarded-flow IPFW/dvtws2 runner with verified pre/post-NAT attribution and transactional cleanup.
+9. [ ] Add ordered/reverse position-8 reflector fragmentation and the semantic result taxonomy.
+10. [ ] Execute the bounded matrix, repeating winners as specified.
+11. [ ] Add the router-native semantic TURN probe and use it as a secondary discriminator.
+12. [ ] Run one final real P2P-disabled remote Telegram call.
+13. [ ] Rebase/rework, replace, or close `v0.5.0_4-telegram-voice-ipfrag` from the resulting evidence; only then choose a package candidate and GUI scope.
 
-The likely first coding scope is the companion harness plus evidence schema, not a new OPNsense package. The first plugin source change should be the narrow external-probe runner, after the companion and control oracle are proven.
+The companion recipe plus evidence schema is complete without creating a new OPNsense package. The first plugin source change should be the narrow external-probe runner, after the fixed-reflector control and provider baseline are proven.
 
 ## Acceptance for Phase C tooling
 
 Phase C tooling is not complete until:
 
-- outer Telegram-iOS commit, tgcalls source commit, build inputs and produced artifact digests are immutable and recorded;
-- the TOS project uses Docker host networking without in-container DHCP/default-route mutation, and the exact `/32` route transaction restores its pre-state;
-- a fixed reflector passes on an independent unblocked path;
-- control capture is wire-equivalent to the known reflector fixture;
-- the provider baseline is measured against the same endpoint;
-- each candidate has isolated flow state and exact on-wire attribution;
-- semantic result classes are stored without promoting silence or arbitrary UDP replies to success;
-- cancellation/failure restores the exact initial Zapret2/firewall/service state;
-- no raw PCAP, peer tag, TURN credential, private address, source port, or external proxy endpoint is committed.
+- [x] outer Telegram-iOS commit, tgcalls source commit, build inputs and produced artifact digests are immutable and recorded;
+- [x] the running TOS project uses Docker host networking without in-container DHCP/default-route mutation;
+- [ ] the exact `/32` route transaction restores its recorded pre-state;
+- [ ] a fixed reflector passes on an independent unblocked path;
+- [ ] control capture is wire-equivalent to the known reflector fixture;
+- [ ] the provider baseline is measured against the same endpoint;
+- [ ] each candidate has isolated flow state and exact on-wire attribution;
+- [ ] semantic result classes are stored without promoting silence or arbitrary UDP replies to success;
+- [ ] cancellation/failure restores the exact initial Zapret2/firewall/service state;
+- [x] no raw PCAP, peer tag, TURN credential, private address, source port, or external proxy endpoint is committed in the current build/runtime evidence.
 
 ## Recorded concurrent normal Traffic Strategy
 

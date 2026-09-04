@@ -9,8 +9,8 @@
 - **Documentation/navigation index:** [`INDEX.md`](INDEX.md)
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
-**Updated:** 2026-09-03
-**Current handoff identity:** `v0.5.0_3` — Phase A/B complete; installed Zapret2 fragmentation capability confirmed; unpublished `_4` candidate paused; Phase C Telegram traffic-emulation oracle selected
+**Updated:** 2026-09-04
+**Current handoff identity:** `v0.5.0_3` — Phase A/B complete; unpublished `_4` candidate paused; Phase C companion build/runtime gate passed; fixed-reflector control is next
 
 ## Current identity
 
@@ -30,6 +30,8 @@
 Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_3.md`](verification/evidence/testing-publications/v0.5.0_3.md).
 
 Installed Zapret2 runtime pin: [`verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md`](verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md).
+
+Phase C companion build/runtime evidence: [`verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md`](verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md).
 
 Owner-live corrective evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md`](verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md).
 
@@ -81,22 +83,26 @@ Established live facts:
 - `v0.5.0_3` correctly emitted two zero16 fakes before every STUN request but restored no reply; runtime/lifecycle passed and provider effectiveness failed;
 - the same STUN-only profile left every Reflector Hello unchanged, so Phase B did not test any reflector-specific bypass;
 - the appliance runs Zapret2 `v1.0.4` at `2c21faa80e1acb71ddceb8b49176f266b7d33f05`, and native ordered/reverse IPv4 fragmentation is available;
+- the TOS 7 Docker-host companion is build-validated from `Telegram-iOS@6ad963e5b62d354da79040f388ae2b9132fb17b8` and its actual tgcalls gitlink `e3069322a3d1e16ecb11a5e302242e59ddd7f09e`;
+- the produced `tgcalls_cli` SHA-256 is `c2bd9e8b55d5542e4471154c832efc4cf0cdd483669dbeb747c706afbe53b11a`;
+- a five-second local P2P self-test established both peers, collected five bitrate records per side, reported non-zero BWE/no errors and exited 0;
+- that local result is a build/runtime PASS, not `MEDIA_PASS`: it did not use a real reflector, provider path, OPNsense or a candidate strategy;
 - offline packet transformation can prove only `WIRE_OK`; it cannot predict the provider response.
 
 The remote branch `v0.5.0_4-telegram-voice-ipfrag` at `3ecdd1b3326fe7655e1d7df9edd51808e2a68dc9` contains a prepared STUN-only ordered-position-8 candidate. It has no PR, exact-head CI, merge, package or live result. Preserve it as unique experimental work, but do not merge or publish it as-is. Phase C evidence decides whether it is rebased/reworked, replaced or rejected.
 
 ## Immediate next action
 
-Build the Phase C automatic oracle around official `TelegramMessenger/tgcalls` commit `78d07f3e46a4bb12b611ccc2816ff59ca63a83fb`:
+Use the build-validated companion to establish the fixed-reflector control epoch:
 
-1. create a reproducible Linux/WSL2 companion artifact outside the OPNsense package and record its digest;
-2. use `tgcalls_cli --mode reflector` with one fixed Telegram reflector `IP:596–599` and obtain `MEDIA_PASS` on an independently unblocked path;
-3. capture that control run and confirm wire equivalence to the real 40-byte Hello/retry/media framing;
-4. run a no-desync baseline through the blocked provider against the same endpoint;
-5. verify whether WAN-out IPFW sees the pre- or post-NAT source, then add a temporary exact-flow/exact-destination/exact-port runner with transactional cleanup;
-6. test reflector fragmentation in bounded order: position 8 ordered, position 8 reverse, then evidence-driven alternate positions; test fake-plus-fragment only after standalone families;
-7. add the correlated 28-byte TURN Allocate probe as a secondary oracle;
-8. repeat any media winner, then perform one final real remote-participant P2P-disabled call.
+1. fetch the current official reflector list and choose one explicit IPv4 endpoint plus one fixed port in `596–599`;
+2. with no lab route installed, record `ip route get <reflector-ip>` on TNAS and run one fresh `tgcalls_cli --mode reflector --reflector <ip>:<port> --duration 10` process;
+3. accept the endpoint as control only if both peers establish, both report non-zero BWE and the process exits 0 (`MEDIA_PASS`); otherwise classify silence/failure as `NO_REPLY_UNKNOWN` until another independent path proves the same endpoint;
+4. capture a successful control and confirm wire equivalence to the real 40-byte Hello/retry/media framing;
+5. add and remove one exact `<reflector-ip>/32` route through OPNsense, recording pre-state, routed state and restoration;
+6. run a no-desynchronization provider baseline through OPNsense against the same endpoint;
+7. only then verify IPFW/PF/NAT source attribution and add the exact-flow/exact-destination/exact-port strategy runner;
+8. test reflector fragmentation in bounded order: position 8 ordered, position 8 reverse, then evidence-driven alternate positions; add TURN as the secondary oracle and finish with a repeated winner plus one real call.
 
 Use the result classes `WIRE_OK`, `TURN_REPLY`, `REFLECTOR_READY`, `MEDIA_PASS`, `CALL_PASS`, `NO_REPLY_UNKNOWN`, `NETWORK_FAIL` and `RESTORE_FAILED` exactly as defined in the architecture document. A silent endpoint without a recent exact-endpoint control is inconclusive. An arbitrary UDP reply is not success. Audio without sustained UDP is not success.
 
