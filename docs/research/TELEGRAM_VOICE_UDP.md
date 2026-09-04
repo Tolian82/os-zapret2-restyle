@@ -1,6 +1,6 @@
 # Telegram voice / UDP DPI-bypass research
 
-**Status:** RESEARCH CURRENT · PHASE A/B COMPLETE · ZERO-FAKE NETWORK FAIL · RUNTIME PIN CONFIRMED · PHASE C EMULATION ORACLE SELECTED · `_4` PAUSED
+**Status:** RESEARCH CURRENT · PHASE A/B COMPLETE · ZERO-FAKE NETWORK FAIL · PHASE C COMPANION BUILD/RUNTIME PASS · FIXED-REFLECTOR CONTROL NEXT · `_4` PAUSED
 **Opened:** 2026-08-19
 **Research conclusion:** 2026-08-19
 **Phase A owner-live observation:** 2026-08-28
@@ -9,7 +9,8 @@
 **Ordered IPv4-fragmentation design:** 2026-09-02
 **Installed runtime pin:** Zapret2 `v1.0.4` / `2c21faa80e1acb71ddceb8b49176f266b7d33f05`
 **Phase C emulation design:** 2026-09-03
-**Updated:** 2026-09-03
+**Phase C companion build/runtime:** 2026-09-04
+**Updated:** 2026-09-04
 **Owner instruction:** Telegram voice/call traffic over UDP is the current selected research task.
 **Pinned starting `main`:** `62e9a62e484d7a983b9b3f91ec672bbe96f684f3`
 **Research-boundary merge:** `9bc225ea457583ffec696e393c8ba697798369f6`
@@ -39,6 +40,8 @@ The exact strategy was emitted correctly and still received no Telegram TURN rep
 The Linux/OpenWrt `50-stun4all` integration cannot be copied literally to OPNsense. Its important property is **kernel-side STUN signature filtering before NFQUEUE**. Zapret2 upstream explicitly documents that FreeBSD `ipfw` lacks raw-payload filtering. Passing all UDP through `dvtws2` merely to discover STUN would create a broad kernel/userspace interception path and is not acceptable as the default production design.
 
 **The project shape remains hybrid and evidence-first, but the next step is now an oracle rather than another package.** Offline replay can predict interception and exact wire transformation only. A standards-correlated TURN probe can prove a returned STUN path but not media. The official pinned `TelegramMessenger/tgcalls` CLI can create caller/callee instances with local signaling and route bidirectional WebRTC media through a real Telegram UDP reflector with TCP disabled. One final real P2P-disabled remote call remains the product gate.
+
+The companion build/runtime gate is now complete. The owner built `tgcalls_cli` from `Telegram-iOS@6ad963e5b62d354da79040f388ae2b9132fb17b8` with its actual tgcalls gitlink `e3069322a3d1e16ecb11a5e302242e59ddd7f09e`; the produced binary SHA-256 is `c2bd9e8b55d5542e4471154c832efc4cf0cdd483669dbeb747c706afbe53b11a`. A five-second local P2P self-test reached `Established` on both sides, collected five bitrate records per side, reported non-zero BWE and no errors, and exited 0. This proves the executable/runtime gate only. It is not `MEDIA_PASS` because no Telegram reflector, provider path, OPNsense rule or strategy participated.
 
 Do **not** make global UDP/443 blocking part of the Telegram Voice default. That is a generic QUIC suppression/fallback measure, can interfere with WebRTC/STUN/TURN using port 443, and current `youtubeUnblock` Telegram-call troubleshooting explicitly found overlapping QUIC-drop/STUN handling to be harmful unless separated.
 
@@ -518,6 +521,20 @@ Every negative provider result requires a recent independent unblocked control a
 
 The first reflector matrix is baseline, ordered position 8, reverse position 8, then evidence-driven alternate fragmentation positions. Fake-plus-fragment follows only after standalone families. Any winner is repeated on the same endpoint and at least two additional control-proven reflectors before the final real call.
 
+#### Phase C companion build/runtime result
+
+The TOS 7 companion uses Docker host networking and a complete outer Telegram-iOS build workspace rather than treating the standalone tgcalls Dockerfile as an independent context. The build-validated identities are:
+
+- Telegram-iOS `6ad963e5b62d354da79040f388ae2b9132fb17b8`;
+- tgcalls `e3069322a3d1e16ecb11a5e302242e59ddd7f09e`;
+- Ubuntu image `sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517`;
+- Bazel `8.4.2`;
+- `tgcalls_cli` SHA-256 `c2bd9e8b55d5542e4471154c832efc4cf0cdd483669dbeb747c706afbe53b11a`.
+
+Earlier source research used the later tgcalls commit `78d07f3e46a4bb12b611ccc2816ff59ca63a83fb`. It is 14 commits newer than the actual gitlink. The required native `p2p`/`reflector` modes, local signaling, UDP-only server configuration, generated audio and success gate already exist in `e306932...`; later additions are not required by the current oracle. Therefore the executable pin is the source actually built, while `78d07f...` remains later-source research only.
+
+Canonical recipe and full redacted evidence: [`2026-09-04-telegram-voice-companion-build-runtime-pass.md`](../verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md).
+
 ### Phase D — product GUI only after a strategy passes
 
 No GUI is authorized during Phase C. If a strategy reaches repeated `MEDIA_PASS` and final `CALL_PASS`, the product control belongs under **Settings**, not inside the existing Generic UDP controls. Keep the surface small, explain that it does not replace the TCP proxy path, show active scope/status, and avoid exposing raw repeat/fragment knobs without evidence.
@@ -632,10 +649,11 @@ Project/operator evidence:
 - Zapret2 Telegram slowdown discussion: <https://github.com/bol-van/zapret2/discussions/148>
 - Zapret2 MTProto/Telegram strategy discussion: <https://github.com/bol-van/zapret2/discussions/77>
 - Telegram `tgcalls` reflector hello implementation, pinned source: <https://github.com/TelegramMessenger/tgcalls/blob/2faee3b5524f54d56c91c2058c00e11c656a74b3/tgcalls/v2/ReflectorPort.cpp#L309-L360>
-- Telegram `tgcalls_cli` real-reflector harness, current research pin: <https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/CLAUDE.md#L105-L122>
-- Telegram `tgcalls_cli` UDP-only server, local signaling and result gate: <https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/tools/cli/main.cpp#L88-L132>
-- Telegram `tgcalls_cli` two-party reflector execution and exit contract: <https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/tools/cli/main.cpp#L342-L670>
-- Telegram official tgcalls container: <https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/Dockerfile>
+- Telegram-iOS outer build workspace, build-validated pin: <https://github.com/TelegramMessenger/Telegram-iOS/tree/6ad963e5b62d354da79040f388ae2b9132fb17b8>
+- Telegram `tgcalls_cli`, build-validated native harness and exit gate: <https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tools/cli/main.cpp>
+- Telegram reflector Hello/framing implementation at the build pin: <https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tgcalls/v2/ReflectorPort.cpp>
+- Telegram official reflector-list runner at the build pin: <https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tools/cli/run-test.sh>
+- Later tgcalls research delta, not the built executable: <https://github.com/TelegramMessenger/tgcalls/compare/e3069322a3d1e16ecb11a5e302242e59ddd7f09e...78d07f3e46a4bb12b611ccc2816ff59ca63a83fb>
 - Zapret2 v1.0.4 STUN detector, pinned source: <https://github.com/bol-van/zapret2/blob/2c21faa/nfq2/protocol.c#L1459-L1465>
 
 Community reports are evidence of observed deployments only; they do not override Telegram protocol documentation or current Zapret2 source/manual.
@@ -644,9 +662,9 @@ Community reports are evidence of observed deployments only; they do not overrid
 
 Follow [`TELEGRAM_VOICE_EMULATION_LAB.md`](../architecture/TELEGRAM_VOICE_EMULATION_LAB.md) in this order:
 
-1. pin/build the official tgcalls commit `78d07f3e46a4bb12b611ccc2816ff59ca63a83fb` as a reproducible Linux/WSL2 companion outside the plugin package and record its artifact digest;
-2. select one explicit current reflector `IP:596–599`, obtain `MEDIA_PASS` on an independently unblocked path, and capture its wire-equivalence ground truth;
-3. run the same endpoint through the blocked provider with no desynchronization;
+1. select one explicit current reflector `IP:596–599` and record the ordinary TNAS route to it;
+2. obtain `MEDIA_PASS` on an independently unblocked path with the build-validated companion, then capture its wire-equivalence ground truth;
+3. execute and restore the exact `/32` route through OPNsense, then run the same endpoint with no desynchronization;
 4. verify the PF/NAT/IPFW source tuple, then add a temporary exact-flow/exact-destination/exact-port IPFW/dvtws2 runner with exact restoration;
 5. test reflector position-8 ordered, position-8 reverse and only then evidence-driven alternate fragmentation positions;
 6. add the fresh-transaction 28-byte TURN Allocate probe and require a semantically correlated response;
