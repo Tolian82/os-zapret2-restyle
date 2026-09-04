@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1
-**Updated:** 2026-09-03
+**Updated:** 2026-09-04
 State-line scope: **`v0.5.x`**
 
 Direct orientation:
@@ -94,7 +94,8 @@ Authorities:
 - [current Phase C emulator/oracle architecture](architecture/TELEGRAM_VOICE_EMULATION_LAB.md);
 - [Phase A live observation](verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md);
 - [Phase B STUN baseline live result](verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md);
-- [installed Zapret2 runtime pin](verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md).
+- [installed Zapret2 runtime pin](verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md);
+- [Phase C companion build/runtime result](verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md).
 
 Established durable facts:
 
@@ -110,7 +111,12 @@ Established durable facts:
 - the provider mechanism remains unclassified: destination-IP/direction/routing policy, stateless payload filtering, fragment policy, relay policy or another blackhole remain possible;
 - the appliance runtime is Zapret2 `v1.0.4` at `2c21faa80e1acb71ddceb8b49176f266b7d33f05` and supports native ordered and reverse IPv4 fragmentation;
 - offline packet replay/transformation can predict exact wire output only; a control-proven live endpoint is required for a network verdict;
-- official `tgcalls_cli` can emulate caller/callee signaling locally and route bidirectional WebRTC media through a real Telegram UDP reflector with TCP disabled.
+- official `tgcalls_cli` can emulate caller/callee signaling locally and route bidirectional WebRTC media through a real Telegram UDP reflector with TCP disabled;
+- the selected TOS 7 companion uses Docker host networking and therefore shares the TNAS network identity/default route rather than receiving a per-container DHCP lease;
+- the companion is build-validated from outer `Telegram-iOS@6ad963e5b62d354da79040f388ae2b9132fb17b8` and its actual `tgcalls@e3069322a3d1e16ecb11a5e302242e59ddd7f09e` gitlink;
+- the build used Ubuntu image `sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517`, Bazel `8.4.2`, and produced `tgcalls_cli` SHA-256 `c2bd9e8b55d5542e4471154c832efc4cf0cdd483669dbeb747c706afbe53b11a`;
+- the five-second in-process P2P self-test reached `Established` on both sides, recorded five bitrate samples per side, reported non-zero BWE/no errors and exited 0;
+- that result closes only the companion build/runtime gate; it is not `MEDIA_PASS` and proves nothing yet about a real reflector, provider path, OPNsense or a DPI-bypass strategy.
 
 The remote branch `v0.5.0_4-telegram-voice-ipfrag` at `3ecdd1b3326fe7655e1d7df9edd51808e2a68dc9` is one commit ahead of its `1bdb3eccf3b96707d6c314a0c364ca14ac2a190c` base. It contains a STUN-only ordered-position-8 implementation but has no PR, exact-head CI, merge, package publication or live result. It is preserved as unique experimental work and must be reworked from the future Phase C evidence rather than merged as-is.
 
@@ -118,7 +124,9 @@ No production GUI, global STUN/all-Internet UDP interception, global UDP/443 dro
 
 ## Immediate next boundary
 
-Pin official `TelegramMessenger/tgcalls` commit `78d07f3e46a4bb12b611ccc2816ff59ca63a83fb` into a reproducible Linux/WSL2 companion artifact. Prove one fixed Telegram reflector `IP:596–599` on an independently unblocked path, then measure the same endpoint through the blocked provider.
+Select one current fixed Telegram reflector `IP:596–599` and use the build-validated companion to obtain an exact-endpoint control `MEDIA_PASS` on an independently unblocked path. Record the ordinary TNAS route before the run and capture the successful control for wire-equivalence analysis.
+
+Then add/remove one exact reflector `/32` route through OPNsense with recorded restoration, and measure the same endpoint through the blocked provider with no desynchronization.
 
 After the oracle is valid, verify the PF/NAT/IPFW source identity and add a narrow temporary forwarded-flow IPFW/dvtws2 runner scoped to one reflector address and one port, plus the exact observable probe source tuple where available. Test the reflector family in this order: baseline, ordered position 8, reverse position 8, then evidence-driven alternate positions. Add a transaction-correlated 28-byte TURN Allocate probe as a secondary oracle.
 
