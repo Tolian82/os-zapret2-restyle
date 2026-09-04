@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Engineering memory index
 
 **Status:** NAVIGATION / INTEGRITY MAP · NOT A CURRENT-STATE NARRATIVE
-**Updated:** 2026-09-03
+**Updated:** 2026-09-04
 
 ## Level 1 — mandatory cold start
 
@@ -22,7 +22,8 @@ Read completely in this order (`DOC-016`):
 
 - **[`v0.5.x working ledger`](history/current/v0.5.x.md)** — current-line chronology and release handoff.
 - **[`Telegram voice / UDP DPI-bypass research`](research/TELEGRAM_VOICE_UDP.md)** — protocol research, Phase A/B evidence interpretation, failed STUN zero-fake baseline and the transition to Phase C emulation.
-- **[`Telegram Voice emulation/oracle architecture`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md)** — exact fixtures, pinned official tgcalls companion, live-oracle hierarchy, candidate order, result taxonomy and implementation handoff.
+- **[`Telegram Voice emulation/oracle architecture`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md)** — exact fixtures, build-validated official tgcalls companion, live-oracle hierarchy, candidate order, result taxonomy and implementation handoff.
+- **[`TOS Telegram Voice companion recipe`](../tools/telegram-voice-lab/compose.tos.yml)** — digest-pinned host-network build/runtime source outside the OPNsense package.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) / [`architecture/`](architecture/) — current technical architecture.
 - [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md) — Strategy Lab architecture entry point.
 - [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md) — accepted production execution model.
