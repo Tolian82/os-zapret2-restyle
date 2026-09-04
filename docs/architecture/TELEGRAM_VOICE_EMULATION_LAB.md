@@ -1,7 +1,7 @@
 # Telegram Voice traffic emulation and strategy oracle
 
-**Status:** CURRENT DESIGN · PHASE C SELECTED · IMPLEMENTATION NOT STARTED
-**Updated:** 2026-09-03
+**Status:** CURRENT DESIGN · PHASE C ENVIRONMENT SELECTED · COMPANION BUILD PIN NOT YET VALIDATED
+**Updated:** 2026-09-04
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
 **Phase A evidence:** [`2026-08-28-telegram-voice-phase-a-live-observation.md`](../verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md)
@@ -49,6 +49,38 @@ Owner-live Phase A/B topology:
 The concurrent Telegram UDP profile covered only destination ports `80,443,5222,8888` and selected `mtproto`. The observed voice candidates used ports `596–599` and `1400`, so those call packets did not enter that ordinary UDP rule. The YouTube and user TLS profiles were TCP-only. The concurrent TCP proxy path is relevant because it explains audible fallback, but the ordinary strategy does not explain the observed voice-UDP failure or the Phase B helper packets.
 
 A separate generic STUN exchange to `141.101.90.1:3478` was bidirectional on the same WAN environment. This proves that UDP and STUN-shaped traffic were not universally blocked. It does not prove that a Telegram destination is reachable, which is why a control must use the exact same Telegram endpoint as the provider-path candidate epoch.
+
+## Phase C companion placement on TOS 7
+
+Owner decision recorded on 2026-09-04: the companion will run in TOS 7 Container Manager using the built-in network named `host` (Docker `host` driver). Do not substitute `macvlan` or `ipvlan` in this phase.
+
+Known host environment:
+
+- TerraMaster TOS 7 on `linux/amd64`;
+- Docker Engine 29.4.0;
+- Docker Compose 5.1.2;
+- OPNsense is a VM on the same TNAS and is directly reachable on the shared LAN.
+
+The host driver has one important operational consequence: the container shares the TNAS network namespace, source address, interface MAC and default route. It does not acquire a separate DHCP lease or use a per-container DHCP reservation. Therefore:
+
+- do not run a DHCP client in the container;
+- do not change an address or the default route from inside the container;
+- do not grant `NET_ADMIN` or `--privileged` merely to configure networking;
+- keep the TNAS default route unchanged;
+- expect OPNsense and captures to identify the probe by the TNAS source address, not by a dedicated companion address.
+
+Route only the selected fixed oracle endpoint through OPNsense for a provider-path epoch. The operator-side lifecycle is:
+
+1. with no lab route installed, run `ip route get <reflector-ip>` and record the existing path;
+2. if that path is independently proven unblocked, use it for the exact-endpoint control run;
+3. add one temporary `<reflector-ip>/32` route via the OPNsense LAN address on the TNAS LAN interface;
+4. run `ip route get <reflector-ip>` again and require it to resolve through OPNsense;
+5. execute one isolated candidate epoch;
+6. remove only the exact route created by the lab and prove that the original route is restored.
+
+Because a host route applies to every TNAS process contacting that destination, no unrelated TNAS workload may use the selected reflector during an epoch. The harness must record the pre-state, whether it actually created the route, the post-add route, the delete result and the restored route. A failed restore is `RESTORE_FAILED`.
+
+This host-mode route switch provides an A/B transport selector without changing the TNAS default gateway. It does not by itself make the ordinary path an independent control; that status still requires a fresh `MEDIA_PASS` against the same reflector IP and port.
 
 ## Captured protocol fixtures
 
@@ -102,7 +134,7 @@ A captured Hello is a format/timing fixture, not a reusable live credential. Bli
 
 ## Authoritative reflector emulator
 
-Use the official [`TelegramMessenger/tgcalls`](https://github.com/TelegramMessenger/tgcalls) CLI pinned to commit `78d07f3e46a4bb12b611ccc2816ff59ca63a83fb`.
+Use the official [`TelegramMessenger/tgcalls`](https://github.com/TelegramMessenger/tgcalls) CLI as the protocol implementation authority. The research/source pin remains commit `78d07f3e46a4bb12b611ccc2816ff59ca63a83fb`.
 
 Why it is the current authority:
 
@@ -121,10 +153,25 @@ Pinned source:
 - [CLI purpose and reflector invocation](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/CLAUDE.md#L105-L122);
 - [UDP-only reflector server and 440 Hz source](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/tools/cli/main.cpp#L88-L132);
 - [local peer tags, signaling bridge, two instances and exit gate](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/tools/cli/main.cpp#L342-L670);
-- [official Linux container build](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/Dockerfile);
+- [upstream container recipe](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/Dockerfile), which requires an outer Telegram-iOS build workspace;
 - [official reflector-list runner](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/tools/cli/run-test.sh);
 - [reflector Hello/retry logic](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/tgcalls/v2/ReflectorPort.cpp#L317-L370);
 - [reflector framing and receive validation](https://github.com/TelegramMessenger/tgcalls/blob/78d07f3e46a4bb12b611ccc2816ff59ca63a83fb/tgcalls/v2/ReflectorPort.cpp#L596-L770).
+
+### Reproducible companion build gate
+
+The Dockerfile stored in the standalone tgcalls repository is not a standalone tgcalls build context. Its commands write Bazel into `build-input/` and build the target `//submodules/TgVoipWebrtc/tgcalls/tools/cli:tgcalls_cli`; both paths belong to the outer Telegram-iOS workspace. A checkout containing only `TelegramMessenger/tgcalls` cannot satisfy that recipe.
+
+Consequently, `78d07f...` is currently a research/source pin, not yet a proven image pin. Before any TOS project is called reproducible, the implementation must:
+
+1. select and record one exact outer Telegram-iOS commit;
+2. record the exact tgcalls gitlink/overlay commit used inside it;
+3. initialize or otherwise pin every required outer dependency;
+4. build the CLI from that complete context on `linux/amd64`;
+5. verify the resulting CLI still has the required UDP-only reflector mode and exit gate;
+6. record the outer commit, tgcalls commit, Dockerfile blob, Bazel version and checksum, image digest and binary digest.
+
+Do not use an unversioned third-party image and do not publish a TOS Compose file pointing at a nonexistent upstream image. The first artifact can be built on TNAS, but only after this gate is resolved.
 
 The first implementation should use a reproducible Linux container/WSL2 companion behind OPNsense. Do not add Bazel, WebRTC, an Ubuntu image, or the `tgcalls` runtime to the OPNsense plugin package.
 
@@ -304,16 +351,18 @@ Only this row is `CALL_PASS`. Audio without sustained UDP remains fallback evide
 
 ## Implementation sequence
 
-1. Pin and package a reproducible companion build from tgcalls commit `78d07f3e46a4bb12b611ccc2816ff59ca63a83fb`; record build inputs and image/binary digest.
-2. Obtain one unblocked-control `MEDIA_PASS` against a fixed reflector and capture LAN/WAN ground truth.
-3. Compare the generated Hello size, marker, retry cadence, endpoint ports and later media framing with the real-call Phase A fixture.
-4. Run a provider-path no-desync baseline against the same endpoint.
-5. Add the narrowly scoped forwarded-flow IPFW/dvtws2 candidate runner with verified pre/post-NAT attribution and transactional cleanup.
-6. Add ordered/reverse position-8 reflector fragmentation and the semantic result taxonomy.
-7. Execute the bounded matrix, repeating winners as specified.
-8. Add the router-native semantic TURN probe and use it as a secondary discriminator.
-9. Run one final real P2P-disabled remote Telegram call.
-10. Rebase/rework, replace, or close `v0.5.0_4-telegram-voice-ipfrag` from the resulting evidence; only then choose a package candidate and GUI scope.
+1. Resolve the reproducible build gate: pin an outer Telegram-iOS workspace plus its exact tgcalls source, then record image and binary digests.
+2. Create the TOS 7 project with `network_mode: host`; do not add DHCP, address, default-route or `NET_ADMIN` setup to the container.
+3. Implement and dry-run the owner-side exact-`/32` route transaction, including pre-state and rollback verification.
+4. Obtain one unblocked-control `MEDIA_PASS` against a fixed reflector and capture LAN/WAN ground truth.
+5. Compare the generated Hello size, marker, retry cadence, endpoint ports and later media framing with the real-call Phase A fixture.
+6. Route that same reflector through OPNsense and run a provider-path no-desync baseline.
+7. Add the narrowly scoped forwarded-flow IPFW/dvtws2 candidate runner with verified pre/post-NAT attribution and transactional cleanup.
+8. Add ordered/reverse position-8 reflector fragmentation and the semantic result taxonomy.
+9. Execute the bounded matrix, repeating winners as specified.
+10. Add the router-native semantic TURN probe and use it as a secondary discriminator.
+11. Run one final real P2P-disabled remote Telegram call.
+12. Rebase/rework, replace, or close `v0.5.0_4-telegram-voice-ipfrag` from the resulting evidence; only then choose a package candidate and GUI scope.
 
 The likely first coding scope is the companion harness plus evidence schema, not a new OPNsense package. The first plugin source change should be the narrow external-probe runner, after the companion and control oracle are proven.
 
@@ -321,7 +370,8 @@ The likely first coding scope is the companion harness plus evidence schema, not
 
 Phase C tooling is not complete until:
 
-- tgcalls source commit and produced artifact digest are immutable and recorded;
+- outer Telegram-iOS commit, tgcalls source commit, build inputs and produced artifact digests are immutable and recorded;
+- the TOS project uses Docker host networking without in-container DHCP/default-route mutation, and the exact `/32` route transaction restores its pre-state;
 - a fixed reflector passes on an independent unblocked path;
 - control capture is wire-equivalent to the known reflector fixture;
 - the provider baseline is measured against the same endpoint;
