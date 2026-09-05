@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Engineering memory index
 
 **Status:** NAVIGATION / INTEGRITY MAP · NOT A CURRENT-STATE NARRATIVE
-**Updated:** 2026-09-04
+**Updated:** 2026-09-05
 
 ## Level 1 — mandatory cold start
 
@@ -22,8 +22,8 @@ Read completely in this order (`DOC-016`):
 
 - **[`v0.5.x working ledger`](history/current/v0.5.x.md)** — current-line chronology and release handoff.
 - **[`Telegram voice / UDP DPI-bypass research`](research/TELEGRAM_VOICE_UDP.md)** — protocol research, Phase A/B evidence interpretation, failed STUN zero-fake baseline and the transition to Phase C emulation.
-- **[`Telegram Voice emulation/oracle architecture`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md)** — exact fixtures, build-validated official tgcalls companion, live-oracle hierarchy, candidate order, result taxonomy and implementation handoff.
-- **[`TOS Telegram Voice companion recipe`](../tools/telegram-voice-lab/compose.tos.yml)** — digest-pinned host-network build/runtime source outside the OPNsense package.
+- **[`Telegram Voice emulation/oracle architecture`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md)** — fixed-reflector control, host-only exact-route topology, temporary OPNsense-console execution, candidate order and result taxonomy.
+- **[`TOS Telegram Voice companion recipe`](../tools/telegram-voice-lab/compose.tos.yml)** — digest-pinned host-network build/runtime/control source; provider epochs use a temporary exact `/32` route through OPNsense.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) / [`architecture/`](architecture/) — current technical architecture.
 - [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md) — Strategy Lab architecture entry point.
 - [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md) — accepted production execution model.
@@ -33,6 +33,7 @@ Read completely in this order (`DOC-016`):
 - [`USER_GUIDE_STRATEGY_LAB.md`](USER_GUIDE_STRATEGY_LAB.md) — user-facing Strategy Lab guide.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributor entry points.
 - [`SECURITY.md`](SECURITY.md) — security reporting/reference.
+- [`2026-09-05 fixed-reflector control`](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md) — exact-endpoint `MEDIA_PASS` and host-only routing correction.
 
 ## Level 3 — completed version-line archives
 
