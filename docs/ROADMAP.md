@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
 **Status:** CURRENT · COMPLETE CONCISE PLAN
-**Updated:** 2026-09-05
+**Updated:** 2026-09-20
 
 - Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - Exact handoff: [`START_HERE.md`](START_HERE.md)
@@ -79,31 +79,31 @@ Owner-live evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-own
 
 The stable Pages/pkg repository remains on `v0.5.0_1`; `_2` was not automatically promoted.
 
-## Telegram voice / UDP DPI-bypass — PHASE C TEMPORARY CONSOLE ORACLE
+## Telegram voice / UDP DPI-bypass — PHASE C WINDOWS/ANDROID ORACLE
 
 Owner-selected authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
 
 Current architecture: [`architecture/TELEGRAM_VOICE_EMULATION_LAB.md`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md).
 
 - [x] complete Phase A/B observation and zero-fake runtime/network interpretation
-- [x] pin Zapret2 `v1.0.4` and preserve unpublished `_4` work
+- [x] preserve historical Zapret2 v1.0.4 runtime evidence and unpublished `_4` work
 - [x] build/digest-pin the TOS/Linux `tgcalls_cli` companion
 - [x] pass the local P2P build/runtime gate
-- [x] select fixed current endpoint `91.108.13.10:596`
-- [x] obtain exact-endpoint control `MEDIA_PASS` through TNAS gateway `192.168.1.140`
-- [x] establish that Docker `host` has no independent container IP/MAC
-- [x] retain only the existing TOS/Docker `host` network by owner instruction
-- [x] reject GUI and permanent Telegram Voice laboratory integration
-- [ ] establish temporary key-only SSH command execution from OPNsense to TNAS
-- [ ] transact `91.108.13.10/32` on TNAS through `192.168.1.2`, with exact restoration to `192.168.1.140`
-- [ ] run the same endpoint through OPNsense with no desynchronization and capture LAN/WAN truth
-- [ ] use temporary, non-packaged OPNsense-console scripts for exact-flow/exact-endpoint candidates
-- [ ] test reflector fragmentation: position 8 ordered, position 8 reverse, then evidence-driven alternates
-- [ ] add correlated TURN Allocate only as a secondary oracle
-- [ ] repeat any winner and complete one final remote P2P-disabled real call
-- [ ] remove temporary SSH/route/scripts, archive evidence and decide `_4`
+- [x] record historical `91.108.13.10:596` reflector `MEDIA_PASS`
+- [x] establish Docker `host` topology and reject permanent GUI/lab integration
+- [x] audit current Windows/Android reflector-network source: Windows pin `24694f64...`, Android audited network files matching that reference
+- [x] retain qualified CLI harness `e306932...` with narrow reflector-path compatibility rather than pretending the older production pin contains the CLI
+- [x] record owner topology correction: `.140` and `.2` both precede MTS/MGTS DPI; `.140` is not an independent control
+- [x] run v1.0.4 reflector fragmentation matrix through `.2`: position 8 ordered/reverse and ordered 16/24/32; on-wire correct, no reflector reply/media establishment
+- [x] record owner upgrade to Zapret2 `v1.0.5.2`
+- [ ] refresh/start TOS companion and verify `source-provenance.txt`
+- [ ] requalify required Zapret2 v1.0.5.2 Lua/desync primitives on the live appliance
+- [ ] select a current reflector and run a fresh no-desynchronization baseline through `192.168.1.2`
+- [ ] continue bounded post-fragment candidate families only after that baseline
+- [ ] repeat any useful result and complete one final remote P2P-disabled real call
+- [ ] remove temporary runtime/scripts and archive closeout evidence
 
-Phase C control evidence: [`verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md`](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md).
+Current source-parity/live-matrix evidence: [`verification/evidence/2026-09-20-telegram-voice-win-android-source-parity.md`](verification/evidence/2026-09-20-telegram-voice-win-android-source-parity.md).
 
 No GUI, permanent lab controller/API/daemon, Generic UDP semantic change or Telegram Voice lab package subsystem belongs to this work. Package identity remains `0.5.0_3`.
 
@@ -132,6 +132,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**From the OPNsense console, transact the control-proven endpoint `/32` on TNAS through `192.168.1.2`, measure the no-desynchronization baseline, then run only temporary bounded candidates with exact restoration.** Keep Docker `host`, add no GUI or permanent laboratory code, and do not publish `_4` before evidence decides its fate.
+**Requalify the installed Zapret2 `v1.0.5.2`, select a current reflector, and measure a fresh no-desynchronization baseline through `192.168.1.2`; then continue only with bounded candidates and exact restoration.** Keep Docker `host`, do not use `.140` as an independent control, add no GUI/permanent laboratory code, and do not publish `_4` before evidence decides its fate.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
