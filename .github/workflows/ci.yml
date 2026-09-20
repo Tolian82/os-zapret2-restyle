@@ -198,6 +198,9 @@ jobs:
       - name: Test Telegram Voice Phase B scoped STUN PoC
         run: sh scripts/test-telegram-voice-phase-b.sh
 
+      - name: Test Telegram Voice laboratory provenance
+        run: sh scripts/test-telegram-voice-lab.sh
+
       - name: Test Strategy Lab corrective matrix
         run: sh scripts/test-strategy-lab-corrective-matrix.sh
 

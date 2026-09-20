@@ -1,7 +1,7 @@
 # Telegram Voice traffic emulation and strategy oracle
 
-**Status:** CURRENT TEMPORARY DESIGN · FIXED-REFLECTOR CONTROL MEDIA_PASS · HOST `/32` ROUTE BASELINE NEXT
-**Updated:** 2026-09-05
+**Status:** CURRENT TEMPORARY DESIGN · WINDOWS/ANDROID REFLECTOR PARITY RECORDED · ZAPRET2 v1.0.5.2 REQUALIFICATION NEXT
+**Updated:** 2026-09-20
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
 **Phase A evidence:** [`2026-08-28-telegram-voice-phase-a-live-observation.md`](../verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md)
@@ -34,7 +34,7 @@ The selected design is a three-tier live oracle supported by an offline wire pre
 
 Tier 2 is the primary automatic strategy oracle. Tier 1 is a fast discriminator and diagnostic probe. Tier 3 is the final acceptance row, not the search loop.
 
-The companion has passed its local gate and one real fixed-reflector control. Endpoint `91.108.13.10:596` reached `MEDIA_PASS` through TNAS gateway `192.168.1.140`. This validates the endpoint/harness, not the OPNsense/provider path. The next gate is the same endpoint after one temporary exact `/32` route through OPNsense `192.168.1.2`.
+The companion has passed its local gate and historically reached `MEDIA_PASS` against endpoint `91.108.13.10:596`. That 2026-09-05 run used TNAS gateway `192.168.1.140` and remains valid endpoint/harness evidence for that epoch. The owner later clarified that both `.140` and OPNsense `192.168.1.2` are upstream of the same MTS/MGTS DPI, so `.140` is **not** an independent DPI-free control and must not be used as one. Current research uses the `.2` path.
 
 The previous plan to publish and immediately live-test one STUN-only ordered-fragment candidate is paused. The remote branch `v0.5.0_4-telegram-voice-ipfrag` at `3ecdd1b3326fe7655e1d7df9edd51808e2a68dc9` contains one prepared candidate, but it has no PR, exact-head CI, merge, package publication, or owner-live result. It must not be merged as-is. After Phase C evidence, it will be rebased/reworked, replaced, or rejected.
 
@@ -58,7 +58,7 @@ A separate generic STUN exchange to `141.101.90.1:3478` was bidirectional on the
 
 Owner decision: retain the existing TOS/Docker network named `host` and use no other Docker network for this experiment.
 
-Docker host mode shares the TNAS network namespace. The container has no independent IP address, MAC address, DHCP lease or default route. Its packets use the TNAS host identity. The 2026-09-05 control therefore appeared as source `192.168.1.100` and followed gateway `192.168.1.140`.
+Docker host mode shares the TNAS network namespace. The container has no independent IP address, MAC address, DHCP lease or default route. Its packets use the TNAS host identity. The historical 2026-09-05 run appeared as source `192.168.1.100` and followed gateway `192.168.1.140`. That route is recorded as history only; it is not a current control criterion.
 
 Consequences:
 
@@ -68,14 +68,7 @@ Consequences:
 - changing default-gateway data for the visible MAC changes the TNAS host path, affecting all host-network workloads;
 - do not change the TNAS default route for this temporary experiment.
 
-The accepted provider-path selector is one destination-specific `/32` route on TNAS. It may be supplied by the owner's DHCP policy or installed explicitly for a bounded epoch, but its effective route and restoration must be proved:
-
-1. record `ip route get <reflector-ip>`;
-2. add only `<reflector-ip>/32 via 192.168.1.2` on `ovs_eth1`;
-3. require the selected route before starting the process;
-4. run one isolated epoch;
-5. remove only the route owned by the epoch;
-6. require byte-for-byte semantic restoration of the original route.
+The selected provider path is now `192.168.1.2`. Before each epoch, require `ip route get <reflector-ip>` on TNAS to show the intended route through `.2`. Do not switch to `.140` for control comparison. If a temporary route mutation is ever required, it remains bounded to the exact reflector `/32` and must be semantically restored, but no route mutation is required merely to reproduce the current `.2` baseline.
 
 The test process is launched from the OPNsense console over temporary key-only SSH to TNAS, using `docker exec tgvoice-lab ...`. This keeps all repeated operator interaction on OPNsense without adding a GUI or permanent service.
 
@@ -133,27 +126,32 @@ A captured Hello is a format/timing fixture, not a reusable live credential. Bli
 
 ## Authoritative reflector emulator
 
-Use the official [`TelegramMessenger/tgcalls`](https://github.com/TelegramMessenger/tgcalls) CLI as the protocol implementation authority. The build-validated executable pin is `e3069322a3d1e16ecb11a5e302242e59ddd7f09e`, selected by the pinned outer Telegram-iOS workspace `6ad963e5b62d354da79040f388ae2b9132fb17b8`.
+The laboratory separates **client source provenance** from the **CLI harness build pin**.
 
-Why it is the current authority:
+Current public Windows/Android reflector provenance, audited on 2026-09-20:
+
+- Telegram Desktop source head `4d4da471fbee771c10e173a83c003ba1728989f1` pins `Telegram/ThirdParty/tgcalls` to `24694f64b03e301ec2c90792566046e61a2c4967`;
+- Telegram Android source head `9552e5541e1274b9557c9832b204dbfcaf44b3dc` vendors `ReflectorPort.cpp`, `NativeNetworkingImpl.cpp`, and `EncryptedConnection.cpp` byte-for-byte identical to the same upstream `24694f64...` source for the reflector/network path.
+
+The qualified official CLI harness remains `TelegramMessenger/tgcalls@e3069322a3d1e16ecb11a5e302242e59ddd7f09e`. The Windows production pin predates the official `tools/cli` testbench, so checking out `24694f64...` cannot by itself build the same oracle.
+
+A focused source compare establishes the narrow compatibility used here: for a valid 16-byte CLI-generated peer tag, the newer `ReflectorPort.cpp` follows the same reflector tag/Hello path; the relevant `NativeNetworkingImpl.cpp` delta is whitespace only; `EncryptedConnection.cpp` is unchanged. Therefore the existing qualified binary remains the reflector-path wire/media oracle for the current Windows/Android protocol. This does **not** claim full equivalence of every client engine state transition or signaling experiment.
+
+The outer Telegram-iOS checkout remains only the reproducible Linux/Bazel/WebRTC build workspace for the existing binary; it is not the client-version authority.
+
+Why the CLI remains useful:
 
 - it runs caller and callee `tgcalls` instances in one process;
 - signaling is bridged locally, so no Telegram account or Telegram API session is required;
 - reflector mode routes both instances through a real Telegram UDP reflector;
-- it generates paired random peer tags and a shared encryption key;
+- it generates paired random 16-byte peer tags and a shared encryption key;
 - it generates 440 Hz audio frames with the project fake audio device;
-- reflector servers are configured with `isTurn=true` and `isTcp=false`, so a successful run cannot be masked by the owner's TCP/HTTP-proxy fallback;
+- reflector servers are configured with `isTurn=true` and `isTcp=false`, so a successful run cannot be masked by a TCP proxy fallback;
 - exit status 0 requires a call to reach Established, statistics to be collected for both sides, and non-zero bandwidth estimation on both sides.
 
-Current limitation: the renderer discards received audio. Exit 0 proves bidirectional media transport and WebRTC state, not waveform identity or human-audible quality. The result name must therefore be `MEDIA_PASS`, not `AUDIO_PASS`.
+Current limitation: the renderer discards received audio. Exit 0 proves bidirectional media transport and WebRTC state, not waveform identity or human-audible quality. The result name remains `MEDIA_PASS`, not `AUDIO_PASS`.
 
-Build-validated source:
-
-- [outer Telegram-iOS workspace](https://github.com/TelegramMessenger/Telegram-iOS/tree/6ad963e5b62d354da79040f388ae2b9132fb17b8);
-- [UDP-only reflector server, generated audio, local signaling and exit gate](https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tools/cli/main.cpp);
-- [official reflector-list runner](https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tools/cli/run-test.sh);
-- [reflector Hello/retry and framing implementation](https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tgcalls/v2/ReflectorPort.cpp);
-- [later research commit](https://github.com/TelegramMessenger/tgcalls/compare/e3069322a3d1e16ecb11a5e302242e59ddd7f09e...78d07f3e46a4bb12b611ccc2816ff59ca63a83fb), retained as source research but not claimed as the built executable.
+Source-parity evidence: [`2026-09-20-telegram-voice-win-android-source-parity.md`](../verification/evidence/2026-09-20-telegram-voice-win-android-source-parity.md).
 
 ### Reproducible companion build gate — passed
 
@@ -163,13 +161,14 @@ Recorded build identity:
 
 | Item | Immutable value |
 |---|---|
-| Telegram-iOS | `6ad963e5b62d354da79040f388ae2b9132fb17b8` |
-| tgcalls | `e3069322a3d1e16ecb11a5e302242e59ddd7f09e` |
+| Linux build workspace | `Telegram-iOS@6ad963e5b62d354da79040f388ae2b9132fb17b8` |
+| CLI harness tgcalls | `e3069322a3d1e16ecb11a5e302242e59ddd7f09e` |
+| Windows/Android reflector-network reference | `24694f64b03e301ec2c90792566046e61a2c4967` |
 | Ubuntu image | `sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517` |
 | Bazel | `8.4.2`, SHA-256 `4dc8e99dfa802e252dac176d08201fd15c542ae78c448c8a89974b6f387c282c` |
 | `tgcalls_cli` | SHA-256 `c2bd9e8b55d5542e4471154c832efc4cf0cdd483669dbeb747c706afbe53b11a` |
 
-The canonical host-network recipe is [`tools/telegram-voice-lab/compose.tos.yml`](../../tools/telegram-voice-lab/compose.tos.yml). It pins the exact Ubuntu digest and records the bounded Linux/OpenH264/WebRTC/CRC32C/FFmpeg/header fixes needed by this outer workspace. The full build evidence and recipe checksums are in [`2026-09-04-telegram-voice-companion-build-runtime-pass.md`](../verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md).
+The canonical host-network recipe is [`tools/telegram-voice-lab/compose.tos.yml`](../../tools/telegram-voice-lab/compose.tos.yml). It pins the exact Ubuntu digest, records the bounded Linux/OpenH264/WebRTC/CRC32C/FFmpeg/header fixes needed by the build workspace, and emits `source-provenance.txt` with separate harness and Windows/Android identities. The full build evidence and recipe checksums are in [`2026-09-04-telegram-voice-companion-build-runtime-pass.md`](../verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md).
 
 The owner then ran a five-second `--mode p2p` self-test. Both sides reached `Established` at 0.021 seconds, each produced five bitrate records, BWE was non-zero, no error was reported, and the process exited 0. This is the accepted local build/runtime gate only. Changing either source pin, the image digest, or the recorded build recipe requires a new binary digest and repeat qualification.
 
@@ -205,13 +204,13 @@ This corrects the current Generic UDP contract, which treats any non-empty reply
 For one search epoch:
 
 1. select one explicit current reflector `IP:port`;
-2. require a recent control `MEDIA_PASS` on the ordinary TNAS path;
-3. from the OPNsense console, record the TNAS route over SSH;
-4. install one temporary exact reflector `/32` route via OPNsense `192.168.1.2`;
-5. require the route change, then start a fresh remote `docker exec` process;
-6. record CLI result, OPNsense IPFW counters, LAN/WAN evidence and cleanup;
-7. remove the exact route and prove the original route is restored;
-8. repeat any winner with fresh process/flow state.
+2. require TNAS `ip route get <reflector-ip>` to use OPNsense `192.168.1.2`;
+3. start a fresh `docker exec` process;
+4. record CLI result, OPNsense IPFW counters, WAN evidence and cleanup;
+5. repeat a candidate only with fresh process/flow state;
+6. if any temporary route/runtime mutation is introduced, prove exact semantic restoration before accepting the epoch.
+
+The historical `.140` path is not an independent control path and is not part of the acceptance criterion.
 
 Do not use random reflector selection during comparison.
 
@@ -267,7 +266,7 @@ Use these names consistently:
 | `MEDIA_PASS` | both tgcalls sides establish, both collect stats, both have non-zero BWE, exit 0 |
 | `CALL_PASS` | final real remote-participant Telegram call passes the selected packet and user-visible checks |
 | `NO_REPLY_UNKNOWN` | no valid reply and the same endpoint has not passed a fresh independent control |
-| `NETWORK_FAIL` | endpoint passed fresh control, candidate is `WIRE_OK`, but the provider-path oracle failed |
+| `NETWORK_FAIL` | candidate is `WIRE_OK`, the provider-path oracle failed, and endpoint liveness is independently established by evidence that does not rely on `.140` as a DPI-free control |
 | `RESTORE_FAILED` | temporary runtime/firewall/profile state was not semantically restored; this overrides other results |
 
 Do not collapse `TURN_REPLY` into `MEDIA_PASS`, or `MEDIA_PASS` into `CALL_PASS`.
@@ -276,9 +275,9 @@ Do not collapse `TURN_REPLY` into `MEDIA_PASS`, or `MEDIA_PASS` into `CALL_PASS`
 
 A silent UDP endpoint is ambiguous. It may be blocked, offline, rate-limited, stale, or rejecting the probe.
 
-Before classifying a provider-path candidate:
+Before classifying a provider-path candidate causally as a provider/network failure:
 
-- the exact reflector `IP:port` must have a recent `MEDIA_PASS` from an independently unblocked path;
+- the exact reflector `IP:port` must have recent independent liveness evidence; the historical `.140` route does not satisfy this by itself because it crosses the same provider DPI;
 - a TURN endpoint should have a recent correlated reply on a control path where practical;
 - endpoint, port, tgcalls commit, probe command, and observation window must match;
 - if the control also fails, discard the epoch and report `NO_REPLY_UNKNOWN`, not strategy failure.
@@ -342,28 +341,27 @@ Only this row is `CALL_PASS`. Audio without sustained UDP remains fallback evide
 ## Implementation sequence
 
 1. [x] Build/digest-pin the companion and pass its local runtime gate.
-2. [x] Select current endpoint `91.108.13.10:596`.
-3. [x] Obtain exact-endpoint control `MEDIA_PASS` through `192.168.1.140`.
-4. [x] Confirm host mode has no per-container IP/MAC and retain `host` by owner instruction.
-5. [x] Select temporary OPNsense-console orchestration; reject GUI/permanent laboratory code.
-6. [ ] Establish temporary key-only SSH command execution from OPNsense to TNAS.
-7. [ ] Dry-run the exact `/32` add/check/delete/restore transaction through `192.168.1.2`.
-8. [ ] Run the no-desynchronization fixed-endpoint baseline with LAN/WAN capture and source attribution.
-9. [ ] Stage temporary exact-flow IPFW/dvtws2 candidate commands outside installed plugin paths.
-10. [ ] Test ordered/reverse position-8 reflector fragmentation, then evidence-driven alternates.
-11. [ ] Add semantic TURN only as a secondary discriminator.
-12. [ ] Repeat a winner and perform one final P2P-disabled real call.
-13. [ ] Remove temporary route, SSH and runner artifacts; archive evidence and decide `_4`.
+2. [x] Record historical fixed-endpoint `MEDIA_PASS` for `91.108.13.10:596`.
+3. [x] Confirm Docker host mode and retain the existing `host` network.
+4. [x] Audit current Windows/Android reflector-network source and record the common reference pin/parity boundary.
+5. [x] Run the v1.0.4 reflector fragmentation matrix through `192.168.1.2`: position 8 ordered/reverse plus ordered 16/24/32; all transformed on wire but obtained no reflector reply.
+6. [x] Record owner topology correction: `.140` and `.2` both precede MTS/MGTS DPI; `.140` is not an independent control.
+7. [ ] Requalify the needed Zapret2 v1.0.5.2 desync primitives on the live appliance.
+8. [ ] Select a current reflector endpoint and run a fresh no-desynchronization baseline through `192.168.1.2`.
+9. [ ] Continue with bounded candidate families only after the v1.0.5.2/runtime/endpoint baseline.
+10. [ ] Repeat any useful result and perform one final P2P-disabled real call against a remote participant.
+11. [ ] Remove temporary runtime/scripts and archive final evidence.
 
 ## Acceptance for the temporary Phase C tooling
 
 - [x] immutable source/build/binary identities recorded;
 - [x] fixed reflector control `MEDIA_PASS` recorded;
 - [x] host-only network constraint and lack of per-container MAC/IP recorded;
-- [ ] OPNsense-to-TNAS key-only remote invocation proven;
-- [ ] exact route through `192.168.1.2` and restoration through `192.168.1.140` proven;
-- [ ] provider baseline measured against the same endpoint;
-- [ ] every candidate has isolated state, wire attribution and exact restoration;
+- [x] Windows/Android reflector-network provenance and harness parity boundary recorded;
+- [x] selected research path fixed to `192.168.1.2`; `.140` removed as an independent-control criterion;
+- [ ] Zapret2 v1.0.5.2 primitive/runtime requalification proven;
+- [ ] fresh provider baseline measured through `.2` against a current reflector endpoint;
+- [ ] every new v1.0.5.2 candidate has isolated state, wire attribution and exact restoration;
 - [ ] no GUI or installed/permanent Telegram Voice laboratory code added;
 - [ ] all temporary access/routes/scripts removed at closeout.
 
