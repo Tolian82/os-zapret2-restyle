@@ -10,6 +10,7 @@ services:
       - TZ=Europe/Moscow
       - TELEGRAM_IOS_SHA=6ad963e5b62d354da79040f388ae2b9132fb17b8
       - TGCALLS_SHA=e3069322a3d1e16ecb11a5e302242e59ddd7f09e
+      - TGCALLS_CURRENT_SHA=efd330ca04f74706024a5abdfb5b41f4e4dd1065
 
     volumes:
       - /Volume1/Docker/TelegramVoiceLab/work:/work
@@ -233,7 +234,94 @@ services:
           } | tee /results/build-manifest.txt
         fi
 
-        echo "tgcalls_cli is ready"
-        cat /results/build-manifest.txt
-        exec sleep infinity
+        # Keep the qualified e3069322 binary as the historical baseline.
+        # Build a second oracle from the current public tgcalls head used for
+        # networking research. The public Telegram-iOS outer workspace does not
+        # yet expose build targets for the new test-only v2wasm engines 18/19,
+        # so this Linux lab intentionally removes only those CLI registrations
+        # while retaining the current 11/13/14 networking and reflector code.
+        if [ ! -x /results/tgcalls_cli-current ]; then
+          tgcalls_dir=/work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls
 
+          git -C "$${tgcalls_dir}" fetch --depth=1 origin "$${TGCALLS_CURRENT_SHA}"
+          git -C "$${tgcalls_dir}" checkout --detach --force FETCH_HEAD
+          test "$$(git -C "$${tgcalls_dir}" rev-parse HEAD)" = \
+            "$${TGCALLS_CURRENT_SHA}"
+
+          cd /work/Telegram-iOS
+
+          core_build=submodules/TgVoipWebrtc/BUILD
+
+          if ! grep -qF '"tgcalls/tgcalls/group/StreamingAudioRenderer.cpp",' \
+            "$${core_build}"; then
+            sed -i \
+              '/"tgcalls\/tgcalls\/group\/StreamingMediaContext.cpp",/a\
+        "tgcalls/tgcalls/group/StreamingAudioRenderer.cpp",' \
+              "$${core_build}"
+          fi
+
+          if ! grep -qF '"tgcalls/tgcalls/v2/MtProtoIceTransport.cpp",' \
+            "$${core_build}"; then
+            sed -i \
+              '/"tgcalls\/tgcalls\/v2\/InstanceV2ReferenceImpl.cpp",/a\
+        "tgcalls/tgcalls/v2/MtProtoIceTransport.cpp",' \
+              "$${core_build}"
+          fi
+
+          test "$$(grep -Fc '"tgcalls/tgcalls/group/StreamingAudioRenderer.cpp",' \
+            "$${core_build}")" -ge 1
+          test "$$(grep -Fc '"tgcalls/tgcalls/v2/MtProtoIceTransport.cpp",' \
+            "$${core_build}")" -ge 1
+
+          cli_main=submodules/TgVoipWebrtc/tgcalls/tools/cli/main.cpp
+          sed -i '/#include "v2wasm\/InstanceV2PumpImpl.h"/d' "$${cli_main}"
+          sed -i \
+            '/tgcalls::Register<tgcalls::InstanceV2PumpImpl>();/d' \
+            "$${cli_main}"
+          ! grep -qF 'InstanceV2PumpImpl' "$${cli_main}"
+
+          cli_build=submodules/TgVoipWebrtc/tgcalls/tools/cli/BUILD
+          sed -i \
+            '/^[[:space:]]*data = \[/,/^[[:space:]]*\],$/d' \
+            "$${cli_build}"
+          ! grep -qF 'reference_core_wasm' "$${cli_build}"
+          ! grep -qF 'variant_core_wasm' "$${cli_build}"
+
+          ./build-input/bazel-8.4.2-linux \
+            --output_user_root=/work/bazel-output \
+            build //submodules/TgVoipWebrtc/tgcalls/tools/cli:tgcalls_cli \
+            --registry=https://raw.githubusercontent.com/bazelbuild/bazel-central-registry/6acdcdaceec1d16120c7f44765e3240cab7f6b67/ \
+            --repository_cache=/work/bazel-repository-cache \
+            --strategy=Genrule=standalone \
+            --spawn_strategy=standalone \
+            --verbose_failures
+
+          install -m 0755 \
+            bazel-bin/submodules/TgVoipWebrtc/tgcalls/tools/cli/tgcalls_cli \
+            /results/tgcalls_cli-current
+
+          /results/tgcalls_cli-current \
+            --mode p2p \
+            --duration 5 \
+            --quiet \
+            > /results/current-smoke.txt 2>&1
+
+          {
+            echo "built_at_utc=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "telegram_ios_workspace_sha=$${TELEGRAM_IOS_SHA}"
+            echo "tgcalls_baseline_sha=$${TGCALLS_SHA}"
+            echo "tgcalls_current_sha=$${TGCALLS_CURRENT_SHA}"
+            echo "current_cli_patchset=linux-x86_64-no-v2wasm-18-19"
+            echo "bazel_version=8.4.2"
+            sha256sum /results/tgcalls_cli-current
+          } | tee /results/build-manifest-current.txt
+        fi
+
+        echo "baseline tgcalls_cli is ready"
+        cat /results/build-manifest.txt
+        echo ""
+        echo "current tgcalls_cli is ready"
+        cat /results/build-manifest-current.txt
+        echo ""
+        cat /results/current-smoke.txt
+        exec sleep infinity

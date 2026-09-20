@@ -11,11 +11,28 @@
 **Phase C emulation design:** 2026-09-03
 **Phase C companion build/runtime:** 2026-09-04
 **Phase C fixed-reflector control:** 2026-09-05
-**Updated:** 2026-09-05
+**Updated:** 2026-09-20
 **Owner instruction:** Telegram voice/call traffic over UDP is the current selected research task.
 **Pinned starting `main`:** `62e9a62e484d7a983b9b3f91ec672bbe96f684f3`
 **Research-boundary merge:** `9bc225ea457583ffec696e393c8ba697798369f6`
 **Package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3` — bounded Phase B runtime/lifecycle passed; zero-fake provider/network gate failed. Remote `_4` source branch exists but is unpublished and paused.
+
+## 2026-09-20 laboratory source update
+
+Owner-client scope is Windows and Android; Telegram-iOS is not used for the live
+call tests. The previously qualified `e3069322...` CLI remains the historical
+control, while the laboratory now also builds public tgcalls
+`efd330ca04f74706024a5abdfb5b41f4e4dd1065` as
+`/results/tgcalls_cli-current`.
+
+The current oracle intentionally excludes only the new test-only v2wasm 18/19
+CLI engines because the public outer Bazel workspace does not expose their build
+targets. Current 11/13/14 reflector/networking code is retained. A local P2P
+smoke test is mandatory before the current binary is accepted.
+
+Zapret2 on the owner's OPNsense has meanwhile been updated from v1.0.4 to
+v1.0.5.2. Earlier v1.0.4 wire evidence remains valid evidence for those exact
+epochs, but new candidate runs must record the v1.0.5.2 runtime identity.
 
 ## Executive conclusion
 
