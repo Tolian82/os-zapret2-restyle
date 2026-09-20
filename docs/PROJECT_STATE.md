@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1
-**Updated:** 2026-09-05
+**Updated:** 2026-09-20
 State-line scope: **`v0.5.x`**
 
 Direct orientation:
@@ -96,30 +96,30 @@ Authorities:
 - [Phase B evidence](verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md);
 - [installed runtime pin](verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md);
 - [companion build/runtime result](verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md);
-- [fixed-reflector control and host-topology result](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md).
+- [fixed-reflector historical result and host-topology record](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md);
+- [Windows/Android source parity and 2026-09-20 live matrix](verification/evidence/2026-09-20-telegram-voice-win-android-source-parity.md).
 
 Established durable facts:
 
-- the Phase A/B protocol interpretation and failed zero16/repeats=2 provider result remain unchanged;
-- the qualified `tgcalls_cli` SHA-256 is `c2bd9e8b55d5542e4471154c832efc4cf0cdd483669dbeb747c706afbe53b11a`;
-- fixed endpoint `91.108.13.10:596` passed a 15-second real-reflector run on 2026-09-05: both sides established, 15 bitrate records per side, non-zero BWE, no errors and exit 0;
-- that exact-endpoint control `MEDIA_PASS` used TNAS `192.168.1.100` through `192.168.1.140` and did not traverse OPNsense;
-- the owner requires the existing Docker `host` network only;
-- a host-network container has no per-container IP or MAC. DHCP sees the TNAS host identity, so it cannot assign this container a separate `192.168.1.239` lease or per-container gateway;
-- pfSense DHCP can still assign routes by the visible TNAS MAC, but their scope is the TNAS host namespace rather than this one container;
-- the provider-path selector is one exact endpoint `/32` route on TNAS through `192.168.1.2`, delivered by owner-controlled DHCP policy or a bounded explicit route transaction, never a TNAS default-route change;
-- OPNsense-console orchestration uses temporary key-only SSH to TNAS plus `docker exec`; every route/runtime mutation requires exact restoration;
+- the Phase A/B protocol interpretation and failed zero16/repeats=2 result remain unchanged;
+- real-call client authority is Windows/Android, not Telegram-iOS;
+- Telegram Desktop currently pins tgcalls `24694f64b03e301ec2c90792566046e61a2c4967`; Android's key reflector/network sources match that reference for the audited files;
+- the qualified `tgcalls_cli` harness remains `e3069322a3d1e16ecb11a5e302242e59ddd7f09e`, SHA-256 `c2bd9e8b55d5542e4471154c832efc4cf0cdd483669dbeb747c706afbe53b11a`; source audit supports its reflector-path use without claiming full client equivalence;
+- historical endpoint `91.108.13.10:596` reached `MEDIA_PASS` on 2026-09-05 through `.140`, but the owner clarified that `.140` and OPNsense `.2` both precede the same MTS/MGTS DPI, so `.140` is not an independent control;
+- current Telegram Voice provider testing uses OPNsense `192.168.1.2`;
+- the v1.0.4 reflector fragmentation matrix (8 ordered/reverse; 16/24/32 ordered) was on-wire correct but produced no reflector reply/media establishment;
+- the owner upgraded the installed Zapret2 runtime to `v1.0.5.2`; v1.0.5.2 primitive qualification is pending and no historical v1.0.4 PASS is transferred to it;
+- Docker `host` remains the only laboratory network; the container has no independent IP/MAC;
 - no Telegram Voice GUI, permanent plugin controller/API/configd action, installed daemon or package-owned laboratory is authorized;
-- temporary console scripts live outside installed plugin paths and are removed when the research closes;
 - the existing Generic UDP Strategy Lab and permanent production code remain unchanged.
 
 The remote `_4` branch remains unpublished and paused. The control result does not authorize a package revision or stable publication.
 
 ## Immediate next boundary
 
-Prove the exact `/32` route transaction for `91.108.13.10` from control gateway `192.168.1.140` to OPNsense `192.168.1.2` and back. Establish temporary key-only invocation from the OPNsense console to TNAS, then run the same endpoint with no desynchronization while recording OPNsense LAN/WAN evidence and counters.
+Refresh the TOS companion provenance without rebuilding the already-qualified binary, require the selected current reflector route through `192.168.1.2`, requalify the required Zapret2 `v1.0.5.2` primitives, then run a fresh no-desynchronization reflector baseline through `.2`.
 
-Only after that baseline may temporary non-packaged console scripts run the bounded reflector matrix. Silence without the fresh control is `NO_REPLY_UNKNOWN`; any failed route/runtime restoration is `RESTORE_FAILED` and overrides other results.
+Only after that current-runtime/current-endpoint baseline may new bounded candidates run. The historical `.140` route is not an independent control criterion. Any failed temporary runtime restoration remains `RESTORE_FAILED` and overrides other results.
 
 The Telegram Voice laboratory will not become permanent plugin code. A later proven production strategy/helper would require a separate owner decision.
 
