@@ -82,9 +82,9 @@ The stable Pages/pkg repository remains on `v0.5.0_1`; `_2` was not automaticall
 ## `v0.5.0_3` current testing line — TELEGRAM VOICE LAB ACTIVE
 
 - [x] keep package identity at `VERSION=0.5.0`, `PLUGIN_REVISION=3`
-- [x] preserve the qualified `e3069322...` tgcalls CLI as the historical Phase C baseline
-- [x] add a separate current tgcalls oracle pinned to `efd330ca04f74706024a5abdfb5b41f4e4dd1065`
-- [x] require a local P2P smoke gate and separate SHA-256 manifest for the current oracle
+- [x] retire the `e3069322...` binary from active laboratory use
+- [x] pin the only active tgcalls oracle to `efd330ca04f74706024a5abdfb5b41f4e4dd1065`
+- [x] require a local P2P smoke gate and SHA-256 manifest for that current oracle
 - [x] record owner runtime update to Zapret2 v1.0.5.2 for future live candidate epochs
 - [x] keep this change lab/docs-only; no package payload or revision bump
 
