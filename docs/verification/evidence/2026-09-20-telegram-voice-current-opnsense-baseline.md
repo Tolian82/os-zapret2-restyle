@@ -1,7 +1,7 @@
 # Telegram Voice current tgcalls OPNsense/provider baseline
 
 **Date:** 2026-09-20  
-**Status:** OWNER-LIVE BASELINE · NETWORK FAIL · WIRE PASS  
+**Status:** OWNER-LIVE BASELINE · WIRE PASS · NO REPLY OBSERVED  
 **Scope:** current tgcalls `efd330ca04f74706024a5abdfb5b41f4e4dd1065`, fixed reflector `91.108.13.10:596`  
 **OPNsense path:** TNAS `192.168.1.100` -> OPNsense gateway `192.168.1.2` -> WAN `vtnet1`
 
@@ -64,8 +64,9 @@ Flow mapping by payload/timestamp is one-to-one:
 - `58791 -> 40655`
 
 All 60 packets preserve the same IP identification across forwarding, TTL changes
-from 64 to 63, and UDP checksums are valid before and after NAT. No inbound
-`91.108.13.10:596` UDP packet appears on WAN or LAN.
+from 64 to 63, and IPv4/UDP checksums validate in both captures. Packet pairing by
+timestamp and payload is one-to-one; the largest LAN-to-WAN timestamp delta is
+under 0.05 ms. No inbound `91.108.13.10:596` UDP packet appears on WAN or LAN.
 
 ## Current Hello framing
 
@@ -82,14 +83,25 @@ observed: 16-byte peer/session tag, 16-byte marker, and big-endian value 123.
 Current Telegram changes therefore did not eliminate the blocked initial reflector
 exchange on the tested provider path.
 
-## Verdict
+## Verdict and evidence boundary
 
 - **WIRE PASS:** both current tgcalls Hello streams traverse OPNsense/NAT and reach
-  WAN with valid packets.
-- **NETWORK FAIL:** no reflector reply returns and the call never reaches
-  `Established`.
-- The failure is not explained by the old laboratory binary or by a local
-  tgcalls build/runtime defect.
-- The next experiment may manipulate the exact fixed reflector flow. It must
-  preserve the current source/destination scope, prove the transformed WAN wire,
-  and retain exact cleanup/restoration.
+  WAN intact. OPNsense forwarding/NAT does not drop or corrupt the outbound
+  baseline packets.
+- **NO REPLY OBSERVED:** the fixed reflector returns zero UDP/596 packets during
+  this 15-second epoch; both tgcalls peers remain `Reconnecting`, with zero BWE.
+- The failure is not explained by the retired `e3069322...` binary or by a local
+  current-tgcalls build/runtime defect: the current `efd330ca...` binary passed
+  its local P2P runtime gate immediately before this provider-path experiment.
+- The current reflector exchange is **non-STUN**: it is the 40-byte Reflector
+  Hello family. Therefore the paused STUN-only `_4` profile cannot directly
+  exercise this exact baseline flow.
+- This capture alone does **not** prove the provider DPI is the cause. A strict
+  `NETWORK_FAIL` classification requires a sufficiently fresh independent
+  control for the same endpoint and current oracle. The historical exact-endpoint
+  control remains useful context but is not silently treated as a fresh control.
+- The next strategy experiment should target only the exact
+  `91.108.13.10:596` UDP flow, prove the transformed WAN wire, and retain exact
+  cleanup/restoration. A successful candidate would be strong causal evidence;
+  another no-reply result remains ambiguous until a fresh independent control is
+  available.
