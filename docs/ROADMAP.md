@@ -106,7 +106,7 @@ Current architecture: [`architecture/TELEGRAM_VOICE_EMULATION_LAB.md`](architect
 - [x] reject GUI and permanent Telegram Voice laboratory integration
 - [ ] establish temporary key-only SSH command execution from OPNsense to TNAS
 - [ ] transact `91.108.13.10/32` on TNAS through `192.168.1.2`, with exact restoration to `192.168.1.140`
-- [ ] run the same endpoint through OPNsense with no desynchronization and capture LAN/WAN truth
+- [x] run current tgcalls against `91.108.13.10:596` through OPNsense with no desynchronization and capture LAN/WAN truth — **WIRE_OK / NETWORK_FAIL**
 - [ ] use temporary, non-packaged OPNsense-console scripts for exact-flow/exact-endpoint candidates
 - [ ] test reflector fragmentation: position 8 ordered, position 8 reverse, then evidence-driven alternates
 - [ ] add correlated TURN Allocate only as a secondary oracle
@@ -142,6 +142,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**From the OPNsense console, transact the control-proven endpoint `/32` on TNAS through `192.168.1.2`, measure the no-desynchronization baseline, then run only temporary bounded candidates with exact restoration.** Keep Docker `host`, add no GUI or permanent laboratory code, and do not publish `_4` before evidence decides its fate.
+**From the OPNsense console, use the now-proven current-tgcalls `WIRE_OK / NETWORK_FAIL` baseline at `91.108.13.10:596` to run only temporary exact-flow/exact-endpoint candidates with on-wire proof and exact restoration.** Keep Docker `host`, add no GUI or permanent laboratory code, and do not publish `_4` before evidence decides its fate.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
