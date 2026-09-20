@@ -9,8 +9,7 @@ services:
     environment:
       - TZ=Europe/Moscow
       - TELEGRAM_IOS_SHA=6ad963e5b62d354da79040f388ae2b9132fb17b8
-      - TGCALLS_SHA=e3069322a3d1e16ecb11a5e302242e59ddd7f09e
-      - TGCALLS_CURRENT_SHA=efd330ca04f74706024a5abdfb5b41f4e4dd1065
+      - TGCALLS_SHA=efd330ca04f74706024a5abdfb5b41f4e4dd1065
 
     volumes:
       - /Volume1/Docker/TelegramVoiceLab/work:/work
@@ -38,290 +37,204 @@ services:
           zlib1g-dev libbz2-dev iproute2 tzdata
 
         mkdir -p /work /results
+        mkdir -p /work/Telegram-iOS
 
-        if [ ! -x /results/tgcalls_cli ]; then
-          mkdir -p /work/Telegram-iOS
+        if [ ! -d /work/Telegram-iOS/.git ]; then
+          git init /work/Telegram-iOS
+        fi
 
-          if [ ! -d /work/Telegram-iOS/.git ]; then
-            git init /work/Telegram-iOS
-          fi
+        if git -C /work/Telegram-iOS remote get-url origin >/dev/null 2>&1; then
+          git -C /work/Telegram-iOS remote set-url origin \
+            https://github.com/TelegramMessenger/Telegram-iOS.git
+        else
+          git -C /work/Telegram-iOS remote add origin \
+            https://github.com/TelegramMessenger/Telegram-iOS.git
+        fi
 
-          if git -C /work/Telegram-iOS remote get-url origin >/dev/null 2>&1; then
-            git -C /work/Telegram-iOS remote set-url origin \
-              https://github.com/TelegramMessenger/Telegram-iOS.git
-          else
-            git -C /work/Telegram-iOS remote add origin \
-              https://github.com/TelegramMessenger/Telegram-iOS.git
-          fi
+        # Telegram-iOS is used only as the outer Bazel/WebRTC build workspace.
+        # The voice engine itself is replaced below with the pinned current
+        # public tgcalls source.
+        git -C /work/Telegram-iOS fetch --depth=1 origin "$${TELEGRAM_IOS_SHA}"
+        git -C /work/Telegram-iOS checkout --detach --force FETCH_HEAD
+        git -C /work/Telegram-iOS submodule sync --recursive
+        git -C /work/Telegram-iOS submodule update \
+          --init --recursive --depth=1 --force
 
-          git -C /work/Telegram-iOS fetch --depth=1 origin "$${TELEGRAM_IOS_SHA}"
-          git -C /work/Telegram-iOS checkout --detach --force FETCH_HEAD
-          git -C /work/Telegram-iOS submodule sync --recursive
-          git -C /work/Telegram-iOS submodule update \
-            --init --recursive --depth=1 --force
+        test "$$(git -C /work/Telegram-iOS rev-parse HEAD)" = \
+          "$${TELEGRAM_IOS_SHA}"
 
-          test "$$(git -C /work/Telegram-iOS rev-parse HEAD)" = \
-            "$${TELEGRAM_IOS_SHA}"
-          test "$$(git -C /work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls rev-parse HEAD)" = \
-            "$${TGCALLS_SHA}"
+        tgcalls_dir=/work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls
+        git -C "$${tgcalls_dir}" fetch --depth=1 origin "$${TGCALLS_SHA}"
+        git -C "$${tgcalls_dir}" checkout --detach --force FETCH_HEAD
+        test "$$(git -C "$${tgcalls_dir}" rev-parse HEAD)" = \
+          "$${TGCALLS_SHA}"
 
-          cd /work/Telegram-iOS
+        cd /work/Telegram-iOS
 
-          # The pinned Telegram-iOS tree defines linux_x86_64, but the three
-          # OpenH264 architecture selects omit it and otherwise choose ARM64.
-          if ! grep -qF '"//build-system:linux_x86_64": [],' \
-            third-party/openh264/BUILD; then
-            sed -i \
-              '/"@build_bazel_rules_apple\/\/apple:ios_x86_64": \[\],/a\    "//build-system:linux_x86_64": [],' \
-              third-party/openh264/BUILD
-          fi
+        # The outer workspace needs the same Linux/x86_64 corrections used by
+        # the qualified laboratory build.
+        if ! grep -qF '"//build-system:linux_x86_64": [],' \
+          third-party/openh264/BUILD; then
+          sed -i \
+            '/"@build_bazel_rules_apple\/\/apple:ios_x86_64": \[\],/a\    "//build-system:linux_x86_64": [],' \
+            third-party/openh264/BUILD
+        fi
 
-          test "$$(grep -Fc '"//build-system:linux_x86_64": [],' \
-            third-party/openh264/BUILD)" -eq 3
+        test "$$(grep -Fc '"//build-system:linux_x86_64": [],' \
+          third-party/openh264/BUILD)" -eq 3
 
-          # WebRTC has two architecture selects that treat every Linux host as
-          # ARM64. The two generic SPL C implementations are nevertheless
-          # required on x86_64; only the NEON source must stay ARM-specific.
-          # Give linux/amd64 those scalar sources and flags without
-          # WEBRTC_ARCH_ARM64/WEBRTC_HAS_NEON/LIBYUV_NEON, while preserving the
-          # existing Linux ARM64 behaviour.
-          webrtc_build=third-party/webrtc/BUILD
-          if ! grep -qF 'linux_x86_64_specific_sources = ["webrtc/" + path for path in [' \
-            "$${webrtc_build}"; then
-            sed -i \
-              '/^arch_specific_sources = select({$/i\
+        webrtc_build=third-party/webrtc/BUILD
+        if ! grep -qF 'linux_x86_64_specific_sources = ["webrtc/" + path for path in [' \
+          "$${webrtc_build}"; then
+          sed -i \
+            '/^arch_specific_sources = select({$/i\
         linux_x86_64_specific_sources = ["webrtc/" + path for path in [\
             "common_audio/signal_processing/filter_ar_fast_q12.c",\
             "common_audio/signal_processing/complex_bit_reverse.c",\
         ]]\
         ' \
-              "$${webrtc_build}"
-          fi
+            "$${webrtc_build}"
+        fi
 
-          if ! grep -qF '"//build-system:linux_x86_64": linux_x86_64_specific_sources,' \
-            "$${webrtc_build}"; then
-            sed -i \
-              '/"\/\/build-system:ios_sim_arm64": common_arm_specific_sources + arm64_specific_sources,/a\
+        if ! grep -qF '"//build-system:linux_x86_64": linux_x86_64_specific_sources,' \
+          "$${webrtc_build}"; then
+          sed -i \
+            '/"\/\/build-system:ios_sim_arm64": common_arm_specific_sources + arm64_specific_sources,/a\
               "//build-system:linux_arm64": common_arm_specific_sources + arm64_specific_sources,\
               "//build-system:linux_x86_64": linux_x86_64_specific_sources,' \
-              "$${webrtc_build}"
-          fi
+            "$${webrtc_build}"
+        fi
 
-          if grep -qF '"@platforms//os:linux": platform_shared_flags + linux_specific_flags + arm64_specific_flags,' \
-            "$${webrtc_build}"; then
-            sed -i \
-              '/"@platforms\/\/os:linux": platform_shared_flags + linux_specific_flags + arm64_specific_flags,/c\
+        if grep -qF '"@platforms//os:linux": platform_shared_flags + linux_specific_flags + arm64_specific_flags,' \
+          "$${webrtc_build}"; then
+          sed -i \
+            '/"@platforms\/\/os:linux": platform_shared_flags + linux_specific_flags + arm64_specific_flags,/c\
               "//build-system:linux_arm64": platform_shared_flags + linux_specific_flags + arm64_specific_flags,\
               "//build-system:linux_x86_64": platform_shared_flags + linux_specific_flags,' \
-              "$${webrtc_build}"
-          fi
-
-          test "$$(grep -Fc 'linux_x86_64_specific_sources = ["webrtc/" + path for path in [' \
-            "$${webrtc_build}")" -eq 1
-          test "$$(grep -Fc '"//build-system:linux_x86_64": linux_x86_64_specific_sources,' \
-            "$${webrtc_build}")" -eq 1
-          test "$$(grep -Fc '"//build-system:linux_x86_64": platform_shared_flags + linux_specific_flags,' \
-            "$${webrtc_build}")" -eq 1
-          ! grep -qF '"@platforms//os:linux": platform_shared_flags + linux_specific_flags + arm64_specific_flags,' \
             "$${webrtc_build}"
+        fi
 
-          # The monolithic iOS-derived WebRTC Bazel target does not declare
-          # separate x86 SSE2/AVX2 libraries with their per-file compiler
-          # flags. Keep the correct x86_64/64-bit/little-endian detection, but
-          # disable only optional x86 SIMD dispatch so the already-declared
-          # scalar implementations are used by this traffic laboratory.
-          webrtc_arch=third-party/webrtc/webrtc/rtc_base/system/arch.h
-          if grep -qF '#define WEBRTC_ARCH_X86_FAMILY' \
-            "$${webrtc_arch}"; then
-            sed -i '/^#define WEBRTC_ARCH_X86_FAMILY$/d' \
-              "$${webrtc_arch}"
-          fi
-          ! grep -qF '#define WEBRTC_ARCH_X86_FAMILY' "$${webrtc_arch}"
-          grep -qF '#define WEBRTC_ARCH_X86_64' "$${webrtc_arch}"
-          grep -qF '#define WEBRTC_ARCH_64_BITS' "$${webrtc_arch}"
-          grep -qF '#define WEBRTC_ARCH_LITTLE_ENDIAN' "$${webrtc_arch}"
+        test "$$(grep -Fc 'linux_x86_64_specific_sources = ["webrtc/" + path for path in [' \
+          "$${webrtc_build}")" -eq 1
+        test "$$(grep -Fc '"//build-system:linux_x86_64": linux_x86_64_specific_sources,' \
+          "$${webrtc_build}")" -eq 1
+        test "$$(grep -Fc '"//build-system:linux_x86_64": platform_shared_flags + linux_specific_flags,' \
+          "$${webrtc_build}")" -eq 1
 
-          # The bundled CRC32C configuration enables SSE4.2 on every x86_64
-          # compiler, but its Bazel target does not compile crc32c_sse42.cc.
-          # Force the already-declared portable implementation for this lab.
-          crc32c_config=third-party/webrtc/crc32c/third_party/crc32c/src/include/crc32c/crc32c_config.h
-          if grep -qF '#define HAVE_SSE42 1' "$${crc32c_config}"; then
-            sed -i \
-              's/^#define HAVE_SSE42 1$/#define HAVE_SSE42 0/' \
-              "$${crc32c_config}"
-          fi
-          grep -qF '#define HAVE_SSE42 0' "$${crc32c_config}"
-          ! grep -qF '#define HAVE_SSE42 1' "$${crc32c_config}"
+        webrtc_arch=third-party/webrtc/webrtc/rtc_base/system/arch.h
+        if grep -qF '#define WEBRTC_ARCH_X86_FAMILY' "$${webrtc_arch}"; then
+          sed -i '/^#define WEBRTC_ARCH_X86_FAMILY$/d' "$${webrtc_arch}"
+        fi
+        grep -qF '#define WEBRTC_ARCH_X86_64' "$${webrtc_arch}"
+        grep -qF '#define WEBRTC_ARCH_64_BITS' "$${webrtc_arch}"
+        grep -qF '#define WEBRTC_ARCH_LITTLE_ENDIAN' "$${webrtc_arch}"
 
-          # Apple linkers tolerate the upstream FFmpeg archive order, while
-          # GNU ld resolves static archives from left to right. Put dependants
-          # before their providers: avformat -> avcodec -> swresample -> avutil.
-          ffmpeg_build=submodules/ffmpeg/BUILD
-          sed -i \
-            '/^ffmpeg_libs = \[$/,/^\]$/c\
+        crc32c_config=third-party/webrtc/crc32c/third_party/crc32c/src/include/crc32c/crc32c_config.h
+        if grep -qF '#define HAVE_SSE42 1' "$${crc32c_config}"; then
+          sed -i 's/^#define HAVE_SSE42 1$/#define HAVE_SSE42 0/' \
+            "$${crc32c_config}"
+        fi
+        grep -qF '#define HAVE_SSE42 0' "$${crc32c_config}"
+
+        ffmpeg_build=submodules/ffmpeg/BUILD
+        sed -i \
+          '/^ffmpeg_libs = \[$/,/^\]$/c\
         ffmpeg_libs = [\
             "libavformat.a",\
             "libavcodec.a",\
             "libswresample.a",\
             "libavutil.a",\
         ]' \
-            "$${ffmpeg_build}"
+          "$${ffmpeg_build}"
 
-          expected_ffmpeg_libs='ffmpeg_libs = [
-            "libavformat.a",
-            "libavcodec.a",
-            "libswresample.a",
-            "libavutil.a",
-        ]'
-          test "$$(sed -n '/^ffmpeg_libs = \[$/,/^\]$/p' \
-            "$${ffmpeg_build}")" = "$${expected_ffmpeg_libs}"
-
-          # The pinned CLI sources use std::condition_variable without
-          # including its standard header in two translation units.
-          for source in \
-            submodules/TgVoipWebrtc/tgcalls/tools/cli/group_mode.cpp \
-            submodules/TgVoipWebrtc/tgcalls/tools/cli/group_churn_mode.cpp; do
-            if ! grep -qF '#include <condition_variable>' "$${source}"; then
-              sed -i \
-                '/#include <chrono>/a#include <condition_variable>' \
-                "$${source}"
-            fi
-            grep -qF '#include <condition_variable>' "$${source}"
-          done
-
-          # GroupInstanceReferenceImpl uses std::mutex/std::lock_guard but the
-          # pinned source relies on a transitive include that GCC does not see.
-          reference_impl=submodules/TgVoipWebrtc/tgcalls/tgcalls/group/GroupInstanceReferenceImpl.cpp
-          if ! grep -qF '#include <mutex>' "$${reference_impl}"; then
-            sed -i \
-              '/#include <map>/i#include <mutex>' \
-              "$${reference_impl}"
+        for source in \
+          submodules/TgVoipWebrtc/tgcalls/tools/cli/group_mode.cpp \
+          submodules/TgVoipWebrtc/tgcalls/tools/cli/group_churn_mode.cpp; do
+          if ! grep -qF '#include <condition_variable>' "$${source}"; then
+            sed -i '/#include <chrono>/a#include <condition_variable>' \
+              "$${source}"
           fi
-          grep -qF '#include <mutex>' "$${reference_impl}"
+        done
 
-          mkdir -p build-input/configuration-repository
-          printf 'module(name = "build_configuration", version = "0.0.0")\n' \
-            > build-input/configuration-repository/MODULE.bazel
-          touch build-input/configuration-repository/BUILD.bazel
-
-          curl -fL \
-            https://github.com/bazelbuild/bazel/releases/download/8.4.2/bazel-8.4.2-linux-x86_64 \
-            -o build-input/bazel-8.4.2-linux
-
-          echo "4dc8e99dfa802e252dac176d08201fd15c542ae78c448c8a89974b6f387c282c  build-input/bazel-8.4.2-linux" \
-            | sha256sum -c -
-          chmod +x build-input/bazel-8.4.2-linux
-
-          ./build-input/bazel-8.4.2-linux \
-            --output_user_root=/work/bazel-output \
-            build //submodules/TgVoipWebrtc/tgcalls/tools/cli:tgcalls_cli \
-            --registry=https://raw.githubusercontent.com/bazelbuild/bazel-central-registry/6acdcdaceec1d16120c7f44765e3240cab7f6b67/ \
-            --repository_cache=/work/bazel-repository-cache \
-            --strategy=Genrule=standalone \
-            --spawn_strategy=standalone \
-            --verbose_failures
-
-          install -m 0755 \
-            bazel-bin/submodules/TgVoipWebrtc/tgcalls/tools/cli/tgcalls_cli \
-            /results/tgcalls_cli
-
-          {
-            echo "built_at_utc=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "telegram_ios_sha=$${TELEGRAM_IOS_SHA}"
-            echo "tgcalls_sha=$${TGCALLS_SHA}"
-            echo "bazel_version=8.4.2"
-            sha256sum /results/tgcalls_cli
-          } | tee /results/build-manifest.txt
+        reference_impl=submodules/TgVoipWebrtc/tgcalls/tgcalls/group/GroupInstanceReferenceImpl.cpp
+        if ! grep -qF '#include <mutex>' "$${reference_impl}"; then
+          sed -i '/#include <map>/i#include <mutex>' "$${reference_impl}"
         fi
 
-        # Keep the qualified e3069322 binary as the historical baseline.
-        # Build a second oracle from the current public tgcalls head used for
-        # networking research. The public Telegram-iOS outer workspace does not
-        # yet expose build targets for the new test-only v2wasm engines 18/19,
-        # so this Linux lab intentionally removes only those CLI registrations
-        # while retaining the current 11/13/14 networking and reflector code.
-        if [ ! -x /results/tgcalls_cli-current ]; then
-          tgcalls_dir=/work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls
+        # Add current tgcalls sources that the older outer BUILD file does not
+        # know about yet.
+        core_build=submodules/TgVoipWebrtc/BUILD
 
-          git -C "$${tgcalls_dir}" fetch --depth=1 origin "$${TGCALLS_CURRENT_SHA}"
-          git -C "$${tgcalls_dir}" checkout --detach --force FETCH_HEAD
-          test "$$(git -C "$${tgcalls_dir}" rev-parse HEAD)" = \
-            "$${TGCALLS_CURRENT_SHA}"
-
-          cd /work/Telegram-iOS
-
-          core_build=submodules/TgVoipWebrtc/BUILD
-
-          if ! grep -qF '"tgcalls/tgcalls/group/StreamingAudioRenderer.cpp",' \
-            "$${core_build}"; then
-            sed -i \
-              '/"tgcalls\/tgcalls\/group\/StreamingMediaContext.cpp",/a\
+        if ! grep -qF '"tgcalls/tgcalls/group/StreamingAudioRenderer.cpp",' \
+          "$${core_build}"; then
+          sed -i \
+            '/"tgcalls\/tgcalls\/group\/StreamingMediaContext.cpp",/a\
         "tgcalls/tgcalls/group/StreamingAudioRenderer.cpp",' \
-              "$${core_build}"
-          fi
-
-          if ! grep -qF '"tgcalls/tgcalls/v2/MtProtoIceTransport.cpp",' \
-            "$${core_build}"; then
-            sed -i \
-              '/"tgcalls\/tgcalls\/v2\/InstanceV2ReferenceImpl.cpp",/a\
-        "tgcalls/tgcalls/v2/MtProtoIceTransport.cpp",' \
-              "$${core_build}"
-          fi
-
-          test "$$(grep -Fc '"tgcalls/tgcalls/group/StreamingAudioRenderer.cpp",' \
-            "$${core_build}")" -ge 1
-          test "$$(grep -Fc '"tgcalls/tgcalls/v2/MtProtoIceTransport.cpp",' \
-            "$${core_build}")" -ge 1
-
-          cli_main=submodules/TgVoipWebrtc/tgcalls/tools/cli/main.cpp
-          sed -i '/#include "v2wasm\/InstanceV2PumpImpl.h"/d' "$${cli_main}"
-          sed -i \
-            '/tgcalls::Register<tgcalls::InstanceV2PumpImpl>();/d' \
-            "$${cli_main}"
-          ! grep -qF 'InstanceV2PumpImpl' "$${cli_main}"
-
-          cli_build=submodules/TgVoipWebrtc/tgcalls/tools/cli/BUILD
-          sed -i \
-            '/^[[:space:]]*data = \[/,/^[[:space:]]*\],$/d' \
-            "$${cli_build}"
-          ! grep -qF 'reference_core_wasm' "$${cli_build}"
-          ! grep -qF 'variant_core_wasm' "$${cli_build}"
-
-          ./build-input/bazel-8.4.2-linux \
-            --output_user_root=/work/bazel-output \
-            build //submodules/TgVoipWebrtc/tgcalls/tools/cli:tgcalls_cli \
-            --registry=https://raw.githubusercontent.com/bazelbuild/bazel-central-registry/6acdcdaceec1d16120c7f44765e3240cab7f6b67/ \
-            --repository_cache=/work/bazel-repository-cache \
-            --strategy=Genrule=standalone \
-            --spawn_strategy=standalone \
-            --verbose_failures
-
-          install -m 0755 \
-            bazel-bin/submodules/TgVoipWebrtc/tgcalls/tools/cli/tgcalls_cli \
-            /results/tgcalls_cli-current
-
-          /results/tgcalls_cli-current \
-            --mode p2p \
-            --duration 5 \
-            --quiet \
-            > /results/current-smoke.txt 2>&1
-
-          {
-            echo "built_at_utc=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "telegram_ios_workspace_sha=$${TELEGRAM_IOS_SHA}"
-            echo "tgcalls_baseline_sha=$${TGCALLS_SHA}"
-            echo "tgcalls_current_sha=$${TGCALLS_CURRENT_SHA}"
-            echo "current_cli_patchset=linux-x86_64-no-v2wasm-18-19"
-            echo "bazel_version=8.4.2"
-            sha256sum /results/tgcalls_cli-current
-          } | tee /results/build-manifest-current.txt
+            "$${core_build}"
         fi
 
-        echo "baseline tgcalls_cli is ready"
+        if ! grep -qF '"tgcalls/tgcalls/v2/MtProtoIceTransport.cpp",' \
+          "$${core_build}"; then
+          sed -i \
+            '/"tgcalls\/tgcalls\/v2\/InstanceV2ReferenceImpl.cpp",/a\
+        "tgcalls/tgcalls/v2/MtProtoIceTransport.cpp",' \
+            "$${core_build}"
+        fi
+
+        # v2wasm 18/19 are test-only and their public outer Bazel targets are
+        # not present in this workspace. The current 11/13/14 networking path
+        # stays intact.
+        cli_main=submodules/TgVoipWebrtc/tgcalls/tools/cli/main.cpp
+        sed -i '/#include "v2wasm\/InstanceV2PumpImpl.h"/d' "$${cli_main}"
+        sed -i '/tgcalls::Register<tgcalls::InstanceV2PumpImpl>();/d' "$${cli_main}"
+
+        cli_build=submodules/TgVoipWebrtc/tgcalls/tools/cli/BUILD
+        sed -i '/^[[:space:]]*data = \[/,/^[[:space:]]*\],$/d' "$${cli_build}"
+
+        mkdir -p build-input/configuration-repository
+        printf 'module(name = "build_configuration", version = "0.0.0")\n' \
+          > build-input/configuration-repository/MODULE.bazel
+        touch build-input/configuration-repository/BUILD.bazel
+
+        curl -fL \
+          https://github.com/bazelbuild/bazel/releases/download/8.4.2/bazel-8.4.2-linux-x86_64 \
+          -o build-input/bazel-8.4.2-linux
+
+        echo "4dc8e99dfa802e252dac176d08201fd15c542ae78c448c8a89974b6f387c282c  build-input/bazel-8.4.2-linux" \
+          | sha256sum -c -
+        chmod +x build-input/bazel-8.4.2-linux
+
+        ./build-input/bazel-8.4.2-linux \
+          --output_user_root=/work/bazel-output \
+          build //submodules/TgVoipWebrtc/tgcalls/tools/cli:tgcalls_cli \
+          --registry=https://raw.githubusercontent.com/bazelbuild/bazel-central-registry/6acdcdaceec1d16120c7f44765e3240cab7f6b67/ \
+          --repository_cache=/work/bazel-repository-cache \
+          --strategy=Genrule=standalone \
+          --spawn_strategy=standalone \
+          --verbose_failures
+
+        # The current binary replaces the obsolete historical laboratory binary.
+        install -m 0755 \
+          bazel-bin/submodules/TgVoipWebrtc/tgcalls/tools/cli/tgcalls_cli \
+          /results/tgcalls_cli
+
+        /results/tgcalls_cli \
+          --mode p2p \
+          --duration 5 \
+          --quiet \
+          > /results/smoke.txt 2>&1
+
+        {
+          echo "built_at_utc=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "telegram_ios_workspace_sha=$${TELEGRAM_IOS_SHA}"
+          echo "tgcalls_sha=$${TGCALLS_SHA}"
+          echo "cli_patchset=linux-x86_64-no-v2wasm-18-19"
+          echo "bazel_version=8.4.2"
+          sha256sum /results/tgcalls_cli
+        } | tee /results/build-manifest.txt
+
+        echo "current tgcalls_cli is ready"
         cat /results/build-manifest.txt
         echo ""
-        echo "current tgcalls_cli is ready"
-        cat /results/build-manifest-current.txt
-        echo ""
-        cat /results/current-smoke.txt
+        cat /results/smoke.txt
         exec sleep infinity
