@@ -8,6 +8,7 @@
 **Phase B evidence:** [`2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md`](../verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md)
 **Installed Zapret2 pin:** [`2026-09-02-telegram-voice-ipfrag-runtime-pin.md`](../verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md)
 **Companion build/runtime evidence:** [`2026-09-04-telegram-voice-companion-build-runtime-pass.md`](../verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md)
+**Current tgcalls owner-live evidence:** [`2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md`](../verification/evidence/2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md)
 **Fixed-reflector control/host-topology evidence:** [`2026-09-05-telegram-voice-fixed-reflector-control-pass.md`](../verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md)
 
 ## 2026-09-20 current-tgcalls oracle update
