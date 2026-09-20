@@ -185,8 +185,15 @@ services:
         # not present in this workspace. The current 11/13/14 networking path
         # stays intact.
         cli_main=submodules/TgVoipWebrtc/tgcalls/tools/cli/main.cpp
-        sed -i '/#include "v2wasm\/InstanceV2PumpImpl.h"/d' "$${cli_main}"
-        sed -i '/tgcalls::Register<tgcalls::InstanceV2PumpImpl>();/d' "$${cli_main}"
+        sed -i '/#include "v2wasm\/InstanceV2PumpImpl.h"/d' "${cli_main}"
+        sed -i '/tgcalls::Register<tgcalls::InstanceV2PumpImpl>();/d' "${cli_main}"
+
+        # GCC requires C++ designated initializers to follow declaration order.
+        # Current tgcalls Config declares logPath before statsLogPath, while the
+        # CLI caller descriptor currently initializes statsLogPath first.
+        sed -i '/\.statsLogPath = {callerStatsPath},/d' "${cli_main}"
+        sed -i '/\.logPath = {logFile},/a\            .statsLogPath = {callerStatsPath},' "${cli_main}"
+        test "$(grep -Fc '.statsLogPath = {callerStatsPath},' "${cli_main}")" -eq 1
 
         cli_build=submodules/TgVoipWebrtc/tgcalls/tools/cli/BUILD
         sed -i '/^[[:space:]]*data = \[/,/^[[:space:]]*\],$/d' "$${cli_build}"
