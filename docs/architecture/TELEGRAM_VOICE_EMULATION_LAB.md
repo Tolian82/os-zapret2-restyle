@@ -12,13 +12,13 @@
 
 ## 2026-09-20 current-tgcalls oracle update
 
-The owner uses Telegram calls on Windows and Android, not Telegram-iOS. The previous
-`e3069322a3d1e16ecb11a5e302242e59ddd7f09e` CLI therefore remains a qualified
-historical baseline, but it is no longer the only laboratory oracle.
+The owner uses Telegram calls on Windows and Android, not Telegram-iOS. The
+historical `e3069322a3d1e16ecb11a5e302242e59ddd7f09e` laboratory binary is no
+longer a useful active oracle for this scope.
 
-The TOS compose recipe now preserves that binary as `/results/tgcalls_cli` and
-builds a second binary, `/results/tgcalls_cli-current`, from public tgcalls commit
-`efd330ca04f74706024a5abdfb5b41f4e4dd1065`.
+The TOS compose recipe now builds only the current public tgcalls commit
+`efd330ca04f74706024a5abdfb5b41f4e4dd1065` and installs it as
+`/results/tgcalls_cli`, replacing any older laboratory binary.
 
 The public tgcalls head contains newer reflector/networking work, including the
 current 11/13/14 engines, reflector-keying experiments and MTProto transport
@@ -30,13 +30,13 @@ dependency for 18/19 and adds the two current C++ sources required by the outer
 
 The current binary is accepted only if a local five-second P2P smoke test exits
 zero. Its exact source SHA, patchset label and SHA-256 are written to
-`/results/build-manifest-current.txt`; smoke output is written to
-`/results/current-smoke.txt`.
+`/results/build-manifest.txt`; smoke output is written to
+`/results/smoke.txt`.
 
-For provider experiments, prefer `tgcalls_cli-current`. Keep the old binary for
-A/B reproduction of the earlier Phase C evidence. A difference between the two
-oracles is diagnostic; it is not by itself proof of Windows or Android product
-behaviour, which still requires one real P2P-disabled client call.
+Earlier Phase C evidence that used the historical binary remains valid evidence
+for those exact epochs, but new provider experiments use only the current
+`/results/tgcalls_cli`. Real Windows/Android behaviour still requires one final
+P2P-disabled client call.
 
 ## Purpose
 
