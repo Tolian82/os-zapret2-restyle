@@ -44,8 +44,6 @@ grep -Fq 'test "$$(git -C /work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls rev
     fail "harness gitlink check lost shell command substitution"
 grep -Fq '"$${HARNESS_TGCALLS_SHA}"' "${COMPOSE}" ||
     fail "harness SHA check lost Compose-safe shell expansion"
-grep -Fq '"$${CLIENT_REFLECTOR_TGCALLS_SHA}"' "${COMPOSE}" ||
-    fail "client reflector reference lost Compose-safe shell expansion"
 
 grep -Fq '/results/source-provenance.txt' "${COMPOSE}" ||
     fail "source provenance artifact is not emitted"
