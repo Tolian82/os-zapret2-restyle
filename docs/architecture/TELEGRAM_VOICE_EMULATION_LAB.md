@@ -1,7 +1,7 @@
 # Telegram Voice traffic emulation and strategy oracle
 
 **Status:** CURRENT TEMPORARY DESIGN · FIXED-REFLECTOR CONTROL MEDIA_PASS · HOST `/32` ROUTE BASELINE NEXT
-**Updated:** 2026-09-05
+**Updated:** 2026-09-20
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
 **Phase A evidence:** [`2026-08-28-telegram-voice-phase-a-live-observation.md`](../verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md)
@@ -9,6 +9,34 @@
 **Installed Zapret2 pin:** [`2026-09-02-telegram-voice-ipfrag-runtime-pin.md`](../verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md)
 **Companion build/runtime evidence:** [`2026-09-04-telegram-voice-companion-build-runtime-pass.md`](../verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md)
 **Fixed-reflector control/host-topology evidence:** [`2026-09-05-telegram-voice-fixed-reflector-control-pass.md`](../verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md)
+
+## 2026-09-20 current-tgcalls oracle update
+
+The owner uses Telegram calls on Windows and Android, not Telegram-iOS. The previous
+`e3069322a3d1e16ecb11a5e302242e59ddd7f09e` CLI therefore remains a qualified
+historical baseline, but it is no longer the only laboratory oracle.
+
+The TOS compose recipe now preserves that binary as `/results/tgcalls_cli` and
+builds a second binary, `/results/tgcalls_cli-current`, from public tgcalls commit
+`efd330ca04f74706024a5abdfb5b41f4e4dd1065`.
+
+The public tgcalls head contains newer reflector/networking work, including the
+current 11/13/14 engines, reflector-keying experiments and MTProto transport
+plumbing. Its public standalone tree does not carry the outer Bazel targets
+needed for the new test-only v2wasm 18/19 engines. The Linux lab therefore makes
+one explicit build-only adaptation: it removes the CLI registration/data
+dependency for 18/19 and adds the two current C++ sources required by the outer
+`tgcalls_core` target. It does not alter the 11/13/14 networking implementation.
+
+The current binary is accepted only if a local five-second P2P smoke test exits
+zero. Its exact source SHA, patchset label and SHA-256 are written to
+`/results/build-manifest-current.txt`; smoke output is written to
+`/results/current-smoke.txt`.
+
+For provider experiments, prefer `tgcalls_cli-current`. Keep the old binary for
+A/B reproduction of the earlier Phase C evidence. A difference between the two
+oracles is diagnostic; it is not by itself proof of Windows or Android product
+behaviour, which still requires one real P2P-disabled client call.
 
 ## Purpose
 
