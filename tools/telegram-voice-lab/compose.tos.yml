@@ -249,12 +249,12 @@ services:
         fi
 
         {
-          echo "observed_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "build_workspace_sha=${BUILD_WORKSPACE_SHA}"
-          echo "harness_tgcalls_sha=${HARNESS_TGCALLS_SHA}"
-          echo "windows_android_tgcalls_sha=${WINDOWS_ANDROID_TGCALLS_SHA}"
-          echo "telegram_desktop_source_sha=${TDESKTOP_SOURCE_SHA}"
-          echo "telegram_android_source_sha=${ANDROID_SOURCE_SHA}"
+          echo "observed_at_utc=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "build_workspace_sha=$${BUILD_WORKSPACE_SHA}"
+          echo "harness_tgcalls_sha=$${HARNESS_TGCALLS_SHA}"
+          echo "windows_android_tgcalls_sha=$${WINDOWS_ANDROID_TGCALLS_SHA}"
+          echo "telegram_desktop_source_sha=$${TDESKTOP_SOURCE_SHA}"
+          echo "telegram_android_source_sha=$${ANDROID_SOURCE_SHA}"
           echo "reflector_parity=source-audited-2026-09-20"
         } | tee /results/source-provenance.txt
 
