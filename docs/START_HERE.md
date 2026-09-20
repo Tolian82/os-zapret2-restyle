@@ -9,8 +9,8 @@
 - **Documentation/navigation index:** [`INDEX.md`](INDEX.md)
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
-**Updated:** 2026-09-05
-**Current handoff identity:** `v0.5.0_3` — fixed-reflector control `MEDIA_PASS`; host-only exact-route/OPNsense-console baseline next
+**Updated:** 2026-09-20
+**Current handoff identity:** `v0.5.0_3` — Windows/Android reflector parity recorded; Zapret2 v1.0.5.2 requalification and fresh `.2` baseline next
 
 ## Current identity
 
@@ -29,7 +29,9 @@
 
 Testing publication evidence: [`verification/evidence/testing-publications/v0.5.0_3.md`](verification/evidence/testing-publications/v0.5.0_3.md).
 
-Installed Zapret2 runtime pin: [`verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md`](verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md).
+Historical Zapret2 v1.0.4 runtime pin: [`verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md`](verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md).
+
+Windows/Android source-parity and 2026-09-20 live-matrix evidence: [`verification/evidence/2026-09-20-telegram-voice-win-android-source-parity.md`](verification/evidence/2026-09-20-telegram-voice-win-android-source-parity.md).
 
 Phase C companion build/runtime evidence: [`verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md`](verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md).
 
@@ -74,29 +76,27 @@ Read the current [research](research/TELEGRAM_VOICE_UDP.md) and [temporary emula
 
 Established live facts:
 
-- Phase A/B and the failed STUN zero-fake provider result remain unchanged;
-- the pinned companion binary remains SHA-256 `c2bd9e8b55d5542e4471154c832efc4cf0cdd483669dbeb747c706afbe53b11a`;
-- on 2026-09-05 fixed current endpoint `91.108.13.10:596` passed a fresh 15-second real-reflector run: both peers established, 15 bitrate records per side, non-zero BWE, no errors, exit 0;
-- this is exact-endpoint control `MEDIA_PASS`; the run used TNAS `192.168.1.100` through ordinary gateway `192.168.1.140`, so it did not traverse OPNsense;
-- the owner requires the existing TOS/Docker network named `host` and no other Docker network;
-- Docker host mode gives the container no independent IP or MAC. DHCP can identify only the TNAS host MAC; it cannot issue a separate `192.168.1.239` lease to this container;
-- pfSense DHCP may assign routes by the visible TNAS MAC, but those routes belong to the TNAS host namespace and affect every host-network workload that uses the same destination;
-- the laboratory therefore requires an endpoint-specific reflector `/32` route via OPNsense `192.168.1.2`, supplied either by the owner-controlled DHCP policy or by a temporary explicit route transaction; the TNAS default gateway is not changed and restoration is proved;
-- repeated tests are launched from the OPNsense console over temporary key-only SSH to TNAS, invoking `docker exec tgvoice-lab ...`;
-- the Telegram Voice laboratory is temporary research tooling only: no GUI, permanent backend/API/configd surface, daemon or package-owned subsystem;
+- Phase A/B and the failed STUN zero-fake result remain unchanged;
+- the owner uses Windows and Android for real Telegram calls; Telegram-iOS is not a client authority for this research;
+- Telegram Desktop source head `4d4da471fbee771c10e173a83c003ba1728989f1` pins tgcalls `24694f64b03e301ec2c90792566046e61a2c4967`;
+- current Android reflector/network source matches that same reference for `ReflectorPort.cpp`, `NativeNetworkingImpl.cpp`, and `EncryptedConnection.cpp`;
+- the qualified CLI harness stays at tgcalls `e3069322a3d1e16ecb11a5e302242e59ddd7f09e`, binary SHA-256 `c2bd9e8b55d5542e4471154c832efc4cf0cdd483669dbeb747c706afbe53b11a`; its compatibility claim is intentionally limited to the reflector wire/media path;
+- the historical 2026-09-05 `91.108.13.10:596` run reached `MEDIA_PASS`, but `192.168.1.140` is **not** an independent DPI-free control because both `.140` and OPNsense `.2` precede the same MTS/MGTS DPI;
+- current provider research uses `192.168.1.2`; do not switch to `.140` as a control criterion;
+- on Zapret2 v1.0.4, reflector fragmentation at position 8 ordered/reverse plus ordered 16/24/32 was emitted correctly on WAN but obtained no reflector reply or media establishment;
+- the owner has since upgraded the installed Zapret2 runtime to `v1.0.5.2`; the v1.0.4 captures remain historical and do not qualify the new runtime;
+- the owner requires the existing TOS/Docker network named `host`; no Telegram Voice GUI/permanent subsystem is authorized;
 - the existing Generic UDP Strategy Lab and permanent plugin code remain unchanged.
 
 The remote `_4` fragmentation branch remains unpublished and paused.
 
 ## Immediate next action
 
-1. From OPNsense, establish temporary key-only SSH command execution on TNAS `192.168.1.100`.
-2. Record `ip route get 91.108.13.10` on TNAS and require the known control route through `192.168.1.140`.
-3. Add only `91.108.13.10/32 via 192.168.1.2` on TNAS and require `ip route get` to show that gateway.
-4. From the OPNsense console, start a fresh `docker exec tgvoice-lab /results/tgcalls_cli --mode reflector --reflector 91.108.13.10:596 --duration 15` while OPNsense captures LAN/WAN traffic and counters.
-5. Remove only the owned `/32` route and prove restoration through `192.168.1.140`; restoration failure is `RESTORE_FAILED`.
-6. Only after the no-desynchronization baseline, use temporary non-packaged console scripts for the bounded candidate matrix.
-7. Remove the temporary route/SSH/scripts when research closes.
+1. Refresh/start the existing TOS `tgvoice-lab` recipe and verify the qualified binary plus `/results/source-provenance.txt`.
+2. Require TNAS `ip route get <current-reflector-ip>` to use OPNsense `192.168.1.2`; do not use `.140` as a control route.
+3. Requalify the required Zapret2 `v1.0.5.2` Lua/desync primitives on the live appliance.
+4. Select a current Telegram reflector endpoint and run a fresh no-desynchronization baseline through `.2`.
+5. Continue with bounded candidate families only after that current-runtime/current-endpoint baseline.
+6. Preserve exact cleanup for every temporary IPFW/dvtws2 mutation and archive the resulting evidence.
 
 Do not modify the GUI or permanent Strategy Lab implementation. Do not publish `_4`, intercept all Internet UDP, globally drop UDP/443, or bundle `tgcalls`/Linux into the OPNsense package.
-
