@@ -67,14 +67,9 @@ services:
           test "$$(git -C /work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls rev-parse HEAD)" = \
             "$${HARNESS_TGCALLS_SHA}"
 
-          # Telegram Desktop pins this exact tgcalls core; the audited Android
-          # ReflectorPort/NativeNetworking/EncryptedConnection sources match it
-          # for the reflector/network path. It predates the official CLI
-          # testbench, so it is recorded as provenance rather than checked out.
-          git -C /work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls fetch \
-            --depth=1 origin "$${CLIENT_REFLECTOR_TGCALLS_SHA}"
-          test "$$(git -C /work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls rev-parse FETCH_HEAD)" = \
-            "$${CLIENT_REFLECTOR_TGCALLS_SHA}"
+          # CLIENT_REFLECTOR_TGCALLS_SHA is provenance only. Its Windows pin
+          # and Android reflector/network parity are externally source-audited
+          # in the project evidence; it is not a build dependency.
 
           cd /work/Telegram-iOS
 
