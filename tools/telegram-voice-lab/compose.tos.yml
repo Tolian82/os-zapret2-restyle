@@ -56,25 +56,25 @@ services:
               https://github.com/TelegramMessenger/Telegram-iOS.git
           fi
 
-          git -C /work/Telegram-iOS fetch --depth=1 origin "$${BUILD_WORKSPACE_SHA}"
+          git -C /work/Telegram-iOS fetch --depth=1 origin "$$${BUILD_WORKSPACE_SHA}"
           git -C /work/Telegram-iOS checkout --detach --force FETCH_HEAD
           git -C /work/Telegram-iOS submodule sync --recursive
           git -C /work/Telegram-iOS submodule update \
             --init --recursive --depth=1 --force
 
           test "$$(git -C /work/Telegram-iOS rev-parse HEAD)" = \
-            "$${BUILD_WORKSPACE_SHA}"
+            "$$${BUILD_WORKSPACE_SHA}"
           test "$(git -C /work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls rev-parse HEAD)" = \
-            "${HARNESS_TGCALLS_SHA}"
+            "$${HARNESS_TGCALLS_SHA}"
 
           # Windows Telegram Desktop and Telegram Android currently share this
           # exact tgcalls network core. It predates the official CLI testbench,
           # so it is recorded as the client-provenance pin rather than checked
           # out into the build workspace.
           git -C /work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls fetch \
-            --depth=1 origin "${WINDOWS_ANDROID_TGCALLS_SHA}"
+            --depth=1 origin "$${WINDOWS_ANDROID_TGCALLS_SHA}"
           test "$(git -C /work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls rev-parse FETCH_HEAD)" = \
-            "${WINDOWS_ANDROID_TGCALLS_SHA}"
+            "$${WINDOWS_ANDROID_TGCALLS_SHA}"
 
           cd /work/Telegram-iOS
 
@@ -238,11 +238,11 @@ services:
 
           {
             echo "built_at_utc=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "build_workspace_sha=${BUILD_WORKSPACE_SHA}"
-            echo "harness_tgcalls_sha=${HARNESS_TGCALLS_SHA}"
-            echo "windows_android_tgcalls_sha=${WINDOWS_ANDROID_TGCALLS_SHA}"
-            echo "telegram_desktop_source_sha=${TDESKTOP_SOURCE_SHA}"
-            echo "telegram_android_source_sha=${ANDROID_SOURCE_SHA}"
+            echo "build_workspace_sha=$${BUILD_WORKSPACE_SHA}"
+            echo "harness_tgcalls_sha=$${HARNESS_TGCALLS_SHA}"
+            echo "windows_android_tgcalls_sha=$${WINDOWS_ANDROID_TGCALLS_SHA}"
+            echo "telegram_desktop_source_sha=$${TDESKTOP_SOURCE_SHA}"
+            echo "telegram_android_source_sha=$${ANDROID_SOURCE_SHA}"
             echo "bazel_version=8.4.2"
             sha256sum /results/tgcalls_cli
           } | tee /results/build-manifest.txt
@@ -250,11 +250,11 @@ services:
 
         {
           echo "observed_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "build_workspace_sha=${BUILD_WORKSPACE_SHA}"
-          echo "harness_tgcalls_sha=${HARNESS_TGCALLS_SHA}"
-          echo "windows_android_tgcalls_sha=${WINDOWS_ANDROID_TGCALLS_SHA}"
-          echo "telegram_desktop_source_sha=${TDESKTOP_SOURCE_SHA}"
-          echo "telegram_android_source_sha=${ANDROID_SOURCE_SHA}"
+          echo "build_workspace_sha=$${BUILD_WORKSPACE_SHA}"
+          echo "harness_tgcalls_sha=$${HARNESS_TGCALLS_SHA}"
+          echo "windows_android_tgcalls_sha=$${WINDOWS_ANDROID_TGCALLS_SHA}"
+          echo "telegram_desktop_source_sha=$${TDESKTOP_SOURCE_SHA}"
+          echo "telegram_android_source_sha=$${ANDROID_SOURCE_SHA}"
           echo "reflector_parity=source-audited-2026-09-20"
         } | tee /results/source-provenance.txt
 
