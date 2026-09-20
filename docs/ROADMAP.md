@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
 **Status:** CURRENT · COMPLETE CONCISE PLAN
-**Updated:** 2026-09-05
+**Updated:** 2026-09-20
 
 - Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - Exact handoff: [`START_HERE.md`](START_HERE.md)
@@ -78,6 +78,15 @@ Testing publication evidence: [`verification/evidence/testing-publications/v0.5.
 Owner-live evidence: [`verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md`](verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md).
 
 The stable Pages/pkg repository remains on `v0.5.0_1`; `_2` was not automatically promoted.
+
+## `v0.5.0_3` current testing line — TELEGRAM VOICE LAB ACTIVE
+
+- [x] keep package identity at `VERSION=0.5.0`, `PLUGIN_REVISION=3`
+- [x] preserve the qualified `e3069322...` tgcalls CLI as the historical Phase C baseline
+- [x] add a separate current tgcalls oracle pinned to `efd330ca04f74706024a5abdfb5b41f4e4dd1065`
+- [x] require a local P2P smoke gate and separate SHA-256 manifest for the current oracle
+- [x] record owner runtime update to Zapret2 v1.0.5.2 for future live candidate epochs
+- [x] keep this change lab/docs-only; no package payload or revision bump
 
 ## Telegram voice / UDP DPI-bypass — PHASE C TEMPORARY CONSOLE ORACLE
 
