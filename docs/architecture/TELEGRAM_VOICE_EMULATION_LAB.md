@@ -1,6 +1,6 @@
 # Telegram Voice traffic emulation and strategy oracle
 
-**Status:** CURRENT TEMPORARY DESIGN · FIXED-REFLECTOR CONTROL MEDIA_PASS · HOST `/32` ROUTE BASELINE NEXT
+**Status:** CURRENT TEMPORARY DESIGN · CURRENT-TGCALLS OPNsense BASELINE NETWORK_FAIL · EXACT-FLOW CANDIDATE NEXT
 **Updated:** 2026-09-20
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
@@ -9,6 +9,7 @@
 **Installed Zapret2 pin:** [`2026-09-02-telegram-voice-ipfrag-runtime-pin.md`](../verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md)
 **Companion build/runtime evidence:** [`2026-09-04-telegram-voice-companion-build-runtime-pass.md`](../verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md)
 **Current tgcalls owner-live evidence:** [`2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md`](../verification/evidence/2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md)
+**Current OPNsense/provider baseline:** [`2026-09-20-telegram-voice-current-opnsense-baseline.md`](../verification/evidence/2026-09-20-telegram-voice-current-opnsense-baseline.md)
 **Fixed-reflector control/host-topology evidence:** [`2026-09-05-telegram-voice-fixed-reflector-control-pass.md`](../verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md)
 
 ## 2026-09-20 current-tgcalls oracle update
@@ -63,7 +64,7 @@ The selected design is a three-tier live oracle supported by an offline wire pre
 
 Tier 2 is the primary automatic strategy oracle. Tier 1 is a fast discriminator and diagnostic probe. Tier 3 is the final acceptance row, not the search loop.
 
-The companion has passed its local gate and one real fixed-reflector control. Endpoint `91.108.13.10:596` reached `MEDIA_PASS` through TNAS gateway `192.168.1.140`. This validates the endpoint/harness, not the OPNsense/provider path. The next gate is the same endpoint after one temporary exact `/32` route through OPNsense `192.168.1.2`.
+The current companion has passed its local gate. Endpoint `91.108.13.10:596` was then run through the OPNsense/provider path selected by TNAS gateway `192.168.1.2`. The 2026-09-20 LAN/WAN capture proved two current 40-byte Reflector Hello flows crossed OPNsense/NAT cleanly, but no UDP reply returned and both tgcalls sides remained `Reconnecting`. The current no-desynchronization baseline is therefore `WIRE_OK` / `NETWORK_FAIL`. The next gate is a temporary exact-flow/exact-endpoint desynchronization candidate with on-wire proof and cleanup.
 
 The previous plan to publish and immediately live-test one STUN-only ordered-fragment candidate is paused. The remote branch `v0.5.0_4-telegram-voice-ipfrag` at `3ecdd1b3326fe7655e1d7df9edd51808e2a68dc9` contains one prepared candidate, but it has no PR, exact-head CI, merge, package publication, or owner-live result. It must not be merged as-is. After Phase C evidence, it will be rebased/reworked, replaced, or rejected.
 
