@@ -10,7 +10,7 @@ services:
       - TZ=Europe/Moscow
       - BUILD_WORKSPACE_SHA=6ad963e5b62d354da79040f388ae2b9132fb17b8
       - HARNESS_TGCALLS_SHA=e3069322a3d1e16ecb11a5e302242e59ddd7f09e
-      - WINDOWS_ANDROID_TGCALLS_SHA=24694f64b03e301ec2c90792566046e61a2c4967
+      - CLIENT_REFLECTOR_TGCALLS_SHA=24694f64b03e301ec2c90792566046e61a2c4967
       - TDESKTOP_SOURCE_SHA=4d4da471fbee771c10e173a83c003ba1728989f1
       - ANDROID_SOURCE_SHA=9552e5541e1274b9557c9832b204dbfcaf44b3dc
 
@@ -67,14 +67,14 @@ services:
           test "$$(git -C /work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls rev-parse HEAD)" = \
             "$${HARNESS_TGCALLS_SHA}"
 
-          # Windows Telegram Desktop and Telegram Android currently share this
-          # exact tgcalls network core. It predates the official CLI testbench,
-          # so it is recorded as the client-provenance pin rather than checked
-          # out into the build workspace.
+          # Telegram Desktop pins this exact tgcalls core; the audited Android
+          # ReflectorPort/NativeNetworking/EncryptedConnection sources match it
+          # for the reflector/network path. It predates the official CLI
+          # testbench, so it is recorded as provenance rather than checked out.
           git -C /work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls fetch \
-            --depth=1 origin "$${WINDOWS_ANDROID_TGCALLS_SHA}"
+            --depth=1 origin "$${CLIENT_REFLECTOR_TGCALLS_SHA}"
           test "$$(git -C /work/Telegram-iOS/submodules/TgVoipWebrtc/tgcalls rev-parse FETCH_HEAD)" = \
-            "$${WINDOWS_ANDROID_TGCALLS_SHA}"
+            "$${CLIENT_REFLECTOR_TGCALLS_SHA}"
 
           cd /work/Telegram-iOS
 
@@ -240,7 +240,7 @@ services:
             echo "built_at_utc=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "build_workspace_sha=$${BUILD_WORKSPACE_SHA}"
             echo "harness_tgcalls_sha=$${HARNESS_TGCALLS_SHA}"
-            echo "windows_android_tgcalls_sha=$${WINDOWS_ANDROID_TGCALLS_SHA}"
+            echo "client_reflector_tgcalls_sha=$${CLIENT_REFLECTOR_TGCALLS_SHA}"
             echo "telegram_desktop_source_sha=$${TDESKTOP_SOURCE_SHA}"
             echo "telegram_android_source_sha=$${ANDROID_SOURCE_SHA}"
             echo "bazel_version=8.4.2"
@@ -252,7 +252,7 @@ services:
           echo "observed_at_utc=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "build_workspace_sha=$${BUILD_WORKSPACE_SHA}"
           echo "harness_tgcalls_sha=$${HARNESS_TGCALLS_SHA}"
-          echo "windows_android_tgcalls_sha=$${WINDOWS_ANDROID_TGCALLS_SHA}"
+          echo "client_reflector_tgcalls_sha=$${CLIENT_REFLECTOR_TGCALLS_SHA}"
           echo "telegram_desktop_source_sha=$${TDESKTOP_SOURCE_SHA}"
           echo "telegram_android_source_sha=$${ANDROID_SOURCE_SHA}"
           echo "reflector_parity=source-audited-2026-09-20"
