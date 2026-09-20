@@ -1,6 +1,6 @@
 # Telegram Voice traffic emulation and strategy oracle
 
-**Status:** CURRENT TEMPORARY DESIGN · CURRENT-TGCALLS OPNsense BASELINE NETWORK_FAIL · EXACT-FLOW CANDIDATE NEXT
+**Status:** CURRENT TEMPORARY DESIGN · CURRENT-TGCALLS OPNsense BASELINE WIRE_OK / NO_REPLY_UNKNOWN · EXACT-FLOW CANDIDATE NEXT
 **Updated:** 2026-09-20
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
@@ -64,7 +64,7 @@ The selected design is a three-tier live oracle supported by an offline wire pre
 
 Tier 2 is the primary automatic strategy oracle. Tier 1 is a fast discriminator and diagnostic probe. Tier 3 is the final acceptance row, not the search loop.
 
-The current companion has passed its local gate. Endpoint `91.108.13.10:596` was then run through the OPNsense/provider path selected by TNAS gateway `192.168.1.2`. The 2026-09-20 LAN/WAN capture proved two current 40-byte Reflector Hello flows crossed OPNsense/NAT cleanly, but no UDP reply returned and both tgcalls sides remained `Reconnecting`. The current no-desynchronization baseline is therefore `WIRE_OK` / `NETWORK_FAIL`. The next gate is a temporary exact-flow/exact-endpoint desynchronization candidate with on-wire proof and cleanup.
+The current companion has passed its local gate. Endpoint `91.108.13.10:596` was then run through the OPNsense/provider path selected by TNAS gateway `192.168.1.2`. The 2026-09-20 LAN/WAN capture proved two current 40-byte Reflector Hello flows crossed OPNsense/NAT cleanly: 60/60 LAN packets appeared on WAN, payloads matched byte-for-byte, TTL changed only by forwarding, and checksums remained valid. No UDP reply returned and both tgcalls sides remained `Reconnecting`. The current no-desynchronization baseline is therefore `WIRE_OK` / `NO_REPLY_UNKNOWN`, not a claim that provider DPI has already been isolated. The current exchange is non-STUN, so the paused STUN-only `_4` profile is not a direct candidate for this baseline. The next gate is a temporary exact-flow/exact-endpoint desynchronization candidate with on-wire proof and cleanup.
 
 The previous plan to publish and immediately live-test one STUN-only ordered-fragment candidate is paused. The remote branch `v0.5.0_4-telegram-voice-ipfrag` at `3ecdd1b3326fe7655e1d7df9edd51808e2a68dc9` contains one prepared candidate, but it has no PR, exact-head CI, merge, package publication, or owner-live result. It must not be merged as-is. After Phase C evidence, it will be rebased/reworked, replaced, or rejected.
 
@@ -163,7 +163,7 @@ A captured Hello is a format/timing fixture, not a reusable live credential. Bli
 
 ## Authoritative reflector emulator
 
-Use the official [`TelegramMessenger/tgcalls`](https://github.com/TelegramMessenger/tgcalls) CLI as the protocol implementation authority. The build-validated executable pin is `e3069322a3d1e16ecb11a5e302242e59ddd7f09e`, selected by the pinned outer Telegram-iOS workspace `6ad963e5b62d354da79040f388ae2b9132fb17b8`.
+Use the official [`TelegramMessenger/tgcalls`](https://github.com/TelegramMessenger/tgcalls) CLI as the protocol implementation authority. The active build-validated executable pin is `efd330ca04f74706024a5abdfb5b41f4e4dd1065`, built inside the pinned outer Telegram-iOS workspace `6ad963e5b62d354da79040f388ae2b9132fb17b8`. The outer workspace supplies Bazel/WebRTC dependencies only; the active voice engine source is the current tgcalls pin.
 
 Why it is the current authority:
 
@@ -180,10 +180,10 @@ Current limitation: the renderer discards received audio. Exit 0 proves bidirect
 Build-validated source:
 
 - [outer Telegram-iOS workspace](https://github.com/TelegramMessenger/Telegram-iOS/tree/6ad963e5b62d354da79040f388ae2b9132fb17b8);
-- [UDP-only reflector server, generated audio, local signaling and exit gate](https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tools/cli/main.cpp);
-- [official reflector-list runner](https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tools/cli/run-test.sh);
-- [reflector Hello/retry and framing implementation](https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tgcalls/v2/ReflectorPort.cpp);
-- [later research commit](https://github.com/TelegramMessenger/tgcalls/compare/e3069322a3d1e16ecb11a5e302242e59ddd7f09e...78d07f3e46a4bb12b611ccc2816ff59ca63a83fb), retained as source research but not claimed as the built executable.
+- [UDP-only reflector server, generated audio, local signaling and exit gate](https://github.com/TelegramMessenger/tgcalls/blob/efd330ca04f74706024a5abdfb5b41f4e4dd1065/tools/cli/main.cpp);
+- [official reflector-list runner](https://github.com/TelegramMessenger/tgcalls/blob/efd330ca04f74706024a5abdfb5b41f4e4dd1065/tools/cli/run-test.sh);
+- [reflector Hello/retry and framing implementation](https://github.com/TelegramMessenger/tgcalls/blob/efd330ca04f74706024a5abdfb5b41f4e4dd1065/tgcalls/v2/ReflectorPort.cpp);
+- Historical `e3069322...` build evidence remains archived for the earlier Phase C epochs; it is no longer the active executable.
 
 ### Reproducible companion build gate — passed
 
@@ -194,14 +194,14 @@ Recorded build identity:
 | Item | Immutable value |
 |---|---|
 | Telegram-iOS | `6ad963e5b62d354da79040f388ae2b9132fb17b8` |
-| tgcalls | `e3069322a3d1e16ecb11a5e302242e59ddd7f09e` |
+| tgcalls | `efd330ca04f74706024a5abdfb5b41f4e4dd1065` |
 | Ubuntu image | `sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517` |
 | Bazel | `8.4.2`, SHA-256 `4dc8e99dfa802e252dac176d08201fd15c542ae78c448c8a89974b6f387c282c` |
-| `tgcalls_cli` | SHA-256 `c2bd9e8b55d5542e4471154c832efc4cf0cdd483669dbeb747c706afbe53b11a` |
+| `tgcalls_cli` | SHA-256 `7ad8a2eef607e92056e8e8311519d36616c45ca19f1403601bbed8e8db01f3dc` |
 
 The canonical host-network recipe is [`tools/telegram-voice-lab/compose.tos.yml`](../../tools/telegram-voice-lab/compose.tos.yml). It pins the exact Ubuntu digest and records the bounded Linux/OpenH264/WebRTC/CRC32C/FFmpeg/header fixes needed by this outer workspace. The full build evidence and recipe checksums are in [`2026-09-04-telegram-voice-companion-build-runtime-pass.md`](../verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md).
 
-The owner then ran a five-second `--mode p2p` self-test. Both sides reached `Established` at 0.021 seconds, each produced five bitrate records, BWE was non-zero, no error was reported, and the process exited 0. This is the accepted local build/runtime gate only. Changing either source pin, the image digest, or the recorded build recipe requires a new binary digest and repeat qualification.
+The owner then ran a five-second `--mode p2p` self-test of the current binary. Both sides reached `Established` at 0.039 seconds, each produced five bitrate records, BWE was non-zero, no error was reported, and the process exited 0. This is the accepted local build/runtime gate only. Changing either source pin, the image digest, or the recorded build recipe requires a new binary digest and repeat qualification.
 
 The companion remains a reproducible Linux container outside the OPNsense package. Do not add Bazel, WebRTC, an Ubuntu image, or the `tgcalls` runtime to the plugin package.
 
