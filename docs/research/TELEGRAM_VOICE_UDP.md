@@ -20,10 +20,10 @@
 ## 2026-09-20 laboratory source update
 
 Owner-client scope is Windows and Android; Telegram-iOS is not used for the live
-call tests. The previously qualified `e3069322...` CLI remains the historical
-control, while the laboratory now also builds public tgcalls
+call tests. The laboratory now uses only public tgcalls
 `efd330ca04f74706024a5abdfb5b41f4e4dd1065` as
-`/results/tgcalls_cli-current`.
+`/results/tgcalls_cli`. The earlier `e3069322...` binary remains historical
+evidence only and is no longer retained as an active lab oracle.
 
 The current oracle intentionally excludes only the new test-only v2wasm 18/19
 CLI engines because the public outer Bazel workspace does not expose their build
