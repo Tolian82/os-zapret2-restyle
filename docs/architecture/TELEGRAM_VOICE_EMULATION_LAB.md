@@ -1,6 +1,6 @@
 # Telegram Voice traffic emulation and strategy oracle
 
-**Status:** CURRENT TEMPORARY DESIGN · REBUILT LAB CALL SUCCESS IS THE TASK · POST-NAT ORDERED IPFRAG8 WIRE_OK / NO_REPLY_UNKNOWN
+**Status:** CURRENT TEMPORARY DESIGN · OWNER REPORTS CALL ESTABLISHED · FLOW / MEDIA ATTRIBUTION OPEN
 **Updated:** 2026-09-22
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
@@ -20,7 +20,7 @@ The owner explicitly confirms that `192.168.1.140` is no longer a working route.
 
 The laboratory was rebuilt because the owner reports a change in Telegram voice transport. [Current protocol research](../research/TELEGRAM_VOICE_UDP.md) records the upstream networking/MTProto changes, disabled-by-default experiments and the remaining real-client parity question. Current runs select engine `13.0.0` on both peers without custom overrides.
 
-Latest measured result: [September 21 post-NAT position-8 evidence](../verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md), `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, with no established call.
+The [September 21 ordered run](../verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) remains `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, with no established call in that run. For the [September 22 reverse run](../verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), the owner reports an established call with correct routing at call time. Its captures contain no records under `host 91.108.13.10`, and the UDP/596 fragmentation rule has zero hits. Correlate the successful call's actual tool/client, flow and media evidence before changing strategies. These narrow captures neither refute the call nor prove fragmentation caused it.
 
 ## 2026-09-20 current-tgcalls oracle update
 
@@ -353,12 +353,12 @@ Keep TURN/STUN and reflector candidates as separate families because they are di
 
 1. no desynchronization — completed on September 20, `WIRE_OK / NO_REPLY_UNKNOWN`;
 2. ordered IPv4 fragmentation at UDP position 8 — corrected post-NAT setup completed on September 21, `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`;
-3. reverse fragment order at position 8 using Zapret2's `ipfrag_disorder` option — next on the corrected setup, after syntax validation against the installed Lua;
+3. reverse fragment order at position 8 using Zapret2's `ipfrag_disorder` option — source/syntax validated; September 22 endpoint captures/counters are empty, while the owner reports an established call; correlate that observation before another candidate;
 4. evidence-driven alternate positions, initially 32, then 16 and 24;
 5. only after standalone fragmentation is measured, a bounded fake-plus-fragment family;
 6. stop widening if the control-proven endpoint remains silent for every on-wire-correct family.
 
-Position 8 separates the UDP header from the complete 40-byte Hello. Position 32 cuts inside the constant reflector marker and is a higher-value alternate than blindly increasing fake repeats. Exact reverse-order CLI serialization must be checked against the measured installed Zapret2 runtime before execution. Do not count pre-NAT or first-fragment-recapture defects as failed candidates for the corrected setup. Engine/custom-parameter comparisons belong to separate epochs so their effects are not mixed with fragmentation changes.
+Position 8 separates the UDP header from the complete 40-byte Hello. Position 32 cuts inside the constant reflector marker and remains a possible later alternate. Exact reverse-order serialization has been validated against the pinned Lua and accepted by the measured installed runtime; live fragment emission still needs traffic evidence. Do not count pre-NAT or first-fragment-recapture defects as failed candidates for the corrected setup. Engine/custom-parameter comparisons belong to separate epochs so their effects are not mixed with fragmentation changes.
 
 ### TURN/STUN family
 
@@ -406,11 +406,12 @@ Only this row is `CALL_PASS`. Audio without sustained UDP remains fallback evide
 3. [x] Retire `192.168.1.140` as a current working control; preserve the September 5 result as history.
 4. [x] Measure the current fixed-endpoint no-desynchronization baseline with LAN/WAN attribution.
 5. [x] Correct pre-NAT checksum corruption and post-NAT recapture; qualify ordered position-8 output and exact restoration.
-6. [ ] Validate and test reverse position 8 on that corrected setup, then evidence-driven alternate positions.
-7. [ ] Investigate real-client engine/configuration parity in separate experiments where source evidence justifies it.
-8. [ ] Reach and repeat `MEDIA_PASS` through OPNsense with both peers established, stats/BWE on both sides and exit 0.
-9. [ ] Complete one remote P2P-disabled Windows/Android call with two-way sound and sustained bidirectional UDP (`CALL_PASS`).
-10. [ ] Remove temporary owned routes/access/scripts at closeout; archive results and decide the paused `_4` branch.
+6. [x] Validate reverse position-8 syntax and preserve the first archive together with the owner's established-call/correct-route observation.
+7. [ ] Correlate and reproduce that successful call; qualify the actual flow and reverse-strategy behavior before considering alternate positions.
+8. [ ] Investigate real-client engine/configuration parity in separate experiments where source evidence justifies it.
+9. [ ] Reach and repeat `MEDIA_PASS` through OPNsense with both peers established, stats/BWE on both sides and exit 0.
+10. [ ] Complete one remote P2P-disabled Windows/Android call with two-way sound and sustained bidirectional UDP (`CALL_PASS`).
+11. [ ] Remove temporary owned routes/access/scripts at closeout; archive results and decide the paused `_4` branch.
 
 Every new candidate must retain exact endpoint/process isolation, complete wire/media evidence and exact restoration. Optional SSH automation and a secondary correlated TURN probe are not blockers for the present reflector-call objective. Package identity remains `VERSION=0.5.0`, `PLUGIN_REVISION=3`; the laboratory stays outside permanent plugin code.
 

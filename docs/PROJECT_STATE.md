@@ -86,7 +86,7 @@ No further package correction belongs to this scope.
 
 ## Telegram voice / UDP research state
 
-The current task is to make a call establish and carry bidirectional media through OPNsense in the rebuilt tgvoice laboratory. Phase A/B, the rebuild/local runtime gate and local wire corrections are completed facts; the current media goal remains open.
+The owner now reports an established call with correct routing at the time. The current task is to correlate and reproduce that success, then qualify bidirectional media through OPNsense in the rebuilt tgvoice laboratory. Phase A/B, the rebuild/local runtime gate and local wire corrections are completed facts; formal media qualification for this observation remains open.
 
 Authorities and evidence:
 
@@ -96,7 +96,8 @@ Authorities and evidence:
 - [historical 2026-09-05 control](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md);
 - [current build/runtime qualification](verification/evidence/2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md);
 - [current unmodified OPNsense baseline](verification/evidence/2026-09-20-telegram-voice-current-opnsense-baseline.md);
-- [post-NAT position-8 test sequence and restoration](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md).
+- [post-NAT position-8 test sequence and restoration](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md);
+- [reverse-run capture and owner-reported call establishment](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md).
 
 Established facts:
 
@@ -107,6 +108,8 @@ Established facts:
 - The September 20 no-desynchronization run to `91.108.13.10:596` traversed OPNsense correctly: 60 outbound Hello datagrams, preserved payloads and valid checksums, no incoming UDP replies.
 - The September 21 pre-NAT checksum defect and subsequent recapture of first fragments were corrected in temporary runner `tgvoice_ipfrag8_postnat_v2.py`. The qualified final run produced 60 ordered pairs, 60 valid reassembled UDP checksums, no original duplicates and no incoming reflector packets.
 - That final 15-second CLI run still had both peers `Reconnecting`, no established call, 15 bitrate records per side, zero BWE, no reported errors and exit 1. Result: local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, not `MEDIA_PASS`.
+- Reverse position-8 source/syntax validation completed, and the September 22 run loaded the profile successfully. Its LAN/WAN captures contain zero records under `host 91.108.13.10`; the UDP/596 fragmentation rule recorded zero hits. Cleanup restored the measured state. No companion call log is included.
+- After reviewing that archive, the owner explicitly reported that **the call established and routing was correct during the call**. Preserve this observation separately from the earlier failed CLI runs. The exact calling tool/client, flow and media metrics are not yet correlated with the archive; neither failed-call attribution nor a reverse-fragmentation success follows from its empty endpoint captures.
 - Restoration is to the recorded pre-test state. Normal rules 19000/19001 were already absent before the post-NAT experiments; restoring that snapshot does not prove normal Zapret forwarding was re-enabled. The existing listener on 989 remained; temporary rule 18990/listener 990 were removed and IPv4 hook order restored.
 - Docker `host` is the owner's selected topology, with no independent container IP/MAC. Routing belongs to TNAS; use the measured path through `192.168.1.2` and only bounded endpoint-route changes if necessary. Never prescribe restoration to the retired gateway.
 - TNAS/OPNsense console execution is already available. Temporary key-only SSH may automate it later, but does not block experiments.
@@ -116,7 +119,7 @@ The runtime update to Zapret2 `v1.0.5.2` is owner-reported; exact measured binar
 
 ## Immediate next boundary
 
-Follow the exact next action in [`START_HERE.md`](START_HERE.md): continue controlled experiments from the qualified post-NAT wire path toward repeated `MEDIA_PASS`, then a real remote Windows/Android `CALL_PASS`. There is no current independent working control. Its absence limits a causal `NETWORK_FAIL` claim; it does not block searching for a working call. A failed restoration remains overriding `RESTORE_FAILED`.
+Follow the exact next action in [`START_HERE.md`](START_HERE.md): correlate the owner's successful call with the actual flow and capture scope, preserve and reproduce its conditions, then qualify repeated `MEDIA_PASS` and a real remote Windows/Android `CALL_PASS`. Do not change split positions or reopen routing diagnosis ahead of that attribution. There is no current independent working control; its absence limits causal `NETWORK_FAIL` attribution, not continued work. A failed restoration remains overriding `RESTORE_FAILED`.
 
 ## Completed version-line archives
 
