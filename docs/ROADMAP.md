@@ -112,14 +112,17 @@ Current architecture: [`architecture/TELEGRAM_VOICE_EMULATION_LAB.md`](architect
 - [x] stage temporary non-packaged exact-endpoint runner and distinguish the corrected file as `tgvoice_ipfrag8_postnat_v2.py`
 - [x] correct pre-NAT UDP checksum corruption and post-NAT first-fragment recapture
 - [x] qualify ordered position-8 post-NAT wire output: 60 complete pairs, valid checksums, no replies; `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, call still fails
-- [ ] test reverse position 8 with installed-runtime syntax validation, then position 32 and evidence-driven 16/24 alternatives
+- [x] validate reverse position-8 syntax/source and run the distinct temporary runner; supplied endpoint captures and rule counters are empty, cleanup restored
+- [x] record the owner's subsequent report that the call established and routing was correct at call time
+- [ ] correlate and reproduce that successful call with its calling tool/client, actual flow, capture window and media evidence before changing strategies
+- [ ] qualify reverse position-8 behavior on the actual selected flow; consider positions 32/16/24 only if the resulting evidence warrants them
 - [ ] assess engine/custom-parameter parity in separate source-guided experiments without changing fragmentation simultaneously
 - [ ] achieve and repeat a real-reflector laboratory call through OPNsense: both peers established, both stats/BWE positive, exit 0 (`MEDIA_PASS`)
 - [ ] add correlated TURN Allocate only as a secondary oracle
 - [ ] repeat any winner and complete one final remote P2P-disabled real call
 - [ ] remove temporary SSH/route/scripts, archive evidence and decide `_4`
 
-Current test evidence: [`2026-09-21 post-NAT fragmentation`](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md). The [September 5 control](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md) is historical and its route is retired.
+Current test evidence: [`September 22 reverse run and successful-call observation`](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), following [`September 21 ordered post-NAT fragmentation`](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md). The [September 5 control](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md) is historical and its route is retired.
 
 No GUI, permanent lab controller/API/daemon, Generic UDP semantic change or Telegram Voice lab package subsystem belongs to this work. Package identity remains `0.5.0_3`.
 
@@ -148,6 +151,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Make the call pass with bidirectional media in the rebuilt laboratory through OPNsense.** The corrected ordered position-8 test establishes local wire validity, not call success. Continue the bounded plan in `START_HERE.md`; do not return to `192.168.1.140` as a working control or delay the task waiting for it. Keep no-reply results causally inconclusive without a fresh independent control, and keep the Docker `host` / temporary-tooling / package `0.5.0_3` boundary.
+**Correlate and reproduce the successful call reported by the owner, then qualify bidirectional media through OPNsense.** The empty reverse-run capture is scoped to one reflector and does not refute that observation. Follow `START_HERE.md` before trying another split position. Do not return to retired `192.168.1.140`; preserve the Docker `host`, temporary-tooling and package `0.5.0_3` boundary.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).

@@ -1,6 +1,6 @@
 # Telegram voice / UDP DPI-bypass research
 
-**Status:** RESEARCH CURRENT · REBUILT LAB CALL SUCCESS IS THE TASK · POST-NAT ORDERED IPFRAG8 WIRE_OK / NO_REPLY_UNKNOWN · `_4` PAUSED
+**Status:** RESEARCH CURRENT · OWNER REPORTS CALL ESTABLISHED · CORRELATE FLOW / STRATEGY · `_4` PAUSED
 **Opened:** 2026-08-19
 **Research conclusion:** 2026-08-19
 **Phase A owner-live observation:** 2026-08-28
@@ -22,7 +22,7 @@
 
 The owner explicitly states that `192.168.1.140` is no longer a working route. It is retired from current testing and is not a usable independent control or a required restoration destination. The September 5 success is preserved as a historical result with the older binary; it cannot qualify the present endpoint/path.
 
-The owner reports that Telegram changed how voice is transported and that this is why the tgvoice laboratory had to be rebuilt. This is the recorded project motivation. The current task is **to make the call establish and carry bidirectional media in the rebuilt laboratory through OPNsense**, not merely to demonstrate outbound packets. No current reflector `MEDIA_PASS` has been obtained with the rebuilt oracle on that path.
+The owner reports that Telegram changed how voice is transported and that this is why the tgvoice laboratory had to be rebuilt. This is the recorded project motivation. The owner subsequently reported **an established call with correct routing at call time**. The current task is to correlate and reproduce that success and qualify bidirectional media through OPNsense. Formal reflector `MEDIA_PASS` evidence for this new observation is not yet supplied; that does not negate the owner's report.
 
 ### What official Telegram sources establish
 
@@ -38,11 +38,15 @@ The [current CLI](https://github.com/TelegramMessenger/tgcalls/blob/efd330ca04f7
 
 Telegram's [voice/video transport documentation](https://core.telegram.org/api/end-to-end/video-calls) describes WebRTC-based transport with optimized MTProto encryption and API call negotiation. It explicitly covers clients from version 7.0 (2020); it is background architecture, not a dated announcement of a September 2026 migration. The reviewed sources do not establish a global rollout date or a universal STUN-to-reflector switch. Both packet families were already present in earlier project captures. The initial [Reflector Hello implementation](https://github.com/TelegramMessenger/tgcalls/blob/efd330ca04f74706024a5abdfb5b41f4e4dd1065/tgcalls/v2/ReflectorPort.cpp) and our current capture still show the same 40-byte framing family.
 
-### Latest completed experiment
+### Qualified ordered experiment — September 21
 
 The [September 21 evidence](../verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) closes the local ordered position-8 wire correction: fragmentation after PF/NAT plus `frag !mf,!offset` avoids both a stale UDP checksum and recapture of the first replacement fragment. The corrected runner emitted 60 complete pairs, all reassembled UDP checksums valid, without duplicate originals. No incoming reflector packet appeared; both peers remained `Reconnecting`, BWE was zero, exit was 1, and cleanup restored the pre-test state.
 
-The result is **local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`; the call still fails**. No currently working independent control is established. That limits causal attribution but does not prevent the next bounded experiment toward a working laboratory call. The old gateway is not a prerequisite.
+That run's result is **local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`; its call failed**. No currently working independent control is established. That limits causal attribution but does not prevent continued work. The old gateway is not a prerequisite.
+
+### Latest observation — September 22
+
+The [reverse-run archive and owner correction](../verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md) record a loaded reverse position-8 profile, empty captures filtered to `91.108.13.10`, zero hits on the UDP/596 interception rule and exact restoration. The owner reports that the call established and routing was correct at the time. The capture does not cover all possible call destinations, and contains no companion log. Preserve the successful-call observation; identify its tool/client, actual flow, timing and media evidence before attributing it to reverse fragmentation or trying another split position. Empty endpoint captures are not proof of an absent call or incorrect routing.
 
 ## 2026-09-20 laboratory source update
 
@@ -599,7 +603,7 @@ The oracle has four evidence layers:
 
 A causal `NETWORK_FAIL` verdict requires a recent independent working control against the same fixed endpoint. Without one, continue bounded tests and record silence as `NO_REPLY_UNKNOWN`; do not block the campaign waiting for retired `192.168.1.140`. Each candidate receives a fresh process/source-flow state. The temporary OPNsense scope is one selected probe client, one reflector IPv4 address and one port in `596–599`; the reflector profile must not use `--payload=stun` because Reflector Hello is not STUN.
 
-The initial matrix is baseline, ordered position 8, reverse position 8, then evidence-driven alternates. Baseline and the corrected post-NAT ordered position-8 test are now complete without a media pass. Reverse position 8 is next for the corrected setup, followed by position 32 and evidence-driven 16/24. Fake-plus-fragment follows only after standalone families. Repeat any winner with fresh processes, then perform the real-call gate; additional reflector coverage is recorded as separate epochs, never silently substituted within a comparison.
+The initial matrix is baseline, ordered position 8, reverse position 8, then evidence-driven alternates. Baseline and corrected ordered position-8 runs completed without a media pass. Reverse syntax is now validated and its first archive is empty for the selected endpoint, while the owner reports an established call. Correlate and reproduce that success before advancing the matrix. Positions 32/16/24 remain conditional later experiments; fake-plus-fragment follows only after standalone families. Repeat a qualified winner with fresh processes, then perform the real-call gate; additional reflector coverage remains a separate epoch.
 
 #### Phase C companion and fixed-reflector result
 
@@ -696,7 +700,7 @@ Risk: high and unrelated to the primary mechanism. It can disable QUIC/HTTP/3 an
 9. **Can current Strategy Lab auto-find the voice strategy?** Not with its current arbitrary-reply oracle and `from me` rule. A separate external-probe runner using pinned official tgcalls and a real reflector can provide `MEDIA_PASS` while reusing existing lifecycle machinery.
 10. **What was built and measured first?** Phase A completed the traffic observation; `0.5.0_3` implemented the Telegram-IP-scoped native STUN helper. Owner-live testing proved its mechanics and rollback but the zero-fake strategy failed to restore inbound or sustained Telegram UDP.
 11. **What about P2P?** The safe MVP does not claim arbitrary-peer P2P interception. Relay-mode verification is the first target.
-12. **What is next?** Achieve a passing media call in the rebuilt laboratory through OPNsense. Start from the corrected post-NAT ordered position-8 wire result; isolate reverse order and alternate positions, and investigate engine/configuration parity separately when justified. Preserve full wire/media/cleanup evidence. The STUN-only `_4` branch remains paused because it does not match the captured 40-byte Reflector Hello.
+12. **What is next?** Correlate and reproduce the owner's successful call with its actual flow and media evidence. The empty endpoint-filtered reverse capture does not refute the call, but does not attribute it to fragmentation. Keep the successful conditions while resolving this; later strategy/engine comparisons remain isolated. The STUN-only `_4` branch stays paused.
 
 ## Sources added during research
 
@@ -736,9 +740,9 @@ Community reports are evidence of observed deployments only; they do not overrid
 
 The exact current handoff is [`START_HERE.md`](../START_HERE.md); the runner and acceptance contract is in [`TELEGRAM_VOICE_EMULATION_LAB.md`](../architecture/TELEGRAM_VOICE_EMULATION_LAB.md).
 
-1. Keep the qualified `efd330ca...` binary, engine/configuration and `91.108.13.10:596` fixed for each comparison through OPNsense.
-2. Use the corrected post-NAT runner contract, validate the installed reverse-order syntax, and test one factor at a time: reverse position 8, then position 32 and evidence-driven 16/24.
-3. Record returned packets and media success as well as local wire truth; exact cleanup remains mandatory. A fresh independent control improves causal interpretation but the retired gateway is not a task dependency.
+1. Identify the successful call's tool/client, actual endpoint/transport and media evidence, accepting the owner's statement that routing was correct at call time.
+2. Correlate that call with the endpoint-filtered reverse archive and preserve its successful conditions for a bounded repeat if needed. Do not change strategies before this attribution; installed reverse-order syntax validation is already complete.
+3. For subsequent CLI comparisons, keep the qualified binary, engine/configuration and endpoint fixed and change one factor at a time. Record returned packets/media, local wire truth and cleanup. A fresh independent control improves causal interpretation but the retired gateway is not a task dependency.
 4. Compare engine/custom parameters separately only when the upstream findings and failure stage justify it. Do not assume later ICE/media changes explain no initial reply on WAN.
 5. Reach and repeat `MEDIA_PASS`, then verify one remote P2P-disabled Windows/Android call with two-way audio and sustained bidirectional UDP before a production decision.
 

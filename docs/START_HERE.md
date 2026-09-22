@@ -10,7 +10,7 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-09-22
-**Current handoff identity:** `v0.5.0_3` — rebuilt Telegram Voice lab; ordered post-NAT fragmentation is `WIRE_OK / NO_REPLY_UNKNOWN`; successful media call is the current task
+**Current handoff identity:** `v0.5.0_3` — owner reports an established call with correct routing; correlate that success with the reverse-run capture before changing strategies
 
 ## Current identity
 
@@ -70,9 +70,9 @@ The source correction, full CI/FreeBSD-15 qualification, testing-package publica
 
 ## Telegram voice / UDP — current laboratory task
 
-**Current task: establish a call with bidirectional media in the rebuilt laboratory through OPNsense.** The task is complete only after repeatable `MEDIA_PASS`, followed by a real Windows/Android call for product acceptance. Correct outbound packets alone do not complete it.
+**Current task: identify and reproduce the successful call reported by the owner, then qualify bidirectional media through OPNsense.** The owner confirms that the call established and routing was correct at the time. The task is complete after repeatable `MEDIA_PASS`, followed by a real Windows/Android call for product acceptance; packet attribution and media evidence for this observation remain open.
 
-Read the [research](research/TELEGRAM_VOICE_UDP.md), [temporary laboratory architecture](architecture/TELEGRAM_VOICE_EMULATION_LAB.md), and [2026-09-21 test evidence](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md).
+Read the [research](research/TELEGRAM_VOICE_UDP.md), [temporary laboratory architecture](architecture/TELEGRAM_VOICE_EMULATION_LAB.md), [September 21 ordered test evidence](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md), and [September 22 reverse run / successful-call observation](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md).
 
 Current facts:
 
@@ -82,16 +82,18 @@ Current facts:
 - The current command uses engine `13.0.0` on both peers with no custom-parameter override. These are engine versions, not Telegram application versions. Windows/Android transport parity still needs evidence.
 - The no-desynchronization OPNsense baseline sent 60 valid 40-byte Reflector Hellos through NAT, with zero replies.
 - The corrected post-NAT runner `tgvoice_ipfrag8_postnat_v2.py` (`postnat-nofrag-v2`) then emitted 60 complete ordered fragment pairs with valid reassembled UDP checksums and no unfragmented originals. Zero packets returned from the reflector; both peers stayed `Reconnecting`, BWE was zero, and the 15-second call exited 1.
-- Latest classification: **local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`; no `MEDIA_PASS`**. No currently working independent control is established.
+- The September 21 ordered run is **local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`; no `MEDIA_PASS` in that run**. This does not classify the later owner-reported successful call. No currently working independent control is established.
+- Reverse position-8 syntax/source validation is complete. The September 22 archive records a loaded profile, empty LAN/WAN captures filtered to `91.108.13.10`, zero hits on rule 18990 and `RESTORE_OK`; it contains no companion call log.
+- The owner then confirmed **the call established and routing was correct during the call**. The calling tool/client, actual flow and media details are not yet correlated with that archive. The report stands; the narrow capture neither disproves it nor proves reverse fragmentation caused it.
 - Docker remains on the existing `host` network. Tests already work from the TNAS and OPNsense consoles; optional SSH automation is not a prerequisite for the next experiment.
 - The runtime is owner-reported Zapret2 `v1.0.5.2`; exact binary/Lua identities and the limits of restoration are in the latest evidence. The older v1.0.4 pin is historical.
 
 ## Immediate next action
 
-1. Keep the qualified binary, engine/configuration and `91.108.13.10:596` fixed. Record the actual TNAS route through OPNsense `192.168.1.2`; if a temporary exact `/32` is needed, restore the measured pre-test route afterward, with no hardcoded `192.168.1.140` assumption.
-2. Use the corrected post-NAT interception and fragment exclusion as the starting point. Validate the installed Lua syntax for one isolated reverse-order position-8 candidate; then test position 32, followed by 16/24 only as evidence warrants. Earlier malformed runs are not negative network results for this setup.
-3. For each fresh 15-second process, retain LAN/WAN evidence including non-initial fragments, counters, checksums, replies, both peer states, BWE, exit status and exact cleanup. Keep the old and revised runner filenames distinct.
-4. Track transport parity explicitly. Any engine/custom-parameter comparison is a separate experiment based on the source findings; do not combine it with a fragment change or presume it fixes the unanswered initial Hello. Changing the endpoint starts a separate comparison epoch.
-5. Repeat any candidate reaching `MEDIA_PASS`; then verify a remote P2P-disabled Windows/Android call with two-way sound and sustained bidirectional UDP (`CALL_PASS`). A fresh independent control would improve causal attribution, but absence of the retired route does not suspend the current task.
+1. Accept the owner's correct-route observation. Identify whether the successful call used `tgcalls_cli` or a Telegram client and obtain its existing output/media observation from that run; do not infer a route failure from the empty endpoint capture.
+2. Correlate the successful call's actual endpoint, transport and timing with the September 22 capture. If a repeat is needed, preserve the successful conditions and use bounded observation of the selected client's actual flow. The existing capture covers only `91.108.13.10`; fragmentation covers only its UDP port 596.
+3. Keep the qualified runtime and distinctly named `tgvoice_ipfrag8_reverse_postnat_v1.py` unchanged while resolving attribution. Once the flow is identified, compare baseline/reverse behavior one factor at a time where applicable. Do not advance to positions 32/16/24 before understanding this success.
+4. For a CLI comparison, keep the binary, engine/configuration and endpoint fixed, use fresh processes, and retain wire/counter/checksum/reply evidence plus both peer states, BWE, exit status and exact cleanup. Engine/configuration or endpoint changes start separate comparisons.
+5. Reproduce and qualify `MEDIA_PASS`; then verify a remote P2P-disabled Windows/Android call with two-way sound and sustained bidirectional UDP (`CALL_PASS`). A fresh independent control improves causal attribution, but the retired route is not a prerequisite and is never an assumed restoration destination.
 
 The laboratory remains temporary console tooling. Keep package identity `0.5.0_3`, Generic UDP and production plugin code unchanged; `_4` remains unpublished and paused. No GUI/permanent laboratory subsystem, all-Internet UDP interception, global UDP/443 drop or bundled tgcalls/Linux belongs to this task.

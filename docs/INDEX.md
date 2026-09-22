@@ -35,6 +35,7 @@ Read completely in this order (`DOC-016`):
 - [`SECURITY.md`](SECURITY.md) — security reporting/reference.
 - [`2026-09-20 current laboratory qualification`](verification/evidence/2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md) — rebuilt binary and local P2P gate.
 - [`2026-09-21 post-NAT fragmentation tests`](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) — local defects, corrected wire output, failed media call, restoration and archive identities.
+- [`2026-09-22 reverse run and successful-call observation`](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md) — owner reports an established call with correct routing; endpoint captures/counters are empty, so flow and strategy attribution remain open.
 
 ## Level 3 — completed version-line archives
 
