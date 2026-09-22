@@ -1,6 +1,6 @@
 # Telegram voice / UDP DPI-bypass research
 
-**Status:** RESEARCH CURRENT · PHASE A/B COMPLETE · CURRENT REFLECTOR BASELINE WIRE_OK / NO_REPLY_UNKNOWN · EXACT-FLOW CANDIDATE NEXT · `_4` PAUSED
+**Status:** RESEARCH CURRENT · REBUILT LAB CALL SUCCESS IS THE TASK · POST-NAT ORDERED IPFRAG8 WIRE_OK / NO_REPLY_UNKNOWN · `_4` PAUSED
 **Opened:** 2026-08-19
 **Research conclusion:** 2026-08-19
 **Phase A owner-live observation:** 2026-08-28
@@ -12,11 +12,37 @@
 **Phase C emulation design:** 2026-09-03
 **Phase C companion build/runtime:** 2026-09-04
 **Phase C fixed-reflector control:** 2026-09-05
-**Updated:** 2026-09-20
+**Updated:** 2026-09-22
 **Owner instruction:** Telegram voice/call traffic over UDP is the current selected research task.
 **Pinned starting `main`:** `62e9a62e484d7a983b9b3f91ec672bbe96f684f3`
 **Research-boundary merge:** `9bc225ea457583ffec696e393c8ba697798369f6`
 **Package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3` — bounded Phase B runtime/lifecycle passed; zero-fake provider/network gate failed. Remote `_4` source branch exists but is unpublished and paused.
+
+## 2026-09-22 owner correction and current objective
+
+The owner explicitly states that `192.168.1.140` is no longer a working route. It is retired from current testing and is not a usable independent control or a required restoration destination. The September 5 success is preserved as a historical result with the older binary; it cannot qualify the present endpoint/path.
+
+The owner reports that Telegram changed how voice is transported and that this is why the tgvoice laboratory had to be rebuilt. This is the recorded project motivation. The current task is **to make the call establish and carry bidirectional media in the rebuilt laboratory through OPNsense**, not merely to demonstrate outbound packets. No current reflector `MEDIA_PASS` has been obtained with the rebuilt oracle on that path.
+
+### What official Telegram sources establish
+
+The old and new laboratory pins differ: [source comparison](https://github.com/TelegramMessenger/tgcalls/compare/e3069322a3d1e16ecb11a5e302242e59ddd7f09e...efd330ca04f74706024a5abdfb5b41f4e4dd1065). Relevant changes in that history are:
+
+| Upstream change | Technical effect | Relevance and limit for this laboratory |
+|---|---|---|
+| [MTProto transport for PeerConnection engines, `bd22b80`](https://github.com/TelegramMessenger/tgcalls/commit/bd22b80ae1a132c348866013203db225a986e27d), 2026-09-01 | With `network_use_mtproto`, engines 11 and 18/19 can encrypt RTP and SCTP using MTProto above ICE, replacing DTLS/SRTP on this path and matching engine 13's transport. It requires the matching WebRTC SCTP support. | The flag is disabled by default for those engines. STUN remains outside that encryption and the reflector/candidate mechanism is unchanged. This is not evidence that the initial Hello changed or that every released client switched transport. Engines 18/19 are not included in this lab build. |
+| [Reflector candidate address resolution, `c09fa36`](https://github.com/TelegramMessenger/tgcalls/commit/c09fa36abe4ee8a87f7fe4df3e7edbae90bffa6c), 2026-08-20; [additional engine wiring, `e284539`](https://github.com/TelegramMessenger/tgcalls/commit/e284539c9feddb9b6012a760d5cd9bba56b63d0f), 2026-08-28 | `network_reflector_resolve_remote_candidate_ip` lets UDP connection lookup use a resolved remote address and guards against collisions with existing connections. | Also disabled by default. It can affect ICE Binding-response association after traffic returns; it does not establish why our WAN capture contains no incoming reflector packet at all. |
+| [Engine parity fixes, `b174ea9`](https://github.com/TelegramMessenger/tgcalls/commit/b174ea9813c9ca7cc1645f86abaae1d364f3bbeb), 2026-08-20 | Among the changes, `network_disable_stun_when_unconfigured` prevents affected PeerConnection engines from treating an unconfigured UDP reflector as a generic STUN server. | This is another optional, default-off experiment. It does not mean a reflector Hello is a STUN request or that a STUN-only profile covers it. |
+
+The [current CLI](https://github.com/TelegramMessenger/tgcalls/blob/efd330ca04f74706024a5abdfb5b41f4e4dd1065/tools/cli/main.cpp) defaults to engine `13.0.0`, and exposes engine/custom-parameter overrides. The owner's recorded commands supply neither override. Current source plus a passed local P2P smoke test proves a qualified rebuilt harness, not identical negotiated engine/flags/endpoints to every released Windows/Android client. Record those separately if transport parity is investigated; do not blindly enable all experimental flags.
+
+Telegram's [voice/video transport documentation](https://core.telegram.org/api/end-to-end/video-calls) describes WebRTC-based transport with optimized MTProto encryption and API call negotiation. It explicitly covers clients from version 7.0 (2020); it is background architecture, not a dated announcement of a September 2026 migration. The reviewed sources do not establish a global rollout date or a universal STUN-to-reflector switch. Both packet families were already present in earlier project captures. The initial [Reflector Hello implementation](https://github.com/TelegramMessenger/tgcalls/blob/efd330ca04f74706024a5abdfb5b41f4e4dd1065/tgcalls/v2/ReflectorPort.cpp) and our current capture still show the same 40-byte framing family.
+
+### Latest completed experiment
+
+The [September 21 evidence](../verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) closes the local ordered position-8 wire correction: fragmentation after PF/NAT plus `frag !mf,!offset` avoids both a stale UDP checksum and recapture of the first replacement fragment. The corrected runner emitted 60 complete pairs, all reassembled UDP checksums valid, without duplicate originals. No incoming reflector packet appeared; both peers remained `Reconnecting`, BWE was zero, exit was 1, and cleanup restored the pre-test state.
+
+The result is **local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`; the call still fails**. No currently working independent control is established. That limits causal attribution but does not prevent the next bounded experiment toward a working laboratory call. The old gateway is not a prerequisite.
 
 ## 2026-09-20 laboratory source update
 
@@ -53,9 +79,10 @@ The paired LAN/WAN captures establish the forwarding truth:
 - zero inbound UDP/596 packets from the reflector appear on either capture.
 
 Therefore the current client still uses the same non-STUN 40-byte Reflector
-Hello framing family at this stage. The old-client hypothesis is ruled out, and
-ordinary OPNsense/NAT forwarding is not corrupting or dropping the outbound
-baseline packets.
+Hello framing family at this stage. The old laboratory binary is no longer
+being used; this does not rule out differences in real-client engine negotiation
+or custom parameters. Ordinary OPNsense/NAT forwarding is not corrupting or
+dropping the outbound baseline packets.
 
 The strict result is `WIRE_OK / NO_REPLY_UNKNOWN`. The capture proves a failed
 current reflector exchange on this path but does not, by itself, identify the
@@ -77,7 +104,7 @@ Phase B then tested the exact official zero-fake/repeats=2 hypothesis on the sam
 
 A separate generic STUN exchange with `141.101.90.1:3478` returned bidirectional responses in the same WAN environment. Thus neither UDP nor STUN framing was universally blocked; the unresolved discriminator is Telegram-specific destination/direction/path policy versus a more selective payload/relay classifier.
 
-Phase C proved the pinned media oracle against current endpoint `91.108.13.10:596`: a fresh 15-second run established both peers, produced 15 bitrate records per side, reported non-zero BWE/no errors and exited 0. This is exact-endpoint control `MEDIA_PASS`. It used TNAS source `192.168.1.100` through `192.168.1.140`, so it validates the endpoint/harness but not the OPNsense path.
+On 2026-09-05, the historical Phase C binary reached `MEDIA_PASS` at `91.108.13.10:596` through TNAS gateway `192.168.1.140`: both peers established, 15 records per side, non-zero BWE, no errors and exit 0. That did not traverse OPNsense. The owner has since retired this route as non-working; this old success is not a current control for the rebuilt laboratory.
 
 The original next candidate was source-designed from Zapret2's UDP fragmentation path: re-send each selected STUN datagram as two ordered IPv4 fragments at UDP position 8, then drop the unfragmented original. The owner then confirmed that the installed Zapret2 `v1.0.4` runtime exposes this primitive. Remote branch `v0.5.0_4-telegram-voice-ipfrag` preserves that implementation, but no PR, CI, merge, package or network result exists and the branch is now paused.
 
@@ -92,7 +119,7 @@ The exact strategy was emitted correctly and still received no Telegram TURN rep
 
 The Linux/OpenWrt `50-stun4all` integration cannot be copied literally to OPNsense. Its important property is **kernel-side STUN signature filtering before NFQUEUE**. Zapret2 upstream explicitly documents that FreeBSD `ipfw` lacks raw-payload filtering. Passing all UDP through `dvtws2` merely to discover STUN would create a broad kernel/userspace interception path and is not acceptable as the default production design.
 
-**The project shape remains hybrid and evidence-first, but the next step is now an oracle rather than another package.** Offline replay can predict interception and exact wire transformation only. A standards-correlated TURN probe can prove a returned STUN path but not media. The official pinned `TelegramMessenger/tgcalls` CLI can create caller/callee instances with local signaling and route bidirectional WebRTC media through a real Telegram UDP reflector with TCP disabled. One final real P2P-disabled remote call remains the product gate.
+**The project remains a temporary laboratory campaign: the rebuilt oracle exists, and the next objective is a passing media call.** Offline replay can predict interception and exact wire transformation only. A standards-correlated TURN probe can prove a returned STUN path but not media. The official pinned `TelegramMessenger/tgcalls` CLI can create caller/callee instances with local signaling and route bidirectional WebRTC media through a real Telegram UDP reflector with TCP disabled. One final real P2P-disabled remote call remains the product gate.
 
 The companion build/runtime gate is now complete for the active oracle. The owner built `tgcalls_cli` from current tgcalls `efd330ca04f74706024a5abdfb5b41f4e4dd1065` inside `Telegram-iOS@6ad963e5b62d354da79040f388ae2b9132fb17b8`; the produced binary SHA-256 is `7ad8a2eef607e92056e8e8311519d36616c45ca19f1403601bbed8e8db01f3dc`. A five-second local P2P self-test reached `Established` on both sides at 0.039 seconds, collected five bitrate records per side, reported non-zero BWE and no errors, and exited 0. This proves the executable/runtime gate only. Historical `e3069322...` evidence remains valid for its old epochs but is no longer the active oracle.
 
@@ -512,7 +539,7 @@ Position 16 would leave the first 8 STUN bytes—including the complete `0x2112A
 
 Zapret2's FreeBSD raw-send implementation uses a divert socket (`PF_DIVERT` on FreeBSD 14+) and sends each reconstructed fragment through that path. The existing Phase B fake packets already proved that generated `dvtws2` traffic reaches the owner's WAN; the fragment candidate uses the same raw-send layer.
 
-No firewall architecture change is required. Keep:
+The September 2 STUN-only design originally proposed retaining the following firewall arrangement. This is historical design, not an adequate contract for the current reflector experiment: September 21 evidence requires fragmentation after PF/NAT and explicit exclusion of all replacement fragments from the temporary divert rule. The paused packaged `_4` design has not received that qualification. Original arrangement:
 
 - the `zapret2_tgvoice` active/staging tables;
 - the all-destination-port outbound UDP rule bounded by that table;
@@ -570,23 +597,23 @@ The oracle has four evidence layers:
 3. official pinned `tgcalls_cli` routes in-process caller/callee WebRTC media through a real Telegram UDP reflector with TCP disabled (`REFLECTOR_READY` / `MEDIA_PASS`);
 4. one final real remote-participant P2P-disabled Telegram call provides end-to-end product evidence (`CALL_PASS`).
 
-Every negative provider result requires a recent independent unblocked control against the same fixed endpoint. Each candidate receives a fresh process/source-flow state. The temporary OPNsense scope is one selected probe client, one reflector IPv4 address and one port in `596–599`; the reflector profile must not use `--payload=stun` because Reflector Hello is not STUN.
+A causal `NETWORK_FAIL` verdict requires a recent independent working control against the same fixed endpoint. Without one, continue bounded tests and record silence as `NO_REPLY_UNKNOWN`; do not block the campaign waiting for retired `192.168.1.140`. Each candidate receives a fresh process/source-flow state. The temporary OPNsense scope is one selected probe client, one reflector IPv4 address and one port in `596–599`; the reflector profile must not use `--payload=stun` because Reflector Hello is not STUN.
 
-The first reflector matrix is baseline, ordered position 8, reverse position 8, then evidence-driven alternate fragmentation positions. Fake-plus-fragment follows only after standalone families. Any winner is repeated on the same endpoint and at least two additional control-proven reflectors before the final real call.
+The initial matrix is baseline, ordered position 8, reverse position 8, then evidence-driven alternates. Baseline and the corrected post-NAT ordered position-8 test are now complete without a media pass. Reverse position 8 is next for the corrected setup, followed by position 32 and evidence-driven 16/24. Fake-plus-fragment follows only after standalone families. Repeat any winner with fresh processes, then perform the real-call gate; additional reflector coverage is recorded as separate epochs, never silently substituted within a comparison.
 
 #### Phase C companion and fixed-reflector result
 
 The active qualified binary is current tgcalls `efd330ca04f74706024a5abdfb5b41f4e4dd1065`; `tgcalls_cli` SHA-256 is `7ad8a2eef607e92056e8e8311519d36616c45ca19f1403601bbed8e8db01f3dc`.
 
-The local P2P run remains a build/runtime gate. The 2026-09-05 fixed-reflector run is the first `MEDIA_PASS`: endpoint `91.108.13.10:596`, both peers established, 15/15 bitrate records, non-zero BWE, no errors and exit 0.
+The local P2P run remains a build/runtime gate. The 2026-09-05 fixed-reflector `MEDIA_PASS` belongs to the older `e3069322...` binary and the now-retired route, not the current qualified binary. The rebuilt oracle has not yet reached reflector `MEDIA_PASS` through OPNsense.
 
-Owner network decision: keep only the existing Docker network named `host`. Host mode has no per-container interface, IP, MAC or DHCP lease. The control inherited TNAS `192.168.1.100` and gateway `192.168.1.140`.
+Owner network decision: keep only the existing Docker network named `host`. Host mode has no per-container interface, IP, MAC or DHCP lease. The historical September 5 control inherited TNAS `192.168.1.100` and gateway `192.168.1.140`; that gateway is now retired as non-working.
 
 Therefore a DHCP reservation cannot distinguish this container. pfSense may assign an exact route by the visible TNAS MAC, but that route applies to the TNAS host namespace. Further provider epochs keep host mode and select only the fixed endpoint `/32` through OPNsense `192.168.1.2`, using owner-controlled DHCP policy or a bounded explicit route transaction and proving the original route afterward.
 
 ### Phase D — no permanent laboratory integration
 
-The Telegram Voice laboratory is temporary. OPNsense-console scripts invoke TNAS `docker exec` over temporary key-only SSH and own bounded route/firewall/runtime cleanup. Do not add a GUI, permanent controller/API/configd surface, daemon or package-owned lab subsystem. Do not change Generic UDP Strategy Lab.
+The Telegram Voice laboratory is temporary. The existing TNAS/OPNsense consoles run `docker exec` and bounded firewall/runtime experiments. Temporary key-only SSH is optional orchestration; any owned route/firewall/runtime change requires exact cleanup. Do not add a GUI, permanent controller/API/configd surface, daemon or package-owned lab subsystem. Do not change Generic UDP Strategy Lab.
 
 A future working production strategy/helper would require a separate owner decision; the experimental laboratory itself is removed or archived.
 
@@ -608,7 +635,7 @@ Therefore the project should not claim universal P2P handling in the initial hel
 
 The existing Generic UDP request/reply contract remains unchanged and cannot label Telegram reflector media as working.
 
-For this temporary campaign, OPNsense-console scripts may reuse fixed-endpoint, bounded IPFW/divert, fresh-flow and exact-restoration concepts, but they remain outside installed plugin paths. The companion is started by temporary key-only SSH to TNAS plus `docker exec`.
+For this temporary campaign, OPNsense-console scripts may reuse fixed-endpoint, bounded IPFW/divert, fresh-flow and exact-restoration concepts, but they remain outside installed plugin paths. The companion is started with TNAS `docker exec`, directly or through optional temporary key-only SSH.
 
 No GUI, MVC/API/configd addition, background service, permanent external-probe runner or Generic UDP behavior change is authorized.
 
@@ -636,7 +663,7 @@ The completed comparison kept P2P disabled on both clients and left the existing
 
 The required causal signal—an inbound TURN/STUN response followed by sustained bidirectional Telegram UDP in B—did not appear. Sound remains secondary because TCP fallback can keep a call audible.
 
-The next comparison uses the stricter Phase C hierarchy. First prove one fixed reflector endpoint on an independently unblocked path; then compare the provider baseline and bounded candidates against that exact endpoint with fresh process/flow state. Fragmentation remains diagnostic as well as practical: if the provider blocks by destination IP alone, it will not help. Do not present a fragment candidate as universal before repeated `MEDIA_PASS` and final `CALL_PASS` evidence.
+Current comparisons use the stricter Phase C hierarchy and a fixed endpoint with fresh process/flow state. Seek a fresh independent endpoint control when available; none is currently established, and `192.168.1.140` must not be assumed working. Continue the bounded laboratory search meanwhile, preserving `NO_REPLY_UNKNOWN` for silence. Fragmentation remains diagnostic as well as practical: if the provider blocks by destination IP alone, it will not help. Do not present a fragment candidate as universal before repeated `MEDIA_PASS` and final `CALL_PASS` evidence.
 
 ## Collateral-risk assessment
 
@@ -669,7 +696,7 @@ Risk: high and unrelated to the primary mechanism. It can disable QUIC/HTTP/3 an
 9. **Can current Strategy Lab auto-find the voice strategy?** Not with its current arbitrary-reply oracle and `from me` rule. A separate external-probe runner using pinned official tgcalls and a real reflector can provide `MEDIA_PASS` while reusing existing lifecycle machinery.
 10. **What was built and measured first?** Phase A completed the traffic observation; `0.5.0_3` implemented the Telegram-IP-scoped native STUN helper. Owner-live testing proved its mechanics and rollback but the zero-fake strategy failed to restore inbound or sustained Telegram UDP.
 11. **What about P2P?** The safe MVP does not claim arbitrary-peer P2P interception. Relay-mode verification is the first target.
-12. **What is next?** Use the established current-client `WIRE_OK / NO_REPLY_UNKNOWN` baseline to test only exact-flow non-STUN reflector candidates, beginning with bounded fragmentation/desynchronization and full WAN proof. The prepared STUN-only `_4` branch remains paused because it does not match the captured 40-byte Reflector Hello.
+12. **What is next?** Achieve a passing media call in the rebuilt laboratory through OPNsense. Start from the corrected post-NAT ordered position-8 wire result; isolate reverse order and alternate positions, and investigate engine/configuration parity separately when justified. Preserve full wire/media/cleanup evidence. The STUN-only `_4` branch remains paused because it does not match the captured 40-byte Reflector Hello.
 
 ## Sources added during research
 
@@ -697,25 +724,22 @@ Project/operator evidence:
 - Zapret2 MTProto/Telegram strategy discussion: <https://github.com/bol-van/zapret2/discussions/77>
 - Telegram `tgcalls` reflector hello implementation, pinned source: <https://github.com/TelegramMessenger/tgcalls/blob/2faee3b5524f54d56c91c2058c00e11c656a74b3/tgcalls/v2/ReflectorPort.cpp#L309-L360>
 - Telegram-iOS outer build workspace, build-validated pin: <https://github.com/TelegramMessenger/Telegram-iOS/tree/6ad963e5b62d354da79040f388ae2b9132fb17b8>
-- Telegram `tgcalls_cli`, build-validated native harness and exit gate: <https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tools/cli/main.cpp>
-- Telegram reflector Hello/framing implementation at the build pin: <https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tgcalls/v2/ReflectorPort.cpp>
-- Telegram official reflector-list runner at the build pin: <https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tools/cli/run-test.sh>
-- Later tgcalls research delta, not the built executable: <https://github.com/TelegramMessenger/tgcalls/compare/e3069322a3d1e16ecb11a5e302242e59ddd7f09e...78d07f3e46a4bb12b611ccc2816ff59ca63a83fb>
+- Historical September 4 `tgcalls_cli` native harness and exit gate: <https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tools/cli/main.cpp>
+- Historical September 4 reflector Hello/framing implementation: <https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tgcalls/v2/ReflectorPort.cpp>
+- Historical September 4 reflector-list runner: <https://github.com/TelegramMessenger/tgcalls/blob/e3069322a3d1e16ecb11a5e302242e59ddd7f09e/tools/cli/run-test.sh>
+- Historical September 3 research delta (superseded by the active `efd330ca...` build): <https://github.com/TelegramMessenger/tgcalls/compare/e3069322a3d1e16ecb11a5e302242e59ddd7f09e...78d07f3e46a4bb12b611ccc2816ff59ca63a83fb>
 - Zapret2 v1.0.4 STUN detector, pinned source: <https://github.com/bol-van/zapret2/blob/2c21faa/nfq2/protocol.c#L1459-L1465>
 
 Community reports are evidence of observed deployments only; they do not override Telegram protocol documentation or current Zapret2 source/manual.
 
 ## Recommended next project action
 
-Follow [`TELEGRAM_VOICE_EMULATION_LAB.md`](../architecture/TELEGRAM_VOICE_EMULATION_LAB.md):
+The exact current handoff is [`START_HERE.md`](../START_HERE.md); the runner and acceptance contract is in [`TELEGRAM_VOICE_EMULATION_LAB.md`](../architecture/TELEGRAM_VOICE_EMULATION_LAB.md).
 
-1. keep `91.108.13.10:596` fixed and the current `efd330ca...` oracle unchanged;
-2. treat the captured no-desynchronization epoch as `WIRE_OK / NO_REPLY_UNKNOWN`;
-3. do not reuse the paused STUN-only `_4` profile for this non-STUN Hello flow;
-4. run temporary exact-flow/exact-endpoint fragmentation candidates through OPNsense `192.168.1.2`;
-5. for every candidate prove IPFW/dvtws2 selection, transformed WAN wire, reply/no-reply result and exact cleanup;
-6. repeat any successful candidate with fresh process/flow state;
-7. obtain a fresh independent exact-endpoint control when practical, then perform a final P2P-disabled real Windows/Android call before productizing anything.
+1. Keep the qualified `efd330ca...` binary, engine/configuration and `91.108.13.10:596` fixed for each comparison through OPNsense.
+2. Use the corrected post-NAT runner contract, validate the installed reverse-order syntax, and test one factor at a time: reverse position 8, then position 32 and evidence-driven 16/24.
+3. Record returned packets and media success as well as local wire truth; exact cleanup remains mandatory. A fresh independent control improves causal interpretation but the retired gateway is not a task dependency.
+4. Compare engine/custom parameters separately only when the upstream findings and failure stage justify it. Do not assume later ICE/media changes explain no initial reply on WAN.
+5. Reach and repeat `MEDIA_PASS`, then verify one remote P2P-disabled Windows/Android call with two-way audio and sustained bidirectional UDP before a production decision.
 
-Do not add a Telegram Voice GUI or permanent laboratory code, publish `_4`, widen to all Internet UDP, globally drop UDP/443, or bundle tgcalls/Bazel/Linux into OPNsense.
-
+Keep the laboratory temporary and package identity `0.5.0_3` unchanged. Do not publish the paused STUN-only `_4` as-is.

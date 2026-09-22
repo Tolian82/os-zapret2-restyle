@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Engineering memory index
 
 **Status:** NAVIGATION / INTEGRITY MAP · NOT A CURRENT-STATE NARRATIVE
-**Updated:** 2026-09-05
+**Updated:** 2026-09-22
 
 ## Level 1 — mandatory cold start
 
@@ -21,9 +21,9 @@ Read completely in this order (`DOC-016`):
 ## Level 2 — current line and specialist detail
 
 - **[`v0.5.x working ledger`](history/current/v0.5.x.md)** — current-line chronology and release handoff.
-- **[`Telegram voice / UDP DPI-bypass research`](research/TELEGRAM_VOICE_UDP.md)** — protocol research, Phase A/B evidence interpretation, failed STUN zero-fake baseline and the transition to Phase C emulation.
-- **[`Telegram Voice emulation/oracle architecture`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md)** — fixed-reflector control, host-only exact-route topology, temporary OPNsense-console execution, candidate order and result taxonomy.
-- **[`TOS Telegram Voice companion recipe`](../tools/telegram-voice-lab/compose.tos.yml)** — digest-pinned host-network build/runtime/control source; provider epochs use a temporary exact `/32` route through OPNsense.
+- **[`Telegram voice / UDP DPI-bypass research`](research/TELEGRAM_VOICE_UDP.md)** — protocol changes and source links, rebuild motivation, Phase A/B interpretation and current Phase C experiments.
+- **[`Telegram Voice emulation/oracle architecture`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md)** — rebuilt media oracle, retired control route, corrected post-NAT wire path, current call-success goal and result taxonomy.
+- **[`TOS Telegram Voice companion recipe`](../tools/telegram-voice-lab/compose.tos.yml)** — digest-pinned host-network build/runtime source; endpoint routing through OPNsense is measured per epoch.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) / [`architecture/`](architecture/) — current technical architecture.
 - [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md) — Strategy Lab architecture entry point.
 - [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md) — accepted production execution model.
@@ -33,7 +33,8 @@ Read completely in this order (`DOC-016`):
 - [`USER_GUIDE_STRATEGY_LAB.md`](USER_GUIDE_STRATEGY_LAB.md) — user-facing Strategy Lab guide.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributor entry points.
 - [`SECURITY.md`](SECURITY.md) — security reporting/reference.
-- [`2026-09-05 fixed-reflector control`](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md) — exact-endpoint `MEDIA_PASS` and host-only routing correction.
+- [`2026-09-20 current laboratory qualification`](verification/evidence/2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md) — rebuilt binary and local P2P gate.
+- [`2026-09-21 post-NAT fragmentation tests`](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) — local defects, corrected wire output, failed media call, restoration and archive identities.
 
 ## Level 3 — completed version-line archives
 
@@ -45,6 +46,8 @@ Read completely in this order (`DOC-016`):
 Archive mechanics are owned by `DOC-026`–`DOC-030`; version authority is owned by `DEV-029`–`DEV-038`.
 
 ## Level 3 — deep history, decisions, audits, and proof
+
+- [`2026-09-05 fixed-reflector control`](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md) — historical `MEDIA_PASS`; route `192.168.1.140` is no longer working and is retired from the active plan.
 
 - [`DECISIONS.md`](DECISIONS.md) / [`decisions/`](decisions/)
 - [`AUDIT.md`](AUDIT.md) / [`audit/`](audit/)
