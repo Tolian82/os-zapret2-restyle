@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1
-**Updated:** 2026-09-05
+**Updated:** 2026-09-22
 State-line scope: **`v0.5.x`**
 
 Direct orientation:
@@ -86,42 +86,37 @@ No further package correction belongs to this scope.
 
 ## Telegram voice / UDP research state
 
-Phase A observation, Phase B zero-fake measurement, the companion build/runtime gate and one fixed-reflector control are complete. Phase C remains a temporary console-driven research campaign, not a product subsystem.
+The current task is to make a call establish and carry bidirectional media through OPNsense in the rebuilt tgvoice laboratory. Phase A/B, the rebuild/local runtime gate and local wire corrections are completed facts; the current media goal remains open.
 
-Authorities:
+Authorities and evidence:
 
-- [research and interpretation](research/TELEGRAM_VOICE_UDP.md);
+- [research, transport changes and interpretation](research/TELEGRAM_VOICE_UDP.md);
 - [temporary emulator/oracle architecture](architecture/TELEGRAM_VOICE_EMULATION_LAB.md);
-- [Phase A evidence](verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md);
-- [Phase B evidence](verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md);
-- [installed runtime pin](verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md);
-- [companion build/runtime result](verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md);
-- [fixed-reflector control and host-topology result](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md).
+- [Phase A observation](verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md) and [Phase B zero-fake failure](verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md);
+- [historical 2026-09-05 control](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md);
+- [current build/runtime qualification](verification/evidence/2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md);
+- [current unmodified OPNsense baseline](verification/evidence/2026-09-20-telegram-voice-current-opnsense-baseline.md);
+- [post-NAT position-8 test sequence and restoration](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md).
 
-Established durable facts:
+Established facts:
 
-- the Phase A/B protocol interpretation and failed zero16/repeats=2 provider result remain unchanged;
-- the qualified `tgcalls_cli` SHA-256 is `c2bd9e8b55d5542e4471154c832efc4cf0cdd483669dbeb747c706afbe53b11a`;
-- fixed endpoint `91.108.13.10:596` passed a 15-second real-reflector run on 2026-09-05: both sides established, 15 bitrate records per side, non-zero BWE, no errors and exit 0;
-- that exact-endpoint control `MEDIA_PASS` used TNAS `192.168.1.100` through `192.168.1.140` and did not traverse OPNsense;
-- the owner requires the existing Docker `host` network only;
-- a host-network container has no per-container IP or MAC. DHCP sees the TNAS host identity, so it cannot assign this container a separate `192.168.1.239` lease or per-container gateway;
-- pfSense DHCP can still assign routes by the visible TNAS MAC, but their scope is the TNAS host namespace rather than this one container;
-- the provider-path selector is one exact endpoint `/32` route on TNAS through `192.168.1.2`, delivered by owner-controlled DHCP policy or a bounded explicit route transaction, never a TNAS default-route change;
-- OPNsense-console orchestration uses temporary key-only SSH to TNAS plus `docker exec`; every route/runtime mutation requires exact restoration;
-- no Telegram Voice GUI, permanent plugin controller/API/configd action, installed daemon or package-owned laboratory is authorized;
-- temporary console scripts live outside installed plugin paths and are removed when the research closes;
-- the existing Generic UDP Strategy Lab and permanent production code remain unchanged.
+- **`192.168.1.140` is no longer a working route**, by the owner's explicit correction. It is retired from the active test plan and cannot serve as a current independent control. Its September 5 `MEDIA_PASS` remains a fact about that old epoch and old binary only.
+- The owner reports a Telegram voice-transport change as the reason for rebuilding the laboratory. Official tgcalls sources confirm networking and MTProto transport changes; some are disabled by default. The research distinguishes these changes from unverified production rollout and actual Windows/Android negotiation.
+- The active tgcalls pin is `efd330ca04f74706024a5abdfb5b41f4e4dd1065`; binary SHA-256 is `7ad8a2eef607e92056e8e8311519d36616c45ca19f1403601bbed8e8db01f3dc`. The local P2P run established both sides at 0.039 seconds, collected five records per side, had non-zero BWE and exited 0.
+- The build-only `linux-x86_64-no-v2wasm-18-19` adaptation leaves 11/13/14 networking intact. Current reflector runs use engine `13.0.0` on both peers; using current sources alone does not prove parity with every current client configuration.
+- The September 20 no-desynchronization run to `91.108.13.10:596` traversed OPNsense correctly: 60 outbound Hello datagrams, preserved payloads and valid checksums, no incoming UDP replies.
+- The September 21 pre-NAT checksum defect and subsequent recapture of first fragments were corrected in temporary runner `tgvoice_ipfrag8_postnat_v2.py`. The qualified final run produced 60 ordered pairs, 60 valid reassembled UDP checksums, no original duplicates and no incoming reflector packets.
+- That final 15-second CLI run still had both peers `Reconnecting`, no established call, 15 bitrate records per side, zero BWE, no reported errors and exit 1. Result: local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, not `MEDIA_PASS`.
+- Restoration is to the recorded pre-test state. Normal rules 19000/19001 were already absent before the post-NAT experiments; restoring that snapshot does not prove normal Zapret forwarding was re-enabled. The existing listener on 989 remained; temporary rule 18990/listener 990 were removed and IPv4 hook order restored.
+- Docker `host` is the owner's selected topology, with no independent container IP/MAC. Routing belongs to TNAS; use the measured path through `192.168.1.2` and only bounded endpoint-route changes if necessary. Never prescribe restoration to the retired gateway.
+- TNAS/OPNsense console execution is already available. Temporary key-only SSH may automate it later, but does not block experiments.
+- The laboratory stays outside installed plugin paths. No GUI, permanent controller/API/configd action, daemon, Generic UDP semantic change or package-owned lab is authorized.
 
-The remote `_4` branch remains unpublished and paused. The control result does not authorize a package revision or stable publication.
+The runtime update to Zapret2 `v1.0.5.2` is owner-reported; exact measured binary/Lua hashes are in the September 21 evidence. The remote `_4` branch remains unpublished and paused, and package identity remains `0.5.0_3`.
 
 ## Immediate next boundary
 
-Prove the exact `/32` route transaction for `91.108.13.10` from control gateway `192.168.1.140` to OPNsense `192.168.1.2` and back. Establish temporary key-only invocation from the OPNsense console to TNAS, then run the same endpoint with no desynchronization while recording OPNsense LAN/WAN evidence and counters.
-
-Only after that baseline may temporary non-packaged console scripts run the bounded reflector matrix. Silence without the fresh control is `NO_REPLY_UNKNOWN`; any failed route/runtime restoration is `RESTORE_FAILED` and overrides other results.
-
-The Telegram Voice laboratory will not become permanent plugin code. A later proven production strategy/helper would require a separate owner decision.
+Follow the exact next action in [`START_HERE.md`](START_HERE.md): continue controlled experiments from the qualified post-NAT wire path toward repeated `MEDIA_PASS`, then a real remote Windows/Android `CALL_PASS`. There is no current independent working control. Its absence limits a causal `NETWORK_FAIL` claim; it does not block searching for a working call. A failed restoration remains overriding `RESTORE_FAILED`.
 
 ## Completed version-line archives
 

@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
 **Status:** CURRENT · COMPLETE CONCISE PLAN
-**Updated:** 2026-09-20
+**Updated:** 2026-09-22
 
 - Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - Exact handoff: [`START_HERE.md`](START_HERE.md)
@@ -100,21 +100,26 @@ Current architecture: [`architecture/TELEGRAM_VOICE_EMULATION_LAB.md`](architect
 - [x] build/digest-pin the TOS/Linux `tgcalls_cli` companion
 - [x] pass the local P2P build/runtime gate
 - [x] select fixed current endpoint `91.108.13.10:596`
-- [x] preserve the historical exact-endpoint `MEDIA_PASS` through TNAS gateway `192.168.1.140` as context; do not treat it as a fresh independent control for the current oracle
+- [x] retire `192.168.1.140` as a working route by owner correction; preserve the September 5 success only as historical evidence
+- [x] record the rebuild motivation and verified upstream voice-transport changes, including default-off flags and remaining Windows/Android parity questions
 - [x] establish that Docker `host` has no independent container IP/MAC
 - [x] retain only the existing TOS/Docker `host` network by owner instruction
 - [x] reject GUI and permanent Telegram Voice laboratory integration
-- [ ] establish temporary key-only SSH command execution from OPNsense to TNAS
-- [ ] transact `91.108.13.10/32` on TNAS through `192.168.1.2`, with exact restoration to `192.168.1.140`
+- [x] run paired TNAS/OPNsense console tests; optional SSH automation is no longer an experiment prerequisite
+- [ ] for any future route mutation, snapshot and restore the actual pre-test route; never assume `192.168.1.140` is usable
 - [x] run current tgcalls against `91.108.13.10:596` through OPNsense with no desynchronization and capture LAN/WAN truth — **WIRE_OK / NO_REPLY_UNKNOWN**; 60/60 outbound packets survive forwarding/NAT, zero inbound replies
 - [x] establish from current capture that the reflector baseline is non-STUN 40-byte Hello traffic; paused STUN-only `_4` is not a direct candidate
-- [ ] use temporary, non-packaged OPNsense-console scripts for exact-flow/exact-endpoint non-STUN candidates
-- [ ] test reflector fragmentation: position 8 ordered, position 8 reverse, then evidence-driven alternates
+- [x] stage temporary non-packaged exact-endpoint runner and distinguish the corrected file as `tgvoice_ipfrag8_postnat_v2.py`
+- [x] correct pre-NAT UDP checksum corruption and post-NAT first-fragment recapture
+- [x] qualify ordered position-8 post-NAT wire output: 60 complete pairs, valid checksums, no replies; `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, call still fails
+- [ ] test reverse position 8 with installed-runtime syntax validation, then position 32 and evidence-driven 16/24 alternatives
+- [ ] assess engine/custom-parameter parity in separate source-guided experiments without changing fragmentation simultaneously
+- [ ] achieve and repeat a real-reflector laboratory call through OPNsense: both peers established, both stats/BWE positive, exit 0 (`MEDIA_PASS`)
 - [ ] add correlated TURN Allocate only as a secondary oracle
 - [ ] repeat any winner and complete one final remote P2P-disabled real call
 - [ ] remove temporary SSH/route/scripts, archive evidence and decide `_4`
 
-Phase C control evidence: [`verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md`](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md).
+Current test evidence: [`2026-09-21 post-NAT fragmentation`](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md). The [September 5 control](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md) is historical and its route is retired.
 
 No GUI, permanent lab controller/API/daemon, Generic UDP semantic change or Telegram Voice lab package subsystem belongs to this work. Package identity remains `0.5.0_3`.
 
@@ -143,6 +148,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**From the OPNsense console, use the current-tgcalls `WIRE_OK / NO_REPLY_UNKNOWN` baseline at `91.108.13.10:596` to run only temporary exact-flow/exact-endpoint non-STUN candidates with on-wire proof and exact restoration.** A successful candidate is strong causal evidence; repeated no-reply results remain inconclusive without a fresh independent endpoint control. Keep Docker `host`, add no GUI or permanent laboratory code, and do not publish the paused STUN-only `_4` as-is.
+**Make the call pass with bidirectional media in the rebuilt laboratory through OPNsense.** The corrected ordered position-8 test establishes local wire validity, not call success. Continue the bounded plan in `START_HERE.md`; do not return to `192.168.1.140` as a working control or delay the task waiting for it. Keep no-reply results causally inconclusive without a fresh independent control, and keep the Docker `host` / temporary-tooling / package `0.5.0_3` boundary.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
