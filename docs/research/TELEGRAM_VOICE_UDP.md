@@ -752,7 +752,7 @@ Community reports are evidence of observed deployments only; they do not overrid
 
 The exact current handoff is [`START_HERE.md`](../START_HERE.md); the runner and acceptance contract is in [`TELEGRAM_VOICE_EMULATION_LAB.md`](../architecture/TELEGRAM_VOICE_EMULATION_LAB.md).
 
-1. Run `tgvoice_fakefrag8_reverse24_postnat_v1.py --after-nat`, revision `postnat-fakefrag8-reverse24-v1`, SHA-256 `c4ee47779d778f50b04e48ffe744f5d098d3fb32863133b7d3a8d7ed6c633d24`, then start the same fixed-reflector 15-second CLI after `READY`.
+1. Run `tgvoice_fakefrag8_reverse24_postnat_v1.py --after-nat`, revision `postnat-fakefrag8-reverse24-v1`, SHA-256 `db8d8a9e1e67c2df91a77462d244be37988bbda8cd674bca7c0b77d16d8cc03d`, then start the same fixed-reflector 15-second CLI after `READY`.
 2. Keep endpoint `91.108.13.10:596`, route through `192.168.1.2`, current tgcalls binary/engine and measured Zapret2 runtime identities fixed.
 3. Require four WAN fragments per 40-byte Hello: ordered fake len 28 offset 0/MF=1, fake len 60 offset 8/MF=0, then real reverse24 len 44 offset 24/MF=0 and len 44 offset 0/MF=1. The fake pair must have intentionally invalid reassembled UDP checksum and a different IPv4 ID from the real pair; the real pair must remain checksum-valid and payload-exact. Reject/rerun an epoch with a fake/real ID collision.
 4. Preserve the earlier positive CLI observation separately. A wire-correct silent result remains `NO_REPLY_UNKNOWN` without a fresh independent control; a media success must be repeated with fresh process/flow state.

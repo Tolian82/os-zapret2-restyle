@@ -72,7 +72,7 @@ Every fully correlated current-runtime run emitted the intended valid local-WAN 
 
 Prepared file: **`tgvoice_fakefrag8_reverse24_postnat_v1.py`**, revision **`postnat-fakefrag8-reverse24-v1`**.
 
-SHA-256: `c4ee47779d778f50b04e48ffe744f5d098d3fb32863133b7d3a8d7ed6c633d24`.
+SHA-256: `db8d8a9e1e67c2df91a77462d244be37988bbda8cd674bca7c0b77d16d8cc03d`.
 
 The first candidate keeps the just-qualified real reverse24 serialization unchanged and adds one fake before it:
 
