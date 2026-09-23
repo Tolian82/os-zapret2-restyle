@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1
-**Updated:** 2026-09-22
+**Updated:** 2026-09-23
 State-line scope: **`v0.5.x`**
 
 Direct orientation:
@@ -86,7 +86,7 @@ No further package correction belongs to this scope.
 
 ## Telegram voice / UDP research state
 
-The owner now reports an established call with correct routing at the time. The current task is to correlate and reproduce that success, then qualify bidirectional media through OPNsense in the rebuilt tgvoice laboratory. Phase A/B, the rebuild/local runtime gate and local wire corrections are completed facts; formal media qualification for this observation remains open.
+The current task is a repeatable call carrying bidirectional media through OPNsense in the rebuilt tgvoice laboratory. The owner identified the earlier reported successful call as the fixed-reflector CLI command. A later post-reboot repeat is fully correlated and failed despite valid reverse position-8 wire output. Preserve these as separate observations; formal media qualification remains open.
 
 Authorities and evidence:
 
@@ -97,7 +97,8 @@ Authorities and evidence:
 - [current build/runtime qualification](verification/evidence/2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md);
 - [current unmodified OPNsense baseline](verification/evidence/2026-09-20-telegram-voice-current-opnsense-baseline.md);
 - [post-NAT position-8 test sequence and restoration](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md);
-- [reverse-run capture and owner-reported call establishment](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md).
+- [earlier reverse-run capture and owner-reported call establishment](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md);
+- [post-reboot reverse repeat and guarded position-32 candidate](verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md).
 
 Established facts:
 
@@ -109,8 +110,10 @@ Established facts:
 - The September 21 pre-NAT checksum defect and subsequent recapture of first fragments were corrected in temporary runner `tgvoice_ipfrag8_postnat_v2.py`. The qualified final run produced 60 ordered pairs, 60 valid reassembled UDP checksums, no original duplicates and no incoming reflector packets.
 - That final 15-second CLI run still had both peers `Reconnecting`, no established call, 15 bitrate records per side, zero BWE, no reported errors and exit 1. Result: local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, not `MEDIA_PASS`.
 - Reverse position-8 source/syntax validation completed, and the September 22 run loaded the profile successfully. Its LAN/WAN captures contain zero records under `host 91.108.13.10`; the UDP/596 fragmentation rule recorded zero hits. Cleanup restored the measured state. No companion call log is included.
-- After reviewing that archive, the owner explicitly reported that **the call established and routing was correct during the call**. Preserve this observation separately from the earlier failed CLI runs. The exact calling tool/client, flow and media metrics are not yet correlated with the archive; neither failed-call attribution nor a reverse-fragmentation success follows from its empty endpoint captures.
-- Restoration is to the recorded pre-test state. Normal rules 19000/19001 were already absent before the post-NAT experiments; restoring that snapshot does not prove normal Zapret forwarding was re-enabled. The existing listener on 989 remained; temporary rule 18990/listener 990 were removed and IPv4 hook order restored.
+- After reviewing that archive, the owner explicitly reported that **the call established and routing was correct during the call**. Preserve this observation separately from the earlier failed CLI runs. The owner subsequently identified the same 15-second fixed-reflector `tgcalls_cli` command. Its positive summary/timing have not been supplied; neither failed-call attribution nor a reverse-fragmentation success follows from that first empty archive.
+- After reboot, the owner restored the endpoint route through `192.168.1.2` / `ovs_eth1`, source `192.168.1.100`; Docker is running on `host`. The same binary was used in the September 22 21:04:34–21:04:49 UTC repeat. Rule 18990 counted 60 packets / 4080 bytes. WAN has 60 complete reverse pairs, 60 valid reassembled UDP checksums and exact primary-LAN payload matches, with no unfragmented originals or reflector replies. Both peers remained `Reconnecting`, BWE was zero, exit was 1. This repeat is local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, without `MEDIA_PASS`.
+- Guarded reverse position 32 is prepared in `tgvoice_ipfrag32_reverse_postnat_v1.py` and passed 27 offline cases against the pinned native Lua functions. UDP payloads of at most 24 bytes pass unchanged without raw-send; longer datagrams use native reverse fragmentation. It has no live result yet.
+- Restoration is to the recorded pre-test state. Normal rules 19000/19001 were absent in the earlier post-NAT archives, but were present before and after the post-reboot repeat. In this repeat the IPFW, PFIL and socket snapshots are byte-identical before/after; listener 989 remains, temporary 18990/990 are removed, and IPv4 hook order is restored.
 - Docker `host` is the owner's selected topology, with no independent container IP/MAC. Routing belongs to TNAS; use the measured path through `192.168.1.2` and only bounded endpoint-route changes if necessary. Never prescribe restoration to the retired gateway.
 - TNAS/OPNsense console execution is already available. Temporary key-only SSH may automate it later, but does not block experiments.
 - The laboratory stays outside installed plugin paths. No GUI, permanent controller/API/configd action, daemon, Generic UDP semantic change or package-owned lab is authorized.
@@ -119,7 +122,7 @@ The runtime update to Zapret2 `v1.0.5.2` is owner-reported; exact measured binar
 
 ## Immediate next boundary
 
-Follow the exact next action in [`START_HERE.md`](START_HERE.md): correlate the owner's successful call with the actual flow and capture scope, preserve and reproduce its conditions, then qualify repeated `MEDIA_PASS` and a real remote Windows/Android `CALL_PASS`. Do not change split positions or reopen routing diagnosis ahead of that attribution. There is no current independent working control; its absence limits causal `NETWORK_FAIL` attribution, not continued work. A failed restoration remains overriding `RESTORE_FAILED`.
+Follow the exact next action in [`START_HERE.md`](START_HERE.md): run the prepared guarded reverse position-32 candidate with the same qualified binary/runtime and endpoint, then qualify wire/media/restoration evidence. The post-reboot route and position-8 packet attribution are established; the earlier positive owner observation remains separately unqualified. Reach repeated `MEDIA_PASS` and a real remote Windows/Android `CALL_PASS`. There is no current independent working control; its absence limits causal `NETWORK_FAIL` attribution, not continued work. A failed restoration remains overriding `RESTORE_FAILED`.
 
 ## Completed version-line archives
 

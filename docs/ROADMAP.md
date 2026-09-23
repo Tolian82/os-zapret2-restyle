@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
 **Status:** CURRENT · COMPLETE CONCISE PLAN
-**Updated:** 2026-09-22
+**Updated:** 2026-09-23
 
 - Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - Exact handoff: [`START_HERE.md`](START_HERE.md)
@@ -114,15 +114,18 @@ Current architecture: [`architecture/TELEGRAM_VOICE_EMULATION_LAB.md`](architect
 - [x] qualify ordered position-8 post-NAT wire output: 60 complete pairs, valid checksums, no replies; `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, call still fails
 - [x] validate reverse position-8 syntax/source and run the distinct temporary runner; supplied endpoint captures and rule counters are empty, cleanup restored
 - [x] record the owner's subsequent report that the call established and routing was correct at call time
-- [ ] correlate and reproduce that successful call with its calling tool/client, actual flow, capture window and media evidence before changing strategies
-- [ ] qualify reverse position-8 behavior on the actual selected flow; consider positions 32/16/24 only if the resulting evidence warrants them
+- [x] identify the earlier reported successful tool as the same fixed-reflector CLI command; preserve that observation separately from failed repeats
+- [x] restore the endpoint route after reboot and correlate the new CLI run with 60 valid reverse position-8 pairs; zero replies, `Reconnecting`, zero BWE, exit 1, exact restoration
+- [x] prepare distinct guarded reverse position-32 runner and validate its short-packet pass-through/native fragmentation behavior offline
+- [ ] live-test guarded reverse position 32 on the same endpoint/runtime; qualify wire/media/restoration before choosing further positions
+- [ ] correlate the earlier positive CLI output if recovered; qualify a repeatable successful call
 - [ ] assess engine/custom-parameter parity in separate source-guided experiments without changing fragmentation simultaneously
 - [ ] achieve and repeat a real-reflector laboratory call through OPNsense: both peers established, both stats/BWE positive, exit 0 (`MEDIA_PASS`)
 - [ ] add correlated TURN Allocate only as a secondary oracle
 - [ ] repeat any winner and complete one final remote P2P-disabled real call
 - [ ] remove temporary SSH/route/scripts, archive evidence and decide `_4`
 
-Current test evidence: [`September 22 reverse run and successful-call observation`](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), following [`September 21 ordered post-NAT fragmentation`](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md). The [September 5 control](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md) is historical and its route is retired.
+Current test evidence: [`September 22 post-reboot reverse repeat`](verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md), with the separate [`earlier successful-call observation`](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), following [`September 21 ordered post-NAT fragmentation`](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md). The [September 5 control](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md) is historical and its route is retired.
 
 No GUI, permanent lab controller/API/daemon, Generic UDP semantic change or Telegram Voice lab package subsystem belongs to this work. Package identity remains `0.5.0_3`.
 
@@ -151,6 +154,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Correlate and reproduce the successful call reported by the owner, then qualify bidirectional media through OPNsense.** The empty reverse-run capture is scoped to one reflector and does not refute that observation. Follow `START_HERE.md` before trying another split position. Do not return to retired `192.168.1.140`; preserve the Docker `host`, temporary-tooling and package `0.5.0_3` boundary.
+**Establish and repeat a call carrying bidirectional media through OPNsense.** The post-reboot reverse position-8 repeat is wire-qualified but has no replies or media; guarded reverse position 32 is the prepared next test in `START_HERE.md`. The earlier owner-reported success remains a separate observation. Do not return to retired `192.168.1.140`; preserve the Docker `host`, temporary-tooling and package `0.5.0_3` boundary.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
