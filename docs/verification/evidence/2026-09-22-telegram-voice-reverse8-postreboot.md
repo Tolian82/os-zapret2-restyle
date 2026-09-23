@@ -111,6 +111,10 @@ This specific repeat is **local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`**,
 
 The pinned [CLI source](https://github.com/TelegramMessenger/tgcalls/blob/efd330ca04f74706024a5abdfb5b41f4e4dd1065/tools/cli/main.cpp), [engine 13 implementation](https://github.com/TelegramMessenger/tgcalls/blob/efd330ca04f74706024a5abdfb5b41f4e4dd1065/tgcalls/v2/InstanceV2Impl.cpp) and [native networking](https://github.com/TelegramMessenger/tgcalls/blob/efd330ca04f74706024a5abdfb5b41f4e4dd1065/tgcalls/v2/NativeNetworkingImpl.cpp) support one configured UDP reflector with P2P/TCP disabled for this command; no automatic alternate endpoint/TCP fallback is established. The CLI's `Call established` flag latches if either peer ever establishes. Exit 0 additionally requires stats and nonzero BWE on both sides; the laboratory's `MEDIA_PASS` also requires both final peer states established. The generated-tone/no-op-renderer harness does not prove audible decoded speech.
 
+## Subsequent live result — September 23
+
+The [reverse position-32 archive and CLI](2026-09-23-telegram-voice-reverse32.md) now qualify 60 complete reverse pairs with valid checksums, no replies/media and exact restoration. The preparation record below describes the state before that run; it is retained as history. The current handoff advances to guarded reverse position 16 in [`START_HERE.md`](../../START_HERE.md).
+
 ## Prepared next candidate: guarded reverse position 32
 
 Distinct file: **`tgvoice_ipfrag32_reverse_postnat_v1.py`**, revision **`postnat-reverse32-v1`**.
