@@ -160,6 +160,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Establish and repeat a call carrying bidirectional media through OPNsense.** Reverse positions 8, 16 and 32 are wire-qualified but have no replies or media in their measured runs; guarded reverse position 24 is the prepared next test in `START_HERE.md`. If it is also wire-correct and silent, move beyond standalone fragment-position widening. The earlier owner-reported success remains a separate observation. Do not return to retired `192.168.1.140`; preserve the Docker `host`, temporary-tooling and package `0.5.0_3` boundary.
+**Establish and repeat a call carrying bidirectional media through OPNsense.** The standalone reflector-fragmentation sweep is closed: ordered position 8 and reverse positions 8, 16, 24 and 32 are locally wire-qualified, but no fully correlated run received a reflector reply or media. The prepared next test is one fragmented checksum-invalid zero fake at position 8 followed by the already-qualified real reverse24 path. The earlier owner-reported success remains separate. Do not return to retired `192.168.1.140`; preserve Docker `host`, temporary tooling and package `0.5.0_3`.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
