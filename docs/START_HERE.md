@@ -10,7 +10,7 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-09-23
-**Current handoff identity:** `v0.5.0_3` — post-reboot reverse position-8 output is wire-qualified but the call failed; test guarded reverse position 32 next
+**Current handoff identity:** `v0.5.0_3` — reverse position-32 output is wire-qualified but the call failed; test guarded reverse position 16 next
 
 ## Current identity
 
@@ -70,9 +70,9 @@ The source correction, full CI/FreeBSD-15 qualification, testing-package publica
 
 ## Telegram voice / UDP — current laboratory task
 
-**Current task: establish and repeat a call carrying bidirectional media through OPNsense in the rebuilt tgvoice laboratory.** The September 22 post-reboot reverse position-8 repeat is now correlated with its CLI run: local wire output and restoration passed, but the call failed. The earlier owner-reported success remains a separate observation. Next is a bounded guarded reverse position-32 test; acceptance remains repeatable `MEDIA_PASS`, followed by a real Windows/Android call.
+**Current task: establish and repeat a call carrying bidirectional media through OPNsense in the rebuilt tgvoice laboratory.** The September 23 reverse position-32 run is correlated with its CLI: local wire output and restoration passed, but the call failed. The earlier owner-reported success remains a separate observation. Next is a bounded guarded reverse position-16 test; acceptance remains repeatable `MEDIA_PASS`, followed by a real Windows/Android call.
 
-Read the [research](research/TELEGRAM_VOICE_UDP.md), [temporary laboratory architecture](architecture/TELEGRAM_VOICE_EMULATION_LAB.md), [September 21 ordered test evidence](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md), [earlier September 22 successful-call observation](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), and [post-reboot reverse repeat / next candidate](verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md).
+Read the [research](research/TELEGRAM_VOICE_UDP.md), [temporary laboratory architecture](architecture/TELEGRAM_VOICE_EMULATION_LAB.md), [September 21 ordered test evidence](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md), [earlier September 22 successful-call observation](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), [post-reboot reverse position-8 repeat](verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md), and [reverse position-32 result / next candidate](verification/evidence/2026-09-23-telegram-voice-reverse32.md).
 
 Current facts:
 
@@ -87,14 +87,15 @@ Current facts:
 - The owner confirmed **the earlier call established and routing was correct during the call**, then identified the tool as the same `tgcalls_cli --mode reflector --reflector 91.108.13.10:596 --duration 15` command. Its positive summary remains unavailable, so strategy/media attribution for that observation is still open.
 - After reboot, TNAS restored the endpoint route through `192.168.1.2` on `ovs_eth1` with source `192.168.1.100`; the container is running with `network=host`. The September 22 21:04:34–21:04:49 UTC CLI run used the same binary hash. Its capture contains 60 complete reverse pairs, all checksums valid and payloads matched to the primary LAN flow, no unfragmented originals and zero reflector replies. Both peers stayed `Reconnecting`, BWE was zero and exit was 1: **local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`; no `MEDIA_PASS` for this repeat**.
 - Normal rules 19000/19001 were present before and after this post-reboot run. Temporary 18990/990 were removed, listener 989 retained, and IPFW/PFIL/socket snapshots restored exactly.
+- The September 23 07:06:36–07:06:51 UTC reverse position-32 run used the same route, binary and runtime. It emitted 60 complete reverse pairs: IP length 36 at offset 32, then length 52 at offset 0/MF=1. All checksums and primary-LAN payload matches passed; no original duplicates or replies appeared. Both peers remained `Reconnecting`, BWE was zero, exit was 1 and restoration was exact: **local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`; no `MEDIA_PASS`**. The short-UDP guard was not exercised by these 40-byte Hellos.
 - Docker remains on the existing `host` network. Tests already work from the TNAS and OPNsense consoles; optional SSH automation is not a prerequisite for the next experiment.
 - The runtime is owner-reported Zapret2 `v1.0.5.2`; exact binary/Lua identities and the limits of restoration are in the latest evidence. The older v1.0.4 pin is historical.
 
 ## Immediate next action
 
-1. Run the distinctly named `tgvoice_ipfrag32_reverse_postnat_v1.py --after-nat` on OPNsense, wait for its `READY`, then run the same 15-second CLI on TNAS with console and RTC logs under a distinct `reverse32` prefix. The runner is prepared and offline-validated only; live position-32 evidence is pending.
-2. Keep the same runtime, binary, engine, endpoint and restored route. For the observed 40-byte Hello, change the cut from 8 to 32 while retaining reverse order. The new short-packet guard passes UDP payloads of at most 24 bytes through normally, preventing unfragmented raw-send recapture; this guard is an explicit additional behavior for short traffic. See [candidate contract and hashes](verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md).
-3. Qualify wire output, checksums, replies, both peer states/stats/BWE, exit status and exact restoration. For this Hello expect the offset-32 final fragment before the offset-0 first fragment. Engine/configuration or endpoint changes start separate comparisons.
+1. Run the distinctly named `tgvoice_ipfrag16_reverse_postnat_v1.py --after-nat` on OPNsense, wait for its `READY`, then run the same 15-second CLI on TNAS with console and RTC logs under a distinct `reverse16` prefix. The runner is prepared and offline-validated only; live position-16 evidence is pending.
+2. Keep the same runtime, binary, engine, endpoint and restored route. For the observed 40-byte Hello, change the cut from 32 to 16 while retaining reverse order. Adjust the short-packet guard to pass UDP payloads of at most 8 bytes normally; payloads of 9–24 bytes now fragment rather than pass, an explicit additional difference for short traffic. See [candidate contract and hashes](verification/evidence/2026-09-23-telegram-voice-reverse32.md).
+3. Qualify wire output, checksums, replies, both peer states/stats/BWE, exit status and exact restoration. For this Hello expect the offset-16 final fragment (IP length 52) before the offset-0 first fragment (IP length 36, MF=1). Engine/configuration or endpoint changes start separate comparisons.
 4. Preserve the earlier successful-call report. If its original positive output becomes available, correlate it separately; the fully attributed failed repeat does not disprove that observation, and waiting for the older log does not block the next bounded experiment.
 5. Reach and repeat `MEDIA_PASS`; then verify a remote P2P-disabled Windows/Android call with two-way sound and sustained bidirectional UDP (`CALL_PASS`). A fresh independent control improves causal attribution, but the retired route is not a prerequisite or restoration destination.
 

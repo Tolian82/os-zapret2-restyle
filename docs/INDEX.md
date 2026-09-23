@@ -36,7 +36,8 @@ Read completely in this order (`DOC-016`):
 - [`2026-09-20 current laboratory qualification`](verification/evidence/2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md) — rebuilt binary and local P2P gate.
 - [`2026-09-21 post-NAT fragmentation tests`](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) — local defects, corrected wire output, failed media call, restoration and archive identities.
 - [`2026-09-22 reverse run and successful-call observation`](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md) — owner identified the fixed-reflector CLI; the first empty archive does not attribute the reported success.
-- [`2026-09-22 post-reboot reverse repeat`](verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md) — 60 valid reverse position-8 pairs, no replies/media, exact restoration; guarded reverse position 32 is prepared for the next live test.
+- [`2026-09-22 post-reboot reverse repeat`](verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md) — 60 valid reverse position-8 pairs, no replies/media, exact restoration.
+- [`2026-09-23 reverse position-32 result`](verification/evidence/2026-09-23-telegram-voice-reverse32.md) — 60 valid reverse pairs, no replies/media, exact restoration; guarded reverse position 16 is prepared for the next live test.
 
 ## Level 3 — completed version-line archives
 

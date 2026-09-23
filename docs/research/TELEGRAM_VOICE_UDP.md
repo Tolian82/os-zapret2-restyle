@@ -1,6 +1,6 @@
 # Telegram voice / UDP DPI-bypass research
 
-**Status:** RESEARCH CURRENT · REVERSE8 WIRE_OK / NO_REPLY_UNKNOWN · GUARDED REVERSE32 NEXT · `_4` PAUSED
+**Status:** RESEARCH CURRENT · REVERSE32 WIRE_OK / NO_REPLY_UNKNOWN · GUARDED REVERSE16 NEXT · `_4` PAUSED
 **Opened:** 2026-08-19
 **Research conclusion:** 2026-08-19
 **Phase A owner-live observation:** 2026-08-28
@@ -22,7 +22,7 @@
 
 The owner explicitly states that `192.168.1.140` is no longer a working route. It is retired from current testing and is not a usable independent control or a required restoration destination. The September 5 success is preserved as a historical result with the older binary; it cannot qualify the present endpoint/path.
 
-The owner reports that Telegram changed how voice is transported and that this is why the tgvoice laboratory had to be rebuilt. This is the recorded project motivation. The owner subsequently reported **an established call with correct routing at call time**. The owner identified it as the same fixed-reflector CLI command. Its positive summary remains unavailable, while a later post-reboot repeat is fully correlated and failed with valid reverse position-8 output. The current task remains a repeatable call carrying bidirectional media through OPNsense; the next candidate is guarded reverse position 32. The failed repeat does not negate the earlier report.
+The owner reports that Telegram changed how voice is transported and that this is why the tgvoice laboratory had to be rebuilt. This is the recorded project motivation. The owner subsequently reported **an established call with correct routing at call time**. The owner identified it as the same fixed-reflector CLI command. Its positive summary remains unavailable, while a later post-reboot repeat is fully correlated and failed with valid reverse position-8 output. The current task remains a repeatable call carrying bidirectional media through OPNsense; the latest reverse position-32 run is also wire-qualified without replies/media, and the next candidate is guarded reverse position 16. The failed repeat does not negate the earlier report.
 
 ### What official Telegram sources establish
 
@@ -44,13 +44,17 @@ The [September 21 evidence](../verification/evidence/2026-09-21-telegram-voice-p
 
 That run's result is **local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`; its call failed**. No currently working independent control is established. That limits causal attribution but does not prevent continued work. The old gateway is not a prerequisite.
 
-### Latest qualified repeat — September 22, recorded September 23
+### Qualified reverse position-8 repeat — September 22, recorded September 23
 
 The [earlier archive and owner correction](../verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md) preserve an established-call/correct-route report alongside empty endpoint captures. The owner clarified that the successful display came from the same fixed-reflector CLI command; its positive output is still unavailable.
 
 The [post-reboot repeat](../verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md) is fully correlated: the unchanged binary ran from 21:04:34 to 21:04:49 UTC inside the active capture window. Rule 18990 saw 60 packets; WAN contains 60 complete reverse position-8 pairs with correct IPv4/reassembled UDP checksums and exact primary-LAN payload matches. There are no unfragmented originals or replies. Both peers stayed `Reconnecting`, BWE was zero, exit was 1; cleanup restored all snapshots and retained the normal rules. Result: local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, no `MEDIA_PASS` for this repeat. Neither provider DPI nor behavior beyond local WAN is isolated.
 
-Next is the separately named guarded reverse position-32 runner. For the observed Hello it changes the split point while retaining reverse order; its explicit short-UDP pass-through guard avoids the pinned native fallback to unfragmented raw-send. The candidate passed offline validation only. Waiting for the old positive log does not block this bounded next experiment.
+### Latest qualified run — September 23
+
+The [guarded reverse position-32 run](../verification/evidence/2026-09-23-telegram-voice-reverse32.md) overlaps the supplied 07:06:36–07:06:51 UTC CLI log. The same route, CLI hash and runtime produced 60 complete reverse pairs with valid IPv4/UDP checksums and exact primary-LAN payload matches. WAN has no unfragmented originals or reflector replies. Both peers stayed `Reconnecting`, BWE was zero, exit was 1; all snapshots restored exactly. Result: local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, no `MEDIA_PASS`. The short guard was not exercised by these 40-byte Hellos.
+
+Next is the separately named guarded reverse position-16 runner, offline-validated only. For this Hello it changes the split from 32 to 16 while retaining reverse order. The short-UDP pass threshold becomes 8 payload bytes; lengths 9–24 now fragment instead of pass. Waiting for the earlier positive CLI log does not block this bounded next experiment. No fresh independent control establishes where the silence beyond local WAN originates.
 
 ## 2026-09-20 laboratory source update
 
@@ -607,7 +611,7 @@ The oracle has four evidence layers:
 
 A causal `NETWORK_FAIL` verdict requires a recent independent working control against the same fixed endpoint. Without one, continue bounded tests and record silence as `NO_REPLY_UNKNOWN`; do not block the campaign waiting for retired `192.168.1.140`. Each candidate receives a fresh process/source-flow state. The temporary OPNsense scope is one selected probe client, one reflector IPv4 address and one port in `596–599`; the reflector profile must not use `--payload=stun` because Reflector Hello is not STUN.
 
-The initial matrix is baseline, ordered position 8, reverse position 8, then evidence-driven alternates. Baseline and both qualified position-8 orders completed without a media pass. The post-reboot reverse repeat has complete wire/CLI attribution; the earlier owner-reported success remains separate. Guarded reverse position 32 is prepared for the next live test; positions 16/24 remain conditional later experiments. Fake-plus-fragment follows only after standalone families. Repeat a qualified winner with fresh processes, then perform the real-call gate; additional reflector coverage remains a separate epoch.
+The initial matrix is baseline, ordered position 8, reverse position 8, then evidence-driven alternates. Baseline and both qualified position-8 orders completed without a media pass. The post-reboot reverse repeat has complete wire/CLI attribution; the earlier owner-reported success remains separate. Guarded reverse position 32 is now wire-qualified without replies/media. Position 16 is prepared for the next live test; position 24 remains conditional on that result. Fake-plus-fragment follows only after standalone families. Repeat a qualified winner with fresh processes, then perform the real-call gate; additional reflector coverage remains a separate epoch.
 
 #### Phase C companion and fixed-reflector result
 
@@ -704,7 +708,7 @@ Risk: high and unrelated to the primary mechanism. It can disable QUIC/HTTP/3 an
 9. **Can current Strategy Lab auto-find the voice strategy?** Not with its current arbitrary-reply oracle and `from me` rule. A separate external-probe runner using pinned official tgcalls and a real reflector can provide `MEDIA_PASS` while reusing existing lifecycle machinery.
 10. **What was built and measured first?** Phase A completed the traffic observation; `0.5.0_3` implemented the Telegram-IP-scoped native STUN helper. Owner-live testing proved its mechanics and rollback but the zero-fake strategy failed to restore inbound or sustained Telegram UDP.
 11. **What about P2P?** The safe MVP does not claim arbitrary-peer P2P interception. Relay-mode verification is the first target.
-12. **What is next?** Live-test guarded reverse position 32 with the same runtime, binary, engine and endpoint. The post-reboot reverse position-8 repeat is wire-qualified but has no replies/media. Preserve the earlier positive CLI observation separately and correlate its original output if recovered. Later engine comparisons remain isolated. The STUN-only `_4` branch stays paused.
+12. **What is next?** Live-test guarded reverse position 16 with the same runtime, binary, engine and endpoint. Reverse positions 8 and 32 are wire-qualified but have no replies/media in their measured runs. Preserve the earlier positive CLI observation separately and correlate its original output if recovered. Later engine comparisons remain isolated. The STUN-only `_4` branch stays paused.
 
 ## Sources added during research
 
@@ -744,7 +748,7 @@ Community reports are evidence of observed deployments only; they do not overrid
 
 The exact current handoff is [`START_HERE.md`](../START_HERE.md); the runner and acceptance contract is in [`TELEGRAM_VOICE_EMULATION_LAB.md`](../architecture/TELEGRAM_VOICE_EMULATION_LAB.md).
 
-1. Run the prepared guarded reverse position-32 candidate after `READY`, with the same fixed-reflector CLI and timestamped console/RTC output. Preserve the restored endpoint route and Docker `host` topology.
+1. Run the prepared guarded reverse position-16 candidate after `READY`, with the same fixed-reflector CLI and timestamped console/RTC output. Preserve the restored endpoint route and Docker `host` topology.
 2. Verify both expected fragments, reverse order, checksums, payload preservation, returned packets, both peer states/stats/BWE, exit and exact cleanup. The short-packet guard is a documented additional behavior; it does not affect splitting of the observed 40-byte Hello.
 3. Keep the qualified binary, engine/configuration and endpoint fixed. Preserve the earlier positive CLI observation separately and correlate its original output if recovered; the latest failed repeat is already attributed. A fresh independent control improves causal interpretation but the retired gateway is not a task dependency.
 4. Compare engine/custom parameters separately only when the upstream findings and failure stage justify it. Do not assume later ICE/media changes explain no initial reply on WAN.
