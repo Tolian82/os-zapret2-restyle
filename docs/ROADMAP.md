@@ -121,7 +121,9 @@ Current architecture: [`architecture/TELEGRAM_VOICE_EMULATION_LAB.md`](architect
 - [x] prepare distinct guarded reverse position-16 runner and pass 27 offline boundary/options cases
 - [x] live-qualify guarded reverse position 16: 60 valid reverse pairs, no replies/media, exact restoration
 - [x] prepare distinct guarded reverse position-24 runner with <=16-byte short-payload pass guard; Python syntax passed
-- [ ] live-test guarded reverse position 24; if wire-correct without replies/media, stop widening standalone fragment positions and move to the next bounded family
+- [x] live-qualify guarded reverse position 24: 60 valid equal-length reverse pairs, no replies/media, exact restoration; standalone fragment-position widening closed
+- [x] prepare `tgvoice_fakefrag8_reverse24_postnat_v1.py`: one checksum-invalid 40-byte zero fake fragmented ordered at position 8, then qualified real reverse24
+- [ ] live-test fragmented fake8 + reverse24 and qualify fake/real fragment identity, checksums, replies/media and exact restoration
 - [ ] correlate the earlier positive CLI output if recovered; qualify a repeatable successful call
 - [ ] assess engine/custom-parameter parity in separate source-guided experiments without changing fragmentation simultaneously
 - [ ] achieve and repeat a real-reflector laboratory call through OPNsense: both peers established, both stats/BWE positive, exit 0 (`MEDIA_PASS`)
@@ -129,7 +131,7 @@ Current architecture: [`architecture/TELEGRAM_VOICE_EMULATION_LAB.md`](architect
 - [ ] repeat any winner and complete one final remote P2P-disabled real call
 - [ ] remove temporary SSH/route/scripts, archive evidence and decide `_4`
 
-Current test evidence: [`September 23 reverse position-16 result`](verification/evidence/2026-09-23-telegram-voice-reverse16.md), following [`reverse position-32`](verification/evidence/2026-09-23-telegram-voice-reverse32.md) and [`September 22 post-reboot reverse position-8 repeat`](verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md), with the separate [`earlier successful-call observation`](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), following [`September 21 ordered post-NAT fragmentation`](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md). The [September 5 control](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md) is historical and its route is retired.
+Current test evidence: [`September 23 reverse position-24 result`](verification/evidence/2026-09-23-telegram-voice-reverse24.md), following [`reverse position-16`](verification/evidence/2026-09-23-telegram-voice-reverse16.md) and [`reverse position-32`](verification/evidence/2026-09-23-telegram-voice-reverse32.md) and [`September 22 post-reboot reverse position-8 repeat`](verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md), with the separate [`earlier successful-call observation`](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), following [`September 21 ordered post-NAT fragmentation`](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md). The [September 5 control](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md) is historical and its route is retired.
 
 No GUI, permanent lab controller/API/daemon, Generic UDP semantic change or Telegram Voice lab package subsystem belongs to this work. Package identity remains `0.5.0_3`.
 
@@ -158,6 +160,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Establish and repeat a call carrying bidirectional media through OPNsense.** Reverse positions 8, 16 and 32 are wire-qualified but have no replies or media in their measured runs; guarded reverse position 24 is the prepared next test in `START_HERE.md`. If it is also wire-correct and silent, move beyond standalone fragment-position widening. The earlier owner-reported success remains a separate observation. Do not return to retired `192.168.1.140`; preserve the Docker `host`, temporary-tooling and package `0.5.0_3` boundary.
+**Establish and repeat a call carrying bidirectional media through OPNsense.** The standalone reflector-fragmentation sweep is closed: ordered position 8 and reverse positions 8, 16, 24 and 32 are locally wire-qualified, but no fully correlated run received a reflector reply or media. The prepared next test is one fragmented checksum-invalid zero fake at position 8 followed by the already-qualified real reverse24 path. The earlier owner-reported success remains separate. Do not return to retired `192.168.1.140`; preserve Docker `host`, temporary tooling and package `0.5.0_3`.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).

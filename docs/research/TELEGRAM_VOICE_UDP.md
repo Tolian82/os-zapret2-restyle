@@ -1,6 +1,6 @@
 # Telegram voice / UDP DPI-bypass research
 
-**Status:** RESEARCH CURRENT · REVERSE16 WIRE_OK / NO_REPLY_UNKNOWN · GUARDED REVERSE24 NEXT · `_4` PAUSED
+**Status:** RESEARCH CURRENT · STANDALONE FRAGMENT SWEEP CLOSED · FAKEFRAG8 + REVERSE24 NEXT · `_4` PAUSED
 **Opened:** 2026-08-19
 **Research conclusion:** 2026-08-19
 **Phase A owner-live observation:** 2026-08-28
@@ -22,7 +22,7 @@
 
 The owner explicitly states that `192.168.1.140` is no longer a working route. It is retired from current testing and is not a usable independent control or a required restoration destination. The September 5 success is preserved as a historical result with the older binary; it cannot qualify the present endpoint/path.
 
-The owner reports that Telegram changed how voice is transported and that this is why the tgvoice laboratory had to be rebuilt. This is the recorded project motivation. The owner subsequently reported **an established call with correct routing at call time**. The owner identified it as the same fixed-reflector CLI command. Its positive summary remains unavailable, while a later post-reboot repeat is fully correlated and failed with valid reverse position-8 output. The current task remains a repeatable call carrying bidirectional media through OPNsense. Reverse positions 32 and 16 are now both wire-qualified without replies/media, and the next bounded candidate is guarded reverse position 24. The failed repeats do not negate the earlier report.
+The owner reports that Telegram changed how voice is transported and that this is why the tgvoice laboratory had to be rebuilt. This is the recorded project motivation. The owner subsequently reported **an established call with correct routing at call time**. The owner identified it as the same fixed-reflector CLI command. Its positive summary remains unavailable, while later fully correlated reverse-fragment runs failed despite valid local-WAN output. Reverse positions 8, 16, 24 and 32 are now wire-qualified without replies/media; the standalone position sweep is closed. The current task remains a repeatable call carrying bidirectional media through OPNsense, with fragmented fake plus qualified real fragmentation as the next bounded family. The failed repeats do not negate the earlier report.
 
 ### What official Telegram sources establish
 
@@ -56,7 +56,9 @@ The [guarded reverse position-32 run](../verification/evidence/2026-09-23-telegr
 
 The subsequent [guarded reverse position-16 run](../verification/evidence/2026-09-23-telegram-voice-reverse16.md) is also fully correlated. It emitted 60 complete reverse pairs with the expected offset-16/offset-0 layout, valid IPv4 and reassembled UDP checksums, exact primary-LAN payload matches, no unfragmented originals and no replies. Both peers stayed `Reconnecting`, BWE was zero, exit was 1, and restoration was exact. Result: local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, no `MEDIA_PASS`. All intercepted payloads were 40 bytes, so the <=8-byte short guard was not exercised.
 
-Next is the separately named guarded reverse position-24 runner. For this Hello it retains reverse order and moves the split from 16 to 24. The wrapper passes application payloads at or below 16 bytes unchanged; longer datagrams use native reverse fragmentation. The expected 40-byte Hello serialization is two equal IP length-44 fragments: offset 24/MF=0 first, then offset 0/MF=1. If this candidate is also wire-correct and silent, stop widening standalone fragment positions. Waiting for the earlier positive CLI log does not block this bounded experiment. No fresh independent control establishes where the silence beyond local WAN originates.
+The subsequent [guarded reverse position-24 run](../verification/evidence/2026-09-23-telegram-voice-reverse24.md) is fully correlated as well. It emitted 60 complete reverse pairs with two equal IP length-44 fragments per Hello, valid IPv4 and reassembled UDP checksums, exact primary-LAN payload matches, no unfragmented originals and no replies. Both peers stayed `Reconnecting`, BWE was zero, exit was 1, and restoration was exact. Result: local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, no `MEDIA_PASS`. This closes standalone fragment-position widening for the current reflector epoch.
+
+The next prepared family adds one fragmented fake before the qualified real reverse24 path. Candidate `postnat-fakefrag8-reverse24-v1` uses a 40-byte zero fake with intentionally bad UDP checksum and random IPv4 ID, fragmented ordered at UDP position 8, followed by the same checksum-valid real reverse24 pair. Fragmenting the fake prevents an unfragmented raw-sent fake from re-entering the post-NAT divert rule. Waiting for the earlier positive CLI log does not block this bounded experiment. No fresh independent control establishes where the silence beyond local WAN originates.
 
 ## 2026-09-20 laboratory source update
 
@@ -710,7 +712,7 @@ Risk: high and unrelated to the primary mechanism. It can disable QUIC/HTTP/3 an
 9. **Can current Strategy Lab auto-find the voice strategy?** Not with its current arbitrary-reply oracle and `from me` rule. A separate external-probe runner using pinned official tgcalls and a real reflector can provide `MEDIA_PASS` while reusing existing lifecycle machinery.
 10. **What was built and measured first?** Phase A completed the traffic observation; `0.5.0_3` implemented the Telegram-IP-scoped native STUN helper. Owner-live testing proved its mechanics and rollback but the zero-fake strategy failed to restore inbound or sustained Telegram UDP.
 11. **What about P2P?** The safe MVP does not claim arbitrary-peer P2P interception. Relay-mode verification is the first target.
-12. **What is next?** Live-test guarded reverse position 24 with the same runtime, binary, engine and endpoint. Reverse positions 8, 16 and 32 are wire-qualified but have no replies/media in their measured runs. If position 24 is also wire-correct and silent, end the standalone position sweep and move to the next bounded candidate family. Preserve the earlier positive CLI observation separately and correlate its original output if recovered. Later engine comparisons remain isolated. The STUN-only `_4` branch stays paused.
+12. **What is next?** Live-test the first fragmented-fake + qualified reverse24 candidate with the same runtime, binary, engine, endpoint and route. The standalone reflector fragmentation sweep is closed: ordered position 8 and reverse positions 8, 16, 24 and 32 are locally wire-qualified but every fully correlated run remained silent. The new candidate adds one 40-byte zero fake with bad UDP checksum, random IPv4 ID and ordered position-8 fragmentation before the already-qualified real reverse24 pair. Preserve the earlier positive CLI observation separately; later engine comparisons remain isolated. The STUN-only `_4` branch stays paused.
 
 ## Sources added during research
 
@@ -750,10 +752,10 @@ Community reports are evidence of observed deployments only; they do not overrid
 
 The exact current handoff is [`START_HERE.md`](../START_HERE.md); the runner and acceptance contract is in [`TELEGRAM_VOICE_EMULATION_LAB.md`](../architecture/TELEGRAM_VOICE_EMULATION_LAB.md).
 
-1. Run the prepared guarded reverse position-24 candidate after `READY`, with the same fixed-reflector CLI and timestamped console/RTC output. Preserve the restored endpoint route and Docker `host` topology. Runner SHA-256 is `c63ddb5dc097dfcec2759134101a31f1020cf5536d82f26eeab3dd2b30217905`.
-2. Verify the expected equal 44-byte IP fragments in reverse order, checksums, payload preservation, returned packets, both peer states/stats/BWE, exit and exact cleanup. The short-packet guard passes application payloads of at most 16 bytes unchanged; it does not affect the observed 40-byte Hello.
-3. Keep the qualified binary, engine/configuration and endpoint fixed. If reverse24 is wire-correct but receives no reply/media, end standalone fragment-position widening and move to the next bounded family. Preserve the earlier positive CLI observation separately and correlate its original output if recovered. A fresh independent control improves causal interpretation but the retired gateway is not a task dependency.
-4. Compare engine/custom parameters separately only when the upstream findings and failure stage justify it. Do not assume later ICE/media changes explain no initial reply on WAN.
+1. Run `tgvoice_fakefrag8_reverse24_postnat_v1.py --after-nat`, revision `postnat-fakefrag8-reverse24-v1`, SHA-256 `c4ee47779d778f50b04e48ffe744f5d098d3fb32863133b7d3a8d7ed6c633d24`, then start the same fixed-reflector 15-second CLI after `READY`.
+2. Keep endpoint `91.108.13.10:596`, route through `192.168.1.2`, current tgcalls binary/engine and measured Zapret2 runtime identities fixed.
+3. Require four WAN fragments per 40-byte Hello: ordered fake len 28 offset 0/MF=1, fake len 60 offset 8/MF=0, then real reverse24 len 44 offset 24/MF=0 and len 44 offset 0/MF=1. The fake pair must have intentionally invalid reassembled UDP checksum and a different IPv4 ID from the real pair; the real pair must remain checksum-valid and payload-exact. Reject/rerun an epoch with a fake/real ID collision.
+4. Preserve the earlier positive CLI observation separately. A wire-correct silent result remains `NO_REPLY_UNKNOWN` without a fresh independent control; a media success must be repeated with fresh process/flow state.
 5. Reach and repeat `MEDIA_PASS`, then verify one remote P2P-disabled Windows/Android call with two-way audio and sustained bidirectional UDP before a production decision.
 
 Keep the laboratory temporary and package identity `0.5.0_3` unchanged. Do not publish the paused STUN-only `_4` as-is.
