@@ -16,6 +16,8 @@
 
 **Establish and repeat a call carrying bidirectional media through OPNsense in the rebuilt laboratory.** A correct packet transformation is an intermediate gate; the required laboratory result is `MEDIA_PASS`, followed by a real remote Windows/Android `CALL_PASS` before product acceptance.
 
+**Scope boundary:** the owner explicitly defines this work as an internal laboratory test on owner-controlled infrastructure. It is not intended to bypass sanctions or sanctions-related restrictions, and no such bypass is part of the project objective.
+
 The owner explicitly confirms that `192.168.1.140` is no longer a working route. Do not use it as a current independent control, prescribe a detour through it, or assume it is the restoration destination. Its September 5 success belongs to the old epoch and binary. No fresh independent working control is currently established; this limits causal classification, not permission to continue the lab campaign.
 
 The laboratory was rebuilt because the owner reports a change in Telegram voice transport. [Current protocol research](../research/TELEGRAM_VOICE_UDP.md) records the upstream networking/MTProto changes, disabled-by-default experiments and the remaining real-client parity question. Current runs select engine `13.0.0` on both peers without custom overrides.
