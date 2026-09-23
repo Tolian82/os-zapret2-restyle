@@ -1,7 +1,7 @@
 # Telegram Voice traffic emulation and strategy oracle
 
-**Status:** CURRENT TEMPORARY DESIGN · OWNER REPORTS CALL ESTABLISHED · FLOW / MEDIA ATTRIBUTION OPEN
-**Updated:** 2026-09-22
+**Status:** CURRENT TEMPORARY DESIGN · REVERSE8 WIRE_OK / NO_REPLY_UNKNOWN · GUARDED REVERSE32 NEXT
+**Updated:** 2026-09-23
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
 **Phase A evidence:** [`2026-08-28-telegram-voice-phase-a-live-observation.md`](../verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md)
@@ -20,7 +20,7 @@ The owner explicitly confirms that `192.168.1.140` is no longer a working route.
 
 The laboratory was rebuilt because the owner reports a change in Telegram voice transport. [Current protocol research](../research/TELEGRAM_VOICE_UDP.md) records the upstream networking/MTProto changes, disabled-by-default experiments and the remaining real-client parity question. Current runs select engine `13.0.0` on both peers without custom overrides.
 
-The [September 21 ordered run](../verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) remains `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, with no established call in that run. For the [September 22 reverse run](../verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), the owner reports an established call with correct routing at call time. Its captures contain no records under `host 91.108.13.10`, and the UDP/596 fragmentation rule has zero hits. Correlate the successful call's actual tool/client, flow and media evidence before changing strategies. These narrow captures neither refute the call nor prove fragmentation caused it.
+The [September 21 ordered run](../verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) remains `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, with no established call in that run. For the [September 22 reverse run](../verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), the owner reports an established call with correct routing at call time. Its captures contain no records under `host 91.108.13.10`, and the UDP/596 fragmentation rule has zero hits. The owner later identified the same fixed-reflector CLI command; its positive output remains unavailable. These narrow captures neither refute the call nor prove fragmentation caused it. The separate [post-reboot repeat](../verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md) now correlates that command with 60 valid reverse pairs and zero replies: both peers `Reconnecting`, zero BWE, exit 1, exact restoration. This repeat qualifies reverse position-8 emission but has no media pass; guarded reverse position 32 is the next live candidate.
 
 ## 2026-09-20 current-tgcalls oracle update
 
@@ -74,7 +74,7 @@ The selected design is a three-tier live oracle supported by an offline wire pre
 
 Tier 2 is the primary automatic strategy oracle. Tier 1 is a fast discriminator and diagnostic probe. Tier 3 is the final acceptance row, not the search loop.
 
-The current companion has passed its local gate. Endpoint `91.108.13.10:596` was then run through the OPNsense/provider path selected by TNAS gateway `192.168.1.2`. The 2026-09-20 LAN/WAN capture proved two current 40-byte Reflector Hello flows crossed OPNsense/NAT cleanly: 60/60 LAN packets appeared on WAN, payloads matched byte-for-byte, TTL changed only by forwarding, and checksums remained valid. No UDP reply returned and both tgcalls sides remained `Reconnecting`. The current no-desynchronization baseline is therefore `WIRE_OK` / `NO_REPLY_UNKNOWN`, not a claim that provider DPI has already been isolated. The current exchange is non-STUN, so the paused STUN-only `_4` profile is not a direct candidate for this baseline. The subsequent September 21 ordered position-8 candidate is now wire-qualified but still receives no reply. The next experiment uses its corrected post-NAT setup to change only fragment order, after installed-runtime syntax validation; full media success remains the objective.
+The current companion has passed its local gate. Endpoint `91.108.13.10:596` was then run through the OPNsense/provider path selected by TNAS gateway `192.168.1.2`. The 2026-09-20 LAN/WAN capture proved two current 40-byte Reflector Hello flows crossed OPNsense/NAT cleanly: 60/60 LAN packets appeared on WAN, payloads matched byte-for-byte, TTL changed only by forwarding, and checksums remained valid. No UDP reply returned and both tgcalls sides remained `Reconnecting`. The current no-desynchronization baseline is therefore `WIRE_OK` / `NO_REPLY_UNKNOWN`, not a claim that provider DPI has already been isolated. The current exchange is non-STUN, so the paused STUN-only `_4` profile is not a direct candidate for this baseline. The subsequent September 21 ordered position-8 candidate is now wire-qualified but still receives no reply. The September 22 post-reboot reverse position-8 repeat also has 60 valid pairs, zero replies and a failed call, with exact restoration. Next, retain reverse order and move the observed Hello cut to 32, with explicit short-packet pass-through; full media success remains the objective.
 
 The previous plan to publish and immediately live-test one STUN-only ordered-fragment candidate is paused. The remote branch `v0.5.0_4-telegram-voice-ipfrag` at `3ecdd1b3326fe7655e1d7df9edd51808e2a68dc9` contains one prepared candidate, but it has no PR, exact-head CI, merge, package publication, or owner-live result. It must not be merged as-is. After Phase C evidence, it will be rebased/reworked, replaced, or rejected.
 
@@ -353,12 +353,12 @@ Keep TURN/STUN and reflector candidates as separate families because they are di
 
 1. no desynchronization — completed on September 20, `WIRE_OK / NO_REPLY_UNKNOWN`;
 2. ordered IPv4 fragmentation at UDP position 8 — corrected post-NAT setup completed on September 21, `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`;
-3. reverse fragment order at position 8 using Zapret2's `ipfrag_disorder` option — source/syntax validated; September 22 endpoint captures/counters are empty, while the owner reports an established call; correlate that observation before another candidate;
-4. evidence-driven alternate positions, initially 32, then 16 and 24;
+3. reverse fragment order at position 8 using Zapret2's `ipfrag_disorder` option — post-reboot repeat wire-qualified on September 22, `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, no media pass; the earlier positive owner report remains separate;
+4. guarded reverse position 32 — prepared and offline-validated, live evidence pending; positions 16/24 remain conditional later comparisons;
 5. only after standalone fragmentation is measured, a bounded fake-plus-fragment family;
 6. stop widening if the control-proven endpoint remains silent for every on-wire-correct family.
 
-Position 8 separates the UDP header from the complete 40-byte Hello. Position 32 cuts inside the constant reflector marker and remains a possible later alternate. Exact reverse-order serialization has been validated against the pinned Lua and accepted by the measured installed runtime; live fragment emission still needs traffic evidence. Do not count pre-NAT or first-fragment-recapture defects as failed candidates for the corrected setup. Engine/custom-parameter comparisons belong to separate epochs so their effects are not mixed with fragmentation changes.
+Position 8 separates the UDP header from the complete 40-byte Hello. Position 32 cuts inside the constant reflector marker. Exact reverse position-8 serialization is now live-qualified. For position 32 the pinned native Lua falls back to unfragmented raw-send when UDP payload length is at most 24 bytes; the prepared wrapper returns `VERDICT_PASS` without raw-send for these short datagrams to prevent recapture. Longer datagrams use native `send` fragmentation followed by `VERDICT_DROP`. This guard is an explicit additional behavior for short traffic; for the observed 40-byte Hello only the cut position changes. Expected IP lengths/order are 36 bytes at offset 32, MF=0, then 52 bytes at offset 0, MF=1. Offline validation is not live qualification. Do not count pre-NAT or first-fragment-recapture defects as failed candidates for the corrected setup. Engine/custom-parameter comparisons belong to separate epochs so their effects are not mixed with fragmentation changes.
 
 ### TURN/STUN family
 
@@ -407,11 +407,12 @@ Only this row is `CALL_PASS`. Audio without sustained UDP remains fallback evide
 4. [x] Measure the current fixed-endpoint no-desynchronization baseline with LAN/WAN attribution.
 5. [x] Correct pre-NAT checksum corruption and post-NAT recapture; qualify ordered position-8 output and exact restoration.
 6. [x] Validate reverse position-8 syntax and preserve the first archive together with the owner's established-call/correct-route observation.
-7. [ ] Correlate and reproduce that successful call; qualify the actual flow and reverse-strategy behavior before considering alternate positions.
-8. [ ] Investigate real-client engine/configuration parity in separate experiments where source evidence justifies it.
-9. [ ] Reach and repeat `MEDIA_PASS` through OPNsense with both peers established, stats/BWE on both sides and exit 0.
-10. [ ] Complete one remote P2P-disabled Windows/Android call with two-way sound and sustained bidirectional UDP (`CALL_PASS`).
-11. [ ] Remove temporary owned routes/access/scripts at closeout; archive results and decide the paused `_4` branch.
+7. [x] Correlate the post-reboot CLI repeat and qualify reverse position-8 wire output/restoration; preserve the earlier positive report separately.
+8. [ ] Live-test the prepared guarded reverse position-32 runner and qualify wire/media/restoration evidence.
+9. [ ] Investigate real-client engine/configuration parity in separate experiments where source evidence justifies it.
+10. [ ] Reach and repeat `MEDIA_PASS` through OPNsense with both peers established, stats/BWE on both sides and exit 0.
+11. [ ] Complete one remote P2P-disabled Windows/Android call with two-way sound and sustained bidirectional UDP (`CALL_PASS`).
+12. [ ] Remove temporary owned routes/access/scripts at closeout; archive results and decide the paused `_4` branch.
 
 Every new candidate must retain exact endpoint/process isolation, complete wire/media evidence and exact restoration. Optional SSH automation and a secondary correlated TURN probe are not blockers for the present reflector-call objective. Package identity remains `VERSION=0.5.0`, `PLUGIN_REVISION=3`; the laboratory stays outside permanent plugin code.
 

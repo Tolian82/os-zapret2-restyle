@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Engineering memory index
 
 **Status:** NAVIGATION / INTEGRITY MAP · NOT A CURRENT-STATE NARRATIVE
-**Updated:** 2026-09-22
+**Updated:** 2026-09-23
 
 ## Level 1 — mandatory cold start
 
@@ -35,7 +35,8 @@ Read completely in this order (`DOC-016`):
 - [`SECURITY.md`](SECURITY.md) — security reporting/reference.
 - [`2026-09-20 current laboratory qualification`](verification/evidence/2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md) — rebuilt binary and local P2P gate.
 - [`2026-09-21 post-NAT fragmentation tests`](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) — local defects, corrected wire output, failed media call, restoration and archive identities.
-- [`2026-09-22 reverse run and successful-call observation`](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md) — owner reports an established call with correct routing; endpoint captures/counters are empty, so flow and strategy attribution remain open.
+- [`2026-09-22 reverse run and successful-call observation`](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md) — owner identified the fixed-reflector CLI; the first empty archive does not attribute the reported success.
+- [`2026-09-22 post-reboot reverse repeat`](verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md) — 60 valid reverse position-8 pairs, no replies/media, exact restoration; guarded reverse position 32 is prepared for the next live test.
 
 ## Level 3 — completed version-line archives
 

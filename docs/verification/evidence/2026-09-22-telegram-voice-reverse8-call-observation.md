@@ -6,6 +6,12 @@
 
 **Scope:** temporary console laboratory; no plugin/package change
 
+## Subsequent clarification and separate repeat — recorded September 23
+
+The owner identified the successful display as `docker exec tgvoice-lab /results/tgcalls_cli --mode reflector --reflector 91.108.13.10:596 --duration 15`, followed by `echo "tgcalls_exit=$?"`. Its positive console summary was not supplied. The tool is therefore identified; timing, media qualification and attribution to this first empty archive remain open.
+
+After reboot, a [separate reverse position-8 repeat](2026-09-22-telegram-voice-reverse8-postreboot.md) produced 60 valid fragment pairs during the measured CLI window but no replies or media. This later failed repeat does not disprove the earlier reported success. The historical next-evidence list below records the plan at the time of this first archive; the current handoff has advanced to guarded reverse position 32 in [`START_HERE.md`](../../START_HERE.md).
+
 ## Owner observation
 
 After the reverse-run archive was inspected, the owner explicitly reported that **the call established and routing was correct at the time of the call**. Preserve both facts as owner observations. Empty endpoint-filtered captures do not refute that report, and do not justify diagnosing an incorrect route or an absent call.
