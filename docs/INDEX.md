@@ -21,6 +21,8 @@ Read completely in this order (`DOC-016`):
 ## Level 2 — current line and specialist detail
 
 - **[`v0.5.x working ledger`](history/current/v0.5.x.md)** — current-line chronology and release handoff.
+- **[`Telegram exact owner-live startup, SSH and manual TNAS route operations`](architecture/TELEGRAM_LAB_OPERATIONS.md)** — read first when continuing the live laboratory: Squid/sing-box GUI and file locations, Voice ON-but-lost-on-reboot warning, csh versus `/bin/sh`, verified SSH keys/port, full owner-tested manual TNAS route script and recovery checklist.
+- **[`2026-10-01 owner-live lab inventory and sing-box GUI snapshot`](verification/evidence/2026-10-01-telegram-lab-owner-live-inventory.md)** — exact current status, hashes, full owner-provided sing-box JSON, startup and SSH/route proof; not post-reboot acceptance.
 - **[`Telegram three-origin laboratory and reboot recovery`](architecture/TELEGRAM_TRAFFIC_POLICY.md)** — mandatory separate, reboot-persistent LAN/router-local/SOCKS5 testbed, experimental Squid/sing-box/PF/parent paths and TNAS routing; not approved plugin TCP/proxy scope.
 - **[`September 23–October 1 evidence`](verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md)** — fakefrag/tee/reverse8 results, verified TCP parent paths, failed and successful policy application, latest active-helper UDP failure.
 - **[`Telegram voice / UDP DPI-bypass research`](research/TELEGRAM_VOICE_UDP.md)** — protocol changes and source links, rebuild motivation, Phase A/B and current Phase C experiments; approved product boundary is UDP-only.
