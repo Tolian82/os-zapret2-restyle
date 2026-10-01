@@ -1,7 +1,7 @@
 # Telegram: laboratory TCP/proxy policy and recovery runbook
 
-**Status:** EXPERIMENTAL LAB CONFIGURATION · NOT AN APPROVED TCP/PROXY PLUGIN CONTRACT  
-**Updated:** 2026-10-01  
+**Status:** EXPERIMENTAL LAB CONFIGURATION · NOT AN APPROVED TCP/PROXY PLUGIN CONTRACT
+**Updated:** 2026-10-01
 **Superseded product boundary:** The owner's later October 1 instruction limits current product work to **Telegram Voice UDP** and three sequential stages: repeatable `MEDIA_PASS` through OPNsense, remote real-client `CALL_PASS`, then native plugin integration of the proven UDP behavior. See [product requirements](../REQUIREMENTS.md), [current handoff](../START_HERE.md), [roadmap](../ROADMAP.md) and [UDP oracle](TELEGRAM_VOICE_EMULATION_LAB.md).
 
 This document is the **laboratory** record and recovery procedure for the already working Squid/sing-box/PF, external proxy and selected test routes. Preserve the proven October 1 TCP configuration unchanged. GUI-managed OPNsense persistence of the *separate lab settings* is acceptable for convenience, but Telegram TCP/TLS interception, Squid, sing-box, SOCKS integration, PF proxy redirects, parent proxy management and automatic proxy for the router console **are not current plugin deliverables**. The external proxy remains a laboratory prerequisite for real Telegram TCP signaling where needed; choosing the eventual product TCP architecture and an end-to-end clean-install TCP solution are **not approved work stages**.
