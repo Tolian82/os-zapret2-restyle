@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Engineering memory index
 
 **Status:** NAVIGATION / INTEGRITY MAP · NOT A CURRENT-STATE NARRATIVE
-**Updated:** 2026-09-23
+**Updated:** 2026-10-01
 
 ## Level 1 — mandatory cold start
 
@@ -21,6 +21,8 @@ Read completely in this order (`DOC-016`):
 ## Level 2 — current line and specialist detail
 
 - **[`v0.5.x working ledger`](history/current/v0.5.x.md)** — current-line chronology and release handoff.
+- **[`Telegram traffic policy and recovery`](architecture/TELEGRAM_TRAFFIC_POLICY.md)** — owner goal, actual LAN/local/SOCKS coverage, Squid/sing-box/firewall files, helper semantics, Docker and reboot routes.
+- **[`September 23–October 1 evidence`](verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md)** — fakefrag/tee/reverse8 results, verified TCP parent paths, failed and successful policy application, latest active-helper UDP failure.
 - **[`Telegram voice / UDP DPI-bypass research`](research/TELEGRAM_VOICE_UDP.md)** — protocol changes and source links, rebuild motivation, Phase A/B interpretation and current Phase C experiments.
 - **[`Telegram Voice emulation/oracle architecture`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md)** — rebuilt media oracle, retired control route, corrected post-NAT wire path, current call-success goal and result taxonomy.
 - **[`TOS Telegram Voice companion recipe`](../tools/telegram-voice-lab/compose.tos.yml)** — digest-pinned host-network build/runtime source; endpoint routing through OPNsense is measured per epoch.
@@ -39,7 +41,7 @@ Read completely in this order (`DOC-016`):
 - [`2026-09-22 post-reboot reverse repeat`](verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md) — 60 valid reverse position-8 pairs, no replies/media, exact restoration.
 - [`2026-09-23 reverse position-32 result`](verification/evidence/2026-09-23-telegram-voice-reverse32.md) — 60 valid reverse pairs, no replies/media and exact restoration.
 - [`2026-09-23 reverse position-16 result`](verification/evidence/2026-09-23-telegram-voice-reverse16.md) — 60 valid reverse pairs, no replies/media and exact restoration.
-- [`2026-09-23 reverse position-24 result`](verification/evidence/2026-09-23-telegram-voice-reverse24.md) — 60 valid equal-length reverse pairs, no replies/media and exact restoration; standalone fragment positions close and fragmented fake + reverse24 is next.
+- [`2026-09-23 reverse position-24 result`](verification/evidence/2026-09-23-telegram-voice-reverse24.md) — 60 valid equal-length reverse pairs, no replies/media and exact restoration; standalone fragment positions close; subsequent fakefrag results are in the October 1 evidence.
 
 ## Level 3 — completed version-line archives
 

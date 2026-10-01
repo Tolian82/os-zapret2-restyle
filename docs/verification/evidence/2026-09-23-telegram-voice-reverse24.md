@@ -68,6 +68,10 @@ The corrected current-runtime reflector campaign now has on-wire-qualified stand
 
 Every fully correlated current-runtime run emitted the intended valid local-WAN serialization and received zero reflector packets. With no fresh independently working control, this remains `NO_REPLY_UNKNOWN`, not a causal provider `NETWORK_FAIL`. It is nevertheless enough to stop widening fragment positions: another split point would add little diagnostic value while repeating the same silent outcome.
 
+## Subsequent result — recorded October 1
+
+The preparation below is historical. Fakefrag8+reverse24 **v2** was tested later on September 23 and emitted the intended valid real pairs plus intentionally invalid fake pairs, but no reply/media. Separate original-pass and tee variants had different local outcomes. See [the September 23–October 1 evidence](2026-10-01-telegram-traffic-policy-and-voice-control.md); current work is owned by [START_HERE](../../START_HERE.md), not the old next-test list.
+
 ## Next bounded family: fragmented fake plus qualified real fragmentation
 
 Prepared file: **`tgvoice_fakefrag8_reverse24_postnat_v1.py`**, revision **`postnat-fakefrag8-reverse24-v1`**.

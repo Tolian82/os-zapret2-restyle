@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1
-**Updated:** 2026-09-23
+**Updated:** 2026-10-01
 State-line scope: **`v0.5.x`**
 
 Direct orientation:
@@ -84,53 +84,33 @@ Completed boundary:
 
 No further package correction belongs to this scope.
 
-## Telegram voice / UDP research state
+## Telegram traffic policy and voice state
 
-The current task is a repeatable call carrying bidirectional media through OPNsense in the rebuilt tgvoice laboratory. The owner identified the earlier reported successful call as the fixed-reflector CLI command. The post-reboot reverse position-8 repeat and subsequent reverse position-32 run are fully correlated and failed despite valid local-WAN output. Preserve these as separate observations; formal media qualification remains open.
+The owner-selected goal is **«Воспроизводимая конфигурация того успеха»**: permanent identical Telegram traffic policy for LAN, router-local applications and SOCKS5 clients on OPNsense `192.168.1.2`; UDP through Zapret2 with active `telegram_voice`, TCP/TLS through Squid to parent `185.203.117.88:33128`, and TGVOICE routed through `192.168.1.2`.
 
-Authorities and evidence:
-
-- [research, transport changes and interpretation](research/TELEGRAM_VOICE_UDP.md);
-- [temporary emulator/oracle architecture](architecture/TELEGRAM_VOICE_EMULATION_LAB.md);
-- [Phase A observation](verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md) and [Phase B zero-fake failure](verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md);
-- [historical 2026-09-05 control](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md);
-- [current build/runtime qualification](verification/evidence/2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md);
-- [current unmodified OPNsense baseline](verification/evidence/2026-09-20-telegram-voice-current-opnsense-baseline.md);
-- [post-NAT position-8 test sequence and restoration](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md);
-- [earlier reverse-run capture and owner-reported call establishment](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md);
-- [post-reboot reverse position-8 repeat](verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md);
-- [reverse position-32 live result](verification/evidence/2026-09-23-telegram-voice-reverse32.md);
-- [reverse position-16 live result](verification/evidence/2026-09-23-telegram-voice-reverse16.md);
-- [reverse position-24 live result and next fake-plus-fragment candidate](verification/evidence/2026-09-23-telegram-voice-reverse24.md).
+Primary homes: [current configuration, helper semantics and reboot commands](architecture/TELEGRAM_TRAFFIC_POLICY.md), [new evidence through October 1](verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md), [oracle architecture](architecture/TELEGRAM_VOICE_EMULATION_LAB.md), [protocol research](research/TELEGRAM_VOICE_UDP.md). The [current ledger](history/current/v0.5.x.md) preserves chronology; individual fragmentation results remain reachable through [INDEX](INDEX.md).
 
 Established facts:
 
-- **`192.168.1.140` is no longer a working route**, by the owner's explicit correction. It is retired from the active test plan and cannot serve as a current independent control. Its September 5 `MEDIA_PASS` remains a fact about that old epoch and old binary only.
-- The owner reports a Telegram voice-transport change as the reason for rebuilding the laboratory. Official tgcalls sources confirm networking and MTProto transport changes; some are disabled by default. The research distinguishes these changes from unverified production rollout and actual Windows/Android negotiation.
-- The active tgcalls pin is `efd330ca04f74706024a5abdfb5b41f4e4dd1065`; binary SHA-256 is `7ad8a2eef607e92056e8e8311519d36616c45ca19f1403601bbed8e8db01f3dc`. The local P2P run established both sides at 0.039 seconds, collected five records per side, had non-zero BWE and exited 0.
-- The build-only `linux-x86_64-no-v2wasm-18-19` adaptation leaves 11/13/14 networking intact. Current reflector runs use engine `13.0.0` on both peers; using current sources alone does not prove parity with every current client configuration.
-- The September 20 no-desynchronization run to `91.108.13.10:596` traversed OPNsense correctly: 60 outbound Hello datagrams, preserved payloads and valid checksums, no incoming UDP replies.
-- The September 21 pre-NAT checksum defect and subsequent recapture of first fragments were corrected in temporary runner `tgvoice_ipfrag8_postnat_v2.py`. The qualified final run produced 60 ordered pairs, 60 valid reassembled UDP checksums, no original duplicates and no incoming reflector packets.
-- That final 15-second CLI run still had both peers `Reconnecting`, no established call, 15 bitrate records per side, zero BWE, no reported errors and exit 1. Result: local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, not `MEDIA_PASS`.
-- Reverse position-8 source/syntax validation completed, and the September 22 run loaded the profile successfully. Its LAN/WAN captures contain zero records under `host 91.108.13.10`; the UDP/596 fragmentation rule recorded zero hits. Cleanup restored the measured state. No companion call log is included.
-- After reviewing that archive, the owner explicitly reported that **the call established and routing was correct during the call**. Preserve this observation separately from the earlier failed CLI runs. The owner subsequently identified the same 15-second fixed-reflector `tgcalls_cli` command. Its positive summary/timing have not been supplied; neither failed-call attribution nor a reverse-fragmentation success follows from that first empty archive.
-- After reboot, the owner restored the endpoint route through `192.168.1.2` / `ovs_eth1`, source `192.168.1.100`; Docker is running on `host`. The same binary was used in the September 22 21:04:34–21:04:49 UTC repeat. Rule 18990 counted 60 packets / 4080 bytes. WAN has 60 complete reverse pairs, 60 valid reassembled UDP checksums and exact primary-LAN payload matches, with no unfragmented originals or reflector replies. Both peers remained `Reconnecting`, BWE was zero, exit was 1. This repeat is local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, without `MEDIA_PASS`.
-- The September 23 07:06:36–07:06:51 UTC guarded reverse position-32 run used the same route, CLI hash and runtime identities. WAN has 60 complete reverse pairs with valid IPv4/reassembled UDP checksums and exact primary-LAN payload matches; no unfragmented originals or reflector replies. Both peers stayed `Reconnecting`, BWE was zero, exit was 1. Rule 18990 counted 60/4080; IPFW/PFIL/socket snapshots restored exactly. This is local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, no `MEDIA_PASS`. All intercepted payloads were 40 bytes, so live short-packet pass-through was not exercised.
-- The September 23 07:29:23–07:29:38 UTC guarded reverse position-16 run used the same route, CLI hash and runtime identities. Rule 18990 counted 60 packets / 4080 bytes. WAN contains 60 complete reverse pairs with IP length 52 at offset 16 followed by IP length 36 at offset 0/MF=1; all IPv4/reassembled UDP checksums and primary-LAN payload matches passed, with no unfragmented originals or reflector replies. Both peers stayed `Reconnecting`, BWE was zero, exit was 1 and restoration was exact: local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, no `MEDIA_PASS`. All intercepted payloads were 40 bytes, so the <=8-byte short guard was not exercised.
-- The September 23 12:45:54–12:46:09 UTC guarded reverse position-24 run used the same route, CLI hash and runtime identities. Rule 18990 counted 60 packets / 4080 bytes. WAN contains 60 complete reverse pairs with two IP length-44 fragments per Hello, offset 24/MF=0 first and offset 0/MF=1 second; all IPv4/reassembled UDP checksums and primary-LAN payload matches passed, with no unfragmented originals or reflector replies. Both peers stayed `Reconnecting`, BWE was zero, exit was 1 and restoration was exact: local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, no `MEDIA_PASS`. This closes standalone fragment-position widening for the current reflector epoch.
-- The next bounded runner is `tgvoice_fakefrag8_reverse24_postnat_v1.py`, revision `postnat-fakefrag8-reverse24-v1`, SHA-256 `db8d8a9e1e67c2df91a77462d244be37988bbda8cd674bca7c0b77d16d8cc03d`. It adds one 40-byte zero fake with intentionally bad UDP checksum and random IPv4 ID, fragmented ordered at UDP position 8, before the already-qualified real reverse24 serialization. Python syntax and `--help` passed; no live fake-plus-fragment result exists yet.
-- Restoration is to the recorded pre-test state. Normal rules 19000/19001 were absent in the earlier post-NAT archives, but were present before and after the post-reboot repeat. In this repeat the IPFW, PFIL and socket snapshots are byte-identical before/after; listener 989 remains, temporary 18990/990 are removed, and IPv4 hook order is restored.
-- Docker `host` is the owner's selected topology, with no independent container IP/MAC. Routing belongs to TNAS; use the measured path through `192.168.1.2` and only bounded endpoint-route changes if necessary. Never prescribe restoration to the retired gateway.
-- TNAS/OPNsense console execution is already available. Temporary key-only SSH may automate it later, but does not block experiments.
-- The laboratory stays outside installed plugin paths. No GUI, permanent controller/API/configd action, daemon, Generic UDP semantic change or package-owned lab is authorized.
+- `192.168.1.140` is retired as a working Telegram exit. No alternative working exit exists; upstream `192.168.80.1` is a third-party router without owner access. Its inaccessibility limits causal attribution, not progress on the owned configuration.
+- The laboratory was rebuilt after the owner's reported Telegram voice-transport change. Research distinguishes verified upstream networking/MTProto changes from unverified rollout/client parity.
+- TNAS `192.168.1.100` / `ovs_eth1` and `tgvoice-lab` share the Docker `host` network. The fixed reflector route is through `192.168.1.2`; the separate `149.154.167.99/32` HTTPS test route is also selected through it. Container-only restart does not itself remove host routes.
+- Active tgcalls source is `efd330ca04f74706024a5abdfb5b41f4e4dd1065`; binary SHA-256 `7ad8a2eef607e92056e8e8311519d36616c45ca19f1403601bbed8e8db01f3dc`. Its [local P2P gate](verification/evidence/2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md) passed. Current reflector runs use engine `13.0.0` and local in-process signaling, with no external Telegram API/TCP dependency for that signaling.
+- The owner reported an established call and correct routing through `192.168.1.2`, identifying the fixed-reflector CLI. The [positive observation](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md) is retained; its original positive output and exact strategy attribution remain unavailable. Every later fully correlated documented repeat failed, which does not refute the earlier observation.
+- Standalone ordered8 and reverse8/16/24/32 are locally wire-qualified without replies/media. The subsequent combined fakefrag8+reverse24 is also locally wire-qualified and silent. Fakefrag8+original instead lost real packets locally in PF; tee preserved real packets but emitted them before fake. These are distinct conclusions, not a blanket strategy verdict.
+- Transparent LAN HTTPS through Squid to the parent was proven on September 30 after correcting the HTTPS endpoint route. Squid's `parentproxy.conf` selects the parent and disallows direct exit for admitted traffic.
+- `singbox_squid_lan_policy_20260930_v2.py` successfully applied on October 1 at 03:47 UTC. It added loopback-only plain CONNECT `127.0.0.1:3130`, scoped Squid ACLs and sing-box IPv4 TCP/80,443 selection from a PF-alias snapshot. All five HTTP/HTTPS probes passed with parent evidence. UDP remains `direct` subject to output IPFW. The script did not alter PF/IPFW or enable voice.
+- A previous failed v2 run restored files but left a Squid listener; a full `configctl proxy restart` released it. The successful later run is the latest applied state. v2's runtime rollback verification defect and the single unexplained TLS EOF remain recorded; successful reload output is not full restoration proof.
+- Latest helper state is `requested=on`, `effective=on`, service running, active profile on, 14 entries, no stage table. The strategy is still `stun-zero-fake-repeats-2`, not reverse fragmentation. It intercepts Telegram IPv4 UDP on all ports but modifies only STUN.
+- The October 1 04:15 UTC control sent 60 valid, unfragmented, non-STUN 40-byte Hellos through the helper/WAN. Rule 19000 increased 0→60 packets / 4080 bytes. No reply appeared; both peers stayed `Reconnecting`, BWE was zero, exit 1. Interception is proven; repeatable media is not.
 
-The runtime update to Zapret2 `v1.0.5.2` is owner-reported; exact measured binary/Lua hashes are in the September 21 evidence. The remote `_4` branch remains unpublished and paused, and package identity remains `0.5.0_3`.
+## Open transition debt and next boundary
 
-## Immediate next boundary
+The permanent goal is not complete. Router-local traffic without explicit proxy is not covered by LAN `rdr`; SOCKS UDP is not separately wire-qualified; the current TCP policy is IPv4/80,443 only and uses a non-refreshing alias snapshot. `telegram_voice` is intentionally requested through an ephemeral `/var/run` marker and returns OFF at reboot. Persistent TNAS routing, service/config survival and the complete three-origin policy need reboot acceptance. Keep the successful configuration backups and use the recovery instructions until these gaps close.
 
-Follow the exact next action in [`START_HERE.md`](START_HERE.md): run the prepared fragmented-fake + qualified reverse24 candidate with the same current binary/runtime, route and fixed endpoint. The standalone reflector fragment-position sweep is closed: ordered position 8 and reverse positions 8, 16, 24 and 32 are locally wire-qualified, while every fully correlated run remained silent and without `MEDIA_PASS`. The earlier positive owner observation remains separately unqualified.
+The laboratory remains temporary outside the plugin; permanent router traffic policy is now owner-required and must not be rejected using the older lab-controller restriction. Follow [START_HERE](START_HERE.md) for the exact next task. Reach repeated `MEDIA_PASS` and a real remote `CALL_PASS`, preserving the prior positive report and truthful `NO_REPLY_UNKNOWN`/restoration results.
 
-For the next runner, require one ordered position-8 fake pair with bad reassembled UDP checksum and a fake IPv4 ID distinct from the real pair, followed by the already-qualified checksum-valid reverse24 real pair. Any accidental fake/real IPv4-ID collision invalidates that epoch and requires a fresh run. Reach repeated `MEDIA_PASS` and a real remote Windows/Android `CALL_PASS`; without a fresh independent working control, a silent candidate remains `NO_REPLY_UNKNOWN`. A failed restoration remains overriding `RESTORE_FAILED`.
+Runtime Zapret2 `v1.0.5.2` is owner-reported; the exact measured binary/Lua hashes are in [September 21 evidence](verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md). The remote `_4` branch remains unpublished and paused; package identity stays `0.5.0_3`.
 
 ## Completed version-line archives
 
