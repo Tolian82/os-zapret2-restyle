@@ -1,23 +1,18 @@
-# Telegram: постоянная политика трафика и восстановление лаборатории
+# Telegram: laboratory TCP/proxy policy and recovery runbook
 
-**Статус:** ТЕКУЩАЯ ЦЕЛЬ И ОПЕРАЦИОННАЯ ИНСТРУКЦИЯ · реализовано частично  
-**Обновлено:** 2026-10-01  
-**Основание:** прямое указание владельца от 1 октября; конфигурации и результаты из его консолей, исходники применённого скрипта и пакета `0.5.0_3`.
+**Status:** EXPERIMENTAL LAB CONFIGURATION · NOT AN APPROVED TCP/PROXY PLUGIN CONTRACT  
+**Updated:** 2026-10-01  
+**Superseded product boundary:** The owner's later October 1 instruction limits current product work to **Telegram Voice UDP** and three sequential stages: repeatable `MEDIA_PASS` through OPNsense, remote real-client `CALL_PASS`, then native plugin integration of the proven UDP behavior. See [product requirements](../REQUIREMENTS.md), [current handoff](../START_HERE.md), [roadmap](../ROADMAP.md) and [UDP oracle](TELEGRAM_VOICE_EMULATION_LAB.md).
 
-Это основной документ о целевой политике, применённых настройках и восстановлении после перезагрузки. [Текущий результат проекта](../PROJECT_STATE.md), [ближайшее действие](../START_HERE.md), [журнал новых испытаний](../verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md) и [устройство медиалаборатории](TELEGRAM_VOICE_EMULATION_LAB.md) имеют отдельные роли.
+This document is the **laboratory** record and recovery procedure for the already working Squid/sing-box/PF, external proxy and selected test routes. Preserve the proven October 1 TCP configuration unchanged. GUI-managed OPNsense persistence of the *separate lab settings* is acceptable for convenience, but Telegram TCP/TLS interception, Squid, sing-box, SOCKS integration, PF proxy redirects, parent proxy management and automatic proxy for the router console **are not current plugin deliverables**. The external proxy remains a laboratory prerequisite for real Telegram TCP signaling where needed; choosing the eventual product TCP architecture and an end-to-end clean-install TCP solution are **not approved work stages**.
 
-## Цель: «Воспроизводимая конфигурация того успеха»
+Values `192.168.1.2`, `192.168.1.100`, `185.203.117.88:33128`, port assignments and TNAS host routes below are **testbed-specific**, not plugin defaults or automatic product policy. Historical measurements and run commands are retained to reproduce previous tests; they do not authorize packaging that configuration. The present `telegram_voice` marker under `/var/run` is deliberately temporary PoC state. After proving `MEDIA_PASS` and `CALL_PASS`, stage 3 will replace that transient product-state mechanism with native persisted plugin GUI/configuration and managed UDP lifecycle; no ad-hoc `rc.syshook` file should be installed for the final product.
 
-На OPNsense `192.168.1.2` должна постоянно, включая перезапуск служб и перезагрузку, действовать единая политика для трёх источников: LAN-клиентов, собственной командной строки/локальных приложений роутера и клиентов SOCKS5 `192.168.1.2:1080`:
+**Laboratory success already measured:** LAN and SOCKS5 Telegram IPv4 TCP/80,443 traversed Squid and the external parent. The owner repeated transparent TNAS HTTPS on October 1 after correcting the HTTPS test route: HTTP 200 and Squid `FIRSTUP_PARENT`. These tests do **not** establish Telegram UDP media success. The active-helper October 1 UDP control intercepted 60 non-STUN Reflector Hellos and still produced no replies or established call. The historical September 22 owner-reported call through OPNsense remains uncorrelated with an exact winning strategy.
 
-- Telegram UDP проходит через Zapret2 при активном `telegram_voice`.
-- Telegram TCP/TLS обрабатывается локальным Squid и в итоге проходит через родительский HTTP-прокси `185.203.117.88:33128`.
-- TGVOICE работает через `192.168.1.2`; маршрут и фактическое прохождение подтверждаются в каждом измеряемом запуске.
-- Ранее сообщённый успешный звонок нужно воспроизвести, связать с точными настройками, затем повторить. Включённый helper, открытый CONNECT или счётчик пакетов сами по себе не означают успех звонка.
+## Retained testbed goal (historical; no longer product scope)
 
-Владелец сообщил, что звонок уже устанавливался через `192.168.1.2`, и указал команду фиксированного reflector CLI. [Эта положительная запись](../verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md) сохраняется. Положительный вывод CLI и согласованный снимок всех настроек того момента пока не получены; причинная связь с reverse8 не доказана. Здесь фиксируется цель восстановить и доказать успех, а не утверждение, что его конфигурация уже восстановлена.
-
-Постоянная политика роутера теперь прямо требуется владельцем. Ранее установленный запрет на постоянный **контроллер лаборатории**, её GUI/API/daemon и включение tgcalls в пакет остаётся отдельной границей и не запрещает эту политику. Данная правка только документирует состояние: она не устанавливает автозагрузку, новые правила или новый пакет.
+The previously selected three-origin LAN/router-local/SOCKS separation with TCP/TLS routed through this parent proxy remains the experimental **testbed arrangement**, not the active `os-zapret2-restyle` development target. The earlier automatic no-proxy router-console requirement is explicitly cancelled. A console using an explicitly configured proxy is a valid test tool; it does not imply any product requirement to auto-proxy other local processes.
 
 ## Топология и ограничения
 
@@ -149,7 +144,7 @@ http_access deny singbox_lan_v1_in
 | `configctl zapret telegram_voice_enable` | Требует полностью работающий Zapret; создаёт marker, транзакционно переприменяет конфигурацию, добавляет профиль и Telegram-IP UDP-правило. Уже включённый исправный helper просто возвращает status |
 | `configctl zapret telegram_voice_disable` | Удаляет запрос и через lifecycle убирает helper-профиль/правило/таблицы, сохраняя обычную стратегию; используется для выбранного отката/сравнения |
 
-Название `telegram_voice` обозначает семейство actions; команды вызываются с суффиксами выше. Marker: `/var/run/zapret2-telegram-voice-poc.enabled`. Он переживает обычное переприменение службы, **но после перезагрузки helper возвращается в OFF**. Автоматическое постоянное включение — пока незавершённое требование владельца.
+Название `telegram_voice` обозначает семейство actions; команды вызываются с суффиксами выше. Marker: `/var/run/zapret2-telegram-voice-poc.enabled`. Он переживает обычное переприменение службы, **но после перезагрузки helper возвращается в OFF**. Persistent GUI-backed activation is approved **only for eventual UDP plugin stage 3 after successful media and real-call acceptance**; the existing marker is acceptable for the current lab. Do not add an independent boot hook.
 
 Профиль `0.5.0_3`, добавляемый перед пользовательской стратегией:
 
@@ -308,12 +303,8 @@ printf 'recorded_run_exit=%s\n' "$TGVOICE_PIPE_EXIT"
 
 Сопоставить напечатанный SHA с таблицей выше. Для изменённой стратегии менять префикс журналов соответственно, чтобы `reverse16` не оказался именем опыта fakefrag8+reverse24. Shell pipeline не должен подменять код CLI кодом успешного `tee`.
 
-## Условия завершения цели
+## Laboratory evidence and recovery boundary
 
-1. Сохранена и проверена после reboot конфигурация каждого из трёх источников: LAN, локальные приложения OPNsense, SOCKS5.
-2. Для Telegram TCP/TLS доказаны путь через Squid и parent, применимый адресный/портовый охват; нет неучтённого прямого пути в требуемом scope.
-3. Для Telegram UDP доказаны попадание в Zapret2, фактическая нужная обработка и возврат трафика; для SOCKS выполнен отдельный UDP-тест, не только TCP CONNECT.
-4. TNAS/host-container после reboot использует `192.168.1.2` без ручного восстановления постоянной политики; временные команды выше служат до закрытия этой части.
-5. Тот же oracle повторно достигает обоих `Established`, ненулевого BWE и exit 0 (`MEDIA_PASS`); затем пройден реальный удалённый Windows/Android-звонок с отключённым P2P, двусторонним звуком и UDP (`CALL_PASS`).
+The commands above reproduce or inspect the currently working **experimental** proxy/routing configuration; they are not a product-installation procedure. Do not reboot, reset proxy configuration, rerun the installer or install an ad-hoc Voice boot hook merely to make experimental settings resemble production. OPNsense GUI-managed persistence of these lab settings may be used where supported, separately from the Voice UDP plugin's eventual configuration.
 
-На 1 октября доказана TCP-часть в указанном узком scope и перехват последнего UDP-контроля. Последний звонок не прошёл. Цель целиком остаётся открытой.
+Current **product** acceptance is limited to the approved sequence: (1) repeatable current-oracle `MEDIA_PASS` through OPNsense; (2) remote Windows/Android P2P-disabled `CALL_PASS` with bidirectional UDP and two-way audio; (3) plugin-native UDP rule/IPSET/strategy/lifecycle and persistent existing-Settings-GUI control, with evidence-based parameters only if genuinely necessary. See [requirements](../REQUIREMENTS.md) and [roadmap](../ROADMAP.md). There are no approved TCP integration or clean-install TCP/proxy stages 4–5.
