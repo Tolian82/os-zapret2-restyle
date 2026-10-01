@@ -1,6 +1,6 @@
 # Telegram laboratory: exact live configuration, boot and operator runbook
 
-**Status:** owner-live inventory, 2026-10-01; separate laboratory, not plugin code.  
+**Status:** owner-live inventory, 2026-10-01; separate laboratory, not plugin code.
 **Read first:** [dated owner evidence](../verification/evidence/2026-10-01-telegram-lab-owner-live-inventory.md) (including full sing-box JSON and file hashes); [traffic and recovery policy](TELEGRAM_TRAFFIC_POLICY.md); [current handoff](../START_HERE.md).
 
 **Preserve existing working TCP configuration.** No reboot, Squid/sing-box reload, GUI Apply, plugin change or new automation was performed as part of this documentation work. Explicitly distinguish observed live state from unverified post-reboot behavior.
