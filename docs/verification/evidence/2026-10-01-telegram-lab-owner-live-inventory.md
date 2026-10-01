@@ -1,7 +1,7 @@
 # 2026-10-01: owner-live Squid, sing-box, Zapret2, SSH and TNAS route inventory
 
-**Type:** dated owner-provided appliance evidence; **not** a post-reboot test, a new media pass, or an action performed by the documentation writer.  
-**Operational recovery:** [Telegram lab operations](../../architecture/TELEGRAM_LAB_OPERATIONS.md).  
+**Type:** dated owner-provided appliance evidence; **not** a post-reboot test, a new media pass, or an action performed by the documentation writer.
+**Operational recovery:** [Telegram lab operations](../../architecture/TELEGRAM_LAB_OPERATIONS.md).
 **Underlying traffic design/history:** [Telegram traffic policy](../../architecture/TELEGRAM_TRAFFIC_POLICY.md).
 
 The owner executed the listed commands on a live OPNsense installation and TOS 7 TNAS. The owner also copied the **full current sing-box JSON from its own GUI**. This evidence fixes provenance: the JSON is not a hypothetical suggested template, and the original one-time TCP policy installer is not the authority for the most recently owner-displayed GUI snapshot. No password or private SSH key is recorded here.
