@@ -112,11 +112,11 @@ Consequences:
 - changing default-gateway data for the visible MAC changes the TNAS host path, affecting all host-network workloads;
 - do not change the TNAS default route for this temporary experiment.
 
-The effective laboratory path must go through OPNsense `192.168.1.2`. The owner-selected reflector and HTTPS-test routes are part of the retained baseline in [the recovery runbook](TELEGRAM_TRAFFIC_POLICY.md#после-перезагрузки-tnas-или-контейнера). Do not remove them after each call. Their boot persistence remains unproven and is now part of the **mandatory separate laboratory reboot acceptance**, not UDP plugin stage 3.
+The current manual OPNsense-to-TNAS SSH path and owner-tested route script are documented in [live lab operations](TELEGRAM_LAB_OPERATIONS.md); no TNAS route or container autostart is requested. The effective laboratory path must go through OPNsense `192.168.1.2`. The owner-selected reflector and HTTPS-test routes are part of the retained baseline in [the recovery runbook](TELEGRAM_TRAFFIC_POLICY.md#после-перезагрузки-tnas-или-контейнера). Do not remove them after each call. Their boot persistence remains unproven and is now part of the **mandatory separate laboratory reboot acceptance**, not UDP plugin stage 3.
 
 An additional route introduced only for a bounded experiment must be snapshotted and restored to its actual prior state. Do not change the TNAS default route or prescribe the retired `.140` as a rollback gateway. A Docker-only restart in host mode does not remove a TNAS host route; TNAS reboot/network regeneration may do so. Route guards apply before starting the companion.
 
-The current tests use the existing TNAS and OPNsense consoles with `docker exec tgvoice-lab ...`. Temporary key-only SSH may later centralize repeated execution on OPNsense, but it is not a prerequisite for the next candidate and introduces no GUI or permanent service.
+The current tests use the existing TNAS and OPNsense consoles with `docker exec tgvoice-lab ...`. The dedicated OPNsense-to-TNAS SSH connection is now owner-live verified; use the documented absolute TOS Docker executable for noninteractive SSH commands. It is separate lab infrastructure and introduces no plugin GUI or controller.
 
 Because a host route affects every TNAS process contacting that exact reflector, the endpoint must be isolated for the epoch. A failed route restore is `RESTORE_FAILED`.
 
@@ -276,7 +276,7 @@ The owner selected console-only temporary orchestration:
 - the script owns only its temporary changes: one fixed reflector/port, IPFW/dvtws2 state, captures, hook ordering and, only when needed, an endpoint `/32` route;
 - every baseline/candidate uses a fresh companion process/source-flow;
 - every exit path proves route and Zapret2/firewall restoration;
-- temporary SSH keys/scripts are removed when the research closes.
+- the owner-tested independent lab SSH access and manually invoked route script remain in place for operator recovery; remove only additional temporary experiment-specific keys/scripts when experiments close.
 
 No Telegram Voice laboratory GUI, MVC/API/configd addition, daemon, persistent lab controller or Generic UDP semantic change is selected. The temporary laboratory will not become permanent plugin code. The superseding owner decision approves native UDP plugin integration only after the two media gates; TCP/Squid/sing-box/PF proxy setup remains laboratory-only.
 
