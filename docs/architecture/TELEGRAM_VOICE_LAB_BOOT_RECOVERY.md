@@ -1,83 +1,64 @@
-# Laboratory-only Telegram Voice ON recovery after OPNsense reboot
+# Telegram Voice lab: GUI versus helper, IPFW/PF/NAT and one-shot reboot decision
 
-**Status:** design and installation procedure approved by owner request; **not yet installed or owner-live reboot tested**.  
-**Scope:** independent OPNsense *laboratory* configuration, not `os-zapret2-restyle` source, package, GUI implementation or product stage 3.  
-**Inputs:** [live inventory](../verification/evidence/2026-10-01-telegram-lab-owner-live-inventory.md), [existing lab operations](TELEGRAM_LAB_OPERATIONS.md), [traffic contract](TELEGRAM_TRAFFIC_POLICY.md).
+**Status:** source audit completed against main `857ff3f8c0e01c1aefa2be1b523e28ee01a6dbb2`; **no new boot action installed; no current post-reboot acceptance**. This independent laboratory is separate from the approved plugin product stage 3.
 
-## Requirement and decision
+**Owner decision (supersedes an unpublished, unmerged earlier draft):** absolutely **no Cron, periodic checking or recurring telegram-voice-enable**. If the existing helper remains part of the lab, run it **only once during OPNsense boot, after regular Zapret2 becomes ready**, with a bounded delay/readiness check, never by a permanently enabled periodic task. Do not automatically enable the unrelated TNAS route guard or Docker container. First determine whether the helper is actually needed compared with the existing GUI configuration.
 
-The observed experimental Voice helper was `requested=on`/`effective=on`, with the `stun-zero-fake-repeats-2` STUN-only PoC profile, Telegram IPSET and an IPFW divert rule. Its **request marker** is `/var/run/zapret2-telegram-voice-poc.enabled`; ordinary OPNsense reboot clears it. The already-packaged native `start/20-zapret` hook only starts regular Zapret2 and **does not** preserve the helper's selected ON state. `configctl zapret status` is not a Voice status test.
+This file is the active design/audit record, not instructions to run an unqualified new boot hook. Consult the [owner-live operations inventory](TELEGRAM_LAB_OPERATIONS.md) and [dated evidence](../verification/evidence/2026-10-01-telegram-lab-owner-live-inventory.md) before operating on the appliance.
 
-**Selected independent lab solution:** native **System → Settings → Cron** GUI task, invoking a **separately registered laboratory configd action** every five minutes while enabled. This is a *persistent OPNsense GUI ON/OFF selector*: **Cron task enabled = the laboratory operator wants Voice ON automatically recovered**; Cron task disabled = no automatic restoration. To turn Voice actually OFF, disable and Apply the Cron job **before** calling the plugin's existing `telegram_voice_disable` action. Do not assume disabling a Cron job alone turns off an already-active helper.
+## Confirmed: two profile sources but just one dvtws2
 
-This approach does **not** create another `rc.syshook` hook, change any package-owned `actions_zapret.conf`, change the `/var/run` marker format, interfere with Squid/sing-box/PF or affect TNAS routes. Existing plugin source must **only** be changed through GitHub, and future product OPNsense-config-backed Voice Settings GUI persistence is still reserved for product **stage 3 after MEDIA_PASS and CALL_PASS**.
+The persistent settings of `os-zapret2-restyle` are modeled in [Zapret.xml](../../src/opnsense/mvc/app/models/OPNsense/Zapret/Zapret.xml); the [generated template](../../src/opnsense/service/templates/OPNsense/Zapret/zapret.conf) reads `OPNsense.Zapret.strategy.trafficargs` and `OPNsense.Zapret.hostlist.telegramips` into `/usr/local/etc/zapret2/zapret.conf`. The ordinary [orchestrator](../../src/opnsense/scripts/OPNsense/Zapret/backend/orchestrator.sh) normalizes the GUI strategy, writes `/usr/local/etc/zapret2/runtime-v2/traffic-user.conf` and a managed `runtime-v2/managed/ipset-telegram.txt`. The installed helper defined in [telegram_voice.sh](../../src/opnsense/scripts/OPNsense/Zapret/backend/telegram_voice.sh) **prepends**, rather than separately launching, a STUN-oriented `telegram-voice-poc` profile to the effective `runtime-v2/traffic.conf` **only if** `/var/run/zapret2-telegram-voice-poc.enabled` exists. The effective runtime is launched as **one dvtws2 instance**, using generated `runtime-v2/dvtws.args`.
 
-The registered action invokes the **same backend command** as the package's existing `zapret telegram_voice_enable` action **directly**, rather than nesting `configctl zapret ...` inside a configd action. This avoids a possible configd self-call/deadlock. The service's actual source checks that ordinary Zapret2 is already completely running, uses a lifecycle lock, and **when the marker and effective state are already ON, returns current status without reconfiguration**. Before Zapret is ready the command fails safely; the next scheduled invocation retries without force-starting/restarting ordinary Zapret2. The job is recovery, **not a daemon or strategy experiment**. A scheduled call can still fail and is *never* proof that Voice media passes.
+The currently installed helper profile has `--filter-l3=ipv4 --filter-udp=* --filter-l7=stun --ipset=.../managed/ipset-telegram.txt --payload=stun --lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2`. Its name, filters, fake content and repeat count are **source-code constants**, not separately editable/persisted GUI Voice fields. The `/var/run` marker remembers only transient ON; `runtime-v2/telegram-voice-poc.state` is a generated runtime observation, **not a permanent preference**.
 
-**Boot availability:** OPNsense schedules Cron via its persistent GUI configuration. The first successful action after reboot may be up to five minutes **after ordinary Zapret2 is actually ready**; do not claim instantaneous ON. If Cron/configd never becomes operational or Zapret startup remains incomplete, this action cannot recover it. Capture the job log, actual status and boot timing during the first controlled reboot.
+Owner's regular GUI strategy contains YouTube HTTP/TLS, then Telegram TCP `80,443,5222,8888` MTProto and Telegram UDP **the same four ports** with `<IPSET:telegram>` and `--filter-l7=mtproto`, and then user TLS. The Telegram TCP and UDP lines are separated by **no** `--new`; by normal strategy syntax, they are part of the same successive block, not independently selectable STUN and MTProto Voice strategies. This regular GUI strategy contains **no Voice-specific STUN or current-reflector profile**.
 
-References: [OPNsense native configd custom actions](https://docs.opnsense.org/development/backend/configd.html), [OPNsense GUI Cron](https://docs.opnsense.org/manual/settingsmenu.html#cron), [OPNsense native boot ordering](https://docs.opnsense.org/development/backend/overview.html), [current project source service dispatch](../../src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh), [existing hook](../../src/etc/rc.syshook.d/start/20-zapret).
+`<IPSET:telegram>` is expanded from the same managed data the helper uses: the GUI's 14 listed IPv4 prefixes are normalized into `runtime-v2/managed/ipset-telegram.txt`. The helper additionally constructs an **IPFW table** `zapret2_tgvoice` from that managed file. This is one configured Telegram-address dataset represented twice in different runtime subsystems, **not two unrelated permanent IP lists**. Do not mistake this for the *separate* PF aliases `Telegram`/`Telegram_IPs` or sing-box's static `ip_cidr` snapshot: these lists are currently not automatically synchronized.
 
-## Prepare without affecting today's active traffic
+## Why GUI alone is not equivalent with the current firewall backend
 
-OPNsense owner console is **csh**, not POSIX `sh`. Every console command below is deliberately **one line compatible with the default csh**. No interactive multiline scripts/heredocs. The package's backend uses its own `#!/bin/sh` and is launched directly by configd. Do not restart Zapret2, Squid or sing-box for installation.
-
-Before installation:
+Current code in [ports.sh](../../src/opnsense/scripts/OPNsense/Zapret/backend/ports.sh) extracts **only numerical** `--filter-tcp=` and `--filter-udp=` ports and ranges from **traffic-user.conf**, i.e. from GUI strategy *without* the injected helper. The current extractor rejects the wildcard `*`; the extracted values generate common IPFW rules in [firewall.sh](../../src/opnsense/scripts/OPNsense/Zapret/backend/firewall.sh):
 
 ```text
-configctl zapret status
-configctl zapret telegram_voice_status
-ls -l /usr/local/opnsense/service/conf/actions.d/actions_tgvoice_lab_restore.conf
+udp from any to any 80,443,5222,8888 out not diverted not sockarg xmit vtnet1
 ```
 
-The last `ls` is a **collision guard**: expected `No such file or directory`. If it exists, STOP and inspect it; do **not** overwrite it. Ensure the current Voice state is the intended ON baseline. Record current uptime if a future boot time comparison is planned.
+The `<IPSET:telegram>` in GUI's dvtws2 profile is **not** an IPFW destination selector. Common UDP interception covers only its configured ports but across **all WAN destination IPs**. To capture all ports by adding `1-65535` to GUI would cause very broad interception of virtually all outbound UDP, **not a narrow Telegram Voice solution**. Copying `--filter-udp=*` to the GUI cannot currently substitute for the helper either, as the port extractor rejects `*`.
 
-With the expected file absent, install the **single independent lab action**; the literal command is one line despite its display wrapping:
+With Voice helper ON, [firewall.sh](../../src/opnsense/scripts/OPNsense/Zapret/backend/firewall.sh) first inserts an additional dedicated rule at the start of the plugin-owned rule range:
+
+```text
+udp from any to table(zapret2_tgvoice) out not diverted not sockarg xmit vtnet1
+```
+
+It then shifts the ordinary port rules down one number. The dedicated rule captures Telegram-destination UDP on **any** port; for Telegram UDP/443 both rule families could match *before* first interception, but the earlier dedicated rule catches it and the `not diverted` condition stops subsequent recapture after return from the same divert socket. Thus this is **overlap in capture eligibility**, not double interception by two separate dvtws2 instances, double encryption or automatically applying two fake strategies. The upstream Zapret2 profile engine selects the **first applicable profile**. The helper STUN profile precedes the regular GUI profiles; for non-STUN packets it does not apply, and the later profiles are still individually filter-dependent.
+
+**Today this narrowly scoped capture is real, but the helper's STUN strategy is not a solution for the current non-STUN reflector.** The latest [October 1 owner evidence](../verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md) saw 60 intercepted 40-byte non-STUN Reflector Hello packets, no modified Hello, zero inbound replies, no `MEDIA_PASS`. GUI's MTProto-initial profiles also do **not** establish processing of these non-STUN/non-MTProto-intial 40-byte packets. Whether a future effective Voice strategy can be expressed as GUI text **after** adding safe destination-scoped capture is an architecture question; do not discard the current capture guard while answering it.
+
+**Other possible limited use:** a known single reflector UDP port could be included in GUI port filters for a bounded experiment, but common IPFW would also divert that port for *any* destination. This is neither equivalent to all Telegram UDP ports nor a persistent narrow solution. Do not change the working GUI strategy as part of this audit.
+
+## NAT and hook order are important, but not a GUI/helper distinction
+
+Both rule families are constructed by the **same** plugin firewall backend, target the **same** outgoing WAN `xmit` interface, use the **same** divert port (currently `989`) and return to the **same** single dvtws2. There is **no separate pre-NAT/post-NAT hook chosen per profile**. They differ by **IPFW match**, not their place relative to PF.
+
+PF and IPFW can run in different output hook orders; read their **actual** order on the live OPNsense with the csh-compatible `pfilctl heads` before drawing a conclusion. Historical [2026-09-21 post-NAT fragmentation evidence](../verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) recorded the original `IPFW → PF` order, a **temporary lab-only** `PF → IPFW` reorder to avoid post-NAT invalid fragment UDP checksums, and verified restoration. Those historical observations do **not** prove the actual order after the latest boot/configuration epoch. Never reorder all outgoing IPv4 PFIL hooks merely to make an ordinary STUN fake work: it affects traffic outside Telegram. Such output-order changes require a separate bounded test, snapshots and exact restoration.
+
+To check current state **read-only** from OPNsense's *default csh*:
 
 ```sh
-/usr/bin/printf '%s\n' '[ensure]' 'command:/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh telegram-voice-enable' 'parameters:' 'type:script' 'message:Ensuring lab Telegram Voice ON' 'description:Ensure lab Telegram Voice ON' 'timeout:600' > /usr/local/opnsense/service/conf/actions.d/actions_tgvoice_lab_restore.conf
-```
-
-The `printf` invocation is `csh` compatible, with no shell variable assignments, conditionals or heredocs. It **must not** be pasted as multiple separately executed lines. Then verify before starting the action:
-
-```text
-cat /usr/local/opnsense/service/conf/actions.d/actions_tgvoice_lab_restore.conf
-pkg which /usr/local/opnsense/service/conf/actions.d/actions_tgvoice_lab_restore.conf
-service configd restart
-configctl tgvoice_lab_restore ensure
+pfilctl heads
+ipfw -a list
+cat /usr/local/etc/zapret2/runtime-v2/udp-ports.txt
 configctl zapret telegram_voice_status
 ```
 
-The `pkg which` check should report no owning package; this separate operator-created lab file must not masquerade as plugin source. `service configd restart` reloads **configd**, not Zapret2/Squid/sing-box; perform only when safe to briefly interrupt configd control actions. The newly registered action is deliberately `type:script` (returns status only), so the manual call may print nothing on success; **always** inspect the independent Voice status output.
+Current `ipfw` counters confirm packet interception, **not** a successful transformation or voice call. Current output hook order can only be established from this live check, not deduced from whether a profile originated in GUI.
 
-Expected *status content* after the test with the currently live ON baseline: `telegram_voice_poc.requested=on`, `effective=on`, `service=running`, `active_profile=on`, `table_present=yes`, a nonempty IPSET and a real Voice-specific divert rule. IPSET entry count and numeric rule assignment can legitimately differ from the historical 14/`19000`. If the action returns error or state is not fully ON, do **not** create the Cron job; inspect errors first.
+## One-shot boot requirement: decision, not installed functionality
 
-## Register the desired ON state through native OPNsense GUI
+**No new boot mechanism is installed or verified. No Cron.** If the owner retains the helper while current stage-1 experiments proceed, a future independent one-shot OPNsense startup action must first establish a deliberate durable desired state **ON** without relying on `/var/run`, run **after** the existing package's `start/20-zapret` has made normal Zapret2 ready, wait only for a **bounded** time, invoke `configctl zapret telegram_voice_enable` **at most once on success**, and verify full `requested/effective/active_profile/table/rule` state before reporting success. Do not use a fixed sleep as readiness proof, endlessly retry in a daemon, schedule a recurring job or automatically re-enable Voice during intentionally disabled live experiments.
 
-Only **after the manual registered action passed**:
+A startup-stage OPNsense native `rc.syshook.d/start` script *could* meet the once-per-boot condition if its owner, execution order, persistence and interaction with existing package hook are checked. OPNsense's [rc.syshook](https://github.com/opnsense/core/blob/master/src/etc/rc.syshook) runs sorted start hooks. But this would be an **independent, explicitly approved laboratory mechanism**, not local modification of `os-zapret2-restyle` package files, not a claimed product feature and not an installed/tested action. The choice must be reconciled with the repo's warning against **unreviewed ad-hoc product hooks**, and documented before any device mutation. Alternatively, moving capture and persistent Voice ON preference to the plugin GUI requires owner-approved plugin code changes, appropriate package qualification and live tests, and is separate from merely pasting a profile into the current GUI.
 
-1. OPNsense GUI **System → Settings → Cron** → **+** new job.
-2. Enable: **ON**. `Minutes=*/5`; `Hours=*`; `Days=*`; `Months=*`; `Weekdays=*`.
-3. **Command:** `Ensure lab Telegram Voice ON` (registered action's exact description). **Parameters:** blank. **Description:** `Telegram Voice independent lab ON recovery`.
-4. Save **and Apply**. Confirm the job is enabled/present; optionally inspect the generated cron entry, without directly editing the generated crontab.
-
-If the command description does not appear, first check the action file's exact name, the `description` field and whether configd was restarted. Do not invent a different command or edit package-owned actions to force it.
-
-**Operating mode:** With the Cron job enabled, healthy ON is a no-op on future checks. If reboot clears the marker, the recurring action re-enables it after normal Zapret is ready. If the user **intentionally stops** Voice during a test, **first disable and Apply** this particular job in the GUI, then `configctl zapret telegram_voice_disable` and verify the full status. After the experiment, `configctl zapret telegram_voice_enable` followed by re-enabling and Applying this **same** Cron task restores the selected persistent laboratory ON mode. Do **not** run a baseline/candidate comparison that expects Voice to stay OFF while this task remains enabled.
-
-**Do not** schedule TNAS route repair or Docker container startup. The owner rejected those automations. The existing, owner-tested TNAS routes remain a **manual** OPNsense SSH command described in [lab operations](TELEGRAM_LAB_OPERATIONS.md#tnas-host-routing-and-manually-operated-docker-lab).
-
-## Acceptance: test the actual boot, not merely registration
-
-Record **before** OPNsense reboot: exact Cron enabled state, `configctl zapret status`, complete `configctl zapret telegram_voice_status`, actual Voice IPFW divert/target table, and any service file changes. Save existing Squid and sing-box active configuration hashes and listeners via the [operations runbook](TELEGRAM_LAB_OPERATIONS.md) before any controlled reboot.
-
-After an owner-controlled OPNsense reboot, **do not manually enable Voice while measuring auto recovery**. Allow at least **two scheduled intervals after regular Zapret reports running** (10 minutes with `*/5`, accounting for task time). Confirm the same GUI task is still enabled, `configctl zapret status` shows regular Zapret running, and independent `configctl zapret telegram_voice_status` reports requested=on, effective=on, active_profile=on, real Telegram table and actual IPFW Voice rule. Capture startup/cron/configd logs and actual boot-to-Voice timing. Successful re-enabling of experimental intercept is **LAB_VOICE_AUTO_RESTORE_PASS**; it is **not** Telegram `MEDIA_PASS` or `CALL_PASS`. If no action runs, inspect GUI task persistence and cron/configd state. If it runs before readiness, first expected failure is permitted **only if a later scheduled retry succeeds**. No actual reboot result exists yet.
-
-Optional separate test (planned, not a prerequisite for basic reboot proof): after starting a controlled experimental Voice OFF interval, verify Cron-disabled survives reboot and leaves Voice OFF rather than silently restoring it. Re-enable only with deliberate owner action.
-
-## Recovery, removal and backups
-
-- If the job starts interfering with a controlled experiment: disable **only this** Cron task through GUI, Apply, then optionally use `configctl zapret telegram_voice_disable`. Do not disable the OPNsense Cron service globally.
-- If the laboratory action file must be removed: first disable and delete **this** GUI task and Apply; then only after checking the exact file path, remove `/usr/local/opnsense/service/conf/actions.d/actions_tgvoice_lab_restore.conf` and reload configd. Do **not** remove package-owned `actions_zapret.conf` or native `start/20-zapret`.
-- The Cron job's enabled flag/schedule is part of OPNsense native configuration; the manually added `actions_tgvoice_lab_restore.conf` is **not guaranteed included in OPNsense config.xml backups or retained through upgrades**. Back up that specific non-secret file **separately**, verify it after upgrades, and preserve the exact operational instructions in GitHub.
-- This design uses **no permanent new script** beyond the tiny laboratory configd action file and no change to production package revision. The source implementation already exists, and the helper's temporary marker remains deliberately temporary. Only the independent lab's GUI schedule provides the durable desired ON preference.
+Actual reboot acceptance is still open: after any approved implementation, boot with chosen ON, do **not** manually enable Voice while measuring, verify regular Zapret status, native Voice requested/effective/profile/table/firewall and preserve already-working Squid/sing-box TCP paths. Restoring interception is only a lab **startup pass**, never `MEDIA_PASS` or `CALL_PASS`. TNAS host routes and the `tgvoice-lab` Docker container remain **manual-only**, as separately decided.
