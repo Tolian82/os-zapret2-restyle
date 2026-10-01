@@ -55,6 +55,8 @@ Archive mechanics are owned by `DOC-026`–`DOC-030`; version authority is owned
 ## Level 3 — deep history, decisions, audits, and proof
 
 - [`2026-09-05 fixed-reflector control`](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md) — historical `MEDIA_PASS`; route `192.168.1.140` is no longer working and is retired from the active plan.
+- [`2026-09-05 B/A/B archival measurements`](verification/evidence/2026-09-05-telegram-voice-phase-c-reflector-bab-path-isolation.md) — old gateway comparison salvaged from PR #286; no current independent control.
+- [`2026-09-20 corrected client-source audit`](verification/evidence/2026-09-20-telegram-voice-win-android-source-audit.md) — corrected PR #287's historical source identities; no current client-parity claim.
 
 - [`DECISIONS.md`](DECISIONS.md) / [`decisions/`](decisions/)
 - [`AUDIT.md`](AUDIT.md) / [`audit/`](audit/)
