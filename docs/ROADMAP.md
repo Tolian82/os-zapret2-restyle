@@ -91,7 +91,17 @@ The stable Pages/pkg repository remains on `v0.5.0_1`; `_2` was not automaticall
 
 ## Telegram Voice UDP — three owner-approved stages
 
-**Product boundary:** Telegram Voice UDP alone will become integrated into `os-zapret2-restyle`. TCP/TLS, Squid, sing-box, PF proxy rules, external parent proxy and TNAS routing remain unchanged **laboratory infrastructure**; none is a current plugin deliverable. Automatic proxy for the OPNsense console is cancelled. No extra stages for TCP architecture or complete clean-install TCP/proxy integration are authorized. [Product requirements](REQUIREMENTS.md) and [current handoff](START_HERE.md) are authoritative.
+**Product boundary:** Telegram Voice UDP alone will become integrated into `os-zapret2-restyle`, after the approved media gates. Squid, sing-box, PF proxy rules, external parent proxy and TNAS routing remain **separate laboratory infrastructure**, not plugin deliverables. However, the owner requires that full three-origin lab separation and working proxy/routing **survive or automatically recover after reboot**, just as before reboot. This is a mandatory parallel **lab** track, not a new plugin product stage. No blanket proxy for every OPNsense console process, new TCP integration stage or complete product TCP clean-install scope is approved. Plugin code/config-model/GUI changes use **GitHub only**; lab settings prefer proven native OPNsense GUI/facilities. [Product requirements](REQUIREMENTS.md), [laboratory persistence contract](architecture/TELEGRAM_TRAFFIC_POLICY.md) and [current handoff](START_HERE.md) are authoritative.
+
+### Parallel requirement — independent persistent laboratory (not plugin stage 4)
+
+- [x] Prove the bounded October 1 LAN HTTPS and SOCKS5 Telegram IPv4 TCP/80,443 paths through Squid to the external parent. Retain the working setup unchanged for now.
+- [ ] Maintain a single documented lab baseline for **LAN, router-local Telegram traffic and SOCKS5 clients** with separate TCP/TLS parent-proxy and Telegram UDP/Zapret2 paths. Router-local Telegram TCP/TLS without explicit SOCKS and SOCKS UDP ASSOCIATE are not yet qualified; this is not a request for global console proxy variables.
+- [ ] Prefer supported OPNsense GUI configuration and service persistence for Squid, PF and eligible settings; explicitly verify how non-GUI sing-box/ACL/snapshot state survives regeneration. Do not invent GUI features or modify plugin code directly on the appliance.
+- [ ] Restore the experiment-selected current Voice-helper ON/OFF baseline, services, firewall rules, ACL/alias synchronization and TNAS host routes after **OPNsense and TNAS reboots** using supported, reproducible lab mechanisms rather than unreviewed ad-hoc plugin hooks.
+- [ ] Compare pre/post-reboot snapshots and repeat route, service, LAN/SOCKS/router-local TCP-to-parent and separate relevant UDP/interception tests. Record individual failures; manual re-enablement is fallback and does not fulfill automated recovery acceptance.
+
+This parallel lab requirement is tracked in the [laboratory runbook](architecture/TELEGRAM_TRAFFIC_POLICY.md) and does **not** add Squid, sing-box, TCP proxy functionality, SOCKS integration or routes to the `os-zapret2-restyle` package.
 
 ### Completed research and lab setup (evidence, not product acceptance)
 
@@ -119,7 +129,7 @@ The stable Pages/pkg repository remains on `v0.5.0_1`; `_2` was not automaticall
 - [ ] Persist the user's Voice setting in OPNsense configuration and expose it in the existing Settings GUI. Use a simple enable/disable control if one fixed strategy works reliably; only add parameter controls or a separate page when stages 1–2 establish a real need.
 - [ ] Remove testbed address/interface/rule-number assumptions from production behavior; keep the temporary `tgcalls` lab outside the package. Verify lifecycle/restoration and restart/reboot persistence with appropriately selected owner-live tests.
 
-**Not approved as stage 4 or 5:** packaging/integrating Telegram TCP/TLS or proxy components, SOCKS integration, automatic router-console proxy configuration, or an end-to-end clean-install Telegram TCP/proxy delivery. OPNsense GUI-managed persistence of lab-only Squid/PF settings may be used without making them plugin dependencies. TNAS lab route persistence is testbed maintenance, not stage-3 product scope.
+**Not approved as product stages 4 or 5:** packaging/integrating Telegram TCP/TLS/proxy or SOCKS components, blanket router-console proxying, or end-to-end clean-install TCP/proxy delivery. **Separately,** OPNsense GUI-managed persistence and verified post-reboot recovery of lab Squid/PF/sing-box, the selected helper state and TNAS routes **are required lab work**, not optional conveniences or stage-3 product scope.
 
 Current [oracle architecture](architecture/TELEGRAM_VOICE_EMULATION_LAB.md), [protocol research](research/TELEGRAM_VOICE_UDP.md), [laboratory TCP/proxy/route recovery](architecture/TELEGRAM_TRAFFIC_POLICY.md), [current evidence](verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md). `_4` remains an unpublished, paused historical candidate; do not merge its STUN-only fragment profile as the final product by inertia.
 
