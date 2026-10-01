@@ -21,17 +21,17 @@ Read completely in this order (`DOC-016`):
 ## Level 2 — current line and specialist detail
 
 - **[`v0.5.x working ledger`](history/current/v0.5.x.md)** — current-line chronology and release handoff.
-- **[`Telegram traffic policy and recovery`](architecture/TELEGRAM_TRAFFIC_POLICY.md)** — owner goal, actual LAN/local/SOCKS coverage, Squid/sing-box/firewall files, helper semantics, Docker and reboot routes.
+- **[`Telegram laboratory traffic/proxy recovery`](architecture/TELEGRAM_TRAFFIC_POLICY.md)** — experimental Squid/sing-box/PF and testbed route recovery only; not approved plugin TCP/proxy scope.
 - **[`September 23–October 1 evidence`](verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md)** — fakefrag/tee/reverse8 results, verified TCP parent paths, failed and successful policy application, latest active-helper UDP failure.
-- **[`Telegram voice / UDP DPI-bypass research`](research/TELEGRAM_VOICE_UDP.md)** — protocol changes and source links, rebuild motivation, Phase A/B interpretation and current Phase C experiments.
-- **[`Telegram Voice emulation/oracle architecture`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md)** — rebuilt media oracle, retired control route, corrected post-NAT wire path, current call-success goal and result taxonomy.
+- **[`Telegram voice / UDP DPI-bypass research`](research/TELEGRAM_VOICE_UDP.md)** — protocol changes and source links, rebuild motivation, Phase A/B and current Phase C experiments; approved product boundary is UDP-only.
+- **[`Telegram Voice emulation/oracle architecture`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md)** — current media oracle and sequential MEDIA_PASS/CALL_PASS gates before future native UDP-only plugin integration.
 - **[`TOS Telegram Voice companion recipe`](../tools/telegram-voice-lab/compose.tos.yml)** — digest-pinned host-network build/runtime source; endpoint routing through OPNsense is measured per epoch.
+- **[`REQUIREMENTS.md`](REQUIREMENTS.md)** — normative Telegram Voice UDP-only product scope and three approved stages; TCP/proxy remains experimental laboratory infrastructure.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) / [`architecture/`](architecture/) — current technical architecture.
 - [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md) — Strategy Lab architecture entry point.
 - [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md) — accepted production execution model.
 - [`architecture/STRATEGY_LAB_QUIC_CONTROL.md`](architecture/STRATEGY_LAB_QUIC_CONTROL.md) — persisted Enable QUIC contract.
 - [`architecture/STRATEGY_LAB_UDP_INPUT.md`](architecture/STRATEGY_LAB_UDP_INPUT.md) — Generic UDP input contract.
-- [`REQUIREMENTS.md`](REQUIREMENTS.md) — product requirements.
 - [`USER_GUIDE_STRATEGY_LAB.md`](USER_GUIDE_STRATEGY_LAB.md) — user-facing Strategy Lab guide.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributor entry points.
 - [`SECURITY.md`](SECURITY.md) — security reporting/reference.
