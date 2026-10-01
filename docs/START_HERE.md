@@ -10,7 +10,7 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-01
-**Current handoff identity:** `v0.5.0_3` — reproduce the reported success with permanent LAN / router-local / SOCKS traffic separation; TCP policy verified in a bounded scope, latest UDP control failed
+**Current handoff identity:** `v0.5.0_3` — UDP-only product scope approved; stage 1 repeatable current-oracle MEDIA_PASS through OPNsense remains open; TCP/proxy is laboratory-only
 
 ## Current identity
 
@@ -68,26 +68,26 @@ The English localization leak (`Выбор файла` / `Не выбран ни
 
 The source correction, full CI/FreeBSD-15 qualification, testing-package publication, publication-record tail and focused owner-live check are complete. The owner confirmed that `v0.5.0_2` works as intended. No further source change belongs to this scope.
 
-## Telegram — current owner goal
+## Telegram Voice UDP — current owner-approved goal
 
-**«Воспроизводимая конфигурация того успеха».** The owner requires permanent traffic separation on OPNsense `192.168.1.2` for LAN, router-local command-line/app traffic and SOCKS5 clients: active `telegram_voice`, Telegram UDP through Zapret2, Telegram TCP/TLS through local Squid to parent `185.203.117.88:33128`. TGVOICE must use `192.168.1.2`. Persistence across reboot is part of the goal, not yet an established result.
+**Product scope is Telegram Voice UDP only**, not permanent Telegram TCP/TLS or router-wide proxy integration. The owner approved three **sequential** stages: (1) reproduce and repeat `MEDIA_PASS` on the current tgcalls reflector oracle through OPNsense; (2) prove a remote P2P-disabled Windows/Android call with sustained bidirectional UDP and audible two-way sound (`CALL_PASS`); (3) integrate the **validated** Voice UDP configuration into `os-zapret2-restyle` with persistent OPNsense-config-backed control in the existing Settings GUI and full managed lifecycle. The normative product boundary is in [Requirements](REQUIREMENTS.md).
 
-The primary configuration/recovery home is [Telegram traffic policy](architecture/TELEGRAM_TRAFFIC_POLICY.md). Read it, the [September 23–October 1 evidence](verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md), [oracle architecture](architecture/TELEGRAM_VOICE_EMULATION_LAB.md), and [protocol research](research/TELEGRAM_VOICE_UDP.md) before further changes. Older experiment details are linked from the evidence/index and need not be rediscovered to choose the current task.
+Product integration must own Telegram UDP interception, managed Telegram IPSET, proven Zapret2 strategy, restart/stop, conflict-safe firewall rule ownership, and reboot restoration. Use no fixed testbed addresses or hard-coded rule/interface identities. If one fixed strategy works reliably, add only an enable/disable switch to the existing Settings GUI; multiple modes/parameters or a separate page require experimental evidence. The current `/var/run` request marker is temporary PoC state, not the final persistent implementation. **Do not install a local ad-hoc boot hook.**
 
-What this handoff establishes:
+**TCP/TLS/Squid/sing-box/PF proxy rules are laboratory infrastructure only.** Keep the currently working configuration unchanged, including external proxy/routing experiments; native OPNsense GUI persistence within the lab is acceptable. No Telegram TCP/TLS or SOCKS feature goes into the plugin in this approved scope, no automatic proxy for the OPNsense console, and no approved stages 4–5 (final TCP architecture or whole-system clean-install acceptance). The lab's external proxy is still needed for real Telegram TCP signaling where direct TCP is unavailable, but the plugin will not manage it in these stages. The voice test controller/companion remains outside the package.
 
-- Transparent LAN HTTPS passed through Squid to the parent after the separate HTTPS `/32` route was corrected on TNAS. The SOCKS policy then passed all five v2 probes on October 1 at 03:47 UTC and remains applied in the last reported state.
-- The successful v2 run is `/root/singbox-lan-policy-20261001T034734Z-33814uhu`. The earlier 02:49 TLS failure rolled files back but left a Squid listener; a full proxy restart released it. Do not confuse that failed run with the later applied configuration.
-- `telegram_voice` is ON in the latest snapshot, with 14 table entries and `stun-zero-fake-repeats-2`. The 04:15 UTC CLI control still failed: both peers `Reconnecting`, BWE zero, exit 1; rule 19000 increased by 60 packets / 4080 bytes and WAN showed 60 valid non-STUN Hello packets with no replies.
-- The earlier owner-reported successful call through `192.168.1.2` is preserved. Its exact positive CLI output/configuration attribution remains open. Later failures do not erase it.
-- Fakefrag8+reverse24 was already tested with valid local-WAN fake/real pairs; fakefrag8+original had a separate local PF defect; tee preserved the real packet but put it before the fake. The September 30 reverse8 repeat also failed. Do not restart the completed fragment-position sweep or call these different outcomes one undifferentiated failure.
+## Verified evidence and limitations
 
-## Immediate next action
+- The historical September 5 `MEDIA_PASS` used the old binary and now-retired `192.168.1.140` route, **not** OPNsense; do not restore that route as a control.
+- The owner reported an established reflector CLI call through OPNsense on September 22. Its positive CLI output and exact matching strategy/profile/flow are not yet correlated. Keep the positive observation without declaring reverse8 proven.
+- Existing ordered8, reverse8/16/24/32 and fakefrag8+reverse24 local wire experiments emitted their documented correct packets but did not deliver a correlated current `MEDIA_PASS`. Do not repeat the completed fragment sweep by inertia. The fakefrag8+original run had a separate local PF real-packet loss; tee changed ordering.
+- The latest October 1 ON-helper control intercepted 60 Telegram UDP packets and sent 60 valid 40-byte **non-STUN** Reflector Hellos through the WAN with zero observed replies. Both peers stayed `Reconnecting`, BWE was zero, exit 1. The current STUN-only `stun-zero-fake-repeats-2` helper does not modify that Hello; ON/interception is not voice success.
+- October 1 LAN HTTPS and SOCKS5 TCP/443 via Squid and the external parent have passed. Additional owner verification on October 1 again confirmed transparent TNAS HTTPS `HTTP=200` and Squid `FIRSTUP_PARENT`. These are **retained lab facts**, not new plugin requirements or proof of UDP voice.
 
-1. Use the configuration/recovery document to retain the verified TCP path and selected TNAS routes. `192.168.1.140` is retired; `192.168.80.1` is outside owner control. There is no alternate working exit.
-2. Complete the explicitly recorded transition debt: automatic router-local TCP/TLS selection, reboot persistence of `telegram_voice` and TNAS routes, service/config survival, and controlled PF-alias snapshot refresh. The current helper marker in `/var/run` returns OFF after reboot; the v2 script did not install a boot hook.
-3. Verify LAN, local-origin and SOCKS as separate ingress cases, including a real SOCKS UDP ASSOCIATE path. Existing TCP/80,443 IPv4 checks must not be presented as proof for all Telegram TCP, IPv6 or SOCKS UDP.
-4. Correlate the reported successful call if its original evidence is recovered; otherwise measure one bounded change against the recorded current baseline. Record hooks, effective profile, routes, binary hash, counters, packet evidence and CLI output together. Current non-STUN Hello traffic is not transformed by the STUN-only helper; do not blindly substitute fragmentation in that profile.
-5. Repeat a qualified `MEDIA_PASS` with fresh flows, then verify a remote P2P-disabled Windows/Android call with two-way sound and sustained bidirectional UDP (`CALL_PASS`). Silence without an independent working control remains `NO_REPLY_UNKNOWN`.
+Evidence: [September 22 positive observation](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), [September 23–October 1 results](verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md), [current media oracle](architecture/TELEGRAM_VOICE_EMULATION_LAB.md), [current laboratory proxy and route recovery](architecture/TELEGRAM_TRAFFIC_POLICY.md), and [protocol research](research/TELEGRAM_VOICE_UDP.md).
 
-This documentation update makes no appliance or package change. Keep package identity `0.5.0_3`; `_4` remains unpublished and paused. Permanent router traffic policy is now owner-required, while the laboratory controller itself remains temporary. No new GUI/permanent lab subsystem, Generic UDP change or bundled tgcalls/Linux is selected. The owner defines the work as an internal laboratory test; sanctions circumvention is not an objective.
+## Immediate next action — approved stage 1 only
+
+Recover any existing positive CLI evidence if available; otherwise run one bounded, source-guided test addressing a specific unresolved hypothesis against the *current* non-STUN Reflector Hello and qualified tgcalls binary, with fixed reflector/route and correlated profile, hooks, counters, LAN/WAN captures, peer states and exit status. Do not conflate the historical success with later failures or claim provider DPI attribution from WAN silence without an independent working control. Preserve the already-working TCP laboratory path unchanged. Repeat a genuine `MEDIA_PASS` before proceeding to real-client `CALL_PASS` and only then product integration.
+
+The three approved stages are tracked in [ROADMAP](ROADMAP.md). Package identity stays `VERSION=0.5.0`, `PLUGIN_REVISION=3`; unpublished `_4` remains paused pending evidence. This documentation-only update changes no source, running appliance, testing package or release.

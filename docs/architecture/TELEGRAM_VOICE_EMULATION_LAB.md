@@ -1,6 +1,6 @@
 # Telegram Voice traffic emulation and strategy oracle
 
-**Status:** CURRENT ORACLE DESIGN · PERMANENT TRAFFIC POLICY REQUIRED · TCP VERIFIED / MEDIA OPEN
+**Status:** CURRENT UDP MEDIA ORACLE · APPROVED FUTURE UDP PRODUCT · LAB TCP VERIFIED / MEDIA OPEN
 **Updated:** 2026-10-01
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
@@ -12,11 +12,11 @@
 **Current OPNsense/provider baseline:** [`2026-09-20-telegram-voice-current-opnsense-baseline.md`](../verification/evidence/2026-09-20-telegram-voice-current-opnsense-baseline.md)
 **Historical fixed-reflector control/host-topology evidence:** [`2026-09-05-telegram-voice-fixed-reflector-control-pass.md`](../verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md)
 
-## Current task and retired route
+## Current approved UDP task and retired route
 
-**Owner goal: «Воспроизводимая конфигурация того успеха».** Establish and repeat the reported call through OPNsense `192.168.1.2`, with active `telegram_voice`, Telegram UDP through Zapret2 and Telegram TCP/TLS through Squid to parent `185.203.117.88:33128`. The owner now requires this traffic separation to persist for LAN, router-local applications and SOCKS5 clients. [Current configuration, coverage gaps and reboot commands](TELEGRAM_TRAFFIC_POLICY.md) are the primary operational home.
+The owner's superseding October 1 decision limits the current product direction to **Telegram Voice UDP alone**, in three gated stages: reproduce and repeat the current-oracle `MEDIA_PASS` through OPNsense; confirm real remote Windows/Android P2P-disabled `CALL_PASS` with sustained bidirectional UDP and audible sound; and only then integrate the proven UDP interception/managed Telegram IPSET/strategy and restart-safe lifecycle into the plugin. The plugin's existing Settings GUI must store enable/disable in persistent OPNsense configuration. Multiple modes or a separate page require laboratory evidence; no production testbed addresses or fixed rule/interface identities. See [product requirements](../REQUIREMENTS.md) and [roadmap](../ROADMAP.md).
 
-The laboratory/oracle remains temporary; the permanent router policy is a separate explicit requirement. A correct packet transformation is an intermediate gate. Acceptance still requires repeated `MEDIA_PASS`, followed by a real remote Windows/Android `CALL_PASS`. The current TCP success does not complete UDP/media acceptance.
+The voice emulator stays temporary and external to the plugin. [Squid, sing-box, PF and parent-proxy configuration](TELEGRAM_TRAFFIC_POLICY.md) is retained *unchanged as laboratory infrastructure only*. The owner cancelled automatic proxying of the router console, and did not approve TCP/proxy or clean-install TCP stages. Successful TCP tests and correct UDP wire transformations are intermediate evidence, not `MEDIA_PASS`.
 
 **Scope boundary:** the owner explicitly defines this work as an internal laboratory test on owner-controlled infrastructure. It is not intended to bypass sanctions or sanctions-related restrictions, and no such bypass is part of the project objective.
 
@@ -78,7 +78,7 @@ The selected design is a three-tier live oracle supported by an offline wire pre
 
 Tier 2 is the primary automatic strategy oracle. Tier 1 is a fast discriminator and diagnostic probe. Tier 3 is the final acceptance row, not the search loop.
 
-The current companion has passed its local gate. Endpoint `91.108.13.10:596` was then run through the OPNsense/provider path selected by TNAS gateway `192.168.1.2`. The 2026-09-20 LAN/WAN capture proved two current 40-byte Reflector Hello flows crossed OPNsense/NAT cleanly: 60/60 LAN packets appeared on WAN, payloads matched byte-for-byte, TTL changed only by forwarding, and checksums remained valid. No UDP reply returned and both tgcalls sides remained `Reconnecting`. The current no-desynchronization baseline is therefore `WIRE_OK` / `NO_REPLY_UNKNOWN`, not a claim that provider DPI has already been isolated. The current exchange is non-STUN, so the paused STUN-only `_4` profile is not a direct candidate for this baseline. The subsequent September 21 ordered position-8 candidate is now wire-qualified but still receives no reply. The September 22 post-reboot reverse position-8 repeat also has 60 valid pairs, zero replies and a failed call, with exact restoration. The September 23 reverse position-32, reverse position-16 and reverse position-24 runs all emitted their intended valid reverse pairs without replies/media and restored the measured state exactly. The final position-24 run produced 60 equal IP length-44 pairs and closes standalone position widening. That fakefrag8+reverse24 test has now also emitted correct local-WAN pairs without replies/media. The October 1 control with the existing STUN-only helper ON emitted unchanged valid Hello packets and failed. The exact next task is [START_HERE](../START_HERE.md), including the permanent policy gaps; full media success remains open.
+The current companion has passed its local gate. Endpoint `91.108.13.10:596` was then run through the OPNsense/provider path selected by TNAS gateway `192.168.1.2`. The 2026-09-20 LAN/WAN capture proved two current 40-byte Reflector Hello flows crossed OPNsense/NAT cleanly: 60/60 LAN packets appeared on WAN, payloads matched byte-for-byte, TTL changed only by forwarding, and checksums remained valid. No UDP reply returned and both tgcalls sides remained `Reconnecting`. The current no-desynchronization baseline is therefore `WIRE_OK` / `NO_REPLY_UNKNOWN`, not a claim that provider DPI has already been isolated. The current exchange is non-STUN, so the paused STUN-only `_4` profile is not a direct candidate for this baseline. The subsequent September 21 ordered position-8 candidate is now wire-qualified but still receives no reply. The September 22 post-reboot reverse position-8 repeat also has 60 valid pairs, zero replies and a failed call, with exact restoration. The September 23 reverse position-32, reverse position-16 and reverse position-24 runs all emitted their intended valid reverse pairs without replies/media and restored the measured state exactly. The final position-24 run produced 60 equal IP length-44 pairs and closes standalone position widening. That fakefrag8+reverse24 test has now also emitted correct local-WAN pairs without replies/media. The October 1 control with the existing STUN-only helper ON emitted unchanged valid Hello packets and failed. The exact next task is [START_HERE](../START_HERE.md): repeated current-oracle `MEDIA_PASS` first, then real-client `CALL_PASS`, then native UDP-only plugin integration; previously proposed permanent TCP/proxy work is laboratory-only.
 
 The previous plan to publish and immediately live-test one STUN-only ordered-fragment candidate is paused. The remote branch `v0.5.0_4-telegram-voice-ipfrag` at `3ecdd1b3326fe7655e1d7df9edd51808e2a68dc9` contains one prepared candidate, but it has no PR, exact-head CI, merge, package publication, or owner-live result. It must not be merged as-is. After Phase C evidence, it will be rebased/reworked, replaced, or rejected.
 
@@ -278,7 +278,7 @@ The owner selected console-only temporary orchestration:
 - every exit path proves route and Zapret2/firewall restoration;
 - temporary SSH keys/scripts are removed when the research closes.
 
-No Telegram Voice laboratory GUI, MVC/API/configd addition, daemon, persistent lab controller or Generic UDP semantic change is selected. The temporary laboratory will not become permanent plugin code. The October 1 owner requirement for permanent router traffic policy is separate and explicitly authorized; it is not implemented by this documentation checkpoint.
+No Telegram Voice laboratory GUI, MVC/API/configd addition, daemon, persistent lab controller or Generic UDP semantic change is selected. The temporary laboratory will not become permanent plugin code. The superseding owner decision approves native UDP plugin integration only after the two media gates; TCP/Squid/sing-box/PF proxy setup remains laboratory-only.
 
 Do not assume WAN IPFW source identity. Prove pre/post-NAT visibility on the no-desynchronization epoch before installing a candidate rule.
 
@@ -415,8 +415,8 @@ Only this row is `CALL_PASS`. Audio without sustained UDP remains fallback evide
 13. [ ] Investigate real-client engine/configuration parity in separate experiments where source evidence justifies it.
 14. [ ] Reach and repeat `MEDIA_PASS` through OPNsense with both peers established, stats/BWE on both sides and exit 0.
 15. [ ] Complete one remote P2P-disabled Windows/Android call with two-way sound and sustained bidirectional UDP (`CALL_PASS`).
-16. [ ] Complete permanent LAN/router-local/SOCKS traffic policy and reboot acceptance as recorded in the [policy runbook](TELEGRAM_TRAFFIC_POLICY.md), including SOCKS UDP verification.
-17. [ ] Remove extra experiment-owned routes/access/scripts at closeout, retain approved policy routes, archive results and decide the paused `_4` branch.
+16. [ ] **Only after repeated `MEDIA_PASS` and real `CALL_PASS`**, integrate the proven Voice UDP feature into the existing plugin GUI and persistent OPNsense configuration, with managed Telegram IPSET, conflict-safe firewall lifecycle and restart/reboot recovery; add GUI parameters only if testing proves necessary.
+17. [ ] Remove temporary experiment-owned resources at closeout, preserve separately needed lab routes/settings, archive evidence, and decide paused `_4` from measured results without packaging the lab or TCP proxy.
 
 Every new candidate must retain exact endpoint/process isolation, complete wire/media evidence and exact restoration. Optional SSH automation and a secondary correlated TURN probe are not blockers for the present reflector-call objective. Package identity remains `VERSION=0.5.0`, `PLUGIN_REVISION=3`; the laboratory stays outside permanent plugin code.
 

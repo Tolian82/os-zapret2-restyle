@@ -89,59 +89,39 @@ The stable Pages/pkg repository remains on `v0.5.0_1`; `_2` was not automaticall
 - [x] record owner runtime update to Zapret2 v1.0.5.2 for future live candidate epochs
 - [x] keep this change lab/docs-only; no package payload or revision bump
 
-## Telegram voice / UDP DPI-bypass — PHASE C TEMPORARY CONSOLE ORACLE
+## Telegram Voice UDP — three owner-approved stages
 
-Owner-selected authority: [`research/TELEGRAM_VOICE_UDP.md`](research/TELEGRAM_VOICE_UDP.md).
+**Product boundary:** Telegram Voice UDP alone will become integrated into `os-zapret2-restyle`. TCP/TLS, Squid, sing-box, PF proxy rules, external parent proxy and TNAS routing remain unchanged **laboratory infrastructure**; none is a current plugin deliverable. Automatic proxy for the OPNsense console is cancelled. No extra stages for TCP architecture or complete clean-install TCP/proxy integration are authorized. [Product requirements](REQUIREMENTS.md) and [current handoff](START_HERE.md) are authoritative.
 
-Current architecture: [`architecture/TELEGRAM_VOICE_EMULATION_LAB.md`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md).
+### Completed research and lab setup (evidence, not product acceptance)
 
-- [x] complete Phase A/B observation and zero-fake runtime/network interpretation
-- [x] pin Zapret2 `v1.0.4` and preserve unpublished `_4` work
-- [x] build/digest-pin the TOS/Linux `tgcalls_cli` companion
-- [x] pass the local P2P build/runtime gate
-- [x] select fixed current endpoint `91.108.13.10:596`
-- [x] retire `192.168.1.140` as a working route by owner correction; preserve the September 5 success only as historical evidence
-- [x] record the rebuild motivation and verified upstream voice-transport changes, including default-off flags and remaining Windows/Android parity questions
-- [x] establish that Docker `host` has no independent container IP/MAC
-- [x] retain only the existing TOS/Docker `host` network by owner instruction
-- [x] reject GUI and permanent Telegram Voice laboratory integration
-- [x] run paired TNAS/OPNsense console tests; optional SSH automation is no longer an experiment prerequisite
-- [ ] make the owner-selected TNAS policy routes persistent; restore only extra experimental routes to the actual pre-test snapshot, never to presumed-working `192.168.1.140`
-- [x] run current tgcalls against `91.108.13.10:596` through OPNsense with no desynchronization and capture LAN/WAN truth — **WIRE_OK / NO_REPLY_UNKNOWN**; 60/60 outbound packets survive forwarding/NAT, zero inbound replies
-- [x] establish from current capture that the reflector baseline is non-STUN 40-byte Hello traffic; paused STUN-only `_4` is not a direct candidate
-- [x] stage temporary non-packaged exact-endpoint runner and distinguish the corrected file as `tgvoice_ipfrag8_postnat_v2.py`
-- [x] correct pre-NAT UDP checksum corruption and post-NAT first-fragment recapture
-- [x] qualify ordered position-8 post-NAT wire output: 60 complete pairs, valid checksums, no replies; `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, call still fails
-- [x] validate reverse position-8 syntax/source and run the distinct temporary runner; supplied endpoint captures and rule counters are empty, cleanup restored
-- [x] record the owner's subsequent report that the call established and routing was correct at call time
-- [x] identify the earlier reported successful tool as the same fixed-reflector CLI command; preserve that observation separately from failed repeats
-- [x] restore the endpoint route after reboot and correlate the new CLI run with 60 valid reverse position-8 pairs; zero replies, `Reconnecting`, zero BWE, exit 1, exact restoration
-- [x] prepare distinct guarded reverse position-32 runner and validate its short-packet pass-through/native fragmentation behavior offline
-- [x] live-qualify reverse position 32 on the same endpoint/runtime: 60 valid reverse pairs, no replies/media, exact restoration
-- [x] prepare distinct guarded reverse position-16 runner and pass 27 offline boundary/options cases
-- [x] live-qualify guarded reverse position 16: 60 valid reverse pairs, no replies/media, exact restoration
-- [x] prepare distinct guarded reverse position-24 runner with <=16-byte short-payload pass guard; Python syntax passed
-- [x] live-qualify guarded reverse position 24: 60 valid equal-length reverse pairs, no replies/media, exact restoration; standalone fragment-position widening closed
-- [x] prepare `tgvoice_fakefrag8_reverse24_postnat_v1.py`: one checksum-invalid 40-byte zero fake fragmented ordered at position 8, then qualified real reverse24
-- [x] live-test fragmented fake8 + reverse24 v2: correct fake/real WAN pairs, no reply/media, exact restoration
-- [x] distinguish fakefrag8+original local PF loss from tee real-before-fake emission; retain both results without claiming media success
-- [x] repeat reverse8 on September 30: correct wire output, no reply/media, exact restoration
-- [x] prove transparent LAN HTTPS through Squid/parent after the HTTPS `/32` route correction
-- [x] apply and validate sing-box IPv4 TCP/80,443 → Squid3130 → parent with all five probes; record failed-run rollback residue and full-restart recovery
-- [x] enable the existing Telegram Voice helper; prove interception of 60 packets in the October 1 control and record failed media with non-STUN Hello pass-through
-- [ ] deliver the owner-required permanent policy for LAN, router-local applications and SOCKS5: Telegram UDP through Zapret2, Telegram TCP/TLS through Squid to `185.203.117.88:33128`, TGVOICE via `192.168.1.2`
-- [ ] close local-origin TCP selection, helper ON persistence, alias snapshot refresh and service/config/route reboot acceptance
-- [ ] verify SOCKS UDP ASSOCIATE separately and account for current IPv4/80,443-only TCP coverage
-- [ ] correlate the earlier positive CLI output if recovered; qualify a repeatable successful call
-- [ ] assess engine/custom-parameter parity in separate source-guided experiments without changing fragmentation simultaneously
-- [ ] achieve and repeat a real-reflector laboratory call through OPNsense: both peers established, both stats/BWE positive, exit 0 (`MEDIA_PASS`)
-- [ ] add correlated TURN Allocate only as a secondary oracle
-- [ ] repeat any winner and complete one final remote P2P-disabled real call
-- [ ] remove temporary SSH/scripts and extra experiment-owned routes, retain the approved permanent traffic policy/routes, archive evidence and decide `_4`
+- [x] Phase A/B Telegram TURN/STUN and reflector traffic observation; STUN zero-fake helper mechanically qualified but did not restore UDP replies/media on the provider path.
+- [x] Build and qualify the current `tgcalls_cli` oracle and local P2P smoke; fix reflector endpoint `91.108.13.10:596` for comparable epochs.
+- [x] Preserve the historical September 5 reflector `MEDIA_PASS` via retired `192.168.1.140`; record the owner's September 22 established-call report through OPNsense without inventing strategy attribution.
+- [x] Establish actual non-STUN 40-byte current Reflector Hello behavior, normal forwarding/NAT, post-NAT local fragmentation fidelity and all already-completed standalone reverse-position/combined-fake experiments without media replies.
+- [x] Verify October 1 Telegram IPv4 TCP/80,443 over laboratory LAN/Squid/parent and SOCKS5/sing-box/Squid/parent, followed by renewed owner-live LAN HTTP 200 and Squid parent tunnel after route correction. Keep this working lab configuration unchanged.
+- [x] Verify `telegram_voice` ON/interception of 60 current reflector Hellos in the October 1 control. These non-STUN packets were not transformed and no media established; the result is **not** `MEDIA_PASS`.
 
-Current evidence: [September 23–October 1 results](verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md). Current settings, permanence gaps and reboot commands: [Telegram traffic policy](architecture/TELEGRAM_TRAFFIC_POLICY.md). The [earlier reported success](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md) remains separate; the [September 5 control](verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md) is historical and its route is retired.
+### Stage 1 — reproduce a working UDP voice transport through OPNsense
 
-Permanent router traffic policy is now an explicit owner goal. The laboratory controller itself remains temporary: no GUI, lab API/daemon, Generic UDP semantic change or bundled tgcalls subsystem. This documentation checkpoint changes no package/source; identity remains `0.5.0_3`.
+- [ ] Correlate existing September 22 positive CLI evidence if recoverable; otherwise choose one bounded source-guided experiment that resolves a specific remaining hypothesis for the *current* non-STUN reflector transport. Do not restart completed fragmentation-position sweeps by inertia.
+- [ ] Freeze source/runtime/profile identity, endpoint, route, hook order and capture boundaries per experiment; preserve exact pre-test state and prove complete restoration.
+- [ ] Repeat successful current-oracle `MEDIA_PASS` through OPNsense: both peers `Established`, stats and non-zero BWE on both, exit 0, and correlated UDP LAN/WAN packets. Missing replies without a fresh independent working control remain `NO_REPLY_UNKNOWN`, not a proven DPI diagnosis.
+
+### Stage 2 — real Telegram client acceptance
+
+- [ ] With existing lab TCP signaling path unchanged, perform a remote Windows/Android P2P-disabled Telegram call; verify sustained bidirectional Telegram UDP and audible two-way sound, not TCP fallback (`CALL_PASS`).
+- [ ] Repeat the positive case and preserve exact qualified strategy and scope for the eventual product.
+
+### Stage 3 — integrate only proven Telegram Voice UDP into the plugin
+
+- [ ] Make the proven UDP interception strategy, managed Telegram IPSET, firewall rule ownership/conflict prevention, start/stop/reconfigure/cleanup and reboot state part of `os-zapret2-restyle`.
+- [ ] Persist the user's Voice setting in OPNsense configuration and expose it in the existing Settings GUI. Use a simple enable/disable control if one fixed strategy works reliably; only add parameter controls or a separate page when stages 1–2 establish a real need.
+- [ ] Remove testbed address/interface/rule-number assumptions from production behavior; keep the temporary `tgcalls` lab outside the package. Verify lifecycle/restoration and restart/reboot persistence with appropriately selected owner-live tests.
+
+**Not approved as stage 4 or 5:** packaging/integrating Telegram TCP/TLS or proxy components, SOCKS integration, automatic router-console proxy configuration, or an end-to-end clean-install Telegram TCP/proxy delivery. OPNsense GUI-managed persistence of lab-only Squid/PF settings may be used without making them plugin dependencies. TNAS lab route persistence is testbed maintenance, not stage-3 product scope.
+
+Current [oracle architecture](architecture/TELEGRAM_VOICE_EMULATION_LAB.md), [protocol research](research/TELEGRAM_VOICE_UDP.md), [laboratory TCP/proxy/route recovery](architecture/TELEGRAM_TRAFFIC_POLICY.md), [current evidence](verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md). `_4` remains an unpublished, paused historical candidate; do not merge its STUN-only fragment profile as the final product by inertia.
 
 ## Remaining regression / future backlog
 
@@ -168,6 +148,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**«Воспроизводимая конфигурация того успеха»: complete permanent three-origin traffic separation and reproduce the call through `192.168.1.2`.** Preserve the verified LAN/SOCKS TCP paths; close the documented local-origin and reboot gaps, then qualify the UDP/media result with correlated evidence. The latest active-helper control failed despite 60 correct outbound Hello packets. The earlier owner-reported success is retained; it does not yet identify a reproducible winning strategy. Do not repeat the completed fragmentation sweep by inertia or prescribe an unavailable alternate exit.
+**Stage 1 first: reproduce and repeat Telegram Voice UDP `MEDIA_PASS` through OPNsense with the current qualified reflector oracle.** Then achieve real remote Windows/Android `CALL_PASS`, and only after those gates integrate the proven UDP feature and persistent GUI control into the plugin (stage 3). Retain the working laboratory TCP/proxy configuration without adding it to product scope. Do not restart the completed fragmentation sweep or assume the retired alternate route works.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).
