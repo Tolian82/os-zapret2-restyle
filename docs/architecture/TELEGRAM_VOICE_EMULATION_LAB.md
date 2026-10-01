@@ -1,6 +1,6 @@
 # Telegram Voice traffic emulation and strategy oracle
 
-**Status:** CURRENT ORACLE DESIGN · PERMANENT TRAFFIC POLICY REQUIRED · TCP VERIFIED / MEDIA OPEN
+**Status:** CURRENT UDP MEDIA ORACLE · APPROVED FUTURE UDP PRODUCT · LAB TCP VERIFIED / MEDIA OPEN
 **Updated:** 2026-10-01
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
@@ -12,11 +12,11 @@
 **Current OPNsense/provider baseline:** [`2026-09-20-telegram-voice-current-opnsense-baseline.md`](../verification/evidence/2026-09-20-telegram-voice-current-opnsense-baseline.md)
 **Historical fixed-reflector control/host-topology evidence:** [`2026-09-05-telegram-voice-fixed-reflector-control-pass.md`](../verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md)
 
-## Current task and retired route
+## Current approved UDP task and retired route
 
-**Owner goal: «Воспроизводимая конфигурация того успеха».** Establish and repeat the reported call through OPNsense `192.168.1.2`, with active `telegram_voice`, Telegram UDP through Zapret2 and Telegram TCP/TLS through Squid to parent `185.203.117.88:33128`. The owner now requires this traffic separation to persist for LAN, router-local applications and SOCKS5 clients. [Current configuration, coverage gaps and reboot commands](TELEGRAM_TRAFFIC_POLICY.md) are the primary operational home.
+The owner's superseding October 1 decision limits the current product direction to **Telegram Voice UDP alone**, in three gated stages: reproduce and repeat the current-oracle `MEDIA_PASS` through OPNsense; confirm real remote Windows/Android P2P-disabled `CALL_PASS` with sustained bidirectional UDP and audible sound; and only then integrate the proven UDP interception/managed Telegram IPSET/strategy and restart-safe lifecycle into the plugin. The plugin's existing Settings GUI must store enable/disable in persistent OPNsense configuration. Multiple modes or a separate page require laboratory evidence; no production testbed addresses or fixed rule/interface identities. See [product requirements](../REQUIREMENTS.md) and [roadmap](../ROADMAP.md).
 
-The laboratory/oracle remains temporary; the permanent router policy is a separate explicit requirement. A correct packet transformation is an intermediate gate. Acceptance still requires repeated `MEDIA_PASS`, followed by a real remote Windows/Android `CALL_PASS`. The current TCP success does not complete UDP/media acceptance.
+The voice emulator stays temporary and external to the plugin. [Squid, sing-box, PF and parent-proxy configuration](TELEGRAM_TRAFFIC_POLICY.md) is retained *unchanged as laboratory infrastructure only*. The owner cancelled automatic proxying of the router console, and did not approve TCP/proxy or clean-install TCP stages. Successful TCP tests and correct UDP wire transformations are intermediate evidence, not `MEDIA_PASS`.
 
 **Scope boundary:** the owner explicitly defines this work as an internal laboratory test on owner-controlled infrastructure. It is not intended to bypass sanctions or sanctions-related restrictions, and no such bypass is part of the project objective.
 
