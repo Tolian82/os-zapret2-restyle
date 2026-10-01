@@ -17,6 +17,20 @@ The zapret2 engine remains an external runtime component managed by this plugin.
 
 General project-development principles are canonical only in [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) (`DEV-*`). This file defines product-specific requirements and does not duplicate that general rule book.
 
+## Telegram Voice UDP — approved product scope (2026-10-01)
+
+The owner approved **Telegram Voice UDP only** as the current Telegram-specific product development scope. The three approved and sequential work stages are:
+
+1. Reproduce and repeat a working Telegram UDP media path through OPNsense with the current qualified oracle, preserving correlated runtime/profile, routes, IPFW, LAN/WAN and client evidence (`MEDIA_PASS`). The earlier owner-reported call through OPNsense remains an observation whose exact successful strategy has not been attributed. Existing wire-only experiments and the October 1 failed STUN-only helper control are not a media pass.
+2. Confirm that a real remote Windows/Android Telegram call with P2P disabled carries sustained bidirectional UDP and audible two-way speech (`CALL_PASS`), rather than mistaking TCP fallback for working UDP.
+3. **Only after stages 1–2**, integrate the proven Telegram Voice UDP configuration into `os-zapret2-restyle`: the plugin owns interception rules and conflict-safe rule placement, managed Telegram IPSET, the qualified Zapret2 strategy, transactional start/stop/reconfigure and verified restoration after restart/reboot. The feature's enable/disable preference and any proven necessary parameters are stored in persistent OPNsense configuration and managed through the existing plugin Settings GUI; the current temporary `/var/run` marker is not the final persistent authority.
+
+Begin with one enable/disable switch in the existing GUI **if one fixed configuration is shown to work reliably**. A separate Voice settings page or variable strategy controls require actual lab evidence that multiple cases/parameters need them; do not build speculative controls. No fixed laboratory addresses, upstream proxy endpoints or hard-coded interface/rule identifiers may become product defaults: derive applicable interfaces, use the managed target set, allocate/manage interception rules with collision protection, and verify cleanup/failure behavior.
+
+**Explicitly outside the present product scope:** Telegram TCP/TLS interception or proxy integration, Squid, sing-box, PF proxy redirects, automatic proxy settings for the OPNsense shell, SOCKS5 feature integration, persistent TNAS experiment routes, and a permanent Telegram Voice testing controller/GUI/API/daemon. Today's successful TCP/proxy/PF setup and external parent proxy remain **unchanged laboratory infrastructure**; OPNsense-native GUI-managed persistence of that external setup is acceptable within the lab, but the plugin must neither package nor take ownership of it in stages 1–3. The existence of a working external proxy remains a separate dependency for real-client TCP signaling on networks that need it; this is not an approved plugin integration task. Product TCP/proxy design, clean-install end-to-end TCP delivery and broader installation qualification have not been approved as stages 4–5.
+
+Lab architecture, result definitions and the historical TCP setup are documented respectively in [the Telegram Voice oracle](architecture/TELEGRAM_VOICE_EMULATION_LAB.md) and [the laboratory traffic runbook](architecture/TELEGRAM_TRAFFIC_POLICY.md). This contract is approved **intent**, not a claim that the current `0.5.0_3` package has implemented or passed these gates.
+
 ## Traffic Strategy
 
 One multiline field replaces separate HTTP and HTTPS fields.
