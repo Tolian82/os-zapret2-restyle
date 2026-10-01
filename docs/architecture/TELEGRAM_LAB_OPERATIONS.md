@@ -37,7 +37,7 @@ sing-box `config.json` is **not absent from GUI**: the owner furnished its full 
 
 The Squid ACL file and sing-box inline `ip_cidr` arose from the same past snapshot of PF `Telegram`+`Telegram_IPs` and **require deliberate resynchronization after alias changes**; no daemon, GUI or automatic synchronization has been verified. One-time installer `singbox_squid_lan_policy_20260930_v2.py` originally lived in `/tmp` and is not a boot mechanism. Successful backups/manifest are in `/root/singbox-lan-policy-20261001T034734Z-33814uhu`; see the traffic policy for its detailed earlier rollback warning.
 
-### The Voice ON-after-reboot trap — independent recovery prepared, owner-live pending
+### The Voice ON-after-reboot trap — one-shot requirement, implementation pending
 
 The appliance already has the package's *single* native start hook `start/20-zapret`. Its boot start does not imply Voice ON. Current temporary Voice marker resides under `/var/run` and is not persisted in the OPNsense config. On reboot, the selected **ON** experiment will revert **OFF** unless someone explicitly restores it. Do **not** deduce Voice ON solely from `configctl zapret status`, `service -e`, generic IPFW divert activity or the numeric identity 19000 (rule positions can be reused).
 
@@ -51,7 +51,7 @@ configctl zapret telegram_voice_status
 ipfw -a list
 ```
 
-Only run `telegram_voice_enable` if the selected experiment actually requires ON and ordinary service is healthy. Verify requested/effective/profile, rule scope/IPSET and firewall counters; invoking a command alone is not proof of intended state. A **separate native OPNsense GUI Cron + lab-only configd action design** has now been documented in the [Telegram Voice laboratory boot-recovery installation and acceptance procedure](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md). It has **not yet been installed or live-tested**: until the operator confirms registration and a controlled actual reboot, the earlier temporary manual recovery above remains necessary. The proposed configd alias invokes the plugin's existing idempotent backend directly (not nested configctl) every five minutes, only while its GUI Cron task is enabled; to intentionally disable Voice during experiments, first disable/Apply that task. This does **not** add a plugin boot hook or preempt future product stage-3 GUI-backed persistence. Do not silently add a custom boot hook or modify plugin code locally.
+Only run `telegram_voice_enable` if the selected experiment actually requires ON and ordinary service is healthy. Verify requested/effective/profile, rule scope/IPSET and firewall counters; invoking a command alone is not proof of intended state. The owner **explicitly rejected Cron and repeated/periodic activation**. A [source-verified comparison of GUI and Voice IPFW interception, PF/NAT hook order, and the one-shot boot boundary](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md) now explains why merely pasting the helper profile into GUI is not equivalent. No new one-shot startup action is installed or reboot-tested. Until an independent one-shot approach is approved/implemented and live-qualified, the earlier manual recovery above remains necessary. Future native product GUI-backed persistence remains stage 3 after the existing media acceptance gates.
 
 The measured live IPFW data for this inventory:
 
@@ -208,7 +208,7 @@ If a route is missing, the script checks source/interface and direct gateway fir
 | After reboot | What is established | Operator recovery / gap |
 |---|---|---|
 | OPNsense regular Zapret2 | Package has existing `start/20-zapret` hook | Check `configctl zapret status`; never use it as a substitute for `telegram_voice_status`. |
-| OPNsense **Voice ON** | Present before reboot; **not persistent yet** because `/var/run` marker is transient | [Native GUI Cron/configd lab-only recovery design](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md) is documented but **installation and actual reboot acceptance pending**. Until proven, check `telegram_voice_status`; if chosen ON, manually call `telegram_voice_enable` and recheck. |
+| OPNsense **Voice ON** | Present before reboot; **not persistent yet** because `/var/run` marker is transient | [GUI-versus-helper firewall/NAT audit and **one-shot-only** boot design](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md) is documented; **no recurring Cron and no actual reboot acceptance**. Until proven, check `telegram_voice_status`; if chosen ON, manually call `telegram_voice_enable` and recheck. |
 | Squid/parent/3130 | Current running listeners and included files verified | Before/after controlled reboot compare effective listeners, parent tunnel, files and hashes (see dated evidence); don't assert GUI-generated persistence not yet measured. |
 | sing-box | RC enabled and GUI JSON provided | Verify actual `*:1080`, JSON + static IP set unchanged, LAN/SOCKS parent probes. Updating subscription or GUI Save may need separate qualification. |
 | PF/IPFW | Rules currently present | Inspect `pfctl -sn`, `ipfw -a list`; current helper UDP rule 19000 is epoch-specific. |
