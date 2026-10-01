@@ -10,7 +10,7 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-01
-**Current handoff identity:** `v0.5.0_3` — reproduce the reported success with permanent LAN / router-local / SOCKS traffic separation; TCP policy verified in a bounded scope, latest UDP control failed
+**Current handoff identity:** `v0.5.0_3` — UDP-only product scope approved; stage 1 repeatable current-oracle MEDIA_PASS through OPNsense remains open; TCP/proxy is laboratory-only
 
 ## Current identity
 
