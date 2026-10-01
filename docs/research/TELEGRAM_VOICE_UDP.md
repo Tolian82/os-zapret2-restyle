@@ -72,6 +72,8 @@ The next family prepared at that historical boundary was fakefrag8+reverse24. It
 
 ## 2026-09-20 laboratory source update
 
+The [corrected historical client-source audit](../verification/evidence/2026-09-20-telegram-voice-win-android-source-audit.md) preserves the verified Android source comparison from superseded PR #287 while correcting its inaccurate pinned Telegram Desktop submodule SHA. It does not qualify current Windows/Android parity.
+
 Owner-client scope is Windows and Android; Telegram-iOS is not used for the live
 call tests. The laboratory now uses only public tgcalls
 `efd330ca04f74706024a5abdfb5b41f4e4dd1065` as
