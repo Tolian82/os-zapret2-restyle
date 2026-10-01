@@ -21,6 +21,7 @@ Read completely in this order (`DOC-016`):
 ## Level 2 — current line and specialist detail
 
 - **[`v0.5.x working ledger`](history/current/v0.5.x.md)** — current-line chronology and release handoff.
+- **[`GUI versus Telegram Voice helper, IPFW/PF/NAT and one-shot boot boundary`](architecture/TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md)** — source-verified reason GUI MTProto profiles cannot currently replace destination-scoped all-port Voice capture, no double encryption, actual PFIL order still requires live read-only measurement, absolutely no Cron and one-shot startup not installed.
 - **[`Telegram exact owner-live startup, SSH and manual TNAS route operations`](architecture/TELEGRAM_LAB_OPERATIONS.md)** — read first when continuing the live laboratory: Squid/sing-box GUI and file locations, Voice ON-but-lost-on-reboot warning, csh versus `/bin/sh`, verified SSH keys/port, full owner-tested manual TNAS route script and recovery checklist.
 - **[`2026-10-01 owner-live lab inventory and sing-box GUI snapshot`](verification/evidence/2026-10-01-telegram-lab-owner-live-inventory.md)** — exact current status, hashes, full owner-provided sing-box JSON, startup and SSH/route proof; not post-reboot acceptance.
 - **[`Telegram three-origin laboratory and reboot recovery`](architecture/TELEGRAM_TRAFFIC_POLICY.md)** — mandatory separate, reboot-persistent LAN/router-local/SOCKS5 testbed, experimental Squid/sing-box/PF/parent paths and TNAS routing; not approved plugin TCP/proxy scope.
