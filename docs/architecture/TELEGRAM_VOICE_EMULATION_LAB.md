@@ -1,6 +1,6 @@
 # Telegram Voice traffic emulation and strategy oracle
 
-**Status:** CURRENT UDP MEDIA ORACLE · APPROVED FUTURE UDP PRODUCT · LAB TCP VERIFIED / MEDIA OPEN
+**Status:** CURRENT UDP MEDIA ORACLE · APPROVED FUTURE UDP PRODUCT · LAB TCP VERIFIED / MEDIA OPEN; 2026-10-02 owner-real-call AUDIO GOOD, UDP MEDIA UNPROVEN
 **Updated:** 2026-10-01
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
@@ -382,6 +382,10 @@ Do not increase fake repeats blindly. Do not interpret the Phase B zero-fake res
 | provider baseline passes | no bypass is needed for that endpoint/epoch; use it as a positive harness control, not a strategy win |
 
 If no payload/fragment strategy passes while the same endpoints pass on an unblocked path, the practical solution moves outside a Zapret2-only payload strategy: UDP-capable tunneling/relay or continued Telegram TCP-reflector fallback through the existing proxy path.
+
+## October 2 early real-call observation — before formal acceptance gates
+
+The owner already tested a real Telegram Desktop Windows → remote Android call in another city **with P2P disabled on both peers** and reported clear sound without interference. This happened **before** the current fixed-reflector `MEDIA_PASS` gate was completed. Matched UDP-only LAN/WAN captures independently show **99 original packets** (90 identical 40-byte non-STUN reflector requests, 9 STUN requests) corresponding exactly to Voice IPFW **99/6624** counter growth, and **18** additional 16-byte zero fake payloads on WAN. **No inbound Telegram UDP** or sustained bidirectional UDP media was present in the captured window. Actual audible media may have used TCP or another uncaptured path; that is *not proven* without synchronous TCP data. Do not discard the positive owner audible observation, but do not promote it to `CALL_PASS` or claim the STUN helper caused it. [Full dated evidence and PCAP hashes](../verification/evidence/2026-10-02-real-telegram-windows-android-p2p-disabled-call.md). The owner did not separately report each audio direction as a controlled test. Normal stage gates remain unchanged.
 
 ## Real-call final gate
 
