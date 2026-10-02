@@ -42,7 +42,7 @@ It then shifts the ordinary port rules down one number. The dedicated rule captu
 
 Both rule families are constructed by the **same** plugin firewall backend, target the **same** outgoing WAN `xmit` interface, use the **same** divert port (currently `989`) and return to the **same** single dvtws2. There is **no separate pre-NAT/post-NAT hook chosen per profile**. They differ by **IPFW match**, not their place relative to PF.
 
-PF and IPFW can run in different output hook orders; read their **actual** order on the live OPNsense with the csh-compatible `pfilctl heads` before drawing a conclusion. Historical [2026-09-21 post-NAT fragmentation evidence](../verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) recorded the original `IPFW → PF` order, a **temporary lab-only** `PF → IPFW` reorder to avoid post-NAT invalid fragment UDP checksums, and verified restoration. Those historical observations do **not** prove the actual order after the latest boot/configuration epoch. Never reorder all outgoing IPv4 PFIL hooks merely to make an ordinary STUN fake work: it affects traffic outside Telegram. Such output-order changes require a separate bounded test, snapshots and exact restoration.
+PF and IPFW can run in different output hook orders; read their **actual** order on the live OPNsense with the csh-compatible `pfilctl heads` before drawing a conclusion. **The October 2 owner-live real-call read-only `pfilctl heads` now confirms actual IPv4 output `ipfw:default → pf:default-out` for that captured epoch**; no hook alteration occurred. The historically corrected post-NAT fragment experiment still requires a deliberate separate bounded change if ever revisited. [Matched current live call/counter evidence](../verification/evidence/2026-10-02-real-telegram-windows-android-p2p-disabled-call.md). Historical [2026-09-21 post-NAT fragmentation evidence](../verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) recorded the original `IPFW → PF` order, a **temporary lab-only** `PF → IPFW` reorder to avoid post-NAT invalid fragment UDP checksums, and verified restoration. Those historical observations do **not** prove the actual order after the latest boot/configuration epoch. Never reorder all outgoing IPv4 PFIL hooks merely to make an ordinary STUN fake work: it affects traffic outside Telegram. Such output-order changes require a separate bounded test, snapshots and exact restoration.
 
 To check current state **read-only** from OPNsense's *default csh*:
 
@@ -53,7 +53,7 @@ cat /usr/local/etc/zapret2/runtime-v2/udp-ports.txt
 configctl zapret telegram_voice_status
 ```
 
-Current `ipfw` counters confirm packet interception, **not** a successful transformation or voice call. Current output hook order can only be established from this live check, not deduced from whether a profile originated in GUI.
+Current `ipfw` counters confirm packet interception, **not** a successful transformation or voice call. The now-documented October 2 owner-live output order is IPFW→PF; any *later* reconfiguration/boot requires another read-only `pfilctl heads`, not an assumption that the value is permanent. The real-call PCAP captured zero inbound Telegram UDP despite good audible voice; no actual media-path proof or STUN-helper causal attribution.
 
 ## One-shot boot requirement: decision, not installed functionality
 
