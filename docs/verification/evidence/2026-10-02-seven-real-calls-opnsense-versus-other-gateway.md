@@ -1,8 +1,8 @@
 # 2026-10-02 — seven failed real calls through OPNsense; owner-reported calls connect via alternate Windows gateway
 
-**Status:** OWNER-LIVE ROUTING A/B OBSERVATION · SEVEN FAILED OPNsense-GATEWAY CALLS · EXACT LAN/WAN PCAP CORRELATION · **NO CURRENT UDP MEDIA PASS**  
-**Related earlier first call:** [October 2 first real P2P-disabled audible call and original UDP-only capture](2026-10-02-real-telegram-windows-android-p2p-disabled-call.md).  
-**Operational policy / packet path:** [Telegram traffic policy](../../architecture/TELEGRAM_TRAFFIC_POLICY.md), [GUI/helper/PF/NAT audit](../../architecture/TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md).  
+**Status:** OWNER-LIVE ROUTING A/B OBSERVATION · SEVEN FAILED OPNsense-GATEWAY CALLS · EXACT LAN/WAN PCAP CORRELATION · **NO CURRENT UDP MEDIA PASS**
+**Related earlier first call:** [October 2 first real P2P-disabled audible call and original UDP-only capture](2026-10-02-real-telegram-windows-android-p2p-disabled-call.md).
+**Operational policy / packet path:** [Telegram traffic policy](../../architecture/TELEGRAM_TRAFFIC_POLICY.md), [GUI/helper/PF/NAT audit](../../architecture/TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md).
 **Original material:** owner-supplied plaintext transcript of Windows `Find-NetRoute`/`route print -4`, plus **14 raw PCAPs** (`tgvoice-real-call2` through `call8`, LAN and WAN). The source PCAPs contain real network metadata and potentially call-related payloads and **are deliberately not committed to this public repository**. SHA-256 values identify the owner's private originals.
 
 ## Owner-observed A/B result, with precisely limited attribution
