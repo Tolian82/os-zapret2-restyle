@@ -41,29 +41,32 @@ The owner **reports that the following block has been added and Applied in the o
 
 **Caveat:** this A1 **nonfragmented 16-byte badsum fake before an intact genuine Hello** is a different local-wire hypothesis from the earlier **40-byte fragmented fake8** plus reverse24, but it is still a **fake-packet family test**, not evidence of a new upstream vulnerability. If LAN/WAN capture shows no fakes, re-examine generated config and installed classifier; don't request a real call to determine whether the profile is selected.
 
-## Exact planned first Docker experiment — NO real Telegram call
+## One-command OPNsense-hosted Docker A1 runner — primary procedure
 
-**Before running:** save/verify the GUI baseline (A1 already Applied), `configctl zapret status`, `configctl zapret telegram_voice_status`, `ipfw -a list`, `pfilctl heads`, and read-only `grep` of generated `runtime-v2/traffic.conf` (check A1 and STUN profile coexist and actual order) and the managed Telegram IPSET. Do not change PFIL hooks, restart Squid/sing-box or reset other firewall rules. Confirm the regular Zapret2 listener on divert 989 is actually active. Record source binary SHA as above, Docker host network/active container, and verify TNAS `ip route get 91.108.13.10 from 192.168.1.100` points via OPNsense `192.168.1.2`, not the TNAS default `192.168.1.140`. **If the TNAS reboot removed those two pre-agreed routes, only the owner may run the existing manual route script**; do not introduce automatic route recovery. If the helper is now OFF after an OPNsense reboot, **stop and reestablish the explicitly selected baseline deliberately**, not invisibly.
+**Owner correction:** the original multi-console procedure is superseded. The laboratory already has an owner-tested, manually invoked OPNsense **`/root/tgvoice-lab/ensure-tnas-routes.sh`**, a restricted noninteractive SSH identity and trust for `tolian@192.168.1.100:9222`, and a host-network `tgvoice-lab` Docker oracle. Do **not** ask the owner to log into TNAS, manage multiple terminal windows, start tcpdump by hand or place shell heredocs into OPNsense **csh**. This section is the design contract for the separate, lab-only tracked executable [`tools/telegram-voice-lab/run-a1-opnsense.sh`](../../tools/telegram-voice-lab/run-a1-opnsense.sh). The GitHub source is canonical. One **explicit operator-invoked** `/bin/sh /root/tgvoice-lab/run-a1-opnsense.sh` must execute the entire single-candidate trial and produce **one local private `.tgz` archive**.
 
-**Run only one 15-second fresh fixed-reflector process**, using the canonical Linux TNAS command (start captures first):
+The runner, invoked **on OPNsense only**, must:
+
+1. Create a unique, private `/root/tgvoice-lab/results/a1-UTC-unique/` work directory, reject concurrent A1 runs, log timestamps and runner revision, and finalize a `.tgz` result even on failure. **Never** include SSH private keys, Squid credentials, general network configuration backups or public call logs.
+2. Snapshot/read-only-validate actual Zapret2 status (**inspect output text, not merely `configctl status` exit 0**), requested/effective/active Telegram Voice ON, managed IPSET containing the pinned target, generated **one-block** A1 selection in active `runtime-v2/traffic.conf`, destination-scoped Voice divert rule and A1 common UDP port rule, `pfilctl heads`, effective IPFW counters and normal TCP parent service status read-only. An absent helper or candidate is a **preflight failure archived**, **not** permission to change production GUI strategy/firewall or silently enable the helper.
+3. Invoke **the exact existing** OPNsense `/bin/sh /root/tgvoice-lab/ensure-tnas-routes.sh` **once** as part of the operator's explicitly requested run; do not implement another route-repair script or a recurring watch. Preserve its guard and selective restoration of the existing two TNAS `/32` routes. The runner must independently verify through the already-established `/usr/local/bin/ssh`, restricted key and trusted host that the pinned reflector `91.108.13.10/32` actually routes **via `192.168.1.2 dev ovs_eth1 src 192.168.1.100`**.
+4. Over the **same SSH link**, use the absolute TNAS Docker path `/Volume1/@apps/DockerEngine/dockerd/bin/docker`. Verify `tgvoice-lab` is Docker host network, the binary's SHA-256 matches qualified `7ad8a2eef607e92056e8e8311519d36616c45ca19f1403601bbed8e8db01f3dc`, and the image/container is running. An explicit **manual runner execution** may start the *existing* container on demand if stopped; it must remember and restore an initially stopped container afterward. This is **not Docker boot autostart** or a second test harness.
+5. From **the same script and before the Docker trial**, start two owned OPNsense tcpdump processes concurrently on `vtnet0` (host `192.168.1.100` and pinned reflector IP) and `vtnet1` (pinned reflector IP), filtering **`ip` rather than UDP-only** to retain non-initial IPv4 fragments. Confirm each owned process is still alive. **Do not kill existing tcpdump processes** or capture all unrelated WAN traffic.
+6. Run **one and only one** fresh `docker exec tgvoice-lab /results/tgcalls_cli --mode reflector --reflector 91.108.13.10:596 --duration 15` via existing noninteractive SSH. Capture its full stdout/stderr and exact exit code; enforce a bounded failure timeout. **No real Telegram call, no second divert listener, no experimental 990 rule, no PFIL reorder, no Squid/sing-box restart, no automatic loop/repeated candidates.**
+7. Automatically stop/wait for **only its two** tcpdump PIDs in all exit paths, collect after-trial Voice status/IPFW/PFIL, source PCAPs, capture process logs, route status and checksums, and produce a **single compressed archive with an exact local path and SHA-256**, reporting success of **data collection separately from `MEDIA_PASS`**. Do not publish raw archives to public GitHub: they contain sensitive network identifiers and packet payloads. The operator only retrieves/sends the one archived file; subsequent forensic analysis and new candidate selection are assistant-owned.
+8. If any prerequisite fails, **do not fabricate a failed candidate verdict**: archive the preflight, emit clear `PRECHECK_FAILED`, and leave router services/GUI and the initially observed Docker-running state unchanged (apart from the **explicitly requested selective** pre-existing TNAS route repair). On a completed but unsuccessful CLI trial, archive `WIRE_UNVERIFIED / MEDIA_FAIL_OR_UNKNOWN` pending PCAP and peer-state analysis; do not conflate runner exit success with media success.
+
+All actual appliance values must be measured at each trial; historical `ipfw 19000` and historical IPFW→PF hook order are evidence, not assumptions. No persistent OPNsense boot work is part of this runner. Any eventual script syntax or integration tests qualify *code*, not a claimed live network result.
+
+### How the single file will be used
+
+After the script is published, the owner may transfer it once to `/root/tgvoice-lab/run-a1-opnsense.sh` by their preferred method (or fetch its pinned GitHub raw file). **Only one OPNsense csh-safe command launches the entire experiment:**
 
 ```sh
-/Volume1/@apps/DockerEngine/dockerd/bin/docker exec tgvoice-lab /results/tgcalls_cli --mode reflector --reflector 91.108.13.10:596 --duration 15
-echo "tgcalls_exit=$?"
+/bin/sh /root/tgvoice-lab/run-a1-opnsense.sh
 ```
 
-Run locally on TNAS **Linux shell**, or use the [already established SSH method](TELEGRAM_LAB_OPERATIONS.md) from OPNsense with absolute `/usr/local/bin/ssh` and the documented identity/port 9222; do not paste Bash or multiline script syntax into OPNsense's default **csh**. For this already configured, ordinary GUI Strategy candidate **do not install an additional IPFW divert 990/standalone experimental dvtws2 runner**: that would mix two interventions and complicate attribution.
-
-**Simultaneous captures from separate OPNsense csh consoles** (each one line; operator stop with Ctrl-C after CLI finishes):
-
-```sh
-tcpdump -ni vtnet0 -s 0 -U -w /tmp/tgvoice-a1-docker-lan.pcap 'host 192.168.1.100 and host 91.108.13.10 and ip'
-tcpdump -ni vtnet1 -s 0 -U -w /tmp/tgvoice-a1-docker-wan.pcap 'host 91.108.13.10 and ip'
-```
-
-The WAN filter intentionally matches **IP**, not merely UDP port: it would otherwise miss non-initial IP fragments. Capture source/destination and post-NAT flow, entire genuine Hello and extra fakes, packet timing/order and IP/UDP checksums. Confirm the two snapshots and capture actually cover the *same* bounded CLI interval, and retain the CLI stdout/stderr plus exact exit status and both peers' state, stats and BWE. The exact fixed reflector endpoint/engine/duration remain constant; changing them starts a separately identified epoch. Capture original PCAP privately; publish only redacted summaries and SHA-256 hashes.
-
-**After one trial:** record final `telegram_voice_status`, `ipfw -a list` counter deltas (if concurrent traffic exists, attribute per-PCAP rather than claiming all counters are the test), `pfilctl heads`, current runtime A1 and any failure logs. No temporary runner or extra route is installed by this planned first A1 procedure, so normal snapshot comparison should show no intentional firewall, PFIL or route mutations. Restore the previous GUI strategy **only after recording evidence and according to owner's chosen retention**, and verify the same active ordinary TCP path. Never silently change the installed A1 in the middle of the test.
+The script prints the final private archive path under `/root/tgvoice-lab/results/`. No interactive TNAS login, SSH prompt, extra window or manual PCAP management is required. On any preflight failure the owner simply supplies that **same** archive; the assistant investigates before scheduling another attempt.
 
 ## Result gates, next decision and limits
 
