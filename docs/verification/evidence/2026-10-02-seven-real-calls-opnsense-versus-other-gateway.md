@@ -46,6 +46,23 @@ There were **390 original Telegram UDP datagrams** corresponding byte-for-byte b
 
 **Call 6 is a useful naturally occurring control:** the capture contained 41 non-STUN originals but **no** STUN probes and thus **no** observed STUN fake packets, yet this call also failed by the owner's report. Hence one cannot attribute all failures *solely* to the currently generated STUN fakes.
 
+## Captured WAN checksum qualification — all 480 packets valid
+
+After preparing the complete 14-PCAP comparison, the owner-provided raw Ethernet/IPv4 frames were additionally checked at **both checksum levels**, not merely matched by payload. For every original LAN Telegram UDP datagram (28- or 40-byte payload), each corresponding NATed WAN UDP datagram, and each additional 16-byte zero-payload WAN fake, the complete UDP datagram was present within snaplen 160. A fresh checksum was computed over the actual captured IPv4 pseudoheader (including the **post-NAT source**), UDP header and payload, using IPv4 one's-complement arithmetic. The IPv4 header checksum was independently validated on the captured WAN datagram.
+
+| Call | Original WAN Telegram UDP | Extra zero16 WAN fakes | Valid WAN IPv4 header checksum | Valid WAN UDP checksum |
+|---|---:|---:|---:|---:|
+| 2 | 48 | 14 | **62 / 62** | **62 / 62** |
+| 3 | 48 | 14 | **62 / 62** | **62 / 62** |
+| 4 | 58 | 16 | **74 / 74** | **74 / 74** |
+| 5 | 48 | 14 | **62 / 62** | **62 / 62** |
+| 6 | 41 | 0 | **41 / 41** | **41 / 41** |
+| 7 | 99 | 18 | **117 / 117** | **117 / 117** |
+| 8 | 48 | 14 | **62 / 62** | **62 / 62** |
+| **Total** | **390** | **90** | **480 / 480** | **480 / 480** |
+
+All **390 original LAN UDP** datagrams also had valid recorded UDP checksums. The packet evidence therefore does **not** show the local UDP-checksum corruption that had complicated September's experimental post-NAT **fragmentation**. These present real-call datagrams were unfragmented; **do not extrapolate this validation to earlier fragmentation experiments, all possible offload/wire behaviors, or remote server receipt**. Valid captured outbound checksums plus zero captured inbound Telegram UDP do not uniquely identify ISP filtering, Telegram server refusal or another route/transport selection mechanism. They *do* remove any observed invalid WAN checksum as an explanation for these particular packets.
+
 ## Simultaneously observed TCP paths: do not assume each was Telegram media
 
 LAN and WAN TCP were captured concurrently this time. WAN traffic to and from the configured external Squid parent `185.203.117.88:33128` was active during each observed UDP-attempt window, including inbound TCP payload. It is a useful sign that OPNsense's **general TCP parent path was not completely silent** while voice setup failed, but the WAN capture includes other LAN and router traffic. **Without application/process-to-flow evidence or Squid access logs, this is not proof any particular TCP byte was Telegram signaling or audio.**
