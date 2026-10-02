@@ -1,6 +1,8 @@
 # Telegram laboratory: exact live configuration, boot and operator runbook
 
 **Status:** owner-live inventory, 2026-10-01; separate laboratory, not plugin code.
+**October 2 continuation:** [Matched real Windows/Android call PCAP/counter evidence](../verification/evidence/2026-10-02-real-telegram-windows-android-p2p-disabled-call.md) records both clients P2P-disabled, clean owner-reported audio, Voice rule +99/+6624 and 18 extra WAN zero16 fakes, **but no inbound Telegram UDP and no proven UDP media**. This does not change startup or routing requirements. Owner-live outbound IPv4 PFIL order for that capture was **IPFW→PF**; re-check after later boots.
+
 **Read first:** [dated owner evidence](../verification/evidence/2026-10-01-telegram-lab-owner-live-inventory.md) (including full sing-box JSON and file hashes); [traffic and recovery policy](TELEGRAM_TRAFFIC_POLICY.md); [current handoff](../START_HERE.md).
 
 **Preserve existing working TCP configuration.** No reboot, Squid/sing-box reload, GUI Apply, plugin change or new automation was performed as part of this documentation work. Explicitly distinguish observed live state from unverified post-reboot behavior.
