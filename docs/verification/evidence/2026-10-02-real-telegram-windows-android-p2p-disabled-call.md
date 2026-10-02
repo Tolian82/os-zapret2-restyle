@@ -91,6 +91,10 @@ The 90 non-STUN payloads were **byte-identical on LAN and WAN**: the current STU
 
 Crucially, the WAN capture contains **zero inbound UDP from either Telegram endpoint and no other observed inbound Telegram UDP**, while the owner reports clean audible voice. That combination is the reason the result must be recorded as **real audible call with undetermined media transport**, not `CALL_PASS`.
 
+## Later follow-up and supersession of the originally proposed next test
+
+**That next test has now happened.** The owner deliberately switched Windows to only `0.0.0.0/0 via 192.168.1.2`, collected **seven** simultaneous TCP+UDP LAN/WAN PCAP pairs for calls #2–#8, and reported that **none of those voice calls established**, although Telegram itself connected. [The newer seven-call route A/B evidence](2026-10-02-seven-real-calls-opnsense-versus-other-gateway.md) records all 14 capture hashes, 390 matched original outbound Telegram UDP datagrams, 90 additional WAN zero16 fake packets, **no Telegram UDP replies** and the owner's report that real calls connected after restoring preferred Windows gateway `192.168.3.140`. The original suggestions immediately below are historical next-test planning and **must not** be repeated as if still pending. The next *current* bounded diagnostic is a TCP+UDP capture of a **successful** alternate-gateway call under explicitly recorded application proxy settings; do not assume its sound used UDP without evidence.
+
 ## Safe follow-up; do not destroy the accepted observation
 
 1. Preserve the **working** Windows/Android P2P-disabled configuration, the owner's existing Squid/sing-box/parent TCP setup and current Zapret2 configuration. Do **not** change NAT hook order, Voice profile or reboot automation based on the audible result alone.
