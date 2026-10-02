@@ -115,7 +115,7 @@ trap 'finish "$?"' 0
 trap 'RESULT=INTERRUPTED; exit 130' 1 2 3 15
 
 log "A1 single-run preflight and acquisition; results directory: $RUN"
-printf 'runner=a1-one-command-v1\nendpoint=%s:596\nmode=reflector\nduration=15\n' "$TARGET" > "$RUN/manifest.txt"
+printf 'runner=a1-one-command-v2-saved-gui-diagnostics\nendpoint=%s:596\nmode=reflector\nduration=15\n' "$TARGET" > "$RUN/manifest.txt"
 date -u +%Y-%m-%dT%H:%M:%SZ > "$RUN/start-utc.txt"
 uname -a > "$RUN/opnsense-uname.txt"
 for bin in "$SSH" "$KEY" "$ROUTE_FIX" "$ACTIVE/traffic.conf" "$ACTIVE/managed/ipset-telegram.txt"; do
@@ -136,6 +136,42 @@ configctl proxy status > "$RUN/squid-status.txt" 2>&1 || :
 cp "$ACTIVE/traffic.conf" "$RUN/traffic-effective.txt" || fail 'cannot save effective traffic profile'
 cp "$ACTIVE/managed/ipset-telegram.txt" "$RUN/ipset-telegram.txt" || fail 'cannot save managed IPSET'
 
+# Read persisted GUI strategy WITHOUT archiving /conf/config.xml or printing credentials.
+# An unreadable saved model is an honest UNKNOWN, not an assumption about GUI Apply.
+if [ -x /usr/local/bin/python3 ] && [ -r /conf/config.xml ]; then
+    /usr/local/bin/python3 - > "$RUN/a1-saved-diagnostics.txt" 2>&1 <<'SAVED_A1'
+import xml.etree.ElementTree as ET
+try:
+    root = ET.parse("/conf/config.xml").getroot()
+    node = root.find("./OPNsense/Zapret/strategy/trafficargs")
+    if node is None:
+        print("saved_gui_model=NOT_FOUND")
+    else:
+        print("saved_gui_model=READ_OK")
+        data = (node.text or "").replace("\r", "")
+        need_port = "--filter-udp=596-599"
+        need_payload = "--payload=unknown"
+        need_fake = "--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:badsum:repeats=2"
+        blocks = data.split("--new")
+        valid = any(all(token in block for token in (need_port, need_payload, need_fake, "<IPSET:telegram>")) for block in blocks)
+        print("saved_gui_A1=" + ("YES" if valid else "NO"))
+        print("saved_gui_A1_port=" + ("YES" if need_port in data else "NO"))
+        print("saved_gui_A1_payload=" + ("YES" if need_payload in data else "NO"))
+        print("saved_gui_A1_fake=" + ("YES" if need_fake in data else "NO"))
+        print("saved_gui_A1_ipset=" + ("YES" if "<IPSET:telegram>" in data else "NO"))
+except (OSError, ET.ParseError, UnicodeError) as e:
+    print("saved_gui_model=UNREADABLE")
+    print("saved_gui_error_class=" + type(e).__name__)
+SAVED_A1
+    if [ "$?" -ne 0 ]; then
+        printf '%s\n' 'saved_gui_model=DIAGNOSTIC_ERROR' > "$RUN/a1-saved-diagnostics.txt"
+    fi
+else
+    printf '%s\n' 'saved_gui_model=UNAVAILABLE_PYTHON_OR_XML' > "$RUN/a1-saved-diagnostics.txt"
+fi
+# Safe to report: this file contains ONLY boolean A1 flags; never XML contents.
+cat "$RUN/a1-saved-diagnostics.txt"
+
 # Verify all A1 terms occur within ONE generated --new-delimited profile.
 awk '
 function check() { if (udp && ipset && unknown && fake) found=1 }
@@ -145,13 +181,25 @@ index($0,"ipset-telegram.txt") {ipset=1}
 $0=="--payload=unknown" {unknown=1}
 index($0,"--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:badsum:repeats=2") {fake=1}
 END {check(); exit !found}
-' "$ACTIVE/traffic.conf" || fail 'A1 not found as one complete effective profile (check Apply/normalization)'
+' "$ACTIVE/traffic.conf" || {
+    if grep -Fxq 'saved_gui_A1=NO' "$RUN/a1-saved-diagnostics.txt"; then
+        RESULT=A1_NOT_IN_SAVED_GUI
+        log 'A1_NOT_IN_SAVED_GUI: the saved GUI Strategy does not contain the full A1 block; Docker NOT started'
+    elif grep -Fxq 'saved_gui_A1=YES' "$RUN/a1-saved-diagnostics.txt"; then
+        RESULT=A1_SAVED_BUT_NOT_EFFECTIVE
+        log 'A1_SAVED_BUT_NOT_EFFECTIVE: GUI Strategy contains A1, but runtime traffic.conf does not; Docker NOT started'
+    else
+        RESULT=A1_SAVED_STATUS_UNKNOWN
+        log 'A1_SAVED_STATUS_UNKNOWN: A1 absent from runtime; persisted GUI state could not be proven; Docker NOT started'
+    fi
+    exit 2
+}
 grep -Fq -- '--name=telegram-voice-poc' "$ACTIVE/traffic.conf" || fail 'STUN helper effective profile missing'
 grep -Fqx '91.108.12.0/22' "$ACTIVE/managed/ipset-telegram.txt" || fail 'known target-covering managed Telegram CIDR not found'
 grep -F 'table(zapret2_tgvoice)' "$RUN/ipfw-before.txt" | grep -Eq 'divert [0-9]+ udp .*xmit vtnet1' || fail 'destination-scoped Voice IPFW rule missing'
 ipfw table zapret2_tgvoice list > "$RUN/voice-ipfw-table.txt" 2>&1 || fail 'cannot read Voice IPFW table'
 grep -Fq '91.108.12.0/22' "$RUN/voice-ipfw-table.txt" || fail 'fixed reflector missing from Voice IPFW table'
-grep -F '596-599' "$RUN/ipfw-before.txt" | grep -Fq ' udp ' || fail 'A1 numeric UDP-port IPFW rule missing'
+grep -F '596-599' "$RUN/ipfw-before.txt" | grep -Fq ' udp ' || { RESULT=A1_ACTIVE_PROFILE_BUT_IPFW_RULE_MISSING; log 'A1_ACTIVE_PROFILE_BUT_IPFW_RULE_MISSING: actual numeric UDP port rule lacks 596-599; Docker NOT started'; exit 2; }
 log 'A1 profile, helper interception, managed IPSET and IPFW preflight passed.'
 
 log 'Invoking existing owner-tested one-shot route guard on OPNsense.'
