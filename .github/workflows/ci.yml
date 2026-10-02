@@ -158,6 +158,10 @@ jobs:
           find scripts -type f -name "*.sh" -exec sh -n {} \;
           sh -n src/etc/rc.syshook.d/start/20-zapret
           sh -n src/etc/rc.syshook.d/stop/20-zapret
+          sh -n tools/telegram-voice-lab/run-a1-opnsense.sh
+
+      - name: Test independent Docker A1 saved-GUI diagnostics (no appliance access)
+        run: python3.13 tools/telegram-voice-lab/tests/test_a1_saved_strategy_preflight.py
 
       - name: Test Strategy Lab Python foundation
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-foundation.sh

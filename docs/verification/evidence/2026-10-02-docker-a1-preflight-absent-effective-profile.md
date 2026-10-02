@@ -1,0 +1,24 @@
+# 2026-10-02 — Docker A1 first one-shot preflight: GUI candidate absent from effective runtime
+
+**Status:** OWNER-EXECUTED RUNNER · PREFLIGHT_FAIL / NO DOCKER CALL / NO A1 WIRE OR MEDIA RESULT. **Do not** label this a failed strategy.
+
+The owner invoked the previously supplied private `/root/tgvoice-lab/tgvoice-a1-lab.sh` from OPNsense and provided its complete single private archive `a1-20261002T161738Z.tgz` (1,866 bytes; SHA-256 `013e9cf9a0b6f88f13d5eb570ce7ca91f552d52344c9783d5b6e9ceb6fe47036`). It was inspected in this private investigation session. No original archive, credentials or full network config are published to GitHub.
+
+## Directly measured facts, from this archived trial
+
+- UTC runner start: **2026-10-02 16:17:38Z**. Old supplied runner archived `result=PREFLIGHT_FAIL`, `script_exit=2`. It stopped **before** remote Docker preflight, any `tgcalls_cli` execution and both tcpdump captures; therefore this event produces no new UDP wire, reflector reply or MEDIA_PASS evidence.
+- Existing **operator-invoked** `/root/tgvoice-lab/ensure-tnas-routes.sh` completed. Both current TNAS routes reported `OK: 91.108.13.10 already uses 192.168.1.2` and `OK: 149.154.167.99 already uses 192.168.1.2`. SSH printed only the known separate post-quantum KEX warning; it did **not** fail authentication or require a TNAS login.
+- `configctl zapret status` reported `zapret is running as pid 64069`. Voice status reported `requested=on`, `effective=on`, `service=running`, `active_profile=on`, `table_present=yes`, **14 entries**, `rule=19000`, `rule_packets=0` and `rule_bytes=0` at that preflight snapshot. A zero rule counter before the Docker test does **not** diagnose a bypass failure.
+- `ipfw -a list` included rule **19000** `divert 989 udp from any to table(zapret2_tgvoice) ... xmit vtnet1` and ordinary UDP rule **19002** containing **only ports 80,443,5222,8888**. There was **no ordinary UDP capture addition for 596–599** in the effective rules.
+- `pfilctl heads` still showed current IPv4 outgoing **IPFW→PF** in this snapshot; no hook changes performed.
+- The archived exact `runtime-v2/traffic.conf` begins with the expected **STUN-only** injected `telegram-voice-poc` helper profile. It contains normal YouTube, MTProto and user TLS profiles, but **no `--filter-udp=596-599`, no `--payload=unknown` and no expected A1 `--lua-desync=fake:payload=unknown:blob=zero16:badsum:repeats=2`**. Therefore the old runner's rejection `GUI A1 block not found in effective traffic` was **correct** for the captured active runtime: no A1 lab test occurred.
+
+**Unresolved, and not in this archive:** whether the A1 text was ever written to **persisted** GUI `OPNsense.Zapret.strategy.trafficargs`, stored only on another page such as Strategy Lab, lost at GUI Apply or accepted in GUI but rejected/overwritten during service regeneration. The archive includes only effective runtime configuration, **not a safe diagnostic of the persisted strategy**. Therefore do not claim a particular GUI/user error or blindly reapply/restart the live plugin.
+
+## Corrective automation and next bounded step
+
+The independent source-tracked [one-command runner](../../../tools/telegram-voice-lab/run-a1-opnsense.sh) must now **first** inspect **both** persisted GUI strategy and the effective runtime through a privacy-preserving, read-only diagnostic. The diagnostic must print only A1-specific boolean flags, never the full `/conf/config.xml` or credentials. Explicit verdicts: `A1_NOT_IN_SAVED_GUI` (GUI candidate was not persisted) versus `A1_SAVED_BUT_NOT_EFFECTIVE` (candidate saved but not generated/activated) versus `A1_SAVED_UNREADABLE` if OPNsense PHP/XML tools cannot safely read the saved model. Include active numeric port-rule indication, injected helper/IPSET snapshots, and the existing route guard output in the same final archive.
+
+**Fail closed** if the effective A1 profile/rule is missing. A test with no active candidate is a baseline, **not** A1, and must not consume a remote Docker trial. The runner must **never silently edit the GUI, package files or active traffic.conf**; that would destroy the comparison. The owner should only be asked for a GUI correction **after** the runner states which state boundary is failing, with one combined automatic OPNsense command on subsequent retries. Preserve the existing key-only SSH, already functioning selective two-route script, optional container start/restoration and bounded captures. No TNAS manual login, multiple consoles, real-person calls, Cron or product package changes.
+
+The ordinary GUI's A1 profile is assumed **owner-reported Applied**, but its persisted state was not measured in this archive. No new desynchronization candidate is selected before A1 is actually tested; previous verified September/October fragmentation and packet analyses remain closed.

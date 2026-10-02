@@ -119,6 +119,9 @@ This parallel lab requirement is tracked in the [exact owner-live operations/reb
 
 **Superseding owner test priority, October 2:** perform repeated experimental strategy qualification **in the existing TNAS Docker laboratory**, not by asking humans to make a real Telegram call for each candidate. The provider's Telegram DPI block is the owner-established premise; keep functioning Telegram TCP via external Squid parent unchanged. The operator reports that candidate `HELLO-FAKE-A1` has already been Applied in ordinary GUI Strategy, but **no wire profile/call outcome is yet known**. [Read and follow the complete campaign and preflight before experiment](architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md). The fixed target remains `91.108.13.10:596`, current binary/engine pinned, TNAS `/32` through OPNsense and one new 15-second Docker test with simultaneous LAN/WAN IP captures.
 
+- [x] Analyze first one-shot A1 owner archive: existing TNAS routes correct and Voice ON, **effective `traffic.conf` has no A1** and IPFW rule19002 has no UDP/596–599; no Docker call/capture occurred, so `PREFLIGHT_FAIL` **is not** `WIRE_FAIL` or `MEDIA_FAIL`. [Exact archived evidence](verification/evidence/2026-10-02-docker-a1-preflight-absent-effective-profile.md).
+- [ ] Publish and qualify updated GitHub [one-command A1 runner](../tools/telegram-voice-lab/run-a1-opnsense.sh) that safely distinguishes saved GUI A1 absent / saved but not effective / saved unreadable, without dumping all config.xml or silently changing plugin state. Owner need transfer/run only the one script and upload one `.tgz`.
+
 ### Stage 1 — reproduce a working UDP voice transport through OPNsense
 
 - [x] Preserve owner's October 2 Docker-first decision and exact A1 GUI candidate **Applied-reported only**; [complete canonical plan](architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md).
