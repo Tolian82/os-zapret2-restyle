@@ -1,8 +1,8 @@
 # 2026-10-02: real Telegram Windows → Android call, P2P disabled — good audio, UDP interception observed, UDP media **not** proven
 
-**Status:** owner-live **REAL_CALL_AUDIO_REPORTED_GOOD / VOICE_IPFW_CAPTURE_PASS / UDP_MEDIA_NOT_OBSERVED**; **NOT** verified `CALL_PASS`, `MEDIA_PASS`, verified UDP relay or proof that the experimental STUN fake enabled the call.  
-**Source:** owner-reported Windows → Android real call, both peers with P2P disabled and callee in another city; owner-provided OPNsense status/IPFW/PFIL output before/after the call and two original UDP PCAP uploads, read and independently cross-correlated.  
-**Date:** 2026-10-02; PCAP timestamps UTC 04:54–04:58 (OPNsense local UTC+3 ≈07:54–07:58).  
+**Status:** owner-live **REAL_CALL_AUDIO_REPORTED_GOOD / VOICE_IPFW_CAPTURE_PASS / UDP_MEDIA_NOT_OBSERVED**; **NOT** verified `CALL_PASS`, `MEDIA_PASS`, verified UDP relay or proof that the experimental STUN fake enabled the call.
+**Source:** owner-reported Windows → Android real call, both peers with P2P disabled and callee in another city; owner-provided OPNsense status/IPFW/PFIL output before/after the call and two original UDP PCAP uploads, read and independently cross-correlated.
+**Date:** 2026-10-02; PCAP timestamps UTC 04:54–04:58 (OPNsense local UTC+3 ≈07:54–07:58).
 **Source privacy:** the original PCAPs were uploaded into the private investigation conversation; **not uploaded to this public GitHub repository** because a real call's packets and identifiers may be sensitive. The tables below give sanitized, reproducible summaries and exact SHA-256 identifiers. The owner should retain the original PCAPs privately for future correlation.
 
 ## Outcome and why the distinction matters
