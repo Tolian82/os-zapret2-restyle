@@ -205,6 +205,10 @@ EXIT=0
 
 If a route is missing, the script checks source/interface and direct gateway first, selectively uses `ip -4 route replace`, then verifies each route. If expected source or gateway is absent, it fails rather than guessing. The optional file `/root/tgvoice-lab/route-watch.disabled` pauses execution; remove it to resume. From the **default csh** the exit status is `echo $status`; in **sh** the owner demonstrated `echo "$?"`. Neither means an automatic reboot test was performed. If a previously suggested `actions_tgvoice_lab_routes.conf` exists, that was **never confirmed**; do not assume or schedule it.
 
+## One-command, manually invoked Docker A1 strategy screening
+
+The separate [canonical Docker-first strategy campaign](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md) now uses the tracked [OPNsense one-shot A1 runner](../../tools/telegram-voice-lab/run-a1-opnsense.sh). **The existing `/root/tgvoice-lab/ensure-tnas-routes.sh` and existing restricted key are prerequisites, not replaced.** With the source transferred once to `/root/tgvoice-lab/run-a1-opnsense.sh`, a **single** csh-compatible `/bin/sh /root/tgvoice-lab/run-a1-opnsense.sh` performs route guard, SSH Docker preflight/test, both owned captures and one private results archive. On-demand Docker start and subsequent stop **only if initially stopped** are parts of one explicitly initiated laboratory run, **not Docker autostart after reboot**. All testing stays outside the plugin lifecycle; the temporary Voice helper stays operator-selected ON unless a separate approved action changes it. No real calls per candidate. **Not yet tested on the owner's running OPNsense; preserve source versus owner-live distinction.**
+
 ## Reboot risk register and next operator action
 
 | After reboot | What is established | Operator recovery / gap |
