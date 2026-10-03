@@ -177,7 +177,9 @@ try:
         print("saved_gui_" + os.environ["TGVOICE_CANDIDATE"] + "=" + ("YES" if valid else "NO"))
         print("saved_gui_A1_port=" + ("YES" if need_port in data else "NO"))
         print("saved_gui_A1_payload=" + ("YES" if need_payload in data else "NO"))
-        print("saved_gui_A1_fake=" + ("YES" if need_fake in data else "NO"))
+        a1_fake = "--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:badsum:repeats=2"
+        print("saved_gui_A1_fake=" + ("YES" if a1_fake in data else "NO"))
+        print("saved_gui_candidate_fake=" + ("YES" if need_fake in data else "NO"))
         print("saved_gui_A1_ipset=" + ("YES" if "<IPSET:telegram>" in data else "NO"))
 except (OSError, ET.ParseError, UnicodeError) as e:
     print("saved_gui_model=UNREADABLE")
