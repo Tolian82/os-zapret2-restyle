@@ -126,6 +126,7 @@ Detailed protocol research and current oracle: [Telegram UDP research](research/
 
 Package identity stays `VERSION=0.5.0`, `PLUGIN_REVISION=3`; remote `_4` remains unpublished and paused. The owner-approved product behavior is **planned**, not yet implemented or qualified.
 
+**2026-10-03 A2 superseding outcome:** The owner's first Docker A2 run passed unique saved/effective A2, Voice ON/table14, owner TNAS route guard and pinned host-network Docker. Independent LAN/WAN PCAP analysis: 60 genuine 40-byte Hello preserved after NAT; 120 zero16 fakes with **120/120 valid UDP checksums** precede every original in exact 60/60 triplets; no pinned reflector replies on either interface, zero capture drops. Both peers Reconnecting, BWE zero, CLI exit 1. **A2 CONFIG_PASS/WIRE_OK/NO_REPLY_UNKNOWN; MEDIA_PASS OPEN**. Relative to A1, removing only `:badsum` proved insufficient in this epoch; do not infer provider drop stage or reflector readiness. [Measured A2 evidence](verification/evidence/2026-10-03-docker-a2-valid-checksum-fakes-no-reflector-reply.md). Next unproven prerequisite is a fresh same-endpoint **independently working current route with the same CLI**, not automatic speculative A3; retired `.140` prohibited; keep TCP/proxy and A2 lab baseline unchanged.
 ## Completed version-line archives
 
 - [`v0.1.x archive`](history/archive/v0.1.x.md)
