@@ -88,7 +88,7 @@ class A1SavedStrategyDiagnosticTests(unittest.TestCase):
     def test_remote_linux_explicit_from_route_preflight(self):
         """Treat valid Linux 'from' route text as valid; independently guard NIC IP."""
         source = RUNNER.read_text(encoding="utf-8")
-        remote = source.split("<<'REMOTE_PRE'\\n", 1)[1].split("\\nREMOTE_PRE", 1)[0]
+        remote = source.split("<<'REMOTE_PRE'\n", 1)[1].split("\nREMOTE_PRE", 1)[0]
         route_check = remote.split('[ -x "$DOCKER" ]', 1)[0]
         good = "91.108.13.10 from 192.168.1.100 via 192.168.1.2 dev ovs_eth1 uid 0"
         second = "149.154.167.99 from 192.168.1.100 via 192.168.1.2 dev ovs_eth1 uid 0"
@@ -99,16 +99,16 @@ class A1SavedStrategyDiagnosticTests(unittest.TestCase):
             (good, False, False),
         ):
             shell = (
-                'ip() {\\n'
-                '  if [ "$2" = -o ]; then\\n'
+                'ip() {\n'
+                '  if [ "$2" = -o ]; then\n'
                 '    echo ' + shlex.quote(
                     "2: ovs_eth1 inet " + ("192.168.1.100" if addr_ok else "192.168.1.99") + "/24 brd 192.168.1.255 scope global ovs_eth1"
-                ) + ';\\n'
-                '  elif [ "$3" = get ]; then\\n'
-                '    if [ "$4" = 91.108.13.10 ]; then echo ' + shlex.quote(text) + ';\\n'
-                '    else echo ' + shlex.quote(second) + '; fi\\n'
-                '  else return 1; fi\\n'
-                '}\\n'
+                ) + ';\n'
+                '  elif [ "$3" = get ]; then\n'
+                '    if [ "$4" = 91.108.13.10 ]; then echo ' + shlex.quote(text) + ';\n'
+                '    else echo ' + shlex.quote(second) + '; fi\n'
+                '  else return 1; fi\n'
+                '}\n'
             )
             p = subprocess.run(["/bin/sh", "-c", shell + route_check],
                                capture_output=True, text=True)
