@@ -1,5 +1,5 @@
 #!/bin/sh
-# Telegram Voice independent laboratory: one-shot A1 Docker oracle from OPNsense.
+# Telegram Voice independent laboratory: explicit A1/A2 one-shot Docker oracle.
 # No plugin source edits, PFIL changes, Cron, second divert listener or real calls.
 set -u
 umask 077
@@ -16,6 +16,23 @@ BIN_SHA=7ad8a2eef607e92056e8e8311519d36616c45ca19f1403601bbed8e8db01f3dc
 ACTIVE=/usr/local/etc/zapret2/runtime-v2
 TARGET=91.108.13.10
 LOCK="$BASE/.a1-run.lock"
+# Explicit A2 opt-in; historic default remains A1.
+CANDIDATE=${TGVOICE_CANDIDATE:-A1}
+case "$CANDIDATE" in
+    A1)
+        FAKE_LINE="--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:badsum:repeats=2"
+        OTHER_FAKE="--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:repeats=2"
+        PREFIX=a1
+        ;;
+    A2)
+        FAKE_LINE="--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:repeats=2"
+        OTHER_FAKE="--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:badsum:repeats=2"
+        PREFIX=a2
+        ;;
+    *) echo "ERROR: unsupported TGVOICE_CANDIDATE (A1 or A2 only)" >&2; exit 2 ;;
+esac
+TGVOICE_CANDIDATE=$CANDIDATE
+export TGVOICE_CANDIDATE
 
 if [ "$(id -u)" != 0 ]; then
     echo 'ERROR: run this script as root on OPNsense' >&2
@@ -26,7 +43,7 @@ if ! mkdir "$LOCK" 2>/dev/null; then
     echo "ERROR: A1 lock exists ($LOCK). Check for an active run before removing a stale lock." >&2
     exit 2
 fi
-RUN=$(mktemp -d "$RESULTS/a1-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX") || {
+RUN=$(mktemp -d "$RESULTS/$PREFIX-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX") || {
     rmdir "$LOCK"
     exit 2
 }
@@ -114,8 +131,8 @@ fail() {
 trap 'finish "$?"' 0
 trap 'RESULT=INTERRUPTED; exit 130' 1 2 3 15
 
-log "A1 single-run preflight and acquisition; results directory: $RUN"
-printf 'runner=a1-one-command-v3-linux-from-route-compatible\nendpoint=%s:596\nmode=reflector\nduration=15\n' "$TARGET" > "$RUN/manifest.txt"
+log "$CANDIDATE single-run preflight and acquisition; results directory: $RUN"
+printf 'runner=voice-one-command-v4-a1-a2\ncandidate=%s\nendpoint=%s:596\nmode=reflector\nduration=15\n' "$CANDIDATE" "$TARGET" > "$RUN/manifest.txt"
 date -u +%Y-%m-%dT%H:%M:%SZ > "$RUN/start-utc.txt"
 uname -a > "$RUN/opnsense-uname.txt"
 for bin in "$SSH" "$KEY" "$ROUTE_FIX" "$ACTIVE/traffic.conf" "$ACTIVE/managed/ipset-telegram.txt"; do
@@ -140,6 +157,7 @@ cp "$ACTIVE/managed/ipset-telegram.txt" "$RUN/ipset-telegram.txt" || fail 'canno
 # An unreadable saved model is an honest UNKNOWN, not an assumption about GUI Apply.
 if [ -x /usr/local/bin/python3 ] && [ -r /conf/config.xml ]; then
     /usr/local/bin/python3 - > "$RUN/a1-saved-diagnostics.txt" 2>&1 <<'SAVED_A1'
+import os
 import xml.etree.ElementTree as ET
 try:
     root = ET.parse("/conf/config.xml").getroot()
@@ -151,13 +169,17 @@ try:
         data = (node.text or "").replace("\r", "")
         need_port = "--filter-udp=596-599"
         need_payload = "--payload=unknown"
-        need_fake = "--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:badsum:repeats=2"
+        need_fake = "--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000" + (":badsum" if os.environ["TGVOICE_CANDIDATE"] == "A1" else "") + ":repeats=2"
+        other_fake = "--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000" + ("" if os.environ["TGVOICE_CANDIDATE"] == "A1" else ":badsum") + ":repeats=2"
         blocks = data.split("--new")
-        valid = any(all(token in block for token in (need_port, need_payload, need_fake, "<IPSET:telegram>")) for block in blocks)
-        print("saved_gui_A1=" + ("YES" if valid else "NO"))
+        valid = (sum(all(token in block for token in (need_port, need_payload, need_fake, "<IPSET:telegram>")) for block in blocks) == 1
+                 and not any(all(token in block for token in (need_port, need_payload, other_fake, "<IPSET:telegram>")) for block in blocks))
+        print("saved_gui_" + os.environ["TGVOICE_CANDIDATE"] + "=" + ("YES" if valid else "NO"))
         print("saved_gui_A1_port=" + ("YES" if need_port in data else "NO"))
         print("saved_gui_A1_payload=" + ("YES" if need_payload in data else "NO"))
-        print("saved_gui_A1_fake=" + ("YES" if need_fake in data else "NO"))
+        a1_fake = "--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:badsum:repeats=2"
+        print("saved_gui_A1_fake=" + ("YES" if a1_fake in data else "NO"))
+        print("saved_gui_candidate_fake=" + ("YES" if need_fake in data else "NO"))
         print("saved_gui_A1_ipset=" + ("YES" if "<IPSET:telegram>" in data else "NO"))
 except (OSError, ET.ParseError, UnicodeError) as e:
     print("saved_gui_model=UNREADABLE")
@@ -172,25 +194,28 @@ fi
 # Safe to report: this file contains ONLY boolean A1 flags; never XML contents.
 cat "$RUN/a1-saved-diagnostics.txt"
 
-# Verify all A1 terms occur within ONE generated --new-delimited profile.
-awk '
-function check() { if (udp && ipset && unknown && fake) found=1 }
-$0=="--new" {check(); udp=ipset=unknown=fake=0; next}
-index($0,"--filter-udp=596-599") {udp=1}
-index($0,"ipset-telegram.txt") {ipset=1}
+# Verify exact active candidate profile, refusing competing fake variants.
+# Verify the selected candidate exists in exactly ONE complete generated profile.
+awk -v expected="$FAKE_LINE" -v competing="$OTHER_FAKE" '
+function check() { if (l3 && udp && ipset && unknown) { if (fake) hits++; if (alt) conflicts++ } }
+$0=="--new" { check(); l3=udp=ipset=unknown=fake=alt=0; next }
+$0=="--filter-l3=ipv4" {l3=1}
+$0=="--filter-udp=596-599" {udp=1}
+$0=="--ipset=/usr/local/etc/zapret2/runtime-v2/managed/ipset-telegram.txt" {ipset=1}
 $0=="--payload=unknown" {unknown=1}
-index($0,"--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:badsum:repeats=2") {fake=1}
-END {check(); exit !found}
+$0==expected {fake=1}
+$0==competing {alt=1}
+END { check(); exit !(hits==1 && conflicts==0) }
 ' "$ACTIVE/traffic.conf" || {
-    if grep -Fxq 'saved_gui_A1=NO' "$RUN/a1-saved-diagnostics.txt"; then
-        RESULT=A1_NOT_IN_SAVED_GUI
-        log 'A1_NOT_IN_SAVED_GUI: the saved GUI Strategy does not contain the full A1 block; Docker NOT started'
-    elif grep -Fxq 'saved_gui_A1=YES' "$RUN/a1-saved-diagnostics.txt"; then
-        RESULT=A1_SAVED_BUT_NOT_EFFECTIVE
-        log 'A1_SAVED_BUT_NOT_EFFECTIVE: GUI Strategy contains A1, but runtime traffic.conf does not; Docker NOT started'
+    if grep -Fxq "saved_gui_${CANDIDATE}=NO" "$RUN/a1-saved-diagnostics.txt"; then
+        RESULT="${CANDIDATE}_NOT_IN_SAVED_GUI"
+        log "$RESULT: no unique saved candidate block (or competitor remains); Docker NOT started"
+    elif grep -Fxq "saved_gui_${CANDIDATE}=YES" "$RUN/a1-saved-diagnostics.txt"; then
+        RESULT="${CANDIDATE}_SAVED_BUT_NOT_EFFECTIVE"
+        log "$RESULT: saved candidate does not match unique active profile; Docker NOT started"
     else
-        RESULT=A1_SAVED_STATUS_UNKNOWN
-        log 'A1_SAVED_STATUS_UNKNOWN: A1 absent from runtime; persisted GUI state could not be proven; Docker NOT started'
+        RESULT="${CANDIDATE}_SAVED_STATUS_UNKNOWN"
+        log "$RESULT: persisted candidate not proven; Docker NOT started"
     fi
     exit 2
 }
@@ -199,8 +224,8 @@ grep -Fqx '91.108.12.0/22' "$ACTIVE/managed/ipset-telegram.txt" || fail 'known t
 grep -F 'table(zapret2_tgvoice)' "$RUN/ipfw-before.txt" | grep -Eq 'divert [0-9]+ udp .*xmit vtnet1' || fail 'destination-scoped Voice IPFW rule missing'
 ipfw table zapret2_tgvoice list > "$RUN/voice-ipfw-table.txt" 2>&1 || fail 'cannot read Voice IPFW table'
 grep -Fq '91.108.12.0/22' "$RUN/voice-ipfw-table.txt" || fail 'fixed reflector missing from Voice IPFW table'
-grep -F '596-599' "$RUN/ipfw-before.txt" | grep -Fq ' udp ' || { RESULT=A1_ACTIVE_PROFILE_BUT_IPFW_RULE_MISSING; log 'A1_ACTIVE_PROFILE_BUT_IPFW_RULE_MISSING: actual numeric UDP port rule lacks 596-599; Docker NOT started'; exit 2; }
-log 'A1 profile, helper interception, managed IPSET and IPFW preflight passed.'
+grep -F '596-599' "$RUN/ipfw-before.txt" | grep -Fq ' udp ' || { RESULT="${CANDIDATE}_ACTIVE_PROFILE_BUT_IPFW_RULE_MISSING"; log "$RESULT: actual numeric UDP port rule lacks 596-599; Docker NOT started"; exit 2; }
+log "$CANDIDATE profile, helper interception, managed IPSET and IPFW preflight passed."
 
 log 'Invoking existing owner-tested one-shot route guard on OPNsense.'
 /bin/sh "$ROUTE_FIX" > "$RUN/route-guard.log" 2>&1 || fail 'existing TNAS route guard failed; see route-guard.log'

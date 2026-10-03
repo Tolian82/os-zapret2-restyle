@@ -7,11 +7,13 @@ against in-memory OPNsense XML fixtures.
 """
 import contextlib
 import io
+import os
 import shlex
 from pathlib import Path
 import re
 import subprocess
 import unittest
+from unittest.mock import patch
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 
@@ -35,7 +37,7 @@ def saved_diagnostic_snippet():
     return match.group(1)
 
 
-def execute_fixture(traffic, missing_model=False):
+def execute_fixture(traffic, missing_model=False, candidate="A1"):
     if missing_model:
         xml = "<opnsense><OPNsense><Zapret/></OPNsense></opnsense>"
     else:
@@ -48,7 +50,7 @@ def execute_fixture(traffic, missing_model=False):
     try:
         ET.parse = lambda path: ET.ElementTree(ET.fromstring(xml))
         buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
+        with contextlib.redirect_stdout(buf), patch.dict(os.environ, {"TGVOICE_CANDIDATE": candidate}):
             exec(compile(saved_diagnostic_snippet(), "saved-a1-diagnostic", "exec"), {})
         return buf.getvalue()
     finally:
@@ -85,6 +87,44 @@ class A1SavedStrategyDiagnosticTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_SECRET_MUST_NOT_APPEAR", output)
         self.assertIn("saved_gui_A1=YES", output)
 
+    def test_selected_a2_is_recognized_when_only_checksum_flag_changes(self):
+        a2 = A1.replace(':badsum:repeats=2', ':repeats=2')
+        output = execute_fixture(a2, candidate='A2')
+        self.assertIn('saved_gui_A2=YES', output)
+        self.assertIn('saved_gui_A1_fake=NO', output)
+
+    def test_wrong_or_competing_candidate_is_not_accepted(self):
+        a2 = A1.replace(':badsum:repeats=2', ':repeats=2')
+        self.assertIn('saved_gui_A2=NO', execute_fixture(A1, candidate='A2'))
+        self.assertIn('saved_gui_A1=NO', execute_fixture(a2, candidate='A1'))
+        self.assertIn('saved_gui_A2=NO', execute_fixture(A1 + a2, candidate='A2'))
+        self.assertIn('saved_gui_A1=NO', execute_fixture(A1 + a2, candidate='A1'))
+
+    def test_active_profile_exact_candidate_and_competitor_guard(self):
+        source = RUNNER.read_text(encoding='utf-8')
+        match = re.search(r'awk -v expected="\$FAKE_LINE" -v competing="\$OTHER_FAKE" \'\n(.*?)\n\' "\$ACTIVE/traffic.conf"', source, re.DOTALL)
+        self.assertIsNotNone(match, 'dynamic active-profile guard missing')
+        program = match.group(1)
+        a1 = '--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:badsum:repeats=2'
+        a2 = a1.replace(':badsum:repeats=2', ':repeats=2')
+        def effective(*fake_lines):
+            return ('--filter-l3=ipv4\n--filter-udp=596-599\n'
+                    '--ipset=/usr/local/etc/zapret2/runtime-v2/managed/ipset-telegram.txt\n'
+                    '--payload=unknown\n' + '\n'.join(fake_lines) + '\n--new\n')
+        # Join the tuple's parts explicitly, not individual character iterations.
+        def profile(*fake_lines):
+            return ''.join(effective(*fake_lines))
+        for selected, other in ((a1, a2), (a2, a1)):
+            for config, succeeds in ((profile(selected), True),
+                                     (profile(other), False),
+                                     (profile(selected) + profile(other), False),
+                                     (profile(selected, other), False),
+                                     ('--new\n', False)):
+                p = subprocess.run(['awk', '-v', 'expected=' + selected,
+                                    '-v', 'competing=' + other, program],
+                                   input=config, capture_output=True, text=True)
+                self.assertEqual(p.returncode == 0, succeeds, (selected, config, p.stderr))
+
     def test_remote_linux_explicit_from_route_preflight(self):
         """Treat valid Linux 'from' route text as valid; independently guard NIC IP."""
         source = RUNNER.read_text(encoding="utf-8")
@@ -117,10 +157,10 @@ class A1SavedStrategyDiagnosticTests(unittest.TestCase):
 
     def test_effective_absence_rejects_docker_without_mutation(self):
         source = RUNNER.read_text(encoding="utf-8")
-        for verdict in ("A1_NOT_IN_SAVED_GUI", "A1_SAVED_BUT_NOT_EFFECTIVE",
-                        "A1_SAVED_STATUS_UNKNOWN", "A1_ACTIVE_PROFILE_BUT_IPFW_RULE_MISSING"):
+        for verdict in ("_NOT_IN_SAVED_GUI", "_SAVED_BUT_NOT_EFFECTIVE",
+                        "_SAVED_STATUS_UNKNOWN", "_ACTIVE_PROFILE_BUT_IPFW_RULE_MISSING"):
             self.assertIn(verdict, source)
-        self.assertLess(source.index("A1_NOT_IN_SAVED_GUI"), source.index("Running ONE fresh"))
+        self.assertLess(source.index("_NOT_IN_SAVED_GUI"), source.index("Running ONE fresh"))
 
 
 if __name__ == "__main__":
