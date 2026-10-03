@@ -192,25 +192,28 @@ fi
 # Safe to report: this file contains ONLY boolean A1 flags; never XML contents.
 cat "$RUN/a1-saved-diagnostics.txt"
 
-# Verify all A1 terms occur within ONE generated --new-delimited profile.
-awk '
-function check() { if (udp && ipset && unknown && fake) found=1 }
-$0=="--new" {check(); udp=ipset=unknown=fake=0; next}
-index($0,"--filter-udp=596-599") {udp=1}
-index($0,"ipset-telegram.txt") {ipset=1}
+# Verify exact active candidate profile, refusing competing fake variants.
+# Verify the selected candidate exists in exactly ONE complete generated profile.
+awk -v expected="$FAKE_LINE" -v competing="$OTHER_FAKE" '
+function check() { if (l3 && udp && ipset && unknown) { if (fake) hits++; if (alt) conflicts++ } }
+$0=="--new" { check(); l3=udp=ipset=unknown=fake=alt=0; next }
+$0=="--filter-l3=ipv4" {l3=1}
+$0=="--filter-udp=596-599" {udp=1}
+$0=="--ipset=/usr/local/etc/zapret2/runtime-v2/managed/ipset-telegram.txt" {ipset=1}
 $0=="--payload=unknown" {unknown=1}
-index($0,"--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:badsum:repeats=2") {fake=1}
-END {check(); exit !found}
+$0==expected {fake=1}
+$0==competing {alt=1}
+END { check(); exit !(hits==1 && conflicts==0) }
 ' "$ACTIVE/traffic.conf" || {
-    if grep -Fxq 'saved_gui_A1=NO' "$RUN/a1-saved-diagnostics.txt"; then
-        RESULT=A1_NOT_IN_SAVED_GUI
-        log 'A1_NOT_IN_SAVED_GUI: the saved GUI Strategy does not contain the full A1 block; Docker NOT started'
-    elif grep -Fxq 'saved_gui_A1=YES' "$RUN/a1-saved-diagnostics.txt"; then
-        RESULT=A1_SAVED_BUT_NOT_EFFECTIVE
-        log 'A1_SAVED_BUT_NOT_EFFECTIVE: GUI Strategy contains A1, but runtime traffic.conf does not; Docker NOT started'
+    if grep -Fxq "saved_gui_${CANDIDATE}=NO" "$RUN/a1-saved-diagnostics.txt"; then
+        RESULT="${CANDIDATE}_NOT_IN_SAVED_GUI"
+        log "$RESULT: no unique saved candidate block (or competitor remains); Docker NOT started"
+    elif grep -Fxq "saved_gui_${CANDIDATE}=YES" "$RUN/a1-saved-diagnostics.txt"; then
+        RESULT="${CANDIDATE}_SAVED_BUT_NOT_EFFECTIVE"
+        log "$RESULT: saved candidate does not match unique active profile; Docker NOT started"
     else
-        RESULT=A1_SAVED_STATUS_UNKNOWN
-        log 'A1_SAVED_STATUS_UNKNOWN: A1 absent from runtime; persisted GUI state could not be proven; Docker NOT started'
+        RESULT="${CANDIDATE}_SAVED_STATUS_UNKNOWN"
+        log "$RESULT: persisted candidate not proven; Docker NOT started"
     fi
     exit 2
 }
@@ -219,8 +222,8 @@ grep -Fqx '91.108.12.0/22' "$ACTIVE/managed/ipset-telegram.txt" || fail 'known t
 grep -F 'table(zapret2_tgvoice)' "$RUN/ipfw-before.txt" | grep -Eq 'divert [0-9]+ udp .*xmit vtnet1' || fail 'destination-scoped Voice IPFW rule missing'
 ipfw table zapret2_tgvoice list > "$RUN/voice-ipfw-table.txt" 2>&1 || fail 'cannot read Voice IPFW table'
 grep -Fq '91.108.12.0/22' "$RUN/voice-ipfw-table.txt" || fail 'fixed reflector missing from Voice IPFW table'
-grep -F '596-599' "$RUN/ipfw-before.txt" | grep -Fq ' udp ' || { RESULT=A1_ACTIVE_PROFILE_BUT_IPFW_RULE_MISSING; log 'A1_ACTIVE_PROFILE_BUT_IPFW_RULE_MISSING: actual numeric UDP port rule lacks 596-599; Docker NOT started'; exit 2; }
-log 'A1 profile, helper interception, managed IPSET and IPFW preflight passed.'
+grep -F '596-599' "$RUN/ipfw-before.txt" | grep -Fq ' udp ' || { RESULT="${CANDIDATE}_ACTIVE_PROFILE_BUT_IPFW_RULE_MISSING"; log "$RESULT: actual numeric UDP port rule lacks 596-599; Docker NOT started"; exit 2; }
+log "$CANDIDATE profile, helper interception, managed IPSET and IPFW preflight passed."
 
 log 'Invoking existing owner-tested one-shot route guard on OPNsense.'
 /bin/sh "$ROUTE_FIX" > "$RUN/route-guard.log" 2>&1 || fail 'existing TNAS route guard failed; see route-guard.log'
