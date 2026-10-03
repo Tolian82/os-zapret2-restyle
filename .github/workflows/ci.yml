@@ -160,6 +160,11 @@ jobs:
           sh -n src/etc/rc.syshook.d/stop/20-zapret
           sh -n tools/telegram-voice-lab/run-a1-opnsense.sh
 
+      - name: Validate read-only independent-control inventory script
+        run: |
+          sh -n tools/telegram-voice-lab/run-control-inventory-opnsense.sh
+          python3.13 tools/telegram-voice-lab/tests/test_control_path_inventory.py
+
       - name: Test independent Docker A1 saved-GUI diagnostics (no appliance access)
         run: python3.13 tools/telegram-voice-lab/tests/test_a1_saved_strategy_preflight.py
 
