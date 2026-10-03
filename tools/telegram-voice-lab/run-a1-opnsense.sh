@@ -115,7 +115,7 @@ trap 'finish "$?"' 0
 trap 'RESULT=INTERRUPTED; exit 130' 1 2 3 15
 
 log "A1 single-run preflight and acquisition; results directory: $RUN"
-printf 'runner=a1-one-command-v2-saved-gui-diagnostics\nendpoint=%s:596\nmode=reflector\nduration=15\n' "$TARGET" > "$RUN/manifest.txt"
+printf 'runner=a1-one-command-v3-linux-from-route-compatible\nendpoint=%s:596\nmode=reflector\nduration=15\n' "$TARGET" > "$RUN/manifest.txt"
 date -u +%Y-%m-%dT%H:%M:%SZ > "$RUN/start-utc.txt"
 uname -a > "$RUN/opnsense-uname.txt"
 for bin in "$SSH" "$KEY" "$ROUTE_FIX" "$ACTIVE/traffic.conf" "$ACTIVE/managed/ipset-telegram.txt"; do
@@ -210,11 +210,21 @@ set -eu
 DOCKER=/Volume1/@apps/DockerEngine/dockerd/bin/docker
 SRC=192.168.1.100
 GW=192.168.1.2
+DEV=ovs_eth1
 EXPECTED=7ad8a2eef607e92056e8e8311519d36616c45ca19f1403601bbed8e8db01f3dc
+# A route lookup with an explicit "from" may echo "from", not "src".
+# Verify the expected source is assigned to the expected NIC independently.
+if ! ip -4 -o addr show dev "$DEV" | awk '{print $4}' | grep -Eq "^$SRC/[0-9]+$"; then
+    echo 'TNAS_SOURCE_ADDRESS_INVALID'
+    exit 10
+fi
 for target in 91.108.13.10 149.154.167.99; do
     line=$(ip -4 route get "$target" from "$SRC")
     printf 'ROUTE %s: %s\n' "$target" "$line"
-    case " $line " in *" via $GW dev ovs_eth1 "*" src $SRC "*) : ;; *) echo 'ROUTE_INVALID'; exit 11;; esac
+    case " $line " in
+        *" via $GW dev $DEV "*) : ;;
+        *) echo 'ROUTE_INVALID'; exit 11 ;;
+    esac
 done
 [ -x "$DOCKER" ] || { echo 'DOCKER_NOT_INSTALLED'; exit 12; }
 mode=$("$DOCKER" inspect -f '{{.HostConfig.NetworkMode}}' tgvoice-lab)

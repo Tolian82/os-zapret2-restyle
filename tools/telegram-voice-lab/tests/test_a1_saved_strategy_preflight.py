@@ -7,6 +7,7 @@ against in-memory OPNsense XML fixtures.
 """
 import contextlib
 import io
+import shlex
 from pathlib import Path
 import re
 import subprocess
@@ -83,6 +84,36 @@ class A1SavedStrategyDiagnosticTests(unittest.TestCase):
         output = execute_fixture(A1 + "PRIVATE_SECRET_MUST_NOT_APPEAR")
         self.assertNotIn("PRIVATE_SECRET_MUST_NOT_APPEAR", output)
         self.assertIn("saved_gui_A1=YES", output)
+
+    def test_remote_linux_explicit_from_route_preflight(self):
+        """Treat valid Linux 'from' route text as valid; independently guard NIC IP."""
+        source = RUNNER.read_text(encoding="utf-8")
+        remote = source.split("<<'REMOTE_PRE'\n", 1)[1].split("\nREMOTE_PRE", 1)[0]
+        route_check = remote.split('[ -x "$DOCKER" ]', 1)[0]
+        good = "91.108.13.10 from 192.168.1.100 via 192.168.1.2 dev ovs_eth1 uid 0"
+        second = "149.154.167.99 from 192.168.1.100 via 192.168.1.2 dev ovs_eth1 uid 0"
+        for text, addr_ok, should_pass in (
+            (good, True, True),
+            ("91.108.13.10 via 192.168.1.2 dev ovs_eth1 src 192.168.1.100", True, True),
+            ("91.108.13.10 from 192.168.1.100 via 192.168.1.140 dev ovs_eth1 uid 0", True, False),
+            (good, False, False),
+        ):
+            shell = (
+                'ip() {\n'
+                '  if [ "$2" = -o ]; then\n'
+                '    echo ' + shlex.quote(
+                    "2: ovs_eth1 inet " + ("192.168.1.100" if addr_ok else "192.168.1.99") + "/24 brd 192.168.1.255 scope global ovs_eth1"
+                ) + ';\n'
+                '  elif [ "$3" = get ]; then\n'
+                '    if [ "$4" = 91.108.13.10 ]; then echo ' + shlex.quote(text) + ';\n'
+                '    else echo ' + shlex.quote(second) + '; fi\n'
+                '  else return 1; fi\n'
+                '}\n'
+            )
+            p = subprocess.run(["/bin/sh", "-c", shell + route_check],
+                               capture_output=True, text=True)
+            self.assertEqual(p.returncode == 0, should_pass,
+                             (text, addr_ok, p.stdout, p.stderr))
 
     def test_effective_absence_rejects_docker_without_mutation(self):
         source = RUNNER.read_text(encoding="utf-8")
