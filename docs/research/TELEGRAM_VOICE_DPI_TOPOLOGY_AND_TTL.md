@@ -6,7 +6,7 @@
 
 **Исходное состояние проекта:** `ab4bff1679aeacaa2af1058852e0ae6934a3ab7a`, пакет `0.5.0_3`.
 
-**Текущий следующий шаг:** [START_HERE](../START_HERE.md); подробный порядок выполнения принадлежит [плану Docker-экспериментов](../architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#next-experiment--limited-fake-ttl-planned-not-run).
+**Текущий следующий шаг:** [START_HERE](../START_HERE.md); подробный порядок выполнения принадлежит [плану Docker-экспериментов](../architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#next-experiment-limited-fake-ttl-planned-not-run).
 
 ## Цель и границы обсуждения
 
@@ -100,6 +100,6 @@ CLI передаёт signaling внутри процесса. Поэтому н�
 
 Для сокращения числа опытов сохраняются один endpoint, бинарник/engine, payload, число повторов, helper, NAT/PFIL и маршрут. После сведений о пути выбирается ограниченный список TTL и заранее записывается предел серии. Нет оснований считать успех монотонным по TTL и применять двоичный поиск. После первого принятого библиотекой ответа дальнейший перебор уступает проверке обоих участников и воспроизводимости. Неуспех одного TTL или ограниченного набора относится только к этим значениям, endpoint и времени; он не опровергает все способы обхода.
 
-Сейчас [v4 runner](../../tools/telegram-voice-lab/run-a1-opnsense.sh) сохраняет stdout/stderr CLI, но не передаёт `--log-file`; WAN-фильтр `host 91.108.13.10 and ip` может не захватить ICMP Time Exceeded от промежуточного маршрутизатора. В ближайшем изменении runner следует включить полный RTC-лог и ограниченный сбор ICMP ошибок с корреляцией процитированного внутреннего пакета. Даже полученный ICMP не доказывает положение DPI. Полный порядок, остановки и восстановление — в [плане ближайшего эксперимента](../architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#next-experiment--limited-fake-ttl-planned-not-run).
+Сейчас [v4 runner](../../tools/telegram-voice-lab/run-a1-opnsense.sh) сохраняет stdout/stderr CLI, но не передаёт `--log-file`; WAN-фильтр `host 91.108.13.10 and ip` может не захватить ICMP Time Exceeded от промежуточного маршрутизатора. В ближайшем изменении runner следует включить полный RTC-лог и ограниченный сбор ICMP ошибок с корреляцией процитированного внутреннего пакета. Даже полученный ICMP не доказывает положение DPI. Полный порядок, остановки и восстановление — в [плане ближайшего эксперимента](../architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#next-experiment-limited-fake-ttl-planned-not-run).
 
 Эта запись меняет только документацию. Новый runner, числовые TTL, изменения GUI и сетевые испытания по данной гипотезе ещё не выполнены; рабочий TCP, package identity и текущая конфигурация устройств этой записью не изменяются.

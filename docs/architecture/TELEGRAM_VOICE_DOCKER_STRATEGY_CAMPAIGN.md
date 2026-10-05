@@ -12,7 +12,7 @@ Before changing any strategy, commit goals, current evidence, precise candidate,
 
 Three approved product stages remain **unchanged**: repeated `MEDIA_PASS` on current Docker oracle -> real remote `CALL_PASS` with sustained two-way UDP and good sound -> only then approved Voice-UDP-only integration into the existing plugin Settings GUI, with IPSET/firewall lifecycle and persistent ON. Do not package temporary Docker runners, add a plugin page or implement recurring Cron as part of candidate research.
 
-## Next experiment — limited fake TTL (planned, not run)
+## Next experiment: limited fake TTL (planned, not run)
 
 The exact current handoff is [START_HERE](../START_HERE.md). The [October 5 analysis](../research/TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md) explains why the common TNAS/OPNsense virtual switch does not bypass the external reflector path, what TTL can and cannot do, and why A2's TTL=63 leaves a distinct hypothesis untested.
 
@@ -100,7 +100,7 @@ The source-controlled independent [same one-shot OPNsense runner](../../tools/te
 
 The owner applied exact unique A2 and ran the merged explicit-selector v4 script. Fresh LAN/WAN captures independently proved 60 unmodified genuine WAN Reflector Hellos and **120 correct-UDP-checksum** zero16 A2 fakes in precise 60/60 two-before-one triplets, with **zero incoming pinned-reflector packets**. Both engine-13 peers remained Reconnecting/zero BWE, CLI exit 1. All GUI/runtime/Voice/route/Docker checks passed. [Full measured record](../verification/evidence/2026-10-03-docker-a2-valid-checksum-fakes-no-reflector-reply.md). A1 had intentionally **bad** fake checksums; A2 had **valid** fake checksums, but neither achieved a reply. This is insufficient to attribute the drop or conclude the remote endpoint is presently reachable.
 
-**Current follow-up:** the [limited-fake-TTL plan](#next-experiment--limited-fake-ttl-planned-not-run) refines the October 3 source-guided-hypothesis boundary. Preserve A2 until the explicitly selected candidate/runner/rollback are ready; no new value or live trial is recorded yet. Same-endpoint independent control remains optional, working TCP stays intact and retired `192.168.1.140` stays retired.
+**Current follow-up:** the [limited-fake-TTL plan](#next-experiment-limited-fake-ttl-planned-not-run) refines the October 3 source-guided-hypothesis boundary. Preserve A2 until the explicitly selected candidate/runner/rollback are ready; no new value or live trial is recorded yet. Same-endpoint independent control remains optional, working TCP stays intact and retired `192.168.1.140` stays retired.
 
 ## Existing A1/A2 runner contract — baseline for the planned extension
 
