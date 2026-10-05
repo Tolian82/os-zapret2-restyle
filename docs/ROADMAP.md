@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
 **Status:** CURRENT · COMPLETE CONCISE PLAN
-**Updated:** 2026-10-01
+**Updated:** 2026-10-05
 
 - Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - Exact handoff: [`START_HERE.md`](START_HERE.md)
@@ -138,7 +138,9 @@ This parallel lab requirement is tracked in the [exact owner-live operations/reb
 - [x] Design one guarded, read-only same-endpoint **control-path inventory** from existing OPNsense→TNAS SSH with one private archive, no experimental host-route edits, Docker execution, GUI/PFIL changes or assumption that external TCP parent carries UDP. [Control architecture and runner](architecture/TELEGRAM_VOICE_INDEPENDENT_CONTROL.md).
 - [ ] **Optional causal diagnostic only:** existing read-only inventory helper is available if a specific later hypothesis requires route/tool information; it is NOT the next mandatory run or a reason to build a new UDP exit.
 
-- [ ] **Actual next task:** review current non-STUN reflector/tgcalls source and measured A1/A2 and closed fake/fragment families; propose one nonduplicate Zapret2 UDP hypothesis through the existing OPNsense/same ISP. Independent same-endpoint controls are optional for causality, not an alternative-egress gate; old `.140` retired.
+- [x] Record October 5 topology/source review: shared LAN does not make reflector-mode media local; local P2P smoke and external UDP oracle have different scope; A2 TTL=63 did not test limited fake TTL; CLI exit 0 alone is weaker than the project's media gate. [Analysis and sources](research/TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md).
+- [ ] **Immediate implementation:** extend the existing one-command Docker runner with full RTC logs and bounded correlated ICMP error capture; preserve existing SSH/routes, TCP settings, exact state restoration and one private archive. No TTL test or new runner has yet run.
+- [ ] **Next experimental hypothesis, not an accepted strategy:** prepare a limited-fake-TTL comparison against A2, changing only fake `ip_ttl`. Commit an explicit bounded value list and candidate/stop/restore contract after path/source checks; seek the first library-accepted reflector response, then both-peer media. [Detailed campaign plan](architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#next-experiment-limited-fake-ttl-planned-not-run). Independent controls remain optional; old `.140` stays retired.
 - [ ] For any Docker media-positive candidate, repeat independent fixed-target fresh runs before a single bounded human real-client `CALL_PASS`; record every run's private PCAP hashes and bounded outcome in GitHub.
 
 - [ ] Correlate existing September 22 positive CLI evidence if recoverable; otherwise choose one bounded source-guided experiment that resolves a specific remaining hypothesis for the *current* non-STUN reflector transport. Do not restart completed fragmentation-position sweeps by inertia.
@@ -186,6 +188,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Stage 1 first: reproduce and repeat Telegram Voice UDP `MEDIA_PASS` through OPNsense with the current qualified reflector oracle.** Then achieve real remote Windows/Android `CALL_PASS`, and only after those gates integrate the proven UDP feature and persistent GUI control into the plugin (stage 3). Retain the working laboratory TCP/proxy configuration without adding it to product scope. Do not restart the completed fragmentation sweep or assume the retired alternate route works.
+**Stage 1 first: reproduce and repeat Telegram Voice UDP `MEDIA_PASS` through OPNsense with the current qualified reflector oracle.** The immediate work is RTC/ICMP observability followed by the bounded, untested limited-fake-TTL hypothesis in [the campaign](architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#next-experiment-limited-fake-ttl-planned-not-run). Then achieve real remote Windows/Android `CALL_PASS`, and only after those gates integrate the proven UDP feature and persistent GUI control into the plugin (stage 3). The user's practical priority is connection establishment through `.1.2` before sound-quality research. Retain the working laboratory TCP/proxy configuration without adding it to product scope. Do not restart the completed fragmentation sweep or assume the retired alternate route works.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).

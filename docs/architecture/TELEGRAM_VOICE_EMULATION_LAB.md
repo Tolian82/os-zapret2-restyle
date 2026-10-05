@@ -1,7 +1,7 @@
 # Telegram Voice traffic emulation and strategy oracle
 
 **Status:** CURRENT UDP MEDIA ORACLE · APPROVED FUTURE UDP PRODUCT · LAB TCP VERIFIED / MEDIA OPEN; 2026-10-02 owner-real-call AUDIO GOOD, UDP MEDIA UNPROVEN
-**Updated:** 2026-10-01
+**Updated:** 2026-10-05
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
 **Phase A evidence:** [`2026-08-28-telegram-voice-phase-a-live-observation.md`](../verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md)
@@ -13,6 +13,8 @@
 **Historical fixed-reflector control/host-topology evidence:** [`2026-09-05-telegram-voice-fixed-reflector-control-pass.md`](../verification/evidence/2026-09-05-telegram-voice-fixed-reflector-control-pass.md)
 
 ## Current approved UDP task and retired route
+
+**October 5 clarification:** TNAS and OPNsense share the owner's `192.168.1.0/24` virtual switch. In reflector mode the container hosts two clients with local signaling, not a local post-Zapret server: both UDP paths address external `91.108.13.10:596` through OPNsense WAN, upstream `.80.1` and the provider. The local P2P smoke qualifies the executable only. Keep this topology for external-path research. [Detailed topology, TTL mechanisms and source review](../research/TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md). [Current campaign](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#next-experiment-limited-fake-ttl-planned-not-run) now plans RTC/ICMP collection and a bounded limited-fake-TTL hypothesis; implementation and live results remain pending.
 
 The owner's superseding October 1 decision limits the current product direction to **Telegram Voice UDP alone**, in three gated stages: reproduce and repeat the current-oracle `MEDIA_PASS` through OPNsense; confirm real remote Windows/Android P2P-disabled `CALL_PASS` with sustained bidirectional UDP and audible sound; and only then integrate the proven UDP interception/managed Telegram IPSET/strategy and restart-safe lifecycle into the plugin. The plugin's existing Settings GUI must store enable/disable in persistent OPNsense configuration. Multiple modes or a separate page require laboratory evidence; no production testbed addresses or fixed rule/interface identities. See [product requirements](../REQUIREMENTS.md) and [roadmap](../ROADMAP.md).
 
@@ -26,7 +28,7 @@ The laboratory was rebuilt because the owner reports a change in Telegram voice 
 
 The [September 21 ordered run](../verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) remains `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, with no established call in that run. For the [September 22 reverse run](../verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), the owner reports an established call with correct routing at call time. Its captures contain no records under `host 91.108.13.10`, and the UDP/596 fragmentation rule has zero hits. The owner later identified the same fixed-reflector CLI command; its positive output remains unavailable. These narrow captures neither refute the call nor prove fragmentation caused it. The separate [post-reboot repeat](../verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md) now correlates that command with 60 valid reverse pairs and zero replies: both peers `Reconnecting`, zero BWE, exit 1, exact restoration. This repeat qualifies reverse position-8 emission but has no media pass. The [September 23 reverse position-32 run](../verification/evidence/2026-09-23-telegram-voice-reverse32.md), [guarded reverse position-16 run](../verification/evidence/2026-09-23-telegram-voice-reverse16.md), and [guarded reverse position-24 run](../verification/evidence/2026-09-23-telegram-voice-reverse24.md) all emitted the intended valid local-WAN reverse fragment pairs with no replies/media and exact restoration. Position 24 closes standalone position widening for this reflector epoch. The [subsequent September 23–October 1 evidence](../verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md) records the already-tested fakefrag8+reverse24 v2, separate fakefrag8+original PF loss, tee real-before-fake ordering and another failed reverse8 repeat. LAN/SOCKS TCP through Squid/parent then passed, but the active-helper October 1 reflector control still failed. The earlier positive owner report remains separate.
 
-**October 2 superseding execution priority:** the owner requires that all current *strategy-screening* trials run first on the existing, already qualified **TNAS Docker `tgvoice-lab`** and that no human Telegram call be requested for each guess. The user reports ordinary GUI `HELLO-FAKE-A1` **Applied** for `unknown` UDP/596–599; there is not yet any local wire or media result. [Dedicated Docker-first strategy campaign, exact A1 snippet and first bounded 15-second experiment](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md) overrides dated suggestions to capture another real Windows/Android call *before* proceeding with the Docker oracle. A real alternate-gateway capture remains optional for separate causal localization and **real `CALL_PASS` remains obligatory only after repeated Docker `MEDIA_PASS`**. Do not reorder closed reverse/fragment families or alter the working Telegram TCP proxy.
+**October 2 superseding execution priority:** the owner requires that all current *strategy-screening* trials run first on the existing, already qualified **TNAS Docker `tgvoice-lab`** and that no human Telegram call be requested for each guess. A1 and A2 subsequently completed local wire qualification on October 3 with zero reflector replies/media. The [Docker-first campaign with archived A1/A2 and the planned TTL comparison](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md) overrides dated suggestions to capture another real Windows/Android call *before* proceeding with the Docker oracle. A real alternate-gateway capture remains optional for separate causal localization and **real `CALL_PASS` remains obligatory only after repeated Docker `MEDIA_PASS`**. Do not reorder closed reverse/fragment families or alter the working Telegram TCP proxy.
 
 ## 2026-09-20 current-tgcalls oracle update
 
@@ -184,9 +186,9 @@ Why it is the current authority:
 - it generates paired random peer tags and a shared encryption key;
 - it generates 440 Hz audio frames with the project fake audio device;
 - reflector servers are configured with `isTurn=true` and `isTcp=false`, so a successful run cannot be masked by the owner's TCP/HTTP-proxy fallback;
-- exit status 0 requires a call to reach Established, statistics to be collected for both sides, and non-zero bandwidth estimation on both sides.
+- exit status 0 requires the shared `establishedAt` to have been set by **either** peer, statistics for both sides and non-zero BWE on both; it does not independently require both final peer states to be Established.
 
-Current limitation: the renderer discards received audio. Exit 0 proves bidirectional media transport and WebRTC state, not waveform identity or human-audible quality. The result name must therefore be `MEDIA_PASS`, not `AUDIO_PASS`.
+Current limitation: the renderer discards received audio. Project `MEDIA_PASS` additionally requires both peers Established and correlated sustained bidirectional UDP through the selected WAN path; neither the CLI's success line/exit 0 nor the archive runner's exit 0 alone closes that gate. Even a fully verified `MEDIA_PASS` does not prove waveform identity or human-audible quality and must not be called `AUDIO_PASS`. [Exact source-gate review](../research/TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md).
 
 Build-validated source:
 
@@ -248,7 +250,7 @@ For one search epoch:
 1. select one explicit reflector `IP:port`, keep source/binary/engine/custom parameters fixed and record them;
 2. record any fresh independent control, if available; otherwise preserve the `NO_REPLY_UNKNOWN` limitation without routing through retired `192.168.1.140`;
 3. record the TNAS route and require the selected path through OPNsense; change only an owned endpoint `/32` if necessary;
-4. start capture and the qualified bounded runner on OPNsense, wait for its `READY`, then start a fresh TNAS `docker exec` process;
+4. invoke the existing one-command OPNsense runner, which owns captures and starts the fresh TNAS `docker exec` process through the verified SSH path; the future TTL extension must be qualified before use;
 5. record both CLI peer states, stats/BWE, exit status, IPFW counters, complete LAN/WAN evidence and cleanup;
 6. restore only owned runtime/rule/hook/route mutations to their measured pre-test state;
 7. repeat any winner with fresh process/flow state.
@@ -263,7 +265,7 @@ docker exec tgvoice-lab /results/tgcalls_cli \
 echo "tgcalls_exit=$?"
 ```
 
-Temporary key-only SSH may invoke the same command; direct TNAS execution is already proven.
+The one-command OPNsense runner invokes this same oracle through the existing verified SSH path; the standalone TNAS command is reference information, not an extra operator step.
 
 The official list is available from `https://core.telegram.org/getReflectorList`.
 
@@ -271,9 +273,9 @@ The official list is available from `https://core.telegram.org/getReflectorList`
 
 The existing Generic UDP Strategy Lab is not modified. It generates firewall-local probes, accepts arbitrary replies and cannot model reflector media.
 
-The owner selected console-only temporary orchestration:
+The owner selected console-only temporary orchestration. The original multi-console sequence is historical; the [current one-command campaign](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md) owns execution:
 
-- the TNAS console starts `docker exec`; optional temporary key-only SSH may centralize execution on OPNsense;
+- the OPNsense runner starts `docker exec` over the existing owner-tested noninteractive SSH path; no interactive TNAS login is required;
 - any orchestration script is staged outside installed plugin paths, preferably under `/tmp`;
 - the script owns only its temporary changes: one fixed reflector/port, IPFW/dvtws2 state, captures, hook ordering and, only when needed, an endpoint `/32` route;
 - every baseline/candidate uses a fresh companion process/source-flow;
@@ -325,7 +327,7 @@ Use these names consistently:
 | `WIRE_OK` | intended transformed packets observed on WAN with valid structure/checksums and required original suppression |
 | `TURN_REPLY` | semantically valid correlated Allocate response |
 | `REFLECTOR_READY` | valid reflector response accepted by the pinned client/peer-tag check |
-| `MEDIA_PASS` | both tgcalls sides establish, both collect stats, both have non-zero BWE, exit 0 |
+| `MEDIA_PASS` | both tgcalls sides establish, both collect stats, both have non-zero BWE, exit 0, and sustained correlated bidirectional UDP traverses the selected WAN path |
 | `CALL_PASS` | final real remote-participant Telegram call passes the selected packet and user-visible checks |
 | `NO_REPLY_UNKNOWN` | no valid reply and the same endpoint has not passed a fresh independent control |
 | `NETWORK_FAIL` | endpoint passed fresh control, candidate is `WIRE_OK`, but the provider-path oracle failed |
@@ -383,7 +385,7 @@ Do not increase fake repeats blindly. Do not interpret the Phase B zero-fake res
 | both control and provider fail | harness/endpoint epoch invalid; no DPI conclusion |
 | provider baseline passes | no bypass is needed for that endpoint/epoch; use it as a positive harness control, not a strategy win |
 
-If no payload/fragment strategy passes while the same endpoints pass on an unblocked path, the practical solution moves outside a Zapret2-only payload strategy: UDP-capable tunneling/relay or continued Telegram TCP-reflector fallback through the existing proxy path.
+**Historical contingency, not the current assignment:** a different UDP exit or TCP fallback can be a separate response to a diagnosed limitation, but the owner has explicitly retained same-ISP Zapret2 research. Failure of the tested payload/fragment families does not prove every strategy impossible and does not authorize redirecting this campaign to tunneling/another provider. Follow the current [handoff](../START_HERE.md).
 
 ## October 2 early real-call observation — before formal acceptance gates
 
@@ -391,7 +393,7 @@ The owner already tested a real Telegram Desktop Windows → remote Android call
 
 ## October 2 follow-up — seven failures with OPNsense-only IPv4 default
 
-After the initial good-audio but unknown-transport call, the owner routed Windows' only IPv4 default through OPNsense `192.168.1.2` and made seven additional real-call attempts. All seven failed to establish voice although Telegram connectivity remained. [Fourteen PCAPs were correlated](../verification/evidence/2026-10-02-seven-real-calls-opnsense-versus-other-gateway.md): 345 unchanged non-STUN reflector Hellos and 45 STUN requests were observed on both LAN and NATed WAN; 90 extra zero16 WAN fakes were present, with **zero incoming Telegram UDP** in the seven capture windows. Simultaneous TCP showed different direct/HTTP-proxy/SOCKS-pattern observations and the external Squid parent was active, but packet captures alone cannot assign each TCP flow to the Telegram client. The owner restored preferred Windows default `192.168.3.140` and reported that calls then connected; **there is no PCAP of the successful-route call** or definite audio-transport attribution. Next necessary narrow control: capture one successful-route real call with in-app proxy and P2P settings documented, TCP+UDP simultaneously, and explicit speech direction before attributing the failure to the alternate WAN path or changing strategies. This observational step does not by itself close independent stage-1 TNAS `MEDIA_PASS` or formal real-call UDP `CALL_PASS`.
+After the initial good-audio but unknown-transport call, the owner routed Windows' only IPv4 default through OPNsense `192.168.1.2` and made seven additional real-call attempts. All seven failed to establish voice although Telegram connectivity remained. [Fourteen PCAPs were correlated](../verification/evidence/2026-10-02-seven-real-calls-opnsense-versus-other-gateway.md): 345 unchanged non-STUN reflector Hellos and 45 STUN requests were observed on both LAN and NATed WAN; 90 extra zero16 WAN fakes were present, with **zero incoming Telegram UDP** in the seven capture windows. Simultaneous TCP showed different direct/HTTP-proxy/SOCKS-pattern observations and the external Squid parent was active, but packet captures alone cannot assign each TCP flow to the Telegram client. The owner restored preferred Windows default `192.168.3.140` and reported that calls then connected; **there is no PCAP of the successful-route call** or definite audio-transport attribution. The then-proposed successful-route capture is now optional causal diagnosis only, not a prerequisite for the current same-ISP Docker strategy campaign. This observational step does not by itself close independent stage-1 TNAS `MEDIA_PASS` or formal real-call UDP `CALL_PASS`.
 
 ## Real-call final gate
 
