@@ -1,6 +1,6 @@
 # Telegram Voice UDP strategy campaign — Docker-first Reflector Hello experiments
 
-**Updated 2026-10-03:** A1 and A2 have both completed qualified WAN wire experiments, with zero replies and no MEDIA_PASS. Older A1/A2 preflight and setup instructions below are historical, not outstanding actions.
+**Updated 2026-10-05:** A1/A2 remain completed wire experiments with zero replies and no MEDIA_PASS. The next planned work is RTC/ICMP observability, then the limited-fake-TTL hypothesis below; no new runner, TTL value or live result is delivered by this documentation update. Older A1/A2 setup and preflight instructions are historical, not outstanding actions. [Topology and source analysis](../research/TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md).
 
 ## Binding mission and owner constraints
 
@@ -12,7 +12,46 @@ Before changing any strategy, commit goals, current evidence, precise candidate,
 
 Three approved product stages remain **unchanged**: repeated `MEDIA_PASS` on current Docker oracle -> real remote `CALL_PASS` with sustained two-way UDP and good sound -> only then approved Voice-UDP-only integration into the existing plugin Settings GUI, with IPSET/firewall lifecycle and persistent ON. Do not package temporary Docker runners, add a plugin page or implement recurring Cron as part of candidate research.
 
-## What we have proved and why A1 is a different question
+## Next experiment — limited fake TTL (planned, not run)
+
+The exact current handoff is [START_HERE](../START_HERE.md). The [October 5 analysis](../research/TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md) explains why the common TNAS/OPNsense virtual switch does not bypass the external reflector path, what TTL can and cannot do, and why A2's TTL=63 leaves a distinct hypothesis untested.
+
+**Question:** with A2's valid UDP checksum, zero16 payload and repeats=2 held fixed, can limiting only the fake packet's TTL produce a first accepted reflector response and then media through the same ISP? This does not presume that A2 reached or harmed the server, that a suitable TTL window exists, or that the ISP's mechanism is already identified.
+
+### 1. Improve the existing runner before another candidate
+
+- Extend the same GitHub-tracked one-command OPNsense runner; retain the verified manual route guard, restricted SSH, host-mode Docker, pinned binary, one 15-second fresh process, owned captures, timeout, cleanup and single private archive. This is independent laboratory tooling, not plugin integration.
+- Pass the existing CLI `--log-file` to a unique run-specific file under the existing results mount; retrieve it into that same private archive. Record missing/truncated RTC output explicitly and preserve CLI exit/state even if log retrieval fails. Do not publish raw RTC logs, session tags or PCAPs.
+- Retain endpoint-scoped full-IP captures, including non-initial fragments. Add narrowly bounded ICMP Time Exceeded/Destination Unreachable observation for the lab address/time window, then correlate quoted inner destination/protocol/ports/length/ID with captured test packets where the quote permits. Filtering only on the reflector's **outer** IP misses intermediate-router ICMP. Neither a missing ICMP nor its responding hop identifies DPI location.
+- Record the installed dvtws2/Lua identity and selected fake TTL, effective unique profile, Voice/IPFW/PFIL, actual routes, actual WAN original/fake TTL and post-NAT checksums. Keep the existing good TCP parent path intact.
+- Validate the changed runner on fixtures/mocks covering log collection, capture selection, explicit candidate identity, failure/cleanup and state restoration, then use the normal GitHub PR/CI/merge workflow before owner deployment. CI proves tooling, not network success.
+
+### 2. Freeze the experiment and choose a bounded TTL list
+
+Keep fixed: `91.108.13.10:596`; current binary SHA-256 and engine 13; TNAS `/32 via 192.168.1.2`; the same WAN/ISP; helper ON and Telegram IPSET; profile scope/`unknown`; valid-checksum zero16; two repeats; original forwarding; NAT/PFIL and other strategies. No simultaneous engine, payload, repeats, fragment, endpoint or TCP change.
+
+Use available bounded route observations to document what is known about distance and what remains unknown. Traceroute is not a DPI locator, and incoming-TTL `ip_autottl` assumptions are especially weak when the reflector sends no observed reply. Select an explicit finite TTL list and maximum number of trials **before** execution; no numerical value is approved by this document. Check the installed native `fake:...:ip_ttl=N` semantics and verify the actual WAN value, because forwarding placement can affect it. Do not silently change the genuine packets' TTL.
+
+Give the new candidate its own explicit selector/manifest identity; do not relabel it A2. The current v4 script supports only literal A1/A2 and **cannot run this candidate unchanged**. Commit exact candidate syntax, expected packet layout and rollback to the measured saved/effective pre-test profile before asking for GUI Apply. Preserve working earlier GUI profiles and reject overlapping candidate variants. Deliver one csh-safe OPNsense invocation; no owner script edits, TNAS login or manual multi-window captures.
+
+### 3. Run one fresh trial per selected value and stop on useful evidence
+
+Each trial uses fresh peer/session tags and socket state; verify actual LAN/NAT flow tuples instead of replaying a stale Hello. One owner invocation yields one private archive. Inspect that archive before selecting the next value; this plan does not install an unattended sweep.
+
+1. A preflight, wrong profile/TTL, damaged original/checksum or cleanup failure is an instrumentation/configuration result, not a DPI rejection. Repair that boundary before another network interpretation; restoration failure overrides intermediate success.
+2. Correct fake/original output without a response is `WIRE_OK / NO_REPLY_UNKNOWN` for that exact TTL, endpoint and time. It neither locates the loss nor disproves every TTL/UDP strategy. Do not expand the predeclared series indefinitely or assume TTL outcomes are monotonic/binary-searchable.
+3. The first valid response **accepted by the pinned reflector implementation** is `REFLECTOR_READY`. Stop broad value search and examine both clients' RTC/ICE states and later UDP exchange.
+4. Require both peers Established, statistics and non-zero BWE on both, CLI exit 0 **and sustained correlated bidirectional UDP through WAN** for provisional `MEDIA_PASS`. The CLI's shared `establishedAt` may be set by either peer, so its printed success/exit alone is insufficient. Audio rendering/quality is not tested by the synthetic CLI.
+
+### 4. Reproduce a winner and proceed to the real connection gate
+
+Repeat the same candidate on independent fresh runs. Compare the selected limited-TTL action enabled/disabled/enabled on the **same path**, preserving Voice interception and other settings, recording/restoring the actual initial candidate state. This controlled confirmation is the reason to repeat a baseline after a positive outcome; it is not another blind A1/A2 or fragmentation sweep. If the no-action baseline also works, record current endpoint reachability rather than claiming the candidate caused the recovery.
+
+Only repeated Docker media success opens the bounded remote P2P-disabled Windows/Android test. First verify real connection establishment through `.1.2` and actual bidirectional Telegram UDP with TCP parent preserved, then two-way sound. A lab result does not itself establish real-client parity or audio quality. UDP-only product integration remains after both approved gates.
+
+If the bounded TTL set remains silent, publish exact per-value wire/RTC/ICMP results and limitations before selecting another single-variable hypothesis. Endpoint health or an independently healthy same-endpoint path can aid causal diagnosis if available, but no alternate exit is required and no access to the third-party `.80.1` is assumed.
+
+## Completed baseline and A1/A2 history
 
 - Qualified pinned TNAS host-network Docker companion: `tgvoice-lab`; `/results/tgcalls_cli`; upstream source `efd330ca04f74706024a5abdfb5b41f4e4dd1065`; qualified binary SHA-256 `7ad8a2eef607e92056e8e8311519d36616c45ca19f1403601bbed8e8db01f3dc`; caller/callee engines 13.0.0. The *local five-second P2P smoke gate passed*, verifying the binary, **not** remote reflector access.
 - Current **pinned reflector epoch**: `91.108.13.10:596`, **15 seconds**, fresh `--mode reflector` per trial with both test peers within the qualified harness; TNAS host `192.168.1.100` on Docker `host`, selected **specific `91.108.13.10/32` TNAS host route via OPNsense `192.168.1.2`**, OPNsense WAN `vtnet1`, upstream `192.168.80.1`. An operator-tested independent SSH port-9222 connection and **manual** guarded TNAS-route script already exist. Docker/container and route recovery remain **manual-only** after TNAS reboot, by owner decision.
@@ -21,7 +60,7 @@ Three approved product stages remain **unchanged**: repeated `MEDIA_PASS` on cur
 - **Already completed; don't blindly retest:** unmodified current reflector baseline; ordered UDP-position-8 fragments; reverse position 8/16/24/32; fakefrag8 + reverse24; fakefrag8 + original (lost originals locally); and tee where original preceded fake. Their detailed `WIRE_OK / NO_REPLY_UNKNOWN` or local failure and restoration outcomes are preserved in existing [oracle architecture](TELEGRAM_VOICE_EMULATION_LAB.md) and [October 1 measured evidence](../verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md). A1 is **not** a claim that this old, complete fragmentation sweep is untested.
 - The historical September 5 `MEDIA_PASS` used the **retired** `192.168.1.140` path and older testing epoch; do not silently reuse it as a current working control. The owner's September 22 positive-call report remains historically documented without verified attribution to the claimed fragment strategy.
 
-**Latest measured update (owner 16:17:38Z trial): A1 is NOT present in the effective runtime, regardless of earlier reported GUI Apply.** The previous standalone one-command script successfully invoked the existing two-route guard, checked Voice ON/table14 and current PFIL, then returned **`PREFLIGHT_FAIL` before Docker**. Archived `runtime-v2/traffic.conf` contained **only STUN helper plus existing normal profiles**; ordinary IPFW UDP rule19002 lacked `596–599`. Its archive does not reveal whether A1 was saved in GUI but not activated or was never persisted. **Do not treat this preflight as an A1 network rejection and do not blindly change network/PFIL or add another candidate.** [Exact private-archive source evidence](../verification/evidence/2026-10-02-docker-a1-preflight-absent-effective-profile.md). The tracked single-command script now includes safe read-only persistence-vs-effective classification and emits one archive even on rejection, with no raw `/conf/config.xml` disclosure. Only when A1 is proven active will the first actual Docker A1 test begin.
+**Historical first preflight (October 2, owner 16:17:38Z trial; since resolved): A1 was NOT present in the effective runtime, regardless of earlier reported GUI Apply.** The previous standalone one-command script successfully invoked the existing two-route guard, checked Voice ON/table14 and current PFIL, then returned **`PREFLIGHT_FAIL` before Docker**. Archived `runtime-v2/traffic.conf` contained **only STUN helper plus existing normal profiles**; ordinary IPFW UDP rule19002 lacked `596–599`. Its archive does not reveal whether A1 was saved in GUI but not activated or was never persisted. **Do not treat this preflight as an A1 network rejection and do not blindly change network/PFIL or add another candidate.** [Exact private-archive source evidence](../verification/evidence/2026-10-02-docker-a1-preflight-absent-effective-profile.md). The tracked single-command script now includes safe read-only persistence-vs-effective classification and emits one archive even on rejection, with no raw `/conf/config.xml` disclosure. Only when A1 is proven active will the first actual Docker A1 test begin.
 
 **Second owner-verified preflight supersedes uncertainty about saved state:** V2 pinned one-command runner successfully read saved GUI Strategy on **2026-10-02 19:08:19 UTC**. All of A1's port/payload/fake markers are **NO**, while the Telegram IPSET marker is YES due to pre-existing profiles. Effective A1 and numeric UDP/596–599 IPFW rule are also absent. It correctly returned `A1_NOT_IN_SAVED_GUI` **before running Docker**. The root *state boundary* is now established as saved GUI, not failed runtime normalization or an ineffective UDP desync. *Why* a prior GUI Apply did not persist A1 is not established. [Private-source second-run evidence](../verification/evidence/2026-10-02-docker-a1-second-preflight-saved-gui-absent.md). Correct only the persistent ordinary GUI Strategy field, confirm Apply success, then rerun **the existing** installed one-command script. No new profile, runner, proxy changes or human calls until A1 actually gets a Docker wire/media observation.
 
@@ -29,7 +68,7 @@ Three approved product stages remain **unchanged**: repeated `MEDIA_PASS` on cur
 
 **October 3 first actual A1 Docker run supersedes earlier preflight status:** preflight now PASS, fixed TNAS Docker reflector ran 15 seconds. Both CLI peers stayed Reconnecting, BWE zero, exit 1. Correlated **60** genuine LAN Hello -> byte-identical original NATed WAN, **120** WAN zero16 fake packets with *intentionally invalid* UDP checksums, all **60** triplets serialized **[fake, fake, original]** with valid IPv4 header checksums and valid original UDP checksums. **Zero replies from pinned target** on LAN/WAN; no tcpdump drops. Voice IPFW19000 +60/+4080 and ordinary19002 0 as expected due earlier destination-scoped interception. **A1 `WIRE_OK / NO_REPLY_UNKNOWN`; MEDIA_PASS still OPEN.** [Dated full source-grounded evidence](../verification/evidence/2026-10-03-docker-a1-wire-pass-no-reflector-reply.md). **Do not schedule the unchanged A1 again or ask for real human calls.** The *next untested one-factor hypothesis* is A2 = same 16-zero two-repeat fake but **without `:badsum`**, testing valid-UDP-checksum fakes. Current one-command runner has a literal exact-A1 guard, so first document/CI-qualify explicit candidate-aware safeguards and a single-command A2 workflow **before** requesting a GUI A1→A2 Apply. This does not establish a uniquely responsible ISP/remote drop cause.
 
-## Candidate HELLO-FAKE-A1 — current operator-reported configuration
+## Historical HELLO-FAKE-A1 design — subsequently applied and tested
 
 The owner **reports that the following block has been added and Applied in the ordinary OPNsense GUI Strategy**. **Only GUI Apply is reported**; exact generated active profile and IPFW rules have not yet been re-measured at this new epoch.
 
@@ -49,7 +88,7 @@ The owner **reports that the following block has been added and Applied in the o
 
 **Caveat:** this A1 **nonfragmented 16-byte badsum fake before an intact genuine Hello** is a different local-wire hypothesis from the earlier **40-byte fragmented fake8** plus reverse24, but it is still a **fake-packet family test**, not evidence of a new upstream vulnerability. If LAN/WAN capture shows no fakes, re-examine generated config and installed classifier; don't request a real call to determine whether the profile is selected.
 
-## A2 follow-up implementation contract — single-command, explicit candidate selection
+## Historical A2 implementation contract — completed single-command comparison
 
 The [first real A1 wire evidence](../verification/evidence/2026-10-03-docker-a1-wire-pass-no-reflector-reply.md) **closes unmodified A1 as an unsuccessful media candidate in this pinned epoch**. A2 is explicitly only a checksum-only comparison: `fake:payload=unknown:blob=zero16:repeats=2`, with **no `:badsum`**. Keep all 596–599/Telegram-IPSET profile scope, `unknown` handling, two repeats, original forwarding, current Voice/STUN helper, fixed 15-second Docker oracle, existing owner route script, SSH, NAT/IPFW/PFIL and TCP parent infrastructure **unchanged**.
 
@@ -61,9 +100,9 @@ The source-controlled independent [same one-shot OPNsense runner](../../tools/te
 
 The owner applied exact unique A2 and ran the merged explicit-selector v4 script. Fresh LAN/WAN captures independently proved 60 unmodified genuine WAN Reflector Hellos and **120 correct-UDP-checksum** zero16 A2 fakes in precise 60/60 two-before-one triplets, with **zero incoming pinned-reflector packets**. Both engine-13 peers remained Reconnecting/zero BWE, CLI exit 1. All GUI/runtime/Voice/route/Docker checks passed. [Full measured record](../verification/evidence/2026-10-03-docker-a2-valid-checksum-fakes-no-reflector-reply.md). A1 had intentionally **bad** fake checksums; A2 had **valid** fake checksums, but neither achieved a reply. This is insufficient to attribute the drop or conclude the remote endpoint is presently reachable.
 
-**CORRECT CURRENT NEXT ACTION:** preserve current A2, TNAS's selected `/32` through OPNsense/local ISP and the working Squid GUI parent/sing-box TCP. Do not repeat unchanged A1/A2 or guess A3. Analyze current official `tgcalls_cli`/Reflector Hello semantics alongside measured A1/A2 and closed fake/fragment families; choose **one falsifiable, nonduplicate Zapret2 UDP hypothesis on the same ISP path**. A narrow current-reflector-readiness check may help if needed; an independent same-endpoint healthy route is **OPTIONAL for causal attribution, not a mandatory alternative egress, new VPN/UDP proxy or blocker of further controlled Zapret2 trials**. No real calls per candidate; retired `192.168.1.140` stays retired.
+**Current follow-up:** the [limited-fake-TTL plan](#next-experiment--limited-fake-ttl-planned-not-run) refines the October 3 source-guided-hypothesis boundary. Preserve A2 until the explicitly selected candidate/runner/rollback are ready; no new value or live trial is recorded yet. Same-endpoint independent control remains optional, working TCP stays intact and retired `192.168.1.140` stays retired.
 
-## One-command OPNsense-hosted Docker A1 runner — primary procedure
+## Existing A1/A2 runner contract — baseline for the planned extension
 
 **Owner correction:** the original multi-console procedure is superseded. The laboratory already has an owner-tested, manually invoked OPNsense **`/root/tgvoice-lab/ensure-tnas-routes.sh`**, a restricted noninteractive SSH identity and trust for `tolian@192.168.1.100:9222`, and a host-network `tgvoice-lab` Docker oracle. Do **not** ask the owner to log into TNAS, manage multiple terminal windows, start tcpdump by hand or place shell heredocs into OPNsense **csh**. This section is the design contract for the separate, lab-only tracked executable [`tools/telegram-voice-lab/run-a1-opnsense.sh`](../../tools/telegram-voice-lab/run-a1-opnsense.sh). The GitHub source is canonical. One **explicit operator-invoked** `/bin/sh /root/tgvoice-lab/run-a1-opnsense.sh` must execute the entire single-candidate trial and produce **one local private `.tgz` archive**.
 
@@ -80,7 +119,7 @@ The runner, invoked **on OPNsense only**, must:
 
 All actual appliance values must be measured at each trial; historical `ipfw 19000` and historical IPFW→PF hook order are evidence, not assumptions. No persistent OPNsense boot work is part of this runner. Any eventual script syntax or integration tests qualify *code*, not a claimed live network result.
 
-### How the single file will be used
+### Historical A1 invocation — not the next TTL command
 
 After the script is published, the owner may transfer it once to `/root/tgvoice-lab/run-a1-opnsense.sh` by their preferred method (or fetch its pinned GitHub raw file). **Only one OPNsense csh-safe command launches the entire experiment:**
 
@@ -97,7 +136,7 @@ The script prints the final private archive path under `/root/tgvoice-lab/result
 | A1 absent or `unknown` profile does not match 40-byte Hello; no A1 fake on WAN | `PROFILE_NOT_SELECTED` / `WIRE_FAIL` | Fix exact classifier/profile or unintended profile precedence **in the Docker lab**, after documenting. No real call. |
 | Correct 16-byte zero fakes and original Hello visible, checksums/order verified; no valid reflector response | `WIRE_OK / NO_REPLY_UNKNOWN` | Retain WAN transformation and exact CLI negative outcome. Do **not** increase repeats or repeat identical A1 endlessly; select one **new** source-justified single-variable hypothesis, and record differences from completed fakefrag/fragment work before another test. |
 | Valid reflector response received and qualified client accepts it | `REFLECTOR_READY` | Verify both peers' ICE state, stats/BWE and exit; **a single reply alone is not MEDIA_PASS**. |
-| Both peers Established, non-zero BWE/stats on both, complete bilateral UDP and `tgcalls_exit=0` | provisional `MEDIA_PASS` | Repeat a fresh independent Docker process using the same exact A1 and fixed reflector. Only *repeated* MEDIA_PASS opens the real-user CALL_PASS gate. |
+| Both peers Established, non-zero BWE/stats on both, complete bilateral UDP and `tgcalls_exit=0` | provisional `MEDIA_PASS` | Repeat a fresh independent Docker process using the same exact selected candidate and fixed reflector. Only *repeated* MEDIA_PASS opens the real-user CALL_PASS gate. |
 | No control-proven endpoint reply across all candidates, despite WIRE_OK | `NO_REPLY_UNKNOWN` (not proven strategy/provider cause) | Record ambiguity and choose one targeted new hypothesis or obtain a recent same-endpoint working-path control for *causal attribution*, without requiring live human calls for every candidate. |
 
 **One-factor discipline:** do not mix helper OFF/ON, STUN repeats, GUI fake blob/badsum, fragment order, PFIL hook order, NAT, endpoint and binary changes in the same comparison. The current A1 epoch keeps current helper state and known TCP paths as its baseline. No real calls, no TCPSquid debugging and no recurring Cron before the Docker oracle shows a promising repeatable outcome.

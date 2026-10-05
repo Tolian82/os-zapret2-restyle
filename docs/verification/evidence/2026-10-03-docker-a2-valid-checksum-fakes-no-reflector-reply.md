@@ -2,6 +2,8 @@
 
 **Evidence:** OWNER-LIVE ONE-SHOT A2 fixed-reflector Docker epoch · `CONFIG_PASS / WIRE_OK / NO_REPLY_UNKNOWN` · **NOT** `MEDIA_PASS`.
 
+**Historical-plan clarification, 2026-10-05:** the final "Next evidence gate" paragraph below records the proposal before the owner's October 3 same-ISP correction. Its mandatory independent-path prerequisite is superseded; the measurements remain unchanged. A healthy same-endpoint control is optional causal diagnosis. Current execution follows [START_HERE](../../START_HERE.md) and the [RTC/ICMP plus limited-fake-TTL plan](../../architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#next-experiment--limited-fake-ttl-planned-not-run), which has no new live result yet.
+
 The owner supplied one **private** `a2-20261003T133150Z-5o6Gta.tgz`, verified SHA-256 `f0c7c551bc279278efa6e3914c3ed3c3d7ff5f0de4ef0c5184e788c7818b6bd3`. All archived SHA256SUMS entries passed. No raw PCAP, private runtime XML, keys or proxy credentials are committed. The merged `voice-one-command-v4-a1-a2` runner explicitly recorded `candidate=A2`, pinned fixed `91.108.13.10:596`, 15-second fresh Docker CLI epoch 13:31:53–13:32:08 UTC.
 
 ## Configuration and execution
