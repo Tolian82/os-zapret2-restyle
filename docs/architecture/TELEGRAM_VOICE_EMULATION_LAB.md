@@ -1,7 +1,7 @@
 # Telegram Voice traffic emulation and strategy oracle
 
 **Status:** CURRENT UDP MEDIA ORACLE · APPROVED FUTURE UDP PRODUCT · LAB TCP VERIFIED / MEDIA OPEN; 2026-10-02 owner-real-call AUDIO GOOD, UDP MEDIA UNPROVEN
-**Updated:** 2026-10-05
+**Updated:** 2026-10-07
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
 **Phase A evidence:** [`2026-08-28-telegram-voice-phase-a-live-observation.md`](../verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md)
@@ -324,7 +324,7 @@ Use these names consistently:
 
 | Result | Required evidence |
 |---|---|
-| `WIRE_OK` | intended transformed packets observed on WAN with valid structure/checksums and required original suppression |
+| `WIRE_OK` | WAN output matches the selected strategy: genuine datagrams/reassembly are valid; fake structure/checksums match intent, including deliberately invalid fake UDP checksum for A1; suppress the intact original only when that strategy requires it |
 | `TURN_REPLY` | semantically valid correlated Allocate response |
 | `REFLECTOR_READY` | valid reflector response accepted by the pinned client/peer-tag check |
 | `MEDIA_PASS` | both tgcalls sides establish, both collect stats, both have non-zero BWE, exit 0, and sustained correlated bidirectional UDP traverses the selected WAN path |
@@ -402,13 +402,14 @@ After one candidate has repeated `MEDIA_PASS`:
 - remote participant, not the same LAN;
 - P2P disabled on both Telegram clients;
 - existing Telegram TCP proxy unchanged;
-- clean helper OFF/ON/OFF comparison;
+- candidate-action comparison already qualified in Docker, with Voice-helper/interception kept ON; do not switch the whole helper OFF/ON/OFF as a substitute, because that also changes interception;
+- actual client-selected destination/port covered by the proven profile, with per-destination route and client-log evidence;
 - on-wire proof that the selected strategy acted on its intended UDP protocol;
 - inbound and sustained bidirectional Telegram UDP;
 - two-way sound and no material delay;
 - exact cleanup.
 
-Only this row is `CALL_PASS`. Audio without sustained UDP remains fallback evidence, exactly as Phase A demonstrated.
+Only this row is `CALL_PASS`. Audio without captured sustained bidirectional UDP is an audible observation with unproven media transport. TCP fallback or another uncaptured route may explain it, but that explanation requires its own evidence. For the current bounded execution and repeatability criteria, follow the [campaign plan](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#next-experiment-limited-fake-ttl-planned-not-run).
 
 ## Implementation sequence and current acceptance
 
