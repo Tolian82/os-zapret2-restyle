@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
 **Status:** CURRENT · COMPLETE CONCISE PLAN
-**Updated:** 2026-10-05
+**Updated:** 2026-10-07
 
 - Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - Exact handoff: [`START_HERE.md`](START_HERE.md)
@@ -139,13 +139,14 @@ This parallel lab requirement is tracked in the [exact owner-live operations/reb
 - [ ] **Optional causal diagnostic only:** existing read-only inventory helper is available if a specific later hypothesis requires route/tool information; it is NOT the next mandatory run or a reason to build a new UDP exit.
 
 - [x] Record October 5 topology/source review: shared LAN does not make reflector-mode media local; local P2P smoke and external UDP oracle have different scope; A2 TTL=63 did not test limited fake TTL; CLI exit 0 alone is weaker than the project's media gate. [Analysis and sources](research/TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md).
-- [ ] **Immediate implementation:** extend the existing one-command Docker runner with full RTC logs and bounded correlated ICMP error capture; preserve existing SSH/routes, TCP settings, exact state restoration and one private archive. No TTL test or new runner has yet run.
-- [ ] **Next experimental hypothesis, not an accepted strategy:** prepare a limited-fake-TTL comparison against A2, changing only fake `ip_ttl`. Commit an explicit bounded value list and candidate/stop/restore contract after path/source checks; seek the first library-accepted reflector response, then both-peer media. [Detailed campaign plan](architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#next-experiment-limited-fake-ttl-planned-not-run). Independent controls remain optional; old `.140` stays retired.
-- [ ] For any Docker media-positive candidate, repeat independent fixed-target fresh runs before a single bounded human real-client `CALL_PASS`; record every run's private PCAP hashes and bounded outcome in GitHub.
+- [x] Audit October 7 documentation/source consistency: retain topology and measured outcomes; correct whole-helper toggling, intentional fake checksum semantics and unproven audio-transport attribution. [Audit](research/TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md#проверка-документации-7-октября).
+- [ ] **Immediate implementation:** extend the existing one-command Docker runner with RTC logs, bounded correlated ICMP, strict saved/effective candidate checks and verified owned remote-process/container cleanup. Expected result: one complete private evidence bundle with separately verified restoration, qualified tooling through PR/CI; no live bypass claim.
+- [ ] **Next experimental hypothesis, not an accepted strategy:** prepare a limited-fake-TTL comparison against A2, changing only fake `ip_ttl`. Commit the exact candidate, at most four initial TTL values, expected wire output and stop/restore contract after path/source checks; seek the first library-accepted reflector response, then both-peer media. The campaign specifies expected results and branches for WAN-only reply, client rejection, partial connection and full silence. [Detailed campaign plan](architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#next-experiment-limited-fake-ttl-planned-not-run). Independent controls remain optional; old `.140` stays retired.
+- [ ] For a Docker media-positive candidate, apply the campaign's three-successful-fresh-run and action-only control plan, keeping Voice-helper ON; preserve failed runs and distinguish repeatability from causality. Then perform one bounded real-client connection/UDP test followed by two-way sound, with the actual client endpoint/profile verified.
 
 - [ ] Correlate existing September 22 positive CLI evidence if recoverable; otherwise choose one bounded source-guided experiment that resolves a specific remaining hypothesis for the *current* non-STUN reflector transport. Do not restart completed fragmentation-position sweeps by inertia.
 - [ ] Freeze source/runtime/profile identity, endpoint, route, hook order and capture boundaries per experiment; preserve exact pre-test state and prove complete restoration.
-- [ ] **Optional separate causal control, not the next screening task:** capture a successful Windows/Android call over the alternate `192.168.3.140` gateway with matching TCP+UDP/ICE and frozen application settings, *if* later needed to locate a path difference. Do not delay fixed-target Docker A1 or repeatedly request human calls as candidate screens.
+- [ ] **Optional separate causal control, not the next screening task:** capture a successful Windows/Android call over the alternate `192.168.3.140` gateway with matching TCP+UDP/ICE and frozen application settings, *if* later needed to locate a path difference. Do not delay the next qualified same-ISP Docker experiment or repeatedly request human calls as candidate screens.
 - [ ] Repeat successful current-oracle `MEDIA_PASS` through OPNsense: both peers `Established`, stats and non-zero BWE on both, exit 0, and correlated UDP LAN/WAN packets. Missing replies without a fresh independent working control remain `NO_REPLY_UNKNOWN`, not a proven DPI diagnosis.
 
 ### Stage 2 — real Telegram client acceptance
