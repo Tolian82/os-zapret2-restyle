@@ -1,6 +1,6 @@
 # Telegram Voice UDP strategy campaign — Docker-first Reflector Hello experiments
 
-**Updated 2026-10-07:** documentation/source audit completed; A1/A2 remain wire-only negative results. The next section now gives a bounded execution plan, expected results and decision branches. RTC/ICMP tooling, numeric TTL values and all new live trials remain pending; historical A1/A2 setup below is not outstanding work.
+**Updated 2026-10-08:** helper controls are now explicit for every trial. Owner snapshots measured helper ON → OFF after OPNsense reboot; subsequent manual enable restored native ON/table14/rule. GUI A2 survived unchanged. [Reboot/recovery evidence](../verification/evidence/2026-10-07-telegram-voice-reboot-and-manual-recovery.md). A1/A2 remain wire-only negative results; RTC/ICMP tooling, strict full-baseline validation, numeric TTL values and new media trials remain pending.
 
 ## Binding mission and owner constraints
 
@@ -12,6 +12,45 @@ Before changing any strategy, commit goals, current evidence, precise candidate,
 
 Three approved product stages remain **unchanged**: repeated `MEDIA_PASS` on current Docker oracle -> real remote `CALL_PASS` with sustained two-way UDP and good sound -> only then approved Voice-UDP-only integration into the existing plugin Settings GUI, with IPSET/firewall lifecycle and persistent ON. Do not package temporary Docker runners, add a plugin page or implement recurring Cron as part of candidate research.
 
+## telegram_voice controls for every trial
+
+`telegram_voice` is an active part of the laboratory baseline. Its two roles are **destination-scoped all-port Telegram UDP interception** and a **fixed STUN profile** in the same dvtws2. The GUI supplies the separate experimental `unknown` profile for current Reflector Hello. Full configuration ownership, source-defined constants, command meanings and boot procedure belong to the [helper reference](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md).
+
+**We did not vary helper parameters in A1/A2. We do not vary them in the planned TTL series.** Earlier plan text already required helper ON and the actual runner checked it; this matrix makes those conditions and their evidence explicit. Changing STUN repeats/TTL does not test the non-STUN Hello. A helper/protocol redesign, if later justified by evidence, is a separate epoch and must follow the change-record contract below.
+
+| Control | A1 | A2 / current restored baseline | Planned limited-fake-TTL series |
+|---|---|---|---|
+| Helper request/effective/profile | ON / ON / ON | ON / ON / ON | Fixed ON / ON / ON |
+| Helper STUN action | zero16, repeats=2; no explicit short TTL | Identical | Identical; do not put the experimental TTL here |
+| Telegram target set and all-port IPFW rule | Fixed managed set and destination-table capture | Same; current set has 14 prefixes | Freeze exact set, target membership and rule semantics, not just a count/number |
+| Experimental GUI profile | IPv4, Telegram IPSET, UDP 596–599, `unknown` | Same | Same scope, until a separately documented comparison changes it |
+| Candidate fake checksum | `badsum` | No `badsum`; WAN-valid in measured A2 | Keep A2 intent and verify on WAN |
+| Candidate fake blob/repeats | zero16 / 2 | zero16 / 2 | Fixed zero16 / 2 |
+| Candidate fake `ip_ttl` | No explicit override | No explicit override; measured WAN TTL=63 on October 3 | Only selected experimental variable; exact values/selector not yet qualified |
+| Original forwarding, NAT/PFIL, binary, endpoint, routes, TCP parent | Frozen per epoch | Frozen per epoch | Preserve and measure; no simultaneous changes |
+
+The actual A1/A2 reports prove helper ON/table14 and Voice-rule growth, not merely a GUI entry. The October 7 reboot audit establishes why this remains a mandatory precondition: normal Zapret2 and A2 can be running with helper OFF and no dedicated all-port rule. Manual enable has restored the native status/firewall baseline, but is not automatic boot acceptance or a new media pass.
+
+### Before and after each trial
+
+The existing v4 already rejects missing native Voice ON/table/target/rule before Docker and archives Voice/IPFW/PFIL before/after. Its full-profile identity and strict saved/effective/after-state checks still need the planned extension; do not describe this complete contract as already implemented:
+
+1. Capture UTC and boot/configuration epoch, runner/candidate ID, installed package and dvtws2/Lua/helper-source identities. Read status fields even if `configctl` exits zero.
+2. Verify requested/effective/active_profile ON, service running, one engine/divert listener, exact unchanged prepended helper profile and selected complete GUI candidate in saved/resolved/effective/process arguments.
+3. Record actual IPFW rule content/order/divert/WAN, table contents and managed-set identity/membership, PFIL/NAT and required routes. `19000` may be TCP after reboot; 14 entries alone do not prove the right target set. Preserve working TCP parent settings.
+4. Keep missing or changed baseline separate from strategy outcome: stop before traffic, archive the discrepancy, and never silently run enable/Apply or replace firewall rules. An operator-selected recovery is recorded separately and followed by a fresh verified baseline.
+5. After the bounded trial, compare helper/profile/table/rule/route semantics and counter deltas; new PIDs and reset counters are not semantic equality. Unexpected drift makes the comparison unqualified, not evidence that DPI rejected the candidate. Preserve any packet evidence and report restoration/cleanup independently.
+
+For a reboot audit specifically, collect the pristine after-boot snapshot **before** the runner's authorized route/container preparation or manual enable. The completed October 7 audit is not a new per-candidate reboot requirement. Automatic boot recovery is a separate open laboratory task; measured manual recovery plus a passing preflight allows the research series to proceed.
+
+### How any helper change is recorded
+
+Before a deliberate change, commit a candidate/epoch record with: hypothesis and affected protocol; full old/new helper state and profile; target-set/capture differences; GUI action differences; exact single variable; expected wire and status effects; commands/code version; stopping conditions and restoration. A source-coded helper change requires the normal GitHub qualification, not a manual edit on OPNsense.
+
+After the trial, add timestamped saved/effective/process/status/table/rule evidence, observed packet/peer outcome, archive/hash identities, drift and restoration results to dated evidence; reconcile current state and next plan. Keep raw XML, credentials and private PCAP outside public GitHub. A baseline change starts a distinct comparison; do not merge it invisibly into the TTL series.
+
+**Candidate-action OFF is not `telegram_voice_disable`.** Keep helper ON and capture unchanged while disabling only the candidate's experimental action. If a future test truly studies helper OFF/ON, name and measure both its capture and STUN-profile effects separately; it is not the current strategy efficacy control.
+
 ## Next experiment: limited fake TTL (planned, not run)
 
 **План уточнён 7 октября 2026 года.** Текущая задача — воспроизводимое установление реального звонка через `.1.2`; сначала отсеиваем кандидаты существующей Docker-лабораторией. [Проверка топологии и прежней документации](../research/TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md) подтверждает внешний reflector-путь и отмечает исправленные неточности. [START_HERE](../START_HERE.md) остаётся текущей точкой входа.
@@ -22,6 +61,7 @@ Three approved product stages remain **unchanged**: repeated `MEDIA_PASS` on cur
 
 | Шаг | Действие | Ожидаемый проверяемый результат | Решение по результату |
 |---|---|---|---|
+| 0. Зафиксировать helper | Сверить полную исходную конфигурацию по матрице выше; в каждом опыте оставить helper ON и его STUN-параметры прежними | Отдельно подтверждены перехват, STUN-helper и GUI-кандидат; ручное восстановление после ребута не смешано с испытанием | При OFF или расхождении остановиться до трафика; записать восстановление отдельно |
 | 1. Подготовить сбор данных | Дополнить существующий runner RTC-логом, ICMP, строгими проверками профиля и завершения | Проверенный через GitHub/CI инструмент; одна команда даёт один полный приватный архив и отдельный результат восстановления | При неполном сборе исправляем инструмент; сетевую гипотезу не объявляем неудачной |
 | 2. Зафиксировать серию | Снять текущую конфигурацию, проверить семантику `ip_ttl`, записать кандидат и конечный список значений | Манифест с неизменными параметрами A2, ожидаемыми WAN TTL и точным возвратом к исходной конфигурации | Неизвестное положение DPI остаётся неизвестным; доступ к `.80.1` не нужен |
 | 3. Проверить значения | По одному свежему 15-секундному запуску на значение; после каждого разобрать архив | Для каждого значения: корректность оригинала/фейков, судьба наблюдаемых ICMP/UDP, состояние каждого клиента | На первом принятом reflector-ответе прекращаем широкий перебор и разбираем следующий этап соединения; без ответов заканчиваем ограниченную серию |
@@ -38,7 +78,7 @@ Three approved product stages remain **unchanged**: repeated `MEDIA_PASS` on cur
 - Передавать поддерживаемый CLI `--log-file` с уникальным путём в существующем results mount и включать RTC в архив. Неполный/отсутствующий лог помечать явно, сохраняя stdout/stderr, код CLI и PCAP; отсутствие лога не стирает измеренную отправку или ответ.
 - Сохранять полные endpoint-scoped IP-захваты, включая не первые фрагменты. Добавить ограниченный адресами лаборатории и окном опыта сбор ICMP Time Exceeded/Destination Unreachable. Коррелировать процитированный внутренний пакет по адресу, протоколу, tuple, длинам и ID, насколько позволяет ICMP. Один IP ID недостаточен: A2 повторял его у фейков и оригинала. Не ограничивать ICMP только внешним IP рефлектора.
 - Отдельно учитывать, что ICMP может цитировать фейк, оригинал или неидентифицированный пакет. Он не доказывает положение DPI; отсутствие ICMP не означает отсутствие истечения TTL. Если RTC показывает ошибку сокета после ICMP, исследовать эту последовательность, не приписывать её автоматически блокировке.
-- Записывать dvtws2/Lua identity, сохранённый и реально активный профиль, Voice/IPFW/PFIL, маршрут и фактические WAN TTL/checksum. Требовать согласованный единственный **полный** кандидат в saved/effective, без лишних действий и конкурирующего перекрывающего профиля. В текущем v4 диагностические saved-флаги и наличие ожидаемой строки ещё не обеспечивают весь этот контракт.
+- Записывать dvtws2/Lua/helper-source identity, полное неизменное STUN-helper действие, сохранённый и реально активный GUI-кандидат, Voice/IPFW/PFIL, маршрут и фактические WAN TTL/checksum. Проверять [полную исходную конфигурацию до и после](#telegram_voice-controls-for-every-trial), включая точный IPSET и семантику правил. Требовать согласованный единственный **полный** кандидат в saved/effective, без лишних действий и конкурирующего перекрывающего профиля. В текущем v4 диагностические saved-флаги и наличие ожидаемой строки ещё не обеспечивают весь этот контракт; автоматически включать helper при ошибке нельзя.
 - Подтверждать завершение именно созданного удалённого CLI-процесса при штатном окончании, таймауте и обрыве SSH. Завершение локального SSH/`docker exec` не считать само по себе доказательством завершения процесса внутри контейнера. Не останавливать чужие процессы или изначально работающий контейнер.
 - Проверять финальное семантическое состояние ресурсов, которыми владеет запуск: capture PID, удалённый процесс, исходное состояние контейнера. Для профиля отдельно фиксировать состояние до/после и предусмотренный возврат; GUI Apply кандидата не является автоматической функцией текущего runner. Не скрывать проблему восстановления за успешной упаковкой архива.
 

@@ -1,7 +1,7 @@
 # Telegram: laboratory TCP/proxy policy and recovery runbook
 
 **Status:** EXPERIMENTAL LAB CONFIGURATION · NOT AN APPROVED TCP/PROXY PLUGIN CONTRACT
-**Updated:** 2026-10-01
+**Updated:** 2026-10-08
 **Superseded product boundary:** The owner's later October 1 instruction limits current product work to **Telegram Voice UDP** and three sequential stages: repeatable `MEDIA_PASS` through OPNsense, remote real-client `CALL_PASS`, then native plugin integration of the proven UDP behavior. See [product requirements](../REQUIREMENTS.md), [current handoff](../START_HERE.md), [roadmap](../ROADMAP.md) and [UDP oracle](TELEGRAM_VOICE_EMULATION_LAB.md).
 
 This document is the **separate, owner-required laboratory traffic policy** for Squid/sing-box/PF, the external parent proxy, Telegram UDP observations and selected test routes. **For exact verified live service startup, GUI ownership, file fingerprints, OPNsense-to-TNAS SSH keys/port, the complete owner-tested TNAS route script, csh-safe commands and current Voice ON/reboot warning, read the [2026-10-01 laboratory operations runbook](TELEGRAM_LAB_OPERATIONS.md) first.** The [dated owner-live inventory](../verification/evidence/2026-10-01-telegram-lab-owner-live-inventory.md) preserves the complete sing-box GUI JSON and raw state facts. The already working October 1 TCP configuration must remain unchanged during this documentation update. **After OPNsense reboot the laboratory must preserve or recover its selected working state**, but current Voice ON state is demonstrably not yet persistent. **After TNAS reboot the owner explicitly chooses manual route restoration using the verified OPNsense SSH script and manual container startup only on demand**, rather than route/Docker automation. Those selections do not establish any untested OPNsense reboot acceptance. Prefer OPNsense's own supported configuration/GUI for persistence, service startup and PF rules whenever the particular setting is actually supported there. Where GUI cannot represent a required setting, investigate a verified OPNsense-supported alternative and document its ownership/recovery; do not assume GUI support, fabricate autostart or inject code into the plugin. The external proxy remains necessary for real Telegram TCP signaling on this test network; the laboratory requirement does not approve TCP/proxy integration into the plugin.
@@ -20,7 +20,9 @@ Values `192.168.1.2`, `192.168.1.100`, `185.203.117.88:33128`, port assignments 
 
 **Разделение ответственности:** любые изменения *исходников, конфигурационной модели, GUI или жизненного цикла* самого `os-zapret2-restyle` проводятся только через штатный GitHub branch/PR/CI/merge. Рабочие лабораторные Squid/sing-box/PF/route настройки выполняются независимо от исходников плагина, преимущественно стандартными средствами OPNsense и по возможности через его GUI. Создание специальной лабораторной страницы или автоматизация TCP внутри плагина не разрешены.
 
-### Проверка восстановления лаборатории — ещё не выполнена
+### Проверка восстановления лаборатории — частичный результат 7 октября
+
+**Проверено 7 октября:** после OPNsense reboot обычный Zapret2 и GUI A2 сохранились, но helper стал OFF, его таблица и правило исчезли. Ручное включение восстановило native ON/table14/rule19000. PF NAT/rdr, маршрут OPNsense и порядок IPFW→PF совпали до/после. Это частичная проверка конфигурации, не автоматическое восстановление всей лаборатории и не звонок; свежие TCP-parent/SOCKS/локальные UDP и TNAS проверки не выполнялись в этом снимке. [Измерения и границы результата](../verification/evidence/2026-10-07-telegram-voice-reboot-and-manual-recovery.md).
 
 Зафиксировать заведомо исправную базу **до** перезагрузки и повторить **после** неё на каждой вовлечённой системе. Для OPNsense сравнить автозапуск и реальные слушающие порты Squid/sing-box, применённые ACL/parent, правила и таблицы PF, правила/состояние Zapret2 и запрошенное для опыта состояние `telegram_voice`; получить свежие TCP/HTTPS-проверки для LAN и SOCKS с подтверждением `FIRSTUP_PARENT`, а также отдельные проверки локального Telegram TCP/TLS и UDP-перехвата для нужных источников. Для TNAS проверить оба выбранных маршрута, исходный IP, состояние host-network контейнера и закреплённую сборку CLI. Непрохождение даже одной обязательной ветви нельзя скрывать общим `TCP_POLICY_PASS` либо тем, что после ручной команды всё заработало.
 
@@ -157,61 +159,13 @@ http_access deny singbox_lan_v1_in
 
 ## configctl zapret telegram_voice: команды и смысл
 
-Основные реализации: [helper](../../src/opnsense/scripts/OPNsense/Zapret/backend/telegram_voice.sh), [служба](../../src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh), [configd actions](../../src/opnsense/service/conf/actions.d/actions_zapret.conf).
+Единый технический справочник — [telegram_voice: назначение, параметры, команды, статусы и восстановление](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md). Он описывает `telegram_voice_enable`, `telegram_voice_status`, `telegram_voice_disable`, временный marker, правила IPFW и отдельный STUN-профиль. Порядок работы в каждом опыте и запись любого изменения — в [матрице кампании](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#telegram_voice-controls-for-every-trial).
 
-| Команда | Действие |
-|---|---|
-| `configctl zapret telegram_voice_status` | Читает запрос, активный профиль, состояние службы, таблицы, правило и счётчики; ничего не включает |
-| `configctl zapret telegram_voice_enable` | Требует полностью работающий Zapret; создаёт marker, транзакционно переприменяет конфигурацию, добавляет профиль и Telegram-IP UDP-правило. Уже включённый исправный helper просто возвращает status |
-| `configctl zapret telegram_voice_disable` | Удаляет запрос и через lifecycle убирает helper-профиль/правило/таблицы, сохраняя обычную стратегию; используется для выбранного отката/сравнения |
+В текущей лаборатории helper постоянно **выбран ON в качестве исходного условия**, но ещё не включается автоматически после reboot. Его действие STUN zero16/repeats=2 не менялось в A1/A2 и остаётся прежним в планируемой TTL-серии. Экспериментальная обработка non-STUN Reflector Hello задаётся отдельным `unknown`-профилем GUI. IPFW-перехват всех Telegram UDP-портов не расширяет область действия A2 за пределы `596–599`. Статус `strategy=stun-zero-fake-repeats-2` — имя встроенного helper, не название выбранного GUI-кандидата и не подтверждение успешного звонка.
 
-Название `telegram_voice` обозначает семейство actions; команды вызываются с суффиксами выше. Marker: `/var/run/zapret2-telegram-voice-poc.enabled`. Он переживает обычное переприменение службы, **но после перезагрузки helper возвращается в OFF**. **Owner-live follow-up confirmed that `telegram_voice` is presently ON but will be OFF after OPNsense reboot unless explicitly restored; see [exact observed values and reboot recovery](TELEGRAM_LAB_OPERATIONS.md).** Permanent OPNsense-config-backed Voice GUI state belongs to approved **plugin stage 3**, after `MEDIA_PASS` and `CALL_PASS`. Meanwhile, the **laboratory** must recover whatever Voice-helper ON/OFF state the baseline requires after reboot; the present `/var/run` marker does not do this. This remains an open lab-persistence problem to solve with a supported mechanism without an ad-hoc unreviewed plugin/boot modification.
+**Последний результат 7 октября:** ON до reboot → OFF после → ручное native ON/table14/rule19000, счётчики 0/0 после reconfigure. Обычная GUI A2 и списки Telegram сохранились; числовые GUI-порты теперь TCP `80,443`, UDP `596–599`. Прежние MTProto `80,443,5222,8888` относятся к более ранней конфигурации. Счётчики 60/4080 в снимке до reboot были накопленными; они не обозначают новый звонок. [Точный протокол](../verification/evidence/2026-10-07-telegram-voice-reboot-and-manual-recovery.md) отделяет проверку до/после от последующего ручного восстановления.
 
-Профиль `0.5.0_3`, добавляемый перед пользовательской стратегией:
-
-```text
---name=telegram-voice-poc
---filter-l3=ipv4
---filter-udp=*
---filter-l7=stun
---ipset=/usr/local/etc/zapret2/runtime-v2/managed/ipset-telegram.txt
---payload=stun
---lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2
---new
-```
-
-Он перехватывает Telegram IPv4 UDP на **всех портах**, но изменяет только распознанный STUN: отправляет два zero16 fake и пропускает оригинал. Нестандартный 40-байтный Reflector Hello текущего CLI не является STUN и этим действием не изменяется. `enable` не включает reverse8, fakefrag8 или доказанную рабочую голосовую стратегию.
-
-Последний подтверждённый ON:
-
-```text
-telegram_voice_poc.requested=on
-telegram_voice_poc.effective=on
-telegram_voice_poc.service=running
-telegram_voice_poc.active_profile=on
-telegram_voice_poc.strategy=stun-zero-fake-repeats-2
-telegram_voice_poc.scope=telegram-ipv4-all-udp-ports
-telegram_voice_poc.table=zapret2_tgvoice
-telegram_voice_poc.table_present=yes
-telegram_voice_poc.table_entries=14
-telegram_voice_poc.stage_table=zapret2_tgvoice_stage
-telegram_voice_poc.stage_table_present=no
-telegram_voice_poc.rule=19000
-telegram_voice_poc.rule_packets=60
-telegram_voice_poc.rule_bytes=4080
-```
-
-`requested` — marker; `active_profile` — сгенерированное состояние; `effective` дополнительно требует работающую службу и полный firewall runtime. `stage_table_present=no` после завершённой транзакции нормально. 14 — измеренное число записей, не константа протокола. Счётчики относятся к перехваченным пакетам, не к успешным звонкам или обязательно выполненной Lua-модификации. Wrapper status в configd завершает команду через `exit 0`: для проверки читать поля, не полагаться только на exit status.
-
-Последние правила при ON:
-
-```text
-19000 divert 989 udp from any to table(zapret2_tgvoice) out not diverted not sockarg xmit vtnet1
-19001 divert 989 tcp from any to any 80,443,5222,8888 out not diverted not sockarg xmit vtnet1
-19002 divert 989 udp from any to any 80,443,5222,8888 out not diverted not sockarg xmit vtnet1
-```
-
-Без helper обычные TCP/UDP-правила занимали 19000/19001 и не покрывали UDP/596. При ON helper использует обычный dvtws2/divert 989 и отдельную таблицу из managed Telegram IPv4 IPSET; не создаёт глобальный перехват UDP. Новые Squid/sing-box-файлы этих правил не меняли. Временные испытания использовали 18990/990 и временный порядок выходных IPv4 hooks PF→IPFW; они восстановили исходный IPFW→PF. Не оставлять такой экспериментальный порядок как якобы уже утверждённую постоянную конфигурацию. **Обновление 2 октября:** теперь получен актуальный для реального звонка `pfilctl heads`, подтверждающий IPv4 output **IPFW→PF**; новые перезагрузки потребуют нового измерения. Одновременно получены и сопоставлены LAN/WAN PCAP: 90 неизменённых Hello + 9 STUN, 18 дополнительных zero16 fake на WAN, входящего Telegram UDP не было, несмотря на хороший слышимый звук. [Подробный протокол](../verification/evidence/2026-10-02-real-telegram-windows-android-p2p-disabled-call.md).
+Команда enable не нужна перед каждым тестом, если полная исходная конфигурация уже проверена. Проверять её до/после необходимо. `telegram_voice_disable` выключает и дополнительный перехват, и STUN-профиль, поэтому не используется вместо отключения одного экспериментального действия. Параметры встроенного STUN-helper находятся в исходнике; их возможная будущая правка требует отдельного опыта и GitHub-процедуры, а не правки runtime на роутере.
 
 ## Docker tgvoice-lab: воспроизводимая база
 
@@ -278,7 +232,7 @@ pfilctl heads
 pfctl -sn
 ```
 
-Ожидаемый внешний маршрут OPNsense — `192.168.80.1`, `vtnet1`. Это следующий hop, не альтернативный лабораторный выход. При исправном работающем Zapret и `requested=off` восстановить выбранное ON, затем проверить поля и правила:
+Ожидаемый внешний маршрут OPNsense — `192.168.80.1`, `vtnet1`. Это следующий hop, не альтернативный лабораторный выход. При измерении восстановления сначала сохранить неизменённый снимок после reboot, не запускать enable/GUI Apply/runner. После сохранения этого свидетельства, при исправном работающем Zapret и `requested=off`, восстановить выбранное ON и отдельно проверить поля/правила:
 
 ```sh
 configctl zapret telegram_voice_enable
@@ -326,6 +280,6 @@ printf 'recorded_run_exit=%s\n' "$TGVOICE_PIPE_EXIT"
 
 ## Laboratory evidence and recovery boundary
 
-The commands above reproduce or inspect the experimental proxy/routing configuration; they are not a product-installation procedure. Manual recovery of OPNsense Voice ON is **not** acceptance of its required persistence; separately, the owner's verified SSH route script is the deliberately chosen **manual** TNAS reboot procedure. Actual post-reboot equivalence has yet to be observed. Preserve the existing working TCP state. Configure permanent lab settings preferentially through *verified* native OPNsense GUI mechanisms, then verify service regeneration/reboot and TNAS route restoration in a planned, measured test; do not reset services or install an ad-hoc Voice hook merely because source/package stage 3 is future work.
+The commands above reproduce or inspect the experimental proxy/routing configuration; they are not a product-installation procedure. Manual recovery of OPNsense Voice ON is **not** acceptance of its required persistence; separately, the owner's verified SSH route script is the deliberately chosen **manual** TNAS reboot procedure. October 7 measured a partial configuration comparison: GUI A2 and PF NAT/rdr survived, Voice ON did not, and manual native recovery succeeded; full three-origin automatic post-reboot equivalence remains unverified. Preserve the existing working TCP state. Configure permanent lab settings preferentially through *verified* native OPNsense GUI mechanisms, then verify service regeneration/reboot and TNAS route restoration in a planned, measured test; do not reset services or install an ad-hoc Voice hook merely because source/package stage 3 is future work.
 
 Current **product** acceptance is limited to the approved sequence: (1) repeatable current-oracle `MEDIA_PASS` through OPNsense; (2) remote Windows/Android P2P-disabled `CALL_PASS` with bidirectional UDP and two-way audio; (3) plugin-native UDP rule/IPSET/strategy/lifecycle and persistent existing-Settings-GUI control, with evidence-based parameters only if genuinely necessary. See [requirements](../REQUIREMENTS.md) and [roadmap](../ROADMAP.md). There are no approved TCP integration or clean-install TCP/proxy stages 4–5.
