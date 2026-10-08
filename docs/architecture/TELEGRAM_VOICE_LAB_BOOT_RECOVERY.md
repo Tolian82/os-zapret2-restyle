@@ -1,8 +1,10 @@
-# Telegram Voice lab: GUI versus helper, IPFW/PF/NAT and one-shot reboot decision
+# Telegram Voice helper: configuration, test controls and reboot recovery
 
-**Status:** source audit completed against main `857ff3f8c0e01c1aefa2be1b523e28ee01a6dbb2`; **no new boot action installed; no current post-reboot acceptance**. This independent laboratory is separate from the approved plugin product stage 3.
+**Updated:** 2026-10-08. Source rechecked at `3f7d5e413da9b224f34dce6cfccd441e23b27b23`; installed package reports `0.5.0_3`. **Measured: ON before reboot, OFF after boot, manual native status/table/rule ON restored. Automatic recovery is still unimplemented/unaccepted.** [Dated evidence and private snapshot hashes](../verification/evidence/2026-10-07-telegram-voice-reboot-and-manual-recovery.md).
 
-**Owner decision (supersedes an unpublished, unmerged earlier draft):** absolutely **no Cron, periodic checking or recurring telegram-voice-enable**. If the existing helper remains part of the lab, run it **only once during OPNsense boot, after regular Zapret2 becomes ready**, with a bounded delay/readiness check, never by a permanently enabled periodic task. Do not automatically enable the unrelated TNAS route guard or Docker container. First determine whether the helper is actually needed compared with the existing GUI configuration.
+This is the primary technical/operator reference for the temporary `telegram_voice` helper: purpose, configuration ownership, commands and recovery. The [campaign control matrix](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#telegram_voice-controls-for-every-trial) owns per-test invariants and deliberate parameter-change records. This independent laboratory remains separate from approved plugin product stage 3.
+
+**Owner decision (supersedes an unpublished, unmerged earlier draft):** absolutely **no Cron, periodic checking or recurring telegram-voice-enable**. The current campaign retains helper ON as a fixed baseline. Any future automatic laboratory recovery runs **only once during OPNsense boot, after regular Zapret2 becomes ready**, with bounded readiness checking. It is not installed by this document. Do not automatically enable the unrelated TNAS route guard or Docker container.
 
 This file is the active design/audit record, not instructions to run an unqualified new boot hook. Consult the [owner-live operations inventory](TELEGRAM_LAB_OPERATIONS.md) and [dated evidence](../verification/evidence/2026-10-01-telegram-lab-owner-live-inventory.md) before operating on the appliance.
 
@@ -12,7 +14,9 @@ The persistent settings of `os-zapret2-restyle` are modeled in [Zapret.xml](../.
 
 The currently installed helper profile has `--filter-l3=ipv4 --filter-udp=* --filter-l7=stun --ipset=.../managed/ipset-telegram.txt --payload=stun --lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2`. Its name, filters, fake content and repeat count are **source-code constants**, not separately editable/persisted GUI Voice fields. The `/var/run` marker remembers only transient ON; `runtime-v2/telegram-voice-poc.state` is a generated runtime observation, **not a permanent preference**.
 
-Owner's regular GUI strategy contains YouTube HTTP/TLS, then Telegram TCP `80,443,5222,8888` MTProto and Telegram UDP **the same four ports** with `<IPSET:telegram>` and `--filter-l7=mtproto`, and then user TLS. The Telegram TCP and UDP lines are separated by **no** `--new`; by normal strategy syntax, they are part of the same successive block, not independently selectable STUN and MTProto Voice strategies. This regular GUI strategy contains **no Voice-specific STUN or current-reflector profile**.
+**Current GUI baseline, measured October 7:** YouTube HTTP/TLS, a separate Telegram IPv4 UDP `596–599` / `unknown` A2 block, then user TLS, separated by `--new`. A2 uses `--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:repeats=2`, with no `badsum`, explicit fake TTL or fragmentation. The former MTProto TCP/UDP `80,443,5222,8888` example belongs to the earlier epoch, not today's active configuration. Saved GUI placeholders resolve exactly to the observed `traffic-user.conf`; the running process matched the generated arguments in both reboot snapshots.
+
+**Two distinct decisions:** IPFW decides which packets enter dvtws2; the first applicable dvtws2 profile decides their treatment. The helper supplies all-port Telegram capture **and** a fixed STUN action. A1/A2 supply a separate `unknown` action in GUI. Capturing a packet does not prove which action ran. The current non-STUN Hello is treated by the matching GUI candidate, not by the helper's STUN action.
 
 `<IPSET:telegram>` is expanded from the same managed data the helper uses: the GUI's 14 listed IPv4 prefixes are normalized into `runtime-v2/managed/ipset-telegram.txt`. The helper additionally constructs an **IPFW table** `zapret2_tgvoice` from that managed file. This is one configured Telegram-address dataset represented twice in different runtime subsystems, **not two unrelated permanent IP lists**. Do not mistake this for the *separate* PF aliases `Telegram`/`Telegram_IPs` or sing-box's static `ip_cidr` snapshot: these lists are currently not automatically synchronized.
 
@@ -21,7 +25,7 @@ Owner's regular GUI strategy contains YouTube HTTP/TLS, then Telegram TCP `80,44
 Current code in [ports.sh](../../src/opnsense/scripts/OPNsense/Zapret/backend/ports.sh) extracts **only numerical** `--filter-tcp=` and `--filter-udp=` ports and ranges from **traffic-user.conf**, i.e. from GUI strategy *without* the injected helper. The current extractor rejects the wildcard `*`; the extracted values generate common IPFW rules in [firewall.sh](../../src/opnsense/scripts/OPNsense/Zapret/backend/firewall.sh):
 
 ```text
-udp from any to any 80,443,5222,8888 out not diverted not sockarg xmit vtnet1
+udp from any to any 596-599 out not diverted not sockarg xmit vtnet1
 ```
 
 The `<IPSET:telegram>` in GUI's dvtws2 profile is **not** an IPFW destination selector. Common UDP interception covers only its configured ports but across **all WAN destination IPs**. To capture all ports by adding `1-65535` to GUI would cause very broad interception of virtually all outbound UDP, **not a narrow Telegram Voice solution**. Copying `--filter-udp=*` to the GUI cannot currently substitute for the helper either, as the port extractor rejects `*`.
@@ -32,11 +36,11 @@ With Voice helper ON, [firewall.sh](../../src/opnsense/scripts/OPNsense/Zapret/b
 udp from any to table(zapret2_tgvoice) out not diverted not sockarg xmit vtnet1
 ```
 
-It then shifts the ordinary port rules down one number. The dedicated rule captures Telegram-destination UDP on **any** port; for Telegram UDP/443 both rule families could match *before* first interception, but the earlier dedicated rule catches it and the `not diverted` condition stops subsequent recapture after return from the same divert socket. Thus this is **overlap in capture eligibility**, not double interception by two separate dvtws2 instances, double encryption or automatically applying two fake strategies. The upstream Zapret2 profile engine selects the **first applicable profile**. The helper STUN profile precedes the regular GUI profiles; for non-STUN packets it does not apply, and the later profiles are still individually filter-dependent.
+It then shifts the ordinary port rules down one number. The dedicated rule captures Telegram-destination UDP on **any** port; for current Telegram UDP/596 both rule families could match *before* first interception, but the earlier dedicated rule catches it and the `not diverted` condition stops subsequent recapture after return from the same divert socket. Thus this is **overlap in capture eligibility**, not double interception by two separate dvtws2 instances, double encryption or automatically applying two fake strategies. The upstream Zapret2 profile engine selects the **first applicable profile**. The helper STUN profile precedes the regular GUI profiles; for non-STUN packets it does not apply, and the later profiles are still individually filter-dependent.
 
-**Today this narrowly scoped capture is real, but the helper's STUN strategy is not a solution for the current non-STUN reflector.** The latest [October 1 owner evidence](../verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md) saw 60 intercepted 40-byte non-STUN Reflector Hello packets, no modified Hello, zero inbound replies, no `MEDIA_PASS`. GUI's MTProto-initial profiles also do **not** establish processing of these non-STUN/non-MTProto-intial 40-byte packets. Whether a future effective Voice strategy can be expressed as GUI text **after** adding safe destination-scoped capture is an architecture question; do not discard the current capture guard while answering it.
+**The helper's STUN strategy is not a solution for the current non-STUN reflector.** The [October 1 control](../verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md) intercepted 60 Hello packets without a matching Hello action or replies. Subsequent [A1](../verification/evidence/2026-10-03-docker-a1-wire-pass-no-reflector-reply.md) and [A2](../verification/evidence/2026-10-03-docker-a2-valid-checksum-fakes-no-reflector-reply.md) kept helper ON and did emit their GUI-selected fakes, but still had no replies/media. The October 7 reboot loss does not invalidate those ON-qualified measurements.
 
-**Other possible limited use:** a known single reflector UDP port could be included in GUI port filters for a bounded experiment, but common IPFW would also divert that port for *any* destination. This is neither equivalent to all Telegram UDP ports nor a persistent narrow solution. Do not change the working GUI strategy as part of this audit.
+**Measured limited coverage:** after the October 7 reboot helper OFF removed its table/rule and STUN profile, but GUI A2 and common UDP `596–599` interception survived. A UDP/596 test can therefore still be intercepted without satisfying the campaign's helper-ON baseline. Other Telegram UDP ports lose dedicated capture. Conversely, helper ON does not expand A2's `596–599` action to every port: real-client acceptance must verify its actual endpoint/protocol/profile separately.
 
 ## NAT and hook order are important, but not a GUI/helper distinction
 
@@ -53,7 +57,54 @@ cat /usr/local/etc/zapret2/runtime-v2/udp-ports.txt
 configctl zapret telegram_voice_status
 ```
 
-Current `ipfw` counters confirm packet interception, **not** a successful transformation or voice call. The now-documented October 2 owner-live output order is IPFW→PF; any *later* reconfiguration/boot requires another read-only `pfilctl heads`, not an assumption that the value is permanent. The real-call PCAP captured zero inbound Telegram UDP despite good audible voice; no actual media-path proof or STUN-helper causal attribution.
+Current `ipfw` counters confirm packet interception, **not** a successful transformation or voice call. October 7 before/after reboot snapshots both measured **IPFW→PF**, unchanged route, IPFW sysctls and PF NAT/rdr. Future boot/hook changes require another read-only measurement. The earlier real-call PCAP captured zero inbound Telegram UDP despite good audible voice; no actual media-path proof or STUN-helper causal attribution.
+
+## Configuration, commands and parameter ownership
+
+| Item | Authority / supported operation | Treatment in the current campaign |
+|---|---|---|
+| Helper ON/OFF | Native enable/disable actions; transient `/var/run` marker | Fixed ON; observed before/after every trial |
+| STUN filters, zero16 blob, repeats=2, no explicit short TTL | Constants in `backend/telegram_voice.sh` | Unchanged in A1/A2 and planned TTL series; enable accepts no strategy/repeats/TTL settings |
+| Candidate filters and action | Ordinary GUI `OPNsense.Zapret.strategy.trafficargs` | A1→A2 changed only candidate `badsum`; next qualified series changes only candidate fake `ip_ttl` |
+| Telegram IPv4/CIDR set | GUI `OPNsense.Zapret.hostlist.telegramips` | Freeze exact contents/target coverage; managed file and helper table represent the same set |
+| Runtime state/profile/arguments | Generated by the normal lifecycle | Observe and compare; do not hand-edit as permanent configuration |
+| WAN/divert/rule range | Existing plugin settings/lifecycle | Freeze and record; current `vtnet1`/`989`/`19000` are lab identities, not universal Voice constants |
+
+Changing the helper's STUN repeats/TTL cannot test the identified non-STUN Hello. A future STUN-specific hypothesis or different capture architecture may justify a helper change, but requires a separate documented comparison, candidate ID, exact old/new values, reason, expected packet effect and restoration. Plugin-source changes go through GitHub, never edits to installed source. Because the helper is first, appending a new GUI STUN profile does not establish it will be selected. No helper-parameter change is required or delivered for the present reflector TTL plan.
+
+Exact csh-compatible actions from [configd](../../src/opnsense/service/conf/actions.d/actions_zapret.conf) and [service source](../../src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh):
+
+| Command | Meaning |
+|---|---|
+| `configctl zapret status` | Observe ordinary service completeness, not Voice ON |
+| `configctl zapret telegram_voice_status` | Read request, generated state, service and firewall; changes nothing |
+| `configctl zapret telegram_voice_enable` | Requires a complete running service, creates the marker and reconfigures when needed; already requested/effectively ON simply returns status |
+| `configctl zapret telegram_voice_disable` | Removes request and helper profile/table/rule through the lifecycle, retaining GUI strategy; not a control for disabling only a candidate action |
+
+`telegram_voice` is the action family, not a second daemon or a command with free-form strategy parameters. No enable invocation is needed before every trial when the baseline already verifies ON. After any error inspect the returned state; do not infer restoration from invoking a command.
+
+Status interpretation:
+
+- `requested` reflects the marker; `active_profile` reflects generated `telegram-voice-poc.state`, not an independent full process comparison.
+- `effective` additionally requires running service and complete helper firewall runtime. Confirm the actual process, profile and table contents separately.
+- `strategy` and `scope` are fixed labels **also printed while OFF**; they do not identify the GUI candidate or prove treatment/success.
+- `rule=19000` alone does not prove Voice interception: OFF reused that number for TCP. Check rule content/destination table/divert/WAN.
+- `table_entries=14` is the measured baseline, not a protocol constant. Check membership and exact intended set, not count alone; staging-table absence is normal after a completed transaction.
+- The configd status wrapper ends with `exit 0`; inspect fields, not only shell status. Compare packet/byte deltas within a trial; zero counters after reconfigure/reboot are normal.
+
+### Manual recovery and reboot measurement order
+
+Observe service/helper/IPFW first. If normal Zapret2 is healthy and selected ON was lost, restore it explicitly:
+
+```sh
+configctl zapret telegram_voice_enable
+configctl zapret telegram_voice_status
+ipfw -a list
+```
+
+Validate the full campaign baseline before traffic. A stopped/incomplete normal service is a separate preflight error, not permission to loop enable commands. The runner must not silently enable the helper.
+
+For a reboot audit, save the before snapshot under `/root`, reboot OPNsense only, then collect the identical after snapshot **before enable, GUI Apply or the runner's route/container operations**. Include UTC/boot time, package/process/divert socket, selected saved GUI fields only (never full private XML), resolved/effective strategy/args, marker/state, IPFW rules/table contents, PFIL, PF NAT/rdr and reflector route. Preserve that evidence, then record manual recovery as a distinct third phase. [October 7 evidence](../verification/evidence/2026-10-07-telegram-voice-reboot-and-manual-recovery.md) completed this comparison; do not repeat it unchanged instead of addressing the persistence task.
 
 ## One-shot boot requirement: decision, not installed functionality
 
@@ -61,4 +112,4 @@ Current `ipfw` counters confirm packet interception, **not** a successful transf
 
 A startup-stage OPNsense native `rc.syshook.d/start` script *could* meet the once-per-boot condition if its owner, execution order, persistence and interaction with existing package hook are checked. OPNsense's [rc.syshook](https://github.com/opnsense/core/blob/master/src/etc/rc.syshook) runs sorted start hooks. But this would be an **independent, explicitly approved laboratory mechanism**, not local modification of `os-zapret2-restyle` package files, not a claimed product feature and not an installed/tested action. The choice must be reconciled with the repo's warning against **unreviewed ad-hoc product hooks**, and documented before any device mutation. Alternatively, moving capture and persistent Voice ON preference to the plugin GUI requires owner-approved plugin code changes, appropriate package qualification and live tests, and is separate from merely pasting a profile into the current GUI.
 
-Actual reboot acceptance is still open: after any approved implementation, boot with chosen ON, do **not** manually enable Voice while measuring, verify regular Zapret status, native Voice requested/effective/profile/table/firewall and preserve already-working Squid/sing-box TCP paths. Restoring interception is only a lab **startup pass**, never `MEDIA_PASS` or `CALL_PASS`. TNAS host routes and the `tgvoice-lab` Docker container remain **manual-only**, as separately decided.
+Actual **automatic** reboot acceptance is still open. The [existing start hook](../../src/etc/rc.syshook.d/start/20-zapret) started normal Zapret2 at the measured October 7 reboot, but Voice became OFF. Subsequent manual enable restored native ON/table14/rule19000; no new full post-enable profile/process snapshot, parent probe or media test accompanied that transcript. After any approved automatic implementation, boot with chosen ON, do **not** manually enable while measuring, verify the full chosen configuration and preserve the separately required TCP/UDP laboratory paths. Startup/configuration acceptance is never `MEDIA_PASS` or `CALL_PASS`. TNAS routes and Docker remain manual-only. Verified manual recovery permits fixed-baseline trials while automatic persistence remains unresolved; this documentation installs no boot mechanism.

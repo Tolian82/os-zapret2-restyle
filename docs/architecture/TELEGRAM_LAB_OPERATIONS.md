@@ -1,11 +1,11 @@
 # Telegram laboratory: exact live configuration, boot and operator runbook
 
-**Status:** owner-live inventory, 2026-10-01; separate laboratory, not plugin code.
+**Status:** October 1 owner-live inventory with **October 7 Voice reboot/recovery update**; separate laboratory, not plugin code. Latest helper state: native ON/table14/rule restored manually; automatic recovery still unimplemented. [Three-phase evidence](../verification/evidence/2026-10-07-telegram-voice-reboot-and-manual-recovery.md).
 **October 2 continuation:** [Matched real Windows/Android call PCAP/counter evidence](../verification/evidence/2026-10-02-real-telegram-windows-android-p2p-disabled-call.md) records both clients P2P-disabled, clean owner-reported audio, Voice rule +99/+6624 and 18 extra WAN zero16 fakes, **but no inbound Telegram UDP and no proven UDP media**. This does not change startup or routing requirements. Owner-live outbound IPv4 PFIL order for that capture was **IPFW→PF**; re-check after later boots.
 
 **Read first:** [dated owner evidence](../verification/evidence/2026-10-01-telegram-lab-owner-live-inventory.md) (including full sing-box JSON and file hashes); [traffic and recovery policy](TELEGRAM_TRAFFIC_POLICY.md); [current handoff](../START_HERE.md).
 
-**Preserve existing working TCP configuration.** No reboot, Squid/sing-box reload, GUI Apply, plugin change or new automation was performed as part of this documentation work. Explicitly distinguish observed live state from unverified post-reboot behavior.
+**Preserve existing working TCP configuration.** The owner performed the October 7 OPNsense reboot and manual Voice enable recorded below. This documentation update changes no runtime or automation. PF NAT/rdr survived that measured reboot unchanged, but fresh Squid/sing-box listeners, parent connectivity and the other three-origin traffic checks were not supplied; do not promote them to post-boot acceptance.
 
 ## Important shell and responsibility boundaries
 
@@ -25,7 +25,7 @@
 | sing-box | Existing `os-sing-box-1.0.2` GUI `/usr/local/www/sing-box.php` edits/views `/usr/local/etc/sing-box/config.json`; rc `/usr/local/etc/rc.d/sing-box`; configd `/usr/local/opnsense/service/conf/actions.d/actions_sing-box.conf`. | `service sing-box rcvar` = `sing_box_enable="YES"`, service appears in `service -e`, process listens `*:1080`. Package owns both `config.json` and rc script. GUI owner displayed the exact JSON preserved in [evidence](../verification/evidence/2026-10-01-telegram-lab-owner-live-inventory.md#sing-box-full-gui-json). |
 | PF/NAT | Effective `pfctl -sn` | `rdr pass` for `<Telegram>` and `<Telegram_IPs>`, TCP 80→3128 and TCP 443→3129, on LAN `vtnet0` and legacy `tun_singbox`. Today's sing-box is **SOCKS**, not a proven active TUN; legacy rules do not prove TUN traffic. Exact GUI persistence of rules not yet measured. |
 | Zapret2 normal service | Package boot hook `/usr/local/etc/rc.syshook.d/start/20-zapret` → `configctl zapret start`; existing `configctl zapret status`. | Live status: `zapret is running as pid 50205`. Existing hook starts ordinary service, **not** the experimental Voice-helper ON request. |
-| Telegram Voice UDP | `configctl zapret telegram_voice_enable|disable|status`; ephemeral `/var/run/zapret2-telegram-voice-poc.enabled` | Owner directly measured **requested=on, effective=on, active_profile=on**, current `stun-zero-fake-repeats-2`, 14 Telegram IPSET entries, rule 19000, 60 packets / 4080 bytes. Only interception proven; media **not** established. **Reboot loses the marker: helper will be OFF despite ordinary Zapret starting.** |
+| Telegram Voice UDP | `configctl zapret telegram_voice_enable|disable|status`; ephemeral `/var/run/zapret2-telegram-voice-poc.enabled` | October 7 measured ON→OFF after reboot, then manual native ON/table14/rule19000 restored, counters 0/0. Ordinary GUI A2 survived reboot. No new media test or automatic recovery acceptance. [Configuration, status semantics and fixed test role](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md). |
 
 Squid parent snippet from prior effective config (and currently verified directive inventory):
 
@@ -41,7 +41,7 @@ The Squid ACL file and sing-box inline `ip_cidr` arose from the same past snapsh
 
 ### The Voice ON-after-reboot trap — one-shot requirement, implementation pending
 
-The appliance already has the package's *single* native start hook `start/20-zapret`. Its boot start does not imply Voice ON. Current temporary Voice marker resides under `/var/run` and is not persisted in the OPNsense config. On reboot, the selected **ON** experiment will revert **OFF** unless someone explicitly restores it. Do **not** deduce Voice ON solely from `configctl zapret status`, `service -e`, generic IPFW divert activity or the numeric identity 19000 (rule positions can be reused).
+The appliance already has the package's *single* native start hook `start/20-zapret`. Its boot start does not imply Voice ON. On October 7 the selected **ON** state became **OFF** after reboot: `/var/run` marker, helper profile and destination-table rule were absent, while ordinary A2 continued running. Rule19000 became TCP. Do **not** deduce Voice ON solely from ordinary status, `service -e`, generic divert activity or rule number. For a reboot audit, preserve the pristine after-boot snapshot **before** enable, GUI Apply or the runner. [Exact procedure and meanings](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md#manual-recovery-and-reboot-measurement-order).
 
 **Temporary operator recovery after OPNsense reboot, one csh-compatible command per line:**
 
@@ -55,12 +55,12 @@ ipfw -a list
 
 Only run `telegram_voice_enable` if the selected experiment actually requires ON and ordinary service is healthy. Verify requested/effective/profile, rule scope/IPSET and firewall counters; invoking a command alone is not proof of intended state. The owner **explicitly rejected Cron and repeated/periodic activation**. A [source-verified comparison of GUI and Voice IPFW interception, PF/NAT hook order, and the one-shot boot boundary](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md) now explains why merely pasting the helper profile into GUI is not equivalent. No new one-shot startup action is installed or reboot-tested. Until an independent one-shot approach is approved/implemented and live-qualified, the earlier manual recovery above remains necessary. Future native product GUI-backed persistence remains stage 3 after the existing media acceptance gates.
 
-The measured live IPFW data for this inventory:
+Latest supplied IPFW after the October 7 manual recovery (the earlier four-port MTProto inventory remains in the dated October 1 evidence):
 
 ```text
-19000     60     4080 divert 989 udp from any to table(zapret2_tgvoice) out not diverted not sockarg xmit vtnet1
-19001   1280    96712 divert 989 tcp from any to any 80,443,5222,8888 out not diverted not sockarg xmit vtnet1
-19002      0        0 divert 989 udp from any to any 80,443,5222,8888 out not diverted not sockarg xmit vtnet1
+19000      0        0 divert 989 udp from any to table(zapret2_tgvoice) out not diverted not sockarg xmit vtnet1
+19001      0        0 divert 989 tcp from any to any 80,443 out not diverted not sockarg xmit vtnet1
+19002      0        0 divert 989 udp from any to any 596-599 out not diverted not sockarg xmit vtnet1
 ```
 
 ## Verified SSH from OPNsense to TNAS
@@ -205,16 +205,16 @@ EXIT=0
 
 If a route is missing, the script checks source/interface and direct gateway first, selectively uses `ip -4 route replace`, then verifies each route. If expected source or gateway is absent, it fails rather than guessing. The optional file `/root/tgvoice-lab/route-watch.disabled` pauses execution; remove it to resume. From the **default csh** the exit status is `echo $status`; in **sh** the owner demonstrated `echo "$?"`. Neither means an automatic reboot test was performed. If a previously suggested `actions_tgvoice_lab_routes.conf` exists, that was **never confirmed**; do not assume or schedule it.
 
-## One-command, manually invoked Docker A1 strategy screening
+## One-command, manually invoked Docker A1/A2 strategy screening
 
-The separate [canonical Docker-first strategy campaign](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md) now uses the tracked [OPNsense one-shot A1 runner](../../tools/telegram-voice-lab/run-a1-opnsense.sh). **The existing `/root/tgvoice-lab/ensure-tnas-routes.sh` and existing restricted key are prerequisites, not replaced.** With the source transferred once to `/root/tgvoice-lab/run-a1-opnsense.sh`, a **single** csh-compatible `/bin/sh /root/tgvoice-lab/run-a1-opnsense.sh` performs route guard, SSH Docker preflight/test, both owned captures and one private results archive. On-demand Docker start and subsequent stop **only if initially stopped** are parts of one explicitly initiated laboratory run, **not Docker autostart after reboot**. All testing stays outside the plugin lifecycle; the temporary Voice helper stays operator-selected ON unless a separate approved action changes it. No real calls per candidate. **Not yet tested on the owner's running OPNsense; preserve source versus owner-live distinction.**
+The separate [Docker-first campaign](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md) uses the tracked [one-shot runner](../../tools/telegram-voice-lab/run-a1-opnsense.sh). **The existing route guard and restricted SSH key are prerequisites, not replaced.** Its A1/A2 acquisitions were owner-live measured October 3; neither achieved media. V4 defaults to A1 and supports explicit `TGVOICE_CANDIDATE=A2`; csh uses `env TGVOICE_CANDIDATE=A2 /bin/sh /root/tgvoice-lab/run-a1-opnsense.sh`. This describes the qualified historical invocation, **not an instruction to repeat A2 or run a TTL candidate under its name**. On-demand Docker start and stop only when initially stopped belong to one operator-initiated run, not boot autostart. The runner requires helper ON and must not silently enable it. The [full helper/candidate control contract](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#telegram_voice-controls-for-every-trial), RTC/ICMP and cleanup extensions still require implementation/qualification. No human call per candidate.
 
 ## Reboot risk register and next operator action
 
 | After reboot | What is established | Operator recovery / gap |
 |---|---|---|
 | OPNsense regular Zapret2 | Package has existing `start/20-zapret` hook | Check `configctl zapret status`; never use it as a substitute for `telegram_voice_status`. |
-| OPNsense **Voice ON** | Present before reboot; **not persistent yet** because `/var/run` marker is transient | [GUI-versus-helper firewall/NAT audit and **one-shot-only** boot design](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md) is documented; **no recurring Cron and no actual reboot acceptance**. Until proven, check `telegram_voice_status`; if chosen ON, manually call `telegram_voice_enable` and recheck. |
+| OPNsense **Voice ON** | October 7 reboot **lost ON**; manual native status/table/rule recovery succeeded | [Helper configuration and one-shot-only design](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md); no recurring Cron or automatic recovery acceptance. Preserve pristine boot evidence first; then selected manual enable and complete preflight. |
 | Squid/parent/3130 | Current running listeners and included files verified | Before/after controlled reboot compare effective listeners, parent tunnel, files and hashes (see dated evidence); don't assert GUI-generated persistence not yet measured. |
 | sing-box | RC enabled and GUI JSON provided | Verify actual `*:1080`, JSON + static IP set unchanged, LAN/SOCKS parent probes. Updating subscription or GUI Save may need separate qualification. |
 | PF/IPFW | Rules currently present | Inspect `pfctl -sn`, `ipfw -a list`; current helper UDP rule 19000 is epoch-specific. |

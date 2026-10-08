@@ -1,7 +1,7 @@
 # Telegram Voice traffic emulation and strategy oracle
 
 **Status:** CURRENT UDP MEDIA ORACLE · APPROVED FUTURE UDP PRODUCT · LAB TCP VERIFIED / MEDIA OPEN; 2026-10-02 owner-real-call AUDIO GOOD, UDP MEDIA UNPROVEN
-**Updated:** 2026-10-07
+**Updated:** 2026-10-08
 **Project package identity on `main`:** `VERSION=0.5.0`, `PLUGIN_REVISION=3`
 **Research authority:** [`TELEGRAM_VOICE_UDP.md`](../research/TELEGRAM_VOICE_UDP.md)
 **Phase A evidence:** [`2026-08-28-telegram-voice-phase-a-live-observation.md`](../verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md)
@@ -29,6 +29,21 @@ The laboratory was rebuilt because the owner reports a change in Telegram voice 
 The [September 21 ordered run](../verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md) remains `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, with no established call in that run. For the [September 22 reverse run](../verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), the owner reports an established call with correct routing at call time. Its captures contain no records under `host 91.108.13.10`, and the UDP/596 fragmentation rule has zero hits. The owner later identified the same fixed-reflector CLI command; its positive output remains unavailable. These narrow captures neither refute the call nor prove fragmentation caused it. The separate [post-reboot repeat](../verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md) now correlates that command with 60 valid reverse pairs and zero replies: both peers `Reconnecting`, zero BWE, exit 1, exact restoration. This repeat qualifies reverse position-8 emission but has no media pass. The [September 23 reverse position-32 run](../verification/evidence/2026-09-23-telegram-voice-reverse32.md), [guarded reverse position-16 run](../verification/evidence/2026-09-23-telegram-voice-reverse16.md), and [guarded reverse position-24 run](../verification/evidence/2026-09-23-telegram-voice-reverse24.md) all emitted the intended valid local-WAN reverse fragment pairs with no replies/media and exact restoration. Position 24 closes standalone position widening for this reflector epoch. The [subsequent September 23–October 1 evidence](../verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md) records the already-tested fakefrag8+reverse24 v2, separate fakefrag8+original PF loss, tee real-before-fake ordering and another failed reverse8 repeat. LAN/SOCKS TCP through Squid/parent then passed, but the active-helper October 1 reflector control still failed. The earlier positive owner report remains separate.
 
 **October 2 superseding execution priority:** the owner requires that all current *strategy-screening* trials run first on the existing, already qualified **TNAS Docker `tgvoice-lab`** and that no human Telegram call be requested for each guess. A1 and A2 subsequently completed local wire qualification on October 3 with zero reflector replies/media. The [Docker-first campaign with archived A1/A2 and the planned TTL comparison](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md) overrides dated suggestions to capture another real Windows/Android call *before* proceeding with the Docker oracle. A real alternate-gateway capture remains optional for separate causal localization and **real `CALL_PASS` remains obligatory only after repeated Docker `MEDIA_PASS`**. Do not reorder closed reverse/fragment families or alter the working Telegram TCP proxy.
+
+## telegram_voice as a controlled laboratory component
+
+The laboratory includes one ordinary dvtws2 engine with two profile sources: the temporary native `telegram_voice` helper and the ordinary persistent GUI strategy. IPFW capture and protocol-specific treatment are separate:
+
+| Component | Current purpose | Experimental status |
+|---|---|---|
+| Voice helper IPFW table/rule | Intercept all outbound UDP ports to managed Telegram IPv4 destinations | Required ON baseline in current reflector comparisons |
+| Prepended `telegram-voice-poc` profile | Fixed STUN zero16/repeats=2 action | Unchanged across A1/A2 and planned candidate-TTL series; does not transform identified non-STUN Hello |
+| Separate GUI `unknown` profile | Apply A1/A2, then a qualified new candidate to Telegram UDP 596–599 | The candidate action is the controlled variable; its port/protocol scope must be verified |
+| Native status plus runtime/process/packet evidence | Establish request, effective setup, selected profile and actual treatment | An ON status or counter increase alone is not media success |
+
+All-port capture does not make a fixed-port action cover every real-client voice endpoint. New STUN-specific tuning or a capture redesign needs a separately documented hypothesis and comparison; it is not achieved by changing the current Hello candidate or silently toggling helper OFF. The [helper reference](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md) owns configuration/commands/recovery, and the [campaign matrix](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#telegram_voice-controls-for-every-trial) owns fixed/variable parameters and each trial's before/after evidence.
+
+**October 7 observed lifecycle:** helper ON before reboot, OFF after reboot with GUI A2 still active, then native status/table/rule ON restored manually. Automatic recovery remains unimplemented; no new media run occurred. [Exact snapshots and recovery limits](../verification/evidence/2026-10-07-telegram-voice-reboot-and-manual-recovery.md). This does not invalidate the October 3 A1/A2 runs, whose helper ON was recorded. Future runs require a fresh full preflight without silently repairing Voice state.
 
 ## 2026-09-20 current-tgcalls oracle update
 
@@ -250,7 +265,7 @@ For one search epoch:
 1. select one explicit reflector `IP:port`, keep source/binary/engine/custom parameters fixed and record them;
 2. record any fresh independent control, if available; otherwise preserve the `NO_REPLY_UNKNOWN` limitation without routing through retired `192.168.1.140`;
 3. record the TNAS route and require the selected path through OPNsense; change only an owned endpoint `/32` if necessary;
-4. invoke the existing one-command OPNsense runner, which owns captures and starts the fresh TNAS `docker exec` process through the verified SSH path; the future TTL extension must be qualified before use;
+4. require the [campaign helper/candidate baseline](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#telegram_voice-controls-for-every-trial), then invoke the existing one-command OPNsense runner, which owns captures and starts the fresh TNAS `docker exec` process through the verified SSH path; the future full-baseline/TTL extension must be qualified before use;
 5. record both CLI peer states, stats/BWE, exit status, IPFW counters, complete LAN/WAN evidence and cleanup;
 6. restore only owned runtime/rule/hook/route mutations to their measured pre-test state;
 7. repeat any winner with fresh process/flow state.
