@@ -22,6 +22,8 @@ The current in-progress candidate is `v0.5.1_1` (unmerged, not published). The e
 - [x] Stage ownership-checked IPFW transaction algorithm and mocked failure-injection rollback (not wired to production)
 - [x] Stage durable owner-private IPFW manifest/intent files, fsync/atomic rename and read-only crash-triage; mock-test tampering, permissions and unfinished transitions
 - [x] Stage checked retryable post-commit table cleanup and fix foreign-rule collision rollback in mock core
+- [x] Stage mock-only activation controller connecting ledger, IPFW swap, verified cleanup and abort; ON/change/OFF/crash failure-injection tests
+- [ ] Wire real FreeBSD IPFW adapter and lifecycle lock, dvtws2/manifest rollback, and recovery before enabling Apply
 - [ ] Implement and verify real FreeBSD IPFW adapter, lock-held activation, atomic manifest handoff and crash recovery before enabling Voice Apply
 - [ ] Wire real IPFW adapter, persistent ownership manifest/journal and crash recovery; qualify staged swap/rollback on FreeBSD
 - [x] Stage Voice-only payload whitelist and symmetric Telegram-IPSET freshness validation helper (future API still pending)
