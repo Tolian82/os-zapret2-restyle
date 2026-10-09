@@ -175,7 +175,7 @@ class FreeBSDIPFWAdapter:
             return None
         # Different installed table kinds (flow, iface, number) must not be
         # adopted as Voice IPv4 destination tables.
-        if not re.search(r"(?im)\\btype\\s*:\\s*addr\\b", info):
+        if not re.search(r"(?im)\btype\s*:\s*addr\b", info):
             raise IPFWAdapterError("existing IPFW table is not address type")
         output = self._run("table", name, "list")
         values: list[str] = []
