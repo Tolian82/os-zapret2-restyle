@@ -194,6 +194,7 @@ jobs:
             php scripts/test-strategy-voice-settings-scope.php
             php scripts/test-voice-settings-payload.php
             php scripts/test-voice-candidate-validator.php
+            python3.13 scripts/test-voice-validator-parity.py
           '
 
       - name: Validate shell scripts
