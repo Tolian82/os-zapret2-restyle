@@ -162,7 +162,7 @@ def apply_transaction(adapter, previous: dict, desired: dict) -> None:
     newly_created = []
     prior_rule_numbers = set(previous["rules"])
     deleted_old_rules = set()
-    attempted_rules = set()
+    installed_rules = set()
     try:
         # Prepare every new target set without disturbing active entries.
         for table, addresses in desired["tables"].items():
@@ -184,12 +184,14 @@ def apply_transaction(adapter, previous: dict, desired: dict) -> None:
             adapter.delete_rule(number)
             deleted_old_rules.add(number)
         for number, argv in sorted(desired["rules"].items()):
-            attempted_rules.add(number)
+            # Only a successful add is ours. If a concurrent foreign rule
+            # wins this number, never delete it during rollback.
             adapter.add_rule(number, argv)
+            installed_rules.add(number)
     except Exception as original:
         # Roll back rules first while active tables still exist.
         rollback_errors = []
-        for number in sorted(attempted_rules):
+        for number in sorted(installed_rules):
             try:
                 adapter.delete_rule(number)
             except Exception as exc:
@@ -233,3 +235,59 @@ def apply_transaction(adapter, previous: dict, desired: dict) -> None:
     # and atomically records the new ownership manifest.
     # The orchestrator MUST finish/clean all stages after the commit.
 
+
+
+def plan_postcommit_cleanup(adapter, previous: dict, desired: dict) -> list[tuple[str, str, list[str]]]:
+    """Plan cleanup only for verified obsolete and stage tables, without touching IPFW.
+
+    Call after installing desired rules AND a durable ownership commit.
+    Failed/partial cleanup can be retried, but only with the caller-held
+    lifecycle lock. An unknown table or orphan stage fails closed.
+    """
+    if previous["rule_base"] != desired["rule_base"] or \
+       previous["rule_max"] != desired["rule_max"]:
+        raise VoiceFirewallError("cleanup ownership range changed")
+    if adapter.list_rules(desired["rule_base"], desired["rule_max"]) != desired["rules"]:
+        raise VoiceFirewallError("cannot clean Voice tables: live rules differ from commit")
+    prior_tables, desired_tables = previous["tables"], desired["tables"]
+    if any(name not in (TABLE_PREFIX + n for n in SERVICES)
+           for name in set(prior_tables) | set(desired_tables)):
+        raise VoiceFirewallError("unexpected table in cleanup manifest")
+    steps: list[tuple[str, str, list[str]]] = []
+    for service in SERVICES:
+        name = TABLE_PREFIX + service
+        active = adapter.get_table(name)
+        stage = adapter.get_table(name + "_stage")
+        if name in desired_tables:
+            if active != desired_tables[name]:
+                raise VoiceFirewallError(f"Voice committed table mismatch: {name}")
+            # After swap, stage contains old active contents. New table's
+            # stage is empty. Already-cleaned stage is also valid on retry.
+            allowed_stage = prior_tables.get(name, [])
+            if stage is not None and stage != allowed_stage:
+                raise VoiceFirewallError(f"Voice staging table changed unexpectedly: {name}")
+            if stage is not None:
+                steps.append(("stage", name + "_stage", list(stage)))
+        elif name in prior_tables:
+            # A just-disabled service loses its rule immediately; its
+            # previous table is removed only after durable ownership commit.
+            if active is not None and active != prior_tables[name]:
+                raise VoiceFirewallError(f"unowned retired Voice table: {name}")
+            if stage is not None:
+                raise VoiceFirewallError(f"unexpected retired Voice stage table: {name}")
+            if active is not None:
+                steps.append(("retired", name, list(active)))
+        elif active is not None or stage is not None:
+            raise VoiceFirewallError(f"unexpected foreign Voice table: {name}")
+    return steps
+
+
+def cleanup_committed(adapter, previous: dict, desired: dict) -> None:
+    """Retryable post-commit cleanup; never remove unverified table contents."""
+    steps = plan_postcommit_cleanup(adapter, previous, desired)
+    for _, name, expected in steps:
+        if adapter.get_table(name) != expected:
+            raise VoiceFirewallError(f"Voice table changed during cleanup: {name}")
+        adapter.destroy_table(name)
+    # Callers must re-check desired kernel state and finish the intent after
+    # cleanup. This function never silently clears the durable journal.
