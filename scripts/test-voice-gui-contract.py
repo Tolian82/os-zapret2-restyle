@@ -56,7 +56,7 @@ def main() -> None:
     check(menu.find("./Services/Zapret/Voice").get("order") == "1", "Voice menu order missing")
     check(menu.find("./Services/Zapret/Diagnostics").get("order") == "2", "Laboratory menu order changed")
     check("function voiceAction()" in controller and "getForm('voice')" in controller, "Voice route missing")
-    for marker in ("base_form", "frm_VoiceSettings", "/api/zapret/settings/get",
+    for marker in ("base_form", "frm_VoiceSettings", "/api/zapret/voice/load",
                    "voiceServiceState", "voiceReleaseSelect", "voiceServiceControl",
                    "voiceRepositoryReleasesLabel", "voiceImplementationNotice"):
         check(marker in view, f"Voice view missing {marker}")
@@ -102,6 +102,16 @@ def main() -> None:
           "Voice candidate syntax check must not mutate active config")
     check("public function validateAction()" in status_php,
           "Voice read-only syntax validation action is unavailable")
+    check("public function loadAction()" in status_php and
+          "VoiceSettingsSnapshot::digest($nodes)" in status_php and
+          "VoiceSettingsSnapshot::requireFresh($current" in status_php and
+          "VoiceSettingsPayload::overlay($current, $fields)" in status_php and
+          "finally {" in status_php,
+          "Voice form load and validation must use one locked freshness check")
+    check("voiceSnapshot.val(record.snapshot)" in view and
+          "id: 'zapret.sync.snapshot'" in view and
+          "record.snapshot" in view,
+          "Voice GUI must retain the same model snapshot as the loaded fields")
     for field in fields:
         check(not any(bad in field for bad in BAD_FIELDS), f"Forbidden toggle: {field}")
     check('<IPSET:telegram>' in ET.tostring(form, encoding="unicode") or
