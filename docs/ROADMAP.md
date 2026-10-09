@@ -1,5 +1,10 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Native Voice load returns model + stable baseline from a single Config-locked read
+- [x] Voice Validate rejects stale Strategies/Voice/shared target edits under same Config lock, strict field whitelist and localized errors
+- [x] Model-stub PHP test proves stale/conflict/missing-token, read-only behavior and lock release
+- [ ] Persist and apply Voice under one validated transaction, rechecking baseline before config/runtime mutation and restoring all resources on failure
+
 - [x] Add native Voice form Validate action: unsaved IPv4/STUN/UDP scope checks without config mutation; localized RU/EN field errors
 - [x] Add standalone PHP validator regression and PHP/Python candidate acceptance parity CI; correct CI host/container interpreter ownership
 - [ ] Qualify native GUI AJAX/DOM form and field-error display on owner OPNsense; ensure dark/light theme and RU/EN

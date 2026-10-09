@@ -1,5 +1,13 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### Атомарная загрузка GUI и обнаружение устаревших вкладок (Draft, 2026-10-09)
+
+- Для страницы «Передача голоса» `VoiceController::loadAction()` теперь отдаёт **поля native модели и SHA256 baseline из одного чтения под Config lock**, а `mapDataToFormUI` сохраняет baseline как hidden `zapret.sync.snapshot`. Кнопка «Проверить» становится активной только после успешной загрузки совпадающих полей и baseline. Это устраняет гонку двух отдельных запросов за конфигурацией и её контрольной версией.
+- `VoiceSettingsSnapshot.php` детерминированно отслеживает все общие группы `general`, `strategy`, `voice`, `hostlist` (без unrelated Laboratory). Изменение Telegram IPSET, обычного Traffic Strategy, WAN, других Voice параметров и любого общего IPSET отклоняет устаревшую форму при Validate. Сравнение выполняется **под Config lock**; на Apply такую же проверку потребуется повторить непосредственно перед транзакционной записью и активацией, а не считать прошлый Validate разрешением на запись.
+- `VoiceController::validateAction()` сверяет snapshot с текущей моделью, удаляет sync-метаданные, проверяет whitelist `VoiceSettingsPayload::overlay()`, затем `VoiceCandidateValidator::check()`. Нет `save()`, `reconfigure`, IPFW, запусков `dvtws2` и смены PoC. Сообщения о конфликте переведены RU/EN.
+- PHP-интеграционный тест `scripts/test-voice-api-concurrency.php` использует заглушки модели/Config, проверяет load, digest, stale ordinary и Telegram, injection/отсутствующий baseline, unlock и отсутствие записи; отдельный GUI-contract проверяет endpoint/hidden token. Это ещё **не owner-live GUI acceptance**.
+
+
 ### Native Voice GUI — проверка до сохранения (v0.5.1_1, Draft)
 
 - Добавлена кнопка **«Проверить» / Validate** на штатной странице. Она посылает только несохранённые поля формы на `/api/zapret/voice/validate` в `Api/VoiceController.php`. `VoiceCandidateValidator.php` выполняет чистую проверку IPv4/CIDR, допустимых STUN/UDP параметров и пересечений адрес+порт между включёнными сервисами; OFF может сохранять незавершённые черновики.

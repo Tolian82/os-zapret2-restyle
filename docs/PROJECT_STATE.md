@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Voice GUI state (draft):** read-only native load now returns model and optimistic digest atomically under Config lock. Syntax-only Validate checks the baseline again, rejects concurrent edits in general/strategy/voice/hostlist, and never changes config or runtime. CI includes stubbed API concurrency and GUI token tests. This does NOT implement persistent Apply, PoC migration, real FreeBSD lifecycle or boot restore.
+
+
 **Voice form validation staging:** new read-only VoiceCandidateValidator/VoiceController.validateAction plus RU/EN native GUI Validate button, syntax/target overlap guard, and PHP/Python differential CI tests. Last-stage CI run must be checked against exact head. This is validation of unsaved GUI data only: no config write, no Apply, no dvtws2, no live IPFW change; existing temporary Telegram PoC still not removed. The primary remaining implementation boundary is safe native lifecycle cutover, persistent Apply and boot recovery.
 
 

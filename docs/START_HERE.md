@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Voice GUI concurrency update:** Draft PR #328 содержит `VoiceController.loadAction`, возвращающий модель и fingerprint из одного чтения под Config lock. `VoiceController.validateAction` требует тот же fingerprint, отвергает stale Voice/Strategies/shared IPSET, проверяет whitelist и native STUN. Применение/сохранение не включено; в дальнейшем Apply обязан повторить проверку под lock перед live-транзакцией. CI включает PHP model-stub проверку и GUI контракт.
+
+
 **Voice GUI Validate staged:** в PR #328 добавлен read-only endpoint `/api/zapret/voice/validate`, отдельная кнопка Validate и RU/EN локализация ошибок. Он проверяет несохранённую конфигурацию (IPSET, STUN, пересечения), не пишет `config.xml` и не меняет dvtws2/IPFW. PHP-проверки и сопоставление с авторитетным Python compiler добавлены в CI. Кнопка Apply остаётся disabled: cross-runtime rollback/legacy migration/boot/owner-live ещё OPEN. Не устанавливать как production voice feature только на основании CI.
 
 
