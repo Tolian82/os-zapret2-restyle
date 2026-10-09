@@ -7,6 +7,8 @@ OPNsense Config, process control or outside network operations are performed.
 from __future__ import annotations
 
 import importlib.util
+import os
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -127,6 +129,30 @@ class BootGateTests(unittest.TestCase):
                 self.assertEqual("blocked", result["state"])
                 self.assertEqual("invalid-or-untrusted-journal", result["reason"])
                 self.assertFalse(result["safe_to_mutate"])
+
+    def test_service_shell_guard_has_ci_interpreter_without_a_production_bypass(self):
+        service=(ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
+        self.assertIn("_voice_cutover_guard_python=/usr/local/bin/python3.13",service)
+        self.assertIn("case \"${BACKEND_DIR}\" in",service)
+        self.assertIn("/usr/local/opnsense/scripts/OPNsense/Zapret/backend)",service)
+        self.assertIn("command -v python3.13",service)
+        body=service.split("preflight_voice_cutover_journals()\\n{",1)[1].split("\\n}\\n",1)[0]
+        snippet="preflight_voice_cutover_journals()\\n{" + body + "\\n}\\npreflight_voice_cutover_journals\\n"
+        with tempfile.TemporaryDirectory() as temp:
+            backend=Path(temp)/"backend"
+            backend.mkdir()
+            script=backend/"voice_cutover_guard.py"
+            for status in (0, 69):
+                with self.subTest(status=status):
+                    script.write_text("raise SystemExit("+str(status)+")\\n")
+                    env=os.environ.copy()
+                    env["BACKEND_DIR"]=str(backend)
+                    result=subprocess.run(
+                        ["/bin/sh","-c",snippet],env=env,
+                        stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,
+                        check=False,
+                    )
+                    self.assertEqual(status,result.returncode,result.stderr)
 
     def test_real_service_lock_wrapper_probes_before_any_dispatch(self):
         service = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
