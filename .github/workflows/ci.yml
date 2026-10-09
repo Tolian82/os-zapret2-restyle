@@ -120,6 +120,8 @@ jobs:
         run: sh scripts/test-voice-shared-ipsets.sh
       - name: Voice fail-closed compiler
         run: python3.13 scripts/test-voice-profile-compiler.py
+      - name: Voice destination-scoped IPFW capture planning
+        run: python3.13 scripts/test-voice-capture-plan.py
       - name: Voice GUI model and localization contract
         run: python3.13 scripts/test-voice-gui-contract.py
 
