@@ -59,6 +59,21 @@ refresh_generated_configuration()
     fi
 }
 
+# Run the staged-only Voice ON refusal immediately after rendering the
+# generated config and before firewall_prepare can load or change IPFW.
+# Overall Zapret OFF is an exception: reconfigure must still be allowed to
+# stop the existing service, even if a Voice checkbox was saved as ON.
+preflight_native_voice_before_firewall()
+{
+    config_load "${CONFIG}" || return 1
+    if [ "${ZAPRET_ENABLED:-0}" = 1 ]; then
+        config_voice_staged_only_guard || {
+            echo "ERROR: Voice ON requires native transactional runtime; firewall unchanged" >&2
+            return 1
+        }
+    fi
+}
+
 prepare_firewall_prerequisites()
 {
     if ! firewall_prepare; then
@@ -71,6 +86,7 @@ start_service()
 {
     ensure_runtime_components || return 1
     refresh_generated_configuration || return 1
+    preflight_native_voice_before_firewall || return 1
     prepare_firewall_prerequisites || return 1
     orchestrator_native_start \
         "${CONFIG}" "${ZAPRET_DIR}" "${ACTIVE_DIR}" "${BACKUP_ROOT}" \
@@ -93,6 +109,7 @@ reconfigure_service()
 {
     ensure_runtime_components || return 1
     refresh_generated_configuration || return 1
+    preflight_native_voice_before_firewall || return 1
     prepare_firewall_prerequisites || return 1
     orchestrator_native_reconfigure \
         "${CONFIG}" "${ZAPRET_DIR}" "${ACTIVE_DIR}" "${BACKUP_ROOT}" \
