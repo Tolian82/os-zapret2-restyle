@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Rollback safety (draft):** the shared real `atomic_restore_tree` no longer removes current active runtime before proving a requested rollback backup exists as a non-symlink directory. A missing/symlinked backup is rejected without destroying the candidate, and good backup restores normally. Linux/FreeBSD regression covers both cases. This stabilizes existing Strategies rollback and is a dependency for future Voice cutover, not full durable recovery.
+
+
 **Native legacy-lifecycle interruption guard (Draft):** a read-only Python boot guard now executes inside the existing zapret_service.sh lockf scope before start/stop/reconfigure/legacy Telegram PoC and runtime-failure paths. Pending whole-runtime or IPFW intents, committed native ownership and corrupt private ledgers all block old dispatcher; missing clean journals leave prior Strategies behavior. Distinct return code 69 avoids lockf busy 75 confusion. No real native dvtws2/IPFW Apply or automated recovery; this is a preservation guard until explicit ownership routing exists.
 
 

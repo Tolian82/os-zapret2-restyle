@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Voice rollback hardening:** исправлен порядок `atomic_restore_tree` в общем runtime: при отсутствующем или symlink backup текущий каталог не удаляется. `test-voice-atomic-rollback-preflight.sh` проверяет это вместе с успешным restore на Linux/FreeBSD CI. Ранний `voice_cutover_guard.py` из предыдущего этапа продолжает блокировать legacy lifecycle при pending/недоверенных журналах/зарегистрированном native IPFW ownership. Native Voice Save/Apply остаётся disabled.
+
+
 **Voice boot/lifecycle guard staged in native service:** `voice_cutover_guard.py` выполняется под существующим `lockf` перед любыми операциями `zapret_service.sh`, способными поменять runtime. При pending/повреждении обоих журналов или уже закреплённом за Voice native IPFW ownership он защищает прежний процесс и правила от изменений старым dispatcher (код 69, lock busy 75). Чистая установка без журналов работает по-старому; read-only status доступен. Явный Stop тоже блокируется при неразрешённом journal — требуется ручная подтверждённая процедура recovery. CI и FreeBSD packaging включают guard; **native Apply всё ещё не подключён**.
 
 

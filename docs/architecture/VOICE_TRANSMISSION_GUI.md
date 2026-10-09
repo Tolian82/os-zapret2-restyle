@@ -1,5 +1,11 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### Безопасный базовый откат runtime дерева (2026-10-09)
+
+- При аудите реального `backend/atomic.sh::atomic_restore_tree` найден дефект: при указанном `BACKUP_DIR`, который отсутствует, старый порядок **сначала удалял активный runtime**, и только потом проверял backup. Исправление в PR #328 проверяет абсолютный путь, существование настоящего каталога и отсутствие symlink **до** любого удаления current runtime. При отсутствующей/небезопасной копии функция теперь отказывает, оставляя действующую версию нетронутой. Правильная копия восстанавливается штатно, включая каталог предыдущего `dvtws2` релиза.
+- `scripts/test-voice-atomic-rollback-preflight.sh` вызывает действующий `atomic.sh` на приватном mock runtime и проверяет missing/symlink backup (current tree остаётся целым), затем успешный restore из корректной копии. CI исполняет это на Linux и FreeBSD 15. Это **общий rollback safety fix**, используемый существующими Strategies; он сам не делает Voice Apply транзакционным и не гарантирует восстановление после потери питания.
+
+
 ### Fail-closed реального service lifecycle при незавершённом Voice-журнале (2026-10-09)
 
 - `backend/voice_cutover_guard.py` — настоящий **read-only boot/lifecycle gate**, вызываемый `zapret_service.sh::service_with_lifecycle_lock()` после успешного `/usr/bin/lockf` и **до** `service_dispatch`. Он ничего не создаёт, не меняет и не восстанавливает, не запускает IPFW/dvtws2/configd. Без аргументов проверяет два фиксированных root-private каталога: `/var/db/zapret2/voice-cutover` и `/var/db/zapret2/voice-ipfw`. Отсутствие обоих или пустые валидные каталоги пропускает обычный runtime.

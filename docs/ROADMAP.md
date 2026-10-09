@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Fix non-destructive shared runtime rollback: validate backup before deleting current release, deny symlinks/missing backup, Linux/FreeBSD regression
+- [ ] Implement real native Voice Apply using validated backup + full journal/IPFW rollback; test hard power-loss recovery and owner-live OPNsense behavior before publishing
+
 - [x] Enforce read-only pending dual-journal/native-owner gate under the actual zapret_service.sh lifecycle lock, before legacy runtime mutation; test FreeBSD and no-journal compatibility
 - [ ] Implement a native-owner-aware Start/Stop/Reconfigure dispatcher and reviewed cold-boot journal recovery; safely migrate old Telegram Voice PoC and enable Apply only after end-to-end rollback acceptance
 
