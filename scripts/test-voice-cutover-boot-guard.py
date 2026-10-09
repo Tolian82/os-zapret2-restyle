@@ -136,15 +136,15 @@ class BootGateTests(unittest.TestCase):
         self.assertIn("case \"${BACKEND_DIR}\" in",service)
         self.assertIn("/usr/local/opnsense/scripts/OPNsense/Zapret/backend)",service)
         self.assertIn("command -v python3.13",service)
-        body=service.split("preflight_voice_cutover_journals()\\n{",1)[1].split("\\n}\\n",1)[0]
-        snippet="preflight_voice_cutover_journals()\\n{" + body + "\\n}\\npreflight_voice_cutover_journals\\n"
+        body=service.split("preflight_voice_cutover_journals()\n{",1)[1].split("\n}\n",1)[0]
+        snippet="preflight_voice_cutover_journals()\n{" + body + "\n}\npreflight_voice_cutover_journals\n"
         with tempfile.TemporaryDirectory() as temp:
             backend=Path(temp)/"backend"
             backend.mkdir()
             script=backend/"voice_cutover_guard.py"
             for status in (0, 69):
                 with self.subTest(status=status):
-                    script.write_text("raise SystemExit("+str(status)+")\\n")
+                    script.write_text("raise SystemExit("+str(status)+")\n")
                     env=os.environ.copy()
                     env["BACKEND_DIR"]=str(backend)
                     result=subprocess.run(
