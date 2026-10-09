@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_4 — native read-only process inventory adapter (2026-10-09):** `voice_native_process_probe.py` uses no shell and performs only bounded native FreeBSD `/bin/ps` reads plus no-follow, checked owner PID-file reads. It requires one exact engine process, one matching supervisor daemon and one monitor, checks immutable PID+process-start observation, catches foreign/orphan/duplicate processes and refuses inferred OFF if matching processes remain without PID files. The adapter is *not called* from production lifecycle, GUI or boot, and has no stop/start/IPFW method. Mock ps + real temporary PID-file regression runs on Linux and FreeBSD 15; the complete live FreeBSD argv/start-time process behavior still needs owner-device qualification. Previous snapshot v0.5.1_3 is preserved; Voice Apply remains absent.
+
+
 **v0.5.1_3 — offline engine/supervisor recovery evidence (2026-10-09):** New staging-only `voice_process_recovery_evidence.py` captures an injected read-only double/triple process probe for exactly one dvtws2 engine and daemon+supervisor monitor. It requires coherent running/stopped topology, distinct PID/start identity and fixed trusted executable paths, and binds the engine's saved `dvtws.args` SHA to the sealed runtime backup. Published private 0600 evidence produces separate engine/supervisor hashes for the whole-cutover journal; reopening checks hashes and trusted bytes again. There is no production probe implementation, kernel read, process mutation, automatic boot recovery or Voice Apply. Linux+FreeBSD 15 tests cover corruption, PID collisions, torn captures, foreign identity, stale runtime, and destination conflicts.
 
 
@@ -84,8 +87,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_3` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_3.pkg` (**not published, do not install**);
+- current source candidate revision: `_4` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_4.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
@@ -149,7 +152,7 @@ Completed boundary:
 
 No further package correction belongs to this scope.
 
-## Development handoff: `v0.5.1_3` native Voice GUI (Draft PR #328)
+## Development handoff: `v0.5.1_4` native Voice GUI (Draft PR #328)
 
 Work is staged at [PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), branched from `main` `3f9951c928ac2521c3551c8311d58ed755947007`. New native MVC page, five default-OFF fields, bilingual guidance, common service control and shared IPSET model are present. Registry, storage and managed target generation for Discord/X/SIP/Custom are staged; a read-only native config.xml Voice exporter, fail-closed STUN compiler, inert release-bundle consistency gate, one-engine traffic merge helper, IPFW capture-plan validator, an adapter-injected mock-tested IPFW transaction core, retryable postcommit cleanup, and private durable ownership/intent journal with read-only restart triage plus mock-only activation ordering and verified abort (all not production-wired) and per-service scope conflict checks have also been added (not wired to Apply/runtime); Strategies Apply now limits its POST to Strategies-owned fields (Strategies-side shared Telegram-IPSET optimistic lock active in source; Voice-side payload/freshness helper staged, future Voice Apply endpoint not yet implemented); the existing Telegram hostlist data is reused. **Voice Apply is disabled** until complete validation and lifecycle migration are implemented. This draft has not replaced the temporary Telegram Voice PoC or qualified boot restoration, dual-WAN behavior, or media. The existing published and stable `0.5.0` packages are unchanged. See [design and implementation status](architecture/VOICE_TRANSMISSION_GUI.md).
 

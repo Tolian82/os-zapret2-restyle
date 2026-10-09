@@ -6,6 +6,7 @@
 
 - [x] Staged private verified Config/runtime restoration payload without appliance mutation or overwrite
 - [x] Stage private, runtime-bound process evidence for old one-engine dvtws2 and supervisor with restart-read tests
+- [x] Stage read-only FreeBSD process PIDfile/ps inventory adapter and fake process-table tests; no live call site
 - [ ] Native dual-lock held restore adapter: previous engine, supervisor, Config and IPFW; verify on reboot before Voice activation
 
 
