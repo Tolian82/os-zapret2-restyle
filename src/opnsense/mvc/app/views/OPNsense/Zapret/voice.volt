@@ -69,6 +69,8 @@ $(document).ready(function () {
             'IPSET must be a text list': 'IPSET должен быть текстовым списком',
             'Enabled Voice service requires destination IPs': 'Для включённой службы нужны IP-адреса назначения',
             'Voice validation failed': 'Проверка параметров голоса завершилась ошибкой',
+            'Strategies WAN must be configured before Voice': 'Сначала настройте WAN на странице «Стратегии».',
+            'Independent Voice WAN cannot be isolated by the shared engine yet; select the Strategies WAN': 'Отдельный WAN для голоса пока нельзя изолировать в общем движке. Выберите WAN из страницы «Стратегии».',
             'Missing Voice form': 'Не получена форма передачи голоса',
             'Voice configuration baseline is missing. Reload the Voice page.': 'Нет исходной версии настроек. Обновите страницу передачи голоса.',
             'Voice or shared Strategies settings changed in another tab. Reload the Voice page.': 'Параметры передачи голоса или общие настройки стратегий были изменены в другой вкладке. Обновите страницу.',
