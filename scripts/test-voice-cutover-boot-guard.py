@@ -50,7 +50,10 @@ class BootGateTests(unittest.TestCase):
             self.assertTrue(guard.check_pending(whole, ipfw)["safe_to_mutate"])
             current = fixture.fixture()
             VoiceOwnershipStore(ipfw).seed(current)
-            self.assertTrue(guard.check_pending(whole, ipfw)["safe_to_mutate"])
+            owned = guard.check_pending(whole, ipfw)
+            self.assertFalse(owned["safe_to_mutate"])
+            self.assertEqual("native-ipfw-owned", owned["reason"])
+            self.assertIsNone(VoiceOwnershipStore(ipfw).pending())
 
     def test_each_whole_cutover_phase_preempts_any_other_state(self):
         for phase in ("prepared", "mutating", "committed"):
@@ -71,6 +74,18 @@ class BootGateTests(unittest.TestCase):
                 self.assertEqual(before, (whole / "intent.json").read_bytes())
                 self.assertFalse(ipfw.exists(),
                                  "journal guard must never initialize any directory")
+
+    def test_existing_native_ownership_blocks_legacy_even_if_all_journals_committed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            whole, ipfw = self.paths(Path(tmp))
+            whole.mkdir(mode=0o700)
+            ipfw.mkdir(mode=0o700)
+            ledger = VoiceOwnershipStore(ipfw)
+            ledger.seed(fixture.fixture())
+            result = guard.check_pending(whole, ipfw)
+            self.assertEqual("native-ipfw-owned", result["reason"])
+            self.assertFalse(result["safe_to_mutate"])
+            self.assertFalse((whole / "intent.json").exists())
 
     def test_ipfw_pending_blocks_even_without_whole_journal(self):
         with tempfile.TemporaryDirectory() as tmp:
