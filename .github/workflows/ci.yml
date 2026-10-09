@@ -171,6 +171,7 @@ jobs:
             set -e
             find src -type f -name "*.php" -exec php -l {} \;
             find src -type f -name "*.inc" -exec php -l {} \;
+            php scripts/test-strategy-voice-settings-scope.php
           '
 
       - name: Validate shell scripts
