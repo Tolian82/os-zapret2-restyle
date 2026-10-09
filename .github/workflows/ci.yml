@@ -132,6 +132,8 @@ jobs:
         run: python3.13 scripts/test-voice-firewall-transaction.py
       - name: Voice durable IPFW ownership and crash ledger
         run: python3.13 scripts/test-voice-firewall-ledger.py
+      - name: Voice mocked lifecycle activation and recovery
+        run: python3.13 scripts/test-voice-firewall-activation.py
       - name: Voice GUI model and localization contract
         run: python3.13 scripts/test-voice-gui-contract.py
 
