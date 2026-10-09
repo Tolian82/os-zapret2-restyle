@@ -15,9 +15,12 @@ from voice_cutover_backup import (
     VoiceBackupError, bound_resource_fingerprints,
 )
 from voice_cutover_journal import (
-    CutoverJournalError, RESOURCE_NAMES,
+    CutoverJournalError, RESOURCE_NAMES, SECURITY_BOUND_SCHEMA,
 )
 from voice_cutover_recovery_preflight import inspect_recovery
+from voice_security_policy_evidence import (
+    SecurityPolicyError, inspect_security_policy, verify_current_security,
+)
 from voice_firewall_ledger import LedgerError
 from voice_process_recovery_evidence import (
     ProcessEvidenceError, inspect_process_evidence,
@@ -50,7 +53,8 @@ def _sample(observer):
 
 def inspect_full_recovery(cutover, firewall, previous_backup: Path,
                           process_evidence: Path, expected_executables: dict,
-                          observer) -> dict:
+                          observer, *, security_evidence: Path | None = None,
+                          security_reader=None) -> dict:
     """Correlate sealed previous Config/runtime, process evidence and journals.
 
     This is intentionally an OFFLINE DECISION CONTRACT, not a recovery plan.
@@ -79,10 +83,48 @@ def inspect_full_recovery(cutover, firewall, previous_backup: Path,
         if set(prior) != set(RESOURCE_NAMES):
             raise ValueError("incomplete previous Voice snapshot")
 
+        sealed_security = None
+        if record["schema"] == SECURITY_BOUND_SCHEMA:
+            if security_evidence is None or security_reader is None:
+                return _result("blocked", "missing-native-security-attestation",
+                               phase=phase, cross_journal_reason=cross["reason"])
+            sealed_security = inspect_security_policy(
+                security_evidence, previous_backup, process_evidence,
+                journal_record=record, expected_scripts=expected_executables,
+            )
+            policy = sealed_security["policy"]
+            if (getattr(security_reader, "expected_scripts", None) != policy["scripts"]
+                or getattr(security_reader, "kernel_images", None) != policy["images"]
+                or getattr(security_reader, "credentials", None) != policy["credentials"]):
+                return _result("blocked", "foreign-native-security-reader",
+                               phase=phase, cross_journal_reason=cross["reason"])
+            security_report = security_reader.inspect_twice()
+            if not verify_current_security(security_report, sealed_security):
+                return _result("blocked", "native-security-policy-mismatch",
+                               phase=phase, cross_journal_reason=cross["reason"])
+            observed_roles = security_report["roles"]
+            old_roles = {"engine": old_process["observation"]["engine"]["process"],
+                         "daemon": old_process["observation"]["supervisor"]["daemon"],
+                         "monitor": old_process["observation"]["supervisor"]["monitor"]}
+            if any(observed_roles[role]["pid"] != old_roles[role]["pid"] or
+                   observed_roles[role]["start_ns"] != old_roles[role]["start_ns"]
+                   for role in old_roles):
+                return _result("blocked", "security-process-instance-differs",
+                               phase=phase, cross_journal_reason=cross["reason"])
+
         first = _sample(observer)
         second = _sample(observer)
         # After both observations, the immutable sources and BOTH journals
         # must still describe the same intended old snapshot.
+        if sealed_security is not None and (
+            inspect_security_policy(
+                security_evidence, previous_backup, process_evidence,
+                journal_record=record, expected_scripts=expected_executables,
+            )["policy_sha256"] != sealed_security["policy_sha256"] or
+            security_reader.inspect_twice() != security_report
+        ):
+            return _result("blocked", "unstable-native-security-attestation",
+                           phase=phase, cross_journal_reason=cross["reason"])
         if first != second or cutover.read() != record or \
            inspect_recovery(cutover, firewall, previous_backup) != cross or \
            bound_resource_fingerprints(previous_backup, record["previous"]) != old_files or \
@@ -117,5 +159,5 @@ def inspect_full_recovery(cutover, firewall, previous_backup: Path,
                        cross_journal_reason=cross["reason"])
     except (OSError, ValueError, TypeError, KeyError, AttributeError,
             VoiceBackupError, ProcessEvidenceError, CutoverJournalError,
-            LedgerError, RuntimeError):
+            LedgerError, RuntimeError, SecurityPolicyError):
         return _result("blocked", "invalid-or-incomplete-whole-system-evidence")

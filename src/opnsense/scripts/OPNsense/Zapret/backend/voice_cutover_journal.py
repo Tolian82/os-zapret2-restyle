@@ -16,8 +16,10 @@ import stat
 import tempfile
 
 SCHEMA = 1
-BOUND_SCHEMA = 2  # future, explicitly bound desired IPFW ownership (staging only)
+BOUND_SCHEMA = 2  # explicitly bound desired IPFW ownership (staging only)
+SECURITY_BOUND_SCHEMA = 3  # also pins previous native process security policy
 BOUND_FIELD = "firewall_manifest_sha256"
+SECURITY_FIELD = "process_security_policy_sha256"
 MAX_BYTES = 65536
 FILES = ("intent.json",)
 SHA = "0123456789abcdef"
@@ -44,7 +46,7 @@ def validate_record(record: dict) -> dict:
     if not isinstance(record, dict) or set(record) != {
         "schema", "phase", "previous", "candidate", "check",
     } or type(record.get("schema")) is not int or \
-       record["schema"] not in (SCHEMA, BOUND_SCHEMA) or \
+       record["schema"] not in (SCHEMA, BOUND_SCHEMA, SECURITY_BOUND_SCHEMA) or \
        record.get("phase") not in PHASES:
         raise CutoverJournalError("invalid durable Voice cutover journal schema")
     previous = record["previous"]
@@ -53,8 +55,10 @@ def validate_record(record: dict) -> dict:
        any(not _sha(value) for value in previous.values()):
         raise CutoverJournalError("incomplete previous system snapshot")
     expected_candidate = set(PROOF_NAMES)
-    if record["schema"] == BOUND_SCHEMA:
+    if record["schema"] >= BOUND_SCHEMA:
         expected_candidate.add(BOUND_FIELD)
+    if record["schema"] == SECURITY_BOUND_SCHEMA:
+        expected_candidate.add(SECURITY_FIELD)
     if not isinstance(desired, dict) or set(desired) != expected_candidate or \
        any(not _sha(value) for value in desired.values()):
         raise CutoverJournalError("unverified desired Voice fingerprints")
@@ -94,6 +98,26 @@ def new_bound_record(previous: dict, proof: dict, desired_manifest: dict) -> dic
         **base["candidate"],
         BOUND_FIELD: fingerprint(canonical_manifest(desired_manifest)),
     }
+    body["check"] = _digest(body)
+    return validate_record(body)
+
+
+
+def new_security_bound_record(previous: dict, proof: dict,
+                              desired_manifest: dict,
+                              security_policy_sha256: str) -> dict:
+    """Schema 3: explicit desired firewall AND previous process policy digest.
+
+    A digest alone is not evidence: the caller must verify a sealed policy
+    and both immutable previous snapshots before writing this intent.
+    """
+    if not _sha(security_policy_sha256):
+        raise CutoverJournalError("invalid prior Voice security policy fingerprint")
+    base = new_bound_record(previous, proof, desired_manifest)
+    body = {k: v for k, v in base.items() if k != "check"}
+    body["schema"] = SECURITY_BOUND_SCHEMA
+    body["candidate"] = {**body["candidate"],
+                         SECURITY_FIELD: security_policy_sha256}
     body["check"] = _digest(body)
     return validate_record(body)
 
@@ -183,6 +207,24 @@ class VoiceCutoverJournal:
         if self.read() is not None:
             raise CutoverJournalError("Voice cutover intent already exists; inspect first")
         self._store(new_bound_record(previous, proof, desired_manifest))
+
+    def begin_security_bound(self, previous: dict, proof: dict,
+                             desired_manifest: dict, policy_dir: Path,
+                             previous_backup: Path, process_evidence: Path,
+                             expected_scripts: dict) -> None:
+        """Staging-only; verify actual sealed policy before durable intent."""
+        from voice_security_policy_evidence import inspect_security_policy
+        if self.read() is not None:
+            raise CutoverJournalError("Voice cutover intent already exists; inspect first")
+        report = inspect_security_policy(
+            policy_dir, previous_backup, process_evidence,
+            expected_scripts=expected_scripts,
+        )
+        if report["policy"]["previous"] != previous:
+            raise CutoverJournalError("security policy refers to another previous state")
+        self._store(new_security_bound_record(
+            previous, proof, desired_manifest, report["policy_sha256"],
+        ))
 
     def _transition(self, expected: str, new: str) -> None:
         current = self.read()

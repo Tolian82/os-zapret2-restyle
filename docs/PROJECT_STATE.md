@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_14 — sealed native process security policy tied to durable cutover journal (2026-10-10):** Added `voice_security_policy_evidence.py` with private write-once 0700/0600, fsync-backed evidence of the expected kernel executable paths and all six real/effective/saved numeric UID/GID fields for engine, daemon and supervisor monitor. Evidence is tied to the **verified previous five-resource** snapshot and prior process identities. Extended the existing whole-cutover journal with **optional schema 3**, binding a policy SHA256 alongside the schema-2 desired IPFW fingerprint, without weakening legacy schema 1/2 parsing. Full read-only recovery preflight rejects missing/mismatched policy or role security, drift across double reads, foreign process instances, and stale snapshots. The injected policy values do **not** become authoritative merely by being sealed; owner OPNsense privilege mapping, binary trust, post-boot readiness and native dual locks remain mandatory. No production invocation, Apply/rollback, service restart, Telegram PoC migration, or release.
+
+
 **v0.5.1_13 — native FreeBSD process image/credentials read-only witness (2026-10-10):** Added *unwired* `voice_freebsd_process_security.py`, which reads FreeBSD kernel executable image path using `kern.proc.pathname.<PID>` and six numeric real/effective/saved UID/GID fields via fixed `/bin/ps` columns, bracketed by stable three-role PID/start-time process probes. The supervisor script must be distinguished from its kernel interpreter image (`/bin/sh`). Explicit caller-supplied expected role paths and credentials are validated but are **not yet bound to a production journal**, so an exact match gives only non-authorizing `review-required`. CI uses injected adversarial process data on Linux/FreeBSD 15 and a genuinely native FreeBSD **self-process** sysctl/ps read in the FreeBSD VM. This checks OS API support, not real owner OPNsense process policy. No mutation, automatic boot recovery, live Voice Apply, old PoC removal or media certification.
 
 
@@ -117,8 +120,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_13` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_13.pkg` (**not published, do not install**);
+- current source candidate revision: `_14` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_14.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
@@ -182,7 +185,7 @@ Completed boundary:
 
 No further package correction belongs to this scope.
 
-## Development handoff: `v0.5.1_13` native Voice GUI (Draft PR #328)
+## Development handoff: `v0.5.1_14` native Voice GUI (Draft PR #328)
 
 Work is staged at [PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), branched from `main` `3f9951c928ac2521c3551c8311d58ed755947007`. New native MVC page, five default-OFF fields, bilingual guidance, common service control and shared IPSET model are present. Registry, storage and managed target generation for Discord/X/SIP/Custom are staged; a read-only native config.xml Voice exporter, fail-closed STUN compiler, inert release-bundle consistency gate, one-engine traffic merge helper, IPFW capture-plan validator, an adapter-injected mock-tested IPFW transaction core, retryable postcommit cleanup, and private durable ownership/intent journal with read-only restart triage plus mock-only activation ordering and verified abort (all not production-wired) and per-service scope conflict checks have also been added (not wired to Apply/runtime); Strategies Apply now limits its POST to Strategies-owned fields (Strategies-side shared Telegram-IPSET optimistic lock active in source; Voice-side payload/freshness helper staged, future Voice Apply endpoint not yet implemented); the existing Telegram hostlist data is reused. **Voice Apply is disabled** until complete validation and lifecycle migration are implemented. This draft has not replaced the temporary Telegram Voice PoC or qualified boot restoration, dual-WAN behavior, or media. The existing published and stable `0.5.0` packages are unchanged. See [design and implementation status](architecture/VOICE_TRANSMISSION_GUI.md).
 
