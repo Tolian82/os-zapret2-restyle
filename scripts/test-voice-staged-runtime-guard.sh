@@ -44,4 +44,48 @@ ORCH="${ROOT}/src/opnsense/scripts/OPNsense/Zapret/backend/orchestrator.sh"
 grep -Fq 'config_voice_staged_only_guard || {' "${ORCH}" ||
     { echo "FAIL: native Voice preflight is not integrated" >&2; exit 1; }
 
+
+# Verify START checks native Voice before cleanup_runtime even when
+# an old engine was considered complete.
+. "${ROOT}/src/opnsense/scripts/OPNsense/Zapret/backend/orchestrator.sh"
+WORK=$(mktemp -d)
+trap 'rm -rf "${WORK}"' EXIT HUP INT TERM
+SOURCE="${WORK}/zapret.conf"
+CALLS="${WORK}/operations"
+: > "${CALLS}"
+orchestrator_runtime_is_complete() { return 1; }
+orchestrator_cleanup_runtime() { printf '%s\n' cleanup >> "${CALLS}"; }
+common_create_workspace() { return 1; }
+launcher_status() { return 0; }
+invoke_start() {
+    orchestrator_native_start "${SOURCE}" /tmp/zapret /tmp/active /tmp/backup \
+        /bin/true /tmp/child.pid /tmp/supd.pid /tmp/supmon.pid /tmp/suploop \
+        /tmp/service 19000 19010 /tmp/stage /tmp/log /tmp/suplog
+}
+printf '%s\n' 'ZAPRET_ENABLED=1' 'VOICE_TELEGRAM_REQUESTED=1' > "${SOURCE}"
+if invoke_start >/dev/null 2>&1; then
+    echo "FAIL: unsupported Voice ON incorrectly started" >&2
+    exit 1
+fi
+[ ! -s "${CALLS}" ] || {
+    echo "FAIL: start destroyed running resources before Voice preflight" >&2
+    exit 1
+}
+orchestrator_runtime_is_complete() { return 0; }
+if invoke_start >/dev/null 2>&1; then
+    echo "FAIL: complete old runtime incorrectly hides requested Voice ON" >&2
+    exit 1
+fi
+[ ! -s "${CALLS}" ] || { echo "FAIL: old engine modified on rejected ON" >&2; exit 1; }
+orchestrator_runtime_is_complete() { return 1; }
+printf '%s\n' 'ZAPRET_ENABLED=1' 'VOICE_TELEGRAM_REQUESTED=0' > "${SOURCE}"
+if invoke_start >/dev/null 2>&1; then
+    echo "FAIL: mocked workspace was expected to refuse further start" >&2
+    exit 1
+fi
+grep -qx 'cleanup' "${CALLS}" || {
+    echo "FAIL: all Voice OFF unexpectedly bypassed ordinary start cleanup" >&2
+    exit 1
+}
+
 echo "PASS: native Voice ON is fail-closed until one-engine IPFW/runtime migration is ready"
