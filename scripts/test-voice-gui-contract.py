@@ -68,6 +68,13 @@ def main() -> None:
     check("/api/zapret/voice/inspect" in view and
           "refreshVoiceIPFW" in view and "voiceIPFWState" in view,
           "Voice read-only IPFW diagnostics are missing from GUI")
+    check("voiceIPFWDetail" in view and
+          "prepared-needs-previous-verification" in view and
+          "interrupted-needs-kernel-runtime-review" in view and
+          "committed-needs-cleanup-review" in view and
+          "Незавершённая подготовка" in view and
+          "Interrupted cutover" in view,
+          "Native Voice diagnostic needs bilingual whole-runtime crash guidance")
     for term in ("'Правила подтверждены'", "'Verified rules'",
                  "'Новая Voice-конфигурация не активирована'", "'New Voice configuration not activated'"):
         check(term in view, f"Missing read-only Voice diagnostic localization: {term}")
