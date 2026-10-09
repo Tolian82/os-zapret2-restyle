@@ -47,6 +47,24 @@ class VoiceHandoffPreflightTests(unittest.TestCase):
             self.assertEqual(64, len(result["native_argv_sha256"]))
             self.assertEqual(64, len(result["saved_xml_sha256"]))
 
+    def test_extracted_ordinary_ports_agree_with_real_production_parser(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            variants = [
+                ("--filter-tcp=00443\n--filter-udp=00596-00599\n",
+                 ("443", "596-599")),
+                ("--filter-tcp=80,443,80\n--filter-udp=596-599\n--filter-tcp=81-81\n",
+                 ("80,443,81", "596-599")),
+                ("--filter-tcp=1\n--filter-udp=65535\n", ("1", "65535")),
+            ]
+            for n, (text, expected) in enumerate(variants):
+                with self.subTest(variant=n):
+                    live = bridge.extract_real_ordinary_ports(root / str(n), text)
+                    self.assertEqual(expected, live)
+                    self.assertEqual(live, contract._ordinary_ports(text))
+            self.assertEqual(("443", "596-599"),
+                             contract._ordinary_ports(bridge.ORDINARY))
+
     def test_all_voice_off_preserves_one_engine_and_no_voice_table(self):
         with tempfile.TemporaryDirectory() as td:
             b, argv = self.build(Path(td) / "off", False)
@@ -69,10 +87,6 @@ class VoiceHandoffPreflightTests(unittest.TestCase):
             ]
             for label, candidate, arguments, ordinary, tcp, udp in bad:
                 with self.subTest(label=label):
-                    if label == "different Voice capture TCP":
-                        # A different ordinary port is well-formed but cannot
-                        # be checked against parsed ordinary filters here.
-                        continue
                     with self.assertRaises(contract.VoiceHandoffError):
                         self.validate(candidate, arguments, ordinary, tcp, udp)
             mutators = [
