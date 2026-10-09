@@ -21,6 +21,19 @@ class VoiceFirewallError(RuntimeError):
     pass
 
 
+def table_contents_equal(observed, expected) -> bool:
+    """IPFW tables are sets; their native list output order is not stable."""
+    if observed is None or expected is None:
+        return observed is None and expected is None
+    if not isinstance(observed, list) or not isinstance(expected, list):
+        return False
+    if any(not isinstance(x, str) for x in observed + expected):
+        return False
+    if len(observed) != len(expected) or len(set(observed)) != len(observed):
+        return False
+    return set(observed) == set(expected)
+
+
 def _validate_port_string(text: str, label: str) -> str:
     if not isinstance(text, str) or (text and not PORTS.fullmatch(text)):
         raise VoiceFirewallError(f"{label}: invalid ordinary port specification")
@@ -143,7 +156,7 @@ def verify_prior_state(adapter, previous: dict, desired: dict) -> None:
     for table in expected_table_names:
         actual = adapter.get_table(table)
         expected = previous["tables"].get(table)
-        if actual != expected:
+        if not table_contents_equal(actual, expected):
             raise VoiceFirewallError(f"foreign or modified IPFW table: {table}")
         if adapter.get_table(table + "_stage") is not None:
             raise VoiceFirewallError(f"stale or foreign IPFW stage table: {table}")
@@ -259,19 +272,19 @@ def plan_postcommit_cleanup(adapter, previous: dict, desired: dict) -> list[tupl
         active = adapter.get_table(name)
         stage = adapter.get_table(name + "_stage")
         if name in desired_tables:
-            if active != desired_tables[name]:
+            if not table_contents_equal(active, desired_tables[name]):
                 raise VoiceFirewallError(f"Voice committed table mismatch: {name}")
             # After swap, stage contains old active contents. New table's
             # stage is empty. Already-cleaned stage is also valid on retry.
             allowed_stage = prior_tables.get(name, [])
-            if stage is not None and stage != allowed_stage:
+            if stage is not None and not table_contents_equal(stage, allowed_stage):
                 raise VoiceFirewallError(f"Voice staging table changed unexpectedly: {name}")
             if stage is not None:
                 steps.append(("stage", name + "_stage", list(stage)))
         elif name in prior_tables:
             # A just-disabled service loses its rule immediately; its
             # previous table is removed only after durable ownership commit.
-            if active is not None and active != prior_tables[name]:
+            if active is not None and not table_contents_equal(active, prior_tables[name]):
                 raise VoiceFirewallError(f"unowned retired Voice table: {name}")
             if stage is not None:
                 raise VoiceFirewallError(f"unexpected retired Voice stage table: {name}")
@@ -286,7 +299,7 @@ def cleanup_committed(adapter, previous: dict, desired: dict) -> None:
     """Retryable post-commit cleanup; never remove unverified table contents."""
     steps = plan_postcommit_cleanup(adapter, previous, desired)
     for _, name, expected in steps:
-        if adapter.get_table(name) != expected:
+        if not table_contents_equal(adapter.get_table(name), expected):
             raise VoiceFirewallError(f"Voice table changed during cleanup: {name}")
         adapter.destroy_table(name)
     # Callers must re-check desired kernel state and finish the intent after

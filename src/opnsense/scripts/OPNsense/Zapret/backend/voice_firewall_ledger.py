@@ -23,7 +23,9 @@ import stat
 import tempfile
 from typing import Any
 
-from voice_firewall_transaction import SERVICES, TABLE_PREFIX, VoiceFirewallError
+from voice_firewall_transaction import (
+    SERVICES, TABLE_PREFIX, VoiceFirewallError, table_contents_equal,
+)
 
 SCHEMA = 1
 FILES = ("ownership.json", "intent.json")
@@ -342,7 +344,7 @@ class VoiceOwnershipStore:
             for name in SERVICES
         }
         known_active = lambda tables: all(
-            live_tables[name] == tables.get(name) for name in live_tables
+            table_contents_equal(live_tables[name], tables.get(name)) for name in live_tables
         )
         if live_rules == prev["rules"] and known_active(prev_tables):
             return "previous-intact"

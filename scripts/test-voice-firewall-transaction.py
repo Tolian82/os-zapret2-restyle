@@ -83,6 +83,23 @@ class VoiceFirewallTransactionTests(unittest.TestCase):
         self.assertEqual("tcp", adapter.rules[19001][2])
         self.assertEqual("udp", adapter.rules[19002][2])
 
+    def test_native_ipfw_address_tables_are_sets_not_ordered_lists(self):
+        original = fixture(("telegram", "91.108.0.0/16\\n91.108.13.10"))
+        wanted = fixture(("telegram", "91.108.0.0/16\\n91.108.13.10"))
+        live = FakeIPFW(original["rules"], original["tables"])
+        live.tables["zapret2_voice_telegram"] = list(
+            reversed(live.tables["zapret2_voice_telegram"])
+        )
+        transaction.verify_prior_state(live, original, wanted)
+        self.assertTrue(transaction.table_contents_equal(
+            ["91.108.13.10", "91.108.0.0/16"],
+            ["91.108.0.0/16", "91.108.13.10"],
+        ))
+        self.assertFalse(transaction.table_contents_equal(
+            ["91.108.13.10", "91.108.13.10"],
+            ["91.108.0.0/16", "91.108.13.10"],
+        ))
+
     def test_failed_ipfw_operations_restore_rules_and_all_new_tables(self):
         previous = fixture()
         desired = fixture(("telegram","91.108.0.0/16"))

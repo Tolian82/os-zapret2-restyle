@@ -12,7 +12,9 @@ import sys
 
 from voice_firewall_ledger import LedgerError, VoiceOwnershipStore
 from voice_ipfw_adapter import FreeBSDIPFWAdapter, IPFWAdapterError
-from voice_firewall_transaction import SERVICES, TABLE_PREFIX, VoiceFirewallError
+from voice_firewall_transaction import (
+    SERVICES, TABLE_PREFIX, VoiceFirewallError, table_contents_equal,
+)
 
 
 class VoiceInspectError(RuntimeError):
@@ -51,7 +53,7 @@ def examine(store, adapter) -> dict:
                 "remedy": "manual-inspection"}
     for name in SERVICES:
         table = TABLE_PREFIX + name
-        if adapter.get_table(table) != expected["tables"].get(table):
+        if not table_contents_equal(adapter.get_table(table), expected["tables"].get(table)):
             return {
                 "state": "foreign-or-modified-table",
                 "service": name,

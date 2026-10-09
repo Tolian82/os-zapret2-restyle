@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from voice_firewall_transaction import (
     VoiceFirewallError, apply_transaction, verify_prior_state,
-    cleanup_committed,
+    cleanup_committed, table_contents_equal,
 )
 from voice_firewall_ledger import VoiceOwnershipStore, LedgerError
 
@@ -48,7 +48,7 @@ def activate_mockable(adapter, ledger: VoiceOwnershipStore,
     if adapter.list_rules(desired["rule_base"], desired["rule_max"]) != desired["rules"]:
         raise VoiceActivationError("post-install Voice IPFW rules differ from candidate")
     for table, targets in desired["tables"].items():
-        if adapter.get_table(table) != targets:
+        if not table_contents_equal(adapter.get_table(table), targets):
             raise VoiceActivationError("post-install Voice IPFW table differs from candidate")
 
     # Any failure here leaves the durable intent and never enables a new
