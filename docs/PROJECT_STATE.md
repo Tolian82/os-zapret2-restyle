@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Voice draft UI decision (2026-10-09):** As explicitly requested, the disabled `voiceApply` **settings** button is removed from the Voice page rather than displayed as a misleading action. The independent `voiceReleaseApply` repository-package installation control, Voice Validate, read-only diagnostics and service controls are preserved. No voice settings persistence or activation endpoint is exposed; `VoiceApplyCandidate` remains a pure read-only validation/normalization helper. Future transactional activation requires a separate approved implementation. This change does not remove the old Telegram PoC or affect installed OPNsense.
+
+
 **Voice recovery v2 boundary:** Draft PR #328 stages an explicit schema-2 desired IPFW ownership digest, retaining schema-1 read compatibility. The recovery preflight independently correlates previous immutable Config/runtime bytes with the whole journal and both previous/desired canonical IPFW manifests with the separate ledger. Phase and crash-restart tests include actual distinct targets and reject orphan/foreign/premature/mismatched ownership. Regressions establish that both native read-only inspector and boot lifecycle guard still block on v2 pending intent. These do not read the live FreeBSD kernel, recover the engine/supervisor, expose Voice Apply or authorize automatic reboot replay. Stable installed OPNsense and legacy Telegram PoC remain unchanged; exact-head Linux and FreeBSD CI required.
 
 

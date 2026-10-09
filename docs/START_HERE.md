@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Voice draft UI decision (2026-10-09):** As explicitly requested, the disabled `voiceApply` **settings** button is removed from the Voice page rather than displayed as a misleading action. The independent `voiceReleaseApply` repository-package installation control, Voice Validate, read-only diagnostics and service controls are preserved. No voice settings persistence or activation endpoint is exposed; `VoiceApplyCandidate` remains a pure read-only validation/normalization helper. Future transactional activation requires a separate approved implementation. This change does not remove the old Telegram PoC or affect installed OPNsense.
+
+
 **Voice journal v2 recovery proof (Draft PR #328):** staging-only `VoiceCutoverJournal.begin_bound()` writes an explicitly bound desired IPFW manifest SHA256 alongside the existing candidate hashes. The old v1 schema and read-only inspection remain compatible. `voice_cutover_recovery_preflight.py` compares previous Config/runtime backup, previous IPFW digest, new desired IPFW digest and both journals; all outcomes prohibit activation, automatic recovery and live mutation. The boot guard and read-only inspector have v2 blocking tests. No Voice Apply, no production v2 writer, no installed engine/supervisor recovery, no PoC migration. CI must be checked on exact HEAD.
 
 

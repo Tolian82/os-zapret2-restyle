@@ -138,13 +138,21 @@ def main() -> None:
               "Voice browser JavaScript syntax error: " + parsed.stderr)
     else:
         print("SKIP: Node.js is unavailable; browser JavaScript syntax was not checked")
-    # Until transactional validation and IPFW ownership are implemented, the
-    # configuration Apply control must not mutate persistent or live state.
-    if "Draft staging of the native Voice form" in view:
-        check(re.search(r'id="voiceApply"[^>]*disabled', view) is not None,
-              "An incomplete Voice implementation must keep Apply disabled")
-        check('"/api/zapret/settings/apply"' not in view,
-              "Draft Voice GUI must not invoke the global Settings Apply endpoint")
+    # Voice settings Apply was explicitly removed from the staging form.
+    # The unrelated repository-release Apply and syntax validation stay.
+    check('id="voiceApply"' not in view and "$('#voiceApply')" not in view,
+          "Voice settings Apply must not be rendered or wired in this draft")
+    check('id="voiceReleaseApply"' in view and
+          "$('#voiceReleaseApply').on('click'" in view and
+          "'/api/zapret/service/install'" in view,
+          "Removing settings Apply must not delete the repository installer")
+    check('id="voiceValidate"' in view and
+          "'/api/zapret/voice/validate'" in view,
+          "Voice validation control must remain usable")
+    check('"/api/zapret/settings/apply"' not in view and
+          "'/api/zapret/voice/apply'" not in view and
+          '"/api/zapret/voice/apply"' not in view,
+          "Draft Voice GUI must not invoke a mutating settings endpoint")
     print("PASS: Voice GUI model, native form, menu, RU/EN guidance, staging guard")
 
 if __name__ == "__main__":
