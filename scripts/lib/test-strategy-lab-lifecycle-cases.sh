@@ -110,6 +110,14 @@ for module in common config parser registry storage targets telegram_voice targe
 do
     : > "${SERVICE_BACKEND}/${module}.sh"
 done
+# This test already provides isolated mock backend modules. Mock only the
+# read-only journal probe here; its real Python implementation, permissions,
+# corruption and restart behavior are covered by the dedicated Voice tests.
+# A pending journal must still prevent inherited-owner Strategy Lab stop.
+cat > "${SERVICE_BACKEND}/voice_cutover_guard.py" <<'MOCK'
+import os
+raise SystemExit(69 if os.environ.get("MOCK_VOICE_INTENT_PENDING") == "1" else 0)
+MOCK
 cat > "${SERVICE_BACKEND}/orchestrator.sh" <<'MOCK'
 orchestrator_native_status()
 {
@@ -139,6 +147,27 @@ MOCK
 chmod +x "${SERVICE_WORKER}"
 printf '%s\n' RUNNING > "${STATE_FILE}"
 : > "${CALLS_FILE}"
+# An inherited lock does NOT imply permission to mutate when a Voice
+# cutover is pending; verify the service rejects stop before mock IPFW/runtime
+# teardown, then prove the clean-journal path below still works.
+set +e
+MOCK_VOICE_INTENT_PENDING=1 \
+SCRIPT_DIR="${SERVICE_ROOT}" \
+BACKEND_DIR="${SERVICE_BACKEND}" \
+LOCKF_BIN="${MOCK_BIN}/lockf" \
+LIFECYCLE_LOCK_FILE="${SERVICE_LOCK}" \
+STRATEGY_LAB_WORKER="${SERVICE_WORKER}" \
+MOCK_STATE_FILE="${STATE_FILE}" \
+MOCK_CALLS_FILE="${CALLS_FILE}" \
+    "${SERVICE_SOURCE}" strategy-lab job.ServiceLock >/dev/null 2>&1
+blocked_voice_status=$?
+set -e
+[ "${blocked_voice_status}" -eq 94 ] ||
+    fail "Voice journal guard was bypassed by inherited Strategy Lab lifecycle owner"
+[ "$(cat "${STATE_FILE}")" = RUNNING ] ||
+    fail "pending Voice cutover changed the previously running service"
+[ ! -s "${CALLS_FILE}" ] ||
+    fail "pending Voice cutover allowed Strategy Lab stop cleanup"
 SCRIPT_DIR="${SERVICE_ROOT}" \
 BACKEND_DIR="${SERVICE_BACKEND}" \
 LOCKF_BIN="${MOCK_BIN}/lockf" \
