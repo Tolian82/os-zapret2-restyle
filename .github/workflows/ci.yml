@@ -126,6 +126,8 @@ jobs:
         run: python3.13 scripts/test-voice-model-export.py
       - name: Voice inactive staging with managed IPSET and resolved WAN
         run: python3.13 scripts/test-voice-release-stage.py
+      - name: Voice staged candidate into native dvtws2 arguments and IPFW plan
+        run: python3.13 scripts/test-voice-generator-interop.py
       - name: Voice and ordinary single-engine traffic merging
         run: python3.13 scripts/test-voice-traffic-merge.py
       - name: Voice owned IPFW transaction and rollback simulation
@@ -463,6 +465,7 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-ipfw-adapter.py
             /usr/local/bin/python3.13 scripts/test-voice-live-inspect.py
             /usr/local/bin/python3.13 scripts/test-voice-migration-plan.py
+            /usr/local/bin/python3.13 scripts/test-voice-generator-interop.py
             /usr/local/bin/python3.13 scripts/test-voice-firewall-ledger.py
             /usr/local/bin/python3.13 scripts/test-voice-firewall-activation.py
             sh scripts/build-pkg.sh
