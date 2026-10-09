@@ -521,6 +521,22 @@ service_dispatch()
     esac
 }
 
+# A pending full Voice cutover or per-IPFW journal is stronger than the
+# legacy service's ordinary start/stop/reconfigure semantics. In particular,
+# boot must NOT clean old resources before an interrupted transaction has
+# been reviewed. This check is read-only and MUST run *under* the same lockf
+# handle held by all existing Zapret2 lifecycle operations.
+preflight_voice_cutover_journals()
+{
+    _voice_cutover_guard_script="${BACKEND_DIR}/voice_cutover_guard.py"
+    if [ ! -r "${_voice_cutover_guard_script}" ] ||
+       [ ! -x /usr/local/bin/python3.13 ]; then
+        echo "ERROR: native Voice journal inspection is unavailable; refusing lifecycle mutation" >&2
+        return 69
+    fi
+    /usr/local/bin/python3.13 "${_voice_cutover_guard_script}"
+}
+
 service_with_lifecycle_lock()
 {
     _service_lock_timeout="$1"
@@ -535,6 +551,14 @@ service_with_lifecycle_lock()
         if ! "${LOCKF_BIN}" -s -t "${_service_lock_timeout}" 9; then
             return 75
         fi
+        # Do not permit ANY legacy lifecycle action to overwrite the
+        # evidence of an interrupted Voice cutover. Status/inspection remain
+        # available, and no journal is created during normal operation.
+        case "${1:-}" in
+            start|stop|restart|reconfigure|telegram-voice-enable|telegram-voice-disable|runtime-failure|strategy-lab|strategy-lab-circular|strategy-lab-recover)
+                preflight_voice_cutover_journals || return 69
+                ;;
+        esac
         service_dispatch "$@"
     ) 9>"${LIFECYCLE_LOCK_FILE}"
 }
