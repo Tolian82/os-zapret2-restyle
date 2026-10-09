@@ -21,6 +21,7 @@ from voice_profile_compiler import (
     SERVICES, VoiceConfigurationError, compile_candidate, normalize_targets,
 )
 from voice_capture_plan import CapturePlanError, compile_capture_plan
+from voice_traffic_merge import VoiceMergeError, merge_profiles
 
 
 class VoiceStageError(ValueError):
@@ -54,7 +55,7 @@ def require_managed_match(state: dict, managed_source: Path) -> dict[str, str]:
 
 def compile_bundle(config: Path, managed_source: Path, active_root: Path,
                    physical_wan: str, first_rule: int, last_rule: int,
-                   divert_port: int) -> dict[str, str]:
+                   divert_port: int, ordinary_source: Path | None = None) -> dict[str, str]:
     if not active_root.is_absolute():
         raise VoiceStageError("active runtime directory must be absolute")
     if not isinstance(physical_wan, str) or not physical_wan:
@@ -82,12 +83,19 @@ def compile_bundle(config: Path, managed_source: Path, active_root: Path,
         "profile_count": len(capture["voice"]),
         "ipset_sha256": hashes,
     }
-    return {
+    artifacts = {
         "voice.conf": profile,
         "profile-plan.json": json.dumps(candidate, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
         "capture-plan.json": json.dumps(capture, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
-        "metadata.json": json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
     }
+    if ordinary_source is not None:
+        ordinary = ordinary_source.read_text(encoding="utf-8")
+        merged = merge_profiles(profile, ordinary)
+        artifacts["traffic.conf"] = merged
+        metadata["ordinary_sha256"] = hashlib.sha256(ordinary.encode()).hexdigest()
+        metadata["merged_sha256"] = hashlib.sha256(merged.encode()).hexdigest()
+    artifacts["metadata.json"] = json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    return artifacts
 
 
 def stage_bundle(output: Path, content: dict[str, str]) -> None:
@@ -102,7 +110,7 @@ def stage_bundle(output: Path, content: dict[str, str]) -> None:
     try:
         os.chmod(temp, 0o700)
         for name, value in content.items():
-            if name not in {"voice.conf", "profile-plan.json", "capture-plan.json", "metadata.json"}:
+            if name not in {"voice.conf", "traffic.conf", "profile-plan.json", "capture-plan.json", "metadata.json"}:
                 raise VoiceStageError("unknown staged artifact")
             path = temp / name
             with path.open("x", encoding="utf-8") as stream:
@@ -117,18 +125,19 @@ def stage_bundle(output: Path, content: dict[str, str]) -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 9:
+    if len(argv) not in (9, 10):
         print("usage: voice_release_stage.py CONFIG.XML MANAGED_SOURCE ACTIVE_ROOT "
-              "RESOLVED_WAN RULE_BASE RULE_MAX DIVERT_PORT OUTPUT_DIR", file=sys.stderr)
+              "RESOLVED_WAN RULE_BASE RULE_MAX DIVERT_PORT [ORDINARY_TRAFFIC.conf] OUTPUT_DIR", file=sys.stderr)
         return 64
     config, source, root = map(Path, argv[1:4])
     physical_wan = argv[4]
     try:
+        ordinary_source = Path(argv[8]) if len(argv) == 10 else None
         candidate = compile_bundle(
             config, source, root, physical_wan, int(argv[5]),
-            int(argv[6]), int(argv[7]),
+            int(argv[6]), int(argv[7]), ordinary_source,
         )
-        stage_bundle(Path(argv[8]), candidate)
+        stage_bundle(Path(argv[-1]), candidate)
     except (ValueError, OSError, UnicodeError, VoiceConfigurationError,
             CapturePlanError, VoiceModelError) as exc:
         # No IPSET contents, secret XML fields or raw profile data in errors.
