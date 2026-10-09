@@ -36,12 +36,17 @@ def valid_numbers(first: int, last: int, name: str) -> None:
 
 
 def compile_capture_plan(candidate: dict, rule_base: int, rule_max: int,
-                         divert_port: int) -> dict:
+                         divert_port: int, physical_wan: str | None = None) -> dict:
     if not isinstance(candidate, dict) or candidate.get("schema") != 1:
         fail("unsupported or missing Voice candidate schema")
     wan = candidate.get("wan")
     if not isinstance(wan, str) or not WAN_RE.fullmatch(wan):
-        fail("unsafe or missing Voice WAN device")
+        fail("unsafe or missing Voice WAN logical interface")
+    # 'WAN' in OPNsense XML is a logical name. Runtime callers must supply
+    # the resolved kernel interface separately. Never treat this as routing.
+    capture_wan = wan if physical_wan is None else physical_wan
+    if not isinstance(capture_wan, str) or not WAN_RE.fullmatch(capture_wan):
+        fail("unsafe or missing resolved Voice WAN device")
     if type(rule_base) is not int or type(rule_max) is not int or not (
         MIN_RULE <= rule_base <= rule_max <= MAX_RULE
     ):
@@ -122,7 +127,7 @@ def compile_capture_plan(candidate: dict, rule_base: int, rule_max: int,
                 "to", f"table({table})"]
         if port_expression is not None:
             argv.append(port_expression)
-        argv += ["out", "not", "diverted", "not", "sockarg", "xmit", wan]
+        argv += ["out", "not", "diverted", "not", "sockarg", "xmit", capture_wan]
         rows.append({
             "service": name,
             "table": table,
@@ -141,7 +146,8 @@ def compile_capture_plan(candidate: dict, rule_base: int, rule_max: int,
         fail("not enough plugin-owned IPFW numbers for Voice and ordinary Strategies")
     return {
         "schema": 1,
-        "wan": wan,
+        "logical_wan": wan,
+        "wan": capture_wan,
         "divert_port": divert_port,
         "rule_base": rule_base,
         "rule_max": rule_max,
