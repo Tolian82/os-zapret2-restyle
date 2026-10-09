@@ -106,8 +106,8 @@ class VoiceCandidateTests(unittest.TestCase):
             (BASE_ARGS + "\n--name=system", "forbidden"),
             (BASE_ARGS + "\n--port=989", "forbidden"),
             (BASE_ARGS + "\n$(touch /tmp/unsafe)", "only printable"),
-            (BASE_ARGS + "\n--lua-desync=send:ipfrag", "unsupported"),
-            (BASE_ARGS + "\n--lua-desync=fake:blob=0x12:repeats=9999", "unsupported"),
+            (BASE_ARGS + "\n--lua-desync=send:ipfrag", "only native"),
+            (BASE_ARGS + "\n--lua-desync=fake:blob=0x12:repeats=9999", "fake repeats"),
             (BASE_ARGS.replace("--filter-udp=*", "--filter-udp=0"), "invalid UDP"),
             (BASE_ARGS.replace("--filter-udp=*", "--filter-udp=65536"), "invalid UDP"),
             (BASE_ARGS.replace("--filter-l7=stun", "--filter-l7=unknown"), "only --filter-l7=stun"),
@@ -119,6 +119,47 @@ class VoiceCandidateTests(unittest.TestCase):
             with self.subTest(args=args):
                 with self.assertRaisesRegex(voice.VoiceConfigurationError, message):
                     self.compile(enable(payload(), args=args))
+
+    def test_advanced_native_fake_options_are_bounded_before_engine(self):
+        examples = [
+            "--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2:ip_ttl=3",
+            "--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2:badsum",
+            "--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2:ipfrag:ipfrag_pos_udp=8",
+            "--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2:ipfrag:ipfrag_pos_udp=8:ipfrag_disorder",
+        ]
+        for native in examples:
+            with self.subTest(native=native):
+                text, _ = self.compile(enable(payload(),args=(
+                    "--filter-udp=596-599\n--filter-l7=stun\n--payload=stun\n"
+                    "--out-range=n1-n10\n"+native
+                )))
+                self.assertIn(native, text)
+                self.assertIn("--out-range=n1-n10", text)
+
+    def test_fake_param_injections_and_invalid_fragments_are_rejected(self):
+        cases = [
+            (":ip_ttl=0", "fake TTL"),
+            (":ip_ttl=256", "fake TTL"),
+            (":ip_ttl=3:ip_ttl=4", "duplicate"),
+            (":badsum=1", "badsum is a flag"),
+            (":ipfrag_pos_udp=8", "require ipfrag"),
+            (":ipfrag:ipfrag_pos_udp=7", "multiple of 8"),
+            (":ipfrag:ipfrag_pos_udp=2048", "split"),
+            (":ipfrag:ipfrag_disorder=1", "is a flag"),
+            (":ipfrag:badsum", "not yet qualified"),
+            (":ifout=lo0", "unverified fake option"),
+            (":repeats=0", "fake repeats"),
+            (":ipfrag=my_fragment", "only the installed"),
+        ]
+        for suffix, expected in cases:
+            with self.subTest(suffix=suffix):
+                args = BASE_ARGS+suffix
+                with self.assertRaisesRegex(voice.VoiceConfigurationError, expected):
+                    self.compile(enable(payload(), args=args))
+        for rng in ["s1-s10", "n1-x", "n1;id", "n1-n9999999", "-d10", "n1<<d5"]:
+            with self.subTest(rng=rng):
+                with self.assertRaisesRegex(voice.VoiceConfigurationError, "out-range"):
+                    self.compile(enable(payload(),args=BASE_ARGS+"\n--out-range="+rng))
 
     def test_required_fields_and_empty_ipset(self):
         for value in ["", "garbage", "91.108.13.10/24", "2001:db8::1", "1.2.3.4\n1.2.3.5/24"]:
