@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Native legacy-lifecycle interruption guard (Draft):** a read-only Python boot guard now executes inside the existing zapret_service.sh lockf scope before start/stop/reconfigure/legacy Telegram PoC and runtime-failure paths. Pending whole-runtime or IPFW intents, committed native ownership and corrupt private ledgers all block old dispatcher; missing clean journals leave prior Strategies behavior. Distinct return code 69 avoids lockf busy 75 confusion. No real native dvtws2/IPFW Apply or automated recovery; this is a preservation guard until explicit ownership routing exists.
+
+
 **Voice diagnostic integration:** current read-only configd inspector checks the full durable cutover journal before IPFW. Any prepared/mutating/committed unfinished intent blocks positive readiness; GUI shows localized stage explanations. This does NOT mean that normal boot or full native cutover is implemented: production adapters remain disconnected, Apply disabled, legacy PoC unchanged. Real recovery must coordinate the whole-runtime and IPFW journals under the shared lock.
 
 

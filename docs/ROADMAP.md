@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Enforce read-only pending dual-journal/native-owner gate under the actual zapret_service.sh lifecycle lock, before legacy runtime mutation; test FreeBSD and no-journal compatibility
+- [ ] Implement a native-owner-aware Start/Stop/Reconfigure dispatcher and reviewed cold-boot journal recovery; safely migrate old Telegram Voice PoC and enable Apply only after end-to-end rollback acceptance
+
 - [x] Wire private whole-cutover pending-intent classification into native read-only Voice configd diagnostics before IPFW readiness; RU/EN stage text and CI regression
 - [ ] Adopt and coordinate full-runtime/IPFW journals in actual Config/lifecycle locked native Apply and cold-boot recovery, without automatically clearing ambiguity
 
