@@ -165,6 +165,14 @@ def capture_previous(config: Path, runtime: Path, output: Path) -> dict:
             handle.write(encoded)
             handle.flush()
             os.fsync(handle.fileno())
+        # A separate content seal detects torn/accidentally modified
+        # manifests independently of the per-file backup hashes.
+        seal = (hashlib.sha256(encoded).hexdigest() + "\n").encode("ascii")
+        with (temporary / "manifest.sha256").open("xb") as handle:
+            os.chmod(temporary / "manifest.sha256", 0o600)
+            handle.write(seal)
+            handle.flush()
+            os.fsync(handle.fileno())
         _sync_dir(config_dir)
         _sync_dir(runtime_dir)
         _sync_dir(temporary)
@@ -175,6 +183,28 @@ def capture_previous(config: Path, runtime: Path, output: Path) -> dict:
     finally:
         if temporary.exists():
             shutil.rmtree(temporary)
+
+
+def _read_private_file(path: Path, limit: int) -> bytes:
+    # O_NOFOLLOW protects the actual open, not just a prior lstat.
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or \
+           info.st_uid != os.geteuid() or info.st_mode & 0o077 or \
+           info.st_size > limit:
+            raise VoiceBackupError("Voice backup metadata is not private and regular")
+        data = bytearray()
+        while len(data) <= limit:
+            chunk = os.read(fd, min(CHUNK, limit + 1 - len(data)))
+            if not chunk:
+                break
+            data.extend(chunk)
+        if len(data) > limit:
+            raise VoiceBackupError("Voice backup metadata too large")
+        return bytes(data)
+    finally:
+        os.close(fd)
 
 
 def _verify_file(file: Path, row: dict) -> None:
@@ -201,12 +231,13 @@ def inspect_previous(output: Path) -> dict:
     output = Path(output)
     _private_dir(output.parent)
     _private_dir(output)
-    manifest_path = output / "manifest.json"
-    raw_info = _regular(manifest_path)
-    if raw_info.st_size > MAX_MANIFEST or raw_info.st_mode & 0o077:
-        raise VoiceBackupError("unsafe Voice backup manifest")
+    raw_manifest = _read_private_file(output / "manifest.json", MAX_MANIFEST)
+    raw_seal = _read_private_file(output / "manifest.sha256", 65)
+    expected_seal = (hashlib.sha256(raw_manifest).hexdigest() + "\n").encode("ascii")
+    if raw_seal != expected_seal:
+        raise VoiceBackupError("Voice backup manifest checksum mismatch")
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest = json.loads(raw_manifest)
     except (ValueError, UnicodeError) as e:
         raise VoiceBackupError("invalid Voice backup manifest") from e
     if not isinstance(manifest, dict) or set(manifest) != {
@@ -216,6 +247,7 @@ def inspect_previous(output: Path) -> dict:
     _verify_file(output / "config/config.xml", manifest["config"])
     declared = set(manifest["runtime"])
     actual = set()
+    actual_bytes = 0
     base = output / "runtime"
     if base.is_symlink() or not base.is_dir():
         raise VoiceBackupError("Voice backup runtime folder missing or unsafe")
@@ -237,12 +269,17 @@ def inspect_previous(output: Path) -> dict:
                     raise VoiceBackupError("runtime directory manifest differs")
             elif stat.S_ISREG(info.st_mode):
                 _verify_file(item, row)
+                actual_bytes += info.st_size
             else:
                 raise VoiceBackupError("Voice backup runtime contains unsafe entry")
     if declared != actual:
         raise VoiceBackupError("Voice backup has missing runtime entries")
+    if type(manifest["runtime_bytes"]) is not int or \
+       actual_bytes != manifest["runtime_bytes"]:
+        raise VoiceBackupError("Voice backup runtime total size mismatch")
     # Forbid unexpected files outside the strict storage layout.
-    if sorted(p.name for p in output.iterdir()) != ["config", "manifest.json", "runtime"] or \
+    if sorted(p.name for p in output.iterdir()) != \
+       ["config", "manifest.json", "manifest.sha256", "runtime"] or \
        sorted(p.name for p in (output / "config").iterdir()) != ["config.xml"]:
         raise VoiceBackupError("Voice backup contains unknown payloads")
     return manifest
