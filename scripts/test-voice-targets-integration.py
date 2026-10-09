@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -47,7 +48,18 @@ def run_real_targets(folder: Path, addresses: dict[str, str]) -> subprocess.Comp
         str(folder), "youtube.com", addresses["telegram"], "example.org",
         addresses["discord"], addresses["x"], addresses["sip"], addresses["custom"],
     ]
-    return subprocess.run(cmd, capture_output=True, text=True, check=False)
+    # FreeBSD packages /usr/local/bin/python3.13 but may not install the
+    # unversioned python3 executable. Feed the tested interpreter to the
+    # unchanged production helper through a *private test-only* PATH entry.
+    # A genuine malformed target must not pass merely because python3 is
+    # missing in the ephemeral FreeBSD CI VM.
+    with tempfile.TemporaryDirectory(prefix="voice-targets-python-") as tmp:
+        interpreter = Path(tmp) / "python3"
+        interpreter.symlink_to(Path(sys.executable).resolve())
+        env = os.environ.copy()
+        env["PATH"] = tmp + os.pathsep + env.get("PATH", "")
+        return subprocess.run(cmd, capture_output=True, text=True,
+                              check=False, env=env)
 
 def xml_source(path: Path, addresses: dict[str,str]) -> None:
     root = ET.Element("opnsense")
@@ -107,6 +119,8 @@ class RealTargetsBridgeTests(unittest.TestCase):
             xml_source(source, bad)
             result = run_real_targets(managed, bad)
             self.assertNotEqual(0, result.returncode, result.stdout)
+            self.assertIn("has host bits set", result.stderr,
+                          "invalid CIDR must be rejected by Python's native IPv4 parser, not by a missing interpreter")
             with self.assertRaises((ValueError, OSError)):
                 stage.compile_bundle(
                     source, managed, Path("/usr/local/etc/zapret2/runtime-v2"),
