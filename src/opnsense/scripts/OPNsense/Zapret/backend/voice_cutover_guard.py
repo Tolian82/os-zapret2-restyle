@@ -43,11 +43,21 @@ def check_pending(whole_root: Path, ipfw_root: Path) -> dict:
                     "phase": state, "safe_to_mutate": False,
                 }
         if _present(ipfw_root):
-            pending = VoiceOwnershipStore(ipfw_root).pending()
+            ledger = VoiceOwnershipStore(ipfw_root)
+            pending = ledger.pending()
             if pending is not None:
                 return {
                     "state": "blocked", "reason": "ipfw-intent",
                     "phase": pending["phase"], "safe_to_mutate": False,
+                }
+            # Once *native* Voice owns an IPFW range, starting the legacy
+            # PoC would be a second, unrelated owner even after the intent
+            # was committed. This legacy-only service wrapper must refuse
+            # until it is explicitly replaced by native ownership routing.
+            if ledger.owned() is not None:
+                return {
+                    "state": "blocked", "reason": "native-ipfw-owned",
+                    "safe_to_mutate": False,
                 }
         return {"state": "clear", "safe_to_mutate": True}
     except (OSError, ValueError, LedgerError, CutoverJournalError):
