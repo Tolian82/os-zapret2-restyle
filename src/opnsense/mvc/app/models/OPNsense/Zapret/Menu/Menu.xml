@@ -2,7 +2,8 @@
     <Services>
         <Zapret VisibleName="Zapret DPI Bypass" cssClass="fa fa-shield" order="99">
             <General VisibleName="Strategy" url="/ui/zapret" order="0"/>
-            <Diagnostics VisibleName="Laboratory" url="/ui/zapret/diagnostics" order="1"/>
+            <Voice VisibleName="Voice Transmission" url="/ui/zapret/voice" order="1"/>
+            <Diagnostics VisibleName="Laboratory" url="/ui/zapret/diagnostics" order="2"/>
         </Zapret>
     </Services>
 </menu>
