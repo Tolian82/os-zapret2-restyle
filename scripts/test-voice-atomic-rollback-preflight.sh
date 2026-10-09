@@ -40,6 +40,46 @@ assert_candidate
 rm "${backup}"
 mkdir "${backup}"
 cp "${dir}/original/dvtws.args" "${backup}/dvtws.args"
+
+# Simulate the failure of the critical backup -> active rename AFTER the
+# current candidate has been parked. This must not strand or delete either.
+if (
+    mv() {
+        if [ "$1" = "${backup}" ] && [ "$2" = "${active}" ]; then
+            return 1
+        fi
+        command mv "$@"
+    }
+    atomic_restore_tree "${active}" "${backup}" 2>/dev/null
+); then
+    echo "FAIL: deliberately failed backup move unexpectedly succeeded" >&2
+    exit 1
+fi
+assert_candidate
+[ -f "${backup}/dvtws.args" ] || {
+    echo "FAIL: backup was lost on failed rename" >&2
+    exit 1
+}
+[ ! -e "${active}.rollback-old.$" ] || {
+    echo "FAIL: candidate remained stranded in rollback parking path" >&2
+    exit 1
+}
+
+# An unknown pre-existing parked release must not be erased or overwritten.
+park="${active}.rollback-old.$"
+mkdir "${park}"
+printf '%s\n' sentinel > "${park}/keep"
+if atomic_restore_tree "${active}" "${backup}" 2>/dev/null; then
+    echo "FAIL: conflicting parked runtime was overwritten" >&2
+    exit 1
+fi
+assert_candidate
+[ "$(cat "${park}/keep")" = sentinel ] || {
+    echo "FAIL: parked unknown runtime was modified" >&2
+    exit 1
+}
+rm -rf "${park}"
+
 atomic_restore_tree "${active}" "${backup}" || {
     echo "FAIL: valid saved runtime failed to restore" >&2
     exit 1
