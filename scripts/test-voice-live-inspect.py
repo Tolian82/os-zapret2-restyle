@@ -13,6 +13,7 @@ sys.path.insert(0, str(BACKEND))
 
 from voice_live_inspect import examine
 from voice_firewall_ledger import VoiceOwnershipStore
+from voice_cutover_journal import VoiceCutoverJournal, CutoverJournalError
 from voice_firewall_transaction import VoiceFirewallError
 import importlib.util
 fixture_path=ROOT / "scripts/test-voice-firewall-transaction.py"
@@ -65,6 +66,47 @@ class InspectionTests(unittest.TestCase):
             kernel = FakeAdapter(two)
             kernel.tables["zapret2_voice_telegram"].reverse()
             self.assertEqual("ready", examine(store, kernel)["state"])
+
+    def test_whole_system_intent_dominates_even_healthy_ipfw_and_is_read_only(self):
+        previous = {name: str(i) * 64 for i, name in
+                    enumerate(("config","runtime","engine","firewall","supervisor"))}
+        proof = {"saved_xml_sha256":"a"*64, "merged_sha256":"b"*64,
+                 "native_argv_sha256":"c"*64}
+        for phase,condition in (
+            ("prepared","prepared-needs-previous-verification"),
+            ("mutating","interrupted-needs-kernel-runtime-review"),
+            ("committed","committed-needs-cleanup-review"),
+        ):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as d:
+                store,old,new=self.states(d)
+                store.seed(old)
+                parent=Path(d)/"cutover"
+                parent.mkdir(mode=0o700)
+                cutover=VoiceCutoverJournal(parent)
+                cutover.begin(previous, proof)
+                if phase in ("mutating","committed"):
+                    cutover.mark_mutating()
+                if phase=="committed":
+                    cutover.commit()
+                kernel=FakeAdapter(old)
+                report=examine(store,kernel,cutover)
+                self.assertEqual("interrupted",report["state"])
+                self.assertEqual(condition,report["condition"])
+                self.assertFalse(report["can_activate"])
+                self.assertEqual([],kernel.operations,
+                                 "whole-journal pending must block before IPFW read")
+                self.assertEqual(phase,cutover.read()["phase"])
+
+    def test_whole_system_cutover_journal_absent_falls_back_to_owned_ipfw(self):
+        with tempfile.TemporaryDirectory() as d:
+            store,old,new=self.states(d)
+            store.seed(old)
+            folder=Path(d)/"cutover"
+            folder.mkdir(mode=0o700)
+            cutover=VoiceCutoverJournal(folder)
+            kernel=FakeAdapter(old)
+            self.assertEqual("ready",examine(store,kernel,cutover)["state"])
+            self.assertEqual("no-intent",cutover.inspect())
 
     def test_foreign_rule_and_table_block(self):
         with tempfile.TemporaryDirectory() as d:
