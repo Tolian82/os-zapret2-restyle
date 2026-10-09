@@ -163,7 +163,7 @@ class VoiceFirewallTransactionTests(unittest.TestCase):
         with self.assertRaisesRegex(transaction.VoiceFirewallError,"IPv4"):
             transaction.prepare_desired(profile,"443","596-599")
         with self.assertRaisesRegex(transaction.VoiceFirewallError,"neither TCP nor UDP"):
-            transaction.prepare_desired({**profile,"voice":[]},"","")
+            transaction.prepare_desired({**profile,"voice":[],"ordinary_rule_base":19000},"","")
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
