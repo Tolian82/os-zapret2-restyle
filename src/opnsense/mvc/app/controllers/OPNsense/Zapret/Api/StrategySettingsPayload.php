@@ -35,7 +35,7 @@ final class StrategySettingsPayload
         // Browser textareas normalize line endings. Compare the same data,
         // while keeping all address/content validation with the model.
         $normalize = static function (string $value): string {
-            return str_replace(["\r\n", "\r"], "\n", $value);
+            return rtrim(str_replace(["\r\n", "\r"], "\n", $value), "\n");
         };
         if (!hash_equals($normalize($saved), $normalize($baseline))) {
             throw new \InvalidArgumentException(
