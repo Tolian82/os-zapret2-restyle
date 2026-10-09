@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 
 from voice_firewall_ledger import LedgerError, VoiceOwnershipStore
+from voice_cutover_journal import CutoverJournalError, VoiceCutoverJournal
 from voice_ipfw_adapter import FreeBSDIPFWAdapter, IPFWAdapterError
 from voice_firewall_transaction import (
     SERVICES, TABLE_PREFIX, VoiceFirewallError, table_contents_equal,
@@ -21,8 +22,21 @@ class VoiceInspectError(RuntimeError):
     pass
 
 
-def examine(store, adapter) -> dict:
-    """Inspect without side effects; 'ready' requires exact owned kernel state."""
+def examine(store, adapter, cutover=None) -> dict:
+    """Inspect without side effects; 'ready' requires exact owned kernel state.
+
+    An incomplete whole-runtime Config/engine/IPFW transition takes priority
+    even if this moment's individual IPFW rules happen to appear correct.
+    """
+    if cutover is not None:
+        phase = cutover.inspect()
+        if phase != "no-intent":
+            return {
+                "state": "interrupted",
+                "condition": phase,
+                "can_activate": False,
+                "remedy": "whole-runtime-manual-review",
+            }
     if store.pending() is not None:
         condition = store.inspect(adapter)
         return {
@@ -76,6 +90,19 @@ def main(args: list[str]) -> int:
         print("usage: voice_live_inspect.py", file=sys.stderr)
         return 64
     try:
+        # A whole-runtime cutover intent is stronger than a momentary IPFW
+        # observation: deny readiness even when the per-IPFW ledger is absent.
+        cutover_dir = Path("/var/db/zapret2/voice-cutover")
+        cutover = None
+        if cutover_dir.exists() or cutover_dir.is_symlink():
+            cutover = VoiceCutoverJournal(cutover_dir)
+            status = cutover.inspect()
+            if status != "no-intent":
+                print(json.dumps({
+                    "state": "interrupted", "condition": status,
+                    "can_activate": False, "remedy": "whole-runtime-manual-review",
+                }, sort_keys=True))
+                return 2
         # Fixed private path. The production code must explicitly prepare
         # the directory under the existing lifecycle lock after migration.
         directory = Path("/var/db/zapret2/voice-ipfw")
@@ -86,11 +113,11 @@ def main(args: list[str]) -> int:
             return 2
         store = VoiceOwnershipStore(directory)
         adapter = FreeBSDIPFWAdapter(19000, 19010)
-        report = examine(store, adapter)
+        report = examine(store, adapter, cutover)
         print(json.dumps(report, sort_keys=True))
         return 0 if report["state"] == "ready" else 2
     except (OSError, ValueError, VoiceFirewallError, LedgerError,
-            IPFWAdapterError) as error:
+            IPFWAdapterError, CutoverJournalError) as error:
         # Never dump kernel rule text, sensitive config or tables to stdout.
         print(json.dumps({
             "state": "inspection-error",
