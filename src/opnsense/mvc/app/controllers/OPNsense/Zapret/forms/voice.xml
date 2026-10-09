@@ -17,6 +17,16 @@
         <label>Voice Transmission Parameters</label>
     </field>
     <field>
+        <type>info</type>
+        <label>About Voice Profiles</label>
+        <text><![CDATA[
+            This page configures outgoing STUN / UDP interception through the existing Zapret2 engine.
+            The service checkbox controls whether a destination-scoped profile is included on Apply.
+            Each enabled profile requires a nonempty IPv4/CIDR destination IPSET and native dvtws2 parameters.
+            Non-STUN strategies remain on the Strategy page. A profile being enabled does not prove a working voice call.
+        ]]></text>
+    </field>
+    <field>
         <id>zapret.voice.telegram.enabled</id>
         <label>Telegram</label>
         <type>checkbox</type>
