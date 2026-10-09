@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Read-only cutover status now in GUI:** `voice_live_inspect.py` / `configctl zapret voice_inspect` сначала смотрит новый приватный `/var/db/zapret2/voice-cutover` journal. Если он содержит pending whole-runtime транзакцию, GUI показывает `interrupted` с RU/EN причиной даже при корректных IPFW-правилах; no rollback/replay. Отсутствующий журнал сохраняет старую IPFW-диагностику. Voice Apply всё ещё заблокирован.
+
+
 **Voice full cutover mock (не runtime):** `voice_cutover_coordinator.py` моделирует фазы checked old state → durable prepared/mutating → one-engine/tree/IPFW/supervisor → Config save → committed → verified cleanup или полный rollback; по умолчанию блокирует выполнение, работает только с injected test adapters. `voice_cutover_journal.py` отдельно пишет ограниченный, приватный, fsync'ed whole-runtime intent и при перерыве выдаёт manual review без автоматических kernel-команд. Тесты проверяют отказные точки и actual on-disk journal, Linux/FreeBSD CI и package contents. **НЕ включать GUI Apply и не публиковать пакет по этому факту:** реальный Config/lifecycle/PoC/boot переход ещё не подключён.
 
 

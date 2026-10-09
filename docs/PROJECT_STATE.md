@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Voice diagnostic integration:** current read-only configd inspector checks the full durable cutover journal before IPFW. Any prepared/mutating/committed unfinished intent blocks positive readiness; GUI shows localized stage explanations. This does NOT mean that normal boot or full native cutover is implemented: production adapters remain disconnected, Apply disabled, legacy PoC unchanged. Real recovery must coordinate the whole-runtime and IPFW journals under the shared lock.
+
+
 **Voice next milestone (draft, mock-only):** whole-system `voice_cutover_coordinator.py` now models full Config, one dvtws2, supervisor and IPFW transition, verifies trusted previous state before any intent, runs fault-injected rollback, and never claims success if a partial failure remains. `voice_cutover_journal.py` is a separate private fsync'd prepared/mutating/committed intent with read-only boot classification, integrated with the simulated coordinator in tests. Both modules are packaged, but neither is connected to production startup, configd or GUI Apply. Must coordinate with per-IPFW ledger, migrate legacy marker, qualify installed engine and validate recovery on real OPNsense. Latest head CI pending independent verification.
 
 

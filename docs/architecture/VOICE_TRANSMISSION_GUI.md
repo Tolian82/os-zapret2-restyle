@@ -1,5 +1,12 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### Read-only интеграция общего журнала в диагностику страницы
+
+- В отличие от mock-only активатора, `voice_live_inspect.py` **уже вызывается штатным configd read-only `zapret voice_inspect`**. Теперь перед IPFW-проверкой он проверяет `/var/db/zapret2/voice-cutover` (если такой приватный каталог существует). Долговечный `prepared`/`mutating`/`committed` intent немедленно даёт `state=interrupted`, `can_activate=false` и фиксированное `condition`; IPFW-проверки не могут скрыть незавершённое переключение, даже если собственный `voice-ipfw` каталог отсутствует. Некорректные права, symlink или повреждение журнала дают fail-closed `inspection-error`. Отсутствующий whole-runtime journal сохраняет прежнюю IPFW диагностику.
+- GUI отображает статус и короткую RU/EN подсказку о фазе: проверка прежнего состояния, прерванная замена компонентов или проверка cleanup после фиксации. Это только текст и чтение; статус **не запускает восстановление**, не принимает решение пользователя, не активирует новый профайл и не разблокирует Apply.
+- `scripts/test-voice-live-inspect.py` с реальным файловым `VoiceCutoverJournal` и mock IPFW проверяет приоритет всех трёх фаз и отсутствие kernel-чтений после обнаружения pending-intent. `scripts/test-voice-gui-contract.py` закрепляет RU/EN представление состояния. Для live эксплуатации всё ещё обязателен будущий единый lockf/recovery и owner approval acceptance.
+
+
 ### Whole-system Voice cutover: ещё отключённый протокол транзакции (2026-10-09)
 
 - `backend/voice_cutover_coordinator.py` — **исключительно adapter-injected mock contract**, без CLI и без использования из `zapret_service.sh`/GUI. Никакая реальная мутация невозможна по умолчанию: `simulate_cutover(..., test_only_mutations=False)` отказывает до вызова адаптера. Для теста требуется явный `test_only_mutations=True` и оба замка (Config и lifecycle) от тестового адаптера. Нельзя переносить эту проверку в runtime простым включением флага.
