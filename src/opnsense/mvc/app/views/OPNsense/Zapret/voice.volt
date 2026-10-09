@@ -10,7 +10,7 @@ $(document).ready(function () {
         infoTitle: 'Как работают голосовые профили',
         infoText: 'Страница настраивает перехват исходящего UDP/STUN в общем движке Zapret2. Каждый включённый профиль требует IPSET и нативные аргументы dvtws2. Non-STUN остаётся в «Стратегиях». Включённый профиль не означает успешный голосовой звонок.',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
-        service: 'Служба Zapret2', apply: 'Применить', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
+        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', checkOk: 'Синтаксис проверен (без применения)', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
         notice: 'Форма v0.5.1_1 находится в разработке. Применение заблокировано до завершения валидации, единого движка, IPFW и восстановления после загрузки. Текущая служба не изменяется.',
         status: 'Статус', running: 'Запущена', stopped: 'Остановлена', error: 'Ошибка',
         loading: 'Загрузка…', incomplete: 'Неизвестно',
@@ -27,7 +27,7 @@ $(document).ready(function () {
         infoTitle: 'About Voice Profiles',
         infoText: 'This page configures outgoing UDP/STUN interception in the shared Zapret2 engine. Each enabled profile requires an IPSET and native dvtws2 arguments. Non-STUN remains in Strategies. An enabled profile does not prove a working voice call.',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
-        service: 'Zapret2 Service', apply: 'Apply', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
+        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', checkOk: 'Syntax checked (not applied)', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
         notice: 'The v0.5.1_1 form is under development. Apply is locked until validation, single-engine/IPFW handling and boot recovery are complete. Current runtime is not modified.',
         status: 'Status', running: 'Started', stopped: 'Stopped', error: 'Error',
         loading: 'Loading…', incomplete: 'Unknown',
@@ -95,6 +95,31 @@ $(document).ready(function () {
     $('#voiceServiceTitle').text(text.service);
     $('#voiceStatusLabel').text(text.status + ':');
     $('#voiceApply').text(text.apply).prop('disabled', true);
+    $('#voiceValidate').text(text.validate);
+    $('#voiceValidate').on('click', function () {
+        var button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        $('#voiceValidationStatus').text(text.loading);
+        $.ajax({
+            type: 'POST',
+            url: '/api/zapret/voice/validate',
+            data: getFormData('frm_VoiceSettings'),
+            dataType: 'json',
+            timeout: 30000
+        }).done(function (reply) {
+            handleFormValidation('frm_VoiceSettings', (reply && reply.validations) || {});
+            if (reply && reply.result === 'validated') {
+                $('#voiceValidationStatus').text(text.checkOk);
+            } else {
+                $('#voiceValidationStatus').text(text.checkFailed);
+            }
+        }).fail(function () {
+            $('#voiceValidationStatus').text(text.checkError);
+        }).always(function () {
+            button.prop('disabled', false);
+        });
+    });
     $('#voiceImplementationNotice').text(text.notice);
     $('#voiceIPFWLabel').text(text.ipfwStatus + ':');
     localizeForm();
@@ -254,6 +279,8 @@ $(document).ready(function () {
 <section class="grid-bottom-reserve __mt">
     <div class="alert content-box" style="margin-bottom: 0;">
         <button class="btn btn-primary __mr" id="voiceApply" type="button" disabled>Apply</button>
+        <button class="btn btn-default __mr" id="voiceValidate" type="button">Validate</button>
+        <span id="voiceValidationStatus" aria-live="polite"></span>
         <span id="voiceImplementationNotice" aria-live="polite"></span>
     </div>
 </section>
