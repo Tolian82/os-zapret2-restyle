@@ -1,7 +1,11 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_9`: compose all five native, injection-only read-only prior-instance fingerprints and test with complete cutover preflight; no activation capability
+- [ ] Wire production Config/lifecycle locks and verify semantic process argv + post-boot new-instance attestation before replay or Voice Apply
+
+
 - [x] Current candidate `v0.5.1_8`: read-only live Config/runtime canonical SHA256 witness, strict `dir_fd` no-follow traversal and double-scan race checks
-- [ ] Compose all five native read-only witnesses into the recovery attestation under common lifecycle/Config locks before any Voice Apply or replay
+- [x] Compose the five read-only witnesses in offline staging; production lifecycle/Config lock entry remains pending
 
 
 - [x] Current candidate `v0.5.1_7`: real kernel IPFW ownership witness, read-only and strictly ledger-matched

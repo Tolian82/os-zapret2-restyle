@@ -146,6 +146,8 @@ jobs:
         run: python3.13 scripts/test-voice-native-file-observer.py
       - name: Native read-only IPFW kernel ownership witness
         run: python3.13 scripts/test-voice-native-ipfw-ownership.py
+      - name: Compose complete read-only five-resource native Voice witness
+        run: python3.13 scripts/test-voice-native-full-observer.py
       - name: Voice complete five-resource read-only recovery attestation
         run: python3.13 scripts/test-voice-cutover-full-recovery.py
       - name: Voice read-only cross-journal recovery preflight
@@ -519,6 +521,7 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-native-process-probe.py
             /usr/local/bin/python3.13 scripts/test-voice-native-file-observer.py
             /usr/local/bin/python3.13 scripts/test-voice-native-ipfw-ownership.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-full-observer.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-full-recovery.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-recovery-preflight.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-boot-guard.py
@@ -574,6 +577,7 @@ jobs:
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_full_recovery.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_ipfw_ownership.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_file_observer.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_full_observer.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_guard.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_capture_plan.py' "${contents}"
