@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_5 — corrective FreeBSD ps inventory parsing (2026-10-09):** The native read-only process adapter now ignores empty/whitespace-only rows in ps output while still rejecting nonempty malformed process lines. The error was established by the failed v0.5.1_4 Voice CI fixture for a clean stopped state; added a regression for malformed nonempty listings. The project ROADMAP current-candidate marker also follows the revised package identity so the Strategy Lab corrective matrix can verify the same version as VERSION/Makefile. No service mutation, process restart or Voice Apply. Recheck all exact-head Linux and FreeBSD 15 CI.
+
+
 **v0.5.1_4 — native read-only process inventory adapter (2026-10-09):** `voice_native_process_probe.py` uses no shell and performs only bounded native FreeBSD `/bin/ps` reads plus no-follow, checked owner PID-file reads. It requires one exact engine process, one matching supervisor daemon and one monitor, checks immutable PID+process-start observation, catches foreign/orphan/duplicate processes and refuses inferred OFF if matching processes remain without PID files. The adapter is *not called* from production lifecycle, GUI or boot, and has no stop/start/IPFW method. Mock ps + real temporary PID-file regression runs on Linux and FreeBSD 15; the complete live FreeBSD argv/start-time process behavior still needs owner-device qualification. Previous snapshot v0.5.1_3 is preserved; Voice Apply remains absent.
 
 
@@ -78,13 +81,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_4` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_5` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=4` (**development candidate, not published**);
+- `PLUGIN_REVISION=5` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
@@ -164,7 +167,7 @@ Evidence: [September 22 positive observation](verification/evidence/2026-09-22-t
 
 ## Draft implementation progress (PR #328)
 
-The new menu/controller/form/view/model and RU/EN guidance are staged, with all five service switches default OFF. The shared Telegram IPSET remains `hostlist.telegramips`; four additional datasets now have staged backend registry/storage/normalizer/template entries. A read-only persistent Voice config.xml exporter, fail-closed STUN profile compiler, inert candidate-release staging with exact managed IPSET/WAN checks, single-engine traffic merge helper, declarative IPFW capture planner plus a mock-tested IPFW ownership/rollback core and durable private ownership/intent ledger and mock-only activation ordering with read-only restart triage exist (production adapter, lifecycle lock integration, automatic recovery and boot remain unwired) with a temporary narrow, tested option allowlist and rejects a different WAN until true one-engine isolation is proven. **Strategies Apply is now explicitly scoped and rejects a stale shared Telegram IPSET baseline (Voice side still pending). No Voice configuration Apply, runtime multi-service generator, replacement of old PoC marker, destination-scoped IPFW, migration or boot recovery is qualified.** Continue on this same Draft PR. Current stable remains `v0.5.0_1`; latest published experimental testing candidate remains `v0.5.0_3`. Do not install or merge WIP `v0.5.1_4`.
+The new menu/controller/form/view/model and RU/EN guidance are staged, with all five service switches default OFF. The shared Telegram IPSET remains `hostlist.telegramips`; four additional datasets now have staged backend registry/storage/normalizer/template entries. A read-only persistent Voice config.xml exporter, fail-closed STUN profile compiler, inert candidate-release staging with exact managed IPSET/WAN checks, single-engine traffic merge helper, declarative IPFW capture planner plus a mock-tested IPFW ownership/rollback core and durable private ownership/intent ledger and mock-only activation ordering with read-only restart triage exist (production adapter, lifecycle lock integration, automatic recovery and boot remain unwired) with a temporary narrow, tested option allowlist and rejects a different WAN until true one-engine isolation is proven. **Strategies Apply is now explicitly scoped and rejects a stale shared Telegram IPSET baseline (Voice side still pending). No Voice configuration Apply, runtime multi-service generator, replacement of old PoC marker, destination-scoped IPFW, migration or boot recovery is qualified.** Continue on this same Draft PR. Current stable remains `v0.5.0_1`; latest published experimental testing candidate remains `v0.5.0_3`. Do not install or merge WIP `v0.5.1_5`.
 
 ## Actual current assignment — implement the approved Voice page
 

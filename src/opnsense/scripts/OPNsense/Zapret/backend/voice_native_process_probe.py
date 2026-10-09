@@ -109,6 +109,10 @@ class FreeBSDVoiceProcessProbe:
     def _parse_global(output):
         rows={}
         for line in output.splitlines():
+            # BSD ps may emit an empty trailing row; never interpret it as a
+            # real process or reject an otherwise complete inventory.
+            if not line.strip():
+                continue
             fields=line.split(None,1)
             if len(fields) != 2 or not fields[0].isdigit():
                 raise ProcessEvidenceError("unexpected global FreeBSD ps row")

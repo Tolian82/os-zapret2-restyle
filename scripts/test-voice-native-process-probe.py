@@ -117,6 +117,18 @@ class NativeProcessProbeTests(unittest.TestCase):
                     probe.probe()
                 self.assertFalse(target.exists())
 
+    def test_nonblank_malformed_ps_row_remains_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            probe,target,runtime,config=self.fixture(d,running=False)
+            class CorruptPs(FakePs):
+                def __call__(self, argv):
+                    if "-A" in argv:
+                        return "1 /sbin/init\nnon-numeric invalid process\n"
+                    return super().__call__(argv)
+            probe.reader=CorruptPs({})
+            with self.assertRaises(evidence.ProcessEvidenceError):
+                probe.probe()
+
     def test_untrusted_pidfile_map_rejected_at_constructor(self):
         with tempfile.TemporaryDirectory() as d:
             probe,target,runtime,config=self.fixture(d)

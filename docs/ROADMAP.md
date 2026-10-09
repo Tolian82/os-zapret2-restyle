@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_5`: tolerate blank native ps rows, reject malformed rows; retain strict three-role inventory
+
+
 - [x] Correct DEV-032 missed revision bump forward to v0.5.1_2; guard future packaged-code pushes
 - [ ] Preserve per-commit revision increments on future product code changes; docs/CI-only stay unchanged
 
