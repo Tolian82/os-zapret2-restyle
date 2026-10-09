@@ -48,6 +48,20 @@ class LiveFileObserverTests(unittest.TestCase):
             self.assertEqual(b"<opnsense>previous</opnsense>\n",config.read_bytes())
             self.assertEqual(old,backup.bound_resource_fingerprints(previous))
 
+    def test_previous_mode_bound_observer_blocks_same_bytes_with_wrong_permissions(self):
+        with tempfile.TemporaryDirectory() as d:
+            config,runtime,previous=self.fixture(d)
+            old=backup.bound_resource_fingerprints(previous)
+            witness=live.LiveFileObserver(config,runtime,previous)
+            self.assertEqual(old,witness.observe())
+            config.chmod(0o644)
+            # Config content digest alone cannot notice this unsafe drift.
+            self.assertEqual(old,live.observe_live_files(config,runtime))
+            with self.assertRaisesRegex(live.LiveFileEvidenceError,
+                                        "permission mode differs"):
+                witness.observe()
+            self.assertEqual(0o600,backup.inspect_previous(previous)["config"]["mode"])
+
     def test_changed_live_files_produce_different_bounded_fingerprints(self):
         with tempfile.TemporaryDirectory() as d:
             config,runtime,previous=self.fixture(d)

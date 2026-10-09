@@ -116,12 +116,14 @@ class IntegratedPriorTests(unittest.TestCase):
             self.assertEqual(b"<opnsense>original</opnsense>",config.read_bytes())
 
     def test_changed_file_proves_mixed_and_new_pid_proves_new_instance(self):
-        for case in ("config","runtime","pid","start-time","process-stopped"):
+        for case in ("config","config-mode","runtime","pid","start-time","process-stopped"):
             with self.subTest(case=case),tempfile.TemporaryDirectory() as d:
                 parts=self.fixture(d)
                 observer,journal,fw,saved,procdir,config,runtime,probe,k=parts
                 if case=="config":
                     config.write_text("<opnsense>different</opnsense>")
+                elif case=="config-mode":
+                    config.chmod(0o644)
                 elif case=="runtime":
                     (runtime/"dvtws.args").write_text("--port=990\n")
                 elif case=="pid":
@@ -139,7 +141,11 @@ class IntegratedPriorTests(unittest.TestCase):
                 result=self.attest(parts)
                 self.assertEqual("blocked",result["state"])
                 self.assertFalse(result["safe_to_mutate"])
-                self.assertEqual("mixed-or-untrusted-previous-state",result["reason"])
+                self.assertEqual(
+                    "invalid-or-incomplete-whole-system-evidence" if case=="config-mode"
+                    else "mixed-or-untrusted-previous-state",
+                    result["reason"],
+                )
                 if case in ("pid","start-time","process-stopped"):
                     self.assertEqual("unknown-or-changed",result["domains"]["engine"])
 

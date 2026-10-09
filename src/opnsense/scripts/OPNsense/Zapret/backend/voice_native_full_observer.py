@@ -30,7 +30,7 @@ class NativePreviousObserver:
                  process_probe, firewall_store, firewall_adapter,
                  file_observer=None):
         self.files = (file_observer if file_observer is not None
-                      else LiveFileObserver(config, runtime))
+                      else LiveFileObserver(config, runtime, previous_backup))
         self.previous_backup = Path(previous_backup)
         self.process_evidence = Path(process_evidence)
         self.expected_executables = dict(expected_executables)

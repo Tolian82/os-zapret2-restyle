@@ -2,7 +2,9 @@
 """Staging-only read-only live Config/runtime fingerprint witness.
 
 Mirrors voice_cutover_backup's exact Config SHA256 and canonical runtime-tree
-fingerprint without writing or staging a file. Uses anchored descriptor-relative
+fingerprint without writing or staging a file.
+When bound to a sealed previous backup, also require its exact Config mode;
+Config content hashes deliberately exclude the mode bits. Uses anchored descriptor-relative
 traversal and O_NOFOLLOW; refuses symlinks, hard links, special files, unstable
 inode metadata, unsafe owners, excessive depth/files/bytes, and torn scans.
 
@@ -20,7 +22,7 @@ from pathlib import Path
 import stat
 
 from voice_cutover_backup import (
-    CHUNK, MAX_BYTES, MAX_FILES, VoiceBackupError,
+    CHUNK, MAX_BYTES, MAX_FILES, VoiceBackupError, inspect_previous,
 )
 
 MAX_DEPTH = 32
@@ -163,7 +165,8 @@ def _scan(config: Path, runtime: Path):
         os.close(fd)
 
 
-def observe_live_files(config: Path, runtime: Path) -> dict[str, str]:
+def observe_live_files(config: Path, runtime: Path,
+                       *, previous_backup: Path | None = None) -> dict[str, str]:
     """Two full stable read-only sweeps of Config and runtime, fail closed."""
     config, runtime = Path(config), Path(runtime)
     if not config.is_absolute() or not runtime.is_absolute() or \
@@ -176,14 +179,28 @@ def observe_live_files(config: Path, runtime: Path) -> dict[str, str]:
         raise LiveFileEvidenceError("untrusted live Voice file inspection") from exc
     if first != second:
         raise LiveFileEvidenceError("live Config/runtime changed between observations")
+    if previous_backup is not None:
+        # The whole-cutover config fingerprint intentionally contains only
+        # the SHA256 of config bytes. To certify the *previous* live state,
+        # separately require the exact saved permission bits, not just bytes.
+        try:
+            old = inspect_previous(Path(previous_backup))
+        except (OSError, VoiceBackupError) as exc:
+            raise LiveFileEvidenceError("invalid sealed previous Voice Config mode") from exc
+        if first[0][2] != old["config"]["mode"]:
+            raise LiveFileEvidenceError("live Config permission mode differs from sealed prior")
     return {"config": first[0][0], "runtime": first[1]}
 
 
 class LiveFileObserver:
     """Injectable two-resource source for the eventual five-resource observer."""
 
-    def __init__(self, config: Path, runtime: Path):
+    def __init__(self, config: Path, runtime: Path,
+                 previous_backup: Path | None = None):
         self.config, self.runtime = Path(config), Path(runtime)
+        self.previous_backup = (Path(previous_backup) if previous_backup is not None
+                                else None)
 
     def observe(self) -> dict[str, str]:
-        return observe_live_files(self.config, self.runtime)
+        return observe_live_files(self.config, self.runtime,
+                                  previous_backup=self.previous_backup)

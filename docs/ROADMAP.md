@@ -1,5 +1,9 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_10`: seal-bound live Config permissions checked alongside unchanged canonical byte SHA256
+- [ ] Native dual-lock-held process/Config/IPFW restart and semantic argv verification before Voice Apply
+
+
 - [x] Current candidate `v0.5.1_9`: compose all five native, injection-only read-only prior-instance fingerprints and test with complete cutover preflight; no activation capability
 - [ ] Wire production Config/lifecycle locks and verify semantic process argv + post-boot new-instance attestation before replay or Voice Apply
 
