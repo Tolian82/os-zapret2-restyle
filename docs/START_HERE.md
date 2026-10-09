@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Voice journal v2 recovery proof (Draft PR #328):** staging-only `VoiceCutoverJournal.begin_bound()` writes an explicitly bound desired IPFW manifest SHA256 alongside the existing candidate hashes. The old v1 schema and read-only inspection remain compatible. `voice_cutover_recovery_preflight.py` compares previous Config/runtime backup, previous IPFW digest, new desired IPFW digest and both journals; all outcomes prohibit activation, automatic recovery and live mutation. The boot guard and read-only inspector have v2 blocking tests. No Voice Apply, no production v2 writer, no installed engine/supervisor recovery, no PoC migration. CI must be checked on exact HEAD.
+
+
 **Strategy Lab / Voice guard e2e:** у старого `test-strategy-lab-lifecycle-cases.sh` создаётся полностью mocked backend, поэтому в нём теперь есть только тестовая Python-заглушка обязательного Voice guard. При pending родительский lifecycle возвращает 69 до worker, а при pending, обнаруженном под унаследованным fd9, внутренний stop тоже возвращает 69 без изменения процесса. Production guard не затронут; его реальные filesystem/ownership проверки покрыты отдельным Voice CI. Проверить exact-head общий CI после этого исправления.
 
 

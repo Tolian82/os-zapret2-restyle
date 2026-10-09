@@ -1,5 +1,11 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Stage optional Voice whole-cutover journal schema 2 with desired canonical IPFW digest; retain schema 1 compatibility, restart checks, and both native diagnostic/boot guard fail-closed tests
+- [x] Cross-check previous sealed Config/runtime snapshot and previous/desired IPFW ownership against separate dual journals in read-only offline tests
+- [ ] Validate full Linux + FreeBSD 15 CI at exact current PR #328 HEAD after schema-2 stage
+- [ ] Implement native lock-held writer/adapters, engine/supervisor recovery evidence, verified power-loss handling, old Telegram PoC retirement and installer qualification BEFORE enabling Apply
+
+
 - [x] Repair Strategy Lab mocked backend fixture for mandatory Voice journal guard; distinguish parent-before-worker and inherited-lock internal stop denials with no prior service mutation
 - [ ] Confirm final full corrective matrix and FreeBSD 15 package on exact PR #328 head after fixture correction
 

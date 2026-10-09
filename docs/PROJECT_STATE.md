@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Voice recovery v2 boundary:** Draft PR #328 stages an explicit schema-2 desired IPFW ownership digest, retaining schema-1 read compatibility. The recovery preflight independently correlates previous immutable Config/runtime bytes with the whole journal and both previous/desired canonical IPFW manifests with the separate ledger. Phase and crash-restart tests include actual distinct targets and reject orphan/foreign/premature/mismatched ownership. Regressions establish that both native read-only inspector and boot lifecycle guard still block on v2 pending intent. These do not read the live FreeBSD kernel, recover the engine/supervisor, expose Voice Apply or authorize automatic reboot replay. Stable installed OPNsense and legacy Telegram PoC remain unchanged; exact-head Linux and FreeBSD CI required.
+
+
 **Strategy Lab lifecycle regression root-cause corrected:** an integration fixture creates a fully mocked SERVICE_BACKEND and lacked the newly mandatory Voice guard file. The fixture now models guard success/pending through a test-only Python file and checks both parent-before-worker rejection (69) and inherited-lock internal stop rejection (69); neither case may stop the prior service. The real production journal guard remains fail closed. Separate versioned Python portability fix still applies to non-installed Linux source trees. Last-head full project/FreeBSD CI remains the release gate.
 
 
