@@ -89,8 +89,26 @@ def canonical_manifest(state: dict) -> dict:
             f"table({TABLE_PREFIX}{name})" for name in SERVICES
         ):
             _fail("unknown IPFW destination in owned rule")
-        if dest != "any" and argv[2] != "udp":
-            _fail("Voice destination tables must be UDP-scoped")
+        if dest != "any":
+            if argv[2] != "udp":
+                _fail("Voice destination tables must be UDP-scoped")
+            table_name = dest[6:-1]
+            if table_name not in source_tables:
+                _fail("Voice rule refers to a table absent from ownership")
+            if len(argv) not in (14, 15):
+                _fail("unrecognized Voice IPFW argument layout")
+        elif len(argv) != 15:
+            _fail("ordinary IPFW capture requires an explicit port selector")
+        if len(argv) == 15:
+            selector = argv[7]
+            if not re.fullmatch(r"[0-9,-]{1,1024}", selector):
+                _fail("invalid owned UDP/TCP port selector")
+            for interval in selector.split(","):
+                parts = interval.split("-")
+                if not 1 <= len(parts) <= 2 or any(
+                    not part.isdecimal() or not 1 <= int(part) <= 65535 for part in parts
+                ) or int(parts[0]) > int(parts[-1]):
+                    _fail("invalid owned UDP/TCP port interval")
         rules.append({"number": num, "argv": list(argv)})
     rules.sort(key=lambda v: v["number"])
     tables = []
@@ -103,11 +121,6 @@ def canonical_manifest(state: dict) -> dict:
             _fail("duplicate owned IPFW table entries")
         tables.append({"name": name, "addresses": parsed})
     tables.sort(key=lambda v: v["name"])
-    if any(
-        f"table({name})" in item["argv"] for item in rules
-        for name in source_tables if name not in (TABLE_PREFIX + n for n in SERVICES)
-    ):
-        _fail("invalid owned table binding")
     return {
         "schema": SCHEMA,
         "rule_base": first,
