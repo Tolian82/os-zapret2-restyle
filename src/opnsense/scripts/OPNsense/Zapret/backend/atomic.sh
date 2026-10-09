@@ -260,16 +260,26 @@ atomic_restore_tree()
     atomic_validate_path \
         "${_atomic_restore_destination}" "destination directory" || return 1
 
+    # Validate the previous tree BEFORE touching the currently active tree.
+    # A missing, unsafe or symlinked backup must never make rollback destroy
+    # the only remaining dvtws2 candidate. This is especially important for
+    # interrupted full-system Voice/Strategies handoffs.
+    if [ -n "${_atomic_restore_backup}" ]; then
+        atomic_validate_path \
+            "${_atomic_restore_backup}" "rollback backup" || return 1
+        if [ -L "${_atomic_restore_backup}" ] ||
+           [ ! -d "${_atomic_restore_backup}" ]; then
+            common_error "atomic rollback backup is missing or unsafe: ${_atomic_restore_backup}"
+            return 1
+        fi
+    fi
+
     if [ -e "${_atomic_restore_destination}" ] ||
        [ -L "${_atomic_restore_destination}" ]; then
         atomic_remove_tree "${_atomic_restore_destination}" || return 1
     fi
 
     if [ -n "${_atomic_restore_backup}" ]; then
-        [ -d "${_atomic_restore_backup}" ] || {
-            common_error "atomic rollback backup does not exist: ${_atomic_restore_backup}"
-            return 1
-        }
         mv "${_atomic_restore_backup}" "${_atomic_restore_destination}" || {
             common_error "cannot restore atomic rollback backup"
             return 1
