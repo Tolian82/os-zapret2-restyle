@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Voice durable previous-state storage:** к mock coordinator и журналу SHA256 добавлен `voice_cutover_backup.py`, который в приватную write-once папку сохраняет *байты* прежнего Config.xml и runtime tree, манифест с хешами и отдельным seal, повторно сверяет источники. `test-voice-cutover-backup.py` покрывает повреждения/гонки; Linux/FreeBSD CI. Хранилище пока изолировано от OPNsense configd и legacy runtime, symlink tree fail-closed, данные kernel/process отдельно не сохраняются. Это подготовка к реальному restore, а не активация Apply.
+
+
 **Shared runtime rollback hardening:** `atomic_restore_tree` теперь сначала отставляет активный runtime в `.rollback-old.PID` и восстанавливает его при неудаче второго `mv`; неизвестный существующий park блокирует восстановление без перезаписи. Есть Linux/FreeBSD fault-injection. Это защита от ошибки команд, но не complete power-loss transaction и не готовый Voice Apply.
 
 

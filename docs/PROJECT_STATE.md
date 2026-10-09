@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Durable old Config/runtime bytes staged (Draft):** `voice_cutover_backup.py` now captures previous config.xml and regular-only runtime-v2 contents into a private write-once fsync'd directory with sealed manifest and per-file SHA256. Source re-hashing detects torn Config/runtime snapshots, read-only inspector rejects corruption/foreign files. It is disconnected from GUI and service and does not yet capture kernel IPFW, running engine/supervisor or verify actual installed runtime symlinks. Full native cutover adapter and crash recovery remain OPEN.
+
+
 **Runtime rollback fault tolerance:** shared atomic_restore_tree parks the current release before installing a verified previous backup, reverses the park on failed second rename, and rejects existing unknown parked trees. New injected-rename regression verifies live candidate and backup survive without loss. No claim of crash-atomic rollback; full native cutover and cold reboot reconciliation remain unfinished.
 
 

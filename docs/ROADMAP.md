@@ -1,5 +1,9 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Stage private previous Config.xml + runtime byte snapshot, sealed manifest, source race detection and read-only integrity tests (Linux/FreeBSD)
+- [ ] Verify installed runtime directory structure and symlink policy; persist trusted snapshots of IPFW and supervisor/engine metadata and bind all resources to journal under one lock
+- [ ] Implement authenticated OPNsense persistent Voice Apply, native single-engine IPFW handoff, power-loss recovery and owner-live acceptance
+
 - [x] Preserve active runtime during failed rollback backup rename using parked candidate and verified inverse rename, with fault-injected Linux/FreeBSD test
 - [ ] Add durable whole-cutover recovery across power loss and verified OPNsense live acceptance, rather than treating two renames as fully atomic
 
