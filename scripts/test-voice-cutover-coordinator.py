@@ -16,6 +16,7 @@ ROOT=Path(__file__).resolve().parent.parent
 BACKEND=ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
 import voice_cutover_coordinator as cutover
+import voice_cutover_journal as durable_journal
 
 VALID={
     "schema":1, "state":"preflight-only", "activation_authorized":False,
@@ -159,6 +160,40 @@ class FakeLifecycle:
         return (self.config,self.runtime,self.firewall,self.engine,self.supervisor)
 
 
+class DurableFakeLifecycle(FakeLifecycle):
+    """Connect the mock lifecycle to the real fsync/rename journal on disk."""
+    PREVIOUS_DIGESTS = {
+        name: str(i) * 64
+        for i, name in enumerate(durable_journal.RESOURCE_NAMES)
+    }
+
+    def __init__(self, store, fail=None):
+        super().__init__(fail=fail)
+        self.store=store
+
+    def begin_intent(self, previous, proof):
+        self.store.begin(self.PREVIOUS_DIGESTS, proof)
+        super().begin_intent(previous, proof)
+
+    def mark_mutating(self):
+        self.store.mark_mutating()
+        super().mark_mutating()
+
+    def commit_intent(self):
+        self.store.commit()
+        super().commit_intent()
+
+    def abort_intent(self):
+        self.store.abort_verified_previous(previous_verified=True)
+        super().abort_intent()
+
+    def finish_intent(self):
+        self.store.finish_verified_desired(
+            desired_verified=True, cleanup_verified=True
+        )
+        super().finish_intent()
+
+
 class WholeCutoverTests(unittest.TestCase):
     def test_real_staging_and_generator_proof_feeds_mock_cutover(self):
         """Carry real candidate/XML/ports/IPFW hashes through the mock lifecycle."""
@@ -179,6 +214,31 @@ class WholeCutoverTests(unittest.TestCase):
             self.assertEqual(("new",)*5,adapter.state())
             self.assertEqual([],proof.get("mutation_history",[]))
             self.assertIsNone(adapter.intent)
+
+    def test_real_durable_journal_covers_mock_happy_rollback_and_crash(self):
+        for fail, expected, status in [
+            (None, ("new",)*5, "no-intent"),
+            ("start_candidate_engine", ("old",)*5, "no-intent"),
+            ("cleanup_retired", ("new",)*5, "committed-needs-cleanup-review"),
+        ]:
+            with self.subTest(fail=fail), tempfile.TemporaryDirectory() as td:
+                directory=Path(td)/"private-cutover"
+                directory.mkdir(mode=0o700)
+                store=durable_journal.VoiceCutoverJournal(directory)
+                adapter=DurableFakeLifecycle(store,fail=fail)
+                if fail is None:
+                    self.assertEqual(
+                        "simulated-committed",
+                        cutover.simulate_cutover(adapter,VALID,test_only_mutations=True)
+                    )
+                else:
+                    expected_exception=(cutover.CutoverManualReview if
+                                        fail=="cleanup_retired" else cutover.CutoverError)
+                    with self.assertRaises(expected_exception):
+                        cutover.simulate_cutover(adapter,VALID,test_only_mutations=True)
+                self.assertEqual(expected,adapter.state())
+                recovered=durable_journal.VoiceCutoverJournal(directory)
+                self.assertEqual(status,recovered.inspect())
 
     def test_default_rejects_all_real_mutations(self):
         a=FakeLifecycle()
