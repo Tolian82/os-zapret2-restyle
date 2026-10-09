@@ -13,6 +13,7 @@ use OPNsense\Core\Config;
 require_once __DIR__ . '/VoiceCandidateValidator.php';
 require_once __DIR__ . '/VoiceSettingsSnapshot.php';
 require_once __DIR__ . '/VoiceSettingsPayload.php';
+require_once __DIR__ . '/VoiceApplyCandidate.php';
 
 class VoiceController extends ApiControllerBase
 {
@@ -62,18 +63,19 @@ class VoiceController extends ApiControllerBase
             if (!is_array($sync) || array_keys($sync) !== ['snapshot']) {
                 throw new \InvalidArgumentException('Voice configuration baseline is missing. Reload the Voice page.');
             }
-            VoiceSettingsSnapshot::requireFresh($current, $sync['snapshot']);
             unset($fields['sync']);
-            // Strict form ownership applies to validation as well as future
-            // Apply; no unrelated model fields can be submitted.
-            VoiceSettingsPayload::overlay($current, $fields);
-            $errors = VoiceCandidateValidator::check($fields);
-            if ($errors) {
-                return ['result' => 'failed', 'validations' => $errors];
+            // Build a normalized *in-memory* preview under the same Config
+            // lock. The actual Save/Apply transaction must re-run this
+            // entire preparation and the Python release compiler.
+            $plan = VoiceApplyCandidate::prepare($current, $fields, $sync['snapshot']);
+            if ($plan['result'] !== 'prepared') {
+                return $plan;
             }
-            // This is an observation, not a promise that a future Apply will
-            // succeed. The authoritative candidate and runtime are untouched.
-            return ['result' => 'validated', 'scope' => 'syntax-only'];
+            return [
+                'result' => 'validated',
+                'scope' => 'syntax-only',
+                'change_count' => count($plan['changed_fields']),
+            ];
         } catch (\InvalidArgumentException $error) {
             return ['result' => 'failed', 'validations' => [
                 'zapret.voice.waninterface' => $error->getMessage()
