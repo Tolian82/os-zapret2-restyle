@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Voice native Apply remains blocked:** a pure `VoiceApplyCandidate` now shares code between future commit preparation and current validate-only GUI, detects independent WAN, canonicalizes enabled IPSET and preserves disabled drafts and unrelated settings. Generated OPNsense template exposes all five native Voice enable flags, and legacy `orchestrator_build_release` explicitly refuses persisted ON rather than silently disregarding it. This is fail-closed staging, not activation/boot recovery. Target real one-engine cutover, legacy migration, restored runtime/ownership on failure and owner-live acceptance remain OPEN.
+
+
 **Voice GUI state (draft):** read-only native load now returns model and optimistic digest atomically under Config lock. Syntax-only Validate checks the baseline again, rejects concurrent edits in general/strategy/voice/hostlist, and never changes config or runtime. CI includes stubbed API concurrency and GUI token tests. This does NOT implement persistent Apply, PoC migration, real FreeBSD lifecycle or boot restore.
 
 

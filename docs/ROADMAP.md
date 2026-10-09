@@ -1,5 +1,10 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Stage pure VoiceApplyCandidate plan: baseline+whitelist, enabled IPSET normalization and OFF draft preservation, field diffs, WAN-isolation gate; reuse in Validate
+- [x] Add native generated-config five-checkbox staged-only gate so future saved Voice ON cannot silently run through old Telegram PoC
+- [x] Test pure Voice Apply plan, foreign settings stability, stale tabs and native backend ON-gate under CI
+- [ ] Remove temporary staged-only guard **only with** full one-engine native Voice runtime, atomic config/IPFW/dvtws handoff, compatibility migration and restart recovery
+
 - [x] Native Voice load returns model + stable baseline from a single Config-locked read
 - [x] Voice Validate rejects stale Strategies/Voice/shared target edits under same Config lock, strict field whitelist and localized errors
 - [x] Model-stub PHP test proves stale/conflict/missing-token, read-only behavior and lock release

@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Voice Apply preparation (Draft PR #328):** `Api/VoiceApplyCandidate.php` строит только нормализованный будущий Voice overlay, сохраняя OFF-черновики и все unrelated поля. Он используется уже в read-only Validate, но не пишет config.xml и не запускает runtime. До live cutover пять generated `VOICE_*_REQUESTED` проходят через `config_voice_staged_only_guard`: сохранённое ON или невалидное значение вызывает раннюю ошибку legacy build, а OFF оставляет обычные Strategies. При окончательном cutover временный guard заменить общей транзакцией, не выпускать его как готовую поддержку Voice.
+
+
 **Voice GUI concurrency update:** Draft PR #328 содержит `VoiceController.loadAction`, возвращающий модель и fingerprint из одного чтения под Config lock. `VoiceController.validateAction` требует тот же fingerprint, отвергает stale Voice/Strategies/shared IPSET, проверяет whitelist и native STUN. Применение/сохранение не включено; в дальнейшем Apply обязан повторить проверку под lock перед live-транзакцией. CI включает PHP model-stub проверку и GUI контракт.
 
 
