@@ -65,6 +65,22 @@ def main() -> None:
                    "'Voice Transmission Parameters'", "'Как работают голосовые профили'",
                    "'About Voice Profiles'", "'Служба Zapret2'", "'Zapret2 Service'"):
         check(marker in view, f"Missing RU/EN translation: {marker}")
+    check("/api/zapret/voice/inspect" in view and
+          "refreshVoiceIPFW" in view and "voiceIPFWState" in view,
+          "Voice read-only IPFW diagnostics are missing from GUI")
+    for term in ("'Правила подтверждены'", "'Verified rules'",
+                 "'Ещё не активировано'", "'Not activated yet'"):
+        check(term in view, f"Missing read-only Voice diagnostic localization: {term}")
+    status_api = SRC / "controllers/OPNsense/Zapret/Api/VoiceController.php"
+    status_php = status_api.read_text(encoding="utf-8")
+    check("public function inspectAction()" in status_php and
+          "configdRun('zapret voice_inspect'" in status_php and
+          "public function applyAction()" not in status_php,
+          "Voice diagnostic API must be read-only and fail-closed")
+    configd = (ROOT / "src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text(encoding="utf-8")
+    check("[voice_inspect]" in configd and
+          "voice_live_inspect.py; exit 0" in configd,
+          "Native Voice inspection must use a fixed read-only configd action")
     for field in fields:
         check(not any(bad in field for bad in BAD_FIELDS), f"Forbidden toggle: {field}")
     check('<IPSET:telegram>' in ET.tostring(form, encoding="unicode") or
