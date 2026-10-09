@@ -17,6 +17,9 @@ $(document).ready(function () {
         ipfwStatus: 'IPFW — передача голоса', ipfwReady: 'Правила подтверждены',
         ipfwEmpty: 'Новая Voice-конфигурация не активирована', ipfwInterrupted: 'Незавершённое применение',
         ipfwBlocked: 'Требуется проверка правил', ipfwUnknown: 'Статус недоступен',
+        cutoverPrepared: 'Незавершённая подготовка — проверьте прежнее состояние',
+        cutoverMutating: 'Прервано переключение — требуется проверка служб и IPFW',
+        cutoverCommitted: 'Переключение зафиксировано — проверьте завершение очистки',
         wanHelp: 'Исходящий WAN для перехвата голосового UDP. Пустое значение наследует WAN страницы «Стратегии». Выбор WAN не меняет маршруты.',
         enableHelp: 'Включает отдельный STUN-профиль и адресный перехват UDP. Если галочка снята, параметры и IP-адреса сохраняются.',
         argsHelp: 'Один нативный STUN-профиль dvtws2: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> и необязательные действия <code>--lua-desync</code>. Имя профиля и IPSET задаёт плагин. Не вводите <code>--new</code>, TCP или команды shell. Это не означает, что звонок заработает.',
@@ -34,6 +37,9 @@ $(document).ready(function () {
         ipfwStatus: 'Voice IPFW', ipfwReady: 'Verified rules',
         ipfwEmpty: 'New Voice configuration not activated', ipfwInterrupted: 'Interrupted apply',
         ipfwBlocked: 'Firewall review required', ipfwUnknown: 'Status unavailable',
+        cutoverPrepared: 'Interrupted preparation — verify previous runtime',
+        cutoverMutating: 'Interrupted cutover — inspect services and IPFW',
+        cutoverCommitted: 'Cutover committed — verify cleanup completion',
         wanHelp: 'Outgoing WAN used for voice UDP interception. Empty selection inherits Strategies WAN. WAN selection does not change routing.',
         enableHelp: 'Enables this STUN profile and destination-scoped UDP interception. Disabling keeps parameters and addresses.',
         argsHelp: 'One native dvtws2 STUN profile: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> and optional <code>--lua-desync</code> actions. The plugin supplies profile identity and IPSET. Do not enter <code>--new</code>, TCP options or shell commands. This is not proof of working calls.',
@@ -250,6 +256,17 @@ $(document).ready(function () {
                             state === 'interrupted' ? text.ipfwInterrupted :
                             state === 'inspection-error' ? text.ipfwUnknown :
                             text.ipfwBlocked;
+                var details = {
+                    'prepared-needs-previous-verification': text.cutoverPrepared,
+                    'interrupted-needs-kernel-runtime-review': text.cutoverMutating,
+                    'committed-needs-cleanup-review': text.cutoverCommitted
+                };
+                $('#voiceIPFWDetail').text(
+                    state === 'interrupted' && reply &&
+                    typeof reply.condition === 'string' &&
+                    Object.prototype.hasOwnProperty.call(details, reply.condition)
+                        ? details[reply.condition] : ''
+                );
                 $('#voiceIPFWState')
                     .removeClass('label-success label-default label-danger')
                     .addClass(state === 'ready' ? 'label-success' :
@@ -258,6 +275,7 @@ $(document).ready(function () {
             }).fail(function () {
                 $('#voiceIPFWState').removeClass('label-success label-default')
                     .addClass('label-danger').text(text.ipfwUnknown);
+                $('#voiceIPFWDetail').text('');
             });
     }
     function refreshReleases() {
@@ -352,6 +370,7 @@ $(document).ready(function () {
             <tr><td colspan="3">
                 <b id="voiceIPFWLabel">Voice IPFW:</b>
                 <span id="voiceIPFWState" class="label label-default">—</span>
+                <span id="voiceIPFWDetail" aria-live="polite"></span>
             </td></tr></tbody>
         </table>
     </div></div>
