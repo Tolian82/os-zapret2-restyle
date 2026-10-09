@@ -6,6 +6,7 @@
 #   targets_normalize_hostlist INPUT_FILE OUTPUT_FILE LABEL
 #   targets_normalize_ipset INPUT_FILE OUTPUT_FILE LABEL
 #   targets_prepare_managed BUILD_ROOT YOUTUBE_TEXT TELEGRAM_TEXT USER_TEXT
+#                           [DISCORD_TEXT X_TEXT SIP_TEXT CUSTOM_TEXT]
 #   targets_index_all WORKDIR PROFILE_COUNT
 #   targets_resolve_profile PROFILE_NO WORKDIR REGISTRY CATALOG MANAGED_ROOT RUNTIME_ROOT
 #   targets_resolve_all WORKDIR PROFILE_COUNT REGISTRY CATALOG MANAGED_ROOT RUNTIME_ROOT OUTPUT
@@ -175,6 +176,10 @@ targets_prepare_managed()
     local youtube_text="$2"
     local telegram_text="$3"
     local user_text="$4"
+    local discord_text="${5-}"
+    local x_text="${6-}"
+    local sip_text="${7-}"
+    local custom_text="${8-}"
     local input_root
 
     [ -n "${build_root}" ] || {
@@ -198,6 +203,18 @@ targets_prepare_managed()
         "${input_root}/telegram.txt" "${build_root}/ipset-telegram.txt" "Telegram IPs" || return 1
     targets_normalize_hostlist \
         "${input_root}/user.txt" "${build_root}/hostlist-user.txt" "User Domains" || return 1
+    printf '%s\n' "${discord_text}" > "${input_root}/discord.txt" || return 1
+    targets_normalize_ipset \
+        "${input_root}/discord.txt" "${build_root}/ipset-discord.txt" "DISCORD IPs" || return 1
+    printf '%s\n' "${x_text}" > "${input_root}/x.txt" || return 1
+    targets_normalize_ipset \
+        "${input_root}/x.txt" "${build_root}/ipset-x.txt" "X IPs" || return 1
+    printf '%s\n' "${sip_text}" > "${input_root}/sip.txt" || return 1
+    targets_normalize_ipset \
+        "${input_root}/sip.txt" "${build_root}/ipset-sip.txt" "SIP IPs" || return 1
+    printf '%s\n' "${custom_text}" > "${input_root}/custom.txt" || return 1
+    targets_normalize_ipset \
+        "${input_root}/custom.txt" "${build_root}/ipset-custom.txt" "CUSTOM IPs" || return 1
 
     chmod 0755 "${build_root}" || {
         common_error "could not set managed Target directory permissions"
@@ -207,7 +224,11 @@ targets_prepare_managed()
     chmod 0644 \
         "${build_root}/hostlist-youtube.txt" \
         "${build_root}/ipset-telegram.txt" \
-        "${build_root}/hostlist-user.txt" || {
+        "${build_root}/hostlist-user.txt" \
+        "${build_root}/ipset-discord.txt" \
+        "${build_root}/ipset-x.txt" \
+        "${build_root}/ipset-sip.txt" \
+        "${build_root}/ipset-custom.txt" || {
             common_error "could not set managed Target file permissions"
             return 1
         }

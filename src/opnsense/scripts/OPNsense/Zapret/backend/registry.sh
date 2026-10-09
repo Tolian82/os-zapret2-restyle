@@ -31,6 +31,10 @@ registry_build()
         printf 'HOSTLIST\tuser\t--hostlist\thostlist.user\t1\n'
         printf 'HOSTLIST\tauto\t--hostlist\thostlist.auto\t0\n'
         printf 'IPSET\ttelegram\t--ipset\tipset.telegram\t1\n'
+        printf 'IPSET\tdiscord\t--ipset\tipset.discord\t1\n'
+        printf 'IPSET\tx\t--ipset\tipset.x\t1\n'
+        printf 'IPSET\tsip\t--ipset\tipset.sip\t1\n'
+        printf 'IPSET\tcustom\t--ipset\tipset.custom\t1\n'
     } > "${registry_tmp}" || {
         rm -f "${registry_tmp}"
         common_error "could not create target registry '${registry_output}'"

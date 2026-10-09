@@ -198,6 +198,7 @@ orchestrator_build_release()
         "${YOUTUBE_DOMAINS}" \
         "${TELEGRAM_IPS}" \
         "${USER_DOMAINS}" \
+        "${DISCORD_IPS:-}" "${X_IPS:-}" "${SIP_IPS:-}" "${CUSTOM_IPS:-}" \
         2>"${_orchestrator_build_error}" || {
             orchestrator_fail_from_log \
                 "${_orchestrator_build_stage_file}" 3 \
