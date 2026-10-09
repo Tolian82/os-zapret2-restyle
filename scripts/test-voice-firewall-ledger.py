@@ -172,6 +172,8 @@ class VoiceLedgerTests(unittest.TestCase):
         x = deepcopy(valid); x["tables"]["zapret2_voice_telegram"] = []; variants.append(x)
         x = deepcopy(valid); x["rules"]["19000"] = x["rules"].pop(19000); variants.append(x)
         x = deepcopy(valid); x["rules"][19000][-1] = "vtnet1;rm"; variants.append(x)
+        x = deepcopy(valid); x["tables"] = {}; variants.append(x)
+        x = deepcopy(valid); x["rules"][19000][7] = "--new"; variants.append(x)
         x = deepcopy(valid); x["rule_base"] = 0; variants.append(x)
         for bad in variants:
             with self.subTest(bad=bad):
