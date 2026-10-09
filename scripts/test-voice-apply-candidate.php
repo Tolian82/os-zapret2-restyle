@@ -81,6 +81,21 @@ verify($draft['candidate']['voice']['discord']['args'] === $form['voice']['disco
        $draft['candidate']['hostlist']['discordips'] === '203.0.113.7',
        'disabled drafts must survive without syntax validation');
 
+$wanMismatch = $form;
+$wanMismatch['voice']['waninterface'] = 'WAN2';
+$wan = VoiceApplyCandidate::prepare($before, $wanMismatch, $token);
+verify($wan['result'] === 'failed' &&
+       isset($wan['validations']['zapret.voice.waninterface']),
+       'independent Voice WAN must fail before a candidate is accepted');
+$wanMissing = $before;
+$wanMissing['general']['waninterface'] = '';
+$missing = VoiceApplyCandidate::prepare(
+    $wanMissing, $form, VoiceSettingsSnapshot::digest($wanMissing)
+);
+verify($missing['result'] === 'failed' &&
+       isset($missing['validations']['zapret.voice.waninterface']),
+       'missing Strategies WAN must fail before Apply');
+
 $changed = $before;
 $changed['strategy']['trafficargs'] .= "\n--new";
 try {
