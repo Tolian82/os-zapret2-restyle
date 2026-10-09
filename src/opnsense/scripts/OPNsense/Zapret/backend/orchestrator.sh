@@ -462,6 +462,18 @@ orchestrator_native_start()
     _orchestrator_start_supervisor_log="$6"
     _orchestrator_start_total=13
 
+    # A saved native Voice ON cannot be handled by the legacy PoC.
+    # Check BEFORE runtime_is_complete returns success and, crucially,
+    # BEFORE cleanup_runtime stops any currently working process/rules.
+    # Reconfigure already builds before stopping; start used to clean first.
+    if [ -r "${_orchestrator_start_config}" ]; then
+        config_load "${_orchestrator_start_config}" || return 1
+        config_voice_staged_only_guard || {
+            common_error "native Voice preflight refused; current runtime left untouched"
+            return 1
+        }
+    fi
+
     if orchestrator_runtime_is_complete \
         "${_orchestrator_start_child_pid}" \
         "${_orchestrator_start_supervisor_monitor}" \
