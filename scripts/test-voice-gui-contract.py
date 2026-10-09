@@ -104,8 +104,8 @@ def main() -> None:
           "Voice read-only syntax validation action is unavailable")
     check("public function loadAction()" in status_php and
           "VoiceSettingsSnapshot::digest($nodes)" in status_php and
-          "VoiceSettingsSnapshot::requireFresh($current" in status_php and
-          "VoiceSettingsPayload::overlay($current, $fields)" in status_php and
+          "VoiceApplyCandidate::prepare($current, $fields, $sync['snapshot'])" in status_php and
+          "VoiceApplyCandidate.php" in status_php and
           "finally {" in status_php,
           "Voice form load and validation must use one locked freshness check")
     check("voiceSnapshot.val(record.snapshot)" in view and
