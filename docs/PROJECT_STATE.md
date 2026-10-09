@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Revision correction v0.5.1_2 (2026-10-09):** Draft PR #328 incorrectly kept packaged code changes under `_1`. Corrected `Makefile` forward to `_2`, preserving immutable history. New GitHub verification checks every historical commit against its own VERSION/PLUGIN_REVISION, while PR title matches HEAD. Prospective `.github/REVISION_GUARD` enforces one-step `_N` bumps on all future packaged-code commits; docs/governance/CI-only commits retain revision. No Voice Apply, installation or release authorized.
+
+
 **Voice isolated restore stage (Draft PR #328, 2026-10-09):** added `voice_cutover_restore_stage.py` to produce an independently inspectable private copy of sealed previous Config/runtime bytes, checked against durable journal previous fingerprints, per-file hashes, full manifest and source reinspection. No live destination or process is touched, and no automatic rollback/Voice Apply is enabled. New Linux/FreeBSD 15 offline regression covers tamper/symlinks/faults/destination conflicts. A real restorer still needs lock-held kernel/dvtws2/supervisor adapters and boot qualification.
 
 

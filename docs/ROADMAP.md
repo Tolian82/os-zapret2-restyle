@@ -1,5 +1,9 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Correct DEV-032 missed revision bump forward to v0.5.1_2; guard future packaged-code pushes
+- [ ] Preserve per-commit revision increments on future product code changes; docs/CI-only stay unchanged
+
+
 - [x] Staged private verified Config/runtime restoration payload without appliance mutation or overwrite
 - [ ] Native dual-lock held restore adapter: previous engine, supervisor, Config and IPFW; verify on reboot before Voice activation
 
