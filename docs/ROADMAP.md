@@ -1,5 +1,10 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Stage immutable Voice/Strategies/native dvtws2/IPFW handoff integrity preflight; SHA checks, original ordinary port cross-check and old-PoC conflict detection
+- [x] Verify port agreement using actual `backend/ports.sh` and one-engine generation with `generator.sh` on Linux/FreeBSD CI
+- [x] Correct FreeBSD CI test-only `python3` resolution without altering production OPNsense/Python
+- [ ] Attach approved handoff to lock-held single-engine config/dvtws2/IPFW transaction with rollback, migration and boot recovery
+
 - [x] Cross-check all five native Voice IPSET fields against production Targets normalization and candidate compiler on Linux/FreeBSD CI
 
 - [x] Gate native saved Voice ON before top-level firewall_prepare and before destructive orchestrator START cleanup; permit global Zapret OFF

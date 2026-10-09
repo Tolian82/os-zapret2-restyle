@@ -1,5 +1,13 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### Offline preflight перед реальным единым переключением (черновик, 2026-10-09)
+
+- `backend/voice_handoff_preflight.py` — **чистая безмутационная проверка** согласования опубликованного только в staging кандидата: `metadata.json`, `profile-plan.json`, `capture-plan.json`, `voice.conf`, `traffic.conf`, реальные аргументы `dvtws.args`, список портов обычной стратегии. Она восстанавливает IPFW scope из профилей, проверяет хеш каждого Voice-профиля, управляемых IPSET, исходного XML (наличие pinned SHA), объединённого и обычного трафика, ровно один divert socket, один непрерывный merged traffic и отсутствие старого `telegram-voice-poc`.
+- Для обычных TCP/UDP IPFW-портов добавлена независимая нормализация, сопоставляемая CI со штатным `backend/ports.sh::ports_extract_file` именно по исходной *ordinary* стратегии, **не** по merged Voice+ordinary: Voice-порты захватываются своими узко адресованными правилами. Подмена портов в caller-плане блокируется.
+- `scripts/test-voice-handoff-preflight.py` и `scripts/test-voice-generator-interop.py` запускаются в Linux и FreeBSD 15 CI с реальным `generator.sh` и `ports.sh`, но без `dvtws2`, IPFW или записи `config.xml`. Результат preflight всегда `activation_authorized=false`. Отдельно ещё нужны trusted ownership/legacy migration, lock-held config commit, реальный installed Lua/dvtws2, отказоустойчивый rollback и reboot replay.
+- Исправлен FreeBSD CI тест `test-voice-targets-integration.py`: временная тестовая `python3` ссылка на установленный `python3.13` только внутри приватного PATH запуска подпроцесса. Это **не** изменение системного Python маршрутизатора; отрицательный тест обязан видеть ошибку CIDR host bits, а не отсутствие интерпретатора.
+
+
 - `scripts/test-voice-targets-integration.py` дополнительно прогоняет **все пять** списков IPv4/CIDR через реальный `targets_prepare_managed()` и тот же Python Voice release compiler: Telegram IPSET остаётся общим со «Стратегиями», порядок/дедупликация должны совпасть, включённые профили получают правильный IPFW table, CIDR с битами хоста отвергается. Проверка входит в Linux + FreeBSD CI и не обращается к живому IPFW/dvtws2.
 
 ### Перехват ошибок ДО IPFW и проверка связи со штатным generator.sh (Draft, 2026-10-09)

@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Voice draft handoff integrity:** new non-mutating bundle verifier checks candidate profile hashes, target hashes, derived native IPFW capture/rules, original ordinary port selectors against production ports.sh, WAN and exactly one generated dvtws2 divert socket. No access to a running OPNsense occurs; output explicitly disallows activation. FreeBSD-only unversioned-python3 test harness failure fixed by a private interpreter shim, not a production change. Pending: exact-head full FreeBSD CI, durable single-engine runtime cutover, config.xml persistence, removal of old Telegram PoC and boot recovery.
+
+
 **Voice shared Target compatibility:** staged test now drives all five IPSET services through the real production `targets_prepare_managed()` followed by native Voice compilation; dedup/order/canonical CIDR match or fail closed, including an invalid prefix test. This is offline only and is not a live traffic claim.
 
 **Voice PR #328 latest checkpoint:** native Voice persisted ON is rejected at the service entry *before firewall_prepare* and in orchestrator START *before cleanup or the complete-runtime shortcut*; global Zapret OFF can still stop the service. Offline candidate integration now exercises the actual production generator.sh and a consistent scoped IPFW plan. Staging snapshots source XML/managed targets/ordinary traffic twice, records hashes and refuses changes/symlinks. Tests cover torn-input races and fake cleanup; no live Voice Apply, single-engine cutover or automatic reboot recovery has been deployed. Last exact-head CI must be checked before merge.

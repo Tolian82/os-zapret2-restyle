@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Voice one-engine handoff preflight (draft):** `voice_handoff_preflight.py` сопоставляет Voice/ordinary/реальный `dvtws.args`/IPFW-plan в памяти, проверяет SHA256, managed targets, ровно один divert, портовый вывод production `ports.sh`, WAN и отсутствие старого PoC. CI Linux и FreeBSD 15 проверяет реальные `generator.sh`/`ports.sh` с sandbox-артефактами; никаких live-мутаций. FreeBSD python3 alias используется только в test-private PATH. Apply остаётся disabled, изоляция legacy и crash rollback ещё не реализованы.
+
+
 **Voice Targets interoperability:** `test-voice-targets-integration.py` теперь проверяет пять реальных managed IPSET через штатный `targets_prepare_managed()` и Voice compiler с отрицательным случаем для CIDR host bits. Это offline regression, не интеграция Apply или медиатест.
 
 **Voice staging safety:** в Draft PR #328 Voice ON теперь отклоняется до `firewall_prepare` в сервисном входе и до `orchestrator_cleanup_runtime` при старте. Глобальный OFF остаётся допустим. Реальный `generator.sh` протестирован вместе с offline Voice+Strategies+IPFW планом (без запуска службы); source XML/managed IPSET/ordinary traffic повторно сверяются по SHA256 до публикации кандидата и не могут быть symlink. Тесты `test-voice-staged-runtime-guard.sh`, `test-voice-generator-interop.py`, `test-voice-release-stage.py` включены в CI. Native Voice Apply всё ещё disabled; legacy PoC и live runtime не заменены.
