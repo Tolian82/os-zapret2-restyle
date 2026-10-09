@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Engineering memory index
 
 **Status:** NAVIGATION / INTEGRITY MAP · NOT A CURRENT-STATE NARRATIVE
-**Updated:** 2026-10-08
+**Updated:** 2026-10-09
 
 ## Level 1 — mandatory cold start
 
@@ -20,6 +20,8 @@ Read completely in this order (`DOC-016`):
 
 ## Level 2 — current line and specialist detail
 
+- **[«Передача голоса»: complete implementation handoff](architecture/VOICE_TRANSMISSION_GUI.md)** — approved Strategies-style design, fields/native input, current versus target behavior, shared IPSETs, WAN/local UDP, persistence, dismantling/migration, source map and expected acceptance; immediate next implementation, not a deployed feature.
+
 - **[`v0.5.x working ledger`](history/current/v0.5.x.md)** — current-line chronology and release handoff.
 - **[2026-10-07 Voice reboot and manual recovery](verification/evidence/2026-10-07-telegram-voice-reboot-and-manual-recovery.md)** — measured ON→OFF after reboot with GUI A2 retained, then native ON/table14/rule19000 restored manually; exact private snapshot identities, comparison and unmeasured post-enable/media limits.
 - **[Telegram Voice topology, DPI and fake TTL analysis; October 7 audit](research/TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md)** — shared-LAN versus external-reflector path, separate fake/TTL/checksum/fragment mechanisms, A2 TTL=63, CLI success-gate limitation, Desktop source comparison, rationale for the untested limited-TTL hypothesis and reviewed checksum/helper/audio-attribution corrections.
@@ -30,7 +32,7 @@ Read completely in this order (`DOC-016`):
 - **[`2026-10-03 third A1 preflight: A1 active; Linux `from` route parser false negative`](verification/evidence/2026-10-03-docker-a1-preflight-linux-route-from-mismatch.md)** — private owner archive proves saved/effective A1 and IPFW port rule active and existing TNAS routes correct; fixed-reflector Docker call was blocked by redundant runner's incorrect `src` string requirement.
 - **[`2026-10-02 second A1 preflight: persisted GUI Strategy lacked port/unknown/fake`](verification/evidence/2026-10-02-docker-a1-second-preflight-saved-gui-absent.md)** — owner-uploaded private v2-archive conclusively shows saved A1 absent, active A1 absent and Docker intentionally unrun; distinguishes config state from strategy efficacy.
 - **[`2026-10-02 first A1 preflight: effective strategy and UDP capture rule absent`](verification/evidence/2026-10-02-docker-a1-preflight-absent-effective-profile.md)** — private owner archive verifies both TNAS routes already correct, Voice ON/table14 and a failed **preflight before Docker**; saved GUI state not captured, so root cause pending safe persisted-vs-effective automation.
-- **[`Docker-first Telegram Voice strategy campaign and next TTL experiment`](architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md)** — same-ISP campaign; completed A1/A2, explicit fixed-helper versus variable-GUI parameter matrix, pre/post checks and change-recording contract; planned RTC/ICMP checks, finite fake-TTL budget, repeatability and outcome-dependent decisions.
+- **[`Docker-first Telegram Voice strategy campaign and next TTL experiment`](architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md)** — retained same-ISP research after the new page/baseline; completed A1/A2, epoch-specific fixed-helper versus variable-GUI parameter matrix, pre/post checks and change-recording contract; planned RTC/ICMP checks, finite fake-TTL budget, repeatability and outcome-dependent decisions.
 - **[`Telegram Voice helper: configuration, test controls and reboot recovery`](architecture/TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md)** — source-verified capture versus STUN action versus current GUI A2, native commands and parameter ownership, measured October 7 reboot/manual recovery, IPFW/PF/NAT order; no Cron, one-shot startup not installed.
 - **[`Telegram exact owner-live startup, SSH and manual TNAS route operations`](architecture/TELEGRAM_LAB_OPERATIONS.md)** — read first when continuing the live laboratory: Squid/sing-box GUI and file locations, Voice ON-but-lost-on-reboot warning, csh versus `/bin/sh`, verified SSH keys/port, full owner-tested manual TNAS route script and recovery checklist.
 - **[`2026-10-02 Telegram Desktop WebRTC debug evidence for isolated OPNsense-path ICE timeout`](verification/evidence/2026-10-02-telegram-desktop-webrtc-ice-timeout-on-opnsense-gateway.md)** — private log SHA-256s, 16:16 signaling and relay probes vs 20-second ICE/media timeout, local adapter-error attribution and the unrelated 16:27 main-log startup warning.
@@ -40,9 +42,9 @@ Read completely in this order (`DOC-016`):
 - **[`Telegram three-origin laboratory and reboot recovery`](architecture/TELEGRAM_TRAFFIC_POLICY.md)** — mandatory separate, reboot-persistent LAN/router-local/SOCKS5 testbed, experimental Squid/sing-box/PF/parent paths and TNAS routing; not approved plugin TCP/proxy scope.
 - **[`September 23–October 1 evidence`](verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md)** — fakefrag/tee/reverse8 results, verified TCP parent paths, failed and successful policy application, latest active-helper UDP failure.
 - **[`Telegram voice / UDP DPI-bypass research`](research/TELEGRAM_VOICE_UDP.md)** — protocol changes and source links, rebuild motivation, Phase A/B and current Phase C experiments; approved product boundary is UDP-only.
-- **[`Telegram Voice emulation/oracle architecture`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md)** — current media oracle, explicit fixed Voice-helper/capture and variable GUI strategy roles, and sequential MEDIA_PASS/CALL_PASS gates before future native UDP-only plugin integration.
+- **[`Telegram Voice emulation/oracle architecture`](architecture/TELEGRAM_VOICE_EMULATION_LAB.md)** — current media oracle, explicit fixed Voice-helper/capture and variable GUI strategy roles, and separate MEDIA_PASS/CALL_PASS qualification gates; page implementation is now approved independently.
 - **[`TOS Telegram Voice companion recipe`](../tools/telegram-voice-lab/compose.tos.yml)** — digest-pinned host-network build/runtime source; endpoint routing through OPNsense is measured per epoch.
-- **[`REQUIREMENTS.md`](REQUIREMENTS.md)** — normative Telegram Voice UDP-only product scope and three approved stages; TCP/proxy remains experimental laboratory infrastructure.
+- **[`REQUIREMENTS.md`](REQUIREMENTS.md)** — normative Voice UDP/STUN page scope and separate Telegram media qualification; TCP/proxy remains experimental laboratory infrastructure.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) / [`architecture/`](architecture/) — current technical architecture.
 - [`architecture/STRATEGY_LAB.md`](architecture/STRATEGY_LAB.md) — Strategy Lab architecture entry point.
 - [`architecture/STRATEGY_LAB_MODEL_C.md`](architecture/STRATEGY_LAB_MODEL_C.md) — accepted production execution model.

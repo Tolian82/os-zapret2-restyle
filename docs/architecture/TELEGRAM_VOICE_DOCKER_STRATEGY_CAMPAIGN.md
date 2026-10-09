@@ -1,6 +1,6 @@
 # Telegram Voice UDP strategy campaign — Docker-first Reflector Hello experiments
 
-**Updated 2026-10-08:** helper controls are now explicit for every trial. Owner snapshots measured helper ON → OFF after OPNsense reboot; subsequent manual enable restored native ON/table14/rule. GUI A2 survived unchanged. [Reboot/recovery evidence](../verification/evidence/2026-10-07-telegram-voice-reboot-and-manual-recovery.md). A1/A2 remain wire-only negative results; RTC/ICMP tooling, strict full-baseline validation, numeric TTL values and new media trials remain pending.
+**Updated 2026-10-09:** helper controls are now explicit for every trial. Owner snapshots measured helper ON → OFF after OPNsense reboot; subsequent manual enable restored native ON/table14/rule. GUI A2 survived unchanged. [Reboot/recovery evidence](../verification/evidence/2026-10-07-telegram-voice-reboot-and-manual-recovery.md). A1/A2 remain wire-only negative results; RTC/ICMP tooling, strict full-baseline validation, numeric TTL values and new media trials remain pending.
 
 ## Binding mission and owner constraints
 
@@ -10,13 +10,13 @@
 
 Before changing any strategy, commit goals, current evidence, precise candidate, test/restore procedure and success/unknown/failure classification to GitHub. After each **actual** measured laboratory run, attach sanitized outcome and archive/hash identities in a dated evidence document, reconcile `START_HERE`, `PROJECT_STATE`, roadmap and current chronology, and **only then** select another candidate. Do not conflate design, owner-reported Apply, observed wire transformation, remote reply and successful media.
 
-Three approved product stages remain **unchanged**: repeated `MEDIA_PASS` on current Docker oracle -> real remote `CALL_PASS` with sustained two-way UDP and good sound -> only then approved Voice-UDP-only integration into the existing plugin Settings GUI, with IPSET/firewall lifecycle and persistent ON. Do not package temporary Docker runners, add a plugin page or implement recurring Cron as part of candidate research.
+**October 8 planning update:** implementation of [the native Voice page and persistent lifecycle](VOICE_TRANSMISSION_GUI.md) is approved now and is the immediate engineering task. This replaces the prior prohibition on a page before MEDIA_PASS/CALL_PASS. The Docker campaign remains a separate research track: repeated media, then real remote UDP call, before claiming a working strategy/preset. The temporary runner remains outside the package; no recurring Cron. A migrated helper starts a documented new baseline; these A1/A2 records and their fixed-helper comparisons remain intact.
 
 ## telegram_voice controls for every trial
 
 `telegram_voice` is an active part of the laboratory baseline. Its two roles are **destination-scoped all-port Telegram UDP interception** and a **fixed STUN profile** in the same dvtws2. The GUI supplies the separate experimental `unknown` profile for current Reflector Hello. Full configuration ownership, source-defined constants, command meanings and boot procedure belong to the [helper reference](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md).
 
-**We did not vary helper parameters in A1/A2. We do not vary them in the planned TTL series.** Earlier plan text already required helper ON and the actual runner checked it; this matrix makes those conditions and their evidence explicit. Changing STUN repeats/TTL does not test the non-STUN Hello. A helper/protocol redesign, if later justified by evidence, is a separate epoch and must follow the change-record contract below.
+**We did not vary helper parameters in A1/A2. We do not vary them in the planned TTL series.** Earlier plan text already required helper ON and the actual runner checked it; this matrix makes those conditions and their evidence explicit. Changing STUN repeats/TTL does not test the non-STUN Hello. The approved configurable STUN helper/page redesign creates a separate epoch and must follow the change-record contract below.
 
 | Control | A1 | A2 / current restored baseline | Planned limited-fake-TTL series |
 |---|---|---|---|
@@ -53,6 +53,8 @@ After the trial, add timestamped saved/effective/process/status/table/rule evide
 
 ## Next experiment: limited fake TTL (planned, not run)
 
+**Scheduling:** this remains the next proposed network hypothesis, not a prerequisite for the new Voice page. Complete/record the selected page migration baseline before resuming; STUN settings remain frozen within this particular non-STUN TTL comparison.
+
 **План уточнён 7 октября 2026 года.** Текущая задача — воспроизводимое установление реального звонка через `.1.2`; сначала отсеиваем кандидаты существующей Docker-лабораторией. [Проверка топологии и прежней документации](../research/TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md) подтверждает внешний reflector-путь и отмечает исправленные неточности. [START_HERE](../START_HERE.md) остаётся текущей точкой входа.
 
 **Гипотеза:** при правильной UDP checksum, zero16 и двух фейках перед оригиналом ограничение только TTL фейков может изменить поведение DPI, сохранив настоящим пакетам возможность достичь рефлектора. A2 с WAN TTL=63 этого не проверял. Наличие подходящего диапазона TTL, место DPI и достижимость рефлектора сейчас не доказаны. Ожидаемый результат каждого этапа ниже — проверяемые сведения или завершённая работа; успешный обход заранее не обещан.
@@ -67,7 +69,7 @@ After the trial, add timestamped saved/effective/process/status/table/rule evide
 | 3. Проверить значения | По одному свежему 15-секундному запуску на значение; после каждого разобрать архив | Для каждого значения: корректность оригинала/фейков, судьба наблюдаемых ICMP/UDP, состояние каждого клиента | На первом принятом reflector-ответе прекращаем широкий перебор и разбираем следующий этап соединения; без ответов заканчиваем ограниченную серию |
 | 4. Подтвердить успех | Повторить одинаковый кандидат на свежих потоках и сравнить его действие включённым/выключенным | Три успешных запуска кандидата и отдельное сравнение без него; повторяемость отделена от причинности | При сбое разбираем расхождение; при успехе без кандидата не приписываем восстановление его действию |
 | 5. Проверить реальный звонок | Один контролируемый удалённый Windows/Android тест после повторяемого Docker-успеха | Сначала установление соединения через `.1.2` с подтверждённым двусторонним UDP, затем слышимая речь в обе стороны | Неустановившийся реальный звонок открывает разбор его конкретного endpoint/ICE/профиля; лабораторный результат не объявляется универсальным |
-| 6. Сохранить рабочее решение | После обоих голосовых этапов реализовать UDP-only управление и отдельно проверить лабораторное восстановление | Проверенная стратегия, постоянная настройка GUI и управляемые правила; результаты перезагрузки записаны отдельно | Текущий временный `/var/run` marker и успешный ручной запуск не считаются постоянной настройкой |
+| 6. Сохранить рабочее решение | После обоих голосовых этапов записать проверенный preset/область действия; GUI и постоянный lifecycle разрабатываются отдельно уже сейчас | Проверенная стратегия и отдельные результаты конфигурационной/перезагрузочной приёмки | Наличие GUI и успешный ручной enable не заменяют проверку звонка или reboot |
 
 ### 1. Подготовка runner
 
@@ -132,7 +134,7 @@ After the trial, add timestamped saved/effective/process/status/table/rule evide
 - При полном отсутствии обратных данных проверить актуальность выбранного рефлектора по первичному источнику и соответствие текущему клиенту. Публикация адреса в списке Telegram сама по себе не доказывает его доступность. Другой endpoint или engine — отдельная новая серия с собственной исходной проверкой на **том же OPNsense/провайдере**, без смешивания с TTL.
 - Только после такого разбора выбрать один следующий механизм с конкретным основанием из источника/пакетов и ожидаемым наблюдаемым отличием от уже закрытых экспериментов. Сейчас «следующая выигрышная стратегия» не назначена.
 
-Независимый рабочий путь к тому же endpoint может помочь причинному сравнению, **если он отдельно доступен**, но не является обязательным этапом. Не возвращать `192.168.1.140`, не требовать доступ к чужому `.80.1`, не переводить задачу на новый VPN/провайдера. Последующие интеграция UDP в плагин и лабораторная перезагрузочная приёмка идут по [roadmap](../ROADMAP.md); никаких boot-изменений этот план не устанавливает.
+Независимый рабочий путь к тому же endpoint может помочь причинному сравнению, **если он отдельно доступен**, но не является обязательным этапом. Не возвращать `192.168.1.140`, не требовать доступ к чужому `.80.1`, не переводить задачу на новый VPN/провайдера. Разработка постоянной Voice-страницы уже выделена в ближайшую задачу; её приёмка и лабораторные проверки идут по [roadmap](../ROADMAP.md); никаких boot-изменений этот план не устанавливает.
 
 ## Completed baseline and A1/A2 history
 
@@ -183,7 +185,7 @@ The source-controlled independent [same one-shot OPNsense runner](../../tools/te
 
 The owner applied exact unique A2 and ran the merged explicit-selector v4 script. Fresh LAN/WAN captures independently proved 60 unmodified genuine WAN Reflector Hellos and **120 correct-UDP-checksum** zero16 A2 fakes in precise 60/60 two-before-one triplets, with **zero incoming pinned-reflector packets**. Both engine-13 peers remained Reconnecting/zero BWE, CLI exit 1. All GUI/runtime/Voice/route/Docker checks passed. [Full measured record](../verification/evidence/2026-10-03-docker-a2-valid-checksum-fakes-no-reflector-reply.md). A1 had intentionally **bad** fake checksums; A2 had **valid** fake checksums, but neither achieved a reply. This is insufficient to attribute the drop or conclude the remote endpoint is presently reachable.
 
-**Current follow-up:** the [limited-fake-TTL plan](#next-experiment-limited-fake-ttl-planned-not-run) refines the October 3 source-guided-hypothesis boundary. Preserve A2 until the explicitly selected candidate/runner/rollback are ready; no new value or live trial is recorded yet. Same-endpoint independent control remains optional, working TCP stays intact and retired `192.168.1.140` stays retired.
+**Retained research follow-up after the selected page/migration work:** the [limited-fake-TTL plan](#next-experiment-limited-fake-ttl-planned-not-run) refines the October 3 source-guided-hypothesis boundary. Preserve A2 until the explicitly selected candidate/runner/rollback are ready; no new value or live trial is recorded yet. Same-endpoint independent control remains optional, working TCP stays intact and retired `192.168.1.140` stays retired.
 
 ## Existing A1/A2 runner contract — baseline for the planned extension
 
