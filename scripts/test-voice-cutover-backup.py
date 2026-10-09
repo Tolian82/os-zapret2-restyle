@@ -138,6 +138,55 @@ class SnapshotTests(unittest.TestCase):
                 self.assertTrue(config.is_file())
                 self.assertTrue(active.is_dir())
 
+    def test_inspection_rejects_manifest_type_confusion_and_reopen_races(self):
+        import json
+        for case in ("boolean-size", "negative-size", "invalid-mode",
+                     "symlink-at-open", "changed-during-read"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as d:
+                config, active, target = self.fixture(d)
+                backup.capture_previous(config, active, target)
+                victim = target / "runtime/dvtws.args"
+                if case in ("boolean-size", "negative-size", "invalid-mode"):
+                    manifest_path = target / "manifest.json"
+                    manifest = json.loads(manifest_path.read_text())
+                    row = manifest["runtime"]["dvtws.args"]
+                    if case == "boolean-size":
+                        row["bytes"] = True
+                    elif case == "negative-size":
+                        row["bytes"] = -1
+                    else:
+                        row["mode"] = "0644"
+                    encoded = (json.dumps(manifest, sort_keys=True,
+                               separators=(",", ":")) + "\n").encode()
+                    manifest_path.write_bytes(encoded)
+                    (target / "manifest.sha256").write_text(
+                        hashlib.sha256(encoded).hexdigest() + "\n"
+                    )
+                    with self.assertRaises(backup.VoiceBackupError):
+                        backup.inspect_previous(target)
+                elif case == "symlink-at-open":
+                    victim.unlink()
+                    victim.symlink_to(config)
+                    with self.assertRaises((backup.VoiceBackupError, OSError)):
+                        backup.inspect_previous(target)
+                else:
+                    actual_open = backup.os.open
+                    # Mutate during descriptor acquisition; inspection must
+                    # never accept bytes from a changing file.
+                    original = victim.read_bytes()
+                    def switched_open(path, flags, *args, **kwargs):
+                        fd = actual_open(path, flags, *args, **kwargs)
+                        if Path(path) == victim:
+                            write_fd = actual_open(victim, os.O_WRONLY | os.O_TRUNC)
+                            try:
+                                os.write(write_fd, b"x" * len(original))
+                            finally:
+                                os.close(write_fd)
+                        return fd
+                    with patch.object(backup.os, "open", side_effect=switched_open):
+                        with self.assertRaises(backup.VoiceBackupError):
+                            backup.inspect_previous(target)
+
     def test_mid_copy_source_replacement_refuses_snapshot_without_touching_original(self):
         with tempfile.TemporaryDirectory() as d:
             config,active,target=self.fixture(d)

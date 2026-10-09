@@ -270,22 +270,43 @@ def _read_private_file(path: Path, limit: int) -> bytes:
 
 
 def _verify_file(file: Path, row: dict) -> None:
-    info = _regular(file)
-    if not isinstance(row, dict) or set(row) != {"sha256", "bytes", "mode"} and \
-       set(row) != {"type", "sha256", "bytes", "mode"}:
+    """Verify saved bytes from one no-follow descriptor, not a pathname reopen."""
+    if not isinstance(row, dict) or set(row) not in (
+        {"sha256", "bytes", "mode"},
+        {"type", "sha256", "bytes", "mode"},
+    ):
         raise VoiceBackupError("malformed Voice backup manifest record")
-    if info.st_size != row["bytes"] or not isinstance(row["bytes"], int):
-        raise VoiceBackupError("Voice backup file size mismatch")
-    if not isinstance(row["sha256"], str) or len(row["sha256"]) != 64:
-        raise VoiceBackupError("Voice backup file digest invalid")
-    sha = hashlib.sha256()
-    with file.open("rb") as input_file:
-        for chunk in iter(lambda: input_file.read(CHUNK), b""):
-            sha.update(chunk)
-    if sha.hexdigest() != row["sha256"]:
-        raise VoiceBackupError("Voice backup file digest mismatch")
-    if info.st_mode & 0o077:
-        raise VoiceBackupError("Voice backup file is not private")
+    if row.get("type", "file") != "file" or type(row["bytes"]) is not int or \
+       not 0 <= row["bytes"] <= MAX_BYTES or \
+       type(row["mode"]) is not int or not 0 <= row["mode"] <= 0o7777 or \
+       not isinstance(row["sha256"], str) or len(row["sha256"]) != 64 or \
+       any(ch not in "0123456789abcdef" for ch in row["sha256"]):
+        raise VoiceBackupError("invalid Voice backup file metadata")
+    fd = os.open(file, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or \
+           info.st_uid != os.geteuid() or info.st_mode & 0o077 or \
+           info.st_size != row["bytes"]:
+            raise VoiceBackupError("Voice backup file is not private, regular or intact")
+        digest = hashlib.sha256()
+        count = 0
+        while True:
+            chunk = os.read(fd, CHUNK)
+            if not chunk:
+                break
+            count += len(chunk)
+            if count > MAX_BYTES:
+                raise VoiceBackupError("Voice backup file exceeds configured bound")
+            digest.update(chunk)
+        finish = os.fstat(fd)
+        if count != row["bytes"] or info.st_size != finish.st_size or \
+           info.st_mtime_ns != finish.st_mtime_ns or \
+           info.st_ctime_ns != finish.st_ctime_ns or \
+           digest.hexdigest() != row["sha256"]:
+            raise VoiceBackupError("Voice backup file digest or stable metadata mismatch")
+    finally:
+        os.close(fd)
 
 
 def inspect_previous(output: Path) -> dict:
