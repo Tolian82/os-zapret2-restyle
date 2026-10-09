@@ -16,6 +16,7 @@ import re
 from voice_firewall_transaction import VoiceFirewallError, prepare_desired
 from voice_traffic_merge import VoiceMergeError, merge_profiles
 from voice_profile_compiler import SERVICES
+from voice_capture_plan import CapturePlanError, compile_capture_plan
 
 PORT = re.compile(r"^--port=([0-9]{1,5})$")
 LUA = re.compile(r"^--lua-init=@/\S+$")
@@ -88,6 +89,22 @@ def verify_staged_handoff(artifacts: dict[str, str], native_argv: str,
     if any(f"--name=voice-{name}" not in merged for name in enabled) or \
        "--name=telegram-voice-poc" in merged:
         raise VoiceHandoffError("unbound Voice identity or legacy PoC collision")
+    native_parts = [part.rstrip("\n") for part in voice.split("\n--new\n")] if voice else []
+    if len(native_parts) != len(profiles):
+        raise VoiceHandoffError("Voice profile boundaries do not match validated plan")
+    for part, entry, service in zip(native_parts, profiles, enabled):
+        if not part.startswith(f"--name=voice-{service}\n") or \
+           _hash(part) != entry.get("profile_sha256"):
+            raise VoiceHandoffError("Voice profile content differs from its approved hash")
+    try:
+        rebuilt_capture = compile_capture_plan(
+            plan, capture["rule_base"], capture["rule_max"],
+            capture["divert_port"], physical_wan=capture["wan"],
+        )
+    except (KeyError, TypeError, ValueError, CapturePlanError) as exc:
+        raise VoiceHandoffError("Voice IPFW capture plan cannot be reconstructed") from exc
+    if rebuilt_capture != capture:
+        raise VoiceHandoffError("Voice IPFW capture plan differs from profile manifest")
     if not isinstance(native_argv, str) or len(native_argv) > 4 * 1048576 or \
        "\x00" in native_argv or "\r" in native_argv:
         raise VoiceHandoffError("invalid native engine arguments")
@@ -117,12 +134,18 @@ def verify_staged_handoff(artifacts: dict[str, str], native_argv: str,
     names = [name for name in enabled if "zapret2_voice_" + name in desired["tables"]]
     if names != enabled or len(desired["tables"]) != len(enabled):
         raise VoiceHandoffError("scoped IPFW destination tables differ from Voice profiles")
-    if metadata.get("ipset_sha256") is None or \
-       set(metadata["ipset_sha256"]) != set(enabled) or any(
-           not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{64}", value)
-           for value in metadata["ipset_sha256"].values()
-       ):
+    fingerprints = metadata.get("ipset_sha256")
+    if not isinstance(fingerprints, dict) or set(fingerprints) != set(enabled):
         raise VoiceHandoffError("missing or incorrect managed IPSET fingerprints")
+    for entry in profiles:
+        name = entry["service"]
+        targets = entry.get("targets")
+        if not isinstance(targets, list) or not targets or \
+           any(not isinstance(target, str) for target in targets):
+            raise VoiceHandoffError("malformed Voice managed target set")
+        expected_hash = _hash("".join(target + "\n" for target in targets))
+        if fingerprints[name] != expected_hash:
+            raise VoiceHandoffError("Voice managed target hash differs from profile plan")
     return {
         "schema": 1,
         "state": "preflight-only",
