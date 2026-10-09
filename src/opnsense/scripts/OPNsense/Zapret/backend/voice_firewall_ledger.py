@@ -337,6 +337,18 @@ class VoiceOwnershipStore:
             return "desired-intact"
         return "manual-review"
 
+    def abort(self, adapter) -> None:
+        """Discard an intent ONLY when exactly the trusted previous kernel state survives.
+
+        A crash during incomplete installation or any lingering staging table
+        must not silently clear the evidence needed for operator recovery.
+        """
+        intent = self.pending()
+        if intent is None or self.inspect(adapter) != "previous-intact" or \
+           self._read("ownership.json") != intent["previous"]:
+            _fail("cannot abort Voice intent without verified previous kernel state")
+        self._remove("intent.json")
+
     def finish(self, adapter) -> None:
         """Finish ONLY when desired is live and ALL stage tables are gone."""
         intent = self.pending()
