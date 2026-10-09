@@ -69,7 +69,7 @@ def main(argv: list[str]) -> int:
     print("ERROR: unfinished or untrusted native Voice journal; "
           "existing Zapret2 lifecycle mutation blocked until verified recovery",
           file=sys.stderr)
-    return 75
+    return 69
 
 
 if __name__ == "__main__":
