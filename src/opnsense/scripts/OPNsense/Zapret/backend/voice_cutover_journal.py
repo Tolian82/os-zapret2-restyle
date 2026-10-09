@@ -60,8 +60,9 @@ def validate_record(record: dict) -> dict:
 
 
 def new_record(previous: dict, proof: dict) -> dict:
-    if not isinstance(previous, dict) or not isinstance(proof, dict):
-        raise CutoverJournalError("invalid cutover input")
+    if not isinstance(previous, dict) or not isinstance(proof, dict) or \
+       set(previous) != set(RESOURCE_NAMES):
+        raise CutoverJournalError("invalid cutover snapshot fields")
     previous_digests = {name: previous.get(name) for name in RESOURCE_NAMES}
     candidate = {name: proof.get(name) for name in PROOF_NAMES}
     record = {
