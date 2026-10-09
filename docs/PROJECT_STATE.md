@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_11 — offline exact restarted dvtws2 argv contract (2026-10-10):** Added `voice_restart_argv_attestation.py` as a disconnected read-only check. The previous sealed `dvtws.args` is parsed by the same whitespace token model as native `launcher_prepare_argv`; the expected kernel argv must equal executable + saved tokens + the actual two mandatory launcher flags `--sockarg=0x200` and `--user=nobody`. An *injected future kernel argv-array reader* must observe two identical newly started engine, daemon and monitor instances with exact expected per-role argument arrays and verified newer start tokens. No human-readable `ps` string parsing is accepted as a kernel argv proof. Changed/missing/reordered arguments, unexpected flags, PID reuse or stale start, corrupt backup and changing observations reject. Positive result remains **review-required**, with `startup_ready`, `media_pass`, `safe_to_mutate` and `can_activate` all false. No FreeBSD kernel-argv provider, production boot hook, automatic rollback, Telegram migration or Voice Apply.
+
+
 **v0.5.1_10 — previous Config permission mode is part of read-only recovery proof (2026-10-10):** The canonical Config fingerprint is by design a SHA256 of file bytes only; after v0.5.1_9, a byte-identical but permission-changed live `config.xml` could misleadingly look like the previous Config. The staged `NativePreviousObserver` now supplies the sealed previous backup to `LiveFileObserver` and **requires exact saved Config permission bits**, while leaving the immutable five-resource SHA schema untouched. Changed Config permissions fail closed even if all content hashes match. Linux/FreeBSD regression adds direct and composed mode-drift tests; no live Apply/rollback, locks or reboot integration introduced.
 
 
@@ -108,8 +111,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_10` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_10.pkg` (**not published, do not install**);
+- current source candidate revision: `_11` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_11.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
@@ -173,7 +176,7 @@ Completed boundary:
 
 No further package correction belongs to this scope.
 
-## Development handoff: `v0.5.1_10` native Voice GUI (Draft PR #328)
+## Development handoff: `v0.5.1_11` native Voice GUI (Draft PR #328)
 
 Work is staged at [PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), branched from `main` `3f9951c928ac2521c3551c8311d58ed755947007`. New native MVC page, five default-OFF fields, bilingual guidance, common service control and shared IPSET model are present. Registry, storage and managed target generation for Discord/X/SIP/Custom are staged; a read-only native config.xml Voice exporter, fail-closed STUN compiler, inert release-bundle consistency gate, one-engine traffic merge helper, IPFW capture-plan validator, an adapter-injected mock-tested IPFW transaction core, retryable postcommit cleanup, and private durable ownership/intent journal with read-only restart triage plus mock-only activation ordering and verified abort (all not production-wired) and per-service scope conflict checks have also been added (not wired to Apply/runtime); Strategies Apply now limits its POST to Strategies-owned fields (Strategies-side shared Telegram-IPSET optimistic lock active in source; Voice-side payload/freshness helper staged, future Voice Apply endpoint not yet implemented); the existing Telegram hostlist data is reused. **Voice Apply is disabled** until complete validation and lifecycle migration are implemented. This draft has not replaced the temporary Telegram Voice PoC or qualified boot restoration, dual-WAN behavior, or media. The existing published and stable `0.5.0` packages are unchanged. See [design and implementation status](architecture/VOICE_TRANSMISSION_GUI.md).
 
