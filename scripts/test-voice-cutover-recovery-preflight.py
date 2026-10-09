@@ -63,6 +63,21 @@ class CrossJournalTests(unittest.TestCase):
             result=self.check(saved,whole,fw,"review-required","dual-journals-bound")
             self.assertEqual(result["phase"],"committed")
 
+    def test_distinct_desired_ipfw_requires_matching_committed_owner(self):
+        desired={**OLD,"tables":{"zapret2_voice_telegram":["91.108.0.0/16"]}}
+        with tempfile.TemporaryDirectory() as d:
+            saved,whole,fw,old=self.setup(d)
+            whole.begin(old,PROOF)
+            whole.mark_mutating()
+            fw.begin(OLD,desired)
+            fw.mark_mutating()
+            # The full cutover must not claim an IPFW commit while ownership
+            # still points at the previous manifest.
+            whole.commit()
+            self.check(saved,whole,fw,"blocked","uncommitted-ipfw-ownership")
+            fw.commit(desired)
+            self.check(saved,whole,fw,"review-required","dual-journals-bound")
+
     def test_phase_conflict_and_orphan_intent(self):
         with tempfile.TemporaryDirectory() as d:
             saved,whole,fw,old=self.setup(d)
