@@ -10,13 +10,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.0_3` — next implementation: approved «Передача голоса» page and persistent Voice configuration; no page/code delivered yet; media gates remain open.
+**Current handoff identity:** `v0.5.1_1` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
-- `VERSION=0.5.0`;
-- `PLUGIN_REVISION=3`;
+- `VERSION=0.5.1` (**Draft PR #328, not merged**);
+- `PLUGIN_REVISION=1` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
@@ -94,6 +94,10 @@ The [operations runbook](architecture/TELEGRAM_LAB_OPERATIONS.md) owns live Squi
 
 Evidence: [September 22 positive observation](verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md), [September 23–October 1 results](verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md), [current media oracle](architecture/TELEGRAM_VOICE_EMULATION_LAB.md), [current laboratory proxy and route recovery](architecture/TELEGRAM_TRAFFIC_POLICY.md), and [protocol research](research/TELEGRAM_VOICE_UDP.md).
 
+## Draft implementation progress (PR #328)
+
+The new menu/controller/form/view/model and RU/EN guidance are staged, with all five service switches default OFF. The shared Telegram IPSET remains `hostlist.telegramips`; four additional datasets now have staged backend registry/storage/normalizer/template entries. **No configuration Apply, runtime Voice multi-service generator, replacement of old PoC marker, destination-scoped IPFW, migration or boot recovery is qualified.** Continue on this same Draft PR. Current stable remains `v0.5.0_1`; latest published experimental testing candidate remains `v0.5.0_3`. Do not install or merge WIP `v0.5.1_1`.
+
 ## Actual current assignment — implement the approved Voice page
 
 After the mandatory Level-1 documents, read [the complete Voice page specification](architecture/VOICE_TRANSMISSION_GUI.md) and [current helper implementation/reference](architecture/TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md). For live operation or laboratory migration also read the operations/campaign documents linked above; do not reconstruct old experiments before starting the page.
@@ -102,7 +106,7 @@ After the mandatory Level-1 documents, read [the complete Voice page specificati
 2. Build the native page and menu, then replace PoC-only request/profile generation with persistent service profiles and transactional scoped IPFW lifecycle. Keep compatible Telegram configctl actions on the same authority; preserve ordinary non-STUN strategies.
 3. Qualify input validation, overlapping profiles, one-engine operation, local/forwarded UDP, failure/rollback, saved OFF/global OFF and reboot restoration. Complete GitHub/CI/package work under the normal project rules; owner-live results are a separate gate.
 
-The current scope saved **documentation only**. Package identity remains `0.5.0_3`, no runtime or appliance settings were changed, no new page/boot implementation or media PASS is claimed. Do not merge the old unpublished `_4` fragment branch as this feature.
+The prior `0.5.0_3` handoff saved documentation only. Development is now on `0.5.1_1` in a Draft PR. No new Voice Apply, complete boot behavior or media PASS is claimed; no owner appliance settings were changed. Do not merge the old unpublished `_4` fragment branch as this feature.
 
 **Retained research queue:** [the Docker-first campaign](architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md) still requires RTC/ICMP/full-profile/cleanup tooling before a distinct limited-fake-TTL series (at most four initial values; none selected yet). This does not block implementing the page. Migration starts a documented new baseline; historical A1/A2 kept helper ON/fixed and both remain `WIRE_OK / NO_REPLY_UNKNOWN`. Do not repeat their unchanged negative tests or the closed fragment sweep by inertia. Candidate-action OFF is not whole-helper disable.
 

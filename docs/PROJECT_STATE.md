@@ -18,9 +18,9 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
-- project version: `0.5.0`;
-- current source candidate revision: `_3`;
-- package candidate: `os-zapret2-restyle-0.5.0_3.pkg`;
+- project version: `0.5.1` (**unmerged Draft PR #328**);
+- current source candidate revision: `_1` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_1.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
@@ -84,6 +84,10 @@ Completed boundary:
 
 No further package correction belongs to this scope.
 
+## Development handoff: `v0.5.1_1` native Voice GUI (Draft PR #328)
+
+Work is staged at [PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), branched from `main` `3f9951c928ac2521c3551c8311d58ed755947007`. New native MVC page, five default-OFF fields, bilingual guidance, common service control and shared IPSET model are present. Registry, storage and managed target generation for Discord/X/SIP/Custom are staged; the existing Telegram hostlist data is reused. **Voice Apply is disabled** until complete validation and lifecycle migration are implemented. This draft has not replaced the temporary Telegram Voice PoC or qualified boot restoration, dual-WAN behavior, or media. The existing published and stable `0.5.0` packages are unchanged. See [design and implementation status](architecture/VOICE_TRANSMISSION_GUI.md).
+
 ## Telegram Voice UDP: current product scope and measured state
 
 **October 8 superseding design decision:** implement the native **«Передача голоса»** configuration page now, between Strategies and Laboratory, in the same native design. Five services: Telegram / Discord / X (Twitter) / SIP (VoIP) / Custom, per-service checkbox and multiline parameters, separate shared IPSET fields, Voice WAN at top. No LAN/local-UDP/boot toggles; matching local UDP is always included and saved state must restore through the normal single-engine lifecycle. Non-STUN stays in Strategies. [Complete implementation specification](architecture/VOICE_TRANSMISSION_GUI.md), [requirements](REQUIREMENTS.md), [next task](START_HERE.md), [roadmap](ROADMAP.md). This replaces the former GUI-only-after-media/one-checkbox restriction; the Telegram `MEDIA_PASS` then real UDP `CALL_PASS` gates still qualify a claimed working strategy.
@@ -126,7 +130,7 @@ Detailed protocol research and current oracle: [Telegram UDP research](research/
 
 **Lab permanence is an approved requirement but not a verified result.** October 1 LAN HTTPS and SOCKS TCP parent checks passed, but router-origin Telegram automatic selection, SOCKS UDP, Squid/sing-box regenerated state, **automatic OPNsense Voice-helper ON recovery**, alias synchronization and **the selected manual route-script procedure after an actual TNAS reboot** have not been jointly accepted after reboot. TNAS route auto-recovery and Docker autostart are **not** required by the owner. Manual recovery commands are a contingency, not successful automatic reboot acceptance. Retain the working TCP configuration while making supported lab persistence changes in a separately controlled test.
 
-Package identity stays `VERSION=0.5.0`, `PLUGIN_REVISION=3`; remote `_4` remains unpublished and paused. The owner-approved product behavior is **planned**, not yet implemented or qualified.
+Published Telegram PoC identity stays `VERSION=0.5.0`, `PLUGIN_REVISION=3`; Draft PR #328 introduces the separate unreleased `0.5.1_1` development identity. Remote `_4` remains unpublished and paused. The owner-approved product behavior is **planned**, not yet implemented or qualified.
 
 **2026-10-03 A2 superseding outcome:** The owner's first Docker A2 run passed unique saved/effective A2, Voice ON/table14, owner TNAS route guard and pinned host-network Docker. Independent LAN/WAN PCAP analysis: 60 genuine 40-byte Hello preserved after NAT; 120 zero16 fakes with **120/120 valid UDP checksums** precede every original in exact 60/60 triplets; no pinned reflector replies on either interface, zero capture drops. Both peers Reconnecting, BWE zero, CLI exit 1. **A2 CONFIG_PASS/WIRE_OK/NO_REPLY_UNKNOWN; MEDIA_PASS OPEN**. Relative to A1, removing only `:badsum` proved insufficient in this epoch; do not infer provider drop stage or reflector readiness. [Measured A2 evidence](verification/evidence/2026-10-03-docker-a2-valid-checksum-fakes-no-reflector-reply.md). A fresh healthy same-endpoint control is optional causal diagnostic; it is not an independent-UDP-exit prerequisite before any further controlled same-ISP Zapret2 research. Retired `.140` prohibited; keep TCP/proxy and A2 lab baseline unchanged.
 ## Completed version-line archives

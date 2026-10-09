@@ -7,6 +7,20 @@
 - Exact handoff: [`START_HERE.md`](START_HERE.md)
 - Current-line detail: [`history/current/v0.5.x.md`](history/current/v0.5.x.md)
 
+## Active `v0.5.1_1` — Voice Transmission development, Draft PR #328
+
+The current in-progress candidate is `v0.5.1_1` (unmerged, not published). The existing `v0.5.0_3` remains the latest experimental prerelease; stable Web/pkg remains `v0.5.0_1`.
+
+- [x] Stage native Voice page between Strategy and Laboratory with the existing form style and RU/EN guidance
+- [x] Stage five OFF-by-default service fields, WAN selector, shared IPv4/CIDR target fields
+- [x] Stage new named target registry, storage and normalization for Discord, X, SIP and Custom (pending CI)
+- [ ] Native STUN options allowlist/line-specific errors and fully transactional independent Apply
+- [ ] Replace hard-coded ephemeral `telegram_voice` with persistent per-service profiles and compatible commands
+- [ ] Destination/port-scoped IPFW and WAN isolation, ownership, overlap detection and rollback
+- [ ] Boot persistence / OFF and global OFF safety / legacy migration / single-engine regression
+- [ ] Exact-head CI, FreeBSD package qualification, documentation synchronization and user-live review
+- [ ] Controlled post-install WAN and reboot acceptance; distinct from MEDIA_PASS/CALL_PASS
+
 ## Completed project path
 
 - [x] Initial OPNsense plugin and independent project identity
