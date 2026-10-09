@@ -94,6 +94,10 @@ def simulate_cutover(adapter: CutoverAdapter, proof: dict, *,
     previous = adapter.snapshot_previous()
     if not isinstance(previous, dict) or not previous:
         raise CutoverRejected("missing trusted previous Config/runtime/IPFW snapshot")
+    # A snapshot alone is not proof that the current appliance is complete.
+    # Verify dvtws2, supervisor, Config tree AND exact plugin-owned rules
+    # before allowing any durable intent or mutation.
+    adapter.verify_previous(previous)
     adapter.reverify_sources(proof)
     # Durable prepared + mutating intent MUST be fsync'd before first live
     # change. A failure here is an interrupted intent, NOT an implicit abort.
