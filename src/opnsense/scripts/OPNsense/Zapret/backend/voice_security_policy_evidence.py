@@ -63,7 +63,7 @@ def _normalize(previous, scripts, images, credentials):
             "images": {role: images[role] for role in ROLES},
             "credentials": {
                 role: {field: credentials[role][field] for field in FIELDS}
-                for role in ROLES,
+                for role in ROLES
             }}
 
 

@@ -146,6 +146,13 @@ jobs:
         run: python3.13 scripts/test-voice-native-file-observer.py
       - name: Native read-only IPFW kernel ownership witness
         run: python3.13 scripts/test-voice-native-ipfw-ownership.py
+      - name: Compile security policy and recovery Python before behavioral tests
+        run: |
+          python3.13 -m py_compile \
+            src/opnsense/scripts/OPNsense/Zapret/backend/voice_security_policy_evidence.py \
+            src/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_journal.py \
+            src/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_full_recovery.py \
+            scripts/test-voice-security-policy-evidence.py
       - name: Private schema-3 Voice process security policy evidence
         run: python3.13 scripts/test-voice-security-policy-evidence.py
       - name: FreeBSD kernel executable pathname and process credentials
@@ -529,6 +536,11 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-native-process-probe.py
             /usr/local/bin/python3.13 scripts/test-voice-native-file-observer.py
             /usr/local/bin/python3.13 scripts/test-voice-native-ipfw-ownership.py
+            /usr/local/bin/python3.13 -m py_compile \
+              src/opnsense/scripts/OPNsense/Zapret/backend/voice_security_policy_evidence.py \
+              src/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_journal.py \
+              src/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_full_recovery.py \
+              scripts/test-voice-security-policy-evidence.py
             /usr/local/bin/python3.13 scripts/test-voice-security-policy-evidence.py
             /usr/local/bin/python3.13 scripts/test-voice-freebsd-process-security.py
             /usr/local/bin/python3.13 scripts/test-voice-freebsd-kernel-argv.py

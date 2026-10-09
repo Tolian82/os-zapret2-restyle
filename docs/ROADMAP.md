@@ -1,5 +1,9 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_15`: correct schema-3 policy module syntax and gate Python compilation explicitly ahead of behavioral regression tests
+- [ ] Qualify schema-3 full matrix, owner native policy authority and lock-held recovery before enabling any Voice Apply
+
+
 - [x] Current candidate `v0.5.1_14`: schema-3 cutover journal pins immutable previous process kernel image/credential policy to validated five-way previous-state evidence and read-only security reader
 - [ ] Qualify owner-device role UID/GID and kernel executable identities, immutable launch trust and semantic readiness; production Config+lifecycle lock-held restore remains gated
 
