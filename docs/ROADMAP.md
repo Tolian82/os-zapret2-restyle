@@ -1,5 +1,9 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_13`: read-only native FreeBSD process text pathname + numeric UID/GID witness with PID/start stability; test kernel self-process in FreeBSD 15 CI
+- [ ] Bind verified actual OPNsense process image/credential policy to durable intended state; test on owner device and certify kernel argv provenance/readiness before any native recovery
+
+
 - [x] Current candidate `v0.5.1_12`: kernel-exposed NUL-delimited FreeBSD argv reading with strict bounds, PID/start double-probe and offline tests, still unwired
 - [ ] Validate real FreeBSD kern.proc.args behavior and mutable process-title risk on owner appliance; qualify executable path/credential proofs and UDP readiness under native locks before Voice Apply
 
