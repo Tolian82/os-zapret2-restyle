@@ -58,6 +58,37 @@ class SnapshotTests(unittest.TestCase):
                 backup.capture_previous(config,active,target)
             self.assertEqual(manifest,backup.inspect_previous(target))
 
+    def test_snapshot_fingerprints_bind_to_durable_cutover_intent(self):
+        # Existing full transaction journal records five resource hashes.
+        # The byte snapshot attests exactly Config and runtime, not kernel
+        # IPFW or process state; those three require independent adapters.
+        journal_spec=importlib.util.spec_from_file_location(
+            "voice_cutover_journal", BACKEND/"voice_cutover_journal.py"
+        )
+        journal=importlib.util.module_from_spec(journal_spec)
+        journal_spec.loader.exec_module(journal)
+        with tempfile.TemporaryDirectory() as d:
+            config,active,target=self.fixture(d)
+            snapshot=backup.capture_previous(config,active,target)
+            digests=backup.bound_resource_fingerprints(target)
+            self.assertEqual(snapshot["config"]["sha256"],digests["config"])
+            self.assertEqual(64,len(digests["runtime"]))
+            before={**digests,
+                    "engine":"1"*64, "firewall":"2"*64,
+                    "supervisor":"3"*64}
+            proof={"saved_xml_sha256":"4"*64,
+                   "merged_sha256":"5"*64,
+                   "native_argv_sha256":"6"*64}
+            record=journal.new_record(before,proof)
+            self.assertEqual(before,record["previous"])
+            self.assertEqual(digests,backup.bound_resource_fingerprints(target,before))
+            bad={**before,"runtime":"f"*64}
+            with self.assertRaisesRegex(backup.VoiceBackupError,"fingerprint mismatch"):
+                backup.bound_resource_fingerprints(target,bad)
+            (target/"runtime/dvtws.args").write_text("--port=990\n")
+            with self.assertRaises(backup.VoiceBackupError):
+                backup.bound_resource_fingerprints(target,before)
+
     def test_invalid_input_and_parent_permissions_never_publish(self):
         for variant in ("config-symlink","runtime-symlink","parent-mode","runtime-special"):
             with self.subTest(variant=variant),tempfile.TemporaryDirectory() as d:
