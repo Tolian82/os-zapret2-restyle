@@ -30,6 +30,13 @@ def merge_profiles(voice: str, ordinary: str) -> str:
         raise VoiceMergeError("ordinary Strategy collides with reserved Voice identity")
     if not voice:
         return ordinary
+    # Native first-match STUN semantics make an ordinary STUN profile
+    # ambiguous when Voice is prepended. Reject conservatively until a
+    # full destination/port-scope comparison is available.
+    if any(token in ("--filter-l7=stun", "--payload=stun") for token in lines):
+        raise VoiceMergeError(
+            "ordinary Strategies also contain STUN; review competing profile priority before enabling Voice"
+        )
     voice_lines = [line.strip() for line in voice.splitlines() if line.strip()]
     if not voice_lines or voice_lines[0] == "--new" or voice_lines[-1] == "--new":
         raise VoiceMergeError("Voice generator produced an empty profile boundary")
