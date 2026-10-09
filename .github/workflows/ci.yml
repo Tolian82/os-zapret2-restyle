@@ -122,6 +122,8 @@ jobs:
         run: python3.13 scripts/test-voice-profile-compiler.py
       - name: Voice destination-scoped IPFW capture planning
         run: python3.13 scripts/test-voice-capture-plan.py
+      - name: Persisted Voice model to candidate and capture plan
+        run: python3.13 scripts/test-voice-model-export.py
       - name: Voice GUI model and localization contract
         run: python3.13 scripts/test-voice-gui-contract.py
 
