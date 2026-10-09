@@ -117,11 +117,12 @@ class GeneratorInteropTests(unittest.TestCase):
 
     def test_old_poc_or_ordinary_stun_conflict_fails_before_generator(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            for bad in (
+            for number, bad in enumerate((
                 "--name=telegram-voice-poc\n" + ORDINARY,
                 "--filter-udp=*\n--filter-l7=stun\n--payload=stun\n",
-            ):
+            )):
+                root = Path(tmp) / str(number)
+                root.mkdir()
                 with self.subTest(bad=bad):
                     with self.assertRaises(ValueError):
                         self.compile(root, enabled=True, ordinary=bad)
