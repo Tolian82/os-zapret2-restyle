@@ -128,6 +128,8 @@ jobs:
         run: python3.13 scripts/test-voice-release-stage.py
       - name: Voice and ordinary single-engine traffic merging
         run: python3.13 scripts/test-voice-traffic-merge.py
+      - name: Voice owned IPFW transaction and rollback simulation
+        run: python3.13 scripts/test-voice-firewall-transaction.py
       - name: Voice GUI model and localization contract
         run: python3.13 scripts/test-voice-gui-contract.py
 
