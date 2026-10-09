@@ -21,9 +21,9 @@ def load(path: Path, name: str):
 
 transaction_tests = load(ROOT / "scripts/test-voice-firewall-transaction.py",
                          "transaction_mock_fixtures")
-activation = load(BACKEND / "voice_firewall_activation.py", "voice_firewall_activation")
-ledger = load(BACKEND / "voice_firewall_ledger.py", "voice_firewall_ledger")
-transaction = load(BACKEND / "voice_firewall_transaction.py", "voice_firewall_transaction")
+import voice_firewall_activation as activation
+import voice_firewall_ledger as ledger
+import voice_firewall_transaction as transaction
 FakeIPFW = transaction_tests.FakeIPFW
 fixture = transaction_tests.fixture
 
