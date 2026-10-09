@@ -131,6 +131,64 @@ def _tree(source: Path, destination: Path) -> tuple[dict, int]:
     return result, total_bytes
 
 
+def _live_sha(path: Path) -> tuple[str, int, int]:
+    info = _regular(path)
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        start = os.fstat(fd)
+        digest = hashlib.sha256()
+        count = 0
+        while True:
+            chunk = os.read(fd, CHUNK)
+            if not chunk:
+                break
+            count += len(chunk)
+            if count > MAX_BYTES:
+                raise VoiceBackupError("Voice live source exceeds configured bound")
+            digest.update(chunk)
+        finish = os.fstat(fd)
+        if start.st_ino != info.st_ino or start.st_dev != info.st_dev or \
+           start.st_size != finish.st_size or start.st_mtime_ns != finish.st_mtime_ns or \
+           start.st_ctime_ns != finish.st_ctime_ns or count != start.st_size:
+            raise VoiceBackupError("Voice live source changed during verification")
+        return digest.hexdigest(), count, stat.S_IMODE(start.st_mode)
+    finally:
+        os.close(fd)
+
+
+def _verify_sources(config: Path, runtime: Path, manifest: dict) -> None:
+    config_row = manifest["config"]
+    if _live_sha(config) != (config_row["sha256"], config_row["bytes"], config_row["mode"]):
+        raise VoiceBackupError("Voice Config changed while building previous-state backup")
+    entries = manifest["runtime"]
+    actual = set()
+    for here, folders, files in os.walk(runtime, topdown=True, followlinks=False):
+        current = Path(here)
+        if current.is_symlink():
+            raise VoiceBackupError("Voice runtime directory changed to symlink")
+        for name in folders + files:
+            item = current / name
+            info = os.lstat(item)
+            rel = item.relative_to(runtime).as_posix()
+            key = rel + "/" if stat.S_ISDIR(info.st_mode) else rel
+            if key not in entries:
+                raise VoiceBackupError("Voice runtime changed after snapshot")
+            actual.add(key)
+            record = entries[key]
+            if stat.S_ISDIR(info.st_mode):
+                if record != {"type": "dir", "mode": stat.S_IMODE(info.st_mode)}:
+                    raise VoiceBackupError("Voice runtime directory changed")
+            elif stat.S_ISREG(info.st_mode):
+                if record.get("type") != "file" or _live_sha(item) != (
+                    record["sha256"], record["bytes"], record["mode"]
+                ):
+                    raise VoiceBackupError("Voice runtime file changed after snapshot")
+            else:
+                raise VoiceBackupError("Voice runtime contains an unsafe changed entry")
+    if actual != set(entries):
+        raise VoiceBackupError("Voice runtime entries changed while snapshotting")
+
+
 def capture_previous(config: Path, runtime: Path, output: Path) -> dict:
     """Create one immutable, durable private backup; never overwrite output."""
     config, runtime, output = Path(config), Path(runtime), Path(output)
@@ -157,6 +215,10 @@ def capture_previous(config: Path, runtime: Path, output: Path) -> dict:
             "runtime": entries,
             "runtime_bytes": total,
         }
+        # Re-read live sources after the full copy, before publishing the
+        # snapshot. The future live adapter must STILL hold both locks and
+        # compare this immutable snapshot with its pinned preflight proof.
+        _verify_sources(config, runtime, manifest)
         encoded = (json.dumps(manifest, sort_keys=True, separators=(",", ":"))+"\n").encode("utf-8")
         if len(encoded) > MAX_MANIFEST:
             raise VoiceBackupError("Voice previous snapshot manifest too large")
