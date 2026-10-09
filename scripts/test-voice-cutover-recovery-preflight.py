@@ -114,6 +114,20 @@ class CrossJournalTests(unittest.TestCase):
                         else "invalid-or-untrusted-recovery-evidence")
                 self.check(saved,whole,fw,"blocked",reason)
 
+    def test_corrupt_or_untrusted_ipfw_ledger_is_bounded_refusal(self):
+        for case in ("corrupt-ownership", "symlink-intent"):
+            with self.subTest(case=case),tempfile.TemporaryDirectory() as d:
+                saved,whole,fw,old=self.setup(d)
+                whole.begin(old,PROOF)
+                if case=="corrupt-ownership":
+                    fw._location("ownership.json").write_text("corrupt")
+                else:
+                    target=Path(d)/"other.json"
+                    target.write_text("{}")
+                    fw._location("intent.json").symlink_to(target)
+                self.check(saved,whole,fw,"blocked",
+                           "invalid-or-untrusted-recovery-evidence")
+
     def test_unknown_owner_and_missing_ledger_block(self):
         with tempfile.TemporaryDirectory() as d:
             saved,whole,fw,old=self.setup(d)

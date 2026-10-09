@@ -6,7 +6,7 @@ Does NOT enable activation, replay, IPFW access or boot recovery.
 from __future__ import annotations
 from pathlib import Path
 from voice_cutover_backup import bound_resource_fingerprints
-from voice_firewall_ledger import canonical_manifest, fingerprint
+from voice_firewall_ledger import LedgerError, canonical_manifest, fingerprint
 
 
 def _result(state, reason, **extras):
@@ -60,5 +60,5 @@ def inspect_recovery(cutover, firewall, previous_backup: Path) -> dict:
         if fingerprint(canonical_manifest(owned)) != prior:
             return _result("blocked", "unbound-ipfw-ownership", phase=phase)
         return _result("review-required", "previous-snapshot-bound", phase=phase)
-    except (OSError, ValueError, TypeError, KeyError):
+    except (OSError, ValueError, TypeError, KeyError, LedgerError):
         return _result("blocked", "invalid-or-untrusted-recovery-evidence")
