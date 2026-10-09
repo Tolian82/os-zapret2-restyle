@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Voice GUI Validate staged:** в PR #328 добавлен read-only endpoint `/api/zapret/voice/validate`, отдельная кнопка Validate и RU/EN локализация ошибок. Он проверяет несохранённую конфигурацию (IPSET, STUN, пересечения), не пишет `config.xml` и не меняет dvtws2/IPFW. PHP-проверки и сопоставление с авторитетным Python compiler добавлены в CI. Кнопка Apply остаётся disabled: cross-runtime rollback/legacy migration/boot/owner-live ещё OPEN. Не устанавливать как production voice feature только на основании CI.
+
+
 **Migration staging:** a separate read-only `voice_migration_plan.py` distinguishes clean install, explicit native ON/OFF, still-running old PoC, lost `/var/run` marker and ambiguous legacy state. No automatic promotion of temporary ON to persistent ON; old builder/marker/runtime is not removed until verified cutover. The read-only Voice IPFW status is available in RU/EN GUI, but the save/apply endpoint is still absent.
 
 

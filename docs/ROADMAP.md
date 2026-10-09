@@ -1,5 +1,10 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Add native Voice form Validate action: unsaved IPv4/STUN/UDP scope checks without config mutation; localized RU/EN field errors
+- [x] Add standalone PHP validator regression and PHP/Python candidate acceptance parity CI; correct CI host/container interpreter ownership
+- [ ] Qualify native GUI AJAX/DOM form and field-error display on owner OPNsense; ensure dark/light theme and RU/EN
+- [ ] Implement persistent Voice Save/Apply behind unified lifecycle lock, installed engine preflight, transaction and reboot restore; retire temporary PoC only after verified cutover
+
 - [x] Stage explicit old PoC migration plan from config.xml, transient marker and active state; preserve native preference and refuse ambiguous live state
 - [ ] Implement one-way atomic migration and persistent native Voice Apply; decommission marker/old hard-coded profile/rules after verified handoff
 

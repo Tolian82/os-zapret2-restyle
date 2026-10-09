@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Voice form validation staging:** new read-only VoiceCandidateValidator/VoiceController.validateAction plus RU/EN native GUI Validate button, syntax/target overlap guard, and PHP/Python differential CI tests. Last-stage CI run must be checked against exact head. This is validation of unsaved GUI data only: no config write, no Apply, no dvtws2, no live IPFW change; existing temporary Telegram PoC still not removed. The primary remaining implementation boundary is safe native lifecycle cutover, persistent Apply and boot recovery.
+
+
 **Legacy Telegram Voice migration:** a read-only model/marker/active-state assessment and six negative/upgrade regression scenarios are staged. Ambiguous legacy status blocks new activation; old PoC must not be deleted before successful one-engine cutover, native lock integration and rollback. No package is published.
 
 
