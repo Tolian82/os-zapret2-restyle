@@ -132,6 +132,8 @@ jobs:
         run: python3.13 scripts/test-voice-firewall-transaction.py
       - name: FreeBSD IPFW adapter exact argv and parsing contract
         run: python3.13 scripts/test-voice-ipfw-adapter.py
+      - name: Voice native saved-ON staging guard
+        run: sh scripts/test-voice-staged-runtime-guard.sh
       - name: Voice read-only live IPFW ownership inspector
         run: python3.13 scripts/test-voice-live-inspect.py
       - name: Voice explicit legacy PoC migration safety
