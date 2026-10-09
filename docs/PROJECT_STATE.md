@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Legacy Telegram Voice migration:** a read-only model/marker/active-state assessment and six negative/upgrade regression scenarios are staged. Ambiguous legacy status blocks new activation; old PoC must not be deleted before successful one-engine cutover, native lock integration and rollback. No package is published.
+
+
 **Voice Draft PR #328 latest staging:** FreeBSD IPFW adapter is read-only by default with narrow bounded commands and parsing, a dedicated configd/API read-only Voice status is visible in RU/EN GUI, and native table equality is order-independent. Advanced fake TTL/checksum/fragment/range syntax is still parser-only pending installed engine qualification. Runtime cutover, persisted Apply, PoC removal, cold-boot recovery, FreeBSD owner-live acceptance remain OPEN. No new package has been published.
 
 

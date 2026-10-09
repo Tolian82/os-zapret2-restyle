@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Stage explicit old PoC migration plan from config.xml, transient marker and active state; preserve native preference and refuse ambiguous live state
+- [ ] Implement one-way atomic migration and persistent native Voice Apply; decommission marker/old hard-coded profile/rules after verified handoff
+
 - [x] Stage FreeBSD IPFW adapter, non-mutating by default, narrow argv/table/rule parsing and native-VM test coverage (not production-wired)
 - [x] Stage read-only Voice configd/API status with RU/EN GUI labels; no save/apply route
 - [x] Compare IPFW address tables as unordered unique CIDR sets across rollback and journal

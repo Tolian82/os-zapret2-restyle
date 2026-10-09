@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Migration staging:** a separate read-only `voice_migration_plan.py` distinguishes clean install, explicit native ON/OFF, still-running old PoC, lost `/var/run` marker and ambiguous legacy state. No automatic promotion of temporary ON to persistent ON; old builder/marker/runtime is not removed until verified cutover. The read-only Voice IPFW status is available in RU/EN GUI, but the save/apply endpoint is still absent.
+
+
 **Draft PR #328 дополнен:** native FreeBSD IPFW adapter (read-only by default), read-only Voice status/configd/API in RU/EN GUI, unordered IPv4 table comparison, extended bounded fake parser, FreeBSD package regression. **Это не рабочий Voice Apply**: orchestration, старая PoC-миграция, lock-held journal/live runtime и reboot acceptance ещё впереди. Сначала смотреть exact-head CI, затем проверять безопасный one-engine cutover без второго пути ON.
 
 
