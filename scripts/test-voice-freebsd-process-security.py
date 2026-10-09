@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import ctypes
 import os
 from pathlib import Path
 import sys
@@ -215,9 +216,55 @@ class SecurityTests(unittest.TestCase):
         # Real read-only system calls in FreeBSD CI, but NEVER a service
         # PID, IPFW rule, Config mutation, or production Voice activation.
         pid = os.getpid()
-        actual_path = security.parse_kernel_path(
-            security.sysctl_kernel_path(pid)
-        )
+        try:
+            raw_path = security.sysctl_kernel_path(pid)
+        except security.ProcessSecurityError as exc:
+            # CI-only read-only probe; never substitute a fake for a failed
+            # native check. Capture the actual OID/errno behavior on FreeBSD.
+            libc = ctypes.CDLL(None, use_errno=True)
+            byname = libc.sysctlbyname
+            byname.argtypes = [ctypes.c_char_p, ctypes.c_void_p,
+                               ctypes.POINTER(ctypes.c_size_t),
+                               ctypes.c_void_p, ctypes.c_size_t]
+            byname.restype = ctypes.c_int
+            n = ctypes.c_size_t()
+            ctypes.set_errno(0)
+            name_rc = byname(f"kern.proc.pathname.{pid}".encode(),
+                             None, ctypes.byref(n), None, 0)
+            name_errno = ctypes.get_errno()
+            nametomib = libc.sysctlnametomib
+            nametomib.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_int),
+                                  ctypes.POINTER(ctypes.c_size_t)]
+            nametomib.restype = ctypes.c_int
+            mib = (ctypes.c_int * 24)()
+            depth = ctypes.c_size_t(24)
+            ctypes.set_errno(0)
+            mib_rc = nametomib(b"kern.proc.pathname", mib,
+                               ctypes.byref(depth))
+            mib_errno = ctypes.get_errno()
+            numeric_rc = None
+            numeric_errno = None
+            numeric_length = None
+            if mib_rc == 0 and 0 < depth.value < 24:
+                mib[depth.value] = pid
+                native_sysctl = libc.sysctl
+                native_sysctl.argtypes = [ctypes.POINTER(ctypes.c_int),
+                                          ctypes.c_uint, ctypes.c_void_p,
+                                          ctypes.POINTER(ctypes.c_size_t),
+                                          ctypes.c_void_p, ctypes.c_size_t]
+                native_sysctl.restype = ctypes.c_int
+                numeric_size = ctypes.c_size_t()
+                ctypes.set_errno(0)
+                numeric_rc = native_sysctl(mib, depth.value + 1, None,
+                                           ctypes.byref(numeric_size), None, 0)
+                numeric_errno = ctypes.get_errno()
+                numeric_length = numeric_size.value
+            self.fail(f"{exc}; FreeBSD read-only OID probe: "
+                      f"byname_rc={name_rc} errno={name_errno} len={n.value}; "
+                      f"nametomib_rc={mib_rc} errno={mib_errno} depth={depth.value}; "
+                      f"numeric_rc={numeric_rc} errno={numeric_errno} "
+                      f"len={numeric_length}")
+        actual_path = security.parse_kernel_path(raw_path)
         self.assertTrue(actual_path.startswith("/"))
         creds = security.ps_numeric_credentials(pid)
         self.assertEqual(os.geteuid(),creds["euid"])
