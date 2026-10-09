@@ -28,6 +28,19 @@ class VoiceStageError(ValueError):
     pass
 
 
+def file_sha256(path: Path) -> str:
+    """Stream-hash a regular staging source without retaining its contents."""
+    if path.is_symlink() or not path.is_file():
+        raise VoiceStageError("Voice staging source must be a regular non-symlink file")
+    if path.stat().st_size > 128 * 1024 * 1024:
+        raise VoiceStageError("Voice staging source exceeds configured bound")
+    digest = hashlib.sha256()
+    with path.open("rb") as src:
+        for chunk in iter(lambda: src.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def require_managed_match(state: dict, managed_source: Path) -> dict[str, str]:
     hashes: dict[str, str] = {}
     for service in SERVICES:
@@ -37,8 +50,8 @@ def require_managed_match(state: dict, managed_source: Path) -> dict[str, str]:
         if not expected:
             raise VoiceStageError(f"{service}: enabled Voice IPSET is empty")
         filename = managed_source / f"ipset-{service}.txt"
-        if not filename.is_file():
-            raise VoiceStageError(f"{service}: managed IPSET is missing")
+        if filename.is_symlink() or not filename.is_file():
+            raise VoiceStageError(f"{service}: managed IPSET is missing or unsafe")
         if filename.stat().st_size > 1_048_576:
             raise VoiceStageError(f"{service}: managed IPSET is oversized")
         # Exact equality preserves order, deduplication and strict CIDR
@@ -60,6 +73,7 @@ def compile_bundle(config: Path, managed_source: Path, active_root: Path,
         raise VoiceStageError("active runtime directory must be absolute")
     if not isinstance(physical_wan, str) or not physical_wan:
         raise VoiceStageError("resolved kernel WAN must be supplied")
+    source_sha = file_sha256(config)
     state = read_voice_model(config)
     profile, candidate = compile_candidate(state, active_root / "managed")
     hashes = require_managed_match(state, managed_source)
@@ -76,6 +90,7 @@ def compile_bundle(config: Path, managed_source: Path, active_root: Path,
             raise VoiceStageError(f"{name}: missing verified managed IPSET")
     metadata = {
         "schema": 1,
+        "saved_xml_sha256": source_sha,
         "mode": "staged-only",
         "activation_authorized": False,
         "logical_wan": candidate["wan"],
@@ -89,11 +104,21 @@ def compile_bundle(config: Path, managed_source: Path, active_root: Path,
         "capture-plan.json": json.dumps(capture, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
     }
     if ordinary_source is not None:
+        ordinary_sha = file_sha256(ordinary_source)
         ordinary = ordinary_source.read_text(encoding="utf-8")
         merged = merge_profiles(profile, ordinary)
         artifacts["traffic.conf"] = merged
         metadata["ordinary_sha256"] = hashlib.sha256(ordinary.encode()).hexdigest()
         metadata["merged_sha256"] = hashlib.sha256(merged.encode()).hexdigest()
+    # Prevent an internally coherent-looking bundle being created from
+    # different generations of saved XML, managed IPSET or ordinary traffic.
+    # A real Apply must still re-check these under its lifecycle/Config lock.
+    if file_sha256(config) != source_sha:
+        raise VoiceStageError("saved Voice configuration changed during candidate staging")
+    if require_managed_match(state, managed_source) != hashes:
+        raise VoiceStageError("managed IPSET changed during Voice candidate staging")
+    if ordinary_source is not None and file_sha256(ordinary_source) != ordinary_sha:
+        raise VoiceStageError("ordinary Strategy changed during Voice candidate staging")
     artifacts["metadata.json"] = json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
     return artifacts
 
@@ -119,6 +144,13 @@ def stage_bundle(output: Path, content: dict[str, str]) -> None:
                 os.fsync(stream.fileno())
             os.chmod(path, 0o600)
         os.rename(temp, output)
+        # Persist the newly published candidate directory entry as well as
+        # its individually fsync'd files. This is not an activation commit.
+        fd = os.open(parent, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
     finally:
         if temp.exists():
             shutil.rmtree(temp)
