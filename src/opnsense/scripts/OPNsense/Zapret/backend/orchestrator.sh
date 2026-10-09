@@ -97,6 +97,17 @@ orchestrator_build_release()
             "service is disabled"
         return 2
     }
+    # Reject native Voice ON before generating anything for the
+    # old telegram-voice-poc prepend. Apply remains disabled in v0.5.1_1.
+    # Until the one-engine cutover is implemented, silently ignoring a
+    # persisted Voice checkbox would misrepresent runtime state.
+    config_voice_staged_only_guard || {
+        orchestrator_fail_stage \
+            "${_orchestrator_build_stage_file}" 1 \
+            "${_orchestrator_build_total}" config \
+            "native Voice ON requires the completed transactional runtime"
+        return 1
+    }
     [ -n "${TRAFFIC_ARGS}" ] || {
         common_error "Traffic Strategy is empty"
         orchestrator_fail_stage \
