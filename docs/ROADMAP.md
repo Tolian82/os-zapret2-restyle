@@ -14,7 +14,8 @@ The current in-progress candidate is `v0.5.1_1` (unmerged, not published). The e
 - [x] Stage native Voice page between Strategy and Laboratory with the existing form style and RU/EN guidance
 - [x] Stage five OFF-by-default service fields, WAN selector, shared IPv4/CIDR target fields
 - [x] Stage new named target registry, storage and normalization for Discord, X, SIP and Custom (pending CI)
-- [ ] Native STUN options allowlist/line-specific errors and fully transactional independent Apply
+- [x] Stage standalone fail-closed STUN compiler, initial allowlist and per-service conflict/line validation tests (not yet applied)
+- [ ] Expand and qualify native options (TTL/ranges/fragmentation) and connect fully transactional independent Apply
 - [ ] Replace hard-coded ephemeral `telegram_voice` with persistent per-service profiles and compatible commands
 - [ ] Destination/port-scoped IPFW and WAN isolation, ownership, overlap detection and rollback
 - [ ] Boot persistence / OFF and global OFF safety / legacy migration / single-engine regression
