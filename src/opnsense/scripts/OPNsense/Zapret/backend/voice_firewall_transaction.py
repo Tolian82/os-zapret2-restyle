@@ -9,6 +9,7 @@ touches the kernel. Unit tests inject an in-memory IPFW simulator.
 from __future__ import annotations
 
 from copy import deepcopy
+import ipaddress
 import re
 
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
@@ -61,10 +62,15 @@ def prepare_desired(capture_plan: dict, tcp: str, udp: str) -> dict:
     if not isinstance(voice, list) or len(voice) > len(SERVICES):
         raise VoiceFirewallError("invalid service count")
     expected_rule = first
+    previous_service_index = -1
     for record in voice:
         if not isinstance(record, dict) or record.get("service") not in SERVICES:
             raise VoiceFirewallError("invalid Voice service record")
         name = record["service"]
+        index = SERVICES.index(name)
+        if index <= previous_service_index:
+            raise VoiceFirewallError("Voice services are reordered or duplicated")
+        previous_service_index = index
         table = TABLE_PREFIX + name
         if record.get("table") != table or record.get("rule") != expected_rule:
             raise VoiceFirewallError("nonsequential or inconsistent Voice rule")
@@ -86,9 +92,25 @@ def prepare_desired(capture_plan: dict, tcp: str, udp: str) -> dict:
             not isinstance(value, str) or not value for value in destinations
         ):
             raise VoiceFirewallError("empty or invalid Voice destination table")
+        if len(destinations) != record.get("destination_count"):
+            raise VoiceFirewallError("Voice target count mismatch")
+        canonical = []
+        for destination in destinations:
+            try:
+                network = ipaddress.IPv4Network(
+                    destination if "/" in destination else destination + "/32", strict=True
+                )
+            except ValueError as error:
+                raise VoiceFirewallError("invalid Voice IPv4 destination") from error
+            normal = str(network) if "/" in destination else str(network.network_address)
+            if destination != normal:
+                raise VoiceFirewallError("noncanonical Voice IPv4 destination")
+            canonical.append(destination)
+        if len(set(canonical)) != len(canonical):
+            raise VoiceFirewallError("duplicate Voice IPv4 destination")
         if table in tables:
             raise VoiceFirewallError("duplicate Voice service")
-        tables[table] = list(destinations)
+        tables[table] = canonical
         rules[expected_rule] = list(argv)
         expected_rule += 1
     if expected_rule != ordinary_first:
@@ -139,6 +161,7 @@ def apply_transaction(adapter, previous: dict, desired: dict) -> None:
     swapped = []
     newly_created = []
     prior_rule_numbers = set(previous["rules"])
+    deleted_old_rules = set()
     attempted_rules = set()
     try:
         # Prepare every new target set without disturbing active entries.
@@ -159,6 +182,7 @@ def apply_transaction(adapter, previous: dict, desired: dict) -> None:
         # range or delete an unrelated rule that was not in previous manifest.
         for number in sorted(prior_rule_numbers):
             adapter.delete_rule(number)
+            deleted_old_rules.add(number)
         for number, argv in sorted(desired["rules"].items()):
             attempted_rules.add(number)
             adapter.add_rule(number, argv)
@@ -171,6 +195,8 @@ def apply_transaction(adapter, previous: dict, desired: dict) -> None:
             except Exception as exc:
                 rollback_errors.append(str(exc))
         for number, argv in sorted(previous["rules"].items()):
+            if number not in deleted_old_rules:
+                continue
             try:
                 adapter.add_rule(number, argv)
             except Exception as exc:
