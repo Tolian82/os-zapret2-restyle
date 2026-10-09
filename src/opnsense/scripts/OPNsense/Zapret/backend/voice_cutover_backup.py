@@ -345,3 +345,28 @@ def inspect_previous(output: Path) -> dict:
        sorted(p.name for p in (output / "config").iterdir()) != ["config.xml"]:
         raise VoiceBackupError("Voice backup contains unknown payloads")
     return manifest
+
+
+def bound_resource_fingerprints(output: Path, previous: dict | None = None) -> dict:
+    """Bind real previous Config/runtime bytes to the whole-cutover journal.
+
+    The journal also requires independently verified engine, supervisor and
+    owned-IPFW fingerprints. This only attests the two resource types for
+    which this snapshot has restorable bytes. It never mutates anything.
+    """
+    verified = inspect_previous(output)
+    config_sha = verified["config"]["sha256"]
+    runtime_content = {
+        "entries": verified["runtime"],
+        "total_bytes": verified["runtime_bytes"],
+    }
+    runtime_sha = hashlib.sha256(json.dumps(
+        runtime_content, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("ascii")).hexdigest()
+    result = {"config": config_sha, "runtime": runtime_sha}
+    if previous is not None:
+        if not isinstance(previous, dict) or any(
+            previous.get(name) != result[name] for name in result
+        ):
+            raise VoiceBackupError("previous Config/runtime journal fingerprint mismatch")
+    return result
