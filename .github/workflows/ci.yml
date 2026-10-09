@@ -136,6 +136,8 @@ jobs:
         run: python3.13 scripts/test-voice-cutover-journal.py
       - name: Voice immutable previous Config and runtime backup
         run: python3.13 scripts/test-voice-cutover-backup.py
+      - name: Voice private Config/runtime restore staging (non-activating)
+        run: python3.13 scripts/test-voice-cutover-restore-stage.py
       - name: Voice read-only cross-journal recovery preflight
         run: python3.13 scripts/test-voice-cutover-recovery-preflight.py
       - name: Voice native boot and shared lockf cutover guard
@@ -486,6 +488,7 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-cutover-coordinator.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-journal.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-backup.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-restore-stage.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-recovery-preflight.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-boot-guard.py
             sh scripts/test-voice-atomic-rollback-preflight.sh
@@ -533,6 +536,7 @@ jobs:
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_coordinator.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_journal.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_backup.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_restore_stage.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_recovery_preflight.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_guard.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py' "${contents}"

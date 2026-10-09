@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Voice isolated restore stage (Draft PR #328, 2026-10-09):** added `voice_cutover_restore_stage.py` to produce an independently inspectable private copy of sealed previous Config/runtime bytes, checked against durable journal previous fingerprints, per-file hashes, full manifest and source reinspection. No live destination or process is touched, and no automatic rollback/Voice Apply is enabled. New Linux/FreeBSD 15 offline regression covers tamper/symlinks/faults/destination conflicts. A real restorer still needs lock-held kernel/dvtws2/supervisor adapters and boot qualification.
+
+
 **Voice draft UI decision (2026-10-09):** As explicitly requested, the disabled `voiceApply` **settings** button is removed from the Voice page rather than displayed as a misleading action. The independent `voiceReleaseApply` repository-package installation control, Voice Validate, read-only diagnostics and service controls are preserved. No voice settings persistence or activation endpoint is exposed; `VoiceApplyCandidate` remains a pure read-only validation/normalization helper. Future transactional activation requires a separate approved implementation. This change does not remove the old Telegram PoC or affect installed OPNsense.
 
 

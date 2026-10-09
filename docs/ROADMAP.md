@@ -1,5 +1,9 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Staged private verified Config/runtime restoration payload without appliance mutation or overwrite
+- [ ] Native dual-lock held restore adapter: previous engine, supervisor, Config and IPFW; verify on reboot before Voice activation
+
+
 - [x] Remove misleading disabled Voice settings Apply button while keeping release installer, Validate and service controls (Draft PR #328; 2026-10-09)
 - [ ] Integrate real transactional Voice save/activation only after native locks, dual journals and reboot validation qualify the one-engine cutover
 
