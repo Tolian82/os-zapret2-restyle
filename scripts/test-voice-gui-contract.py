@@ -81,6 +81,22 @@ def main() -> None:
     check("[voice_inspect]" in configd and
           "voice_live_inspect.py; exit 0" in configd,
           "Native Voice inspection must use a fixed read-only configd action")
+    check("/api/zapret/voice/validate" in view and
+          "getFormData('frm_VoiceSettings')" in view and
+          'id="voiceValidate"' in view and
+          'id="voiceValidationStatus"' in view,
+          "Voice GUI missing syntax-only Validate control")
+    for term in ("'Проверить'", "'Validate'", "'Синтаксис проверен (без применения)'",
+                 "'Syntax checked (not applied)'"):
+        check(term in view, f"Voice validation UI missing localization {term}")
+    validator = SRC / "controllers/OPNsense/Zapret/Api/VoiceCandidateValidator.php"
+    voice_validator = validator.read_text(encoding="utf-8")
+    check("class VoiceCandidateValidator" in voice_validator and
+          "function check(" in voice_validator and
+          "Config::" not in voice_validator and "configdRun" not in voice_validator,
+          "Voice candidate syntax check must not mutate active config")
+    check("public function validateAction()" in status_php,
+          "Voice read-only syntax validation action is unavailable")
     for field in fields:
         check(not any(bad in field for bad in BAD_FIELDS), f"Forbidden toggle: {field}")
     check('<IPSET:telegram>' in ET.tostring(form, encoding="unicode") or
