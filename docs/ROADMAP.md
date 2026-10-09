@@ -16,6 +16,7 @@ The current in-progress candidate is `v0.5.1_1` (unmerged, not published). The e
 - [x] Stage new named target registry, storage and normalization for Discord, X, SIP and Custom (pending CI)
 - [x] Stage standalone fail-closed STUN compiler, initial allowlist and per-service conflict/line validation tests (not yet applied)
 - [x] Stage declarative Voice IPFW address-and-port capture plan with five-service range/overlap checks (not yet installed)
+- [x] Stage read-only native OPNsense Voice config.xml export and end-to-end candidate pipeline tests (not yet activated)
 - [x] Scope Strategies Apply to Strategies-owned fields without resetting Voice/other IPSETs
 - [ ] Expand and qualify native options (TTL/ranges/fragmentation) and connect fully transactional independent Apply
 - [ ] Replace hard-coded ephemeral `telegram_voice` with persistent per-service profiles and compatible commands
