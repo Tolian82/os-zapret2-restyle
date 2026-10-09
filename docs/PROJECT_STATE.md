@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Voice next milestone (draft, mock-only):** whole-system `voice_cutover_coordinator.py` now models full Config, one dvtws2, supervisor and IPFW transition, verifies trusted previous state before any intent, runs fault-injected rollback, and never claims success if a partial failure remains. `voice_cutover_journal.py` is a separate private fsync'd prepared/mutating/committed intent with read-only boot classification, integrated with the simulated coordinator in tests. Both modules are packaged, but neither is connected to production startup, configd or GUI Apply. Must coordinate with per-IPFW ledger, migrate legacy marker, qualify installed engine and validate recovery on real OPNsense. Latest head CI pending independent verification.
+
+
 **Voice draft handoff integrity:** new non-mutating bundle verifier checks candidate profile hashes, target hashes, derived native IPFW capture/rules, original ordinary port selectors against production ports.sh, WAN and exactly one generated dvtws2 divert socket. No access to a running OPNsense occurs; output explicitly disallows activation. FreeBSD-only unversioned-python3 test harness failure fixed by a private interpreter shim, not a production change. Pending: exact-head full FreeBSD CI, durable single-engine runtime cutover, config.xml persistence, removal of old Telegram PoC and boot recovery.
 
 

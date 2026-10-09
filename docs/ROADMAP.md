@@ -1,5 +1,9 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Stage isolated full-system Voice cutover coordinator with verified old state, ordered single-engine/IPFW/supervisor/config handoff and fault-injected rollback (test adapters only)
+- [x] Stage durable private whole-runtime fsync journal, crash-phase inspection and integration with mock coordinator; verify restart/permissions and package inclusion
+- [ ] Implement real OPNsense native cutover adapter under Config/lifecycle locks, coordinate both journals, decommission old PoC, bootstrap persistent Voice ON after restart and qualify owner-live packet/media acceptance
+
 - [x] Stage immutable Voice/Strategies/native dvtws2/IPFW handoff integrity preflight; SHA checks, original ordinary port cross-check and old-PoC conflict detection
 - [x] Verify port agreement using actual `backend/ports.sh` and one-engine generation with `generator.sh` on Linux/FreeBSD CI
 - [x] Correct FreeBSD CI test-only `python3` resolution without altering production OPNsense/Python

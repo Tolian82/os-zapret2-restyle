@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Voice full cutover mock (не runtime):** `voice_cutover_coordinator.py` моделирует фазы checked old state → durable prepared/mutating → one-engine/tree/IPFW/supervisor → Config save → committed → verified cleanup или полный rollback; по умолчанию блокирует выполнение, работает только с injected test adapters. `voice_cutover_journal.py` отдельно пишет ограниченный, приватный, fsync'ed whole-runtime intent и при перерыве выдаёт manual review без автоматических kernel-команд. Тесты проверяют отказные точки и actual on-disk journal, Linux/FreeBSD CI и package contents. **НЕ включать GUI Apply и не публиковать пакет по этому факту:** реальный Config/lifecycle/PoC/boot переход ещё не подключён.
+
+
 **Voice one-engine handoff preflight (draft):** `voice_handoff_preflight.py` сопоставляет Voice/ordinary/реальный `dvtws.args`/IPFW-plan в памяти, проверяет SHA256, managed targets, ровно один divert, портовый вывод production `ports.sh`, WAN и отсутствие старого PoC. CI Linux и FreeBSD 15 проверяет реальные `generator.sh`/`ports.sh` с sandbox-артефактами; никаких live-мутаций. FreeBSD python3 alias используется только в test-private PATH. Apply остаётся disabled, изоляция legacy и crash rollback ещё не реализованы.
 
 
