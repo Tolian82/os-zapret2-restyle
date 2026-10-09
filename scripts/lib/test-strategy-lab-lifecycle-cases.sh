@@ -162,12 +162,36 @@ MOCK_CALLS_FILE="${CALLS_FILE}" \
     "${SERVICE_SOURCE}" strategy-lab job.ServiceLock >/dev/null 2>&1
 blocked_voice_status=$?
 set -e
-[ "${blocked_voice_status}" -eq 94 ] ||
-    fail "Voice journal guard was bypassed by inherited Strategy Lab lifecycle owner"
+[ "${blocked_voice_status}" -eq 69 ] ||
+    fail "parent Strategy Lab worker ran despite a pending Voice cutover"
 [ "$(cat "${STATE_FILE}")" = RUNNING ] ||
     fail "pending Voice cutover changed the previously running service"
 [ ! -s "${CALLS_FILE}" ] ||
     fail "pending Voice cutover allowed Strategy Lab stop cleanup"
+
+# A journal could become pending *after* a worker legitimately acquired
+# the shared lockf and entered its lifecycle. Prove inherited fd 9 still
+# does not authorize the subsequent internal stop action.
+set +e
+(
+    exec 9>"${SERVICE_LOCK}"
+    STRATEGY_LAB_LIFECYCLE_OWNER=1 \
+    MOCK_VOICE_INTENT_PENDING=1 \
+    SCRIPT_DIR="${SERVICE_ROOT}" \
+    BACKEND_DIR="${SERVICE_BACKEND}" \
+    MOCK_STATE_FILE="${STATE_FILE}" \
+    MOCK_CALLS_FILE="${CALLS_FILE}" \
+        "${SERVICE_SOURCE}" strategy-lab-stop >/dev/null 2>&1
+)
+blocked_internal_status=$?
+set -e
+[ "${blocked_internal_status}" -eq 69 ] ||
+    fail "inherited Strategy Lab owner bypassed newly pending Voice journal"
+[ "$(cat "${STATE_FILE}")" = RUNNING ] ||
+    fail "inherited Strategy Lab stop changed the previous service"
+[ ! -s "${CALLS_FILE}" ] ||
+    fail "inherited Strategy Lab stop caused forbidden runtime cleanup"
+
 SCRIPT_DIR="${SERVICE_ROOT}" \
 BACKEND_DIR="${SERVICE_BACKEND}" \
 LOCKF_BIN="${MOCK_BIN}/lockf" \
