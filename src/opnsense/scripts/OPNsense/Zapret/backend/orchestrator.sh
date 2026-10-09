@@ -468,10 +468,14 @@ orchestrator_native_start()
     # Reconfigure already builds before stopping; start used to clean first.
     if [ -r "${_orchestrator_start_config}" ]; then
         config_load "${_orchestrator_start_config}" || return 1
-        config_voice_staged_only_guard || {
-            common_error "native Voice preflight refused; current runtime left untouched"
-            return 1
-        }
+        # Global OFF must still be permitted to stop Zapret; a native Voice
+        # ON preference is not an independent request to start the daemon.
+        if [ "${ZAPRET_ENABLED:-0}" = 1 ]; then
+            config_voice_staged_only_guard || {
+                common_error "native Voice preflight refused; current runtime left untouched"
+                return 1
+            }
+        fi
     fi
 
     if orchestrator_runtime_is_complete \
