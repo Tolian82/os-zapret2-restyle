@@ -16,8 +16,8 @@ $(document).ready(function () {
         loading: 'Загрузка…', incomplete: 'Неизвестно',
         wanHelp: 'Исходящий WAN для перехвата голосового UDP. Пустое значение наследует WAN страницы «Стратегии». Выбор WAN не меняет маршруты.',
         enableHelp: 'Включает отдельный STUN-профиль и адресный перехват UDP. Если галочка снята, параметры и IP-адреса сохраняются.',
-        argsHelp: 'Один нативный STUN-профиль dvtws2: --filter-udp, --filter-l7=stun, --payload=stun и необязательные действия --lua-desync. Имя профиля и IPSET задаёт плагин. Не вводите --new, TCP или команды shell. Это не означает, что звонок заработает.',
-        ipHelp: 'Общий с «Стратегиями» IPSET. Один IPv4-адрес или CIDR в строке. Пустой список нельзя применять при включённой службе; нет автоматической замены на любой адрес.'
+        argsHelp: 'Один нативный STUN-профиль dvtws2: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> и необязательные действия <code>--lua-desync</code>. Имя профиля и IPSET задаёт плагин. Не вводите <code>--new</code>, TCP или команды shell. Это не означает, что звонок заработает.',
+        ipHelp: 'Общий со «Стратегиями» IPSET. Один IPv4-адрес или CIDR в строке. Пустой список нельзя применять при включённой службе; нет автоматической замены на любой адрес.'
     } : {
         navStrategy: 'Strategies', navVoice: 'Voice Transmission', navLab: 'Laboratory',
         general: 'General Settings', wan: 'Voice WAN Interface',
@@ -30,7 +30,7 @@ $(document).ready(function () {
         loading: 'Loading…', incomplete: 'Unknown',
         wanHelp: 'Outgoing WAN used for voice UDP interception. Empty selection inherits Strategies WAN. WAN selection does not change routing.',
         enableHelp: 'Enables this STUN profile and destination-scoped UDP interception. Disabling keeps parameters and addresses.',
-        argsHelp: 'One native dvtws2 STUN profile: --filter-udp, --filter-l7=stun, --payload=stun and optional --lua-desync actions. The plugin supplies profile identity and IPSET. Do not enter --new, TCP options or shell commands. This is not proof of working calls.',
+        argsHelp: 'One native dvtws2 STUN profile: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> and optional <code>--lua-desync</code> actions. The plugin supplies profile identity and IPSET. Do not enter <code>--new</code>, TCP options or shell commands. This is not proof of working calls.',
         ipHelp: 'Shared IPSET, available in Strategies. One IPv4 address or CIDR per line. Empty sets must not be enabled or implicitly match any destination.'
     };
     var names = {telegram:'Telegram', discord:'Discord', x:'X (Twitter)', sip:'SIP (VoIP)', custom:'Custom'};
@@ -58,7 +58,14 @@ $(document).ready(function () {
             var input = document.getElementById(id) || document.getElementById(id.replace(/\./g, '_'));
             if (!input) return;
             var label = $(input).closest('tr').find('label').first();
-            if (label.length) label.text(names[key] + (ru ? ' — параметры' : ' Parameters'));
+            var original = names[key] + ' Parameters';
+            var translated = names[key] + (ru ? ' — параметры' : ' Parameters');
+            // Replacing the label's entire HTML would destroy native help icons.
+            label.find('*').addBack().contents().filter(function () {
+                return this.nodeType === 3 && this.textContent.indexOf(original) !== -1;
+            }).each(function () {
+                this.textContent = this.textContent.replace(original, translated);
+            });
         });
         form.find('tr').each(function () {
             var row = $(this);
@@ -72,8 +79,8 @@ $(document).ready(function () {
             if (!help.length) return;
             if (id === 'zapret.voice.waninterface') help.text(text.wanHelp);
             else if (/^zapret\.voice\.[^.]+\.enabled$/.test(id)) help.text(text.enableHelp);
-            else if (/^zapret\.voice\.[^.]+\.args$/.test(id)) help.text(text.argsHelp);
-            else if (/^zapret\.hostlist\.(telegram|discord|x|sip|custom)ips$/.test(id)) help.text(text.ipHelp);
+            else if (/^zapret\.voice\.[^.]+\.args$/.test(id)) help.html(text.argsHelp);
+            else if (/^zapret\.hostlist\.(telegram|discord|x|sip|custom)ips$/.test(id)) help.html(text.ipHelp);
         });
     }
     $('a[href="/ui/zapret"]').text(text.navStrategy);
