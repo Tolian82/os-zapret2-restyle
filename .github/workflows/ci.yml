@@ -134,6 +134,8 @@ jobs:
         run: python3.13 scripts/test-voice-ipfw-adapter.py
       - name: Voice read-only live IPFW ownership inspector
         run: python3.13 scripts/test-voice-live-inspect.py
+      - name: Voice explicit legacy PoC migration safety
+        run: python3.13 scripts/test-voice-migration-plan.py
       - name: Voice durable IPFW ownership and crash ledger
         run: python3.13 scripts/test-voice-firewall-ledger.py
       - name: Voice mocked lifecycle activation and recovery
@@ -452,6 +454,7 @@ jobs:
             sh scripts/test-telegram-voice-phase-b.sh
             /usr/local/bin/python3.13 scripts/test-voice-ipfw-adapter.py
             /usr/local/bin/python3.13 scripts/test-voice-live-inspect.py
+            /usr/local/bin/python3.13 scripts/test-voice-migration-plan.py
             /usr/local/bin/python3.13 scripts/test-voice-firewall-ledger.py
             /usr/local/bin/python3.13 scripts/test-voice-firewall-activation.py
             sh scripts/build-pkg.sh
@@ -487,6 +490,7 @@ jobs:
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/telegram_voice.sh' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_migration_plan.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_firewall_ledger.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_firewall_activation.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py' "${contents}"
