@@ -78,6 +78,48 @@ class CrossJournalTests(unittest.TestCase):
             fw.commit(desired)
             self.check(saved,whole,fw,"review-required","dual-journals-bound")
 
+    def test_schema_two_binds_distinct_target_across_dual_journals(self):
+        desired={**OLD,"tables":{"zapret2_voice_telegram":["91.108.0.0/16"]}}
+        another={**OLD,"tables":{"zapret2_voice_discord":["203.0.113.0/24"]}}
+        with tempfile.TemporaryDirectory() as d:
+            saved,whole,fw,previous=self.setup(d)
+            whole.begin_bound(previous,PROOF,desired)
+            whole.mark_mutating()
+            fw.begin(OLD,another)
+            fw.mark_mutating()
+            self.check(saved,whole,fw,"blocked",
+                       "cross-journal-desired-ipfw-mismatch")
+            # Complete the unrelated old transaction only in this isolated
+            # fixture; the whole-cutover journal stays interrupted.
+            fw.abort(type("Adapter",(),{"list_rules":lambda self,a,b: {},
+                   "get_table":lambda self,name: None})())
+            fw.begin(OLD,desired)
+            fw.mark_mutating()
+            self.check(saved,whole,fw,"review-required","dual-journals-bound")
+            whole.commit()
+            self.check(saved,whole,fw,"blocked","uncommitted-ipfw-ownership")
+            fw.commit(desired)
+            self.check(saved,whole,fw,"review-required","dual-journals-bound")
+            # Simulate verified per-IPFW cleanup and durable removal of only
+            # its intent, while the whole-cutover intent remains committed.
+            fw.finish(type("Adapter",(),{"list_rules":lambda self,a,b: {},
+                "get_table":lambda self,name: (
+                    ["91.108.0.0/16"] if name=="zapret2_voice_telegram"
+                    else None)})())
+            self.check(saved,whole,fw,"review-required","committed-target-bound")
+
+    def test_bound_target_with_absent_ipfw_transition_cannot_infer_commit(self):
+        desired={**OLD,"tables":{"zapret2_voice_telegram":["91.108.0.0/16"]}}
+        with tempfile.TemporaryDirectory() as d:
+            saved,whole,fw,previous=self.setup(d)
+            whole.begin_bound(previous,PROOF,desired)
+            self.check(saved,whole,fw,"review-required","previous-snapshot-bound")
+            whole.mark_mutating()
+            self.check(saved,whole,fw,"review-required","previous-snapshot-bound")
+            whole.commit()
+            self.check(saved,whole,fw,"blocked",
+                       "unbound-committed-ipfw-ownership")
+
     def test_phase_conflict_and_orphan_intent(self):
         with tempfile.TemporaryDirectory() as d:
             saved,whole,fw,old=self.setup(d)

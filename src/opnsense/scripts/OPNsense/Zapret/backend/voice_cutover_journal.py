@@ -16,6 +16,8 @@ import stat
 import tempfile
 
 SCHEMA = 1
+BOUND_SCHEMA = 2  # future, explicitly bound desired IPFW ownership (staging only)
+BOUND_FIELD = "firewall_manifest_sha256"
 MAX_BYTES = 65536
 FILES = ("intent.json",)
 SHA = "0123456789abcdef"
@@ -41,14 +43,19 @@ def _sha(value) -> bool:
 def validate_record(record: dict) -> dict:
     if not isinstance(record, dict) or set(record) != {
         "schema", "phase", "previous", "candidate", "check",
-    } or record.get("schema") != SCHEMA or record.get("phase") not in PHASES:
+    } or type(record.get("schema")) is not int or \
+       record["schema"] not in (SCHEMA, BOUND_SCHEMA) or \
+       record.get("phase") not in PHASES:
         raise CutoverJournalError("invalid durable Voice cutover journal schema")
     previous = record["previous"]
     desired = record["candidate"]
     if not isinstance(previous, dict) or set(previous) != set(RESOURCE_NAMES) or \
        any(not _sha(value) for value in previous.values()):
         raise CutoverJournalError("incomplete previous system snapshot")
-    if not isinstance(desired, dict) or set(desired) != set(PROOF_NAMES) or \
+    expected_candidate = set(PROOF_NAMES)
+    if record["schema"] == BOUND_SCHEMA:
+        expected_candidate.add(BOUND_FIELD)
+    if not isinstance(desired, dict) or set(desired) != expected_candidate or \
        any(not _sha(value) for value in desired.values()):
         raise CutoverJournalError("unverified desired Voice fingerprints")
     if record["check"] != _digest({
@@ -71,6 +78,24 @@ def new_record(previous: dict, proof: dict) -> dict:
     }
     record["check"] = _digest(record)
     return validate_record(record)
+
+
+def new_bound_record(previous: dict, proof: dict, desired_manifest: dict) -> dict:
+    """Explicit schema 2; bind desired IPFW ownership, never infer readiness.
+
+    This is a *staging-only* data contract, NOT the production cutover
+    coordinator. Invalid desired rule/table manifests fail before journaling.
+    """
+    from voice_firewall_ledger import canonical_manifest, fingerprint
+    base = new_record(previous, proof)
+    body = {name: value for name, value in base.items() if name != "check"}
+    body["schema"] = BOUND_SCHEMA
+    body["candidate"] = {
+        **base["candidate"],
+        BOUND_FIELD: fingerprint(canonical_manifest(desired_manifest)),
+    }
+    body["check"] = _digest(body)
+    return validate_record(body)
 
 
 class VoiceCutoverJournal:
@@ -152,6 +177,12 @@ class VoiceCutoverJournal:
         if self.read() is not None:
             raise CutoverJournalError("Voice cutover intent already exists; inspect first")
         self._store(new_record(previous, proof))
+
+    def begin_bound(self, previous: dict, proof: dict, desired_manifest: dict) -> None:
+        """Future schema-2 intent: staging only, no production caller."""
+        if self.read() is not None:
+            raise CutoverJournalError("Voice cutover intent already exists; inspect first")
+        self._store(new_bound_record(previous, proof, desired_manifest))
 
     def _transition(self, expected: str, new: str) -> None:
         current = self.read()

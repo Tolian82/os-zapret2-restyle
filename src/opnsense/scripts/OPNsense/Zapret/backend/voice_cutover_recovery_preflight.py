@@ -19,8 +19,9 @@ def inspect_recovery(cutover, firewall, previous_backup: Path) -> dict:
     """Cross-check immutable previous bytes and two durable journal records.
 
     Previous firewall SHA must be the canonical ownership manifest fingerprint.
-    There is no desired firewall SHA in the whole journal schema 1, so unknown
-    post-cutover ownership cannot be accepted as safe or automatically restored.
+    Schema 1 lacks desired ownership and remains legacy-review-only. Schema 2
+    explicitly binds the canonical target IPFW manifest and rejects mismatched
+    pending ledger intents, even when the previous state matches.
     """
     try:
         record = cutover.read()
@@ -37,9 +38,13 @@ def inspect_recovery(cutover, firewall, previous_backup: Path) -> dict:
             return _result("blocked", "missing-ipfw-ledger", phase=phase)
         bound_resource_fingerprints(previous_backup, record["previous"])
         prior = record["previous"]["firewall"]
+        desired = record["candidate"].get("firewall_manifest_sha256")
         if pending is not None:
             if pending["previous_sha256"] != prior:
                 return _result("blocked", "cross-journal-previous-ipfw-mismatch",
+                               phase=phase)
+            if desired is not None and pending["desired_sha256"] != desired:
+                return _result("blocked", "cross-journal-desired-ipfw-mismatch",
                                phase=phase)
             if owned is None:
                 return _result("blocked", "missing-ipfw-ownership", phase=phase)
@@ -57,7 +62,19 @@ def inspect_recovery(cutover, firewall, previous_backup: Path) -> dict:
                            phase=phase, ipfw_phase=pending["phase"])
         if owned is None:
             return _result("blocked", "missing-ipfw-ownership", phase=phase)
-        if fingerprint(canonical_manifest(owned)) != prior:
+        current = fingerprint(canonical_manifest(owned))
+        if desired is not None and phase == "committed":
+            if current != desired:
+                return _result("blocked", "unbound-committed-ipfw-ownership",
+                               phase=phase)
+            return _result("review-required", "committed-target-bound",
+                           phase=phase)
+        if desired is not None and phase == "mutating" and current != prior:
+            # Without the separate IPFW intent, a modified owner cannot
+            # be certified even when it resembles the desired manifest.
+            return _result("blocked", "missing-ipfw-transition-evidence",
+                           phase=phase)
+        if current != prior:
             return _result("blocked", "unbound-ipfw-ownership", phase=phase)
         return _result("review-required", "previous-snapshot-bound", phase=phase)
     except (OSError, ValueError, TypeError, KeyError, LedgerError):
