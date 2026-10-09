@@ -143,10 +143,11 @@ class JournalTests(unittest.TestCase):
 
     def test_bound_schema_rejects_malformed_desired_and_resealed_tampering(self):
         import copy
+        from voice_firewall_ledger import LedgerError
         valid={"rule_base":19000,"rule_max":19010,"rules":{},"tables":{}}
         with tempfile.TemporaryDirectory() as d:
             store=self.setup_store(d)
-            with self.assertRaises(ValueError):
+            with self.assertRaises(LedgerError):
                 store.begin_bound(PREVIOUS,PROOF,{**valid,"rule_base":0})
             self.assertIsNone(store.read())
             store.begin_bound(PREVIOUS,PROOF,valid)
