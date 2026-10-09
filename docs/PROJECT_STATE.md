@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Runtime rollback fault tolerance:** shared atomic_restore_tree parks the current release before installing a verified previous backup, reverses the park on failed second rename, and rejects existing unknown parked trees. New injected-rename regression verifies live candidate and backup survive without loss. No claim of crash-atomic rollback; full native cutover and cold reboot reconciliation remain unfinished.
+
+
 **Rollback safety (draft):** the shared real `atomic_restore_tree` no longer removes current active runtime before proving a requested rollback backup exists as a non-symlink directory. A missing/symlinked backup is rejected without destroying the candidate, and good backup restores normally. Linux/FreeBSD regression covers both cases. This stabilizes existing Strategies rollback and is a dependency for future Voice cutover, not full durable recovery.
 
 

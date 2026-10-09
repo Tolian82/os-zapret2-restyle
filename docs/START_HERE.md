@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Shared runtime rollback hardening:** `atomic_restore_tree` теперь сначала отставляет активный runtime в `.rollback-old.PID` и восстанавливает его при неудаче второго `mv`; неизвестный существующий park блокирует восстановление без перезаписи. Есть Linux/FreeBSD fault-injection. Это защита от ошибки команд, но не complete power-loss transaction и не готовый Voice Apply.
+
+
 **Voice rollback hardening:** исправлен порядок `atomic_restore_tree` в общем runtime: при отсутствующем или symlink backup текущий каталог не удаляется. `test-voice-atomic-rollback-preflight.sh` проверяет это вместе с успешным restore на Linux/FreeBSD CI. Ранний `voice_cutover_guard.py` из предыдущего этапа продолжает блокировать legacy lifecycle при pending/недоверенных журналах/зарегистрированном native IPFW ownership. Native Voice Save/Apply остаётся disabled.
 
 
