@@ -529,12 +529,30 @@ service_dispatch()
 preflight_voice_cutover_journals()
 {
     _voice_cutover_guard_script="${BACKEND_DIR}/voice_cutover_guard.py"
+    _voice_cutover_guard_python=/usr/local/bin/python3.13
+
+    # FreeBSD production uses only the trusted, absolute pkg interpreter.
+    # The repository's Linux integration tests run from a non-installed
+    # BACKEND_DIR; there alone resolve the versioned CI interpreter on PATH.
+    # Never permit an environment-supplied interpreter or bypass in a live
+    # OPNsense installation.
+    if [ ! -x "${_voice_cutover_guard_python}" ]; then
+        case "${BACKEND_DIR}" in
+            /usr/local/opnsense/scripts/OPNsense/Zapret/backend)
+                ;;
+            *)
+                _voice_cutover_guard_python=$(command -v python3.13 2>/dev/null || true)
+                ;;
+        esac
+    fi
+
     if [ ! -r "${_voice_cutover_guard_script}" ] ||
-       [ ! -x /usr/local/bin/python3.13 ]; then
+       [ -z "${_voice_cutover_guard_python}" ] ||
+       [ ! -x "${_voice_cutover_guard_python}" ]; then
         echo "ERROR: native Voice journal inspection is unavailable; refusing lifecycle mutation" >&2
         return 69
     fi
-    /usr/local/bin/python3.13 "${_voice_cutover_guard_script}"
+    "${_voice_cutover_guard_python}" "${_voice_cutover_guard_script}"
 }
 
 service_with_lifecycle_lock()
