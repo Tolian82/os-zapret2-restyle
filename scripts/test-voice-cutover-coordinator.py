@@ -194,6 +194,7 @@ class WholeCutoverTests(unittest.TestCase):
         self.assertEqual(("new",)*5,a.state())
         self.assertIsNone(a.intent)
         self.assertTrue(a.cleaned)
+        self.assertLess(a.calls.index("verify_previous"),a.calls.index("begin_intent"))
         self.assertLess(a.calls.index("begin_intent"),a.calls.index("mark_mutating"))
         self.assertLess(a.calls.index("mark_mutating"),a.calls.index("install_candidate_tree"))
         self.assertLess(a.calls.index("start_candidate_engine"),
@@ -246,7 +247,9 @@ class WholeCutoverTests(unittest.TestCase):
                     def __init__(self):
                         super().__init__(fail="install_owned_firewall")
                     def _op(self,name,after=False):
-                        if name==operation:
+                        if name==operation and (
+                            name!="verify_previous" or self.intent is not None
+                        ):
                             self.calls.append(name)
                             raise OSError("rollback failure")
                         return super()._op(name,after)
