@@ -225,6 +225,9 @@ jobs:
       - name: Test GUI runtime management
         run: sh scripts/test-gui-runtime-management.sh
 
+      - name: Test native Voice Transmission form contract
+        run: python3.13 scripts/test-voice-gui-contract.py
+
       - name: Test automated release trigger contract
         run: sh scripts/test-release-trigger.sh
 
