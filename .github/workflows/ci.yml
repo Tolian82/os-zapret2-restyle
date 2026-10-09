@@ -204,6 +204,9 @@ jobs:
       - name: Test configuration activation contract
         run: sh scripts/test-config-activation-contract.sh
 
+      - name: Test shared Voice IPSET registration and normalization
+        run: sh scripts/test-voice-shared-ipsets.sh
+
       - name: Test Telegram Voice Phase B scoped STUN PoC
         run: sh scripts/test-telegram-voice-phase-b.sh
 
