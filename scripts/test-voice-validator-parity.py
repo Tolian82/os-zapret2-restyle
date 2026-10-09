@@ -68,7 +68,10 @@ class ParserParity(unittest.TestCase):
         )
         self.assertEqual(0,proc.returncode,proc.stderr)
         errors=json.loads(proc.stdout)
-        self.assertIsInstance(errors,dict)
+        # PHP json_encode([]) is the JSON array [] when validation passes;
+        # associative field errors are encoded as JSON objects.
+        self.assertTrue(errors == [] or isinstance(errors,dict),
+                        f"{label}: invalid PHP validation response: {errors!r}")
         self.assertEqual(not bool(errors),python_accepts(data),
                          f"{label}: Python/PHP validator divergence: {errors}")
 
