@@ -78,7 +78,13 @@ def main(args: list[str]) -> int:
     try:
         # Fixed private path. The production code must explicitly prepare
         # the directory under the existing lifecycle lock after migration.
-        store = VoiceOwnershipStore(Path("/var/db/zapret2/voice-ipfw"))
+        directory = Path("/var/db/zapret2/voice-ipfw")
+        if not directory.exists() and not directory.is_symlink():
+            print(json.dumps({"state": "uninitialized", "can_activate": False,
+                              "remedy": "explicit-ownership-adoption-required"},
+                             sort_keys=True))
+            return 2
+        store = VoiceOwnershipStore(directory)
         adapter = FreeBSDIPFWAdapter(19000, 19010)
         report = examine(store, adapter)
         print(json.dumps(report, sort_keys=True))
