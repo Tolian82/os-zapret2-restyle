@@ -97,7 +97,12 @@ def simulate_cutover(adapter: CutoverAdapter, proof: dict, *,
     adapter.reverify_sources(proof)
     # Durable prepared + mutating intent MUST be fsync'd before first live
     # change. A failure here is an interrupted intent, NOT an implicit abort.
-    adapter.begin_intent(previous, proof)
+    try:
+        adapter.begin_intent(previous, proof)
+    except Exception as exc:
+        raise CutoverManualReview(
+            "cannot verify persisted prepared Voice intent; no mutation permitted"
+        ) from exc
     try:
         adapter.mark_mutating()
     except Exception as exc:
