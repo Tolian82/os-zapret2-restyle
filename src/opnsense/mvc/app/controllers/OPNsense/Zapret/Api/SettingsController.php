@@ -12,6 +12,8 @@ use OPNsense\Base\UserException;
 use OPNsense\Core\Backend;
 use OPNsense\Core\Config;
 
+require_once __DIR__ . '/StrategySettingsPayload.php';
+
 class SettingsController extends ApiMutableModelControllerBase
 {
     protected static $internalModelName = 'zapret';
@@ -222,7 +224,18 @@ class SettingsController extends ApiMutableModelControllerBase
         $model = $this->getModel();
         $oldNodes = $model->getNodes();
         $post = $this->request->getPost(static::$internalModelName);
-        $model->setNodes($post);
+        try {
+            if (!is_array($post)) {
+                throw new \InvalidArgumentException('Missing Strategies form payload');
+            }
+            // Only the fields visible on the Strategies form may be updated.
+            // In particular, a stale form must not reset persistent Voice
+            // service states, arguments or independently managed IPSETs.
+            $model->setNodes(StrategySettingsPayload::overlay($oldNodes, $post));
+        } catch (\InvalidArgumentException $exception) {
+            $config->unlock();
+            return ['result' => 'failed', 'message' => $exception->getMessage()];
+        }
 
         $result = $this->validate(null, null, true);
         if (!empty($result['result'])) {
