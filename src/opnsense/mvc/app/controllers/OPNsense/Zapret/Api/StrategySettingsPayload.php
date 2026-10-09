@@ -21,6 +21,29 @@ final class StrategySettingsPayload
         ],
     ];
 
+    /**
+     * Optimistic guard for the Telegram IPSET shared by both GUI pages.
+     * Reject an old Strategies tab before any model or runtime mutation.
+     * The baseline is raw form content, not a request to change the IPSET.
+     */
+    public static function requireFreshTelegram(array $current, $baseline): void
+    {
+        if (!is_string($baseline)) {
+            throw new \InvalidArgumentException('Telegram IPSET baseline is missing. Reload the Strategies page.');
+        }
+        $saved = (string)($current['hostlist']['telegramips'] ?? '');
+        // Browser textareas normalize line endings. Compare the same data,
+        // while keeping all address/content validation with the model.
+        $normalize = static function (string $value): string {
+            return str_replace(["\r\n", "\r"], "\n", $value);
+        };
+        if (!hash_equals($normalize($saved), $normalize($baseline))) {
+            throw new \InvalidArgumentException(
+                'Telegram IPSET changed in another page. Reload the Strategies page before applying.'
+            );
+        }
+    }
+
     public static function overlay(array $current, array $submitted): array
     {
         $result = $current;
