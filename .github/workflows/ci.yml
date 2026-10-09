@@ -207,6 +207,9 @@ jobs:
       - name: Test shared Voice IPSET registration and normalization
         run: sh scripts/test-voice-shared-ipsets.sh
 
+      - name: Test fail-closed Voice profile compiler
+        run: python3.13 scripts/test-voice-profile-compiler.py
+
       - name: Test Telegram Voice Phase B scoped STUN PoC
         run: sh scripts/test-telegram-voice-phase-b.sh
 
