@@ -175,7 +175,7 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-005` | `DEV-027`–`DEV-040` |
 | `GH-006` | `DOC-016`, `DOC-049` |
 | `GH-011` | `DEV-017` |
-| `GH-014` | `DEV-027`, `DEV-028` |
+| `GH-014` | `DEV-027`–`DEV-033` |
 | `GH-015` | `DEV-033` |
 | `GH-017` | `DEV-012` |
 | `GH-019` | `DEV-013` |

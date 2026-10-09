@@ -142,6 +142,8 @@ jobs:
         run: python3.13 scripts/test-voice-process-recovery-evidence.py
       - name: Native read-only FreeBSD Voice PID/process inventory
         run: python3.13 scripts/test-voice-native-process-probe.py
+      - name: Voice complete five-resource read-only recovery attestation
+        run: python3.13 scripts/test-voice-cutover-full-recovery.py
       - name: Voice read-only cross-journal recovery preflight
         run: python3.13 scripts/test-voice-cutover-recovery-preflight.py
       - name: Voice native boot and shared lockf cutover guard
@@ -497,6 +499,7 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-cutover-restore-stage.py
             /usr/local/bin/python3.13 scripts/test-voice-process-recovery-evidence.py
             /usr/local/bin/python3.13 scripts/test-voice-native-process-probe.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-full-recovery.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-recovery-preflight.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-boot-guard.py
             sh scripts/test-voice-atomic-rollback-preflight.sh
@@ -548,6 +551,7 @@ jobs:
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_process_recovery_evidence.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_process_probe.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_recovery_preflight.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_full_recovery.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_guard.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_capture_plan.py' "${contents}"
