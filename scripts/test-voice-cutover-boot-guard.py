@@ -154,6 +154,20 @@ class BootGateTests(unittest.TestCase):
                     )
                     self.assertEqual(status,result.returncode,result.stderr)
 
+    def test_inherited_strategy_lab_owner_cannot_bypass_voice_crash_guard(self):
+        service=(ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
+        owner=service.split("strategy_lab_internal_dispatch()\n{",1)[1].split("\n}\n",1)[0]
+        self.assertIn("strategy_lab_lock_owner_valid",owner)
+        self.assertEqual(2,owner.count("preflight_voice_cutover_journals || return 69"))
+        for action in ("strategy-lab-stop", "strategy-lab-start"):
+            block=owner.split(action+")",1)[1].split(";;",1)[0]
+            self.assertLess(block.index("preflight_voice_cutover_journals || return 69"),
+                            block.index("stop_service" if action.endswith("stop") else "start_service"))
+        for action in ("strategy-lab-status", "strategy-lab-evidence"):
+            block=owner.split(action+")",1)[1].split(";;",1)[0]
+            self.assertNotIn("preflight_voice_cutover_journals",block,
+                             "read-only Strategy Lab status must remain available for recovery")
+
     def test_real_service_lock_wrapper_probes_before_any_dispatch(self):
         service = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
         method = service.split("service_with_lifecycle_lock()\n{", 1)[1]
