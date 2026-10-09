@@ -70,6 +70,8 @@ def main() -> None:
     check('<IPSET:telegram>' in ET.tostring(form, encoding="unicode") or
           'zapret.hostlist.telegramips' in fields,
           "Telegram must reuse hostlist.telegramips")
+    check(r"\\\\." not in view,
+          "Voice JavaScript regexes must escape a dot once, not twice")
     # Parse the exact inline browser JavaScript, not just regex for UI labels.
     match = re.search(r"<script>(.*?)</script>", view, re.DOTALL)
     check(match is not None, "Voice view is missing inline JavaScript")
