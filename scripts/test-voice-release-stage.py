@@ -177,7 +177,7 @@ class VoiceReleaseStageTests(unittest.TestCase):
             )
             merged = artifacts["traffic.conf"]
             self.assertTrue(merged.startswith("--name=voice-telegram"))
-            self.assertIn("--payload=stun\n--new\n--filter-tcp=443", merged)
+            self.assertIn("--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2\n--new\n--filter-tcp=443", merged)
             self.assertTrue(merged.endswith(original))
             self.assertEqual(2, merged.count("\n--new\n"))
             meta = json.loads(artifacts["metadata.json"])
