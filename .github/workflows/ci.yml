@@ -514,6 +514,8 @@ jobs:
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_firewall_ledger.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_firewall_activation.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_handoff_preflight.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_coordinator.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_capture_plan.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_traffic_merge.py' "${contents}"
