@@ -117,5 +117,5 @@ def inspect_full_recovery(cutover, firewall, previous_backup: Path,
                        cross_journal_reason=cross["reason"])
     except (OSError, ValueError, TypeError, KeyError, AttributeError,
             VoiceBackupError, ProcessEvidenceError, CutoverJournalError,
-            LedgerError):
+            LedgerError, RuntimeError):
         return _result("blocked", "invalid-or-incomplete-whole-system-evidence")

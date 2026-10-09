@@ -208,6 +208,18 @@ class FullRecoveryTests(unittest.TestCase):
             r = self.inspect(whole, fw, saved, proc_dir, observer)
             self.assertEqual("invalid-or-incomplete-whole-system-evidence", r["reason"])
 
+    def test_unexpected_read_only_probe_error_remains_fail_closed(self):
+        with tempfile.TemporaryDirectory() as d:
+            whole, fw, saved, proc_dir, previous, config, runtime = self.fixture(d)
+            whole.begin_bound(previous, PROOF, OLD)
+            class BrokenObserver:
+                def observe(self):
+                    raise RuntimeError("native observer unavailable")
+            result = self.inspect(whole, fw, saved, proc_dir, BrokenObserver())
+            self.assertEqual("blocked", result["state"])
+            self.assertEqual("invalid-or-incomplete-whole-system-evidence", result["reason"])
+            self.assert_inert(result)
+
     def test_cross_journal_phase_mismatch_stays_blocked(self):
         with tempfile.TemporaryDirectory() as d:
             whole, fw, saved, proc_dir, previous, config, runtime = self.fixture(d)

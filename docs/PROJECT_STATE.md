@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_7 — native read-only IPFW kernel witness (Draft, 2026-10-09):** An unwired `voice_native_ipfw_ownership.py` now interrogates the current IPFW plugin-owned numeric range and every active/stage table through `FreeBSDIPFWAdapter(allow_mutations=False)`, then proves that live rules and IPv4 table sets match the owner-private durable IPFW ledger. Only an exact match returns the *ledger canonical manifest* SHA256; orphan stages, missing/foreign/mutated rules or tables, unsafe ownership, and changing ledger state block with no IPFW modifications. `voice_cutover_full_recovery` also converts a native observer RuntimeError into non-authorizing blocked evidence. This remains separate from production native Apply and boot recovery and does not certify the desired committed state. Offline Linux/FreeBSD 15 CI tests; active OPNsense and Telegram PoC unaffected.
+
+
 **v0.5.1_6 — read-only five-resource restart attestation (Draft, 2026-10-09):** `voice_cutover_full_recovery.py` correlates the existing sealed old Config/runtime snapshot, the independent saved engine/supervisor process evidence and both durable IPFW/whole-cutover journals with a strictly typed, repeated, injected five-resource observation. It rejects missing/corrupt/unstable/foreign state, treats schema-2 committed target as **unprovable** without four additional desired hashes, and never authorizes automatic recovery, mutation or finish-intent. This is an offline staging contract, *not* a trusted FreeBSD live resource observer or boot adapter; existing Telegram PoC and OPNsense remain unchanged. The same code increment also reconciles GH-014/DEV rule-reference tables after the exact-head v0.5.1_5 repository-hygiene CI failure.
 
 
@@ -93,8 +96,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_6` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_6.pkg` (**not published, do not install**);
+- current source candidate revision: `_7` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_7.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
@@ -158,7 +161,7 @@ Completed boundary:
 
 No further package correction belongs to this scope.
 
-## Development handoff: `v0.5.1_6` native Voice GUI (Draft PR #328)
+## Development handoff: `v0.5.1_7` native Voice GUI (Draft PR #328)
 
 Work is staged at [PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), branched from `main` `3f9951c928ac2521c3551c8311d58ed755947007`. New native MVC page, five default-OFF fields, bilingual guidance, common service control and shared IPSET model are present. Registry, storage and managed target generation for Discord/X/SIP/Custom are staged; a read-only native config.xml Voice exporter, fail-closed STUN compiler, inert release-bundle consistency gate, one-engine traffic merge helper, IPFW capture-plan validator, an adapter-injected mock-tested IPFW transaction core, retryable postcommit cleanup, and private durable ownership/intent journal with read-only restart triage plus mock-only activation ordering and verified abort (all not production-wired) and per-service scope conflict checks have also been added (not wired to Apply/runtime); Strategies Apply now limits its POST to Strategies-owned fields (Strategies-side shared Telegram-IPSET optimistic lock active in source; Voice-side payload/freshness helper staged, future Voice Apply endpoint not yet implemented); the existing Telegram hostlist data is reused. **Voice Apply is disabled** until complete validation and lifecycle migration are implemented. This draft has not replaced the temporary Telegram Voice PoC or qualified boot restoration, dual-WAN behavior, or media. The existing published and stable `0.5.0` packages are unchanged. See [design and implementation status](architecture/VOICE_TRANSMISSION_GUI.md).
 

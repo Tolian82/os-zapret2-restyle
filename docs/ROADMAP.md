@@ -1,5 +1,9 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_7`: real kernel IPFW ownership witness, read-only and strictly ledger-matched
+- [ ] Qualify lock-held FreeBSD Config/runtime/process observer and stage-to-live recovery before exposing Voice Save/Apply
+
+
 - [x] Current candidate `v0.5.1_6`: five-way read-only recovery attestation with fail-closed mixed-state and committed-target rejection; no live restore
 - [x] Reconcile GH-014 / DEV-029–DEV-033 cross-reference tables after v0.5.1_5 repository-integrity failure
 - [ ] Implement and qualify real lock-held Config, dvtws2/supervisor, IPFW and boot restore; currently staging-only
