@@ -2,6 +2,8 @@
 """Static contract for the staged Voice Transmission GUI; not runtime validation."""
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -68,6 +70,18 @@ def main() -> None:
     check('<IPSET:telegram>' in ET.tostring(form, encoding="unicode") or
           'zapret.hostlist.telegramips' in fields,
           "Telegram must reuse hostlist.telegramips")
+    # Parse the exact inline browser JavaScript, not just regex for UI labels.
+    match = re.search(r"<script>(.*?)</script>", view, re.DOTALL)
+    check(match is not None, "Voice view is missing inline JavaScript")
+    if shutil.which("node"):
+        parsed = subprocess.run(
+            ["node", "--check", "-"], input=match.group(1),
+            text=True, capture_output=True, check=False,
+        )
+        check(parsed.returncode == 0,
+              "Voice browser JavaScript syntax error: " + parsed.stderr)
+    else:
+        print("SKIP: Node.js is unavailable; browser JavaScript syntax was not checked")
     # Until transactional validation and IPFW ownership are implemented, the
     # configuration Apply control must not mutate persistent or live state.
     if "Draft staging of the native Voice form" in view:
