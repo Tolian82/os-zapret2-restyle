@@ -69,7 +69,7 @@ def main() -> None:
           "refreshVoiceIPFW" in view and "voiceIPFWState" in view,
           "Voice read-only IPFW diagnostics are missing from GUI")
     for term in ("'Правила подтверждены'", "'Verified rules'",
-                 "'Ещё не активировано'", "'Not activated yet'"):
+                 "'Новая Voice-конфигурация не активирована'", "'New Voice configuration not activated'"):
         check(term in view, f"Missing read-only Voice diagnostic localization: {term}")
     status_api = SRC / "controllers/OPNsense/Zapret/Api/VoiceController.php"
     status_php = status_api.read_text(encoding="utf-8")
