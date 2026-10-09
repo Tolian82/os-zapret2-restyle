@@ -160,7 +160,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install validation tools
-        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils php-cli
 
       - name: Validate project identity and version
         shell: bash
@@ -194,8 +194,10 @@ jobs:
             php scripts/test-strategy-voice-settings-scope.php
             php scripts/test-voice-settings-payload.php
             php scripts/test-voice-candidate-validator.php
-            python3.13 scripts/test-voice-validator-parity.py
           '
+
+      - name: Verify Voice GUI and backend parser parity
+        run: python3.13 scripts/test-voice-validator-parity.py
 
       - name: Validate shell scripts
         run: |
