@@ -59,6 +59,12 @@ class OneEngineMergeTests(unittest.TestCase):
         with self.assertRaises(merge.VoiceMergeError):
             merge.merge_profiles(VOICE + "--new\n", STRATEGIES)
 
+    def test_ordinary_stun_is_rejected_only_when_voice_is_on(self):
+        ordinary = "--filter-udp=596-599\\n--filter-l7=stun\\n--payload=stun\\n"
+        self.assertEqual(ordinary, merge.merge_profiles("", ordinary))
+        with self.assertRaisesRegex(merge.VoiceMergeError, "competing profile priority"):
+            merge.merge_profiles(VOICE, ordinary)
+
     def test_cli_candidate_creation_is_non_destructive(self):
         with tempfile.TemporaryDirectory() as d:
             folder = Path(d)
