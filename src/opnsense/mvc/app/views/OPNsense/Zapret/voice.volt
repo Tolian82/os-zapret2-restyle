@@ -55,7 +55,7 @@ $(document).ready(function () {
         });
         Object.keys(names).forEach(function (key) {
             var id = 'zapret.voice.' + key + '.args';
-            var input = document.getElementById(id) || document.getElementById(id.replace(/\\./g, '_'));
+            var input = document.getElementById(id) || document.getElementById(id.replace(/\./g, '_'));
             if (!input) return;
             var label = $(input).closest('tr').find('label').first();
             if (label.length) label.text(names[key] + (ru ? ' — параметры' : ' Parameters'));
@@ -71,9 +71,9 @@ $(document).ready(function () {
             var help = row.find('.help-block').first();
             if (!help.length) return;
             if (id === 'zapret.voice.waninterface') help.text(text.wanHelp);
-            else if (/^zapret\\.voice\\.[^.]+\\.enabled$/.test(id)) help.text(text.enableHelp);
-            else if (/^zapret\\.voice\\.[^.]+\\.args$/.test(id)) help.text(text.argsHelp);
-            else if (/^zapret\\.hostlist\\.(telegram|discord|x|sip|custom)ips$/.test(id)) help.text(text.ipHelp);
+            else if (/^zapret\.voice\.[^.]+\.enabled$/.test(id)) help.text(text.enableHelp);
+            else if (/^zapret\.voice\.[^.]+\.args$/.test(id)) help.text(text.argsHelp);
+            else if (/^zapret\.hostlist\.(telegram|discord|x|sip|custom)ips$/.test(id)) help.text(text.ipHelp);
         });
     }
     $('a[href="/ui/zapret"]').text(text.navStrategy);
@@ -95,7 +95,7 @@ $(document).ready(function () {
         var controllable = runtimeInstalled && (runtimeState === 'started' || runtimeState === 'stopped');
         $('#voiceServiceControl').prop('disabled', busy || !controllable);
         var releasesAvailable = $('#voiceReleaseSelect option').filter(function () {
-            return /^v[0-9]+(?:\\.[0-9]+)+$/.test(this.value);
+            return /^v[0-9]+(?:\.[0-9]+)+$/.test(this.value);
         }).length > 0;
         $('#voiceReleaseSelect,#voiceReleaseApply').prop('disabled', busy || !releasesAvailable);
     }
@@ -152,7 +152,7 @@ $(document).ready(function () {
     });
     $('#voiceReleaseApply').on('click', function () {
         var version = $('#voiceReleaseSelect').val();
-        if (runtimeBusy || !/^v[0-9]+(?:\\.[0-9]+)+$/.test(version || '')) return;
+        if (runtimeBusy || !/^v[0-9]+(?:\.[0-9]+)+$/.test(version || '')) return;
         setServiceControlsBusy(true);
         $.ajax({type:'POST',url:'/api/zapret/service/install',data:{version:version},dataType:'json',timeout:30000})
             .always(function () { refreshReleases(); refreshRuntime(); updateServiceControlUI('zapret'); });
