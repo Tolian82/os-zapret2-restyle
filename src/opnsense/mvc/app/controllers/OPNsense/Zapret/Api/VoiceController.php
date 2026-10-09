@@ -32,7 +32,7 @@ class VoiceController extends ApiControllerBase
                 return ['result' => 'failed', 'validations' => $errors];
             }
             return ['result' => 'validated', 'scope' => 'syntax-only'];
-        } catch (\\Throwable $error) {
+        } catch (\Throwable $error) {
             // Never reveal PHP stack, unrelated configuration or raw input.
             return ['result' => 'failed', 'validations' => [
                 'zapret.voice.waninterface' => 'Voice validation failed'
