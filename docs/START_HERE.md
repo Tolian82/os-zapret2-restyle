@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**CI infrastructure retry (v0.5.1_7, docs/CI-only, 2026-10-09):** Both initial and job-only rerun of exact-head CI failed before PHP lint because anonymous Docker Hub returned `toomanyrequests` for `php:8.2-cli`. The CI PHP step now prefers already installed runner PHP **only if it is version >=8.2 and <9**, executing the same source lint and five PHP validation scripts. Otherwise it retains the original pinned php:8.2-cli Docker fallback. This is an external-runner availability fix, not a PHP source change, so PLUGIN_REVISION remains **7** under DEV-033. All other Voice/FreeBSD 15 gates and packaging remain unchanged; require CI success on the new exact HEAD.
+
+
 **v0.5.1_7 — native read-only IPFW kernel witness (Draft, 2026-10-09):** An unwired `voice_native_ipfw_ownership.py` now interrogates the current IPFW plugin-owned numeric range and every active/stage table through `FreeBSDIPFWAdapter(allow_mutations=False)`, then proves that live rules and IPv4 table sets match the owner-private durable IPFW ledger. Only an exact match returns the *ledger canonical manifest* SHA256; orphan stages, missing/foreign/mutated rules or tables, unsafe ownership, and changing ledger state block with no IPFW modifications. `voice_cutover_full_recovery` also converts a native observer RuntimeError into non-authorizing blocked evidence. This remains separate from production native Apply and boot recovery and does not certify the desired committed state. Offline Linux/FreeBSD 15 CI tests; active OPNsense and Telegram PoC unaffected.
 
 

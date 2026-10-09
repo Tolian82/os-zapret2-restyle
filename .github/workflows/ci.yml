@@ -218,17 +218,31 @@ jobs:
         run: find src -type f -name "*.xml" -exec xmllint --noout {} \;
 
       - name: Lint PHP files
+        shell: bash
         run: |
-          docker run --rm -v "${PWD}":/app -w /app php:8.2-cli sh -c '
-            set -e
-            find src -type f -name "*.php" -exec php -l {} \;
-            find src -type f -name "*.inc" -exec php -l {} \;
-            php scripts/test-strategy-voice-settings-scope.php
-            php scripts/test-voice-settings-payload.php
-            php scripts/test-voice-candidate-validator.php
-            php scripts/test-voice-api-concurrency.php
-            php scripts/test-voice-apply-candidate.php
-          '
+          set -euo pipefail
+          # One identical lint/API suite regardless of runtime source.
+          # Runner PHP avoids anonymous Docker Hub rate-limit outages;
+          # the pinned PHP 8.2 image remains a fallback if not installed.
+          php_checks=$(cat <<'PHP_CHECKS'
+          set -e
+          find src -type f -name "*.php" -exec php -l {} \;
+          find src -type f -name "*.inc" -exec php -l {} \;
+          php scripts/test-strategy-voice-settings-scope.php
+          php scripts/test-voice-settings-payload.php
+          php scripts/test-voice-candidate-validator.php
+          php scripts/test-voice-api-concurrency.php
+          php scripts/test-voice-apply-candidate.php
+          PHP_CHECKS
+          )
+          if command -v php >/dev/null 2>&1 &&
+             php -r 'exit(PHP_VERSION_ID >= 80200 && PHP_VERSION_ID < 90000 ? 0 : 1);'; then
+            php --version | head -n 1
+            sh -c "${php_checks}"
+          else
+            echo "Compatible host PHP not available; using php:8.2-cli container"
+            docker run --rm -v "${PWD}":/app -w /app php:8.2-cli sh -c "${php_checks}"
+          fi
 
       - name: Verify Voice GUI and backend parser parity
         run: python3.13 scripts/test-voice-validator-parity.py
