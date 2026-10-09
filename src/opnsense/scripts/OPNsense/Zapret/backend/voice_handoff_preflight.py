@@ -43,6 +43,40 @@ def _hash(source: str) -> str:
     return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
+def _ordinary_ports(source: str) -> tuple[str, str]:
+    """Independent strict port cross-check; CI compares with ports.sh.
+
+    Only parse the *ordinary* source, never merged traffic: native Voice
+    profiles have their own separate, destination-scoped IPFW rules.
+    """
+    found: dict[str, list[str]] = {"tcp": [], "udp": []}
+    for line in source.splitlines():
+        for token in line.split():
+            for protocol in ("tcp", "udp"):
+                if not token.startswith("--filter-" + protocol + "="):
+                    continue
+                spec = token.partition("=")[2]
+                if not spec or len(spec) > 8192:
+                    raise VoiceHandoffError("ordinary port filter is missing or oversized")
+                for part in spec.split(","):
+                    values = part.split("-")
+                    if len(values) not in (1, 2) or any(
+                        not re.fullmatch(r"[0-9]+", n) or len(n) > 10
+                        for n in values
+                    ):
+                        raise VoiceHandoffError("unsupported ordinary port filter")
+                    numbers = [int(v) for v in values]
+                    if min(numbers) < 1 or max(numbers) > 65535 or \
+                       numbers[0] > numbers[-1]:
+                        raise VoiceHandoffError("ordinary port filter outside 1–65535")
+                    normalized = "-".join(str(n) for n in numbers)
+                    if len(numbers) == 2 and numbers[0] == numbers[1]:
+                        normalized = str(numbers[0])
+                    if normalized not in found[protocol]:
+                        found[protocol].append(normalized)
+    return ",".join(found["tcp"]), ",".join(found["udp"])
+
+
 def verify_staged_handoff(artifacts: dict[str, str], native_argv: str,
                           ordinary: str, tcp: str, udp: str) -> dict:
     """Prepare a non-authorizing proof of a complete one-engine candidate."""
@@ -127,6 +161,10 @@ def verify_staged_handoff(artifacts: dict[str, str], native_argv: str,
                if lines[i:i+len(traffic_lines)] == traffic_lines]
     if len(matches) != 1:
         raise VoiceHandoffError("generated argv does not contain exactly one merged traffic plan")
+    if _ordinary_ports(ordinary) != (tcp, udp):
+        raise VoiceHandoffError(
+            "ordinary Strategies port extraction differs from the proposed IPFW rule scope"
+        )
     try:
         desired = prepare_desired(capture, tcp, udp)
     except VoiceFirewallError as error:
