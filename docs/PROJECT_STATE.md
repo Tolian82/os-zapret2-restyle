@@ -81,8 +81,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_1` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_1.pkg` (**not published, do not install**);
+- current source candidate revision: `_2` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_2.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
@@ -146,7 +146,7 @@ Completed boundary:
 
 No further package correction belongs to this scope.
 
-## Development handoff: `v0.5.1_1` native Voice GUI (Draft PR #328)
+## Development handoff: `v0.5.1_2` native Voice GUI (Draft PR #328)
 
 Work is staged at [PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), branched from `main` `3f9951c928ac2521c3551c8311d58ed755947007`. New native MVC page, five default-OFF fields, bilingual guidance, common service control and shared IPSET model are present. Registry, storage and managed target generation for Discord/X/SIP/Custom are staged; a read-only native config.xml Voice exporter, fail-closed STUN compiler, inert release-bundle consistency gate, one-engine traffic merge helper, IPFW capture-plan validator, an adapter-injected mock-tested IPFW transaction core, retryable postcommit cleanup, and private durable ownership/intent journal with read-only restart triage plus mock-only activation ordering and verified abort (all not production-wired) and per-service scope conflict checks have also been added (not wired to Apply/runtime); Strategies Apply now limits its POST to Strategies-owned fields (Strategies-side shared Telegram-IPSET optimistic lock active in source; Voice-side payload/freshness helper staged, future Voice Apply endpoint not yet implemented); the existing Telegram hostlist data is reused. **Voice Apply is disabled** until complete validation and lifecycle migration are implemented. This draft has not replaced the temporary Telegram Voice PoC or qualified boot restoration, dual-WAN behavior, or media. The existing published and stable `0.5.0` packages are unchanged. See [design and implementation status](architecture/VOICE_TRANSMISSION_GUI.md).
 

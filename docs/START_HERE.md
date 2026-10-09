@@ -72,13 +72,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_1` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_2` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=1` (**development candidate, not published**);
+- `PLUGIN_REVISION=2` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
@@ -158,7 +158,7 @@ Evidence: [September 22 positive observation](verification/evidence/2026-09-22-t
 
 ## Draft implementation progress (PR #328)
 
-The new menu/controller/form/view/model and RU/EN guidance are staged, with all five service switches default OFF. The shared Telegram IPSET remains `hostlist.telegramips`; four additional datasets now have staged backend registry/storage/normalizer/template entries. A read-only persistent Voice config.xml exporter, fail-closed STUN profile compiler, inert candidate-release staging with exact managed IPSET/WAN checks, single-engine traffic merge helper, declarative IPFW capture planner plus a mock-tested IPFW ownership/rollback core and durable private ownership/intent ledger and mock-only activation ordering with read-only restart triage exist (production adapter, lifecycle lock integration, automatic recovery and boot remain unwired) with a temporary narrow, tested option allowlist and rejects a different WAN until true one-engine isolation is proven. **Strategies Apply is now explicitly scoped and rejects a stale shared Telegram IPSET baseline (Voice side still pending). No Voice configuration Apply, runtime multi-service generator, replacement of old PoC marker, destination-scoped IPFW, migration or boot recovery is qualified.** Continue on this same Draft PR. Current stable remains `v0.5.0_1`; latest published experimental testing candidate remains `v0.5.0_3`. Do not install or merge WIP `v0.5.1_1`.
+The new menu/controller/form/view/model and RU/EN guidance are staged, with all five service switches default OFF. The shared Telegram IPSET remains `hostlist.telegramips`; four additional datasets now have staged backend registry/storage/normalizer/template entries. A read-only persistent Voice config.xml exporter, fail-closed STUN profile compiler, inert candidate-release staging with exact managed IPSET/WAN checks, single-engine traffic merge helper, declarative IPFW capture planner plus a mock-tested IPFW ownership/rollback core and durable private ownership/intent ledger and mock-only activation ordering with read-only restart triage exist (production adapter, lifecycle lock integration, automatic recovery and boot remain unwired) with a temporary narrow, tested option allowlist and rejects a different WAN until true one-engine isolation is proven. **Strategies Apply is now explicitly scoped and rejects a stale shared Telegram IPSET baseline (Voice side still pending). No Voice configuration Apply, runtime multi-service generator, replacement of old PoC marker, destination-scoped IPFW, migration or boot recovery is qualified.** Continue on this same Draft PR. Current stable remains `v0.5.0_1`; latest published experimental testing candidate remains `v0.5.0_3`. Do not install or merge WIP `v0.5.1_2`.
 
 ## Actual current assignment — implement the approved Voice page
 
@@ -168,7 +168,7 @@ After the mandatory Level-1 documents, read [the complete Voice page specificati
 2. Build the native page and menu, then replace PoC-only request/profile generation with persistent service profiles and transactional scoped IPFW lifecycle. Keep compatible Telegram configctl actions on the same authority; preserve ordinary non-STUN strategies.
 3. Qualify input validation, overlapping profiles, one-engine operation, local/forwarded UDP, failure/rollback, saved OFF/global OFF and reboot restoration. Complete GitHub/CI/package work under the normal project rules; owner-live results are a separate gate.
 
-The prior `0.5.0_3` handoff saved documentation only. Development is now on `0.5.1_1` in a Draft PR. No new Voice Apply, complete boot behavior or media PASS is claimed; no owner appliance settings were changed. Do not merge the old unpublished `_4` fragment branch as this feature.
+The prior `0.5.0_3` handoff saved documentation only. Development is now on `0.5.1_2` in a Draft PR. No new Voice Apply, complete boot behavior or media PASS is claimed; no owner appliance settings were changed. Do not merge the old unpublished `_4` fragment branch as this feature.
 
 **Retained research queue:** [the Docker-first campaign](architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md) still requires RTC/ICMP/full-profile/cleanup tooling before a distinct limited-fake-TTL series (at most four initial values; none selected yet). This does not block implementing the page. Migration starts a documented new baseline; historical A1/A2 kept helper ON/fixed and both remain `WIRE_OK / NO_REPLY_UNKNOWN`. Do not repeat their unchanged negative tests or the closed fragment sweep by inertia. Candidate-action OFF is not whole-helper disable.
 
