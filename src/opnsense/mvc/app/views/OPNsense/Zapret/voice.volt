@@ -70,6 +70,8 @@ $(document).ready(function () {
             'Enabled Voice service requires destination IPs': 'Для включённой службы нужны IP-адреса назначения',
             'Voice validation failed': 'Проверка параметров голоса завершилась ошибкой',
             'Missing Voice form': 'Не получена форма передачи голоса',
+            'Voice configuration baseline is missing. Reload the Voice page.': 'Нет исходной версии настроек. Обновите страницу передачи голоса.',
+            'Voice or shared Strategies settings changed in another tab. Reload the Voice page.': 'Параметры передачи голоса или общие настройки стратегий были изменены в другой вкладке. Обновите страницу.',
             'POST request required': 'Требуется запрос POST'
         };
         var dynamic = [
@@ -156,7 +158,13 @@ $(document).ready(function () {
     $('#voiceServiceTitle').text(text.service);
     $('#voiceStatusLabel').text(text.status + ':');
     $('#voiceApply').text(text.apply).prop('disabled', true);
-    $('#voiceValidate').text(text.validate);
+    // This value comes from the same locked config.xml snapshot as the form
+    // itself. Keep Validate disabled until that paired read succeeds.
+    var voiceSnapshot = $('<input/>', {
+        type: 'hidden', id: 'zapret.sync.snapshot'
+    });
+    $('#frm_VoiceSettings').append(voiceSnapshot);
+    $('#voiceValidate').text(text.validate).prop('disabled', true);
     $('#voiceValidate').on('click', function () {
         var button = $(this);
         if (button.prop('disabled')) return;
@@ -184,7 +192,15 @@ $(document).ready(function () {
     $('#voiceImplementationNotice').text(text.notice);
     $('#voiceIPFWLabel').text(text.ipfwStatus + ':');
     localizeForm();
-    mapDataToFormUI({'frm_VoiceSettings':'/api/zapret/settings/get'}).done(function () {
+    mapDataToFormUI({'frm_VoiceSettings':'/api/zapret/voice/load'}).done(function (loaded) {
+        var record = loaded && loaded['frm_VoiceSettings'];
+        if (record && typeof record.snapshot === 'string' &&
+            /^[a-f0-9]{64}$/.test(record.snapshot)) {
+            voiceSnapshot.val(record.snapshot);
+            $('#voiceValidate').prop('disabled', false);
+        } else {
+            $('#voiceValidationStatus').text(text.checkError);
+        }
         formatTokenizersUI();
         $('.selectpicker').selectpicker('refresh');
         localizeForm();
@@ -340,7 +356,7 @@ $(document).ready(function () {
 <section class="grid-bottom-reserve __mt">
     <div class="alert content-box" style="margin-bottom: 0;">
         <button class="btn btn-primary __mr" id="voiceApply" type="button" disabled>Apply</button>
-        <button class="btn btn-default __mr" id="voiceValidate" type="button">Validate</button>
+        <button class="btn btn-default __mr" id="voiceValidate" type="button" disabled>Validate</button>
         <span id="voiceValidationStatus" aria-live="polite"></span>
         <span id="voiceImplementationNotice" aria-live="polite"></span>
     </div>
