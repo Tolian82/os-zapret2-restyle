@@ -1,5 +1,9 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_12`: kernel-exposed NUL-delimited FreeBSD argv reading with strict bounds, PID/start double-probe and offline tests, still unwired
+- [ ] Validate real FreeBSD kern.proc.args behavior and mutable process-title risk on owner appliance; qualify executable path/credential proofs and UDP readiness under native locks before Voice Apply
+
+
 - [x] Current candidate `v0.5.1_11`: exact kernel argv-array restart attestation against saved dvtws.args + fixed launcher flags, double observations, new PID/start token safeguards (test-only reader)
 - [ ] Qualify genuine FreeBSD kernel argv provider, semantic supervisor launcher and readiness evidence before allowing any Voice Apply/restart
 
