@@ -17,6 +17,9 @@ The current in-progress candidate is `v0.5.1_1` (unmerged, not published). The e
 - [x] Stage standalone fail-closed STUN compiler, initial allowlist and per-service conflict/line validation tests (not yet applied)
 - [x] Stage declarative Voice IPFW address-and-port capture plan with five-service range/overlap checks (not yet installed)
 - [x] Stage read-only native OPNsense Voice config.xml export and end-to-end candidate pipeline tests (not yet activated)
+- [x] Stage inert candidate-release bundling with exact normalized managed-IPSET verification, resolved physical WAN and private atomic artifacts
+- [x] Stage one-engine Voice + unchanged ordinary Strategies text merge, reject legacy PoC identity/double-prepend
+- [x] Stage Voice-only payload whitelist and symmetric Telegram-IPSET freshness validation helper (future API still pending)
 - [x] Scope Strategies Apply to Strategies-owned fields without resetting Voice/other IPSETs
 - [x] Guard existing Strategies Apply against stale Telegram IPSET input under config lock
 - [ ] Enforce the same Telegram IPSET concurrency guard for future Voice Apply
