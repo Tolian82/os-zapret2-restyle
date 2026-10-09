@@ -136,6 +136,8 @@ jobs:
         run: python3.13 scripts/test-voice-cutover-journal.py
       - name: Voice native boot and shared lockf cutover guard
         run: python3.13 scripts/test-voice-cutover-boot-guard.py
+      - name: Voice non-destructive atomic runtime rollback preflight
+        run: sh scripts/test-voice-atomic-rollback-preflight.sh
       - name: Voice IPSET integration with shared production Targets normalizer
         run: python3.13 scripts/test-voice-targets-integration.py
       - name: Voice and ordinary single-engine traffic merging
@@ -480,6 +482,7 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-cutover-coordinator.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-journal.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-boot-guard.py
+            sh scripts/test-voice-atomic-rollback-preflight.sh
             /usr/local/bin/python3.13 scripts/test-voice-targets-integration.py
             /usr/local/bin/python3.13 scripts/test-voice-firewall-ledger.py
             /usr/local/bin/python3.13 scripts/test-voice-firewall-activation.py
