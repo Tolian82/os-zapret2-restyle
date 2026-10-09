@@ -9,8 +9,37 @@ namespace OPNsense\Zapret\Api;
 use OPNsense\Base\ApiControllerBase;
 use OPNsense\Core\Backend;
 
+require_once __DIR__ . '/VoiceCandidateValidator.php';
+
 class VoiceController extends ApiControllerBase
 {
+    public function validateAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['result' => 'failed', 'validations' => [
+                'zapret.voice.waninterface' => 'POST request required'
+            ]];
+        }
+        $fields = $this->request->getPost('zapret');
+        if (!is_array($fields)) {
+            return ['result' => 'failed', 'validations' => [
+                'zapret.voice.waninterface' => 'Missing Voice form'
+            ]];
+        }
+        try {
+            $errors = VoiceCandidateValidator::check($fields);
+            if ($errors) {
+                return ['result' => 'failed', 'validations' => $errors];
+            }
+            return ['result' => 'validated', 'scope' => 'syntax-only'];
+        } catch (\\Throwable $error) {
+            // Never reveal PHP stack, unrelated configuration or raw input.
+            return ['result' => 'failed', 'validations' => [
+                'zapret.voice.waninterface' => 'Voice validation failed'
+            ]];
+        }
+    }
+
     public function inspectAction(): array
     {
         if (!$this->request->isPost()) {
