@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+from unittest.mock import patch
 import subprocess
 import sys
 import tempfile
@@ -201,6 +202,80 @@ class VoiceReleaseStageTests(unittest.TestCase):
                 stage.compile_bundle(
                     source, managed, ACTIVE_ROOT, "vtnet1", 19000, 19010, 989, ordinary
                 )
+
+    def test_source_xml_changes_mid_stage_are_detected(self):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            source, managed = write_fixture(tmp)
+            original = stage.compile_capture_plan
+
+            def edit_xml_during_compile(*args, **kwargs):
+                plan = original(*args, **kwargs)
+                with source.open("ab") as out:
+                    out.write(b"<!-- concurrent Voice tab update -->")
+                return plan
+
+            with patch.object(stage, "compile_capture_plan",
+                              side_effect=edit_xml_during_compile):
+                with self.assertRaisesRegex(stage.VoiceStageError,
+                                            "configuration changed"):
+                    stage.compile_bundle(source, managed, ACTIVE_ROOT, "vtnet1",
+                                         19000, 19010, 989)
+
+    def test_source_ipset_or_ordinary_traffic_changes_mid_stage_are_detected(self):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            source, managed = write_fixture(tmp)
+            original = stage.compile_capture_plan
+
+            def edit_ipset_after_first_read(*args, **kwargs):
+                plan = original(*args, **kwargs)
+                (managed / "ipset-telegram.txt").write_text("203.0.113.10\n")
+                return plan
+
+            with patch.object(stage, "compile_capture_plan",
+                              side_effect=edit_ipset_after_first_read):
+                with self.assertRaisesRegex(stage.VoiceStageError,
+                                            "does not match saved Voice targets"):
+                    stage.compile_bundle(source, managed, ACTIVE_ROOT, "vtnet1",
+                                         19000, 19010, 989)
+            (managed / "ipset-telegram.txt").write_text(
+                "91.108.0.0/16\n91.108.13.10\n")
+            ordinary = tmp / "ordinary.conf"
+            ordinary.write_text("--filter-tcp=443\n--filter-l7=tls\n")
+            old_merge = stage.merge_profiles
+
+            def edit_ordinary_after_read(*args, **kwargs):
+                result = old_merge(*args, **kwargs)
+                ordinary.write_text("--filter-tcp=80\n--filter-l7=tls\n")
+                return result
+
+            with patch.object(stage, "merge_profiles",
+                              side_effect=edit_ordinary_after_read):
+                with self.assertRaisesRegex(stage.VoiceStageError,
+                                            "ordinary Strategy changed"):
+                    stage.compile_bundle(source, managed, ACTIVE_ROOT, "vtnet1",
+                                         19000, 19010, 989, ordinary)
+
+    def test_reject_symlinked_xml_or_managed_target_without_publishing(self):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            source, managed = write_fixture(tmp)
+            linked = tmp / "config-link.xml"
+            linked.symlink_to(source)
+            with self.assertRaisesRegex(stage.VoiceStageError, "non-symlink"):
+                stage.compile_bundle(linked, managed, ACTIVE_ROOT,
+                                     "vtnet1", 19000, 19010, 989)
+            target = managed / "ipset-telegram.txt"
+            outside = tmp / "other-ipset"
+            outside.write_bytes(target.read_bytes())
+            target.unlink()
+            target.symlink_to(outside)
+            with self.assertRaisesRegex(stage.VoiceStageError, "unsafe"):
+                stage.compile_bundle(source, managed, ACTIVE_ROOT,
+                                     "vtnet1", 19000, 19010, 989)
+            self.assertEqual("91.108.0.0/16\n91.108.13.10\n",
+                             outside.read_text())
 
     def test_reject_nonexistent_source_with_no_artifacts(self):
         with tempfile.TemporaryDirectory() as d:
