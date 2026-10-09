@@ -39,6 +39,67 @@ $(document).ready(function () {
         argsHelp: 'One native dvtws2 STUN profile: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> and optional <code>--lua-desync</code> actions. The plugin supplies profile identity and IPSET. Do not enter <code>--new</code>, TCP options or shell commands. This is not proof of working calls.',
         ipHelp: 'Shared IPSET, available in Strategies. One IPv4 address or CIDR per line. Empty sets must not be enabled or implicitly match any destination.'
     };
+    // Validation messages arrive as a fixed, trusted server-side English
+    // allowlist. Translate their meaning without replacing native form/help DOM
+    // or touching the user's configuration. Unknown error text stays intact.
+    function localizeVoiceErrors(errors) {
+        if (!ru || !errors || typeof errors !== 'object') return errors || {};
+        var fixed = {
+            'IPv4/CIDR list is too large': 'Список IPv4/CIDR слишком большой',
+            'Too many destination addresses': 'Слишком много адресов назначения',
+            'UDP ports must be numeric intervals or *': 'Порты UDP должны быть числами, диапазонами или *',
+            'Invalid UDP port selector': 'Некорректный выбор UDP-портов',
+            'UDP port is outside 1–65535': 'UDP-порт вне диапазона 1–65535',
+            'Only the native fake Lua action is currently supported': 'Пока поддерживается только нативное Lua-действие fake',
+            'Fake blob must be whole bytes of 0xHEX': 'Поддельные данные должны состоять из целых байтов 0xHEX',
+            'Fake repeats must be 1–10': 'Количество повторов fake — от 1 до 10',
+            'Fake TTL must be 1–255': 'TTL fake — от 1 до 255',
+            'UDP fake fragment offset must be a multiple of 8': 'Смещение UDP-фрагмента fake должно быть кратно 8',
+            'Invalid fake option flag': 'Некорректный флаг параметра fake',
+            'Unverified native fake option': 'Неподтверждённый нативный параметр fake',
+            'Missing fake blob or invalid fragmentation combination': 'Нет данных fake или недопустимое сочетание фрагментации',
+            'STUN parameters are too long': 'Параметры STUN слишком длинные',
+            'Only single-token native ASCII arguments are permitted': 'Допускаются только одиночные нативные аргументы ASCII',
+            'Only native STUN filtering is allowed': 'Допускается только нативная фильтрация STUN',
+            'Unsupported UDP out-range selector': 'Неподдерживаемое значение UDP out-range',
+            'Unexpected Voice form fields': 'В запросе есть посторонние поля',
+            'Voice settings and IPSET fields are required': 'Требуются настройки голоса и поля IPSET',
+            'Invalid Voice WAN selection': 'Некорректный выбор голосового WAN',
+            'Service checkbox and parameters are required': 'Требуются переключатель службы и параметры',
+            'IPSET must be a text list': 'IPSET должен быть текстовым списком',
+            'Enabled Voice service requires destination IPs': 'Для включённой службы нужны IP-адреса назначения',
+            'Voice validation failed': 'Проверка параметров голоса завершилась ошибкой',
+            'Missing Voice form': 'Не получена форма передачи голоса',
+            'POST request required': 'Требуется запрос POST'
+        };
+        var dynamic = [
+            [/^Invalid IPv4\/CIDR at line ([0-9]+)$/, 'Некорректный IPv4/CIDR в строке $1'],
+            [/^CIDR contains host bits at line ([0-9]+)$/, 'В CIDR заданы биты хоста в строке $1'],
+            [/^Duplicate fake option: ([A-Za-z0-9_]+)$/, 'Повторяется параметр fake: $1'],
+            [/^Repeated (--[a-z0-9-]+) at line ([0-9]+)$/, 'Повторяется $1 в строке $2'],
+            [/^Forbidden or unverified dvtws2 parameter at line ([0-9]+)$/, 'Запрещённый или неподтверждённый параметр dvtws2 в строке $1'],
+            [/^Required native STUN option missing: (--[a-z0-9-]+)$/, 'Отсутствует обязательный параметр STUN: $1'],
+            [/^UDP ports and destinations overlap with (telegram|discord|x|sip|custom)$/, 'UDP-порты и адреса пересекаются с профилем $1']
+        ];
+        var result = {};
+        Object.keys(errors).forEach(function (key) {
+            var message = errors[key];
+            if (typeof message !== 'string') { result[key] = message; return; }
+            if (Object.prototype.hasOwnProperty.call(fixed, message)) {
+                result[key] = fixed[message];
+                return;
+            }
+            result[key] = message;
+            for (var i = 0; i < dynamic.length; i++) {
+                if (dynamic[i][0].test(message)) {
+                    result[key] = message.replace(dynamic[i][0], dynamic[i][1]);
+                    break;
+                }
+            }
+        });
+        return result;
+    }
+
     var names = {telegram:'Telegram', discord:'Discord', x:'X (Twitter)', sip:'SIP (VoIP)', custom:'Custom'};
     function localizeForm() {
         var form = $('#frm_VoiceSettings');
@@ -108,7 +169,7 @@ $(document).ready(function () {
             dataType: 'json',
             timeout: 30000
         }).done(function (reply) {
-            handleFormValidation('frm_VoiceSettings', (reply && reply.validations) || {});
+            handleFormValidation('frm_VoiceSettings', localizeVoiceErrors((reply && reply.validations) || {}));
             if (reply && reply.result === 'validated') {
                 $('#voiceValidationStatus').text(text.checkOk);
             } else {
