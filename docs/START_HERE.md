@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Strategy Lab / Voice guard e2e:** у старого `test-strategy-lab-lifecycle-cases.sh` создаётся полностью mocked backend, поэтому в нём теперь есть только тестовая Python-заглушка обязательного Voice guard. При pending родительский lifecycle возвращает 69 до worker, а при pending, обнаруженном под унаследованным fd9, внутренний stop тоже возвращает 69 без изменения процесса. Production guard не затронут; его реальные filesystem/ownership проверки покрыты отдельным Voice CI. Проверить exact-head общий CI после этого исправления.
+
+
 **Voice lifecycle safety correction (Draft PR #328):** исправлена Linux-CI регрессия от жёсткого FreeBSD python path: рабочая OPNsense использует только `/usr/local/bin/python3.13`, а non-installed test backend может найти версионированный Python в PATH и **всё равно исполняет тот же fail-closed guard**. Внутренние `strategy-lab-start/stop` с унаследованным lockf fd 9 тоже проверяют pending whole/IPFW journals, не обходя новый gate; `status/evidence` остаются read-only. Следить за последним exact-head CI; Voice Apply не подключён.
 
 

@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Strategy Lab lifecycle regression root-cause corrected:** an integration fixture creates a fully mocked SERVICE_BACKEND and lacked the newly mandatory Voice guard file. The fixture now models guard success/pending through a test-only Python file and checks both parent-before-worker rejection (69) and inherited-lock internal stop rejection (69); neither case may stop the prior service. The real production journal guard remains fail closed. Separate versioned Python portability fix still applies to non-installed Linux source trees. Last-head full project/FreeBSD CI remains the release gate.
+
+
 **Voice guard corrective checkpoint:** a Linux-only Strategy Lab corrective matrix failure was traced to the absolute FreeBSD Python interpreter used by the actual lifecycle guard (exit 69), not to Voice validation. The guard now resolves Python 3.13 from PATH only for non-installed source/test BACKEND_DIR when the fixed interpreter is missing; on installed FreeBSD it stays absolute and cannot be disabled. Internal Strategy Lab start/stop actions own inherited lockf and had bypassed the guard; both now call the same read-only fail-closed preflight before mutating. Exact-head complete CI including FreeBSD must be checked before qualification.
 
 
