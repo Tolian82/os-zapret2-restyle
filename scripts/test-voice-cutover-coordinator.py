@@ -160,6 +160,26 @@ class FakeLifecycle:
 
 
 class WholeCutoverTests(unittest.TestCase):
+    def test_real_staging_and_generator_proof_feeds_mock_cutover(self):
+        """Carry real candidate/XML/ports/IPFW hashes through the mock lifecycle."""
+        spec=importlib.util.spec_from_file_location(
+            "voice_handoff_fixture",
+            ROOT/"scripts/test-voice-handoff-preflight.py"
+        )
+        fixture=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+        case=fixture.VoiceHandoffPreflightTests()
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle, native_argv=case.build(Path(tmp)/"voice", True)
+            proof=case.validate(bundle, native_argv)
+            adapter=FakeLifecycle()
+            outcome=cutover.simulate_cutover(adapter, proof, test_only_mutations=True)
+            self.assertEqual("simulated-committed",outcome)
+            self.assertEqual(["telegram"],proof["enabled_services"])
+            self.assertEqual(("new",)*5,adapter.state())
+            self.assertEqual([],proof.get("mutation_history",[]))
+            self.assertIsNone(adapter.intent)
+
     def test_default_rejects_all_real_mutations(self):
         a=FakeLifecycle()
         with self.assertRaises(cutover.CutoverRejected):
