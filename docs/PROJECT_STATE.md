@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Snapshot-to-journal link:** read-only `bound_resource_fingerprints` now ties persisted previous Config and runtime bytes to the two corresponding whole-cutover journal fingerprints; regression checks the journal record and rejects mismatched/corrupted runtime content. Actual old engine/firewall/supervisor snapshot adapters are still absent.
+
+
 **Durable old Config/runtime bytes staged (Draft):** `voice_cutover_backup.py` now captures previous config.xml and regular-only runtime-v2 contents into a private write-once fsync'd directory with sealed manifest and per-file SHA256. Source re-hashing detects torn Config/runtime snapshots, read-only inspector rejects corruption/foreign files. It is disconnected from GUI and service and does not yet capture kernel IPFW, running engine/supervisor or verify actual installed runtime symlinks. Full native cutover adapter and crash recovery remain OPEN.
 
 

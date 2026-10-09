@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Previous-state binding:** `bound_resource_fingerprints` проверяет сохранённые байты и связывает два SHA (Config/runtime) с `VoiceCutoverJournal.previous`; отдельные engine/IPFW/supervisor записи пока не содержат восстановимых ресурсов. Тест целостности включён в Voice backup suite. Не объявлять переход атомарным до связи всех пяти источников.
+
+
 **Voice durable previous-state storage:** к mock coordinator и журналу SHA256 добавлен `voice_cutover_backup.py`, который в приватную write-once папку сохраняет *байты* прежнего Config.xml и runtime tree, манифест с хешами и отдельным seal, повторно сверяет источники. `test-voice-cutover-backup.py` покрывает повреждения/гонки; Linux/FreeBSD CI. Хранилище пока изолировано от OPNsense configd и legacy runtime, symlink tree fail-closed, данные kernel/process отдельно не сохраняются. Это подготовка к реальному restore, а не активация Apply.
 
 

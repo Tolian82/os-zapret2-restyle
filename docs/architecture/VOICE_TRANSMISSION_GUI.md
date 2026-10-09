@@ -1,5 +1,8 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+- Дополнительно `voice_cutover_backup.bound_resource_fingerprints(snapshot, previous)` выполняет read-only проверку целого snapshot и вычисляет согласованные SHA256 прежнего `config.xml` (байты) и дерева runtime (канонический manifest с файлами, правами, размерами). Если в полном `VoiceCutoverJournal.previous` эти две записи отличаются от фактических копий, переход блокируется. Три остальные компонента журнала (`engine`, `firewall`, `supervisor`) пока должны проверяться отдельными production adapters. `test-voice-cutover-backup.py` связывает реальное файловое хранилище с `VoiceCutoverJournal.new_record` и проверяет отказ при подмене runtime.
+
+
 ### Долговечное сохранение предыдущего Config + runtime (новый изолированный контракт, 2026-10-09)
 
 - Новый `backend/voice_cutover_backup.py` сохраняет **реальные байты прежнего `config.xml` и дерева `runtime-v2`**, в отличие от `voice_cutover_journal.py`, который хранит только SHA256 решений и пяти ресурсов. Это отдельный pure filesystem staging API `capture_previous(config, runtime, output)` и read-only `inspect_previous(output)`, **без CLI / configd entrypoint / автоматического восстановления**.

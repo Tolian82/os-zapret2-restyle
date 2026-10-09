@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Bind verifiable previous Config/runtime byte snapshots to two corresponding durable whole-cutover journal resource hashes, with tamper regression
+- [ ] Bind actual previous engine, supervisor and plugin-owned IPFW snapshots and implement full lock-held recovery before Apply
+
 - [x] Stage private previous Config.xml + runtime byte snapshot, sealed manifest, source race detection and read-only integrity tests (Linux/FreeBSD)
 - [ ] Verify installed runtime directory structure and symlink policy; persist trusted snapshots of IPFW and supervisor/engine metadata and bind all resources to journal under one lock
 - [ ] Implement authenticated OPNsense persistent Voice Apply, native single-engine IPFW handoff, power-loss recovery and owner-live acceptance
