@@ -114,7 +114,6 @@ def simulate_cutover(adapter: CutoverAdapter, proof: dict, *,
         # runtime verification. On failure restore saved previous Config too.
         adapter.persist_config()
         adapter.verify_candidate()
-        adapter.commit_intent()
     except Exception as original:
         errors = []
         # Reverse EVERY component after an uncertain partial failure. The
@@ -144,6 +143,17 @@ def simulate_cutover(adapter: CutoverAdapter, proof: dict, *,
                 "Voice previous state verified but pending intent cannot be cleared"
             ) from exc
         raise CutoverError("Voice candidate failed; verified previous state restored") from original
+
+    # An unknown result from writing the committed marker cannot safely
+    # be treated as a pre-commit failure. If fsync/rename had already
+    # completed before reporting an error, rollback would contradict the
+    # durable decision. Leave the intent and require a restart review.
+    try:
+        adapter.commit_intent()
+    except Exception as exc:
+        raise CutoverManualReview(
+            "Voice commit journal outcome uncertain; no implicit rollback"
+        ) from exc
 
     # After a durable committed intent there is NO return to old Config,
     # because the operation may already have survived a power loss. Cleanup
