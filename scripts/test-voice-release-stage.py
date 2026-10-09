@@ -162,6 +162,46 @@ class VoiceReleaseStageTests(unittest.TestCase):
             self.assertEqual(before, (out / "voice.conf").read_bytes())
             self.assertNotIn("SECRET_DO_NOT_LEAK", failed.stderr)
 
+    def test_staged_combined_traffic_keeps_ordinary_A2_and_voice_precedence(self):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            source, managed = write_fixture(tmp)
+            ordinary = tmp / "traffic-user.conf"
+            original = (
+                "--filter-tcp=443\n--filter-l7=tls\n--new\n"
+                "--filter-udp=596-599\n--filter-l7=unknown\n--payload=unknown\n"
+            )
+            ordinary.write_text(original, encoding="utf-8")
+            artifacts = stage.compile_bundle(
+                source, managed, ACTIVE_ROOT, "vtnet1", 19000, 19010, 989, ordinary
+            )
+            merged = artifacts["traffic.conf"]
+            self.assertTrue(merged.startswith("--name=voice-telegram"))
+            self.assertIn("--payload=stun\n--new\n--filter-tcp=443", merged)
+            self.assertTrue(merged.endswith(original))
+            self.assertEqual(2, merged.count("\n--new\n"))
+            meta = json.loads(artifacts["metadata.json"])
+            self.assertEqual(64, len(meta["merged_sha256"]))
+            self.assertEqual(64, len(meta["ordinary_sha256"]))
+            self.assertFalse(meta["activation_authorized"])
+
+    def test_staged_all_off_keeps_ordinary_bytes_and_rejects_poc_collision(self):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            source, managed = write_fixture(tmp, fixture(False))
+            ordinary = tmp / "traffic-user.conf"
+            original = "--filter-tcp=443\n--filter-l7=tls\n\n"
+            ordinary.write_text(original, encoding="utf-8")
+            artifacts = stage.compile_bundle(
+                source, managed, ACTIVE_ROOT, "vtnet1", 19000, 19010, 989, ordinary
+            )
+            self.assertEqual(original, artifacts["traffic.conf"])
+            ordinary.write_text("--name=telegram-voice-poc\n" + original, encoding="utf-8")
+            with self.assertRaises(ValueError):
+                stage.compile_bundle(
+                    source, managed, ACTIVE_ROOT, "vtnet1", 19000, 19010, 989, ordinary
+                )
+
     def test_reject_nonexistent_source_with_no_artifacts(self):
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
