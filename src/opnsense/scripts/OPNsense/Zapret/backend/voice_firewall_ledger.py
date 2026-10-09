@@ -318,6 +318,12 @@ class VoiceOwnershipStore:
         prev = decode_manifest(intent["previous"])
         want = decode_manifest(intent["desired"])
         prev_tables, want_tables = prev["tables"], want["tables"]
+        # Without a recorded per-operation stage phase, an orphan _stage
+        # table is ambiguous even when active rules happen to match.
+        # Fail closed rather than accepting a stale/foreign stage as safe.
+        if any(adapter.get_table(TABLE_PREFIX + name + "_stage") is not None
+               for name in SERVICES):
+            return "manual-review"
         live_tables = {
             TABLE_PREFIX + name: adapter.get_table(TABLE_PREFIX + name)
             for name in SERVICES
