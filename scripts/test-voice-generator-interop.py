@@ -67,6 +67,25 @@ def generate_native_argv(folder: Path, traffic: str) -> str:
     return outputfile.read_text(encoding="utf-8")
 
 
+def extract_real_ordinary_ports(folder: Path, ordinary: str) -> tuple[str, str]:
+    """Use production ports.sh, never infer ports from merged Voice filters."""
+    folder.mkdir(parents=True, exist_ok=True)
+    source = folder / "ordinary.conf"
+    tcp = folder / "ordinary.tcp"
+    udp = folder / "ordinary.udp"
+    source.write_text(ordinary, encoding="utf-8")
+    command = [
+        "/bin/sh", "-c",
+        '. "$1"; . "$2"; shift 2; ports_extract_file "$@"',
+        "native-ports-test", str(BACKEND / "common.sh"),
+        str(BACKEND / "ports.sh"), str(source), str(tcp), str(udp),
+    ]
+    response = subprocess.run(command, capture_output=True, text=True, check=False)
+    if response.returncode:
+        raise AssertionError("production ordinary ports extractor failed: " + response.stderr)
+    return tcp.read_text(encoding="utf-8").strip(), udp.read_text(encoding="utf-8").strip()
+
+
 class GeneratorInteropTests(unittest.TestCase):
     def compile(self, root: Path, *, enabled: bool, ordinary: str = ORDINARY) -> dict:
         xml, managed = fixtures.write_fixture(root, fixtures.fixture(enabled))
@@ -93,7 +112,9 @@ class GeneratorInteropTests(unittest.TestCase):
             self.assertFalse(meta["activation_authorized"])
             self.assertEqual(1, meta["profile_count"])
             plan = json.loads(bundle["capture-plan.json"])
-            desired = firewall.prepare_desired(plan, "443", "596-599")
+            tcp, udp = extract_real_ordinary_ports(root / "port-extractor", ORDINARY)
+            self.assertEqual(("443", "596-599"), (tcp, udp))
+            desired = firewall.prepare_desired(plan, tcp, udp)
             self.assertEqual([19000, 19001, 19002], sorted(desired["rules"]))
             self.assertEqual("table(zapret2_voice_telegram)", desired["rules"][19000][6])
             self.assertEqual("tcp", desired["rules"][19001][2])
@@ -111,7 +132,9 @@ class GeneratorInteropTests(unittest.TestCase):
             self.assertIn(ORDINARY, full)
             self.assertEqual(1, full.count("--port=989\n"))
             plan = json.loads(bundle["capture-plan.json"])
-            desired = firewall.prepare_desired(plan, "443", "596-599")
+            tcp, udp = extract_real_ordinary_ports(root / "port-extractor", ORDINARY)
+            self.assertEqual(("443", "596-599"), (tcp, udp))
+            desired = firewall.prepare_desired(plan, tcp, udp)
             self.assertEqual([19000, 19001], sorted(desired["rules"]))
             self.assertEqual({}, desired["tables"])
 
