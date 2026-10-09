@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Voice Draft PR #328 latest staging:** FreeBSD IPFW adapter is read-only by default with narrow bounded commands and parsing, a dedicated configd/API read-only Voice status is visible in RU/EN GUI, and native table equality is order-independent. Advanced fake TTL/checksum/fragment/range syntax is still parser-only pending installed engine qualification. Runtime cutover, persisted Apply, PoC removal, cold-boot recovery, FreeBSD owner-live acceptance remain OPEN. No new package has been published.
+
+
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1
 **Updated:** 2026-10-09
 State-line scope: **`v0.5.x`**

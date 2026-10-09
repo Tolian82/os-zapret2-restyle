@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Draft PR #328 дополнен:** native FreeBSD IPFW adapter (read-only by default), read-only Voice status/configd/API in RU/EN GUI, unordered IPv4 table comparison, extended bounded fake parser, FreeBSD package regression. **Это не рабочий Voice Apply**: orchestration, старая PoC-миграция, lock-held journal/live runtime и reboot acceptance ещё впереди. Сначала смотреть exact-head CI, затем проверять безопасный one-engine cutover без второго пути ON.
+
+
 - **Current project state:** [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - **Documentation rules:** [`DOCUMENTATION_RULES.md`](DOCUMENTATION_RULES.md)
 - **Project-development rules:** [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md)

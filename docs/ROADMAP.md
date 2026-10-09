@@ -1,5 +1,12 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Stage FreeBSD IPFW adapter, non-mutating by default, narrow argv/table/rule parsing and native-VM test coverage (not production-wired)
+- [x] Stage read-only Voice configd/API status with RU/EN GUI labels; no save/apply route
+- [x] Compare IPFW address tables as unordered unique CIDR sets across rollback and journal
+- [x] Stage bounded fake TTL/checksum/fragment/out-range parsing with negative examples (installed-engine gate pending)
+- [x] Reject competing ordinary STUN during Voice candidate merging while preserving non-STUN A2
+- [ ] Wire lock-held real IPFW activation, persistent native Voice Apply, replacement of Telegram PoC, boot recovery, exact-head full CI and owner-live review
+
 **Status:** CURRENT · COMPLETE CONCISE PLAN
 **Updated:** 2026-10-09
 
