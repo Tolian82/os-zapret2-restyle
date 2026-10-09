@@ -50,6 +50,29 @@ final class VoiceApplyCandidate
             ];
         }
         $next = VoiceSettingsPayload::overlay($previous, $submitted);
+        // The production dvtws2 instance and divert socket are shared.
+        // Until per-profile incoming-WAN isolation is proven, the kernel
+        // capture interface must be identical for Strategies and Voice.
+        // This matches the authoritative Python compiler preflight.
+        $strategyWan = (string)($previous['general']['waninterface'] ?? '');
+        $selectedWan = (string)($next['voice']['waninterface'] ?? '');
+        if ($strategyWan === '') {
+            return [
+                'result' => 'failed',
+                'validations' => [
+                    'zapret.voice.waninterface' => 'Strategies WAN must be configured before Voice',
+                ],
+            ];
+        }
+        if ($selectedWan !== '' && $selectedWan !== $strategyWan) {
+            return [
+                'result' => 'failed',
+                'validations' => [
+                    'zapret.voice.waninterface' =>
+                        'Independent Voice WAN cannot be isolated by the shared engine yet; select the Strategies WAN',
+                ],
+            ];
+        }
         $enabled = [];
         $targetCounts = [];
         foreach (self::SERVICES as $service) {
