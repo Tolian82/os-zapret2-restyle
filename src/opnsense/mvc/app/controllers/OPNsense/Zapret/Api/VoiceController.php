@@ -8,11 +8,38 @@ namespace OPNsense\Zapret\Api;
 
 use OPNsense\Base\ApiControllerBase;
 use OPNsense\Core\Backend;
+use OPNsense\Core\Config;
 
 require_once __DIR__ . '/VoiceCandidateValidator.php';
+require_once __DIR__ . '/VoiceSettingsSnapshot.php';
+require_once __DIR__ . '/VoiceSettingsPayload.php';
 
 class VoiceController extends ApiControllerBase
 {
+    /**
+     * One native model response contains both the visible form and its exact
+     * optimistic concurrency baseline. A second request for the token would
+     * introduce a race with updates from Strategies or another Voice tab.
+     */
+    public function loadAction(): array
+    {
+        if (!$this->request->isGet()) {
+            return ['result' => 'failed'];
+        }
+        $config = Config::getInstance();
+        $config->lock();
+        try {
+            $model = new \OPNsense\Zapret\Zapret();
+            $nodes = $model->getNodes();
+            return [
+                'zapret' => $nodes,
+                'snapshot' => VoiceSettingsSnapshot::digest($nodes),
+            ];
+        } finally {
+            $config->unlock();
+        }
+    }
+
     public function validateAction(): array
     {
         if (!$this->request->isPost()) {
@@ -26,17 +53,38 @@ class VoiceController extends ApiControllerBase
                 'zapret.voice.waninterface' => 'Missing Voice form'
             ]];
         }
+        $config = Config::getInstance();
+        $config->lock();
         try {
+            $model = new \OPNsense\Zapret\Zapret();
+            $current = $model->getNodes();
+            $sync = $fields['sync'] ?? null;
+            if (!is_array($sync) || array_keys($sync) !== ['snapshot']) {
+                throw new \InvalidArgumentException('Voice configuration baseline is missing. Reload the Voice page.');
+            }
+            VoiceSettingsSnapshot::requireFresh($current, $sync['snapshot']);
+            unset($fields['sync']);
+            // Strict form ownership applies to validation as well as future
+            // Apply; no unrelated model fields can be submitted.
+            VoiceSettingsPayload::overlay($current, $fields);
             $errors = VoiceCandidateValidator::check($fields);
             if ($errors) {
                 return ['result' => 'failed', 'validations' => $errors];
             }
+            // This is an observation, not a promise that a future Apply will
+            // succeed. The authoritative candidate and runtime are untouched.
             return ['result' => 'validated', 'scope' => 'syntax-only'];
+        } catch (\InvalidArgumentException $error) {
+            return ['result' => 'failed', 'validations' => [
+                'zapret.voice.waninterface' => $error->getMessage()
+            ]];
         } catch (\Throwable $error) {
             // Never reveal PHP stack, unrelated configuration or raw input.
             return ['result' => 'failed', 'validations' => [
                 'zapret.voice.waninterface' => 'Voice validation failed'
             ]];
+        } finally {
+            $config->unlock();
         }
     }
 
