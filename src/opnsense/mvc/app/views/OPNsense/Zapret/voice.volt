@@ -7,6 +7,8 @@ $(document).ready(function () {
     var text = ru ? {
         navStrategy: 'Стратегии', navVoice: 'Передача голоса', navLab: 'Лаборатория',
         general: 'Основные настройки', wan: 'Интерфейс WAN для голоса',
+        infoTitle: 'Как работают голосовые профили',
+        infoText: 'Страница настраивает перехват исходящего UDP/STUN в общем движке Zapret2. Каждый включённый профиль требует IPSET и нативные аргументы dvtws2. Non-STUN остаётся в «Стратегиях». Включённый профиль не означает успешный голосовой звонок.',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
         service: 'Служба Zapret2', apply: 'Применить', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
         notice: 'Форма v0.5.1_1 находится в разработке. Применение заблокировано до завершения валидации, единого движка, IPFW и восстановления после загрузки. Текущая служба не изменяется.',
@@ -19,6 +21,8 @@ $(document).ready(function () {
     } : {
         navStrategy: 'Strategies', navVoice: 'Voice Transmission', navLab: 'Laboratory',
         general: 'General Settings', wan: 'Voice WAN Interface',
+        infoTitle: 'About Voice Profiles',
+        infoText: 'This page configures outgoing UDP/STUN interception in the shared Zapret2 engine. Each enabled profile requires an IPSET and native dvtws2 arguments. Non-STUN remains in Strategies. An enabled profile does not prove a working voice call.',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
         service: 'Zapret2 Service', apply: 'Apply', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
         notice: 'The v0.5.1_1 form is under development. Apply is locked until validation, single-engine/IPFW handling and boot recovery are complete. Current runtime is not modified.',
@@ -32,42 +36,44 @@ $(document).ready(function () {
     var names = {telegram:'Telegram', discord:'Discord', x:'X (Twitter)', sip:'SIP (VoIP)', custom:'Custom'};
     function localizeForm() {
         var form = $('#frm_VoiceSettings');
-        form.find('tr').each(function () {
-            var row = $(this);
-            var cell = row.children('th,td').first();
-            var visible = $.trim(cell.text());
-            var mapping = {
-                'General Settings': text.general,
-                'Voice WAN Interface': text.wan,
-                'Voice Transmission Parameters': text.parameters,
-                'Destination IP Addresses': text.destinations
-            };
-            if (Object.prototype.hasOwnProperty.call(mapping, visible)) {
-                // Preserve the native header/help chrome where possible.
-                cell.find('label').first().text(mapping[visible]);
-                if (!cell.find('label').length) {
-                    cell.contents().filter(function () { return this.nodeType === 3; }).each(function () {
-                        this.textContent = this.textContent.replace(visible, mapping[visible]);
-                    });
-                }
+        var titles = {
+            'General Settings': text.general,
+            'Voice WAN Interface': text.wan,
+            'Voice Transmission Parameters': text.parameters,
+            'About Voice Profiles': text.infoTitle,
+            'Destination IP Addresses': text.destinations
+        };
+        // Use exact original text rather than translating arbitrarily sized
+        // containers: preserve form labels, help icons and native OPNsense chrome.
+        form.find('label,th,h3,b,legend').each(function () {
+            var element = $(this);
+            var original = $.trim(element.text());
+            if (Object.prototype.hasOwnProperty.call(titles, original)) {
+                element.contents().filter(function () { return this.nodeType === 3; })
+                    .each(function () { this.textContent = this.textContent.replace(original, titles[original]); });
             }
         });
         Object.keys(names).forEach(function (key) {
-            var field = $('#zapret\\.voice\\.' + key + '\\.args');
-            field.closest('tr').find('td').first().find('label').first().text(names[key] + (ru ? ' — параметры' : ' Parameters'));
+            var id = 'zapret.voice.' + key + '.args';
+            var input = document.getElementById(id) || document.getElementById(id.replace(/\\./g, '_'));
+            if (!input) return;
+            var label = $(input).closest('tr').find('label').first();
+            if (label.length) label.text(names[key] + (ru ? ' — параметры' : ' Parameters'));
         });
-        // Form-rendered help text is controlled here so it follows OPNsense,
-        // not browser/OS locale. Native tokens remain unchanged.
         form.find('tr').each(function () {
             var row = $(this);
+            if (row.text().indexOf('This page configures outgoing STUN') !== -1) {
+                var info = row.find('td').last();
+                if (info.length) info.text(text.infoText);
+            }
             var field = row.find('input,textarea,select').first();
             var id = (field.attr('id') || '').replace(/_/g, '.');
             var help = row.find('.help-block').first();
             if (!help.length) return;
             if (id === 'zapret.voice.waninterface') help.text(text.wanHelp);
-            else if (/^zapret\.voice\.[^.]+\.enabled$/.test(id)) help.text(text.enableHelp);
-            else if (/^zapret\.voice\.[^.]+\.args$/.test(id)) help.text(text.argsHelp);
-            else if (/^zapret\.hostlist\.(telegram|discord|x|sip|custom)ips$/.test(id)) help.text(text.ipHelp);
+            else if (/^zapret\\.voice\\.[^.]+\\.enabled$/.test(id)) help.text(text.enableHelp);
+            else if (/^zapret\\.voice\\.[^.]+\\.args$/.test(id)) help.text(text.argsHelp);
+            else if (/^zapret\\.hostlist\\.(telegram|discord|x|sip|custom)ips$/.test(id)) help.text(text.ipHelp);
         });
     }
     $('a[href="/ui/zapret"]').text(text.navStrategy);
@@ -150,6 +156,10 @@ $(document).ready(function () {
         setServiceControlsBusy(true);
         $.ajax({type:'POST',url:'/api/zapret/service/install',data:{version:version},dataType:'json',timeout:30000})
             .always(function () { refreshReleases(); refreshRuntime(); updateServiceControlUI('zapret'); });
+    });
+    $('#voiceServiceHeader').on('click', function () {
+        $('#voiceServiceBody').toggle();
+        $('#voiceServiceCollapseIcon').toggleClass('fa-angle-down fa-angle-right');
     });
     $('#voiceRepositoryReleasesLabel').text(text.repositoryReleases);
     $('#voiceReleaseApply').text(text.apply);
