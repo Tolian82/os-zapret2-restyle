@@ -129,7 +129,7 @@ class VoiceLedgerTests(unittest.TestCase):
             with self.assertRaisesRegex(ledger.LedgerError,"untrusted"):
                 store.begin(other,want)
             store.begin(old,want)
-            with self.assertRaisesRegex(ledger.LedgerError,"not prepared"):
+            with self.assertRaisesRegex(ledger.LedgerError,"cannot commit"):
                 store.commit(want)
             store.mark_mutating()
             with self.assertRaisesRegex(ledger.LedgerError,"cannot commit"):
