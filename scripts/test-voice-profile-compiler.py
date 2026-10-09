@@ -153,7 +153,8 @@ class VoiceCandidateTests(unittest.TestCase):
         ]
         for suffix, expected in cases:
             with self.subTest(suffix=suffix):
-                args = BASE_ARGS+suffix
+                args = (BASE_ARGS.replace(":repeats=2", "") if
+                        suffix.startswith(":repeats=") else BASE_ARGS) + suffix
                 with self.assertRaisesRegex(voice.VoiceConfigurationError, expected):
                     self.compile(enable(payload(), args=args))
         for rng in ["s1-s10", "n1-x", "n1;id", "n1-n9999999", "-d10", "n1<<d5"]:
