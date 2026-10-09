@@ -408,6 +408,10 @@ strategy_lab_internal_dispatch()
         return 77
     }
 
+    # Strategy Lab already owns inherited lockf fd 9 and calls these
+    # privileged internal actions directly. Do not let its stop/start
+    # bypass the pending whole-runtime/IPFW journal guard simply because
+    # no new service_with_lifecycle_lock invocation occurs.
     case "${1:-}" in
         strategy-lab-status)
             service_dispatch status
@@ -416,9 +420,11 @@ strategy_lab_internal_dispatch()
             strategy_lab_semantic_evidence
             ;;
         strategy-lab-stop)
+            preflight_voice_cutover_journals || return 69
             stop_service
             ;;
         strategy-lab-start)
+            preflight_voice_cutover_journals || return 69
             start_service
             ;;
         *)
