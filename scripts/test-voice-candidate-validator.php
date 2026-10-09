@@ -56,6 +56,8 @@ check(VoiceCandidateValidator::check($two) === [], 'Two disjoint services');
 
 $conflict = active($telegram,'discord',"91.108.13.10");
 invalid($conflict,'zapret.voice.discord.enabled','IPSET+UDP overlap must be refused');
+$conflict['voice']['telegram']['args'] =
+    "--filter-udp=596-599\n--filter-l7=stun\n--payload=stun";
 $conflict['voice']['discord']['args'] =
     "--filter-udp=40000\n--filter-l7=stun\n--payload=stun";
 check(VoiceCandidateValidator::check($conflict) === [], 'Disjoint UDP ports allow overlapping IPs');
