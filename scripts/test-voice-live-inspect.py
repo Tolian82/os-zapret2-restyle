@@ -60,7 +60,7 @@ class InspectionTests(unittest.TestCase):
     def test_unsorted_native_address_table_does_not_trigger_false_collision(self):
         with tempfile.TemporaryDirectory() as d:
             store, old, new = self.states(d)
-            two = fixtures(("telegram", "91.108.0.0/16\\n91.108.13.10"))
+            two = fixtures(("telegram", "91.108.0.0/16\n91.108.13.10"))
             store.seed(two)
             kernel = FakeAdapter(two)
             kernel.tables["zapret2_voice_telegram"].reverse()
