@@ -108,11 +108,11 @@ verify($allOff['result'] === 'prepared' &&
        $allOff['candidate']['hostlist']['telegramips'] === '',
        'OFF should preserve even an incomplete draft and blank IPSET');
 
-try {
-    VoiceApplyCandidate::prepare($before, $form + ['general'=>['enabled'=>'0']], $token);
-    verify(false, 'foreign model group unexpectedly accepted');
-} catch (\InvalidArgumentException $ex) {
-    verify(str_contains($ex->getMessage(), 'Unexpected'), 'foreign field error missing');
-}
+$foreign = VoiceApplyCandidate::prepare(
+    $before, $form + ['general'=>['enabled'=>'0']], $token
+);
+verify($foreign['result'] === 'failed' &&
+       isset($foreign['validations']['zapret.voice.waninterface']),
+       'foreign model group unexpectedly accepted');
 
 echo "PASS: pure Voice Apply candidate normalization, preservation, conflict and stale token\n";
