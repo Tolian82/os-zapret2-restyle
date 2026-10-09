@@ -97,6 +97,29 @@ class InspectionTests(unittest.TestCase):
                                  "whole-journal pending must block before IPFW read")
                 self.assertEqual(phase,cutover.read()["phase"])
 
+    def test_schema_two_whole_journal_blocks_even_healthy_owned_ipfw(self):
+        previous = {name: str(i)*64 for i,name in enumerate(
+            ("config","runtime","engine","firewall","supervisor")
+        )}
+        proof = {"saved_xml_sha256":"a"*64, "merged_sha256":"b"*64,
+                 "native_argv_sha256":"c"*64}
+        with tempfile.TemporaryDirectory() as d:
+            store,old,new=self.states(d)
+            store.seed(old)
+            folder=Path(d)/"cutover"
+            folder.mkdir(mode=0o700)
+            whole=VoiceCutoverJournal(folder)
+            whole.begin_bound(previous, proof, new)
+            whole.mark_mutating()
+            whole.commit()
+            kernel=FakeAdapter(old)
+            result=examine(store,kernel,whole)
+            self.assertEqual("interrupted",result["state"])
+            self.assertEqual("committed-needs-cleanup-review",result["condition"])
+            self.assertFalse(result["can_activate"])
+            self.assertEqual([],kernel.operations,
+                             "pending v2 whole journal must preempt any kernel access")
+
     def test_whole_system_cutover_journal_absent_falls_back_to_owned_ipfw(self):
         with tempfile.TemporaryDirectory() as d:
             store,old,new=self.states(d)
