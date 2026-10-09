@@ -165,5 +165,62 @@ class VoiceFirewallTransactionTests(unittest.TestCase):
         with self.assertRaisesRegex(transaction.VoiceFirewallError,"neither TCP nor UDP"):
             transaction.prepare_desired({**profile,"voice":[],"ordinary_rule_base":19000},"","")
 
+    def test_postcommit_cleanup_enables_repeat_reconfigure_and_disable(self):
+        initial = fixture()
+        first = fixture(("telegram", "91.108.0.0/16"))
+        second = fixture(("telegram", "91.108.4.0/22"),
+                         ("discord", "203.0.113.0/24"))
+        adapter = FakeIPFW(initial["rules"], initial["tables"])
+        transaction.apply_transaction(adapter, initial, first)
+        self.assertIsNotNone(adapter.get_table("zapret2_voice_telegram_stage"))
+        transaction.cleanup_committed(adapter, initial, first)
+        self.assertIsNone(adapter.get_table("zapret2_voice_telegram_stage"))
+        transaction.apply_transaction(adapter, first, second)
+        transaction.cleanup_committed(adapter, first, second)
+        self.assertEqual(second["rules"], adapter.list_rules(19000, 19010))
+        self.assertEqual(second["tables"], {
+            n: adapter.get_table(n) for n in second["tables"]
+        })
+        self.assertFalse(any(name.endswith("_stage") for name in adapter.tables))
+        transaction.apply_transaction(adapter, second, initial)
+        transaction.cleanup_committed(adapter, second, initial)
+        self.assertEqual(initial["rules"], adapter.list_rules(19000, 19010))
+        self.assertEqual(initial["tables"], adapter.tables)
+
+    def test_postcommit_cleanup_rejects_foreign_and_is_retryable(self):
+        initial = fixture()
+        first = fixture(("telegram", "91.108.0.0/16"))
+        adapter = FakeIPFW(initial["rules"], initial["tables"])
+        transaction.apply_transaction(adapter, initial, first)
+        adapter.tables["zapret2_voice_telegram_stage"] = ["8.8.8.8"]
+        before = deepcopy(adapter.tables)
+        with self.assertRaisesRegex(transaction.VoiceFirewallError, "staging table changed"):
+            transaction.cleanup_committed(adapter, initial, first)
+        self.assertEqual(before, adapter.tables)
+        adapter.tables["zapret2_voice_telegram_stage"] = []
+        adapter.failure = "destroy_table"
+        with self.assertRaises(OSError):
+            transaction.cleanup_committed(adapter, initial, first)
+        self.assertIsNotNone(adapter.get_table("zapret2_voice_telegram_stage"))
+        adapter.failure = None
+        transaction.cleanup_committed(adapter, initial, first)
+        transaction.cleanup_committed(adapter, initial, first)
+        self.assertIsNone(adapter.get_table("zapret2_voice_telegram_stage"))
+
+    def test_failed_add_collision_does_not_delete_racing_foreign_rule(self):
+        class InjectForeignDuringAdd(FakeIPFW):
+            def add_rule(self, number, argv):
+                if number == 19000 and not self.failed:
+                    self.failed = True
+                    self.rules[number] = ["allow","ip","from","any","to","any"]
+                    raise OSError("foreign concurrently inserted")
+                return super().add_rule(number, argv)
+        initial = fixture()
+        desired = fixture(("telegram", "91.108.0.0/16"))
+        adapter = InjectForeignDuringAdd(initial["rules"], initial["tables"])
+        with self.assertRaisesRegex(transaction.VoiceFirewallError, "rollback incomplete"):
+            transaction.apply_transaction(adapter, initial, desired)
+        self.assertEqual(["allow","ip","from","any","to","any"], adapter.rules[19000])
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
