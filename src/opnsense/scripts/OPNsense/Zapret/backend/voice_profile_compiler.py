@@ -22,10 +22,71 @@ MAX_INPUT_BYTES = 1024 * 1024
 MAX_ARGS_BYTES = 16384
 MAX_TARGETS = 4096
 MAX_PROFILES = len(SERVICES)
-# Only syntax already present in the installed PoC is accepted until native
-# FreeBSD dvtws2 + Lua capability probing is attached to transactional Apply.
-FAKE = re.compile(r"^--lua-desync=fake:blob=0x([0-9A-Fa-f]{2,8192}):repeats=([0-9]{1,2})$")
+# Bounded documented native parameters. This compiles candidates only:
+# installed dvtws2/Lua dry-run and FreeBSD wire qualification are required
+# before Apply can rely on any advanced fake TTL/checksum/IPfrag action.
+HEX_BLOB = re.compile(r"^blob=0x([0-9A-Fa-f]{2,8192})$")
+RANGE = re.compile(r"^(?:[ndb][0-9]{1,6}(?:[-<][ndb][0-9]{1,6})?|a|x)$")
 PORT = re.compile(r"^[0-9]{1,5}(?:-[0-9]{1,5})?$")
+
+
+def validate_fake(item: str, field: str) -> None:
+    parts = item.split(":")
+    if len(parts) < 2 or parts[0] != "--lua-desync=fake":
+        fail(field, "only native fake:blob=0xHEX Lua action is allowed")
+    blob = None
+    features: set[str] = set()
+    repeat_count = 1
+    pos = None
+    for token in parts[1:]:
+        key = token.split("=", 1)[0]
+        if key in features:
+            fail(field, f"duplicate fake option {key}")
+        features.add(key)
+        if key == "blob":
+            match = HEX_BLOB.fullmatch(token)
+            if not match:
+                fail(field, "fake blob requires native 0xHEX syntax")
+            blob = match.group(1)
+            if len(blob) % 2:
+                fail(field, "fake blob must contain whole bytes")
+        elif key == "repeats":
+            value = token.partition("=")[2]
+            if not re.fullmatch(r"[0-9]{1,2}", value) or not 1 <= int(value) <= 10:
+                fail(field, "fake repeats must be between 1 and 10")
+            repeat_count = int(value)
+        elif key == "ip_ttl":
+            value = token.partition("=")[2]
+            if not re.fullmatch(r"[0-9]{1,3}", value) or not 1 <= int(value) <= 255:
+                fail(field, "fake TTL must be between 1 and 255")
+        elif key == "badsum":
+            if token != "badsum":
+                fail(field, "badsum is a flag, not a value")
+        elif key == "ipfrag":
+            if token != "ipfrag":
+                fail(field, "only the installed default native ipfrag function is permitted")
+        elif key == "ipfrag_pos_udp":
+            value = token.partition("=")[2]
+            if not re.fullmatch(r"[0-9]{1,4}", value):
+                fail(field, "fake UDP fragment position must be a number")
+            pos = int(value)
+            if not 8 <= pos <= 4096 or pos % 8:
+                fail(field, "fake UDP fragment position must be a multiple of 8")
+        elif key == "ipfrag_disorder":
+            if token != "ipfrag_disorder":
+                fail(field, "ipfrag_disorder is a flag")
+        else:
+            fail(field, f"unverified fake option '{key}'")
+    if blob is None:
+        fail(field, "native fake requires blob=0xHEX")
+    if any(key in features for key in ("ipfrag_pos_udp", "ipfrag_disorder")) and "ipfrag" not in features:
+        fail(field, "fragment parameters require ipfrag")
+    if "ipfrag" in features:
+        if "badsum" in features:
+            fail(field, "badsum+ipfrag combination is not yet qualified")
+        if pos is not None and pos >= 8 + len(blob) // 2:
+            fail(field, "fragment offset must split the actual UDP fake datagram")
+
 
 
 class VoiceConfigurationError(ValueError):
@@ -107,15 +168,11 @@ def validate_arguments(source: str, service: str) -> tuple[list[str], list[tuple
             expected = "stun"
             if item != f"{option}={expected}":
                 fail(field, f"only {option}=stun is supported in Voice")
+        elif option == "--out-range":
+            if "=" not in item or not RANGE.fullmatch(item.partition("=")[2]):
+                fail(field, "unsupported native UDP out-range expression")
         elif option == "--lua-desync":
-            match = FAKE.fullmatch(item)
-            if not match:
-                fail(field, "unsupported native Lua action; only fake:blob=0xHEX:repeats=N is currently qualified")
-            blob, repeats = match.groups()
-            if len(blob) % 2:
-                fail(field, "fake blob must contain whole bytes")
-            if not (1 <= int(repeats) <= 10):
-                fail(field, "fake repeats must be between 1 and 10")
+            validate_fake(item, field)
         else:
             fail(field, f"forbidden or unverified option '{option}'")
         seen.add(option)
