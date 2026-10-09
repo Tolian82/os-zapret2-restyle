@@ -72,4 +72,31 @@ reject($current, ['general' => ['enabled' => ['1']]], 'non-scalar enabled');
 reject($current, ['general' => null], 'non-map group');
 reject($current, ['other' => []], 'unrecognized section');
 
-echo "PASS: Strategies Apply is scoped; Voice, other IPSETs and Strategy Lab remain unchanged\n";
+
+// A second GUI tab may change the shared Telegram IPSET while Strategies is
+// still open; the original Strategies data must no longer overwrite it.
+StrategySettingsPayload::requireFreshTelegram($current, "91.108.0.0/16");
+StrategySettingsPayload::requireFreshTelegram($current, "91.108.0.0/16\r\n");
+foreach (["203.0.113.0/24", null, "", 12] as $stale) {
+    try {
+        StrategySettingsPayload::requireFreshTelegram($current, $stale);
+        fwrite(STDERR, "FAIL: stale/missing Telegram baseline accepted\n");
+        exit(1);
+    } catch (\InvalidArgumentException $exception) {
+        // Correct: fail before model setNodes() and save().
+    }
+}
+$controller = file_get_contents(__DIR__ .
+    '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php');
+$view = file_get_contents(__DIR__ .
+    '/../src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt');
+if (strpos($controller, "requireFreshTelegram(\$oldNodes, \$baseline)") === false ||
+    strpos($controller, "unset(\$post['sync'])") === false ||
+    strpos($view, 'zapret.sync.telegramips_baseline') === false ||
+    strpos($view, 'telegramBaseline.val(currentField ? currentField.value') === false
+) {
+    fwrite(STDERR, "FAIL: Strategies Apply optimistic lock not wired through GUI+API\n");
+    exit(1);
+}
+
+echo "PASS: Strategies Apply is scoped; Voice/other IPSETs remain unchanged and shared Telegram updates require a fresh baseline\n";
