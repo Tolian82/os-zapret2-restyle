@@ -8,7 +8,7 @@ $(document).ready(function () {
         navStrategy: 'Стратегии', navVoice: 'Передача голоса', navLab: 'Лаборатория',
         general: 'Основные настройки', wan: 'Интерфейс WAN для голоса',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
-        service: 'Служба Zapret2', apply: 'Применить',
+        service: 'Служба Zapret2', apply: 'Применить', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
         notice: 'Форма v0.5.1_1 находится в разработке. Применение заблокировано до завершения валидации, единого движка, IPFW и восстановления после загрузки. Текущая служба не изменяется.',
         status: 'Статус', running: 'Запущена', stopped: 'Остановлена', error: 'Ошибка',
         loading: 'Загрузка…', incomplete: 'Неизвестно',
@@ -20,7 +20,7 @@ $(document).ready(function () {
         navStrategy: 'Strategies', navVoice: 'Voice Transmission', navLab: 'Laboratory',
         general: 'General Settings', wan: 'Voice WAN Interface',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
-        service: 'Zapret2 Service', apply: 'Apply',
+        service: 'Zapret2 Service', apply: 'Apply', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
         notice: 'The v0.5.1_1 form is under development. Apply is locked until validation, single-engine/IPFW handling and boot recovery are complete. Current runtime is not modified.',
         status: 'Status', running: 'Started', stopped: 'Stopped', error: 'Error',
         loading: 'Loading…', incomplete: 'Unknown',
@@ -83,39 +83,126 @@ $(document).ready(function () {
         $('.selectpicker').selectpicker('refresh');
         localizeForm();
     });
-    function refreshRuntime() {
-        $.ajax({type:'POST',url:'/api/zapret/service/runtime',dataType:'json',timeout:30000})
-            .done(function (reply) {
-                var status = reply && reply.installed ? reply.service : 'error';
-                var label = status === 'started' ? text.running : status === 'stopped' ? text.stopped : text.error;
-                $('#voiceServiceState').removeClass('label-success label-default label-danger')
-                    .addClass(status === 'started' ? 'label-success' : status === 'stopped' ? 'label-default' : 'label-danger')
-                    .text(label);
-                $('#voiceRuntimeVersion').text(reply && reply.version || '—');
-            }).fail(function () { $('#voiceServiceState').text(text.incomplete); });
+    var runtimeState = 'error', runtimeInstalled = false, runtimeBusy = false;
+    function setServiceControlsBusy(busy) {
+        runtimeBusy = busy;
+        var controllable = runtimeInstalled && (runtimeState === 'started' || runtimeState === 'stopped');
+        $('#voiceServiceControl').prop('disabled', busy || !controllable);
+        var releasesAvailable = $('#voiceReleaseSelect option').filter(function () {
+            return /^v[0-9]+(?:\\.[0-9]+)+$/.test(this.value);
+        }).length > 0;
+        $('#voiceReleaseSelect,#voiceReleaseApply').prop('disabled', busy || !releasesAvailable);
     }
+    function refreshRuntime() {
+        return $.ajax({type:'POST', url:'/api/zapret/service/runtime', dataType:'json', timeout:30000})
+            .done(function (reply) {
+                runtimeInstalled = !!(reply && reply.installed);
+                runtimeState = runtimeInstalled ? reply.service : 'error';
+                var started = runtimeState === 'started', stopped = runtimeState === 'stopped';
+                $('#voiceServiceState')
+                    .removeClass('label-success label-default label-danger')
+                    .addClass(started ? 'label-success' : stopped ? 'label-default' : 'label-danger')
+                    .text(started ? text.running : stopped ? text.stopped : text.error);
+                $('#voiceRuntimeVersion').text((reply && reply.version) || '—');
+                $('#voiceServiceControl')
+                    .toggle(started || stopped)
+                    .text(started ? text.stop : text.start);
+                setServiceControlsBusy(!!(reply && reply.busy));
+            }).fail(function () {
+                runtimeInstalled = false;
+                runtimeState = 'error';
+                $('#voiceServiceState').removeClass('label-success label-default').addClass('label-danger').text(text.incomplete);
+                $('#voiceRuntimeVersion').text('—');
+                $('#voiceServiceControl').hide();
+                setServiceControlsBusy(true);
+            });
+    }
+    function refreshReleases() {
+        var select = $('#voiceReleaseSelect');
+        select.prop('disabled',true).empty().append($('<option/>').val('').text(text.loading));
+        return $.ajax({type:'POST',url:'/api/zapret/service/releases',dataType:'json',timeout:60000})
+            .done(function (reply) {
+                select.empty();
+                if (reply && reply.status === 'ok' && Array.isArray(reply.releases)) {
+                    reply.releases.forEach(function (release) {
+                        select.append($('<option/>').val(release).text(release));
+                    });
+                }
+                if (!select.children().length) {
+                    select.append($('<option/>').val('').text(text.incomplete));
+                }
+                setServiceControlsBusy(runtimeBusy);
+            }).fail(function () {
+                select.empty().append($('<option/>').val('').text(text.incomplete));
+                setServiceControlsBusy(true);
+            });
+    }
+    $('#voiceServiceControl').on('click', function () {
+        if (runtimeBusy || !runtimeInstalled || !['started','stopped'].includes(runtimeState)) return;
+        var action = runtimeState === 'started' ? 'stop' : 'start';
+        setServiceControlsBusy(true);
+        $.ajax({type:'POST',url:'/api/zapret/service/' + action,dataType:'json',timeout:600000})
+            .always(function () { refreshRuntime(); updateServiceControlUI('zapret'); });
+    });
+    $('#voiceReleaseApply').on('click', function () {
+        var version = $('#voiceReleaseSelect').val();
+        if (runtimeBusy || !/^v[0-9]+(?:\\.[0-9]+)+$/.test(version || '')) return;
+        setServiceControlsBusy(true);
+        $.ajax({type:'POST',url:'/api/zapret/service/install',data:{version:version},dataType:'json',timeout:30000})
+            .always(function () { refreshReleases(); refreshRuntime(); updateServiceControlUI('zapret'); });
+    });
+    $('#voiceRepositoryReleasesLabel').text(text.repositoryReleases);
+    $('#voiceReleaseApply').text(text.apply);
     refreshRuntime();
+    refreshReleases();
     updateServiceControlUI('zapret');
 });
 </script>
+
+<style>
+    #voiceServiceLine {
+        display: grid;
+        grid-template-columns: max-content max-content 14ch 12ch 4ch max-content minmax(130px,150px) max-content;
+        column-gap: 8px;
+        align-items: center;
+        min-width: max-content;
+        min-height: 34px;
+        white-space: nowrap;
+    }
+    #voiceRuntimeVersion { display: inline-block; width: 14ch; }
+    #voiceServiceControlSlot, #voiceServiceControl { min-width: 12ch; }
+    .voice-service-spacer { display: inline-block; width: 4ch; }
+    #voiceReleaseSelect { width:150px; min-width:130px; }
+    #frm_VoiceSettings textarea {max-width:100%; box-sizing:border-box;}
+    @media (max-width: 767px) {
+        #frm_VoiceSettings input, #frm_VoiceSettings select {max-width:100%;}
+    }
+</style>
 <div class="content-box __mb">
     {{ partial("layout_partials/base_form",['fields':voiceForm,'id':'frm_VoiceSettings']) }}
     <div class="table-responsive">
         <table class="table table-striped table-condensed" style="table-layout: fixed; width: 100%; margin-bottom: 0;">
-            <thead><tr><th>
-                <div style="padding: 5px 0; font-size: 16px;">
-                    <i class="fa fa-angle-down" aria-hidden="true"></i>
+            <colgroup><col style="width:25%;"><col style="width:40%;"><col style="width:35%;"></colgroup>
+            <thead id="voiceServiceHeader" style="cursor:pointer;"><tr><th colspan="3">
+                <div style="padding: 5px 0; font-size:16px;">
+                    <i id="voiceServiceCollapseIcon" class="fa fa-angle-down" aria-hidden="true"></i>
                     &nbsp;<b id="voiceServiceTitle">Zapret2 Service</b>
                 </div>
             </th></tr></thead>
-            <tbody><tr><td>
-                <span id="voiceStatusLabel">Status:</span>
-                <span id="voiceServiceState" class="label label-danger">—</span>
-                <strong id="voiceRuntimeVersion">—</strong>
+            <tbody id="voiceServiceBody" class="collapsible"><tr><td colspan="3">
+                <div id="voiceServiceLine">
+                    <b id="voiceStatusLabel">Status:</b>
+                    <span id="voiceServiceState" class="label label-danger">—</span>
+                    <strong id="voiceRuntimeVersion">—</strong>
+                    <span id="voiceServiceControlSlot"><button type="button" class="btn btn-default" id="voiceServiceControl" disabled style="display:none">Start</button></span>
+                    <span class="voice-service-spacer" aria-hidden="true"></span>
+                    <label for="voiceReleaseSelect" id="voiceRepositoryReleasesLabel" style="margin-bottom:0;">Repository Releases</label>
+                    <select class="form-control" id="voiceReleaseSelect" disabled><option value="">Loading…</option></select>
+                    <button type="button" class="btn btn-primary" id="voiceReleaseApply" disabled>Apply</button>
+                </div>
             </td></tr></tbody>
         </table>
-    </div>
-</div>
+    </div></div>
 <section class="grid-bottom-reserve __mt">
     <div class="alert content-box" style="margin-bottom: 0;">
         <button class="btn btn-primary __mr" id="voiceApply" type="button" disabled>Apply</button>
