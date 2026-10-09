@@ -14,6 +14,9 @@ $(document).ready(function () {
         notice: 'Форма v0.5.1_1 находится в разработке. Применение заблокировано до завершения валидации, единого движка, IPFW и восстановления после загрузки. Текущая служба не изменяется.',
         status: 'Статус', running: 'Запущена', stopped: 'Остановлена', error: 'Ошибка',
         loading: 'Загрузка…', incomplete: 'Неизвестно',
+        ipfwStatus: 'IPFW — передача голоса', ipfwReady: 'Правила подтверждены',
+        ipfwEmpty: 'Ещё не активировано', ipfwInterrupted: 'Незавершённое применение',
+        ipfwBlocked: 'Требуется проверка правил', ipfwUnknown: 'Статус недоступен',
         wanHelp: 'Исходящий WAN для перехвата голосового UDP. Пустое значение наследует WAN страницы «Стратегии». Выбор WAN не меняет маршруты.',
         enableHelp: 'Включает отдельный STUN-профиль и адресный перехват UDP. Если галочка снята, параметры и IP-адреса сохраняются.',
         argsHelp: 'Один нативный STUN-профиль dvtws2: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> и необязательные действия <code>--lua-desync</code>. Имя профиля и IPSET задаёт плагин. Не вводите <code>--new</code>, TCP или команды shell. Это не означает, что звонок заработает.',
@@ -28,6 +31,9 @@ $(document).ready(function () {
         notice: 'The v0.5.1_1 form is under development. Apply is locked until validation, single-engine/IPFW handling and boot recovery are complete. Current runtime is not modified.',
         status: 'Status', running: 'Started', stopped: 'Stopped', error: 'Error',
         loading: 'Loading…', incomplete: 'Unknown',
+        ipfwStatus: 'Voice IPFW', ipfwReady: 'Verified rules',
+        ipfwEmpty: 'Not activated yet', ipfwInterrupted: 'Interrupted apply',
+        ipfwBlocked: 'Firewall review required', ipfwUnknown: 'Status unavailable',
         wanHelp: 'Outgoing WAN used for voice UDP interception. Empty selection inherits Strategies WAN. WAN selection does not change routing.',
         enableHelp: 'Enables this STUN profile and destination-scoped UDP interception. Disabling keeps parameters and addresses.',
         argsHelp: 'One native dvtws2 STUN profile: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> and optional <code>--lua-desync</code> actions. The plugin supplies profile identity and IPSET. Do not enter <code>--new</code>, TCP options or shell commands. This is not proof of working calls.',
@@ -90,6 +96,7 @@ $(document).ready(function () {
     $('#voiceStatusLabel').text(text.status + ':');
     $('#voiceApply').text(text.apply).prop('disabled', true);
     $('#voiceImplementationNotice').text(text.notice);
+    $('#voiceIPFWLabel').text(text.ipfwStatus + ':');
     localizeForm();
     mapDataToFormUI({'frm_VoiceSettings':'/api/zapret/settings/get'}).done(function () {
         formatTokenizersUI();
@@ -128,6 +135,25 @@ $(document).ready(function () {
                 $('#voiceRuntimeVersion').text('—');
                 $('#voiceServiceControl').hide();
                 setServiceControlsBusy(true);
+            });
+    }
+    function refreshVoiceIPFW() {
+        return $.ajax({type:'POST',url:'/api/zapret/voice/inspect',dataType:'json',timeout:30000})
+            .done(function (reply) {
+                var state = reply && reply.state;
+                var label = state === 'ready' ? text.ipfwReady :
+                            state === 'uninitialized' ? text.ipfwEmpty :
+                            state === 'interrupted' ? text.ipfwInterrupted :
+                            state === 'inspection-error' ? text.ipfwUnknown :
+                            text.ipfwBlocked;
+                $('#voiceIPFWState')
+                    .removeClass('label-success label-default label-danger')
+                    .addClass(state === 'ready' ? 'label-success' :
+                              state === 'uninitialized' ? 'label-default' : 'label-danger')
+                    .text(label);
+            }).fail(function () {
+                $('#voiceIPFWState').removeClass('label-success label-default')
+                    .addClass('label-danger').text(text.ipfwUnknown);
             });
     }
     function refreshReleases() {
@@ -171,6 +197,7 @@ $(document).ready(function () {
     $('#voiceRepositoryReleasesLabel').text(text.repositoryReleases);
     $('#voiceReleaseApply').text(text.apply);
     refreshRuntime();
+    refreshVoiceIPFW();
     refreshReleases();
     updateServiceControlUI('zapret');
 });
@@ -217,6 +244,10 @@ $(document).ready(function () {
                     <select class="form-control" id="voiceReleaseSelect" disabled><option value="">Loading…</option></select>
                     <button type="button" class="btn btn-primary" id="voiceReleaseApply" disabled>Apply</button>
                 </div>
+            </td></tr>
+            <tr><td colspan="3">
+                <b id="voiceIPFWLabel">Voice IPFW:</b>
+                <span id="voiceIPFWState" class="label label-default">—</span>
             </td></tr></tbody>
         </table>
     </div></div>
