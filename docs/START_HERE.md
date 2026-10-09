@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Voice lifecycle safety correction (Draft PR #328):** исправлена Linux-CI регрессия от жёсткого FreeBSD python path: рабочая OPNsense использует только `/usr/local/bin/python3.13`, а non-installed test backend может найти версионированный Python в PATH и **всё равно исполняет тот же fail-closed guard**. Внутренние `strategy-lab-start/stop` с унаследованным lockf fd 9 тоже проверяют pending whole/IPFW journals, не обходя новый gate; `status/evidence` остаются read-only. Следить за последним exact-head CI; Voice Apply не подключён.
+
+
 **Previous-state binding:** `bound_resource_fingerprints` проверяет сохранённые байты и связывает два SHA (Config/runtime) с `VoiceCutoverJournal.previous`; отдельные engine/IPFW/supervisor записи пока не содержат восстановимых ресурсов. Тест целостности включён в Voice backup suite. Не объявлять переход атомарным до связи всех пяти источников.
 
 

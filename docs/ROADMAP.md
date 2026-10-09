@@ -1,5 +1,9 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Correct Linux Strategy Lab CI incompatibility from fixed FreeBSD guard Python without adding production bypass; test real function status propagation
+- [x] Close inherited-lock Strategy Lab internal start/stop route around pending Voice cutover journal inspection; preserve read-only status/evidence
+- [ ] Qualify exact-head full Strategy Lab + Voice + FreeBSD package CI and test real OPNsense boot/lifecycle after eventual native cutover
+
 - [x] Bind verifiable previous Config/runtime byte snapshots to two corresponding durable whole-cutover journal resource hashes, with tamper regression
 - [ ] Bind actual previous engine, supervisor and plugin-owned IPFW snapshots and implement full lock-held recovery before Apply
 

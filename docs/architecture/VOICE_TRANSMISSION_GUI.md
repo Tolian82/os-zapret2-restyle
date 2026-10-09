@@ -1,5 +1,13 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### Ревизия fail-closed gate и совместимость Strategy Lab (2026-10-09)
+
+- Переходный `voice_cutover_guard.py` уже защищает реальные start/stop/reconfigure, однако начальная реализация `zapret_service.sh` жёстко проверяла только `/usr/local/bin/python3.13`. Это корректно на **FreeBSD production**, но ломало интеграционный Strategy Lab на Linux runner до выполнения теста: `ERROR: native Voice journal inspection is unavailable` и код 69. Исправление сохраняет абсолютный production путь и жёсткий отказ, если guard недоступен. **Только** при выполнении исходников из неустановленного `BACKEND_DIR` (репозиторий/тестовый стенд), когда штатного FreeBSD-пути нет, допускается обнаружить доступный `python3.13` через PATH для выполнения того же guard. Никакого флага отключения проверки на рабочем OPNsense не добавлено.
+- Регрессионный `test-voice-cutover-boot-guard.py` теперь дополнительно действительно вызывает выделенную shell-функцию с тестовым backend и проверяет пропуск чистой проверки (0), передачу отказа (69), production-абсолютный путь и отсутствие обхода.
+- Выявлена дополнительная ветка: внутренний `strategy_lab_internal_dispatch` наследует проверенный lockf fd 9 и вызывает `start_service`/`stop_service` **без** `service_with_lifecycle_lock`. Поэтому в `strategy-lab-start` и `strategy-lab-stop` перед изменениями также встроен read-only `preflight_voice_cutover_journals`; read-only `strategy-lab-status` и `strategy-lab-evidence` доступны для диагностики. Регрессионный тест проверяет обе ветки и строгий порядок `guard → mutator`.
+- Это по-прежнему защита рабочего маршрутизатора от незавершённой будущей транзакции, а не включение native Voice Apply. При наличии damaged/pending journal эксплуатационное восстановление требует подтверждения владельца и полного состояния; нельзя чистить intent вручную наугад.
+
+
 - Дополнительно `voice_cutover_backup.bound_resource_fingerprints(snapshot, previous)` выполняет read-only проверку целого snapshot и вычисляет согласованные SHA256 прежнего `config.xml` (байты) и дерева runtime (канонический manifest с файлами, правами, размерами). Если в полном `VoiceCutoverJournal.previous` эти две записи отличаются от фактических копий, переход блокируется. Три остальные компонента журнала (`engine`, `firewall`, `supervisor`) пока должны проверяться отдельными production adapters. `test-voice-cutover-backup.py` связывает реальное файловое хранилище с `VoiceCutoverJournal.new_record` и проверяет отказ при подмене runtime.
 
 

@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Voice guard corrective checkpoint:** a Linux-only Strategy Lab corrective matrix failure was traced to the absolute FreeBSD Python interpreter used by the actual lifecycle guard (exit 69), not to Voice validation. The guard now resolves Python 3.13 from PATH only for non-installed source/test BACKEND_DIR when the fixed interpreter is missing; on installed FreeBSD it stays absolute and cannot be disabled. Internal Strategy Lab start/stop actions own inherited lockf and had bypassed the guard; both now call the same read-only fail-closed preflight before mutating. Exact-head complete CI including FreeBSD must be checked before qualification.
+
+
 **Snapshot-to-journal link:** read-only `bound_resource_fingerprints` now ties persisted previous Config and runtime bytes to the two corresponding whole-cutover journal fingerprints; regression checks the journal record and rejects mismatched/corrupted runtime content. Actual old engine/firewall/supervisor snapshot adapters are still absent.
 
 
