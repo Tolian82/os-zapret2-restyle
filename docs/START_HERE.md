@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**Voice staging safety:** в Draft PR #328 Voice ON теперь отклоняется до `firewall_prepare` в сервисном входе и до `orchestrator_cleanup_runtime` при старте. Глобальный OFF остаётся допустим. Реальный `generator.sh` протестирован вместе с offline Voice+Strategies+IPFW планом (без запуска службы); source XML/managed IPSET/ordinary traffic повторно сверяются по SHA256 до публикации кандидата и не могут быть symlink. Тесты `test-voice-staged-runtime-guard.sh`, `test-voice-generator-interop.py`, `test-voice-release-stage.py` включены в CI. Native Voice Apply всё ещё disabled; legacy PoC и live runtime не заменены.
+
+
 **Voice Apply preparation (Draft PR #328):** `Api/VoiceApplyCandidate.php` строит только нормализованный будущий Voice overlay, сохраняя OFF-черновики и все unrelated поля. Он используется уже в read-only Validate, но не пишет config.xml и не запускает runtime. До live cutover пять generated `VOICE_*_REQUESTED` проходят через `config_voice_staged_only_guard`: сохранённое ON или невалидное значение вызывает раннюю ошибку legacy build, а OFF оставляет обычные Strategies. При окончательном cutover временный guard заменить общей транзакцией, не выпускать его как готовую поддержку Voice.
 
 

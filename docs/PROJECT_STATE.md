@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**Voice PR #328 latest checkpoint:** native Voice persisted ON is rejected at the service entry *before firewall_prepare* and in orchestrator START *before cleanup or the complete-runtime shortcut*; global Zapret OFF can still stop the service. Offline candidate integration now exercises the actual production generator.sh and a consistent scoped IPFW plan. Staging snapshots source XML/managed targets/ordinary traffic twice, records hashes and refuses changes/symlinks. Tests cover torn-input races and fake cleanup; no live Voice Apply, single-engine cutover or automatic reboot recovery has been deployed. Last exact-head CI must be checked before merge.
+
+
 **Voice native Apply remains blocked:** a pure `VoiceApplyCandidate` now shares code between future commit preparation and current validate-only GUI, detects independent WAN, canonicalizes enabled IPSET and preserves disabled drafts and unrelated settings. Generated OPNsense template exposes all five native Voice enable flags, and legacy `orchestrator_build_release` explicitly refuses persisted ON rather than silently disregarding it. This is fail-closed staging, not activation/boot recovery. Target real one-engine cutover, legacy migration, restored runtime/ownership on failure and owner-live acceptance remain OPEN.
 
 

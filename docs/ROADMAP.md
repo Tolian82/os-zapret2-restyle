@@ -1,5 +1,11 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Gate native saved Voice ON before top-level firewall_prepare and before destructive orchestrator START cleanup; permit global Zapret OFF
+- [x] Mock regression for START preserving existing process/IPFW on rejected Voice ON, plus real service entrypoint preflight order
+- [x] Offline bridge of staged Voice + unchanged ordinary Profiles through production generator.sh and scoped IPFW plan in CI/FreeBSD
+- [x] Detect mid-stage source XML/managed IPSET/ordinary changes with checksums, reject symlink sources and fsync published staging directory
+- [ ] Wire installed-runtime capability preflight, atomic release/config/IPFW/dvtws2 cutover, durable crash recovery, native Voice Save/Apply and legacy PoC retirement
+
 - [x] Stage pure VoiceApplyCandidate plan: baseline+whitelist, enabled IPSET normalization and OFF draft preservation, field diffs, WAN-isolation gate; reuse in Validate
 - [x] Add native generated-config five-checkbox staged-only gate so future saved Voice ON cannot silently run through old Telegram PoC
 - [x] Test pure Voice Apply plan, foreign settings stability, stale tabs and native backend ON-gate under CI
