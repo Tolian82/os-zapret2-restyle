@@ -88,4 +88,38 @@ grep -qx 'cleanup' "${CALLS}" || {
     exit 1
 }
 
+
+# The top-level service entrypoint must also fail before firewall_prepare,
+# which may load/configure IPFW even before reaching orchestrator.
+SERVICE="${ROOT}/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
+for entry in start_service reconfigure_service; do
+    body=$(sed -n "/^${entry}()$/,/^}$/p" "${SERVICE}")
+    case "${body}" in
+        *'refresh_generated_configuration || return 1'*'preflight_native_voice_before_firewall || return 1'*'prepare_firewall_prerequisites || return 1'*)
+            ;;
+        *)
+            echo "FAIL: ${entry} may alter IPFW before Voice ON preflight" >&2
+            exit 1
+            ;;
+    esac
+done
+awk '/^preflight_native_voice_before_firewall\(\)$/,/^}$/ { print }' "${SERVICE}" > "${WORK}/preflight.sh"
+. "${WORK}/preflight.sh"
+CONFIG="${SOURCE}"
+printf '%s\n' 'ZAPRET_ENABLED=1' 'VOICE_TELEGRAM_REQUESTED=1' > "${SOURCE}"
+if preflight_native_voice_before_firewall >/dev/null 2>&1; then
+    echo "FAIL: service preflight allowed native Voice ON" >&2
+    exit 1
+fi
+printf '%s\n' 'ZAPRET_ENABLED=0' 'VOICE_TELEGRAM_REQUESTED=1' > "${SOURCE}"
+preflight_native_voice_before_firewall || {
+    echo "FAIL: global Zapret OFF must remain able to stop the service" >&2
+    exit 1
+}
+printf '%s\n' 'ZAPRET_ENABLED=1' 'VOICE_TELEGRAM_REQUESTED=0' > "${SOURCE}"
+preflight_native_voice_before_firewall || {
+    echo "FAIL: five Voice OFF settings must not disrupt ordinary service" >&2
+    exit 1
+}
+
 echo "PASS: native Voice ON is fail-closed until one-engine IPFW/runtime migration is ready"
