@@ -8,7 +8,7 @@ $(document).ready(function () {
         navStrategy: 'Стратегии', navVoice: 'Передача голоса', navLab: 'Лаборатория',
         general: 'Основные настройки', wan: 'Интерфейс WAN для голоса',
         infoTitle: 'Как работают голосовые профили',
-        infoText: 'Страница настраивает перехват исходящего UDP/STUN в общем движке Zapret2. Каждый включённый профиль требует IPSET и нативные аргументы dvtws2. Non-STUN остаётся в «Стратегиях». Включённый профиль не означает успешный голосовой звонок.',
+        infoText: 'Предварительная настройка будущего перехвата UDP/STUN в общем Zapret2. Каждый выбранный профиль требует IPSET и нативные аргументы dvtws2. Пока доступны только проверка и диагностика, без сохранения и активации. Non-STUN остаётся в «Стратегиях».',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
         service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', checkOk: 'Синтаксис проверен (без применения)', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
         notice: 'Форма v0.5.1_1 находится в разработке. Доступна только проверка параметров: сохранение и применение голосовых настроек пока не реализованы. Работающая служба не изменяется.',
@@ -21,14 +21,14 @@ $(document).ready(function () {
         cutoverMutating: 'Прервано переключение — требуется проверка служб и IPFW',
         cutoverCommitted: 'Переключение зафиксировано — проверьте завершение очистки',
         wanHelp: 'Исходящий WAN для перехвата голосового UDP. Пустое значение наследует WAN страницы «Стратегии». Выбор WAN не меняет маршруты.',
-        enableHelp: 'Включает отдельный STUN-профиль и адресный перехват UDP. Если галочка снята, параметры и IP-адреса сохраняются.',
+        enableHelp: 'Выбор STUN-профиля для будущего применения. Пока сохранять и активировать его нельзя; снятие галочки не удаляет введённые параметры.',
         argsHelp: 'Один нативный STUN-профиль dvtws2: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> и необязательные действия <code>--lua-desync</code>. Имя профиля и IPSET задаёт плагин. Не вводите <code>--new</code>, TCP или команды shell. Это не означает, что звонок заработает.',
         ipHelp: 'Общий со «Стратегиями» IPSET. Один IPv4-адрес или CIDR в строке. Пустой список нельзя применять при включённой службе; нет автоматической замены на любой адрес.'
     } : {
         navStrategy: 'Strategies', navVoice: 'Voice Transmission', navLab: 'Laboratory',
         general: 'General Settings', wan: 'Voice WAN Interface',
         infoTitle: 'About Voice Profiles',
-        infoText: 'This page configures outgoing UDP/STUN interception in the shared Zapret2 engine. Each enabled profile requires an IPSET and native dvtws2 arguments. Non-STUN remains in Strategies. An enabled profile does not prove a working voice call.',
+        infoText: 'Preview of future outgoing UDP/STUN interception in the shared Zapret2 engine. Each selected profile requires an IPSET and native dvtws2 arguments. Validation and diagnostics only; settings cannot yet be saved or activated. Non-STUN remains in Strategies.',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
         service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', checkOk: 'Syntax checked (not applied)', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
         notice: 'The v0.5.1_1 form is under development. Only syntax validation is available: saving and activating Voice settings are not implemented. The running service is unchanged.',
@@ -41,7 +41,7 @@ $(document).ready(function () {
         cutoverMutating: 'Interrupted cutover — inspect services and IPFW',
         cutoverCommitted: 'Cutover committed — verify cleanup completion',
         wanHelp: 'Outgoing WAN used for voice UDP interception. Empty selection inherits Strategies WAN. WAN selection does not change routing.',
-        enableHelp: 'Enables this STUN profile and destination-scoped UDP interception. Disabling keeps parameters and addresses.',
+        enableHelp: 'Select this STUN profile for future activation. Saving and activating Voice settings are not yet available; unchecking does not erase typed parameters.',
         argsHelp: 'One native dvtws2 STUN profile: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> and optional <code>--lua-desync</code> actions. The plugin supplies profile identity and IPSET. Do not enter <code>--new</code>, TCP options or shell commands. This is not proof of working calls.',
         ipHelp: 'Shared IPSET, available in Strategies. One IPv4 address or CIDR per line. Empty sets must not be enabled or implicitly match any destination.'
     };
