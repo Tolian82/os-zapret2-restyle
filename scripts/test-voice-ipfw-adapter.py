@@ -72,6 +72,9 @@ class IPFWAdapterTests(unittest.TestCase):
         fake = SimulateFreeBSD()
         adapter = FreeBSDIPFWAdapter(19000, 19010, runner=fake)
         self.assertEqual(fake.table, adapter.get_table("zapret2_voice_telegram"))
+        fake.table_output = "91.108.0.0/16 0\\n91.108.13.10/32 0\\n".replace("\\n", "\n")
+        self.assertEqual(fake.table, adapter.get_table("zapret2_voice_telegram"))
+        fake.table_output = None
         fake.missing = True
         self.assertIsNone(adapter.get_table("zapret2_voice_telegram"))
         fake.missing = False
