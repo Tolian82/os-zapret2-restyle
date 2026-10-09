@@ -70,16 +70,21 @@ def verify_staged_handoff(artifacts: dict[str, str], native_argv: str,
        metadata.get("ordinary_sha256") != _hash(ordinary):
         raise VoiceHandoffError("Voice and Strategies release content disagrees")
     records = capture.get("voice")
-    if not isinstance(records, list) or \
-       metadata.get("profile_count") != len(records) or \
-       not isinstance(plan.get("services"), dict):
+    profiles = plan.get("profiles")
+    if not isinstance(records, list) or not isinstance(profiles, list) or \
+       metadata.get("profile_count") != len(records) or len(profiles) != len(records):
         raise VoiceHandoffError("Voice capture and profile count mismatch")
     enabled = [entry.get("service") for entry in records if isinstance(entry, dict)]
-    if len(enabled) != len(records) or len(set(enabled)) != len(enabled) or \
-       any(s not in SERVICES for s in enabled):
-        raise VoiceHandoffError("unknown or repeated Voice capture identity")
-    if enabled != [name for name in SERVICES if plan["services"].get(name, {}).get("enabled")]:
+    expected = [entry.get("service") for entry in profiles if isinstance(entry, dict)]
+    if len(enabled) != len(records) or len(expected) != len(profiles) or \
+       len(set(enabled)) != len(enabled) or \
+       any(s not in SERVICES for s in enabled) or enabled != expected or \
+       enabled != [name for name in SERVICES if name in enabled]:
         raise VoiceHandoffError("Voice profiles differ from capture plan")
+    if plan.get("wan") != capture.get("logical_wan") or \
+       metadata.get("logical_wan") != plan.get("wan") or \
+       metadata.get("resolved_wan") != capture.get("wan"):
+        raise VoiceHandoffError("Voice WAN identity differs across staged artifacts")
     if any(f"--name=voice-{name}" not in merged for name in enabled) or \
        "--name=telegram-voice-poc" in merged:
         raise VoiceHandoffError("unbound Voice identity or legacy PoC collision")
