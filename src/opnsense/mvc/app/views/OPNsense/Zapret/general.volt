@@ -47,6 +47,7 @@
             setupError: isRussian ? 'Ошибка установки Zapret2' : 'Zapret2 setup error'
         };
         $('a[href="/ui/zapret"]').text(isRussian ? 'Стратегия' : 'Strategy');
+        $('a[href="/ui/zapret/voice"]').text(isRussian ? 'Передача голоса' : 'Voice Transmission');
         $('a[href="/ui/zapret/diagnostics"]').text(isRussian ? 'Лаборатория' : 'Laboratory');
         let runtimePoll = null;
         let runtimeWasBusy = false;
