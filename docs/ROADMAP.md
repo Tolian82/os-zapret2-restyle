@@ -5,6 +5,7 @@
 
 
 - [x] Staged private verified Config/runtime restoration payload without appliance mutation or overwrite
+- [x] Stage private, runtime-bound process evidence for old one-engine dvtws2 and supervisor with restart-read tests
 - [ ] Native dual-lock held restore adapter: previous engine, supervisor, Config and IPFW; verify on reboot before Voice activation
 
 
