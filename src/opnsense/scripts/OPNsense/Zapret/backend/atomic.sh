@@ -274,15 +274,48 @@ atomic_restore_tree()
         fi
     fi
 
-    if [ -e "${_atomic_restore_destination}" ] ||
-       [ -L "${_atomic_restore_destination}" ]; then
-        atomic_remove_tree "${_atomic_restore_destination}" || return 1
-    fi
-
+    # When a previous release is available, park the current candidate
+    # rather than deleting it. If the second move fails after a successful
+    # first move, we can put the candidate back. Refuse a pre-existing park
+    # path instead of erasing unknown data from an interrupted recovery.
     if [ -n "${_atomic_restore_backup}" ]; then
-        mv "${_atomic_restore_backup}" "${_atomic_restore_destination}" || {
-            common_error "cannot restore atomic rollback backup"
+        _atomic_restore_park="${_atomic_restore_destination}.rollback-old.$"
+        if [ -e "${_atomic_restore_park}" ] ||
+           [ -L "${_atomic_restore_park}" ]; then
+            common_error "unexpected parked atomic rollback tree; manual review required"
             return 1
-        }
+        fi
+        _atomic_restore_parked=0
+        if [ -e "${_atomic_restore_destination}" ] ||
+           [ -L "${_atomic_restore_destination}" ]; then
+            mv "${_atomic_restore_destination}" "${_atomic_restore_park}" || {
+                common_error "cannot park current runtime before rollback"
+                return 1
+            }
+            _atomic_restore_parked=1
+        fi
+        if ! mv "${_atomic_restore_backup}" "${_atomic_restore_destination}"; then
+            if [ "${_atomic_restore_parked}" = 1 ]; then
+                mv "${_atomic_restore_park}" "${_atomic_restore_destination}" || {
+                    common_error "rollback failed and candidate restore also failed; parked tree preserved"
+                    return 1
+                }
+            fi
+            common_error "cannot restore atomic rollback backup; candidate retained"
+            return 1
+        fi
+        if [ "${_atomic_restore_parked}" = 1 ]; then
+            atomic_remove_tree "${_atomic_restore_park}" || {
+                common_error "rollback restored but parked candidate cleanup failed"
+                return 1
+            }
+        fi
+    else
+        # No previous release existed (initial start). Preserve the
+        # established semantics: remove only the failed first candidate.
+        if [ -e "${_atomic_restore_destination}" ] ||
+           [ -L "${_atomic_restore_destination}" ]; then
+            atomic_remove_tree "${_atomic_restore_destination}" || return 1
+        fi
     fi
 }
