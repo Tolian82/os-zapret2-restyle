@@ -115,19 +115,28 @@ class SnapshotTests(unittest.TestCase):
                 result=real(source,dest)
                 config.write_text("<opnsense><changed/></opnsense>\n")
                 return result
-            # First config bytes are already copied when runtime scanning
-            # returns. This stage has no lock itself; caller must hold both
-            # native lifecycle locks and final-check the source fingerprint.
-            # A changed model must NEVER be treated as a prepared candidate.
-            # A future adapter must revalidate full hashes immediately
-            # before beginning the durable cutover intent.
+            # A concurrent model change between copy and publishing must
+            # reject the snapshot rather than accepting torn pre-cutover data.
             with patch.object(backup,"_tree",side_effect=race):
-                result=backup.capture_previous(config,active,target)
-            self.assertNotEqual(hashlib.sha256(config.read_bytes()).hexdigest(),
-                                result["config"]["sha256"])
-            # Snapshot of the previous state is intentionally immutable and
-            # must remain verifiable, not follow changed active sources.
-            self.assertEqual(result,backup.inspect_previous(target))
+                with self.assertRaisesRegex(backup.VoiceBackupError,"Config changed"):
+                    backup.capture_previous(config,active,target)
+            self.assertFalse(target.exists(),
+                             "inconsistent previous snapshot was published")
+
+    def test_mid_copy_runtime_change_is_rejected_without_publishing(self):
+        with tempfile.TemporaryDirectory() as d:
+            config,active,target=self.fixture(d)
+            original=backup._tree
+            def edit_after_runtime_capture(source,dest):
+                result=original(source,dest)
+                (active/"managed/ipset-telegram.txt").write_text("203.0.113.10\n")
+                return result
+            with patch.object(backup,"_tree",side_effect=edit_after_runtime_capture):
+                with self.assertRaisesRegex(backup.VoiceBackupError,"runtime file changed"):
+                    backup.capture_previous(config,active,target)
+            self.assertFalse(target.exists())
+            self.assertEqual("203.0.113.10\n",
+                             (active/"managed/ipset-telegram.txt").read_text())
 
 if __name__=="__main__":
     unittest.main(verbosity=2)
