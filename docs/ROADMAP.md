@@ -18,6 +18,8 @@ The current in-progress candidate is `v0.5.1_1` (unmerged, not published). The e
 - [x] Stage declarative Voice IPFW address-and-port capture plan with five-service range/overlap checks (not yet installed)
 - [x] Stage read-only native OPNsense Voice config.xml export and end-to-end candidate pipeline tests (not yet activated)
 - [x] Scope Strategies Apply to Strategies-owned fields without resetting Voice/other IPSETs
+- [x] Guard existing Strategies Apply against stale Telegram IPSET input under config lock
+- [ ] Enforce the same Telegram IPSET concurrency guard for future Voice Apply
 - [ ] Expand and qualify native options (TTL/ranges/fragmentation) and connect fully transactional independent Apply
 - [ ] Replace hard-coded ephemeral `telegram_voice` with persistent per-service profiles and compatible commands
 - [ ] Destination/port-scoped IPFW and WAN isolation, ownership, overlap detection and rollback
