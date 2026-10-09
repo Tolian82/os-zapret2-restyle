@@ -173,6 +173,10 @@ class FreeBSDIPFWAdapter:
         info = self._run("table", name, "info", allow_missing=True)
         if info is None:
             return None
+        # Different installed table kinds (flow, iface, number) must not be
+        # adopted as Voice IPv4 destination tables.
+        if not re.search(r"(?im)\\btype\\s*:\\s*addr\\b", info):
+            raise IPFWAdapterError("existing IPFW table is not address type")
         output = self._run("table", name, "list")
         values: list[str] = []
         for line in output.splitlines():
@@ -181,7 +185,11 @@ class FreeBSDIPFWAdapter:
             match = TABLE_ENTRY.fullmatch(line)
             if not match:
                 raise IPFWAdapterError("unexpected IPFW table listing format")
-            address = checked_ipv4(match.group(1))
+            raw_address = match.group(1)
+            # FreeBSD often prints single-host keys as A.B.C.D/32 even
+            # if the plugin's normalized managed file stores A.B.C.D.
+            address = (raw_address[:-3] if raw_address.endswith("/32") else raw_address)
+            address = checked_ipv4(address)
             if address in values:
                 raise IPFWAdapterError("duplicate IPv4 in IPFW table")
             values.append(address)
