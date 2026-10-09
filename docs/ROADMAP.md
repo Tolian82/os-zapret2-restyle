@@ -1,5 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Cross-check all five native Voice IPSET fields against production Targets normalization and candidate compiler on Linux/FreeBSD CI
+
 - [x] Gate native saved Voice ON before top-level firewall_prepare and before destructive orchestrator START cleanup; permit global Zapret OFF
 - [x] Mock regression for START preserving existing process/IPFW on rejected Voice ON, plus real service entrypoint preflight order
 - [x] Offline bridge of staged Voice + unchanged ordinary Profiles through production generator.sh and scoped IPFW plan in CI/FreeBSD

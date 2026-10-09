@@ -1,5 +1,7 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+- `scripts/test-voice-targets-integration.py` дополнительно прогоняет **все пять** списков IPv4/CIDR через реальный `targets_prepare_managed()` и тот же Python Voice release compiler: Telegram IPSET остаётся общим со «Стратегиями», порядок/дедупликация должны совпасть, включённые профили получают правильный IPFW table, CIDR с битами хоста отвергается. Проверка входит в Linux + FreeBSD CI и не обращается к живому IPFW/dvtws2.
+
 ### Перехват ошибок ДО IPFW и проверка связи со штатным generator.sh (Draft, 2026-10-09)
 
 - Два отдельных ранних safety gate защищают текущую службу от ещё не реализованной Voice ON. `zapret_service.sh::preflight_native_voice_before_firewall()` выполняется непосредственно после актуализации шаблона и **до** `firewall_prepare` в обоих `start_service` и `reconfigure_service`. `orchestrator_native_start()` повторно проверяет Voice ON **до** проверки `runtime_is_complete` и **до** `orchestrator_cleanup_runtime`, иначе неподдерживаемый ON мог бы остановить старый процесс/правила или ошибочно вернуть «ready». Глобальный Zapret OFF допускает штатный stop даже при сохранённой Voice ON. В reconfigure сборка кандидата предшествует остановке действующего runtime.
