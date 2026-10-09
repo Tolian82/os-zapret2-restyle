@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_8 — read-only live Config/runtime fingerprint witness (2026-10-10):** Added an unwired `voice_native_file_observer.py` that uses no-follow, descriptor-anchored `dir_fd` traversal to hash the current OPNsense Config and runtime tree into the **same** two canonical fingerprints as the private pre-cutover snapshot, without writing any files. It rejects symlinks/hardlinks/special files, foreign ownership, oversized/deep trees, replaced descriptors and changes between two complete scans. New Linux and FreeBSD 15 CI tests verify snapshot parity, changed Config/runtime, mode/empty-directory differences, unsafe trees, oversized inputs and mid-observation races. There is still no real lifecycle-lock call site, engine/supervisor restart, boot replay, IPFW mutation or Voice Apply. No installed appliance changes; former Telegram PoC remains intact.
+
+
 **CI infrastructure retry (v0.5.1_7, docs/CI-only, 2026-10-09):** Both initial and job-only rerun of exact-head CI failed before PHP lint because anonymous Docker Hub returned `toomanyrequests` for `php:8.2-cli`. The CI PHP step now prefers already installed runner PHP **only if it is version >=8.2 and <9**, executing the same source lint and five PHP validation scripts. Otherwise it retains the original pinned php:8.2-cli Docker fallback. This is an external-runner availability fix, not a PHP source change, so PLUGIN_REVISION remains **7** under DEV-033. All other Voice/FreeBSD 15 gates and packaging remain unchanged; require CI success on the new exact HEAD.
 
 
@@ -99,8 +102,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_7` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_7.pkg` (**not published, do not install**);
+- current source candidate revision: `_8` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_8.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
@@ -164,7 +167,7 @@ Completed boundary:
 
 No further package correction belongs to this scope.
 
-## Development handoff: `v0.5.1_7` native Voice GUI (Draft PR #328)
+## Development handoff: `v0.5.1_8` native Voice GUI (Draft PR #328)
 
 Work is staged at [PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), branched from `main` `3f9951c928ac2521c3551c8311d58ed755947007`. New native MVC page, five default-OFF fields, bilingual guidance, common service control and shared IPSET model are present. Registry, storage and managed target generation for Discord/X/SIP/Custom are staged; a read-only native config.xml Voice exporter, fail-closed STUN compiler, inert release-bundle consistency gate, one-engine traffic merge helper, IPFW capture-plan validator, an adapter-injected mock-tested IPFW transaction core, retryable postcommit cleanup, and private durable ownership/intent journal with read-only restart triage plus mock-only activation ordering and verified abort (all not production-wired) and per-service scope conflict checks have also been added (not wired to Apply/runtime); Strategies Apply now limits its POST to Strategies-owned fields (Strategies-side shared Telegram-IPSET optimistic lock active in source; Voice-side payload/freshness helper staged, future Voice Apply endpoint not yet implemented); the existing Telegram hostlist data is reused. **Voice Apply is disabled** until complete validation and lifecycle migration are implemented. This draft has not replaced the temporary Telegram Voice PoC or qualified boot restoration, dual-WAN behavior, or media. The existing published and stable `0.5.0` packages are unchanged. See [design and implementation status](architecture/VOICE_TRANSMISSION_GUI.md).
 

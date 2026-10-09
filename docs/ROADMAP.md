@@ -1,5 +1,9 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_8`: read-only live Config/runtime canonical SHA256 witness, strict `dir_fd` no-follow traversal and double-scan race checks
+- [ ] Compose all five native read-only witnesses into the recovery attestation under common lifecycle/Config locks before any Voice Apply or replay
+
+
 - [x] Current candidate `v0.5.1_7`: real kernel IPFW ownership witness, read-only and strictly ledger-matched
 - [ ] Qualify lock-held FreeBSD Config/runtime/process observer and stage-to-live recovery before exposing Voice Save/Apply
 
