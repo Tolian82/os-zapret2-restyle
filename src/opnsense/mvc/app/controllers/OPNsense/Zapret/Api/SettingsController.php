@@ -228,6 +228,10 @@ class SettingsController extends ApiMutableModelControllerBase
             if (!is_array($post)) {
                 throw new \InvalidArgumentException('Missing Strategies form payload');
             }
+            $baseline = $post['sync']['telegramips_baseline'] ?? null;
+            StrategySettingsPayload::requireFreshTelegram($oldNodes, $baseline);
+            // Browser ownership metadata is not a mutable model field.
+            unset($post['sync']);
             // Only the fields visible on the Strategies form may be updated.
             // In particular, a stale form must not reset persistent Voice
             // service states, arguments or independently managed IPSETs.
