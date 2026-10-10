@@ -24,7 +24,7 @@ from voice_native_recovery_quiescence import (
     EXPECTED_SCRIPTS, PIDFILES, _locked_config,
 )
 from voice_cutover_backup import bound_resource_fingerprints
-from voice_native_file_observer import observe_live_files
+from voice_native_file_observer import observe_live_files, LiveFileEvidenceError
 from voice_cutover_journal import VoiceCutoverJournal
 from voice_process_recovery_evidence import _normalize, _runtime_args_digest
 from voice_cutover_backup import inspect_previous
@@ -155,10 +155,16 @@ class FreeBSDVoiceProcessActions:
         previous = bound_resource_fingerprints(
             self.previous_backup, initial["previous"]
         )
-        if observe_live_files(
-            self.config_path, self.active_runtime,
-            previous_backup=self.previous_backup,
-        ) != previous:
+        try:
+            observed = observe_live_files(
+                self.config_path, self.active_runtime,
+                previous_backup=self.previous_backup,
+            )
+        except (LiveFileEvidenceError, OSError) as exc:
+            raise NativeVoiceProcessActionError(
+                "unsafe previous Config/runtime; refusing process restart"
+            ) from exc
+        if observed != previous:
             raise NativeVoiceProcessActionError(
                 "previous Config and runtime must be live before process restart"
             )
@@ -175,10 +181,16 @@ class FreeBSDVoiceProcessActions:
             raise NativeVoiceProcessActionError(
                 "previous one-engine/supervisor failed to restart"
             )
-        if observe_live_files(
-            self.config_path, self.active_runtime,
-            previous_backup=self.previous_backup,
-        ) != previous:
+        try:
+            observed = observe_live_files(
+                self.config_path, self.active_runtime,
+                previous_backup=self.previous_backup,
+            )
+        except (LiveFileEvidenceError, OSError) as exc:
+            raise NativeVoiceProcessActionError(
+                "unsafe previous Config/runtime after native restart"
+            ) from exc
+        if observed != previous:
             raise NativeVoiceProcessActionError(
                 "previous Config/runtime changed during restart"
             )

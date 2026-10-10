@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_44`: bounded FreeBSD native process actuator executes existing single-engine launcher and supervisor through the five-resource rollback's real Config flock, with strict before/after identity verification
+- [x] Current candidate `v0.5.1_45`: reject foreign Config/runtime before/after native process restart with one explicit fail-closed error, and guarantee nonzero test-suite status for any failed process-adapter test
+- [ ] Next: bind real FreeBSD process kernel-image+argv security and durable restart attestation; production FD9-only rollback invocation and boot recovery before Voice ON
+- [x] Previous candidate `v0.5.1_44`: bounded FreeBSD native process actuator executes existing single-engine launcher and supervisor through the five-resource rollback's real Config flock, with strict before/after identity verification
 - [ ] Next: production FD9 cutover coordinator, durable five-resource final attestation and journal cleanup; reboot recovery; qualify Voice ON
 - [x] Previous candidate `v0.5.1_43`: one-lock five-domain rollback execution (dvtws2, supervisor, IPFW, runtime, Config) with restart identity verification and durable pending intent
 - [ ] Next: bind the actual FreeBSD launcher/supervisor to the stop/start adapter, durable five-resource result attestation and journal/redo cleanup, reboot crash-retry; only then production Voice ON

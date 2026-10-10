@@ -180,4 +180,6 @@ if __name__=="__main__":
     # Avoid subclass re-running inherited test fixtures; only local tests.
     names=[name for name in NativeProcessActionTests.__dict__ if name.startswith("test_")]
     suite=unittest.TestSuite(NativeProcessActionTests(name) for name in names)
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    if not result.wasSuccessful():
+        raise SystemExit(1)

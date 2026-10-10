@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_45 — correct false-green native actuator regression and explicit fail-closed restart classification (2026-10-10):** The `_44` native process actions regression printed `FAILED (errors=1)` but returned shell exit code 0 because the manually constructed `unittest.TextTestRunner` suite did not propagate `wasSuccessful()`. The underlying negative test deliberately invoked `start_previous()` with the candidate live Config/runtime and correctly failed strict old-mode observation, but exposed `LiveFileEvidenceError` instead of the intended action-level `NativeVoiceProcessActionError`. `_45` now translates unsafe/missing/foreign Config/runtime observations both before and after native restart into the fail-closed `NativeVoiceProcessActionError`, and **ensures test process exits nonzero for every failed assertion/error**, so GitHub CI cannot display a false PASS. No relaxation of original saved Config/runtime mode or hash policy, no runtime action enabled. Previous `_44` CI green cannot be treated as a clean new regression verdict despite the overall success indication; `_45` exact-head tests required. PLUGIN_REVISION=45.
+
+
 **v0.5.1_44 — native one-engine launcher/supervisor process callbacks bound to the five-resource rollback (2026-10-10):** Added fixed-argument private FreeBSD shell helper `voice_native_process_lifecycle.sh` using existing `launcher_stop`, `launcher_start_once`, `supervisor_stop`, and `supervisor_start`, in exactly that order under the inherited existing FD9 lifecycle lock. Added `voice_native_process_actions.py`, which refuses untrusted/symlink/writable actuator code and foreign process/pidfile topology, double-probes native `ps` before and after stop/start, verifies previous Config/runtime before restarting, and invokes `/bin/sh` with strictly fixed command/parameters, scrubbed environment, bounded subprocess execution, and only FD9 inherited (no arbitrary PID or GUI-supplied arguments). `voice_cutover_five_resource_rollback.py` can now construct a real `FreeBSDVoiceProcessActions` from the active Config flock via `process_actions_factory(fd)` and use it to stop the candidate and launch the previous one-engine/supervisor; old test callbacks remain for isolated regression. New regression tests exercise the actual Config/runtime/IPFW-ledger mutations combined with this native actuator, strict argv/FD9 passing and denial of unsafe code/failed process transitions, plus native `/bin/sh -n` syntax. **Still not a production on-router recovery CLI or Voice ON**: the trusted native factory must be wired to one coordinator with kernel/argv attestation, reboot recovery and complete journal finalization first. PLUGIN_REVISION=44; exact-head CI pending.
 
 
@@ -184,13 +187,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_44` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_45` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=44` (**development candidate, not published**);
+- `PLUGIN_REVISION=45` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

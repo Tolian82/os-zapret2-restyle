@@ -1,5 +1,10 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### v0.5.1_45 — исправление ложного успеха теста native process
+
+Отрицательный тест `start_previous()` с ещё не восстановленным Config/runtime в `_44` действительно обнаруживал нарушение прежнего mode-контракта, но частный unittest runner всегда завершался 0. Исправлено: test runner обязан возвращать ошибку для любого fail/error; `FreeBSDVoiceProcessActions.start_previous()` теперь явно переводит `LiveFileEvidenceError` и файловые ошибки в `NativeVoiceProcessActionError` до/после запуска, не ослабляя старую проверку SHA/mode. Именно `_45` и последующие CI имеют проверяемый код завершения интеграционного сценария.
+
+
 ### v0.5.1_44 — нативные процессы: штатный launcher/supervisor в едином rollback
 
 Добавлены приватный `voice_native_process_lifecycle.sh` с фиксированными действиями stop/start и `voice_native_process_actions.py`, проверяющий истинное наличие процесса по native FreeBSD probe до/после действия, права shell-скрипта и неизменный журнал. `stop` последовательно останавливает supervisor daemon/monitor и dvtws2 штатными функциями, `start` проверяет отсутствие PID-файлов, вызывает `launcher_start_once` с восстановленным `runtime-v2/dvtws.args`, затем `supervisor_start`, без `daemon -r`. Подпроцесс получает только FD9 lifecycle, не Config FD, и изолированное окружение. В общем `voice_cutover_five_resource_rollback.py` фабрика создаётся уже после захвата Config flock, и callback'и используют один и тот же runtime/journal/дескриптор. Тестовая интеграция выполняет реальные файловые операции и IPFW-ledger откат с симуляцией OS-процессов. Пока нет production CLI, boot retry или права на закрытие полного intent/Voice ON: необходимо связать runtime с реальными native security/argv attestations и восстановлением после перезагрузки.
