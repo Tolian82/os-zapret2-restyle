@@ -25,8 +25,18 @@ namespace OPNsense\Core {
         public function save($audit = []): void { $this->saves++; }
     }
     class Backend {
-        public function configdRun() {
-            throw new \RuntimeException('Voice draft validation must not call configd');
+        public static bool $busy = false;
+        public static bool $reconfigureOK = true;
+        public static array $calls = [];
+        public function configdRun($action, ...$args) {
+            self::$calls[] = $action;
+            if ($action === 'zapret strategy_lab_guard') {
+                return json_encode(['busy' => self::$busy]);
+            }
+            if ($action === 'zapret reconfigure') {
+                return self::$reconfigureOK ? 'OK' : 'ERROR';
+            }
+            throw new \RuntimeException('unexpected configd action: ' . $action);
         }
     }
 }
@@ -50,6 +60,7 @@ namespace {
     require_once __DIR__ . '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/VoiceController.php';
 
     use OPNsense\Core\Config;
+    use OPNsense\Core\Backend;
     use OPNsense\Zapret\Zapret;
     use OPNsense\Zapret\Api\VoiceController;
     use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
@@ -205,6 +216,59 @@ namespace {
     equal(1, Config::getInstance()->saves, 'existing ON guard cannot write');
     Zapret::$nodes['voice']['sip']['enabled'] = '0';
 
+    // Real Apply of all-OFF settings must use the production configd
+    // reconfigure path; a previously saved draft with unchanged form must
+    // still be applied to the actual shared service.
+    $candidate['sync']['snapshot'] = VoiceSettingsSnapshot::digest(Zapret::$nodes);
+    $api->request = new FakeRequest('POST', $candidate);
+    Backend::$calls = [];
+    $offApply = $api->applyAction();
+    equal('saved', $offApply['result'], 'OFF Voice Apply should succeed');
+    equal(true, $offApply['applied'], 'OFF Voice Apply must report real reconfigure');
+    equal(true, in_array('zapret reconfigure', Backend::$calls, true),
+        'OFF Apply must call existing Zapret lifecycle reconfigure');
+    equal(1, Config::getInstance()->saves, 'unchanged saved draft has no duplicate Config write');
+    equal(0, Config::getInstance()->locks, 'OFF Apply must release Config lock');
+
+    $candidate['voice']['telegram']['enabled'] = '1';
+    $candidate['voice']['telegram']['args'] =
+        "--filter-udp=*\n--filter-l7=stun\n--payload=stun";
+    Backend::$calls = [];
+    $api->request = new FakeRequest('POST', $candidate);
+    $onApply = $api->applyAction();
+    equal('failed', $onApply['result'], 'native Voice ON must refuse unsafe Apply');
+    equal(false, in_array('zapret reconfigure', Backend::$calls, true),
+        'blocked ON cannot restart shared runtime');
+    $candidate['voice']['telegram']['enabled'] = '0';
+
+    $candidate['hostlist']['discordips'] = '1.2.3.5';
+    $candidate['sync']['snapshot'] = VoiceSettingsSnapshot::digest(Zapret::$nodes);
+    Backend::$busy = true;
+    $api->request = new FakeRequest('POST', $candidate);
+    $busy = $api->applyAction();
+    equal('failed', $busy['result'], 'Strategy Lab must block OFF Apply');
+    equal(1, Config::getInstance()->saves, 'busy runtime must not save settings');
+    Backend::$busy = false;
+
+    // Backend failure is NOT misreported as a recovered runtime. A new
+    // snapshot is returned because the Config change was already durable.
+    Backend::$reconfigureOK = false;
+    $failed = $api->applyAction();
+    equal('failed', $failed['result'], 'failed reconfigure must be visible');
+    equal(true, $failed['saved'], 'show saved Config after runtime failure');
+    equal(false, $failed['applied'], 'runtime failure must not claim success');
+    equal(true, $failed['requires_review'], 'runtime failure requires explicit review');
+    equal('1.2.3.5', Zapret::$nodes['hostlist']['discordips'],
+        'failed runtime attempt keeps honest persisted candidate');
+    equal(2, Config::getInstance()->saves, 'changed OFF Apply writes candidate Config');
+    Backend::$reconfigureOK = true;
+    $candidate['sync']['snapshot'] = VoiceSettingsSnapshot::digest(Zapret::$nodes);
+    $api->request = new FakeRequest('POST', $candidate);
+    $retried = $api->applyAction();
+    equal('saved', $retried['result'], 'retry after runtime review can reconfigure');
+    equal(true, $retried['applied'], 'successful retry reports runtime Apply');
+    equal(2, Config::getInstance()->saves, 'retry unchanged settings does not rewrite Config');
+
     // Read-only GUI/API credentials must not gain a write path.
     $candidate['sync']['snapshot'] = VoiceSettingsSnapshot::digest(Zapret::$nodes);
     $api->request = new FakeRequest('POST', $candidate);
@@ -220,5 +284,5 @@ namespace {
     }
     equal(1, Config::getInstance()->saves, 'denied write did not touch Config');
 
-    echo "PASS: locked Voice load/validate, OFF-only native persisted draft, stale-tab guard, no unsafe ON save\n";
+    echo "PASS: real OFF-only Voice Apply through Zapret reconfigure, Config persistence, ON/Strategy Lab guards\n";
 }

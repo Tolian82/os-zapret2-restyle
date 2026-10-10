@@ -82,8 +82,8 @@ def main() -> None:
     status_php = status_api.read_text(encoding="utf-8")
     check("public function inspectAction()" in status_php and
           "configdRun('zapret voice_inspect'" in status_php and
-          "public function applyAction()" not in status_php,
-          "Voice diagnostic API must be read-only and fail-closed")
+          "public function applyAction()" in status_php,
+          "Voice diagnostics and OFF-only native Apply must both be available")
     configd = (ROOT / "src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text(encoding="utf-8")
     check("[voice_inspect]" in configd and
           "voice_live_inspect.py; exit 0" in configd,
@@ -152,10 +152,16 @@ def main() -> None:
           "'applied' => false" in status_php and
           "throwReadOnly()" in status_php,
           "Voice draft cannot claim activation or bypass write privileges")
-    # Voice settings Apply was explicitly removed from the staging form.
-    # The unrelated repository-release Apply and syntax validation stay.
-    check('id="voiceApply"' not in view and "$('#voiceApply')" not in view,
-          "Voice settings Apply must not be rendered or wired in this draft")
+    # The actual existing-runtime Apply is restricted to all-OFF services.
+    # The independently owned repository release installer remains intact.
+    check('id="voiceApply"' in view and
+          "$('#voiceApply').on('click'" in view and
+          "'/api/zapret/voice/apply'" in view,
+          "Voice native OFF-only Apply must be wired to its own API")
+    check("Native Voice ON still needs the shared IPFW cutover" in status_php and
+          "configdRun('zapret reconfigure'" in status_php and
+          "'applied' => true" in status_php,
+          "OFF-only Apply must run the real shared lifecycle and refuse Voice ON")
     check('id="voiceReleaseApply"' in view and
           "$('#voiceReleaseApply').on('click'" in view and
           "'/api/zapret/service/install'" in view,
@@ -164,10 +170,9 @@ def main() -> None:
           "'/api/zapret/voice/validate'" in view,
           "Voice validation control must remain usable")
     check('"/api/zapret/settings/apply"' not in view and
-          "'/api/zapret/voice/apply'" not in view and
-          '"/api/zapret/voice/apply"' not in view,
-          "Draft Voice GUI must not invoke a mutating settings endpoint")
-    print("PASS: Voice GUI model, native OFF-only Save Draft, RU/EN status, Apply still gated")
+          'id="voiceReleaseApply"' in view,
+          "Voice must not accidentally reuse Strategies Apply or the installer")
+    print("PASS: Voice GUI native OFF-only Config Apply through real shared lifecycle; Voice ON still gated")
 
 if __name__ == "__main__":
     main()

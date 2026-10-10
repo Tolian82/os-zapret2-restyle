@@ -1,4 +1,4 @@
-{# Native Voice OFF-only draft persistence; actual runtime Apply remains unavailable. #}
+{# Native Voice OFF-only Apply of shared Settings; Voice ON and new IPFW cutover remain disabled. #}
 <script>
 $(document).ready(function () {
     "use strict";
@@ -8,10 +8,10 @@ $(document).ready(function () {
         navStrategy: 'Стратегии', navVoice: 'Передача голоса', navLab: 'Лаборатория',
         general: 'Основные настройки', wan: 'Интерфейс WAN для голоса',
         infoTitle: 'Как работают голосовые профили',
-        infoText: 'Редактор UDP/STUN-профилей для общего Zapret2. Выключенные профили и IPSET можно сохранить как черновик в конфигурации OPNsense, без перезапуска службы. Включение и применение профилей пока недоступны. Non-STUN остаётся в «Стратегиях».',
+        infoText: 'Редактор UDP/STUN-профилей для общего Zapret2. Выключенные профили и IPSET можно сохранить как черновик в конфигурации OPNsense, без перезапуска службы. Включение голосовых профилей пока недоступно. Кнопка «Применить» обновляет только выключенные профили и общие IPSET через штатную службу. Non-STUN остаётся в «Стратегиях».',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
-        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', checkOk: 'Синтаксис проверен (без применения)', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
-        notice: 'Можно сохранять только выключенные голосовые профили. Черновик сохраняется в Config и переживает перезагрузку; dvtws2 и IPFW не изменяются. Изменённый общий IPSET может повлиять на следующий запуск обычной службы. Применение голосовых профилей ещё не реализовано.',
+        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applyOff: 'Применить выключенные профили', appliedOff: 'Общие параметры применены; Voice остаётся OFF', applyOffFailed: 'Применение не выполнено — проверьте ошибки и состояние службы', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', checkOk: 'Синтаксис проверен (без применения)', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
+        notice: 'Можно сохранять только выключенные голосовые профили. Черновик сохраняется в Config и переживает перезагрузку; dvtws2 и IPFW не изменяются. Изменённый общий IPSET может повлиять на следующий запуск обычной службы. Для выключенных профилей доступно применение общих настроек через штатный перезапуск Zapret2. Включение голосового UDP ещё не реализовано.',
         status: 'Статус', running: 'Запущена', stopped: 'Остановлена', error: 'Ошибка',
         loading: 'Загрузка…', incomplete: 'Неизвестно',
         ipfwStatus: 'IPFW — передача голоса', ipfwReady: 'Правила подтверждены',
@@ -28,10 +28,10 @@ $(document).ready(function () {
         navStrategy: 'Strategies', navVoice: 'Voice Transmission', navLab: 'Laboratory',
         general: 'General Settings', wan: 'Voice WAN Interface',
         infoTitle: 'About Voice Profiles',
-        infoText: 'Configure UDP/STUN profiles for the shared Zapret2 engine. Disabled profiles and their IPSETs can now be saved as an inactive draft in OPNsense Config without restarting the service. Activation and Apply remain unavailable. Non-STUN remains in Strategies.',
+        infoText: 'Configure UDP/STUN profiles for the shared Zapret2 engine. Disabled profiles and their IPSETs can now be saved as an inactive draft in OPNsense Config without restarting the service. Voice activation remains unavailable. Apply updates disabled profiles and shared IPSET through the normal Zapret2 reconfigure path. Non-STUN remains in Strategies.',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
-        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', checkOk: 'Syntax checked (not applied)', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
-        notice: 'Only disabled Voice profiles can be saved. The draft persists in OPNsense Config across reboot; dvtws2 and IPFW are not changed. An edited shared IPSET may affect the next regular service start. Activating Voice profiles is not implemented yet.',
+        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applyOff: 'Apply inactive settings', appliedOff: 'Shared settings applied; Voice remains OFF', applyOffFailed: 'Apply failed — review validation and current service state', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', checkOk: 'Syntax checked (not applied)', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
+        notice: 'Only disabled Voice profiles can be saved. The draft persists in OPNsense Config across reboot; dvtws2 and IPFW are not changed. An edited shared IPSET may affect the next regular service start. Apply uses the existing Zapret2 reconfigure for all-OFF settings. Activating Voice UDP profiles is not implemented yet.',
         status: 'Status', running: 'Started', stopped: 'Stopped', error: 'Error',
         loading: 'Loading…', incomplete: 'Unknown',
         ipfwStatus: 'Voice IPFW', ipfwReady: 'Verified rules',
@@ -76,6 +76,10 @@ $(document).ready(function () {
             'Enabled Voice service requires destination IPs': 'Для включённой службы нужны IP-адреса назначения',
             'Voice validation failed': 'Проверка параметров голоса завершилась ошибкой',
             'Voice draft could not be saved': 'Не удалось сохранить черновик передачи голоса',
+            'Native Voice ON still needs the shared IPFW cutover; apply only OFF profiles': 'Включение голосовых профилей ещё не готово; применять можно только выключенные',
+            'Zapret lifecycle is busy; retry after diagnostics finish': 'Служба занята лабораторией — дождитесь завершения диагностики',
+            'Zapret lifecycle became busy before applying': 'Служба занята — применение отменено до сохранения',
+            'Settings saved, but Zapret reconfigure failed; inspect current runtime before retrying': 'Настройки сохранены, но перезапуск Zapret2 завершился ошибкой; проверьте фактическое состояние службы',
             'Voice activation is not available yet; save only disabled service drafts': 'Применение голоса пока недоступно; сохраните черновик с выключенными сервисами',
             'Strategies WAN must be configured before Voice': 'Сначала настройте WAN на странице «Стратегии».',
             'Independent Voice WAN cannot be isolated by the shared engine yet; select the Strategies WAN': 'Отдельный WAN для голоса пока нельзя изолировать в общем движке. Выберите WAN из страницы «Стратегии».',
@@ -175,6 +179,7 @@ $(document).ready(function () {
     $('#frm_VoiceSettings').append(voiceSnapshot);
     $('#voiceValidate').text(text.validate).prop('disabled', true);
     $('#voiceSaveDraft').text(text.saveDraft).prop('disabled', true);
+    $('#voiceApply').text(text.applyOff).prop('disabled', true);
     $('#voiceValidate').on('click', function () {
         var button = $(this);
         if (button.prop('disabled')) return;
@@ -227,6 +232,40 @@ $(document).ready(function () {
             button.prop('disabled', !/^[a-f0-9]{64}$/.test(voiceSnapshot.val() || ''));
         });
     });
+    $('#voiceApply').on('click', function () {
+        var button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        $('#voiceValidationStatus').text(text.loading);
+        $.ajax({
+            type: 'POST',
+            url: '/api/zapret/voice/apply',
+            data: getFormData('frm_VoiceSettings'),
+            dataType: 'json',
+            timeout: 220000
+        }).done(function (reply) {
+            handleFormValidation('frm_VoiceSettings', localizeVoiceErrors((reply && reply.validations) || {}));
+            if (reply && reply.saved === true && typeof reply.snapshot === 'string' &&
+                /^[a-f0-9]{64}$/.test(reply.snapshot)) {
+                // The failed backend apply may already have saved Config.
+                // Refresh the concurrency token without pretending Apply succeeded.
+                voiceSnapshot.val(reply.snapshot);
+            }
+            if (reply && reply.result === 'saved' && reply.applied === true &&
+                typeof reply.snapshot === 'string' && /^[a-f0-9]{64}$/.test(reply.snapshot)) {
+                voiceSnapshot.val(reply.snapshot);
+                $('#voiceValidationStatus').text(text.appliedOff);
+                refreshRuntime();
+                refreshVoiceIPFW();
+            } else {
+                $('#voiceValidationStatus').text(text.applyOffFailed);
+            }
+        }).fail(function () {
+            $('#voiceValidationStatus').text(text.applyOffFailed);
+        }).always(function () {
+            button.prop('disabled', !/^[a-f0-9]{64}$/.test(voiceSnapshot.val() || ''));
+        });
+    });
     $('#voiceImplementationNotice').text(text.notice);
     $('#voiceIPFWLabel').text(text.ipfwStatus + ':');
     localizeForm();
@@ -237,6 +276,7 @@ $(document).ready(function () {
             voiceSnapshot.val(record.snapshot);
             $('#voiceValidate').prop('disabled', false);
             $('#voiceSaveDraft').prop('disabled', false);
+            $('#voiceApply').prop('disabled', false);
         } else {
             $('#voiceValidationStatus').text(text.checkError);
         }
@@ -409,6 +449,7 @@ $(document).ready(function () {
     <div class="alert content-box" style="margin-bottom: 0;">
         <button class="btn btn-default __mr" id="voiceValidate" type="button" disabled>Validate</button>
         <button class="btn btn-default __mr" id="voiceSaveDraft" type="button" disabled>Save inactive draft</button>
+        <button class="btn btn-primary __mr" id="voiceApply" type="button" disabled>Apply inactive settings</button>
         <span id="voiceValidationStatus" aria-live="polite"></span>
         <span id="voiceImplementationNotice" aria-live="polite"></span>
     </div>
