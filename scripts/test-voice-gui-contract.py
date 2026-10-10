@@ -138,6 +138,20 @@ def main() -> None:
               "Voice browser JavaScript syntax error: " + parsed.stderr)
     else:
         print("SKIP: Node.js is unavailable; browser JavaScript syntax was not checked")
+    # A real OFF-only draft save is now exposed. Actual Apply, engine
+    # activation and IPFW writes remain intentionally disconnected.
+    check('id="voiceSaveDraft"' in view and
+          "$('#voiceSaveDraft').on('click'" in view and
+          "'/api/zapret/voice/saveDraft'" in view,
+          "Voice UI must expose the real inactive-draft save action")
+    check("public function saveDraftAction()" in status_php and
+          "serializeToConfig(false, true)" in status_php and
+          "VoiceSettingsSnapshot::digest($model->getNodes())" in status_php,
+          "Voice draft must persist using the native model and fresh snapshot")
+    check("Voice activation is not available yet" in status_php and
+          "'applied' => false" in status_php and
+          "throwReadOnly()" in status_php,
+          "Voice draft cannot claim activation or bypass write privileges")
     # Voice settings Apply was explicitly removed from the staging form.
     # The unrelated repository-release Apply and syntax validation stay.
     check('id="voiceApply"' not in view and "$('#voiceApply')" not in view,
@@ -153,7 +167,7 @@ def main() -> None:
           "'/api/zapret/voice/apply'" not in view and
           '"/api/zapret/voice/apply"' not in view,
           "Draft Voice GUI must not invoke a mutating settings endpoint")
-    print("PASS: Voice GUI model, native form, menu, RU/EN guidance, staging guard")
+    print("PASS: Voice GUI model, native OFF-only Save Draft, RU/EN status, Apply still gated")
 
 if __name__ == "__main__":
     main()

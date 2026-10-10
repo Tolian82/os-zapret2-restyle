@@ -1,8 +1,8 @@
 <?php
 
 /**
- * Read-only Voice status endpoint. No Apply/Save method is present until
- * the shared transactional runtime has been qualified.
+ * Native Voice validation, diagnostics, and persistent inactive draft saves.
+ * An ON profile still requires the unfinished whole-runtime Apply transaction.
  */
 namespace OPNsense\Zapret\Api;
 
@@ -84,6 +84,97 @@ class VoiceController extends ApiControllerBase
             // Never reveal PHP stack, unrelated configuration or raw input.
             return ['result' => 'failed', 'validations' => [
                 'zapret.voice.waninterface' => 'Voice validation failed'
+            ]];
+        } finally {
+            $config->unlock();
+        }
+    }
+
+    /**
+     * Persist editable Voice drafts while ALL native Voice services remain
+     * OFF. This is the first real write path for the Voice GUI, but is NOT
+     * Apply: it never invokes configd, dvtws2, IPFW or a service restart.
+     *
+     * Saving ON would make the existing staged-only runtime guard reject a
+     * later reboot, so it MUST remain impossible until native cutover ships.
+     */
+    public function saveDraftAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['result' => 'failed', 'validations' => [
+                'zapret.voice.waninterface' => 'POST request required'
+            ]];
+        }
+        $fields = $this->request->getPost('zapret');
+        if (!is_array($fields)) {
+            return ['result' => 'failed', 'validations' => [
+                'zapret.voice.waninterface' => 'Missing Voice form'
+            ]];
+        }
+
+        // ApiControllerBase protects privileged configuration writes. This
+        // check MUST precede any model mutation or Config persistence.
+        $this->throwReadOnly();
+        $config = Config::getInstance();
+        $config->lock();
+        try {
+            $model = new \OPNsense\Zapret\Zapret();
+            $current = $model->getNodes();
+            $sync = $fields['sync'] ?? null;
+            if (!is_array($sync) || array_keys($sync) !== ['snapshot']) {
+                throw new \InvalidArgumentException(
+                    'Voice configuration baseline is missing. Reload the Voice page.'
+                );
+            }
+            unset($fields['sync']);
+            $plan = VoiceApplyCandidate::prepare($current, $fields, $sync['snapshot']);
+            if ($plan['result'] !== 'prepared') {
+                return $plan;
+            }
+
+            // Native Voice ON cannot be saved safely ahead of its runtime:
+            // even the normal boot path would hit the staged-only guard.
+            foreach (['telegram', 'discord', 'x', 'sip', 'custom'] as $service) {
+                if (($plan['candidate']['voice'][$service]['enabled'] ?? '0') !== '0' ||
+                    ($current['voice'][$service]['enabled'] ?? '0') !== '0'
+                ) {
+                    return ['result' => 'failed', 'validations' => [
+                        'zapret.voice.' . $service . '.enabled' =>
+                            'Voice activation is not available yet; save only disabled service drafts'
+                    ]];
+                }
+            }
+
+            if ($plan['changed_fields'] !== []) {
+                $model->setNodes($plan['candidate']);
+                $messages = $model->performValidation(false);
+                if (count($messages) > 0) {
+                    $validations = [];
+                    foreach ($messages as $message) {
+                        $validations['zapret.' . $message->getField()] = $message->getMessage();
+                    }
+                    return ['result' => 'failed', 'validations' => $validations];
+                }
+                // The same native OPNsense model persistence path as
+                // SettingsController, without a second Voice state store.
+                if (!$model->serializeToConfig(false, true)) {
+                    throw new \RuntimeException('Unable to serialize Voice draft');
+                }
+                $config->save(['description' => gettext('Saved inactive Zapret Voice draft')]);
+            }
+            return [
+                'result' => 'saved',
+                'applied' => false,
+                'change_count' => count($plan['changed_fields']),
+                'snapshot' => VoiceSettingsSnapshot::digest($model->getNodes()),
+            ];
+        } catch (\InvalidArgumentException $error) {
+            return ['result' => 'failed', 'validations' => [
+                'zapret.voice.waninterface' => $error->getMessage()
+            ]];
+        } catch (\Throwable $error) {
+            return ['result' => 'failed', 'validations' => [
+                'zapret.voice.waninterface' => 'Voice draft could not be saved'
             ]];
         } finally {
             $config->unlock();
