@@ -2,7 +2,8 @@
 """Staging-only read-only live Config/runtime fingerprint witness.
 
 Mirrors voice_cutover_backup's exact Config SHA256 and canonical runtime-tree
-fingerprint without writing or staging a file.
+fingerprint including schema-2 root modes, with schema-1 compatibility,
+without writing or staging a file.
 When bound to a sealed previous backup, also require its exact Config mode;
 Config content hashes deliberately exclude the mode bits. Uses anchored descriptor-relative
 traversal and O_NOFOLLOW; refuses symlinks, hard links, special files, unstable
@@ -156,11 +157,19 @@ def _scan(config: Path, runtime: Path):
         if _identity(root_before) != _identity(os.fstat(fd)):
             raise LiveFileEvidenceError("live Voice runtime root changed during scan")
         runtime_content = {"entries": entries, "total_bytes": bounds["bytes"]}
-        runtime_sha = hashlib.sha256(json.dumps(
-            runtime_content, sort_keys=True, separators=(",", ":"),
-            ensure_ascii=True,
-        ).encode("ascii")).hexdigest()
-        return (config_sha, config_size, config_mode), runtime_sha
+        def digest(content):
+            return hashlib.sha256(json.dumps(
+                content, sort_keys=True, separators=(",", ":"),
+                ensure_ascii=True,
+            ).encode("ascii")).hexdigest()
+        # The real checkpoint's schema 2 binds runtime-root permission bits.
+        # Calculate both formats from the SAME descriptor-anchored sweep:
+        # prior schema-1 records remain independently verifiable without
+        # guessing or rewriting their existing immutable fingerprints.
+        legacy_sha = digest(runtime_content)
+        runtime_content["root_mode"] = stat.S_IMODE(root_before.st_mode)
+        runtime_sha = digest(runtime_content)
+        return (config_sha, config_size, config_mode), runtime_sha, legacy_sha
     finally:
         os.close(fd)
 
@@ -179,6 +188,7 @@ def observe_live_files(config: Path, runtime: Path,
         raise LiveFileEvidenceError("untrusted live Voice file inspection") from exc
     if first != second:
         raise LiveFileEvidenceError("live Config/runtime changed between observations")
+    prior_schema = 2
     if previous_backup is not None:
         # The whole-cutover config fingerprint intentionally contains only
         # the SHA256 of config bytes. To certify the *previous* live state,
@@ -189,7 +199,11 @@ def observe_live_files(config: Path, runtime: Path,
             raise LiveFileEvidenceError("invalid sealed previous Voice Config mode") from exc
         if first[0][2] != old["config"]["mode"]:
             raise LiveFileEvidenceError("live Config permission mode differs from sealed prior")
-    return {"config": first[0][0], "runtime": first[1]}
+        prior_schema = old["schema"]
+        if prior_schema == 2 and stat.S_IMODE(os.lstat(runtime).st_mode) != old["runtime_root_mode"]:
+            raise LiveFileEvidenceError("live runtime root permission mode differs from sealed prior")
+    return {"config": first[0][0],
+            "runtime": first[1] if prior_schema == 2 else first[2]}
 
 
 class LiveFileObserver:

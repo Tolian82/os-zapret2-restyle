@@ -62,6 +62,17 @@ class LiveFileObserverTests(unittest.TestCase):
                 witness.observe()
             self.assertEqual(0o600,backup.inspect_previous(previous)["config"]["mode"])
 
+    def test_runtime_root_mode_affects_new_sealed_fingerprint(self):
+        with tempfile.TemporaryDirectory() as d:
+            config,runtime,previous=self.fixture(d)
+            saved=backup.bound_resource_fingerprints(previous)
+            self.assertEqual(saved,live.observe_live_files(config,runtime,previous_backup=previous))
+            runtime.chmod(0o750)
+            self.assertNotEqual(saved["runtime"],live.observe_live_files(config,runtime)["runtime"])
+            with self.assertRaisesRegex(live.LiveFileEvidenceError,
+                                        "runtime root permission mode differs"):
+                live.observe_live_files(config,runtime,previous_backup=previous)
+
     def test_changed_live_files_produce_different_bounded_fingerprints(self):
         with tempfile.TemporaryDirectory() as d:
             config,runtime,previous=self.fixture(d)
