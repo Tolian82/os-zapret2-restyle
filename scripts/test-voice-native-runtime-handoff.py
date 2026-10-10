@@ -29,8 +29,18 @@ from voice_firewall_ledger import decode_manifest, fingerprint
 
 
 class ProductionHandoffTests(unittest.TestCase):
-    def build(self, root: Path, on: bool):
+    def build(self, root: Path, on: bool, big_config: bool = False):
         bundle = bridge.GeneratorInteropTests().compile(root, enabled=on)
+        if big_config:
+            # OPNsense Config includes many unrelated subsystems and may be
+            # larger than the staged dvtws2/Voice artifacts.
+            xml_source = root / "config.xml"
+            with xml_source.open("ab") as stream:
+                stream.write(b"\n<!--" + b"x" * (4 * 1048576) + b"-->\n")
+            bundle = bridge.stage.compile_bundle(
+                xml_source, root / "managed", bridge.ACTIVE_ROOT,
+                "vtnet1", 19000, 19010, 989, root / "ordinary.resolved.conf",
+            )
         stage = root / "candidate"
         bridge.stage.stage_bundle(stage, bundle)
         args = bridge.generate_native_argv(root / "engine", bundle["traffic.conf"])
@@ -79,6 +89,14 @@ class ProductionHandoffTests(unittest.TestCase):
             ))
             self.assertEqual([19000, 19001], sorted(state["rules"]))
             self.assertEqual({}, state["tables"])
+
+    def test_large_real_opnsense_config_is_accepted_and_stream_hashed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            files = self.build(Path(directory), False, big_config=True)
+            self.assertGreater(files[5].stat().st_size, 4 * 1048576)
+            result = self.call(files)
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertTrue((files[0] / "desired-ipfw.json").is_file())
 
     def test_tampering_before_handoff_never_publishes_desired_ipfw(self):
         for kind in ("ports", "argv", "xml", "targets"):

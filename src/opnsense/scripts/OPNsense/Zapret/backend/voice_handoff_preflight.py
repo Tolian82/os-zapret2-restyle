@@ -216,7 +216,11 @@ def build_runtime_handoff(stage: Path, engine_argv: Path, ordinary: Path,
         engine_argv, ordinary, tcp_ports, udp_ports, saved_xml
     ]
     for source in sources:
-        if source.is_symlink() or not source.is_file() or source.stat().st_size > 4 * 1048576:
+        # OPNsense config.xml holds ALL plugin and system settings, not just
+        # Zapret; it can legitimately exceed the 4 MiB candidate-file cap.
+        # Match voice_release_stage.file_sha256's existing 128 MiB XML bound.
+        limit = 128 * 1048576 if source == saved_xml else 4 * 1048576
+        if source.is_symlink() or not source.is_file() or source.stat().st_size > limit:
             raise VoiceHandoffError("Voice handoff input is missing, unsafe or too large")
     artifacts = {name: (stage / name).read_text(encoding="utf-8") for name in names}
     argv = engine_argv.read_text(encoding="utf-8")
@@ -226,7 +230,10 @@ def build_runtime_handoff(stage: Path, engine_argv: Path, ordinary: Path,
     report = verify_staged_handoff(artifacts, argv, ordinary_text, tcp, udp)
     # The XML passed through the original release compiler must still be
     # the same generation at the end of native argument generation.
-    xml_hash = hashlib.sha256(saved_xml.read_bytes()).hexdigest()
+    # Stream the full system config. Do not materialize unrelated OPNsense
+    # subsystem content in the Voice handoff process.
+    with saved_xml.open("rb") as xml_stream:
+        xml_hash = hashlib.file_digest(xml_stream, "sha256").hexdigest()
     if xml_hash != report["saved_xml_sha256"]:
         raise VoiceHandoffError("saved OPNsense Voice Config changed during runtime build")
     capture = json.loads(artifacts["capture-plan.json"])
