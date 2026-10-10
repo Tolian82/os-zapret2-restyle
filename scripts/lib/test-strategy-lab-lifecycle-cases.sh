@@ -159,11 +159,14 @@ LIFECYCLE_LOCK_FILE="${SERVICE_LOCK}" \
 STRATEGY_LAB_WORKER="${SERVICE_WORKER}" \
 MOCK_STATE_FILE="${STATE_FILE}" \
 MOCK_CALLS_FILE="${CALLS_FILE}" \
-    "${SERVICE_SOURCE}" strategy-lab job.ServiceLock >/dev/null 2>&1
+    "${SERVICE_SOURCE}" strategy-lab job.ServiceLock >"${TMP_ROOT}/voice-pending-parent.log" 2>&1
 blocked_voice_status=$?
 set -e
-[ "${blocked_voice_status}" -eq 69 ] ||
+if [ "${blocked_voice_status}" -ne 69 ]; then
+    echo "Voice parent guard returned ${blocked_voice_status}, expected 69" >&2
+    sed -n '1,40p' "${TMP_ROOT}/voice-pending-parent.log" >&2
     fail "parent Strategy Lab worker ran despite a pending Voice cutover"
+fi
 [ "$(cat "${STATE_FILE}")" = RUNNING ] ||
     fail "pending Voice cutover changed the previously running service"
 [ ! -s "${CALLS_FILE}" ] ||

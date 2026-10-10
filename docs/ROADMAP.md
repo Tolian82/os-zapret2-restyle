@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_30`: real service FD9 checkpoint seals current OPNsense Config/runtime before any cutover; native seed now demands schema-2 prepared whole journal and this sealed previous snapshot
+- [x] Current candidate `v0.5.1_31`: real service-owned stage of previous full Config/runtime for Voice rollback, requiring mutating whole journal and prior IPFW ownership
+- [ ] Next: actually restore saved Config/runtime and prior dvtws2/supervisor under unified cutover with cold-boot recovery; only then allow native Voice ON
+- [x] Previous candidate `v0.5.1_30`: real service FD9 checkpoint seals current OPNsense Config/runtime before any cutover; native seed now demands schema-2 prepared whole journal and this sealed previous snapshot
 - [ ] Next: production owner of Config + one dvtws2 + supervisor transaction consumes checkpoint and IPFW precommit/rollback, including reboot recovery; then allow GUI ON
 - [x] Previous candidate `v0.5.1_29`: installed Voice IPFW remains PENDING until whole cutover commit; native FD9 commit and rollback actions with previous table snapshots now exist
 - [ ] Next: orchestrate the real Config+one dvtws2+supervisor cutover around pending IPFW and verify cold reboot, then enable GUI Voice ON

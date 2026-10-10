@@ -515,6 +515,22 @@ native_voice_checkpoint_service()
     "${_native_voice_checkpoint_python}" "${_native_voice_checkpoint_script}" prepare
 }
 
+# Prepare exact sealed previous Config/runtime bytes for a verified Voice
+# rollback. Does NOT install them, restart dvtws2 or mutate firewall.
+# The Python entrypoint requires an already-MUTATING whole journal and
+# validates the original IPFW ownership under the existing lockf FD9.
+native_voice_restore_stage_service()
+{
+    _native_voice_restore_python="/usr/local/bin/python3.13"
+    _native_voice_restore_script="${BACKEND_DIR}/voice_cutover_restore_prepare.py"
+    [ -x "${_native_voice_restore_python}" ] &&
+    [ -r "${_native_voice_restore_script}" ] || {
+        echo "ERROR: native Voice restore preparation is not installed" >&2
+        return 1
+    }
+    "${_native_voice_restore_python}" "${_native_voice_restore_script}" prepare
+}
+
 service_dispatch()
 {
     case "${1:-}" in
@@ -546,6 +562,9 @@ service_dispatch()
             ;;
         native-voice-checkpoint)
             native_voice_checkpoint_service
+            ;;
+        native-voice-restore-stage)
+            native_voice_restore_stage_service
             ;;
         native-voice-ipfw-seed)
             native_voice_ipfw_dispatch seed
@@ -667,7 +686,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

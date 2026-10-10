@@ -134,6 +134,8 @@ jobs:
         run: python3.13 scripts/test-voice-native-ipfw-executor.py
       - name: Real previous Config/runtime checkpoint for Voice whole cutover
         run: python3.13 scripts/test-voice-native-cutover-checkpoint.py
+      - name: Verified previous Config/runtime restore stage under FD9
+        run: python3.13 scripts/test-voice-native-restore-stage.py
       - name: Voice staged candidate into native dvtws2 arguments and IPFW plan
         run: python3.13 scripts/test-voice-generator-interop.py
       - name: Voice immutable one-engine handoff preflight
@@ -542,6 +544,7 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-native-runtime-handoff.py
             /usr/local/bin/python3.13 scripts/test-voice-native-ipfw-executor.py
             /usr/local/bin/python3.13 scripts/test-voice-native-cutover-checkpoint.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-restore-stage.py
             /usr/local/bin/python3.13 scripts/test-voice-handoff-preflight.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-coordinator.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-journal.py
