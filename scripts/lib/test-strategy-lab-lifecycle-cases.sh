@@ -106,6 +106,12 @@ SERVICE_BACKEND="${SERVICE_ROOT}/backend"
 SERVICE_WORKER="${SERVICE_ROOT}/strategy_lab_worker.sh"
 SERVICE_LOCK="${TMP_ROOT}/real-service.lock"
 mkdir -p "${SERVICE_BACKEND}"
+# Repository source is intentionally 100644. The lifecycle entry point is
+# executed by the installed service wrapper; for this direct-exec lock/worker
+# regression use an executable fixture, NOT chmod on production source.
+cp "${SERVICE_SOURCE}" "${SERVICE_ROOT}/zapret_service.sh"
+chmod 0700 "${SERVICE_ROOT}/zapret_service.sh"
+SERVICE_SOURCE="${SERVICE_ROOT}/zapret_service.sh"
 for module in common config parser registry storage targets telegram_voice target_mode profile_normalizer profile_pipeline exclude blobs ports firewall generator validator atomic stage launcher supervisor
 do
     : > "${SERVICE_BACKEND}/${module}.sh"
