@@ -82,14 +82,97 @@ class NativeIPFWExecutor(unittest.TestCase):
             runtime.seed_verified(store, adapter, old)
             self.cutover(journal, desired)
             result = runtime.activate_verified(store, adapter, desired, journal, self.proof())
-            self.assertEqual("installed", result)
+            self.assertEqual("installed-pending-whole-commit", result)
+            self.assertEqual(old, store.owned(), "ownership must NOT commit before supervisor")
+            self.assertEqual("mutating", store.pending()["phase"])
+            self.assertEqual(desired["rules"], adapter.rules)
+            self.assertEqual(desired["tables"]["zapret2_voice_telegram"],
+                             adapter.tables["zapret2_voice_telegram"])
+            self.assertIn("zapret2_voice_telegram_stage", adapter.tables,
+                          "prior Voice table snapshot remains until overall commit")
+            self.assertEqual("mutating", journal.read()["phase"])
+            self.assertTrue(adapter.ops)
+            with self.assertRaisesRegex(runtime.VoiceKernelRuntimeError, "cutover"):
+                runtime.commit_verified(store, adapter, journal, self.proof())
+            self.assertEqual(old, store.owned())
+            journal.commit()
+            self.assertEqual("committed", runtime.commit_verified(
+                store, adapter, journal, self.proof()))
             self.assertEqual(desired, store.owned())
             self.assertIsNone(store.pending())
             self.assertEqual(desired["rules"], adapter.rules)
             self.assertEqual(desired["tables"], adapter.tables)
-            self.assertEqual("mutating", journal.read()["phase"])
-            self.assertTrue(adapter.ops)
             self.assertFalse(any(name.endswith("_stage") for name in adapter.tables))
+
+    def test_supervisor_failure_can_restore_previous_ipfw_before_commit(self):
+        old = manifest()
+        desired = manifest(("telegram", "91.108.0.0/16"))
+        with tempfile.TemporaryDirectory() as directory:
+            store, journal = self.stores(Path(directory))
+            adapter = FakeIPFW(old["rules"], old["tables"])
+            runtime.seed_verified(store, adapter, old)
+            self.cutover(journal, desired)
+            runtime.activate_verified(store, adapter, desired, journal, self.proof())
+            self.assertEqual("restored-previous", runtime.rollback_precommit_verified(
+                store, adapter, journal, self.proof()))
+            self.assertEqual(old["rules"], adapter.rules)
+            self.assertEqual(old["tables"], adapter.tables)
+            self.assertEqual(old, store.owned())
+            self.assertIsNone(store.pending())
+            self.assertEqual("mutating", journal.read()["phase"],
+                             "whole transaction still needs complete rollback verification")
+            # The original whole-journal abort is intentionally a separate
+            # overall Config/engine/supervisor verification step.
+
+    def test_precommit_rollback_refuses_foreign_rules_and_keeps_journal(self):
+        old = manifest()
+        desired = manifest(("telegram", "91.108.0.0/16"))
+        with tempfile.TemporaryDirectory() as directory:
+            store, journal = self.stores(Path(directory))
+            adapter = FakeIPFW(old["rules"], old["tables"])
+            runtime.seed_verified(store, adapter, old)
+            self.cutover(journal, desired)
+            runtime.activate_verified(store, adapter, desired, journal, self.proof())
+            adapter.rules[19005] = ["allow", "ip", "from", "any", "to", "any"]
+            before = list(adapter.ops)
+            with self.assertRaisesRegex(Exception, "differ|foreign|mismatch"):
+                runtime.rollback_precommit_verified(store, adapter, journal, self.proof())
+            self.assertEqual(before, adapter.ops)
+            self.assertIsNotNone(store.pending())
+            self.assertIn(19005, adapter.rules)
+
+    def test_precommit_second_activation_is_refused_before_kernel_changes(self):
+        old = manifest()
+        desired = manifest(("telegram", "91.108.0.0/16"))
+        with tempfile.TemporaryDirectory() as directory:
+            store, journal = self.stores(Path(directory))
+            adapter = FakeIPFW(old["rules"], old["tables"])
+            runtime.seed_verified(store, adapter, old)
+            self.cutover(journal, desired)
+            runtime.activate_verified(store, adapter, desired, journal, self.proof())
+            before = list(adapter.ops)
+            with self.assertRaisesRegex(runtime.VoiceKernelRuntimeError, "pending"):
+                runtime.activate_verified(store, adapter, desired, journal, self.proof())
+            self.assertEqual(before, adapter.ops)
+
+    def test_change_existing_voice_ipset_can_rollback_with_exact_old_contents(self):
+        old = manifest(("telegram", "91.108.0.0/16"))
+        desired = manifest(("telegram", "91.108.13.10"))
+        with tempfile.TemporaryDirectory() as directory:
+            store, journal = self.stores(Path(directory))
+            adapter = FakeIPFW(old["rules"], old["tables"])
+            runtime.seed_verified(store, adapter, old)
+            self.cutover(journal, desired)
+            runtime.activate_verified(store, adapter, desired, journal, self.proof())
+            self.assertEqual(["91.108.0.0/16"],
+                             adapter.tables["zapret2_voice_telegram_stage"])
+            self.assertEqual(["91.108.13.10"],
+                             adapter.tables["zapret2_voice_telegram"])
+            self.assertEqual("restored-previous", runtime.rollback_precommit_verified(
+                store, adapter, journal, self.proof()))
+            self.assertEqual(old["rules"], adapter.rules)
+            self.assertEqual(old["tables"], adapter.tables)
+            self.assertIsNone(store.pending())
 
     def test_wrong_journal_or_candidate_does_not_mutate_kernel(self):
         old = manifest()
@@ -117,6 +200,8 @@ class NativeIPFWExecutor(unittest.TestCase):
         self.assertIn("native_voice_ipfw_dispatch()", source)
         self.assertIn("native_voice_ipfw_dispatch seed", source)
         self.assertIn("native_voice_ipfw_dispatch activate", source)
+        self.assertIn("native_voice_ipfw_dispatch commit", source)
+        self.assertIn("native_voice_ipfw_dispatch rollback", source)
         self.assertIn("voice_ipfw_runtime.py", source)
         self.assertIn("service_with_lifecycle_lock", source)
         self.assertIn("native-voice-ipfw-seed|native-voice-ipfw-activate", source)

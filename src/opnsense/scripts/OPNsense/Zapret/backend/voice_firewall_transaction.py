@@ -295,6 +295,50 @@ def plan_postcommit_cleanup(adapter, previous: dict, desired: dict) -> list[tupl
     return steps
 
 
+def rollback_uncommitted(adapter, previous: dict, desired: dict) -> None:
+    """Restore the exact prior IPFW state while the whole cutover is uncommitted.
+
+    This is a REAL reversible precommit operation. It requires the installed
+    desired rules and all preserved old contents in the stage tables. A
+    partially damaged/foreign state fails closed and retains the durable
+    intent for operator recovery; it is never guessed or swept.
+    """
+    # This validates the full installed desired rules, every Voice table,
+    # the former contents of all swapped stages and any retired tables.
+    # No mutation occurs if the live state does not match the journal.
+    plan_postcommit_cleanup(adapter, previous, desired)
+    if adapter.list_rules(desired["rule_base"], desired["rule_max"]) != desired["rules"]:
+        raise VoiceFirewallError("installed Voice cutover rules changed before rollback")
+    for name in desired["tables"]:
+        stage = name + "_stage"
+        if adapter.get_table(stage) is None:
+            raise VoiceFirewallError(
+                "missing prior Voice table snapshot; rollback requires manual review"
+            )
+    try:
+        for number in sorted(desired["rules"]):
+            adapter.delete_rule(number)
+        for number, argv in sorted(previous["rules"].items()):
+            adapter.add_rule(number, argv)
+        # New active tables were not owned by the previous release. Existing
+        # tables are swapped BACK before their stage snapshots are removed.
+        for name in desired["tables"]:
+            stage = name + "_stage"
+            if name in previous["tables"]:
+                adapter.swap_tables(name, stage)
+                adapter.destroy_table(stage)
+            else:
+                adapter.destroy_table(name)
+                adapter.destroy_table(stage)
+        verify_prior_state(adapter, previous, previous)
+    except Exception as error:
+        # The cross-resource journal and IPFW intent are deliberately left
+        # intact. Never claim rollback if even one kernel command failed.
+        raise VoiceFirewallError(
+            "Voice IPFW rollback incomplete; durable intent retained for review"
+        ) from error
+
+
 def cleanup_committed(adapter, previous: dict, desired: dict) -> None:
     """Retryable post-commit cleanup; never remove unverified table contents."""
     steps = plan_postcommit_cleanup(adapter, previous, desired)

@@ -528,6 +528,12 @@ service_dispatch()
         native-voice-ipfw-activate)
             native_voice_ipfw_dispatch activate
             ;;
+        native-voice-ipfw-commit)
+            native_voice_ipfw_dispatch commit
+            ;;
+        native-voice-ipfw-rollback)
+            native_voice_ipfw_dispatch rollback
+            ;;
         runtime-failure)
             orchestrator_runtime_failure \
                 "${CHILD_PIDFILE}" \
@@ -636,7 +642,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-ipfw-seed|native-voice-ipfw-activate|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

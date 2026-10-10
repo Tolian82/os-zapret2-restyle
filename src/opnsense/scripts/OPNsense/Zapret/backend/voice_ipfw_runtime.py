@@ -9,9 +9,14 @@ reboot rollback in the same durable whole-system cutover.
 Commands:
   seed      Verify and adopt the ALREADY RUNNING, Voice-OFF ordinary IPFW
             rules as prior trusted ownership. Never adopts the old PoC.
-  activate  Install candidate Voice+ordinary scoped rules from the staged
-            release, only while an explicit whole-cutover journal is MUTATING
-            and a native dvtws2 process has the exact candidate kernel argv.
+  activate  Install Voice+ordinary scoped rules with a durable PRECOMMIT
+            ownership journal while the whole-system cutover is MUTATING.
+            Retain old table snapshots until the entire service is ready.
+  commit    Clean old IPFW tables and commit ownership ONLY after the
+            whole-system cutover is durably COMMITTED.
+  rollback  Restore the previous IPFW resources BEFORE whole-system commit,
+            after the candidate dvtws2 has been stopped. Intent persists
+            until Config/runtime/supervisor rollback is independently proven.
 
 No caller-supplied paths or alternate IPFW binaries are accepted on FreeBSD.
 """
@@ -30,9 +35,10 @@ import sys
 from voice_firewall_ledger import (
     VoiceOwnershipStore, canonical_manifest, decode_manifest, fingerprint,
 )
-from voice_firewall_activation import activate_mockable
 from voice_firewall_transaction import (
-    SERVICES, TABLE_PREFIX, verify_prior_state,
+    SERVICES, TABLE_PREFIX, verify_prior_state, apply_transaction,
+    rollback_uncommitted, plan_postcommit_cleanup, cleanup_committed,
+    table_contents_equal,
 )
 from voice_cutover_journal import VoiceCutoverJournal, BOUND_FIELD
 from voice_ipfw_adapter import FreeBSDIPFWAdapter
@@ -198,24 +204,97 @@ def seed_verified(store: VoiceOwnershipStore, adapter, desired: dict) -> str:
     return "seeded"
 
 
-def activate_verified(store: VoiceOwnershipStore, adapter, desired: dict,
-                      whole: VoiceCutoverJournal, proof: dict) -> str:
-    """Apply kernel IPFW only under a hash-bound whole-system cutover."""
+def _whole_matches(whole: VoiceCutoverJournal, desired: dict,
+                   proof: dict, required_phase: str) -> None:
     record = whole.read()
     if record is None or record.get("schema", 0) < 2 or \
-       record.get("phase") != "mutating" or \
-       record["candidate"].get(BOUND_FIELD) != fingerprint(canonical_manifest(desired)) or record["candidate"].get("native_argv_sha256") != proof.get("native_argv_sha256"):
-        _fail("no matching durable mutating whole-system Voice cutover")
+       record.get("phase") != required_phase or \
+       record["candidate"].get(BOUND_FIELD) != fingerprint(canonical_manifest(desired)) or \
+       record["candidate"].get("native_argv_sha256") != proof.get("native_argv_sha256"):
+        _fail("no matching durable whole-system Voice cutover at required phase")
+
+
+def activate_verified(store: VoiceOwnershipStore, adapter, desired: dict,
+                      whole: VoiceCutoverJournal, proof: dict) -> str:
+    """Install real IPFW with durable PRECOMMIT intent, never finalize early.
+
+    The new one-engine dvtws2 must already be running, but the supervisor
+    and Config are not yet transactionally committed. Keep both old table
+    snapshots and old ownership until the entire system commits or rolls
+    back. This is the kernel half of the complete Voice cutover.
+    """
+    _whole_matches(whole, desired, proof, "mutating")
     previous = store.owned()
-    if previous is None:
-        _fail("previous ordinary IPFW ownership was never verified")
-    activate_mockable(adapter, store, previous, desired)
-    return "installed"
+    if previous is None or store.pending() is not None:
+        _fail("IPFW ownership is absent or a prior cutover is still pending")
+    verify_prior_state(adapter, previous, desired)
+    store.begin(previous, desired)
+    store.mark_mutating()
+    try:
+        apply_transaction(adapter, previous, desired)
+    except Exception:
+        # Only a fully restored previous state permits clearing the durable
+        # intent. Ambiguous kernel state stays blocked across reboot.
+        if store.inspect(adapter) == "previous-intact":
+            store.abort(adapter)
+        raise
+    # The former target sets must still be available for a later rollback.
+    plan_postcommit_cleanup(adapter, previous, desired)
+    return "installed-pending-whole-commit"
+
+
+def rollback_precommit_verified(store: VoiceOwnershipStore, adapter,
+                                whole: VoiceCutoverJournal, proof: dict) -> str:
+    """Restore the previous IPFW rules only while whole cutover is MUTATING.
+
+    The production CLI refuses to roll back unless the candidate PID file
+    has been removed by the overall orchestrator's launcher_stop operation.
+    The whole Config/runtime/supervisor journal remains pending until
+    independent previous-state recovery verification finishes.
+    """
+    pending = store.pending()
+    if pending is None or pending["phase"] != "mutating":
+        _fail("no uncommitted Voice IPFW transaction to roll back")
+    from voice_firewall_ledger import decode_manifest
+    previous = decode_manifest(pending["previous"])
+    desired = decode_manifest(pending["desired"])
+    _whole_matches(whole, desired, proof, "mutating")
+    if store.owned() != previous:
+        _fail("previous IPFW owner has already changed; rollback requires review")
+    if store.inspect(adapter) == "previous-intact":
+        store.abort(adapter)
+        return "already-previous"
+    rollback_uncommitted(adapter, previous, desired)
+    store.abort(adapter)
+    return "restored-previous"
+
+
+def commit_verified(store: VoiceOwnershipStore, adapter,
+                    whole: VoiceCutoverJournal, proof: dict) -> str:
+    """Finish IPFW only AFTER the whole-engine/Config/supervisor commit."""
+    pending = store.pending()
+    if pending is None or pending["phase"] != "mutating":
+        _fail("missing pending Voice IPFW ownership commit")
+    from voice_firewall_ledger import decode_manifest
+    previous = decode_manifest(pending["previous"])
+    desired = decode_manifest(pending["desired"])
+    _whole_matches(whole, desired, proof, "committed")
+    old_owner = store.owned()
+    if old_owner not in (previous, desired):
+        _fail("IPFW ownership changed outside the Voice cutover")
+    # The running desired rules, all active tables AND saved previous-stage
+    # snapshots must still agree with the durable intent.
+    plan_postcommit_cleanup(adapter, previous, desired)
+    if old_owner == previous:
+        store.commit(desired)
+    cleanup_committed(adapter, previous, desired)
+    store.finish(adapter)
+    return "committed"
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2 or argv[1] not in ("seed", "activate"):
-        print("usage: voice_ipfw_runtime.py seed|activate", file=sys.stderr)
+    if len(argv) != 2 or argv[1] not in ("seed", "activate", "commit", "rollback"):
+        print("usage: voice_ipfw_runtime.py seed|activate|commit|rollback", file=sys.stderr)
         return 64
     try:
         require_native_lock()
@@ -232,7 +311,7 @@ def main(argv: list[str]) -> int:
                     _fail("persistent Voice ledger directory is not root-private")
         store = VoiceOwnershipStore(LEDGER)
         adapter = FreeBSDIPFWAdapter(19000, 19010,
-                                    allow_mutations=argv[1] == "activate")
+                                    allow_mutations=argv[1] in ("activate", "commit", "rollback"))
         if argv[1] == "seed":
             if proof.get("enabled_services") or desired["tables"]:
                 _fail("only all-OFF ordinary runtime may be adopted")
@@ -241,18 +320,32 @@ def main(argv: list[str]) -> int:
             result = seed_verified(store, adapter, desired)
         else:
             if not proof.get("enabled_services"):
-                _fail("native IPFW activation expects at least one enabled service")
+                _fail("native IPFW cutover requires at least one enabled Voice service")
             require_no_legacy(adapter)
-            require_engine_process(proof)
-            pid_before = _regular(PIDFILE, 40).strip()
-            result = activate_verified(
-                store, adapter, desired, VoiceCutoverJournal(WHOLE), proof
-            )
-            # If the engine dies while IPFW changes, never claim activation
-            # success. The whole-cutover journal remains pending for recovery.
-            require_engine_process(proof)
-            if _regular(PIDFILE, 40).strip() != pid_before:
-                _fail("Voice engine instance changed while installing IPFW")
+            whole = VoiceCutoverJournal(WHOLE)
+            if argv[1] == "rollback":
+                # The overall orchestrator must stop the candidate FIRST,
+                # then revert IPFW, restore tree/Config/previous engine and
+                # only afterwards abort the durable whole-cutover journal.
+                if PIDFILE.exists() or PIDFILE.is_symlink():
+                    _fail("stop the candidate dvtws2 before Voice IPFW rollback")
+                result = rollback_precommit_verified(
+                    store, adapter, whole, proof
+                )
+            else:
+                require_engine_process(proof)
+                pid_before = _regular(PIDFILE, 40).strip()
+                if argv[1] == "activate":
+                    result = activate_verified(
+                        store, adapter, desired, whole, proof
+                    )
+                else:
+                    result = commit_verified(
+                        store, adapter, whole, proof
+                    )
+                require_engine_process(proof)
+                if _regular(PIDFILE, 40).strip() != pid_before:
+                    _fail("Voice engine instance changed during IPFW transaction")
         print("native-voice-ipfw=" + result)
         return 0
     except (OSError, ValueError, RuntimeError) as error:
