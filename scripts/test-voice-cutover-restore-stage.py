@@ -11,6 +11,8 @@ ROOT=Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"))
 import voice_cutover_backup as backup
 import voice_cutover_restore_stage as restorer
+import voice_cutover_install_image as install_image
+from voice_native_file_observer import observe_live_files
 
 
 class RestoreStageTests(unittest.TestCase):
@@ -133,6 +135,79 @@ class RestoreStageTests(unittest.TestCase):
             self.assertEqual(b"--port=989\n",(runtime/"dvtws.args").read_bytes())
             self.assertFalse(list(target.parent.glob(".voice-restore-stage-*")))
 
+
+
+    def test_install_image_materializes_previous_modes_without_live_mutations(self):
+        with tempfile.TemporaryDirectory() as d:
+            saved,stage,digests,config,runtime=self.setup(d)
+            original_config=config.read_bytes()
+            original_args=(runtime/"dvtws.args").read_bytes()
+            original_root_mode=runtime.stat().st_mode & 0o7777
+            original_child_mode=(runtime/"managed").stat().st_mode & 0o7777
+            restorer.prepare_restore_stage(saved,stage,digests)
+            image=stage.parent/"install-image"
+            output=install_image.prepare_installable_restore(stage,image,digests)
+            self.assertEqual("install-image-only",output["state"])
+            self.assertIs(output["activation_authorized"],False)
+            self.assertEqual(digests,output["previous"])
+            self.assertEqual(0o700,image.stat().st_mode & 0o777)
+            self.assertEqual(0o644,(image/"runtime/dvtws.args").stat().st_mode & 0o777)
+            self.assertEqual(original_root_mode,
+                             (image/"runtime").stat().st_mode & 0o7777)
+            self.assertEqual(original_child_mode,
+                             (image/"runtime/managed").stat().st_mode & 0o7777)
+            self.assertEqual(0o600,(image/"config.xml").stat().st_mode & 0o777)
+            self.assertEqual(digests,observe_live_files(image/"config.xml",
+                              image/"runtime",previous_backup=stage))
+            self.assertEqual(original_config,config.read_bytes())
+            self.assertEqual(original_args,(runtime/"dvtws.args").read_bytes())
+            self.assertEqual(digests,backup.bound_resource_fingerprints(stage))
+            with self.assertRaisesRegex(backup.VoiceBackupError,"already exists"):
+                install_image.prepare_installable_restore(stage,image,digests)
+
+    def test_install_image_tamper_and_output_collision_fail_closed(self):
+        for variant in ("stage-tamper","symlink-target","existing-target",
+                        "bad-prior-fingerprint"):
+            with self.subTest(variant=variant),tempfile.TemporaryDirectory() as d:
+                saved,stage,digests,config,runtime=self.setup(d)
+                restorer.prepare_restore_stage(saved,stage,digests)
+                image=stage.parent/"install-image"
+                foreign=Path(d)/"foreign"
+                foreign.mkdir()
+                (foreign/"sentinel").write_text("keep")
+                if variant=="stage-tamper":
+                    (stage/"runtime/dvtws.args").write_text("untrusted")
+                elif variant=="symlink-target":
+                    image.symlink_to(foreign,target_is_directory=True)
+                elif variant=="existing-target":
+                    image.mkdir()
+                else:
+                    digests={**digests,"runtime":"0"*64}
+                with self.assertRaises((OSError,backup.VoiceBackupError)):
+                    install_image.prepare_installable_restore(stage,image,digests)
+                self.assertFalse(image.exists() and image.is_file())
+                self.assertEqual("keep",(foreign/"sentinel").read_text())
+                self.assertEqual(b"--port=989\n",
+                                 (runtime/"dvtws.args").read_bytes())
+
+    def test_install_image_interrupted_mode_restore_never_publishes(self):
+        with tempfile.TemporaryDirectory() as d:
+            saved,stage,digests,config,runtime=self.setup(d)
+            restorer.prepare_restore_stage(saved,stage,digests)
+            image=stage.parent/"install-image"
+            original=install_image._restore_mode
+            def interrupted(path,mode,**kwargs):
+                if path.name=="dvtws.args":
+                    raise OSError("fault while applying sealed file modes")
+                return original(path,mode,**kwargs)
+            with patch.object(install_image,"_restore_mode",side_effect=interrupted):
+                with self.assertRaisesRegex(OSError,"fault while applying"):
+                    install_image.prepare_installable_restore(stage,image,digests)
+            self.assertFalse(image.exists())
+            self.assertFalse(list(stage.parent.glob(".voice-install-image-*")))
+            self.assertEqual(digests,backup.bound_resource_fingerprints(stage))
+            self.assertEqual(b"--port=989\n",
+                             (runtime/"dvtws.args").read_bytes())
 
 if __name__=="__main__":
     unittest.main(verbosity=2)

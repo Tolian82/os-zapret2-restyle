@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_35`: align independent live runtime root-mode fingerprint with checkpoint schema-2 and legacy schema-1
+- [x] Current candidate `v0.5.1_36`: real FD9 rollback preparation now outputs a permission-accurate private install image of previous Config/runtime, with independent byte/mode witness
+- [ ] Next: trusted original file UID/GID + Config lock ownership, then a journal-coordinated live Config/runtime swap and one previous engine/supervisor restart
+- [x] Previous candidate `v0.5.1_35`: align independent live runtime root-mode fingerprint with checkpoint schema-2 and legacy schema-1
 - [ ] Next: production previous Config/runtime restore and prior process restart under one lifecycle and Config authority
 - [x] Previous candidate `v0.5.1_34`: seal previous runtime root permission bits in recoverable backup and whole-cutover digest
 - [ ] Next: real locked Config/runtime swap and prior engine/supervisor restart under a unified cutover transaction

@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_36 — native Voice recovery now prepares a permission-accurate install image (2026-10-10):** Added `backend/voice_cutover_install_image.py` and connected it to the existing production `native-voice-restore-stage` action under shared FD9. After validating the durable mutating whole-cutover journal, previous IPFW ownership and the sealed old Config/runtime snapshot, it creates `/var/db/zapret2/voice-cutover/restore-install-image`: a separate fsync'd, root-private publication with original Config/file/child-directory/runtime-root modes, not the private 0600/0700 snapshot modes. A second independent read-only live-files observer verifies its full previous Config/runtime fingerprints before and after publication. Schema-1 snapshots lacking root mode refuse materialization. Both original backup and private restore-staged remain untouched; no live `/conf/config.xml` or `runtime-v2` overwrite, no process start/stop or IPFW mutation. Original UID/GID restoration, continuous Config authority, actual live file swap, engine/supervisor restart and reboot recovery are still required before Voice ON. Added isolated success/permission, tampering, interruption and unchanged-live regressions for Linux/FreeBSD CI. PLUGIN_REVISION=36; exact-head CI pending.
+
+
 **v0.5.1_35 — align live Voice runtime witness with sealed rollback schema (2026-10-10):** After v0.5.1_34 CI found three real mismatches, updated the independent descriptor-anchored read-only `voice_native_file_observer.py` to calculate exactly the schema-2 root-mode-aware runtime fingerprint used by durable checkpoints. It also calculates the original schema-1 fingerprint from the same stable scan so older verified backups remain inspectable without inventing root metadata. A previous-bound observation rejects a changed root permission mode. Added a live-root permission regression; existing Config/child/mutation tests remain. This fixes a real recovery witness disagreement, not just test expectations. No native Voice ON, actual Config/runtime swap, or automatic reboot recovery. PLUGIN_REVISION=35; CI qualification pending.
 
 
@@ -166,8 +169,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_35` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_35.pkg` (**not published, do not install**);
+- current source candidate revision: `_36` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_36.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

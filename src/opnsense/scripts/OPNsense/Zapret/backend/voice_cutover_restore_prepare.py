@@ -3,8 +3,9 @@
 
 Requires the existing Zapret FD9 lifecycle lock and the durable schema-2+
 whole-cutover journal in MUTATING phase. Restorable Config and runtime are
-materialized into a new, root-private directory. Nothing is installed: this
-action never changes /conf/config.xml, the active tree, IPFW or dvtws2.
+materialized into a private stage and a permission-accurate install image.
+Nothing is installed: this action never changes /conf/config.xml, the
+active tree, IPFW or dvtws2.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ import sys
 from voice_cutover_backup import bound_resource_fingerprints
 from voice_cutover_journal import VoiceCutoverJournal
 from voice_cutover_restore_stage import prepare_restore_stage
+from voice_cutover_install_image import prepare_installable_restore
 from voice_firewall_ledger import VoiceOwnershipStore
 import voice_ipfw_runtime as native
 
@@ -61,13 +63,20 @@ def prepare_recovery(previous_dir: Path, destination: Path,
     if result.get("activation_authorized") is not False or \
        result.get("previous") != old:
         raise NativeRestorePreparationError("recovery files were not sealed")
-    # The cross-system intent remains in MUTATING: this step alone can
-    # never bless kernel, process, supervisor or Config restoration.
+    # Build the image with actual saved modes. Its outer directory remains
+    # private; it is NOT moved into the live runtime or OPNsense Config.
+    image = prepare_installable_restore(
+        destination, destination.parent / "restore-install-image", expected
+    )
+    if image["activation_authorized"] is not False or        image["previous"] != old:
+        raise NativeRestorePreparationError("install image is inconsistent")
+    # The cross-system intent remains in MUTATING: permission-accurate files
+    # alone cannot authorize kernel, process, supervisor or Config recovery.
     if whole.read() != record:
         raise NativeRestorePreparationError(
             "whole-system Voice journal changed while staging previous files"
         )
-    return result
+    return {**result, "install_image": "prepared-only"}
 
 
 def main(argv: list[str]) -> int:
@@ -84,6 +93,7 @@ def main(argv: list[str]) -> int:
             whole, ledger,
         )
         print("native-voice-restore=staged-only")
+        print("native-voice-install-image=" + result["install_image"])
         print("previous-config-sha256=" + result["previous"]["config"])
         print("previous-runtime-sha256=" + result["previous"]["runtime"])
         return 0

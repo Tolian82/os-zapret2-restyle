@@ -38,7 +38,9 @@ class RealNativePreviousRestoreStage(unittest.TestCase):
         self.config.write_text("<opnsense><service>before</service></opnsense>")
         self.runtime = base / "active"
         self.runtime.mkdir()
+        self.runtime.chmod(0o750)
         (self.runtime / "dvtws.args").write_text("--port=989\n--filter-tcp=443\n")
+        (self.runtime / "dvtws.args").chmod(0o640)
         (self.runtime / "traffic.conf").write_text("--filter-tcp=443\n")
         self.whole_root = base / "whole"
         self.whole_root.mkdir(mode=0o700)
@@ -77,6 +79,12 @@ class RealNativePreviousRestoreStage(unittest.TestCase):
         self.assertFalse(result["activation_authorized"])
         self.assertEqual("staged-only", result["state"])
         self.assertEqual(self.evidence, result["previous"])
+        self.assertEqual("prepared-only", result["install_image"])
+        image = self.whole_root / "restore-install-image"
+        self.assertEqual(0o700, image.stat().st_mode & 0o777)
+        self.assertEqual(0o750, (image / "runtime").stat().st_mode & 0o777)
+        self.assertEqual(0o640, (image / "runtime/dvtws.args").stat().st_mode & 0o777)
+        self.assertEqual(before, (image / "config.xml").read_bytes())
         self.assertEqual(before, (self.out / "config/config.xml").read_bytes())
         self.assertEqual((self.runtime / "dvtws.args").read_bytes(),
                          (self.out / "runtime/dvtws.args").read_bytes())
@@ -100,6 +108,7 @@ class RealNativePreviousRestoreStage(unittest.TestCase):
                 self.backup, self.out, self.journal, self.firewall
             )
         self.assertFalse(self.out.exists())
+        self.assertFalse((self.whole_root / "restore-install-image").exists())
 
     def test_committed_intent_cannot_stage_old_config(self):
         self.begin()
