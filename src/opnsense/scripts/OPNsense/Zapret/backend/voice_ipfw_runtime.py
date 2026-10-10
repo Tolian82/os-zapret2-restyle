@@ -300,6 +300,16 @@ def main(argv: list[str]) -> int:
         require_native_lock()
         desired, proof = load_candidate()
         if argv[1] == "seed":
+            # An otherwise successful seed would make the ordinary legacy
+            # lifecycle refuse further restarts as soon as the ledger owns
+            # the plugin IPFW range. NEVER seed ahead of a complete,
+            # separately prepared whole-system rollback transaction.
+            from voice_cutover_backup import bound_resource_fingerprints
+            intent = VoiceCutoverJournal(WHOLE).read()
+            if intent is None or intent.get("phase") != "prepared" or \
+               intent.get("schema", 0) < 2:
+                _fail("native IPFW seed requires a prepared whole-service cutover")
+            bound_resource_fingerprints(WHOLE / "previous", intent["previous"])
             # Persistent /var/db state is created only by an explicit
             # lifecycle-owned adoption operation, never by status or import.
             for directory in (LEDGER.parent, LEDGER):

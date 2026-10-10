@@ -493,6 +493,28 @@ native_voice_ipfw_dispatch()
         "${_native_voice_ipfw_action}"
 }
 
+# Create a real, fsync'd previous Config/runtime checkpoint BEFORE any
+# native Voice transaction takes ownership of IPFW. This action is private
+# to the service lifecycle FD9, never available through Voice GUI Apply.
+native_voice_checkpoint_service()
+{
+    orchestrator_runtime_is_complete \
+        "${CHILD_PIDFILE}" "${SUPERVISOR_MONITOR_PIDFILE}" \
+        "${RULE_BASE}" "${RULE_MAX}" "${ACTIVE_DIR}" || {
+            echo "ERROR: cannot checkpoint an incomplete previous Zapret runtime" >&2
+            return 1
+        }
+
+    _native_voice_checkpoint_python="/usr/local/bin/python3.13"
+    _native_voice_checkpoint_script="${BACKEND_DIR}/voice_cutover_checkpoint.py"
+    [ -x "${_native_voice_checkpoint_python}" ] &&
+    [ -r "${_native_voice_checkpoint_script}" ] || {
+        echo "ERROR: native Voice checkpoint command is not installed" >&2
+        return 1
+    }
+    "${_native_voice_checkpoint_python}" "${_native_voice_checkpoint_script}" prepare
+}
+
 service_dispatch()
 {
     case "${1:-}" in
@@ -521,6 +543,9 @@ service_dispatch()
             ;;
         reconfigure)
             reconfigure_service
+            ;;
+        native-voice-checkpoint)
+            native_voice_checkpoint_service
             ;;
         native-voice-ipfw-seed)
             native_voice_ipfw_dispatch seed
@@ -609,7 +634,7 @@ service_with_lifecycle_lock()
         # evidence of an interrupted Voice cutover. Status/inspection remain
         # available, and no journal is created during normal operation.
         case "${1:-}" in
-            start|stop|restart|reconfigure|native-voice-ipfw-seed|telegram-voice-enable|telegram-voice-disable|runtime-failure|strategy-lab|strategy-lab-circular|strategy-lab-recover)
+            start|stop|restart|reconfigure|native-voice-checkpoint|telegram-voice-enable|telegram-voice-disable|runtime-failure|strategy-lab|strategy-lab-circular|strategy-lab-recover)
                 preflight_voice_cutover_journals || return 69
                 ;;
         esac
@@ -642,7 +667,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

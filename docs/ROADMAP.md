@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_29`: installed Voice IPFW remains PENDING until whole cutover commit; native FD9 commit and rollback actions with previous table snapshots now exist
+- [x] Current candidate `v0.5.1_30`: real service FD9 checkpoint seals current OPNsense Config/runtime before any cutover; native seed now demands schema-2 prepared whole journal and this sealed previous snapshot
+- [ ] Next: production owner of Config + one dvtws2 + supervisor transaction consumes checkpoint and IPFW precommit/rollback, including reboot recovery; then allow GUI ON
+- [x] Previous candidate `v0.5.1_29`: installed Voice IPFW remains PENDING until whole cutover commit; native FD9 commit and rollback actions with previous table snapshots now exist
 - [ ] Next: orchestrate the real Config+one dvtws2+supervisor cutover around pending IPFW and verify cold reboot, then enable GUI Voice ON
 - [x] Previous candidate `v0.5.1_28`: production FreeBSD IPFW executor wired to service lockf FD9; native Voice OFF ownership seed and journal/argv-bound real kernel activation available under locked lifecycle
 - [ ] Next: wire the complete Config/runtime/one-engine/supervisor rollback and boot recovery around the real IPFW executor; enable GUI Voice ON only then
