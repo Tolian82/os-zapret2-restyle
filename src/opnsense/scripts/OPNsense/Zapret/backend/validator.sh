@@ -522,6 +522,10 @@ validator_validate_runtime_modes()
     for _validator_modes_file in \
         "${_validator_modes_managed}/hostlist-youtube.txt" \
         "${_validator_modes_managed}/ipset-telegram.txt" \
+        "${_validator_modes_managed}/ipset-discord.txt" \
+        "${_validator_modes_managed}/ipset-x.txt" \
+        "${_validator_modes_managed}/ipset-sip.txt" \
+        "${_validator_modes_managed}/ipset-custom.txt" \
         "${_validator_modes_managed}/hostlist-user.txt" \
         "${_validator_modes_managed}/hostlist-exclude.txt"
     do

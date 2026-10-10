@@ -66,6 +66,60 @@ orchestrator_fail_from_log()
         "${_orchestrator_fail_log_message}"
 }
 
+# Build the real native Voice + ordinary dvtws2 candidate as an artifact
+# of the normal Zapret release. Only the existing orchestrator owns this path.
+# The candidate is deliberately NOT selected as active traffic.conf while the
+# legacy telegram_voice PoC still owns rule/table lifecycle and native Voice
+# ON has not passed its whole-engine cutover gate.
+orchestrator_stage_native_voice()
+{
+    _orchestrator_voice_xml="$1"
+    _orchestrator_voice_managed="$2"
+    _orchestrator_voice_active="$3"
+    _orchestrator_voice_logical_wan="$4"
+    _orchestrator_voice_rule_base="$5"
+    _orchestrator_voice_rule_max="$6"
+    _orchestrator_voice_divert="$7"
+    _orchestrator_voice_user_traffic="$8"
+    _orchestrator_voice_output="$9"
+
+    _orchestrator_voice_python="/usr/local/bin/python3.13"
+    if [ ! -x "${_orchestrator_voice_python}" ]; then
+        # Native FreeBSD installations must use the pinned package Python.
+        # Repository CI may run from an uninstalled source tree.
+        case "${BACKEND_DIR:-}" in
+            /usr/local/opnsense/scripts/OPNsense/Zapret/backend)
+                common_error "native Voice compiler requires /usr/local/bin/python3.13"
+                return 1
+                ;;
+            *)
+                _orchestrator_voice_python=$(command -v python3.13) || {
+                    common_error "Python 3.13 is required to compile native Voice"
+                    return 1
+                }
+                ;;
+        esac
+    fi
+
+    [ -r "${BACKEND_DIR}/voice_release_stage.py" ] || {
+        common_error "native Voice release compiler is not installed"
+        return 1
+    }
+    _orchestrator_voice_resolved=$(config_resolve_interface "${_orchestrator_voice_logical_wan}") ||
+        return 1
+
+    "${_orchestrator_voice_python}" "${BACKEND_DIR}/voice_release_stage.py" \
+        "${_orchestrator_voice_xml}" \
+        "${_orchestrator_voice_managed}" \
+        "${_orchestrator_voice_active}" \
+        "${_orchestrator_voice_resolved}" \
+        "${_orchestrator_voice_rule_base}" \
+        "${_orchestrator_voice_rule_max}" \
+        "${_orchestrator_voice_divert}" \
+        "${_orchestrator_voice_user_traffic}" \
+        "${_orchestrator_voice_output}"
+}
+
 orchestrator_build_release()
 {
     _orchestrator_build_config="$1"
@@ -96,6 +150,17 @@ orchestrator_build_release()
             "${_orchestrator_build_total}" config \
             "service is disabled"
         return 2
+    }
+    # Reject native Voice ON before generating anything for the
+    # old telegram-voice-poc prepend. Apply remains disabled in v0.5.1_1.
+    # Until the one-engine cutover is implemented, silently ignoring a
+    # persisted Voice checkbox would misrepresent runtime state.
+    config_voice_staged_only_guard || {
+        orchestrator_fail_stage \
+            "${_orchestrator_build_stage_file}" 1 \
+            "${_orchestrator_build_total}" config \
+            "native Voice ON requires the completed transactional runtime"
+        return 1
     }
     [ -n "${TRAFFIC_ARGS}" ] || {
         common_error "Traffic Strategy is empty"
@@ -198,6 +263,7 @@ orchestrator_build_release()
         "${YOUTUBE_DOMAINS}" \
         "${TELEGRAM_IPS}" \
         "${USER_DOMAINS}" \
+        "${DISCORD_IPS:-}" "${X_IPS:-}" "${SIP_IPS:-}" "${CUSTOM_IPS:-}" \
         2>"${_orchestrator_build_error}" || {
             orchestrator_fail_from_log \
                 "${_orchestrator_build_stage_file}" 3 \
@@ -293,6 +359,31 @@ orchestrator_build_release()
                 "Telegram Voice profile generation failed"
             return 1
         }
+    # Actual product release-generation path, not a separate test-only
+    # compiler. Native artifacts remain private/inactive until the shared
+    # single-engine IPFW/Config cutover replaces the PoC runtime.
+    # Do not quietly substitute these into the old traffic.conf: doing so
+    # without switching scoped IPFW tables would redirect wrong UDP traffic.
+    _orchestrator_build_voice_native="${_orchestrator_build_release}/voice-native-candidate"
+    : > "${_orchestrator_build_error}"
+    orchestrator_stage_native_voice \
+        "/conf/config.xml" \
+        "${_orchestrator_build_managed_source}" \
+        "${_orchestrator_build_active_dir}" \
+        "${WAN_IF}" \
+        "${RULE_BASE:-19000}" \
+        "${RULE_MAX:-19010}" \
+        "${DIVERT_PORT}" \
+        "${_orchestrator_build_user_traffic}" \
+        "${_orchestrator_build_voice_native}" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 4 \
+                "${_orchestrator_build_total}" blobs \
+                "${_orchestrator_build_error}" \
+                "native Voice candidate compilation failed"
+            return 1
+        }
     _orchestrator_build_extra_input="${_orchestrator_build_workspace}/extra.input.conf"
     _orchestrator_build_extra="${_orchestrator_build_release}/extra.conf"
     common_write_text_file \
@@ -360,6 +451,51 @@ orchestrator_build_release()
                 "${_orchestrator_build_total}" generator \
                 "${_orchestrator_build_error}" \
                 "argument generation failed"
+            return 1
+        }
+    # Produce the ACTUAL combined Voice + Strategies argv, using the very
+    # same generator, divert socket, Lua initializers and global exclusions
+    # as the currently active single-engine runtime. The candidate is not
+    # installed or used for live divert until native ON cutover is qualified.
+    _orchestrator_build_native_args="${_orchestrator_build_voice_native}/dvtws.args"
+    : > "${_orchestrator_build_error}"
+    generator_build_args_mapped \
+        "${_orchestrator_build_native_args}" \
+        "${DIVERT_PORT}" \
+        "${_orchestrator_build_voice_native}/traffic.conf" \
+        "${_orchestrator_build_extra}" \
+        "${_orchestrator_build_blob_args}" \
+        "${_orchestrator_build_exclude_source}" \
+        "${_orchestrator_build_exclude_reference}" \
+        "${_orchestrator_build_zapret_dir}/lua/zapret-lib.lua" \
+        "${_orchestrator_build_zapret_dir}/lua/zapret-antidpi.lua" \
+        "${_orchestrator_build_zapret_dir}/lua/zapret-auto.lua" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 6 \
+                "${_orchestrator_build_total}" generator \
+                "${_orchestrator_build_error}" \
+                "native Voice engine argument generation failed"
+            return 1
+        }
+    # Bind the generated one-engine argv to destination-scoped IPFW rules.
+    # This writes ONLY release-local private manifest/proof files. IPFW,
+    # current dvtws2 and ordinary Strategies remain unchanged.
+    : > "${_orchestrator_build_error}"
+    "${_orchestrator_voice_python}" \
+        "${BACKEND_DIR}/voice_handoff_preflight.py" \
+        "${_orchestrator_build_voice_native}" \
+        "${_orchestrator_build_native_args}" \
+        "${_orchestrator_build_user_traffic}" \
+        "${_orchestrator_build_tcp}" \
+        "${_orchestrator_build_udp}" \
+        "/conf/config.xml" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 6 \
+                "${_orchestrator_build_total}" generator \
+                "${_orchestrator_build_error}" \
+                "native Voice engine/IPFW handoff compilation failed"
             return 1
         }
     orchestrator_stage \
@@ -449,6 +585,22 @@ orchestrator_native_start()
     _orchestrator_start_log="$5"
     _orchestrator_start_supervisor_log="$6"
     _orchestrator_start_total=13
+
+    # A saved native Voice ON cannot be handled by the legacy PoC.
+    # Check BEFORE runtime_is_complete returns success and, crucially,
+    # BEFORE cleanup_runtime stops any currently working process/rules.
+    # Reconfigure already builds before stopping; start used to clean first.
+    if [ -r "${_orchestrator_start_config}" ]; then
+        config_load "${_orchestrator_start_config}" || return 1
+        # Global OFF must still be permitted to stop Zapret; a native Voice
+        # ON preference is not an independent request to start the daemon.
+        if [ "${ZAPRET_ENABLED:-0}" = 1 ]; then
+            config_voice_staged_only_guard || {
+                common_error "native Voice preflight refused; current runtime left untouched"
+                return 1
+            }
+        fi
+    fi
 
     if orchestrator_runtime_is_complete \
         "${_orchestrator_start_child_pid}" \

@@ -1,0 +1,133 @@
+<form>
+    <field>
+        <type>header</type>
+        <label>General Settings</label>
+    </field>
+    <field>
+        <id>zapret.voice.waninterface</id>
+        <label>Voice WAN Interface</label>
+        <type>dropdown</type>
+        <help><![CDATA[
+            Select the outgoing WAN for voice interception. An empty selection inherits the Strategies WAN.
+            The interface selects interception, not routing; incompatible independent-WAN capture is rejected before activation.
+        ]]></help>
+    </field>
+    <field>
+        <type>header</type>
+        <label>Voice Transmission Parameters</label>
+    </field>
+    <field>
+        <type>info</type>
+        <label>About Voice Profiles</label>
+        <text><![CDATA[
+            This page configures outgoing STUN / UDP interception through the existing Zapret2 engine.
+            The service checkbox selects a destination-scoped profile for a future transactional activation; this draft does not save or activate changes.
+            Each enabled profile requires a nonempty IPv4/CIDR destination IPSET and native dvtws2 parameters.
+            Non-STUN strategies remain on the Strategy page. A profile being enabled does not prove a working voice call.
+        ]]></text>
+    </field>
+    <field>
+        <id>zapret.voice.telegram.enabled</id>
+        <label>Telegram</label>
+        <type>checkbox</type>
+        <help>Select this service's STUN profile for future activation. This draft only validates settings and does not save or activate Voice. Disabled services retain their parameters and IP lists.</help>
+    </field>
+    <field>
+        <id>zapret.voice.telegram.args</id>
+        <label>Telegram Parameters</label>
+        <type>textbox</type>
+        <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
+          The application supplies the profile name, IPv4 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+    </field>
+    <field>
+        <id>zapret.voice.discord.enabled</id>
+        <label>Discord</label>
+        <type>checkbox</type>
+        <help>Select this service's STUN profile for future activation. This draft only validates settings and does not save or activate Voice. Disabled services retain their parameters and IP lists.</help>
+    </field>
+    <field>
+        <id>zapret.voice.discord.args</id>
+        <label>Discord Parameters</label>
+        <type>textbox</type>
+        <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
+          The application supplies the profile name, IPv4 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+    </field>
+    <field>
+        <id>zapret.voice.x.enabled</id>
+        <label>X (Twitter)</label>
+        <type>checkbox</type>
+        <help>Select this service's STUN profile for future activation. This draft only validates settings and does not save or activate Voice. Disabled services retain their parameters and IP lists.</help>
+    </field>
+    <field>
+        <id>zapret.voice.x.args</id>
+        <label>X (Twitter) Parameters</label>
+        <type>textbox</type>
+        <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
+          The application supplies the profile name, IPv4 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+    </field>
+    <field>
+        <id>zapret.voice.sip.enabled</id>
+        <label>SIP (VoIP)</label>
+        <type>checkbox</type>
+        <help>Select this service's STUN profile for future activation. This draft only validates settings and does not save or activate Voice. Disabled services retain their parameters and IP lists.</help>
+    </field>
+    <field>
+        <id>zapret.voice.sip.args</id>
+        <label>SIP (VoIP) Parameters</label>
+        <type>textbox</type>
+        <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
+          The application supplies the profile name, IPv4 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+    </field>
+    <field>
+        <id>zapret.voice.custom.enabled</id>
+        <label>Custom</label>
+        <type>checkbox</type>
+        <help>Select this service's STUN profile for future activation. This draft only validates settings and does not save or activate Voice. Disabled services retain their parameters and IP lists.</help>
+    </field>
+    <field>
+        <id>zapret.voice.custom.args</id>
+        <label>Custom Parameters</label>
+        <type>textbox</type>
+        <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
+          The application supplies the profile name, IPv4 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+    </field>
+    <field>
+        <type>header</type>
+        <label>Destination IP Addresses</label>
+    </field>
+    <field>
+        <id>zapret.hostlist.telegramips</id>
+        <label>IPSET Telegram</label>
+        <type>textbox</type>
+        <help><![CDATA[Shared IPv4 or CIDR targets, one per line. Required when the corresponding service is enabled.
+            These targets are also available to ordinary Strategies as <code>&lt;IPSET:telegram&gt;</code>. No IPv6, hostnames or implicit <code>to any</code>.]]></help>
+    </field>
+    <field>
+        <id>zapret.hostlist.discordips</id>
+        <label>IPSET Discord</label>
+        <type>textbox</type>
+        <help><![CDATA[Shared IPv4 or CIDR targets, one per line. Required when the corresponding service is enabled.
+            These targets are also available to ordinary Strategies as <code>&lt;IPSET:discord&gt;</code>. No IPv6, hostnames or implicit <code>to any</code>.]]></help>
+    </field>
+    <field>
+        <id>zapret.hostlist.xips</id>
+        <label>IPSET X (Twitter)</label>
+        <type>textbox</type>
+        <help><![CDATA[Shared IPv4 or CIDR targets, one per line. Required when the corresponding service is enabled.
+            These targets are also available to ordinary Strategies as <code>&lt;IPSET:x&gt;</code>. No IPv6, hostnames or implicit <code>to any</code>.]]></help>
+    </field>
+    <field>
+        <id>zapret.hostlist.sipips</id>
+        <label>IPSET SIP (VoIP)</label>
+        <type>textbox</type>
+        <help><![CDATA[Shared IPv4 or CIDR targets, one per line. Required when the corresponding service is enabled.
+            These targets are also available to ordinary Strategies as <code>&lt;IPSET:sip&gt;</code>. No IPv6, hostnames or implicit <code>to any</code>.]]></help>
+    </field>
+    <field>
+        <id>zapret.hostlist.customips</id>
+        <label>IPSET Custom</label>
+        <type>textbox</type>
+        <help><![CDATA[Shared IPv4 or CIDR targets, one per line. Required when the corresponding service is enabled.
+            These targets are also available to ordinary Strategies as <code>&lt;IPSET:custom&gt;</code>. No IPv6, hostnames or implicit <code>to any</code>.]]></help>
+    </field>
+</form>

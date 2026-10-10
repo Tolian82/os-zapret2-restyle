@@ -47,14 +47,25 @@
             setupError: isRussian ? 'Ошибка установки Zapret2' : 'Zapret2 setup error'
         };
         $('a[href="/ui/zapret"]').text(isRussian ? 'Стратегия' : 'Strategy');
+        $('a[href="/ui/zapret/voice"]').text(isRussian ? 'Передача голоса' : 'Voice Transmission');
         $('a[href="/ui/zapret/diagnostics"]').text(isRussian ? 'Лаборатория' : 'Laboratory');
         let runtimePoll = null;
         let runtimeWasBusy = false;
         let currentServiceState = 'error';
         let currentRuntimeInstalled = false;
 
+        // The Telegram IPSET is also editable on Voice Transmission. Include
+        // its original value in the Strategies POST as a concurrency token.
+        // A stale browser tab is rejected before the model or runtime changes.
+        const telegramBaseline = $('<input/>', {
+            type: 'hidden', id: 'zapret.sync.telegramips_baseline'
+        });
+        $('#frm_GeneralSettings').append(telegramBaseline);
+
         function reloadSettings() {
             return mapDataToFormUI(data_get_map).done(function() {
+                const currentField = document.getElementById('zapret.hostlist.telegramips');
+                telegramBaseline.val(currentField ? currentField.value : '');
                 formatTokenizersUI();
                 $('.selectpicker').selectpicker('refresh');
             });

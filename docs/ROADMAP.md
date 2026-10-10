@@ -1,11 +1,230 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_42`: production read-only FD9/Config flock quiescence inspection of all native Voice processes plus previous exact IPFW ownership
+- [ ] Next: use native quiescence as real coordinator gate, implement verified process/IPFW restoration and full cross-resource journal close; then boot recovery and Voice ON
+- [x] Previous candidate `v0.5.1_41`: actual combined prior Config/runtime rollback with ONE Config flock spanning both real filesystem writes and durable crash recovery
+- [ ] Next: trusted on-router dual lock and quiescent one-engine/supervisor/IPFW native adapter; then production whole-system rollback, reboot recovery, and Voice ON qualification
+- [x] Previous candidate `v0.5.1_40`: fix real CI failure: candidate digest must be evaluated without imposing previous runtime root permissions
+- [ ] Next: qualify two-rename runtime crash replay on Linux and FreeBSD; implement full native lifecycle/Config rollback owner and process+IPFW recovery
+- [x] Previous candidate `v0.5.1_39`: implement actual verified previous runtime directory swap, full same-filesystem sync and two-rename crash redo/retired candidate
+- [ ] Next: native FD9 + Config lifecycle authority and one-engine/supervisor/IPFW verified full rollback with boot replay and Voice ON cutover
+- [x] Previous candidate `v0.5.1_38`: durable pre-truncate Config redo record and same-inode, old-prefix-only crash retry; protected against foreign Config changes
+- [ ] Next: native FD9 + Config lock ownership with end-to-end runtime/one-engine/supervisor/IPFW restoration and cold-boot decision handling
+- [x] Previous candidate `v0.5.1_37`: implement actual in-place sealed previous Config writer preserving OPNsense flock inode, with real FD/inode/lock/foreign-change regression
+- [ ] Next: production FD9 owner and durable crash-retry for partial Config write, then coordinated runtime, one-engine, supervisor and IPFW rollback
+- [x] Previous candidate `v0.5.1_36`: real FD9 rollback preparation now outputs a permission-accurate private install image of previous Config/runtime, with independent byte/mode witness
+- [ ] Next: trusted original file UID/GID + Config lock ownership, then a journal-coordinated live Config/runtime swap and one previous engine/supervisor restart
+- [x] Previous candidate `v0.5.1_35`: align independent live runtime root-mode fingerprint with checkpoint schema-2 and legacy schema-1
+- [ ] Next: production previous Config/runtime restore and prior process restart under one lifecycle and Config authority
+- [x] Previous candidate `v0.5.1_34`: seal previous runtime root permission bits in recoverable backup and whole-cutover digest
+- [ ] Next: real locked Config/runtime swap and prior engine/supervisor restart under a unified cutover transaction
+- [x] Previous candidate `v0.5.1_33`: unblock full CI lockf Voice parent/inherited-action regression using isolated executable test fixture; align PR title/revision
+- [ ] Next: production previous Config/runtime/one-engine/supervisor restore and deterministic full Voice ON cutover
+- [x] Previous candidate `v0.5.1_32`: qualification of real previous-state restore-staging service after updating its regression for the new FD9 action
+- [ ] Next: whole-system restoration and deterministic Voice ON cutover with one dvtws2, IPFW and supervisor
+- [x] Previous candidate `v0.5.1_31`: real service-owned stage of previous full Config/runtime for Voice rollback, requiring mutating whole journal and prior IPFW ownership
+- [ ] Next: actually restore saved Config/runtime and prior dvtws2/supervisor under unified cutover with cold-boot recovery; only then allow native Voice ON
+- [x] Previous candidate `v0.5.1_30`: real service FD9 checkpoint seals current OPNsense Config/runtime before any cutover; native seed now demands schema-2 prepared whole journal and this sealed previous snapshot
+- [ ] Next: production owner of Config + one dvtws2 + supervisor transaction consumes checkpoint and IPFW precommit/rollback, including reboot recovery; then allow GUI ON
+- [x] Previous candidate `v0.5.1_29`: installed Voice IPFW remains PENDING until whole cutover commit; native FD9 commit and rollback actions with previous table snapshots now exist
+- [ ] Next: orchestrate the real Config+one dvtws2+supervisor cutover around pending IPFW and verify cold reboot, then enable GUI Voice ON
+- [x] Previous candidate `v0.5.1_28`: production FreeBSD IPFW executor wired to service lockf FD9; native Voice OFF ownership seed and journal/argv-bound real kernel activation available under locked lifecycle
+- [ ] Next: wire the complete Config/runtime/one-engine/supervisor rollback and boot recovery around the real IPFW executor; enable GUI Voice ON only then
+- [x] Previous candidate `v0.5.1_27`: real native one-engine runtime/IPFW handoff works with full-sized /conf/config.xml, bounded and stream-hashed
+- [ ] Next: production single-engine IPFW/Config/supervisor cutover and rollback, then GUI Voice ON and reboot acceptance
+- [x] Previous candidate `v0.5.1_26`: real production Voice+Strategies native dvtws2 argument generation and canonical owned IPFW manifest + source fingerprint handoff
+- [ ] Next: complete single-engine IPFW/runtime/Config transactional activation with rollback, then enable GUI Voice ON
+- [x] Previous candidate `v0.5.1_25`: production orchestrator compiles native Voice/ordinary merged candidate and resolved IPFW plan inside each staged runtime release, before activation; active legacy traffic/rules still intact
+- [ ] Next: adopt native candidate in one dvtws2 with transactional Voice IPFW+supervisor/Config rollback; then enable real GUI Voice ON
+- [x] Previous candidate `v0.5.1_24`: qualify genuine OFF-only Voice Apply regression after matching the read-only assertion to the deliberate failed-backend Config save
+- [ ] Next: native one-engine Voice ON cutover, IPFW capture/rollback and boot recovery, not additional model-only lock research
+- [x] Previous candidate `v0.5.1_23`: real GUI OFF-only Apply drives native Config save and existing configd Zapret reconfigure, with diagnostic busy/ON refusal and honest failure reporting
+- [ ] Next production feature: single dvtws2 with active native Voice/STUN profiles and destination-scoped IPFW rule/table runtime plus durable rollback; do not mistake OFF-only Apply for Telegram call support
+- [x] Previous candidate `v0.5.1_22`: qualify real OFF-only draft Config persistence after correcting GET/POST HTTP contract in integration regression
+- [ ] Next: live shared-engine Voice Apply and UDP/IPFW activation; no unrelated mock-only backlog
+- [x] Previous candidate `v0.5.1_21`: real native Voice OFF-only draft persistence via the GUI and audited Config; five service parameters and shared IPSETs persist across GUI reloads/reboots without runtime activation
+- [ ] Next: implement the unified real Apply transaction and one-engine live UDP/IPFW generator; replace OFF-only gate with verified ON cutover; test owner OPNsense before shipping
+- [x] Previous candidate `v0.5.1_20`: isolated cross-process flock and native FreeBSD /usr/bin/lockf inherited-FD9 kernel interoperability tests, wired into Voice and package CI
+- [ ] Next: qualify FreeBSD exact-head results, then establish true Config+lifecycle transaction ownership across Config::save()/configd; no native Apply
+- [x] Previous candidate `v0.5.1_19`: reject ABA lock unlock/reacquire in mock cutover and prove Config::save() LOCK_UN exposure in isolated PHP test
+- [ ] Next: establish real shared ownership/serialization across Config.save, consistent lock acquisition order and durable native recovery; still no Voice Apply
+- [x] Previous candidate `v0.5.1_18`: repeated owner lock attestations in disconnected mock Voice cutover; loss retains journal and prevents unlocked rollback after Config.save()
+- [ ] Next: design and qualify real Config+lifecycle ownership across Config::save(), strict lock order, and FreeBSD recovery; do not wire Voice Apply yet
+- [x] Previous candidate `v0.5.1_17`: use verified numeric FreeBSD kern.proc.args MIB + PID, retaining native smoke and injected failure regressions
+- [x] Exact source HEAD `87de312` passed CI #38017644559 attempt 2 including FreeBSD 15 package, native kernel argv self-test and Linux Voice regressions
+- [ ] Next: build and test Config/lifecycle lock order + Config::save() release semantics under a non-authorizing offline contract, then qualify owner-device role policy and actual service before Voice Apply
+
+- [x] Current candidate `v0.5.1_16`: correct confirmed native FreeBSD pathname PID sysctl ABI with strict negative tests
+- [ ] Verify Linux and FreeBSD 15 package CI at exact HEAD, then establish native Config/lifecycle lock ordering and Config::save() lock lifetime
+
+- [x] Current candidate `v0.5.1_15`: correct schema-3 policy module syntax and gate Python compilation explicitly ahead of behavioral regression tests
+- [ ] Qualify schema-3 full matrix, owner native policy authority and lock-held recovery before enabling any Voice Apply
+
+
+- [x] Current candidate `v0.5.1_14`: schema-3 cutover journal pins immutable previous process kernel image/credential policy to validated five-way previous-state evidence and read-only security reader
+- [ ] Qualify owner-device role UID/GID and kernel executable identities, immutable launch trust and semantic readiness; production Config+lifecycle lock-held restore remains gated
+
+
+- [x] Current candidate `v0.5.1_13`: read-only native FreeBSD process text pathname + numeric UID/GID witness with PID/start stability; test kernel self-process in FreeBSD 15 CI
+- [ ] Bind verified actual OPNsense process image/credential policy to durable intended state; test on owner device and certify kernel argv provenance/readiness before any native recovery
+
+
+- [x] Current candidate `v0.5.1_12`: kernel-exposed NUL-delimited FreeBSD argv reading with strict bounds, PID/start double-probe and offline tests, still unwired
+- [ ] Validate real FreeBSD kern.proc.args behavior and mutable process-title risk on owner appliance; qualify executable path/credential proofs and UDP readiness under native locks before Voice Apply
+
+
+- [x] Current candidate `v0.5.1_11`: exact kernel argv-array restart attestation against saved dvtws.args + fixed launcher flags, double observations, new PID/start token safeguards (test-only reader)
+- [ ] Qualify genuine FreeBSD kernel argv provider, semantic supervisor launcher and readiness evidence before allowing any Voice Apply/restart
+
+
+- [x] Current candidate `v0.5.1_10`: seal-bound live Config permissions checked alongside unchanged canonical byte SHA256
+- [ ] Native dual-lock-held process/Config/IPFW restart and semantic argv verification before Voice Apply
+
+
+- [x] Current candidate `v0.5.1_9`: compose all five native, injection-only read-only prior-instance fingerprints and test with complete cutover preflight; no activation capability
+- [ ] Wire production Config/lifecycle locks and verify semantic process argv + post-boot new-instance attestation before replay or Voice Apply
+
+
+- [x] Current candidate `v0.5.1_8`: read-only live Config/runtime canonical SHA256 witness, strict `dir_fd` no-follow traversal and double-scan race checks
+- [x] Compose the five read-only witnesses in offline staging; production lifecycle/Config lock entry remains pending
+
+
+- [x] Current candidate `v0.5.1_7`: real kernel IPFW ownership witness, read-only and strictly ledger-matched
+- [ ] Qualify lock-held FreeBSD Config/runtime/process observer and stage-to-live recovery before exposing Voice Save/Apply
+
+
+- [x] Current candidate `v0.5.1_6`: five-way read-only recovery attestation with fail-closed mixed-state and committed-target rejection; no live restore
+- [x] Reconcile GH-014 / DEV-029–DEV-033 cross-reference tables after v0.5.1_5 repository-integrity failure
+- [ ] Implement and qualify real lock-held Config, dvtws2/supervisor, IPFW and boot restore; currently staging-only
+
+
+- [x] Current candidate `v0.5.1_5`: tolerate blank native ps rows, reject malformed rows; retain strict three-role inventory
+
+
+- [x] Correct DEV-032 missed revision bump forward to v0.5.1_2; guard future packaged-code pushes
+- [ ] Preserve per-commit revision increments on future product code changes; docs/CI-only stay unchanged
+
+
+- [x] Staged private verified Config/runtime restoration payload without appliance mutation or overwrite
+- [x] Stage private, runtime-bound process evidence for old one-engine dvtws2 and supervisor with restart-read tests
+- [x] Stage read-only FreeBSD process PIDfile/ps inventory adapter and fake process-table tests; no live call site
+- [ ] Native dual-lock held restore adapter: previous engine, supervisor, Config and IPFW; verify on reboot before Voice activation
+
+
+- [x] Remove misleading disabled Voice settings Apply button while keeping release installer, Validate and service controls (Draft PR #328; 2026-10-09)
+- [ ] Integrate real transactional Voice save/activation only after native locks, dual journals and reboot validation qualify the one-engine cutover
+
+
+- [x] Stage optional Voice whole-cutover journal schema 2 with desired canonical IPFW digest; retain schema 1 compatibility, restart checks, and both native diagnostic/boot guard fail-closed tests
+- [x] Cross-check previous sealed Config/runtime snapshot and previous/desired IPFW ownership against separate dual journals in read-only offline tests
+- [ ] Validate full Linux + FreeBSD 15 CI at exact current PR #328 HEAD after schema-2 stage
+- [ ] Implement native lock-held writer/adapters, engine/supervisor recovery evidence, verified power-loss handling, old Telegram PoC retirement and installer qualification BEFORE enabling Apply
+
+
+- [x] Repair Strategy Lab mocked backend fixture for mandatory Voice journal guard; distinguish parent-before-worker and inherited-lock internal stop denials with no prior service mutation
+- [ ] Confirm final full corrective matrix and FreeBSD 15 package on exact PR #328 head after fixture correction
+
+- [x] Correct Linux Strategy Lab CI incompatibility from fixed FreeBSD guard Python without adding production bypass; test real function status propagation
+- [x] Close inherited-lock Strategy Lab internal start/stop route around pending Voice cutover journal inspection; preserve read-only status/evidence
+- [ ] Qualify exact-head full Strategy Lab + Voice + FreeBSD package CI and test real OPNsense boot/lifecycle after eventual native cutover
+
+- [x] Bind verifiable previous Config/runtime byte snapshots to two corresponding durable whole-cutover journal resource hashes, with tamper regression
+- [ ] Bind actual previous engine, supervisor and plugin-owned IPFW snapshots and implement full lock-held recovery before Apply
+
+- [x] Stage private previous Config.xml + runtime byte snapshot, sealed manifest, source race detection and read-only integrity tests (Linux/FreeBSD)
+- [ ] Verify installed runtime directory structure and symlink policy; persist trusted snapshots of IPFW and supervisor/engine metadata and bind all resources to journal under one lock
+- [ ] Implement authenticated OPNsense persistent Voice Apply, native single-engine IPFW handoff, power-loss recovery and owner-live acceptance
+
+- [x] Preserve active runtime during failed rollback backup rename using parked candidate and verified inverse rename, with fault-injected Linux/FreeBSD test
+- [ ] Add durable whole-cutover recovery across power loss and verified OPNsense live acceptance, rather than treating two renames as fully atomic
+
+- [x] Fix non-destructive shared runtime rollback: validate backup before deleting current release, deny symlinks/missing backup, Linux/FreeBSD regression
+- [ ] Implement real native Voice Apply using validated backup + full journal/IPFW rollback; test hard power-loss recovery and owner-live OPNsense behavior before publishing
+
+- [x] Enforce read-only pending dual-journal/native-owner gate under the actual zapret_service.sh lifecycle lock, before legacy runtime mutation; test FreeBSD and no-journal compatibility
+- [ ] Implement a native-owner-aware Start/Stop/Reconfigure dispatcher and reviewed cold-boot journal recovery; safely migrate old Telegram Voice PoC and enable Apply only after end-to-end rollback acceptance
+
+- [x] Wire private whole-cutover pending-intent classification into native read-only Voice configd diagnostics before IPFW readiness; RU/EN stage text and CI regression
+- [ ] Adopt and coordinate full-runtime/IPFW journals in actual Config/lifecycle locked native Apply and cold-boot recovery, without automatically clearing ambiguity
+
+- [x] Stage isolated full-system Voice cutover coordinator with verified old state, ordered single-engine/IPFW/supervisor/config handoff and fault-injected rollback (test adapters only)
+- [x] Stage durable private whole-runtime fsync journal, crash-phase inspection and integration with mock coordinator; verify restart/permissions and package inclusion
+- [ ] Implement real OPNsense native cutover adapter under Config/lifecycle locks, coordinate both journals, decommission old PoC, bootstrap persistent Voice ON after restart and qualify owner-live packet/media acceptance
+
+- [x] Stage immutable Voice/Strategies/native dvtws2/IPFW handoff integrity preflight; SHA checks, original ordinary port cross-check and old-PoC conflict detection
+- [x] Verify port agreement using actual `backend/ports.sh` and one-engine generation with `generator.sh` on Linux/FreeBSD CI
+- [x] Correct FreeBSD CI test-only `python3` resolution without altering production OPNsense/Python
+- [ ] Attach approved handoff to lock-held single-engine config/dvtws2/IPFW transaction with rollback, migration and boot recovery
+
+- [x] Cross-check all five native Voice IPSET fields against production Targets normalization and candidate compiler on Linux/FreeBSD CI
+
+- [x] Gate native saved Voice ON before top-level firewall_prepare and before destructive orchestrator START cleanup; permit global Zapret OFF
+- [x] Mock regression for START preserving existing process/IPFW on rejected Voice ON, plus real service entrypoint preflight order
+- [x] Offline bridge of staged Voice + unchanged ordinary Profiles through production generator.sh and scoped IPFW plan in CI/FreeBSD
+- [x] Detect mid-stage source XML/managed IPSET/ordinary changes with checksums, reject symlink sources and fsync published staging directory
+- [ ] Wire installed-runtime capability preflight, atomic release/config/IPFW/dvtws2 cutover, durable crash recovery, native Voice Save/Apply and legacy PoC retirement
+
+- [x] Stage pure VoiceApplyCandidate plan: baseline+whitelist, enabled IPSET normalization and OFF draft preservation, field diffs, WAN-isolation gate; reuse in Validate
+- [x] Add native generated-config five-checkbox staged-only gate so future saved Voice ON cannot silently run through old Telegram PoC
+- [x] Test pure Voice Apply plan, foreign settings stability, stale tabs and native backend ON-gate under CI
+- [ ] Remove temporary staged-only guard **only with** full one-engine native Voice runtime, atomic config/IPFW/dvtws handoff, compatibility migration and restart recovery
+
+- [x] Native Voice load returns model + stable baseline from a single Config-locked read
+- [x] Voice Validate rejects stale Strategies/Voice/shared target edits under same Config lock, strict field whitelist and localized errors
+- [x] Model-stub PHP test proves stale/conflict/missing-token, read-only behavior and lock release
+- [ ] Persist and apply Voice under one validated transaction, rechecking baseline before config/runtime mutation and restoring all resources on failure
+
+- [x] Add native Voice form Validate action: unsaved IPv4/STUN/UDP scope checks without config mutation; localized RU/EN field errors
+- [x] Add standalone PHP validator regression and PHP/Python candidate acceptance parity CI; correct CI host/container interpreter ownership
+- [ ] Qualify native GUI AJAX/DOM form and field-error display on owner OPNsense; ensure dark/light theme and RU/EN
+- [ ] Implement persistent Voice Save/Apply behind unified lifecycle lock, installed engine preflight, transaction and reboot restore; retire temporary PoC only after verified cutover
+
+- [x] Stage explicit old PoC migration plan from config.xml, transient marker and active state; preserve native preference and refuse ambiguous live state
+- [ ] Implement one-way atomic migration and persistent native Voice Apply; decommission marker/old hard-coded profile/rules after verified handoff
+
+- [x] Stage FreeBSD IPFW adapter, non-mutating by default, narrow argv/table/rule parsing and native-VM test coverage (not production-wired)
+- [x] Stage read-only Voice configd/API status with RU/EN GUI labels; no save/apply route
+- [x] Compare IPFW address tables as unordered unique CIDR sets across rollback and journal
+- [x] Stage bounded fake TTL/checksum/fragment/out-range parsing with negative examples (installed-engine gate pending)
+- [x] Reject competing ordinary STUN during Voice candidate merging while preserving non-STUN A2
+- [ ] Wire lock-held real IPFW activation, persistent native Voice Apply, replacement of Telegram PoC, boot recovery, exact-head full CI and owner-live review
+
 **Status:** CURRENT · COMPLETE CONCISE PLAN
 **Updated:** 2026-10-09
 
 - Current facts: [`PROJECT_STATE.md`](PROJECT_STATE.md)
 - Exact handoff: [`START_HERE.md`](START_HERE.md)
 - Current-line detail: [`history/current/v0.5.x.md`](history/current/v0.5.x.md)
+
+## Active `v0.5.1_1` — Voice Transmission development, Draft PR #328
+
+The current in-progress candidate is `v0.5.1_1` (unmerged, not published). The existing `v0.5.0_3` remains the latest experimental prerelease; stable Web/pkg remains `v0.5.0_1`.
+
+- [x] Stage native Voice page between Strategy and Laboratory with the existing form style and RU/EN guidance
+- [x] Stage five OFF-by-default service fields, WAN selector, shared IPv4/CIDR target fields
+- [x] Stage new named target registry, storage and normalization for Discord, X, SIP and Custom (pending CI)
+- [x] Stage standalone fail-closed STUN compiler, initial allowlist and per-service conflict/line validation tests (not yet applied)
+- [x] Stage declarative Voice IPFW address-and-port capture plan with five-service range/overlap checks (not yet installed)
+- [x] Stage read-only native OPNsense Voice config.xml export and end-to-end candidate pipeline tests (not yet activated)
+- [x] Stage inert candidate-release bundling with exact normalized managed-IPSET verification, resolved physical WAN and private atomic artifacts
+- [x] Stage one-engine Voice + unchanged ordinary Strategies text merge, reject legacy PoC identity/double-prepend
+- [x] Stage ownership-checked IPFW transaction algorithm and mocked failure-injection rollback (not wired to production)
+- [x] Stage durable owner-private IPFW manifest/intent files, fsync/atomic rename and read-only crash-triage; mock-test tampering, permissions and unfinished transitions
+- [x] Stage checked retryable post-commit table cleanup and fix foreign-rule collision rollback in mock core
+- [x] Stage mock-only activation controller connecting ledger, IPFW swap, verified cleanup and abort; ON/change/OFF/crash failure-injection tests
+- [ ] Wire real FreeBSD IPFW adapter and lifecycle lock, dvtws2/manifest rollback, and recovery before enabling Apply
+- [ ] Implement and verify real FreeBSD IPFW adapter, lock-held activation, atomic manifest handoff and crash recovery before enabling Voice Apply
+- [ ] Wire real IPFW adapter, persistent ownership manifest/journal and crash recovery; qualify staged swap/rollback on FreeBSD
+- [x] Stage Voice-only payload whitelist and symmetric Telegram-IPSET freshness validation helper (future API still pending)
+- [x] Scope Strategies Apply to Strategies-owned fields without resetting Voice/other IPSETs
+- [x] Guard existing Strategies Apply against stale Telegram IPSET input under config lock
+- [ ] Enforce the same Telegram IPSET concurrency guard for future Voice Apply
+- [ ] Expand and qualify native options (TTL/ranges/fragmentation) and connect fully transactional independent Apply
+- [ ] Replace hard-coded ephemeral `telegram_voice` with persistent per-service profiles and compatible commands
+- [ ] Destination/port-scoped IPFW and WAN isolation, ownership, overlap detection and rollback
+- [ ] Boot persistence / OFF and global OFF safety / legacy migration / single-engine regression
+- [ ] Exact-head CI, FreeBSD package qualification, documentation synchronization and user-live review
+- [ ] Controlled post-install WAN and reboot acceptance; distinct from MEDIA_PASS/CALL_PASS
 
 ## Completed project path
 

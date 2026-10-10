@@ -10,6 +10,34 @@ config_load()
     . "${_config_path}"
 }
 
+# While Voice native Apply is unfinished, never run the legacy PoC builder
+# against a persisted native Voice ON request. Ordinary Strategies and the
+# existing legacy marker path remain unchanged for five explicit OFFs.
+# Runtime cutover will remove this staged-only guard atomically with adoption
+# of the single-engine voice compiler and IPFW ownership transaction.
+config_voice_staged_only_guard()
+{
+    for _config_voice_requested in \
+        "${VOICE_TELEGRAM_REQUESTED:-0}" \
+        "${VOICE_DISCORD_REQUESTED:-0}" \
+        "${VOICE_X_REQUESTED:-0}" \
+        "${VOICE_SIP_REQUESTED:-0}" \
+        "${VOICE_CUSTOM_REQUESTED:-0}"; do
+        case "${_config_voice_requested}" in
+            0) ;;
+            1)
+                common_error "Persisted native Voice ON cannot be activated by legacy Telegram Voice runtime; native single-engine cutover is not enabled"
+                return 1
+                ;;
+            *)
+                common_error "Invalid persisted native Voice enablement value; refusing legacy runtime activation"
+                return 1
+                ;;
+        esac
+    done
+    return 0
+}
+
 config_resolve_interface()
 {
     _config_iface="$1"

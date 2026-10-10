@@ -59,6 +59,21 @@ refresh_generated_configuration()
     fi
 }
 
+# Run the staged-only Voice ON refusal immediately after rendering the
+# generated config and before firewall_prepare can load or change IPFW.
+# Overall Zapret OFF is an exception: reconfigure must still be allowed to
+# stop the existing service, even if a Voice checkbox was saved as ON.
+preflight_native_voice_before_firewall()
+{
+    config_load "${CONFIG}" || return 1
+    if [ "${ZAPRET_ENABLED:-0}" = 1 ]; then
+        config_voice_staged_only_guard || {
+            echo "ERROR: Voice ON requires native transactional runtime; firewall unchanged" >&2
+            return 1
+        }
+    fi
+}
+
 prepare_firewall_prerequisites()
 {
     if ! firewall_prepare; then
@@ -71,6 +86,7 @@ start_service()
 {
     ensure_runtime_components || return 1
     refresh_generated_configuration || return 1
+    preflight_native_voice_before_firewall || return 1
     prepare_firewall_prerequisites || return 1
     orchestrator_native_start \
         "${CONFIG}" "${ZAPRET_DIR}" "${ACTIVE_DIR}" "${BACKUP_ROOT}" \
@@ -93,6 +109,7 @@ reconfigure_service()
 {
     ensure_runtime_components || return 1
     refresh_generated_configuration || return 1
+    preflight_native_voice_before_firewall || return 1
     prepare_firewall_prerequisites || return 1
     orchestrator_native_reconfigure \
         "${CONFIG}" "${ZAPRET_DIR}" "${ACTIVE_DIR}" "${BACKUP_ROOT}" \
@@ -391,6 +408,10 @@ strategy_lab_internal_dispatch()
         return 77
     }
 
+    # Strategy Lab already owns inherited lockf fd 9 and calls these
+    # privileged internal actions directly. Do not let its stop/start
+    # bypass the pending whole-runtime/IPFW journal guard simply because
+    # no new service_with_lifecycle_lock invocation occurs.
     case "${1:-}" in
         strategy-lab-status)
             service_dispatch status
@@ -399,9 +420,11 @@ strategy_lab_internal_dispatch()
             strategy_lab_semantic_evidence
             ;;
         strategy-lab-stop)
+            preflight_voice_cutover_journals || return 69
             stop_service
             ;;
         strategy-lab-start)
+            preflight_voice_cutover_journals || return 69
             start_service
             ;;
         *)
@@ -452,6 +475,77 @@ strategy_lab_report_lock_failure()
     fi
 }
 
+# Native FreeBSD Voice IPFW owner is a production executable, not an
+# independent daemon. The dispatcher invokes it ONLY beneath FD9 lockf.
+# No GUI action is allowed to use this partial cutover path.
+native_voice_ipfw_dispatch()
+{
+    _native_voice_ipfw_action="$1"
+    _native_voice_ipfw_python="/usr/local/bin/python3.13"
+    _native_voice_ipfw_script="${BACKEND_DIR}/voice_ipfw_runtime.py"
+
+    [ -x "${_native_voice_ipfw_python}" ] &&
+    [ -r "${_native_voice_ipfw_script}" ] || {
+        echo "ERROR: native Voice IPFW runtime is not installed" >&2
+        return 1
+    }
+    "${_native_voice_ipfw_python}" "${_native_voice_ipfw_script}" \
+        "${_native_voice_ipfw_action}"
+}
+
+# Create a real, fsync'd previous Config/runtime checkpoint BEFORE any
+# native Voice transaction takes ownership of IPFW. This action is private
+# to the service lifecycle FD9, never available through Voice GUI Apply.
+native_voice_checkpoint_service()
+{
+    orchestrator_runtime_is_complete \
+        "${CHILD_PIDFILE}" "${SUPERVISOR_MONITOR_PIDFILE}" \
+        "${RULE_BASE}" "${RULE_MAX}" "${ACTIVE_DIR}" || {
+            echo "ERROR: cannot checkpoint an incomplete previous Zapret runtime" >&2
+            return 1
+        }
+
+    _native_voice_checkpoint_python="/usr/local/bin/python3.13"
+    _native_voice_checkpoint_script="${BACKEND_DIR}/voice_cutover_checkpoint.py"
+    [ -x "${_native_voice_checkpoint_python}" ] &&
+    [ -r "${_native_voice_checkpoint_script}" ] || {
+        echo "ERROR: native Voice checkpoint command is not installed" >&2
+        return 1
+    }
+    "${_native_voice_checkpoint_python}" "${_native_voice_checkpoint_script}" prepare
+}
+
+# Prepare exact sealed previous Config/runtime bytes for a verified Voice
+# rollback. Does NOT install them, restart dvtws2 or mutate firewall.
+# The Python entrypoint requires an already-MUTATING whole journal and
+# validates the original IPFW ownership under the existing lockf FD9.
+native_voice_restore_stage_service()
+{
+    _native_voice_restore_python="/usr/local/bin/python3.13"
+    _native_voice_restore_script="${BACKEND_DIR}/voice_cutover_restore_prepare.py"
+    [ -x "${_native_voice_restore_python}" ] &&
+    [ -r "${_native_voice_restore_script}" ] || {
+        echo "ERROR: native Voice restore preparation is not installed" >&2
+        return 1
+    }
+    "${_native_voice_restore_python}" "${_native_voice_restore_script}" prepare
+}
+
+# Read-only native evidence for a future complete Voice rollback. It is
+# accessible only under the existing lockf FD9; unlike file restore it never
+# stops processes, alters IPFW or writes the Config/runtime tree.
+native_voice_quiescence_service()
+{
+    _native_voice_check_python="/usr/local/bin/python3.13"
+    _native_voice_check_script="${BACKEND_DIR}/voice_native_recovery_quiescence.py"
+    [ -x "${_native_voice_check_python}" ] &&
+    [ -r "${_native_voice_check_script}" ] || {
+        echo "ERROR: native Voice recovery inspector is not installed" >&2
+        return 1
+    }
+    "${_native_voice_check_python}" "${_native_voice_check_script}" inspect
+}
+
 service_dispatch()
 {
     case "${1:-}" in
@@ -481,6 +575,27 @@ service_dispatch()
         reconfigure)
             reconfigure_service
             ;;
+        native-voice-checkpoint)
+            native_voice_checkpoint_service
+            ;;
+        native-voice-restore-stage)
+            native_voice_restore_stage_service
+            ;;
+        native-voice-recovery-quiescence)
+            native_voice_quiescence_service
+            ;;
+        native-voice-ipfw-seed)
+            native_voice_ipfw_dispatch seed
+            ;;
+        native-voice-ipfw-activate)
+            native_voice_ipfw_dispatch activate
+            ;;
+        native-voice-ipfw-commit)
+            native_voice_ipfw_dispatch commit
+            ;;
+        native-voice-ipfw-rollback)
+            native_voice_ipfw_dispatch rollback
+            ;;
         runtime-failure)
             orchestrator_runtime_failure \
                 "${CHILD_PIDFILE}" \
@@ -504,6 +619,40 @@ service_dispatch()
     esac
 }
 
+# A pending full Voice cutover or per-IPFW journal is stronger than the
+# legacy service's ordinary start/stop/reconfigure semantics. In particular,
+# boot must NOT clean old resources before an interrupted transaction has
+# been reviewed. This check is read-only and MUST run *under* the same lockf
+# handle held by all existing Zapret2 lifecycle operations.
+preflight_voice_cutover_journals()
+{
+    _voice_cutover_guard_script="${BACKEND_DIR}/voice_cutover_guard.py"
+    _voice_cutover_guard_python=/usr/local/bin/python3.13
+
+    # FreeBSD production uses only the trusted, absolute pkg interpreter.
+    # The repository's Linux integration tests run from a non-installed
+    # BACKEND_DIR; there alone resolve the versioned CI interpreter on PATH.
+    # Never permit an environment-supplied interpreter or bypass in a live
+    # OPNsense installation.
+    if [ ! -x "${_voice_cutover_guard_python}" ]; then
+        case "${BACKEND_DIR}" in
+            /usr/local/opnsense/scripts/OPNsense/Zapret/backend)
+                ;;
+            *)
+                _voice_cutover_guard_python=$(command -v python3.13 2>/dev/null || true)
+                ;;
+        esac
+    fi
+
+    if [ ! -r "${_voice_cutover_guard_script}" ] ||
+       [ -z "${_voice_cutover_guard_python}" ] ||
+       [ ! -x "${_voice_cutover_guard_python}" ]; then
+        echo "ERROR: native Voice journal inspection is unavailable; refusing lifecycle mutation" >&2
+        return 69
+    fi
+    "${_voice_cutover_guard_python}" "${_voice_cutover_guard_script}"
+}
+
 service_with_lifecycle_lock()
 {
     _service_lock_timeout="$1"
@@ -518,6 +667,14 @@ service_with_lifecycle_lock()
         if ! "${LOCKF_BIN}" -s -t "${_service_lock_timeout}" 9; then
             return 75
         fi
+        # Do not permit ANY legacy lifecycle action to overwrite the
+        # evidence of an interrupted Voice cutover. Status/inspection remain
+        # available, and no journal is created during normal operation.
+        case "${1:-}" in
+            start|stop|restart|reconfigure|native-voice-checkpoint|telegram-voice-enable|telegram-voice-disable|runtime-failure|strategy-lab|strategy-lab-circular|strategy-lab-recover)
+                preflight_voice_cutover_journals || return 69
+                ;;
+        esac
         service_dispatch "$@"
     ) 9>"${LIFECYCLE_LOCK_FILE}"
 }
@@ -547,7 +704,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+"""Adapter-injected single-engine Voice cutover ordering contract (NOT WIRED).
+
+This module has no CLI, no system commands and no router dependencies.
+A future production adapter must implement durable intent, native Config
+locking, one dvtws2, exact plugin-owned IPFW snapshots, safe rollback and
+cold-boot review before exposing any GUI Apply. Even a passing mock test
+is not permission to activate; all real operations remain disconnected.
+"""
+from __future__ import annotations
+
+import re
+from typing import Protocol
+
+SHA = re.compile(r"^[a-f0-9]{64}$")
+
+
+class CutoverError(RuntimeError):
+    pass
+
+
+class CutoverManualReview(CutoverError):
+    """An ambiguous live state or rollback needs operator investigation."""
+
+
+class CutoverRejected(CutoverError):
+    """Candidate refused before any runtime changes."""
+
+
+class CutoverAdapter(Protocol):
+    def locks_held(self) -> bool: ...
+    def lock_generation(self) -> tuple[int, int]: ...
+    def verify_legacy_absent(self) -> None: ...
+    def snapshot_previous(self) -> dict: ...
+    def reverify_sources(self, proof: dict) -> None: ...
+    def begin_intent(self, previous: dict, proof: dict) -> None: ...
+    def mark_mutating(self) -> None: ...
+    def install_candidate_tree(self) -> None: ...
+    def stop_previous_engine(self) -> None: ...
+    def start_candidate_engine(self) -> None: ...
+    def install_owned_firewall(self) -> None: ...
+    def start_candidate_supervisor(self) -> None: ...
+    def verify_candidate(self) -> None: ...
+    def persist_config(self) -> None: ...
+    def commit_intent(self) -> None: ...
+    def cleanup_retired(self) -> None: ...
+    def finish_intent(self) -> None: ...
+    def stop_candidate(self) -> None: ...
+    def restore_config(self, previous: dict) -> None: ...
+    def restore_tree(self, previous: dict) -> None: ...
+    def restore_owned_firewall(self, previous: dict) -> None: ...
+    def restore_previous_engine(self, previous: dict) -> None: ...
+    def verify_previous(self, previous: dict) -> None: ...
+    def abort_intent(self) -> None: ...
+
+
+def validate_proof(proof: dict) -> None:
+    if not isinstance(proof, dict) or proof.get("schema") != 1 or \
+       proof.get("state") != "preflight-only" or \
+       proof.get("activation_authorized") is not False:
+        raise CutoverRejected("missing non-authorizing Voice handoff proof")
+    for name in ("saved_xml_sha256", "merged_sha256", "native_argv_sha256"):
+        if not isinstance(proof.get(name), str) or not SHA.fullmatch(proof[name]):
+            raise CutoverRejected("candidate handoff fingerprint is invalid")
+    enabled = proof.get("enabled_services")
+    if not isinstance(enabled, list) or len(enabled) > 5 or \
+       any(name not in ("telegram", "discord", "x", "sip", "custom")
+           for name in enabled) or len(set(enabled)) != len(enabled):
+        raise CutoverRejected("Voice service selection is malformed")
+    for number in ("rule_base", "rule_max", "rule_count", "table_count"):
+        if type(proof.get(number)) is not int:
+            raise CutoverRejected("IPFW candidate range is malformed")
+    if not 1 <= proof["rule_base"] <= proof["rule_max"] <= 65534 or \
+       not 0 < proof["rule_count"] <= proof["rule_max"] - proof["rule_base"] + 1 or \
+       not 0 <= proof["table_count"] == len(enabled):
+        raise CutoverRejected("IPFW Voice rule/table ownership is inconsistent")
+
+
+def _locks_held(adapter: CutoverAdapter) -> bool:
+    """Only exact True proves both externally owned locks; errors deny."""
+    try:
+        return adapter.locks_held() is True
+    except Exception:
+        return False
+
+
+def _read_lock_generation(adapter: CutoverAdapter) -> tuple[int, int] | None:
+    """Two acquisition generations, NOT file descriptors or cached held flags.
+
+    The eventual real adapter MUST advance each generation on EVERY unlock
+    and reacquire even if the identical inode/file descriptor is reused.
+    This mock witness does not itself own or prove an OS-level lock.
+    """
+    try:
+        value = adapter.lock_generation()
+    except Exception:
+        return None
+    if type(value) is not tuple or len(value) != 2:
+        return None
+    if any(type(v) is not int or not 1 <= v < (1 << 63) for v in value):
+        return None
+    return value
+
+
+def _holds_lease(adapter: CutoverAdapter, original: tuple[int, int]) -> bool:
+    """An unlocked-then-relocked mutex is NOT the same transaction lease."""
+    return _locks_held(adapter) and _read_lock_generation(adapter) == original
+
+
+def _require_locks(adapter: CutoverAdapter, original: tuple[int, int]) -> None:
+    """Non-authorizing per-step mock boundary; no production caller.
+
+    Config.save() releases the OPNsense config flock, so a separate, proven
+    serialization boundary is required before wiring native Apply.
+    """
+    if not _holds_lease(adapter, original):
+        raise CutoverManualReview(
+            "Voice Config/lifecycle lock ownership lost or reacquired; "
+            "durable intent retained"
+        )
+
+
+def simulate_cutover(adapter: CutoverAdapter, proof: dict, *,
+                     test_only_mutations: bool = False) -> str:
+    """Exercise stage/mutation/rollback order via injected test doubles ONLY.
+
+    There is deliberately no production call site. A future implementation
+    cannot just switch this flag in a configd action: it must first add
+    concrete adapters, journal recovery and installed-native acceptance.
+    """
+    if not test_only_mutations:
+        raise CutoverRejected("Voice cutover is not connected to OPNsense")
+    validate_proof(proof)
+    lease = _read_lock_generation(adapter)
+    if lease is None or not _holds_lease(adapter, lease):
+        raise CutoverRejected("native Config and lifecycle lock leases are required")
+    # Neither probe may ever mutate. Verify no foreign or legacy PoC state:
+    # the legacy transition must be an explicit separate adoption protocol.
+    adapter.verify_legacy_absent()
+    previous = adapter.snapshot_previous()
+    if not isinstance(previous, dict) or not previous:
+        raise CutoverRejected("missing trusted previous Config/runtime/IPFW snapshot")
+    # A snapshot alone is not proof that the current appliance is complete.
+    # Verify dvtws2, supervisor, Config tree AND exact plugin-owned rules
+    # before allowing any durable intent or mutation.
+    adapter.verify_previous(previous)
+    adapter.reverify_sources(proof)
+    if not _holds_lease(adapter, lease):
+        raise CutoverRejected('Config/lifecycle lock lost or reacquired during preflight')
+    # Durable prepared + mutating intent MUST be fsync'd before first live
+    # change. A failure here is an interrupted intent, NOT an implicit abort.
+    try:
+        adapter.begin_intent(previous, proof)
+    except Exception as exc:
+        raise CutoverManualReview(
+            "cannot verify persisted prepared Voice intent; no mutation permitted"
+        ) from exc
+    _require_locks(adapter, lease)
+    try:
+        adapter.mark_mutating()
+    except Exception as exc:
+        raise CutoverManualReview("cannot verify persisted mutating intent") from exc
+
+    try:
+        _require_locks(adapter, lease)
+        adapter.install_candidate_tree()
+        _require_locks(adapter, lease)
+        adapter.stop_previous_engine()
+        _require_locks(adapter, lease)
+        adapter.start_candidate_engine()
+        _require_locks(adapter, lease)
+        adapter.install_owned_firewall()
+        _require_locks(adapter, lease)
+        adapter.start_candidate_supervisor()
+        _require_locks(adapter, lease)
+        adapter.verify_candidate()
+        # Commit config only after the new engine, IPFW and supervisor pass
+        # runtime verification. On failure restore saved previous Config too.
+        _require_locks(adapter, lease)
+        adapter.persist_config()
+        _require_locks(adapter, lease)
+        adapter.verify_candidate()
+    except Exception as original:
+        # Rollback without both locks risks overwriting newer foreign state.
+        if isinstance(original, CutoverManualReview):
+            raise
+        _require_locks(adapter, lease)
+        errors = []
+        # Reverse EVERY component after an uncertain partial failure. The
+        # methods must be idempotent; a failed command could have mutated
+        # before reporting an error. Keep the durable intent until the
+        # complete previous state has been independently verified.
+        for operation in (
+            adapter.stop_candidate,
+            lambda: adapter.restore_config(previous),
+            lambda: adapter.restore_tree(previous),
+            lambda: adapter.restore_owned_firewall(previous),
+            lambda: adapter.restore_previous_engine(previous),
+            lambda: adapter.verify_previous(previous),
+        ):
+            try:
+                _require_locks(adapter, lease)
+                operation()
+            except CutoverManualReview:
+                raise
+            except Exception as error:
+                errors.append(type(error).__name__)
+        _require_locks(adapter, lease)
+        if errors:
+            raise CutoverManualReview(
+                "Voice cutover failed; rollback incomplete, durable intent retained"
+            ) from original
+        try:
+            _require_locks(adapter, lease)
+            adapter.abort_intent()
+        except Exception as exc:
+            raise CutoverManualReview(
+                "Voice previous state verified but pending intent cannot be cleared"
+            ) from exc
+        raise CutoverError("Voice candidate failed; verified previous state restored") from original
+
+    # An unknown result from writing the committed marker cannot safely
+    # be treated as a pre-commit failure. If fsync/rename had already
+    # completed before reporting an error, rollback would contradict the
+    # durable decision. Leave the intent and require a restart review.
+    _require_locks(adapter, lease)
+    try:
+        adapter.commit_intent()
+    except Exception as exc:
+        raise CutoverManualReview(
+            "Voice commit journal outcome uncertain; no implicit rollback"
+        ) from exc
+
+    # After a durable committed intent there is NO return to old Config,
+    # because the operation may already have survived a power loss. Cleanup
+    # must be retryable under the same lifecycle lock and never delete foreign
+    # state or silently resolve an ambiguous partial transaction.
+    try:
+        _require_locks(adapter, lease)
+        adapter.cleanup_retired()
+        _require_locks(adapter, lease)
+        adapter.verify_candidate()
+        _require_locks(adapter, lease)
+        adapter.finish_intent()
+    except Exception as exc:
+        raise CutoverManualReview(
+            "Voice committed but cleanup/reverification incomplete; review pending intent"
+        ) from exc
+    return "simulated-committed"

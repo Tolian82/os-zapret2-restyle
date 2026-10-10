@@ -38,6 +38,12 @@ class IndexController extends BaseIndexController
         $this->view->generalForm = $this->getForm('general');
     }
 
+    public function voiceAction()
+    {
+        $this->view->pick('OPNsense/Zapret/voice');
+        $this->view->voiceForm = $this->getForm('voice');
+    }
+
     public function diagnosticsAction()
     {
         $this->view->pick('OPNsense/Zapret/diagnostics');

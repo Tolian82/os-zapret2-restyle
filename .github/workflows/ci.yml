@@ -101,6 +101,117 @@ jobs:
       - name: Test repository documentation integrity
         run: sh scripts/test-repository-hygiene.sh
 
+  voice-contract:
+    name: Validate Voice candidates
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.docs_only != 'true') }}
+    runs-on: ubuntu-latest
+    needs: changes
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Validate Voice shell and Python syntax
+        run: |
+          sh -n scripts/test-voice-shared-ipsets.sh
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py
+          python3.13 -m py_compile scripts/test-voice-profile-compiler.py
+      - name: Voice shared IPv4 targets
+        run: sh scripts/test-voice-shared-ipsets.sh
+      - name: Voice fail-closed compiler
+        run: python3.13 scripts/test-voice-profile-compiler.py
+      - name: Voice destination-scoped IPFW capture planning
+        run: python3.13 scripts/test-voice-capture-plan.py
+      - name: Persisted Voice model to candidate and capture plan
+        run: python3.13 scripts/test-voice-model-export.py
+      - name: Voice inactive staging with managed IPSET and resolved WAN
+        run: python3.13 scripts/test-voice-release-stage.py
+      - name: Real orchestrator native Voice candidate build
+        run: python3.13 scripts/test-voice-native-build-wire.py
+      - name: Compile native Voice engine and exact IPFW runtime handoff
+        run: python3.13 scripts/test-voice-native-runtime-handoff.py
+      - name: Actual native Voice IPFW kernel executor via lifecycle FD9
+        run: python3.13 scripts/test-voice-native-ipfw-executor.py
+      - name: Real previous Config/runtime checkpoint for Voice whole cutover
+        run: python3.13 scripts/test-voice-native-cutover-checkpoint.py
+      - name: Verified previous Config/runtime restore stage under FD9
+        run: python3.13 scripts/test-voice-native-restore-stage.py
+      - name: Voice staged candidate into native dvtws2 arguments and IPFW plan
+        run: python3.13 scripts/test-voice-generator-interop.py
+      - name: Voice immutable one-engine handoff preflight
+        run: python3.13 scripts/test-voice-handoff-preflight.py
+      - name: Voice whole-system mock cutover and fault-injection rollback
+        run: python3.13 scripts/test-voice-cutover-coordinator.py
+      - name: Voice durable whole-cutover journal and restart triage
+        run: python3.13 scripts/test-voice-cutover-journal.py
+      - name: Voice immutable previous Config and runtime backup
+        run: python3.13 scripts/test-voice-cutover-backup.py
+      - name: Voice private Config/runtime restore staging (non-activating)
+        run: python3.13 scripts/test-voice-cutover-restore-stage.py
+      - name: Voice real in-place Config restore (isolated inode and lock regression)
+        run: python3.13 scripts/test-voice-cutover-config-restore.py
+      - name: Voice filesystem runtime restore and two-rename crash replay
+        run: python3.13 scripts/test-voice-cutover-runtime-restore.py
+      - name: Voice combined locked Config and runtime rollback
+        run: python3.13 scripts/test-voice-cutover-file-rollback.py
+      - name: Native FD9/Config locked Voice process and IPFW quiescence
+        run: python3.13 scripts/test-voice-native-recovery-quiescence.py
+      - name: Voice durable previous engine/supervisor process evidence
+        run: python3.13 scripts/test-voice-process-recovery-evidence.py
+      - name: Native read-only FreeBSD Voice PID/process inventory
+        run: python3.13 scripts/test-voice-native-process-probe.py
+      - name: Native read-only Config and runtime file fingerprints
+        run: python3.13 scripts/test-voice-native-file-observer.py
+      - name: Native read-only IPFW kernel ownership witness
+        run: python3.13 scripts/test-voice-native-ipfw-ownership.py
+      - name: Compile security policy and recovery Python before behavioral tests
+        run: |
+          python3.13 -m py_compile \
+            src/opnsense/scripts/OPNsense/Zapret/backend/voice_security_policy_evidence.py \
+            src/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_journal.py \
+            src/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_full_recovery.py \
+            scripts/test-voice-security-policy-evidence.py
+      - name: Private schema-3 Voice process security policy evidence
+        run: python3.13 scripts/test-voice-security-policy-evidence.py
+      - name: FreeBSD kernel executable pathname and process credentials
+        run: python3.13 scripts/test-voice-freebsd-process-security.py
+      - name: Read-only FreeBSD kern.proc.args argv byte adapter (offline CI)
+        run: python3.13 scripts/test-voice-freebsd-kernel-argv.py
+      - name: Voice restart exact kernel argv contract (injected, non-activating)
+        run: python3.13 scripts/test-voice-restart-argv-attestation.py
+      - name: Compose complete read-only five-resource native Voice witness
+        run: python3.13 scripts/test-voice-native-full-observer.py
+      - name: Voice complete five-resource read-only recovery attestation
+        run: python3.13 scripts/test-voice-cutover-full-recovery.py
+      - name: Voice read-only cross-journal recovery preflight
+        run: python3.13 scripts/test-voice-cutover-recovery-preflight.py
+      - name: Voice native boot and shared lockf cutover guard
+        run: python3.13 scripts/test-voice-cutover-boot-guard.py
+      - name: Voice private flock/FreeBSD lockf FD9 interoperability
+        run: python3.13 scripts/test-voice-native-lifecycle-lock-interop.py
+      - name: Voice non-destructive atomic runtime rollback preflight
+        run: sh scripts/test-voice-atomic-rollback-preflight.sh
+      - name: Voice IPSET integration with shared production Targets normalizer
+        run: python3.13 scripts/test-voice-targets-integration.py
+      - name: Voice and ordinary single-engine traffic merging
+        run: python3.13 scripts/test-voice-traffic-merge.py
+      - name: Voice owned IPFW transaction and rollback simulation
+        run: python3.13 scripts/test-voice-firewall-transaction.py
+      - name: FreeBSD IPFW adapter exact argv and parsing contract
+        run: python3.13 scripts/test-voice-ipfw-adapter.py
+      - name: Voice native saved-ON staging guard
+        run: sh scripts/test-voice-staged-runtime-guard.sh
+      - name: Voice read-only live IPFW ownership inspector
+        run: python3.13 scripts/test-voice-live-inspect.py
+      - name: Voice explicit legacy PoC migration safety
+        run: python3.13 scripts/test-voice-migration-plan.py
+      - name: Voice durable IPFW ownership and crash ledger
+        run: python3.13 scripts/test-voice-firewall-ledger.py
+      - name: Voice mocked lifecycle activation and recovery
+        run: python3.13 scripts/test-voice-firewall-activation.py
+      - name: Voice GUI model and localization contract
+        run: python3.13 scripts/test-voice-gui-contract.py
+
   validate:
     name: Validate Project
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.docs_only != 'true') }}
@@ -118,8 +229,10 @@ jobs:
           python-version: "3.13"
 
       - name: Install validation tools
-        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils php-cli
 
+      - name: Regression test prospective revision-governance gate
+        run: bash scripts/test-pr-revision-policy.sh
       - name: Validate project identity and version
         shell: bash
         run: |
@@ -144,12 +257,35 @@ jobs:
         run: find src -type f -name "*.xml" -exec xmllint --noout {} \;
 
       - name: Lint PHP files
+        shell: bash
         run: |
-          docker run --rm -v "${PWD}":/app -w /app php:8.2-cli sh -c '
-            set -e
-            find src -type f -name "*.php" -exec php -l {} \;
-            find src -type f -name "*.inc" -exec php -l {} \;
-          '
+          set -euo pipefail
+          # One identical lint/API suite regardless of runtime source.
+          # Runner PHP avoids anonymous Docker Hub rate-limit outages;
+          # the pinned PHP 8.2 image remains a fallback if not installed.
+          php_checks=$(cat <<'PHP_CHECKS'
+          set -e
+          find src -type f -name "*.php" -exec php -l {} \;
+          find src -type f -name "*.inc" -exec php -l {} \;
+          php scripts/test-strategy-voice-settings-scope.php
+          php scripts/test-voice-settings-payload.php
+          php scripts/test-voice-candidate-validator.php
+          php scripts/test-voice-api-concurrency.php
+          php scripts/test-voice-config-flock-release.php
+          php scripts/test-voice-apply-candidate.php
+          PHP_CHECKS
+          )
+          if command -v php >/dev/null 2>&1 &&
+             php -r 'exit(PHP_VERSION_ID >= 80200 && PHP_VERSION_ID < 90000 ? 0 : 1);'; then
+            php --version | head -n 1
+            sh -c "${php_checks}"
+          else
+            echo "Compatible host PHP not available; using php:8.2-cli container"
+            docker run --rm -v "${PWD}":/app -w /app php:8.2-cli sh -c "${php_checks}"
+          fi
+
+      - name: Verify Voice GUI and backend parser parity
+        run: python3.13 scripts/test-voice-validator-parity.py
 
       - name: Validate shell scripts
         run: |
@@ -204,6 +340,12 @@ jobs:
       - name: Test configuration activation contract
         run: sh scripts/test-config-activation-contract.sh
 
+      - name: Test shared Voice IPSET registration and normalization
+        run: sh scripts/test-voice-shared-ipsets.sh
+
+      - name: Test fail-closed Voice profile compiler
+        run: python3.13 scripts/test-voice-profile-compiler.py
+
       - name: Test Telegram Voice Phase B scoped STUN PoC
         run: sh scripts/test-telegram-voice-phase-b.sh
 
@@ -224,6 +366,9 @@ jobs:
 
       - name: Test GUI runtime management
         run: sh scripts/test-gui-runtime-management.sh
+
+      - name: Test native Voice Transmission form contract
+        run: python3.13 scripts/test-voice-gui-contract.py
 
       - name: Test automated release trigger contract
         run: sh scripts/test-release-trigger.sh
@@ -399,6 +544,46 @@ jobs:
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-adaptive-planner.sh
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-search-extended.sh
             sh scripts/test-telegram-voice-phase-b.sh
+            /usr/local/bin/python3.13 scripts/test-voice-ipfw-adapter.py
+            /usr/local/bin/python3.13 scripts/test-voice-live-inspect.py
+            /usr/local/bin/python3.13 scripts/test-voice-migration-plan.py
+            /usr/local/bin/python3.13 scripts/test-voice-generator-interop.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-build-wire.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-runtime-handoff.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-ipfw-executor.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-cutover-checkpoint.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-restore-stage.py
+            /usr/local/bin/python3.13 scripts/test-voice-handoff-preflight.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-coordinator.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-journal.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-backup.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-restore-stage.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-config-restore.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-runtime-restore.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-file-rollback.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-recovery-quiescence.py
+            /usr/local/bin/python3.13 scripts/test-voice-process-recovery-evidence.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-process-probe.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-file-observer.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-ipfw-ownership.py
+            /usr/local/bin/python3.13 -m py_compile \
+              src/opnsense/scripts/OPNsense/Zapret/backend/voice_security_policy_evidence.py \
+              src/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_journal.py \
+              src/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_full_recovery.py \
+              scripts/test-voice-security-policy-evidence.py
+            /usr/local/bin/python3.13 scripts/test-voice-security-policy-evidence.py
+            /usr/local/bin/python3.13 scripts/test-voice-freebsd-process-security.py
+            /usr/local/bin/python3.13 scripts/test-voice-freebsd-kernel-argv.py
+            /usr/local/bin/python3.13 scripts/test-voice-restart-argv-attestation.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-full-observer.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-full-recovery.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-recovery-preflight.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-boot-guard.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-lifecycle-lock-interop.py
+            sh scripts/test-voice-atomic-rollback-preflight.sh
+            /usr/local/bin/python3.13 scripts/test-voice-targets-integration.py
+            /usr/local/bin/python3.13 scripts/test-voice-firewall-ledger.py
+            /usr/local/bin/python3.13 scripts/test-voice-firewall-activation.py
             sh scripts/build-pkg.sh
 
       - name: Inspect built FreeBSD 15 package
@@ -430,6 +615,32 @@ jobs:
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_adapter.sh' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_stage_adapter.sh' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/telegram_voice.sh' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_migration_plan.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_firewall_ledger.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_firewall_activation.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_handoff_preflight.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_coordinator.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_journal.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_backup.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_restore_stage.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_process_recovery_evidence.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_process_probe.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_recovery_preflight.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_full_recovery.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_ipfw_ownership.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_file_observer.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_full_observer.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_restart_argv_attestation.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_freebsd_kernel_argv.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_freebsd_process_security.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_security_policy_evidence.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_guard.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_capture_plan.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_traffic_merge.py' "${contents}"
           tar -xOf dist/*.pkg +MANIFEST > "${manifest}"
           jq -e '.abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64" and .deps.python313.origin == "lang/python313"' "${manifest}" >/dev/null
           head -80 "${manifest}"
