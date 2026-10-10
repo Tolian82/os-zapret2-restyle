@@ -38,6 +38,7 @@ from voice_process_recovery_evidence import (
 )
 from voice_cutover_backup import inspect_previous
 from voice_cutover_config_restore import _pinned_regular
+from voice_native_process_actions import FreeBSDVoiceProcessActions
 
 
 class FiveResourceRollbackError(RuntimeError):
@@ -80,9 +81,10 @@ def restore_previous_five_resources(
     expected_scripts: dict, config_path: Path, active_runtime: Path,
     expected_owner: tuple[int, int], expected_candidate_runtime_sha256: str,
     candidate_proof: dict, process_probe, read_ipfw_adapter,
-    write_ipfw_adapter, stop_candidate: Callable[[], None],
-    start_previous: Callable[[], None],
+    write_ipfw_adapter, stop_candidate: Callable[[], None] | None = None,
+    start_previous: Callable[[], None] | None = None,
     require_lifecycle_owner: Callable[[], None],
+    process_actions_factory: Callable[[int], FreeBSDVoiceProcessActions] | None = None,
 ) -> dict:
     """Rollback under one lock: stop → kernel → runtime → Config → restart.
 
@@ -90,10 +92,17 @@ def restore_previous_five_resources(
     eventually audited FreeBSD launcher/supervisor adapter, not mock-like
     lambdas: CI tests inject deterministic processes and a fake kernel.
     """
-    if any(not callable(callback) for callback in (
-        stop_candidate, start_previous, require_lifecycle_owner
-    )):
-        raise FiveResourceRollbackError("native stop/start and lifecycle owner required")
+    if not callable(require_lifecycle_owner) or (
+        process_actions_factory is None and
+        (not callable(stop_candidate) or not callable(start_previous))
+    ) or (
+        process_actions_factory is not None and
+        (not callable(process_actions_factory) or
+         stop_candidate is not None or start_previous is not None)
+    ):
+        raise FiveResourceRollbackError(
+            "exclusive native process actuator or injected test callbacks required"
+        )
     if type(expected_owner) is not tuple or len(expected_owner) != 2 or \
        any(type(v) is not int or v < 0 for v in expected_owner):
         raise FiveResourceRollbackError("trusted native Config owner required")
@@ -151,6 +160,17 @@ def restore_previous_five_resources(
         require_lifecycle_owner()
         if journal.read()!=original:
             raise FiveResourceRollbackError("whole intent changed after Config lock")
+        if process_actions_factory is not None:
+            # Construct only AFTER acquiring the actual Config flock: the
+            # process actuator receives a borrowed descriptor whose identity
+            # must remain stable across BOTH stop and restart.
+            actuator = process_actions_factory(fd)
+            if not isinstance(actuator, FreeBSDVoiceProcessActions) or                actuator.config_fd != fd or actuator.config_path != config_path or                actuator.active_runtime != active_runtime or                actuator.previous_backup != previous_backup or                actuator.journal.directory != journal.directory:
+                raise FiveResourceRollbackError(
+                    "foreign/misbound native process actuator"
+                )
+            stop_candidate = actuator.stop_candidate
+            start_previous = actuator.start_previous
 
         # Stop precisely the candidate one-engine topology, including both
         # supervisor roles, without touching the normal legacy lifecycle.

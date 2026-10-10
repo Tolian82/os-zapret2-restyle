@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_43`: one-lock five-domain rollback execution (dvtws2, supervisor, IPFW, runtime, Config) with restart identity verification and durable pending intent
+- [x] Current candidate `v0.5.1_44`: bounded FreeBSD native process actuator executes existing single-engine launcher and supervisor through the five-resource rollback's real Config flock, with strict before/after identity verification
+- [ ] Next: production FD9 cutover coordinator, durable five-resource final attestation and journal cleanup; reboot recovery; qualify Voice ON
+- [x] Previous candidate `v0.5.1_43`: one-lock five-domain rollback execution (dvtws2, supervisor, IPFW, runtime, Config) with restart identity verification and durable pending intent
 - [ ] Next: bind the actual FreeBSD launcher/supervisor to the stop/start adapter, durable five-resource result attestation and journal/redo cleanup, reboot crash-retry; only then production Voice ON
 - [x] Previous candidate `v0.5.1_42`: production read-only FD9/Config flock quiescence inspection of all native Voice processes plus previous exact IPFW ownership
 - [ ] Next: use native quiescence as real coordinator gate, implement verified process/IPFW restoration and full cross-resource journal close; then boot recovery and Voice ON
