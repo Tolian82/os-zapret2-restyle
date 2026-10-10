@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_36`: real FD9 rollback preparation now outputs a permission-accurate private install image of previous Config/runtime, with independent byte/mode witness
+- [x] Current candidate `v0.5.1_37`: implement actual in-place sealed previous Config writer preserving OPNsense flock inode, with real FD/inode/lock/foreign-change regression
+- [ ] Next: production FD9 owner and durable crash-retry for partial Config write, then coordinated runtime, one-engine, supervisor and IPFW rollback
+- [x] Previous candidate `v0.5.1_36`: real FD9 rollback preparation now outputs a permission-accurate private install image of previous Config/runtime, with independent byte/mode witness
 - [ ] Next: trusted original file UID/GID + Config lock ownership, then a journal-coordinated live Config/runtime swap and one previous engine/supervisor restart
 - [x] Previous candidate `v0.5.1_35`: align independent live runtime root-mode fingerprint with checkpoint schema-2 and legacy schema-1
 - [ ] Next: production previous Config/runtime restore and prior process restart under one lifecycle and Config authority

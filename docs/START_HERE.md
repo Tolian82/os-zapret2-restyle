@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_37 — actual in-place OPNsense Config recovery primitive (2026-10-10):** Added `voice_cutover_config_restore.py`, a descriptor-based, in-place writer for the previous sealed Config that preserves the SAME inode and PHP `Config::save()` flock identity; no rename, no file replacement. It verifies whole-journal phase `mutating` schema 2+, original Config/runtime snapshot, independent restore-install-image witness, explicit live UID/GID authority, pinned inode and an exclusive nonblocking native Config flock before any mutation. It only overwrites the exactly pinned candidate Config SHA or verifies an already-restored previous SHA; any foreign edits, busy lock, changed image or missing journal refuse the write. After restoring bytes and original mode it fsyncs/rechecks the inode and leaves whole journal `mutating` until engine/runtime/IPFW/supervisor rollback completes. Fault-injected tests cover actual writes, idempotence, Config lock contention, foreign edits, symlink/owner drift, image tampering and interrupted write with retained recovery snapshot. Added Linux/FreeBSD CI execution. IMPORTANT: writer has **no production CLI/action/GUI caller**, lifecycle proof is injectable only to offline tests; live native FD9 ownership and the full five-resource rollback owner are not implemented. No Voice ON or boot recovery. PLUGIN_REVISION=37; exact-head CI pending.
+
+
 **v0.5.1_36 — native Voice recovery now prepares a permission-accurate install image (2026-10-10):** Added `backend/voice_cutover_install_image.py` and connected it to the existing production `native-voice-restore-stage` action under shared FD9. After validating the durable mutating whole-cutover journal, previous IPFW ownership and the sealed old Config/runtime snapshot, it creates `/var/db/zapret2/voice-cutover/restore-install-image`: a separate fsync'd, root-private publication with original Config/file/child-directory/runtime-root modes, not the private 0600/0700 snapshot modes. A second independent read-only live-files observer verifies its full previous Config/runtime fingerprints before and after publication. Schema-1 snapshots lacking root mode refuse materialization. Both original backup and private restore-staged remain untouched; no live `/conf/config.xml` or `runtime-v2` overwrite, no process start/stop or IPFW mutation. Original UID/GID restoration, continuous Config authority, actual live file swap, engine/supervisor restart and reboot recovery are still required before Voice ON. Added isolated success/permission, tampering, interruption and unchanged-live regressions for Linux/FreeBSD CI. PLUGIN_REVISION=36; exact-head CI pending.
 
 
@@ -160,13 +163,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_36` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_37` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=36` (**development candidate, not published**);
+- `PLUGIN_REVISION=37` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
