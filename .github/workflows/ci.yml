@@ -150,6 +150,8 @@ jobs:
         run: python3.13 scripts/test-voice-cutover-restore-stage.py
       - name: Voice real in-place Config restore (isolated inode and lock regression)
         run: python3.13 scripts/test-voice-cutover-config-restore.py
+      - name: Voice filesystem runtime restore and two-rename crash replay
+        run: python3.13 scripts/test-voice-cutover-runtime-restore.py
       - name: Voice durable previous engine/supervisor process evidence
         run: python3.13 scripts/test-voice-process-recovery-evidence.py
       - name: Native read-only FreeBSD Voice PID/process inventory
@@ -553,6 +555,7 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-cutover-backup.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-restore-stage.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-config-restore.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-runtime-restore.py
             /usr/local/bin/python3.13 scripts/test-voice-process-recovery-evidence.py
             /usr/local/bin/python3.13 scripts/test-voice-native-process-probe.py
             /usr/local/bin/python3.13 scripts/test-voice-native-file-observer.py

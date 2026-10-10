@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_38`: durable pre-truncate Config redo record and same-inode, old-prefix-only crash retry; protected against foreign Config changes
+- [x] Current candidate `v0.5.1_39`: implement actual verified previous runtime directory swap, full same-filesystem sync and two-rename crash redo/retired candidate
+- [ ] Next: native FD9 + Config lifecycle authority and one-engine/supervisor/IPFW verified full rollback with boot replay and Voice ON cutover
+- [x] Previous candidate `v0.5.1_38`: durable pre-truncate Config redo record and same-inode, old-prefix-only crash retry; protected against foreign Config changes
 - [ ] Next: native FD9 + Config lock ownership with end-to-end runtime/one-engine/supervisor/IPFW restoration and cold-boot decision handling
 - [x] Previous candidate `v0.5.1_37`: implement actual in-place sealed previous Config writer preserving OPNsense flock inode, with real FD/inode/lock/foreign-change regression
 - [ ] Next: production FD9 owner and durable crash-retry for partial Config write, then coordinated runtime, one-engine, supervisor and IPFW rollback

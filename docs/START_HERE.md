@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_39 — crash-resumable real previous Voice runtime directory restoration (2026-10-10):** Added `voice_cutover_runtime_restore.py`, a real filesystem restore primitive (not yet connected to any production action). From the independently verified prior Config/runtime snapshot and permission-correct install image it copies the old runtime tree onto the SAME filesystem as `runtime-v2`, preserving sealed file/dir/root modes. Before touching active files it writes an owner-private, fsync'd `runtime-restore-redo.json`, pinned to the full MUTATING journal checksum, runtime parent inode, prior tree digest and independently supplied candidate runtime digest. It then uses same-parent renames `runtime-v2 → .voice-restore-retired-<check>` and `.voice-restore-ready-<check> → runtime-v2`, fsyncs the parent after each, and independently verifies both old active runtime and retained candidate. After crash between renames, rerun completes ONLY if the redo, ready tree, retained candidate and whole journal all match; foreign/symlink/tampered trees or missing/incorrect redo are refused, preserving recovery evidence. Added Linux/FreeBSD tests of real renames, failure before/after first rename, resume and mismatch rejection. The retired candidate and redo remain until the complete five-resource rollback is certified. No production CLI/GUI call, single-engine restart, IPFW rollback, boot replay or Voice ON yet. PLUGIN_REVISION=39; exact-head CI pending.
+
+
 **v0.5.1_38 — crash-resumable in-place native Voice Config restoration (2026-10-10):** Implemented `voice_cutover_config_redo.py`, a private write-once, fsync'd `config-restore-redo.json` record written **before** any live inode truncate in `voice_cutover_config_restore.py`. It seals the `mutating` whole-cutover checksum, pinned Config device/inode/UID/GID, exact candidate and previous Config SHA256 and old byte count. If a restore was interrupted after truncation, the new invocation under Config flock permits continuation only for a proven prefix of sealed previous Config bytes from the original inode; arbitrary third-party edits, missing or corrupt redo, changed inode/owner or new cutover intent refuse restoration. The redo remains after a successful Config write because runtime, firewall, process and supervisor still need complete restoration; the whole journal remains `mutating`. New Linux/FreeBSD regression cases cover actual interrupted write + fresh-process resume, missing marker, foreign changed bytes, corrupt marker, inode replacement and marker retention. No automated boot replay, production CLI, GUI Voice ON or whole-system activation is enabled. PLUGIN_REVISION=38; exact-head CI pending.
 
 
@@ -166,13 +169,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_38` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_39` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=38` (**development candidate, not published**);
+- `PLUGIN_REVISION=39` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
