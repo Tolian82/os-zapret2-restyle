@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_27`: real native one-engine runtime/IPFW handoff works with full-sized /conf/config.xml, bounded and stream-hashed
+- [x] Current candidate `v0.5.1_28`: production FreeBSD IPFW executor wired to service lockf FD9; native Voice OFF ownership seed and journal/argv-bound real kernel activation available under locked lifecycle
+- [ ] Next: wire the complete Config/runtime/one-engine/supervisor rollback and boot recovery around the real IPFW executor; enable GUI Voice ON only then
+- [x] Previous candidate `v0.5.1_27`: real native one-engine runtime/IPFW handoff works with full-sized /conf/config.xml, bounded and stream-hashed
 - [ ] Next: production single-engine IPFW/Config/supervisor cutover and rollback, then GUI Voice ON and reboot acceptance
 - [x] Previous candidate `v0.5.1_26`: real production Voice+Strategies native dvtws2 argument generation and canonical owned IPFW manifest + source fingerprint handoff
 - [ ] Next: complete single-engine IPFW/runtime/Config transactional activation with rollback, then enable GUI Voice ON

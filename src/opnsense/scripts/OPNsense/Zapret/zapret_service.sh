@@ -475,6 +475,24 @@ strategy_lab_report_lock_failure()
     fi
 }
 
+# Native FreeBSD Voice IPFW owner is a production executable, not an
+# independent daemon. The dispatcher invokes it ONLY beneath FD9 lockf.
+# No GUI action is allowed to use this partial cutover path.
+native_voice_ipfw_dispatch()
+{
+    _native_voice_ipfw_action="$1"
+    _native_voice_ipfw_python="/usr/local/bin/python3.13"
+    _native_voice_ipfw_script="${BACKEND_DIR}/voice_ipfw_runtime.py"
+
+    [ -x "${_native_voice_ipfw_python}" ] &&
+    [ -r "${_native_voice_ipfw_script}" ] || {
+        echo "ERROR: native Voice IPFW runtime is not installed" >&2
+        return 1
+    }
+    "${_native_voice_ipfw_python}" "${_native_voice_ipfw_script}" \
+        "${_native_voice_ipfw_action}"
+}
+
 service_dispatch()
 {
     case "${1:-}" in
@@ -503,6 +521,12 @@ service_dispatch()
             ;;
         reconfigure)
             reconfigure_service
+            ;;
+        native-voice-ipfw-seed)
+            native_voice_ipfw_dispatch seed
+            ;;
+        native-voice-ipfw-activate)
+            native_voice_ipfw_dispatch activate
             ;;
         runtime-failure)
             orchestrator_runtime_failure \
@@ -579,7 +603,7 @@ service_with_lifecycle_lock()
         # evidence of an interrupted Voice cutover. Status/inspection remain
         # available, and no journal is created during normal operation.
         case "${1:-}" in
-            start|stop|restart|reconfigure|telegram-voice-enable|telegram-voice-disable|runtime-failure|strategy-lab|strategy-lab-circular|strategy-lab-recover)
+            start|stop|restart|reconfigure|native-voice-ipfw-seed|telegram-voice-enable|telegram-voice-disable|runtime-failure|strategy-lab|strategy-lab-circular|strategy-lab-recover)
                 preflight_voice_cutover_journals || return 69
                 ;;
         esac
@@ -612,7 +636,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-ipfw-seed|native-voice-ipfw-activate|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
