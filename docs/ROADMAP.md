@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_16`: correct confirmed native FreeBSD pathname PID sysctl ABI with strict negative tests
+- [ ] Verify Linux and FreeBSD 15 package CI at exact HEAD, then establish native Config/lifecycle lock ordering and Config::save() lock lifetime
+
 - [x] Current candidate `v0.5.1_15`: correct schema-3 policy module syntax and gate Python compilation explicitly ahead of behavioral regression tests
 - [ ] Qualify schema-3 full matrix, owner native policy authority and lock-held recovery before enabling any Voice Apply
 

@@ -90,19 +90,30 @@ def sysctl_kernel_path(pid):
        platform.system() != "FreeBSD":
         raise ProcessSecurityError("native FreeBSD with valid PID required")
     libc = ctypes.CDLL(None, use_errno=True)
-    sysctl = libc.sysctlbyname
-    sysctl.argtypes = [ctypes.c_char_p, ctypes.c_void_p,
-                       ctypes.POINTER(ctypes.c_size_t),
+    # FreeBSD kern.proc.pathname requires a numeric PID MIB component.
+    # sysctlbyname("...pathname.<pid>") returned ENOENT in native FreeBSD 15.
+    to_mib = libc.sysctlnametomib
+    to_mib.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_int),
+                       ctypes.POINTER(ctypes.c_size_t)]
+    to_mib.restype = ctypes.c_int
+    mib = (ctypes.c_int * 4)()
+    depth = ctypes.c_size_t(3)
+    if to_mib(b"kern.proc.pathname", mib, ctypes.byref(depth)) != 0 or \
+       depth.value != 3:
+        raise ProcessSecurityError("FreeBSD process pathname MIB unavailable")
+    mib[3] = pid
+    sysctl = libc.sysctl
+    sysctl.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_uint,
+                       ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t),
                        ctypes.c_void_p, ctypes.c_size_t]
     sysctl.restype = ctypes.c_int
-    oid = f"kern.proc.pathname.{pid}".encode("ascii")
     length = ctypes.c_size_t(0)
-    if sysctl(oid, None, ctypes.byref(length), None, 0) != 0 or \
+    if sysctl(mib, 4, None, ctypes.byref(length), None, 0) != 0 or \
        not 2 <= length.value <= MAX_PATH_BYTES:
         raise ProcessSecurityError("FreeBSD process pathname length unavailable")
     buffer = ctypes.create_string_buffer(length.value)
     filled = ctypes.c_size_t(length.value)
-    if sysctl(oid, buffer, ctypes.byref(filled), None, 0) != 0 or \
+    if sysctl(mib, 4, buffer, ctypes.byref(filled), None, 0) != 0 or \
        not 2 <= filled.value <= length.value:
         raise ProcessSecurityError("FreeBSD process pathname read failed")
     data = buffer.raw[:filled.value]

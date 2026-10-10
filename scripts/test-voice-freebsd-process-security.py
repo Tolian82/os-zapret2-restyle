@@ -210,61 +210,80 @@ class SecurityTests(unittest.TestCase):
         with self.assertRaises(security.ProcessSecurityError):
             reader.inspect_twice()
 
+    def test_numeric_mib_reader_uses_pid_and_rejects_partial_sysctl(self):
+        # Offline ABI simulation, not a FreeBSD qualification.
+        class Function:
+            def __init__(self, impl):
+                self.impl = impl
+
+            def __call__(self, *args):
+                return self.impl(*args)
+
+        class FakeLibc:
+            def __init__(self, raw=b"/bin/sh\x00", failure=None):
+                self.raw = raw
+                self.failure = failure
+                self.calls = []
+                self.sysctlnametomib = Function(self.to_mib)
+                self.sysctl = Function(self.read)
+
+            def to_mib(self, name, mib, length):
+                self.calls.append(("mib", name))
+                if self.failure == "mib":
+                    return -1
+                if name != b"kern.proc.pathname":
+                    raise AssertionError("unexpected OID")
+                mib[0], mib[1], mib[2] = 1, 14, 12
+                length._obj.value = 3
+                return 0
+
+            def read(self, mib, depth, buf, length, newp, newlen):
+                self.calls.append(("sysctl", tuple(mib[:depth]), buf is None))
+                if depth != 4 or tuple(mib[:depth]) != (1, 14, 12, 314):
+                    raise AssertionError("numeric PID was not appended")
+                if newp is not None or newlen != 0:
+                    raise AssertionError("unexpected mutation")
+                if self.failure == "length" and buf is None:
+                    return -1
+                if self.failure == "read" and buf is not None:
+                    return -1
+                if buf is not None:
+                    ctypes.memmove(buf, self.raw, len(self.raw))
+                length._obj.value = len(self.raw)
+                return 0
+
+        fake = FakeLibc()
+        with patch.object(security.platform, "system", return_value="FreeBSD"), \
+             patch.object(security.ctypes, "CDLL", return_value=fake):
+            self.assertEqual(b"/bin/sh\x00", security.sysctl_kernel_path(314))
+        self.assertEqual([
+            ("mib", b"kern.proc.pathname"),
+            ("sysctl", (1, 14, 12, 314), True),
+            ("sysctl", (1, 14, 12, 314), False),
+        ], fake.calls)
+        for failure, blob in (
+            ("mib", b"/bin/sh\x00"),
+            ("length", b"/bin/sh\x00"),
+            ("read", b"/bin/sh\x00"),
+            (None, b"/bin/sh"),
+            (None, b"/" + b"x" * security.MAX_PATH_BYTES + b"\x00"),
+        ):
+            with self.subTest(failure=failure, blob_len=len(blob)):
+                fake = FakeLibc(blob, failure)
+                with patch.object(security.platform, "system", return_value="FreeBSD"), \
+                     patch.object(security.ctypes, "CDLL", return_value=fake):
+                    with self.assertRaises(security.ProcessSecurityError):
+                        security.sysctl_kernel_path(314)
+
     @unittest.skipUnless(sys.platform.startswith("freebsd"),
                          "only the FreeBSD 15 CI VM has kernel process OIDs")
     def test_actual_freebsd_self_process_sysctl_and_numeric_ps(self):
         # Real read-only system calls in FreeBSD CI, but NEVER a service
         # PID, IPFW rule, Config mutation, or production Voice activation.
         pid = os.getpid()
-        try:
-            raw_path = security.sysctl_kernel_path(pid)
-        except security.ProcessSecurityError as exc:
-            # CI-only read-only probe; never substitute a fake for a failed
-            # native check. Capture the actual OID/errno behavior on FreeBSD.
-            libc = ctypes.CDLL(None, use_errno=True)
-            byname = libc.sysctlbyname
-            byname.argtypes = [ctypes.c_char_p, ctypes.c_void_p,
-                               ctypes.POINTER(ctypes.c_size_t),
-                               ctypes.c_void_p, ctypes.c_size_t]
-            byname.restype = ctypes.c_int
-            n = ctypes.c_size_t()
-            ctypes.set_errno(0)
-            name_rc = byname(f"kern.proc.pathname.{pid}".encode(),
-                             None, ctypes.byref(n), None, 0)
-            name_errno = ctypes.get_errno()
-            nametomib = libc.sysctlnametomib
-            nametomib.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_int),
-                                  ctypes.POINTER(ctypes.c_size_t)]
-            nametomib.restype = ctypes.c_int
-            mib = (ctypes.c_int * 24)()
-            depth = ctypes.c_size_t(24)
-            ctypes.set_errno(0)
-            mib_rc = nametomib(b"kern.proc.pathname", mib,
-                               ctypes.byref(depth))
-            mib_errno = ctypes.get_errno()
-            numeric_rc = None
-            numeric_errno = None
-            numeric_length = None
-            if mib_rc == 0 and 0 < depth.value < 24:
-                mib[depth.value] = pid
-                native_sysctl = libc.sysctl
-                native_sysctl.argtypes = [ctypes.POINTER(ctypes.c_int),
-                                          ctypes.c_uint, ctypes.c_void_p,
-                                          ctypes.POINTER(ctypes.c_size_t),
-                                          ctypes.c_void_p, ctypes.c_size_t]
-                native_sysctl.restype = ctypes.c_int
-                numeric_size = ctypes.c_size_t()
-                ctypes.set_errno(0)
-                numeric_rc = native_sysctl(mib, depth.value + 1, None,
-                                           ctypes.byref(numeric_size), None, 0)
-                numeric_errno = ctypes.get_errno()
-                numeric_length = numeric_size.value
-            self.fail(f"{exc}; FreeBSD read-only OID probe: "
-                      f"byname_rc={name_rc} errno={name_errno} len={n.value}; "
-                      f"nametomib_rc={mib_rc} errno={mib_errno} depth={depth.value}; "
-                      f"numeric_rc={numeric_rc} errno={numeric_errno} "
-                      f"len={numeric_length}")
-        actual_path = security.parse_kernel_path(raw_path)
+        actual_path = security.parse_kernel_path(
+            security.sysctl_kernel_path(pid)
+        )
         self.assertTrue(actual_path.startswith("/"))
         creds = security.ps_numeric_credentials(pid)
         self.assertEqual(os.geteuid(),creds["euid"])
