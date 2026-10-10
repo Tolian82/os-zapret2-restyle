@@ -55,34 +55,43 @@ def parse_kernel_argv(raw: bytes) -> list[str]:
 
 
 def sysctl_kernel_argv(pid: int) -> bytes:
-    """Read only kern.proc.args.<PID> via FreeBSD libc sysctlbyname.
+    """Read FreeBSD kern.proc.args for numeric PID using a bounded sysctl MIB.
 
-    Two syscall steps (length then bytes). Identity must be re-probed by
-    caller, since either process might exit/reuse its pid between steps.
+    A static name-to-MIB lookup and two read-only numeric sysctl calls are
+    required. On FreeBSD 15, sysctlbyname("kern.proc.args.<PID>") fails with
+    ENOENT even though numeric sysctl(prefix + PID) works. Caller must
+    re-probe process PID/start identity around the read.
     """
     if not _valid_pid(pid) or platform.system() != "FreeBSD":
         raise KernelArgvError("native FreeBSD and valid process PID required")
     libc = ctypes.CDLL(None, use_errno=True)
-    fn = libc.sysctlbyname
-    fn.argtypes = [ctypes.c_char_p, ctypes.c_void_p,
-                   ctypes.POINTER(ctypes.c_size_t),
-                   ctypes.c_void_p, ctypes.c_size_t]
-    fn.restype = ctypes.c_int
-    name = f"kern.proc.args.{pid}".encode("ascii")
+    to_mib = libc.sysctlnametomib
+    to_mib.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_int),
+                       ctypes.POINTER(ctypes.c_size_t)]
+    to_mib.restype = ctypes.c_int
+    mib = (ctypes.c_int * 4)()
+    depth = ctypes.c_size_t(3)
+    if to_mib(b"kern.proc.args", mib, ctypes.byref(depth)) != 0 or \
+       depth.value != 3:
+        raise KernelArgvError("FreeBSD argv MIB unavailable")
+    mib[3] = pid
+    sysctl = libc.sysctl
+    sysctl.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_uint,
+                       ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t),
+                       ctypes.c_void_p, ctypes.c_size_t]
+    sysctl.restype = ctypes.c_int
     length = ctypes.c_size_t(0)
-    if fn(name, None, ctypes.byref(length), None, 0) != 0:
-        raise KernelArgvError("FreeBSD sysctl argv length query failed")
-    if not 2 <= length.value <= MAX_BYTES:
-        raise KernelArgvError("kernel argv length outside safe bound")
+    if sysctl(mib, 4, None, ctypes.byref(length), None, 0) != 0 or \
+       not 2 <= length.value <= MAX_BYTES:
+        raise KernelArgvError("FreeBSD argv length unavailable or outside safe bound")
     buffer = ctypes.create_string_buffer(length.value)
     filled = ctypes.c_size_t(length.value)
-    if fn(name, buffer, ctypes.byref(filled), None, 0) != 0 or \
+    if sysctl(mib, 4, buffer, ctypes.byref(filled), None, 0) != 0 or \
        not 2 <= filled.value <= length.value:
         raise KernelArgvError("FreeBSD kernel argv changed or read failed")
     result = buffer.raw[:filled.value]
     parse_kernel_argv(result)
     return result
-
 
 class FreeBSDKernelArgvReader:
     """Three-role read-only adapter for inspect_restarted_argv (not wired)."""

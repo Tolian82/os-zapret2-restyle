@@ -147,53 +147,88 @@ class ArgvReaderTests(unittest.TestCase):
     def test_actual_freebsd_self_kernel_argv(self):
         # Genuine kernel self-process read; never replace it with a fake.
         pid = os.getpid()
-        try:
-            raw = kernel.sysctl_kernel_argv(pid)
-        except kernel.KernelArgvError as exc:
-            # One-time read-only ABI evidence if the old dynamic name fails.
-            libc = ctypes.CDLL(None, use_errno=True)
-            byname = libc.sysctlbyname
-            byname.argtypes = [ctypes.c_char_p, ctypes.c_void_p,
-                               ctypes.POINTER(ctypes.c_size_t),
-                               ctypes.c_void_p, ctypes.c_size_t]
-            byname.restype = ctypes.c_int
-            length = ctypes.c_size_t()
-            ctypes.set_errno(0)
-            text_rc = byname(f"kern.proc.args.{pid}".encode("ascii"),
-                             None, ctypes.byref(length), None, 0)
-            text_errno = ctypes.get_errno()
-            to_mib = libc.sysctlnametomib
-            to_mib.argtypes = [ctypes.c_char_p,
-                               ctypes.POINTER(ctypes.c_int),
-                               ctypes.POINTER(ctypes.c_size_t)]
-            to_mib.restype = ctypes.c_int
-            mib = (ctypes.c_int * 24)()
-            depth = ctypes.c_size_t(24)
-            ctypes.set_errno(0)
-            mib_rc = to_mib(b"kern.proc.args", mib, ctypes.byref(depth))
-            mib_errno = ctypes.get_errno()
-            numeric_rc = numeric_errno = numeric_length = None
-            if mib_rc == 0 and 0 < depth.value < 24:
-                mib[depth.value] = pid
-                sysctl = libc.sysctl
-                sysctl.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_uint,
-                                   ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t),
-                                   ctypes.c_void_p, ctypes.c_size_t]
-                sysctl.restype = ctypes.c_int
-                n = ctypes.c_size_t()
-                ctypes.set_errno(0)
-                numeric_rc = sysctl(mib, depth.value + 1, None,
-                                    ctypes.byref(n), None, 0)
-                numeric_errno = ctypes.get_errno()
-                numeric_length = n.value
-            self.fail(f"{exc}; native FreeBSD argv ABI: "
-                      f"byname_rc={text_rc} errno={text_errno} length={length.value}; "
-                      f"mib_rc={mib_rc} errno={mib_errno} depth={depth.value}; "
-                      f"numeric_rc={numeric_rc} errno={numeric_errno} "
-                      f"length={numeric_length}")
+        raw = kernel.sysctl_kernel_argv(pid)
         parsed = kernel.parse_kernel_argv(raw)
         self.assertTrue(parsed)
         self.assertTrue(parsed[0])
+
+    def test_numeric_freebsd_argv_mib_and_fail_closed_faults(self):
+        # Synthetic libc ABI on both platforms. Native self-process CI above
+        # independently verifies FreeBSD 15's actual numeric sysctl behavior.
+        class Fn:
+            def __init__(self, callback):
+                self.callback = callback
+
+            def __call__(self, *args):
+                return self.callback(*args)
+
+        class FakeLibc:
+            def __init__(self, data=b"/bin/sh\x00--port=989\x00", failure=None):
+                self.data = data
+                self.failure = failure
+                self.calls = []
+                self.sysctlnametomib = Fn(self.to_mib)
+                self.sysctl = Fn(self.read)
+
+            def to_mib(self, name, mib, depth):
+                self.calls.append(("mib", name))
+                if name != b"kern.proc.args":
+                    raise AssertionError("untrusted argv OID")
+                if self.failure == "mib-fail":
+                    return -1
+                mib[0], mib[1], mib[2] = 1, 14, 7
+                depth._obj.value = 2 if self.failure == "mib-depth" else 3
+                return 0
+
+            def read(self, mib, size, buf, length, newp, newlen):
+                self.calls.append(("read", tuple(mib[:size]), buf is None))
+                if size != 4 or tuple(mib[:size]) != (1, 14, 7, 314):
+                    raise AssertionError("wrong numeric MIB/PID")
+                if newp is not None or newlen != 0:
+                    raise AssertionError("kernel argv mutation requested")
+                if buf is None:
+                    if self.failure == "length-fail":
+                        return -1
+                    length._obj.value = (
+                        kernel.MAX_BYTES + 1 if self.failure == "oversize"
+                        else 1 if self.failure == "too-short"
+                        else len(self.data)
+                    )
+                    return 0
+                if self.failure == "read-fail":
+                    return -1
+                ctypes.memmove(buf, self.data, len(self.data))
+                length._obj.value = 1 if self.failure == "partial" else len(self.data)
+                return 0
+
+        fake = FakeLibc()
+        with patch.object(kernel.platform, "system", return_value="FreeBSD"), \
+             patch.object(kernel.ctypes, "CDLL", return_value=fake):
+            self.assertEqual(b"/bin/sh\x00--port=989\x00",
+                             kernel.sysctl_kernel_argv(314))
+        self.assertEqual([
+            ("mib", b"kern.proc.args"),
+            ("read", (1, 14, 7, 314), True),
+            ("read", (1, 14, 7, 314), False),
+        ], fake.calls)
+
+        for failure, data in (
+            ("mib-fail", b"/bin/sh\x00"),
+            ("mib-depth", b"/bin/sh\x00"),
+            ("length-fail", b"/bin/sh\x00"),
+            ("oversize", b"/bin/sh\x00"),
+            ("too-short", b"/bin/sh\x00"),
+            ("read-fail", b"/bin/sh\x00"),
+            ("partial", b"/bin/sh\x00"),
+            (None, b"/bin/sh"),
+            (None, b"/bin/sh\x00\x00"),
+        ):
+            with self.subTest(failure=failure, data=data):
+                fake = FakeLibc(data, failure)
+                with patch.object(kernel.platform, "system", return_value="FreeBSD"), \
+                     patch.object(kernel.ctypes, "CDLL", return_value=fake):
+                    with self.assertRaises(kernel.KernelArgvError):
+                        kernel.sysctl_kernel_argv(314)
 
     def test_native_sysctl_never_executes_on_nonfreebsd(self):
         with patch.object(kernel.platform,"system",return_value="Linux"):
