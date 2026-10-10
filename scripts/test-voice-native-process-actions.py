@@ -168,18 +168,19 @@ class NativeProcessActionTests(previous.FiveDomainRecovery):
         self.prepare()
         with self.config.open("r+b") as fd:
             fcntl.flock(fd, fcntl.LOCK_EX|fcntl.LOCK_NB)
-            with self.assertRaisesRegex(
-                native_actions.NativeVoiceProcessActionError,
-                "production restart requires bound native integrity witnesses",
-            ):
-                native_actions.FreeBSDVoiceProcessActions(
-                    probe=self.probe, journal=self.journal,
-                    previous_backup=self.backup, active_runtime=self.active,
-                    config_path=self.config,
-                    config_owner=(os.geteuid(),os.getegid()),
-                    config_fd=fd.fileno(),
-                    require_lifecycle_owner=lambda:None,
-                )
+            with patch.object(native_actions, "PIDFILES", self.pidfiles):
+                with self.assertRaisesRegex(
+                    native_actions.NativeVoiceProcessActionError,
+                    "production restart requires bound native integrity witnesses",
+                ):
+                    native_actions.FreeBSDVoiceProcessActions(
+                        probe=self.probe, journal=self.journal,
+                        previous_backup=self.backup, active_runtime=self.active,
+                        config_path=self.config,
+                        config_owner=(os.geteuid(),os.getegid()),
+                        config_fd=fd.fileno(),
+                        require_lifecycle_owner=lambda:None,
+                    )
         self.assertEqual(self.history,[])
         self.assertEqual(self.executed,[])
 

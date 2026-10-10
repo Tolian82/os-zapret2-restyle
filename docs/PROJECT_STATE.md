@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_47 — validate real-runner security requirement at the intended native PID-file gate (2026-10-10):** CI `_46` correctly rejected the new real-runner negative fixture due to the intentionally isolated `/var/run` process-pidfile mapping before reaching the missing-integrity-witness refusal. Fixed the test to pin the local test-owned pidfile mapping for that one isolated assertion, so the production constructor's mandatory schema-3 kernel image/UID/GID/argv refusal is genuinely exercised without relaxing production path validation. Normalized the new security-result conditional. No production runtime/GUI activation; keep schema-3 evidence and all five resources non-authorizing until native reboot-safe coordinator is implemented. PLUGIN_REVISION=47; CI pending.
+
+
 **v0.5.1_46 — native previous-Voice restart kernel image/UID/GID + argv cross-attestation (2026-10-10):** Added `voice_native_restart_integrity.py`: under injected native FD9 and Config-lock guards, requires schema-3 `mutating` whole-cutover and rereads its immutable policy + previous process snapshot; twice checks FreeBSD `kern.proc.pathname` and numeric UID/GID policy and twice checks NUL-separated `kern.proc.args` against sealed previous `dvtws.args`, the fixed launcher suffix and the supplied exact supervisor launch plan. Both independent readers must share the same native process probe, and NEW PID/start identities must agree across both sources and remain stable after full cross-check/re-read of journal/policy/process evidence. Failures reject foreign image, credential, argv, stale PID or changed cutover. Wired into `FreeBSDVoiceProcessActions.start_previous` after the actual process start, while one FD9 and borrowed Config inode flock are held; **non-injected OS runner cannot be constructed without the complete integrity sources**. Existing simulated runners remain non-authorizing. CI tests on Linux and FreeBSD run schema-3 genuine sealed snapshots with fake native kernel observations; test retained denial of Voice ON, journal cleanup or media readiness. Supervisor argv expectations are not yet bound as immutable desired-state proof, and there is still no boot replay/final transaction completion/production Voice ON. PLUGIN_REVISION=46; exact-head CI pending.
 
 
@@ -199,8 +202,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_46` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_46.pkg` (**not published, do not install**);
+- current source candidate revision: `_47` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_47.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

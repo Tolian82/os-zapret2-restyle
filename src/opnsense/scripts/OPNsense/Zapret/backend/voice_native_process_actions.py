@@ -248,7 +248,11 @@ class FreeBSDVoiceProcessActions:
                     self.config_path, self.config_fd, self.owner,
                 ),
             )
-            if report["state"] != "previous-restart-integrity-observed" or                report["safe_to_enable_voice"] is not False or                report["safe_to_finish_intent"] is not False:
+            if (
+                report["state"] != "previous-restart-integrity-observed"
+                or report["safe_to_enable_voice"] is not False
+                or report["safe_to_finish_intent"] is not False
+            ):
                 raise NativeVoiceProcessActionError(
                     "native previous restart attestation did not match"
                 )

@@ -1,5 +1,10 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### v0.5.1_47 — точное тестирование отказа без native security evidence
+
+`test-voice-native-process-actions.py` теперь правильно использует временные PID-file пути только в рамках отрицательного теста `runner=None`, чтобы проверить именно обязательность схемы безопасности `kern.proc.pathname + UID/GID + kern.proc.args`. Предыдущий тест `_46` отказывал раньше по несовпадению test pidfile map. Производственная проверка `PIDFILES` OPNsense не ослаблена, Voice ON по-прежнему заблокирован.
+
+
 ### v0.5.1_46 — нативная аттестация возобновлённого dvtws2 / supervisor
 
 В `voice_native_restart_integrity.py` обе независимые FreeBSD-проверки исполняемого kernel image, числовых EUID/RUID/SVUID/EGID/RGID/SVGID и точных kernel argv объединены в один результат только при стабильном *одинаковом* новом PID/start для движка, daemon и monitor. Ожидаемая политика обязана быть приватно сохранена и привязана SHA к схеме whole cutover 3 (`mutating`), а аргументы движка выводятся из старого sealed `dvtws.args`; ожидаемые argv supervisor пока должен предоставлять доверенный будущий native координатор. `FreeBSDVoiceProcessActions.start_previous` теперь вызывает проверку после фактического штатного запуска, удерживая FD9 и Config flock. Конструктор без тестового runner уже не допускает запуска без полных security/argv источников. Любой mismatch или неполная policy запрещает успешное завершение. Эта аттестация не доказывает готовность голоса и не закрывает общий журнал. До Voice ON остаются on-router coordinator, pinning supervisor argv, reboot recovery и завершение всей транзакции.
