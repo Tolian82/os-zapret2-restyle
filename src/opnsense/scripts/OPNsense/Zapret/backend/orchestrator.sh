@@ -66,6 +66,60 @@ orchestrator_fail_from_log()
         "${_orchestrator_fail_log_message}"
 }
 
+# Build the real native Voice + ordinary dvtws2 candidate as an artifact
+# of the normal Zapret release. Only the existing orchestrator owns this path.
+# The candidate is deliberately NOT selected as active traffic.conf while the
+# legacy telegram_voice PoC still owns rule/table lifecycle and native Voice
+# ON has not passed its whole-engine cutover gate.
+orchestrator_stage_native_voice()
+{
+    _orchestrator_voice_xml="$1"
+    _orchestrator_voice_managed="$2"
+    _orchestrator_voice_active="$3"
+    _orchestrator_voice_logical_wan="$4"
+    _orchestrator_voice_rule_base="$5"
+    _orchestrator_voice_rule_max="$6"
+    _orchestrator_voice_divert="$7"
+    _orchestrator_voice_user_traffic="$8"
+    _orchestrator_voice_output="$9"
+
+    _orchestrator_voice_python="/usr/local/bin/python3.13"
+    if [ ! -x "${_orchestrator_voice_python}" ]; then
+        # Native FreeBSD installations must use the pinned package Python.
+        # Repository CI may run from an uninstalled source tree.
+        case "${BACKEND_DIR:-}" in
+            /usr/local/opnsense/scripts/OPNsense/Zapret/backend)
+                common_error "native Voice compiler requires /usr/local/bin/python3.13"
+                return 1
+                ;;
+            *)
+                _orchestrator_voice_python=$(command -v python3.13) || {
+                    common_error "Python 3.13 is required to compile native Voice"
+                    return 1
+                }
+                ;;
+        esac
+    fi
+
+    [ -r "${BACKEND_DIR}/voice_release_stage.py" ] || {
+        common_error "native Voice release compiler is not installed"
+        return 1
+    }
+    _orchestrator_voice_resolved=$(config_resolve_interface "${_orchestrator_voice_logical_wan}") ||
+        return 1
+
+    "${_orchestrator_voice_python}" "${BACKEND_DIR}/voice_release_stage.py" \
+        "${_orchestrator_voice_xml}" \
+        "${_orchestrator_voice_managed}" \
+        "${_orchestrator_voice_active}" \
+        "${_orchestrator_voice_resolved}" \
+        "${_orchestrator_voice_rule_base}" \
+        "${_orchestrator_voice_rule_max}" \
+        "${_orchestrator_voice_divert}" \
+        "${_orchestrator_voice_user_traffic}" \
+        "${_orchestrator_voice_output}"
+}
+
 orchestrator_build_release()
 {
     _orchestrator_build_config="$1"
@@ -303,6 +357,31 @@ orchestrator_build_release()
                 "${_orchestrator_build_total}" blobs \
                 "${_orchestrator_build_error}" \
                 "Telegram Voice profile generation failed"
+            return 1
+        }
+    # Actual product release-generation path, not a separate test-only
+    # compiler. Native artifacts remain private/inactive until the shared
+    # single-engine IPFW/Config cutover replaces the PoC runtime.
+    # Do not quietly substitute these into the old traffic.conf: doing so
+    # without switching scoped IPFW tables would redirect wrong UDP traffic.
+    _orchestrator_build_voice_native="${_orchestrator_build_release}/voice-native-candidate"
+    : > "${_orchestrator_build_error}"
+    orchestrator_stage_native_voice \
+        "/conf/config.xml" \
+        "${_orchestrator_build_managed_source}" \
+        "${_orchestrator_build_active_dir}" \
+        "${WAN_IF}" \
+        "${RULE_BASE:-19000}" \
+        "${RULE_MAX:-19010}" \
+        "${DIVERT_PORT}" \
+        "${_orchestrator_build_user_traffic}" \
+        "${_orchestrator_build_voice_native}" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 4 \
+                "${_orchestrator_build_total}" blobs \
+                "${_orchestrator_build_error}" \
+                "native Voice candidate compilation failed"
             return 1
         }
     _orchestrator_build_extra_input="${_orchestrator_build_workspace}/extra.input.conf"

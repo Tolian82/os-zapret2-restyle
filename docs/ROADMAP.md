@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_24`: qualify genuine OFF-only Voice Apply regression after matching the read-only assertion to the deliberate failed-backend Config save
+- [x] Current candidate `v0.5.1_25`: production orchestrator compiles native Voice/ordinary merged candidate and resolved IPFW plan inside each staged runtime release, before activation; active legacy traffic/rules still intact
+- [ ] Next: adopt native candidate in one dvtws2 with transactional Voice IPFW+supervisor/Config rollback; then enable real GUI Voice ON
+- [x] Previous candidate `v0.5.1_24`: qualify genuine OFF-only Voice Apply regression after matching the read-only assertion to the deliberate failed-backend Config save
 - [ ] Next: native one-engine Voice ON cutover, IPFW capture/rollback and boot recovery, not additional model-only lock research
 - [x] Previous candidate `v0.5.1_23`: real GUI OFF-only Apply drives native Config save and existing configd Zapret reconfigure, with diagnostic busy/ON refusal and honest failure reporting
 - [ ] Next production feature: single dvtws2 with active native Voice/STUN profiles and destination-scoped IPFW rule/table runtime plus durable rollback; do not mistake OFF-only Apply for Telegram call support

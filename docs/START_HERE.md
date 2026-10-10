@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_25 — production orchestrator builds native single-engine Voice candidate (2026-10-10):** Connected the EXISTING `voice_release_stage.py` compiler directly to `orchestrator_build_release()` after the normal managed IPv4 IPSET preparation, ordinary traffic normalization, and legacy Telegram PoC handling. On each permitted ordinary start/reconfigure, the actual production build now compiles a private, versioned release-local `voice-native-candidate/` with five-service `voice.conf`, merged `traffic.conf` (Voice first, ordinary Strategies second), resolved-WAN `capture-plan.json`, exact IPSET fingerprints and metadata. Uses `/conf/config.xml`, actual staged managed data, ordinary `traffic-user.conf`, pinned Python 3.13 and the existing runtime active directory; rejects mismatch BEFORE release switch. The old `traffic.conf` and live IPFW rules remain unchanged until shared one-engine native ON cutover, which is STILL disallowed by `config_voice_staged_only_guard`. Separate new real-shell integration tests exercise ON/OFF candidate compilation, WAN/IPSET refusal, production invocation order, plus native FreeBSD 15 CI. This is working product release-generation integration, **not** Telegram media pass nor live native Voice ON. PLUGIN_REVISION=25; exact-HEAD CI pending. Next must adopt this candidate in a complete owned IPFW/dvtws2 handoff with rollback and migration, then enable GUI ON Apply.
+
 **v0.5.1_24 — qualify real OFF-only Voice Apply regression (2026-10-10):** The initial _23 genuine `VoiceController::applyAction` passed Voice GUI validation; the PHP integration runner caught a stale *test* expectation: it still counted a single Config save after deliberately executing the second save in the failed-reconfigure scenario. Updated only the assertion to expect 2 and still enforce no additional write from a read-only caller. The runtime feature remains OFF-only Apply of shared IPSET through real `zapret reconfigure`; Voice ON, IPFW cutover and crash recovery are not enabled. PLUGIN_REVISION=24 (DEV-032); exact-HEAD CI pending. No published package or owner-device mutation.
 
 **v0.5.1_23 — real OFF-only Voice Apply via ordinary Zapret lifecycle (2026-10-10):** Added `VoiceController::applyAction` and the native-form bottom `voiceApply` control (RU/EN). It uses the existing exact loaded Config snapshot and scoped Voice overlay, rejects ALL native Voice ON (both current and submitted), checks Strategy Lab occupancy before saving and before reconfigure, persists changed inactive Voice settings using the native model and Config audit, then calls the existing `zapret reconfigure` command with its own lifecycle FD9 and updates GUI runtime/IPFW status on success. Even an unchanged saved draft invokes reconfigure because Save Draft intentionally left runtime untouched. If runtime reconfigure returns an error, the API clearly reports `saved=true`, `applied=false`, `requires_review=true` and the new snapshot rather than falsely asserting rollback/working service. This stage does **not** enable actual native Voice UDP profiles, independent WAN IPFW, one-engine handoff or durable recovery; the old ON guard and PoC remain intact. The generic Strategies Apply may still interleave across the Config::save() window, so ON activation and full transactional cutover remain gated. v0.5.1_22 exact-HEAD CI, Voice and FreeBSD package PASSED. PLUGIN_REVISION=23 (DEV-032). No router modification or package publication. Exact-HEAD CI pending.
@@ -132,13 +134,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_24` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_25` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=24` (**development candidate, not published**);
+- `PLUGIN_REVISION=25` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
