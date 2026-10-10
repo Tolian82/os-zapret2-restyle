@@ -39,6 +39,7 @@ def restore_previous_files(
     expected_candidate_runtime_sha256: str,
     require_lifecycle_owner: Callable[[], None],
     require_quiescent: Callable[[], bool],
+    locked_config_fd: int | None = None,
 ) -> dict:
     """Restore both filesystem resources holding one exclusive Config flock.
 
@@ -80,17 +81,29 @@ def restore_previous_files(
     config_path = Path(config_path)
     flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | \
         getattr(os, "O_CLOEXEC", 0)
-    fd = os.open(config_path, flags)
+    if locked_config_fd is not None and (
+        type(locked_config_fd) is not int or locked_config_fd < 0
+    ):
+        raise VoiceFileRollbackError("invalid borrowed Config descriptor")
+    owns_fd = locked_config_fd is None
+    fd = os.open(config_path, flags) if owns_fd else locked_config_fd
     try:
         _pinned_regular(config_path, fd, owner=expected_owner)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as exc:
-            if exc.errno in (errno.EWOULDBLOCK, errno.EAGAIN):
-                raise VoiceFileRollbackError(
-                    "another OPNsense Config writer owns the flock"
-                ) from exc
-            raise
+        if owns_fd:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as exc:
+                if exc.errno in (errno.EWOULDBLOCK, errno.EAGAIN):
+                    raise VoiceFileRollbackError(
+                        "another OPNsense Config writer owns the flock"
+                    ) from exc
+                raise
+        else:
+            # A valid FD number or fstat is NOT proof of an acquired flock.
+            # The owner above us must keep the same inode locked through
+            # process/IPFW, file restoration and native restart verification.
+            from voice_native_recovery_quiescence import _locked_config
+            _locked_config(config_path, fd, expected_owner)
         initial = _pinned_regular(config_path, fd, owner=expected_owner)
         gate()
         if journal.read() != original:
@@ -135,4 +148,5 @@ def restore_previous_files(
         # This releases only the Config lock held throughout both writes.
         # Original backups, redo and whole intent stay intact for kernel,
         # engine and supervisor restoration in the future coordinator.
-        os.close(fd)
+        if owns_fd:
+            os.close(fd)

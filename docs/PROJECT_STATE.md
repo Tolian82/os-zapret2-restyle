@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_43 — five-resource previous Voice rollback executor under one Config inode lock (2026-10-10):** Added `voice_cutover_five_resource_rollback.py`, which coordinates real previous-state rollback of **engine, supervisor, native IPFW, runtime-v2 and /conf/config.xml** under a continuous OPNsense Config `flock` and external native FD9 lifecycle lease. It verifies the sealed original process topology/Config/runtime and whole/IPFW journals, calls explicit bounded stop-candidate action, proves native three-role processes are stopped, invokes the existing actual `rollback_precommit_verified()` kernel transaction (or independently verifies already-restored previous IPFW), requires twice-proven kernel/process quiescence, restores real runtime and Config via the existing crash-redo writers using a BORROWED Config descriptor, then invokes an explicit prior-engine+supervisor restart action when the snapshot was running. Final checks prove a NEW stable one-engine/supervisor topology with exact executable/args identities (not stale historical PIDs), unchanged old kernel IPFW and exact old Config/runtime, all while both locks are held. Failures preserve MUTATING whole intent and retained redo/retired candidate; even full observed success does NOT close intent or enable Voice ON. Engine stop/restart actions are still injected adapter interfaces and NOT wired to on-router launcher/supervisor; **do not install/use as a production recovery command yet**. Added isolated real files, real Config flock, simulated process/kernel and IPFW-ledger test suite for Linux/FreeBSD 15. PLUGIN_REVISION=43, CI pending.
+
+
 **v0.5.1_42 — native FD9/Config-locked stopped-process + previous-IPFW recovery witness (2026-10-10):** Added production FreeBSD read-only CLI `voice_native_recovery_quiescence.py inspect`, routed through `zapret_service.sh native-voice-recovery-quiescence` under the existing FD9 lifecycle lock. The command additionally takes the actual OPNsense `config.xml` inode `flock`, checks the `mutating` bound whole-system journal and previous Config/runtime snapshot, obtains two independent global `/bin/ps`/pidfile observations proving all three managed roles (one dvtws2 engine, daemon, monitor) have STOPPED and no orphan processes remain, and twice verifies the full native IPFW rule interval plus all Voice-owned active/stage tables against the previous sealed ledger owner. Pending kernel ledger transitions must match the whole journal's desired/previous fingerprints; any running/stale/foreign process, contested Config lock, unexpected IPFW table/rule, inconsistent journal or lost FD9 fails closed. The diagnostic never stops processes, restores files, mutates kernel, closes journals or enables Voice; full five-resource rollback and crash-start ownership remain necessary. Added Linux/FreeBSD regression fixtures for true Config contention, stopped/foreign processes, IPFW drift, ledger and journal failures. PLUGIN_REVISION=42; exact-head CI pending.
 
 
@@ -187,8 +190,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_42` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_42.pkg` (**not published, do not install**);
+- current source candidate revision: `_43` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_43.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
