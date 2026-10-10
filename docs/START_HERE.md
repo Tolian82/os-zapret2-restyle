@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_38 — crash-resumable in-place native Voice Config restoration (2026-10-10):** Implemented `voice_cutover_config_redo.py`, a private write-once, fsync'd `config-restore-redo.json` record written **before** any live inode truncate in `voice_cutover_config_restore.py`. It seals the `mutating` whole-cutover checksum, pinned Config device/inode/UID/GID, exact candidate and previous Config SHA256 and old byte count. If a restore was interrupted after truncation, the new invocation under Config flock permits continuation only for a proven prefix of sealed previous Config bytes from the original inode; arbitrary third-party edits, missing or corrupt redo, changed inode/owner or new cutover intent refuse restoration. The redo remains after a successful Config write because runtime, firewall, process and supervisor still need complete restoration; the whole journal remains `mutating`. New Linux/FreeBSD regression cases cover actual interrupted write + fresh-process resume, missing marker, foreign changed bytes, corrupt marker, inode replacement and marker retention. No automated boot replay, production CLI, GUI Voice ON or whole-system activation is enabled. PLUGIN_REVISION=38; exact-head CI pending.
+
+
 **v0.5.1_37 — actual in-place OPNsense Config recovery primitive (2026-10-10):** Added `voice_cutover_config_restore.py`, a descriptor-based, in-place writer for the previous sealed Config that preserves the SAME inode and PHP `Config::save()` flock identity; no rename, no file replacement. It verifies whole-journal phase `mutating` schema 2+, original Config/runtime snapshot, independent restore-install-image witness, explicit live UID/GID authority, pinned inode and an exclusive nonblocking native Config flock before any mutation. It only overwrites the exactly pinned candidate Config SHA or verifies an already-restored previous SHA; any foreign edits, busy lock, changed image or missing journal refuse the write. After restoring bytes and original mode it fsyncs/rechecks the inode and leaves whole journal `mutating` until engine/runtime/IPFW/supervisor rollback completes. Fault-injected tests cover actual writes, idempotence, Config lock contention, foreign edits, symlink/owner drift, image tampering and interrupted write with retained recovery snapshot. Added Linux/FreeBSD CI execution. IMPORTANT: writer has **no production CLI/action/GUI caller**, lifecycle proof is injectable only to offline tests; live native FD9 ownership and the full five-resource rollback owner are not implemented. No Voice ON or boot recovery. PLUGIN_REVISION=37; exact-head CI pending.
 
 
@@ -163,13 +166,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_37` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_38` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=37` (**development candidate, not published**);
+- `PLUGIN_REVISION=38` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

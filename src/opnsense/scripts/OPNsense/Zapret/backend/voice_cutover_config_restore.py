@@ -23,6 +23,7 @@ from voice_cutover_backup import (
     inspect_previous,
 )
 from voice_cutover_journal import VoiceCutoverJournal
+from voice_cutover_config_redo import ConfigRestoreRedo, may_resume_partial
 from voice_native_file_observer import observe_live_files
 
 
@@ -81,8 +82,10 @@ def restore_previous_config_in_place(
     lifecycle lease across *all* resources and validate process/IPFW state.
     require_lifecycle_owner MUST be native.require_native_lock in production;
     tests inject an isolated witness. The current Config must match EITHER
-    journal.candidate.saved_xml_sha256 or sealed previous Config exactly.
-    Any third-party changed Config is a conflict, never silently overwritten.
+    journal.candidate.saved_xml_sha256 or sealed previous Config exactly,
+    OR the proven prefix of previous bytes after a durably armed interrupted
+    attempt. Foreign content is never overwritten; a Config redo marker
+    persists until the full five-resource rollback is independently closed.
     This helper does not close or mark the whole-cutover journal.
     """
     if not callable(require_lifecycle_owner) or \
@@ -123,9 +126,6 @@ def restore_previous_config_in_place(
             raise
         _pinned_regular(config_path, live_fd, owner=expected_owner)
         before_hash, before_size = _sha_fd(live_fd)
-        if before_hash not in (expected_live, expected_previous):
-            raise VoiceConfigRestoreError("foreign Config contents; previous rollback refused")
-
         original_mode = saved["config"]["mode"]
         source_fd = os.open(
             image / "config.xml",
@@ -139,6 +139,22 @@ def restore_previous_config_in_place(
             if source_hash != expected_previous or \
                source_bytes != saved["config"]["bytes"]:
                 raise VoiceConfigRestoreError("install-image Config changed before restore")
+
+            # A crashed truncate/write can leave arbitrary SHA but ONLY a
+            # prefix of verified previous bytes. This is accepted exclusively
+            # when an fsync'd, same-inode write-ahead marker exists.
+            redo = ConfigRestoreRedo(journal.directory)
+            marker = redo.read()
+            partial = may_resume_partial(
+                marker, journal_record=record, live_info=os.fstat(live_fd),
+                live_fd=live_fd, source_fd=source_fd,
+                saved_bytes=source_bytes,
+            )
+            if before_hash not in (expected_live, expected_previous) and \
+               not partial:
+                raise VoiceConfigRestoreError(
+                    "foreign Config contents; previous rollback refused"
+                )
             # Still holding flock on the SAME live inode, and FD9 from the
             # outer coordinator. Revalidate journal just before first write.
             require_lifecycle_owner()
@@ -150,6 +166,21 @@ def restore_previous_config_in_place(
             if before_hash == expected_previous and \
                stat.S_IMODE(os.fstat(live_fd).st_mode) == original_mode:
                 return "already-previous"
+
+            # The durable intent MUST precede the first ftruncate. It pins
+            # journal checksum, original inode/owner and the precise old and
+            # candidate Config hashes. Never remove it after this helper
+            # alone: a crash may also have interrupted runtime or IPFW.
+            redo.arm(
+                journal_record=record, info=os.fstat(live_fd),
+                previous_bytes=source_bytes,
+            )
+            require_lifecycle_owner()
+            if journal.read() != record or \
+               _sha_fd(live_fd) != (before_hash, before_size):
+                raise VoiceConfigRestoreError(
+                    "Config or journal changed after durable redo arm"
+                )
 
             # Truncating the original inode (rather than rename) preserves
             # existing OPNsense Config::save() lock identity. A write failure

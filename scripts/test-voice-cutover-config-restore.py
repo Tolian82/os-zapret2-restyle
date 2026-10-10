@@ -23,6 +23,7 @@ from voice_cutover_journal import VoiceCutoverJournal
 from voice_cutover_restore_stage import prepare_restore_stage
 from voice_cutover_install_image import prepare_installable_restore
 import voice_cutover_config_restore as config_restorer
+from voice_cutover_config_redo import ConfigRestoreRedo, NAME as REDO_NAME
 
 spec = importlib.util.spec_from_file_location(
     "config_restore_firewall_fixture",
@@ -172,6 +173,105 @@ class RealConfigInPlaceRestore(unittest.TestCase):
         self.assertNotEqual(self.config.read_bytes(), OLD)
         self.assertEqual((self.backup / "config/config.xml").read_bytes(), OLD)
         self.assertEqual((self.image / "config.xml").read_bytes(), OLD)
+
+
+    def test_interrupted_write_resumes_only_matching_old_byte_prefix(self):
+        self.begin()
+        self.config.write_bytes(NEW)
+        def interrupted(fd, block):
+            os.write(fd, block[:9])
+            raise OSError("simulated power loss while restoring")
+        with patch.object(config_restorer, "_write_all", side_effect=interrupted):
+            with self.assertRaisesRegex(OSError, "power loss"):
+                self.call()
+        fragment = self.config.read_bytes()
+        self.assertEqual(fragment, OLD[:9])
+        redo = ConfigRestoreRedo(self.journal_dir).read()
+        self.assertIsNotNone(redo)
+        self.assertEqual(redo["inode"], self.original_inode)
+        self.assertEqual(redo["cutover_check"], self.journal.read()["check"])
+        self.assertEqual(self.journal.read()["phase"], "mutating")
+        # A fresh invocation uses only the durable saved journal + redo record,
+        # not cached process state or the old Python object.
+        result = config_restorer.restore_previous_config_in_place(
+            self.config, self.image, self.backup,
+            VoiceCutoverJournal(self.journal_dir),
+            require_lifecycle_owner=lambda: None, expected_owner=self.owner,
+        )
+        self.assertEqual(result, "previous-config-restored")
+        self.assertEqual(self.config.read_bytes(), OLD)
+        self.assertEqual((self.config.stat().st_dev, self.config.stat().st_ino),
+                         (self.original_dev, self.original_inode))
+        self.assertEqual(0o640, self.config.stat().st_mode & 0o777)
+        self.assertIsNotNone(ConfigRestoreRedo(self.journal_dir).read())
+        self.assertEqual("mutating", self.journal.read()["phase"])
+
+    def test_partial_without_durable_redo_must_not_overwrite(self):
+        self.begin()
+        self.config.write_bytes(OLD[:8])
+        with self.assertRaisesRegex(
+            config_restorer.VoiceConfigRestoreError, "foreign Config"
+        ):
+            self.call()
+        self.assertEqual(self.config.read_bytes(), OLD[:8])
+        self.assertFalse((self.journal_dir / REDO_NAME).exists())
+
+    def test_redo_never_licenses_foreign_partial_content(self):
+        self.begin()
+        self.config.write_bytes(NEW)
+        def interrupted(fd, block):
+            os.write(fd, block[:8])
+            raise OSError("partial write")
+        with patch.object(config_restorer, "_write_all", side_effect=interrupted):
+            with self.assertRaisesRegex(OSError, "partial write"):
+                self.call()
+        self.config.write_bytes(b"<foreign>")
+        with self.assertRaisesRegex(
+            config_restorer.VoiceConfigRestoreError, "foreign Config"
+        ):
+            self.call()
+        self.assertEqual(self.config.read_bytes(), b"<foreign>")
+        self.assertEqual(self.journal.read()["phase"], "mutating")
+
+    def _interrupt_for_redo(self):
+        self.begin()
+        self.config.write_bytes(NEW)
+        def interrupted(fd, block):
+            os.write(fd, block[:9])
+            raise OSError("interrupted restore")
+        with patch.object(config_restorer, "_write_all", side_effect=interrupted):
+            with self.assertRaisesRegex(OSError, "interrupted restore"):
+                self.call()
+
+    def test_corrupted_redo_refuses_restore(self):
+        self._interrupt_for_redo()
+        (self.journal_dir / REDO_NAME).write_text('{"bad":"marker"}')
+        before = self.config.read_bytes()
+        with self.assertRaises(Exception):
+            self.call()
+        self.assertEqual(self.config.read_bytes(), before)
+        self.assertEqual(self.journal.read()["phase"], "mutating")
+
+    def test_replaced_config_inode_refuses_old_redo(self):
+        self._interrupt_for_redo()
+        replacement = self.base / "replacement.xml"
+        replacement.write_bytes(OLD[:9])
+        os.replace(replacement, self.config)
+        before = self.config.read_bytes()
+        with self.assertRaises(Exception):
+            self.call()
+        self.assertEqual(self.config.read_bytes(), before)
+        self.assertEqual(self.journal.read()["phase"], "mutating")
+
+    def test_redo_retained_after_success_and_rejects_foreign_next_intent(self):
+        self.begin()
+        self.config.write_bytes(NEW)
+        self.assertEqual(self.call(), "previous-config-restored")
+        marker = ConfigRestoreRedo(self.journal_dir).read()
+        self.assertIsNotNone(marker)
+        self.assertEqual("already-previous", self.call())
+        self.assertEqual(marker, ConfigRestoreRedo(self.journal_dir).read())
+        self.assertEqual("mutating", self.journal.read()["phase"])
 
 
 if __name__ == "__main__":
