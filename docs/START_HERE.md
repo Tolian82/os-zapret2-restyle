@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_20 — native lifecycle FD9 interoperability qualification (2026-10-10):** Added a non-activating isolated regression `scripts/test-voice-native-lifecycle-lock-interop.py` that opens ONLY private temporary lock inodes. Linux/FreeBSD exercise independent-descriptor flock contention. On actual FreeBSD 15, the test invokes the same `/usr/bin/lockf -s -t ... 9` inherited-FD contract used by `zapret_service.sh`: Python flock must block it, release must permit it, lockf's kernel ownership must survive helper exit while shell FD9 remains open, and an unrelated inode must not be blocked. Both Voice candidate CI and FreeBSD 15 package CI execute the test. This tests kernel cooperation, NOT retention of Config::save() flock or a working Config+configd transactional handoff. No Voice Apply, GUI mutation, live firewall change or PoC migration. PLUGIN_REVISION=20 (DEV-032); exact-HEAD CI/FreeBSD acceptance pending. v0.5.1_19 full CI initially failed an intermittent Strategy Lab async lifecycle mock (unexpected error rather than completed); focused job rerun was requested, with no weakening of the safety assertion.
+
 **v0.5.1_19 — lock-acquisition generation and ABA refusal (2026-10-10):** The disconnected Voice cutover contract now requires stable, strictly validated ownership acquisition generations for BOTH Config and lifecycle locks, not just boolean status. Unlock+relock invalidates the original transaction even when the held flag immediately returns true; fault injection covers preflight, prepared intent, runtime, Config persistence, commit and cleanup. A PHP regression models the real Config::save() same-handle flock(LOCK_UN) interleaving with a competing writer without touching config.xml. This remains a mock contract, NOT native lock authority or real Apply. CI _18 showed a stale _17 package identity in the Strategy Lab documentation contract, corrected for _19. PLUGIN_REVISION=19 (DEV-032); no production activation, PoC removal or appliance change. Exact-HEAD CI pending.
 
 **v0.5.1_18 — disconnected Voice cutover lock continuity (2026-10-10):** Audited OPNsense core stable/26.7 Config.php: Config::save() explicitly calls flock(LOCK_UN) even when a caller previously invoked Config::lock(). Strengthened ONLY the non-authorizing adapter-injected cutover contract: exact boolean ownership is checked before each journal stage, candidate mutation, rollback operation, commit and cleanup. Lock loss after durable intent stops work and retains the journal for supervised recovery; automatic rollback without lock ownership is forbidden. New injected regressions cover preflight, prepared/mutating, Config save, cleanup, runtime and rollback lock loss. PLUGIN_REVISION=18 (DEV-032). No native adapter, Voice Apply, Telegram PoC retirement or real reboot recovery is enabled. Exact-HEAD CI and FreeBSD package verification remain pending.
@@ -122,13 +124,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_19` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_20` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=19` (**development candidate, not published**);
+- `PLUGIN_REVISION=20` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

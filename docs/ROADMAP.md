@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_19`: reject ABA lock unlock/reacquire in mock cutover and prove Config::save() LOCK_UN exposure in isolated PHP test
+- [x] Current candidate `v0.5.1_20`: isolated cross-process flock and native FreeBSD /usr/bin/lockf inherited-FD9 kernel interoperability tests, wired into Voice and package CI
+- [ ] Next: qualify FreeBSD exact-head results, then establish true Config+lifecycle transaction ownership across Config::save()/configd; no native Apply
+- [x] Previous candidate `v0.5.1_19`: reject ABA lock unlock/reacquire in mock cutover and prove Config::save() LOCK_UN exposure in isolated PHP test
 - [ ] Next: establish real shared ownership/serialization across Config.save, consistent lock acquisition order and durable native recovery; still no Voice Apply
 - [x] Previous candidate `v0.5.1_18`: repeated owner lock attestations in disconnected mock Voice cutover; loss retains journal and prevents unlocked rollback after Config.save()
 - [ ] Next: design and qualify real Config+lifecycle ownership across Config::save(), strict lock order, and FreeBSD recovery; do not wire Voice Apply yet
