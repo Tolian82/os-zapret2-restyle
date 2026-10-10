@@ -531,6 +531,21 @@ native_voice_restore_stage_service()
     "${_native_voice_restore_python}" "${_native_voice_restore_script}" prepare
 }
 
+# Read-only native evidence for a future complete Voice rollback. It is
+# accessible only under the existing lockf FD9; unlike file restore it never
+# stops processes, alters IPFW or writes the Config/runtime tree.
+native_voice_quiescence_service()
+{
+    _native_voice_check_python="/usr/local/bin/python3.13"
+    _native_voice_check_script="${BACKEND_DIR}/voice_native_recovery_quiescence.py"
+    [ -x "${_native_voice_check_python}" ] &&
+    [ -r "${_native_voice_check_script}" ] || {
+        echo "ERROR: native Voice recovery inspector is not installed" >&2
+        return 1
+    }
+    "${_native_voice_check_python}" "${_native_voice_check_script}" inspect
+}
+
 service_dispatch()
 {
     case "${1:-}" in
@@ -565,6 +580,9 @@ service_dispatch()
             ;;
         native-voice-restore-stage)
             native_voice_restore_stage_service
+            ;;
+        native-voice-recovery-quiescence)
+            native_voice_quiescence_service
             ;;
         native-voice-ipfw-seed)
             native_voice_ipfw_dispatch seed
@@ -686,7 +704,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

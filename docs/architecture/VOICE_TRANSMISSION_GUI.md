@@ -1,5 +1,10 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### v0.5.1_42 — нативная проверка остановки Voice и предыдущего IPFW
+
+Реализовано production-действие только для чтения `zapret_service.sh native-voice-recovery-quiescence`, удерживающее FD9 `lockf` и отдельный эксклюзивный `flock` текущего inode `/conf/config.xml`. Под блокировками `voice_native_recovery_quiescence.py` требует незавершённого `mutating` общего intent, проверяет сохранённые Config/runtime и допустимую IPFW ledger фазу. Дважды сканирует полный список процессов FreeBSD (`/bin/ps`) и три управляющих pidfile, доказывая отсутствие dvtws2, daemon и supervisor monitor (включая orphan); затем дважды сверяет kernel IPFW owned rules 19000–19010 и все именованные таблицы с предыдущим IPFW владельцем и убеждается, что stage-таблицы отсутствуют. Любая неопределённость возвращает ошибку. Диагностика ничего не переключает, не восстанавливает и не закрывает intent; **не даёт право на Voice ON**. Следующий этап — передать эту гарантию в полноценный native rollback owner и объединить живой процессный/ядровый rollback с файловым восстановлением.
+
+
 ### v0.5.1_41 — восстановление Config и runtime в одной файловой транзакции
 
 `voice_cutover_file_rollback.py` (без production CLI/GUI) удерживает эксклюзивный `flock` именно на текущем inode `/conf/config.xml` через восстановление двух доменов: `runtime-v2` с двухэтапным безопасным `rename`, затем прежнего Config через запись в тот же locked descriptor. Общий `VoiceCutoverJournal` обязан находиться в `mutating`; до и после переходов проверяются sealed предыдущие байты, install image, lifecycle lease callback и независимый quiescent gate (кандидатный dvtws2, supervisor и IPFW должны быть безопасны для rollback). После обоих шагов независимый наблюдатель подтверждает два прежних SHA и mode. Обе redo-записи и whole journal остаются на диске: **успех только двух файловых доменов не разрешает** запуск движка, закрытие intent или Voice ON. Native FD9/engine/IPFW/supervisor adapter и автоматический reboot recovery остаются задачами будущего этапа.

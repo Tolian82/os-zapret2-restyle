@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_41`: actual combined prior Config/runtime rollback with ONE Config flock spanning both real filesystem writes and durable crash recovery
+- [x] Current candidate `v0.5.1_42`: production read-only FD9/Config flock quiescence inspection of all native Voice processes plus previous exact IPFW ownership
+- [ ] Next: use native quiescence as real coordinator gate, implement verified process/IPFW restoration and full cross-resource journal close; then boot recovery and Voice ON
+- [x] Previous candidate `v0.5.1_41`: actual combined prior Config/runtime rollback with ONE Config flock spanning both real filesystem writes and durable crash recovery
 - [ ] Next: trusted on-router dual lock and quiescent one-engine/supervisor/IPFW native adapter; then production whole-system rollback, reboot recovery, and Voice ON qualification
 - [x] Previous candidate `v0.5.1_40`: fix real CI failure: candidate digest must be evaluated without imposing previous runtime root permissions
 - [ ] Next: qualify two-rename runtime crash replay on Linux and FreeBSD; implement full native lifecycle/Config rollback owner and process+IPFW recovery
