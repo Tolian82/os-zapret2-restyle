@@ -1,5 +1,10 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### v0.5.1_46 — нативная аттестация возобновлённого dvtws2 / supervisor
+
+В `voice_native_restart_integrity.py` обе независимые FreeBSD-проверки исполняемого kernel image, числовых EUID/RUID/SVUID/EGID/RGID/SVGID и точных kernel argv объединены в один результат только при стабильном *одинаковом* новом PID/start для движка, daemon и monitor. Ожидаемая политика обязана быть приватно сохранена и привязана SHA к схеме whole cutover 3 (`mutating`), а аргументы движка выводятся из старого sealed `dvtws.args`; ожидаемые argv supervisor пока должен предоставлять доверенный будущий native координатор. `FreeBSDVoiceProcessActions.start_previous` теперь вызывает проверку после фактического штатного запуска, удерживая FD9 и Config flock. Конструктор без тестового runner уже не допускает запуска без полных security/argv источников. Любой mismatch или неполная policy запрещает успешное завершение. Эта аттестация не доказывает готовность голоса и не закрывает общий журнал. До Voice ON остаются on-router coordinator, pinning supervisor argv, reboot recovery и завершение всей транзакции.
+
+
 ### v0.5.1_45 — исправление ложного успеха теста native process
 
 Отрицательный тест `start_previous()` с ещё не восстановленным Config/runtime в `_44` действительно обнаруживал нарушение прежнего mode-контракта, но частный unittest runner всегда завершался 0. Исправлено: test runner обязан возвращать ошибку для любого fail/error; `FreeBSDVoiceProcessActions.start_previous()` теперь явно переводит `LiveFileEvidenceError` и файловые ошибки в `NativeVoiceProcessActionError` до/после запуска, не ослабляя старую проверку SHA/mode. Именно `_45` и последующие CI имеют проверяемый код завершения интеграционного сценария.

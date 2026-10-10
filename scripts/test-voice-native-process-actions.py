@@ -164,6 +164,25 @@ class NativeProcessActionTests(previous.FiveDomainRecovery):
                     action.start_previous()
         self.assertEqual(self.executed,[])
 
+    def test_real_runner_requires_sealed_native_kernel_attestation(self):
+        self.prepare()
+        with self.config.open("r+b") as fd:
+            fcntl.flock(fd, fcntl.LOCK_EX|fcntl.LOCK_NB)
+            with self.assertRaisesRegex(
+                native_actions.NativeVoiceProcessActionError,
+                "production restart requires bound native integrity witnesses",
+            ):
+                native_actions.FreeBSDVoiceProcessActions(
+                    probe=self.probe, journal=self.journal,
+                    previous_backup=self.backup, active_runtime=self.active,
+                    config_path=self.config,
+                    config_owner=(os.geteuid(),os.getegid()),
+                    config_fd=fd.fileno(),
+                    require_lifecycle_owner=lambda:None,
+                )
+        self.assertEqual(self.history,[])
+        self.assertEqual(self.executed,[])
+
     def test_executable_shell_helper_syntax_and_allowlist(self):
         report=subprocess.run(["/bin/sh","-n",str(shell_path)],
                               capture_output=True,text=True,check=False)

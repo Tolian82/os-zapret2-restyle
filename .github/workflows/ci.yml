@@ -160,6 +160,8 @@ jobs:
         run: python3.13 scripts/test-voice-cutover-five-resource-rollback.py
       - name: Native FreeBSD one-engine launcher and supervisor recovery adapter
         run: python3.13 scripts/test-voice-native-process-actions.py
+      - name: Native restored process image credentials and kernel argv cross-attestation
+        run: python3.13 scripts/test-voice-native-restart-integrity.py
       - name: Voice durable previous engine/supervisor process evidence
         run: python3.13 scripts/test-voice-process-recovery-evidence.py
       - name: Native read-only FreeBSD Voice PID/process inventory
@@ -568,6 +570,7 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-native-recovery-quiescence.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-five-resource-rollback.py
             /usr/local/bin/python3.13 scripts/test-voice-native-process-actions.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-restart-integrity.py
             /usr/local/bin/python3.13 scripts/test-voice-process-recovery-evidence.py
             /usr/local/bin/python3.13 scripts/test-voice-native-process-probe.py
             /usr/local/bin/python3.13 scripts/test-voice-native-file-observer.py

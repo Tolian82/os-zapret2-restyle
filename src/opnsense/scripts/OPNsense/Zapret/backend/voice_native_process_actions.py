@@ -28,6 +28,9 @@ from voice_native_file_observer import observe_live_files, LiveFileEvidenceError
 from voice_cutover_journal import VoiceCutoverJournal
 from voice_process_recovery_evidence import _normalize, _runtime_args_digest
 from voice_cutover_backup import inspect_previous
+from voice_cutover_journal import SECURITY_BOUND_SCHEMA
+from voice_security_policy_evidence import inspect_security_policy
+from voice_native_restart_integrity import attest_previous_restart
 
 
 SHELL = "/bin/sh"
@@ -65,7 +68,11 @@ class FreeBSDVoiceProcessActions:
                  journal: VoiceCutoverJournal, previous_backup: Path,
                  active_runtime: Path, config_path: Path, config_owner: tuple[int,int],
                  config_fd: int, require_lifecycle_owner,
-                 runner=None, actuator: Path = SCRIPT):
+                 runner=None, actuator: Path = SCRIPT,
+                 process_evidence: Path | None = None,
+                 security_evidence: Path | None = None,
+                 security_reader=None, argv_reader=None,
+                 expected_supervisor_argv: dict | None = None):
         if not isinstance(probe, FreeBSDVoiceProcessProbe) or \
            probe.expected != EXPECTED_SCRIPTS or \
            probe.pidfiles != PIDFILES or \
@@ -78,6 +85,20 @@ class FreeBSDVoiceProcessActions:
             raise NativeVoiceProcessActionError("native probe, journal and locks required")
         if runner is None and Path(actuator) != SCRIPT:
             raise NativeVoiceProcessActionError("production actuator path is fixed")
+        integrity_fields = (process_evidence, security_evidence, security_reader,
+                            argv_reader, expected_supervisor_argv)
+        if any(field is not None for field in integrity_fields) and not all(
+            field is not None for field in integrity_fields
+        ):
+            raise NativeVoiceProcessActionError(
+                "incomplete native kernel image/credential/argv restart verifier"
+            )
+        # The actual FreeBSD runner MUST have schema-3 kernel integrity
+        # verification. Only explicitly injected CI simulation can omit it.
+        if runner is None and not all(field is not None for field in integrity_fields):
+            raise NativeVoiceProcessActionError(
+                "production restart requires bound native integrity witnesses"
+            )
         self.probe = probe
         self.journal = journal
         self.previous_backup = Path(previous_backup)
@@ -89,6 +110,13 @@ class FreeBSDVoiceProcessActions:
         self.runner = runner or subprocess.run
         self.script = Path(actuator)
         self.expected = dict(EXPECTED_SCRIPTS)
+        self.process_evidence = (None if process_evidence is None
+                                 else Path(process_evidence))
+        self.security_evidence = (None if security_evidence is None
+                                  else Path(security_evidence))
+        self.security_reader = security_reader
+        self.argv_reader = argv_reader
+        self.expected_supervisor_argv = expected_supervisor_argv
 
     def _gate(self) -> dict:
         self.require_lock()
@@ -174,6 +202,18 @@ class FreeBSDVoiceProcessActions:
             raise NativeVoiceProcessActionError(
                 "one-engine/supervisor not fully stopped before restart"
             )
+        if self.security_evidence is not None:
+            # Inspect the SEALED previous policy BEFORE starting an engine,
+            # so schema-2 or foreign policy cannot start any process.
+            if initial["schema"] != SECURITY_BOUND_SCHEMA:
+                raise NativeVoiceProcessActionError(
+                    "native restart needs durable schema-3 process policy"
+                )
+            inspect_security_policy(
+                self.security_evidence, self.previous_backup,
+                self.process_evidence, journal_record=initial,
+                expected_scripts=self.expected,
+            )
         self._run("start", initial)
         after = self._sample()
         if after["engine"]["state"] != "running" or \
@@ -194,4 +234,22 @@ class FreeBSDVoiceProcessActions:
             raise NativeVoiceProcessActionError(
                 "previous Config/runtime changed during restart"
             )
+        if self.security_evidence is not None:
+            report = attest_previous_restart(
+                journal=self.journal, previous_backup=self.previous_backup,
+                process_evidence=self.process_evidence,
+                security_evidence=self.security_evidence,
+                expected_scripts=self.expected,
+                expected_supervisor_argv=self.expected_supervisor_argv,
+                security_reader=self.security_reader,
+                argv_reader=self.argv_reader,
+                require_lifecycle_owner=self.require_lock,
+                require_config_owner=lambda: _locked_config(
+                    self.config_path, self.config_fd, self.owner,
+                ),
+            )
+            if report["state"] != "previous-restart-integrity-observed" or                report["safe_to_enable_voice"] is not False or                report["safe_to_finish_intent"] is not False:
+                raise NativeVoiceProcessActionError(
+                    "native previous restart attestation did not match"
+                )
         return "running"
