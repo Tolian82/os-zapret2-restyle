@@ -282,7 +282,7 @@ namespace {
     } finally {
         \OPNsense\Base\ApiControllerBase::$denyWrites = false;
     }
-    equal(1, Config::getInstance()->saves, 'denied write did not touch Config');
+    equal(2, Config::getInstance()->saves, 'denied write did not touch Config');
 
     echo "PASS: real OFF-only Voice Apply through Zapret reconfigure, Config persistence, ON/Strategy Lab guards\n";
 }

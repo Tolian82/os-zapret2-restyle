@@ -1,5 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_24 — qualify real OFF-only Voice Apply regression (2026-10-10):** The initial _23 genuine `VoiceController::applyAction` passed Voice GUI validation; the PHP integration runner caught a stale *test* expectation: it still counted a single Config save after deliberately executing the second save in the failed-reconfigure scenario. Updated only the assertion to expect 2 and still enforce no additional write from a read-only caller. The runtime feature remains OFF-only Apply of shared IPSET through real `zapret reconfigure`; Voice ON, IPFW cutover and crash recovery are not enabled. PLUGIN_REVISION=24 (DEV-032); exact-HEAD CI pending. No published package or owner-device mutation.
+
 **v0.5.1_23 — real OFF-only Voice Apply via ordinary Zapret lifecycle (2026-10-10):** Added `VoiceController::applyAction` and the native-form bottom `voiceApply` control (RU/EN). It uses the existing exact loaded Config snapshot and scoped Voice overlay, rejects ALL native Voice ON (both current and submitted), checks Strategy Lab occupancy before saving and before reconfigure, persists changed inactive Voice settings using the native model and Config audit, then calls the existing `zapret reconfigure` command with its own lifecycle FD9 and updates GUI runtime/IPFW status on success. Even an unchanged saved draft invokes reconfigure because Save Draft intentionally left runtime untouched. If runtime reconfigure returns an error, the API clearly reports `saved=true`, `applied=false`, `requires_review=true` and the new snapshot rather than falsely asserting rollback/working service. This stage does **not** enable actual native Voice UDP profiles, independent WAN IPFW, one-engine handoff or durable recovery; the old ON guard and PoC remain intact. The generic Strategies Apply may still interleave across the Config::save() window, so ON activation and full transactional cutover remain gated. v0.5.1_22 exact-HEAD CI, Voice and FreeBSD package PASSED. PLUGIN_REVISION=23 (DEV-032). No router modification or package publication. Exact-HEAD CI pending.
 
 **v0.5.1_22 — native inactive Voice draft acceptance corrective (2026-10-10):** The new v0.5.1_21 real `saveDraftAction` reached PHP integration tests but its first regression used POST when checking `loadAction`, which is deliberately GET-only. Corrected the test fixture to reload using GET, then restore POST to verify optimistic-concurrency stale submissions. No production Apply, dvtws2, IPFW or service runtime changes; actual OFF-only Config persistence implemented in v0.5.1_21 remains the deliverable. This release-gating corrective is a code change, so PLUGIN_REVISION=22 (DEV-032). Full exact-HEAD CI pending; no package publication or installed-router change.
@@ -139,8 +141,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_23` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_23.pkg` (**not published, do not install**);
+- current source candidate revision: `_24` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_24.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
