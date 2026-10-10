@@ -117,7 +117,11 @@ class NativeCheckpointTests(unittest.TestCase):
         self.assertIn("native_voice_checkpoint_service()", service)
         self.assertIn('"${BACKEND_DIR}/voice_cutover_checkpoint.py"', service)
         self.assertIn("native-voice-checkpoint)", service)
-        self.assertIn("native-voice-checkpoint|native-voice-ipfw-seed", service)
+        # The new immutable recovery-stage action legitimately sits between
+        # checkpoint and IPFW ownership seed in the public FD9 dispatcher.
+        # Test that both operations are lifecycle locked, not adjacent.
+        self.assertIn("native-voice-checkpoint|native-voice-restore-stage", service)
+        self.assertIn("native-voice-ipfw-seed|native-voice-ipfw-activate", service)
         self.assertIn("orchestrator_runtime_is_complete", service)
         self.assertIn("native IPFW seed requires a prepared whole-service cutover", runtime)
         self.assertIn('bound_resource_fingerprints(WHOLE / "previous"', runtime)
