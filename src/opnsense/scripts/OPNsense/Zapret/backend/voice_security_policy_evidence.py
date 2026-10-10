@@ -33,7 +33,8 @@ from voice_process_recovery_evidence import (
     ProcessEvidenceError, inspect_process_evidence,
 )
 
-POLICY_SCHEMA = 1
+POLICY_SCHEMA = 1  # legacy path and credentials only
+SUPERVISOR_BOUND_POLICY_SCHEMA = 2
 MAX_POLICY_BYTES = 16384
 _HEX = set("0123456789abcdef")
 
@@ -52,12 +53,13 @@ def _hash(data):
     ).encode("ascii")).hexdigest()
 
 
-def _normalize(previous, scripts, images, credentials):
+def _normalize(previous, scripts, images, credentials, supervisor_argv=None):
     if not isinstance(previous, dict) or set(previous) != set(RESOURCE_NAMES) or \
        any(not _sha(value) for value in previous.values()):
         raise SecurityPolicyError("incomplete previous five-resource identity")
     _expected_map(scripts, images, credentials)
-    return {"schema": POLICY_SCHEMA,
+    body = {"schema": (SUPERVISOR_BOUND_POLICY_SCHEMA
+                       if supervisor_argv is not None else POLICY_SCHEMA),
             "previous": {role: previous[role] for role in RESOURCE_NAMES},
             "scripts": {role: scripts[role] for role in ROLES},
             "images": {role: images[role] for role in ROLES},
@@ -65,6 +67,10 @@ def _normalize(previous, scripts, images, credentials):
                 role: {field: credentials[role][field] for field in FIELDS}
                 for role in ROLES
             }}
+    if supervisor_argv is not None:
+        from voice_native_supervisor_launch import verified_supervisor_argv
+        body["supervisor_argv"] = verified_supervisor_argv(scripts, supervisor_argv)
+    return body
 
 
 def _reopen_original(previous_backup, process_evidence, body):
@@ -94,13 +100,19 @@ def inspect_security_policy(directory: Path, previous_backup: Path,
         record = json.loads(raw)
     except (ValueError, UnicodeError) as exc:
         raise SecurityPolicyError("invalid security policy JSON") from exc
-    if not isinstance(record, dict) or set(record) != {
-        "schema", "previous", "scripts", "images", "credentials", "check",
-    } or type(record.get("schema")) is not int or \
-       record["schema"] != POLICY_SCHEMA or not _sha(record.get("check")):
+    required = {"schema", "previous", "scripts", "images",
+                "credentials", "check"}
+    if not isinstance(record, dict) or type(record.get("schema")) is not int or (
+        record["schema"] not in (POLICY_SCHEMA, SUPERVISOR_BOUND_POLICY_SCHEMA)
+    ) or set(record) != (required | (
+        {"supervisor_argv"} if record["schema"] == SUPERVISOR_BOUND_POLICY_SCHEMA
+        else set()
+    )) or not _sha(record.get("check")):
         raise SecurityPolicyError("invalid security policy record schema")
-    body = _normalize(record["previous"], record["scripts"],
-                      record["images"], record["credentials"])
+    body = _normalize(
+        record["previous"], record["scripts"], record["images"],
+        record["credentials"], record.get("supervisor_argv"),
+    )
     digest = _hash(body)
     if digest != record["check"]:
         raise SecurityPolicyError("modified policy checksum")
@@ -114,7 +126,7 @@ def inspect_security_policy(directory: Path, previous_backup: Path,
            journal_record["candidate"].get(SECURITY_FIELD) != digest:
             raise SecurityPolicyError("security policy not pinned by durable cutover journal")
     _reopen_original(previous_backup, process_evidence, body)
-    return {"schema": POLICY_SCHEMA, "state": "evidence-only",
+    return {"schema": body["schema"], "state": "evidence-only",
             "policy_sha256": digest, "policy": body,
             "can_activate": False, "can_recover_automatically": False,
             "safe_to_mutate": False}
@@ -122,13 +134,14 @@ def inspect_security_policy(directory: Path, previous_backup: Path,
 
 def capture_security_policy(previous_backup: Path, process_evidence: Path,
                             output: Path, previous: dict, scripts: dict,
-                            images: dict, credentials: dict) -> str:
+                            images: dict, credentials: dict, *,
+                            supervisor_argv: dict | None = None) -> str:
     """Private, fsync'd, write-once policy; does not create a journal itself."""
     output = Path(output)
     _private_dir(output.parent)
     if output.exists() or output.is_symlink():
         raise SecurityPolicyError("previous Voice security policy exists")
-    body = _normalize(previous, scripts, images, credentials)
+    body = _normalize(previous, scripts, images, credentials, supervisor_argv)
     _reopen_original(previous_backup, process_evidence, body)
     digest = _hash(body)
     record = {**body, "check": digest}

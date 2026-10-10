@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_47`: align isolated PID-file test fixtures so real native-runner missing-attestation refusal is actually tested (production security unchanged)
+- [x] Current candidate `v0.5.1_48`: bind exact installed supervisor daemon/monitor argv to saved security policy v2 + schema-3 whole journal, deny untrusted or v1 previous-policy restart
+- [ ] Next: production native FD9 coordinator, exact live FreeBSD daemon/proctitle qualification, cold-boot recovery and durable five-resource completion; Voice ON only after validation
+- [x] Previous candidate `v0.5.1_47`: align isolated PID-file test fixtures so real native-runner missing-attestation refusal is actually tested (production security unchanged)
 - [ ] Next: production native FD9 coordinator, immutable supervisor argv plan, crash/reboot recovery and five-resource journal finalization; then Voice ON
 - [x] Previous candidate `v0.5.1_46`: native previous-restart cross-attestation of sealed schema-3 image/UID/GID and kernel argv with stable shared process instance; production process-start requires native integrity sources
 - [ ] Next: bind exact supervisor argv to a durable trusted launch template; wire a native FD9 recovery coordinator and reboot-safe whole-system rollback finalization; only then qualify Voice ON

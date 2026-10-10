@@ -20,7 +20,9 @@ from voice_freebsd_process_security import FreeBSDProcessSecurityReader
 from voice_freebsd_kernel_argv import FreeBSDKernelArgvReader
 from voice_security_policy_evidence import (
     inspect_security_policy, verify_current_security,
+    SUPERVISOR_BOUND_POLICY_SCHEMA,
 )
+from voice_native_supervisor_launch import canonical_supervisor_argv
 from voice_restart_argv_attestation import inspect_restarted_argv
 from voice_process_recovery_evidence import inspect_process_evidence
 
@@ -34,7 +36,6 @@ class NativeRestartIntegrityError(RuntimeError):
 def _attest_previous_restart(
     *, journal, previous_backup: Path, process_evidence: Path,
     security_evidence: Path, expected_scripts: dict,
-    expected_supervisor_argv: dict,
     security_reader: FreeBSDProcessSecurityReader,
     argv_reader: FreeBSDKernelArgvReader,
     require_lifecycle_owner, require_config_owner,
@@ -65,6 +66,17 @@ def _attest_previous_restart(
         journal_record=initial, expected_scripts=expected_scripts,
     )
     sealed = policy["policy"]
+    # A legacy schema-1 policy lacks supervisor command attestation.
+    # Only the SHA-pinned v2 plan in the durable schema-3 whole intent
+    # can authorize consideration of a native previous restart.
+    if policy["schema"] != SUPERVISOR_BOUND_POLICY_SCHEMA or (
+        sealed.get("supervisor_argv") != canonical_supervisor_argv(
+            sealed["scripts"]
+        )
+    ):
+        raise NativeRestartIntegrityError(
+            "supervisor launch argv is not sealed in the whole cutover"
+        )
     if security_reader.expected_scripts != sealed["scripts"] or \
        security_reader.kernel_images != sealed["images"] or \
        security_reader.credentials != sealed["credentials"] or \
@@ -85,7 +97,7 @@ def _attest_previous_restart(
         raise NativeRestartIntegrityError("foreign native kernel image or UID/GID")
     argv = inspect_restarted_argv(
         previous_backup, process_evidence, expected_scripts,
-        expected_supervisor_argv, argv_reader,
+        sealed["supervisor_argv"], argv_reader,
     )
     if argv["state"] != "review-required" or \
        argv["reason"] != "new-process-argv-matches-sealed-launcher-plan":
@@ -114,7 +126,7 @@ def _attest_previous_restart(
        security_reader.inspect_twice() != security or \
        inspect_restarted_argv(
            previous_backup, process_evidence, expected_scripts,
-           expected_supervisor_argv, argv_reader,
+           sealed["supervisor_argv"], argv_reader,
        )["instances"] != instances:
         raise NativeRestartIntegrityError("unstable native restart attestation")
     require_lifecycle_owner()

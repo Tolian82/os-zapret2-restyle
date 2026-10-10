@@ -17,6 +17,7 @@ import voice_process_recovery_evidence as processes
 import voice_security_policy_evidence as security
 from voice_freebsd_process_security import FIELDS
 from voice_cutover_guard import check_pending
+from voice_native_supervisor_launch import canonical_supervisor_argv, SupervisorLaunchError
 
 SCRIPTS={"engine":"/usr/local/etc/zapret2/binaries/my/dvtws2",
          "daemon":"/usr/sbin/daemon",
@@ -77,7 +78,7 @@ class SecurityReader:
 
 
 class SecurityPolicyTests(unittest.TestCase):
-    def setup(self, root):
+    def setup(self, root, *, supervisor_argv=None):
         base=Path(root)
         xml=base/"config.xml"
         xml.write_text("<opnsense/>")
@@ -110,7 +111,7 @@ class SecurityPolicyTests(unittest.TestCase):
         policy_dir=private/"security"
         digest=security.capture_security_policy(
             previous_backup,process_dir,policy_dir,prior,
-            SCRIPTS,IMAGES,CREDS)
+            SCRIPTS,IMAGES,CREDS,supervisor_argv=supervisor_argv)
         whole=journal.VoiceCutoverJournal(private/"whole")
         return (whole,ipfw,previous_backup,process_dir,policy_dir,prior,digest)
 
@@ -155,6 +156,61 @@ class SecurityPolicyTests(unittest.TestCase):
             self.assertEqual("blocked",self.inspect(setup)["state"])
             self.assertEqual("missing-native-security-attestation",
                              self.inspect(setup)["reason"])
+
+    def test_sealed_supervisor_plan_bound_to_schema_three(self):
+        with tempfile.TemporaryDirectory() as root:
+            plan=canonical_supervisor_argv(SCRIPTS)
+            setup=self.setup(root,supervisor_argv=plan)
+            whole,ipfw,saved,process_dir,policy_dir,prior,digest=setup
+            trusted=security.inspect_security_policy(
+                policy_dir,saved,process_dir,expected_scripts=SCRIPTS,
+            )
+            self.assertEqual(security.SUPERVISOR_BOUND_POLICY_SCHEMA,trusted["schema"])
+            self.assertEqual(plan,trusted["policy"]["supervisor_argv"])
+            record=self.start(setup)
+            self.assertEqual(digest,record["candidate"][journal.SECURITY_FIELD])
+            self.assertEqual(plan,security.inspect_security_policy(
+                policy_dir,saved,process_dir,journal_record=record,
+            )["policy"]["supervisor_argv"])
+            self.assert_denied(self.inspect(setup,SecurityReader(prior)))
+            # A noncanonical but valid-looking daemon/monitor command
+            # cannot be used to forge an alternative root-owned plan.
+            for case in ("extra-daemon-flag","foreign-service","csh",
+                         "different-monitor-pid","unknown-key"):
+                with self.subTest(case=case):
+                    wrong=copy.deepcopy(plan)
+                    if case=="extra-daemon-flag":
+                        wrong["daemon"].append("--foreign")
+                    elif case=="foreign-service":
+                        wrong["monitor"][-2]="/tmp/fake_service"
+                    elif case=="csh":
+                        wrong["monitor"][0]="/bin/csh"
+                    elif case=="different-monitor-pid":
+                        wrong["daemon"][4]="/var/run/other.pid"
+                    else:
+                        wrong["other"]=["/bin/sh"]
+                    with self.assertRaises((SupervisorLaunchError, ValueError)):
+                        security.capture_security_policy(
+                            saved,process_dir,policy_dir.parent / "not-trusted",
+                            prior,SCRIPTS,IMAGES,CREDS,supervisor_argv=wrong,
+                        )
+                    self.assertFalse((policy_dir.parent/"not-trusted").exists())
+
+    def test_modified_sealed_supervisor_command_digest_refused(self):
+        import json
+        with tempfile.TemporaryDirectory() as root:
+            setup=self.setup(root,supervisor_argv=canonical_supervisor_argv(SCRIPTS))
+            whole,ipfw,saved,process_dir,policy_dir,prior,digest=setup
+            record=self.start(setup)
+            path=policy_dir/"policy.json"
+            raw=json.loads(path.read_text())
+            raw["supervisor_argv"]["daemon"][-1]="/tmp/foreign_dvtws"
+            path.write_text(json.dumps(raw))
+            with self.assertRaises((security.SecurityPolicyError,ValueError)):
+                security.inspect_security_policy(
+                    policy_dir,saved,process_dir,journal_record=record
+                )
+            self.assertEqual("blocked",self.inspect(setup,SecurityReader(prior))["state"])
 
     def test_existing_schema_one_and_two_remain_readable(self):
         with tempfile.TemporaryDirectory() as root:

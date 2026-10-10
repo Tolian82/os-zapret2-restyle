@@ -1,5 +1,10 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### v0.5.1_48 — закреплённый в SHA supervisor argv
+
+В `voice_native_supervisor_launch.py` жёстко зафиксирован ровно тот список аргументов `daemon -P ... -p ... -o ... -f supervisor_loop.sh` и скрипта monitor, который соответствует установленному `supervisor_start`/`voice_native_process_lifecycle.sh`. Никаких пользовательских параметров или переопределений пути нет. `voice_security_policy_evidence.py` поддерживает read-only старую v1 и новую v2 со списком supervisor argv, включённым в приватно сохраняемый SHA policy, а этот SHA уже находится в whole cutover schema 3. `voice_native_restart_integrity.py` не принимает параметр `expected_supervisor_argv`, получает аргументы исключительно из повторно проверенного sealed policy v2, требует строгого совпадения с нативным установленным контрактом и двумя FreeBSD kernel probes. `FreeBSDVoiceProcessActions.start_previous` проверяет policy v2 до вызова launcher. v1 доступна только для диагностики и не допускает нативный восстановительный запуск. Реальная форма argv процесса `daemon`/monitor на FreeBSD после изменения заголовка процесса пока нуждается в on-appliance подтверждении; поэтому нет production apply, reboot replay и права на Voice ON.
+
+
 ### v0.5.1_47 — точное тестирование отказа без native security evidence
 
 `test-voice-native-process-actions.py` теперь правильно использует временные PID-file пути только в рамках отрицательного теста `runner=None`, чтобы проверить именно обязательность схемы безопасности `kern.proc.pathname + UID/GID + kern.proc.args`. Предыдущий тест `_46` отказывал раньше по несовпадению test pidfile map. Производственная проверка `PIDFILES` OPNsense не ослаблена, Voice ON по-прежнему заблокирован.

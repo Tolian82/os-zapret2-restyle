@@ -19,6 +19,7 @@ import voice_freebsd_kernel_argv as argv_kernel
 import voice_process_recovery_evidence as process
 import voice_security_policy_evidence as policy
 import voice_cutover_journal as journal
+from voice_native_supervisor_launch import canonical_supervisor_argv
 
 
 def fixture(filename, module_name):
@@ -71,7 +72,9 @@ class NativeIntegrityTests(unittest.TestCase):
         temp = tempfile.TemporaryDirectory(prefix="voice-native-integrity-")
         self.addCleanup(temp.cleanup)
         self.fixture = saved_fixture.SecurityPolicyTests()
-        self.ctx = self.fixture.setup(temp.name)
+        self.ctx = self.fixture.setup(
+            temp.name, supervisor_argv=canonical_supervisor_argv(saved_fixture.SCRIPTS),
+        )
         self.whole, self.ledger, self.saved, self.evidence, self.security_dir, \
             self.previous, self.digest = self.ctx
         self.fixture.start(self.ctx)
@@ -87,10 +90,11 @@ class NativeIntegrityTests(unittest.TestCase):
             202: dict(saved_fixture.CREDS["daemon"]),
             203: dict(saved_fixture.CREDS["monitor"]),
         }
+        plan = canonical_supervisor_argv(saved_fixture.SCRIPTS)
         self.argv = argv_fixture.RawProvider({
             201: argv_fixture.ENGINE,
-            202: argv_fixture.SUPERVISOR["daemon"],
-            203: argv_fixture.SUPERVISOR["monitor"],
+            202: plan["daemon"],
+            203: plan["monitor"],
         })
         self.sec_reader = security.FreeBSDProcessSecurityReader(
             self.expected, dict(saved_fixture.IMAGES),
@@ -115,8 +119,7 @@ class NativeIntegrityTests(unittest.TestCase):
             journal=self.whole, previous_backup=self.saved,
             process_evidence=self.evidence, security_evidence=self.security_dir,
             expected_scripts=self.expected,
-            expected_supervisor_argv=argv_fixture.SUPERVISOR,
-            security_reader=self.sec_reader, argv_reader=self.argv_reader,
+                        security_reader=self.sec_reader, argv_reader=self.argv_reader,
             require_lifecycle_owner=lambda:self.locks.append("FD9"),
             require_config_owner=lambda:self.locks.append("flock"),
         )
@@ -172,6 +175,41 @@ class NativeIntegrityTests(unittest.TestCase):
         with self.assertRaises(integrity.NativeRestartIntegrityError):
             self.attest()
 
+    def test_legacy_policy_cannot_attest_restart(self):
+        # Old v1 policies remain readable for investigation, but their
+        # missing supervisor argv must not be a successful native restart.
+        with tempfile.TemporaryDirectory() as root:
+            fixture=self.fixture.setup(root)
+            self.fixture.start(fixture)
+            fixture[0].mark_mutating()
+            previous=(self.whole,self.ledger,self.saved,self.evidence,
+                      self.security_dir,self.previous,self.digest)
+            self.whole,self.ledger,self.saved,self.evidence, \
+                self.security_dir,self.previous,self.digest=fixture
+            try:
+                with self.assertRaisesRegex(
+                    integrity.NativeRestartIntegrityError,"supervisor launch argv"
+                ):
+                    self.attest()
+                self.assertEqual("mutating",self.whole.read()["phase"])
+            finally:
+                self.whole,self.ledger,self.saved,self.evidence, \
+                    self.security_dir,self.previous,self.digest=previous
+
+    def test_immutable_plan_rejects_caller_custom_supervisor_argv(self):
+        # The public API deliberately does not accept an argv override.
+        with self.assertRaises(integrity.NativeRestartIntegrityError):
+            integrity.attest_previous_restart(
+                journal=self.whole,previous_backup=self.saved,
+                process_evidence=self.evidence,security_evidence=self.security_dir,
+                expected_scripts=self.expected,
+                expected_supervisor_argv={"daemon":["/bin/echo"]},
+                security_reader=self.sec_reader,argv_reader=self.argv_reader,
+                require_lifecycle_owner=lambda:None,
+                require_config_owner=lambda:None,
+            )
+        self.assertEqual("mutating",self.whole.read()["phase"])
+
     def test_changed_process_between_security_and_argv_denied(self):
         # Independent readers may each return locally stable identities
         # but different PID/start identities. Cross-check cannot be skipped.
@@ -201,8 +239,7 @@ class NativeIntegrityTests(unittest.TestCase):
                         process_evidence=self.evidence,
                         security_evidence=self.security_dir,
                         expected_scripts=self.expected,
-                        expected_supervisor_argv=argv_fixture.SUPERVISOR,
-                        security_reader=self.sec_reader,argv_reader=self.argv_reader,
+                                                security_reader=self.sec_reader,argv_reader=self.argv_reader,
                         require_lifecycle_owner=lease if role=="lifecycle" else lambda:None,
                         require_config_owner=lease if role=="config" else lambda:None,
                     )

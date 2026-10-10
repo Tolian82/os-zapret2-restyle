@@ -29,7 +29,8 @@ from voice_cutover_journal import VoiceCutoverJournal
 from voice_process_recovery_evidence import _normalize, _runtime_args_digest
 from voice_cutover_backup import inspect_previous
 from voice_cutover_journal import SECURITY_BOUND_SCHEMA
-from voice_security_policy_evidence import inspect_security_policy
+from voice_security_policy_evidence import (inspect_security_policy,
+    SUPERVISOR_BOUND_POLICY_SCHEMA)
 from voice_native_restart_integrity import attest_previous_restart
 
 
@@ -71,8 +72,7 @@ class FreeBSDVoiceProcessActions:
                  runner=None, actuator: Path = SCRIPT,
                  process_evidence: Path | None = None,
                  security_evidence: Path | None = None,
-                 security_reader=None, argv_reader=None,
-                 expected_supervisor_argv: dict | None = None):
+                 security_reader=None, argv_reader=None):
         if not isinstance(probe, FreeBSDVoiceProcessProbe) or \
            probe.expected != EXPECTED_SCRIPTS or \
            probe.pidfiles != PIDFILES or \
@@ -85,8 +85,8 @@ class FreeBSDVoiceProcessActions:
             raise NativeVoiceProcessActionError("native probe, journal and locks required")
         if runner is None and Path(actuator) != SCRIPT:
             raise NativeVoiceProcessActionError("production actuator path is fixed")
-        integrity_fields = (process_evidence, security_evidence, security_reader,
-                            argv_reader, expected_supervisor_argv)
+        integrity_fields = (process_evidence, security_evidence,
+                            security_reader, argv_reader)
         if any(field is not None for field in integrity_fields) and not all(
             field is not None for field in integrity_fields
         ):
@@ -116,7 +116,6 @@ class FreeBSDVoiceProcessActions:
                                   else Path(security_evidence))
         self.security_reader = security_reader
         self.argv_reader = argv_reader
-        self.expected_supervisor_argv = expected_supervisor_argv
 
     def _gate(self) -> dict:
         self.require_lock()
@@ -209,11 +208,15 @@ class FreeBSDVoiceProcessActions:
                 raise NativeVoiceProcessActionError(
                     "native restart needs durable schema-3 process policy"
                 )
-            inspect_security_policy(
+            trusted = inspect_security_policy(
                 self.security_evidence, self.previous_backup,
                 self.process_evidence, journal_record=initial,
                 expected_scripts=self.expected,
             )
+            if trusted["schema"] != SUPERVISOR_BOUND_POLICY_SCHEMA:
+                raise NativeVoiceProcessActionError(
+                    "previous security policy lacks sealed supervisor launch argv"
+                )
         self._run("start", initial)
         after = self._sample()
         if after["engine"]["state"] != "running" or \
@@ -240,7 +243,6 @@ class FreeBSDVoiceProcessActions:
                 process_evidence=self.process_evidence,
                 security_evidence=self.security_evidence,
                 expected_scripts=self.expected,
-                expected_supervisor_argv=self.expected_supervisor_argv,
                 security_reader=self.security_reader,
                 argv_reader=self.argv_reader,
                 require_lifecycle_owner=self.require_lock,
