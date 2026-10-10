@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import copy
+import ctypes
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -139,6 +141,59 @@ class ArgvReaderTests(unittest.TestCase):
         raw.values[201]=b"bad output without NUL"
         with self.assertRaises(kernel.KernelArgvError):
             reader.observe_argv()
+
+    @unittest.skipUnless(sys.platform.startswith("freebsd"),
+                         "requires real FreeBSD libc sysctl")
+    def test_actual_freebsd_self_kernel_argv(self):
+        # Genuine kernel self-process read; never replace it with a fake.
+        pid = os.getpid()
+        try:
+            raw = kernel.sysctl_kernel_argv(pid)
+        except kernel.KernelArgvError as exc:
+            # One-time read-only ABI evidence if the old dynamic name fails.
+            libc = ctypes.CDLL(None, use_errno=True)
+            byname = libc.sysctlbyname
+            byname.argtypes = [ctypes.c_char_p, ctypes.c_void_p,
+                               ctypes.POINTER(ctypes.c_size_t),
+                               ctypes.c_void_p, ctypes.c_size_t]
+            byname.restype = ctypes.c_int
+            length = ctypes.c_size_t()
+            ctypes.set_errno(0)
+            text_rc = byname(f"kern.proc.args.{pid}".encode("ascii"),
+                             None, ctypes.byref(length), None, 0)
+            text_errno = ctypes.get_errno()
+            to_mib = libc.sysctlnametomib
+            to_mib.argtypes = [ctypes.c_char_p,
+                               ctypes.POINTER(ctypes.c_int),
+                               ctypes.POINTER(ctypes.c_size_t)]
+            to_mib.restype = ctypes.c_int
+            mib = (ctypes.c_int * 24)()
+            depth = ctypes.c_size_t(24)
+            ctypes.set_errno(0)
+            mib_rc = to_mib(b"kern.proc.args", mib, ctypes.byref(depth))
+            mib_errno = ctypes.get_errno()
+            numeric_rc = numeric_errno = numeric_length = None
+            if mib_rc == 0 and 0 < depth.value < 24:
+                mib[depth.value] = pid
+                sysctl = libc.sysctl
+                sysctl.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_uint,
+                                   ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t),
+                                   ctypes.c_void_p, ctypes.c_size_t]
+                sysctl.restype = ctypes.c_int
+                n = ctypes.c_size_t()
+                ctypes.set_errno(0)
+                numeric_rc = sysctl(mib, depth.value + 1, None,
+                                    ctypes.byref(n), None, 0)
+                numeric_errno = ctypes.get_errno()
+                numeric_length = n.value
+            self.fail(f"{exc}; native FreeBSD argv ABI: "
+                      f"byname_rc={text_rc} errno={text_errno} length={length.value}; "
+                      f"mib_rc={mib_rc} errno={mib_errno} depth={depth.value}; "
+                      f"numeric_rc={numeric_rc} errno={numeric_errno} "
+                      f"length={numeric_length}")
+        parsed = kernel.parse_kernel_argv(raw)
+        self.assertTrue(parsed)
+        self.assertTrue(parsed[0])
 
     def test_native_sysctl_never_executes_on_nonfreebsd(self):
         with patch.object(kernel.platform,"system",return_value="Linux"):
