@@ -453,6 +453,51 @@ orchestrator_build_release()
                 "argument generation failed"
             return 1
         }
+    # Produce the ACTUAL combined Voice + Strategies argv, using the very
+    # same generator, divert socket, Lua initializers and global exclusions
+    # as the currently active single-engine runtime. The candidate is not
+    # installed or used for live divert until native ON cutover is qualified.
+    _orchestrator_build_native_args="${_orchestrator_build_voice_native}/dvtws.args"
+    : > "${_orchestrator_build_error}"
+    generator_build_args_mapped \
+        "${_orchestrator_build_native_args}" \
+        "${DIVERT_PORT}" \
+        "${_orchestrator_build_voice_native}/traffic.conf" \
+        "${_orchestrator_build_extra}" \
+        "${_orchestrator_build_blob_args}" \
+        "${_orchestrator_build_exclude_source}" \
+        "${_orchestrator_build_exclude_reference}" \
+        "${_orchestrator_build_zapret_dir}/lua/zapret-lib.lua" \
+        "${_orchestrator_build_zapret_dir}/lua/zapret-antidpi.lua" \
+        "${_orchestrator_build_zapret_dir}/lua/zapret-auto.lua" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 6 \
+                "${_orchestrator_build_total}" generator \
+                "${_orchestrator_build_error}" \
+                "native Voice engine argument generation failed"
+            return 1
+        }
+    # Bind the generated one-engine argv to destination-scoped IPFW rules.
+    # This writes ONLY release-local private manifest/proof files. IPFW,
+    # current dvtws2 and ordinary Strategies remain unchanged.
+    : > "${_orchestrator_build_error}"
+    "${_orchestrator_voice_python}" \
+        "${BACKEND_DIR}/voice_handoff_preflight.py" \
+        "${_orchestrator_build_voice_native}" \
+        "${_orchestrator_build_native_args}" \
+        "${_orchestrator_build_user_traffic}" \
+        "${_orchestrator_build_tcp}" \
+        "${_orchestrator_build_udp}" \
+        "/conf/config.xml" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 6 \
+                "${_orchestrator_build_total}" generator \
+                "${_orchestrator_build_error}" \
+                "native Voice engine/IPFW handoff compilation failed"
+            return 1
+        }
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 6 "${_orchestrator_build_total}" \
         generator ok "arguments generated" || return 1

@@ -128,6 +128,8 @@ jobs:
         run: python3.13 scripts/test-voice-release-stage.py
       - name: Real orchestrator native Voice candidate build
         run: python3.13 scripts/test-voice-native-build-wire.py
+      - name: Compile native Voice engine and exact IPFW runtime handoff
+        run: python3.13 scripts/test-voice-native-runtime-handoff.py
       - name: Voice staged candidate into native dvtws2 arguments and IPFW plan
         run: python3.13 scripts/test-voice-generator-interop.py
       - name: Voice immutable one-engine handoff preflight
@@ -533,6 +535,7 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-migration-plan.py
             /usr/local/bin/python3.13 scripts/test-voice-generator-interop.py
             /usr/local/bin/python3.13 scripts/test-voice-native-build-wire.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-runtime-handoff.py
             /usr/local/bin/python3.13 scripts/test-voice-handoff-preflight.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-coordinator.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-journal.py

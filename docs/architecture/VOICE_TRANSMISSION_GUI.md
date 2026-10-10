@@ -1,5 +1,11 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### v0.5.1_26 — готовый артефакт передачи одного движка и IPFW
+
+После получения `voice-native-candidate/traffic.conf` штатный orchestrator запускает `generator_build_args_mapped` ВТОРОЙ раз с тем же divert, Lua, BLOB и global exclude: новый `voice-native-candidate/dvtws.args` содержит единый Voice+Strategies-порядок, но не заменяет активный `runtime-v2/dvtws.args`. Далее CLI `voice_handoff_preflight.py` сверяет XML `/conf/config.xml`, исходные ordinary-профили и tcp/udp артефакты, содержимое engine argv, пути таблиц и хеши IPSET и создаёт внутри приватного кандидата `desired-ipfw.json` строго в формате `VoiceOwnershipStore.canonical_manifest()`, плюс `handoff-proof.json` с хешем манифеста. В IPFW-манифесте отдельные правила Voice идут до обычных tcp/udp, у Voice обязателен `to table(zapret2_voice_<service>)` и выбранный WAN. Ни IPFW, ни процесс dvtws2 при генерации не меняются.
+
+Сейчас кандидат имеет `activation_authorized=false`, а ON по-прежнему блокируется service preflight; это защищает уже работающий старый PoC и обычные «Стратегии». Следующий практический шаг — применить готовый манифест в настоящем owner-controlled cutover с возвратом старого движка, таблиц, supervisor и Config после отказа и с обработкой reboot. Только затем включать ON в GUI.
+
 ### v0.5.1_25 — единый Voice-кандидат собирается в настоящем orchestrator
 
 В `orchestrator_build_release()` непосредственно после `telegram_voice_build_effective_traffic` вызывается `orchestrator_stage_native_voice`, использующий установленный `voice_release_stage.py` и фиксированные входы: `/conf/config.xml`, `release/managed`, `release/traffic-user.conf`, фактический `WAN_IF` из `config_resolve_interface`, `DIVERT_PORT` и выделенный диапазон IPFW. Генерируется каталог `release/voice-native-candidate/` с приватными файлами `voice.conf`, `traffic.conf` (единый dvtws2: Voice STUN → ordinary), `profile-plan.json`, `capture-plan.json` и `metadata.json` с `activation_authorized=false`. Информация о целевых IPv4 должна точно соответствовать обычным управляемым IPSET одного и того же релиза. Несовпадения приводят к остановке сборки до подмены live runtime.

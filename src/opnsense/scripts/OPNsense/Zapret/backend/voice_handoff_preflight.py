@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pure, fail-closed Voice release handoff preflight. No activation occurs.
+"""Voice release handoff compiler for one engine and scoped IPFW. No activation.
 
 Validate relationships among the inert staged Voice bundle, actual native
 dvtws.args emitted by generator.sh, ordinary ports and IPFW capture plan.
@@ -11,12 +11,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+from pathlib import Path
 import re
+import sys
 
 from voice_firewall_transaction import VoiceFirewallError, prepare_desired
 from voice_traffic_merge import VoiceMergeError, merge_profiles
 from voice_profile_compiler import SERVICES
 from voice_capture_plan import CapturePlanError, compile_capture_plan
+from voice_firewall_ledger import canonical_manifest, decode_manifest, fingerprint
 
 PORT = re.compile(r"^--port=([0-9]{1,5})$")
 LUA = re.compile(r"^--lua-init=@/\S+$")
@@ -197,3 +201,79 @@ def verify_staged_handoff(artifacts: dict[str, str], native_argv: str,
         "rule_max": desired["rule_max"],
         "table_count": len(desired["tables"]),
     }
+
+
+def build_runtime_handoff(stage: Path, engine_argv: Path, ordinary: Path,
+                          tcp_ports: Path, udp_ports: Path, saved_xml: Path) -> tuple[dict, dict]:
+    """Bind production engine argv to one exact scoped IPFW manifest.
+
+    All inputs must be already-built private release artifacts. No kernel,
+    service, firewall, OPNsense Config or installed release is modified.
+    """
+    names = ("voice.conf", "traffic.conf", "metadata.json",
+             "profile-plan.json", "capture-plan.json")
+    sources = [stage / name for name in names] + [
+        engine_argv, ordinary, tcp_ports, udp_ports, saved_xml
+    ]
+    for source in sources:
+        if source.is_symlink() or not source.is_file() or source.stat().st_size > 4 * 1048576:
+            raise VoiceHandoffError("Voice handoff input is missing, unsafe or too large")
+    artifacts = {name: (stage / name).read_text(encoding="utf-8") for name in names}
+    argv = engine_argv.read_text(encoding="utf-8")
+    ordinary_text = ordinary.read_text(encoding="utf-8")
+    tcp = tcp_ports.read_text(encoding="utf-8").strip()
+    udp = udp_ports.read_text(encoding="utf-8").strip()
+    report = verify_staged_handoff(artifacts, argv, ordinary_text, tcp, udp)
+    # The XML passed through the original release compiler must still be
+    # the same generation at the end of native argument generation.
+    xml_hash = hashlib.sha256(saved_xml.read_bytes()).hexdigest()
+    if xml_hash != report["saved_xml_sha256"]:
+        raise VoiceHandoffError("saved OPNsense Voice Config changed during runtime build")
+    capture = json.loads(artifacts["capture-plan.json"])
+    desired = prepare_desired(capture, tcp, udp)
+    manifest = canonical_manifest(desired)
+    if decode_manifest(manifest) != desired:
+        raise VoiceHandoffError("Voice IPFW ownership cannot round-trip safely")
+    report["desired_ipfw_sha256"] = fingerprint(manifest)
+    # A release artifact is not permission to mutate kernel resources.
+    if report["state"] != "preflight-only" or report["activation_authorized"] is not False:
+        raise VoiceHandoffError("native handoff unexpectedly claims activation")
+    return manifest, report
+
+
+def _publish_runtime_handoff(stage: Path, manifest: dict, report: dict) -> None:
+    """Publish final bound files into the candidate only; never active root."""
+    outputs = (
+        (stage / "desired-ipfw.json", manifest),
+        (stage / "handoff-proof.json", report),
+    )
+    if stage.is_symlink() or not stage.is_dir():
+        raise VoiceHandoffError("unsafe Voice candidate output")
+    if any(target.exists() or target.is_symlink() for target, _ in outputs):
+        raise VoiceHandoffError("native Voice handoff already exists")
+    for target, content in outputs:
+        payload = json.dumps(content, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
+        with target.open("x", encoding="utf-8") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(target, 0o600)
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 7:
+        print("usage: voice_handoff_preflight.py CANDIDATE_DIR ENGINE_ARGS "
+              "ORDINARY_TRAFFIC TCP_PORTS UDP_PORTS CONFIG.XML", file=sys.stderr)
+        return 64
+    stage, engine, ordinary, tcp, udp, xml = (Path(v) for v in argv[1:])
+    try:
+        manifest, report = build_runtime_handoff(stage, engine, ordinary, tcp, udp, xml)
+        _publish_runtime_handoff(stage, manifest, report)
+    except (OSError, ValueError, UnicodeError, VoiceFirewallError) as error:
+        print("ERROR: native Voice runtime handoff not built: " + str(error), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))
