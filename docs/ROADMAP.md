@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_39`: implement actual verified previous runtime directory swap, full same-filesystem sync and two-rename crash redo/retired candidate
+- [x] Current candidate `v0.5.1_40`: fix real CI failure: candidate digest must be evaluated without imposing previous runtime root permissions
+- [ ] Next: qualify two-rename runtime crash replay on Linux and FreeBSD; implement full native lifecycle/Config rollback owner and process+IPFW recovery
+- [x] Previous candidate `v0.5.1_39`: implement actual verified previous runtime directory swap, full same-filesystem sync and two-rename crash redo/retired candidate
 - [ ] Next: native FD9 + Config lifecycle authority and one-engine/supervisor/IPFW verified full rollback with boot replay and Voice ON cutover
 - [x] Previous candidate `v0.5.1_38`: durable pre-truncate Config redo record and same-inode, old-prefix-only crash retry; protected against foreign Config changes
 - [ ] Next: native FD9 + Config lock ownership with end-to-end runtime/one-engine/supervisor/IPFW restoration and cold-boot decision handling

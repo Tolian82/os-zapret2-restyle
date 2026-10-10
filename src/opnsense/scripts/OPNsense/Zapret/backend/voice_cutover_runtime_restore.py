@@ -256,10 +256,23 @@ def restore_previous_runtime(
             raise VoiceRuntimeRestoreError("linked runtime directory forbidden")
         if not path.exists():
             return False
-        return _fingerprint(
+        # Scan without the old-mode policy first. A valid candidate can
+        # differ from the original runtime in file/root permissions.
+        # Applying the sealed old-mode constraint before knowing which tree
+        # is present incorrectly rejects the candidate instead of comparing.
+        if _fingerprint(
             install_image/"config.xml", path, previous_backup,
-            must_match_previous_modes=(sha == previous_sha)
-        ) == sha
+            must_match_previous_modes=False,
+        ) != sha:
+            return False
+        if sha == previous_sha:
+            # Only a candidate that actually matches the previous sealed
+            # tree gets the stronger saved-Config/runtime-mode assertion.
+            return _fingerprint(
+                install_image/"config.xml", path, previous_backup,
+                must_match_previous_modes=True,
+            ) == sha
+        return True
 
     def check_owner() -> None:
         require_lifecycle_owner()

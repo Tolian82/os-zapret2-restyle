@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_40 — separate candidate runtime evidence from prior sealed mode checks (2026-10-10):** Voice CI for `_39` exposed that the new runtime swap asked the previous-bound file observer to certify a running **candidate** before comparing its runtime digest. That observer correctly refused a candidate runtime root mode different from the saved prior; six rename/recovery tests consequently failed before mutation. The restore now first performs an independent generic descriptor-anchored fingerprint comparison against the exact expected candidate (or previous) runtime SHA; only after the digest matches the prior does it enforce the sealed original Config/runtime mode policy. No relaxed checks for a restored prior, no change to the write-ahead/rename ordering. `_39` failed CI and must not be installed; full `_40` CI required. PLUGIN_REVISION=40; no live Voice ON or production restore caller.
+
+
 **v0.5.1_39 — crash-resumable real previous Voice runtime directory restoration (2026-10-10):** Added `voice_cutover_runtime_restore.py`, a real filesystem restore primitive (not yet connected to any production action). From the independently verified prior Config/runtime snapshot and permission-correct install image it copies the old runtime tree onto the SAME filesystem as `runtime-v2`, preserving sealed file/dir/root modes. Before touching active files it writes an owner-private, fsync'd `runtime-restore-redo.json`, pinned to the full MUTATING journal checksum, runtime parent inode, prior tree digest and independently supplied candidate runtime digest. It then uses same-parent renames `runtime-v2 → .voice-restore-retired-<check>` and `.voice-restore-ready-<check> → runtime-v2`, fsyncs the parent after each, and independently verifies both old active runtime and retained candidate. After crash between renames, rerun completes ONLY if the redo, ready tree, retained candidate and whole journal all match; foreign/symlink/tampered trees or missing/incorrect redo are refused, preserving recovery evidence. Added Linux/FreeBSD tests of real renames, failure before/after first rename, resume and mismatch rejection. The retired candidate and redo remain until the complete five-resource rollback is certified. No production CLI/GUI call, single-engine restart, IPFW rollback, boot replay or Voice ON yet. PLUGIN_REVISION=39; exact-head CI pending.
 
 
@@ -178,8 +181,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_39` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_39.pkg` (**not published, do not install**);
+- current source candidate revision: `_40` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_40.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
