@@ -1,7 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
 - [x] Current candidate `v0.5.1_17`: use verified numeric FreeBSD kern.proc.args MIB + PID, retaining native smoke and injected failure regressions
-- [ ] Verify Linux and FreeBSD 15 full CI on exact `_17` HEAD before qualifying native Config/lifecycle lock-held restore
+- [x] Exact source HEAD `87de312` passed CI #38017644559 attempt 2 including FreeBSD 15 package, native kernel argv self-test and Linux Voice regressions
+- [ ] Next: build and test Config/lifecycle lock order + Config::save() release semantics under a non-authorizing offline contract, then qualify owner-device role policy and actual service before Voice Apply
 
 - [x] Current candidate `v0.5.1_16`: correct confirmed native FreeBSD pathname PID sysctl ABI with strict negative tests
 - [ ] Verify Linux and FreeBSD 15 package CI at exact HEAD, then establish native Config/lifecycle lock ordering and Config::save() lock lifetime
