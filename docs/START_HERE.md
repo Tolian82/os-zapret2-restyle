@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_34 — retain previous runtime root permissions for Voice rollback (2026-10-10):** Real checkpoint now seals the original runtime root mode as well as nested files/directories in a versioned schema-2 snapshot, verifies it against the live source during capture, and includes it in the five-resource journal's previous runtime fingerprint. Existing schema-1 backup manifests remain read-compatible; their missing mode is not guessed. Private recovery staging remains 0700/0600 until an actual locked restore installs the original modes. Added mode-drift and staged-recovery regressions. This is required recovery data, not Voice ON, runtime swap, or automatic reboot recovery. PLUGIN_REVISION=34; exact-head CI pending.
+
+
 **v0.5.1_33 — repair exact-head CI for native Voice rollback qualification (2026-10-10):** Isolate an executable temporary copy of the unchanged mode-100644 service entry point in the Strategy Lab FD9 mock test; this restores the intended parent/inherited-lock Voice pending-intent assertions instead of failing with `Permission denied` (exit 126). Align Draft PR title with `v0.5.1_33`, as required by the forward-revision gate. No production service/GUI change, no Voice activation, and no router mutation. Exact-head CI must qualify this fix before continuing native cutover.
 
 
@@ -151,13 +154,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_33` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_34` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=33` (**development candidate, not published**);
+- `PLUGIN_REVISION=34` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

@@ -25,6 +25,7 @@ class SnapshotTests(unittest.TestCase):
         config.chmod(0o600)
         active=root/"runtime"
         active.mkdir()
+        active.chmod(0o750)
         (active/"dvtws.args").write_text("--port=989\n--filter-tcp=443\n")
         managed=active/"managed"
         managed.mkdir()
@@ -39,7 +40,8 @@ class SnapshotTests(unittest.TestCase):
             source_config=config.read_bytes()
             source_args=(active/"dvtws.args").read_bytes()
             manifest=backup.capture_previous(config,active,target)
-            self.assertEqual(1,manifest["schema"])
+            self.assertEqual(2,manifest["schema"])
+            self.assertEqual(0o750,manifest["runtime_root_mode"])
             self.assertEqual(
                 hashlib.sha256(source_config).hexdigest(),
                 manifest["config"]["sha256"],
@@ -57,6 +59,18 @@ class SnapshotTests(unittest.TestCase):
             with self.assertRaises(backup.VoiceBackupError):
                 backup.capture_previous(config,active,target)
             self.assertEqual(manifest,backup.inspect_previous(target))
+
+    def test_runtime_root_mode_drift_is_detected_before_restore(self):
+        with tempfile.TemporaryDirectory() as d:
+            config,active,target=self.fixture(d)
+            manifest=backup.capture_previous(config,active,target)
+            evidence=backup.bound_resource_fingerprints(target)
+            self.assertEqual(0o750,manifest["runtime_root_mode"])
+            active.chmod(0o700)
+            with self.assertRaisesRegex(backup.VoiceBackupError,
+                                        "runtime root permissions changed"):
+                backup._verify_sources(config,active,manifest)
+            self.assertEqual(evidence,backup.bound_resource_fingerprints(target))
 
     def test_snapshot_fingerprints_bind_to_durable_cutover_intent(self):
         # Existing full transaction journal records five resource hashes.

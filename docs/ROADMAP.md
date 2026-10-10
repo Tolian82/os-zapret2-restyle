@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_33`: unblock full CI lockf Voice parent/inherited-action regression using isolated executable test fixture; align PR title/revision
+- [x] Current candidate `v0.5.1_34`: seal previous runtime root permission bits in recoverable backup and whole-cutover digest
+- [ ] Next: real locked Config/runtime swap and prior engine/supervisor restart under a unified cutover transaction
+- [x] Previous candidate `v0.5.1_33`: unblock full CI lockf Voice parent/inherited-action regression using isolated executable test fixture; align PR title/revision
 - [ ] Next: production previous Config/runtime/one-engine/supervisor restore and deterministic full Voice ON cutover
 - [x] Previous candidate `v0.5.1_32`: qualification of real previous-state restore-staging service after updating its regression for the new FD9 action
 - [ ] Next: whole-system restoration and deterministic Voice ON cutover with one dvtws2, IPFW and supervisor

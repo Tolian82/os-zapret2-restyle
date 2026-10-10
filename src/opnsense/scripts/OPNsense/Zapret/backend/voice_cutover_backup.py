@@ -157,6 +157,13 @@ def _live_sha(path: Path) -> tuple[str, int, int]:
 
 
 def _verify_sources(config: Path, runtime: Path, manifest: dict) -> None:
+    # New checkpoints retain the REAL runtime root mode, not only children.
+    # Older schema-1 snapshots lack this datum; never invent it.
+    if manifest.get("schema") == 2:
+        root_info = os.lstat(runtime)
+        if not stat.S_ISDIR(root_info.st_mode) or \
+           stat.S_IMODE(root_info.st_mode) != manifest["runtime_root_mode"]:
+            raise VoiceBackupError("Voice runtime root permissions changed")
     config_row = manifest["config"]
     if _live_sha(config) != (config_row["sha256"], config_row["bytes"], config_row["mode"]):
         raise VoiceBackupError("Voice Config changed while building previous-state backup")
@@ -210,8 +217,9 @@ def capture_previous(config: Path, runtime: Path, output: Path) -> dict:
         sha, length = _copy_regular(config, config_dir / "config.xml", info)
         entries, total = _tree(runtime, runtime_dir)
         manifest = {
-            "schema": 1, "config": {"sha256": sha, "bytes": length,
+            "schema": 2, "config": {"sha256": sha, "bytes": length,
                                       "mode": stat.S_IMODE(info.st_mode)},
+            "runtime_root_mode": stat.S_IMODE(os.lstat(runtime).st_mode),
             "runtime": entries,
             "runtime_bytes": total,
         }
@@ -323,9 +331,15 @@ def inspect_previous(output: Path) -> dict:
         manifest = json.loads(raw_manifest)
     except (ValueError, UnicodeError) as e:
         raise VoiceBackupError("invalid Voice backup manifest") from e
-    if not isinstance(manifest, dict) or set(manifest) != {
-        "schema", "config", "runtime", "runtime_bytes"
-    } or manifest["schema"] != 1 or not isinstance(manifest["runtime"], dict):
+    if not isinstance(manifest, dict) or manifest.get("schema") not in (1, 2):
+        raise VoiceBackupError("invalid Voice backup schema")
+    required = {"schema", "config", "runtime", "runtime_bytes"}
+    if manifest["schema"] == 2:
+        required.add("runtime_root_mode")
+        mode = manifest.get("runtime_root_mode")
+        if type(mode) is not int or not 0 <= mode <= 0o7777:
+            raise VoiceBackupError("invalid saved Voice runtime root mode")
+    if set(manifest) != required or not isinstance(manifest["runtime"], dict):
         raise VoiceBackupError("invalid Voice backup schema")
     _verify_file(output / "config/config.xml", manifest["config"])
     declared = set(manifest["runtime"])
@@ -381,6 +395,9 @@ def bound_resource_fingerprints(output: Path, previous: dict | None = None) -> d
         "entries": verified["runtime"],
         "total_bytes": verified["runtime_bytes"],
     }
+    # Bind root permissions to the whole-cutover previous runtime digest.
+    if verified["schema"] == 2:
+        runtime_content["root_mode"] = verified["runtime_root_mode"]
     runtime_sha = hashlib.sha256(json.dumps(
         runtime_content, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     ).encode("ascii")).hexdigest()

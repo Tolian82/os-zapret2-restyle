@@ -43,6 +43,10 @@ class RestoreStageTests(unittest.TestCase):
             self.assertEqual(digests,result["previous"])
             self.assertEqual(backup.inspect_previous(saved),backup.inspect_previous(destination))
             self.assertEqual(digests,backup.bound_resource_fingerprints(destination))
+            self.assertEqual(2,result["manifest"]["schema"])
+            self.assertEqual(runtime.stat().st_mode & 0o7777,
+                             result["manifest"]["runtime_root_mode"])
+            self.assertEqual(0o700,(destination/"runtime").stat().st_mode & 0o777)
             self.assertEqual(0o600,(destination/"runtime"/"dvtws.args").stat().st_mode & 0o777,
                              "stage bytes must remain private despite source mode 0644")
             self.assertEqual(0o700,destination.stat().st_mode & 0o777)
