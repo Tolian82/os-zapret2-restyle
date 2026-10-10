@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_40`: fix real CI failure: candidate digest must be evaluated without imposing previous runtime root permissions
+- [x] Current candidate `v0.5.1_41`: actual combined prior Config/runtime rollback with ONE Config flock spanning both real filesystem writes and durable crash recovery
+- [ ] Next: trusted on-router dual lock and quiescent one-engine/supervisor/IPFW native adapter; then production whole-system rollback, reboot recovery, and Voice ON qualification
+- [x] Previous candidate `v0.5.1_40`: fix real CI failure: candidate digest must be evaluated without imposing previous runtime root permissions
 - [ ] Next: qualify two-rename runtime crash replay on Linux and FreeBSD; implement full native lifecycle/Config rollback owner and process+IPFW recovery
 - [x] Previous candidate `v0.5.1_39`: implement actual verified previous runtime directory swap, full same-filesystem sync and two-rename crash redo/retired candidate
 - [ ] Next: native FD9 + Config lifecycle authority and one-engine/supervisor/IPFW verified full rollback with boot replay and Voice ON cutover

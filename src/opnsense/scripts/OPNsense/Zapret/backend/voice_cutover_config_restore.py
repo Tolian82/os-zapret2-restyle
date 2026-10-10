@@ -74,7 +74,7 @@ def _write_all(fd: int, data: bytes) -> None:
 def restore_previous_config_in_place(
     config_path: Path, install_image: Path, previous_backup: Path,
     journal: VoiceCutoverJournal, *, require_lifecycle_owner: Callable[[], None],
-    expected_owner: tuple[int, int],
+    expected_owner: tuple[int, int], locked_config_fd: int | None = None,
 ) -> str:
     """Restore Config bytes WITHOUT replacing its locked inode.
 
@@ -86,6 +86,9 @@ def restore_previous_config_in_place(
     OR the proven prefix of previous bytes after a durably armed interrupted
     attempt. Foreign content is never overwritten; a Config redo marker
     persists until the full five-resource rollback is independently closed.
+    With locked_config_fd, the caller can hold ONE Config flock over a
+    complete Config+runtime rollback. The helper never closes that supplied
+    FD or unlocks it; it still performs its own inode/lock verification.
     This helper does not close or mark the whole-cutover journal.
     """
     if not callable(require_lifecycle_owner) or \
@@ -115,7 +118,12 @@ def restore_previous_config_in_place(
     expected_previous = record["previous"]["config"]
     flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | \
         getattr(os, "O_CLOEXEC", 0)
-    live_fd = os.open(config_path, flags)
+    if locked_config_fd is not None and (
+        type(locked_config_fd) is not int or locked_config_fd < 0
+    ):
+        raise VoiceConfigRestoreError("invalid externally held Config descriptor")
+    owns_fd = locked_config_fd is None
+    live_fd = os.open(config_path, flags) if owns_fd else locked_config_fd
     try:
         _pinned_regular(config_path, live_fd, owner=expected_owner)
         try:
@@ -211,4 +219,5 @@ def restore_previous_config_in_place(
     finally:
         # Releasing this lock never signals whole-system rollback success.
         # The caller must still restore runtime, engine, firewall/supervisor.
-        os.close(live_fd)
+        if owns_fd:
+            os.close(live_fd)

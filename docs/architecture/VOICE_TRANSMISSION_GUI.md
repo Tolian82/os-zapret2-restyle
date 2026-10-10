@@ -1,5 +1,10 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### v0.5.1_41 — восстановление Config и runtime в одной файловой транзакции
+
+`voice_cutover_file_rollback.py` (без production CLI/GUI) удерживает эксклюзивный `flock` именно на текущем inode `/conf/config.xml` через восстановление двух доменов: `runtime-v2` с двухэтапным безопасным `rename`, затем прежнего Config через запись в тот же locked descriptor. Общий `VoiceCutoverJournal` обязан находиться в `mutating`; до и после переходов проверяются sealed предыдущие байты, install image, lifecycle lease callback и независимый quiescent gate (кандидатный dvtws2, supervisor и IPFW должны быть безопасны для rollback). После обоих шагов независимый наблюдатель подтверждает два прежних SHA и mode. Обе redo-записи и whole journal остаются на диске: **успех только двух файловых доменов не разрешает** запуск движка, закрытие intent или Voice ON. Native FD9/engine/IPFW/supervisor adapter и автоматический reboot recovery остаются задачами будущего этапа.
+
+
 ### v0.5.1_39 — реальное восстановление дерева runtime-v2 с redo
 
 Введён `voice_cutover_runtime_restore.py` (пока **без production CLI/GUI entrypoint**). Под наблюдением bound whole-cutover `mutating` journal и внешнего доказательства предыдущего и активного candidate runtime выполняется полный копирующий pre-stage на файловой системе рабочего каталога с `fsync`, исходными режимами и независимой сверкой SHA всего дерева. Перед первой заменой `runtime-restore-redo.json` одноразово фиксирует точный журнал, parent inode, SHA candidate/previous. После этого `runtime-v2` переименовывается в детерминированный `retired`, а проверенный `ready` — в `runtime-v2`. Прерванный промежуток между двумя rename восстанавливается только при подтверждённом redo/retired/ready и неизменном journal; посторонние состояния не переписываются. Старая candidate tree остаётся в retired и **не очищается** до полного восстановления Config/dvtws2/supervisor/IPFW. Модуль не является единым владельцем обеих native блокировок и НЕ даёт права включать Voice.
