@@ -251,6 +251,7 @@ jobs:
           php scripts/test-voice-settings-payload.php
           php scripts/test-voice-candidate-validator.php
           php scripts/test-voice-api-concurrency.php
+          php scripts/test-voice-config-flock-release.php
           php scripts/test-voice-apply-candidate.php
           PHP_CHECKS
           )

@@ -1,5 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_19 — lock-acquisition generation and ABA refusal (2026-10-10):** The disconnected Voice cutover contract now requires stable, strictly validated ownership acquisition generations for BOTH Config and lifecycle locks, not just boolean status. Unlock+relock invalidates the original transaction even when the held flag immediately returns true; fault injection covers preflight, prepared intent, runtime, Config persistence, commit and cleanup. A PHP regression models the real Config::save() same-handle flock(LOCK_UN) interleaving with a competing writer without touching config.xml. This remains a mock contract, NOT native lock authority or real Apply. CI _18 showed a stale _17 package identity in the Strategy Lab documentation contract, corrected for _19. PLUGIN_REVISION=19 (DEV-032); no production activation, PoC removal or appliance change. Exact-HEAD CI pending.
+
 **v0.5.1_18 — disconnected Voice cutover lock continuity (2026-10-10):** Audited OPNsense core stable/26.7 Config.php: Config::save() explicitly calls flock(LOCK_UN) even when a caller previously invoked Config::lock(). Strengthened ONLY the non-authorizing adapter-injected cutover contract: exact boolean ownership is checked before each journal stage, candidate mutation, rollback operation, commit and cleanup. Lock loss after durable intent stops work and retains the journal for supervised recovery; automatic rollback without lock ownership is forbidden. New injected regressions cover preflight, prepared/mutating, Config save, cleanup, runtime and rollback lock loss. PLUGIN_REVISION=18 (DEV-032). No native adapter, Voice Apply, Telegram PoC retirement or real reboot recovery is enabled. Exact-HEAD CI and FreeBSD package verification remain pending.
 
 **v0.5.1_17 — native FreeBSD 15 kern.proc.args numeric-MIB corrective (2026-10-10):** On exact HEAD fb9831e, FreeBSD job 114083651219 proved that dynamic sysctlbyname("kern.proc.args.<PID>") fails ENOENT/2, whereas sysctlnametomib("kern.proc.args") returns a three-component MIB and numeric sysctl(MIB + PID) reports a 68-byte self-process argv. Corrected the disconnected, read-only kernel argv reader to the supported numeric ABI, retained two bounded reads and exact argv/PID/start checks, and added injected failure regression alongside the genuine native self-process test. PLUGIN_REVISION=17 (DEV-032); exact-source HEAD 87de312062612d314cd9b335de3a671b829be835 passed GitHub Actions CI 38017644559 attempt 2, including genuine FreeBSD 15 native argv smoke and package build. Attempt 1 failed unrelated Strategy Lab timeout mock recovery; unmodified retry passed. No package publication or owner-live acceptance. No Voice Apply, automatic recovery, PoC removal, installed OPNsense changes or media certification.
@@ -129,8 +131,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_17` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_17.pkg` (**not published, do not install**);
+- current source candidate revision: `_19` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_19.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

@@ -30,6 +30,7 @@ class FakeLifecycle:
         self.fail=fail
         self.legacy=legacy
         self.locked=locked
+        self.generation=(1, 1)
         self.calls=[]
         self.config="old"
         self.runtime="old"
@@ -48,6 +49,10 @@ class FakeLifecycle:
     def locks_held(self):
         self._op("locks_held")
         return self.locked
+
+    def lock_generation(self):
+        self._op("lock_generation")
+        return self.generation
 
     def verify_legacy_absent(self):
         self._op("verify_legacy_absent")
@@ -170,6 +175,20 @@ class LockDroppingLifecycle(FakeLifecycle):
         result = super()._op(name, after)
         if name == self.release_after:
             self.locked = False
+        return result
+
+
+class ReacquiredLifecycle(FakeLifecycle):
+    """Held remains true; acquisition generation changes after a stage."""
+    def __init__(self, reacquire_after, changed):
+        super().__init__()
+        self.reacquire_after=reacquire_after
+        self.changed=changed
+
+    def _op(self, name, after=False):
+        result=super()._op(name,after)
+        if name==self.reacquire_after:
+            self.generation=self.changed
         return result
 
 
@@ -400,6 +419,42 @@ class WholeCutoverTests(unittest.TestCase):
                     cutover.simulate_cutover(a,VALID,test_only_mutations=True)
                 self.assertIsNone(a.intent)
         a=FakeLifecycle(fail="locks_held")
+        with self.assertRaises(cutover.CutoverRejected):
+            cutover.simulate_cutover(a,VALID,test_only_mutations=True)
+        self.assertIsNone(a.intent)
+
+    def test_reacquiring_a_lock_invalidates_original_cutover_lease(self):
+        for action, new_generation, phase in (
+            ("verify_legacy_absent", (2, 1), None),
+            ("reverify_sources", (1, 2), None),
+            ("begin_intent", (2, 1), "prepared"),
+            ("install_candidate_tree", (1, 2), "mutating"),
+            ("persist_config", (2, 1), "mutating"),
+            ("commit_intent", (1, 2), "committed"),
+            ("cleanup_retired", (2, 2), "committed"),
+        ):
+            with self.subTest(action=action, new_generation=new_generation):
+                a=ReacquiredLifecycle(action,new_generation)
+                error=(cutover.CutoverRejected if phase is None
+                       else cutover.CutoverManualReview)
+                with self.assertRaises(error):
+                    cutover.simulate_cutover(a,VALID,test_only_mutations=True)
+                self.assertEqual(phase,a.intent)
+                self.assertNotIn("abort_intent",a.calls)
+                self.assertNotIn("restore_tree",a.calls)
+
+    def test_missing_or_invalid_lock_generation_denies_every_cutover(self):
+        for invalid in (None, True, 1, [1, 1], (0, 1), (-1, 1),
+                        (True, 1), (1, "2"), (1, 0), (1, (1 << 63)),
+                        (1,), (1, 2, 3)):
+            with self.subTest(invalid=invalid):
+                a=FakeLifecycle()
+                a.generation=invalid
+                with self.assertRaises(cutover.CutoverRejected):
+                    cutover.simulate_cutover(a,VALID,test_only_mutations=True)
+                self.assertIsNone(a.intent)
+                self.assertNotIn("begin_intent",a.calls)
+        a=FakeLifecycle(fail="lock_generation")
         with self.assertRaises(cutover.CutoverRejected):
             cutover.simulate_cutover(a,VALID,test_only_mutations=True)
         self.assertIsNone(a.intent)
