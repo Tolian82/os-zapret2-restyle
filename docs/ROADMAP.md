@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_21`: real native Voice OFF-only draft persistence via the GUI and audited Config; five service parameters and shared IPSETs persist across GUI reloads/reboots without runtime activation
+- [x] Current candidate `v0.5.1_22`: qualify real OFF-only draft Config persistence after correcting GET/POST HTTP contract in integration regression
+- [ ] Next: live shared-engine Voice Apply and UDP/IPFW activation; no unrelated mock-only backlog
+- [x] Previous candidate `v0.5.1_21`: real native Voice OFF-only draft persistence via the GUI and audited Config; five service parameters and shared IPSETs persist across GUI reloads/reboots without runtime activation
 - [ ] Next: implement the unified real Apply transaction and one-engine live UDP/IPFW generator; replace OFF-only gate with verified ON cutover; test owner OPNsense before shipping
 - [x] Previous candidate `v0.5.1_20`: isolated cross-process flock and native FreeBSD /usr/bin/lockf inherited-FD9 kernel interoperability tests, wired into Voice and package CI
 - [ ] Next: qualify FreeBSD exact-head results, then establish true Config+lifecycle transaction ownership across Config::save()/configd; no native Apply

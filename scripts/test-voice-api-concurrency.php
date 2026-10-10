@@ -180,9 +180,11 @@ namespace {
     equal('0', Zapret::$nodes['voice']['telegram']['enabled'],
         'Voice save must not enable native Telegram');
     equal(0, Config::getInstance()->locks, 'successful save unlocks config');
+    $api->request = new FakeRequest('GET');
     $newLoad = $api->loadAction();
     equal($saved['snapshot'], $newLoad['snapshot'], 'saved snapshot matches loaded Config');
 
+    $api->request = new FakeRequest('POST', $candidate);
     $staleSave = $api->saveDraftAction();
     equal('failed', $staleSave['result'], 'old browser snapshot must reject second write');
     equal(1, Config::getInstance()->saves, 'stale browser cannot overwrite Config');
