@@ -75,6 +75,25 @@ def validate_proof(proof: dict) -> None:
         raise CutoverRejected("IPFW Voice rule/table ownership is inconsistent")
 
 
+def _locks_held(adapter: CutoverAdapter) -> bool:
+    """Only exact True proves both externally owned locks; errors deny."""
+    try:
+        return adapter.locks_held() is True
+    except Exception:
+        return False
+
+
+def _require_locks(adapter: CutoverAdapter) -> None:
+    """Non-authorizing contract: real adapter must retain both locks.
+
+    OPNsense Config.save() releases flock; cached lock status is insufficient.
+    """
+    if not _locks_held(adapter):
+        raise CutoverManualReview(
+            "Voice Config/lifecycle lock ownership lost; durable intent retained"
+        )
+
+
 def simulate_cutover(adapter: CutoverAdapter, proof: dict, *,
                      test_only_mutations: bool = False) -> str:
     """Exercise stage/mutation/rollback order via injected test doubles ONLY.
@@ -86,7 +105,7 @@ def simulate_cutover(adapter: CutoverAdapter, proof: dict, *,
     if not test_only_mutations:
         raise CutoverRejected("Voice cutover is not connected to OPNsense")
     validate_proof(proof)
-    if not adapter.locks_held():
+    if not _locks_held(adapter):
         raise CutoverRejected("native Config and lifecycle locks are required")
     # Neither probe may ever mutate. Verify no foreign or legacy PoC state:
     # the legacy transition must be an explicit separate adoption protocol.
@@ -99,6 +118,8 @@ def simulate_cutover(adapter: CutoverAdapter, proof: dict, *,
     # before allowing any durable intent or mutation.
     adapter.verify_previous(previous)
     adapter.reverify_sources(proof)
+    if not _locks_held(adapter):
+        raise CutoverRejected('Config/lifecycle lock lost during read-only preflight')
     # Durable prepared + mutating intent MUST be fsync'd before first live
     # change. A failure here is an interrupted intent, NOT an implicit abort.
     try:
@@ -107,23 +128,36 @@ def simulate_cutover(adapter: CutoverAdapter, proof: dict, *,
         raise CutoverManualReview(
             "cannot verify persisted prepared Voice intent; no mutation permitted"
         ) from exc
+    _require_locks(adapter)
     try:
         adapter.mark_mutating()
     except Exception as exc:
         raise CutoverManualReview("cannot verify persisted mutating intent") from exc
 
     try:
+        _require_locks(adapter)
         adapter.install_candidate_tree()
+        _require_locks(adapter)
         adapter.stop_previous_engine()
+        _require_locks(adapter)
         adapter.start_candidate_engine()
+        _require_locks(adapter)
         adapter.install_owned_firewall()
+        _require_locks(adapter)
         adapter.start_candidate_supervisor()
+        _require_locks(adapter)
         adapter.verify_candidate()
         # Commit config only after the new engine, IPFW and supervisor pass
         # runtime verification. On failure restore saved previous Config too.
+        _require_locks(adapter)
         adapter.persist_config()
+        _require_locks(adapter)
         adapter.verify_candidate()
     except Exception as original:
+        # Rollback without both locks risks overwriting newer foreign state.
+        if isinstance(original, CutoverManualReview):
+            raise
+        _require_locks(adapter)
         errors = []
         # Reverse EVERY component after an uncertain partial failure. The
         # methods must be idempotent; a failed command could have mutated
@@ -138,14 +172,19 @@ def simulate_cutover(adapter: CutoverAdapter, proof: dict, *,
             lambda: adapter.verify_previous(previous),
         ):
             try:
+                _require_locks(adapter)
                 operation()
+            except CutoverManualReview:
+                raise
             except Exception as error:
                 errors.append(type(error).__name__)
+        _require_locks(adapter)
         if errors:
             raise CutoverManualReview(
                 "Voice cutover failed; rollback incomplete, durable intent retained"
             ) from original
         try:
+            _require_locks(adapter)
             adapter.abort_intent()
         except Exception as exc:
             raise CutoverManualReview(
@@ -157,6 +196,7 @@ def simulate_cutover(adapter: CutoverAdapter, proof: dict, *,
     # be treated as a pre-commit failure. If fsync/rename had already
     # completed before reporting an error, rollback would contradict the
     # durable decision. Leave the intent and require a restart review.
+    _require_locks(adapter)
     try:
         adapter.commit_intent()
     except Exception as exc:
@@ -169,8 +209,12 @@ def simulate_cutover(adapter: CutoverAdapter, proof: dict, *,
     # must be retryable under the same lifecycle lock and never delete foreign
     # state or silently resolve an ambiguous partial transaction.
     try:
+        _require_locks(adapter)
         adapter.cleanup_retired()
+        _require_locks(adapter)
+        _require_locks(adapter)
         adapter.verify_candidate()
+        _require_locks(adapter)
         adapter.finish_intent()
     except Exception as exc:
         raise CutoverManualReview(

@@ -160,6 +160,19 @@ class FakeLifecycle:
         return (self.config,self.runtime,self.firewall,self.engine,self.supervisor)
 
 
+class LockDroppingLifecycle(FakeLifecycle):
+    """Simulate lock loss during mocked stages, including Config.save()."""
+    def __init__(self, release_after, fail=None):
+        super().__init__(fail=fail)
+        self.release_after = release_after
+
+    def _op(self, name, after=False):
+        result = super()._op(name, after)
+        if name == self.release_after:
+            self.locked = False
+        return result
+
+
 class DurableFakeLifecycle(FakeLifecycle):
     """Connect the mock lifecycle to the real fsync/rename journal on disk."""
     PREVIOUS_DIGESTS = {
@@ -333,6 +346,63 @@ class WholeCutoverTests(unittest.TestCase):
                 elif fault in ("commit_intent","cleanup_retired","finish_intent"):
                     self.assertEqual(("new",)*5,a.state())
                     self.assertNotIn("restore_tree",a.calls)
+
+    def test_lock_loss_before_intent_rejects_without_mutation(self):
+        for release_after in ("verify_legacy_absent", "reverify_sources"):
+            with self.subTest(release_after=release_after):
+                a=LockDroppingLifecycle(release_after)
+                with self.assertRaises(cutover.CutoverRejected):
+                    cutover.simulate_cutover(a,VALID,test_only_mutations=True)
+                self.assertEqual(("old",)*5,a.state())
+                self.assertIsNone(a.intent)
+                self.assertNotIn("begin_intent",a.calls)
+
+    def test_loss_after_intent_retains_journal_and_stops_unlocked_work(self):
+        for release_after, phase in (
+            ("begin_intent","prepared"),
+            ("mark_mutating","mutating"),
+            ("install_candidate_tree","mutating"),
+            ("stop_previous_engine","mutating"),
+            ("persist_config","mutating"),
+            ("commit_intent","committed"),
+            ("cleanup_retired","committed"),
+        ):
+            with self.subTest(release_after=release_after):
+                a=LockDroppingLifecycle(release_after)
+                with self.assertRaises(cutover.CutoverManualReview):
+                    cutover.simulate_cutover(a,VALID,test_only_mutations=True)
+                self.assertEqual(phase,a.intent)
+                self.assertNotIn("restore_tree",a.calls)
+                self.assertNotIn("abort_intent",a.calls)
+                if release_after=="persist_config":
+                    self.assertEqual("new",a.config)
+                    self.assertNotIn("commit_intent",a.calls)
+                if release_after=="commit_intent":
+                    self.assertNotIn("cleanup_retired",a.calls)
+                if release_after=="install_candidate_tree":
+                    self.assertNotIn("stop_previous_engine",a.calls)
+
+    def test_loss_during_failure_rollback_stops_unsafe_restore(self):
+        a=LockDroppingLifecycle("restore_config",fail="install_owned_firewall")
+        with self.assertRaisesRegex(cutover.CutoverManualReview,"lock ownership lost"):
+            cutover.simulate_cutover(a,VALID,test_only_mutations=True)
+        self.assertEqual("mutating",a.intent)
+        self.assertIn("restore_config",a.calls)
+        self.assertNotIn("restore_tree",a.calls)
+        self.assertNotIn("abort_intent",a.calls)
+
+    def test_lock_attestation_must_be_exact_boolean_true(self):
+        for proof in (False,None,1,"yes",[],{}):
+            with self.subTest(proof=proof):
+                a=FakeLifecycle()
+                a.locked=proof
+                with self.assertRaises(cutover.CutoverRejected):
+                    cutover.simulate_cutover(a,VALID,test_only_mutations=True)
+                self.assertIsNone(a.intent)
+        a=FakeLifecycle(fail="locks_held")
+        with self.assertRaises(cutover.CutoverRejected):
+            cutover.simulate_cutover(a,VALID,test_only_mutations=True)
+        self.assertIsNone(a.intent)
 
     def test_invalid_proofs_rejected_without_any_adapter_action(self):
         for mutation in [

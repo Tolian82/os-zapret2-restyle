@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_18 — disconnected Voice cutover lock continuity (2026-10-10):** Audited OPNsense core stable/26.7 Config.php: Config::save() explicitly calls flock(LOCK_UN) even when a caller previously invoked Config::lock(). Strengthened ONLY the non-authorizing adapter-injected cutover contract: exact boolean ownership is checked before each journal stage, candidate mutation, rollback operation, commit and cleanup. Lock loss after durable intent stops work and retains the journal for supervised recovery; automatic rollback without lock ownership is forbidden. New injected regressions cover preflight, prepared/mutating, Config save, cleanup, runtime and rollback lock loss. PLUGIN_REVISION=18 (DEV-032). No native adapter, Voice Apply, Telegram PoC retirement or real reboot recovery is enabled. Exact-HEAD CI and FreeBSD package verification remain pending.
+
 **v0.5.1_17 — native FreeBSD 15 kern.proc.args numeric-MIB corrective (2026-10-10):** On exact HEAD fb9831e, FreeBSD job 114083651219 proved that dynamic sysctlbyname("kern.proc.args.<PID>") fails ENOENT/2, whereas sysctlnametomib("kern.proc.args") returns a three-component MIB and numeric sysctl(MIB + PID) reports a 68-byte self-process argv. Corrected the disconnected, read-only kernel argv reader to the supported numeric ABI, retained two bounded reads and exact argv/PID/start checks, and added injected failure regression alongside the genuine native self-process test. PLUGIN_REVISION=17 (DEV-032); exact-source HEAD 87de312062612d314cd9b335de3a671b829be835 passed GitHub Actions CI 38017644559 attempt 2, including genuine FreeBSD 15 native argv smoke and package build. Attempt 1 failed unrelated Strategy Lab timeout mock recovery; unmodified retry passed. No package publication or owner-live acceptance. No Voice Apply, automatic recovery, PoC removal, installed OPNsense changes or media certification.
 
 **v0.5.1_16 — FreeBSD 15 pathname numeric MIB correction (2026-10-10):** Native CI run 38006536188 proved ENOENT (errno=2) from dynamic sysctlbyname("kern.proc.pathname.<PID>"), while sysctlnametomib("kern.proc.pathname") returned an exact three-component prefix and numeric sysctl(prefix + PID) returned a 26-byte self-process pathname length. The disconnected, read-only process security adapter now uses the supported numeric ABI with bounded length/read, strict pathname validation and unchanged PID/start/credential checks. Added injected fault regression, retained actual FreeBSD self-process smoke, removed temporary diagnostic and unnecessary classifier addition. PLUGIN_REVISION=16 per DEV-032; new exact-head Linux/FreeBSD CI remains mandatory. Voice Apply, installed OPNsense, Telegram PoC and network routes unchanged.
@@ -118,13 +120,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_17` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_18` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=17` (**development candidate, not published**);
+- `PLUGIN_REVISION=18` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
