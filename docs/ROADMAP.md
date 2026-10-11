@@ -1,5 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Candidate `v0.5.1_68`: read-only scoped ordinary IPFW rule + native/legacy table inventory integrated with normal-running pre-cutover argv/image baseline, double sample and anti-foreign tests; no kernel writes, no adoption, Voice OFF
+- [ ] Next: on-router FreeBSD 15 live baseline and real guarded five-resource native Voice Apply/rollback, then Telegram UDP media experiment
 - [x] Candidate `v0.5.1_67`: correct dvtws2 false-duplicate classification with full canonical daemon/monitor argument vectors and native regression test; require exact-head CI green
 - [x] Candidate `v0.5.1_66`: correct live preflight unittest method collision to ensure new no-journal FreeBSD process auditing test actually executes; rerun exact-head CI
 - [x] Current candidate `v0.5.1_65`: expose read-only pre-cutover physical FreeBSD baseline through normal FD9-locked `zapret_service.sh` dispatch, with no rollback journal/backup prerequisite, native live argv and kernel image comparison and negative CI tests

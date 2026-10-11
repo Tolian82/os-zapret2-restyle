@@ -186,7 +186,7 @@ jobs:
         run: python3.13 scripts/test-voice-cutover-close.py
       - name: FreeBSD kernel native three-role argv and executable attestation
         run: python3.13 scripts/test-voice-native-kernel-argv.py
-      - name: Live pre-cutover FreeBSD process and kernel argv read-only acceptance
+      - name: Live pre-cutover FreeBSD process, argv and scoped IPFW read-only acceptance
         run: python3.13 scripts/test-voice-native-live-preflight.py
       - name: Voice durable previous engine/supervisor process evidence
         run: python3.13 scripts/test-voice-process-recovery-evidence.py

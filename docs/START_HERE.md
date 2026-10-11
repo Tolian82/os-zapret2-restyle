@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_68 — bounded read-only live IPFW preflight before Voice cutover (2026-10-11):** Extended the `_65`/`_67` normal-running FreeBSD Voice preflight with a new separate `voice_native_live_ipfw.py`, sharing `FreeBSDIPFWAdapter` **strictly read-only**. Under existing FD9 and original Config flock, after exact 3-process and native kernel argv/image readings, observe actual scoped rule interval `19000..19010`: require one or two ordinary TCP/UDP divert rules only, unique protocol, no destination-table Voice rules, consistent WAN interface and a divert port equal to current live pinned `dvtws.args --port=NNNN`. Verify all five native Voice tables and staging tables plus both fixed legacy Telegram PoC table names are absent. Repeat IPFW snapshot after native process scans; fail closed on foreign, incomplete or changing rules, foreign tables, read errors and unexpectedly pre-owned native ledger. Return a SHA of structural evidence only; **no durable IPFW ownership, Config/engine/supervisor readiness, Voice ON, network delivery or Telegram media claim**. Expanded test fixtures with a fake bounded IPFW driver and adversarial/race cases; both ordinary and kernel argv test coverage still run via CI. `PLUGIN_REVISION=68`; `_67` full GitHub CI PASS including FreeBSD 15 package. Next is real read-only OPNsense on-router baseline and subsequent guarded complete five-resource Voice Apply/rollback, then real Telegram UDP audio evidence.
+
 **v0.5.1_67 — fix real FreeBSD supervisor/engine role classification (2026-10-11):** With `_66`'s live preflight tests actually executing, the normal full `daemon` and `monitor` launch commands exposed a production process-classifier mistake: both wrappers legitimately include the absolute `dvtws2` executable as a child argument. The pre-existing token-membership engine selector counted them as duplicate engines and refused a healthy three-role service. Fix `FreeBSDVoiceProcessProbe.observe_processes()` by classifying `daemon` and `monitor` first and explicitly excluding those PIDs from `engine` matches; retain strict uniqueness, native PID/start observations, kernel argv/executable proof, lock and journal fail-closed gates. Add an explicit regression using the exact canonical full supervisor plan and engine command, alongside the new live pre-cutover integration tests. Nothing changes kernel IPFW, Config, TCP/Squid routes, engine state or Voice ON. `PLUGIN_REVISION=67`; `_66` Voice CI found this functional bug, so `_67` exact-head CI must pass before on-router use.
 
 **v0.5.1_66 — fix CLI baseline regression test harness (2026-10-11):** `_65` Voice CI failed before exercising the newly added live preflight: the fixture method `LivePreflightTests.run()` accidentally overrode `unittest.TestCase.run()`, so the test runner called it before fixture setup (`AttributeError: config`). Rename that helper to `audit()` and update all callers. The actual locked live-appliance command introduced by `_65` remains unchanged; test automation must execute all negative/positive cases on the exact `_66` commit before device acceptance. `PLUGIN_REVISION=66`; `_65` Validate Voice CI FAIL due to this fixture bug, not a production FreeBSD runtime measurement.
@@ -240,13 +242,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_67` — Draft PR #328; the real full FreeBSD daemon/monitor argument strings now classify into exactly one engine, daemon and monitor (no false duplicate engine). Next: exact-head CI, native OPNsense running-process baseline capture and guarded actual Voice Apply followed by UDP audio verification.
+**Current handoff identity:** `v0.5.1_68` — Draft PR #328; live FreeBSD Voice pre-cutover diagnostic now inspects actual engine/supervisor argv/images AND scoped ordinary IPFW rule/table footprint, without mutating the firewall or adopting ownership. Next: real OPNsense 26.7.x `native-voice-live-preflight` capture, then guarded complete Apply/rollback and bidirectional Telegram UDP media test.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=67` (**development candidate, not published**);
+- `PLUGIN_REVISION=68` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

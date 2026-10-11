@@ -32,6 +32,8 @@ from voice_restart_argv_attestation import (
 from voice_cutover_journal import VoiceCutoverJournal
 from voice_firewall_ledger import VoiceOwnershipStore
 from voice_cutover_config_restore import _pinned_regular
+from voice_native_live_ipfw import observe_ordinary_ipfw
+from voice_ipfw_adapter import FreeBSDIPFWAdapter
 import voice_ipfw_runtime as native
 
 DIR=os.O_RDONLY|getattr(os,"O_DIRECTORY",0)|getattr(os,"O_NOFOLLOW",0)
@@ -57,6 +59,11 @@ def _current_engine_args(active_runtime):
     fd=os.open(active_runtime,DIR)
     try:
         parent=_owner_dir(fd)
+        root=os.lstat(active_runtime)
+        if not stat.S_ISDIR(root.st_mode) or (
+            root.st_dev,root.st_ino
+        )!=parent:
+            raise LivePreflightError("active Voice runtime path was substituted")
         child=os.open("dvtws.args",READ,dir_fd=fd)
         try:
             before=os.fstat(child)
@@ -110,9 +117,11 @@ def _journals_idle(whole_root,ledger_root):
         owner=VoiceOwnershipStore(ledger)
         if owner.pending() is not None:
             raise LivePreflightError("pending Voice IPFW mutation")
-        # An already-seeded native IPFW owner is NOT proof of current kernel
-        # rules; the read-only preflight makes no kernel ownership claim.
-        owner.owned()
+        # This baseline is only for the ordinary unseeded legacy owner.
+        # An existing native ownership ledger needs the separate sealed
+        # owner+kernel comparison, never an unowned structural inspection.
+        if owner.owned() is not None:
+            raise LivePreflightError("native IPFW ownership requires journal-aware review")
 
 
 def _instances(snapshot):
@@ -139,13 +148,15 @@ def _instances(snapshot):
 
 def inspect_live_preflight(
     *, config_path,active_runtime,whole_root,ledger_root,probe,kernel_reader,
-    config_fd,config_owner,require_lifecycle_owner,
+    ipfw_adapter,config_fd,config_owner,require_lifecycle_owner,
 ):
     """Read-only physical baseline, no predecessor evidence or rollback needed."""
     if not callable(require_lifecycle_owner) or (
         not isinstance(probe,FreeBSDVoiceProcessProbe)
         or probe.expected!=EXPECTED_SCRIPTS or probe.pidfiles!=PIDFILES
         or not isinstance(kernel_reader,FreeBSDKernelArgvReader)
+        or not isinstance(ipfw_adapter,FreeBSDIPFWAdapter)
+        or ipfw_adapter.allow_mutations is not False
     ):
         raise LivePreflightError("untrusted live FreeBSD process source")
     require_lifecycle_owner()
@@ -161,6 +172,7 @@ def inspect_live_preflight(
     }
     first=probe.observe_processes()
     instances=_instances(first)
+    first_ipfw=observe_ordinary_ipfw(ipfw_adapter,expected["engine"])
     for _ in range(2):
         for role in ROLES:
             pid=instances[role]["pid"]
@@ -172,6 +184,9 @@ def inspect_live_preflight(
         _locked_config(Path(config_path),config_fd,config_owner)
         if probe.observe_processes()!=first:
             raise LivePreflightError("live native Voice PID/start changed during audit")
+    second_ipfw=observe_ordinary_ipfw(ipfw_adapter,expected["engine"])
+    if first_ipfw!=second_ipfw:
+        raise LivePreflightError("kernel IPFW changed during pre-cutover audit")
     repeated_sha=_current_engine_args(Path(active_runtime))
     if repeated_sha[1:3]!=(argument_sha,parent_inode) or (
         repeated_sha[3]!=first_arg_inode
@@ -188,7 +203,11 @@ def inspect_live_preflight(
         "active_argument_sha256":argument_sha,
         "argv":"matching-current-runtime",
         "kernel_executable":"matching-fixed-launcher-images",
-        "kernel_ipfw":"not-attested",
+        "kernel_ipfw":"ordinary-structure-only-not-owned",
+        "kernel_ipfw_structure_sha256":first_ipfw["structure_sha256"],
+        "kernel_ipfw_rule_count":first_ipfw["rule_count"],
+        "kernel_ipfw_voice_tables":first_ipfw["voice_tables"],
+        "kernel_ipfw_legacy_table":first_ipfw["legacy_table"],
         "safe_to_enable_voice":False,
         "safe_to_start":False,
         "safe_to_mutate":False,
@@ -211,13 +230,17 @@ def main(argv):
             config_path=native.CONFIG,active_runtime=native.ACTIVE_ROOT,
             whole_root=native.WHOLE,ledger_root=native.LEDGER,
             probe=probe,kernel_reader=FreeBSDKernelArgvReader(),
+            ipfw_adapter=FreeBSDIPFWAdapter(19000,19010),
             config_fd=fd,config_owner=(0,0),
             require_lifecycle_owner=native.require_native_lock,
         )
         print("native-voice-live-preflight="+report["state"])
         print("native-voice-argv="+report["argv"])
         print("native-voice-kernel-image="+report["kernel_executable"])
-        print("native-voice-kernel-ipfw=not-attested")
+        print("native-voice-kernel-ipfw="+report["kernel_ipfw"])
+        print("native-voice-ordinary-rules="+str(report["kernel_ipfw_rule_count"]))
+        print("native-voice-voice-tables="+report["kernel_ipfw_voice_tables"])
+        print("native-voice-legacy-table="+report["kernel_ipfw_legacy_table"])
         print("voice-on=blocked")
         return 0
     except (OSError,ValueError,RuntimeError) as exc:

@@ -7,6 +7,7 @@ import importlib.util
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -21,6 +22,7 @@ from voice_native_kernel_argv import FreeBSDKernelArgvReader,SYSTEM_PATHS
 from voice_native_recovery_quiescence import EXPECTED_SCRIPTS,PIDFILES
 from voice_native_supervisor_launch import canonical_supervisor_argv
 from voice_restart_argv_attestation import FIXED_TRAILER
+from voice_ipfw_adapter import FreeBSDIPFWAdapter
 
 
 def load(path,name):
@@ -32,6 +34,41 @@ def load(path,name):
 
 
 fixtures=load("test-voice-native-process-probe.py","precutover_freebsd_probe_fixture")
+
+
+class FakeReadOnlyIPFW:
+    def __init__(self):
+        self.rules=(
+            "00001 allow ip from any to any\n"
+            "19005 divert 989 tcp from any to any 443 out not diverted not sockarg xmit vtnet1\n"
+            "19006 divert 989 udp from any to any 596 out not diverted not sockarg xmit vtnet1\n"
+            "65535 allow ip from any to any\n"
+        )
+        self.active=set()
+        self.calls=[]
+        self.list_count=0
+        self.fail=False
+
+    def __call__(self,argv,**kwargs):
+        self.calls.append(tuple(argv))
+        assert kwargs["check"] is False
+        assert kwargs["capture_output"] is True
+        assert kwargs["timeout"]==15
+        if self.fail:
+            return subprocess.CompletedProcess(argv,1,stdout="",stderr="Permission denied")
+        args=tuple(argv[1:])
+        if args==("-q","list"):
+            self.list_count+=1
+            return subprocess.CompletedProcess(argv,0,stdout=self.rules,stderr="")
+        if len(args)==3 and args[0]=="table" and args[-1]=="info":
+            if args[1] in self.active:
+                return subprocess.CompletedProcess(argv,0,stdout="table type: addr\n",stderr="")
+            return subprocess.CompletedProcess(
+                argv,69,stdout="",stderr=f"Table {args[1]} does not exist",
+            )
+        if len(args)==3 and args[0]=="table" and args[-1]=="list":
+            return subprocess.CompletedProcess(argv,0,stdout="",stderr="")
+        raise AssertionError("unexpected, possibly mutating IPFW command: "+repr(args))
 
 
 class LivePreflightTests(unittest.TestCase):
@@ -74,6 +111,8 @@ class LivePreflightTests(unittest.TestCase):
                                             in self.pid.items() if val==pid),
         )
         self.lock_calls=[]
+        self.fake_ipfw=FakeReadOnlyIPFW()
+        self.adapter=FreeBSDIPFWAdapter(19000,19010,runner=self.fake_ipfw)
 
     def audit(self,lock=True):
         fd=os.open(self.config,os.O_RDWR)
@@ -84,7 +123,7 @@ class LivePreflightTests(unittest.TestCase):
                 config_path=self.config,active_runtime=self.runtime,
                 whole_root=self.whole,ledger_root=self.ledger,
                 probe=self.probe,kernel_reader=self.kernel,
-                config_fd=fd,config_owner=(os.geteuid(),os.getegid()),
+                ipfw_adapter=self.adapter,config_fd=fd,config_owner=(os.geteuid(),os.getegid()),
                 require_lifecycle_owner=lambda:self.lock_calls.append("FD9"),
             )
         finally:
@@ -98,7 +137,12 @@ class LivePreflightTests(unittest.TestCase):
         self.assertEqual("matching-current-runtime",report["argv"])
         self.assertEqual("matching-fixed-launcher-images",
                          report["kernel_executable"])
-        self.assertEqual("not-attested",report["kernel_ipfw"])
+        self.assertEqual("ordinary-structure-only-not-owned",report["kernel_ipfw"])
+        self.assertEqual(2,report["kernel_ipfw_rule_count"])
+        self.assertEqual("absent",report["kernel_ipfw_voice_tables"])
+        self.assertEqual("absent",report["kernel_ipfw_legacy_table"])
+        self.assertEqual(2,self.fake_ipfw.list_count)
+        self.assertTrue(all(call[1] in ("-q","table") for call in self.fake_ipfw.calls))
         self.assertIs(report["safe_to_enable_voice"],False)
         self.assertIs(report["safe_to_mutate"],False)
         self.assertIs(report["safe_to_start"],False)
@@ -108,6 +152,43 @@ class LivePreflightTests(unittest.TestCase):
         self.assertEqual(before,self.runtime.joinpath("dvtws.args").read_bytes())
         self.assertEqual(3,len(report["instances"]))
         self.assertGreaterEqual(len(self.lock_calls),4)
+
+    def test_ipfw_foreign_rule_number_or_port_and_voice_table_refused(self):
+        original=self.fake_ipfw.rules
+        for mutated in (
+            original.replace("19005 divert","19005 allow"),
+            original.replace("19005 divert 989","19005 divert 988"),
+            original.replace("19005 divert 989 tcp","19005 divert 989 udp"),
+            original.replace("19005 ","19999 ").replace("19006 ","19998 "),
+            original.replace("vtnet1", "igc0",1),
+        ):
+            with self.subTest(mutated=mutated[-90:]):
+                self.fake_ipfw.rules=mutated
+                with self.assertRaises((OSError,ValueError,RuntimeError)):
+                    self.audit()
+        self.fake_ipfw.rules=original
+        for table in ("zapret2_voice_telegram","zapret2_voice_custom_stage",
+                      "zapret2_tgvoice","zapret2_tgvoice_stage"):
+            with self.subTest(table=table):
+                self.fake_ipfw.active.add(table)
+                with self.assertRaises((OSError,ValueError,RuntimeError)):
+                    self.audit()
+                self.fake_ipfw.active.clear()
+        self.fake_ipfw.fail=True
+        with self.assertRaises((OSError,ValueError,RuntimeError)):
+            self.audit()
+
+    def test_ipfw_drift_between_scans_refused(self):
+        original=self.fake_ipfw.__call__
+        def changing(argv,**kwargs):
+            if tuple(argv[1:])==("-q","list") and self.fake_ipfw.list_count>=1:
+                self.fake_ipfw.rules=self.fake_ipfw.rules.replace(
+                    "19006 divert 989 udp", "19006 divert 989 tcp",
+                )
+            return original(argv,**kwargs)
+        self.adapter.runner=changing
+        with self.assertRaises((OSError,ValueError,RuntimeError)):
+            self.audit()
 
     def test_requires_original_config_flock(self):
         with self.assertRaises((ValueError,OSError,RuntimeError)):
