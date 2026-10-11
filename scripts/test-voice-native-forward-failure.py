@@ -376,21 +376,22 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
             self.fx.process,self.fx.backup,EXPECTED_SCRIPTS,
             self.prepared["previous"],
         )["observation"]
-        identities={
-            "engine":old["engine"]["process"],
-            "daemon":old["supervisor"]["daemon"],
-            "monitor":old["supervisor"]["monitor"],
+        original_observation={
+            "engine":{
+                "state":old["engine"]["state"],
+                "process":dict(old["engine"]["process"]),
+            },
+            "supervisor":old["supervisor"],
         }
-        self.stage.pids.update(
-            **{role:row["pid"] for role,row in identities.items()},
-        )
-        self.stage.ps.commands={
-            identities["engine"]["pid"]:" ".join(self.old_engine),
-            identities["daemon"]["pid"]:" ".join(self.supervisor["daemon"]),
-            identities["monitor"]["pid"]:" ".join(self.supervisor["monitor"]),
-        }
+        # The early-STOP guard compares BOTH PID and start_ns. FakePs gives
+        # arbitrary synthetic lstart timestamps unrelated to the original
+        # stored capture. Return the EXACT archived native observation at
+        # this isolated seam instead of fabricating matching kernel times.
         self.simulate_native_seal=True
         with patch.object(
+            self.stage.probe,"observe_processes",
+            return_value=original_observation,
+        ), patch.object(
             forward,"seal_previous_completion",
             side_effect=AssertionError("original epochs cannot seal rollback"),
         ):
