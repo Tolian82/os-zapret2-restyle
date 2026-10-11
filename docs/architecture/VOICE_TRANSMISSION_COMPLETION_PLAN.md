@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**v0.5.1_93 (2026-10-11):** Implemented a **private COMMITTED-only same-FD postcommit replay** in `voice_native_forward_apply.py`: after durable whole COMMIT, a crash before/within IPFW ownership/table cleanup can be retried with full double native Config/runtime/process/kernel and redo attestation; the original pending old→desired IPFW ledger is verified even when ownership has already switched. Reuses `voice_ipfw_runtime.commit_verified` only; no new process, Config/runtime mutation, or rollback of COMMITTED. Completed IPFW replay is idempotent/read-only. Added real Config/runtime/ledger and simulated native IPFW/power-loss regressions (after whole COMMIT and after owner switch) and negative guards. **Stage 2 still OPEN:** remaining crash boundaries, lifecycle wiring and real OPNsense acceptance; no GUI ON, public service hook, package release or Telegram MEDIA_PASS.
+
+
 **v0.5.1_92 (2026-10-11):** Added a second real-filesystem/simulated-native-IPFW POWER-CUT regression for Stage-2 five-resource rollback: interrupt the PREVIOUS runtime restore after candidate-active→restore-retired but before restore-ready(previous)→active, after IPFW has already been reverted and journal stays MUTATING. On retry with the same immutable old/forward/restore redo, the normal previous runtime redo MUST take precedence over `_90`'s missing-active forward repair, restore old Config/runtime, then restart previous engine and supervisor. Tests assert no premature restart or journal clearing after the first crash and exact five-domain recovery after retry. No production executor changes in this revision; private GUI/boot and real appliance qualification still pending.
 
 
