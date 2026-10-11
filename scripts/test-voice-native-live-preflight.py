@@ -75,7 +75,7 @@ class LivePreflightTests(unittest.TestCase):
         )
         self.lock_calls=[]
 
-    def run(self,lock=True):
+    def audit(self,lock=True):
         fd=os.open(self.config,os.O_RDWR)
         try:
             if lock:
@@ -92,7 +92,7 @@ class LivePreflightTests(unittest.TestCase):
 
     def test_live_pre_cutover_observation_needs_no_previous_backup(self):
         before=self.runtime.joinpath("dvtws.args").read_bytes()
-        report=self.run()
+        report=self.audit()
         self.assertEqual("live-legacy-process-argv-observed-not-readiness",
                          report["state"])
         self.assertEqual("matching-current-runtime",report["argv"])
@@ -111,7 +111,7 @@ class LivePreflightTests(unittest.TestCase):
 
     def test_requires_original_config_flock(self):
         with self.assertRaises((ValueError,OSError,RuntimeError)):
-            self.run(lock=False)
+            self.audit(lock=False)
         self.assertFalse(self.whole.exists())
 
     def test_kernel_argv_and_executable_mismatch_are_refused(self):
@@ -120,47 +120,47 @@ class LivePreflightTests(unittest.TestCase):
                 original=self.argv[role]
                 self.argv[role]=original[:-1]+b"--foreign\x00"
                 with self.assertRaises((ValueError,OSError,RuntimeError)):
-                    self.run()
+                    self.audit()
                 self.argv[role]=original
                 image=self.image[role]
                 self.image[role]=b"/bin/untrusted\x00"
                 with self.assertRaises((ValueError,OSError,RuntimeError)):
-                    self.run()
+                    self.audit()
                 self.image[role]=image
 
     def test_incomplete_kernel_argv_and_binary_output_are_refused(self):
         value=self.argv["engine"]
         self.argv["engine"]=value[:-1]
         with self.assertRaises((ValueError,OSError,RuntimeError)):
-            self.run()
+            self.audit()
         self.argv["engine"]=value
         value=self.image["daemon"]
         self.image["daemon"]=b"/usr/sbin/daemon"
         with self.assertRaises((ValueError,OSError,RuntimeError)):
-            self.run()
+            self.audit()
         self.image["daemon"]=value
 
     def test_original_runtime_args_changed_or_symlink_is_denied(self):
         file=self.runtime/"dvtws.args"
         file.write_text("--port=989 --user=nobody\n")
         with self.assertRaises((ValueError,OSError,RuntimeError)):
-            self.run()
+            self.audit()
         file.unlink()
         file.symlink_to(self.config)
         with self.assertRaises((ValueError,OSError,RuntimeError)):
-            self.run()
+            self.audit()
 
     def test_orphan_stale_journal_blocks_without_mutation(self):
         self.whole.mkdir(mode=0o700)
         (self.whole/"previous-close-intent.json").write_text("stale")
         with self.assertRaises((ValueError,OSError,RuntimeError)):
-            self.run()
+            self.audit()
         self.assertTrue((self.whole/"previous-close-intent.json").exists())
 
     def test_partial_or_extra_processes_refused(self):
         self.probe._read_pid=lambda p:None
         with self.assertRaises((ValueError,OSError,RuntimeError)):
-            self.run()
+            self.audit()
         self.probe._read_pid=lambda p:next(
             self.pid[k] for k,v in PIDFILES.items() if v==p
         )
@@ -168,7 +168,7 @@ class LivePreflightTests(unittest.TestCase):
             **self.commands,104:self.commands[101],
         })
         with self.assertRaises((ValueError,OSError,RuntimeError)):
-            self.run()
+            self.audit()
 
     def test_process_epoch_race_refused(self):
         original=self.probe.reader
@@ -183,12 +183,12 @@ class LivePreflightTests(unittest.TestCase):
             return text
         self.probe.reader=update
         with self.assertRaises((ValueError,OSError,RuntimeError)):
-            self.run()
+            self.audit()
 
     def test_safely_denies_foreign_writeable_root_and_changed_inode(self):
         self.runtime.chmod(0o777)
         with self.assertRaises((ValueError,OSError,RuntimeError)):
-            self.run()
+            self.audit()
         self.runtime.chmod(0o755)
         old=_current_engine_args(self.runtime)
         self.assertEqual("--port=989",old[0][1])
