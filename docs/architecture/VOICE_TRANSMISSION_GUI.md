@@ -1,5 +1,8 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+**v0.5.1_100 (2026-10-11):** Fixed the final isolated `_99` previous-PID negative test fixture: it now injects the exact archive-bound pre-STOP `PID/start_ns` observation via the already simulated FreeBSD native process-reader seam, instead of asking `FakePs` to invent an unrelated process start epoch. This directly proves a still-running original pre-cutover process is NOT a completed rollback and cannot obtain a previous-restart receipt or ROLLED_BACK. Production behavior unchanged from `_97`; `_98` post-restart positive seal PASSED; `_99` Voice negative failed solely at mismatched simulated start epochs. `_100` exact-head CI required. No published candidate or service/GUI/boot enablement.
+
+
 **v0.5.1_99 (2026-10-11):** Corrected two **test-only** faults in the `_98` post-restart crash replay qualification: the top-level private Voice executor deliberately converts lower-level safety denials into a stable manual-review exception (tests now verify BOTH wrapper and original chained cause), and the pre-STOP guard fixture now uses exact sealed pre-cutover PID/start evidence instead of hard-coded unrelated PIDs. The positive previous-process-restart without duplicate stop/with locked terminal seal test ALREADY PASSED at `_98`; production code and fail-closed policy unchanged. `_99` exact-head full CI required. Package unpublished, no Voice ON or router installation.
 
 
