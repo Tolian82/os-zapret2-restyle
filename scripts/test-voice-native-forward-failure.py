@@ -504,6 +504,67 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         self.assertIsNotNone(self.fx.ipfw.pending())
         self.assertEqual(self.config.read_bytes(),self.previous.candidate)
 
+    def test_candidate_full_process_swap_before_actuator_refuses_stop(self):
+        # Upper coordinator observed sealed candidate 201/202/203, then
+        # daemon restarts exactly at handoff into the lower rollback stage.
+        # It must not call the no-PID stop helper against a NEW process.
+        import voice_native_forward_apply as forward
+        original=forward.restore_previous_five_resources
+        def raced(**kwargs):
+            self.stage.pids["daemon"]=222
+            self.stage.ps.commands.pop(202,None)
+            self.stage.ps.commands[222]=" ".join(self.supervisor["daemon"])
+            return original(**kwargs)
+        with patch.object(
+            forward,"restore_previous_five_resources",side_effect=raced,
+        ):
+            with self.assertRaisesRegex(
+                NativeForwardApplyError,
+                "interrupted MUTATING Voice recovery refused",
+            ) as denied:
+                self.resume_mutating_via_executor()
+        self.assertIn(
+            "candidate process PID/start changed before native stop",
+            str(denied.exception.__cause__),
+        )
+        self.assertEqual(self.operations,[])
+        self.assertEqual(self.fx.whole.read(),self.prepared)
+        self.assertIsNotNone(self.fx.ipfw.pending())
+        self.assertEqual(self.config.read_bytes(),self.previous.candidate)
+
+    def test_partial_supervisor_topology_matrix_blocks_all_actions(self):
+        # A supervisor can fail between daemon and monitor launch, lose a
+        # pidfile, or leave an orphan. Never "adopt" any partial topology
+        # as engine-only, and never mutate Config/IPFW/processes.
+        cases={
+            "engine-plus-daemon": ({"monitor":None},(203,)),
+            "engine-plus-monitor": ({"daemon":None},(202,)),
+            "daemon-and-monitor-no-engine": ({"engine":None},(201,)),
+            "orphan-daemon": ({"daemon":None},()),
+            "orphan-monitor": ({"monitor":None},()),
+            "duplicate-supervisor-pid": ({"monitor":202},(203,)),
+        }
+        original_pids=dict(self.stage.pids)
+        original_ps=dict(self.stage.ps.commands)
+        for name,(updates,removes) in cases.items():
+            with self.subTest(name=name):
+                self.stage.pids.update(original_pids)
+                self.stage.pids.update(updates)
+                self.stage.ps.commands=dict(original_ps)
+                for pid in removes:
+                    self.stage.ps.commands.pop(pid,None)
+                with self.assertRaisesRegex(
+                    NativeForwardApplyError,
+                    "interrupted MUTATING Voice recovery refused",
+                ):
+                    self.resume_mutating_via_executor()
+                self.assertEqual(self.operations,[])
+                self.assertEqual(self.fx.whole.read(),self.prepared)
+                self.assertIsNotNone(self.fx.ipfw.pending())
+                self.assertEqual(self.config.read_bytes(),self.previous.candidate)
+        self.stage.pids.update(original_pids)
+        self.stage.ps.commands=dict(original_ps)
+
     def test_partial_supervisor_remains_blocked_not_killed(self):
         self.stage.pids.update(monitor=None)
         self.stage.ps.commands.pop(203,None)

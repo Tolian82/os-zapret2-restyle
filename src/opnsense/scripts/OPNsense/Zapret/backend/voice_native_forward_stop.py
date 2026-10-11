@@ -179,7 +179,10 @@ def stop_previous_and_install_forward_runtime(
     ):
         raise ForwardStopError("mutating Voice journal not durably confirmed")
 
-    result=actions.stop_candidate()
+    result=actions.stop_candidate(
+        expected_instances=before,kernel_reader=kernel_reader,
+        expected_argv=expected,
+    )
     if result!="stopped":
         raise ForwardStopError("old Voice service was not stopped by native actuator")
     owner()

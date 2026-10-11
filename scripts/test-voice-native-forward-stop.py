@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"))
@@ -207,6 +208,34 @@ class NativeForwardStopTests(unittest.TestCase):
             self.call()
         self.assertEqual("prepared",self.fx.whole.read()["phase"])
         self.assertFalse(self.calls)
+
+    def test_epoch_swap_after_mutating_mark_refuses_native_stop(self):
+        # Preflight verified original PID/start; a process replacement AFTER
+        # mark_mutating but BEFORE actuator must not be killed by pathname.
+        original=self.fx.whole.mark_mutating
+        def swap():
+            original()
+            self.state["engine"]["process"]["start_ns"]+=1000000000
+        with patch.object(self.fx.whole,"mark_mutating",side_effect=swap):
+            with self.assertRaises((RuntimeError,ValueError,OSError)):
+                self.call()
+        self.assertEqual(self.calls,[])
+        self.assertEqual("mutating",self.fx.whole.read()["phase"])
+        self.assertTrue(self.old_is_active())
+
+    def test_binary_swap_after_mutating_mark_refuses_native_stop(self):
+        # Kernel image can change after upper attestation while pidfile and
+        # ps snapshots still look identical; the pinned actuator re-reads it.
+        original=self.fx.whole.mark_mutating
+        def swap():
+            original()
+            self.pathbytes["daemon"]=b"/bin/foreign\\0"
+        with patch.object(self.fx.whole,"mark_mutating",side_effect=swap):
+            with self.assertRaises((RuntimeError,ValueError,OSError)):
+                self.call()
+        self.assertEqual(self.calls,[])
+        self.assertEqual("mutating",self.fx.whole.read()["phase"])
+        self.assertTrue(self.old_is_active())
 
     def test_fail_stop_after_mutating_remains_blocked_for_recovery(self):
         self.fail_stop=True

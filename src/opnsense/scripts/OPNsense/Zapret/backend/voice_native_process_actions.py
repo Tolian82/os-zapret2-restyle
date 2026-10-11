@@ -32,7 +32,9 @@ from voice_cutover_journal import SECURITY_BOUND_SCHEMA, RUNTIME_BOUND_SCHEMA
 from voice_security_policy_evidence import (inspect_security_policy,
     SUPERVISOR_BOUND_POLICY_SCHEMA)
 from voice_native_restart_integrity import attest_previous_restart
-from voice_native_kernel_argv import FreeBSDKernelArgvReader, SYSTEM_PATHS
+from voice_native_kernel_argv import (
+    FreeBSDKernelArgvReader, SYSTEM_PATHS, ROLE_NAMES, _live_instances,
+)
 
 
 SHELL = "/bin/sh"
@@ -161,14 +163,59 @@ class FreeBSDVoiceProcessActions:
                 "Voice journal changed during native process action"
             )
 
-    def stop_candidate(self) -> str:
+    def stop_candidate(self, *, expected_instances=None, kernel_reader=None,
+                       expected_argv=None) -> str:
+        """Pin ALL three PID/start epochs + actual FreeBSD kernel argv/image.
+
+        Forward Apply and its same-FD failed-forward rollback supply the
+        exact full topology observed before this action. The native actuator
+        must independently resample it IMMEDIATELY before the fixed stop
+        command. Legacy manual callers with no pinned proof keep their
+        existing independent process-ownership checks; mixed/partial proof
+        is never accepted.
+        """
+        pinned = expected_instances is not None or kernel_reader is not None or (
+            expected_argv is not None
+        )
+        if pinned and (
+            not isinstance(kernel_reader, FreeBSDKernelArgvReader)
+            or not isinstance(expected_instances, dict)
+            or set(expected_instances) != set(ROLE_NAMES)
+            or not isinstance(expected_argv, dict)
+            or set(expected_argv) != set(ROLE_NAMES)
+        ):
+            raise NativeVoiceProcessActionError(
+                "incomplete candidate three-role stop proof"
+            )
         initial = self._gate()
         before = self._sample()
         if before["engine"]["state"] == "stopped":
+            if pinned:
+                raise NativeVoiceProcessActionError(
+                    "candidate stopped before pinned stop"
+                )
             return "already-stopped"
         if before["engine"]["state"] != "running" or \
            before["supervisor"]["state"] != "running":
             raise NativeVoiceProcessActionError("ambiguous candidate process ownership")
+        if pinned:
+            running = _live_instances(before)
+            if running != expected_instances:
+                raise NativeVoiceProcessActionError(
+                    "candidate process PID/start changed before native stop"
+                )
+            for role in ROLE_NAMES:
+                pid = running[role]["pid"]
+                if kernel_reader.argv(pid) != expected_argv[role] or (
+                    kernel_reader.binary(pid) != SYSTEM_PATHS[role]
+                ):
+                    raise NativeVoiceProcessActionError(
+                        "candidate FreeBSD kernel argv/image changed before native stop"
+                    )
+            if self._gate() != initial or self._sample() != before:
+                raise NativeVoiceProcessActionError(
+                    "candidate process or Voice intent raced before stop"
+                )
         self._run("stop", initial)
         after = self._sample()
         if after["engine"]["state"] != "stopped" or \

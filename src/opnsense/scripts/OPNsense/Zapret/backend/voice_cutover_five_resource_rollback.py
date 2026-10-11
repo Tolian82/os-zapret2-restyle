@@ -89,6 +89,7 @@ def restore_previous_five_resources(
     start_previous: Callable[[], None] | None = None,
     require_lifecycle_owner: Callable[[], None],
     process_actions_factory: Callable[[int], FreeBSDVoiceProcessActions] | None = None,
+    expected_candidate_stop_proof: dict | None = None,
     seal_previous: Callable[[int], dict] | None = None,
     locked_config_fd: int | None = None,
 ) -> dict:
@@ -113,6 +114,16 @@ def restore_previous_five_resources(
     ):
         raise FiveResourceRollbackError(
             "exclusive native process actuator or injected test callbacks required"
+        )
+    if expected_candidate_stop_proof is not None and (
+        process_actions_factory is None
+        or not isinstance(expected_candidate_stop_proof, dict)
+        or set(expected_candidate_stop_proof) != {
+            "expected_instances", "kernel_reader", "expected_argv",
+        }
+    ):
+        raise FiveResourceRollbackError(
+            "pinned native candidate stop needs bound process actuator"
         )
     if type(expected_owner) is not tuple or len(expected_owner) != 2 or \
        any(type(v) is not int or v < 0 for v in expected_owner):
@@ -204,7 +215,12 @@ def restore_previous_five_resources(
                 raise FiveResourceRollbackError(
                     "foreign/misbound native process actuator"
                 )
-            stop_candidate = actuator.stop_candidate
+            stop_candidate = (
+                actuator.stop_candidate if expected_candidate_stop_proof is None
+                else lambda: actuator.stop_candidate(
+                    **expected_candidate_stop_proof
+                )
+            )
             start_previous = actuator.start_previous
 
         # Stop precisely the candidate one-engine topology, including both

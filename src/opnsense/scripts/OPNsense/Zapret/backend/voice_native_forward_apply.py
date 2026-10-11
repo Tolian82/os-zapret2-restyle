@@ -586,6 +586,7 @@ def rollback_failed_precommit_voice_apply(
                 "requires_owner_acceptance": True,
             }
 
+    candidate_stop_proof = None
     if a["engine"]["state"] == "stopped" and (
         a["supervisor"]["state"] == "stopped"
     ):
@@ -610,6 +611,16 @@ def rollback_failed_precommit_voice_apply(
                 raise NativeForwardApplyError("foreign candidate kernel argv/image before stop")
         if probe.observe_processes() != a:
             raise NativeForwardApplyError("candidate process PID/start changed before stop")
+        # Pass the pinned exact native inventory all the way into the
+        # independently gated shell actuator, not just its upper preflight.
+        candidate_stop_proof = {
+            "expected_instances": instances,
+            "kernel_reader": kernel_reader,
+            "expected_argv": {
+                "engine": argv,
+                **canonical_supervisor_argv(EXPECTED_SCRIPTS),
+            },
+        }
     # Borrow the existing Config FD. Do not create a new process actuator,
     # do not take a second flock, and never pass test callbacks into the
     # real recovery executor. All runtime/kernel/file mutations are delegated
@@ -628,6 +639,7 @@ def rollback_failed_precommit_voice_apply(
         write_ipfw_adapter=write_adapter,
         require_lifecycle_owner=require_lifecycle_owner,
         process_actions_factory=lambda borrowed: actions if borrowed == config_fd else None,
+        expected_candidate_stop_proof=candidate_stop_proof,
         locked_config_fd=config_fd,
         seal_previous=seal,
     )
