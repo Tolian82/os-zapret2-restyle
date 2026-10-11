@@ -81,7 +81,7 @@ def attest_forward_five_resources(
     config_owner, staged_config, candidate_runtime, active_runtime,
     desired_manifest, probe, kernel_reader, read_adapter,
     require_lifecycle_owner, expected_phase="mutating",
-    ipfw_committed=False,
+    ipfw_committed=False, postcommit_pending=False,
 ):
     """Independently witness five real candidate domains under BOTH locks.
 
@@ -92,8 +92,8 @@ def attest_forward_five_resources(
     desired ownership instead of the now-absent IPFW pending intent.
     """
     if expected_phase not in ("mutating", "committed") or (
-        ipfw_committed and expected_phase != "committed"
-    ):
+        (ipfw_committed or postcommit_pending) and expected_phase != "committed"
+    ) or (ipfw_committed and postcommit_pending):
         raise NativeForwardApplyError("invalid forward attestation phase")
     _authorities(
         journal=journal, ledger=ledger, probe=probe,
@@ -181,6 +181,24 @@ def attest_forward_five_resources(
             if pending is not None or canonical_manifest(old_owner) != desired:
                 raise NativeForwardApplyError("postcommit IPFW owner is not desired")
             verify_prior_state(read_adapter, desired_manifest, desired_manifest)
+        elif postcommit_pending:
+            # COMMITTED is irreversible. IPFW ownership may already have
+            # switched to desired when power was interrupted. Admit only
+            # the original sealed prior->desired ledger under full proof.
+            if old_owner is None or pending is None or (
+                pending["phase"] != "mutating"
+                or pending["previous_sha256"] != record["previous"]["firewall"]
+                or pending["desired_sha256"] != wanted_sha
+                or pending["desired"] != desired
+                or canonical_manifest(old_owner) not in (
+                    pending["previous"], desired
+                )
+            ):
+                raise NativeForwardApplyError("foreign committed IPFW redo/owner")
+            plan_postcommit_cleanup(
+                read_adapter, decode_manifest(pending["previous"]),
+                desired_manifest,
+            )
         else:
             if old_owner is None or pending is None or (
                 fingerprint(canonical_manifest(old_owner)) != record["previous"]["firewall"]
@@ -252,20 +270,61 @@ def commit_forward_voice_apply(
         or committed["candidate"] != before[0]["candidate"]
     ):
         raise NativeForwardApplyError("whole durable COMMIT not sealed")
-    attest_forward_five_resources(**shared, expected_phase="committed")
-    result = commit_verified(
-        ledger, write_adapter, journal,
-        {"native_argv_sha256": committed["candidate"]["native_argv_sha256"]},
+    return resume_committed_forward_voice_apply(
+        **shared, write_adapter=write_adapter,
     )
-    if result != "committed":
-        raise NativeForwardApplyError("IPFW ownership not committed")
+
+
+def resume_committed_forward_voice_apply(
+    *, journal, ledger, previous_backup, config_path, config_fd,
+    config_owner, staged_config, candidate_runtime, active_runtime,
+    desired_manifest, probe, kernel_reader, read_adapter, write_adapter,
+    require_lifecycle_owner,
+):
+    """Resume COMMITTED-only IPFW cleanup, under original FD9 and Config flock.
+
+    PRIVATE imported helper, never a boot/GUI/service entrypoint. It does
+    not stop/restart engines, write XML or change runtime. Only the existing
+    commit_verified actuator can mutate IPFW after full five-domain proof.
+    """
+    _authorities(
+        journal=journal, ledger=ledger, probe=probe, kernel_reader=kernel_reader,
+        read_adapter=read_adapter, write_adapter=write_adapter,
+        previous_backup=previous_backup,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    shared = dict(
+        journal=journal, ledger=ledger, previous_backup=previous_backup,
+        config_path=config_path, config_fd=config_fd, config_owner=config_owner,
+        staged_config=staged_config, candidate_runtime=candidate_runtime,
+        active_runtime=active_runtime, desired_manifest=desired_manifest,
+        probe=probe, kernel_reader=kernel_reader, read_adapter=read_adapter,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    committed = journal.read()
+    if committed is None or committed["schema"] != RUNTIME_BOUND_SCHEMA or (
+        committed["phase"] != "committed"
+    ):
+        raise NativeForwardApplyError("postcommit replay requires schema-4 COMMITTED")
+    pending = ledger.pending()
+    if pending is not None:
+        before = attest_forward_five_resources(
+            **shared, expected_phase="committed", postcommit_pending=True,
+        )
+        if journal.read() != before[0] or ledger.pending() != before[5]:
+            raise NativeForwardApplyError("postcommit replay evidence raced")
+        result = commit_verified(
+            ledger, write_adapter, journal,
+            {"native_argv_sha256": committed["candidate"]["native_argv_sha256"]},
+        )
+        if result != "committed":
+            raise NativeForwardApplyError("IPFW postcommit replay incomplete")
     post = attest_forward_five_resources(
         **shared, expected_phase="committed", ipfw_committed=True,
     )
     if post[0] != committed:
-        raise NativeForwardApplyError("whole journal changed after IPFW COMMIT")
-    # Previous snapshot/runtime/redos/whole journal deliberately retained:
-    # postcommit archival/cleanup, service/boot ownership need separate gates.
+        raise NativeForwardApplyError("whole journal changed during postcommit replay")
+    # Previous snapshot/runtime/redos and whole journal remain for cleanup.
     return {
         "state": "native-forward-five-resources-committed",
         "whole_phase": "committed",

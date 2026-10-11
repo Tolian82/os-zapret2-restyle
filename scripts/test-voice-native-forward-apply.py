@@ -124,6 +124,71 @@ class NativeForwardCommitTests(unittest.TestCase):
         self.assertEqual("mutating", self.fx.whole.read()["phase"])
 
 
+    def replay(self, *, lock=True):
+        fd = os.open(self.config, os.O_RDWR)
+        try:
+            if lock:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return forward.resume_committed_forward_voice_apply(
+                journal=self.fx.whole, ledger=self.fx.ipfw,
+                previous_backup=self.fx.backup,
+                config_path=self.config, config_fd=fd,
+                config_owner=(os.geteuid(), os.getegid()),
+                staged_config=self.fx.stage_config,
+                candidate_runtime=self.fx.candidate,
+                active_runtime=self.fx.root / "runtime",
+                desired_manifest=self.parent.stage.parent.desired,
+                probe=self.parent.stage.probe,
+                kernel_reader=self.parent.stage.kernel,
+                read_adapter=self.parent.stage.parent.read,
+                write_adapter=self.parent.stage.parent.write,
+                require_lifecycle_owner=lambda: None,
+            )
+        finally:
+            os.close(fd)
+
+    def test_power_cut_after_whole_commit_recovers_ipfw(self):
+        self.fx.whole.commit()
+        result = self.replay()
+        self.assertEqual(result["state"], "native-forward-five-resources-committed")
+        self.assertEqual(self.fx.ipfw.owned(), self.parent.stage.parent.desired)
+        self.assertIsNone(self.fx.ipfw.pending())
+        self.assertEqual(self.config.read_bytes(), self.parent.candidate)
+        self.assertEqual(self.fx.whole.read()["phase"], "committed")
+
+    def test_power_cut_after_ipfw_ownership_switch_recovers_cleanup(self):
+        self.fx.whole.commit()
+        self.fx.ipfw.commit(self.parent.stage.parent.desired)
+        self.assertIsNotNone(self.fx.ipfw.pending())
+        result = self.replay()
+        self.assertEqual(result["state"], "native-forward-five-resources-committed")
+        self.assertIsNone(self.fx.ipfw.pending())
+
+    def test_postcommit_replay_after_finish_is_read_only(self):
+        self.call()
+        with patch.object(forward, "commit_verified",
+                          side_effect=AssertionError("no IPFW mutation permitted")):
+            result = self.replay()
+        self.assertEqual(result["state"], "native-forward-five-resources-committed")
+
+    def test_postcommit_replay_refuses_prepared_and_missing_flock(self):
+        with self.assertRaisesRegex(forward.NativeForwardApplyError, "COMMITTED"):
+            self.replay()
+        self.fx.whole.commit()
+        with self.assertRaises((RuntimeError, OSError, ValueError)):
+            self.replay(lock=False)
+        self.assertEqual(self.fx.ipfw.pending(), self.precommit)
+
+    def test_postcommit_replay_rejects_foreign_engine_before_ipfw(self):
+        self.fx.whole.commit()
+        self.parent.stage.binary[202] = "/bin/foreign"
+        with patch.object(forward, "commit_verified",
+                          side_effect=AssertionError("IPFW mutation forbidden")):
+            with self.assertRaises((RuntimeError, OSError, ValueError)):
+                self.replay()
+        self.assertEqual(self.fx.ipfw.pending(), self.precommit)
+
+
 class NativeForwardOneLockSequenceTests(unittest.TestCase):
     def setUp(self):
         self.parent = stop_fixture.NativeForwardStopTests()
