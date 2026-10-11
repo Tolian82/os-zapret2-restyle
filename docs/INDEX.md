@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Engineering memory index
 
+**v0.5.1_95 (2026-10-11):** Stage-2 PRIVATE same-FD native Voice executor now handles a retried schema-4 **MUTATING** journal by delegating exclusively to the EXISTING independently attested five-resource previous rollback, under its original FD9 and continuously held Config inode/flock. It does **not** repeat candidate forward stages after a power cut; full candidate or trusted engine-only may recover, but a foreign process/kernel, partial supervisor, missing ownership, or altered immutable evidence remains fail-closed and retains journal. Two real filesystem + simulated kernel/IPFW regression cases cover successful late-candidate rollback through the original executor and refusal on a foreign executable. `_94` Voice CI/FreeBSD 15 PASS, general Project CI FAIL only at stale exact ROADMAP candidate identity; current handoff/release identity is synchronized in this revision. **No production GUI/service/boot wiring or owner-live/media verification; package candidate is NOT published.** Exact-head `_95` CI pending.
+
+
 **v0.5.1_94 (2026-10-11):** Private Stage-2 native five-resource executor now handles direct COMMITTED retry after power failure through its existing same-FD Config lock; only verified IPFW postcommit operations may proceed, never another engine/Config/runtime switch. Added filesystem/ledger/native-kernel-simulated crash regression for an already removed staging table, successful retry, foreign table and foreign desired manifest refusal. Release candidate remains unpublished, public Voice ON/boot not wired, OPNsense live and Telegram media unverified. Exact-head CI pending.
 
 
