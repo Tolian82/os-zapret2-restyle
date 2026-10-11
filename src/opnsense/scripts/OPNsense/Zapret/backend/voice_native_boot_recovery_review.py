@@ -25,6 +25,7 @@ from voice_cutover_cleanup_prepare import read_cleanup_plan
 from voice_cutover_reclaim import read_reclaim_intent, inspect_reclaim_placement
 from voice_cutover_prune import read_prune_intent
 from voice_cutover_root_release import read_root_release_intent
+from voice_cutover_finalization import read_finalization_proof, inspect_finalization_proof
 from voice_cutover_runtime_restore import _read_redo
 from voice_cutover_config_restore import _pinned_regular
 from voice_native_file_observer import _hash_file, observe_live_files
@@ -75,7 +76,9 @@ def inspect_boot_recovery(
     if record is None:
         if read_reclaim_intent(journal.directory) is not None or (
             read_prune_intent(journal.directory) is not None
-        ) or read_root_release_intent(journal.directory) is not None:
+        ) or read_root_release_intent(journal.directory) is not None or (
+            read_finalization_proof(journal.directory) is not None
+        ):
             return _state("blocked",reason="orphan-rollback-reclaim-intent")
         if pending is not None:
             return _state("blocked", reason="orphan-ipfw-intent")
@@ -84,7 +87,8 @@ def inspect_boot_recovery(
         record["schema"] != RUNTIME_BOUND_SCHEMA
     ):
         if read_prune_intent(journal.directory) is not None or (
-            read_root_release_intent(journal.directory) is not None
+            read_root_release_intent(journal.directory) is not None or
+            read_finalization_proof(journal.directory) is not None
         ):
             raise BootReviewError("reclaim records cannot belong to nonterminal Voice cutover")
         return _state("blocked", reason="no-schema4-recoverable-cutover",
@@ -239,13 +243,25 @@ def inspect_boot_recovery(
         )
     else:
         if read_reclaim_intent(journal.directory) is not None or (
-            read_root_release_intent(journal.directory) is not None
+            read_root_release_intent(journal.directory) is not None or
+            read_finalization_proof(journal.directory) is not None
         ):
             raise BootReviewError("reclaim intent cannot precede terminal rollback")
         reclaim_location="not-applicable"
     reclaim_before=read_reclaim_intent(journal.directory)
     prune_before=read_prune_intent(journal.directory)
     release_before=read_root_release_intent(journal.directory)
+    finalization_before=read_finalization_proof(journal.directory)
+    if finalization_before is not None:
+        if reclaim_location!="candidate-root-released-awaiting-finalization" or (
+            inspect_finalization_proof(
+                journal=journal,config_path=Path(config_path),
+                active_runtime=Path(active_runtime),
+            )!="sealed-awaiting-owner-acceptance"
+        ):
+            raise BootReviewError("unbound or premature Voice finalization")
+    finalization_state=("sealed-awaiting-owner-acceptance"
+                        if finalization_before is not None else "absent")
 
     first=probe.probe()
     second=probe.probe()
@@ -302,6 +318,7 @@ def inspect_boot_recovery(
         or read_reclaim_intent(journal.directory)!=reclaim_before
         or read_prune_intent(journal.directory)!=prune_before
         or read_root_release_intent(journal.directory)!=release_before
+        or read_finalization_proof(journal.directory)!=finalization_before
     ):
         raise BootReviewError("Voice redo changed during boot review")
     # This is intentionally NOT a readiness report. Even a complete-looking
@@ -319,6 +336,7 @@ def inspect_boot_recovery(
         previous_receipt=receipt_state,
         cleanup_plan="prepared-only" if cleanup else "absent",
         candidate_reclaim=reclaim_location,
+        previous_finalization=finalization_state,
         candidate_runtime_sha256=candidate_sha,
     )
 
