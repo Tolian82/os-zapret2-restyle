@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_53 — durable, non-destructive previous-five-resource cleanup PREPARE under both locks (2026-10-11):** Added `voice_cutover_cleanup_prepare.py` to create write-once, fsync'd private `previous-cleanup-plan.json` while the existing FD9 and SAME Config inode flock are still held. Preflight requires the exact schema-4 MUTATING whole journal, matching durable previous-rollback receipt, previous Config/runtime and install-image hashes+modes, restored IPFW kernel/ledger without pending, fresh kernel image/UID/GID/argv-attested engine/daemon/monitor PID/start equal to receipt and stable process probe; checks Config redo inode/whole SHA and runtime redo parent/expected retired candidate digest. Plan binds whole check, receipt checksum, previous five-domain hashes, candidate runtime checksum, old Config dev/inode, optional redo checks and exact candidate-retired directory identity, then fsyncs. Retried identical prepare is idempotent; missing/foreign/torn redo or foreign retired tree refuses. Native manual recovery now prepares this record **inside** its existing `seal_previous(fd)` hook before Config unlock, after sealing previous receipt. Read-only boot review checks cleanup plan against persisted receipt/journal/redo, but NEVER treats it as authorization. No deletion, journal finish, boot automatic replay or Voice ON yet. Linux/FreeBSD CI covers original inode flock, recovered previous assets, candidate tree retirement, forged receipt, foreign/corrupt cleanup plan and journal phase refusal. `PLUGIN_REVISION=53`; exact-head CI pending.
+
+
 **v0.5.1_52 — durable previous-five-resource attestation BEFORE Config unlock (2026-10-11):** Added `voice_cutover_recovery_receipt.py`, a write-once fsync'd private `previous-rollback-receipt.json` with exact schema-4 whole journal check, five old resource fingerprints, original candidate runtime SHA, sealed process security policy SHA, original locked Config dev/inode, and independently attested NEW engine/daemon/monitor PID/start. The receipt is written only while holding original FD9 and the same Config inode flock, after rechecking exact previous Config/runtime, previous IPFW kernel+ledger with no pending intent, and stable three-role process identities correlated to native kernel image/credentials/argv attestation. The real five-resource executor now has an in-lock `seal_previous(fd)` hook; the native manual recovery entrypoint supplies the real sealed-past-process/FreeBSD-kernel evidence and receipt writer before any lock is released. Repeated receipt publication with matching content is idempotent; foreign, corrupt, stale PID or cutover-mismatched receipts fail closed. Read-only cold-boot review reopens any receipt and distinguishes a stale/restarted process epoch without falsely concluding voice readiness. **Receipt is evidence-only: it does not authorize Voice ON, abort/finish the journal, cleanup redo, or automatic reboot replay**. New Linux/FreeBSD CI tests exercise exact file/kernel/Config-flock prerequisites, write-once storage, refusal on tampering, and schema phase failure. PLUGIN_REVISION=52; exact-head CI pending.
 
 
@@ -208,13 +211,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_52` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_53` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=52` (**development candidate, not published**);
+- `PLUGIN_REVISION=53` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

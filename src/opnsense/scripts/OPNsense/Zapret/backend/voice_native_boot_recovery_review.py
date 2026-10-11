@@ -20,6 +20,7 @@ from voice_cutover_backup import bound_resource_fingerprints
 from voice_cutover_journal import RUNTIME_BOUND_SCHEMA, BOUND_FIELD, bound_candidate_runtime, VoiceCutoverJournal
 from voice_cutover_config_redo import ConfigRestoreRedo, may_resume_partial
 from voice_cutover_recovery_receipt import read_receipt
+from voice_cutover_cleanup_prepare import read_cleanup_plan
 from voice_cutover_runtime_restore import _read_redo
 from voice_cutover_config_restore import _pinned_regular
 from voice_native_file_observer import _hash_file, observe_live_files
@@ -97,6 +98,21 @@ def inspect_boot_recovery(
     config_redo=ConfigRestoreRedo(journal.directory).read()
     runtime_redo=_read_redo(journal.directory)
     receipt=read_receipt(journal.directory)
+    cleanup=read_cleanup_plan(journal.directory)
+    if cleanup is not None and (
+        receipt is None
+        or cleanup["whole_check"]!=record["check"]
+        or cleanup["receipt_check"]!=receipt["check"]
+        or cleanup["previous"]!=record["previous"]
+        or cleanup["candidate_runtime_sha256"]!=candidate_sha
+        or cleanup["config_redo_check"]!=(
+            None if config_redo is None else config_redo["checksum"]
+        )
+        or cleanup["runtime_redo_check"]!=(
+            None if runtime_redo is None else runtime_redo["checksum"]
+        )
+    ):
+        raise BootReviewError("cleanup prepare belongs to foreign cutover or redo")
     if receipt is not None and (
         receipt["whole_check"]!=record["check"]
         or receipt["previous"]!=record["previous"]
@@ -221,6 +237,7 @@ def inspect_boot_recovery(
     if ConfigRestoreRedo(journal.directory).read()!=config_redo or (
         _read_redo(journal.directory)!=runtime_redo
         or read_receipt(journal.directory)!=receipt
+        or read_cleanup_plan(journal.directory)!=cleanup
     ):
         raise BootReviewError("Voice redo changed during boot review")
     # This is intentionally NOT a readiness report. Even a complete-looking
@@ -235,6 +252,7 @@ def inspect_boot_recovery(
         kernel=kernel,config_redo="present" if config_redo else "absent",
         runtime_redo="present" if runtime_redo else "absent",
         previous_receipt=receipt_state,
+        cleanup_plan="prepared-only" if cleanup else "absent",
         candidate_runtime_sha256=candidate_sha,
     )
 

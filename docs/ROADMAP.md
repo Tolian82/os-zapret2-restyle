@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_52`: durable write-once five-domain previous rollback attestation receipt issued while FD9 and same Config inode flock are still held, independently correlating new FreeBSD process/kernel image/UID/GID/argv, previous IPFW and old files; boot review detects stale receipt epochs
+- [x] Current candidate `v0.5.1_53`: persist SHA-sealed and inode-bound post-rollback cleanup PREPARE plan under continuous FD9+Config flock; exact retired candidate and both redo checks prevent foreign deletion; no destructive cleanup or Voice ON
+- [ ] Next: implement bounded redo/candidate retirement reclaimer with fsync'd multi-step markers and locked five-resource reattestation, then explicit whole-intent closure; qualify real FreeBSD process kernel argv before auto reboot replay
+- [x] Previous candidate `v0.5.1_52`: durable write-once five-domain previous rollback attestation receipt issued while FD9 and same Config inode flock are still held, independently correlating new FreeBSD process/kernel image/UID/GID/argv, previous IPFW and old files; boot review detects stale receipt epochs
 - [ ] Next: durable receipt verification across reboot + safe redo/retired candidate cleanup/whole-intent finalization protocol and on-appliance FreeBSD process argv acceptance; only then production Voice ON
 - [x] Previous candidate `v0.5.1_51`: locked read-only native cold-boot triage distinguishes fd9-locked journal-bound previous/candidate/partial Config and directory-rename crash states, kernel unknown/reset and pending owner; never auto replays or finishes journal
 - [ ] Next: durable post-rollback five-domain attestation/receipt under BOTH locks, explicit cleanup/finish protocol and FreeBSD appliance process-title/kernel argv qualification before safe reboot automation or Voice ON

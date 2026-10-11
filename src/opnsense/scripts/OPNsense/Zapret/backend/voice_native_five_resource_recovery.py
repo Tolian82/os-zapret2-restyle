@@ -45,6 +45,7 @@ from voice_native_ipfw_ownership import observe_owned_ipfw
 from voice_cutover_five_resource_rollback import restore_previous_five_resources
 from voice_native_restart_integrity import attest_previous_restart
 from voice_cutover_recovery_receipt import seal_previous_receipt
+from voice_cutover_cleanup_prepare import prepare_previous_cleanup
 from voice_native_recovery_quiescence import _locked_config
 import voice_ipfw_runtime as native
 
@@ -219,13 +220,33 @@ def execute_native_recovery(
                     config_path,config_fd,(0,0),
                 ),
             )
-            return seal_previous_receipt(
+            receipt=seal_previous_receipt(
                 journal=journal,ledger=ledger,previous_backup=previous_backup,
                 config_path=config_path,active_runtime=active_runtime,
                 config_fd=config_fd,config_owner=(0,0),
                 probe=probe,adapter=read_ipfw_adapter,integrity_report=proof,
                 require_lifecycle_owner=require_lifecycle_owner,
             )
+            # Persist the NON-DESTRUCTIVE cleanup intent while this same
+            # Config descriptor and FD9 are still held. A failure leaves
+            # the whole journal and previous receipt intact for manual
+            # inspection; no cleanup is attempted here.
+            prepared=prepare_previous_cleanup(
+                journal=journal,ledger=ledger,previous_backup=previous_backup,
+                install_image=Path(install_image),config_path=config_path,
+                active_runtime=active_runtime,config_fd=config_fd,
+                config_owner=(0,0),probe=probe,adapter=read_ipfw_adapter,
+                integrity_report=proof,
+                require_lifecycle_owner=require_lifecycle_owner,
+            )
+            if prepared["state"] not in (
+                "previous-cleanup-prepared-only",
+                "previous-cleanup-already-prepared",
+            ) or prepared["safe_to_finish_intent"] is not False:
+                raise NativeFiveResourceRecoveryError(
+                    "durable Voice cleanup preparation refused"
+                )
+            return receipt
     result=rollback_executor(
         journal=journal,ledger=ledger,previous_backup=previous_backup,
         install_image=Path(install_image),process_evidence=process_evidence,
