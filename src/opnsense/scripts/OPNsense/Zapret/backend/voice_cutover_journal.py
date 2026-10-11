@@ -25,7 +25,7 @@ RUNTIME_FIELD = "candidate_runtime_sha256"
 MAX_BYTES = 65536
 FILES = ("intent.json",)
 SHA = "0123456789abcdef"
-PHASES = ("prepared", "mutating", "committed")
+PHASES = ("prepared", "mutating", "committed", "rolled_back")
 RESOURCE_NAMES = ("config", "runtime", "engine", "firewall", "supervisor")
 PROOF_NAMES = ("saved_xml_sha256", "merged_sha256", "native_argv_sha256")
 
@@ -335,6 +335,49 @@ class VoiceCutoverJournal:
     def commit(self) -> None:
         self._transition("mutating", "committed")
 
+
+    def seal_previous_restored(self, *, original_check: str,
+                               cleanup_check: str) -> dict:
+        """Durable ROLLED_BACK transition; never remove recovery evidence.
+
+        The caller must hold native FD9 and the original Config flock, after
+        native five-resource verification and write-once cleanup preparation.
+        """
+        from voice_cutover_cleanup_prepare import read_cleanup_plan
+        from voice_cutover_recovery_receipt import read_receipt
+        current = self.read()
+        if current is None or current["schema"] != RUNTIME_BOUND_SCHEMA or (
+            current["phase"] != "mutating" or current["check"] != original_check
+        ):
+            raise CutoverJournalError("no matching mutating Voice rollback")
+        plan = read_cleanup_plan(self.directory)
+        receipt = read_receipt(self.directory)
+        if plan is None or receipt is None or (
+            plan["check"] != cleanup_check
+            or plan["whole_check"] != original_check
+            or receipt["whole_check"] != original_check
+            or plan["receipt_check"] != receipt["check"]
+            or plan["previous"] != current["previous"]
+            or receipt["previous"] != current["previous"]
+            or plan["candidate_runtime_sha256"] != current["candidate"][RUNTIME_FIELD]
+            or receipt["candidate_runtime_sha256"] != current["candidate"][RUNTIME_FIELD]
+            or receipt["security_policy_sha256"] != current["candidate"][SECURITY_FIELD]
+            or plan["instances"] != receipt["instances"]
+            or plan["config_dev"] != receipt["config_dev"]
+            or plan["config_inode"] != receipt["config_inode"]
+        ):
+            raise CutoverJournalError("previous terminal rollback proof unbound")
+        self._transition("mutating", "rolled_back")
+        terminal = self.read()
+        prior = {k: v for k, v in terminal.items() if k != "check"}
+        prior["phase"] = "mutating"
+        if _digest(prior) != original_check or (
+            prior["previous"] != current["previous"]
+            or prior["candidate"] != current["candidate"]
+        ):
+            raise CutoverJournalError("previous terminal predecessor mismatch")
+        return terminal
+
     def _finish(self) -> None:
         self.read()
         os.unlink(self._target())
@@ -363,4 +406,6 @@ class VoiceCutoverJournal:
             return "prepared-needs-previous-verification"
         if current["phase"] == "mutating":
             return "interrupted-needs-kernel-runtime-review"
+        if current["phase"] == "rolled_back":
+            return "previous-restored-needs-final-cleanup"
         return "committed-needs-cleanup-review"

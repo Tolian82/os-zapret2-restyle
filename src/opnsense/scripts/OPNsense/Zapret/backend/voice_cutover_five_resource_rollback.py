@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Callable
 
 from voice_cutover_backup import bound_resource_fingerprints
-from voice_cutover_journal import (
+from voice_cutover_journal import _digest, (
     VoiceCutoverJournal, BOUND_FIELD, RUNTIME_BOUND_SCHEMA,
     bound_candidate_runtime,
 )
@@ -267,6 +267,7 @@ def restore_previous_five_resources(
         # calling it after this function returns is a TOCTOU error.
         # No receipt ever commits/removes the still-MUTATING whole intent.
         receipt_state="not-sealed"
+        attestation=None
         if seal_previous is not None:
             if not callable(seal_previous):
                 raise FiveResourceRollbackError("invalid sealed recovery receipt owner")
@@ -281,7 +282,22 @@ def restore_previous_five_resources(
             receipt_state=attestation["state"]
         _locked_config(config_path,fd,expected_owner)
         require_lifecycle_owner()
-        if journal.read()!=original:
+        actual=journal.read()
+        completion_phase="mutating"
+        if attestation is not None and (
+            attestation.get("whole_intent_phase")=="rolled_back"
+        ):
+            if actual is None or actual["phase"]!="rolled_back":
+                raise FiveResourceRollbackError("durable rollback seal missing")
+            prior={k:v for k,v in actual.items() if k!="check"}
+            prior["phase"]="mutating"
+            if _digest(prior)!=original["check"] or (
+                prior["previous"]!=original["previous"]
+                or prior["candidate"]!=original["candidate"]
+            ):
+                raise FiveResourceRollbackError("foreign rollback seal")
+            completion_phase="rolled_back"
+        elif actual!=original:
             raise FiveResourceRollbackError("whole intent changed after receipt")
 
         return {
@@ -290,7 +306,7 @@ def restore_previous_five_resources(
             "config":"previous", "runtime":"previous",
             "engine":result_state,"supervisor":result_state,
             "ipfw":"previous",
-            "whole_intent_phase":"mutating",
+            "whole_intent_phase":completion_phase,
             "safe_to_clear_intent":False,
             "safe_to_enable_voice":False,
             "requires_durable_restart_finalization":True,

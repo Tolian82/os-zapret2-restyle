@@ -302,3 +302,58 @@ def prepare_previous_cleanup(
         raise CleanupPrepareError("whole cutover changed after cleanup prepare")
     return {"state":"previous-cleanup-prepared-only",
             "safe_to_finish_intent":False,"safe_to_enable_voice":False}
+
+
+
+def seal_previous_completion(
+    *, journal, ledger, previous_backup:Path, install_image:Path,
+    config_path:Path, active_runtime:Path, config_fd:int,
+    config_owner:tuple[int,int], probe:FreeBSDVoiceProcessProbe,
+    adapter:FreeBSDIPFWAdapter, integrity_report:dict,
+    require_lifecycle_owner,
+)->dict:
+    """Persist terminal previous-state proof inside BOTH original locks.
+
+    Crash leaves MUTATING or durable ROLLED_BACK, with all redo, backup,
+    retired candidate and kernel ownership untouched. Neither phase permits
+    ordinary start, deletion, boot replay or Voice ON.
+    """
+    before=journal.read()
+    if before is None or before["schema"]!=RUNTIME_BOUND_SCHEMA or (
+        before["phase"]!="mutating"
+    ):
+        raise CleanupPrepareError("no unfinished schema-4 rollback to complete")
+    proof=prepare_previous_cleanup(
+        journal=journal,ledger=ledger,previous_backup=previous_backup,
+        install_image=install_image,config_path=config_path,
+        active_runtime=active_runtime,config_fd=config_fd,
+        config_owner=config_owner,probe=probe,adapter=adapter,
+        integrity_report=integrity_report,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    if proof["state"] not in (
+        "previous-cleanup-prepared-only","previous-cleanup-already-prepared"
+    ) or proof["safe_to_finish_intent"] is not False:
+        raise CleanupPrepareError("durable cleanup plan is not ready")
+    require_lifecycle_owner()
+    _locked_config(Path(config_path),config_fd,config_owner)
+    plan=read_cleanup_plan(journal.directory)
+    receipt=read_receipt(journal.directory)
+    if plan is None or receipt is None or journal.read()!=before or (
+        plan["whole_check"]!=before["check"]
+        or plan["receipt_check"]!=receipt["check"]
+        or plan["instances"]!=integrity_report["instances"]
+        or ledger.pending() is not None
+    ):
+        raise CleanupPrepareError("previous completion evidence drifted")
+    done=journal.seal_previous_restored(
+        original_check=before["check"],cleanup_check=plan["check"],
+    )
+    if done["phase"]!="rolled_back" or (
+        journal.inspect()!="previous-restored-needs-final-cleanup"
+    ):
+        raise CleanupPrepareError("terminal previous rollback not durable")
+    return {
+        "state":"previous-rollback-sealed","whole_intent_phase":"rolled_back",
+        "safe_to_finish_intent":False,"safe_to_enable_voice":False,
+    }

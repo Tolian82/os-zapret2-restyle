@@ -1,5 +1,9 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### v0.5.1_55 — долговременное состояние завершённого отката
+
+Нативный откат после подтверждения пяти предыдущих ресурсов и сохранения прежнего receipt/cleanup plan под непрерывными FD9 и Config flock переводит whole-журнал из `mutating` в `rolled_back` с атомарной записью+fsync. Все ранее запечатанные данные и восстановимый хеш прежней фазы сохраняются; после перезагрузки старый старт службы по-прежнему заблокирован. Очистка redo/backup/retired runtime и разрешение Voice ON остаются отдельными будущими этапами, PR ещё не устанавливать.
+
 ### v0.5.1_54 — исправление проверки firewall при cleanup prepare
 
 CI `_53` обнаружил `KeyError: 'firewall'`: функция `bound_resource_fingerprints()` возвращает только Config/runtime, а не полный previous snapshot. Исправлено: хеш previous IPFW берётся из SHA-верифицированного `whole["previous"]["firewall"]`, а в durable cleanup plan записываются все пять прежних ресурсных хешей из того же whole intent. Результаты независимого наблюдения Config/runtime по-прежнему сверяются со старым backup, native kernel IPFW с owned ledger, прочие проверки PID/start/receipt/Config inode не изменены. Обязательно пересдать Linux+FreeBSD тесты; ни cleanup, ни Voice ON не разрешены.

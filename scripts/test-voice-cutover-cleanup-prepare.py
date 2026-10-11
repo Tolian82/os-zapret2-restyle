@@ -15,7 +15,7 @@ ROOT=Path(__file__).resolve().parent.parent
 BACKEND=ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
 from voice_cutover_cleanup_prepare import (
-    CleanupPrepareError, NAME, read_cleanup_plan,prepare_previous_cleanup,
+    CleanupPrepareError, NAME, read_cleanup_plan,prepare_previous_cleanup,seal_previous_completion,
 )
 from voice_cutover_recovery_receipt import (
     read_receipt, seal_previous_receipt,
@@ -87,6 +87,63 @@ class CleanupPrepareTests(unittest.TestCase):
         self.assertTrue(self.fx.live.is_dir())
         self.assertTrue(self.fx.image.is_dir())
         self.assertIsNotNone(read_receipt(self.fx.fx.whole.directory))
+
+
+    def complete(self, *, lock=True, witness=None):
+        fd=os.open(self.fx.config,os.O_RDWR)
+        try:
+            if lock:
+                fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            return seal_previous_completion(
+                journal=self.fx.fx.whole,ledger=self.fx.fx.ipfw,
+                previous_backup=self.fx.fx.backup,install_image=self.fx.image,
+                config_path=self.fx.config,active_runtime=self.fx.live,
+                config_fd=fd,config_owner=(os.geteuid(),os.getegid()),
+                probe=self.fx.probe,adapter=self.fx.adapter,
+                integrity_report=self.fx.witness if witness is None else witness,
+                require_lifecycle_owner=lambda:self.observations.append("FD9"),
+            )
+        finally:
+            os.close(fd)
+
+    def test_previous_completion_persists_terminal_phase_and_evidence(self):
+        self.fx.seal()
+        before=self.fx.fx.whole.read()
+        receipt=read_receipt(self.fx.fx.whole.directory)
+        result=self.complete()
+        self.assertEqual("previous-rollback-sealed",result["state"])
+        self.assertEqual("rolled_back",self.fx.fx.whole.read()["phase"])
+        self.assertEqual("previous-restored-needs-final-cleanup",
+                         self.fx.fx.whole.inspect())
+        self.assertEqual(before["previous"],self.fx.fx.whole.read()["previous"])
+        self.assertEqual(before["candidate"],self.fx.fx.whole.read()["candidate"])
+        plan=read_cleanup_plan(self.fx.fx.whole.directory)
+        self.assertEqual(before["check"],plan["whole_check"])
+        self.assertEqual(receipt["check"],plan["receipt_check"])
+        self.assertTrue(self.fx.live.exists())
+        self.assertTrue(self.fx.image.exists())
+        self.assertIs(result["safe_to_enable_voice"],False)
+        with self.assertRaises((CleanupPrepareError,ValueError,RuntimeError)):
+            self.complete()
+
+    def test_previous_completion_requires_receipt_and_original_flock(self):
+        original=self.fx.fx.whole.read()
+        with self.assertRaises((CleanupPrepareError,ValueError,RuntimeError)):
+            self.complete()
+        self.assertEqual(original,self.fx.fx.whole.read())
+        self.fx.seal()
+        with self.assertRaises((CleanupPrepareError,ValueError,RuntimeError)):
+            self.complete(lock=False)
+        self.assertEqual("mutating",self.fx.fx.whole.read()["phase"])
+
+    def test_previous_completion_rejects_stale_process_attestation(self):
+        self.fx.seal()
+        stale=copy.deepcopy(self.fx.witness)
+        stale["instances"]["engine"]["pid"]+=1
+        with self.assertRaises((CleanupPrepareError,ValueError,RuntimeError)):
+            self.complete(witness=stale)
+        self.assertEqual("mutating",self.fx.fx.whole.read()["phase"])
+        self.assertIsNone(read_cleanup_plan(self.fx.fx.whole.directory))
 
     def test_missing_config_lock_fails_closed(self):
         self.fx.seal()

@@ -45,7 +45,7 @@ from voice_native_ipfw_ownership import observe_owned_ipfw
 from voice_cutover_five_resource_rollback import restore_previous_five_resources
 from voice_native_restart_integrity import attest_previous_restart
 from voice_cutover_recovery_receipt import seal_previous_receipt
-from voice_cutover_cleanup_prepare import prepare_previous_cleanup
+from voice_cutover_cleanup_prepare import seal_previous_completion
 from voice_native_recovery_quiescence import _locked_config
 import voice_ipfw_runtime as native
 
@@ -231,7 +231,7 @@ def execute_native_recovery(
             # Config descriptor and FD9 are still held. A failure leaves
             # the whole journal and previous receipt intact for manual
             # inspection; no cleanup is attempted here.
-            prepared=prepare_previous_cleanup(
+            prepared=seal_previous_completion(
                 journal=journal,ledger=ledger,previous_backup=previous_backup,
                 install_image=Path(install_image),config_path=config_path,
                 active_runtime=active_runtime,config_fd=config_fd,
@@ -239,14 +239,14 @@ def execute_native_recovery(
                 integrity_report=proof,
                 require_lifecycle_owner=require_lifecycle_owner,
             )
-            if prepared["state"] not in (
-                "previous-cleanup-prepared-only",
-                "previous-cleanup-already-prepared",
-            ) or prepared["safe_to_finish_intent"] is not False:
+            if prepared["state"]!="previous-rollback-sealed" or (
+                prepared["whole_intent_phase"]!="rolled_back"
+                or prepared["safe_to_finish_intent"] is not False
+            ):
                 raise NativeFiveResourceRecoveryError(
-                    "durable Voice cleanup preparation refused"
+                    "durable previous rollback completion refused"
                 )
-            return receipt
+            return {**receipt,"whole_intent_phase":"rolled_back"}
     result=rollback_executor(
         journal=journal,ledger=ledger,previous_backup=previous_backup,
         install_image=Path(install_image),process_evidence=process_evidence,
@@ -263,7 +263,9 @@ def execute_native_recovery(
     if result.get("state")!="five-previous-domains-observed" or \
        result.get("safe_to_clear_intent") is not False or \
        result.get("safe_to_enable_voice") is not False or \
-       journal.read()!=before["record"]:
+       result.get("whole_intent_phase")!=(
+           "rolled_back" if seal is not None else "mutating"
+       ):
         raise NativeFiveResourceRecoveryError(
             "five-resource rollback did not retain durable whole-system intent"
         )
@@ -292,7 +294,7 @@ def main(argv:list[str]) -> int:
             require_lifecycle_owner=native.require_native_lock,
         )
         print("native-voice-rollback="+result["state"])
-        print("native-voice-whole-intent=mutating")
+        print("native-voice-whole-intent="+result["whole_intent_phase"])
         print("voice-enable=blocked")
         return 0
     except (OSError,ValueError,RuntimeError) as exc:
