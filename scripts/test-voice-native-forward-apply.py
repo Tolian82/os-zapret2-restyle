@@ -147,6 +147,106 @@ class NativeForwardCommitTests(unittest.TestCase):
         finally:
             os.close(fd)
 
+    def resume_via_executor(self):
+        return forward.execute_prepared_voice_apply(
+            journal=self.fx.whole, ledger=self.fx.ipfw,
+            previous_backup=self.fx.backup, process_evidence=None,
+            security_evidence=None, install_image=self.fx.root / "unused-image",
+            config_path=self.config, active_runtime=self.fx.root / "runtime",
+            staged_config=self.fx.stage_config,
+            candidate_runtime=self.fx.candidate,
+            desired_manifest=self.parent.stage.parent.desired,
+            probe=self.parent.stage.probe, kernel_reader=self.parent.stage.kernel,
+            read_adapter=self.parent.stage.parent.read,
+            write_adapter=self.parent.stage.parent.write,
+            require_lifecycle_owner=lambda: None,
+            config_owner=(os.geteuid(), os.getegid()),
+            actions_factory=lambda _: self.fail(
+                "COMMITTED replay must not construct any process actuator"
+            ),
+        )
+
+    def test_committed_retry_through_original_executor(self):
+        self.fx.whole.commit()
+        with patch.object(
+            forward, "stop_previous_and_install_forward_runtime",
+            side_effect=AssertionError("COMMITTED must not enter forward stages"),
+        ):
+            result = self.resume_via_executor()
+        self.assertEqual(result["state"], "native-forward-five-resources-committed")
+        self.assertEqual(self.fx.ipfw.owned(), self.parent.stage.parent.desired)
+        self.assertIsNone(self.fx.ipfw.pending())
+        self.assertEqual(self.config.read_bytes(), self.parent.candidate)
+
+    def test_postcommit_cleanup_power_cut_after_table_destroy_retries(self):
+        self.fx.whole.commit()
+        adapter = self.parent.stage.parent.write
+        real_destroy = adapter.destroy_table
+        def power_cut_after_destroy(name):
+            real_destroy(name)
+            raise OSError("simulated power cut after actual IPFW table removal")
+        with patch.object(adapter, "destroy_table",
+                          side_effect=power_cut_after_destroy):
+            with self.assertRaisesRegex(OSError, "simulated power cut"):
+                self.resume_via_executor()
+        # COMMITTED and desired owner are durable, while IPFW pending still
+        # survives and the kernel stage was actually removed.
+        self.assertEqual(self.fx.whole.read()["phase"], "committed")
+        self.assertIsNotNone(self.fx.ipfw.pending())
+        self.assertEqual(self.fx.ipfw.owned(), self.parent.stage.parent.desired)
+        self.assertIsNone(self.parent.stage.parent.read.get_table(
+            "zapret2_voice_telegram_stage"
+        ))
+        result = self.resume_via_executor()
+        self.assertEqual(result["state"], "native-forward-five-resources-committed")
+        self.assertIsNone(self.fx.ipfw.pending())
+
+    def test_postcommit_rejects_foreign_stage_after_partial_cleanup(self):
+        self.fx.whole.commit()
+        self.fx.ipfw.commit(self.parent.stage.parent.desired)
+        kernel = self.parent.stage.parent.read.kernel
+        # A stage containing values not present in the sealed old manifest
+        # must never be deleted/quietly adopted on retry.
+        kernel.tables["zapret2_voice_telegram_stage"] = ["203.0.113.7"]
+        before = dict(kernel.tables)
+        with patch.object(
+            forward, "commit_verified",
+            side_effect=AssertionError("foreign stage must fail preflight"),
+        ):
+            with self.assertRaises((RuntimeError, ValueError, OSError)):
+                self.resume_via_executor()
+        self.assertEqual(kernel.tables, before)
+        self.assertIsNotNone(self.fx.ipfw.pending())
+
+    def test_committed_retry_refuses_foreign_manifest_before_actuator(self):
+        self.fx.whole.commit()
+        foreign = dict(self.parent.stage.parent.desired)
+        foreign["rules"] = {**foreign["rules"], 19010: [
+            "divert", "989", "udp", "from", "any", "to", "any",
+            "7000", "out", "not", "diverted", "not", "sockarg",
+            "xmit", "vtnet1",
+        ]}
+        with patch.object(forward, "commit_verified",
+                          side_effect=AssertionError("no mutation")):
+            with self.assertRaises((RuntimeError, ValueError, OSError)):
+                forward.execute_prepared_voice_apply(
+                    journal=self.fx.whole, ledger=self.fx.ipfw,
+                    previous_backup=self.fx.backup, process_evidence=None,
+                    security_evidence=None, install_image=self.fx.root,
+                    config_path=self.config, active_runtime=self.fx.root / "runtime",
+                    staged_config=self.fx.stage_config,
+                    candidate_runtime=self.fx.candidate,
+                    desired_manifest=foreign,
+                    probe=self.parent.stage.probe,
+                    kernel_reader=self.parent.stage.kernel,
+                    read_adapter=self.parent.stage.parent.read,
+                    write_adapter=self.parent.stage.parent.write,
+                    require_lifecycle_owner=lambda: None,
+                    config_owner=(os.geteuid(), os.getegid()),
+                    actions_factory=lambda _: self.fail("no actions"),
+                )
+        self.assertEqual(self.fx.ipfw.pending(), self.precommit)
+
     def test_power_cut_after_whole_commit_recovers_ipfw(self):
         self.fx.whole.commit()
         result = self.replay()

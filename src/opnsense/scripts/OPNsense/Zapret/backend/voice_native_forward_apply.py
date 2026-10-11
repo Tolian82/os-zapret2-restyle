@@ -604,7 +604,8 @@ def execute_prepared_voice_apply(
     This private API has no OS entrypoint. After a MUTATING failure, use
     ONLY the existing independently gated five-resource rollback with the
     SAME FD; incomplete native process/redo/owner evidence remains blocked.
-    An already COMMITTED transaction is never rolled back.
+    An already COMMITTED transaction is never rolled back: retry only its
+    verified IPFW postcommit finish using the same lock and executor.
     """
     _authorities(
         journal=journal, ledger=ledger, probe=probe, kernel_reader=kernel_reader,
@@ -626,6 +627,25 @@ def execute_prepared_voice_apply(
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         _locked_config(config_path, fd, config_owner)
         record = journal.read()
+        # A retry after the durable WHOLE COMMIT is FORWARD-ONLY. Re-enter
+        # the same private FD9+Config-lock executor; do not re-run stop,
+        # runtime/Config writes, IPFW activation or old-state rollback.
+        if record is not None and record["phase"] == "committed":
+            if record["schema"] != RUNTIME_BOUND_SCHEMA or (
+                record["candidate"][BOUND_FIELD] != fingerprint(
+                    canonical_manifest(desired_manifest)
+                )
+            ):
+                raise NativeForwardApplyError("foreign committed Voice intent")
+            return resume_committed_forward_voice_apply(
+                journal=journal, ledger=ledger, previous_backup=previous_backup,
+                config_path=config_path, config_fd=fd, config_owner=config_owner,
+                staged_config=staged_config, candidate_runtime=candidate_runtime,
+                active_runtime=active_runtime, desired_manifest=desired_manifest,
+                probe=probe, kernel_reader=kernel_reader,
+                read_adapter=read_adapter, write_adapter=write_adapter,
+                require_lifecycle_owner=require_lifecycle_owner,
+            )
         if record is None or record["phase"] != "prepared" or (
             record["schema"] != RUNTIME_BOUND_SCHEMA
             or record["candidate"][BOUND_FIELD] != fingerprint(
