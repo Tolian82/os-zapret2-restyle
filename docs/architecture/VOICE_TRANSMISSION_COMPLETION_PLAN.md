@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**v0.5.1_99 (2026-10-11):** Corrected two **test-only** faults in the `_98` post-restart crash replay qualification: the top-level private Voice executor deliberately converts lower-level safety denials into a stable manual-review exception (tests now verify BOTH wrapper and original chained cause), and the pre-STOP guard fixture now uses exact sealed pre-cutover PID/start evidence instead of hard-coded unrelated PIDs. The positive previous-process-restart without duplicate stop/with locked terminal seal test ALREADY PASSED at `_98`; production code and fail-closed policy unchanged. `_99` exact-head full CI required. Package unpublished, no Voice ON or router installation.
+
+
 **v0.5.1_98 (2026-10-11):** Stage-2 native same-FD rollback can now **resume AFTER the previous engine+supervisor were already restarted but BEFORE the fsync'd receipt / ROLLED_BACK terminal transition**. If the complete old Config/runtime/IPFW and all three process roles are stable, it refuses to stop/restart them again; requires new PID/start epochs distinct from the originally sealed pre-cutover processes, both independent FreeBSD kernel image/credential/argv security readers, and fresh native attestation before reusing existing receipt/cleanup/terminal-seal functions. Without full evidence it fails closed with the original MUTATING journal intact. Three real-file/IPFW-ledger and simulated process regressions cover refusal without security readers, exact resumed in-lock seal and refusal to forge rollback from original pre-STOP process epochs. `_97` code was immediately corrected at `_98` for a test-syntax error (no change in production policy). `_96` full Project/Voice/FreeBSD 15 CI PASS. `_98` CI pending; no GUI ON/boot/service connection, publication or Telegram media proof.
 
 
@@ -58,7 +61,7 @@
 
 
 **Статус:** ЕДИНЫЙ АКТУАЛЬНЫЙ ПЛАН · Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328) · 2026-10-11  
-**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_98` (Stage 2 продолжается; MUTATING и COMMITTED recovery подключены только к приватному исполнителю). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
+**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_99` (Stage 2 продолжается; MUTATING и COMMITTED recovery подключены только к приватному исполнителю). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
 **Приоритет:** законченный пользовательский сценарий, не очередная подсистема проверки. Детальное утверждённое ТЗ и компоновка остаются в [VOICE_TRANSMISSION_GUI.md](VOICE_TRANSMISSION_GUI.md); сведения о стенде и фактических звонках — в отдельных исследовательских документах. Исторические задачи в ROADMAP, START_HERE и старых блоках архитектурного документа НЕ заменяют эту последовательность.
 
 ## Цель и определение готовности
