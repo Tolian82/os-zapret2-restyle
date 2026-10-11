@@ -378,6 +378,52 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         self.assertEqual(self.config.read_bytes(),self.previous.candidate)
         self.assertEqual(self.fx.whole.read(),self.prepared)
 
+    def test_power_cut_in_previous_rollback_rename_can_retry_same_five_domains(self):
+        import voice_cutover_runtime_restore as old_restore
+        runtime=self.fx.root/"runtime"
+        suffix=self.fx.whole.read()["check"][:20]
+        stopped=self.stage.pids
+        stopped.update(engine=None,daemon=None,monitor=None)
+        self.stage.ps.commands={}
+        original_rename=os.rename
+        interruptions=[]
+        def interrupted_rename(source,destination):
+            if Path(source).name==".voice-restore-ready-"+suffix:
+                interruptions.append((str(source),str(destination)))
+                raise OSError("simulated second power cut inside previous runtime restore")
+            return original_rename(source,destination)
+        with patch.object(old_restore.os,"rename",side_effect=interrupted_rename):
+            with self.assertRaisesRegex(
+                OSError,"simulated second power cut",
+            ):
+                self.recover()
+        self.assertEqual(len(interruptions),1)
+        self.assertFalse(runtime.exists())
+        self.assertTrue((runtime.with_name(".voice-restore-ready-"+suffix)).is_dir())
+        self.assertTrue((runtime.with_name(".voice-restore-retired-"+suffix)).is_dir())
+        self.assertEqual(self.operations,[])
+        self.assertEqual("mutating",self.fx.whole.read()["phase"])
+        self.assertIsNone(self.fx.ipfw.pending())
+        self.assertEqual(self.config.read_bytes(),self.previous.candidate)
+        # On second invocation the newly present previous restore redo owns
+        # the missing-active state. The forward crash bridge MUST not try to
+        # replay forward ready->active; existing old-restore resumes instead.
+        result=self.recover()
+        self.assertEqual(
+            result["state"],"forward-failed-five-previous-domains-observed",
+        )
+        self.assertEqual(self.operations,["start"])
+        self.assertEqual(self.config.read_bytes(),self.previous_config)
+        self.assertEqual(self.fx.ipfw.owned(),self.stage.parent.old)
+        self.assertIsNone(self.fx.ipfw.pending())
+        self.assertEqual(self.fx.whole.read()["phase"],"mutating")
+        self.assertEqual(
+            observe_live_files(
+                self.config,runtime,previous_backup=self.fx.backup,
+            ),
+            {key:self.prepared["previous"][key] for key in ("config","runtime")},
+        )
+
     def test_corrupted_kernel_blocks_failure_rollback(self):
         # Candidate IPFW ledger is still pending, but a foreign in-range
         # kernel rule must never be silently adopted as ours.

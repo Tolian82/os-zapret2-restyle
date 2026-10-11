@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**v0.5.1_92 (2026-10-11):** Added a second real-filesystem/simulated-native-IPFW POWER-CUT regression for Stage-2 five-resource rollback: interrupt the PREVIOUS runtime restore after candidate-active→restore-retired but before restore-ready(previous)→active, after IPFW has already been reverted and journal stays MUTATING. On retry with the same immutable old/forward/restore redo, the normal previous runtime redo MUST take precedence over `_90`'s missing-active forward repair, restore old Config/runtime, then restart previous engine and supervisor. Tests assert no premature restart or journal clearing after the first crash and exact five-domain recovery after retry. No production executor changes in this revision; private GUI/boot and real appliance qualification still pending.
+
+
 **v0.5.1_91 (2026-10-11):** Corrected a regression found by `_90` Voice CI's existing quiescence-loss failure-injection test: the new forward rename crash bridge was calling an additional quiescence gate for ALL normal previous-runtime restores, changing the established fault boundary. Removed that redundant unconditional gate. For the missing-active crash path, the dedicated bridge still independently checks quiescence twice while verifying and completing the exact redo-pinned rename. The original regular rollback gate cadence and semantics remain unchanged. `_91` exact-head full Voice/FreeBSD and new simulated power-cut tests pending.
 
 
@@ -40,7 +43,7 @@
 
 
 **Статус:** ЕДИНЫЙ АКТУАЛЬНЫЙ ПЛАН · Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328) · 2026-10-11  
-**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_91` (Stage 2 начат). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
+**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_92` (Stage 2 начат). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
 **Приоритет:** законченный пользовательский сценарий, не очередная подсистема проверки. Детальное утверждённое ТЗ и компоновка остаются в [VOICE_TRANSMISSION_GUI.md](VOICE_TRANSMISSION_GUI.md); сведения о стенде и фактических звонках — в отдельных исследовательских документах. Исторические задачи в ROADMAP, START_HERE и старых блоках архитектурного документа НЕ заменяют эту последовательность.
 
 ## Цель и определение готовности
