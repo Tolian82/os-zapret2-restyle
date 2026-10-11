@@ -15,11 +15,11 @@ import subprocess
 import sys
 import unittest
 from unittest.mock import patch
-from voice_cutover_journal import _digest
 
 ROOT=Path(__file__).resolve().parent.parent
 BACKEND=ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
+from voice_cutover_journal import _digest
 from voice_cutover_restore_stage import prepare_restore_stage
 from voice_cutover_install_image import prepare_installable_restore
 from voice_native_process_actions import FreeBSDVoiceProcessActions

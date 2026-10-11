@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**v0.5.1_89 (2026-10-11):** Corrected the `_88` new terminal native rollback integration fixture so its `voice_cutover_journal._digest` import occurs AFTER adding the installed backend module root to `sys.path`. `_88` specialized Voice CI terminated at test import before exercising the new seal logic; no production change in `_89`. Full same-original-fd previous receipt/ROLLED_BACK positive and failure tests rerun at exact `_89` head.
+
+
 **v0.5.1_88 (2026-10-11):** Stage 2 native forward failure path now reuses the ALREADY IMPLEMENTED manual-recovery finalization under the SAME borrowed original Config FD9/flock, when and ONLY when its trusted FreeBSD process-security AND kernel-argv readers are both bound to the sealed previous evidence. After five-resource previous restart, its existing `seal_previous` callback performs `attest_previous_restart`, fsyncs `seal_previous_receipt`, and fsyncs non-destructive `seal_previous_completion` / terminal schema-4 ROLLED_BACK while still holding the exact Config fd. The outer forward coordinator independently checks terminal `mutating_predecessor` against original intent and refuses Voice ON pending owner acceptance. Test-simulated process actions without native readers retain MUTATING and cannot fabricate terminal finalization; receipt failures retain previous files/intent for manual inspection. Linux/FreeBSD CI includes late-failure same-lock positive/negative seal tests; exact-head qualification pending. **No actual GUI/service installation or Telegram audio proof.**
 
 
@@ -31,7 +34,7 @@
 
 
 **Статус:** ЕДИНЫЙ АКТУАЛЬНЫЙ ПЛАН · Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328) · 2026-10-11  
-**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_88` (Stage 2 начат). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
+**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_89` (Stage 2 начат). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
 **Приоритет:** законченный пользовательский сценарий, не очередная подсистема проверки. Детальное утверждённое ТЗ и компоновка остаются в [VOICE_TRANSMISSION_GUI.md](VOICE_TRANSMISSION_GUI.md); сведения о стенде и фактических звонках — в отдельных исследовательских документах. Исторические задачи в ROADMAP, START_HERE и старых блоках архитектурного документа НЕ заменяют эту последовательность.
 
 ## Цель и определение готовности
