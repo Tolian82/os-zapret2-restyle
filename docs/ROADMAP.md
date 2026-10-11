@@ -1,5 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_65`: expose read-only pre-cutover physical FreeBSD baseline through normal FD9-locked `zapret_service.sh` dispatch, with no rollback journal/backup prerequisite, native live argv and kernel image comparison and negative CI tests
+- [ ] Next: run on actual OPNsense 26.7.x with ordinary runtime already running; collect observed real FreeBSD argv/path mismatch if any, and implement the guarded native Voice Apply/rollback that keeps ordinary TCP path intact; finally measure Telegram call audio UDP
 - [x] Current candidate `v0.5.1_64`: independent FD9 + Config-flock read-only native three-role FreeBSD kernel argv and kernel executable-image diagnostic; exact saved engine arguments and immutable supervisor plan with double sampling, after protected archive; no Voice ON/readiness
 - [ ] Next: real on-appliance FreeBSD process output acceptance, lifecycle handoff and guarded candidate cutover plus actual UDP audio evidence
 - [x] Current candidate `v0.5.1_63`: write-ahead and atomic archive of whole `intent.json` after completed previous cleanup, with read-only native boot review, retry before/after rename, and legacy start guard retaining fail-closed behavior even when `intent.json` is absent

@@ -137,10 +137,12 @@ class FreeBSDVoiceProcessProbe:
             raise ProcessEvidenceError("invalid process start timestamp")
         return int(timestamp)*1000000000, m.group(9).split()
 
-    def probe(self):
-        """Probe all three roles; require no orphan or duplicate matching process."""
-        saved=inspect_previous(self.previous_backup)
-        args_sha=_runtime_args_digest(saved)
+    def observe_processes(self):
+        """Pre-cutover read-only three-role PID/start observer without backup.
+
+        Kernel argv and executable-image validation is SEPARATE; this source
+        only establishes stable PID identities and presence from FreeBSD ps.
+        """
         pidmap={role:self._read_pid(path) for role,path in self.pidfiles.items()}
         all_rows=self._parse_global(self._query("-A","-ww","-o","pid=","-o","command="))
         engine=self.expected["engine"]
@@ -177,7 +179,16 @@ class FreeBSDVoiceProcessProbe:
                     raise ProcessEvidenceError("Voice process command changed during observation")
                 processes[role]={"pid":pid,"start_ns":start_ns,
                                  "executable":self.expected[role]}
-        return {"engine":{"state":state,"process":processes["engine"],
-                          "runtime_args_sha256":args_sha},
+        return {"engine":{"state":state,"process":processes["engine"]},
                 "supervisor":{"state":state,"daemon":processes["daemon"],
                               "monitor":processes["monitor"]}}
+
+    def probe(self):
+        """Sealed previous backup plus the same native three-role inventory."""
+        saved=inspect_previous(self.previous_backup)
+        args_sha=_runtime_args_digest(saved)
+        seen=self.observe_processes()
+        return {
+            "engine":{**seen["engine"],"runtime_args_sha256":args_sha},
+            "supervisor":seen["supervisor"],
+        }

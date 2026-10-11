@@ -577,6 +577,21 @@ native_voice_boot_review_service()
     "${_native_voice_boot_python}" "${_native_voice_boot_script}" inspect
 }
 
+# Owner-only, READ-ONLY physical appliance baseline BEFORE any Voice journal.
+# This observes the already-running ordinary service; does not generate
+# Config, touch IPFW, stop/start a process, or authorize Voice ON.
+native_voice_live_preflight_service()
+{
+    _native_voice_live_python="/usr/local/bin/python3.13"
+    _native_voice_live_script="${BACKEND_DIR}/voice_native_live_preflight.py"
+    [ -x "${_native_voice_live_python}" ] &&
+    [ -r "${_native_voice_live_script}" ] || {
+        echo "ERROR: native Voice live preflight is not installed" >&2
+        return 1
+    }
+    "${_native_voice_live_python}" "${_native_voice_live_script}" inspect
+}
+
 service_dispatch()
 {
     case "${1:-}" in
@@ -620,6 +635,9 @@ service_dispatch()
             ;;
         native-voice-boot-review)
             native_voice_boot_review_service
+            ;;
+        native-voice-live-preflight)
+            native_voice_live_preflight_service
             ;;
         native-voice-ipfw-seed)
             native_voice_ipfw_dispatch seed
@@ -741,7 +759,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
