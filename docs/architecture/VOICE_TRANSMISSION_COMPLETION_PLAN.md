@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**v0.5.1_98 (2026-10-11):** Stage-2 native same-FD rollback can now **resume AFTER the previous engine+supervisor were already restarted but BEFORE the fsync'd receipt / ROLLED_BACK terminal transition**. If the complete old Config/runtime/IPFW and all three process roles are stable, it refuses to stop/restart them again; requires new PID/start epochs distinct from the originally sealed pre-cutover processes, both independent FreeBSD kernel image/credential/argv security readers, and fresh native attestation before reusing existing receipt/cleanup/terminal-seal functions. Without full evidence it fails closed with the original MUTATING journal intact. Three real-file/IPFW-ledger and simulated process regressions cover refusal without security readers, exact resumed in-lock seal and refusal to forge rollback from original pre-STOP process epochs. `_97` code was immediately corrected at `_98` for a test-syntax error (no change in production policy). `_96` full Project/Voice/FreeBSD 15 CI PASS. `_98` CI pending; no GUI ON/boot/service connection, publication or Telegram media proof.
+
+
 **v0.5.1_96 (2026-10-11):** Closed the **early MUTATING after previous-process STOP but before forward-runtime redo/rename** recovery gap. Under the existing original FD9 + locked Config inode, the private five-resource rollback now refuses a candidate or foreign active runtime with NO durable forward-runtime redo, as well as same-cutover orphan forward-ready/retained directories created before redo publication. Only the exact previous runtime with no unmarked staging can proceed to old dvtws2/supervisor restart and five-domain reattestation. Three real-file/ledger and simulated FreeBSD kernel/IPFW regression tests cover old-stopped successful recovery, orphan pre-arm staging refusal and missing-redo candidate-adoption refusal. `_95` exact-head full CI (Project + Voice + FreeBSD 15) PASS; `_96` CI pending. Public Voice ON/boot/service wiring and OPNsense owner-live/media evidence remain OPEN. Package is NOT published.
 
 
@@ -55,7 +58,7 @@
 
 
 **Статус:** ЕДИНЫЙ АКТУАЛЬНЫЙ ПЛАН · Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328) · 2026-10-11  
-**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_96` (Stage 2 продолжается; MUTATING и COMMITTED recovery подключены только к приватному исполнителю). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
+**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_98` (Stage 2 продолжается; MUTATING и COMMITTED recovery подключены только к приватному исполнителю). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
 **Приоритет:** законченный пользовательский сценарий, не очередная подсистема проверки. Детальное утверждённое ТЗ и компоновка остаются в [VOICE_TRANSMISSION_GUI.md](VOICE_TRANSMISSION_GUI.md); сведения о стенде и фактических звонках — в отдельных исследовательских документах. Исторические задачи в ROADMAP, START_HERE и старых блоках архитектурного документа НЕ заменяют эту последовательность.
 
 ## Цель и определение готовности

@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**v0.5.1_98 (2026-10-11):** Stage-2 native same-FD rollback can now **resume AFTER the previous engine+supervisor were already restarted but BEFORE the fsync'd receipt / ROLLED_BACK terminal transition**. If the complete old Config/runtime/IPFW and all three process roles are stable, it refuses to stop/restart them again; requires new PID/start epochs distinct from the originally sealed pre-cutover processes, both independent FreeBSD kernel image/credential/argv security readers, and fresh native attestation before reusing existing receipt/cleanup/terminal-seal functions. Without full evidence it fails closed with the original MUTATING journal intact. Three real-file/IPFW-ledger and simulated process regressions cover refusal without security readers, exact resumed in-lock seal and refusal to forge rollback from original pre-STOP process epochs. `_97` code was immediately corrected at `_98` for a test-syntax error (no change in production policy). `_96` full Project/Voice/FreeBSD 15 CI PASS. `_98` CI pending; no GUI ON/boot/service connection, publication or Telegram media proof.
+
+
 **v0.5.1_96 (2026-10-11):** Closed the **early MUTATING after previous-process STOP but before forward-runtime redo/rename** recovery gap. Under the existing original FD9 + locked Config inode, the private five-resource rollback now refuses a candidate or foreign active runtime with NO durable forward-runtime redo, as well as same-cutover orphan forward-ready/retained directories created before redo publication. Only the exact previous runtime with no unmarked staging can proceed to old dvtws2/supervisor restart and five-domain reattestation. Three real-file/ledger and simulated FreeBSD kernel/IPFW regression tests cover old-stopped successful recovery, orphan pre-arm staging refusal and missing-redo candidate-adoption refusal. `_95` exact-head full CI (Project + Voice + FreeBSD 15) PASS; `_96` CI pending. Public Voice ON/boot/service wiring and OPNsense owner-live/media evidence remain OPEN. Package is NOT published.
 
 
@@ -59,7 +62,7 @@
 
 ## Current Voice completion order — 2026-10-11
 
-**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_96`, Draft PR #328; not shipped, private cutover and recovery exist but public Voice ON is not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
+**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_98`, Draft PR #328; not shipped, private cutover and recovery exist but public Voice ON is not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
 
 1. **Stabilization (current):** exact _75 identity in START_HERE/PROJECT_STATE/release; fix Project CI dynamic expected package string; audit open GitHub requests; exact-head full Voice/Project/governance/FreeBSD CI.
 2. **One native forward Apply:** reuse PREPARED/STOP/runtime/engine/IPFW/supervisor and five-resource restore; add *forward* candidate Config persist with durable intent; independent five-domain COMMIT/rollback.
