@@ -22,6 +22,7 @@ sys.path.insert(0,str(BACKEND))
 from voice_cutover_restore_stage import prepare_restore_stage
 from voice_cutover_install_image import prepare_installable_restore
 from voice_native_process_actions import FreeBSDVoiceProcessActions
+from voice_native_process_probe import FreeBSDVoiceProcessProbe
 from voice_native_recovery_quiescence import EXPECTED_SCRIPTS
 from voice_restart_argv_attestation import expected_engine_argv
 from voice_native_supervisor_launch import canonical_supervisor_argv
@@ -48,6 +49,15 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         self.previous.call()  # Full candidate engine+supervisor, IPFW pending, Config new
         self.fx=self.previous.fx
         self.stage=self.previous.stage
+        # Earlier forward fixtures intentionally left a previous-STOP probe()
+        # stub in place. The live candidate fixtures use observe_processes()
+        # for accurate kernel/ps topology, but the five-resource restorer
+        # calls probe(). Restore its REAL implementation so a running
+        # three-role candidate is actually STOPPED before the old restart.
+        self.stage.probe.probe=FreeBSDVoiceProcessProbe.probe.__get__(
+            self.stage.probe,FreeBSDVoiceProcessProbe,
+        )
+        self.assertEqual("running",self.stage.probe.probe()["engine"]["state"])
         self.config=self.fx.root/"config.xml"
         self.prepared=self.fx.whole.read()
         self.original_inode=self.config.stat().st_ino
