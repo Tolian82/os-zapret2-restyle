@@ -1,5 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_61`: explicit FD9 + original Config flock release of only the empty quarantine root, after sealed prune inventory and write-ahead root-release intent; crash classification/resumption before or after rmdir/parent fsync, no backup/redo/whole-intent cleanup or Voice ON
+- [ ] Next: independent on-router FreeBSD kernel image/argv acceptance plus bounded terminal proof cleanup protocol, final safe whole-intent closure and reboot boot-state qualification
 - [x] Current candidate `v0.5.1_60`: resumable, inode- and SHA-checked bounded candidate-only prune after write-ahead quarantine; preserve old runtime/Config/backup/redo/receipt/whole journal/IPFW and leave Voice ON blocked
 - [ ] Next: native FreeBSD process argv/image acceptance, owner-held final cleanup state machine and safe journal closure; prove cold boot on actual OPNsense before enabling Voice
 - [x] Current candidate `v0.5.1_59`: first crash-resumable retired-runtime reclaim phase uses fsynced write-ahead marker and same-parent atomic rename into quarantined candidate path; real native read-only boot diagnostic understands both sides of rename; never unlinks backup/redo/receipt or permits Voice ON

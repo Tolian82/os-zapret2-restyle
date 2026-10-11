@@ -24,6 +24,7 @@ from voice_cutover_recovery_receipt import read_receipt
 from voice_cutover_cleanup_prepare import read_cleanup_plan
 from voice_cutover_reclaim import read_reclaim_intent, inspect_reclaim_placement
 from voice_cutover_prune import read_prune_intent
+from voice_cutover_root_release import read_root_release_intent
 from voice_cutover_runtime_restore import _read_redo
 from voice_cutover_config_restore import _pinned_regular
 from voice_native_file_observer import _hash_file, observe_live_files
@@ -74,7 +75,7 @@ def inspect_boot_recovery(
     if record is None:
         if read_reclaim_intent(journal.directory) is not None or (
             read_prune_intent(journal.directory) is not None
-        ):
+        ) or read_root_release_intent(journal.directory) is not None:
             return _state("blocked",reason="orphan-rollback-reclaim-intent")
         if pending is not None:
             return _state("blocked", reason="orphan-ipfw-intent")
@@ -82,8 +83,10 @@ def inspect_boot_recovery(
     if record["phase"] not in ("mutating","rolled_back") or (
         record["schema"] != RUNTIME_BOUND_SCHEMA
     ):
-        if read_prune_intent(journal.directory) is not None:
-            raise BootReviewError("prune intent cannot belong to nonterminal Voice cutover")
+        if read_prune_intent(journal.directory) is not None or (
+            read_root_release_intent(journal.directory) is not None
+        ):
+            raise BootReviewError("reclaim records cannot belong to nonterminal Voice cutover")
         return _state("blocked", reason="no-schema4-recoverable-cutover",
                       phase=record["phase"], schema=record["schema"])
     terminal = record["phase"] == "rolled_back"
@@ -235,11 +238,14 @@ def inspect_boot_recovery(
             install_config=Path(install_image)/"config.xml",
         )
     else:
-        if read_reclaim_intent(journal.directory) is not None:
+        if read_reclaim_intent(journal.directory) is not None or (
+            read_root_release_intent(journal.directory) is not None
+        ):
             raise BootReviewError("reclaim intent cannot precede terminal rollback")
         reclaim_location="not-applicable"
     reclaim_before=read_reclaim_intent(journal.directory)
     prune_before=read_prune_intent(journal.directory)
+    release_before=read_root_release_intent(journal.directory)
 
     first=probe.probe()
     second=probe.probe()
@@ -295,6 +301,7 @@ def inspect_boot_recovery(
         or read_cleanup_plan(journal.directory)!=cleanup
         or read_reclaim_intent(journal.directory)!=reclaim_before
         or read_prune_intent(journal.directory)!=prune_before
+        or read_root_release_intent(journal.directory)!=release_before
     ):
         raise BootReviewError("Voice redo changed during boot review")
     # This is intentionally NOT a readiness report. Even a complete-looking

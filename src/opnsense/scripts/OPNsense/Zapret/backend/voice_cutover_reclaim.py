@@ -145,15 +145,17 @@ def inspect_reclaim_placement(*, journal, plan, receipt, runtime_redo,
                               install_config: Path):
     """READ-ONLY placement and exact candidate SHA check for native boot review."""
     from voice_cutover_prune import read_prune_intent, inspect_prune_placement
+    from voice_cutover_root_release import read_root_release_intent, inspect_root_release_placement
     record = journal.read()
     marker = read_reclaim_intent(journal.directory)
     prune = read_prune_intent(journal.directory)
+    release = read_root_release_intent(journal.directory)
     if record is None or record["phase"] != "rolled_back":
-        if marker is not None or prune is not None:
+        if marker is not None or prune is not None or release is not None:
             raise ReclaimError("reclaim intent without terminal rollback")
         return "not-applicable"
     if runtime_redo is None:
-        if marker is not None or prune is not None:
+        if marker is not None or prune is not None or release is not None:
             raise ReclaimError("reclaim marker without retired candidate redo")
         if plan is not None and plan["retired_name"] is not None:
             raise ReclaimError("retired plan without runtime redo")
@@ -172,9 +174,17 @@ def inspect_reclaim_placement(*, journal, plan, receipt, runtime_redo,
         raise ReclaimError("foreign Voice runtime ready tree")
     a = retired.exists() or retired.is_symlink()
     b = held.exists() or held.is_symlink()
+    if release is not None and prune is None:
+        raise ReclaimError("root release cannot precede candidate prune")
     if prune is not None:
-        if marker is None or marker != expected or a or not b:
-            raise ReclaimError("prune requires an exclusively quarantined candidate")
+        if marker is None or marker != expected or a or (not b and release is None):
+            raise ReclaimError("prune requires a bound quarantined candidate")
+        if release is not None:
+            return inspect_root_release_placement(
+                directory=journal.directory, parent=root,
+                reclaim_record=marker, plan=plan, journal_record=record,
+                prune_record=prune, release_record=release,
+            )
         return inspect_prune_placement(
             directory=journal.directory, parent=root, reclaim_record=marker,
             plan=plan, journal_record=record,
