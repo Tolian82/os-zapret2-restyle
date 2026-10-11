@@ -197,7 +197,17 @@ class CandidateEngineStartTests(unittest.TestCase):
 
     def test_installed_shell_only_exposes_fixed_engine_command(self):
         shell=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend/voice_native_process_lifecycle.sh").read_text()
-        self.assertIn("stop|start|start-candidate-engine",shell)
+        self.assertIn(
+            'case "$1" in stop|stop-candidate-engine|start|'
+            'start-candidate-engine|start-candidate-supervisor) ;; *) exit 64 ;; esac',
+            shell,
+        )
+        solo=shell.split("    stop-candidate-engine)")[1].split("        ;;")[0]
+        self.assertIn('launcher_stop "${CHILD_PIDFILE}" 5',solo)
+        self.assertIn('"${SUPERVISOR_DAEMON_PIDFILE}"',solo)
+        self.assertIn('"${SUPERVISOR_MONITOR_PIDFILE}"',solo)
+        self.assertNotIn("supervisor_stop",solo)
+        self.assertNotIn("eval ",solo)
         phase=shell.split("    start-candidate-engine)")[1].split("        ;;")[0]
         self.assertIn("launcher_start_once",phase)
         self.assertNotIn("supervisor_start",phase)
