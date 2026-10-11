@@ -199,7 +199,10 @@ class FreeBSDVoiceProcessActions:
            before["supervisor"]["state"] != "running":
             raise NativeVoiceProcessActionError("ambiguous candidate process ownership")
         if pinned:
-            running = _live_instances(before)
+            running = _live_instances({
+                "engine": before["engine"],
+                "supervisor": before["supervisor"],
+            })
             if running != expected_instances:
                 raise NativeVoiceProcessActionError(
                     "candidate process PID/start changed before native stop"

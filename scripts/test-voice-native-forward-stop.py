@@ -229,7 +229,7 @@ class NativeForwardStopTests(unittest.TestCase):
         original=self.fx.whole.mark_mutating
         def swap():
             original()
-            self.pathbytes["daemon"]=b"/bin/foreign\\0"
+            self.pathbytes["daemon"]=b"/bin/foreign\0"
         with patch.object(self.fx.whole,"mark_mutating",side_effect=swap):
             with self.assertRaises((RuntimeError,ValueError,OSError)):
                 self.call()
