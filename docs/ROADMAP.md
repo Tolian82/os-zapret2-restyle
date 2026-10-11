@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**v0.5.1_93 (2026-10-11):** Stage-2 COMMITTED-only Voice postcommit IPFW replay was added to the existing private same-FD coordinator. It independently verifies all five candidate domains and the durable IPFW old→desired intent, including a previously switched ownership ledger, before calling the existing IPFW commit/cleanup. Finishing an already completed transaction is read-only. Simulated FreeBSD/native kernel and real filesystem crash-boundary tests were added. Remaining crash/reboot qualification and production service/GUI wiring are NOT done; no appliance or Telegram media acceptance.
+
+
 **v0.5.1_92 (2026-10-11):** Added a second real-filesystem/simulated-native-IPFW POWER-CUT regression for Stage-2 five-resource rollback: interrupt the PREVIOUS runtime restore after candidate-active→restore-retired but before restore-ready(previous)→active, after IPFW has already been reverted and journal stays MUTATING. On retry with the same immutable old/forward/restore redo, the normal previous runtime redo MUST take precedence over `_90`'s missing-active forward repair, restore old Config/runtime, then restart previous engine and supervisor. Tests assert no premature restart or journal clearing after the first crash and exact five-domain recovery after retry. No production executor changes in this revision; private GUI/boot and real appliance qualification still pending.
 
 
