@@ -201,8 +201,8 @@ def prepare_previous_cleanup(
             raise CleanupPrepareError("stale previous process restart epoch")
     owned=ledger.owned()
     if ledger.pending() is not None or owned is None or (
-        fingerprint(canonical_manifest(owned))!=old["firewall"]
-        or observe_owned_ipfw(ledger,adapter)!=old["firewall"]
+        fingerprint(canonical_manifest(owned))!=whole["previous"]["firewall"]
+        or observe_owned_ipfw(ledger,adapter)!=whole["previous"]["firewall"]
     ):
         raise CleanupPrepareError("foreign or unfinished previous IPFW state")
     config_redo=ConfigRestoreRedo(journal.directory).read()
@@ -252,7 +252,7 @@ def prepare_previous_cleanup(
     fields={
         "schema":1,"phase":"prepared-only","whole_check":whole["check"],
         "receipt_check":receipt["check"],
-        "previous":dict(old),
+        "previous":dict(whole["previous"]),
         "candidate_runtime_sha256":whole["candidate"][RUNTIME_FIELD],
         "config_dev":owner.st_dev,"config_inode":owner.st_ino,
         "config_redo_check":None if config_redo is None else config_redo["checksum"],

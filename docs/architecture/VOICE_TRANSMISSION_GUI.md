@@ -1,5 +1,10 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+### v0.5.1_54 — исправление проверки firewall при cleanup prepare
+
+CI `_53` обнаружил `KeyError: 'firewall'`: функция `bound_resource_fingerprints()` возвращает только Config/runtime, а не полный previous snapshot. Исправлено: хеш previous IPFW берётся из SHA-верифицированного `whole["previous"]["firewall"]`, а в durable cleanup plan записываются все пять прежних ресурсных хешей из того же whole intent. Результаты независимого наблюдения Config/runtime по-прежнему сверяются со старым backup, native kernel IPFW с owned ledger, прочие проверки PID/start/receipt/Config inode не изменены. Обязательно пересдать Linux+FreeBSD тесты; ни cleanup, ни Voice ON не разрешены.
+
+
 ### v0.5.1_53 — долговременная подготовка очистки после полного отката
 
 `voice_cutover_cleanup_prepare.py` записывает новый private `previous-cleanup-plan.json` с SHA `intent.json`, SHA `previous-rollback-receipt.json`, ровно пятью предыдущими ресурсами, оригинальным SHA кандидатного runtime, dev/inode Config и криптографически проверенными маркерами redo/retired. Перед созданием заново проверяются предыдущие Config/runtime/install-image, native IPFW без pending, engine/daemon/monitor, совпадение новой kernel UID/GID/image/argv аттестации с PID/start в receipt и непрерывность FD9/Config flock. Реальный внутренний ручной откат создаёт план **до снятия** общего Config lock, сразу после receipt. Повторное создание идентичного плана допустимо. `native-voice-boot-review` проверяет принадлежность плана этому журналу, receipt и redo. В этой ревизии **не удаляются** retired runtime и redo: будущий reclaimer должен использовать отдельные durable этапы, чтобы обрыв удаления не превращал состояние в ложную готовность. Не меняется Voice ON и не разрешается автозапуск после reboot.

@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_54 — fix cleanup-plan firewall resource separation found by exact-head CI (2026-10-11):** The new `_53` cleanup-prepare negative/positive regression correctly failed: `bound_resource_fingerprints()` returns only the two prior Config/runtime fingerprints, while the five-resource security/journal hashes (engine, supervisor, firewall) live in `whole["previous"]`. The cleanup preflight was incorrectly accessing `old["firewall"]`, raising `KeyError`, and would have attempted to persist a two-resource `previous` plan. `_54` uses the SHA-verified schema-4 whole-intent `previous.firewall` for IPFW kernel/ledger validation, retains saved per-file SHA observations for Config/runtime, and stores **all five** sealed previous resource fingerprints in the durable private cleanup plan. No weakening of five-domain verification; still no deletion, journal finish, reboot auto-replay or Voice ON. Re-run Linux/FreeBSD 15 CI on `_54`; earlier `_53` regression failed and is not deployable. PLUGIN_REVISION=54.
+
+
 **v0.5.1_53 — durable, non-destructive previous-five-resource cleanup PREPARE under both locks (2026-10-11):** Added `voice_cutover_cleanup_prepare.py` to create write-once, fsync'd private `previous-cleanup-plan.json` while the existing FD9 and SAME Config inode flock are still held. Preflight requires the exact schema-4 MUTATING whole journal, matching durable previous-rollback receipt, previous Config/runtime and install-image hashes+modes, restored IPFW kernel/ledger without pending, fresh kernel image/UID/GID/argv-attested engine/daemon/monitor PID/start equal to receipt and stable process probe; checks Config redo inode/whole SHA and runtime redo parent/expected retired candidate digest. Plan binds whole check, receipt checksum, previous five-domain hashes, candidate runtime checksum, old Config dev/inode, optional redo checks and exact candidate-retired directory identity, then fsyncs. Retried identical prepare is idempotent; missing/foreign/torn redo or foreign retired tree refuses. Native manual recovery now prepares this record **inside** its existing `seal_previous(fd)` hook before Config unlock, after sealing previous receipt. Read-only boot review checks cleanup plan against persisted receipt/journal/redo, but NEVER treats it as authorization. No deletion, journal finish, boot automatic replay or Voice ON yet. Linux/FreeBSD CI covers original inode flock, recovered previous assets, candidate tree retirement, forged receipt, foreign/corrupt cleanup plan and journal phase refusal. `PLUGIN_REVISION=53`; exact-head CI pending.
 
 
@@ -211,13 +214,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_53` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_54` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=53` (**development candidate, not published**);
+- `PLUGIN_REVISION=54` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
