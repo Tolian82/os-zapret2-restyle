@@ -1,0 +1,367 @@
+#!/usr/bin/env python3
+"""One locked native Voice forward executor: PREPARED -> committed five domains.
+
+PRIVATE, import-only: never a public GUI/configd/boot or old Telegram PoC path.
+The caller supplies the independently prepared schema-4 whole intent and
+pre-seeded old IPFW ownership. This composes the existing native stages, not
+alternative process/Config/IPFW mutation mechanisms. It holds ONE original
+OPNsense config.xml inode flock over the whole transition, in addition to
+the ORIGINAL FD9 lifecycle owner; each stage rechecks both.
+
+Any failed stage leaves a durable PREPARED/MUTATING/COMMITTED intent and the
+previous checkpoint. In particular, NEVER implicitly restart an old engine
+after partial IPFW/Config mutation. The existing five-resource recovery is
+a separate fail-closed path pending safe same-FD integration. A successful
+COMMITTED state also remains journaled for later postcommit cleanup/boot.
+"""
+from __future__ import annotations
+
+import fcntl
+import os
+from pathlib import Path
+
+from voice_cutover_backup import bound_resource_fingerprints, inspect_previous
+from voice_cutover_config_restore import _pinned_regular
+from voice_cutover_journal import (
+    VoiceCutoverJournal, RUNTIME_BOUND_SCHEMA, BOUND_FIELD,
+    _digest, validate_record,
+)
+from voice_firewall_ledger import VoiceOwnershipStore, canonical_manifest, fingerprint
+from voice_firewall_transaction import plan_postcommit_cleanup, verify_prior_state
+from voice_ipfw_adapter import FreeBSDIPFWAdapter
+from voice_ipfw_runtime import commit_verified, require_no_legacy
+from voice_native_process_probe import FreeBSDVoiceProcessProbe
+from voice_native_kernel_argv import FreeBSDKernelArgvReader, SYSTEM_PATHS, _live_instances
+from voice_native_supervisor_launch import canonical_supervisor_argv
+from voice_native_recovery_quiescence import EXPECTED_SCRIPTS, PIDFILES, _locked_config
+from voice_native_process_actions import FreeBSDVoiceProcessActions, SCRIPT
+from voice_native_file_observer import observe_live_files
+from voice_native_forward_runtime import _read_redo
+from voice_native_forward_config import (
+    persist_forward_candidate_config, read_forward_config_redo,
+)
+from voice_native_forward_stop import stop_previous_and_install_forward_runtime
+from voice_native_candidate_engine_start import start_forward_candidate_engine
+from voice_native_forward_ipfw import install_forward_voice_ipfw
+from voice_native_forward_supervisor import start_forward_voice_supervisor
+from voice_native_live_preflight import _current_engine_args
+
+
+class NativeForwardApplyError(RuntimeError):
+    """A failed or ambiguous transition MUST retain all recovery evidence."""
+
+
+def _authorities(*, journal, ledger, probe, kernel_reader, read_adapter,
+                 write_adapter, previous_backup, require_lifecycle_owner):
+    if not isinstance(journal, VoiceCutoverJournal) or (
+        not isinstance(ledger, VoiceOwnershipStore)
+        or not isinstance(probe, FreeBSDVoiceProcessProbe)
+        or probe.expected != EXPECTED_SCRIPTS or probe.pidfiles != PIDFILES
+        or Path(probe.previous_backup) != Path(previous_backup)
+        or not isinstance(kernel_reader, FreeBSDKernelArgvReader)
+        or not isinstance(read_adapter, FreeBSDIPFWAdapter)
+        or read_adapter.allow_mutations is not False
+        or not isinstance(write_adapter, FreeBSDIPFWAdapter)
+        or write_adapter.allow_mutations is not True
+        or any(x.rule_base != 19000 or x.rule_max != 19010
+               for x in (read_adapter, write_adapter))
+        or not callable(require_lifecycle_owner)
+    ):
+        raise NativeForwardApplyError("untrusted native Voice forward authorities")
+
+
+def attest_forward_five_resources(
+    *, journal, ledger, previous_backup, config_path, config_fd,
+    config_owner, staged_config, candidate_runtime, active_runtime,
+    desired_manifest, probe, kernel_reader, read_adapter,
+    require_lifecycle_owner, expected_phase="mutating",
+    ipfw_committed=False,
+):
+    """Independently witness five real candidate domains under BOTH locks.
+
+    A successful writer is not a permit to commit: re-open all read-only
+    sources and compare twice, including process PID/start/kernel argv,
+    original Config inode, bound previous bytes, installed runtime+redo,
+    and actual IPFW tables/rules. In COMMITTED mode verify post-cleanup
+    desired ownership instead of the now-absent IPFW pending intent.
+    """
+    if expected_phase not in ("mutating", "committed") or (
+        ipfw_committed and expected_phase != "committed"
+    ):
+        raise NativeForwardApplyError("invalid forward attestation phase")
+    _authorities(
+        journal=journal, ledger=ledger, probe=probe,
+        kernel_reader=kernel_reader, read_adapter=read_adapter,
+        write_adapter=FreeBSDIPFWAdapter(19000, 19010, allow_mutations=True),
+        previous_backup=previous_backup,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    config_path, staged_config, candidate_runtime, active_runtime = map(
+        Path, (config_path, staged_config, candidate_runtime, active_runtime)
+    )
+    previous_backup = Path(previous_backup)
+    desired = canonical_manifest(desired_manifest)
+    wanted_sha = fingerprint(desired)
+
+    def observe():
+        require_lifecycle_owner()
+        _locked_config(config_path, config_fd, config_owner)
+        cfg = _pinned_regular(config_path, config_fd, owner=config_owner)
+        record = journal.read()
+        if record is None or record["schema"] != RUNTIME_BOUND_SCHEMA or (
+            record["phase"] != expected_phase
+            or record["candidate"][BOUND_FIELD] != wanted_sha
+        ):
+            raise NativeForwardApplyError("whole forward intent not at expected phase")
+        # Runtime/forward-Config redo and retained directory use the original
+        # MUTATING digest, never the later COMMITTED digest. Reconstruct
+        # the predecessor from the validated persisted terminal journal.
+        predecessor_body = {k: v for k, v in record.items() if k != "check"}
+        predecessor_body["phase"] = "mutating"
+        predecessor_body["check"] = _digest(predecessor_body)
+        mutating = validate_record(predecessor_body)
+        old = bound_resource_fingerprints(previous_backup, record["previous"])
+        saved = inspect_previous(previous_backup)
+        candidate = observe_live_files(staged_config, candidate_runtime)
+        live = observe_live_files(config_path, active_runtime)
+        if candidate != {
+            "config": record["candidate"]["saved_xml_sha256"],
+            "runtime": record["candidate"]["candidate_runtime_sha256"],
+        } or live != candidate:
+            raise NativeForwardApplyError("five-domain desired Config/runtime not active")
+        if os.stat(config_path, follow_symlinks=False).st_ino != cfg.st_ino or (
+            (cfg.st_dev, cfg.st_ino) != (os.fstat(config_fd).st_dev, os.fstat(config_fd).st_ino)
+            or (cfg.st_mode & 0o7777) != saved["config"]["mode"]
+        ):
+            raise NativeForwardApplyError("Config inode/mode changed after candidate write")
+        retained = active_runtime.with_name(
+            ".voice-forward-previous-" + mutating["check"][:20]
+        )
+        if retained.is_symlink() or not retained.is_dir() or (
+            observe_live_files(staged_config, retained)["runtime"] != old["runtime"]
+        ):
+            raise NativeForwardApplyError("previous runtime not retained")
+        redo = _read_redo(journal.directory)
+        parent = os.lstat(active_runtime.parent)
+        if redo is None or (
+            redo["whole_check"] != mutating["check"]
+            or redo["candidate_sha256"] != candidate["runtime"]
+            or redo["previous_sha256"] != old["runtime"]
+            or redo["retained_name"] != retained.name
+            or redo["active_name"] != active_runtime.name
+            or (redo["config_dev"], redo["config_inode"]) != (cfg.st_dev, cfg.st_ino)
+            or (redo["parent_dev"], redo["parent_inode"]) != (
+                parent.st_dev, parent.st_ino
+            )
+            or os.path.lexists(active_runtime.with_name(redo["ready_name"]))
+        ):
+            raise NativeForwardApplyError("forward runtime redo/parent not intact")
+        config_redo = read_forward_config_redo(journal.directory)
+        if live["config"] != old["config"]:
+            if config_redo is None or (
+                config_redo["whole_check"] != mutating["check"]
+                or config_redo["candidate_sha256"] != live["config"]
+                or config_redo["previous_sha256"] != old["config"]
+                or (config_redo["config_dev"], config_redo["config_inode"])
+                    != (cfg.st_dev, cfg.st_ino)
+            ):
+                raise NativeForwardApplyError("candidate Config lacks durable forward redo")
+        elif config_redo is not None and (
+            config_redo["whole_check"] != mutating["check"]
+        ):
+            raise NativeForwardApplyError("foreign forward Config redo")
+        old_owner, pending = ledger.owned(), ledger.pending()
+        if ipfw_committed:
+            if pending is not None or canonical_manifest(old_owner) != desired:
+                raise NativeForwardApplyError("postcommit IPFW owner is not desired")
+            verify_prior_state(read_adapter, desired_manifest, desired_manifest)
+        else:
+            if old_owner is None or pending is None or (
+                fingerprint(canonical_manifest(old_owner)) != record["previous"]["firewall"]
+                or pending["phase"] != "mutating"
+                or pending["previous_sha256"] != record["previous"]["firewall"]
+                or pending["desired_sha256"] != wanted_sha
+                or pending["previous"] != canonical_manifest(old_owner)
+                or pending["desired"] != desired
+            ):
+                raise NativeForwardApplyError("separate IPFW PRECOMMIT no longer bound")
+            plan_postcommit_cleanup(read_adapter, old_owner, desired_manifest)
+        require_no_legacy(read_adapter)
+        argv, argv_sha, _, _ = _current_engine_args(active_runtime)
+        if argv_sha != record["candidate"]["native_argv_sha256"] or (
+            {part.split("=", 1)[1] for part in argv if part.startswith("--port=")}
+            != {rule[1] for rule in desired_manifest["rules"].values()}
+        ):
+            raise NativeForwardApplyError("candidate engine digest/divert port mismatch")
+        instances = _live_instances(probe.observe_processes())
+        expected = {"engine": argv, **canonical_supervisor_argv(EXPECTED_SCRIPTS)}
+        for role, identity in instances.items():
+            if kernel_reader.argv(identity["pid"]) != expected[role] or (
+                kernel_reader.binary(identity["pid"]) != SYSTEM_PATHS[role]
+            ):
+                raise NativeForwardApplyError("candidate native kernel args/image mismatch")
+        return (record, old, candidate, instances,
+                canonical_manifest(old_owner), pending, redo, config_redo)
+
+    first = observe()
+    if observe() != first:
+        raise NativeForwardApplyError("five-resource state raced across attestation")
+    return first
+
+
+def commit_forward_voice_apply(
+    *, journal, ledger, previous_backup, config_path, config_fd,
+    config_owner, staged_config, candidate_runtime, active_runtime,
+    desired_manifest, probe, kernel_reader, read_adapter, write_adapter,
+    require_lifecycle_owner,
+):
+    """One-way COMMIT after independent 5-domain witness, no GUI/boot caller.
+
+    The durable WHOLE commit MUST precede IPFW ownership cleanup (existing
+    commit_verified contract); a crash between these states leaves COMMITTED
+    plus IPFW MUTATING for explicit postcommit reconciliation. Never roll
+    back after the whole intent is committed.
+    """
+    _authorities(
+        journal=journal, ledger=ledger, probe=probe, kernel_reader=kernel_reader,
+        read_adapter=read_adapter, write_adapter=write_adapter,
+        previous_backup=previous_backup,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    shared = dict(
+        journal=journal, ledger=ledger, previous_backup=previous_backup,
+        config_path=config_path, config_fd=config_fd, config_owner=config_owner,
+        staged_config=staged_config, candidate_runtime=candidate_runtime,
+        active_runtime=active_runtime, desired_manifest=desired_manifest,
+        probe=probe, kernel_reader=kernel_reader, read_adapter=read_adapter,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    before = attest_forward_five_resources(**shared)
+    if journal.read() != before[0] or ledger.pending() != before[5]:
+        raise NativeForwardApplyError("five resources raced before durable COMMIT")
+    journal.commit()  # fsync whole journal BEFORE retiring old IPFW ownership
+    committed = journal.read()
+    if committed is None or committed["phase"] != "committed" or (
+        committed["previous"] != before[0]["previous"]
+        or committed["candidate"] != before[0]["candidate"]
+    ):
+        raise NativeForwardApplyError("whole durable COMMIT not sealed")
+    attest_forward_five_resources(**shared, expected_phase="committed")
+    result = commit_verified(
+        ledger, write_adapter, desired_manifest, journal,
+        {"native_argv_sha256": committed["candidate"]["native_argv_sha256"]},
+    )
+    if result != "committed":
+        raise NativeForwardApplyError("IPFW ownership not committed")
+    post = attest_forward_five_resources(
+        **shared, expected_phase="committed", ipfw_committed=True,
+    )
+    if post[0] != committed:
+        raise NativeForwardApplyError("whole journal changed after IPFW COMMIT")
+    # Previous snapshot/runtime/redos/whole journal deliberately retained:
+    # postcommit archival/cleanup, service/boot ownership need separate gates.
+    return {
+        "state": "native-forward-five-resources-committed",
+        "whole_phase": "committed",
+        "ipfw_owner": "desired",
+        "config": "candidate", "runtime": "candidate",
+        "engine": "candidate", "supervisor": "candidate",
+        "previous_snapshot_retained": True,
+        "postcommit_cleanup_pending": True,
+        "public_voice_apply": False,
+        "media_pass": False,
+    }
+
+
+def execute_prepared_voice_apply(
+    *, journal, ledger, previous_backup, process_evidence,
+    security_evidence, config_path, active_runtime, staged_config,
+    candidate_runtime, desired_manifest, probe, kernel_reader,
+    read_adapter, write_adapter, require_lifecycle_owner,
+    actions_factory, config_owner, engine_runner=None,
+    supervisor_runner=None, engine_actuator=SCRIPT,
+    supervisor_actuator=SCRIPT,
+):
+    """Compose ALL existing real native forward stages under ONE Config fd.
+
+    Caller MUST already own original FD9 for the entire function and have
+    an audited, root-controlled actions_factory that binds this exact
+    supplied Config descriptor to native process security evidence.
+    This private API has no OS entrypoint. On ANY failure its journal is
+    intentionally preserved and no implicit unsafe service restart occurs.
+    """
+    _authorities(
+        journal=journal, ledger=ledger, probe=probe, kernel_reader=kernel_reader,
+        read_adapter=read_adapter, write_adapter=write_adapter,
+        previous_backup=previous_backup,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    if not callable(actions_factory) or (
+        type(config_owner) is not tuple or len(config_owner) != 2
+        or any(type(n) is not int or n < 0 for n in config_owner)
+    ):
+        raise NativeForwardApplyError("native Config and process owner required")
+    config_path = Path(config_path)
+    flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    require_lifecycle_owner()
+    fd = os.open(config_path, flags)
+    try:
+        _pinned_regular(config_path, fd, owner=config_owner)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _locked_config(config_path, fd, config_owner)
+        record = journal.read()
+        if record is None or record["phase"] != "prepared" or (
+            record["schema"] != RUNTIME_BOUND_SCHEMA
+            or record["candidate"][BOUND_FIELD] != fingerprint(
+                canonical_manifest(desired_manifest)
+            )
+            or ledger.pending() is not None
+        ):
+            raise NativeForwardApplyError("no prepared schema-4 native forward intent")
+        actions = actions_factory(fd)
+        if not isinstance(actions, FreeBSDVoiceProcessActions) or (
+            actions.config_fd != fd or actions.journal is not journal
+            or actions.probe is not probe
+            or actions.previous_backup != Path(previous_backup)
+            or actions.config_path != config_path
+            or actions.active_runtime != Path(active_runtime)
+        ):
+            raise NativeForwardApplyError("process actions not bound to this Config lock")
+        common = dict(
+            journal=journal, ledger=ledger, previous_backup=previous_backup,
+            active_runtime=active_runtime, staged_config=staged_config,
+            candidate_runtime=candidate_runtime, config_path=config_path,
+            probe=probe, kernel_reader=kernel_reader,
+            config_fd=fd, config_owner=config_owner,
+            require_lifecycle_owner=require_lifecycle_owner,
+        )
+        stop_previous_and_install_forward_runtime(
+            **common, process_evidence=process_evidence,
+            security_evidence=security_evidence, actions=actions,
+            ipfw_adapter=read_adapter,
+        )
+        start_forward_candidate_engine(
+            **common, read_ipfw_adapter=read_adapter,
+            runner=engine_runner, actuator=engine_actuator,
+        )
+        install_forward_voice_ipfw(
+            **common, desired_manifest=desired_manifest,
+            readonly_adapter=read_adapter, mutating_adapter=write_adapter,
+        )
+        start_forward_voice_supervisor(
+            **common, desired_manifest=desired_manifest,
+            readonly_adapter=read_adapter, runner=supervisor_runner,
+            actuator=supervisor_actuator,
+        )
+        persist_forward_candidate_config(
+            **{k: v for k, v in common.items() if k != "config_fd"},
+            locked_config_fd=fd, desired_manifest=desired_manifest,
+            readonly_adapter=read_adapter,
+        )
+        return commit_forward_voice_apply(
+            **{k: v for k, v in common.items() if k != "config_fd"},
+            config_fd=fd, desired_manifest=desired_manifest,
+            read_adapter=read_adapter, write_adapter=write_adapter,
+        )
+    finally:
+        os.close(fd)

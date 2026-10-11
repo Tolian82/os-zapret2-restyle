@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**v0.5.1_79 (2026-10-11):** Introduced PRIVATE `voice_native_forward_apply.py` to compose existing schema-4 PREPARED stop/runtime, one candidate engine, IPFW PRECOMMIT, candidate supervisor, and candidate Config under ONE ORIGINAL FD9 owner + ONE Config flock/inode, followed by independent double five-domain live attestation and durable whole COMMIT before existing `commit_verified` IPFW ownership/old-stage-table cleanup. The read-only witness recomputes the MUTATING predecessor digest from COMMITTED for retained runtime/redo evidence, verifies actual kernel process argv/PID-start and scoped IPFW, and retains previous backup/whole journal for postcommit cleanup. Includes genuine filesystem+simulated native IPFW commit tests and single-descriptor staged-order/failure tests in Linux/FreeBSD CI. **Not yet public Voice ON:** automatic same-FD prior rollback, postcommit cleanup/normal boot, GUI/configd wiring and real appliance are still OPEN; on ambiguous failure intent stays fail-closed.
+
+
 **v0.5.1_78 (2026-10-11):** `_77` Voice CI passed 9/10 real changed-candidate Config tests; the remaining negative source-replacement fixture used unlink()+create, which can recycle the just-freed inode. Replaced it with a separately created same-byte, same-mode file and `os.replace()` while the original inode still exists, then explicitly assert different inode before expecting the existing forward-redo anti-replacement check to refuse rollback. Production Config/IPFW/native lifecycle writer unchanged. This is an isolated test-fixture correction; exact-head `_78` CI and FreeBSD 15 qualification required.
 
 
@@ -7,7 +10,7 @@
 
 
 **Статус:** ЕДИНЫЙ АКТУАЛЬНЫЙ ПЛАН · Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328) · 2026-10-11  
-**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_78` (Stage 2 начат). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
+**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_79` (Stage 2 начат). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
 **Приоритет:** законченный пользовательский сценарий, не очередная подсистема проверки. Детальное утверждённое ТЗ и компоновка остаются в [VOICE_TRANSMISSION_GUI.md](VOICE_TRANSMISSION_GUI.md); сведения о стенде и фактических звонках — в отдельных исследовательских документах. Исторические задачи в ROADMAP, START_HERE и старых блоках архитектурного документа НЕ заменяют эту последовательность.
 
 ## Цель и определение готовности
@@ -42,6 +45,8 @@
 **Результат:** на `ff6431c` полный CI (повторный Validate Project), Voice, governance и FreeBSD 15 PASS. Непостоянный первый сбой Strategy Lab circular-e2e не воспроизвёлся без изменения исходников. Документационная стабилизация не меняла ревизию; затем начался этап 2 с новым кодом `_76`.
 
 ### Этап 2 — Собрать один настоящий native Apply/rollback (ТЕКУЩИЙ)
+
+**Реализация `_79`:** появился приватный `voice_native_forward_apply.py` с одним дескриптором Config/flock и одной FD9-арендой для уже готовых STOP → runtime → engine → IPFW PRECOMMIT → supervisor → forward Config; затем двойная независимая проверка всех пяти живых ресурсов, `journal.commit()` и штатный `commit_verified()` IPFW. Предшествующая MUTATING-сумма независимо восстанавливается из терминального COMMITTED для привязанных runtime/Config redo. Журнал/backup сохраняются до postcommit cleanup. **НЕ ЗАКРЫТО:** автоматический откат после неуспешной мутации должен использовать тот же уже захваченный Config FD, а существующий rollback пока пытается открывать/захватывать второй. Любая неоднозначность пока fail-closed, не READY и без публичного маршрута. Реальный FreeBSD/GUI/boot также не принят.
 
 **Уже реализовано в `_76`, исправлено в `_77–_78`:** отдельный **forward** candidate Config writer `voice_native_forward_config.py`, связанный с существующим schema-4 MUTATING, прежним backup, активным/runtime redo, pending IPFW, реальными ролями dvtws2+supervisor (kernel argv/binary), Config inode и непрерывными FD9/flock. Новое write-ahead `forward-config-redo.json` строго необходимо для прямой записи (existing `config-restore-redo.json` относится только к *обратной* записи прежних байтов). Writer не имеет публичного CLI; при обрыве candidate-prefix записи новый redo позволяет либо продолжить прямую запись под живым native gate, либо существующему Config restore безопасно восстановить прежние байты после остановки кандидата и восстановления IPFW в составе полного rollback. Текущие независимые модули ещё не дают общего COMMIT. Нельзя удалять redo/intent по одному успешному writer.
 
