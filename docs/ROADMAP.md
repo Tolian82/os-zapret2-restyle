@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**v0.5.1_80 (2026-10-11):** `_79` real five-resource COMMIT integration test exposed one concrete API mismatch: existing `voice_ipfw_runtime.commit_verified(store, adapter, whole, proof)` takes four arguments, not five. The private native Apply now invokes that existing post-whole-commit IPFW function with the correct contract; no independent IPFW commit path or public ON authority is added. `_79` Voice CI passed 7/8 new coordinator tests, failure strictly at this call; `_80` exact-head CI and actual postcommit state verification required.
+
+
 **v0.5.1_79 (2026-10-11):** Introduced PRIVATE `voice_native_forward_apply.py` to compose existing schema-4 PREPARED stop/runtime, one candidate engine, IPFW PRECOMMIT, candidate supervisor, and candidate Config under ONE ORIGINAL FD9 owner + ONE Config flock/inode, followed by independent double five-domain live attestation and durable whole COMMIT before existing `commit_verified` IPFW ownership/old-stage-table cleanup. The read-only witness recomputes the MUTATING predecessor digest from COMMITTED for retained runtime/redo evidence, verifies actual kernel process argv/PID-start and scoped IPFW, and retains previous backup/whole journal for postcommit cleanup. Includes genuine filesystem+simulated native IPFW commit tests and single-descriptor staged-order/failure tests in Linux/FreeBSD CI. **Not yet public Voice ON:** automatic same-FD prior rollback, postcommit cleanup/normal boot, GUI/configd wiring and real appliance are still OPEN; on ambiguous failure intent stays fail-closed.
 
 
@@ -14,7 +17,7 @@
 
 ## Current Voice completion order — 2026-10-11
 
-**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_79`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
+**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_80`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
 
 1. **Stabilization (current):** exact _75 identity in START_HERE/PROJECT_STATE/release; fix Project CI dynamic expected package string; audit open GitHub requests; exact-head full Voice/Project/governance/FreeBSD CI.
 2. **One native forward Apply:** reuse PREPARED/STOP/runtime/engine/IPFW/supervisor and five-resource restore; add *forward* candidate Config persist with durable intent; independent five-domain COMMIT/rollback.

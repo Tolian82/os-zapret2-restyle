@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**v0.5.1_80 (2026-10-11):** `_79` real five-resource COMMIT integration test exposed one concrete API mismatch: existing `voice_ipfw_runtime.commit_verified(store, adapter, whole, proof)` takes four arguments, not five. The private native Apply now invokes that existing post-whole-commit IPFW function with the correct contract; no independent IPFW commit path or public ON authority is added. `_79` Voice CI passed 7/8 new coordinator tests, failure strictly at this call; `_80` exact-head CI and actual postcommit state verification required.
+
+
 **v0.5.1_79 (2026-10-11):** Introduced PRIVATE `voice_native_forward_apply.py` to compose existing schema-4 PREPARED stop/runtime, one candidate engine, IPFW PRECOMMIT, candidate supervisor, and candidate Config under ONE ORIGINAL FD9 owner + ONE Config flock/inode, followed by independent double five-domain live attestation and durable whole COMMIT before existing `commit_verified` IPFW ownership/old-stage-table cleanup. The read-only witness recomputes the MUTATING predecessor digest from COMMITTED for retained runtime/redo evidence, verifies actual kernel process argv/PID-start and scoped IPFW, and retains previous backup/whole journal for postcommit cleanup. Includes genuine filesystem+simulated native IPFW commit tests and single-descriptor staged-order/failure tests in Linux/FreeBSD CI. **Not yet public Voice ON:** automatic same-FD prior rollback, postcommit cleanup/normal boot, GUI/configd wiring and real appliance are still OPEN; on ambiguous failure intent stays fail-closed.
 
 
@@ -10,7 +13,7 @@
 
 
 **Статус:** ЕДИНЫЙ АКТУАЛЬНЫЙ ПЛАН · Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328) · 2026-10-11  
-**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_79` (Stage 2 начат). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
+**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_80` (Stage 2 начат). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
 **Приоритет:** законченный пользовательский сценарий, не очередная подсистема проверки. Детальное утверждённое ТЗ и компоновка остаются в [VOICE_TRANSMISSION_GUI.md](VOICE_TRANSMISSION_GUI.md); сведения о стенде и фактических звонках — в отдельных исследовательских документах. Исторические задачи в ROADMAP, START_HERE и старых блоках архитектурного документа НЕ заменяют эту последовательность.
 
 ## Цель и определение готовности

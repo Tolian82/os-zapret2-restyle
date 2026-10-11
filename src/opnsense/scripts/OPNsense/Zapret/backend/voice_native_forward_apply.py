@@ -248,7 +248,7 @@ def commit_forward_voice_apply(
         raise NativeForwardApplyError("whole durable COMMIT not sealed")
     attest_forward_five_resources(**shared, expected_phase="committed")
     result = commit_verified(
-        ledger, write_adapter, desired_manifest, journal,
+        ledger, write_adapter, journal,
         {"native_argv_sha256": committed["candidate"]["native_argv_sha256"]},
     )
     if result != "committed":
