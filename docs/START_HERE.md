@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_58 — read-only cold-boot review of durably sealed ROLLED_BACK (2026-10-11):** After `_55`–`_57` made a terminal rollback journal possible, native boot diagnostics can now reopen the checksum-valid `rolled_back` phase and reconstruct its exact schema-4 `mutating` predecessor. Existing write-once receipt, cleanup plan, Config/runtime redo and saved candidate digest remain bound to that predecessor, not the newly recomputed terminal SHA. A terminal review requires original Config inode, previous Config/runtime fingerprints, matching previous IPFW on disk and no pending IPFW mutation; for runtime redo it also verifies the exact retired candidate tree against the previously sealed full runtime SHA. Stale process epochs and postboot kernel reset are reported without claiming operational readiness. Missing/foreign data fail closed. Nothing gets deleted or started, Voice ON is blocked and Draft PR #328 remains uninstalled. `PLUGIN_REVISION=58`; Linux/FreeBSD CI must pass on this exact commit. The CI failure at `_57` also exposed stale package identities in Level-1 documentation; synchronized state, handoff and roadmap for `_58`.
+
 **v0.5.1_57 — correct injected rollback regression boundary (2026-10-11):** Exact-head `_56` Voice CI passed the preceding suites but the isolated injected recovery executor intentionally returns no `whole_intent_phase`, exposing an overly broad new assertion. `_57` now requires `rolled_back` only from the real native-seal path; mock-only injected recovery still must preserve the original MUTATING whole journal, without fabricating terminal receipt evidence. No reduction in production lifecycle checks. `PLUGIN_REVISION=57`; new Linux/FreeBSD 15 head CI required, Voice ON blocked and PR remains Draft.
 
 **v0.5.1_56 — fix Python journal import syntax (2026-10-11):** Exact-head Voice CI for `_55` failed at import time because the new digest import was accidentally written as `from voice_cutover_journal import _digest, (`. Corrected to a separate valid Python import without changing rollback semantics; _55 was not qualified. `PLUGIN_REVISION=56`. Run the complete Linux/FreeBSD voice CI on this head before any readiness claim. Draft PR #328 remains uninstalled and Voice ON blocked.
@@ -220,13 +222,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_54` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_58` — active Draft PR #328; schema-4 five-resource rollback can seal terminal `rolled_back`, cold-boot review is now terminal-aware but no destructive cleanup, automatic recovery or Voice ON is authorized. Next: a crash-safe cleanup/reclaimer protocol with refreshed five-resource/kernel attestation and on-router FreeBSD qualification.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=54` (**development candidate, not published**);
+- `PLUGIN_REVISION=58` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

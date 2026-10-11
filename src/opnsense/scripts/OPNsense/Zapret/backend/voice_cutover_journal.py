@@ -165,6 +165,24 @@ def bound_candidate_runtime(record: dict) -> str:
     return record["candidate"][RUNTIME_FIELD]
 
 
+
+def mutating_predecessor(record: dict) -> dict:
+    """Reconstruct the SHA-verified original intent from terminal ROLLED_BACK.
+
+    A terminal journal never reuses its *new* checksum for sealed pre-rollback
+    receipt/redo. The original MUTATING checksum is deterministic and must
+    match each independently sealed predecessor witness before any cleanup.
+    This helper is READ-ONLY; no terminal record grants deletion permission.
+    """
+    record = validate_record(record)
+    if record["schema"] != RUNTIME_BOUND_SCHEMA or record["phase"] != "rolled_back":
+        raise CutoverJournalError("schema-4 rolled-back predecessor required")
+    original = {k:v for k,v in record.items() if k != "check"}
+    original["phase"] = "mutating"
+    original["check"] = _digest(original)
+    return validate_record(original)
+
+
 class VoiceCutoverJournal:
     """Disk-only journal: CALLER must hold Config and native lifecycle locks."""
 

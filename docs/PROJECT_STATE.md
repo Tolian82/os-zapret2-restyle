@@ -1,5 +1,7 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_58 — read-only cold-boot review of durably sealed ROLLED_BACK (2026-10-11):** After `_55`–`_57` made a terminal rollback journal possible, native boot diagnostics can now reopen the checksum-valid `rolled_back` phase and reconstruct its exact schema-4 `mutating` predecessor. Existing write-once receipt, cleanup plan, Config/runtime redo and saved candidate digest remain bound to that predecessor, not the newly recomputed terminal SHA. A terminal review requires original Config inode, previous Config/runtime fingerprints, matching previous IPFW on disk and no pending IPFW mutation; for runtime redo it also verifies the exact retired candidate tree against the previously sealed full runtime SHA. Stale process epochs and postboot kernel reset are reported without claiming operational readiness. Missing/foreign data fail closed. Nothing gets deleted or started, Voice ON is blocked and Draft PR #328 remains uninstalled. `PLUGIN_REVISION=58`; Linux/FreeBSD CI must pass on this exact commit. The CI failure at `_57` also exposed stale package identities in Level-1 documentation; synchronized state, handoff and roadmap for `_58`.
+
 **v0.5.1_54 — fix cleanup-plan firewall resource separation found by exact-head CI (2026-10-11):** The new `_53` cleanup-prepare negative/positive regression correctly failed: `bound_resource_fingerprints()` returns only the two prior Config/runtime fingerprints, while the five-resource security/journal hashes (engine, supervisor, firewall) live in `whole["previous"]`. The cleanup preflight was incorrectly accessing `old["firewall"]`, raising `KeyError`, and would have attempted to persist a two-resource `previous` plan. `_54` uses the SHA-verified schema-4 whole-intent `previous.firewall` for IPFW kernel/ledger validation, retains saved per-file SHA observations for Config/runtime, and stores **all five** sealed previous resource fingerprints in the durable private cleanup plan. No weakening of five-domain verification; still no deletion, journal finish, reboot auto-replay or Voice ON. Re-run Linux/FreeBSD 15 CI on `_54`; earlier `_53` regression failed and is not deployable. PLUGIN_REVISION=54.
 
 
@@ -223,8 +225,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_54` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_54.pkg` (**not published, do not install**);
+- current source candidate revision: `_58` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_58.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

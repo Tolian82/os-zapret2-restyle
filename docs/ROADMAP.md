@@ -1,5 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_58`: recognize sealed `rolled_back` in native cold-boot review while binding prior MUTATING checksum to receipt/redo/cleanup plan and exact previous Config/runtime/kernel state; no automatic cleanup or Voice ON
+- [ ] Next: implement interruption-resumable cleanup/reclaimer with independent native FreeBSD process/argv attestation and exact obsolete-path ownership, then durable whole-intent closure (no unverified automatic boot replay)
 - [x] Current candidate `v0.5.1_54`: correct isolated two-file snapshot versus SHA-sealed five-domain whole-journal IPFW references in durable cleanup preparation; rerun actual Linux/FreeBSD CI
 - [ ] Next: implement multi-phase fsync'd reclaimer for safely retiring redo/old candidate, verifying kernel image/argv on OPNsense before automatic reboot recovery or Voice ON
 - [x] Previous candidate `v0.5.1_53`: persist SHA-sealed and inode-bound post-rollback cleanup PREPARE plan under continuous FD9+Config flock; exact retired candidate and both redo checks prevent foreign deletion; no destructive cleanup or Voice ON

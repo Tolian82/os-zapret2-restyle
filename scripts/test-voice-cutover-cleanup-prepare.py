@@ -22,6 +22,7 @@ from voice_cutover_recovery_receipt import (
 )
 from voice_cutover_config_redo import ConfigRestoreRedo
 from voice_cutover_runtime_restore import _arm, _record
+from voice_cutover_journal import mutating_predecessor
 from voice_native_recovery_quiescence import EXPECTED_SCRIPTS
 
 
@@ -115,6 +116,7 @@ class CleanupPrepareTests(unittest.TestCase):
         self.assertEqual("rolled_back",self.fx.fx.whole.read()["phase"])
         self.assertEqual("previous-restored-needs-final-cleanup",
                          self.fx.fx.whole.inspect())
+        self.assertEqual(before,mutating_predecessor(self.fx.fx.whole.read()))
         self.assertEqual(before["previous"],self.fx.fx.whole.read()["previous"])
         self.assertEqual(before["candidate"],self.fx.fx.whole.read()["candidate"])
         plan=read_cleanup_plan(self.fx.fx.whole.directory)

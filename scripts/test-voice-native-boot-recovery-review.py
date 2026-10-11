@@ -7,6 +7,7 @@ healthy. No test authorizes automatic Voice ON, rollback or journal cleanup.
 """
 from __future__ import annotations
 
+import copy
 import fcntl
 import importlib.util
 import os
@@ -39,6 +40,7 @@ def load(path,name):
 
 f=load("test-voice-cutover-runtime-bound-intent.py","boot_review_schema4_fixture")
 k=load("test-voice-native-ipfw-ownership.py","boot_review_kernel_fixture")
+cleanup_fixture=load("test-voice-cutover-cleanup-prepare.py","boot_review_terminal_fixture")
 
 
 class BootReviewTests(unittest.TestCase):
@@ -188,6 +190,97 @@ class BootReviewTests(unittest.TestCase):
         self.assertIn("voice_native_boot_recovery_review.py",script)
         self.assertIn("native-voice-rollback-five|native-voice-boot-review|",script)
         self.assertIn("service_with_lifecycle_lock",script)
+
+
+
+class TerminalBootReviewTests(unittest.TestCase):
+    """Read-only post-crash review of a REAL sealed terminal journal.
+
+    The fixture seals the receipt/plan under a genuine Linux/FreeBSD flock
+    BEFORE boot inspection. The inspection never runs cleanup or restarts.
+    """
+    def setUp(self):
+        self.helper=cleanup_fixture.CleanupPrepareTests()
+        self.helper.setUp()
+        self.addCleanup(self.helper.doCleanups)
+        self.fx=self.helper.fx
+        self.fx.seal()
+        self.helper.complete()
+        self.before=self.fx.fx.whole.read()
+        self.calls=[]
+
+    def inspect(self):
+        fd=os.open(self.fx.config,os.O_RDWR)
+        try:
+            fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            return inspect_boot_recovery(
+                journal=self.fx.fx.whole,ledger=self.fx.fx.ipfw,
+                previous_backup=self.fx.fx.backup,
+                process_evidence=self.fx.fx.process,
+                security_evidence=self.fx.fx.policy,
+                install_image=self.fx.image,
+                config_path=self.fx.config,
+                active_runtime=self.fx.live,
+                probe=self.fx.probe,adapter=self.fx.adapter,
+                config_fd=fd,config_owner=(os.geteuid(),os.getegid()),
+                require_lifecycle_owner=lambda:self.calls.append("FD9"),
+            )
+        finally:
+            os.close(fd)
+
+    def test_terminal_boot_read_only_never_promotes_to_voice_on(self):
+        report=self.inspect()
+        self.assertEqual("previous-rollback-sealed-needs-manual-finalization",
+                         report["state"])
+        self.assertEqual("rolled_back",report["phase"])
+        self.assertEqual("previous",report["runtime"])
+        self.assertEqual("previous",report["config"])
+        self.assertEqual("previous",report["kernel"])
+        self.assertEqual("prepared-only",report["cleanup_plan"])
+        for field in ("safe_to_start","safe_to_rollback_automatically",
+                      "safe_to_close_intent","voice_on"):
+            self.assertIs(report[field],False)
+        self.assertEqual(self.before,self.fx.fx.whole.read())
+        self.assertTrue(self.fx.image.exists())
+        self.assertGreaterEqual(len(self.calls),2)
+
+    def test_terminal_boot_reset_kernel_and_new_epoch_not_readiness(self):
+        self.fx.kernel.rules[19000]=k.TCP
+        self.fx.state=copy.deepcopy(self.fx.state)
+        self.fx.state["supervisor"]["daemon"]["start_ns"]+=1234
+        report=self.inspect()
+        self.assertEqual("unknown-or-reset",report["kernel"])
+        self.assertEqual("stale-process-epoch",report["previous_receipt"])
+        self.assertEqual("previous-rollback-sealed-needs-manual-finalization",
+                         report["state"])
+        self.assertIs(report["safe_to_close_intent"],False)
+        self.assertEqual(self.before,self.fx.fx.whole.read())
+
+    def test_terminal_missing_or_corrupt_receipt_plan_fail_closed(self):
+        for name in ("previous-cleanup-plan.json","previous-rollback-receipt.json"):
+            with self.subTest(name=name):
+                path=self.fx.fx.whole.directory/name
+                saved=path.read_bytes()
+                path.unlink()
+                try:
+                    with self.assertRaises((ValueError,OSError,RuntimeError)):
+                        self.inspect()
+                    self.assertEqual(self.before,self.fx.fx.whole.read())
+                finally:
+                    path.write_bytes(saved)
+                    path.chmod(0o600)
+        path=self.fx.fx.whole.directory/"previous-cleanup-plan.json"
+        path.write_bytes(b'{"schema":1,"phase":"forged"}')
+        with self.assertRaises((ValueError,OSError,RuntimeError)):
+            self.inspect()
+        self.assertEqual(self.before,self.fx.fx.whole.read())
+
+    def test_terminal_previous_bytes_or_inode_tampering_denied(self):
+        with self.fx.config.open("ab") as writer:
+            writer.write(b"changed")
+        with self.assertRaises((ValueError,OSError,RuntimeError)):
+            self.inspect()
+        self.assertEqual(self.before,self.fx.fx.whole.read())
 
 
 if __name__=="__main__":

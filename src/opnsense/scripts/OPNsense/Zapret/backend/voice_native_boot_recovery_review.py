@@ -17,7 +17,8 @@ from pathlib import Path
 import sys
 
 from voice_cutover_backup import bound_resource_fingerprints
-from voice_cutover_journal import RUNTIME_BOUND_SCHEMA, BOUND_FIELD, bound_candidate_runtime, VoiceCutoverJournal
+from voice_cutover_journal import (RUNTIME_BOUND_SCHEMA, BOUND_FIELD, bound_candidate_runtime,
+                                  mutating_predecessor, VoiceCutoverJournal)
 from voice_cutover_config_redo import ConfigRestoreRedo, may_resume_partial
 from voice_cutover_recovery_receipt import read_receipt
 from voice_cutover_cleanup_prepare import read_cleanup_plan
@@ -72,10 +73,16 @@ def inspect_boot_recovery(
         if pending is not None:
             return _state("blocked", reason="orphan-ipfw-intent")
         return _state("no-whole-intent", reason="native-journal-absent")
-    if record["phase"] != "mutating" or record["schema"] != RUNTIME_BOUND_SCHEMA:
-        return _state("blocked", reason="no-schema4-mutating-cutover",
+    if record["phase"] not in ("mutating","rolled_back") or (
+        record["schema"] != RUNTIME_BOUND_SCHEMA
+    ):
+        return _state("blocked", reason="no-schema4-recoverable-cutover",
                       phase=record["phase"], schema=record["schema"])
-    candidate_sha=bound_candidate_runtime(record)
+    terminal = record["phase"] == "rolled_back"
+    # The last journal checksum changed at seal time. Every already-sealed
+    # receipt, cleanup plan and redo MUST refer to the original MUTATING SHA.
+    prior = mutating_predecessor(record) if terminal else record
+    candidate_sha=bound_candidate_runtime(prior)
     old=bound_resource_fingerprints(Path(previous_backup),record["previous"])
     prior_process=inspect_process_evidence(
         process_evidence, previous_backup, EXPECTED_SCRIPTS, record["previous"],
@@ -84,7 +91,7 @@ def inspect_boot_recovery(
         raise BootReviewError("previous process topology is not one running engine")
     policy=inspect_security_policy(
         security_evidence, previous_backup, process_evidence,
-        journal_record=record, expected_scripts=EXPECTED_SCRIPTS,
+        journal_record=prior, expected_scripts=EXPECTED_SCRIPTS,
     )
     if policy["schema"] != SUPERVISOR_BOUND_POLICY_SCHEMA or (
         policy["policy"]["supervisor_argv"] != canonical_supervisor_argv(EXPECTED_SCRIPTS)
@@ -101,7 +108,7 @@ def inspect_boot_recovery(
     cleanup=read_cleanup_plan(journal.directory)
     if cleanup is not None and (
         receipt is None
-        or cleanup["whole_check"]!=record["check"]
+        or cleanup["whole_check"]!=prior["check"]
         or cleanup["receipt_check"]!=receipt["check"]
         or cleanup["previous"]!=record["previous"]
         or cleanup["candidate_runtime_sha256"]!=candidate_sha
@@ -114,25 +121,49 @@ def inspect_boot_recovery(
     ):
         raise BootReviewError("cleanup prepare belongs to foreign cutover or redo")
     if receipt is not None and (
-        receipt["whole_check"]!=record["check"]
+        receipt["whole_check"]!=prior["check"]
         or receipt["previous"]!=record["previous"]
         or receipt["candidate_runtime_sha256"]!=candidate_sha
         or receipt["security_policy_sha256"]!=policy["policy_sha256"]
     ):
         raise BootReviewError("previous recovery receipt belongs to another cutover")
     if config_redo is not None and (
-        config_redo["cutover_check"] != record["check"]
+        config_redo["cutover_check"] != prior["check"]
         or config_redo["previous_sha256"] != record["previous"]["config"]
         or config_redo["before_sha256"] != record["candidate"]["saved_xml_sha256"]
     ):
         raise BootReviewError("Config redo belongs to a different cutover")
     if runtime_redo is not None and (
-        runtime_redo["cutover_check"] != record["check"]
+        runtime_redo["cutover_check"] != prior["check"]
         or runtime_redo["candidate_sha256"] != candidate_sha
         or runtime_redo["previous_sha256"] != record["previous"]["runtime"]
         or runtime_redo["active_name"] != Path(active_runtime).name
     ):
         raise BootReviewError("runtime redo belongs to a different cutover")
+
+
+    if terminal:
+        # Terminal phase is an evidence claim, NOT proof of postboot readiness.
+        # An absent/foreign receipt or plan makes that claim unverifiable.
+        if receipt is None or cleanup is None:
+            raise BootReviewError("rolled-back Voice journal lacks sealed receipt/plan")
+        info=_pinned_regular(Path(config_path),config_fd,owner=config_owner)
+        if (info.st_dev,info.st_ino)!=(receipt["config_dev"],receipt["config_inode"]) or (
+            (cleanup["config_dev"],cleanup["config_inode"])!=
+            (receipt["config_dev"],receipt["config_inode"])
+        ) or cleanup["instances"]!=receipt["instances"] or (
+            cleanup["previous"]!=prior["previous"] or
+            cleanup["candidate_runtime_sha256"]!=candidate_sha or
+            receipt["security_policy_sha256"]!=policy["policy_sha256"] or
+            cleanup["config_redo_check"]!=(
+                None if config_redo is None else config_redo["checksum"]
+            ) or cleanup["runtime_redo_check"]!=(
+                None if runtime_redo is None else runtime_redo["checksum"]
+            )
+        ):
+            raise BootReviewError("terminal Voice receipt/plan is not inode-bound")
+        if pending is not None:
+            raise BootReviewError("terminal rollback retains pending IPFW mutation")
 
     # Config is readable even when an interrupted ftruncate left a prefix:
     # use the pinned, borrowed flock descriptor and matching old-byte source.
@@ -147,7 +178,7 @@ def inspect_boot_recovery(
                        os.O_RDONLY | getattr(os,"O_NOFOLLOW",0))
         try:
             if may_resume_partial(
-                config_redo, journal_record=record,
+                config_redo, journal_record=prior,
                 live_info=os.fstat(config_fd),live_fd=config_fd,
                 source_fd=source,
                 saved_bytes=os.fstat(source).st_size,
@@ -180,11 +211,34 @@ def inspect_boot_recovery(
         ):
             raise BootReviewError("runtime redo parent inode changed")
         # A caller cannot substitute custom ready/retired target paths.
-        suffix=record["check"][:20]
+        suffix=prior["check"][:20]
         if runtime_redo["ready_name"]!=".voice-restore-ready-"+suffix or (
             runtime_redo["retired_name"]!=".voice-restore-retired-"+suffix
         ):
             raise BootReviewError("runtime redo recovery paths differ from sealed intent")
+
+
+    if terminal:
+        if config_status!="previous" or runtime_status!="previous":
+            raise BootReviewError("terminal previous files no longer match")
+        if runtime_redo is None:
+            if cleanup["retired_name"] is not None or (
+                cleanup["retired_sha256"] is not None
+            ):
+                raise BootReviewError("terminal plan has unbound retired runtime")
+        else:
+            retired=runtime_path.with_name(runtime_redo["retired_name"])
+            ready=runtime_path.with_name(runtime_redo["ready_name"])
+            if cleanup["retired_name"]!=retired.name or (
+                cleanup["retired_sha256"]!=candidate_sha
+                or ready.exists() or ready.is_symlink()
+                or not retired.is_dir() or retired.is_symlink()
+            ):
+                raise BootReviewError("retired Voice candidate path is incomplete")
+            if observe_live_files(
+                Path(install_image)/"config.xml",retired
+            )["runtime"]!=candidate_sha:
+                raise BootReviewError("retired Voice candidate hash mismatch")
 
     first=probe.probe()
     second=probe.probe()
@@ -242,12 +296,13 @@ def inspect_boot_recovery(
         raise BootReviewError("Voice redo changed during boot review")
     # This is intentionally NOT a readiness report. Even a complete-looking
     # previous state requires independent native post-reboot image/argv attest.
-    status=("previous-files-and-kernel-observed"
+    status=("previous-rollback-sealed-needs-manual-finalization" if terminal
+            else "previous-files-and-kernel-observed"
             if config_status=="previous" and runtime_status=="previous"
             and kernel=="previous" and processes=="running"
             else "manual-recovery-required")
     return _state(
-        status, reason="durable-voice-intent-retained", phase="mutating",
+        status, reason="durable-voice-intent-retained", phase=record["phase"],
         config=config_status,runtime=runtime_status,processes=processes,
         kernel=kernel,config_redo="present" if config_redo else "absent",
         runtime_redo="present" if runtime_redo else "absent",
