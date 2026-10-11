@@ -32,6 +32,7 @@ from voice_native_recovery_quiescence import EXPECTED_SCRIPTS
 from voice_restart_argv_attestation import expected_engine_argv
 from voice_native_supervisor_launch import canonical_supervisor_argv
 from voice_native_file_observer import observe_live_files
+from voice_process_recovery_evidence import inspect_process_evidence
 from voice_native_forward_apply import (
     rollback_failed_precommit_voice_apply, execute_prepared_voice_apply,
     NativeForwardApplyError,
@@ -311,9 +312,13 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         before=self.fx.whole.read()
         with self.assertRaisesRegex(
             NativeForwardApplyError,
-            "restarted previous Voice requires native kernel security/argv",
-        ):
+            "interrupted MUTATING Voice recovery refused",
+        ) as raised:
             self.resume_mutating_via_executor()
+        self.assertIn(
+            "restarted previous Voice requires native kernel security/argv",
+            str(raised.exception.__cause__),
+        )
         self.assertEqual(self.operations,["stop","start"])
         self.assertEqual(self.fx.whole.read(),before)
         self.assertEqual(self.config.read_bytes(),self.previous_config)
@@ -367,11 +372,22 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         # are still running. No receipt, no stop or forged rollback closure.
         import voice_native_forward_apply as forward
         self.simulate_power_cut_after_old_stop_before_forward_runtime()
-        self.stage.pids.update(engine=101,daemon=102,monitor=103)
+        old=inspect_process_evidence(
+            self.fx.process,self.fx.backup,EXPECTED_SCRIPTS,
+            self.prepared["previous"],
+        )["observation"]
+        identities={
+            "engine":old["engine"]["process"],
+            "daemon":old["supervisor"]["daemon"],
+            "monitor":old["supervisor"]["monitor"],
+        }
+        self.stage.pids.update(
+            **{role:row["pid"] for role,row in identities.items()},
+        )
         self.stage.ps.commands={
-            101:" ".join(self.old_engine),
-            102:" ".join(self.supervisor["daemon"]),
-            103:" ".join(self.supervisor["monitor"]),
+            identities["engine"]["pid"]:" ".join(self.old_engine),
+            identities["daemon"]["pid"]:" ".join(self.supervisor["daemon"]),
+            identities["monitor"]["pid"]:" ".join(self.supervisor["monitor"]),
         }
         self.simulate_native_seal=True
         with patch.object(
@@ -380,9 +396,13 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(
                 NativeForwardApplyError,
-                "original pre-STOP process epochs",
-            ):
+                "interrupted MUTATING Voice recovery refused",
+            ) as raised:
                 self.resume_mutating_via_executor()
+        self.assertIn(
+            "original pre-STOP process epochs",
+            str(raised.exception.__cause__),
+        )
         self.assertEqual(self.operations,[])
         self.assertEqual(self.fx.whole.read()["phase"],"mutating")
 
