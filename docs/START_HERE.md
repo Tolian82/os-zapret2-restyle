@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_59 — crash-resumable retired candidate quarantine, non-deleting phase 1 (2026-10-11):** Added private write-once `previous-reclaim-intent.json` binding schema-4 terminal ROLLED_BACK to original MUTATING checksum, receipt, cleanup plan, runtime redo, immutable candidate tree digest, original Config and runtime parent inode. Under original FD9 and Config flock, a strictly explicit native/private helper uses the existing read-only five-resource boot review as preflight, requires matching live previous kernel and process epoch, fsyncs the intent, then atomically renames ONLY the retired candidate directory to deterministic `.voice-reclaim-held-<original-check-prefix>` in its original parent and fsyncs that directory. It never unlinks a file or removes rollback proof. Boot read-only diagnostics now identify three states: retired awaiting reclaim, write-ahead created before rename, and candidate quarantined after rename; every state verifies the full saved candidate tree SHA. Missing/duplicate/foreign trees, missing proof, inode change, corrupt marker, or unsafe kernel state refuse. Retry with old or new location is idempotent. No CLI/boot automation, real FreeBSD process argv attestation for finalization, rollback journal closure or Voice ON yet. `PLUGIN_REVISION=59`, exact-head CI required; `_58` CI fully passed including FreeBSD 15 pkg build.
+
 **v0.5.1_58 — read-only cold-boot review of durably sealed ROLLED_BACK (2026-10-11):** After `_55`–`_57` made a terminal rollback journal possible, native boot diagnostics can now reopen the checksum-valid `rolled_back` phase and reconstruct its exact schema-4 `mutating` predecessor. Existing write-once receipt, cleanup plan, Config/runtime redo and saved candidate digest remain bound to that predecessor, not the newly recomputed terminal SHA. A terminal review requires original Config inode, previous Config/runtime fingerprints, matching previous IPFW on disk and no pending IPFW mutation; for runtime redo it also verifies the exact retired candidate tree against the previously sealed full runtime SHA. Stale process epochs and postboot kernel reset are reported without claiming operational readiness. Missing/foreign data fail closed. Nothing gets deleted or started, Voice ON is blocked and Draft PR #328 remains uninstalled. `PLUGIN_REVISION=58`; Linux/FreeBSD CI must pass on this exact commit. The CI failure at `_57` also exposed stale package identities in Level-1 documentation; synchronized state, handoff and roadmap for `_58`.
 
 **v0.5.1_57 — correct injected rollback regression boundary (2026-10-11):** Exact-head `_56` Voice CI passed the preceding suites but the isolated injected recovery executor intentionally returns no `whole_intent_phase`, exposing an overly broad new assertion. `_57` now requires `rolled_back` only from the real native-seal path; mock-only injected recovery still must preserve the original MUTATING whole journal, without fabricating terminal receipt evidence. No reduction in production lifecycle checks. `PLUGIN_REVISION=57`; new Linux/FreeBSD 15 head CI required, Voice ON blocked and PR remains Draft.
@@ -222,13 +224,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_58` — active Draft PR #328; schema-4 five-resource rollback can seal terminal `rolled_back`, cold-boot review is now terminal-aware but no destructive cleanup, automatic recovery or Voice ON is authorized. Next: a crash-safe cleanup/reclaimer protocol with refreshed five-resource/kernel attestation and on-router FreeBSD qualification.
+**Current handoff identity:** `v0.5.1_59` — active Draft PR #328; the first crash-safe rollback reclaim phase now preserves retired candidate via atomic quarantine and durable write-ahead proof. Next: independently attest FreeBSD process image/argv, finalize remaining cleanup state machine with boot-resumable exact-path ownership, then safely close whole-intent; Voice ON still blocked.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=58` (**development candidate, not published**);
+- `PLUGIN_REVISION=59` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

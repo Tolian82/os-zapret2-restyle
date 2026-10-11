@@ -22,6 +22,7 @@ from voice_cutover_journal import (RUNTIME_BOUND_SCHEMA, BOUND_FIELD, bound_cand
 from voice_cutover_config_redo import ConfigRestoreRedo, may_resume_partial
 from voice_cutover_recovery_receipt import read_receipt
 from voice_cutover_cleanup_prepare import read_cleanup_plan
+from voice_cutover_reclaim import read_reclaim_intent, inspect_reclaim_placement
 from voice_cutover_runtime_restore import _read_redo
 from voice_cutover_config_restore import _pinned_regular
 from voice_native_file_observer import _hash_file, observe_live_files
@@ -221,24 +222,16 @@ def inspect_boot_recovery(
     if terminal:
         if config_status!="previous" or runtime_status!="previous":
             raise BootReviewError("terminal previous files no longer match")
-        if runtime_redo is None:
-            if cleanup["retired_name"] is not None or (
-                cleanup["retired_sha256"] is not None
-            ):
-                raise BootReviewError("terminal plan has unbound retired runtime")
-        else:
-            retired=runtime_path.with_name(runtime_redo["retired_name"])
-            ready=runtime_path.with_name(runtime_redo["ready_name"])
-            if cleanup["retired_name"]!=retired.name or (
-                cleanup["retired_sha256"]!=candidate_sha
-                or ready.exists() or ready.is_symlink()
-                or not retired.is_dir() or retired.is_symlink()
-            ):
-                raise BootReviewError("retired Voice candidate path is incomplete")
-            if observe_live_files(
-                Path(install_image)/"config.xml",retired
-            )["runtime"]!=candidate_sha:
-                raise BootReviewError("retired Voice candidate hash mismatch")
+        reclaim_location=inspect_reclaim_placement(
+            journal=journal,plan=cleanup,receipt=receipt,runtime_redo=runtime_redo,
+            config_path=Path(config_path),active_runtime=runtime_path,
+            install_config=Path(install_image)/"config.xml",
+        )
+    else:
+        if read_reclaim_intent(journal.directory) is not None:
+            raise BootReviewError("reclaim intent cannot precede terminal rollback")
+        reclaim_location="not-applicable"
+    reclaim_before=read_reclaim_intent(journal.directory)
 
     first=probe.probe()
     second=probe.probe()
@@ -292,6 +285,7 @@ def inspect_boot_recovery(
         _read_redo(journal.directory)!=runtime_redo
         or read_receipt(journal.directory)!=receipt
         or read_cleanup_plan(journal.directory)!=cleanup
+        or read_reclaim_intent(journal.directory)!=reclaim_before
     ):
         raise BootReviewError("Voice redo changed during boot review")
     # This is intentionally NOT a readiness report. Even a complete-looking
@@ -308,6 +302,7 @@ def inspect_boot_recovery(
         runtime_redo="present" if runtime_redo else "absent",
         previous_receipt=receipt_state,
         cleanup_plan="prepared-only" if cleanup else "absent",
+        candidate_reclaim=reclaim_location,
         candidate_runtime_sha256=candidate_sha,
     )
 

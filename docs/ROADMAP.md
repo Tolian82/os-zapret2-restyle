@@ -1,5 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_59`: first crash-resumable retired-runtime reclaim phase uses fsynced write-ahead marker and same-parent atomic rename into quarantined candidate path; real native read-only boot diagnostic understands both sides of rename; never unlinks backup/redo/receipt or permits Voice ON
+- [ ] Next: native on-router FreeBSD image/argv acceptance and multi-phase reclaim of final obsolete data with exact guarded deletion, followed by journal closure and boot restore qualification
 - [x] Current candidate `v0.5.1_58`: recognize sealed `rolled_back` in native cold-boot review while binding prior MUTATING checksum to receipt/redo/cleanup plan and exact previous Config/runtime/kernel state; no automatic cleanup or Voice ON
 - [ ] Next: implement interruption-resumable cleanup/reclaimer with independent native FreeBSD process/argv attestation and exact obsolete-path ownership, then durable whole-intent closure (no unverified automatic boot replay)
 - [x] Current candidate `v0.5.1_54`: correct isolated two-file snapshot versus SHA-sealed five-domain whole-journal IPFW references in durable cleanup preparation; rerun actual Linux/FreeBSD CI
