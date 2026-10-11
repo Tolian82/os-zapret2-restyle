@@ -190,6 +190,8 @@ jobs:
         run: python3.13 scripts/test-voice-native-live-preflight.py
       - name: Native Voice forward Apply PREPARED schema-4 journal with full rollback witnesses
         run: python3.13 scripts/test-voice-native-forward-prepare.py
+      - name: Native Voice forward runtime installation and rollback after power loss
+        run: python3.13 scripts/test-voice-native-forward-runtime.py
       - name: Voice durable previous engine/supervisor process evidence
         run: python3.13 scripts/test-voice-process-recovery-evidence.py
       - name: Native read-only FreeBSD Voice PID/process inventory
