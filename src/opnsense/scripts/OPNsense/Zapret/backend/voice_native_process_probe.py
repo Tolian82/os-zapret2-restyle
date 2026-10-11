@@ -148,11 +148,17 @@ class FreeBSDVoiceProcessProbe:
         engine=self.expected["engine"]
         daemon=self.expected["daemon"]
         loop=self.expected["monitor"]
-        engines={pid for pid,tokens in all_rows.items() if engine in tokens}
+        # The real supervisor's /usr/sbin/daemon argv contains BOTH the
+        # monitor script AND the dvtws2 executable as child arguments.
+        # Likewise monitor argv can mention dvtws2. Classify the wrapper
+        # roles FIRST and exclude them from the engine role; raw token
+        # membership alone falsely reports duplicate running engines.
         daemons={pid for pid,tokens in all_rows.items()
                  if daemon in tokens and loop in tokens}
         monitors={pid for pid,tokens in all_rows.items()
                   if loop in tokens and daemon not in tokens}
+        engines={pid for pid,tokens in all_rows.items()
+                 if engine in tokens and pid not in daemons and pid not in monitors}
         expected_sets=(engines,daemons,monitors)
         roles=("engine","daemon","monitor")
         if all(pid is None for pid in pidmap.values()):

@@ -1,5 +1,6 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Candidate `v0.5.1_67`: correct dvtws2 false-duplicate classification with full canonical daemon/monitor argument vectors and native regression test; require exact-head CI green
 - [x] Candidate `v0.5.1_66`: correct live preflight unittest method collision to ensure new no-journal FreeBSD process auditing test actually executes; rerun exact-head CI
 - [x] Current candidate `v0.5.1_65`: expose read-only pre-cutover physical FreeBSD baseline through normal FD9-locked `zapret_service.sh` dispatch, with no rollback journal/backup prerequisite, native live argv and kernel image comparison and negative CI tests
 - [ ] Next: run on actual OPNsense 26.7.x with ordinary runtime already running; collect observed real FreeBSD argv/path mismatch if any, and implement the guarded native Voice Apply/rollback that keeps ordinary TCP path intact; finally measure Telegram call audio UDP

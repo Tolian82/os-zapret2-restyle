@@ -83,6 +83,30 @@ class NativeProcessProbeTests(unittest.TestCase):
             self.assertEqual(digests,report["previous"])
             self.assertEqual("--port=989\n",(runtime/"dvtws.args").read_text())
 
+    def test_real_full_supervisor_argv_does_not_count_as_extra_engine(self):
+        """Real daemon+monitor command both mention dvtws2 as a CHILD arg."""
+        from voice_native_supervisor_launch import canonical_supervisor_argv
+        from voice_restart_argv_attestation import FIXED_TRAILER
+        with tempfile.TemporaryDirectory() as d:
+            probe,target,runtime,config=self.fixture(d)
+            launch=canonical_supervisor_argv(PATHS)
+            real={
+                101:" ".join([PATHS["engine"],"--port=989",*FIXED_TRAILER]),
+                102:" ".join(launch["daemon"]),
+                103:" ".join(launch["monitor"]),
+            }
+            # Both wrapper commands legitimately contain the engine path,
+            # but there is exactly one actual dvtws2 PID (101).
+            self.assertIn(PATHS["engine"],real[102])
+            self.assertIn(PATHS["engine"],real[103])
+            probe.reader=FakePs(real)
+            row=probe.probe()
+            self.assertEqual(101,row["engine"]["process"]["pid"])
+            self.assertEqual(102,row["supervisor"]["daemon"]["pid"])
+            self.assertEqual(103,row["supervisor"]["monitor"]["pid"])
+            self.assertEqual("running",row["engine"]["state"])
+            self.assertEqual("running",row["supervisor"]["state"])
+
     def test_clean_stopped_requires_global_process_absence(self):
         with tempfile.TemporaryDirectory() as d:
             probe,target,runtime,config=self.fixture(d,running=False)

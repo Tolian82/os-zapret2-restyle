@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_67 — fix real FreeBSD supervisor/engine role classification (2026-10-11):** With `_66`'s live preflight tests actually executing, the normal full `daemon` and `monitor` launch commands exposed a production process-classifier mistake: both wrappers legitimately include the absolute `dvtws2` executable as a child argument. The pre-existing token-membership engine selector counted them as duplicate engines and refused a healthy three-role service. Fix `FreeBSDVoiceProcessProbe.observe_processes()` by classifying `daemon` and `monitor` first and explicitly excluding those PIDs from `engine` matches; retain strict uniqueness, native PID/start observations, kernel argv/executable proof, lock and journal fail-closed gates. Add an explicit regression using the exact canonical full supervisor plan and engine command, alongside the new live pre-cutover integration tests. Nothing changes kernel IPFW, Config, TCP/Squid routes, engine state or Voice ON. `PLUGIN_REVISION=67`; `_66` Voice CI found this functional bug, so `_67` exact-head CI must pass before on-router use.
+
 **v0.5.1_66 — fix CLI baseline regression test harness (2026-10-11):** `_65` Voice CI failed before exercising the newly added live preflight: the fixture method `LivePreflightTests.run()` accidentally overrode `unittest.TestCase.run()`, so the test runner called it before fixture setup (`AttributeError: config`). Rename that helper to `audit()` and update all callers. The actual locked live-appliance command introduced by `_65` remains unchanged; test automation must execute all negative/positive cases on the exact `_66` commit before device acceptance. `PLUGIN_REVISION=66`; `_65` Validate Voice CI FAIL due to this fixture bug, not a production FreeBSD runtime measurement.
 
 **v0.5.1_65 — real-service, PRE-cutover read-only FreeBSD appliance preflight (2026-10-11):** Added `voice_native_live_preflight.py` and the locked OPNsense service dispatch `zapret_service.sh native-voice-live-preflight` under the EXISTING FD9 /usr/bin/lockf lifecycle owner. Unlike `_64`, this command works with an already-running ordinary Voice-OFF engine/supervisor **before any schema-4 whole journal or backup exists**. Refactored `FreeBSDVoiceProcessProbe.observe_processes()` to extract exact three-role ps/PID/start inventory without touching archived backup; original `probe()` remains source-compatible and adds the sealed runtime hash. Under real original Config flock the preflight refuses pending/retained cutover evidence or pending IPFW intent, pins live runtime `dvtws.args` (owner, inode, permissions, content and root), compares TWO kernel native sysctl argv/image snapshots against current bounded argv and immutable canonical daemon/monitor launch plan, brackets process epoch checks and reopens Config/runtime/journal state before returning. It changes no Config, IPFW or process; result explicitly reports **kernel IPFW not attested, startup/media/Voice ON not proven**, with no automatic action. New dedicated injected-kernel/ps test suite checks normal no-backup success and aborts for altered argv/binary, partial or orphan process, stale archive marker, Config flock and runtime substitution. Actual target OPNsense still needs real execution/capture; a CI pass is NOT device readiness. `PLUGIN_REVISION=65`; `_64` full CI PASSED including FreeBSD 15 package build.
@@ -238,13 +240,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_66` — Draft PR #328; production no-journal live FreeBSD preflight stays as introduced in `_65`, with CI fixture corrected so actual test cases can run. Next: require exact-head test pass, real on-device FreeBSD kernel output inspection and controlled native Voice Apply/rollback; real Telegram UDP media remains unmeasured.
+**Current handoff identity:** `v0.5.1_67` — Draft PR #328; the real full FreeBSD daemon/monitor argument strings now classify into exactly one engine, daemon and monitor (no false duplicate engine). Next: exact-head CI, native OPNsense running-process baseline capture and guarded actual Voice Apply followed by UDP audio verification.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=66` (**development candidate, not published**);
+- `PLUGIN_REVISION=67` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
