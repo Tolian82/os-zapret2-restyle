@@ -899,7 +899,7 @@ def execute_prepared_voice_apply(
             if unfinished["phase"] != "mutating":
                 raise
             try:
-                rollback_failed_precommit_voice_apply(
+                recovery = rollback_failed_precommit_voice_apply(
                     journal=journal, ledger=ledger,
                     previous_backup=previous_backup,
                     process_evidence=process_evidence,
@@ -918,6 +918,36 @@ def execute_prepared_voice_apply(
                     "Voice forward failed and safe rollback was refused; "
                     "MUTATING intent retained for manual recovery"
                 ) from recovery_error
+            require_lifecycle_owner()
+            _locked_config(config_path, fd, config_owner)
+            final = journal.read()
+            # The lower five-resource executor already verifies the
+            # previous state, receipt and terminal proof. Check its durable
+            # phase is consistent before reporting completion to the future
+            # GUI/service: a successful terminal rollback is NOT MUTATING,
+            # and neither result authorizes Voice ON.
+            if recovery.get("state") != "forward-failed-five-previous-domains-observed" or (
+                recovery.get("safe_to_enable_voice") is not False
+                or recovery.get("whole_phase") not in ("mutating", "rolled_back")
+            ):
+                raise NativeForwardApplyError(
+                    "forward rollback result is not a verified previous state"
+                ) from forward_error
+            if recovery["whole_phase"] == "rolled_back":
+                if final is None or final["phase"] != "rolled_back" or (
+                    mutating_predecessor(final) != unfinished
+                ):
+                    raise NativeForwardApplyError(
+                        "forward rollback terminal result disagrees with journal"
+                    ) from forward_error
+                raise NativeForwardApplyError(
+                    "Voice forward failed; five previous domains durably "
+                    "ROLLED_BACK; Voice ON refused pending owner acceptance"
+                ) from forward_error
+            if final != unfinished:
+                raise NativeForwardApplyError(
+                    "forward rollback MUTATING result disagrees with journal"
+                ) from forward_error
             raise NativeForwardApplyError(
                 "Voice forward failed; all previous five domains restored, "
                 "but MUTATING intent retained until durable finalization"

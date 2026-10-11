@@ -24,6 +24,7 @@ from voice_ipfw_adapter import FreeBSDIPFWAdapter
 from voice_native_process_actions import FreeBSDVoiceProcessActions
 from voice_cutover_restore_stage import prepare_restore_stage
 from voice_cutover_install_image import prepare_installable_restore
+from voice_cutover_journal import _digest, mutating_predecessor
 
 
 def fixture(file, name):
@@ -308,7 +309,7 @@ class NativeForwardOneLockSequenceTests(unittest.TestCase):
             self.fx.whole.read()["previous"],
         )
 
-    def run_sequence(self, fail_at=None):
+    def run_sequence(self, fail_at=None, rollback_phase="mutating"):
         self.recovery_calls=[]
         def actions_factory(fd):
             self._assert_held(fd)
@@ -352,7 +353,20 @@ class NativeForwardOneLockSequenceTests(unittest.TestCase):
             self.recovery_calls.append(kwargs)
             self.assertEqual(kwargs["install_image"], self.install_image)
             self.assertEqual(kwargs["actions"].config_fd, kwargs["config_fd"])
-            return {"state":"forward-failed-five-previous-domains-observed"}
+            if rollback_phase == "rolled_back":
+                previous = self.fx.whole.read()
+                body = {k:v for k,v in previous.items() if k != "check"}
+                body["phase"] = "rolled_back"
+                body["check"] = _digest(body)
+                self.fx.whole._store(body)  # inject lower verified terminal boundary
+            return {
+                "state": "forward-failed-five-previous-domains-observed",
+                "whole_phase": (
+                    "rolled_back" if rollback_phase == "rolled_back-claimed"
+                    else rollback_phase
+                ),
+                "safe_to_enable_voice": False,
+            }
         from contextlib import ExitStack
         with ExitStack() as stack:
             stack.enter_context(patch.object(
@@ -413,6 +427,34 @@ class NativeForwardOneLockSequenceTests(unittest.TestCase):
         self.assertEqual(len(set(self.fds)), 1)
         self.assertEqual("mutating", self.fx.whole.read()["phase"])
         self.assertEqual(self.fx.whole.read()["schema"], 4)
+
+    def test_failed_forward_reports_durable_rolled_back_not_mutating(self):
+        # The lower recovery primitive is mocked at its already-verified
+        # return boundary; production writes its real receipt and plan.
+        with self.assertRaisesRegex(
+            forward.NativeForwardApplyError,
+            "five previous domains durably ROLLED_BACK",
+        ) as denied:
+            self.run_sequence(fail_at="ipfw",rollback_phase="rolled_back")
+        self.assertEqual("mutating",mutating_predecessor(
+            self.fx.whole.read()
+        )["phase"])
+        self.assertEqual("rolled_back",self.fx.whole.read()["phase"])
+        self.assertEqual(len(self.recovery_calls),1)
+        self.assertEqual(len(set(self.fds)),1)
+        self.assertIn("simulated ipfw failure",str(denied.exception.__cause__))
+
+    def test_failed_forward_rejects_contradictory_terminal_report(self):
+        # A fake/incorrect lower-level result may not claim ROLLED_BACK
+        # unless the authoritative journal really made that transition.
+        with self.assertRaisesRegex(
+            forward.NativeForwardApplyError,
+            "terminal result disagrees with journal",
+        ):
+            self.run_sequence(fail_at="ipfw",rollback_phase="rolled_back-claimed")
+        self.assertEqual("mutating",self.fx.whole.read()["phase"])
+        self.assertEqual(len(self.recovery_calls),1)
+        self.assertEqual(len(set(self.fds)),1)
 
     def test_prepared_failure_does_not_try_recovery_or_mutate_live_service(self):
         with self.assertRaisesRegex(RuntimeError, "simulated stop preflight failure"):
