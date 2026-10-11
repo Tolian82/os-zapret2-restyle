@@ -20,6 +20,7 @@ ROOT=Path(__file__).resolve().parent.parent
 BACKEND=ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
 from voice_cutover_journal import _digest
+from voice_native_forward_runtime import _read_redo as read_forward_runtime_redo
 from voice_cutover_restore_stage import prepare_restore_stage
 from voice_cutover_install_image import prepare_installable_restore
 from voice_native_process_actions import FreeBSDVoiceProcessActions
@@ -319,6 +320,63 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         self.assertEqual("mutating",self.fx.whole.read()["phase"])
         self.assertEqual(self.config.read_bytes(),self.previous_config)
         self.assertIsNone(self.fx.ipfw.pending())
+
+    def simulate_power_cut_between_forward_renames(self):
+        # Earlier _72.._75 forward chain completed both renames. Recreate
+        # the exact crash point after active(previous)->retained but BEFORE
+        # ready(candidate)->active; preserve the fsync'd forward redo.
+        runtime=self.fx.root/"runtime"
+        redo=read_forward_runtime_redo(self.fx.whole.directory)
+        self.assertIsNotNone(redo)
+        ready=runtime.with_name(redo["ready_name"])
+        retained=runtime.with_name(redo["retained_name"])
+        self.assertTrue(retained.is_dir())
+        self.assertFalse(ready.exists())
+        os.rename(runtime,ready)
+        self.assertFalse(runtime.exists())
+        self.assertTrue(ready.is_dir())
+        self.stage.pids.update(engine=None,daemon=None,monitor=None)
+        self.stage.ps.commands={}
+        self.assertEqual("stopped",self.stage.probe.probe()["engine"]["state"])
+        return ready
+
+    def test_power_cut_between_forward_renames_can_restore_all_five_domains(self):
+        ready=self.simulate_power_cut_between_forward_renames()
+        result=self.recover()
+        self.assertEqual("forward-failed-five-previous-domains-observed",result["state"])
+        self.assertEqual(self.operations,["start"])
+        self.assertEqual(self.config.read_bytes(),self.previous_config)
+        self.assertEqual(self.fx.ipfw.owned(),self.stage.parent.old)
+        self.assertIsNone(self.fx.ipfw.pending())
+        self.assertEqual(self.fx.whole.read(),self.prepared)
+        self.assertFalse(ready.exists())
+        self.assertEqual(
+            observe_live_files(
+                self.config,self.fx.root/"runtime",previous_backup=self.fx.backup,
+            ),
+            {key:self.prepared["previous"][key] for key in ("config","runtime")},
+        )
+
+    def test_power_cut_missing_forward_redo_never_guesses_missing_runtime(self):
+        ready=self.simulate_power_cut_between_forward_renames()
+        (self.fx.whole.directory/"forward-runtime-redo.json").unlink()
+        with self.assertRaises((RuntimeError,ValueError,OSError)):
+            self.recover()
+        self.assertEqual(self.operations,[])
+        self.assertFalse((self.fx.root/"runtime").exists())
+        self.assertTrue(ready.exists())
+        self.assertEqual(self.config.read_bytes(),self.previous.candidate)
+        self.assertEqual(self.fx.whole.read(),self.prepared)
+
+    def test_power_cut_changed_candidate_tree_denies_restore_and_restart(self):
+        ready=self.simulate_power_cut_between_forward_renames()
+        (ready/"dvtws.args").write_text("--port=12345\\n")
+        with self.assertRaises((RuntimeError,ValueError,OSError)):
+            self.recover()
+        self.assertEqual(self.operations,[])
+        self.assertFalse((self.fx.root/"runtime").exists())
+        self.assertEqual(self.config.read_bytes(),self.previous.candidate)
+        self.assertEqual(self.fx.whole.read(),self.prepared)
 
     def test_corrupted_kernel_blocks_failure_rollback(self):
         # Candidate IPFW ledger is still pending, but a foreign in-range

@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**v0.5.1_90 (2026-10-11):** Stage-2 crash replay now recovers the exact POWER-LOSS GAP between forward runtime `active(previous) → retained(previous)` and `ready(candidate) → active(candidate)`. Prior code refused missing active runtime although the fsync'd original `forward-runtime-redo.json` and both exact trees survived. Under original FD9+Config inode/flock, after independently establishing NO live engine/supervisor and previous native IPFW, `voice_cutover_file_rollback.py` verifies redo checksum/whole journal SHA, same original Config inode and runtime parent, exact candidate ready tree and original retained previous tree. It then completes ONLY the interrupted forward rename and immediately delegates to the EXISTING crash-resumable previous runtime+Config+IPFW/engine/supervisor rollback. If a previous runtime-restore redo already owns missing active, the established previous restore resumes instead. Missing/foreign redo or tampered tree fails closed without service restart. Adds real-file/ledger simulated power-cut success, missing marker and tampering regression. This is not an on-appliance reboot qualification or Voice ON.
+
+
 **v0.5.1_89 (2026-10-11):** Corrected the `_88` new terminal native rollback integration fixture so its `voice_cutover_journal._digest` import occurs AFTER adding the installed backend module root to `sys.path`. `_88` specialized Voice CI terminated at test import before exercising the new seal logic; no production change in `_89`. Full same-original-fd previous receipt/ROLLED_BACK positive and failure tests rerun at exact `_89` head.
 
 
@@ -38,7 +41,7 @@
 
 ## Current Voice completion order — 2026-10-11
 
-**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_89`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
+**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_90`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
 
 1. **Stabilization (current):** exact _75 identity in START_HERE/PROJECT_STATE/release; fix Project CI dynamic expected package string; audit open GitHub requests; exact-head full Voice/Project/governance/FreeBSD CI.
 2. **One native forward Apply:** reuse PREPARED/STOP/runtime/engine/IPFW/supervisor and five-resource restore; add *forward* candidate Config persist with durable intent; independent five-domain COMMIT/rollback.

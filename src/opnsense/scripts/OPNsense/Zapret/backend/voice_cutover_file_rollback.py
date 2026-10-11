@@ -24,12 +24,93 @@ from voice_cutover_config_restore import (
     VoiceConfigRestoreError, _pinned_regular, restore_previous_config_in_place,
 )
 from voice_cutover_journal import VoiceCutoverJournal
-from voice_cutover_runtime_restore import restore_previous_runtime
+from voice_cutover_runtime_restore import restore_previous_runtime, _sync_dir, _read_redo as read_restore_redo
+from voice_native_forward_runtime import _read_redo as read_forward_redo
 from voice_native_file_observer import observe_live_files
 
 
 class VoiceFileRollbackError(RuntimeError):
     """Never close or abort the whole journal on partial file restoration."""
+
+
+def _complete_interrupted_forward_rename(
+    *, active: Path, install_image: Path, previous_backup: Path,
+    journal: VoiceCutoverJournal, locked_config_fd: int, config_path: Path,
+    config_owner: tuple[int, int], require_lifecycle_owner,
+    require_quiescent,
+) -> str:
+    """Resume ONLY the missing-active forward rename under original locks.
+
+    Power loss after previous->retained but before ready->active leaves
+    active absent. The original write-ahead forward redo and BOTH unchanged
+    directories prove this exact state. Publish the verified candidate tree
+    while processes are stopped and the previous IPFW is already restored;
+    then hand control back to the ordinary five-resource rollback. No new
+    Config write, engine start, IPFW mutation or journal transition occurs.
+    """
+    from voice_native_recovery_quiescence import _locked_config
+    active=Path(active)
+    if os.path.lexists(active):
+        return "active-present"
+    # A missing active in the middle of a PREVIOUS rollback is handled by
+    # the established restore-redo, not misclassified as a forward gap.
+    if read_restore_redo(journal.directory) is not None:
+        return "previous-restore-redo-owns-missing-active"
+    require_lifecycle_owner()
+    _locked_config(Path(config_path),locked_config_fd,config_owner)
+    if require_quiescent() is not True:
+        raise VoiceFileRollbackError("forward rename crash repair requires stopped engine and previous IPFW")
+    record=journal.read()
+    if record is None or record["phase"]!="mutating" or record["schema"]!=4:
+        raise VoiceFileRollbackError("forward rename crash repair requires schema-4 MUTATING")
+    sealed=bound_resource_fingerprints(Path(previous_backup),record["previous"])
+    redo=read_forward_redo(journal.directory)
+    parent=os.lstat(active.parent)
+    cfg=os.fstat(locked_config_fd)
+    suffix=record["check"][:20]
+    ready_name=".voice-forward-ready-"+suffix
+    retained_name=".voice-forward-previous-"+suffix
+    if redo is None or any((
+        redo["whole_check"]!=record["check"],
+        redo["candidate_sha256"]!=record["candidate"]["candidate_runtime_sha256"],
+        redo["previous_sha256"]!=sealed["runtime"],
+        redo["active_name"]!=active.name,
+        redo["ready_name"]!=ready_name,
+        redo["retained_name"]!=retained_name,
+        (redo["config_dev"],redo["config_inode"])!=(cfg.st_dev,cfg.st_ino),
+        (redo["parent_dev"],redo["parent_inode"])!=(parent.st_dev,parent.st_ino),
+    )):
+        raise VoiceFileRollbackError("missing or foreign durable forward runtime redo")
+    ready=active.with_name(ready_name)
+    retained=active.with_name(retained_name)
+    for tree,expected in (
+        (ready,record["candidate"]["candidate_runtime_sha256"]),
+        (retained,sealed["runtime"]),
+    ):
+        if tree.is_symlink() or not tree.is_dir() or (
+            observe_live_files(
+                Path(install_image)/"config.xml",tree,
+                **({"previous_backup":previous_backup} if tree==retained else {}),
+            )["runtime"]!=expected
+        ):
+            raise VoiceFileRollbackError("forward crash trees do not match sealed intent")
+    require_lifecycle_owner()
+    _locked_config(Path(config_path),locked_config_fd,config_owner)
+    if require_quiescent() is not True or journal.read()!=record or (
+        read_forward_redo(journal.directory)!=redo or os.path.lexists(active)
+        or (os.lstat(active.parent).st_dev,os.lstat(active.parent).st_ino)
+            !=(parent.st_dev,parent.st_ino)
+    ):
+        raise VoiceFileRollbackError("forward crash evidence raced before rename")
+    os.rename(ready,active)
+    _sync_dir(active.parent)
+    if observe_live_files(
+        Path(install_image)/"config.xml",active
+    )["runtime"]!=record["candidate"]["candidate_runtime_sha256"] or (
+        os.path.lexists(ready) or journal.read()!=record
+    ):
+        raise VoiceFileRollbackError("forward crash rename not durably recovered")
+    return "candidate-rename-resumed-for-previous-rollback"
 
 
 def restore_previous_files(
@@ -109,6 +190,15 @@ def restore_previous_files(
         if journal.read() != original:
             raise VoiceFileRollbackError("whole Voice intent changed after Config lock")
 
+        _complete_interrupted_forward_rename(
+            active=Path(active_runtime),install_image=install_image,
+            previous_backup=Path(previous_backup),journal=journal,
+            locked_config_fd=fd,config_path=config_path,
+            config_owner=expected_owner,
+            require_lifecycle_owner=require_lifecycle_owner,
+            require_quiescent=require_quiescent,
+        )
+        gate()
         restored_runtime = restore_previous_runtime(
             Path(active_runtime), install_image, Path(previous_backup), journal,
             expected_candidate_runtime_sha256=expected_candidate_runtime_sha256,
