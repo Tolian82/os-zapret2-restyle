@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_82 (2026-10-11):** Native private one-FD Voice forward Apply now requires the sealed previous install image BEFORE any process mutation and handles failures using the pre-existing `preflight_native_recovery` + `restore_previous_five_resources` on the SAME locked Config inode and original FD9. When the durable whole journal is MUTATING and all native process/IPFW evidence supports rollback, it restores the old five domains and reports a failed Apply; an incomplete/foreign recovery remains fail-closed with both journals retained. PREPARED failures never stop existing service; an already durable COMMITTED journal is NEVER rolled back (IPFW postcommit requires forward reconciliation). New real-filesystem/kernel-simulator late-failure regression and single-descriptor PREPARED/MUTATING/COMMITTED failure paths in Linux and FreeBSD CI. **Still OPEN:** partial one-engine/no-supervisor failure and crash states, durable previous-restart finalization, public service/GUI ON, real OPNsense acceptance.
+
+
 **v0.5.1_81 (2026-10-11):** The EXISTING `voice_cutover_five_resource_rollback.py` now optionally accepts a borrowed already-locked original Config FD, so it can restore old engine/IPFW/runtime/Config/supervisor under the SAME original flock as private `voice_native_forward_apply.py`. It strictly checks the borrowed descriptor's inode/ownership and acquired flock, never obtains a second conflicting Config lock, and never closes/unlocks a borrowed FD. Its existing manual recovery caller (no borrowed FD) keeps original behavior. Added isolated real-filesystem + simulated process/IPFW tests proving one Config flock spans stop→IPFW→files→restart, rejects unlocked/foreign descriptors and retains the MUTATING journal. **Still OPEN:** safe automatic invocation by native forward on every failure, postcommit finish, production GUI/boot and real OPNsense qualification; do not call private Apply from GUI.
 
 
@@ -18,7 +21,7 @@
 **CURRENT CODE HANDOFF:** v0.5.1_76 (2026-10-11): implemented private `voice_native_forward_config.py` to persist the exact schema-4 candidate Config on the original /conf/config.xml inode under the original FD9 and uninterrupted Config flock, AFTER independently verified candidate engine+supervisor/IPFW PRECOMMIT. Durable write-once `forward-config-redo.json` is fsync'd BEFORE truncate, binds journal SHA, Config inode/owner, old/new digests and saved mode; only a proven candidate-byte prefix can be resumed after interruption. Double native kernel/argv/IPFW/runtime/journal verification, original previous backup intact, no commit/GUI/boot or old Config restore replacement. New isolated real-fd/fault-injection regression wired to Linux and FreeBSD 15 CI. This is a required forward segment, NOT yet full Voice ON Apply.
 
 
-> **CURRENT, 2026-10-11 · v0.5.1_81 · Draft PR #328:** Этап 1 закрыт (общий CI, Voice, FreeBSD 15 PASS на ff6431c). Этап 2 активен: новая приватная прямая запись кандидатного Config после supervisor/IPFW PRECOMMIT существует, но весь Apply/rollback/COMMIT и GUI ON ещё НЕ подключены. Единственный план — [VOICE_TRANSMISSION_COMPLETION_PLAN.md](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). Следующий практический шаг — собрать один исполнитель пяти ресурсов и доказать успешный/неуспешный исход. Старый previous Config restore уже готов. История ниже не является списком текущих задач.
+> **CURRENT, 2026-10-11 · v0.5.1_82 · Draft PR #328:** Этап 1 закрыт (общий CI, Voice, FreeBSD 15 PASS на ff6431c). Этап 2 активен: новая приватная прямая запись кандидатного Config после supervisor/IPFW PRECOMMIT существует, но весь Apply/rollback/COMMIT и GUI ON ещё НЕ подключены. Единственный план — [VOICE_TRANSMISSION_COMPLETION_PLAN.md](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). Следующий практический шаг — собрать один исполнитель пяти ресурсов и доказать успешный/неуспешный исход. Старый previous Config restore уже готов. История ниже не является списком текущих задач.
 
 
 **v0.5.1_75 — post-IPFW candidate supervisor startup and independent native process proof (2026-10-11):** New private fixed shell action `start-candidate-supervisor` invokes ONLY installed `supervisor_start`, never relaunches `dvtws2`. Added `voice_native_forward_supervisor.py`: under original FD9+Config flock, exact schema-4 whole MUTATING intent, separate IPFW PRECOMMIT and old owner, it verifies candidate engine PID/start and FreeBSD kernel argv/image, exact installed desired IPFW rules and preserved stage snapshots, no legacy Telegram PoC, unchanged old Config, active/staged/retained runtimes and redo/inodes. After the fixed shell call, independently double-reads all three engine/daemon/monitor PID/start epochs, exact FreeBSD kernel NUL argv and binary paths, and unchanged Config/IPFW/journals. Failures preserve both pending recovery intents. Integrated offline fixture uses real `_69`..`_74` journals/files and simulated FreeBSD process/kernel/IPFW sources; no actual OPNsense process is touched. Does not save candidate Config, commit, enable Voice, or establish UDP Telegram media. `PLUGIN_REVISION=75`. NEXT: persist Config safely and build single five-resource forward/rollback coordinator, then qualify real FreeBSD and two-way Telegram media.
@@ -278,13 +281,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-11
-**Current handoff identity:** `v0.5.1_81` — Draft PR #328; private one-fd forward Apply and whole→IPFW COMMIT with five-resource postcheck implemented; same-FD automatic rollback, postcommit cleanup, service/GUI/boot still OPEN. Stage 2 active; [completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
+**Current handoff identity:** `v0.5.1_82` — Draft PR #328; private one-fd forward Apply and whole→IPFW COMMIT with five-resource postcheck implemented; same-FD automatic rollback, postcommit cleanup, service/GUI/boot still OPEN. Stage 2 active; [completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=81` (**development candidate, not published**);
+- `PLUGIN_REVISION=82` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

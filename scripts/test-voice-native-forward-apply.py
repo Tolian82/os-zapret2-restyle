@@ -22,6 +22,8 @@ sys.path.insert(0, str(BACKEND))
 import voice_native_forward_apply as forward
 from voice_ipfw_adapter import FreeBSDIPFWAdapter
 from voice_native_process_actions import FreeBSDVoiceProcessActions
+from voice_cutover_restore_stage import prepare_restore_stage
+from voice_cutover_install_image import prepare_installable_restore
 
 
 def fixture(file, name):
@@ -131,8 +133,18 @@ class NativeForwardOneLockSequenceTests(unittest.TestCase):
         self.config = self.fx.root / "config.xml"
         self.stages = []
         self.fds = []
+        self.install_stage = self.fx.whole.directory / "restore-stage"
+        self.install_image = self.fx.whole.directory / "restore-install-image"
+        prepare_restore_stage(
+            self.fx.backup, self.install_stage, self.fx.whole.read()["previous"],
+        )
+        prepare_installable_restore(
+            self.install_stage, self.install_image,
+            self.fx.whole.read()["previous"],
+        )
 
     def run_sequence(self, fail_at=None):
+        self.recovery_calls=[]
         def actions_factory(fd):
             self._assert_held(fd)
             return FreeBSDVoiceProcessActions(
@@ -152,6 +164,9 @@ class NativeForwardOneLockSequenceTests(unittest.TestCase):
                 self.stages.append(name)
                 if make_mutating:
                     self.fx.whole.mark_mutating()
+                if name == "commit" and fail_at == "committed":
+                    self.fx.whole.commit()
+                    raise RuntimeError("simulated commit failure")
                 if fail_at == name:
                     raise RuntimeError("simulated " + name + " failure")
                 return {}
@@ -165,8 +180,17 @@ class NativeForwardOneLockSequenceTests(unittest.TestCase):
             ("persist_forward_candidate_config", "config"),
             ("commit_forward_voice_apply", "commit"),
         ]
+        def rollback(**kwargs):
+            self._assert_held(kwargs["config_fd"])
+            self.recovery_calls.append(kwargs)
+            self.assertEqual(kwargs["install_image"], self.install_image)
+            self.assertEqual(kwargs["actions"].config_fd, kwargs["config_fd"])
+            return {"state":"forward-failed-five-previous-domains-observed"}
         from contextlib import ExitStack
         with ExitStack() as stack:
+            stack.enter_context(patch.object(
+                forward, "rollback_failed_precommit_voice_apply", side_effect=rollback,
+            ))
             for index, (func, label) in enumerate(names):
                 stack.enter_context(patch.object(
                     forward, func, side_effect=step(
@@ -178,6 +202,7 @@ class NativeForwardOneLockSequenceTests(unittest.TestCase):
                 previous_backup=self.fx.backup,
                 process_evidence=self.fx.process,
                 security_evidence=self.fx.policy,
+                install_image=self.install_image,
                 config_path=self.config,
                 active_runtime=self.fx.root / "runtime",
                 staged_config=self.fx.stage_config,
@@ -212,11 +237,35 @@ class NativeForwardOneLockSequenceTests(unittest.TestCase):
         self.assertEqual("mutating", self.fx.whole.read()["phase"])
 
     def test_failure_after_mutating_never_auto_commits_or_clears_recovery(self):
-        with self.assertRaisesRegex(RuntimeError, "simulated ipfw failure"):
+        with self.assertRaisesRegex(
+            forward.NativeForwardApplyError, "all previous five domains restored",
+        ):
             self.run_sequence(fail_at="ipfw")
         self.assertEqual(["stop", "engine", "ipfw"], self.stages)
+        self.assertEqual(len(self.recovery_calls), 1)
+        self.assertEqual(len(set(self.fds)), 1)
         self.assertEqual("mutating", self.fx.whole.read()["phase"])
         self.assertEqual(self.fx.whole.read()["schema"], 4)
+
+    def test_prepared_failure_does_not_try_recovery_or_mutate_live_service(self):
+        with self.assertRaisesRegex(RuntimeError, "simulated stop failure"):
+            self.run_sequence(fail_at="stop")
+        self.assertEqual("prepared", self.fx.whole.read()["phase"])
+        self.assertEqual(self.recovery_calls, [])
+
+    def test_committed_failure_never_rolls_back_previous_state(self):
+        with self.assertRaisesRegex(RuntimeError, "simulated commit failure"):
+            self.run_sequence(fail_at="committed")
+        self.assertEqual("committed", self.fx.whole.read()["phase"])
+        self.assertEqual(self.recovery_calls, [])
+
+    def test_missing_previous_install_image_blocks_before_stop(self):
+        (self.install_image / "config.xml").write_bytes(b"<foreign/>")
+        with self.assertRaisesRegex(forward.NativeForwardApplyError, "install image"):
+            self.run_sequence()
+        self.assertEqual(self.stages, [])
+        self.assertEqual("prepared", self.fx.whole.read()["phase"])
+        self.assertEqual(self.recovery_calls, [])
 
 
 if __name__ == "__main__":

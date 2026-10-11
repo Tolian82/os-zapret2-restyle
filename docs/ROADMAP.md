@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**v0.5.1_82 (2026-10-11):** Native private one-FD Voice forward Apply now requires the sealed previous install image BEFORE any process mutation and handles failures using the pre-existing `preflight_native_recovery` + `restore_previous_five_resources` on the SAME locked Config inode and original FD9. When the durable whole journal is MUTATING and all native process/IPFW evidence supports rollback, it restores the old five domains and reports a failed Apply; an incomplete/foreign recovery remains fail-closed with both journals retained. PREPARED failures never stop existing service; an already durable COMMITTED journal is NEVER rolled back (IPFW postcommit requires forward reconciliation). New real-filesystem/kernel-simulator late-failure regression and single-descriptor PREPARED/MUTATING/COMMITTED failure paths in Linux and FreeBSD CI. **Still OPEN:** partial one-engine/no-supervisor failure and crash states, durable previous-restart finalization, public service/GUI ON, real OPNsense acceptance.
+
+
 **v0.5.1_81 (2026-10-11):** The EXISTING `voice_cutover_five_resource_rollback.py` now optionally accepts a borrowed already-locked original Config FD, so it can restore old engine/IPFW/runtime/Config/supervisor under the SAME original flock as private `voice_native_forward_apply.py`. It strictly checks the borrowed descriptor's inode/ownership and acquired flock, never obtains a second conflicting Config lock, and never closes/unlocks a borrowed FD. Its existing manual recovery caller (no borrowed FD) keeps original behavior. Added isolated real-filesystem + simulated process/IPFW tests proving one Config flock spans stop→IPFW→files→restart, rejects unlocked/foreign descriptors and retains the MUTATING journal. **Still OPEN:** safe automatic invocation by native forward on every failure, postcommit finish, production GUI/boot and real OPNsense qualification; do not call private Apply from GUI.
 
 
@@ -20,7 +23,7 @@
 
 ## Current Voice completion order — 2026-10-11
 
-**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_81`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
+**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_82`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
 
 1. **Stabilization (current):** exact _75 identity in START_HERE/PROJECT_STATE/release; fix Project CI dynamic expected package string; audit open GitHub requests; exact-head full Voice/Project/governance/FreeBSD CI.
 2. **One native forward Apply:** reuse PREPARED/STOP/runtime/engine/IPFW/supervisor and five-resource restore; add *forward* candidate Config persist with durable intent; independent five-domain COMMIT/rollback.

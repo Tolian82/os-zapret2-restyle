@@ -45,6 +45,8 @@ from voice_native_candidate_engine_start import start_forward_candidate_engine
 from voice_native_forward_ipfw import install_forward_voice_ipfw
 from voice_native_forward_supervisor import start_forward_voice_supervisor
 from voice_native_live_preflight import _current_engine_args
+from voice_native_five_resource_recovery import preflight_native_recovery
+from voice_cutover_five_resource_rollback import restore_previous_five_resources
 
 
 class NativeForwardApplyError(RuntimeError):
@@ -273,9 +275,99 @@ def commit_forward_voice_apply(
     }
 
 
+def rollback_failed_precommit_voice_apply(
+    *, journal, ledger, previous_backup, process_evidence, security_evidence,
+    install_image, config_path, active_runtime, config_fd, config_owner,
+    probe, read_adapter, write_adapter, require_lifecycle_owner, actions,
+):
+    """Use the EXISTING five-resource rollback with the ORIGINAL Config FD.
+
+    Called only while the schema-4 whole journal remains MUTATING. The
+    previous installation image and security policy must already be sealed.
+    The existing process actuator must prove that the candidate can be
+    stopped safely: partial/foreign/orphan topologies remain fail-closed.
+    No service boot/GUI route, IPFW ownership inference or fresh Config
+    flock exists here. A successful rollback still retains its whole journal
+    until the separately qualified durable previous-restart receipt/closure.
+    """
+    if not isinstance(journal, VoiceCutoverJournal) or (
+        not isinstance(ledger, VoiceOwnershipStore)
+        or not isinstance(probe, FreeBSDVoiceProcessProbe)
+        or probe.expected != EXPECTED_SCRIPTS or probe.pidfiles != PIDFILES
+        or Path(probe.previous_backup) != Path(previous_backup)
+        or not isinstance(read_adapter, FreeBSDIPFWAdapter)
+        or read_adapter.allow_mutations is not False
+        or not isinstance(write_adapter, FreeBSDIPFWAdapter)
+        or write_adapter.allow_mutations is not True
+        or any(a.rule_base != 19000 or a.rule_max != 19010
+               for a in (read_adapter, write_adapter))
+        or not callable(require_lifecycle_owner)
+    ):
+        raise NativeForwardApplyError("untrusted native previous rollback authority")
+    if not isinstance(actions, FreeBSDVoiceProcessActions) or (
+        actions.journal is not journal or actions.probe is not probe
+        or actions.config_fd != config_fd or actions.owner != config_owner
+        or actions.previous_backup != Path(previous_backup)
+        or actions.config_path != Path(config_path)
+        or actions.active_runtime != Path(active_runtime)
+    ):
+        raise NativeForwardApplyError("recovery actuator does not own original locked Config")
+    require_lifecycle_owner()
+    _locked_config(Path(config_path), config_fd, config_owner)
+    record = journal.read()
+    if record is None or record["schema"] != RUNTIME_BOUND_SCHEMA or (
+        record["phase"] != "mutating"
+    ):
+        raise NativeForwardApplyError("only unfinished MUTATING Voice is eligible for rollback")
+    checked = preflight_native_recovery(
+        journal=journal, ledger=ledger, previous_backup=Path(previous_backup),
+        process_evidence=Path(process_evidence),
+        security_evidence=Path(security_evidence),
+        install_image=Path(install_image), read_ipfw_adapter=read_adapter,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    if checked["record"] != record:
+        raise NativeForwardApplyError("previous recovery witnesses changed")
+    # Borrow the existing Config FD. Do not create a new process actuator,
+    # do not take a second flock, and never pass test callbacks into the
+    # real recovery executor. All runtime/kernel/file mutations are delegated
+    # to the established five-resource rollback primitive.
+    result = restore_previous_five_resources(
+        journal=journal, ledger=ledger,
+        previous_backup=Path(previous_backup),
+        install_image=Path(install_image),
+        process_evidence=Path(process_evidence),
+        expected_scripts=EXPECTED_SCRIPTS,
+        config_path=Path(config_path), active_runtime=Path(active_runtime),
+        expected_owner=config_owner,
+        expected_candidate_runtime_sha256=checked["candidate_runtime_sha256"],
+        candidate_proof=checked["native_candidate_proof"],
+        process_probe=probe, read_ipfw_adapter=read_adapter,
+        write_ipfw_adapter=write_adapter,
+        require_lifecycle_owner=require_lifecycle_owner,
+        process_actions_factory=lambda borrowed: actions if borrowed == config_fd else None,
+        locked_config_fd=config_fd,
+    )
+    require_lifecycle_owner()
+    _locked_config(Path(config_path), config_fd, config_owner)
+    if result.get("state") != "five-previous-domains-observed" or (
+        result.get("whole_intent_phase") != "mutating"
+        or result.get("safe_to_enable_voice") is not False
+        or ledger.pending() is not None
+        or journal.read() != record
+    ):
+        raise NativeForwardApplyError("failed Voice forward rollback not independently verified")
+    return {
+        "state": "forward-failed-five-previous-domains-observed",
+        "whole_phase": "mutating",
+        "safe_to_enable_voice": False,
+        "requires_durable_previous_finalization": True,
+    }
+
+
 def execute_prepared_voice_apply(
     *, journal, ledger, previous_backup, process_evidence,
-    security_evidence, config_path, active_runtime, staged_config,
+    security_evidence, install_image, config_path, active_runtime, staged_config,
     candidate_runtime, desired_manifest, probe, kernel_reader,
     read_adapter, write_adapter, require_lifecycle_owner,
     actions_factory, config_owner, engine_runner=None,
@@ -287,8 +379,10 @@ def execute_prepared_voice_apply(
     Caller MUST already own original FD9 for the entire function and have
     an audited, root-controlled actions_factory that binds this exact
     supplied Config descriptor to native process security evidence.
-    This private API has no OS entrypoint. On ANY failure its journal is
-    intentionally preserved and no implicit unsafe service restart occurs.
+    This private API has no OS entrypoint. After a MUTATING failure, use
+    ONLY the existing independently gated five-resource rollback with the
+    SAME FD; incomplete native process/redo/owner evidence remains blocked.
+    An already COMMITTED transaction is never rolled back.
     """
     _authorities(
         journal=journal, ledger=ledger, probe=probe, kernel_reader=kernel_reader,
@@ -318,6 +412,16 @@ def execute_prepared_voice_apply(
             or ledger.pending() is not None
         ):
             raise NativeForwardApplyError("no prepared schema-4 native forward intent")
+        original = bound_resource_fingerprints(
+            Path(previous_backup), record["previous"],
+        )
+        if observe_live_files(
+            Path(install_image) / "config.xml", Path(install_image) / "runtime",
+            previous_backup=Path(previous_backup),
+        ) != original:
+            raise NativeForwardApplyError(
+                "previous install image is not sealed before any Voice mutation"
+            )
         actions = actions_factory(fd)
         if not isinstance(actions, FreeBSDVoiceProcessActions) or (
             actions.config_fd != fd or actions.journal is not journal
@@ -335,33 +439,74 @@ def execute_prepared_voice_apply(
             config_fd=fd, config_owner=config_owner,
             require_lifecycle_owner=require_lifecycle_owner,
         )
-        stop_previous_and_install_forward_runtime(
-            **common, process_evidence=process_evidence,
-            security_evidence=security_evidence, actions=actions,
-            ipfw_adapter=read_adapter,
-        )
-        start_forward_candidate_engine(
-            **common, read_ipfw_adapter=read_adapter,
-            runner=engine_runner, actuator=engine_actuator,
-        )
-        install_forward_voice_ipfw(
-            **common, desired_manifest=desired_manifest,
-            readonly_adapter=read_adapter, mutating_adapter=write_adapter,
-        )
-        start_forward_voice_supervisor(
-            **common, desired_manifest=desired_manifest,
-            readonly_adapter=read_adapter, runner=supervisor_runner,
-            actuator=supervisor_actuator,
-        )
-        persist_forward_candidate_config(
-            **{k: v for k, v in common.items() if k != "config_fd"},
-            locked_config_fd=fd, desired_manifest=desired_manifest,
-            readonly_adapter=read_adapter,
-        )
-        return commit_forward_voice_apply(
-            **{k: v for k, v in common.items() if k != "config_fd"},
-            config_fd=fd, desired_manifest=desired_manifest,
-            read_adapter=read_adapter, write_adapter=write_adapter,
-        )
+        try:
+            stop_previous_and_install_forward_runtime(
+                **common, process_evidence=process_evidence,
+                security_evidence=security_evidence, actions=actions,
+                ipfw_adapter=read_adapter,
+            )
+            start_forward_candidate_engine(
+                **common, read_ipfw_adapter=read_adapter,
+                runner=engine_runner, actuator=engine_actuator,
+            )
+            install_forward_voice_ipfw(
+                **common, desired_manifest=desired_manifest,
+                readonly_adapter=read_adapter, mutating_adapter=write_adapter,
+            )
+            start_forward_voice_supervisor(
+                **common, desired_manifest=desired_manifest,
+                readonly_adapter=read_adapter, runner=supervisor_runner,
+                actuator=supervisor_actuator,
+            )
+            persist_forward_candidate_config(
+                **{k: v for k, v in common.items() if k != "config_fd"},
+                locked_config_fd=fd, desired_manifest=desired_manifest,
+                readonly_adapter=read_adapter,
+            )
+            return commit_forward_voice_apply(
+                **{k: v for k, v in common.items() if k != "config_fd"},
+                config_fd=fd, desired_manifest=desired_manifest,
+                read_adapter=read_adapter, write_adapter=write_adapter,
+            )
+        except Exception as forward_error:
+            # Nothing after a durable whole COMMIT may run previous recovery:
+            # an incomplete IPFW postcommit must instead be reconciled forward.
+            # An unmodified PREPARED intent similarly never stops the old
+            # live service simply because a preflight failed.
+            require_lifecycle_owner()
+            _locked_config(config_path, fd, config_owner)
+            unfinished = journal.read()
+            if unfinished is None or unfinished["schema"] != RUNTIME_BOUND_SCHEMA or (
+                unfinished["previous"] != record["previous"]
+                or unfinished["candidate"] != record["candidate"]
+            ):
+                raise NativeForwardApplyError(
+                    "forward failed with foreign/unreadable cutover; manual review"
+                ) from forward_error
+            if unfinished["phase"] != "mutating":
+                raise
+            try:
+                rollback_failed_precommit_voice_apply(
+                    journal=journal, ledger=ledger,
+                    previous_backup=previous_backup,
+                    process_evidence=process_evidence,
+                    security_evidence=security_evidence,
+                    install_image=install_image,
+                    config_path=config_path, active_runtime=active_runtime,
+                    config_fd=fd, config_owner=config_owner,
+                    probe=probe, read_adapter=read_adapter,
+                    write_adapter=write_adapter,
+                    require_lifecycle_owner=require_lifecycle_owner,
+                    actions=actions,
+                )
+            except Exception as recovery_error:
+                raise NativeForwardApplyError(
+                    "Voice forward failed and safe rollback was refused; "
+                    "MUTATING intent retained for manual recovery"
+                ) from recovery_error
+            raise NativeForwardApplyError(
+                "Voice forward failed; all previous five domains restored, "
+                "but MUTATING intent retained until durable finalization"
+            ) from forward_error
     finally:
         os.close(fd)
