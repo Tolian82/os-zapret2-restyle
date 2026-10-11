@@ -263,9 +263,8 @@ def execute_native_recovery(
     if result.get("state")!="five-previous-domains-observed" or \
        result.get("safe_to_clear_intent") is not False or \
        result.get("safe_to_enable_voice") is not False or \
-       result.get("whole_intent_phase")!=(
-           "rolled_back" if seal is not None else "mutating"
-       ):
+       (seal is not None and result.get("whole_intent_phase")!="rolled_back") or \
+       (seal is None and journal.read()!=before["record"]):
         raise NativeFiveResourceRecoveryError(
             "five-resource rollback did not retain durable whole-system intent"
         )
