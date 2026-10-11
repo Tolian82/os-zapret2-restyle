@@ -24,7 +24,7 @@ from voice_cutover_backup import bound_resource_fingerprints, inspect_previous
 from voice_cutover_config_restore import _pinned_regular
 from voice_cutover_journal import (
     VoiceCutoverJournal, RUNTIME_BOUND_SCHEMA, BOUND_FIELD,
-    _digest, validate_record,
+    _digest, validate_record, mutating_predecessor,
 )
 from voice_firewall_ledger import VoiceOwnershipStore, canonical_manifest, fingerprint, decode_manifest
 from voice_firewall_transaction import plan_postcommit_cleanup, verify_prior_state
@@ -48,6 +48,9 @@ from voice_native_forward_supervisor import start_forward_voice_supervisor
 from voice_native_live_preflight import _current_engine_args
 from voice_native_five_resource_recovery import preflight_native_recovery
 from voice_cutover_five_resource_rollback import restore_previous_five_resources
+from voice_native_restart_integrity import attest_previous_restart
+from voice_cutover_recovery_receipt import seal_previous_receipt
+from voice_cutover_cleanup_prepare import seal_previous_completion
 
 
 class NativeForwardApplyError(RuntimeError):
@@ -415,6 +418,68 @@ def rollback_failed_precommit_voice_apply(
                 raise NativeForwardApplyError("foreign candidate kernel argv/image before stop")
         if probe.observe_processes() != a:
             raise NativeForwardApplyError("candidate process PID/start changed before stop")
+    # When the *production* actuator carries BOTH sealed native readers,
+    # finish the previous recovery exactly as the manual five-resource
+    # executor does: re-attest the restarted process, fsync the previous
+    # receipt, then fsync the non-destructive cleanup plan / ROLLED_BACK
+    # terminal journal, ALL before releasing this borrowed original FD.
+    # Simulated runners lacking these independent kernel readers never
+    # receive a fabricated receipt or terminal state.
+    ready_to_seal = (
+        actions.security_reader is not None
+        and actions.argv_reader is not None
+    )
+    if ready_to_seal and (
+        actions.process_evidence != Path(process_evidence)
+        or actions.security_evidence != Path(security_evidence)
+    ):
+        raise NativeForwardApplyError("native previous restart readers not bound to evidence")
+    if (actions.security_reader is None) != (actions.argv_reader is None):
+        raise NativeForwardApplyError("incomplete previous restart integrity readers")
+    seal = None
+    if ready_to_seal:
+        def seal(borrowed_fd):
+            if borrowed_fd != config_fd:
+                raise NativeForwardApplyError("previous receipt cannot change original Config fd")
+            require_lifecycle_owner()
+            _locked_config(Path(config_path), borrowed_fd, config_owner)
+            proof = attest_previous_restart(
+                journal=journal, previous_backup=Path(previous_backup),
+                process_evidence=Path(process_evidence),
+                security_evidence=Path(security_evidence),
+                expected_scripts=EXPECTED_SCRIPTS,
+                security_reader=actions.security_reader,
+                argv_reader=actions.argv_reader,
+                require_lifecycle_owner=require_lifecycle_owner,
+                require_config_owner=lambda:_locked_config(
+                    Path(config_path), borrowed_fd, config_owner,
+                ),
+            )
+            receipt = seal_previous_receipt(
+                journal=journal, ledger=ledger,
+                previous_backup=Path(previous_backup),
+                config_path=Path(config_path),
+                active_runtime=Path(active_runtime),
+                config_fd=borrowed_fd, config_owner=config_owner,
+                probe=probe, adapter=read_adapter, integrity_report=proof,
+                require_lifecycle_owner=require_lifecycle_owner,
+            )
+            prepared = seal_previous_completion(
+                journal=journal, ledger=ledger,
+                previous_backup=Path(previous_backup),
+                install_image=Path(install_image),
+                config_path=Path(config_path),
+                active_runtime=Path(active_runtime),
+                config_fd=borrowed_fd, config_owner=config_owner,
+                probe=probe, adapter=read_adapter, integrity_report=proof,
+                require_lifecycle_owner=require_lifecycle_owner,
+            )
+            if prepared["state"] != "previous-rollback-sealed" or (
+                prepared["whole_intent_phase"] != "rolled_back"
+                or prepared["safe_to_finish_intent"] is not False
+            ):
+                raise NativeForwardApplyError("previous recovery completion not durably sealed")
+            return {**receipt, "whole_intent_phase":"rolled_back"}
     # Borrow the existing Config FD. Do not create a new process actuator,
     # do not take a second flock, and never pass test callbacks into the
     # real recovery executor. All runtime/kernel/file mutations are delegated
@@ -434,21 +499,32 @@ def rollback_failed_precommit_voice_apply(
         require_lifecycle_owner=require_lifecycle_owner,
         process_actions_factory=lambda borrowed: actions if borrowed == config_fd else None,
         locked_config_fd=config_fd,
+        seal_previous=seal,
     )
     require_lifecycle_owner()
     _locked_config(Path(config_path), config_fd, config_owner)
+    final = journal.read()
+    phase = result.get("whole_intent_phase")
     if result.get("state") != "five-previous-domains-observed" or (
-        result.get("whole_intent_phase") != "mutating"
-        or result.get("safe_to_enable_voice") is not False
+        result.get("safe_to_enable_voice") is not False
         or ledger.pending() is not None
-        or journal.read() != record
+        or phase not in ("mutating", "rolled_back")
     ):
         raise NativeForwardApplyError("failed Voice forward rollback not independently verified")
+    if phase == "rolled_back":
+        if not ready_to_seal or final is None or (
+            final["phase"] != "rolled_back"
+            or mutating_predecessor(final) != record
+        ):
+            raise NativeForwardApplyError("foreign terminal rollback after candidate stop")
+    elif ready_to_seal or final != record:
+        raise NativeForwardApplyError("native previous recovery receipt missing or intent changed")
     return {
         "state": "forward-failed-five-previous-domains-observed",
-        "whole_phase": "mutating",
+        "whole_phase": phase,
         "safe_to_enable_voice": False,
-        "requires_durable_previous_finalization": True,
+        "requires_durable_previous_finalization": phase != "rolled_back",
+        "requires_owner_acceptance": True,
     }
 
 

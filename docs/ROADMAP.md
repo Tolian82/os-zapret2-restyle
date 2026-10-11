@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**v0.5.1_88 (2026-10-11):** Stage 2 native forward failure path now reuses the ALREADY IMPLEMENTED manual-recovery finalization under the SAME borrowed original Config FD9/flock, when and ONLY when its trusted FreeBSD process-security AND kernel-argv readers are both bound to the sealed previous evidence. After five-resource previous restart, its existing `seal_previous` callback performs `attest_previous_restart`, fsyncs `seal_previous_receipt`, and fsyncs non-destructive `seal_previous_completion` / terminal schema-4 ROLLED_BACK while still holding the exact Config fd. The outer forward coordinator independently checks terminal `mutating_predecessor` against original intent and refuses Voice ON pending owner acceptance. Test-simulated process actions without native readers retain MUTATING and cannot fabricate terminal finalization; receipt failures retain previous files/intent for manual inspection. Linux/FreeBSD CI includes late-failure same-lock positive/negative seal tests; exact-head qualification pending. **No actual GUI/service installation or Telegram audio proof.**
+
+
 **v0.5.1_87 (2026-10-11):** Updated the existing candidate-engine shell allowlist regression to assert the EXACT new fixed native lifecycle action list, including the narrowly bounded `stop-candidate-engine` command introduced in `_86`. Added explicit checks that this command stops only the engine and requires supervisor PID files absent; never executes supervisor_stop or arbitrary user-selected shell commands. `_86` specialized Voice CI stopped only because its prior exact string fixture no longer matched the extended allowlist; behavioral positive/negative engine-only recovery tests are pending exact-head CI.
 
 
@@ -32,7 +35,7 @@
 
 ## Current Voice completion order — 2026-10-11
 
-**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_87`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
+**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_88`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
 
 1. **Stabilization (current):** exact _75 identity in START_HERE/PROJECT_STATE/release; fix Project CI dynamic expected package string; audit open GitHub requests; exact-head full Voice/Project/governance/FreeBSD CI.
 2. **One native forward Apply:** reuse PREPARED/STOP/runtime/engine/IPFW/supervisor and five-resource restore; add *forward* candidate Config persist with durable intent; independent five-domain COMMIT/rollback.

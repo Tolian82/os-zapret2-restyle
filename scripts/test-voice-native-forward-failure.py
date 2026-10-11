@@ -15,6 +15,7 @@ import subprocess
 import sys
 import unittest
 from unittest.mock import patch
+from voice_cutover_journal import _digest
 
 ROOT=Path(__file__).resolve().parent.parent
 BACKEND=ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"
@@ -76,6 +77,7 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         )
         self.supervisor=canonical_supervisor_argv(EXPECTED_SCRIPTS)
         self.stop_refused=False
+        self.simulate_native_seal=False
         self.legacy=patch("voice_native_forward_apply.require_no_legacy")
         self.legacy.start()
         self.addCleanup(self.legacy.stop)
@@ -121,6 +123,11 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
                 require_lifecycle_owner=lambda:None,
                 runner=self.runner,actuator=self.stage.script,
             )
+            if self.simulate_native_seal:
+                actions.process_evidence=self.fx.process
+                actions.security_evidence=self.fx.policy
+                actions.security_reader=object()
+                actions.argv_reader=object()
             result=rollback_failed_precommit_voice_apply(
                 journal=self.fx.whole,ledger=self.fx.ipfw,
                 previous_backup=self.fx.backup,
@@ -247,6 +254,71 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         self.assertEqual(self.operations,[])
         self.assertEqual("mutating",self.fx.whole.read()["phase"])
         self.assertEqual(self.config.read_bytes(),self.previous.candidate)
+
+    def test_native_attested_rollback_seals_terminal_under_original_fd(self):
+        from unittest.mock import patch as mock_patch
+        import voice_native_process_actions as lifecycle
+        import voice_native_forward_apply as forward
+        self.simulate_native_seal=True
+        calls=[]
+        def check_locked():
+            with self.config.open("rb+") as other:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(other,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            self.assertEqual("mutating",self.fx.whole.read()["phase"])
+            calls.append("locked")
+        def integrity(**kwargs):
+            check_locked()
+            return {"state":"previous-restart-integrity-observed",
+                    "safe_to_enable_voice":False,"safe_to_finish_intent":False}
+        def receipt(**kwargs):
+            check_locked()
+            self.assertEqual(kwargs["config_path"],self.config)
+            return {"state":"previous-receipt-sealed","can_finish_intent":False}
+        def completion(**kwargs):
+            check_locked()
+            self.assertEqual(kwargs["install_image"],self.install_image)
+            old=self.fx.whole.read()
+            body={k:v for k,v in old.items() if k!="check"}
+            body["phase"]="rolled_back"
+            body["check"]=_digest(body)
+            self.fx.whole._store(body)
+            return {"state":"previous-rollback-sealed",
+                    "whole_intent_phase":"rolled_back",
+                    "safe_to_finish_intent":False}
+        with mock_patch.object(lifecycle,"attest_previous_restart",side_effect=integrity), \
+             mock_patch.object(forward,"attest_previous_restart",side_effect=integrity), \
+             mock_patch.object(forward,"seal_previous_receipt",side_effect=receipt), \
+             mock_patch.object(forward,"seal_previous_completion",side_effect=completion):
+            result=self.recover()
+        self.assertEqual(self.operations,["stop","start"])
+        self.assertEqual(result["whole_phase"],"rolled_back")
+        self.assertEqual(self.fx.whole.read()["phase"],"rolled_back")
+        self.assertEqual(self.config.read_bytes(),self.previous_config)
+        self.assertFalse(result["requires_durable_previous_finalization"])
+        self.assertTrue(result["requires_owner_acceptance"])
+        self.assertGreaterEqual(len(calls),3)
+
+    def test_native_seal_failure_keeps_old_state_and_mutating_journal(self):
+        from unittest.mock import patch as mock_patch
+        import voice_native_process_actions as lifecycle
+        import voice_native_forward_apply as forward
+        self.simulate_native_seal=True
+        integrity_report={"state":"previous-restart-integrity-observed",
+                          "safe_to_enable_voice":False,
+                          "safe_to_finish_intent":False}
+        with mock_patch.object(lifecycle,"attest_previous_restart",
+                               return_value=integrity_report), \
+             mock_patch.object(forward,"attest_previous_restart",
+                               return_value=integrity_report), \
+             mock_patch.object(forward,"seal_previous_receipt",
+                               side_effect=RuntimeError("receipt fsync refused")):
+            with self.assertRaisesRegex(RuntimeError,"receipt fsync refused"):
+                self.recover()
+        self.assertEqual(self.operations,["stop","start"])
+        self.assertEqual("mutating",self.fx.whole.read()["phase"])
+        self.assertEqual(self.config.read_bytes(),self.previous_config)
+        self.assertIsNone(self.fx.ipfw.pending())
 
     def test_corrupted_kernel_blocks_failure_rollback(self):
         # Candidate IPFW ledger is still pending, but a foreign in-range
