@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**v0.5.1_86 (2026-10-11):** Stage 2 gains a NARROW recovery path for exactly one already-running native Voice candidate dvtws2 without supervisor. Under the SAME FD9 + original Config flock, the existing `voice_native_forward_apply.py` preflights immutable old install image/process policy/IPFW ownership, observes two stable engine-only PID/start snapshots, verifies candidate runtime redo/digest, actual FreeBSD kernel argv/executable and bounded IPFW PRECOMMIT, and dispatches new no-PID `stop-candidate-engine` through the existing pinned `voice_native_process_lifecycle.sh`. `FreeBSDVoiceProcessActions` independently repeats kernel/epoch gate before stop. After verified all-stopped state, it reuses EXACTLY the existing five-resource rollback (IPFW, runtime, Config, prior engine and supervisor). Foreign engine/partial supervisor/failed stop remain fail-closed with MUTATING evidence. Added real-file/simulated-kernel positive+negative tests to current Linux/FreeBSD Voice matrix. **NOT yet qualified for OPNsense/GUI ON or Telegram media; old-state finalization and other crash states remain open.**
+
+
 **v0.5.1_83 (2026-10-11):** Corrected forward-failure test injection to distinguish PREPARED preflight refusal from post-MUTATING failure eligible for the existing five-resource rollback. `_82` CI failed on this fixture ordering mismatch rather than an exception in production rollback. No unsafe fallback added. Exact-head CI pending.
 
 
@@ -26,7 +29,7 @@
 
 ## Current Voice completion order — 2026-10-11
 
-**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_85`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
+**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_86`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
 
 1. **Stabilization (current):** exact _75 identity in START_HERE/PROJECT_STATE/release; fix Project CI dynamic expected package string; audit open GitHub requests; exact-head full Voice/Project/governance/FreeBSD CI.
 2. **One native forward Apply:** reuse PREPARED/STOP/runtime/engine/IPFW/supervisor and five-resource restore; add *forward* candidate Config persist with durable intent; independent five-domain COMMIT/rollback.

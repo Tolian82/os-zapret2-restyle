@@ -32,6 +32,7 @@ from voice_cutover_journal import SECURITY_BOUND_SCHEMA, RUNTIME_BOUND_SCHEMA
 from voice_security_policy_evidence import (inspect_security_policy,
     SUPERVISOR_BOUND_POLICY_SCHEMA)
 from voice_native_restart_integrity import attest_previous_restart
+from voice_native_kernel_argv import FreeBSDKernelArgvReader, SYSTEM_PATHS
 
 
 SHELL = "/bin/sh"
@@ -136,7 +137,7 @@ class FreeBSDVoiceProcessActions:
         return result
 
     def _run(self, action: str, before_journal: dict):
-        if action not in ("start", "stop"):
+        if action not in ("start", "stop", "stop-candidate-engine"):
             raise NativeVoiceProcessActionError("unknown private Voice actuator action")
         self._gate()
         _secure_script(self.script)
@@ -175,6 +176,51 @@ class FreeBSDVoiceProcessActions:
             raise NativeVoiceProcessActionError(
                 "native candidate/supervisor still running after stop"
             )
+        return "stopped"
+
+    def stop_forward_engine_only(self, *, kernel_reader, expected_argv,
+                                 expected_pid, expected_start_ns) -> str:
+        """Stop exactly one fully attested forward dvtws2, no supervisor.
+
+        Only the upper schema-4 MUTATING same-FD recovery coordinator can
+        supply the candidate argv/epoch it just witnessed. A separate
+        native ps snapshot and actual kernel image/argv are checked again
+        here, before calling the fixed zero-PID actuator. The normal
+        stop_candidate path remains unchanged for all-three-role state.
+        """
+        if not isinstance(kernel_reader, FreeBSDKernelArgvReader) or (
+            not isinstance(expected_argv, (list, tuple))
+            or not expected_argv
+            or any(type(part) is not str or not part for part in expected_argv)
+            or type(expected_pid) is not int or expected_pid <= 1
+            or type(expected_start_ns) is not int or expected_start_ns <= 0
+        ):
+            raise NativeVoiceProcessActionError("untrusted engine-only stop identity")
+        original = self._gate()
+        if original["schema"] != RUNTIME_BOUND_SCHEMA:
+            raise NativeVoiceProcessActionError("engine-only stop requires schema-4 intent")
+        first = self.probe.observe_candidate_engine_only()
+        second = self.probe.observe_candidate_engine_only()
+        if first != second or first != {
+            "state": "engine-only", "pid": expected_pid,
+            "start_ns": expected_start_ns,
+        }:
+            raise NativeVoiceProcessActionError("candidate engine-only epoch changed")
+        if kernel_reader.argv(expected_pid) != list(expected_argv) or (
+            kernel_reader.binary(expected_pid) != SYSTEM_PATHS["engine"]
+        ):
+            raise NativeVoiceProcessActionError("foreign candidate engine kernel image")
+        if self._gate() != original or (
+            self.probe.observe_candidate_engine_only() != first
+        ):
+            raise NativeVoiceProcessActionError("candidate identity raced before stop")
+        self._run("stop-candidate-engine", original)
+        a = self.probe.observe_candidate_engine_only()
+        b = self.probe.observe_candidate_engine_only()
+        if a != {"state": "stopped", "pid": None, "start_ns": None} or b != a:
+            raise NativeVoiceProcessActionError("candidate dvtws2 still running")
+        if self._sample()["engine"]["state"] != "stopped":
+            raise NativeVoiceProcessActionError("native full process table not stopped")
         return "stopped"
 
     def start_previous(self) -> str:

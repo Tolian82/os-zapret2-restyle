@@ -91,7 +91,10 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         self.operations.append(action)
         if self.stop_refused:
             return subprocess.CompletedProcess(argv,1,stdout="",stderr="stopped denied")
-        if action=="stop":
+        if action in ("stop","stop-candidate-engine"):
+            if action=="stop-candidate-engine":
+                self.assertIsNone(self.stage.pids["daemon"])
+                self.assertIsNone(self.stage.pids["monitor"])
             self.stage.pids.update(engine=None,daemon=None,monitor=None)
             self.stage.ps.commands={}
         elif action=="start":
@@ -187,6 +190,63 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         self.assertEqual(self.config.read_bytes(),self.previous.candidate)
         self.assertEqual(self.fx.whole.read(),self.prepared)
         self.stage.binary[201]=original
+
+    def make_engine_only(self):
+        # The same real candidate dvtws2 and IPFW PRECOMMIT survive, but
+        # both supervisor roles are absent, as after a supervisor failure.
+        self.stage.pids.update(daemon=None,monitor=None)
+        self.stage.ps.commands={
+            201: " ".join(self.stage.phase.expected),
+        }
+        self.assertEqual(
+            "engine-only", self.stage.probe.observe_candidate_engine_only()["state"],
+        )
+        with self.assertRaises(Exception):
+            self.stage.probe.observe_processes()
+
+    def test_engine_only_candidate_real_five_domain_recovery(self):
+        self.make_engine_only()
+        result=self.recover()
+        self.assertEqual(
+            result["state"],"forward-failed-five-previous-domains-observed",
+        )
+        self.assertEqual(self.operations,["stop-candidate-engine","start"])
+        self.assertEqual(self.config.read_bytes(),self.previous_config)
+        self.assertEqual(self.config.stat().st_ino,self.original_inode)
+        self.assertIsNone(self.fx.ipfw.pending())
+        self.assertEqual(self.fx.ipfw.owned(),self.stage.parent.old)
+        self.assertEqual("mutating",self.fx.whole.read()["phase"])
+        self.assertIs(result["safe_to_enable_voice"],False)
+
+    def test_engine_only_foreign_binary_blocks_before_stop(self):
+        self.make_engine_only()
+        self.stage.binary[201]="/bin/foreign"
+        with self.assertRaisesRegex(
+            NativeForwardApplyError, "foreign engine-only kernel",
+        ):
+            self.recover()
+        self.assertEqual(self.operations,[])
+        self.assertEqual(self.config.read_bytes(),self.previous.candidate)
+        self.assertIsNotNone(self.fx.ipfw.pending())
+
+    def test_engine_only_actuator_failure_keeps_mutating_journals(self):
+        self.make_engine_only()
+        self.stop_refused=True
+        with self.assertRaises((RuntimeError,ValueError)):
+            self.recover()
+        self.assertEqual(self.operations,["stop-candidate-engine"])
+        self.assertEqual("mutating",self.fx.whole.read()["phase"])
+        self.assertIsNotNone(self.fx.ipfw.pending())
+        self.assertEqual(self.config.read_bytes(),self.previous.candidate)
+
+    def test_partial_supervisor_remains_blocked_not_killed(self):
+        self.stage.pids.update(monitor=None)
+        self.stage.ps.commands.pop(203,None)
+        with self.assertRaises((RuntimeError,ValueError)):
+            self.recover()
+        self.assertEqual(self.operations,[])
+        self.assertEqual("mutating",self.fx.whole.read()["phase"])
+        self.assertEqual(self.config.read_bytes(),self.previous.candidate)
 
     def test_corrupted_kernel_blocks_failure_rollback(self):
         # Candidate IPFW ledger is still pending, but a foreign in-range

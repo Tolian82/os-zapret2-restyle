@@ -6,7 +6,7 @@
 set -eu
 
 [ "$#" -eq 1 ] || exit 64
-case "$1" in stop|start|start-candidate-engine|start-candidate-supervisor) ;; *) exit 64 ;; esac
+case "$1" in stop|stop-candidate-engine|start|start-candidate-engine|start-candidate-supervisor) ;; *) exit 64 ;; esac
 [ "$(id -u)" -eq 0 ] || exit 69
 # Fail closed when the Python coordinator did not inherit FD9.
 : <&9 || exit 69
@@ -57,6 +57,16 @@ case "$1" in
             "${SUPERVISOR_MONITOR_PIDFILE}" \
             "${CHILD_PIDFILE}" "${VOICE_SERVICE}" \
             "${DVTWS_BIN}" "${SUPERVISOR_LOG}" || exit 1
+        ;;
+    stop-candidate-engine)
+        # Native coordinator proves sole engine PID/start and kernel argv.
+        # Supervisor pidfiles must be absent. Accept NO caller PID/path.
+        for file in "${SUPERVISOR_DAEMON_PIDFILE}" \
+            "${SUPERVISOR_MONITOR_PIDFILE}"; do
+            [ ! -e "${file}" ] && [ ! -L "${file}" ] || exit 69
+        done
+        [ -e "${CHILD_PIDFILE}" ] && [ ! -L "${CHILD_PIDFILE}" ] || exit 69
+        launcher_stop "${CHILD_PIDFILE}" 5 || exit 1
         ;;
     stop)
         # The Python adapter first pins all existing roles with native
