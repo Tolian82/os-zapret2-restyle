@@ -125,8 +125,9 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
                 security_evidence=self.fx.policy,
                 install_image=self.install_image,
                 config_path=self.config,active_runtime=self.fx.root/"runtime",
+                staged_config=self.fx.stage_config,
                 config_fd=fd,config_owner=(os.geteuid(),os.getegid()),
-                probe=self.stage.probe,
+                probe=self.stage.probe,kernel_reader=self.stage.kernel,
                 read_adapter=self.stage.parent.read,
                 write_adapter=self.stage.parent.write,
                 require_lifecycle_owner=lambda:None,actions=actions,
@@ -174,6 +175,18 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         self.assertEqual(self.fx.whole.read(),self.prepared)
         self.assertIsNotNone(self.fx.ipfw.pending())
         self.assertEqual(self.config.read_bytes(),self.previous.candidate)
+
+    def test_foreign_kernel_engine_denies_before_any_stop(self):
+        original=self.stage.binary[201]
+        self.stage.binary[201]="/bin/foreign"
+        with self.assertRaisesRegex(
+            NativeForwardApplyError, "kernel argv/image",
+        ):
+            self.recover()
+        self.assertEqual(self.operations,[])
+        self.assertEqual(self.config.read_bytes(),self.previous.candidate)
+        self.assertEqual(self.fx.whole.read(),self.prepared)
+        self.stage.binary[201]=original
 
     def test_corrupted_kernel_blocks_failure_rollback(self):
         # Candidate IPFW ledger is still pending, but a foreign in-range

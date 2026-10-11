@@ -277,8 +277,9 @@ def commit_forward_voice_apply(
 
 def rollback_failed_precommit_voice_apply(
     *, journal, ledger, previous_backup, process_evidence, security_evidence,
-    install_image, config_path, active_runtime, config_fd, config_owner,
-    probe, read_adapter, write_adapter, require_lifecycle_owner, actions,
+    install_image, config_path, active_runtime, staged_config,
+    config_fd, config_owner, probe, kernel_reader, read_adapter,
+    write_adapter, require_lifecycle_owner, actions,
 ):
     """Use the EXISTING five-resource rollback with the ORIGINAL Config FD.
 
@@ -295,6 +296,7 @@ def rollback_failed_precommit_voice_apply(
         or not isinstance(probe, FreeBSDVoiceProcessProbe)
         or probe.expected != EXPECTED_SCRIPTS or probe.pidfiles != PIDFILES
         or Path(probe.previous_backup) != Path(previous_backup)
+        or not isinstance(kernel_reader, FreeBSDKernelArgvReader)
         or not isinstance(read_adapter, FreeBSDIPFWAdapter)
         or read_adapter.allow_mutations is not False
         or not isinstance(write_adapter, FreeBSDIPFWAdapter)
@@ -319,6 +321,42 @@ def rollback_failed_precommit_voice_apply(
         record["phase"] != "mutating"
     ):
         raise NativeForwardApplyError("only unfinished MUTATING Voice is eligible for rollback")
+    # STOP is an irreversible process mutation. Prove the exact current
+    # candidate argv + kernel executable independently of ps/pidfiles first.
+    # We can safely handle either fully running three-role candidate or
+    # fully stopped topology. The intentional engine-only phase, partial
+    # supervisor and any foreign/orphan PID are NOT eligible for this generic
+    # rollback: preserve MUTATING evidence for manual reconciliation.
+    a = probe.observe_processes()
+    b = probe.observe_processes()
+    if a != b:
+        raise NativeForwardApplyError("unstable candidate process topology before recovery")
+    if a["engine"]["state"] == "stopped" and (
+        a["supervisor"]["state"] == "stopped"
+    ):
+        # observe_processes() only returns stopped after checking global ps
+        # has NO managed process and ALL three pidfiles are absent.
+        pass
+    else:
+        instances = _live_instances(a)  # refuses engine-only / partial topology
+        argv, argv_sha, _, _ = _current_engine_args(Path(active_runtime))
+        if argv_sha != record["candidate"]["native_argv_sha256"] or (
+            observe_live_files(
+                Path(staged_config), Path(active_runtime),
+            )["runtime"] != record["candidate"]["candidate_runtime_sha256"]
+        ):
+            raise NativeForwardApplyError("candidate runtime not sealed before rollback stop")
+        for role, identity in instances.items():
+            expected = (
+                argv if role == "engine"
+                else canonical_supervisor_argv(EXPECTED_SCRIPTS)[role]
+            )
+            if kernel_reader.argv(identity["pid"]) != expected or (
+                kernel_reader.binary(identity["pid"]) != SYSTEM_PATHS[role]
+            ):
+                raise NativeForwardApplyError("foreign candidate kernel argv/image before stop")
+        if probe.observe_processes() != a:
+            raise NativeForwardApplyError("candidate process PID/start changed before stop")
     checked = preflight_native_recovery(
         journal=journal, ledger=ledger, previous_backup=Path(previous_backup),
         process_evidence=Path(process_evidence),
@@ -493,8 +531,9 @@ def execute_prepared_voice_apply(
                     security_evidence=security_evidence,
                     install_image=install_image,
                     config_path=config_path, active_runtime=active_runtime,
+                    staged_config=staged_config,
                     config_fd=fd, config_owner=config_owner,
-                    probe=probe, read_adapter=read_adapter,
+                    probe=probe, kernel_reader=kernel_reader, read_adapter=read_adapter,
                     write_adapter=write_adapter,
                     require_lifecycle_owner=require_lifecycle_owner,
                     actions=actions,
