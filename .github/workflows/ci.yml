@@ -170,6 +170,8 @@ jobs:
         run: python3.13 scripts/test-voice-native-five-resource-recovery.py
       - name: Read-only native boot recovery triage and crash boundary
         run: python3.13 scripts/test-voice-native-boot-recovery-review.py
+      - name: Durable previous Voice five-resource receipt under FD9 and Config lock
+        run: python3.13 scripts/test-voice-cutover-recovery-receipt.py
       - name: Voice durable previous engine/supervisor process evidence
         run: python3.13 scripts/test-voice-process-recovery-evidence.py
       - name: Native read-only FreeBSD Voice PID/process inventory
@@ -583,6 +585,7 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-cutover-runtime-bound-intent.py
             /usr/local/bin/python3.13 scripts/test-voice-native-five-resource-recovery.py
             /usr/local/bin/python3.13 scripts/test-voice-native-boot-recovery-review.py
+            /usr/local/bin/python3.13 scripts/test-voice-cutover-recovery-receipt.py
             /usr/local/bin/python3.13 scripts/test-voice-process-recovery-evidence.py
             /usr/local/bin/python3.13 scripts/test-voice-native-process-probe.py
             /usr/local/bin/python3.13 scripts/test-voice-native-file-observer.py

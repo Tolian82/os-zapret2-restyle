@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_52 — durable previous-five-resource attestation BEFORE Config unlock (2026-10-11):** Added `voice_cutover_recovery_receipt.py`, a write-once fsync'd private `previous-rollback-receipt.json` with exact schema-4 whole journal check, five old resource fingerprints, original candidate runtime SHA, sealed process security policy SHA, original locked Config dev/inode, and independently attested NEW engine/daemon/monitor PID/start. The receipt is written only while holding original FD9 and the same Config inode flock, after rechecking exact previous Config/runtime, previous IPFW kernel+ledger with no pending intent, and stable three-role process identities correlated to native kernel image/credentials/argv attestation. The real five-resource executor now has an in-lock `seal_previous(fd)` hook; the native manual recovery entrypoint supplies the real sealed-past-process/FreeBSD-kernel evidence and receipt writer before any lock is released. Repeated receipt publication with matching content is idempotent; foreign, corrupt, stale PID or cutover-mismatched receipts fail closed. Read-only cold-boot review reopens any receipt and distinguishes a stale/restarted process epoch without falsely concluding voice readiness. **Receipt is evidence-only: it does not authorize Voice ON, abort/finish the journal, cleanup redo, or automatic reboot replay**. New Linux/FreeBSD CI tests exercise exact file/kernel/Config-flock prerequisites, write-once storage, refusal on tampering, and schema phase failure. PLUGIN_REVISION=52; exact-head CI pending.
+
+
 **v0.5.1_51 — FD9 + Config-lock read-only cold-boot Voice crash classification (2026-10-11):** Added `voice_native_boot_recovery_review.py` and explicit internal service command `native-voice-boot-review`. Normal existing boot/start already refuses a pending whole Voice journal via `voice_cutover_guard.py`. This new inspector is READ-ONLY under the existing native FD9 and one actual locked Config inode. Requires a sealed schema-4 MUTATING intent, v2 supervisor policy, previous install image + process evidence, trusted private previous IPFW owner, and verifies Config/runtime redo markers bound to the same exact whole journal. Classifies candidate/previous/missing-after-rename/foreign runtime, previous/candidate/armed-previous-prefix/foreign Config, stable three-role process topology, and previous/pending-unverified/unknown-or-reset kernel IPFW. A kernel reset after cold boot is never mistaken for successful restoration; an `active→retired` rename and an fsync'd Config prefix redo are identifiable without modifying live bytes. Foreign redo, lost locks, unknown schema/phase and altered evidence fail closed. All responses explicitly forbid automatic retry, journal finalization and Voice ON, even when previous files/kernel look intact. Tests cover true same-inode lock, actual crash-simulated runtime directory rename, partial Config truncate after durable redo, missing/foreign state and exact service routing, on Linux/FreeBSD 15. **No automatic boot replay is enabled**, and `_51` remains non-deployable pending FreeBSD on-appliance process attestation and durable five-resource finalization. PLUGIN_REVISION=51; exact-head CI pending.
 
 
@@ -205,13 +208,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_51` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_52` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=51` (**development candidate, not published**);
+- `PLUGIN_REVISION=52` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

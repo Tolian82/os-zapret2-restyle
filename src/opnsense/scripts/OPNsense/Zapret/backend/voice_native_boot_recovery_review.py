@@ -19,6 +19,7 @@ import sys
 from voice_cutover_backup import bound_resource_fingerprints
 from voice_cutover_journal import RUNTIME_BOUND_SCHEMA, BOUND_FIELD, bound_candidate_runtime, VoiceCutoverJournal
 from voice_cutover_config_redo import ConfigRestoreRedo, may_resume_partial
+from voice_cutover_recovery_receipt import read_receipt
 from voice_cutover_runtime_restore import _read_redo
 from voice_cutover_config_restore import _pinned_regular
 from voice_native_file_observer import _hash_file, observe_live_files
@@ -95,6 +96,14 @@ def inspect_boot_recovery(
         raise BootReviewError("sealed previous install image differs")
     config_redo=ConfigRestoreRedo(journal.directory).read()
     runtime_redo=_read_redo(journal.directory)
+    receipt=read_receipt(journal.directory)
+    if receipt is not None and (
+        receipt["whole_check"]!=record["check"]
+        or receipt["previous"]!=record["previous"]
+        or receipt["candidate_runtime_sha256"]!=candidate_sha
+        or receipt["security_policy_sha256"]!=policy["policy_sha256"]
+    ):
+        raise BootReviewError("previous recovery receipt belongs to another cutover")
     if config_redo is not None and (
         config_redo["cutover_check"] != record["check"]
         or config_redo["previous_sha256"] != record["previous"]["config"]
@@ -168,6 +177,21 @@ def inspect_boot_recovery(
     processes=first["engine"]["state"]
     if processes not in ("stopped","running") or first["supervisor"]["state"]!=processes:
         raise BootReviewError("mixed or invalid Voice engine/supervisor boot state")
+    receipt_state="absent"
+    if receipt is not None:
+        live={
+            "engine":first["engine"]["process"],
+            "daemon":first["supervisor"]["daemon"],
+            "monitor":first["supervisor"]["monitor"],
+        }
+        if processes=="stopped":
+            receipt_state="requires-postboot-process-attestation"
+        elif all(receipt["instances"][role]=={
+            "pid":live[role]["pid"],"start_ns":live[role]["start_ns"],
+        } for role in ("engine","daemon","monitor")):
+            receipt_state="process-epoch-matches-not-readiness"
+        else:
+            receipt_state="stale-process-epoch"
     owned=ledger.owned()
     if owned is None or fingerprint(canonical_manifest(owned)) != (
         record["previous"]["firewall"]
@@ -196,6 +220,7 @@ def inspect_boot_recovery(
         raise BootReviewError("cutover journals changed during boot review")
     if ConfigRestoreRedo(journal.directory).read()!=config_redo or (
         _read_redo(journal.directory)!=runtime_redo
+        or read_receipt(journal.directory)!=receipt
     ):
         raise BootReviewError("Voice redo changed during boot review")
     # This is intentionally NOT a readiness report. Even a complete-looking
@@ -209,6 +234,7 @@ def inspect_boot_recovery(
         config=config_status,runtime=runtime_status,processes=processes,
         kernel=kernel,config_redo="present" if config_redo else "absent",
         runtime_redo="present" if runtime_redo else "absent",
+        previous_receipt=receipt_state,
         candidate_runtime_sha256=candidate_sha,
     )
 

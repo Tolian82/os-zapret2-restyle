@@ -43,6 +43,9 @@ from voice_freebsd_kernel_argv import FreeBSDKernelArgvReader
 from voice_ipfw_adapter import FreeBSDIPFWAdapter
 from voice_native_ipfw_ownership import observe_owned_ipfw
 from voice_cutover_five_resource_rollback import restore_previous_five_resources
+from voice_native_restart_integrity import attest_previous_restart
+from voice_cutover_recovery_receipt import seal_previous_receipt
+from voice_native_recovery_quiescence import _locked_config
 import voice_ipfw_runtime as native
 
 
@@ -199,6 +202,30 @@ def execute_native_recovery(
         # Injected factories are accepted by isolated regression tests only;
         # production CLI never passes this parameter.
         factory=native_actions_factory
+    # The production receipt is written INSIDE the existing five-resource
+    # executor, before its borrowed Config fd is released. Never infer its
+    # process identity from a past call to start_previous.
+    seal=None
+    if native_actions_factory is None and rollback_executor is restore_previous_five_resources:
+        def seal(config_fd):
+            proof=attest_previous_restart(
+                journal=journal,previous_backup=previous_backup,
+                process_evidence=process_evidence,
+                security_evidence=security_evidence,
+                expected_scripts=EXPECTED_SCRIPTS,
+                security_reader=sec_reader,argv_reader=argv_reader,
+                require_lifecycle_owner=require_lifecycle_owner,
+                require_config_owner=lambda:_locked_config(
+                    config_path,config_fd,(0,0),
+                ),
+            )
+            return seal_previous_receipt(
+                journal=journal,ledger=ledger,previous_backup=previous_backup,
+                config_path=config_path,active_runtime=active_runtime,
+                config_fd=config_fd,config_owner=(0,0),
+                probe=probe,adapter=read_ipfw_adapter,integrity_report=proof,
+                require_lifecycle_owner=require_lifecycle_owner,
+            )
     result=rollback_executor(
         journal=journal,ledger=ledger,previous_backup=previous_backup,
         install_image=Path(install_image),process_evidence=process_evidence,
@@ -210,6 +237,7 @@ def execute_native_recovery(
         write_ipfw_adapter=write_ipfw_adapter,
         process_actions_factory=factory,
         require_lifecycle_owner=require_lifecycle_owner,
+        seal_previous=seal,
     )
     if result.get("state")!="five-previous-domains-observed" or \
        result.get("safe_to_clear_intent") is not False or \

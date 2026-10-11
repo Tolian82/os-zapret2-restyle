@@ -88,6 +88,7 @@ def restore_previous_five_resources(
     start_previous: Callable[[], None] | None = None,
     require_lifecycle_owner: Callable[[], None],
     process_actions_factory: Callable[[int], FreeBSDVoiceProcessActions] | None = None,
+    seal_previous: Callable[[int], dict] | None = None,
 ) -> dict:
     """Rollback under one lock: stop → kernel → runtime → Config → restart.
 
@@ -262,8 +263,29 @@ def restore_previous_five_resources(
            ledger.owned()!=old_owner or ledger.pending() is not None:
             raise FiveResourceRollbackError("five-resource recovery postcheck failed")
         _locked_config(config_path,fd,expected_owner)
+        # One last durable witness must be written BEFORE unlocking Config:
+        # calling it after this function returns is a TOCTOU error.
+        # No receipt ever commits/removes the still-MUTATING whole intent.
+        receipt_state="not-sealed"
+        if seal_previous is not None:
+            if not callable(seal_previous):
+                raise FiveResourceRollbackError("invalid sealed recovery receipt owner")
+            attestation=seal_previous(fd)
+            if not isinstance(attestation,dict) or (
+                attestation.get("state") not in (
+                    "previous-receipt-sealed","previous-receipt-already-sealed",
+                )
+                or attestation.get("can_finish_intent") is not False
+            ):
+                raise FiveResourceRollbackError("durable previous receipt refused")
+            receipt_state=attestation["state"]
+        _locked_config(config_path,fd,expected_owner)
+        require_lifecycle_owner()
+        if journal.read()!=original:
+            raise FiveResourceRollbackError("whole intent changed after receipt")
 
         return {
+            "recovery_receipt":receipt_state,
             "state":"five-previous-domains-observed",
             "config":"previous", "runtime":"previous",
             "engine":result_state,"supervisor":result_state,
