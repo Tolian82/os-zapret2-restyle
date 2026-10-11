@@ -1,5 +1,8 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+**v0.5.1_101 (2026-10-11):** Stage-2 PRIVATE original-FD9/Config-flock Voice executor now accepts an already-sealed schema-4 **ROLLED_BACK** transaction for a strictly READ-ONLY repeat. It reuses existing `inspect_boot_recovery` to verify the durable original MUTATING predecessor, installed old Config/runtime, exact old IPFW ownership and live kernel, terminal receipt, cleanup plan, and matching three-role PID/start epochs. A healthy unchanged terminal returns `native-voice-rolled-back-read-only-verified`, explicitly **not** Voice ON or permission to finish/close; stale process epochs, a reset/foreign kernel, missing receipt/plan or wrong desired manifest refuse without stop/start, IPFW mutation, Config write or journal deletion. Three real-file/ledger/simulated FreeBSD terminal CI regressions added. `_100` full Project/Voice/FreeBSD15 CI PASS. `_101` exact-head CI pending. No live appliance, GUI/service/boot wiring or Telegram MEDIA_PASS; package candidate unpublished.
+
+
 **v0.5.1_100 (2026-10-11):** Fixed the final isolated `_99` previous-PID negative test fixture: it now injects the exact archive-bound pre-STOP `PID/start_ns` observation via the already simulated FreeBSD native process-reader seam, instead of asking `FakePs` to invent an unrelated process start epoch. This directly proves a still-running original pre-cutover process is NOT a completed rollback and cannot obtain a previous-restart receipt or ROLLED_BACK. Production behavior unchanged from `_97`; `_98` post-restart positive seal PASSED; `_99` Voice negative failed solely at mismatched simulated start epochs. `_100` exact-head CI required. No published candidate or service/GUI/boot enablement.
 
 
