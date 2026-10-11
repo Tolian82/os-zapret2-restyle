@@ -30,8 +30,9 @@ from voice_firewall_ledger import VoiceOwnershipStore, canonical_manifest, finge
 from voice_firewall_transaction import plan_postcommit_cleanup, verify_prior_state
 from voice_ipfw_adapter import FreeBSDIPFWAdapter
 from voice_ipfw_runtime import commit_verified, require_no_legacy
+from voice_native_ipfw_ownership import observe_owned_ipfw
 from voice_native_process_probe import FreeBSDVoiceProcessProbe
-from voice_process_recovery_evidence import ProcessEvidenceError
+from voice_process_recovery_evidence import ProcessEvidenceError, inspect_process_evidence
 from voice_native_kernel_argv import FreeBSDKernelArgvReader, SYSTEM_PATHS, _live_instances
 from voice_native_supervisor_launch import canonical_supervisor_argv
 from voice_native_recovery_quiescence import EXPECTED_SCRIPTS, PIDFILES, _locked_config
@@ -396,87 +397,6 @@ def rollback_failed_precommit_voice_apply(
     )
     if checked["record"] != record:
         raise NativeForwardApplyError("previous recovery witnesses changed")
-    # A running three-role candidate uses the existing all-roles process
-    # stop. The intentional intermediate phase (one candidate engine,
-    # no supervisor) needs a narrowly attested engine-only stop; never
-    # treat other partially started supervisors as engine-only.
-    try:
-        a = probe.observe_processes()
-        b = probe.observe_processes()
-    except ProcessEvidenceError:
-        one = probe.observe_candidate_engine_only()
-        two = probe.observe_candidate_engine_only()
-        if one != two or one["state"] != "engine-only":
-            raise NativeForwardApplyError(
-                "partial or foreign Voice process topology; manual recovery"
-            )
-        candidate_argv, argv_sha, _, _ = _current_engine_args(Path(active_runtime))
-        running = observe_live_files(Path(staged_config), Path(active_runtime))
-        redo = _read_redo(journal.directory)
-        cfg = os.fstat(config_fd)
-        if argv_sha != record["candidate"]["native_argv_sha256"] or (
-            running["runtime"] != record["candidate"]["candidate_runtime_sha256"]
-            or running["config"] != record["candidate"]["saved_xml_sha256"]
-            or redo is None or redo["whole_check"] != record["check"]
-            or redo["candidate_sha256"] != running["runtime"]
-            or redo["previous_sha256"] != record["previous"]["runtime"]
-            or (redo["config_dev"], redo["config_inode"])
-                != (cfg.st_dev, cfg.st_ino)
-            or redo["active_name"] != Path(active_runtime).name
-        ):
-            raise NativeForwardApplyError(
-                "single candidate engine runtime/redo not bound to forward intent"
-            )
-        if kernel_reader.argv(one["pid"]) != candidate_argv or (
-            kernel_reader.binary(one["pid"]) != SYSTEM_PATHS["engine"]
-        ):
-            raise NativeForwardApplyError("foreign engine-only kernel argv/image")
-        pending = ledger.pending()
-        if pending is not None:
-            if ledger.owned() is None:
-                raise NativeForwardApplyError("previous IPFW ownership absent")
-            plan_postcommit_cleanup(read_adapter, ledger.owned(), decode_manifest(pending["desired"]))
-        # Final pre-stop identity under the SAME FD9+Config flock. The
-        # actuator checks PID/start + kernel image again immediately before
-        # dispatching the fixed no-PID shell helper.
-        require_lifecycle_owner()
-        _locked_config(Path(config_path), config_fd, config_owner)
-        if journal.read() != record or (
-            probe.observe_candidate_engine_only() != one
-        ):
-            raise NativeForwardApplyError("engine-only recovery state raced")
-        actions.stop_forward_engine_only(
-            kernel_reader=kernel_reader, expected_argv=candidate_argv,
-            expected_pid=one["pid"], expected_start_ns=one["start_ns"],
-        )
-        a = probe.observe_processes()
-        b = probe.observe_processes()
-    if a != b:
-        raise NativeForwardApplyError("unstable candidate process topology before recovery")
-    if a["engine"]["state"] == "stopped" and (
-        a["supervisor"]["state"] == "stopped"
-    ):
-        pass  # global ps + all three pidfile absence was independently verified
-    else:
-        instances = _live_instances(a)
-        argv, argv_sha, _, _ = _current_engine_args(Path(active_runtime))
-        if argv_sha != record["candidate"]["native_argv_sha256"] or (
-            observe_live_files(
-                Path(staged_config), Path(active_runtime),
-            )["runtime"] != record["candidate"]["candidate_runtime_sha256"]
-        ):
-            raise NativeForwardApplyError("candidate runtime not sealed before rollback stop")
-        for role, identity in instances.items():
-            expected = (
-                argv if role == "engine"
-                else canonical_supervisor_argv(EXPECTED_SCRIPTS)[role]
-            )
-            if kernel_reader.argv(identity["pid"]) != expected or (
-                kernel_reader.binary(identity["pid"]) != SYSTEM_PATHS[role]
-            ):
-                raise NativeForwardApplyError("foreign candidate kernel argv/image before stop")
-        if probe.observe_processes() != a:
-            raise NativeForwardApplyError("candidate process PID/start changed before stop")
     # When the *production* actuator carries BOTH sealed native readers,
     # finish the previous recovery exactly as the manual five-resource
     # executor does: re-attest the restarted process, fsync the previous
@@ -539,6 +459,156 @@ def rollback_failed_precommit_voice_apply(
             ):
                 raise NativeForwardApplyError("previous recovery completion not durably sealed")
             return {**receipt, "whole_intent_phase":"rolled_back"}
+    # A running three-role candidate uses the existing all-roles process
+    # stop. The intentional intermediate phase (one candidate engine,
+    # no supervisor) needs a narrowly attested engine-only stop; never
+    # treat other partially started supervisors as engine-only.
+    try:
+        a = probe.observe_processes()
+        b = probe.observe_processes()
+    except ProcessEvidenceError:
+        one = probe.observe_candidate_engine_only()
+        two = probe.observe_candidate_engine_only()
+        if one != two or one["state"] != "engine-only":
+            raise NativeForwardApplyError(
+                "partial or foreign Voice process topology; manual recovery"
+            )
+        candidate_argv, argv_sha, _, _ = _current_engine_args(Path(active_runtime))
+        running = observe_live_files(Path(staged_config), Path(active_runtime))
+        redo = _read_redo(journal.directory)
+        cfg = os.fstat(config_fd)
+        if argv_sha != record["candidate"]["native_argv_sha256"] or (
+            running["runtime"] != record["candidate"]["candidate_runtime_sha256"]
+            or running["config"] != record["candidate"]["saved_xml_sha256"]
+            or redo is None or redo["whole_check"] != record["check"]
+            or redo["candidate_sha256"] != running["runtime"]
+            or redo["previous_sha256"] != record["previous"]["runtime"]
+            or (redo["config_dev"], redo["config_inode"])
+                != (cfg.st_dev, cfg.st_ino)
+            or redo["active_name"] != Path(active_runtime).name
+        ):
+            raise NativeForwardApplyError(
+                "single candidate engine runtime/redo not bound to forward intent"
+            )
+        if kernel_reader.argv(one["pid"]) != candidate_argv or (
+            kernel_reader.binary(one["pid"]) != SYSTEM_PATHS["engine"]
+        ):
+            raise NativeForwardApplyError("foreign engine-only kernel argv/image")
+        pending = ledger.pending()
+        if pending is not None:
+            if ledger.owned() is None:
+                raise NativeForwardApplyError("previous IPFW ownership absent")
+            plan_postcommit_cleanup(read_adapter, ledger.owned(), decode_manifest(pending["desired"]))
+        # Final pre-stop identity under the SAME FD9+Config flock. The
+        # actuator checks PID/start + kernel image again immediately before
+        # dispatching the fixed no-PID shell helper.
+        require_lifecycle_owner()
+        _locked_config(Path(config_path), config_fd, config_owner)
+        if journal.read() != record or (
+            probe.observe_candidate_engine_only() != one
+        ):
+            raise NativeForwardApplyError("engine-only recovery state raced")
+        actions.stop_forward_engine_only(
+            kernel_reader=kernel_reader, expected_argv=candidate_argv,
+            expected_pid=one["pid"], expected_start_ns=one["start_ns"],
+        )
+        a = probe.observe_processes()
+        b = probe.observe_processes()
+    if a != b:
+        raise NativeForwardApplyError("unstable candidate process topology before recovery")
+
+    # Crash after the previous engine/supervisor were restarted, but before
+    # previous-receipt/ROLLED_BACK was fsynced. Never stop those now-live old
+    # processes as if they were a candidate. The journal remains MUTATING;
+    # only a FRESH sealed FreeBSD kernel image/credential/argv attestation
+    # can finish it, under this exact original FD9 + Config flock.
+    if a["engine"]["state"] == "running" and (
+        a["supervisor"]["state"] == "running"
+        and ledger.pending() is None
+    ):
+        old = bound_resource_fingerprints(
+            Path(previous_backup), record["previous"],
+        )
+        try:
+            restored = observe_live_files(
+                Path(config_path), Path(active_runtime),
+                previous_backup=Path(previous_backup),
+            ) == old
+        except (OSError, ValueError):
+            restored = False
+        owned = ledger.owned()
+        if restored and owned is not None and (
+            fingerprint(canonical_manifest(owned)) == record["previous"]["firewall"]
+            and observe_owned_ipfw(ledger, read_adapter)
+                == record["previous"]["firewall"]
+        ):
+            # Reject the pre-STOP case: the exact original PID/start epochs
+            # still running after journal.mark_mutating() do NOT prove that
+            # rollback ever occurred. The native verifier additionally
+            # attests new epochs and both independent kernel readers.
+            saved = inspect_process_evidence(
+                Path(process_evidence), Path(previous_backup),
+                EXPECTED_SCRIPTS, record["previous"],
+            )["observation"]
+            original_instances = {
+                "engine": saved["engine"]["process"],
+                "daemon": saved["supervisor"]["daemon"],
+                "monitor": saved["supervisor"]["monitor"],
+            }
+            current_instances = _live_instances(a)
+            if any(current_instances[role] == {
+                "pid": original_instances[role]["pid"],
+                "start_ns": original_instances[role]["start_ns"],
+            } for role in ("engine", "daemon", "monitor")):
+                raise NativeForwardApplyError(
+                    "original pre-STOP process epochs are not previous rollback"
+                )
+            if not ready_to_seal or seal is None:
+                raise NativeForwardApplyError(
+                    "restarted previous Voice requires native kernel security/argv attestation"
+                )
+            sealed = seal(config_fd)
+            if sealed.get("whole_intent_phase") != "rolled_back" or (
+                journal.read() is None
+                or journal.read()["phase"] != "rolled_back"
+                or mutating_predecessor(journal.read()) != record
+                or probe.observe_processes() != a
+            ):
+                raise NativeForwardApplyError(
+                    "interrupted previous recovery failed durable closure"
+                )
+            return {
+                "state": "forward-failed-five-previous-domains-observed",
+                "whole_phase": "rolled_back",
+                "safe_to_enable_voice": False,
+                "requires_durable_previous_finalization": False,
+                "requires_owner_acceptance": True,
+            }
+
+    if a["engine"]["state"] == "stopped" and (
+        a["supervisor"]["state"] == "stopped"
+    ):
+        pass  # global ps + all three pidfile absence was independently verified
+    else:
+        instances = _live_instances(a)
+        argv, argv_sha, _, _ = _current_engine_args(Path(active_runtime))
+        if argv_sha != record["candidate"]["native_argv_sha256"] or (
+            observe_live_files(
+                Path(staged_config), Path(active_runtime),
+            )["runtime"] != record["candidate"]["candidate_runtime_sha256"]
+        ):
+            raise NativeForwardApplyError("candidate runtime not sealed before rollback stop")
+        for role, identity in instances.items():
+            expected = (
+                argv if role == "engine"
+                else canonical_supervisor_argv(EXPECTED_SCRIPTS)[role]
+            )
+            if kernel_reader.argv(identity["pid"]) != expected or (
+                kernel_reader.binary(identity["pid"]) != SYSTEM_PATHS[role]
+            ):
+                raise NativeForwardApplyError("foreign candidate kernel argv/image before stop")
+        if probe.observe_processes() != a:
+            raise NativeForwardApplyError("candidate process PID/start changed before stop")
     # Borrow the existing Config FD. Do not create a new process actuator,
     # do not take a second flock, and never pass test callbacks into the
     # real recovery executor. All runtime/kernel/file mutations are delegated

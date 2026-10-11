@@ -156,7 +156,7 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
 
     def resume_mutating_via_executor(self, *, desired=None):
         def native_actions(fd):
-            return FreeBSDVoiceProcessActions(
+            actions=FreeBSDVoiceProcessActions(
                 probe=self.stage.probe, journal=self.fx.whole,
                 previous_backup=self.fx.backup,
                 active_runtime=self.fx.root/"runtime",
@@ -165,6 +165,12 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
                 config_fd=fd, require_lifecycle_owner=lambda:None,
                 runner=self.runner, actuator=self.stage.script,
             )
+            if self.simulate_native_seal:
+                actions.process_evidence=self.fx.process
+                actions.security_evidence=self.fx.policy
+                actions.security_reader=object()
+                actions.argv_reader=object()
+            return actions
         return execute_prepared_voice_apply(
             journal=self.fx.whole,ledger=self.fx.ipfw,
             previous_backup=self.fx.backup,
@@ -297,6 +303,87 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         self.assertEqual(self.operations,[])
         self.assertTrue(unowned.is_dir())
         self.assertIsNone(self.fx.ipfw.pending())
+        self.assertEqual(self.fx.whole.read()["phase"],"mutating")
+
+    def test_interrupted_previous_restart_without_native_readers_refuses_stop(self):
+        self.recover()  # Real previous Config/runtime/IPFW and new old-process PIDs.
+        self.assertEqual(self.operations,["stop","start"])
+        before=self.fx.whole.read()
+        with self.assertRaisesRegex(
+            NativeForwardApplyError,
+            "restarted previous Voice requires native kernel security/argv",
+        ):
+            self.resume_mutating_via_executor()
+        self.assertEqual(self.operations,["stop","start"])
+        self.assertEqual(self.fx.whole.read(),before)
+        self.assertEqual(self.config.read_bytes(),self.previous_config)
+
+    def test_interrupted_previous_restart_can_seal_without_second_process_stop(self):
+        import voice_native_forward_apply as forward
+        self.recover()
+        self.assertEqual(self.operations,["stop","start"])
+        self.simulate_native_seal=True
+        visits=[]
+        def check_locked():
+            with self.config.open("rb+") as other:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(other,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            self.assertEqual(self.fx.whole.read()["phase"],"mutating")
+            visits.append("locked")
+        def integrity(**kw):
+            check_locked()
+            return {"state":"previous-restart-integrity-observed",
+                    "safe_to_enable_voice":False,"safe_to_finish_intent":False}
+        def receipt(**kw):
+            check_locked()
+            return {"state":"previous-receipt-sealed","can_finish_intent":False}
+        def completion(**kw):
+            check_locked()
+            original=self.fx.whole.read()
+            body={k:v for k,v in original.items() if k!="check"}
+            body["phase"]="rolled_back"
+            body["check"]=_digest(body)
+            self.fx.whole._store(body)
+            return {"state":"previous-rollback-sealed",
+                    "whole_intent_phase":"rolled_back",
+                    "safe_to_finish_intent":False}
+        with patch.object(forward,"attest_previous_restart",side_effect=integrity), \\
+             patch.object(forward,"seal_previous_receipt",side_effect=receipt), \\
+             patch.object(forward,"seal_previous_completion",side_effect=completion), \\
+             patch.object(forward,"stop_previous_and_install_forward_runtime",
+                          side_effect=AssertionError("must never repeat forward stages")):
+            with self.assertRaisesRegex(
+                NativeForwardApplyError,
+                "interrupted MUTATING Voice forward recovered previous domains",
+            ):
+                self.resume_mutating_via_executor()
+        self.assertGreaterEqual(len(visits),3)
+        self.assertEqual(self.operations,["stop","start"])
+        self.assertEqual(self.fx.whole.read()["phase"],"rolled_back")
+        self.assertIsNone(self.fx.ipfw.pending())
+
+    def test_original_process_epochs_not_misclassified_as_rollback(self):
+        # After a durable MUTATING mark but before stop, original old PIDs
+        # are still running. No receipt, no stop or forged rollback closure.
+        import voice_native_forward_apply as forward
+        self.simulate_power_cut_after_old_stop_before_forward_runtime()
+        self.stage.pids.update(engine=101,daemon=102,monitor=103)
+        self.stage.ps.commands={
+            101:" ".join(self.old_engine),
+            102:" ".join(self.supervisor["daemon"]),
+            103:" ".join(self.supervisor["monitor"]),
+        }
+        self.simulate_native_seal=True
+        with patch.object(
+            forward,"seal_previous_completion",
+            side_effect=AssertionError("original epochs cannot seal rollback"),
+        ):
+            with self.assertRaisesRegex(
+                NativeForwardApplyError,
+                "original pre-STOP process epochs",
+            ):
+                self.resume_mutating_via_executor()
+        self.assertEqual(self.operations,[])
         self.assertEqual(self.fx.whole.read()["phase"],"mutating")
 
     def test_real_late_failure_restores_old_five_domains_and_retains_intent(self):
