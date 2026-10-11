@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_49`: checksum-bound schema-4 native Voice candidate runtime digest, verified before journaling and enforced by five-resource and filesystem rollback across renames/crash replay
+- [x] Current candidate `v0.5.1_50`: native root/FreeBSD manual emergency five-resource rollback through existing FD9 lifecycle service dispatcher using schema-4 pinned candidate/runtime/engine/IPFW/Config recovery, retaining MUTATING intent
+- [ ] Next: full on-appliance FreeBSD native supervisor proctitle/kernel argv test, boot replay policy and verified durable journal/redo finalization; then Voice ON
+- [x] Previous candidate `v0.5.1_49`: checksum-bound schema-4 native Voice candidate runtime digest, verified before journaling and enforced by five-resource and filesystem rollback across renames/crash replay
 - [ ] Next: actual native FD9-only five-resource rollback CLI, boot/crash decision and durable restart finalization; full FreeBSD on-appliance acceptance before Voice ON
 - [x] Previous candidate `v0.5.1_48`: bind exact installed supervisor daemon/monitor argv to saved security policy v2 + schema-3 whole journal, deny untrusted or v1 previous-policy restart
 - [ ] Next: production native FD9 coordinator, exact live FreeBSD daemon/proctitle qualification, cold-boot recovery and durable five-resource completion; Voice ON only after validation
