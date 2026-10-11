@@ -26,6 +26,7 @@ from voice_cutover_reclaim import read_reclaim_intent, inspect_reclaim_placement
 from voice_cutover_prune import read_prune_intent
 from voice_cutover_root_release import read_root_release_intent
 from voice_cutover_finalization import read_finalization_proof, inspect_finalization_proof
+from voice_cutover_close import inspect_close_placement
 from voice_cutover_runtime_restore import _read_redo
 from voice_cutover_config_restore import _pinned_regular
 from voice_native_file_observer import _hash_file, observe_live_files
@@ -71,7 +72,12 @@ def inspect_boot_recovery(
         raise BootReviewError("native read-only process/IPFW witnesses required")
     require_lifecycle_owner()
     _locked_config(Path(config_path), config_fd, config_owner)
-    record=journal.read()
+    closure=inspect_close_placement(
+        journal=journal, config_path=Path(config_path),
+        active_runtime=Path(active_runtime),
+    )
+    journal=closure["view"]
+    record=closure["record"]
     pending=ledger.pending()
     if record is None:
         if read_reclaim_intent(journal.directory) is not None or (
@@ -323,7 +329,9 @@ def inspect_boot_recovery(
         raise BootReviewError("Voice redo changed during boot review")
     # This is intentionally NOT a readiness report. Even a complete-looking
     # previous state requires independent native post-reboot image/argv attest.
-    status=("previous-rollback-sealed-needs-manual-finalization" if terminal
+    status=("previous-journal-archived-awaits-native-acceptance"
+            if closure["state"]=="archived-awaiting-native-acceptance"
+            else "previous-rollback-sealed-needs-manual-finalization" if terminal
             else "previous-files-and-kernel-observed"
             if config_status=="previous" and runtime_status=="previous"
             and kernel=="previous" and processes=="running"
@@ -337,6 +345,7 @@ def inspect_boot_recovery(
         cleanup_plan="prepared-only" if cleanup else "absent",
         candidate_reclaim=reclaim_location,
         previous_finalization=finalization_state,
+        whole_closure=closure["state"],
         candidate_runtime_sha256=candidate_sha,
     )
 

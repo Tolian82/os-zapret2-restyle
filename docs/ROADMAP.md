@@ -1,5 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Current candidate `v0.5.1_63`: write-ahead and atomic archive of whole `intent.json` after completed previous cleanup, with read-only native boot review, retry before/after rename, and legacy start guard retaining fail-closed behavior even when `intent.json` is absent
+- [ ] Next: on-router FreeBSD exact process argv/image acceptance, gated old-state boot qualification, and safe retirement or retention of redo/proofs without confusing legacy/native ownership
 - [x] Current candidate `v0.5.1_62`: persist read-only boot-verifiable finalization proof joining all terminal rollback/reclaim/prune/rmdir documents under native owner locks and old five-resource state; never close intent or enable Voice ON
 - [ ] Next: native FreeBSD kernel process argv/image acceptance, plus ordered crash-safe deletion/whole-journal closure and boot checks (no automatic replay)
 - [x] Current candidate `v0.5.1_61`: explicit FD9 + original Config flock release of only the empty quarantine root, after sealed prune inventory and write-ahead root-release intent; crash classification/resumption before or after rmdir/parent fsync, no backup/redo/whole-intent cleanup or Voice ON

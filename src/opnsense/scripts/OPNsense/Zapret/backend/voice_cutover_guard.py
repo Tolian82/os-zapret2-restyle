@@ -18,6 +18,7 @@ import sys
 
 from voice_cutover_journal import VoiceCutoverJournal, CutoverJournalError
 from voice_firewall_ledger import VoiceOwnershipStore, LedgerError
+from voice_cutover_close import NAME as CLOSE_NAME, ARCHIVE as CLOSED_ARCHIVE
 
 WHOLE_ROOT = Path("/var/db/zapret2/voice-cutover")
 IPFW_ROOT = Path("/var/db/zapret2/voice-ipfw")
@@ -36,6 +37,14 @@ def check_pending(whole_root: Path, ipfw_root: Path) -> dict:
     """Return a bounded, machine-readable advisory without kernel reads."""
     try:
         if _present(whole_root):
+            # Once the rollback is archived, intent.json is intentionally absent.
+            # Its closure WAL and immutable archive MUST still block legacy
+            # lifecycle and cannot be treated as permission to start.
+            if _present(whole_root / CLOSE_NAME) or _present(whole_root / CLOSED_ARCHIVE):
+                return {
+                    "state": "blocked", "reason": "native-closure-retained",
+                    "safe_to_mutate": False,
+                }
             state = VoiceCutoverJournal(whole_root).inspect()
             if state != "no-intent":
                 return {
