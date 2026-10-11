@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+> **Current, 2026-10-11:** `v0.5.1_75` Draft PR #328, latest audited head `dc27412375731fc54f1df97a36f61c541f2f1790`, **not merged/published/installed**. Canonical [seven-stage Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) supersedes historical «Next» paragraphs below. GUI OFF-only saving and isolated five-resource rollback exist; ON Apply, candidate Config persist, whole COMMIT, normal boot, legacy PoC migration and verified UDP media remain OPEN. At audit baseline Voice CI PASS and FreeBSD 15 build PASS, but Project CI FAIL due to this file still naming `_74` where the existing dynamic Strategy Lab contract requires `_75`; after this documentation correction all gates require new exact-head runs.
+
+
 **v0.5.1_75 — post-IPFW candidate supervisor startup and independent native process proof (2026-10-11):** New private fixed shell action `start-candidate-supervisor` invokes ONLY installed `supervisor_start`, never relaunches `dvtws2`. Added `voice_native_forward_supervisor.py`: under original FD9+Config flock, exact schema-4 whole MUTATING intent, separate IPFW PRECOMMIT and old owner, it verifies candidate engine PID/start and FreeBSD kernel argv/image, exact installed desired IPFW rules and preserved stage snapshots, no legacy Telegram PoC, unchanged old Config, active/staged/retained runtimes and redo/inodes. After the fixed shell call, independently double-reads all three engine/daemon/monitor PID/start epochs, exact FreeBSD kernel NUL argv and binary paths, and unchanged Config/IPFW/journals. Failures preserve both pending recovery intents. Integrated offline fixture uses real `_69`..`_74` journals/files and simulated FreeBSD process/kernel/IPFW sources; no actual OPNsense process is touched. Does not save candidate Config, commit, enable Voice, or establish UDP Telegram media. `PLUGIN_REVISION=75`. NEXT: persist Config safely and build single five-resource forward/rollback coordinator, then qualify real FreeBSD and two-way Telegram media.
 
 
@@ -242,7 +245,7 @@
 
 
 **Status:** CURRENT SECOND-COMPONENT STATE · LEVEL 1
-**Updated:** 2026-10-09
+**Updated:** 2026-10-11
 State-line scope: **`v0.5.x`**
 
 Direct orientation:
@@ -260,8 +263,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_74` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_74.pkg` (**not published, do not install**);
+- current source candidate revision: `_75` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_75.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

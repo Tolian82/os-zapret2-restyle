@@ -1,5 +1,22 @@
 # os-zapret2-restyle — Master development plan
 
+## Current Voice completion order — 2026-10-11
+
+**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Baseline: `v0.5.1_75`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
+
+1. **Stabilization (current):** exact _75 identity in START_HERE/PROJECT_STATE/release; fix Project CI dynamic expected package string; audit open GitHub requests; exact-head full Voice/Project/governance/FreeBSD CI.
+2. **One native forward Apply:** reuse PREPARED/STOP/runtime/engine/IPFW/supervisor and five-resource restore; add *forward* candidate Config persist with durable intent; independent five-domain COMMIT/rollback.
+3. **Existing service lifecycle:** configd/FD9/Config integration, `runtime-failure`, migrate/retire PoC authority and route old Telegram CLI to persistent Config; normal cold boot restores saved Voice without manual enable.
+4. **GUI finish:** native Strategies-style Apply ON/OFF, consistent RU/EN, five effective per-service states, light/dark/mobile inspection.
+5. **Owner-live FreeBSD/OPNsense acceptance:** exact kernel/argv, IPFW, one dvtws2, LAN+local/SOCKS UDP, failures, ordinary Strategies and reboot.
+6. **Telegram voice research:** separately report `WIRE_OK`, `MEDIA_PASS`, `CALL_PASS`; not a prerequisite to ship a correctly functioning generic Voice page.
+7. **Final package/release:** complete regression/migration/boot/CI, document verified claims, PR/release governance; package build ≠ publication.
+
+**Avoid repeating:** `voice_cutover_config_restore.py` / `voice_cutover_config_redo.py`, five-resource rollback, IPFW ledger, runtime redo and prior cleanup are already implemented as separate primitives. Only add new protection if a demonstrable gap prevents one of these seven results. Code changes increment `PLUGIN_REVISION`, docs-only changes do not.
+
+## Historical revision milestones (not the current action list)
+
+
 **v0.5.1_75 — post-IPFW candidate supervisor startup and independent native process proof (2026-10-11):** New private fixed shell action `start-candidate-supervisor` invokes ONLY installed `supervisor_start`, never relaunches `dvtws2`. Added `voice_native_forward_supervisor.py`: under original FD9+Config flock, exact schema-4 whole MUTATING intent, separate IPFW PRECOMMIT and old owner, it verifies candidate engine PID/start and FreeBSD kernel argv/image, exact installed desired IPFW rules and preserved stage snapshots, no legacy Telegram PoC, unchanged old Config, active/staged/retained runtimes and redo/inodes. After the fixed shell call, independently double-reads all three engine/daemon/monitor PID/start epochs, exact FreeBSD kernel NUL argv and binary paths, and unchanged Config/IPFW/journals. Failures preserve both pending recovery intents. Integrated offline fixture uses real `_69`..`_74` journals/files and simulated FreeBSD process/kernel/IPFW sources; no actual OPNsense process is touched. Does not save candidate Config, commit, enable Voice, or establish UDP Telegram media. `PLUGIN_REVISION=75`. NEXT: persist Config safely and build single five-resource forward/rollback coordinator, then qualify real FreeBSD and two-way Telegram media.
 
 

@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+> **CURRENT, 2026-10-11 · v0.5.1_75 · Draft PR #328:** Единственный актуальный план завершения Voice — [VOICE_TRANSMISSION_COMPLETION_PLAN.md](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). На `_75` реализован приватный запуск supervisor после IPFW PRECOMMIT; **полного native Apply/Config commit/GUI ON/boot и Telegram UDP MEDIA_PASS нет**. Следующее действие — этап 1 (согласование документации и полный exact-head CI), затем этап 2 (единственный forward Apply/rollback), НЕ разработка повторного Config restore. Все версии/«Next» в более ранних блоках ниже — хронология на момент соответствующего коммита, а не текущий план. Один открытый Draft PR #328, других открытых PR/Issues и unresolved review threads нет (проверено 2026-10-11).
+
+
 **v0.5.1_75 — post-IPFW candidate supervisor startup and independent native process proof (2026-10-11):** New private fixed shell action `start-candidate-supervisor` invokes ONLY installed `supervisor_start`, never relaunches `dvtws2`. Added `voice_native_forward_supervisor.py`: under original FD9+Config flock, exact schema-4 whole MUTATING intent, separate IPFW PRECOMMIT and old owner, it verifies candidate engine PID/start and FreeBSD kernel argv/image, exact installed desired IPFW rules and preserved stage snapshots, no legacy Telegram PoC, unchanged old Config, active/staged/retained runtimes and redo/inodes. After the fixed shell call, independently double-reads all three engine/daemon/monitor PID/start epochs, exact FreeBSD kernel NUL argv and binary paths, and unchanged Config/IPFW/journals. Failures preserve both pending recovery intents. Integrated offline fixture uses real `_69`..`_74` journals/files and simulated FreeBSD process/kernel/IPFW sources; no actual OPNsense process is touched. Does not save candidate Config, commit, enable Voice, or establish UDP Telegram media. `PLUGIN_REVISION=75`. NEXT: persist Config safely and build single five-resource forward/rollback coordinator, then qualify real FreeBSD and two-way Telegram media.
 
 
@@ -256,14 +259,14 @@
 - **Documentation/navigation index:** [`INDEX.md`](INDEX.md)
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
-**Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_74` — Draft PR #328; engine-only candidate now has a private real desired-IPFW PRECOMMIT transition wired to existing kernel/ledger rollback with preserved old ownership, no supervisor. Next: supervisor launch after desired IPFW, candidate Config persistence, full forward COMMIT/rollback, real FreeBSD acceptance and Telegram UDP audio.
+**Updated:** 2026-10-11
+**Current handoff identity:** `v0.5.1_75` — Draft PR #328, head `dc27412375731fc54f1df97a36f61c541f2f1790` at audit baseline. Private candidate engine, owned IPFW PRECOMMIT and supervisor are implemented as separate gates; no candidate Config save/whole COMMIT/production ON. Stage 1: repair revision/documentation drift and revalidate exact-head CI; Stage 2: compose single real forward Apply using existing rollback. Canonical [completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=74` (**development candidate, not published**);
+- `PLUGIN_REVISION=75` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

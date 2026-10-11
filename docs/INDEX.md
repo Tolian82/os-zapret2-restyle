@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Engineering memory index
 
 **Status:** NAVIGATION / INTEGRITY MAP · NOT A CURRENT-STATE NARRATIVE
-**Updated:** 2026-10-09
+**Updated:** 2026-10-11
 
 ## Level 1 — mandatory cold start
 
@@ -19,6 +19,8 @@ Read completely in this order (`DOC-016`):
 10. only current-task specialist documents selected by `START_HERE.md`
 
 ## Level 2 — current line and specialist detail
+
+- **[Voice Transmission: single current seven-stage completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** — authoritative open work, baseline v0.5.1_75 and exact CI/GUI/Config/lifecycle/FreeBSD/Telegram/media acceptance criteria; supersedes obsolete historical «Next» paragraphs without altering approved requirements. Draft PR #328 remains open.
 
 - **[«Передача голоса»: complete implementation handoff](architecture/VOICE_TRANSMISSION_GUI.md)** — approved Strategies-style design, fields/native input, current versus target behavior, shared IPSETs, WAN/local UDP, persistence, dismantling/migration, source map and expected acceptance; immediate next implementation, not a deployed feature.
 
