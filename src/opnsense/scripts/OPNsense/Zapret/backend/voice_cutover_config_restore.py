@@ -160,9 +160,25 @@ def restore_previous_config_in_place(
             )
             if before_hash not in (expected_live, expected_previous) and \
                not partial:
-                raise VoiceConfigRestoreError(
-                    "foreign Config contents; previous rollback refused"
+                # A power cut during the *forward* candidate writer can leave
+                # an exact candidate-byte prefix rather than a previous-byte
+                # prefix. Only its independently fsync'd, inode-bound redo
+                # and still-verified staged Config allow restoring old bytes.
+                # This path works even after reboot when candidate processes
+                # are gone: the outer five-resource owner still decides when
+                # rollback is safe. No forward process restart is required.
+                from voice_native_forward_config import (
+                    read_forward_config_redo,
+                    is_bound_forward_candidate_prefix,
                 )
+                forward_partial = is_bound_forward_candidate_prefix(
+                    read_forward_config_redo(journal.directory),
+                    record, live_fd, os.fstat(live_fd),
+                )
+                if not forward_partial:
+                    raise VoiceConfigRestoreError(
+                        "foreign Config contents; previous rollback refused"
+                    )
             # Still holding flock on the SAME live inode, and FD9 from the
             # outer coordinator. Revalidate journal just before first write.
             require_lifecycle_owner()
