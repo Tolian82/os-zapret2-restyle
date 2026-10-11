@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**v0.5.1_78 (2026-10-11):** `_77` Voice CI passed 9/10 real changed-candidate Config tests; the remaining negative source-replacement fixture used unlink()+create, which can recycle the just-freed inode. Replaced it with a separately created same-byte, same-mode file and `os.replace()` while the original inode still exists, then explicitly assert different inode before expecting the existing forward-redo anti-replacement check to refuse rollback. Production Config/IPFW/native lifecycle writer unchanged. This is an isolated test-fixture correction; exact-head `_78` CI and FreeBSD 15 qualification required.
+
+
 **v0.5.1_77 (2026-10-11):** The first `_76` Voice CI revealed the inherited `_69.._75` integration fixture used identical previous and staged Config bytes. Fixed `_77` test setup to generate a **distinct candidate XML BEFORE** the schema-4 PREPARED intent is sealed so success, prefix-power-cut replay and previous-restore tests exercise actual write mutation, not a no-op. The native candidate writer now correctly returns `candidate-config-unchanged` when desired and previous Config truly have identical bytes and mode (without manufacturing a redo). Original FD9, Config inode/flock, independent kernel/IPFW proof, write-ahead and no public Apply/COMMIT guarantees stay intact. `_76` Voice CI failed at its new test fixture; `_77` exact-head CI is required.
 
 
@@ -8,7 +11,7 @@
 
 ## Current Voice completion order — 2026-10-11
 
-**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_77`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
+**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_78`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
 
 1. **Stabilization (current):** exact _75 identity in START_HERE/PROJECT_STATE/release; fix Project CI dynamic expected package string; audit open GitHub requests; exact-head full Voice/Project/governance/FreeBSD CI.
 2. **One native forward Apply:** reuse PREPARED/STOP/runtime/engine/IPFW/supervisor and five-resource restore; add *forward* candidate Config persist with durable intent; independent five-domain COMMIT/rollback.

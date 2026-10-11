@@ -243,8 +243,14 @@ class ForwardCandidateConfigTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 self.call()
         original = self.config.read_bytes()
-        self.fx.stage_config.unlink()
-        self.fx.stage_config.write_bytes(self.candidate)
+        previous_source_inode = self.fx.stage_config.stat().st_ino
+        replacement = self.fx.root / "foreign-staged-config.xml"
+        replacement.write_bytes(self.candidate)
+        replacement.chmod(self.fx.stage_config.stat().st_mode & 0o777)
+        # os.replace while the old source still exists must install a
+        # DIFFERENT inode. unlink()+create can reuse its inode immediately.
+        os.replace(replacement, self.fx.stage_config)
+        self.assertNotEqual(self.fx.stage_config.stat().st_ino, previous_source_inode)
         with self.assertRaises((RuntimeError, ValueError)):
             self._previous_restore()
         self.assertEqual(self.config.read_bytes(), original)
