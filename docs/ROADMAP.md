@@ -1,5 +1,7 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Candidate `v0.5.1_73`: private fixed-argv candidate dvtws2-only process launch after forward runtime swap, with exact engine-only FreeBSD process identity/kernel argv and binary proof, unchanged old native IPFW ownership and Config, journal and redo checks, no supervisor/Voice ON; isolated regression tests
+- [ ] Next: bound old→desired kernel IPFW ownership mutation following candidate engine start, and supervisor/Config/rollback/commit under one original FD9 lease
 - [x] Candidate `v0.5.1_72`: complete native old-process stop + actual candidate runtime switch segment of forward Voice Apply, behind original FD9/Config + sealed old process/kernel/IPFW checks, write-ahead MUTATING, safe previous-tree preservation; positive/negative simulated kernel and real-filesystem tests
 - [ ] Next: gated new dvtws2 engine start + owned IPFW transaction + new supervisor start, Config persistence, five-resource commit/rollback under one native executor; then physical OPNsense/Telegram UDP audio qualification
 - [x] Candidate `v0.5.1_71`: real native file-mutating forward candidate-runtime install with original Config/FD9, schema-4 MUTATING, stopped-engine gate, SHA-bound source and original runtime, fsynced redo and old-tree retention; crash/retry and actual previous-runtime rollback tests; NOT exposed in GUI/CLI

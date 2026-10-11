@@ -6,7 +6,7 @@
 set -eu
 
 [ "$#" -eq 1 ] || exit 64
-case "$1" in stop|start) ;; *) exit 64 ;; esac
+case "$1" in stop|start|start-candidate-engine) ;; *) exit 64 ;; esac
 [ "$(id -u)" -eq 0 ] || exit 69
 # Fail closed when the Python coordinator did not inherit FD9.
 : <&9 || exit 69
@@ -29,6 +29,21 @@ SUPERVISOR_LOG=/var/log/zapret2/supervisor.log
 VOICE_SERVICE="${VOICE_SCRIPT_DIR}/zapret_service.sh"
 
 case "$1" in
+    start-candidate-engine)
+        # Native forward phase AFTER the old three-role stop and checked
+        # candidate runtime rename, BEFORE IPFW/Config/supervisor switch.
+        # All gates are enforced by the FD9+Config-flocked Python caller;
+        # here we accept NO user path, argument or arbitrary PID.
+        for file in "${CHILD_PIDFILE}" "${SUPERVISOR_DAEMON_PIDFILE}" \
+            "${SUPERVISOR_MONITOR_PIDFILE}"; do
+            [ ! -e "${file}" ] && [ ! -L "${file}" ] || exit 69
+        done
+        [ -r "${ACTIVE_DIR}/dvtws.args" ] || exit 69
+        launcher_start_once "${DVTWS_BIN}" "${ACTIVE_DIR}/dvtws.args" \
+            "${CHILD_PIDFILE}" "${DVTWS_LOG}" 5 || exit 1
+        # Intentionally DO NOT start supervisor here. The next stage must
+        # first transition the saved IPFW owner to desired native rules.
+        ;;
     stop)
         # The Python adapter first pins all existing roles with native
         # FreeBSD /bin/ps, pidfiles and FD9/Config locks. No arbitrary PID

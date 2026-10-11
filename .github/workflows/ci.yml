@@ -194,6 +194,8 @@ jobs:
         run: python3.13 scripts/test-voice-native-forward-runtime.py
       - name: Native Voice previous process stop and forward runtime handoff
         run: python3.13 scripts/test-voice-native-forward-stop.py
+      - name: Native Voice candidate engine-only start and kernel process witness
+        run: python3.13 scripts/test-voice-native-candidate-engine-start.py
       - name: Voice durable previous engine/supervisor process evidence
         run: python3.13 scripts/test-voice-process-recovery-evidence.py
       - name: Native read-only FreeBSD Voice PID/process inventory

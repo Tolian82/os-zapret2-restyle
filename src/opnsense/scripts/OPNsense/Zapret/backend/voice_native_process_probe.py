@@ -189,6 +189,45 @@ class FreeBSDVoiceProcessProbe:
                 "supervisor":{"state":state,"daemon":processes["daemon"],
                               "monitor":processes["monitor"]}}
 
+    def observe_candidate_engine_only(self):
+        """Independent native FreeBSD transition observer, NO sealed old argv.
+
+        Allowed topologies are all-absent and exactly ONE dvtws2 process with
+        its pinned engine pidfile. A daemon/monitor role (or its pidfile) is
+        forbidden until the forward firewall transition is complete. Do not
+        use the normal all-three-role probe for this intentional phase.
+        """
+        pidmap={role:self._read_pid(path) for role,path in self.pidfiles.items()}
+        rows=self._parse_global(self._query("-A","-ww","-o","pid=","-o","command="))
+        engine=self.expected["engine"]
+        daemon=self.expected["daemon"]
+        loop=self.expected["monitor"]
+        daemons={pid for pid,tokens in rows.items()
+                 if daemon in tokens and loop in tokens}
+        monitors={pid for pid,tokens in rows.items()
+                  if loop in tokens and daemon not in tokens}
+        engines={pid for pid,tokens in rows.items()
+                 if engine in tokens and pid not in daemons and pid not in monitors}
+        if daemons or monitors or pidmap["daemon"] is not None or (
+            pidmap["monitor"] is not None
+        ):
+            raise ProcessEvidenceError("supervisor must be absent in candidate engine phase")
+        pid=pidmap["engine"]
+        if pid is None:
+            if engines:
+                raise ProcessEvidenceError("orphan candidate dvtws2 without pidfile")
+            return {"state":"stopped","pid":None,"start_ns":None}
+        if engines!={pid}:
+            raise ProcessEvidenceError("duplicate or foreign candidate dvtws2 process")
+        output=self._query("-p",str(pid),"-o","pid=","-o","lstart=","-o","command=")
+        lines=output.splitlines()
+        if len(lines)!=1:
+            raise ProcessEvidenceError("unstable candidate engine detail")
+        started,tokens=self._started(lines[0],pid)
+        if tokens!=rows[pid]:
+            raise ProcessEvidenceError("candidate engine command changed while inspecting")
+        return {"state":"engine-only","pid":pid,"start_ns":started}
+
     def probe(self):
         """Sealed previous backup plus the same native three-role inventory."""
         saved=inspect_previous(self.previous_backup)
