@@ -176,6 +176,8 @@ jobs:
         run: python3.13 scripts/test-voice-cutover-cleanup-prepare.py
       - name: Durable retired Voice candidate quarantine with write-ahead crash replay
         run: python3.13 scripts/test-voice-cutover-reclaim.py
+      - name: Inode-pinned candidate prune write-ahead and power-cut resumption
+        run: python3.13 scripts/test-voice-cutover-prune.py
       - name: Voice durable previous engine/supervisor process evidence
         run: python3.13 scripts/test-voice-process-recovery-evidence.py
       - name: Native read-only FreeBSD Voice PID/process inventory
