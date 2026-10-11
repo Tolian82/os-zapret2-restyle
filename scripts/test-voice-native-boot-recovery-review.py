@@ -20,6 +20,11 @@ ROOT=Path(__file__).resolve().parent.parent
 BACKEND=ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
 from voice_native_boot_recovery_review import inspect_boot_recovery, BootReviewError
+from voice_native_forward_apply import execute_prepared_voice_apply, NativeForwardApplyError
+from voice_native_kernel_argv import FreeBSDKernelArgvReader
+from voice_ipfw_adapter import FreeBSDIPFWAdapter
+from voice_firewall_ledger import decode_manifest
+from voice_cutover_recovery_receipt import read_receipt
 from voice_native_process_probe import FreeBSDVoiceProcessProbe
 from voice_native_recovery_quiescence import EXPECTED_SCRIPTS,PIDFILES
 from voice_ipfw_adapter import FreeBSDIPFWAdapter
@@ -227,6 +232,97 @@ class TerminalBootReviewTests(unittest.TestCase):
             )
         finally:
             os.close(fd)
+
+    def replay_in_original_executor(self, *, desired=None):
+        # Exact already-sealed rollback in a real filesystem fixture;
+        # both kernel and process ACTUATORS are deliberately poison-pill
+        # objects: no terminal retry may call or construct mutation paths.
+        original=self.fx.fx.whole.read()
+        native=FreeBSDKernelArgvReader(
+            raw_argv_reader=lambda pid: (_ for _ in ()).throw(
+                AssertionError("rolled-back retry must not query forward argv")
+            ),
+            raw_path_reader=lambda pid: (_ for _ in ()).throw(
+                AssertionError("rolled-back retry must not query forward binary")
+            ),
+        )
+        read=self.fx.adapter
+        def deny_mutation(*args,**kwargs):
+            raise AssertionError("rolled-back retry must not call IPFW writer")
+        write=FreeBSDIPFWAdapter(
+            19000,19010,allow_mutations=True,runner=deny_mutation,
+        )
+        expected_manifest=cleanup_fixture.receipt_tests.source.fixture.IPFW
+        return execute_prepared_voice_apply(
+            journal=self.fx.fx.whole, ledger=self.fx.fx.ipfw,
+            previous_backup=self.fx.fx.backup,
+            process_evidence=self.fx.fx.process,
+            security_evidence=self.fx.fx.policy,
+            install_image=self.fx.image,
+            config_path=self.fx.config, active_runtime=self.fx.live,
+            staged_config=self.fx.fx.stage_config,
+            candidate_runtime=self.fx.fx.candidate,
+            desired_manifest=expected_manifest if desired is None else desired,
+            probe=self.fx.probe,kernel_reader=native,
+            read_adapter=read,write_adapter=write,
+            require_lifecycle_owner=lambda:self.calls.append("FD9"),
+            config_owner=(os.geteuid(),os.getegid()),
+            actions_factory=lambda fd:deny_mutation(fd),
+        )
+
+    def test_original_executor_retries_rolled_back_read_only(self):
+        before=self.fx.fx.whole.read()
+        files=(self.fx.config.read_bytes(),
+               (self.fx.live/"dvtws.args").read_bytes())
+        result=self.replay_in_original_executor()
+        self.assertEqual("native-voice-rolled-back-read-only-verified",
+                         result["state"])
+        self.assertEqual(result["whole_phase"],"rolled_back")
+        self.assertIs(result["safe_to_enable_voice"],False)
+        self.assertIs(result["safe_to_close_intent"],False)
+        self.assertFalse(result["process_action_performed"])
+        self.assertFalse(result["ipfw_mutation_performed"])
+        self.assertEqual(self.fx.fx.whole.read(),before)
+        self.assertEqual(
+            (self.fx.config.read_bytes(),
+             (self.fx.live/"dvtws.args").read_bytes()),files
+        )
+        self.assertTrue(self.fx.image.exists())
+        self.assertIsNotNone(read_receipt(self.fx.fx.whole.directory))
+        self.assertGreaterEqual(len(self.calls),2)
+
+    def test_original_executor_rejects_stale_epoch_or_reset_ipfw(self):
+        prior=self.fx.fx.whole.read()
+        self.fx.state=copy.deepcopy(self.fx.state)
+        self.fx.state["supervisor"]["daemon"]["start_ns"]+=1234
+        with self.assertRaisesRegex(
+            NativeForwardApplyError,"terminal Voice rollback cannot be re-attested",
+        ):
+            self.replay_in_original_executor()
+        self.assertEqual(self.fx.fx.whole.read(),prior)
+        self.fx.state["supervisor"]["daemon"]["start_ns"]-=1234
+        self.fx.kernel.rules[19000]=k.TCP
+        with self.assertRaisesRegex(
+            NativeForwardApplyError,"terminal Voice rollback cannot be re-attested",
+        ):
+            self.replay_in_original_executor()
+        self.assertEqual(self.fx.fx.whole.read(),prior)
+
+    def test_original_executor_rejects_foreign_or_missing_terminal_proof(self):
+        record=self.fx.fx.whole.read()
+        foreign={"services":{"telegram":{"rules":[]}}}
+        with self.assertRaises((NativeForwardApplyError,ValueError,RuntimeError)):
+            self.replay_in_original_executor(desired=foreign)
+        receipt=self.fx.fx.whole.directory/"previous-rollback-receipt.json"
+        saved=receipt.read_bytes()
+        receipt.unlink()
+        try:
+            with self.assertRaises((ValueError,RuntimeError)):
+                self.replay_in_original_executor()
+            self.assertEqual(self.fx.fx.whole.read(),record)
+        finally:
+            receipt.write_bytes(saved)
+            receipt.chmod(0o600)
 
     def test_terminal_boot_read_only_never_promotes_to_voice_on(self):
         report=self.inspect()

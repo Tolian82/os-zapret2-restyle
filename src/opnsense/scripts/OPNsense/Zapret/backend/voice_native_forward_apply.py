@@ -48,6 +48,7 @@ from voice_native_forward_ipfw import install_forward_voice_ipfw
 from voice_native_forward_supervisor import start_forward_voice_supervisor
 from voice_native_live_preflight import _current_engine_args
 from voice_native_five_resource_recovery import preflight_native_recovery
+from voice_native_boot_recovery_review import inspect_boot_recovery
 from voice_cutover_five_resource_rollback import restore_previous_five_resources
 from voice_native_restart_integrity import attest_previous_restart
 from voice_cutover_recovery_receipt import seal_previous_receipt
@@ -678,7 +679,10 @@ def execute_prepared_voice_apply(
     verified IPFW postcommit finish using the same lock and executor.
     An interrupted MUTATING transaction re-enters the established guarded
     previous five-resource rollback with the original locked Config fd,
-    NEVER the forward mutation chain.
+    NEVER the forward mutation chain. An already ROLLED_BACK terminal is
+    inspected READ-ONLY using the existing boot/terminal receipt/cleanup
+    proof under that SAME Config lock: never another actuator, IPFW change,
+    service start or implicit Voice ON.
     """
     _authorities(
         journal=journal, ledger=ledger, probe=probe, kernel_reader=kernel_reader,
@@ -700,6 +704,57 @@ def execute_prepared_voice_apply(
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         _locked_config(config_path, fd, config_owner)
         record = journal.read()
+        if record is not None and record["phase"] == "rolled_back":
+            # A crash immediately AFTER durable ROLLED_BACK must not try
+            # PREPARED/COMMITTED apply or repeat the previous engine stop.
+            # Reuse the existing read-only terminal proof, not an invented
+            # second process/IPFW/Config ownership mechanism. A cold boot
+            # with a different process epoch or unknown kernel remains
+            # manual-review, never a success or service readiness.
+            if record["schema"] != RUNTIME_BOUND_SCHEMA or (
+                record["candidate"][BOUND_FIELD] != fingerprint(
+                    canonical_manifest(desired_manifest)
+                )
+            ):
+                raise NativeForwardApplyError("foreign rolled-back Voice intent")
+            review = inspect_boot_recovery(
+                journal=journal, ledger=ledger,
+                previous_backup=Path(previous_backup),
+                process_evidence=Path(process_evidence),
+                security_evidence=Path(security_evidence),
+                install_image=Path(install_image),
+                config_path=config_path, active_runtime=Path(active_runtime),
+                probe=probe, adapter=read_adapter,
+                config_fd=fd, config_owner=config_owner,
+                require_lifecycle_owner=require_lifecycle_owner,
+            )
+            if review["state"] != (
+                "previous-rollback-sealed-needs-manual-finalization"
+            ) or any((
+                review.get("phase") != "rolled_back",
+                review.get("config") != "previous",
+                review.get("runtime") != "previous",
+                review.get("kernel") != "previous",
+                review.get("processes") != "running",
+                review.get("previous_receipt") != "process-epoch-matches-not-readiness",
+                review.get("cleanup_plan") != "prepared-only",
+                review.get("voice_on") is not False,
+                review.get("safe_to_close_intent") is not False,
+                journal.read() != record,
+                ledger.pending() is not None,
+            )):
+                raise NativeForwardApplyError(
+                    "terminal Voice rollback cannot be re-attested; manual review"
+                )
+            return {
+                "state": "native-voice-rolled-back-read-only-verified",
+                "whole_phase": "rolled_back",
+                "safe_to_enable_voice": False,
+                "safe_to_close_intent": False,
+                "requires_owner_acceptance": True,
+                "process_action_performed": False,
+                "ipfw_mutation_performed": False,
+            }
         # A retry after the durable WHOLE COMMIT is FORWARD-ONLY. Re-enter
         # the same private FD9+Config-lock executor; do not re-run stop,
         # runtime/Config writes, IPFW activation or old-state rollback.
