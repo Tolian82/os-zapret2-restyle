@@ -30,7 +30,8 @@ from voice_restart_argv_attestation import expected_engine_argv
 from voice_native_supervisor_launch import canonical_supervisor_argv
 from voice_native_file_observer import observe_live_files
 from voice_native_forward_apply import (
-    rollback_failed_precommit_voice_apply, NativeForwardApplyError,
+    rollback_failed_precommit_voice_apply, execute_prepared_voice_apply,
+    NativeForwardApplyError,
 )
 
 def fixture(path,name):
@@ -149,6 +150,69 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
             return result
         finally:
             os.close(fd)
+
+    def resume_mutating_via_executor(self, *, desired=None):
+        def native_actions(fd):
+            return FreeBSDVoiceProcessActions(
+                probe=self.stage.probe, journal=self.fx.whole,
+                previous_backup=self.fx.backup,
+                active_runtime=self.fx.root/"runtime",
+                config_path=self.config,
+                config_owner=(os.geteuid(),os.getegid()),
+                config_fd=fd, require_lifecycle_owner=lambda:None,
+                runner=self.runner, actuator=self.stage.script,
+            )
+        return execute_prepared_voice_apply(
+            journal=self.fx.whole,ledger=self.fx.ipfw,
+            previous_backup=self.fx.backup,
+            process_evidence=self.fx.process,
+            security_evidence=self.fx.policy,
+            install_image=self.install_image,
+            config_path=self.config, active_runtime=self.fx.root/"runtime",
+            staged_config=self.fx.stage_config,
+            candidate_runtime=self.fx.candidate,
+            desired_manifest=(self.stage.parent.desired
+                              if desired is None else desired),
+            probe=self.stage.probe,kernel_reader=self.stage.kernel,
+            read_adapter=self.stage.parent.read,
+            write_adapter=self.stage.parent.write,
+            require_lifecycle_owner=lambda:None,
+            config_owner=(os.geteuid(),os.getegid()),
+            actions_factory=native_actions,
+        )
+
+    def test_interrupted_mutating_retries_previous_under_original_executor(self):
+        with patch(
+            "voice_native_forward_apply.stop_previous_and_install_forward_runtime",
+            side_effect=AssertionError("MUTATING must never run forward again"),
+        ):
+            with self.assertRaisesRegex(
+                NativeForwardApplyError,
+                "interrupted MUTATING Voice forward recovered previous domains",
+            ):
+                self.resume_mutating_via_executor()
+        self.assertEqual(self.operations,["stop","start"])
+        self.assertEqual(self.config.read_bytes(),self.previous_config)
+        self.assertEqual(self.config.stat().st_ino,self.original_inode)
+        self.assertEqual(self.fx.ipfw.owned(),self.stage.parent.old)
+        self.assertIsNone(self.fx.ipfw.pending())
+        self.assertEqual(self.fx.whole.read(),self.prepared)
+        self.assertEqual(
+            observe_live_files(self.config,self.fx.root/"runtime",
+                               previous_backup=self.fx.backup),
+            {k:self.prepared["previous"][k] for k in ("config","runtime")},
+        )
+
+    def test_interrupted_mutating_foreign_kernel_refuses_before_stop(self):
+        self.stage.binary[202]="/bin/foreign"
+        with self.assertRaisesRegex(
+            NativeForwardApplyError,"interrupted MUTATING Voice recovery refused",
+        ):
+            self.resume_mutating_via_executor()
+        self.assertEqual(self.operations,[])
+        self.assertEqual(self.fx.whole.read(),self.prepared)
+        self.assertEqual(self.config.read_bytes(),self.previous.candidate)
+        self.assertIsNotNone(self.fx.ipfw.pending())
 
     def test_real_late_failure_restores_old_five_domains_and_retains_intent(self):
         result=self.recover()

@@ -606,6 +606,9 @@ def execute_prepared_voice_apply(
     SAME FD; incomplete native process/redo/owner evidence remains blocked.
     An already COMMITTED transaction is never rolled back: retry only its
     verified IPFW postcommit finish using the same lock and executor.
+    An interrupted MUTATING transaction re-enters the established guarded
+    previous five-resource rollback with the original locked Config fd,
+    NEVER the forward mutation chain.
     """
     _authorities(
         journal=journal, ledger=ledger, probe=probe, kernel_reader=kernel_reader,
@@ -646,14 +649,16 @@ def execute_prepared_voice_apply(
                 read_adapter=read_adapter, write_adapter=write_adapter,
                 require_lifecycle_owner=require_lifecycle_owner,
             )
-        if record is None or record["phase"] != "prepared" or (
+        if record is None or record["phase"] not in ("prepared", "mutating") or (
             record["schema"] != RUNTIME_BOUND_SCHEMA
             or record["candidate"][BOUND_FIELD] != fingerprint(
                 canonical_manifest(desired_manifest)
             )
-            or ledger.pending() is not None
+            or (record["phase"] == "prepared" and ledger.pending() is not None)
         ):
-            raise NativeForwardApplyError("no prepared schema-4 native forward intent")
+            raise NativeForwardApplyError(
+                "no sealed PREPARED/MUTATING schema-4 native forward intent"
+            )
         original = bound_resource_fingerprints(
             Path(previous_backup), record["previous"],
         )
@@ -681,6 +686,35 @@ def execute_prepared_voice_apply(
             config_fd=fd, config_owner=config_owner,
             require_lifecycle_owner=require_lifecycle_owner,
         )
+        if record["phase"] == "mutating":
+            # A power cut after the first irreversible stop MUST NOT replay
+            # forward work. Delegate only to the established five-resource
+            # previous rollback with the SAME original locked Config fd.
+            # Its independent native process/kernel/IPFW/redo preflight can
+            # refuse a partial or foreign state without touching services.
+            try:
+                rollback_failed_precommit_voice_apply(
+                    journal=journal, ledger=ledger,
+                    previous_backup=previous_backup,
+                    process_evidence=process_evidence,
+                    security_evidence=security_evidence,
+                    install_image=install_image, config_path=config_path,
+                    active_runtime=active_runtime, staged_config=staged_config,
+                    config_fd=fd, config_owner=config_owner,
+                    probe=probe, kernel_reader=kernel_reader,
+                    read_adapter=read_adapter, write_adapter=write_adapter,
+                    require_lifecycle_owner=require_lifecycle_owner,
+                    actions=actions,
+                )
+            except Exception as recovery_error:
+                raise NativeForwardApplyError(
+                    "interrupted MUTATING Voice recovery refused; "
+                    "journal retained for manual review"
+                ) from recovery_error
+            raise NativeForwardApplyError(
+                "interrupted MUTATING Voice forward recovered previous domains; "
+                "Voice ON remains refused pending durable finalization"
+            )
         try:
             stop_previous_and_install_forward_runtime(
                 **common, process_evidence=process_evidence,
