@@ -98,7 +98,8 @@ class FiveDomainRecovery(unittest.TestCase):
             Path(self.pidfiles[role]).write_text(str(index)+"\n")
             Path(self.pidfiles[role]).chmod(0o600)
 
-    def recover(self, *, restart=None, stopped=None, lifecycle=None):
+    def recover(self, *, restart=None, stopped=None, lifecycle=None,
+                locked_config_fd=None):
         with patch.object(gate,"PIDFILES",self.pidfiles):
             return whole.restore_previous_five_resources(
                 journal=self.journal,ledger=self.store,
@@ -113,6 +114,7 @@ class FiveDomainRecovery(unittest.TestCase):
                 stop_candidate=stopped or self.stop,
                 start_previous=restart or self.restart,
                 require_lifecycle_owner=lifecycle or (lambda:None),
+                locked_config_fd=locked_config_fd,
             )
 
     def test_all_five_domains_restore_real_files_and_prior_kernel(self):
@@ -209,6 +211,64 @@ class FiveDomainRecovery(unittest.TestCase):
             self.recover()
         self.assertEqual(self.history,[])
 
+
+    def test_borrowed_config_fd_preserves_one_lock_through_full_restore(self):
+        self.initialize(pending=True)
+        fd=os.open(self.config,os.O_RDWR)
+        try:
+            fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            inode=os.fstat(fd).st_ino
+            seen=[]
+            def assert_owned():
+                self.assertEqual(os.fstat(fd).st_ino,inode)
+                with self.config.open("r+b") as another:
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(another,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                seen.append(True)
+            def stop():
+                assert_owned()
+                self.stop()
+            def restart():
+                assert_owned()
+                self.restart()
+            result=self.recover(
+                stopped=stop,restart=restart,locked_config_fd=fd,
+            )
+            self.assertEqual(result["state"],"five-previous-domains-observed")
+            self.assertEqual(seen,[True,True])
+            # The borrowed descriptor is still valid and LOCKED on return.
+            assert_owned()
+            self.assertEqual(self.config.stat().st_ino,inode)
+            self.assertEqual(self.journal.read()["phase"],"mutating")
+        finally:
+            os.close(fd)
+
+    def test_unlocked_borrowed_fd_refuses_before_process_stop(self):
+        self.initialize(pending=True)
+        fd=os.open(self.config,os.O_RDWR)
+        try:
+            with self.assertRaises((RuntimeError,OSError,ValueError)):
+                self.recover(locked_config_fd=fd)
+        finally:
+            os.close(fd)
+        self.assertEqual(self.history,[])
+        self.assertEqual(self.config.read_bytes(),b"<candidate/>")
+        self.assertIsNotNone(self.store.pending())
+
+    def test_foreign_borrowed_fd_is_not_closed_or_used(self):
+        self.initialize(pending=True)
+        foreign=self.base/"foreign.xml"
+        foreign.write_bytes(b"<foreign/>")
+        fd=os.open(foreign,os.O_RDWR)
+        try:
+            fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            with self.assertRaises((RuntimeError,OSError,ValueError)):
+                self.recover(locked_config_fd=fd)
+            self.assertEqual(os.fstat(fd).st_ino,foreign.stat().st_ino)
+        finally:
+            os.close(fd)
+        self.assertEqual(self.history,[])
+        self.assertEqual(foreign.read_bytes(),b"<foreign/>")
 
 if __name__=="__main__":
     unittest.main(verbosity=2)

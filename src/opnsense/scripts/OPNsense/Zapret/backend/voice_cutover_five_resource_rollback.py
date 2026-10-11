@@ -90,8 +90,14 @@ def restore_previous_five_resources(
     require_lifecycle_owner: Callable[[], None],
     process_actions_factory: Callable[[int], FreeBSDVoiceProcessActions] | None = None,
     seal_previous: Callable[[int], dict] | None = None,
+    locked_config_fd: int | None = None,
 ) -> dict:
     """Rollback under one lock: stop → kernel → runtime → Config → restart.
+
+    When called from the *same* forward Apply coordinator, accept the
+    already locked original Config descriptor. Do NOT acquire another flock,
+    unlock, close or replace its inode. The independent manual recovery
+    caller still uses its original acquire/close mode by default.
 
     This module has no production CLI. The stop/start callbacks need an
     eventually audited FreeBSD launcher/supervisor adapter, not mock-like
@@ -166,17 +172,25 @@ def restore_previous_five_resources(
 
     flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | \
         getattr(os, "O_CLOEXEC", 0)
-    fd = os.open(config_path, flags)
+    if locked_config_fd is not None and (
+        type(locked_config_fd) is not int or locked_config_fd < 0
+    ):
+        raise FiveResourceRollbackError("invalid borrowed Config descriptor")
+    owns_fd = locked_config_fd is None
+    fd = os.open(config_path, flags) if owns_fd else locked_config_fd
     try:
         _pinned_regular(config_path,fd,owner=expected_owner)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as exc:
-            if exc.errno in (errno.EWOULDBLOCK, errno.EAGAIN):
-                raise FiveResourceRollbackError(
-                    "OPNsense Config is locked by another writer"
-                ) from exc
-            raise
+        if owns_fd:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as exc:
+                if exc.errno in (errno.EWOULDBLOCK, errno.EAGAIN):
+                    raise FiveResourceRollbackError(
+                        "OPNsense Config is locked by another writer"
+                    ) from exc
+                raise
+        # Also proves an externally supplied fd ACTUALLY owns the flock,
+        # rather than merely pointing at an already open Config inode.
         _locked_config(config_path,fd,expected_owner)
         require_lifecycle_owner()
         if journal.read()!=original:
@@ -313,4 +327,5 @@ def restore_previous_five_resources(
             "requires_durable_restart_finalization":True,
         }
     finally:
-        os.close(fd)
+        if owns_fd:
+            os.close(fd)
