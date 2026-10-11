@@ -347,9 +347,9 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
             return {"state":"previous-rollback-sealed",
                     "whole_intent_phase":"rolled_back",
                     "safe_to_finish_intent":False}
-        with patch.object(forward,"attest_previous_restart",side_effect=integrity), \\
-             patch.object(forward,"seal_previous_receipt",side_effect=receipt), \\
-             patch.object(forward,"seal_previous_completion",side_effect=completion), \\
+        with patch.object(forward,"attest_previous_restart",side_effect=integrity), \
+             patch.object(forward,"seal_previous_receipt",side_effect=receipt), \
+             patch.object(forward,"seal_previous_completion",side_effect=completion), \
              patch.object(forward,"stop_previous_and_install_forward_runtime",
                           side_effect=AssertionError("must never repeat forward stages")):
             with self.assertRaisesRegex(
