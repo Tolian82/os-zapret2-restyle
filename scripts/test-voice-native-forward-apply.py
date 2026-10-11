@@ -162,6 +162,8 @@ class NativeForwardOneLockSequenceTests(unittest.TestCase):
                 fd = args.get("config_fd", args.get("locked_config_fd"))
                 self._assert_held(fd)
                 self.stages.append(name)
+                if name == "stop" and fail_at == "stop_prepared":
+                    raise RuntimeError("simulated stop preflight failure")
                 if make_mutating:
                     self.fx.whole.mark_mutating()
                 if name == "commit" and fail_at == "committed":
@@ -248,8 +250,8 @@ class NativeForwardOneLockSequenceTests(unittest.TestCase):
         self.assertEqual(self.fx.whole.read()["schema"], 4)
 
     def test_prepared_failure_does_not_try_recovery_or_mutate_live_service(self):
-        with self.assertRaisesRegex(RuntimeError, "simulated stop failure"):
-            self.run_sequence(fail_at="stop")
+        with self.assertRaisesRegex(RuntimeError, "simulated stop preflight failure"):
+            self.run_sequence(fail_at="stop_prepared")
         self.assertEqual("prepared", self.fx.whole.read()["phase"])
         self.assertEqual(self.recovery_calls, [])
 
