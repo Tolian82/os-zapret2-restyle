@@ -21,7 +21,9 @@ from unittest.mock import patch
 ROOT=Path(__file__).resolve().parent.parent
 BACKEND=ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
-from voice_cutover_journal import _digest
+from voice_cutover_journal import _digest, SECURITY_FIELD, mutating_predecessor
+from voice_cutover_recovery_receipt import read_receipt
+from voice_cutover_cleanup_prepare import read_cleanup_plan
 from voice_native_forward_runtime import _read_redo as read_forward_runtime_redo
 from voice_ipfw_runtime import rollback_precommit_verified
 from voice_cutover_restore_stage import prepare_restore_stage
@@ -366,6 +368,171 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         self.assertEqual(self.operations,["stop","start"])
         self.assertEqual(self.fx.whole.read()["phase"],"rolled_back")
         self.assertIsNone(self.fx.ipfw.pending())
+
+    def native_old_restart_witness(self, **kwargs):
+        # FreeBSD's kernel security and argv readers are simulated ONLY.
+        # The five-resource rollback, fsync receipt, non-destructive plan
+        # and terminal journal are the genuine production algorithms.
+        self.assertEqual(self.fx.whole.read()["phase"],"mutating")
+        with self.config.open("rb+") as other:
+            with self.assertRaises(BlockingIOError):
+                fcntl.flock(other,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        snap=self.stage.probe.probe()
+        self.assertEqual(snap["engine"]["state"],"running")
+        return {
+            "state":"previous-restart-integrity-observed",
+            "whole_intent_phase":"mutating",
+            "safe_to_enable_voice":False,
+            "safe_to_finish_intent":False,
+            "security_policy_sha256":
+                self.prepared["candidate"][SECURITY_FIELD],
+            "instances":{
+                "engine":{
+                    k:snap["engine"]["process"][k]
+                    for k in ("pid","start_ns")
+                },
+                "daemon":{
+                    k:snap["supervisor"]["daemon"][k]
+                    for k in ("pid","start_ns")
+                },
+                "monitor":{
+                    k:snap["supervisor"]["monitor"][k]
+                    for k in ("pid","start_ns")
+                },
+            },
+        }
+
+    def test_power_cut_after_actual_receipt_resumes_without_second_stop(self):
+        import voice_native_forward_apply as forward
+        import voice_native_process_actions as lifecycle
+        self.simulate_native_seal=True
+        with patch.object(
+            lifecycle,"attest_previous_restart",
+            side_effect=self.native_old_restart_witness,
+        ), patch.object(
+            forward,"attest_previous_restart",
+            side_effect=self.native_old_restart_witness,
+        ), patch.object(
+            forward,"seal_previous_completion",
+            side_effect=RuntimeError("power-cut-after-real-receipt"),
+        ):
+            with self.assertRaisesRegex(
+                NativeForwardApplyError,"interrupted MUTATING Voice recovery refused",
+            ) as raised:
+                self.resume_mutating_via_executor()
+        self.assertIn(
+            "power-cut-after-real-receipt",str(raised.exception.__cause__),
+        )
+        previous=self.fx.whole.read()
+        receipt=read_receipt(self.fx.whole.directory)
+        self.assertIsNotNone(receipt)
+        self.assertIsNone(read_cleanup_plan(self.fx.whole.directory))
+        self.assertEqual(self.operations,["stop","start"])
+        self.assertEqual(previous,self.prepared)
+        self.assertEqual(self.config.read_bytes(),self.previous_config)
+        self.assertIsNone(self.fx.ipfw.pending())
+        with patch.object(
+            forward,"attest_previous_restart",
+            side_effect=self.native_old_restart_witness,
+        ), patch.object(
+            forward,"stop_previous_and_install_forward_runtime",
+            side_effect=AssertionError("must not replay candidate forward"),
+        ):
+            with self.assertRaisesRegex(
+                NativeForwardApplyError,
+                "interrupted MUTATING Voice forward recovered previous domains",
+            ):
+                self.resume_mutating_via_executor()
+        self.assertEqual(self.operations,["stop","start"])
+        self.assertEqual(self.fx.whole.read()["phase"],"rolled_back")
+        self.assertEqual(
+            mutating_predecessor(self.fx.whole.read()),previous,
+        )
+        self.assertEqual(read_receipt(self.fx.whole.directory),receipt)
+        plan=read_cleanup_plan(self.fx.whole.directory)
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan["receipt_check"],receipt["check"])
+        self.assertTrue(self.install_image.exists())
+        self.assertTrue((self.fx.whole.directory/"runtime-restore-redo.json").exists())
+
+    def test_power_cut_after_actual_cleanup_plan_resumes_terminal_only(self):
+        import voice_native_forward_apply as forward
+        import voice_native_process_actions as lifecycle
+        self.simulate_native_seal=True
+        with patch.object(
+            lifecycle,"attest_previous_restart",
+            side_effect=self.native_old_restart_witness,
+        ), patch.object(
+            forward,"attest_previous_restart",
+            side_effect=self.native_old_restart_witness,
+        ), patch.object(
+            self.fx.whole,"seal_previous_restored",
+            side_effect=RuntimeError("power-cut-after-real-cleanup-plan"),
+        ):
+            with self.assertRaisesRegex(
+                NativeForwardApplyError,"interrupted MUTATING Voice recovery refused",
+            ) as raised:
+                self.resume_mutating_via_executor()
+        self.assertIn(
+            "power-cut-after-real-cleanup-plan",
+            str(raised.exception.__cause__),
+        )
+        original=self.fx.whole.read()
+        receipt=read_receipt(self.fx.whole.directory)
+        plan=read_cleanup_plan(self.fx.whole.directory)
+        self.assertIsNotNone(receipt)
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan["receipt_check"],receipt["check"])
+        self.assertEqual(self.operations,["stop","start"])
+        self.assertEqual(original["phase"],"mutating")
+        with patch.object(
+            forward,"attest_previous_restart",
+            side_effect=self.native_old_restart_witness,
+        ):
+            with self.assertRaisesRegex(
+                NativeForwardApplyError,
+                "interrupted MUTATING Voice forward recovered previous domains",
+            ):
+                self.resume_mutating_via_executor()
+        self.assertEqual(self.operations,["stop","start"])
+        self.assertEqual(self.fx.whole.read()["phase"],"rolled_back")
+        self.assertEqual(mutating_predecessor(self.fx.whole.read()),original)
+        self.assertEqual(read_receipt(self.fx.whole.directory),receipt)
+        self.assertEqual(read_cleanup_plan(self.fx.whole.directory),plan)
+
+    def test_power_cut_receipt_tampering_denies_replay_without_second_stop(self):
+        import voice_native_forward_apply as forward
+        import voice_native_process_actions as lifecycle
+        self.simulate_native_seal=True
+        with patch.object(
+            lifecycle,"attest_previous_restart",
+            side_effect=self.native_old_restart_witness,
+        ), patch.object(
+            forward,"attest_previous_restart",
+            side_effect=self.native_old_restart_witness,
+        ), patch.object(
+            forward,"seal_previous_completion",
+            side_effect=RuntimeError("stop-after-receipt"),
+        ):
+            with self.assertRaises(NativeForwardApplyError):
+                self.resume_mutating_via_executor()
+        receipt_file=self.fx.whole.directory/"previous-rollback-receipt.json"
+        receipt_file.write_bytes(b'{"schema":1,"check":"foreign"}')
+        receipt_file.chmod(0o600)
+        record=self.fx.whole.read()
+        with patch.object(
+            forward,"attest_previous_restart",
+            side_effect=self.native_old_restart_witness,
+        ):
+            with self.assertRaisesRegex(
+                NativeForwardApplyError,"interrupted MUTATING Voice recovery refused",
+            ):
+                self.resume_mutating_via_executor()
+        self.assertEqual(self.operations,["stop","start"])
+        self.assertEqual(self.fx.whole.read(),record)
+        self.assertEqual(self.config.read_bytes(),self.previous_config)
+        self.assertIsNone(self.fx.ipfw.pending())
+        self.assertIsNone(read_cleanup_plan(self.fx.whole.directory))
 
     def test_original_process_epochs_not_misclassified_as_rollback(self):
         # After a durable MUTATING mark but before stop, original old PIDs
