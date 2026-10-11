@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**v0.5.1_91 (2026-10-11):** Corrected a regression found by `_90` Voice CI's existing quiescence-loss failure-injection test: the new forward rename crash bridge was calling an additional quiescence gate for ALL normal previous-runtime restores, changing the established fault boundary. Removed that redundant unconditional gate. For the missing-active crash path, the dedicated bridge still independently checks quiescence twice while verifying and completing the exact redo-pinned rename. The original regular rollback gate cadence and semantics remain unchanged. `_91` exact-head full Voice/FreeBSD and new simulated power-cut tests pending.
+
+
 **v0.5.1_90 (2026-10-11):** Stage-2 crash replay now recovers the exact POWER-LOSS GAP between forward runtime `active(previous) → retained(previous)` and `ready(candidate) → active(candidate)`. Prior code refused missing active runtime although the fsync'd original `forward-runtime-redo.json` and both exact trees survived. Under original FD9+Config inode/flock, after independently establishing NO live engine/supervisor and previous native IPFW, `voice_cutover_file_rollback.py` verifies redo checksum/whole journal SHA, same original Config inode and runtime parent, exact candidate ready tree and original retained previous tree. It then completes ONLY the interrupted forward rename and immediately delegates to the EXISTING crash-resumable previous runtime+Config+IPFW/engine/supervisor rollback. If a previous runtime-restore redo already owns missing active, the established previous restore resumes instead. Missing/foreign redo or tampered tree fails closed without service restart. Adds real-file/ledger simulated power-cut success, missing marker and tampering regression. This is not an on-appliance reboot qualification or Voice ON.
 
 
@@ -41,7 +44,7 @@
 
 ## Current Voice completion order — 2026-10-11
 
-**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_90`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
+**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_91`, Draft PR #328; not shipped, Voice ON and end-to-end cutover not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
 
 1. **Stabilization (current):** exact _75 identity in START_HERE/PROJECT_STATE/release; fix Project CI dynamic expected package string; audit open GitHub requests; exact-head full Voice/Project/governance/FreeBSD CI.
 2. **One native forward Apply:** reuse PREPARED/STOP/runtime/engine/IPFW/supervisor and five-resource restore; add *forward* candidate Config persist with durable intent; independent five-domain COMMIT/rollback.

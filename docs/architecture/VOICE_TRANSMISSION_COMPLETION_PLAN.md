@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**v0.5.1_91 (2026-10-11):** Corrected a regression found by `_90` Voice CI's existing quiescence-loss failure-injection test: the new forward rename crash bridge was calling an additional quiescence gate for ALL normal previous-runtime restores, changing the established fault boundary. Removed that redundant unconditional gate. For the missing-active crash path, the dedicated bridge still independently checks quiescence twice while verifying and completing the exact redo-pinned rename. The original regular rollback gate cadence and semantics remain unchanged. `_91` exact-head full Voice/FreeBSD and new simulated power-cut tests pending.
+
+
 **v0.5.1_90 (2026-10-11):** Stage-2 crash replay now recovers the exact POWER-LOSS GAP between forward runtime `active(previous) → retained(previous)` and `ready(candidate) → active(candidate)`. Prior code refused missing active runtime although the fsync'd original `forward-runtime-redo.json` and both exact trees survived. Under original FD9+Config inode/flock, after independently establishing NO live engine/supervisor and previous native IPFW, `voice_cutover_file_rollback.py` verifies redo checksum/whole journal SHA, same original Config inode and runtime parent, exact candidate ready tree and original retained previous tree. It then completes ONLY the interrupted forward rename and immediately delegates to the EXISTING crash-resumable previous runtime+Config+IPFW/engine/supervisor rollback. If a previous runtime-restore redo already owns missing active, the established previous restore resumes instead. Missing/foreign redo or tampered tree fails closed without service restart. Adds real-file/ledger simulated power-cut success, missing marker and tampering regression. This is not an on-appliance reboot qualification or Voice ON.
 
 
@@ -37,7 +40,7 @@
 
 
 **Статус:** ЕДИНЫЙ АКТУАЛЬНЫЙ ПЛАН · Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328) · 2026-10-11  
-**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_90` (Stage 2 начат). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
+**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_91` (Stage 2 начат). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
 **Приоритет:** законченный пользовательский сценарий, не очередная подсистема проверки. Детальное утверждённое ТЗ и компоновка остаются в [VOICE_TRANSMISSION_GUI.md](VOICE_TRANSMISSION_GUI.md); сведения о стенде и фактических звонках — в отдельных исследовательских документах. Исторические задачи в ROADMAP, START_HERE и старых блоках архитектурного документа НЕ заменяют эту последовательность.
 
 ## Цель и определение готовности

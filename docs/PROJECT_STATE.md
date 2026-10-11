@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_91 (2026-10-11):** Corrected a regression found by `_90` Voice CI's existing quiescence-loss failure-injection test: the new forward rename crash bridge was calling an additional quiescence gate for ALL normal previous-runtime restores, changing the established fault boundary. Removed that redundant unconditional gate. For the missing-active crash path, the dedicated bridge still independently checks quiescence twice while verifying and completing the exact redo-pinned rename. The original regular rollback gate cadence and semantics remain unchanged. `_91` exact-head full Voice/FreeBSD and new simulated power-cut tests pending.
+
+
 **v0.5.1_90 (2026-10-11):** Stage-2 crash replay now recovers the exact POWER-LOSS GAP between forward runtime `active(previous) → retained(previous)` and `ready(candidate) → active(candidate)`. Prior code refused missing active runtime although the fsync'd original `forward-runtime-redo.json` and both exact trees survived. Under original FD9+Config inode/flock, after independently establishing NO live engine/supervisor and previous native IPFW, `voice_cutover_file_rollback.py` verifies redo checksum/whole journal SHA, same original Config inode and runtime parent, exact candidate ready tree and original retained previous tree. It then completes ONLY the interrupted forward rename and immediately delegates to the EXISTING crash-resumable previous runtime+Config+IPFW/engine/supervisor rollback. If a previous runtime-restore redo already owns missing active, the established previous restore resumes instead. Missing/foreign redo or tampered tree fails closed without service restart. Adds real-file/ledger simulated power-cut success, missing marker and tampering regression. This is not an on-appliance reboot qualification or Voice ON.
 
 
@@ -39,7 +42,7 @@
 **CURRENT IMPLEMENTATION:** v0.5.1_76 (2026-10-11): implemented private `voice_native_forward_config.py` to persist the exact schema-4 candidate Config on the original /conf/config.xml inode under the original FD9 and uninterrupted Config flock, AFTER independently verified candidate engine+supervisor/IPFW PRECOMMIT. Durable write-once `forward-config-redo.json` is fsync'd BEFORE truncate, binds journal SHA, Config inode/owner, old/new digests and saved mode; only a proven candidate-byte prefix can be resumed after interruption. Double native kernel/argv/IPFW/runtime/journal verification, original previous backup intact, no commit/GUI/boot or old Config restore replacement. New isolated real-fd/fault-injection regression wired to Linux and FreeBSD 15 CI. This is a required forward segment, NOT yet full Voice ON Apply.
 
 
-> **Current, 2026-10-11:** `v0.5.1_90` Draft PR #328, not merged/published/installed. Stage 1 DONE. Stage 2 now contains a private single-descriptor multi-resource forward cutover/whole-to-IPFW COMMIT and independent read-only five-domain attestation; **automatic same-FD failure rollback, cleanup, public Voice ON, boot/PoC migration and owner-live media remain OPEN**. Exact-head CI for `_79` required. [Plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
+> **Current, 2026-10-11:** `v0.5.1_91` Draft PR #328, not merged/published/installed. Stage 1 DONE. Stage 2 now contains a private single-descriptor multi-resource forward cutover/whole-to-IPFW COMMIT and independent read-only five-domain attestation; **automatic same-FD failure rollback, cleanup, public Voice ON, boot/PoC migration and owner-live media remain OPEN**. Exact-head CI for `_79` required. [Plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
 
 
 **v0.5.1_75 — post-IPFW candidate supervisor startup and independent native process proof (2026-10-11):** New private fixed shell action `start-candidate-supervisor` invokes ONLY installed `supervisor_start`, never relaunches `dvtws2`. Added `voice_native_forward_supervisor.py`: under original FD9+Config flock, exact schema-4 whole MUTATING intent, separate IPFW PRECOMMIT and old owner, it verifies candidate engine PID/start and FreeBSD kernel argv/image, exact installed desired IPFW rules and preserved stage snapshots, no legacy Telegram PoC, unchanged old Config, active/staged/retained runtimes and redo/inodes. After the fixed shell call, independently double-reads all three engine/daemon/monitor PID/start epochs, exact FreeBSD kernel NUL argv and binary paths, and unchanged Config/IPFW/journals. Failures preserve both pending recovery intents. Integrated offline fixture uses real `_69`..`_74` journals/files and simulated FreeBSD process/kernel/IPFW sources; no actual OPNsense process is touched. Does not save candidate Config, commit, enable Voice, or establish UDP Telegram media. `PLUGIN_REVISION=75`. NEXT: persist Config safely and build single five-resource forward/rollback coordinator, then qualify real FreeBSD and two-way Telegram media.
@@ -302,8 +305,8 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - repository: `Tolian82/os-zapret2-restyle`;
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
-- current source candidate revision: `_90` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_90.pkg` (**not published, do not install**);
+- current source candidate revision: `_91` (**development only**);
+- package candidate: `os-zapret2-restyle-0.5.1_91.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

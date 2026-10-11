@@ -198,7 +198,6 @@ def restore_previous_files(
             require_lifecycle_owner=require_lifecycle_owner,
             require_quiescent=require_quiescent,
         )
-        gate()
         restored_runtime = restore_previous_runtime(
             Path(active_runtime), install_image, Path(previous_backup), journal,
             expected_candidate_runtime_sha256=expected_candidate_runtime_sha256,
