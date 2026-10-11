@@ -354,10 +354,15 @@ def persist_forward_candidate_config(
         if before_hash == candidate_sha and before_size == source_bytes and (
             stat.S_IMODE(cfg.st_mode) == previous_mode
         ):
-            if existing is None:
-                raise ForwardConfigError("candidate Config exists without redo")
             if native_proof() != first:
                 raise ForwardConfigError("candidate moved after earlier write")
+            if existing is None:
+                # A runtime-only update may legitimately have identical old
+                # and desired XML. Do not truncate it or create an artificial
+                # write-ahead marker for a write that never occurs.
+                if candidate_sha != old["config"]:
+                    raise ForwardConfigError("candidate Config exists without redo")
+                return "candidate-config-unchanged"
             return "candidate-config-already-persisted"
         # Intact previous Config MUST have its sealed original permissions.
         if existing is None and stat.S_IMODE(cfg.st_mode) != previous_mode:

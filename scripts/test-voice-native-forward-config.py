@@ -27,8 +27,22 @@ spec.loader.exec_module(fixture)
 
 class ForwardCandidateConfigTests(unittest.TestCase):
     def setUp(self):
+        # All earlier _69.._75 fixtures intentionally used the same old
+        # and staged Config bytes: they only exercised runtime/process/IPFW.
+        # Alter the candidate BEFORE the _69 immutable intent is sealed, so
+        # this test actually exercises a distinct Config candidate and can
+        # simulate an interrupted truncate/write instead of a no-op.
         self.stage = fixture.ForwardSupervisorTests()
-        self.stage.setUp()
+        preparer = fixture.fixture.previous.step72.forward.NativeForwardPrepareTests
+        original_prepare = preparer.prepare
+        def prepare_changed_config(instance, *args, **kwargs):
+            import hashlib
+            altered = instance.fx.stage_config.read_bytes() + b"\n<!-- Voice forward candidate -->\n"
+            instance.fx.stage_config.write_bytes(altered)
+            instance.proof["saved_xml_sha256"] = hashlib.sha256(altered).hexdigest()
+            return original_prepare(instance, *args, **kwargs)
+        with patch.object(preparer, "prepare", prepare_changed_config):
+            self.stage.setUp()
         self.addCleanup(self.stage.doCleanups)
         self.stage.call()  # _69 PREPARED through _75 native supervisor
         self.fx = self.stage.fx
