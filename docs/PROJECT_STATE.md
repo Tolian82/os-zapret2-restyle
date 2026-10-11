@@ -1,5 +1,6 @@
 # os-zapret2-restyle — Current state for `v0.5.x`
 
+**v0.5.1_94 (2026-10-11):** Stage-2 PRIVATE `execute_prepared_voice_apply` now recognizes an already-durable schema-4 **COMMITTED** intent under its original FD9 + Config inode flock and routes the retry directly to the existing bounded postcommit IPFW replay, without re-running process stop, runtime rename, candidate Config writes or PRECOMMIT. Added real-file/ledger + simulated native IPFW fault-injection for power loss AFTER a stage table is actually deleted but BEFORE the cleanup returns, then successful retry; also rejects foreign stage contents and a foreign desired manifest. This moves interrupted COMMITTED recovery into the SAME private executor; normal GUI/service/boot are NOT yet connected and live FreeBSD has NOT been qualified. `v0.5.1_94` candidate is **unpublished**. Exact-head CI pending.\n\n
 **v0.5.1_93 (2026-10-11):** Implemented a **private COMMITTED-only same-FD postcommit replay** in `voice_native_forward_apply.py`: after durable whole COMMIT, a crash before/within IPFW ownership/table cleanup can be retried with full double native Config/runtime/process/kernel and redo attestation; the original pending old→desired IPFW ledger is verified even when ownership has already switched. Reuses `voice_ipfw_runtime.commit_verified` only; no new process, Config/runtime mutation, or rollback of COMMITTED. Completed IPFW replay is idempotent/read-only. Added real Config/runtime/ledger and simulated native IPFW/power-loss regressions (after whole COMMIT and after owner switch) and negative guards. **Stage 2 still OPEN:** remaining crash boundaries, lifecycle wiring and real OPNsense acceptance; no GUI ON, public service hook, package release or Telegram MEDIA_PASS.
 
 
@@ -312,7 +313,7 @@ Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 - primary branch: `main`;
 - project version: `0.5.1` (**unmerged Draft PR #328**);
 - current source candidate revision: `_92` (**development only**);
-- package candidate: `os-zapret2-restyle-0.5.1_93.pkg` (**not published, do not install**);
+- package candidate: `os-zapret2-restyle-0.5.1_94.pkg` (**not published, do not install**);
 - published testing candidate: `os-zapret2-restyle-0.5.0_3.pkg` / `v0.5.0_3`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
