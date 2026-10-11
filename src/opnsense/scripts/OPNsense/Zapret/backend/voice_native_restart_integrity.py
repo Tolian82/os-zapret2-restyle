@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from voice_cutover_journal import SECURITY_BOUND_SCHEMA
+from voice_cutover_journal import SECURITY_BOUND_SCHEMA, RUNTIME_BOUND_SCHEMA
 from voice_freebsd_process_security import FreeBSDProcessSecurityReader
 from voice_freebsd_kernel_argv import FreeBSDKernelArgvReader
 from voice_security_policy_evidence import (
@@ -56,7 +56,7 @@ def _attest_previous_restart(
     require_lifecycle_owner()
     require_config_owner()
     initial = journal.read()
-    if initial is None or initial.get("schema") != SECURITY_BOUND_SCHEMA or \
+    if initial is None or initial.get("schema") not in (SECURITY_BOUND_SCHEMA, RUNTIME_BOUND_SCHEMA) or \
        initial.get("phase") != "mutating":
         raise NativeRestartIntegrityError("restart needs mutating schema-3 whole intent")
     previous_backup = Path(previous_backup)

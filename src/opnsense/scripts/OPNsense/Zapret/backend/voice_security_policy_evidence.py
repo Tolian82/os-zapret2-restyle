@@ -25,7 +25,7 @@ from voice_cutover_backup import (
     VoiceBackupError, _private_dir, _read_private_file, _sync_dir,
     bound_resource_fingerprints,
 )
-from voice_cutover_journal import RESOURCE_NAMES, SECURITY_BOUND_SCHEMA, SECURITY_FIELD
+from voice_cutover_journal import RESOURCE_NAMES, SECURITY_BOUND_SCHEMA, RUNTIME_BOUND_SCHEMA, SECURITY_FIELD
 from voice_freebsd_process_security import (
     FIELDS, ROLES, ProcessSecurityError, _expected_map,
 )
@@ -120,7 +120,7 @@ def inspect_security_policy(directory: Path, previous_backup: Path,
         raise SecurityPolicyError("foreign native process scripts")
     if journal_record is not None:
         if not isinstance(journal_record, dict) or \
-           journal_record.get("schema") != SECURITY_BOUND_SCHEMA or \
+           journal_record.get("schema") not in (SECURITY_BOUND_SCHEMA, RUNTIME_BOUND_SCHEMA) or \
            journal_record.get("previous") != body["previous"] or \
            not isinstance(journal_record.get("candidate"), dict) or \
            journal_record["candidate"].get(SECURITY_FIELD) != digest:

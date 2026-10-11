@@ -84,7 +84,7 @@ def inspect_full_recovery(cutover, firewall, previous_backup: Path,
             raise ValueError("incomplete previous Voice snapshot")
 
         sealed_security = None
-        if record["schema"] == SECURITY_BOUND_SCHEMA:
+        if record["schema"] >= SECURITY_BOUND_SCHEMA:
             if security_evidence is None or security_reader is None:
                 return _result("blocked", "missing-native-security-attestation",
                                phase=phase, cross_journal_reason=cross["reason"])

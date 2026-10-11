@@ -27,7 +27,9 @@ from voice_cutover_backup import (
     bound_resource_fingerprints, inspect_previous,
 )
 from voice_cutover_install_image import _restore_mode
-from voice_cutover_journal import VoiceCutoverJournal
+from voice_cutover_journal import (
+    VoiceCutoverJournal, RUNTIME_BOUND_SCHEMA, bound_candidate_runtime,
+)
 from voice_native_file_observer import observe_live_files
 
 REDO = "runtime-restore-redo.json"
@@ -218,15 +220,25 @@ def restore_previous_runtime(
     against the exact running candidate under BOTH locks. This isolated
     helper cannot itself prove process/IPFW state or own native locks.
     """
-    if not callable(require_lifecycle_owner) or \
-       not isinstance(expected_candidate_runtime_sha256, str) or \
-       len(expected_candidate_runtime_sha256) != 64 or \
-       not set(expected_candidate_runtime_sha256) <= HEX:
-        raise VoiceRuntimeRestoreError("trusted active runtime proof/lock required")
+    if not callable(require_lifecycle_owner):
+        raise VoiceRuntimeRestoreError("trusted lifecycle owner required")
     require_lifecycle_owner()
     record = journal.read()
     if record is None or record["phase"] != "mutating" or record["schema"] < 2:
         raise VoiceRuntimeRestoreError("no mutating whole Voice cutover")
+    if record["schema"] == RUNTIME_BOUND_SCHEMA:
+        sealed_candidate = bound_candidate_runtime(record)
+        if expected_candidate_runtime_sha256 is not None and (
+            expected_candidate_runtime_sha256 != sealed_candidate
+        ):
+            raise VoiceRuntimeRestoreError(
+                "candidate runtime digest disagrees with durable whole intent"
+            )
+        expected_candidate_runtime_sha256 = sealed_candidate
+    if not isinstance(expected_candidate_runtime_sha256, str) or \
+       len(expected_candidate_runtime_sha256) != 64 or \
+       not set(expected_candidate_runtime_sha256) <= HEX:
+        raise VoiceRuntimeRestoreError("trusted candidate runtime fingerprint required")
     previous_backup, install_image = Path(previous_backup), Path(install_image)
     sealed = bound_resource_fingerprints(previous_backup, record["previous"])
     previous_sha = sealed["runtime"]

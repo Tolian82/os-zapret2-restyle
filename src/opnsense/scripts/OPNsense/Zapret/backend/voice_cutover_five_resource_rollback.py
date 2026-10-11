@@ -22,7 +22,10 @@ from pathlib import Path
 from typing import Callable
 
 from voice_cutover_backup import bound_resource_fingerprints
-from voice_cutover_journal import VoiceCutoverJournal, BOUND_FIELD
+from voice_cutover_journal import (
+    VoiceCutoverJournal, BOUND_FIELD, RUNTIME_BOUND_SCHEMA,
+    bound_candidate_runtime,
+)
 from voice_firewall_ledger import (
     VoiceOwnershipStore, canonical_manifest, decode_manifest, fingerprint,
 )
@@ -111,6 +114,22 @@ def restore_previous_five_resources(
     if original is None or original["phase"] != "mutating" or \
        original["schema"] < 2:
         raise FiveResourceRollbackError("no mutating bound five-resource intent")
+    if original["schema"] == RUNTIME_BOUND_SCHEMA:
+        # A future production rollback MUST take the candidate runtime hash
+        # from the persisted, checked cutover. It cannot be guessed from an
+        # absent active tree after a power failure or caller-chosen input.
+        sealed_candidate = bound_candidate_runtime(original)
+        if expected_candidate_runtime_sha256 is not None and (
+            expected_candidate_runtime_sha256 != sealed_candidate
+        ):
+            raise FiveResourceRollbackError(
+                "caller candidate runtime differs from sealed whole intent"
+            )
+        expected_candidate_runtime_sha256 = sealed_candidate
+    elif expected_candidate_runtime_sha256 is None:
+        raise FiveResourceRollbackError(
+            "unbound old cutover has no trusted candidate runtime digest"
+        )
     previous_backup = Path(previous_backup)
     install_image = Path(install_image)
     config_path = Path(config_path)

@@ -1,5 +1,8 @@
 # os-zapret2-restyle — START HERE
 
+**v0.5.1_49 — durable schema-4 candidate runtime fingerprint for reboot-safe Voice rollback (2026-10-11):** The schema-3 whole journal bound the previous Config/runtime/processes, native desired IPFW and security policy, but NOT the candidate's complete installed runtime digest. An interrupted two-rename rollback therefore depended on a separately supplied candidate tree fingerprint — unsafe to reconstruct from an absent or foreign active directory after power loss. Added schema-4 `candidate_runtime_sha256` to `voice_cutover_journal.py`, checksum-protected in the same private durable whole intent; `begin_runtime_bound` first verifies the version-2 sealed supervisor policy, previous five-resource identity, staged candidate Config hash and exact candidate `dvtws.args` handoff hash, double-sweeps the complete candidate runtime tree, and persists its exact digest. Older schema-1/2/3 records remain readable but `bound_candidate_runtime()` refuses them for prospective production rollback. Both the full five-resource rollback and the real runtime rename writer now *require the schema-4 digest over any caller-supplied candidate digest*, preventing a foreign argument from overriding a durable cutover even when a retry has renamed/retired the runtime. Native restart/process-security/full-recovery readers recognize schema 4. Linux/FreeBSD 15 CI adds real private staged snapshot, crash-tolerant reopen, tamper/mismatch/legacy/committed refusal regression. No native GUI Voice ON, boot hook or final journal cleanup; deployment still blocked. PLUGIN_REVISION=49; exact-head CI pending.
+
+
 **v0.5.1_48 — immutable installed supervisor argv in SHA-bound prior Voice security policy (2026-10-11):** Added `voice_native_supervisor_launch.py`: exact installed `supervisor_start`/`daemon -P ... -p ... -o ... -f ...` and shell-monitor argument arrays, fixed OPNsense paths and deterministic fingerprint; no caller-supplied process flags, alternate shell, service path or PID-file. Extended sealed private `voice_security_policy_evidence.py` with backwards-readable v1 policy plus **supervisor-bound v2 policy** (exact argv material, not just an unsealed caller expectation), with its checksum bound to the same schema-3 whole cutover journal. Actual `voice_native_restart_integrity.py` now requires the v2 security policy and obtains supervisor argv **only from the reopened SHA-bound policy**, never from caller-supplied parameters; old v1 policies cannot satisfy native restart. The real process adapter checks policy v2 BEFORE launching previous dvtws2/supervisor. Regression tests cover expected launcher contract, shell parity, tampered/missing/foreign command flags, schema-2 and schema-3/v1 refusal, actual v2 checkpoint and native kernel argv correlation. This validates the static launch contract, not actual FreeBSD process-title/daemon argv behavior, readiness, boot recovery or Voice ON; production still blocked. PLUGIN_REVISION=48, exact-head CI pending.
 
 
@@ -196,13 +199,13 @@
 
 **Status:** AUTHORITATIVE REVISION HANDOFF · LEVEL 1
 **Updated:** 2026-10-09
-**Current handoff identity:** `v0.5.1_48` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
+**Current handoff identity:** `v0.5.1_49` — active Draft PR #328 for «Передача голоса»; model/GUI/shared target generation staged, Apply and runtime migration incomplete, media gates open.
 
 ## Current identity
 
 - repository: `Tolian82/os-zapret2-restyle`;
 - `VERSION=0.5.1` (**Draft PR #328, not merged**);
-- `PLUGIN_REVISION=48` (**development candidate, not published**);
+- `PLUGIN_REVISION=49` (**development candidate, not published**);
 - published testing candidate: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - testing source/tag target: `34adca978b3b6769972591872209c166ec9c6eb6`;
 - testing package SHA-256: `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;

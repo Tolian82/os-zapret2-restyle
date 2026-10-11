@@ -28,7 +28,7 @@ from voice_native_file_observer import observe_live_files, LiveFileEvidenceError
 from voice_cutover_journal import VoiceCutoverJournal
 from voice_process_recovery_evidence import _normalize, _runtime_args_digest
 from voice_cutover_backup import inspect_previous
-from voice_cutover_journal import SECURITY_BOUND_SCHEMA
+from voice_cutover_journal import SECURITY_BOUND_SCHEMA, RUNTIME_BOUND_SCHEMA
 from voice_security_policy_evidence import (inspect_security_policy,
     SUPERVISOR_BOUND_POLICY_SCHEMA)
 from voice_native_restart_integrity import attest_previous_restart
@@ -204,7 +204,7 @@ class FreeBSDVoiceProcessActions:
         if self.security_evidence is not None:
             # Inspect the SEALED previous policy BEFORE starting an engine,
             # so schema-2 or foreign policy cannot start any process.
-            if initial["schema"] != SECURITY_BOUND_SCHEMA:
+            if initial["schema"] not in (SECURITY_BOUND_SCHEMA, RUNTIME_BOUND_SCHEMA):
                 raise NativeVoiceProcessActionError(
                     "native restart needs durable schema-3 process policy"
                 )

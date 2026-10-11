@@ -18,8 +18,10 @@ import tempfile
 SCHEMA = 1
 BOUND_SCHEMA = 2  # explicitly bound desired IPFW ownership (staging only)
 SECURITY_BOUND_SCHEMA = 3  # also pins previous native process security policy
+RUNTIME_BOUND_SCHEMA = 4  # additionally seals the EXACT candidate runtime tree
 BOUND_FIELD = "firewall_manifest_sha256"
 SECURITY_FIELD = "process_security_policy_sha256"
+RUNTIME_FIELD = "candidate_runtime_sha256"
 MAX_BYTES = 65536
 FILES = ("intent.json",)
 SHA = "0123456789abcdef"
@@ -46,7 +48,9 @@ def validate_record(record: dict) -> dict:
     if not isinstance(record, dict) or set(record) != {
         "schema", "phase", "previous", "candidate", "check",
     } or type(record.get("schema")) is not int or \
-       record["schema"] not in (SCHEMA, BOUND_SCHEMA, SECURITY_BOUND_SCHEMA) or \
+       record["schema"] not in (
+           SCHEMA, BOUND_SCHEMA, SECURITY_BOUND_SCHEMA, RUNTIME_BOUND_SCHEMA
+       ) or \
        record.get("phase") not in PHASES:
         raise CutoverJournalError("invalid durable Voice cutover journal schema")
     previous = record["previous"]
@@ -57,8 +61,10 @@ def validate_record(record: dict) -> dict:
     expected_candidate = set(PROOF_NAMES)
     if record["schema"] >= BOUND_SCHEMA:
         expected_candidate.add(BOUND_FIELD)
-    if record["schema"] == SECURITY_BOUND_SCHEMA:
+    if record["schema"] >= SECURITY_BOUND_SCHEMA:
         expected_candidate.add(SECURITY_FIELD)
+    if record["schema"] == RUNTIME_BOUND_SCHEMA:
+        expected_candidate.add(RUNTIME_FIELD)
     if not isinstance(desired, dict) or set(desired) != expected_candidate or \
        any(not _sha(value) for value in desired.values()):
         raise CutoverJournalError("unverified desired Voice fingerprints")
@@ -120,6 +126,43 @@ def new_security_bound_record(previous: dict, proof: dict,
                          SECURITY_FIELD: security_policy_sha256}
     body["check"] = _digest(body)
     return validate_record(body)
+
+
+
+def new_runtime_bound_record(previous: dict, proof: dict,
+                             desired_manifest: dict, security_policy_sha256: str,
+                             candidate_runtime_sha256: str) -> dict:
+    """Schema 4: rollback identity for the EXACT candidate runtime tree.
+
+    This digest is never inferred from a possibly already-renamed active
+    tree during crash recovery. The creator must verify a complete,
+    trusted candidate runtime before entering MUTATING. Older schemas stay
+    readable, but are NEVER sufficient for future production recovery.
+    """
+    if not _sha(candidate_runtime_sha256):
+        raise CutoverJournalError("invalid candidate runtime fingerprint")
+    base = new_security_bound_record(
+        previous, proof, desired_manifest, security_policy_sha256,
+    )
+    body = {key: value for key, value in base.items() if key != "check"}
+    body["schema"] = RUNTIME_BOUND_SCHEMA
+    body["candidate"] = {
+        **body["candidate"], RUNTIME_FIELD: candidate_runtime_sha256,
+    }
+    body["check"] = _digest(body)
+    return validate_record(body)
+
+
+def bound_candidate_runtime(record: dict) -> str:
+    """Strict future-production recovery input; NEVER guess from live disk."""
+    record = validate_record(record)
+    if record["schema"] != RUNTIME_BOUND_SCHEMA or (
+        record["phase"] not in ("prepared", "mutating")
+    ):
+        raise CutoverJournalError(
+            "native rollback requires noncommitted schema-4 candidate runtime"
+        )
+    return record["candidate"][RUNTIME_FIELD]
 
 
 class VoiceCutoverJournal:
@@ -224,6 +267,57 @@ class VoiceCutoverJournal:
             raise CutoverJournalError("security policy refers to another previous state")
         self._store(new_security_bound_record(
             previous, proof, desired_manifest, report["policy_sha256"],
+        ))
+
+    def begin_runtime_bound(
+        self, previous: dict, proof: dict, desired_manifest: dict,
+        policy_dir: Path, previous_backup: Path, process_evidence: Path,
+        expected_scripts: dict, *, staged_config: Path, candidate_runtime: Path,
+    ) -> None:
+        """Create schema 4 ONLY after independently sweeping staged bytes.
+
+        The installed native caller must additionally own FD9 and the Config
+        flock, and trust the staging roots. This helper itself never
+        authorizes a cutover or modifies runtime, Config or IPFW.
+        """
+        from voice_security_policy_evidence import (
+            inspect_security_policy, SUPERVISOR_BOUND_POLICY_SCHEMA,
+        )
+        from voice_native_file_observer import observe_live_files
+        from voice_cutover_backup import _read_private_file
+
+        if self.read() is not None:
+            raise CutoverJournalError("Voice cutover intent already exists")
+        policy = inspect_security_policy(
+            policy_dir, previous_backup, process_evidence,
+            expected_scripts=expected_scripts,
+        )
+        if policy["schema"] != SUPERVISOR_BOUND_POLICY_SCHEMA or (
+            policy["policy"]["previous"] != previous
+        ):
+            raise CutoverJournalError(
+                "schema-4 rollback requires bound supervisor security policy"
+            )
+        config_path, runtime_path = Path(staged_config), Path(candidate_runtime)
+        live = observe_live_files(config_path, runtime_path)
+        # The runtime digest is a full tree fingerprint, not just a digest of
+        # the dvtws2 args. Check both the candidate release's exact saved XML
+        # and native engine args against the handoff proof as well.
+        if live["config"] != proof.get("saved_xml_sha256"):
+            raise CutoverJournalError("staged candidate Config differs from handoff")
+        try:
+            argv = _read_private_file(runtime_path / "dvtws.args", 4 * 1048576)
+        except (OSError, ValueError) as exc:
+            raise CutoverJournalError("unsafe staged Voice engine argv") from exc
+        if hashlib.sha256(argv).hexdigest() != proof.get("native_argv_sha256"):
+            raise CutoverJournalError("candidate args differ from native handoff")
+        # A second independent stable sweep before the journal's durable
+        # create rejects staging mutation between hashing and publication.
+        if observe_live_files(config_path, runtime_path) != live:
+            raise CutoverJournalError("candidate staging changed before intent")
+        self._store(new_runtime_bound_record(
+            previous, proof, desired_manifest, policy["policy_sha256"],
+            live["runtime"],
         ))
 
     def _transition(self, expected: str, new: str) -> None:

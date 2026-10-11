@@ -1,6 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
-- [x] Current candidate `v0.5.1_48`: bind exact installed supervisor daemon/monitor argv to saved security policy v2 + schema-3 whole journal, deny untrusted or v1 previous-policy restart
+- [x] Current candidate `v0.5.1_49`: checksum-bound schema-4 native Voice candidate runtime digest, verified before journaling and enforced by five-resource and filesystem rollback across renames/crash replay
+- [ ] Next: actual native FD9-only five-resource rollback CLI, boot/crash decision and durable restart finalization; full FreeBSD on-appliance acceptance before Voice ON
+- [x] Previous candidate `v0.5.1_48`: bind exact installed supervisor daemon/monitor argv to saved security policy v2 + schema-3 whole journal, deny untrusted or v1 previous-policy restart
 - [ ] Next: production native FD9 coordinator, exact live FreeBSD daemon/proctitle qualification, cold-boot recovery and durable five-resource completion; Voice ON only after validation
 - [x] Previous candidate `v0.5.1_47`: align isolated PID-file test fixtures so real native-runner missing-attestation refusal is actually tested (production security unchanged)
 - [ ] Next: production native FD9 coordinator, immutable supervisor argv plan, crash/reboot recovery and five-resource journal finalization; then Voice ON
