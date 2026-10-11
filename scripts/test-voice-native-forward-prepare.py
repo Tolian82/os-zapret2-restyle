@@ -63,7 +63,11 @@ class NativeForwardPrepareTests(unittest.TestCase):
         observation=inspect_process_evidence(
             self.fx.process,self.fx.backup,src.fixture.SCRIPTS,
         )["observation"]
-        self.process_probe=src.fixture.Probe(observation)
+        # The durable on-disk report carries its schema field; the raw
+        # native process probe contract returns only engine + supervisor.
+        self.process_probe=src.fixture.Probe({
+            role:observation[role] for role in ("engine","supervisor")
+        })
         self.observer=NativePreviousObserver(
             config=self.live_config,runtime=self.live_runtime,
             previous_backup=self.fx.backup,process_evidence=self.fx.process,

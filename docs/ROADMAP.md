@@ -1,5 +1,6 @@
 # os-zapret2-restyle — Master development plan
 
+- [x] Candidate `v0.5.1_70`: repair mock native process probe schema adaptation exposed by `_69` CI; rerun real forward PREPARED journal scenarios and all Voice regression gates
 - [x] Candidate `v0.5.1_69`: non-simulated schema-4 native forward Apply PREPARED journal writer, binding existing five-resource rollback evidence and old IPFW to exact candidate runtime, Config and desired Voice IPFW handoff under FD9/Config locks; crash-retained pre-mutation journal; no live service changes
 - [ ] Next: authenticated native forward execution for full Config/runtime/engine/supervisor/IPFW mutation with deterministic power-loss rollback, then hardware and Telegram voice/media confirmation
 - [x] Candidate `v0.5.1_68`: read-only scoped ordinary IPFW rule + native/legacy table inventory integrated with normal-running pre-cutover argv/image baseline, double sample and anti-foreign tests; no kernel writes, no adoption, Voice OFF
