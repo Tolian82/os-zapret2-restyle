@@ -22,7 +22,8 @@ from pathlib import Path
 from typing import Callable
 
 from voice_cutover_backup import bound_resource_fingerprints
-from voice_cutover_journal import _digest, (
+from voice_cutover_journal import _digest
+from voice_cutover_journal import (
     VoiceCutoverJournal, BOUND_FIELD, RUNTIME_BOUND_SCHEMA,
     bound_candidate_runtime,
 )
