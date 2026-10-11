@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Engineering memory index
 
+**v0.5.1_94 (2026-10-11):** Private Stage-2 native five-resource executor now handles direct COMMITTED retry after power failure through its existing same-FD Config lock; only verified IPFW postcommit operations may proceed, never another engine/Config/runtime switch. Added filesystem/ledger/native-kernel-simulated crash regression for an already removed staging table, successful retry, foreign table and foreign desired manifest refusal. Release candidate remains unpublished, public Voice ON/boot not wired, OPNsense live and Telegram media unverified. Exact-head CI pending.
+
+
 **v0.5.1_93 (2026-10-11):** Stage-2 COMMITTED-only Voice postcommit IPFW replay was added to the existing private same-FD coordinator. It independently verifies all five candidate domains and the durable IPFW old→desired intent, including a previously switched ownership ledger, before calling the existing IPFW commit/cleanup. Finishing an already completed transaction is read-only. Simulated FreeBSD/native kernel and real filesystem crash-boundary tests were added. Remaining crash/reboot qualification and production service/GUI wiring are NOT done; no appliance or Telegram media acceptance.
 
 

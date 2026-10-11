@@ -1,5 +1,8 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+**v0.5.1_94 (2026-10-11):** Private Stage-2 native five-resource executor now handles direct COMMITTED retry after power failure through its existing same-FD Config lock; only verified IPFW postcommit operations may proceed, never another engine/Config/runtime switch. Added filesystem/ledger/native-kernel-simulated crash regression for an already removed staging table, successful retry, foreign table and foreign desired manifest refusal. Release candidate remains unpublished, public Voice ON/boot not wired, OPNsense live and Telegram media unverified. Exact-head CI pending.
+
+
 **v0.5.1_93 (2026-10-11):** Implemented a **private COMMITTED-only same-FD postcommit replay** in `voice_native_forward_apply.py`: after durable whole COMMIT, a crash before/within IPFW ownership/table cleanup can be retried with full double native Config/runtime/process/kernel and redo attestation; the original pending old→desired IPFW ledger is verified even when ownership has already switched. Reuses `voice_ipfw_runtime.commit_verified` only; no new process, Config/runtime mutation, or rollback of COMMITTED. Completed IPFW replay is idempotent/read-only. Added real Config/runtime/ledger and simulated native IPFW/power-loss regressions (after whole COMMIT and after owner switch) and negative guards. **Stage 2 still OPEN:** remaining crash boundaries, lifecycle wiring and real OPNsense acceptance; no GUI ON, public service hook, package release or Telegram MEDIA_PASS.
 
 
