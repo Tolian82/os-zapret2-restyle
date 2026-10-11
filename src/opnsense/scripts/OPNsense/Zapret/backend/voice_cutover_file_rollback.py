@@ -51,6 +51,52 @@ def _complete_interrupted_forward_rename(
     from voice_native_recovery_quiescence import _locked_config
     active=Path(active)
     if os.path.lexists(active):
+        # At the earliest schema-4 MUTATING boundary the old engine may
+        # already be stopped while the old active runtime is still intact.
+        # Without a durable forward redo, NO candidate runtime switch or
+        # same-cutover forward staging path is authorized. Do not mistake a
+        # matching candidate tree (or a pre-arm ready copy) for recovery
+        # evidence and silently restart the old process against foreign
+        # runtime state. Old schema-2/3 rollback retains its own contract.
+        record=journal.read()
+        if record is not None and record["schema"]==4 and (
+            record["phase"]=="mutating"
+        ):
+            require_lifecycle_owner()
+            _locked_config(Path(config_path),locked_config_fd,config_owner)
+            if require_quiescent() is not True:
+                raise VoiceFileRollbackError(
+                    "early forward runtime recovery requires stopped engine and previous IPFW"
+                )
+            forward=read_forward_redo(journal.directory)
+            if forward is None:
+                suffix=record["check"][:20]
+                for name in (
+                    ".voice-forward-ready-"+suffix,
+                    ".voice-forward-previous-"+suffix,
+                ):
+                    if os.path.lexists(active.with_name(name)):
+                        raise VoiceFileRollbackError(
+                            "unowned early forward runtime staging without durable redo"
+                        )
+                previous=bound_resource_fingerprints(
+                    Path(previous_backup),record["previous"],
+                )
+                if observe_live_files(
+                    Path(install_image)/"config.xml",active,
+                    previous_backup=previous_backup,
+                )["runtime"]!=previous["runtime"]:
+                    raise VoiceFileRollbackError(
+                        "forward runtime changed without durable redo"
+                    )
+                require_lifecycle_owner()
+                _locked_config(Path(config_path),locked_config_fd,config_owner)
+                if journal.read()!=record or (
+                    read_forward_redo(journal.directory) is not None
+                ):
+                    raise VoiceFileRollbackError(
+                        "unmarked early forward runtime evidence raced"
+                    )
         return "active-present"
     # A missing active in the middle of a PREVIOUS rollback is handled by
     # the established restore-redo, not misclassified as a forward gap.

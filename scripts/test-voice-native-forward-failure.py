@@ -10,6 +10,8 @@ from __future__ import annotations
 import fcntl
 import importlib.util
 import os
+import shutil
+import stat
 from pathlib import Path
 import subprocess
 import sys
@@ -21,6 +23,7 @@ BACKEND=ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
 from voice_cutover_journal import _digest
 from voice_native_forward_runtime import _read_redo as read_forward_runtime_redo
+from voice_ipfw_runtime import rollback_precommit_verified
 from voice_cutover_restore_stage import prepare_restore_stage
 from voice_cutover_install_image import prepare_installable_restore
 from voice_native_process_actions import FreeBSDVoiceProcessActions
@@ -213,6 +216,88 @@ class FailedNativeForwardRecoveryTests(unittest.TestCase):
         self.assertEqual(self.fx.whole.read(),self.prepared)
         self.assertEqual(self.config.read_bytes(),self.previous.candidate)
         self.assertIsNotNone(self.fx.ipfw.pending())
+
+    def simulate_power_cut_after_old_stop_before_forward_runtime(self):
+        # Rewind the simulated kernel/files from the fully exercised
+        # candidate fixture to the exact earliest MUTATING power-loss
+        # boundary: all THREE old process roles stopped, previous Config
+        # and active runtime intact, old IPFW still owned, and NO forward
+        # runtime redo or stage directory. Keep real sealed backup/journal
+        # and original Config inode; never touch actual host services.
+        self.stage.pids.update(engine=None,daemon=None,monitor=None)
+        self.stage.ps.commands={}
+        proof={"native_argv_sha256":
+               self.prepared["candidate"]["native_argv_sha256"]}
+        rollback_precommit_verified(
+            self.fx.ipfw,self.stage.parent.write,self.fx.whole,proof,
+        )
+        runtime=self.fx.root/"runtime"
+        redo=read_forward_runtime_redo(self.fx.whole.directory)
+        self.assertIsNotNone(redo)
+        retired=runtime.with_name(redo["retained_name"])
+        self.assertTrue(retired.is_dir())
+        discarded=runtime.with_name(".test-removed-candidate")
+        os.rename(runtime,discarded)
+        os.rename(retired,runtime)
+        shutil.rmtree(discarded)
+        (self.fx.whole.directory/"forward-runtime-redo.json").unlink()
+        self.config.write_bytes(self.previous_config)
+        self.config.chmod(stat.S_IMODE((self.install_image/"config.xml").stat().st_mode))
+        self.assertEqual(self.config.stat().st_ino,self.original_inode)
+        self.assertIsNone(self.fx.ipfw.pending())
+        self.assertEqual(self.stage.parent.old,self.fx.ipfw.owned())
+        self.assertEqual("stopped",self.stage.probe.probe()["engine"]["state"])
+        self.assertEqual(
+            observe_live_files(self.config,runtime,previous_backup=self.fx.backup),
+            {k:self.prepared["previous"][k] for k in ("config","runtime")},
+        )
+        return runtime
+
+    def test_power_cut_after_old_stop_before_forward_runtime_restarts_old(self):
+        self.simulate_power_cut_after_old_stop_before_forward_runtime()
+        with patch(
+            "voice_native_forward_apply.stop_previous_and_install_forward_runtime",
+            side_effect=AssertionError("interrupted MUTATING may not replay forward"),
+        ):
+            with self.assertRaisesRegex(
+                NativeForwardApplyError,
+                "interrupted MUTATING Voice forward recovered previous domains",
+            ):
+                self.resume_mutating_via_executor()
+        self.assertEqual(self.operations,["start"])
+        self.assertIsNone(self.fx.ipfw.pending())
+        self.assertEqual(self.fx.whole.read()["phase"],"mutating")
+        self.assertEqual(self.config.read_bytes(),self.previous_config)
+        self.assertFalse((self.fx.whole.directory/"forward-runtime-redo.json").exists())
+
+    def test_early_forward_unarmed_ready_path_refuses_process_restart(self):
+        runtime=self.simulate_power_cut_after_old_stop_before_forward_runtime()
+        orphan=runtime.with_name(
+            ".voice-forward-ready-"+self.prepared["check"][:20]
+        )
+        shutil.copytree(self.fx.candidate,orphan)
+        with self.assertRaisesRegex(
+            NativeForwardApplyError,"interrupted MUTATING Voice recovery refused",
+        ):
+            self.resume_mutating_via_executor()
+        self.assertEqual(self.operations,[])
+        self.assertTrue(orphan.is_dir())
+        self.assertEqual(self.config.read_bytes(),self.previous_config)
+        self.assertEqual(self.fx.whole.read()["phase"],"mutating")
+
+    def test_early_forward_candidate_active_without_redo_refuses_adoption(self):
+        runtime=self.simulate_power_cut_after_old_stop_before_forward_runtime()
+        unowned=runtime.with_name(".test-unmarked-previous")
+        os.rename(runtime,unowned)
+        shutil.copytree(self.fx.candidate,runtime)
+        with self.assertRaisesRegex(
+            NativeForwardApplyError,"interrupted MUTATING Voice recovery refused",
+        ):
+            self.resume_mutating_via_executor()
+        self.assertEqual(self.operations,[])
+        self.assertTrue(unowned.is_dir())
+        self.assertIsNone(self.fx.ipfw.pending())
+        self.assertEqual(self.fx.whole.read()["phase"],"mutating")
 
     def test_real_late_failure_restores_old_five_domains_and_retains_intent(self):
         result=self.recover()
