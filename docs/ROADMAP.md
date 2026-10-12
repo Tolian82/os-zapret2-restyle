@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**`v0.5.1_157` (12.10.2026, этап 3).** Исправлено точечное согласование `legacy-files-ready` с существующим read-only reverse WAL gate: промежуточный tmp каталог допускается только при явной проверке его единственного точного имени под FD9 и Config flock, опубликованный `legacy-files-ready` повторно проходит тот же reader. Другие/частичные каталоги остаются fail-closed; ранее CI `_156` падал на проверке собственного staging, а не на копировании Config. Никакого подключения к production Apply или включения Voice; `_157` CI pending.
+
+
 **Этап 3 · `v0.5.1_156`:** после законченного verified IPFW reverse replay собирается неизменяемый файловый previous Config/runtime install-image с оригинальными mode bits и прежний Telegram marker, с проверкой против kernel/process/ledger under original locks. Следующая веха — единый journal-led обратный apply: сохранённые Config/runtime in-place/atomic, marker exact presence/mode, проверенный restart триады, full receipt и reboot; затем forward PoC→native и owner-live MEDIA_PASS. Не включать GUI Apply раньше этого.
 
 

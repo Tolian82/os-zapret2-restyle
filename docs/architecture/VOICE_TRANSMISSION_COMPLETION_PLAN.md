@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**`v0.5.1_157` (12.10.2026, этап 3).** Исправлено точечное согласование `legacy-files-ready` с существующим read-only reverse WAL gate: промежуточный tmp каталог допускается только при явной проверке его единственного точного имени под FD9 и Config flock, опубликованный `legacy-files-ready` повторно проходит тот же reader. Другие/частичные каталоги остаются fail-closed; ранее CI `_156` падал на проверке собственного staging, а не на копировании Config. Никакого подключения к production Apply или включения Voice; `_157` CI pending.
+
+
 **Этап 3 · `v0.5.1_156`:** import-only `voice_native_legacy_files_ready.py` после verified completed `legacy-ipfw-replay` использует EXISTING `prepare_restore_stage` + `prepare_installable_restore` над исходным `legacy-previous/previous` (schema2) и запечатывает exact previous marker byte/mode в isolated `legacy-files-ready` dir. Original FD9+Config inode flock; exact kernel prefix, missing 3 processes, marker disabled, no native ledger, and prior fingerprint re-attested before fsynced atomic publication. On crash partial staging retained and boot/lifecycle fail-closed. Integrity reader reopens previous files/image (including original modes) and marker. NO writes to active Config/runtime, no old marker restoration, process starts, cutoff commit, or public Voice Apply. Next work: guarded live file+marker restore redo under original Config inode lock, followed by security/argv-attested old 3-role process restart, final whole five-domain receipt and reboot test; then native forward+media.
 
 

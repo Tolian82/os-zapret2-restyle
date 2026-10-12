@@ -146,13 +146,23 @@ def _read_manifest(root):
     return value
 
 
-def inspect_legacy_reverse_wal(root, *, allow_ipfw_replay=False):
+def inspect_legacy_reverse_wal(root, *, allow_ipfw_replay=False,
+                               allow_files_stage=None):
     """Read-only reboot triage, recompute source bindings; no kernel trust."""
     root = Path(root)
     _private_dir(root)
     expected = {NAME, PLAN_NAME, WAL_NAME}
     if allow_ipfw_replay:
         expected.add("legacy-ipfw-replay")
+    if allow_files_stage is not None:
+        if (not isinstance(allow_files_stage, str) or
+            (allow_files_stage != "legacy-files-ready" and
+             not (allow_files_stage.startswith(".legacy-files-ready-")
+                  and len(allow_files_stage) > len(".legacy-files-ready-"))) or
+            "/" in allow_files_stage or "\\x00" in allow_files_stage):
+            raise LegacyReverseWALError("untrusted file-stage allowance")
+        _private_dir(root / allow_files_stage)
+        expected.add(allow_files_stage)
     if set(os.listdir(root)) != expected:
         raise LegacyReverseWALError("reverse WAL has foreign or missing staging artifacts")
     record = _read_manifest(root)

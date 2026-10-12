@@ -50,10 +50,11 @@ class LegacyFilesReadyError(RuntimeError):
     pass
 
 
-def _snapshot(root):
+def _snapshot(root, *, extra_stage=None):
     """Read-only evidence: all old IPFW replay commands completed and current."""
     plan = inspect_legacy_restore_plan(root)
-    inspect_legacy_reverse_wal(root, allow_ipfw_replay=True)
+    inspect_legacy_reverse_wal(root, allow_ipfw_replay=True,
+                               allow_files_stage=extra_stage)
     directory = root / REPLAY_NAME
     _private_dir(directory)
     done, active = _steps(directory, plan)
@@ -125,6 +126,9 @@ def inspect_legacy_files_ready(root):
     if set(os.listdir(root)) != EXPECTED_ROOT | {FILES_NAME}:
         raise LegacyFilesReadyError("foreign previous-file recovery artifact")
     plan = inspect_legacy_restore_plan(root)
+    inspect_legacy_reverse_wal(
+        root, allow_ipfw_replay=True, allow_files_stage=FILES_NAME,
+    )
     record = _read_ready(root, plan)
     return {
         "state": "legacy-previous-files-staged-not-installed",
@@ -155,7 +159,7 @@ def stage_legacy_previous_files(
         require_lifecycle_owner()
         _locked_config(config_path, config_fd, config_owner)
 
-    def prove_environment(plan):
+    def prove_environment(plan, *, extra_stage=None):
         if _stopped(process_probe) != "exact-three-role-absence" or (
             _old_marker_off(legacy_marker, active_runtime) !=
             "legacy-marker-absent-and-runtime-not-enabled"
@@ -167,7 +171,7 @@ def stage_legacy_previous_files(
             _expected_after(plan, len(plan["legacy_ipfw_commands"]))
         ):
             raise LegacyFilesReadyError("old PoC IPFW replay no longer matches")
-        if _snapshot(root) != plan:
+        if _snapshot(root, extra_stage=extra_stage) != plan:
             raise LegacyFilesReadyError("previous replay seal changed")
 
     held()
@@ -218,7 +222,7 @@ def stage_legacy_previous_files(
     _write_once(scratch / "ready.sha256", (_digest(raw)+"\n").encode("ascii"))
     _sync_dir(scratch)
     held()
-    prove_environment(plan)
+    prove_environment(plan, extra_stage=scratch.name)
     if set(os.listdir(root)) != EXPECTED_ROOT | {scratch.name}:
         raise LegacyFilesReadyError("unexpected previous-file stage changed")
     # Check all copies before publication, including original modes.
