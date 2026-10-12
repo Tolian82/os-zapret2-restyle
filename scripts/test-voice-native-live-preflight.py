@@ -283,11 +283,13 @@ class LivePreflightTests(unittest.TestCase):
         self.assertIn('native-voice-live-preflight)',script)
         self.assertIn('native-voice-prepare-prebuilt)',script)
         self.assertIn('native-voice-prepare-release)',script)
+        self.assertIn('native-voice-prepare-saved)',script)
         self.assertIn(
-            "native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-ipfw-seed",
+            "native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-ipfw-seed",
             script,
         )
         self.assertIn("native_voice_prepare_prebuilt_service prepare-from-release",script)
+        self.assertIn("native_voice_prepare_prebuilt_service prepare-from-saved",script)
         self.assertIn('service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}"',script)
 
 

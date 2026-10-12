@@ -36,6 +36,7 @@ from voice_freebsd_process_security import FreeBSDProcessSecurityReader, FIELDS
 from voice_native_recovery_quiescence import EXPECTED_SCRIPTS, PIDFILES, _locked_config
 from voice_native_prepare_one_lock import prepare_native_voice_one_lock
 from voice_native_operator_input_stage import stage_native_operator_input
+from voice_native_saved_pair_guard import require_saved_pair
 import voice_ipfw_runtime as native
 
 INPUT = Path("/var/db/zapret2/voice-operator-input")
@@ -133,6 +134,11 @@ def prepare_operator_prebuilt(
         native.require_native_lock()
         _locked_config(native.CONFIG, fd, owner)
         if from_saved:
+            # A saved candidate XML and the OPNsense template output MUST
+            # describe the same generation, not two separate GUI saves.
+            require_saved_pair(BUILD_INPUT / "config.xml", BUILD_INPUT / "zapret.conf")
+            native.require_native_lock()
+            _locked_config(native.CONFIG, fd, owner)
             # The parent holds original FD9 and the original Config flock
             # throughout this child. The worker sources the same existing
             # orchestrator modules; it cannot launch or install the runtime.

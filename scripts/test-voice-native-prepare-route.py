@@ -141,7 +141,8 @@ class OperatorPrepareRouteTests(unittest.TestCase):
             return {"state":"native-voice-original-lock-prepared",
                     "safe_to_enable_voice":False,"public_voice_apply":False}
         resolved_wan="vtnet1"
-        with patch.object(route.subprocess,"run",side_effect=build), \
+        with patch.object(route,"require_saved_pair",return_value=None), \
+             patch.object(route.subprocess,"run",side_effect=build), \
              patch.object(route,"stage_native_operator_input",side_effect=stage), \
              patch.object(route,"prepare_native_voice_one_lock",side_effect=prepared):
             result=route.prepare_operator_prebuilt(
@@ -168,12 +169,24 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         self.assertFalse(self.whole.exists())
         self.assertFalse(self.ledger.exists())
 
+    def test_mismatched_saved_pair_refuses_before_orchestrator(self):
+        (self.build/"release").rmdir()
+        (self.build/"zapret.conf").write_text('ZAPRET_ENABLED="1"')
+        (self.build/"zapret.conf").chmod(0o600)
+        with patch.object(route.subprocess, "run") as runner:
+            with self.assertRaises((ValueError,RuntimeError,OSError)):
+                route.prepare_operator_prebuilt("vtnet1",989,from_saved=True)
+            runner.assert_not_called()
+        self.assertFalse(self.whole.exists())
+        self.assertFalse(self.ledger.exists())
+
     def test_orchestrator_build_error_cannot_prepare_or_publish(self):
         import subprocess
         (self.build/"release").rmdir()
         (self.build/"zapret.conf").write_text("ZAPRET_ENABLED=1")
         (self.build/"zapret.conf").chmod(0o600)
-        with patch.object(route.subprocess, "run",
+        with patch.object(route,"require_saved_pair",return_value=None), \
+             patch.object(route.subprocess, "run",
                           side_effect=subprocess.CalledProcessError(1, ["/bin/sh"])), \
              patch.object(route, "stage_native_operator_input") as stage, \
              patch.object(route, "prepare_native_voice_one_lock") as prepared:
