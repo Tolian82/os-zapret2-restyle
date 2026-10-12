@@ -117,7 +117,7 @@ def prepare_staged_forward_voice_intent(
         previous_observer=previous_observer,
         config_path=config_path, active_runtime=active_runtime,
         staged_config=stage / "config.xml", candidate_runtime=stage / "runtime",
-        proof=proof, desired_manifest=desired,
+        proof=proof, desired_manifest=desired_manifest,
         expected_scripts=expected_scripts, ipfw_adapter=ipfw_adapter,
         config_fd=config_fd, config_owner=config_owner,
         require_lifecycle_owner=require_lifecycle_owner,
