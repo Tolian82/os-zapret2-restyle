@@ -13,7 +13,7 @@ from pathlib import Path
 import sys
 
 from voice_cutover_backup import _private_dir
-from voice_cutover_journal import VoiceCutoverJournal, RUNTIME_BOUND_SCHEMA, BOUND_FIELD
+from voice_cutover_journal import VoiceCutoverJournal, RUNTIME_BOUND_SCHEMA, BOUND_FIELD, RUNTIME_FIELD
 from voice_firewall_ledger import VoiceOwnershipStore, canonical_manifest, decode_manifest, fingerprint
 from voice_native_file_observer import observe_live_files
 from voice_security_policy_evidence import SUPERVISOR_BOUND_POLICY_SCHEMA, inspect_security_policy
@@ -50,6 +50,8 @@ def sealed_prepared_handoff(journal: VoiceCutoverJournal, stage: Path) -> dict:
     ) or fingerprint(canonical_manifest(desired)) != record["candidate"][BOUND_FIELD]:
         raise NativeVoiceApplyRouteError("candidate IPFW differs from journal")
     files = observe_live_files(stage / "config.xml", stage / "runtime")
+    if files["runtime"] != record["candidate"][RUNTIME_FIELD]:
+        raise NativeVoiceApplyRouteError("candidate runtime tree differs from journal")
     if files["config"] != record["candidate"]["saved_xml_sha256"]:
         raise NativeVoiceApplyRouteError("candidate Config differs from journal")
     args = stage / "runtime" / "dvtws.args"

@@ -243,6 +243,8 @@ jobs:
         run: python3.13 scripts/test-voice-native-lifecycle-router.py
       - name: Native Voice operator-only PREPARED Apply routing
         run: python3.13 scripts/test-voice-native-apply-route.py
+      - name: Native Voice write-once stage and five-resource PREPARED handoff
+        run: python3.13 scripts/test-voice-native-forward-stage-prepare.py
       - name: Voice non-destructive atomic runtime rollback preflight
         run: sh scripts/test-voice-atomic-rollback-preflight.sh
       - name: Voice IPSET integration with shared production Targets normalizer
