@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Engineering memory index
 
+**Этап 3 · `v0.5.1_164` (12.10.2026).** Исправлена обнаруженная CI `_163` ошибка координации crash-replay: наличие директории current WAL **не доказывает** завершение действия. `voice_native_legacy_five_domain_coordinator.py` теперь при записанном intent вызывает reentrant executor **текущей** стадии IPFW/runtime/Config/marker/process, который повторно сверяет точные previous/current suffix/prefix и безопасно завершает операцию, и лишь затем идёт к следующей стадии. `legacy-files-ready` не переделывается, так как её публикация строго атомарная и её инспектор подтверждает manifest. Таким образом power-cut после IPFW mutation before done не перескакивает к files-ready. Исходный FD9+Config flock не размыкается, двойной запуск процесса запрещён, all stages remain import-only and public GUI/Voice ON blocked. Full-chain CI `_164` pending, PR #328 Draft.
+
+
 **Этап 3 · `v0.5.1_163`:** новый original-FD9 five-domain rollback coordinator исполняет все пять областей старого Telegram PoC c resume только текущего журнала и окончательной независимой проверкой, без final receipt или запуска GUI. [Handoff](START_HERE.md), [план](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
 
 

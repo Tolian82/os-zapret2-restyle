@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**Этап 3 · `v0.5.1_164` (12.10.2026).** Исправлена обнаруженная CI `_163` ошибка координации crash-replay: наличие директории current WAL **не доказывает** завершение действия. `voice_native_legacy_five_domain_coordinator.py` теперь при записанном intent вызывает reentrant executor **текущей** стадии IPFW/runtime/Config/marker/process, который повторно сверяет точные previous/current suffix/prefix и безопасно завершает операцию, и лишь затем идёт к следующей стадии. `legacy-files-ready` не переделывается, так как её публикация строго атомарная и её инспектор подтверждает manifest. Таким образом power-cut после IPFW mutation before done не перескакивает к files-ready. Исходный FD9+Config flock не размыкается, двойной запуск процесса запрещён, all stages remain import-only and public GUI/Voice ON blocked. Full-chain CI `_164` pending, PR #328 Draft.
+
+
 **Этап 3 · `v0.5.1_163`:** завершена интеграция пяти изолированных restorers под single original FD9 + Config inode flock: fixed IPFW, previous runtime/Config/marker, three-role process integrity, step-by-step exact journal prefix after power cut. Следующая веха — самостоятельный durable **five-domain owner receipt** после independent final witness, cold-reboot triage и строгого lifecycle gate, затем реальная forward native миграция/GUI Apply с on-device MEDIA_PASS. До этого PR остаётся Draft.
 
 

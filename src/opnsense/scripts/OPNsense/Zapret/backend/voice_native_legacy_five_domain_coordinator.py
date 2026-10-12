@@ -165,11 +165,13 @@ def recover_legacy_five_domains(
         ),
     )
 
-    # A stage is present BEFORE its mutation is necessarily complete.
-    # Resume exactly that stage. Earlier steps must never be reissued once
-    # a later durable record exists. The process step itself is always
-    # reattested, including on subsequent calls after success.
-    start=min(n,len(STAGES)-1)
+    # A stage directory is a durable INTENT, not proof of completion.
+    # IPFW, runtime, Config, marker and process stages are reentrant and
+    # must reattest their own exact per-stage redo (or finish an interrupted
+    # write) before any newer stage may run. The files-ready image alone is
+    # published atomically and explicitly refuses a duplicate staging call.
+    # Never rewind past the current journal-owned stage.
+    start=(n-1 if n in (1,3,4,5,6) else n)
     process_report=None
     for i in range(start,len(STAGES)):
         held()
