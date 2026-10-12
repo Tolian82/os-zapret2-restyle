@@ -206,6 +206,8 @@ jobs:
         run: python3.13 scripts/test-voice-native-legacy-marker-restore.py
       - name: Restart old three-role Telegram engine exactly once with sealed kernel security and argv
         run: python3.13 scripts/test-voice-native-legacy-process-restart.py
+      - name: Execute original-FD9 five-domain legacy rollback end-to-end with power-cut resume
+        run: python3.13 scripts/test-voice-native-legacy-five-domain-coordinator.py
       - name: Native Voice forward Apply PREPARED schema-4 journal with full rollback witnesses
         run: python3.13 scripts/test-voice-native-forward-prepare.py
       - name: Native Voice forward runtime installation and rollback after power loss

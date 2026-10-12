@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Engineering memory index
 
+**Этап 3 · `v0.5.1_163`:** новый original-FD9 five-domain rollback coordinator исполняет все пять областей старого Telegram PoC c resume только текущего журнала и окончательной независимой проверкой, без final receipt или запуска GUI. [Handoff](START_HERE.md), [план](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
+
+
 **Этап 3 · `v0.5.1_162`:** новый import-only real three-role old process restart с write-once intent и kernel argv/UID/GID attestation завершает подготовку пяти изолированных restorative primitives; общий rollback receipt и native GUI acceptance ещё впереди. [Handoff](START_HERE.md), [completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
 
 

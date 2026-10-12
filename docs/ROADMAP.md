@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**Этап 3 · `v0.5.1_163`:** завершена интеграция пяти изолированных restorers под single original FD9 + Config inode flock: fixed IPFW, previous runtime/Config/marker, three-role process integrity, step-by-step exact journal prefix after power cut. Следующая веха — самостоятельный durable **five-domain owner receipt** после independent final witness, cold-reboot triage и строгого lifecycle gate, затем реальная forward native миграция/GUI Apply с on-device MEDIA_PASS. До этого PR остаётся Draft.
+
+
 **Этап 3 · `v0.5.1_162`:** isolated old PoC reverse executors теперь покрывают IPFW, runtime, Config, marker и *однократный* startup three-role с independent integrity attestation и durable intent, без auto retry при partial start. Дальше приоритет — единый original FD9+Config five-domain coordinator, durable verified whole rollback receipt + reboot reconciliation, затем native forward/GUI Apply и actual Telegram MEDIA_PASS. До этого Voice ON публично закрыт.
 
 
