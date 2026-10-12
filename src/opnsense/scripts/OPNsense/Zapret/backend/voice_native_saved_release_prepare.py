@@ -21,6 +21,9 @@ from voice_release_stage import compile_bundle, file_sha256
 
 FILES = ("voice.conf", "traffic.conf", "metadata.json",
          "profile-plan.json", "capture-plan.json")
+# Actual orchestrator.sh release, AFTER generator_build_args_mapped and
+# voice_handoff_preflight.py. Accept no partial five-file test fixture.
+SEALED_FILES = (*FILES, "dvtws.args", "desired-ipfw.json", "handoff-proof.json")
 # Native IPSET paths are fixed at the installed generator root; staged or
 # simulated previous runtime paths must never alter the compiled argv.
 MANAGED_ACTIVE_ROOT = Path("/usr/local/etc/zapret2/runtime-v2")
@@ -75,7 +78,7 @@ def prepare_saved_release_forward_intent(
     require_lifecycle_owner()
     _locked_config(config_path, config_fd, config_owner)
     _private_dir(release_dir)
-    if set(p.name for p in release_dir.iterdir()) != set(FILES):
+    if set(p.name for p in release_dir.iterdir()) != set(SEALED_FILES):
         raise SavedReleasePrepareError("native Voice release artifacts incomplete or foreign")
     _require_global_on(source_config)
     # Independently compile the same saved GUI fields and shared managed IPSET
@@ -91,12 +94,39 @@ def prepare_saved_release_forward_intent(
             file.read_bytes() != expected[name].encode("utf-8")
         ):
             raise SavedReleasePrepareError("compiled release differs from saved GUI")
+    # The actual release producer writes dvtws.args alongside those five
+    # files. The eventual detached installable runtime MUST carry identical
+    # argv, not a separately fabricated second engine configuration.
+    argv = release_dir / "dvtws.args"
+    native_argv = source_runtime / "dvtws.args"
+    if argv.is_symlink() or not argv.is_file() or (
+        native_argv.is_symlink() or not native_argv.is_file()
+        or argv.read_bytes() != native_argv.read_bytes()
+    ):
+        raise SavedReleasePrepareError("native generator argv differs from install candidate")
     # Existing production handoff binds real generator dvtws.args, ordinary
     # port-extractor output, STUN/Strategies merge and exact scoped IPFW.
     manifest, proof = build_runtime_handoff(
         release_dir, source_runtime / "dvtws.args", ordinary_source,
         tcp_ports, udp_ports, source_config,
     )
+    # The generator also publishes its OWN handoff manifest/proof into the
+    # same candidate folder. Verify those exact objects against the
+    # independently rebuilt handoff, not just a self-consistent pair of
+    # caller-provided files or a five-file synthetic release.
+    for name, rebuilt in (("desired-ipfw.json", manifest),
+                          ("handoff-proof.json", proof)):
+        filename = release_dir / name
+        if filename.is_symlink() or not filename.is_file() or (
+            filename.stat().st_size > 4 * 1048576
+        ):
+            raise SavedReleasePrepareError("missing or unsafe generator handoff seal")
+        try:
+            on_disk = json.loads(filename.read_text(encoding="utf-8"))
+        except (ValueError, UnicodeError) as exc:
+            raise SavedReleasePrepareError("invalid generator handoff JSON") from exc
+        if on_disk != rebuilt:
+            raise SavedReleasePrepareError("production generator handoff differs from candidate")
     desired = decode_manifest(manifest)
     if not proof["enabled_services"] or not desired["tables"] or (
         proof["rule_base"], proof["rule_max"]

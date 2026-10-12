@@ -16,6 +16,7 @@ from voice_native_saved_release_prepare import (
     prepare_saved_release_forward_intent, SavedReleasePrepareError,
 )
 from voice_cutover_guard import check_pending
+from voice_handoff_preflight import build_runtime_handoff, _publish_runtime_handoff
 
 def load(path, name):
     spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / path)
@@ -58,6 +59,14 @@ class SavedReleaseBridgeTests(unittest.TestCase):
             self.ports, bridge.ORDINARY,
         )
         self.tcp_file, self.udp_file = self.ports / "ordinary.tcp", self.ports / "ordinary.udp"
+        # Emulate the exact final orchestrator.sh output, including its
+        # generator argv and two independently verified handoff seals.
+        (self.release / "dvtws.args").write_text(args, encoding="utf-8")
+        manifest, proof = build_runtime_handoff(
+            self.release, self.release / "dvtws.args", self.ordinary,
+            self.tcp_file, self.udp_file, self.xml,
+        )
+        _publish_runtime_handoff(self.release, manifest, proof)
 
     def prepare(self, locked=True):
         fd = os.open(self.previous.live_config, os.O_RDWR)
@@ -128,6 +137,35 @@ class SavedReleaseBridgeTests(unittest.TestCase):
 
     def test_wrong_ordinary_port_extractor_refused_before_journal(self):
         self.tcp_file.write_text("80")
+        with self.assertRaises((RuntimeError, ValueError, OSError)):
+            self.prepare()
+        self.assertIsNone(self.fx.whole.read())
+
+    def test_partial_five_file_release_is_not_a_production_generator_result(self):
+        (self.release / "handoff-proof.json").unlink()
+        with self.assertRaises((RuntimeError, ValueError, OSError)):
+            self.prepare()
+        self.assertIsNone(self.fx.whole.read())
+        self.assertFalse((self.fx.whole.directory / "forward-candidate").exists())
+
+    def test_foreign_generator_manifest_refused_before_seed_or_journal(self):
+        import json
+        file = self.release / "desired-ipfw.json"
+        value = json.loads(file.read_text())
+        value["rule_base"] = 19001
+        file.write_text(json.dumps(value))
+        with self.assertRaises((RuntimeError, ValueError, OSError)):
+            self.prepare()
+        self.assertIsNone(self.fx.whole.read())
+
+    def test_different_runtime_argv_refused_before_stage(self):
+        (self.release / "dvtws.args").write_text("--port=989\\n--name=unrelated\\n")
+        with self.assertRaises((RuntimeError, ValueError, OSError)):
+            self.prepare()
+        self.assertIsNone(self.fx.whole.read())
+
+    def test_extra_foreign_generator_artifact_refused(self):
+        (self.release / "unknown.conf").write_text("malicious")
         with self.assertRaises((RuntimeError, ValueError, OSError)):
             self.prepare()
         self.assertIsNone(self.fx.whole.read())
