@@ -57,6 +57,16 @@ class BootGateTests(unittest.TestCase):
             self.assertEqual("native-ipfw-owned", owned["reason"])
             self.assertIsNone(VoiceOwnershipStore(ipfw).pending())
 
+    def test_orphan_previous_evidence_without_journal_blocks_legacy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            whole, ipfw = self.paths(Path(tmp))
+            whole.mkdir(mode=0o700)
+            (whole / "previous").mkdir(mode=0o700)
+            state=guard.check_pending(whole,ipfw)
+            self.assertEqual("orphan-native-voice-evidence",state["reason"])
+            self.assertFalse(state["safe_to_mutate"])
+            self.assertFalse(ipfw.exists())
+
     def test_each_whole_cutover_phase_preempts_any_other_state(self):
         for phase in ("prepared", "mutating", "committed"):
             with self.subTest(phase=phase), tempfile.TemporaryDirectory() as tmp:

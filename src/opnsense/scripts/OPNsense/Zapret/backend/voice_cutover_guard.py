@@ -51,6 +51,14 @@ def check_pending(whole_root: Path, ipfw_root: Path) -> dict:
                     "state": "blocked", "reason": "whole-runtime-intent",
                     "phase": state, "safe_to_mutate": False,
                 }
+            # A power cut can happen after fsync'd "previous" snapshot
+            # or process policy but BEFORE schema-4 intent.json. The old
+            # wrapper must not restart/overwrite this unowned evidence.
+            if os.listdir(whole_root):
+                return {
+                    "state": "blocked", "reason": "orphan-native-voice-evidence",
+                    "safe_to_mutate": False,
+                }
         if _present(ipfw_root):
             ledger = VoiceOwnershipStore(ipfw_root)
             pending = ledger.pending()
