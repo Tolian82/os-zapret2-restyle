@@ -278,9 +278,10 @@ class LivePreflightTests(unittest.TestCase):
     def test_production_entrypoint_uses_same_existing_lifecycle_lock(self):
         script=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
         self.assertIn("native_voice_live_preflight_service()",script)
+        self.assertIn("native_voice_apply_prepared_service()",script)
         self.assertIn('native-voice-live-preflight)',script)
         self.assertIn(
-            "native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-ipfw-seed",
+            "native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-apply-prepared|native-voice-ipfw-seed",
             script,
         )
         self.assertIn('service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}"',script)

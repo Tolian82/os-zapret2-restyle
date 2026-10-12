@@ -623,6 +623,18 @@ native_voice_candidate_preflight_service()
     "${_native_voice_router_python}" "${_native_voice_router_script}" candidate-preflight
 }
 
+# Owner-only presealed schema-4 forward Apply; NO GUI/configd/boot call.
+native_voice_apply_prepared_service()
+{
+    _voice_python="/usr/local/bin/python3.13"
+    _voice_route="${BACKEND_DIR}/voice_native_apply_route.py"
+    [ -x "${_voice_python}" ] && [ -r "${_voice_route}" ] || {
+        echo "ERROR: native Voice forward router unavailable" >&2
+        return 69
+    }
+    "${_voice_python}" "${_voice_route}" execute-prepared
+}
+
 native_voice_live_preflight_service()
 {
     _native_voice_live_python="/usr/local/bin/python3.13"
@@ -689,6 +701,9 @@ service_dispatch()
             ;;
         native-voice-candidate-preflight)
             native_voice_candidate_preflight_service
+            ;;
+        native-voice-apply-prepared)
+            native_voice_apply_prepared_service
             ;;
         native-voice-ipfw-seed)
             native_voice_ipfw_dispatch seed
@@ -810,7 +825,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-apply-prepared|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
