@@ -23,6 +23,14 @@ namespace OPNsense\Core {
         public function lock(): void { $this->locks++; }
         public function unlock(): void { $this->locks--; }
         public function save($audit = []): void { $this->saves++; }
+        // Production OPNsense Config::__toString() returns its independent
+        // full XML serialization; this stub must expose that same read-only
+        // API without simulating any persistence.
+        public function __toString(): string {
+            return '<?xml version="1.0" encoding="utf-8"?>' .
+                '<opnsense><system><hostname>old</hostname></system>' .
+                '<OPNsense><Zapret><voice/></Zapret></OPNsense></opnsense>';
+        }
     }
     class Backend {
         public static bool $busy = false;
@@ -117,7 +125,10 @@ namespace {
     $api->request = new FakeRequest('POST', $candidate);
     $check = $api->validateAction();
     equal('validated', $check['result'], 'fresh Voice form should pass preflight');
-    equal('syntax-only', $check['scope'], 'preflight must never report applied');
+    equal('detached-xml-preview-only', $check['scope'], 'preview must never report applied');
+    equal(64, strlen($check['candidate_xml_sha256']), 'candidate XML witness missing');
+    equal(false, $check['applied'], 'validated XML candidate cannot report Apply');
+    equal(0, Config::getInstance()->saves, 'validation cannot persist native Voice');
     equal(0, Config::getInstance()->locks, 'successful validate must unlock config');
 
     // Same saved model, different PHP array field ordering: stable digest.
@@ -157,8 +168,12 @@ namespace {
     $candidate['voice']['telegram']['args'] =
         "--filter-udp=*\n--filter-l7=stun\n--payload=stun";
     $api->request = new FakeRequest('POST', $candidate);
-    equal('validated', $api->validateAction()['result'],
-        'valid enabled Telegram can be syntax-checked without saving');
+    $onPreview = $api->validateAction();
+    equal('validated', $onPreview['result'],
+        'valid enabled Telegram can produce isolated XML without saving');
+    equal(64, strlen($onPreview['candidate_xml_sha256']),
+        'ON XML preview must return a deterministic digest');
+    equal(false, $onPreview['applied'], 'ON preview is not a live Apply');
     equal('0', Zapret::$nodes['voice']['telegram']['enabled'],
         'read-only validation must not mutate persisted Voice checkbox');
     equal(0, Config::getInstance()->locks, 'all paths must release config lock');
