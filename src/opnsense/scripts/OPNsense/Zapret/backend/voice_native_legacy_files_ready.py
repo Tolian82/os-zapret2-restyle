@@ -121,11 +121,15 @@ def _read_ready(root, plan):
 
 def inspect_legacy_files_ready(root, *, allow_runtime_restore=False,
                                allow_config_restore=False,
-                               allow_marker_restore=False):
+                               allow_marker_restore=False,
+                               allow_process_restart=False):
     """Disk-only reboot triage; cannot authorize installation or Voice ON."""
     root = Path(root)
     _private_dir(root)
     expected = set(EXPECTED_ROOT) | {FILES_NAME}
+    if allow_process_restart:
+        _private_dir(root / "legacy-process-restart")
+        expected.add("legacy-process-restart")
     if allow_marker_restore:
         _private_dir(root / "legacy-marker-restore")
         expected.add("legacy-marker-restore")
@@ -143,6 +147,7 @@ def inspect_legacy_files_ready(root, *, allow_runtime_restore=False,
         allow_runtime_restore=allow_runtime_restore,
         allow_config_restore=allow_config_restore,
         allow_marker_restore=allow_marker_restore,
+        allow_process_restart=allow_process_restart,
     )
     record = _read_ready(root, plan)
     return {

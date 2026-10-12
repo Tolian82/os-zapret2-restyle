@@ -156,13 +156,17 @@ def inspect_legacy_reverse_wal(root, *, allow_ipfw_replay=False,
                                allow_files_stage=None,
                                allow_runtime_restore=False,
                                allow_config_restore=False,
-                               allow_marker_restore=False):
+                               allow_marker_restore=False,
+                               allow_process_restart=False):
     """Read-only reboot triage, recompute source bindings; no kernel trust."""
     root = Path(root)
     _private_dir(root)
     expected = {NAME, PLAN_NAME, WAL_NAME}
     if allow_ipfw_replay:
         expected.add("legacy-ipfw-replay")
+    if allow_process_restart:
+        _private_dir(root / "legacy-process-restart")
+        expected.add("legacy-process-restart")
     if allow_marker_restore:
         _private_dir(root / "legacy-marker-restore")
         expected.add("legacy-marker-restore")

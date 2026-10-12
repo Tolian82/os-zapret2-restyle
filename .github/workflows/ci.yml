@@ -204,6 +204,8 @@ jobs:
         run: python3.13 scripts/test-voice-native-legacy-config-restore.py
       - name: Recover old Telegram PoC marker with atomic no-replace hardlink and crash replay
         run: python3.13 scripts/test-voice-native-legacy-marker-restore.py
+      - name: Restart old three-role Telegram engine exactly once with sealed kernel security and argv
+        run: python3.13 scripts/test-voice-native-legacy-process-restart.py
       - name: Native Voice forward Apply PREPARED schema-4 journal with full rollback witnesses
         run: python3.13 scripts/test-voice-native-forward-prepare.py
       - name: Native Voice forward runtime installation and rollback after power loss

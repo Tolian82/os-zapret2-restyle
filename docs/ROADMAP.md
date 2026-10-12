@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**Этап 3 · `v0.5.1_162`:** isolated old PoC reverse executors теперь покрывают IPFW, runtime, Config, marker и *однократный* startup three-role с independent integrity attestation и durable intent, без auto retry при partial start. Дальше приоритет — единый original FD9+Config five-domain coordinator, durable verified whole rollback receipt + reboot reconciliation, затем native forward/GUI Apply и actual Telegram MEDIA_PASS. До этого Voice ON публично закрыт.
+
+
 **Этап 3 · `v0.5.1_161`:** sealed IPFW, runtime, original Config и точный transient legacy marker могут быть восстановлены отдельными import-only executors, каждый с durable redo и fail-closed crash semantics. Следующий шаг — verified process-security/argv-bound restart old engine+daemon+monitor под единой five-domain MUTATING coordinator, post-reboot full receipt, затем реальный PoC→native forward cutover, GUI Apply и MEDIA_PASS. Отдельный marker сам по себе НЕ разрешает Voice ON.
 
 
