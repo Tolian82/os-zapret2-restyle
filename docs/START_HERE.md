@@ -56,7 +56,7 @@
 
 
 **Current handoff identity:** `v0.5.1_164`
-`PLUGIN_REVISION=164` — unpublished native Voice candidate; PR #328 remains Draft.
+`PLUGIN_REVISION=167` — unpublished native Voice candidate; PR #328 remains Draft.
 
 **Этап 3 · `v0.5.1_147` (12.10.2026).** Исправлен несовпадавший с native Apply read-only GUI preview: существующий Telegram PoC fail-closed marker/runtime guard из `_146` вынесен в **один** production-модуль `voice_native_legacy_poc_guard.py`, используемый **обоими** маршрутами `voice_native_prepare_route.py` и `voice_native_draft_preview_route.py` под исходными FD9 + оригинальным Config inode flock. Наличие marker (включая пустой), runtime `enabled`, неверное/меняющееся состояние и symlink запрещают GUI preview до показа готовности; explicit disabled и отсутствие marker пропускают только дальнейшие обычные проверки. Контроль повторяется до/после генерации read-only preview, без Config/IPFW/runtime/engine writes, миграции PoC или публичного ON. В отдельном CI тесте показаны отрицательные сценарии и отсутствие staging/изменения Config. Отставшая строка `package candidate` в `PROJECT_STATE.md` и release metadata обновлена до `_147`: предыдущий `_146` Project CI упал на буквальном `_146` identity-contract, тогда как `_146` Voice CI/FreeBSD15 прошли. **Следом:** безопасная квалифицированная PoC→native миграция с удержанием previous evidence/rollback внутри original-FD9 operator continuous Apply, затем boot/runtime-failure и owner-live FreeBSD/MEDIA_PASS. Пакет неопубликован, PR Draft, exact _147 CI pending.
 

@@ -16,6 +16,7 @@ sys.path.insert(0,str(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"))
 import voice_native_legacy_five_domain_coordinator as whole
 from voice_native_legacy_reverse_wal import inspect_legacy_reverse_wal
 from voice_cutover_guard import check_pending
+from voice_native_legacy_boot_review import inspect_legacy_boot_disk
 from voice_native_legacy_whole_receipt import (
     receipt_directory, inspect_legacy_whole_receipt, LegacyWholeReceiptError,
 )
@@ -208,6 +209,54 @@ class LegacySingleLockWholeRollbackTests(unittest.TestCase):
         source.write_bytes(source.read_bytes().replace(b"a",b"f",1))
         with self.assertRaises((OSError,RuntimeError,ValueError)):
             inspect_legacy_whole_receipt(self.root)
+
+    def inspect_disk(self, *, locked=True):
+        fd=os.open(self.live.config,os.O_RDWR)
+        try:
+            if locked:
+                fcntl.flock(fd,fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return inspect_legacy_boot_disk(
+                root=self.root, config_path=self.live.config,
+                config_fd=fd, config_owner=(os.geteuid(),os.getegid()),
+                require_lifecycle_owner=lambda:self.live.lock_calls.append("FD9"),
+            )
+        finally:
+            os.close(fd)
+
+    def test_legacy_boot_disk_prefix_receipt_and_no_live_claim(self):
+        pre=self.inspect_disk()
+        self.assertEqual("legacy-five-domain-incomplete-manual-review",pre["state"])
+        self.assertEqual(0,pre["stage_directories_present"])
+        self.assertFalse(pre["safe_to_start"])
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            self.inspect_disk(locked=False)
+        self.call()
+        post=self.inspect_disk()
+        self.assertEqual("legacy-whole-disk-valid-live-boot-recheck-required",post["state"])
+        for key in ("safe_to_mutate","safe_to_start","safe_to_enable_voice",
+                    "public_voice_apply","boot_recovery_validated","media_pass"):
+            self.assertFalse(post[key])
+        self.assertEqual(1,self.t.calls)
+
+    def test_old_boot_disk_refuses_missing_stage_root_and_corrupted_receipt(self):
+        self.call()
+        receipt=receipt_directory(self.root)
+        with patch("voice_native_legacy_boot_review.inspect_legacy_whole_receipt",
+                   side_effect=RuntimeError("foreign receipt")):
+            with self.assertRaises(RuntimeError):
+                self.inspect_disk()
+        # No implicit recovery or a process re-launch after review errors.
+        self.assertTrue(receipt.is_dir())
+        self.assertEqual(1,self.t.calls)
+
+    def test_legacy_boot_review_service_stays_read_only_under_fd9(self):
+        service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
+        self.assertIn("native-voice-legacy-boot-review)", service)
+        self.assertIn("native_voice_legacy_boot_review_service", service)
+        self.assertIn("voice_native_legacy_boot_review.py", service)
+        top=service.split('case "${1:-}" in')[-1]
+        self.assertIn("|native-voice-legacy-boot-review|", top)
+        self.assertNotIn("native-voice-legacy-boot-review|runtime-failure",top)
 
     def test_no_public_entrypoint_or_false_media_pass(self):
         service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
