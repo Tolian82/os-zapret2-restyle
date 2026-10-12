@@ -8,7 +8,9 @@ schema-4 PREPARED writer has completed. No process/kernel/active runtime
 changes are authorized. Detached source input uses fixed root-only paths:
 the normal orchestrator's voice-native-candidate (8 exact files), shared
 managed IPSET and ordinary Strategies plus an isolated installable runtime.
-The producer of that detached input is still an explicitly open Stage-3 task.
+A second private service command composes the existing release producer and
+the original one-lock PREPARED coordinator without releasing FD9 or Config.
+The source remains operator supplied, not yet GUI-generated.
 """
 from __future__ import annotations
 
@@ -30,9 +32,12 @@ from voice_native_process_probe import FreeBSDVoiceProcessProbe
 from voice_freebsd_process_security import FreeBSDProcessSecurityReader, FIELDS
 from voice_native_recovery_quiescence import EXPECTED_SCRIPTS, PIDFILES, _locked_config
 from voice_native_prepare_one_lock import prepare_native_voice_one_lock
+from voice_native_operator_input_stage import stage_native_operator_input
 import voice_ipfw_runtime as native
 
 INPUT = Path("/var/db/zapret2/voice-operator-input")
+BUILD_INPUT = Path("/var/db/zapret2/voice-build-input")
+BUILD_ENTRIES = frozenset(("config.xml", "release"))
 FILES = ("config.xml", "user-traffic.conf", "tcp-ports.txt", "udp-ports.txt")
 DIRS = ("runtime", "voice-native-candidate", "managed")
 _ALLOWED_WAN = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,63}$")
@@ -82,28 +87,59 @@ def _expected_credentials() -> dict[str, dict[str, int]]:
     }
 
 
-def prepare_operator_prebuilt(physical_wan: str, divert_port: int) -> dict:
+def prepare_operator_prebuilt(
+    physical_wan: str, divert_port: int, *, from_release: bool = False,
+) -> dict:
     if not isinstance(physical_wan, str) or not _ALLOWED_WAN.fullmatch(physical_wan) or (
         type(divert_port) is not int or not 1 <= divert_port <= 65535
     ):
         raise NativePrepareRouteError("invalid resolved WAN or divert port")
     native.require_native_lock()
-    paths = _fixed_input()
-    # Do not create the ledger/whole directories for invalid operator input.
-    for directory in (native.WHOLE.parent, native.WHOLE, native.LEDGER):
-        _ensure_private_dir(directory)
-    journal = VoiceCutoverJournal(native.WHOLE)
-    ledger = VoiceOwnershipStore(native.LEDGER)
-    probe = FreeBSDVoiceProcessProbe(
-        EXPECTED_SCRIPTS, PIDFILES, native.WHOLE / "previous",
-    )
-    security = FreeBSDProcessSecurityReader(
-        EXPECTED_SCRIPTS, SYSTEM_PATHS, _expected_credentials(), probe,
-    )
+    # Existing operator route remains unchanged. The NEW fixed build input
+    # consumes only a complete previously orchestrated detached release; no
+    # GUI or CLI-controlled path may be passed in.
+    if from_release:
+        _private_dir(BUILD_INPUT)
+        if set(os.listdir(BUILD_INPUT)) != BUILD_ENTRIES:
+            raise NativePrepareRouteError("untrusted detached build input layout")
+        _ensure_private_dir(native.WHOLE.parent)
+    else:
+        paths = _fixed_input()
+        # Preserve the earlier fail-before-journal behavior for bad input.
+        for directory in (native.WHOLE.parent, native.WHOLE, native.LEDGER):
+            _ensure_private_dir(directory)
     fd = os.open(native.CONFIG, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         owner = (os.geteuid(), os.getegid())
+        native.require_native_lock()
+        _locked_config(native.CONFIG, fd, owner)
+        if from_release:
+            result = stage_native_operator_input(
+                config_path=native.CONFIG,
+                source_config=BUILD_INPUT / "config.xml",
+                staged_release=BUILD_INPUT / "release",
+                destination=INPUT, physical_wan=physical_wan,
+                divert_port=divert_port, config_fd=fd,
+                config_owner=owner,
+                require_lifecycle_owner=native.require_native_lock,
+            )
+            if result.get("state") != "native-voice-detached-operator-input-published" or (
+                result.get("safe_to_enable_voice") is not False
+                or result.get("public_voice_apply") is not False
+            ):
+                raise NativePrepareRouteError("native detached release not sealed")
+            paths = _fixed_input()
+            for directory in (native.WHOLE, native.LEDGER):
+                _ensure_private_dir(directory)
+        journal = VoiceCutoverJournal(native.WHOLE)
+        ledger = VoiceOwnershipStore(native.LEDGER)
+        probe = FreeBSDVoiceProcessProbe(
+            EXPECTED_SCRIPTS, PIDFILES, native.WHOLE / "previous",
+        )
+        security = FreeBSDProcessSecurityReader(
+            EXPECTED_SCRIPTS, SYSTEM_PATHS, _expected_credentials(), probe,
+        )
         native.require_native_lock()
         _locked_config(native.CONFIG, fd, owner)
         result = prepare_native_voice_one_lock(
@@ -133,14 +169,16 @@ def prepare_operator_prebuilt(physical_wan: str, divert_port: int) -> dict:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 3 or argv[0] != "prepare-prebuilt":
-        print("usage: voice_native_prepare_route.py prepare-prebuilt RESOLVED_WAN DIVERT_PORT",
+    if len(argv) != 3 or argv[0] not in ("prepare-prebuilt", "prepare-from-release"):
+        print("usage: voice_native_prepare_route.py {prepare-prebuilt|prepare-from-release} RESOLVED_WAN DIVERT_PORT",
               file=sys.stderr)
         return 64
     if not argv[2].isdecimal():
         return 64
     try:
-        report = prepare_operator_prebuilt(argv[1], int(argv[2]))
+        report = prepare_operator_prebuilt(
+            argv[1], int(argv[2]), from_release=argv[0] == "prepare-from-release",
+        )
         if report["state"] != "native-voice-original-lock-prepared":
             raise NativePrepareRouteError("prepared state not verified")
         print("native-voice-prepared=sealed")

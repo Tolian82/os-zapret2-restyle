@@ -1,6 +1,6 @@
 # os-zapret2-restyle — Master development plan
 
-**Этап 3 · актуально `v0.5.1_135`.** Detached input producer теперь сохраняет отдельный `source_config` XML, не ранее работавший live `/conf/config.xml`; под original FD9 и Config flock выполняется реальная проверка компилятора до/после приватного stage. Прежние 5-domain PREPARED / recovery остаются. Открыто: доверенный GUI candidate source и generated zapret.conf, service build owner, guarded Apply, миграция PoC, boot/failure, live MEDIA_PASS. Exact CI pending; package not published.
+**Этап 3 · текущая ревизия `v0.5.1_136`.** Operator-only `native-voice-prepare-release` соединяет фиксированный root-private готовый native release с тем же schema-4 PREPARED под одним оригинальным FD9 и одним Config inode flock. Это реальный service dispatch, но не публичный GUI/configd и не автоматический генератор saved candidate. Следующий шаг — сохранить и сгенерировать кандидат средствами OPNsense, guarded Apply, migrate PoC, boot/runtime failure, owner-live/MEDIA_PASS. Нет опубликованного пакета; PR Draft, exact CI pending.
 
 **Текущий Stage 3 · `v0.5.1_119`:** появился продукционный import-only snapshot предыдущих Config/runtime/трёх процессов/security policy/IPFW owner в один NativePreviousObserver. Offline один-FD9/Config-flock PREPARED и restore image — Voice CI 82 PASS. Не выполнены начальный audited IPFW seed/migration, service/configd Apply, GUI ON/OFF, boot, FreeBSD owner-live и MEDIA_PASS; PR Draft, пакет не опубликован.
 

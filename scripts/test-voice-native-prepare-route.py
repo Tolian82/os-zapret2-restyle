@@ -29,9 +29,15 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         self.live.mkdir(mode=0o700)
         self.whole=base/"voice-cutover"
         self.ledger=base/"voice-ipfw"
+        self.build=base/"voice-build-input"
+        self.build.mkdir(mode=0o700)
+        (self.build/"config.xml").write_text("<opnsense/>")
+        (self.build/"config.xml").chmod(0o600)
+        (self.build/"release").mkdir(mode=0o700)
         self.calls=[]
         self.patches=[
             patch.object(route,"INPUT",self.input),
+            patch.object(route,"BUILD_INPUT",self.build),
             patch.object(route.native,"CONFIG",self.config),
             patch.object(route.native,"ACTIVE_ROOT",self.live),
             patch.object(route.native,"WHOLE",self.whole),
@@ -73,6 +79,43 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         self.assertTrue(self.whole.is_dir())
         self.assertTrue(self.ledger.is_dir())
         self.assertEqual(self.config.read_text(),"<opnsense/>")
+
+    def test_fixed_release_and_prepared_share_original_fd9_and_config_flock(self):
+        observed=[]
+        def stage(**kwargs):
+            _locked_config(self.config,kwargs["config_fd"],kwargs["config_owner"])
+            self.assertEqual(self.build/"config.xml",kwargs["source_config"])
+            self.assertEqual(self.build/"release",kwargs["staged_release"])
+            self.assertEqual(self.input,kwargs["destination"])
+            self.assertEqual("vtnet1",kwargs["physical_wan"])
+            self.assertEqual(989,kwargs["divert_port"])
+            self.assertTrue(self.input.is_dir())
+            self.assertEqual([],list(self.input.iterdir()))
+            observed.append(("stage",os.fstat(kwargs["config_fd"]).st_ino))
+            self.input_files()
+            return {"state":"native-voice-detached-operator-input-published",
+                    "safe_to_enable_voice":False,"public_voice_apply":False}
+        def prepared(**kwargs):
+            _locked_config(self.config,kwargs["config_fd"],kwargs["config_owner"])
+            observed.append(("PREPARED",os.fstat(kwargs["config_fd"]).st_ino))
+            self.assertEqual(self.input/"config.xml",kwargs["source_config"])
+            return {"state":"native-voice-original-lock-prepared",
+                    "safe_to_enable_voice":False,"public_voice_apply":False}
+        with patch.object(route,"stage_native_operator_input",side_effect=stage), \
+             patch.object(route,"prepare_native_voice_one_lock",side_effect=prepared):
+            result=route.prepare_operator_prebuilt("vtnet1",989,from_release=True)
+        self.assertEqual("native-voice-original-lock-prepared",result["state"])
+        self.assertEqual([("stage",self.config.stat().st_ino),
+                          ("PREPARED",self.config.stat().st_ino)],observed)
+        self.assertEqual("<opnsense/>",self.config.read_text())
+
+    def test_unknown_fixed_release_member_is_refused_before_config_open(self):
+        (self.build/"foreign").write_text("foreign")
+        with self.assertRaises((OSError,ValueError,RuntimeError)):
+            route.prepare_operator_prebuilt("vtnet1",989,from_release=True)
+        self.assertFalse(self.whole.exists())
+        self.assertFalse(self.ledger.exists())
+        self.assertFalse(self.input.exists())
 
     def test_incomplete_source_refuses_before_ledger_or_original_config_open(self):
         self.input_files()
@@ -117,10 +160,13 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         configd=(ROOT/"src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text()
         self.assertIn("native_voice_prepare_prebuilt_service()",service)
         self.assertIn("native-voice-prepare-prebuilt)",service)
+        self.assertIn("native-voice-prepare-release)",service)
+        self.assertIn("native_voice_prepare_prebuilt_service prepare-from-release",service)
         locked=service.split("case \"${1:-}\" in",1)[-1]
         self.assertIn("native-voice-prepare-prebuilt|native-voice-apply-prepared",locked)
         self.assertNotIn("[voice_prepare_prebuilt]",configd)
         self.assertNotIn("native-voice-prepare-prebuilt",configd)
+        self.assertNotIn("native-voice-prepare-release",configd)
 
 
 if __name__=="__main__":
