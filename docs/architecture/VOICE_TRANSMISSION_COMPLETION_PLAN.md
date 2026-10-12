@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**Этап 3 · `v0.5.1_154`:** `voice_native_legacy_reverse_wal.py` под единым original FD9+Config flock создаёт non-authorizing reverse PREPARED WAL только после проверяемого clean IPFW interval+tables, отсутствия старого PoC marker/ON-state, трёх остановленных kernel process roles и native ledger owner/pending. Строгий re-inspect `legacy-previous` и `legacy-restore-plan`, write-once/fsync/rename WAL, repeat source/kernel/process/ledger attestations, partial publication retained and boot-blocked. Нет восстановления таблиц/правил, marker, Config/runtime или процессов, нет CLI/GUI action. Продолжение: per-action WAL phases, guarded full five-resource reverse executor и доказательство power-cut recovery; затем native forward cutover + owner-live boot/media test.
+
+
 **Этап 3 · `v0.5.1_153`:** import-only `voice_native_legacy_restore_plan.py` строит validated reverse commands старого IPFW (create `zapret2_tgvoice` addr table, add canonical CIDR, then exact 19000+ ordinary divert rules), воспроизводимые из sealed previous schema2 и проверяемые вместе с runtime dvtws.args/managed IPSET, old state и marker. `prepare_legacy_restore_plan` записывает согласованный bounded plan под original FD9+Config flock (temp+fsync+rename); `inspect_legacy_restore_plan` детерминированно пересчитывает и отвергает чужие/изменённые свидетельства. Нет subprocess/ACL bypass, нет live marker/IPFW mutation, и прежний owner не присваивается native ledger. Следующие шаги: durable undo boundary → чистое IPFW restoration с проверкой отсутствия чужого/конкурирующего owner → previous marker/process/Config restoration → единый PoC→native guarded rollback, reboot UAT, MEDIA_PASS. `_152` CI PASS, `_153` pending.
 
 

@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Engineering memory index
 
+**Этап 3 · `v0.5.1_154`:** immutable legacy previous + reverse plan теперь дополняет внутренний pre-mutation WAL admission с подтверждённой тишиной процессов/IPFW и original locks. Обратные команды всё ещё не исполняются. [Handoff](START_HERE.md), [план](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
+
+
 **Этап 3 · `v0.5.1_153`:** закрытый, non-executable, durable legacy reverse plan под original FD9/Config flock проверяет старый marker, IPv4 IPSET, WAN/divert port и exact rule 19000. [Handoff](START_HERE.md), [план завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). Реальные rollback/voice media/UI ON остаются открыты.
 
 

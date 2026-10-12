@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**Этап 3 · `v0.5.1_154`:** добавлена блокировочная, неизменяющая систему admission-подготовка обратной WAL из двух прежних immutable PoC seals. Обязательные критерии: old marker/ON-state отсутствуют, все три процесса остановлены, 19000..19010 + старые/native таблицы пусты, native owner/pending отсутствуют; отдельный fsync PREPARED и fail-closed reboot. Далее — durable per-action redo/undo и verified legacy IPFW/marker/Config/process restoration, rollback при сбое питания и native live MEDIA_PASS.
+
+
 **Этап 3 · `v0.5.1_153`:** завершён изолированный deterministic reverse-plan builder старого Telegram PoC: точные допустимые argv старой `zapret2_tgvoice` таблицы, адресов и правил, ранее проверенный marker. План может быть write-once sealed под original FD9/Config flock, но не выполняется. Следом реализовать durable WAL + безопасные reverse operations и объединить с прежним пятиресурсным restore, защитой boot и публичным native GUI ON после owner-live приемки.
 
 
