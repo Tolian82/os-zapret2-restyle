@@ -20,7 +20,15 @@ from voice_native_recovery_quiescence import _locked_config
 from voice_native_legacy_five_domain_coordinator import FIRST, STAGES, _prefix
 from voice_native_legacy_whole_receipt import (
     inspect_legacy_whole_receipt, receipt_directory,
+    reconcile_legacy_whole_receipt_live,
 )
+from voice_native_legacy_previous_seal import NAME
+from voice_native_process_probe import FreeBSDVoiceProcessProbe
+from voice_native_recovery_quiescence import EXPECTED_SCRIPTS, PIDFILES
+from voice_freebsd_kernel_argv import FreeBSDKernelArgvReader
+from voice_freebsd_process_security import FreeBSDProcessSecurityReader
+from voice_security_policy_evidence import inspect_security_policy
+from voice_ipfw_adapter import FreeBSDIPFWAdapter
 import voice_ipfw_runtime as native
 
 
@@ -93,8 +101,52 @@ def inspect_legacy_boot_disk(*, root, config_path, config_fd, config_owner,
     }
 
 
+def inspect_legacy_boot_live(*, root, config_path, config_fd, config_owner,
+                             active_runtime, marker_path, ledger_root,
+                             process_probe, readonly_ipfw, security_reader,
+                             argv_reader, require_lifecycle_owner):
+    """Read-only owner-live reattestation; only terminal sealed process intents.
+
+    The existing imported process verifier cannot attempt startup because
+    inspect_legacy_whole_receipt requires the FINAL process verified record
+    inside the exact complete journal tree, and the caller retains FD9 and
+    Config flock. No synthetic PID replacement, process restart, or replay.
+    """
+    disk = inspect_legacy_boot_disk(
+        root=root, config_path=config_path, config_fd=config_fd,
+        config_owner=config_owner,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    if disk["state"] != "legacy-whole-disk-valid-live-boot-recheck-required":
+        raise LegacyBootReviewError("no terminal old five-domain receipt to reattest")
+    result = reconcile_legacy_whole_receipt_live(
+        root=root, config_path=config_path, config_fd=config_fd,
+        config_owner=config_owner, active_runtime=active_runtime,
+        marker_path=marker_path, ledger_root=ledger_root,
+        process_probe=process_probe, readonly_ipfw=readonly_ipfw,
+        security_reader=security_reader, argv_reader=argv_reader,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    if result["state"] != "legacy-whole-receipt-live-reconciled-boot-uat-pending":
+        raise LegacyBootReviewError("old live witness was not independently bound")
+    require_lifecycle_owner()
+    _locked_config(Path(config_path), config_fd, config_owner)
+    if inspect_legacy_boot_disk(
+        root=root, config_path=config_path, config_fd=config_fd,
+        config_owner=config_owner,
+        require_lifecycle_owner=require_lifecycle_owner,
+    ) != disk:
+        raise LegacyBootReviewError("old receipt changed during live witness")
+    return {
+        "state": "legacy-five-domains-live-observed-no-boot-acceptance",
+        "safe_to_mutate": False, "safe_to_start": False,
+        "safe_to_enable_voice": False, "public_voice_apply": False,
+        "boot_recovery_validated": False, "media_pass": False,
+    }
+
+
 def main(argv):
-    if argv != ["inspect"]:
+    if argv not in (["inspect"], ["inspect-live"]):
         return 64
     fd = None
     try:
@@ -102,10 +154,33 @@ def main(argv):
         fd = os.open(native.CONFIG, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
         _pinned_regular(native.CONFIG, fd, owner=(0,0))
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        report = inspect_legacy_boot_disk(
-            root=native.WHOLE, config_path=native.CONFIG, config_fd=fd,
-            config_owner=(0,0), require_lifecycle_owner=native.require_native_lock,
-        )
+        if argv == ["inspect"]:
+            report = inspect_legacy_boot_disk(
+                root=native.WHOLE, config_path=native.CONFIG, config_fd=fd,
+                config_owner=(0,0), require_lifecycle_owner=native.require_native_lock,
+            )
+        else:
+            root = native.WHOLE
+            old = root / NAME / "previous"
+            probe = FreeBSDVoiceProcessProbe(EXPECTED_SCRIPTS, PIDFILES, old)
+            policy = inspect_security_policy(
+                root / NAME / "process-security-policy", old,
+                root / NAME / "process-evidence",
+                expected_scripts=EXPECTED_SCRIPTS,
+            )
+            security = FreeBSDProcessSecurityReader(
+                EXPECTED_SCRIPTS, policy["policy"]["images"],
+                policy["policy"]["credentials"], probe,
+            )
+            argv_reader = FreeBSDKernelArgvReader(EXPECTED_SCRIPTS, probe)
+            report = inspect_legacy_boot_live(
+                root=root, config_path=native.CONFIG, config_fd=fd,
+                config_owner=(0,0), active_runtime=native.ACTIVE_ROOT,
+                marker_path=native.LEGACY_MARKER, ledger_root=native.LEDGER,
+                process_probe=probe, readonly_ipfw=FreeBSDIPFWAdapter(19000,19010),
+                security_reader=security, argv_reader=argv_reader,
+                require_lifecycle_owner=native.require_native_lock,
+            )
         print("legacy-voice-boot-review="+json.dumps(
             report, sort_keys=True, separators=(",", ":"),
         ))

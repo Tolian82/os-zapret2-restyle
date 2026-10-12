@@ -16,7 +16,7 @@ sys.path.insert(0,str(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"))
 import voice_native_legacy_five_domain_coordinator as whole
 from voice_native_legacy_reverse_wal import inspect_legacy_reverse_wal
 from voice_cutover_guard import check_pending
-from voice_native_legacy_boot_review import inspect_legacy_boot_disk
+from voice_native_legacy_boot_review import inspect_legacy_boot_disk, inspect_legacy_boot_live
 from voice_native_legacy_whole_receipt import (
     receipt_directory, inspect_legacy_whole_receipt, LegacyWholeReceiptError,
 )
@@ -252,11 +252,62 @@ class LegacySingleLockWholeRollbackTests(unittest.TestCase):
     def test_legacy_boot_review_service_stays_read_only_under_fd9(self):
         service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
         self.assertIn("native-voice-legacy-boot-review)", service)
+        self.assertIn("native-voice-legacy-boot-live-review)", service)
+        self.assertIn("native_voice_legacy_boot_live_review_service", service)
         self.assertIn("native_voice_legacy_boot_review_service", service)
         self.assertIn("voice_native_legacy_boot_review.py", service)
         top=service.split('case "${1:-}" in')[-1]
         self.assertIn("|native-voice-legacy-boot-review|", top)
+        self.assertIn("|native-voice-legacy-boot-live-review|", top)
         self.assertNotIn("native-voice-legacy-boot-review|runtime-failure",top)
+
+    def test_sealed_old_receipt_live_recheck_does_not_restart_or_touch_ipfw(self):
+        self.call()
+        before=list(self.kernel.writes)
+        fd=os.open(self.live.config,os.O_RDWR)
+        try:
+            fcntl.flock(fd,fcntl.LOCK_EX | fcntl.LOCK_NB)
+            args=dict(
+                root=self.root, config_path=self.live.config,
+                config_fd=fd, config_owner=(os.geteuid(),os.getegid()),
+                active_runtime=self.live.runtime, marker_path=self.marker,
+                ledger_root=self.live.ledger, process_probe=self.t.probe,
+                readonly_ipfw=self.ipfw.readonly, security_reader=self.t.security,
+                argv_reader=self.t.argv,
+                require_lifecycle_owner=lambda:self.live.lock_calls.append("FD9"),
+            )
+            state=inspect_legacy_boot_live(**args)
+            self.assertEqual("legacy-five-domains-live-observed-no-boot-acceptance",
+                             state["state"])
+            for name in ("safe_to_mutate","safe_to_start","safe_to_enable_voice",
+                         "public_voice_apply","boot_recovery_validated","media_pass"):
+                self.assertFalse(state[name])
+            self.assertEqual(1,self.t.calls)
+            self.assertEqual(before,self.kernel.writes)
+            self.kernel.rules[19010]=["allow","ip","from","any","to","any"]
+            with self.assertRaises((OSError,RuntimeError,ValueError)):
+                inspect_legacy_boot_live(**args)
+        finally:
+            os.close(fd)
+        self.assertEqual(1,self.t.calls)
+
+    def test_old_live_review_does_not_start_when_receipt_absent(self):
+        fd=os.open(self.live.config,os.O_RDWR)
+        try:
+            fcntl.flock(fd,fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaises((OSError,RuntimeError,ValueError)):
+                inspect_legacy_boot_live(
+                    root=self.root,config_path=self.live.config,config_fd=fd,
+                    config_owner=(os.geteuid(),os.getegid()),
+                    active_runtime=self.live.runtime,marker_path=self.marker,
+                    ledger_root=self.live.ledger,process_probe=self.t.probe,
+                    readonly_ipfw=self.ipfw.readonly,security_reader=self.t.security,
+                    argv_reader=self.t.argv,require_lifecycle_owner=lambda:None,
+                )
+            self.assertEqual(0,self.t.calls)
+            self.assertEqual([],self.kernel.writes)
+        finally:
+            os.close(fd)
 
     def test_no_public_entrypoint_or_false_media_pass(self):
         service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
