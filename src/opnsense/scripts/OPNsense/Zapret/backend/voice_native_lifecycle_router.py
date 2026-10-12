@@ -212,9 +212,34 @@ def inspect_candidate(config_path: Path, whole_root: Path, ledger_root: Path,
     }
 
 
+def check_legacy_poc_compatibility(config_path: Path, whole_root: Path,
+                                   ledger_root: Path, *, config_fd: int,
+                                   config_owner: tuple[int, int],
+                                   require_lifecycle_owner) -> None:
+    """Retire competing legacy mutations as soon as ANY native Voice is saved.
+
+    Old configurations without Voice stay compatible. This check takes place
+    under the already-held ordinary FD9 and the same locked Config inode,
+    BEFORE old Telegram PoC marker, engine, or IPFW actions. It never changes
+    the saved choice or performs migration. A pending whole/IPFW journal,
+    corrupt Config, or a new ON request always refuses.
+    """
+    status = inspect_lifecycle(
+        config_path, whole_root, ledger_root, config_fd=config_fd,
+        config_owner=config_owner,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    if status["state"] != "voice-saved-off-legacy-guard-still-authoritative":
+        raise VoiceLifecycleRouteError(
+            "legacy Telegram Voice PoC conflicts with native Voice selection "
+            "or pending cutover; migration/recovery required"
+        )
+
+
 def main(argv: list[str]) -> int:
-    if argv not in (["inspect"], ["candidate-preflight"]):
-        print("usage: voice_native_lifecycle_router.py {inspect|candidate-preflight}", file=sys.stderr)
+    if argv not in (["inspect"], ["candidate-preflight"],
+                    ["legacy-poc-preflight"]):
+        print("usage: voice_native_lifecycle_router.py {inspect|candidate-preflight|legacy-poc-preflight}", file=sys.stderr)
         return 64
     fd = None
     try:
@@ -222,11 +247,18 @@ def main(argv: list[str]) -> int:
         fd = os.open(native.CONFIG, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
         _pinned_regular(native.CONFIG, fd, owner=(0, 0))
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        route = inspect_lifecycle if argv == ["inspect"] else inspect_candidate
-        result = route(
-            native.CONFIG, native.WHOLE, native.LEDGER,
+        arguments = dict(
             config_fd=fd, config_owner=(0, 0),
             require_lifecycle_owner=native.require_native_lock,
+        )
+        if argv == ["legacy-poc-preflight"]:
+            check_legacy_poc_compatibility(
+                native.CONFIG, native.WHOLE, native.LEDGER, **arguments,
+            )
+            return 0
+        route = inspect_lifecycle if argv == ["inspect"] else inspect_candidate
+        result = route(
+            native.CONFIG, native.WHOLE, native.LEDGER, **arguments,
         )
         prefix = "native-voice-lifecycle=" if argv == ["inspect"] else "native-voice-candidate="
         print(prefix + json.dumps(

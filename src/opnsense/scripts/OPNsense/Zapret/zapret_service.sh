@@ -594,6 +594,21 @@ native_voice_lifecycle_inspect_service()
     "${_native_voice_router_python}" "${_native_voice_router_script}" inspect
 }
 
+# Compatibility guard: before either old PoC mutation, refuse coexistence
+# with saved native Voice ON or any pending native cutover, under EXISTING FD9.
+# This does not migrate or clean up legacy PoC state; status remains readable.
+native_voice_legacy_poc_preflight_service()
+{
+    _native_voice_router_python="/usr/local/bin/python3.13"
+    _native_voice_router_script="${BACKEND_DIR}/voice_native_lifecycle_router.py"
+    [ -x "${_native_voice_router_python}" ] &&
+    [ -r "${_native_voice_router_script}" ] || {
+        echo "ERROR: native Voice compatibility guard is unavailable" >&2
+        return 69
+    }
+    "${_native_voice_router_python}" "${_native_voice_router_script}" legacy-poc-preflight
+}
+
 # Read-only saved-model -> native compiler bridge, under the same FD9.
 # This MUST NOT invoke the private five-resource actuator.
 native_voice_candidate_preflight_service()
@@ -638,9 +653,11 @@ service_dispatch()
                 "${RULE_BASE}" "${RULE_MAX}" "${ACTIVE_DIR}"
             ;;
         telegram-voice-enable)
+            native_voice_legacy_poc_preflight_service || return 69
             telegram_voice_enable_service
             ;;
         telegram-voice-disable)
+            native_voice_legacy_poc_preflight_service || return 69
             telegram_voice_disable_service
             ;;
         telegram-voice-status)
