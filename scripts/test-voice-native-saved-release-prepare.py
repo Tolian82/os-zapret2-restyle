@@ -44,7 +44,7 @@ class SavedReleaseBridgeTests(unittest.TestCase):
         self.ordinary = self.source / "ordinary.conf"
         self.ordinary.write_text(bridge.ORDINARY)
         self.bundle = bridge.stage.compile_bundle(
-            self.xml, self.managed, self.previous.live_runtime,
+            self.xml, self.managed, bridge.ACTIVE_ROOT,
             "vtnet1", 19000, 19010, 989, self.ordinary,
         )
         self.release = self.source / "release"

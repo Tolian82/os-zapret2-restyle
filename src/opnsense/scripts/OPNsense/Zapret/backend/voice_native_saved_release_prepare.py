@@ -21,6 +21,9 @@ from voice_release_stage import compile_bundle, file_sha256
 
 FILES = ("voice.conf", "traffic.conf", "metadata.json",
          "profile-plan.json", "capture-plan.json")
+# Native IPSET paths are fixed at the installed generator root; staged or
+# simulated previous runtime paths must never alter the compiled argv.
+MANAGED_ACTIVE_ROOT = Path("/usr/local/etc/zapret2/runtime-v2")
 
 
 class SavedReleasePrepareError(RuntimeError):
@@ -79,7 +82,7 @@ def prepare_saved_release_forward_intent(
     # through the ORIGINAL compiler. Reject even coherent-looking forged
     # metadata if it does not originate from this XML and ordinary Strategies.
     expected = compile_bundle(
-        source_config, managed_source, active_runtime,
+        source_config, managed_source, MANAGED_ACTIVE_ROOT,
         physical_wan, 19000, 19010, divert_port, ordinary_source,
     )
     for name in FILES:
