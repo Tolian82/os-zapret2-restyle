@@ -251,6 +251,8 @@ jobs:
         run: python3.13 scripts/test-voice-native-previous-evidence-prepare.py
       - name: Native Voice audited ordinary IPFW initial owner bootstrap
         run: python3.13 scripts/test-voice-native-initial-ipfw-seed.py
+      - name: Native Voice original one-lock seed to PREPARED coordinator
+        run: python3.13 scripts/test-voice-native-prepare-one-lock.py
       - name: Voice non-destructive atomic runtime rollback preflight
         run: sh scripts/test-voice-atomic-rollback-preflight.sh
       - name: Voice IPSET integration with shared production Targets normalizer
