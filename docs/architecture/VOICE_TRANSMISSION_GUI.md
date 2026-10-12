@@ -1,6 +1,6 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
-**Текущий Stage 3 · `v0.5.1_119`:** появился продукционный import-only snapshot предыдущих Config/runtime/трёх процессов/security policy/IPFW owner в один NativePreviousObserver. Offline один-FD9/Config-flock PREPARED и restore image — Voice CI 82 PASS. Не выполнены начальный audited IPFW seed/migration, service/configd Apply, GUI ON/OFF, boot, FreeBSD owner-live и MEDIA_PASS; PR Draft, пакет не опубликован.
+**Страница «Передача голоса» — статус backend `v0.5.1_128`:** единый `zapret_service.sh` теперь поддерживает **только закрытый операторский** `native-voice-prepare-prebuilt` под оригинальными FD9 и Config flock. Вход — приватный полный detached candidate, включая восемь канонических артефактов `orchestrator.sh`. Полная проверка до IPFW seed; при успехе только запечатанный schema-4 PREPARED и прежний install-image, без запуска или публичного ON. **Нельзя** считать это готовой кнопкой GUI Apply: ещё нужны штатный detached candidate producer, согласованный ON/OFF, миграция legacy Telegram PoC, нормальный boot/runtime-failure и реальные звонки. Voice CI 85 PASS, FreeBSD/MEDIA_PASS — не проверены.
 
 **Текущий Stage 3 · `v0.5.1_118`:** после schema-4 PREPARED запечатывается настоящий mode-preserving `restore-install-image` из предыдущего Config/runtime под FD9/Config flock, до MUTATING. Voice CI 81 PASS; текущая задача — штатная сборка предыдущих process/security/IPFW witnesses и один сервисный Apply, далее PoC migration/reboot/GUI. Не опубликовано, нет MEDIA_PASS.
 
