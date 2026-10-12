@@ -77,7 +77,10 @@ class ActualRuntimeWire(unittest.TestCase):
         self.assertIn('"${_orchestrator_build_user_traffic}" \\', source)
         self.assertIn('"${_orchestrator_build_managed_source}" \\', source)
         self.assertIn('"${_orchestrator_build_voice_native}"', source)
-        self.assertLess(source.index("config_voice_staged_only_guard"),
+        guard = shell[shell.index("orchestrator_voice_build_preflight()"):
+                      shell.index("orchestrator_build_release()")]
+        self.assertIn("config_voice_staged_only_guard", guard)
+        self.assertLess(source.index("orchestrator_voice_build_preflight"),
                         source.index("orchestrator_stage_native_voice"))
         # Old PoC still builds real traffic.conf until full IPFW cutover.
         self.assertLess(source.index("telegram_voice_build_effective_traffic"),
