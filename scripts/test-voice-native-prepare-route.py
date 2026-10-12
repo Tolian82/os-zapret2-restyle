@@ -42,6 +42,7 @@ class OperatorPrepareRouteTests(unittest.TestCase):
             patch.object(route,"BUILD_INPUT",self.build),
             patch.object(route,"BUILD_WORKER",self.build_worker),
             patch.object(route.native,"CONFIG",self.config),
+            patch.object(route.native,"LEGACY_MARKER",base/"legacy.enabled"),
             patch.object(route.native,"ACTIVE_ROOT",self.live),
             patch.object(route.native,"WHOLE",self.whole),
             patch.object(route.native,"LEDGER",self.ledger),
@@ -352,6 +353,53 @@ class OperatorPrepareRouteTests(unittest.TestCase):
             )
         self.assertFalse(self.whole.exists())
         self.assertFalse(self.ledger.exists())
+
+
+    def test_legacy_marker_prevents_prepared_even_when_prior_runtime_is_off(self):
+        self.input_files()
+        marker=route.native.LEGACY_MARKER
+        marker.write_text("enabled\\n")
+        (self.live/"telegram-voice-poc.state").write_text("disabled\\n")
+        with patch.object(route,"prepare_native_voice_one_lock") as prepared:
+            with self.assertRaisesRegex(route.NativePrepareRouteError,"requires reviewed migration"):
+                route.prepare_operator_prebuilt("vtnet1",989)
+            prepared.assert_not_called()
+        self.assertEqual("enabled\\n",marker.read_text())
+        self.assertFalse(self.whole.exists())
+
+    def test_legacy_runtime_on_without_marker_blocks_migration(self):
+        self.input_files()
+        (self.live/"telegram-voice-poc.state").write_text("enabled\\n")
+        with patch.object(route,"prepare_native_voice_one_lock") as prepared:
+            with self.assertRaisesRegex(route.NativePrepareRouteError,"requires reviewed migration"):
+                route.prepare_operator_prebuilt("vtnet1",989)
+            prepared.assert_not_called()
+
+    def test_legacy_unsafe_and_unknown_state_fail_closed(self):
+        self.input_files()
+        state=self.live/"telegram-voice-poc.state"
+        state.symlink_to(self.config)
+        with self.assertRaisesRegex(route.NativePrepareRouteError,"untrusted"):
+            route.prepare_operator_prebuilt("vtnet1",989)
+        state.unlink()
+        state.write_text("unrecognized\\n")
+        with self.assertRaisesRegex(route.NativePrepareRouteError,"unknown legacy"):
+            route.prepare_operator_prebuilt("vtnet1",989)
+        state.unlink()
+        route.native.LEGACY_MARKER.symlink_to(self.config)
+        with self.assertRaisesRegex(route.NativePrepareRouteError,"untrusted"):
+            route.prepare_operator_prebuilt("vtnet1",989)
+
+    def test_disabled_state_allows_existing_operator_preparation(self):
+        self.input_files()
+        (self.live/"telegram-voice-poc.state").write_text("disabled\\n")
+        with patch.object(route,"prepare_native_voice_one_lock",
+                          return_value={"state":"native-voice-original-lock-prepared",
+                                        "safe_to_enable_voice":False,
+                                        "public_voice_apply":False}) as prepared:
+            out=route.prepare_operator_prebuilt("vtnet1",989)
+        self.assertEqual("native-voice-original-lock-prepared",out["state"])
+        prepared.assert_called_once()
 
     def test_shell_route_is_fd9_operator_only_not_configd(self):
         service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
