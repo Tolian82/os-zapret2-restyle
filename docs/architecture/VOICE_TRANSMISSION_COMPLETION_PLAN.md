@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**ЭТАП 2 ЗАКРЫТ — offline/private native Apply/rollback, 2026-10-12, `v0.5.1_105`.** Итог подтверждён на кодовом HEAD [`b7c6aa5`](https://github.com/Tolian82/os-zapret2-restyle/commit/b7c6aa59116ecb967ff605e3dc82fe0bb33ce88a): [общий CI + Voice + FreeBSD 15](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38182594108) PASS, [FreeBSD 15 testing-package qualification + delivery governance](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38182594158) PASS, PR-title PASS. Матрица PREPARED/MUTATING/COMMITTED/ROLLED_BACK, crash/receipt/redo/reboot-review и отказ для foreign/partial supervisor прошли офлайн. Завершение означает **только готовность закрытого приватного исполнителя к подключению**, не готовность GUI, не установленный пакет, не проверку на живой FreeBSD и не Telegram MEDIA_PASS. **Дальше активен этап 3: единый штатный FD9/configd/service lifecycle, миграция legacy и разделение normal reboot vs incomplete recovery.** Документационный коммит после `_105` не меняет `PLUGIN_REVISION=105`. Исторические нижележащие записи с «PENDING» и старые ревизии относятся к моменту их создания. [Единый план](VOICE_TRANSMISSION_COMPLETION_PLAN.md).
+
+
 **v0.5.1_105 (2026-10-12):** Stage-2 FINAL transition-contract audit found and fixed the private Apply **false MUTATING diagnostic after a durable previous ROLLED_BACK**. When a forward stage fails and its existing independently verified rollback returns, the upper original-FD9/Config-flock coordinator now checks returned safety flag, five-resource result, read-back durable phase and immutable original MUTATING predecessor. It reports either `MUTATING` retained pending receipt/closure, or already **durable `ROLLED_BACK`** awaiting owner acceptance; contradictory returned phase versus on-disk journal refuses. Original PREPARED failures never call rollback; COMMITTED only goes forward; terminal retry remains read-only. Two native one-lock failure-injection regressions check accurate durable status and refusal of fabricated terminal claim. `_104` exact-head Project, Voice, governance, FreeBSD 15 build and PR title all PASS. `_105` exact-head CI pending. This changes no public Voice ON, configd/service/boot, package publication or on-device Telegram media qualification.
 
 
@@ -76,7 +79,7 @@
 
 
 **Статус:** ЕДИНЫЙ АКТУАЛЬНЫЙ ПЛАН · Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328) · 2026-10-11  
-**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_105` (Stage 2 продолжается; MUTATING и COMMITTED recovery подключены только к приватному исполнителю). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
+**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_105` (Stage 2 закрыт на exact-head CI; Stage 3 — активный следующий этап; приватный исполнитель ещё НЕ подключён к service/GUI). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
 **Приоритет:** законченный пользовательский сценарий, не очередная подсистема проверки. Детальное утверждённое ТЗ и компоновка остаются в [VOICE_TRANSMISSION_GUI.md](VOICE_TRANSMISSION_GUI.md); сведения о стенде и фактических звонках — в отдельных исследовательских документах. Исторические задачи в ROADMAP, START_HERE и старых блоках архитектурного документа НЕ заменяют эту последовательность.
 
 ## Цель и определение готовности
@@ -110,9 +113,9 @@
 
 **Результат:** на `ff6431c` полный CI (повторный Validate Project), Voice, governance и FreeBSD 15 PASS. Непостоянный первый сбой Strategy Lab circular-e2e не воспроизвёлся без изменения исходников. Документационная стабилизация не меняла ревизию; затем начался этап 2 с новым кодом `_76`.
 
-### Этап 2 — Собрать один настоящий native Apply/rollback (ТЕКУЩИЙ; offline gate _105)
+### Этап 2 — Собрать один настоящий native Apply/rollback (ЗАКРЫТ · offline gate `v0.5.1_105`)
 
-#### Этап 2: проверяемая матрица состояний и переход к этапу 3 (состояние _105)
+#### Этап 2: принятая матрица состояний и переход к этапу 3 (`_105`)
 
 | Durable state | Initial / retry rule under original FD9 + Config flock | Permitted side effects / required outcome | Evidence |
 | --- | --- | --- | --- |
@@ -128,7 +131,7 @@
 **Acceptance boundary:** Stage 2 is **offline/private code only**. Its exit gate is exact-head Voice + general Project CI + FreeBSD 15 package qualification + governance/title PASS and the fault-injection matrix above. This does **not** authorize plugin installation, owner-live changes or Telegram MEDIA_PASS. **Stage 3** must connect a single existing FD9/configd/service/boot lifecycle owner to this private executor, define package install/restart/migration precedence and safe configuration enable/disable. **Stage 4** must connect saved GUI profiles/ON/OFF to that lifecycle; Stage 5 performs on-appliance FreeBSD acceptance; Stage 6 tests voice media. Partial supervisor states deliberately remain manual/fail-closed and are **not** silently restarted.
 
 
-**Текущее состояние на `_105`:** приватный один-locked-FD исполнитель покрывает PREPARED Apply, возврат старых пяти ресурсов при MUTATING (включая начальный STOP, engine-only и обрыв после перезапуска старых процессов), COMMITTED-only IPFW postcommit, а теперь также **повторную read-only проверку терминального ROLLED_BACK**. Каждая ветка подтверждает связь с immutable schema-4 intent и никогда не обещает public Voice ON. Неполный supervisor, чужая/смешанная трёхролевая топология, потерянные kernel epochs или неопознанное IPFW остаются безопасно заблокированными, а не автоматически уничтожаемыми. **Для закрытия этапа 2** нужны проверка точного HEAD CI, отрицательная матрица неполного supervisor с сохранением immutable evidence и явный handoff политики к этапу 3; фактическое подключение к `zapret_service.sh`/configd/GUI/boot относится к этапу 3, owner-live и Telegram MEDIA_PASS — к этапам 5–6. Ни один пакет `_105` не опубликован; до точного полного CI `_105` этап 2 остаётся открытым.
+**Принятый результат этапа 2 на `_105`:** приватный один-locked-FD исполнитель покрывает PREPARED Apply, возврат старых пяти ресурсов при MUTATING (включая начальный STOP, engine-only и обрыв после перезапуска старых процессов), COMMITTED-only IPFW postcommit, а теперь также **повторную read-only проверку терминального ROLLED_BACK**. Каждая ветка подтверждает связь с immutable schema-4 intent и никогда не обещает public Voice ON. Неполный supervisor, чужая/смешанная трёхролевая топология, потерянные kernel epochs или неопознанное IPFW остаются безопасно заблокированными, а не автоматически уничтожаемыми. **Критерии выхода этапа 2 выполнены на кодовом HEAD `b7c6aa5`:** полный Voice/Project CI, FreeBSD 15 build+governance, PR-title PASS; отрицательная матрица partial supervisor и power-loss replay подтверждены. **Ни один пакет `_105` не опубликован, рабочий OPNsense не менялся.** Подключение service/configd/boot — этап 3, GUI — этап 4, owner-live/MEDIA_PASS — этапы 5–6.
 
 
 **Усиление `_85`:** прежде чем старый five-resource rollback вызывает stop на живом кандидате, native coordinator обязан дважды подтвердить полный трёхролевой PID/start inventory и точные argv/путь исполняемого файла через FreeBSD kernel API, а также соответствие установленного runtime сохранённой кандидатной контрольной сумме. Engine-only/partial supervisor остаются blocked/manual, а не слепо убиваются. Проверка никаким образом не подтверждает доставку Telegram MEDIA_PASS.
@@ -145,7 +148,10 @@
 
 **Готово:** один ограниченный нативный исполнитель проверяемо применяет всю операцию и возвращает пять ресурсов; сценарий не требует ручного вызова частных шагов.
 
-### Этап 3 — Штатный lifecycle, миграция и reboot
+### Этап 3 — Штатный lifecycle, миграция и reboot (АКТИВНЫЙ СЛЕДУЮЩИЙ ЭТАП)
+
+**Первый implementation patch этапа 3 (фиксированный handoff):** проверить существующий `zapret_service.sh` и configd dispatch + FD9 lifecycle-owner + `voice_cutover_guard.py`; добавить **один** внутренний маршрутизатор команд, который привяжет сохранённую Config-модель к существующему приватному `execute_prepared_voice_apply` без второго двигателя, конкурирующего процесса или собственного cron. До первого изменения IPFW/процессов — read-only compare выбранного WAN, активного Strategies runtime, legacy Telegram authority и partial journal. `PREPARED` допустим только после безопасной подготовки, `MUTATING` — только attested old rollback, `COMMITTED` — только forward IPFW finish, `ROLLED_BACK` — только read-only review + разрешённая позже owner finalization. **Не делать** GUI Voice ON, live firewall actions или package publication частью этого первого патча. Каждый кодовый push повышает `PLUGIN_REVISION` (следующий `_106`).
+
 
 - Подключить один native исполнитель к существующим `zapret_service.sh`, configd и общему orchestrator без второго dvtws2, параллельного watcher или нового cron.
 - Перенаправить `telegram_voice_enable/disable/status` как совместимые адаптеры к **той же постоянной модели**. Старый `telegram_voice.sh`, marker и hard-coded prepend выводить из authority **только после** проверенной явной миграции; отсутствие marker после reboot не доказывает OFF.
