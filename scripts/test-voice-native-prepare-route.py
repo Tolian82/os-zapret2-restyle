@@ -115,7 +115,8 @@ class OperatorPrepareRouteTests(unittest.TestCase):
             route.prepare_operator_prebuilt("vtnet1",989,from_release=True)
         self.assertFalse(self.whole.exists())
         self.assertFalse(self.ledger.exists())
-        self.assertFalse(self.input.exists())
+        self.assertTrue(self.input.is_dir())
+        self.assertEqual([], list(self.input.iterdir()))
 
     def test_incomplete_source_refuses_before_ledger_or_original_config_open(self):
         self.input_files()
