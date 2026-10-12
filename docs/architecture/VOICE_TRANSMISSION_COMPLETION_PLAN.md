@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**Этап 3 · `v0.5.1_158`:** новый import-only `voice_native_legacy_runtime_restore.py` восстанавливает real old `runtime-v2` только при завершённом IPFW exact replay + previous-files stage, сохранённых candidate Config/runtime fingerprint в upgraded WAL schema2, отсутствии всех трёх процессов и старого marker, native owner ledger empty и original FD9/Config inode flock. Использует реальную `_stage_old_tree` native restorer (correct original mode + nofollow/fsync) плюс отдельный immutable pre-first-rename `legacy-runtime-restore` intent, deterministic ready/retired names и две same-parent rename with prefix recovery. Unknown current/ready/retired state fails closed, кандидата сохраняет, redo и полный предыдущий snapshot не удаляет. Active Config inode и old marker не затрагивает. Next: Config restore same inode with write-ahead and verified prior candidate (plus power-cut prefix), old marker exact file/mode restore and 3-role secured process restart, final five-domain receipt/reboot then actual native migration MEDIA_PASS. `_158` CI pending.
+
+
 **`v0.5.1_157` (12.10.2026, этап 3).** Исправлено точечное согласование `legacy-files-ready` с существующим read-only reverse WAL gate: промежуточный tmp каталог допускается только при явной проверке его единственного точного имени под FD9 и Config flock, опубликованный `legacy-files-ready` повторно проходит тот же reader. Другие/частичные каталоги остаются fail-closed; ранее CI `_156` падал на проверке собственного staging, а не на копировании Config. Никакого подключения к production Apply или включения Voice; `_157` CI pending.
 
 

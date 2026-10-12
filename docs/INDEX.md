@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Engineering memory index
 
+**Этап 3 · `v0.5.1_158`:** old runtime теперь может быть установлен через отдельный import-only WAL + two-rename restorer после verified IPFW reverse; Config/marker/три процесса не восстановлены. [Handoff](START_HERE.md), [план завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
+
+
 **`v0.5.1_157` (12.10.2026, этап 3).** Исправлено точечное согласование `legacy-files-ready` с существующим read-only reverse WAL gate: промежуточный tmp каталог допускается только при явной проверке его единственного точного имени под FD9 и Config flock, опубликованный `legacy-files-ready` повторно проходит тот же reader. Другие/частичные каталоги остаются fail-closed; ранее CI `_156` падал на проверке собственного staging, а не на копировании Config. Никакого подключения к production Apply или включения Voice; `_157` CI pending.
 
 

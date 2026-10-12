@@ -198,6 +198,8 @@ jobs:
         run: python3.13 scripts/test-voice-native-legacy-ipfw-replay.py
       - name: Stage previous Telegram PoC Config runtime and marker after completed IPFW replay
         run: python3.13 scripts/test-voice-native-legacy-files-ready.py
+      - name: Recover original Telegram runtime via original-FD9 double-rename and durable redo
+        run: python3.13 scripts/test-voice-native-legacy-runtime-restore.py
       - name: Native Voice forward Apply PREPARED schema-4 journal with full rollback witnesses
         run: python3.13 scripts/test-voice-native-forward-prepare.py
       - name: Native Voice forward runtime installation and rollback after power loss

@@ -28,13 +28,14 @@ from voice_ipfw_adapter import FreeBSDIPFWAdapter
 from voice_firewall_ledger import VoiceOwnershipStore
 from voice_native_process_probe import FreeBSDVoiceProcessProbe
 from voice_native_legacy_poc_guard import _legacy_read
+from voice_native_file_observer import observe_live_files
 from voice_native_recovery_quiescence import (
     EXPECTED_SCRIPTS, PIDFILES, _locked_config,
 )
 
 WAL_NAME = "legacy-reverse-wal"
 WAL_FILES = frozenset(("wal.json", "wal.sha256"))
-SCHEMA = 1
+SCHEMA = 2
 LIMIT = 16384
 INITIAL = "prepared-clean-kernel-not-executable"
 
@@ -136,10 +137,15 @@ def _read_manifest(root):
         "schema", "phase", "restore_plan_sha256", "previous_five",
         "legacy_ipfw_structure_sha256", "process_security_policy_sha256",
         "marker_sha256", "quiescent_kernel", "quiescent_processes",
-        "legacy_authority",
+        "legacy_authority", "candidate_config_sha256",
+        "candidate_runtime_sha256",
         "native_ledger", "safe_to_execute", "safe_to_enable_voice",
     } or type(value["schema"]) is not int or value["schema"] != SCHEMA or (
-        value["phase"] != INITIAL or value["safe_to_execute"] is not False
+        value["phase"] != INITIAL or
+        any(not isinstance(value[name], str) or len(value[name]) != 64 or
+            any(c not in "0123456789abcdef" for c in value[name])
+            for name in ("candidate_config_sha256","candidate_runtime_sha256"))
+        or value["safe_to_execute"] is not False
         or value["safe_to_enable_voice"] is not False
     ):
         raise LegacyReverseWALError("invalid reverse WAL schema or authority")
@@ -147,13 +153,17 @@ def _read_manifest(root):
 
 
 def inspect_legacy_reverse_wal(root, *, allow_ipfw_replay=False,
-                               allow_files_stage=None):
+                               allow_files_stage=None,
+                               allow_runtime_restore=False):
     """Read-only reboot triage, recompute source bindings; no kernel trust."""
     root = Path(root)
     _private_dir(root)
     expected = {NAME, PLAN_NAME, WAL_NAME}
     if allow_ipfw_replay:
         expected.add("legacy-ipfw-replay")
+    if allow_runtime_restore:
+        _private_dir(root / "legacy-runtime-restore")
+        expected.add("legacy-runtime-restore")
     if allow_files_stage is not None:
         if (not isinstance(allow_files_stage, str) or
             (allow_files_stage != "legacy-files-ready" and
@@ -215,6 +225,9 @@ def prepare_legacy_reverse_wal(
     stopped = _stopped(process_probe)
     inactive = _old_marker_off(legacy_marker, active_runtime)
     clean = _kernel_empty(readonly_ipfw)
+    candidate = observe_live_files(config_path, Path(active_runtime))
+    if set(candidate) != {"config", "runtime"}:
+        raise LegacyReverseWALError("candidate Config/runtime snapshot is invalid")
     record = {
         "schema": SCHEMA, "phase": INITIAL,
         "restore_plan_sha256": _digest(
@@ -227,6 +240,8 @@ def prepare_legacy_reverse_wal(
         "quiescent_kernel": clean,
         "quiescent_processes": stopped,
         "legacy_authority": inactive,
+        "candidate_config_sha256": candidate["config"],
+        "candidate_runtime_sha256": candidate["runtime"],
         "native_ledger": ledger,
         "safe_to_execute": False, "safe_to_enable_voice": False,
     }
@@ -247,6 +262,7 @@ def prepare_legacy_reverse_wal(
         _stopped(process_probe) != stopped or
         _old_marker_off(legacy_marker, active_runtime) != inactive or
         _kernel_empty(readonly_ipfw) != clean or
+        observe_live_files(config_path, Path(active_runtime)) != candidate or
         set(os.listdir(root)) != {NAME, PLAN_NAME, scratch.name}):
         raise LegacyReverseWALError("reverse predecessor drift before WAL publication")
     os.rename(scratch, root / WAL_NAME)

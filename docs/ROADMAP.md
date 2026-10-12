@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**Этап 3 · `v0.5.1_158`:** добавлен tested isolated LIVE runtime install step с полнотой старого IPFW redo, root-private fsynced intent и verified two-rename, power-cut resume, original Config inode flock и FD9. Существующий rollback receipt и public Voice ON остаются заблокированными. Далее — Config same-inode recovery with prefix redo, marker exact restoration and old process security/argv restart; после реальной полной пятидоменной приемки допустима native GUI Apply UAT / reboot / MEDIA_PASS.
+
+
 **`v0.5.1_157` (12.10.2026, этап 3).** Исправлено точечное согласование `legacy-files-ready` с существующим read-only reverse WAL gate: промежуточный tmp каталог допускается только при явной проверке его единственного точного имени под FD9 и Config flock, опубликованный `legacy-files-ready` повторно проходит тот же reader. Другие/частичные каталоги остаются fail-closed; ранее CI `_156` падал на проверке собственного staging, а не на копировании Config. Никакого подключения к production Apply или включения Voice; `_157` CI pending.
 
 

@@ -119,15 +119,20 @@ def _read_ready(root, plan):
     return record
 
 
-def inspect_legacy_files_ready(root):
+def inspect_legacy_files_ready(root, *, allow_runtime_restore=False):
     """Disk-only reboot triage; cannot authorize installation or Voice ON."""
     root = Path(root)
     _private_dir(root)
-    if set(os.listdir(root)) != EXPECTED_ROOT | {FILES_NAME}:
+    expected = EXPECTED_ROOT | {FILES_NAME}
+    if allow_runtime_restore:
+        _private_dir(root / "legacy-runtime-restore")
+        expected.add("legacy-runtime-restore")
+    if set(os.listdir(root)) != expected:
         raise LegacyFilesReadyError("foreign previous-file recovery artifact")
     plan = inspect_legacy_restore_plan(root)
     inspect_legacy_reverse_wal(
         root, allow_ipfw_replay=True, allow_files_stage=FILES_NAME,
+        allow_runtime_restore=allow_runtime_restore,
     )
     record = _read_ready(root, plan)
     return {
