@@ -36,7 +36,7 @@ class OperatorInputStageTests(unittest.TestCase):
         self.fixture.setUp()
         self.addCleanup(self.fixture.doCleanups)
         self.live = self.fixture.previous.live_config
-        shutil.copyfile(self.fixture.xml, self.live)
+        # Keep previous Config intact; candidate is a distinct saved XML.
         self.old_bytes = self.fixture.previous.live_runtime.joinpath(
             "dvtws.args"
         ).read_bytes() if (
@@ -55,6 +55,9 @@ class OperatorInputStageTests(unittest.TestCase):
         self.private = self.fixture.source / "operator-private"
         self.private.mkdir(mode=0o700)
         self.output = self.private / "voice-operator-input"
+        self.candidate = self.private / "candidate.xml"
+        shutil.copyfile(self.fixture.xml, self.candidate)
+        self.candidate.chmod(0o600)
         self.hits = 0
 
     def publish(self, *, locked=True):
@@ -65,8 +68,9 @@ class OperatorInputStageTests(unittest.TestCase):
             def owner():
                 self.hits += 1
             return stage_native_operator_input(
-                config_path=self.live, staged_release=self.stage,
-                destination=self.output, physical_wan="vtnet1",
+                config_path=self.live, source_config=self.candidate,
+                staged_release=self.stage, destination=self.output,
+                physical_wan="vtnet1",
                 divert_port=989, config_fd=fd,
                 config_owner=(os.geteuid(), os.getegid()),
                 require_lifecycle_owner=owner,
@@ -84,6 +88,10 @@ class OperatorInputStageTests(unittest.TestCase):
         self.assertEqual(set(FILE_NAMES + DIR_NAMES),
                          {p.name for p in self.output.iterdir()})
         self.assertEqual(self.old_sha, self.live.read_bytes())
+        self.assertEqual(self.candidate.read_bytes(),
+                         (self.output / "config.xml").read_bytes())
+        self.assertNotEqual(self.old_sha,
+                            (self.output / "config.xml").read_bytes())
         self.assertEqual(self.old_bytes, (
             self.fixture.previous.live_runtime / "dvtws.args"
         ).read_bytes() if (
@@ -137,14 +145,41 @@ class OperatorInputStageTests(unittest.TestCase):
         with self.assertRaises((RuntimeError, ValueError, OSError)):
             self.publish(locked=False)
         self.assertFalse(self.output.exists())
-        self.assertFalse(list(self.private.iterdir()))
+        self.assertEqual([self.candidate], list(self.private.iterdir()))
+
+    def test_active_config_cannot_be_the_candidate(self):
+        fd = os.open(self.live, os.O_RDWR)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaises((RuntimeError, ValueError, OSError)):
+                stage_native_operator_input(
+                    config_path=self.live, source_config=self.live,
+                    staged_release=self.stage, destination=self.output,
+                    physical_wan="vtnet1", divert_port=989, config_fd=fd,
+                    config_owner=(os.geteuid(), os.getegid()),
+                    require_lifecycle_owner=lambda: None,
+                )
+        finally:
+            os.close(fd)
+        self.assertFalse(self.output.exists())
+
+    def test_public_or_symlink_candidate_denied(self):
+        self.candidate.chmod(0o644)
+        with self.assertRaises((RuntimeError, ValueError, OSError)):
+            self.publish()
+        self.candidate.chmod(0o600)
+        self.candidate.unlink()
+        self.candidate.symlink_to(self.fixture.xml)
+        with self.assertRaises((RuntimeError, ValueError, OSError)):
+            self.publish()
+        self.assertFalse(self.output.exists())
 
     def test_stale_generated_proof_never_publishes(self):
         (self.stage / "voice-native-candidate/handoff-proof.json").write_text("{}")
         with self.assertRaises((RuntimeError, ValueError, OSError)):
             self.publish()
         self.assertFalse(self.output.exists())
-        self.assertFalse(list(self.private.iterdir()))
+        self.assertEqual([self.candidate], list(self.private.iterdir()))
         self.assertEqual(self.old_sha, self.live.read_bytes())
 
     def test_symlinked_release_child_cannot_be_adopted(self):
