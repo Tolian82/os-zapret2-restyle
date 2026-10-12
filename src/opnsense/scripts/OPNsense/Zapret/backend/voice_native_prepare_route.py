@@ -21,6 +21,7 @@ import stat
 import sys
 
 from voice_cutover_backup import _private_dir
+from voice_cutover_checkpoint import _private_dir as _ensure_private_dir
 from voice_cutover_journal import VoiceCutoverJournal
 from voice_firewall_ledger import VoiceOwnershipStore
 from voice_ipfw_adapter import FreeBSDIPFWAdapter
@@ -83,7 +84,7 @@ def prepare_operator_prebuilt(physical_wan: str, divert_port: int) -> dict:
     paths = _fixed_input()
     # Do not create the ledger/whole directories for invalid operator input.
     for directory in (native.WHOLE.parent, native.WHOLE, native.LEDGER):
-        _private_dir(directory)
+        _ensure_private_dir(directory)
     journal = VoiceCutoverJournal(native.WHOLE)
     ledger = VoiceOwnershipStore(native.LEDGER)
     probe = FreeBSDVoiceProcessProbe(
