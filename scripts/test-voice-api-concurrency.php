@@ -36,6 +36,24 @@ namespace OPNsense\Core {
         public static bool $busy = false;
         public static bool $reconfigureOK = true;
         public static array $calls = [];
+        public static array $params = [];
+        public function configdpRun($action, $params, ...$args) {
+            self::$calls[] = $action;
+            self::$params = $params;
+            if ($action !== 'zapret voice_preview_draft') {
+                throw new \RuntimeException('unexpected parameterized configd action');
+            }
+            if (Config::getInstance()->locks !== 0) {
+                throw new \RuntimeException('GUI Config lock held during FD9 preview');
+            }
+            return json_encode([
+                'state' => 'native-voice-saved-draft-preview',
+                'selected_profiles' => substr_count($params[0], '1'),
+                'saved_xml_sha256' => str_repeat('b', 64),
+                'safe_to_enable_voice' => false,
+                'public_voice_apply' => false,
+            ]);
+        }
         public function configdRun($action, ...$args) {
             self::$calls[] = $action;
             if ($action === 'zapret strategy_lab_guard') {
@@ -120,6 +138,47 @@ namespace {
     equal(Zapret::$nodes, $loaded['zapret'], 'atomic native load must use one saved model');
     equal(64, strlen($loaded['snapshot']), 'baseline digest length');
     equal(0, Config::getInstance()->locks, 'load must release configuration lock');
+
+
+    // New GUI -> read-only configdp FD9 preflight never stages PREPARED. It
+    // accepts only previously saved OFF drafts plus new ON toggles.
+    $savedBeforePreview = Zapret::$nodes;
+    $telegramDraftArgs = "--filter-udp=*\n--filter-l7=stun\n--payload=stun";
+    Zapret::$nodes['voice']['telegram']['args'] = $telegramDraftArgs;
+    $previewForm = $candidate;
+    $previewForm['voice']['telegram']['enabled'] = '1';
+    $previewForm['voice']['telegram']['args'] = $telegramDraftArgs;
+    $previewForm['sync'] = ['snapshot' => VoiceSettingsSnapshot::digest(Zapret::$nodes)];
+    $previewApi = new class extends VoiceController {
+        protected function originalConfigDigest(): string { return str_repeat('a', 64); }
+    };
+    $previewApi->request = new FakeRequest('POST', $previewForm);
+    Backend::$calls = [];
+    $preview = $previewApi->previewDraftAction();
+    equal('previewed', $preview['result'], 'saved draft read-only FD9 preview must complete');
+    equal(false, $preview['saved'], 'read-only preview must not persist the Config');
+    equal(false, $preview['prepared'], 'read-only preview must not seal PREPARED');
+    equal(false, $preview['applied'], 'read-only preview must not claim Voice ON');
+    equal(1, $preview['selected_profiles'], 'native backend selected wrong Voice count');
+    equal(['10000', str_repeat('a', 64)], Backend::$params,
+        'only selected five-bit mask and exact original Config digest may go to configd');
+    equal(['zapret voice_preview_draft'], Backend::$calls,
+        'preview must not call runtime reconfigure or PREPARED');
+    equal(0, Config::getInstance()->saves, 'preview changed Config');
+    equal(0, Config::getInstance()->locks, 'preview leaked Config lock');
+    $previewForm['voice']['telegram']['args'] .= "\n--out-range=n1-n2";
+    $previewApi->request = new FakeRequest('POST', $previewForm);
+    Backend::$calls = [];
+    $badPreview = $previewApi->previewDraftAction();
+    equal('failed', $badPreview['result'], 'unsaved Voice arguments cannot enter FD9');
+    equal([], Backend::$calls, 'invalid saved draft should fail before calling configd');
+    $previewForm['voice']['telegram']['args'] = $telegramDraftArgs;
+    $previewForm['sync']['snapshot'] = str_repeat('0', 64);
+    $previewApi->request = new FakeRequest('POST', $previewForm);
+    equal('failed', $previewApi->previewDraftAction()['result'],
+        'stale Voice snapshot cannot open FD9');
+    equal([], Backend::$calls, 'stale GUI snapshot must not reach configd');
+    Zapret::$nodes = $savedBeforePreview;
 
     $candidate['sync'] = ['snapshot' => $loaded['snapshot']];
     $api->request = new FakeRequest('POST', $candidate);

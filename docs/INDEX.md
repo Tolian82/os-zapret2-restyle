@@ -1,6 +1,6 @@
 # os-zapret2-restyle — Engineering memory index
 
-**Текущий этап 3 · `v0.5.1_128`:** [рабочий handoff](START_HERE.md) и [единый план](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) отражают обязательную квалификацию настоящего восьмифайлового Voice release до IPFW seed и закрытый операторский original-FD9 путь к schema-4 PREPARED. Следующее: штатный производитель отдельного полного Config/runtime, GUI Apply, legacy migration, reboot и MEDIA_PASS. Voice CI 85 PASS на кодовом HEAD; остальные acceptance требуют проверки. Старые записи ниже — исторические checkpoints.
+**Текущий этап 3 · `v0.5.1_144`:** [рабочий handoff](START_HERE.md) и [единый план](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). GUI теперь имеет строго read-only FD9 preview сохранённых OFF голосовых черновиков через configdp mask + original Config SHA. Producer PREPARED в закрытом операторском маршруте уже существует, но GUI не вызывает его, поскольку связанного guarded ON Apply/commit ещё нет. Дальше — единая native транзакция Apply/rollback, PoC migration, reboot/runtime-failure, Telegram MEDIA_PASS. PR Draft, pkg не опубликован.
 
 **Текущий Stage 3 · `v0.5.1_118`:** после schema-4 PREPARED запечатывается настоящий mode-preserving `restore-install-image` из предыдущего Config/runtime под FD9/Config flock, до MUTATING. Voice CI 81 PASS; текущая задача — штатная сборка предыдущих process/security/IPFW witnesses и один сервисный Apply, далее PoC migration/reboot/GUI. Не опубликовано, нет MEDIA_PASS.
 

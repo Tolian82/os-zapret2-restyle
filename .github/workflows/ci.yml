@@ -261,6 +261,8 @@ jobs:
         run: python3.13 scripts/test-voice-native-xml-render-route.py
       - name: Native Voice saved GUI OFF draft root-only Config candidate under FD9
         run: python3.13 scripts/test-voice-native-saved-draft-candidate.py
+      - name: Native Voice saved GUI read-only FD9 preflight contract
+        run: python3.13 scripts/test-voice-native-draft-preview-route.py
       - name: Native Voice operator-only fixed-input service PREPARED route
         run: python3.13 scripts/test-voice-native-prepare-route.py
       - name: Voice non-destructive atomic runtime rollback preflight
@@ -348,6 +350,7 @@ jobs:
           php scripts/test-voice-config-flock-release.php
           php scripts/test-voice-apply-candidate.php
           php scripts/test-voice-candidate-xml.php
+          php scripts/test-voice-draft-selection.php
           PHP_CHECKS
           )
           if command -v php >/dev/null 2>&1 &&

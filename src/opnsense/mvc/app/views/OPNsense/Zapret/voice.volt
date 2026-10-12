@@ -10,7 +10,7 @@ $(document).ready(function () {
         infoTitle: 'Как работают голосовые профили',
         infoText: 'Редактор UDP/STUN-профилей для общего Zapret2. Выключенные профили и IPSET можно сохранить как черновик в конфигурации OPNsense, без перезапуска службы. Включение голосовых профилей пока недоступно. Кнопка «Применить» обновляет только выключенные профили и общие IPSET через штатную службу. Non-STUN остаётся в «Стратегиях».',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
-        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applyOff: 'Применить выключенные профили', appliedOff: 'Общие параметры применены; Voice остаётся OFF', applyOffFailed: 'Применение не выполнено — проверьте ошибки и состояние службы', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', checkOk: 'Синтаксис проверен (без применения)', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
+        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applyOff: 'Применить выключенные профили', appliedOff: 'Общие параметры применены; Voice остаётся OFF', applyOffFailed: 'Применение не выполнено — проверьте ошибки и состояние службы', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
         notice: 'Можно сохранять только выключенные голосовые профили. Черновик сохраняется в Config и переживает перезагрузку; dvtws2 и IPFW не изменяются. Изменённый общий IPSET может повлиять на следующий запуск обычной службы. Для выключенных профилей доступно применение общих настроек через штатный перезапуск Zapret2. Включение голосового UDP ещё не реализовано.',
         status: 'Статус', running: 'Запущена', stopped: 'Остановлена', error: 'Ошибка',
         loading: 'Загрузка…', incomplete: 'Неизвестно',
@@ -30,7 +30,7 @@ $(document).ready(function () {
         infoTitle: 'About Voice Profiles',
         infoText: 'Configure UDP/STUN profiles for the shared Zapret2 engine. Disabled profiles and their IPSETs can now be saved as an inactive draft in OPNsense Config without restarting the service. Voice activation remains unavailable. Apply updates disabled profiles and shared IPSET through the normal Zapret2 reconfigure path. Non-STUN remains in Strategies.',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
-        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applyOff: 'Apply inactive settings', appliedOff: 'Shared settings applied; Voice remains OFF', applyOffFailed: 'Apply failed — review validation and current service state', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', checkOk: 'Syntax checked (not applied)', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
+        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applyOff: 'Apply inactive settings', appliedOff: 'Shared settings applied; Voice remains OFF', applyOffFailed: 'Apply failed — review validation and current service state', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
         notice: 'Only disabled Voice profiles can be saved. The draft persists in OPNsense Config across reboot; dvtws2 and IPFW are not changed. An edited shared IPSET may affect the next regular service start. Apply uses the existing Zapret2 reconfigure for all-OFF settings. Activating Voice UDP profiles is not implemented yet.',
         status: 'Status', running: 'Started', stopped: 'Stopped', error: 'Error',
         loading: 'Loading…', incomplete: 'Unknown',
@@ -86,7 +86,14 @@ $(document).ready(function () {
             'Missing Voice form': 'Не получена форма передачи голоса',
             'Voice configuration baseline is missing. Reload the Voice page.': 'Нет исходной версии настроек. Обновите страницу передачи голоса.',
             'Voice or shared Strategies settings changed in another tab. Reload the Voice page.': 'Параметры передачи голоса или общие настройки стратегий были изменены в другой вкладке. Обновите страницу.',
-            'POST request required': 'Требуется запрос POST'
+            'POST request required': 'Требуется запрос POST',
+            'Enable Zapret2 before preparing saved Voice drafts': 'Включите Zapret2 перед проверкой сохранённых голосовых профилей',
+            'Existing native Voice ON cannot be prepared from inactive drafts': 'Активированный профиль нельзя проверить как выключенный черновик',
+            'Invalid saved Voice selection': 'Некорректный выбор голосового профиля',
+            'Select at least one Voice service to preview': 'Выберите хотя бы один голосовой профиль для проверки',
+            'Save inactive Voice parameters and IPSET changes before native preview': 'Сначала сохраните параметры голоса и IPSET с выключенными профилями',
+            'Saved native Voice preview unavailable': 'Предпросмотр сохранённых голосовых профилей недоступен',
+            'Saved Voice drafts or Config generation changed; reload and retry': 'Черновики или конфигурация изменились; обновите страницу и повторите проверку'
         };
         var dynamic = [
             [/^Invalid IPv4\/CIDR at line ([0-9]+)$/, 'Некорректный IPv4/CIDR в строке $1'],
@@ -178,6 +185,7 @@ $(document).ready(function () {
     });
     $('#frm_VoiceSettings').append(voiceSnapshot);
     $('#voiceValidate').text(text.validate).prop('disabled', true);
+    $('#voicePreviewDraft').text(text.previewDraft).prop('disabled', true);
     $('#voiceSaveDraft').text(text.saveDraft).prop('disabled', true);
     $('#voiceApply').text(text.applyOff).prop('disabled', true);
     $('#voiceValidate').on('click', function () {
@@ -202,6 +210,40 @@ $(document).ready(function () {
             $('#voiceValidationStatus').text(text.checkError);
         }).always(function () {
             button.prop('disabled', false);
+        });
+    });
+    // This is an actual read-only native preflight behind the existing
+    // Zapret lifecycle FD9 and original Config flock. It NEVER invokes the
+    // stateful PREPARED producer or changes Config, dvtws2 or IPFW.
+    $('#voicePreviewDraft').on('click', function () {
+        var button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        $('#voiceValidationStatus').text(text.loading);
+        $.ajax({
+            type: 'POST',
+            url: '/api/zapret/voice/previewDraft',
+            data: getFormData('frm_VoiceSettings'),
+            dataType: 'json',
+            timeout: 45000
+        }).done(function (reply) {
+            handleFormValidation('frm_VoiceSettings', localizeVoiceErrors(
+                (reply && reply.validations) || {}
+            ));
+            if (reply && reply.result === 'previewed' &&
+                reply.saved === false && reply.prepared === false &&
+                reply.applied === false && Number.isInteger(reply.selected_profiles) &&
+                reply.selected_profiles >= 1 && reply.selected_profiles <= 5 &&
+                typeof reply.candidate_xml_sha256 === 'string' &&
+                /^[a-f0-9]{64}$/.test(reply.candidate_xml_sha256)) {
+                $('#voiceValidationStatus').text(text.previewOk);
+            } else {
+                $('#voiceValidationStatus').text(text.previewFailed);
+            }
+        }).fail(function () {
+            $('#voiceValidationStatus').text(text.previewFailed);
+        }).always(function () {
+            button.prop('disabled', !/^[a-f0-9]{64}$/.test(voiceSnapshot.val() || ''));
         });
     });
     $('#voiceSaveDraft').on('click', function () {
@@ -275,6 +317,7 @@ $(document).ready(function () {
             /^[a-f0-9]{64}$/.test(record.snapshot)) {
             voiceSnapshot.val(record.snapshot);
             $('#voiceValidate').prop('disabled', false);
+            $('#voicePreviewDraft').prop('disabled', false);
             $('#voiceSaveDraft').prop('disabled', false);
             $('#voiceApply').prop('disabled', false);
         } else {
@@ -448,6 +491,7 @@ $(document).ready(function () {
 <section class="grid-bottom-reserve __mt">
     <div class="alert content-box" style="margin-bottom: 0;">
         <button class="btn btn-default __mr" id="voiceValidate" type="button" disabled>Validate</button>
+        <button class="btn btn-default __mr" id="voicePreviewDraft" type="button" disabled>Preview saved Voice drafts</button>
         <button class="btn btn-default __mr" id="voiceSaveDraft" type="button" disabled>Save inactive draft</button>
         <button class="btn btn-primary __mr" id="voiceApply" type="button" disabled>Apply inactive settings</button>
         <span id="voiceValidationStatus" aria-live="polite"></span>

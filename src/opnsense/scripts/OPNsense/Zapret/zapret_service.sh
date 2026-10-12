@@ -661,6 +661,27 @@ native_voice_prepare_prebuilt_service()
     fi
 }
 
+# Read-only GUI native Voice saved-draft candidate preview. This is NOT
+# prepare-from-draft, does NOT seal PREPARED, and changes no persisted state.
+native_voice_preview_draft_service()
+{
+    _voice_mask="${1:-}"
+    _voice_sha="${2:-}"
+    case "${_voice_mask}" in
+        [01][01][01][01][01]) ;;
+        *) return 64 ;;
+    esac
+    [ "${_voice_mask}" != 00000 ] || return 64
+    printf '%s\n' "${_voice_sha}" | grep -Eq '^[0-9a-f]{64}$' || return 64
+    _voice_python="/usr/local/bin/python3.13"
+    _voice_route="${BACKEND_DIR}/voice_native_draft_preview_route.py"
+    [ -x "${_voice_python}" ] && [ -r "${_voice_route}" ] || {
+        echo "ERROR: native Voice read-only preview unavailable" >&2
+        return 69
+    }
+    "${_voice_python}" "${_voice_route}" preview-draft "${_voice_mask}" "${_voice_sha}"
+}
+
 native_voice_apply_prepared_service()
 {
     _voice_python="/usr/local/bin/python3.13"
@@ -753,6 +774,9 @@ service_dispatch()
             ;;
         native-voice-prepare-draft)
             native_voice_prepare_prebuilt_service prepare-from-draft "${2:-}" "${3:-}"
+            ;;
+        native-voice-preview-draft)
+            native_voice_preview_draft_service "${2:-}" "${3:-}"
             ;;
         native-voice-apply-prepared)
             native_voice_apply_prepared_service
@@ -877,7 +901,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

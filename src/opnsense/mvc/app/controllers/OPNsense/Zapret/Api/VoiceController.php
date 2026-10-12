@@ -15,6 +15,7 @@ require_once __DIR__ . '/VoiceSettingsSnapshot.php';
 require_once __DIR__ . '/VoiceSettingsPayload.php';
 require_once __DIR__ . '/VoiceApplyCandidate.php';
 require_once __DIR__ . '/VoiceCandidateXml.php';
+require_once __DIR__ . '/VoiceDraftSelection.php';
 
 class VoiceController extends ApiControllerBase
 {
@@ -98,6 +99,100 @@ class VoiceController extends ApiControllerBase
             ]];
         } finally {
             $config->unlock();
+        }
+    }
+
+    /**
+     * Read-only full native saved-draft preflight, under ONE original FD9
+     * and ONE original Config inode flock in the installed backend.
+     *
+     * No XML/secret or arbitrary path travels through configd. PHP releases
+     * its own Config::lock before acquiring FD9 in configd (no lock inversion).
+     * This method CANNOT prepare PREPARED or mutate runtime/IPFW/Config.
+     */
+    protected function originalConfigDigest(): string
+    {
+        return VoiceDraftSelection::digestOriginalConfig();
+    }
+
+    public function previewDraftAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['result' => 'failed', 'validations' => [
+                'zapret.voice.waninterface' => 'POST request required'
+            ]];
+        }
+        $fields = $this->request->getPost('zapret');
+        if (!is_array($fields)) {
+            return ['result' => 'failed', 'validations' => [
+                'zapret.voice.waninterface' => 'Missing Voice form'
+            ]];
+        }
+        $config = Config::getInstance();
+        $config->lock();
+        try {
+            $model = new \OPNsense\Zapret\Zapret();
+            $saved = $model->getNodes();
+            $sync = $fields['sync'] ?? null;
+            if (!is_array($sync) || array_keys($sync) !== ['snapshot']) {
+                throw new \InvalidArgumentException(
+                    'Voice configuration baseline is missing. Reload the Voice page.'
+                );
+            }
+            unset($fields['sync']);
+            $selection = VoiceDraftSelection::plan($saved, $fields, $sync['snapshot']);
+            if (($selection['result'] ?? null) !== 'eligible') {
+                return $selection;
+            }
+            // This is the exact BYTES hash read again by the root-only
+            // backend while holding FD9 and the original on-disk inode.
+            $digest = $this->originalConfigDigest();
+            $mask = $selection['mask'];
+            $count = $selection['selected_count'];
+        } catch (\InvalidArgumentException $error) {
+            return ['result' => 'failed', 'validations' => [
+                'zapret.voice.waninterface' => $error->getMessage()
+            ]];
+        } catch (\Throwable $error) {
+            return ['result' => 'failed', 'validations' => [
+                'zapret.voice.waninterface' => 'Saved native Voice preview unavailable'
+            ]];
+        } finally {
+            $config->unlock();
+        }
+        // Never hold PHP Config::lock across configd: backend obtains FD9
+        // first, then its own lock of the ORIGINAL Config inode. The digest
+        // pins the exact previous generation across that lock handoff.
+        try {
+            $backend = new Backend();
+            $raw = trim((string)$backend->configdpRun(
+                'zapret voice_preview_draft', [$mask, $digest], false, 40
+            ));
+            $report = json_decode($raw, true);
+            if (!is_array($report) ||
+                ($report['state'] ?? null) !== 'native-voice-saved-draft-preview' ||
+                ($report['selected_profiles'] ?? null) !== $count ||
+                ($report['safe_to_enable_voice'] ?? null) !== false ||
+                ($report['public_voice_apply'] ?? null) !== false ||
+                !isset($report['saved_xml_sha256']) ||
+                !is_string($report['saved_xml_sha256']) ||
+                !preg_match('/^[0-9a-f]{64}$/D', $report['saved_xml_sha256'])
+            ) {
+                throw new \RuntimeException('invalid native Voice preflight result');
+            }
+            return [
+                'result' => 'previewed',
+                'selected_profiles' => $count,
+                'candidate_xml_sha256' => $report['saved_xml_sha256'],
+                'saved' => false,
+                'prepared' => false,
+                'applied' => false,
+            ];
+        } catch (\Throwable $error) {
+            return ['result' => 'failed', 'validations' => [
+                'zapret.voice.waninterface' =>
+                    'Saved Voice drafts or Config generation changed; reload and retry'
+            ]];
         }
     }
 

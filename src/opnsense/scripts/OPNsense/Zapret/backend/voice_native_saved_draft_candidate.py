@@ -59,19 +59,19 @@ def _check_mask(mask: str, expected_sha: str) -> None:
         raise NativeDraftCandidateError("invalid Voice profile mask or Config baseline")
 
 
-def prepare_saved_draft_candidate(
-    *, config_path, destination, mask, expected_sha, config_fd,
+def render_saved_draft_candidate(
+    *, config_path, mask, expected_sha, config_fd,
     config_owner, require_lifecycle_owner,
-) -> dict:
-    """Atomic root-private XML publication; never touches existing live Config."""
+) -> bytes:
+    """ONE authoritative, read-only saved-draft parser under FD9 + Config flock.
+
+    This exact parser is shared by GUI preflight and the persistent candidate
+    publisher. Never read a browser-supplied XML or install running resources.
+    """
     _check_mask(mask, expected_sha)
-    config_path, destination = Path(config_path), Path(destination)
-    if not config_path.is_absolute() or not destination.is_absolute() or (
-        destination.name != "voice-build-input" or config_path == destination
-    ):
-        raise NativeDraftCandidateError("foreign native Voice destination")
-    if not callable(require_lifecycle_owner):
-        raise NativeDraftCandidateError("missing original lifecycle FD9 owner")
+    config_path = Path(config_path)
+    if not config_path.is_absolute() or not callable(require_lifecycle_owner):
+        raise NativeDraftCandidateError("foreign native Voice Config or missing lifecycle owner")
     require_lifecycle_owner()
     _locked_config(config_path, config_fd, config_owner)
 
@@ -113,6 +113,47 @@ def prepare_saved_draft_candidate(
     candidate_xml = doc.toxml(encoding="utf-8")
     if len(candidate_xml) > MAX_CONFIG:
         raise NativeDraftCandidateError("Voice candidate XML exceeds Config limit")
+    require_lifecycle_owner()
+    _locked_config(config_path, config_fd, config_owner)
+    if hashlib.sha256(os.pread(config_fd, MAX_CONFIG + 1, 0)).hexdigest() != expected_sha:
+        raise NativeDraftCandidateError("current Config changed during candidate rendering")
+    return candidate_xml
+
+
+def preview_saved_draft_candidate(
+    *, config_path, mask, expected_sha, config_fd,
+    config_owner, require_lifecycle_owner,
+) -> dict:
+    """No filesystem writes, status only; no PREPARED journal."""
+    candidate_xml = render_saved_draft_candidate(
+        config_path=config_path, mask=mask, expected_sha=expected_sha,
+        config_fd=config_fd, config_owner=config_owner,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    return {
+        "state": "native-voice-saved-draft-preview",
+        "selected_profiles": sum(ch == "1" for ch in mask),
+        "saved_xml_sha256": hashlib.sha256(candidate_xml).hexdigest(),
+        "safe_to_enable_voice": False,
+        "public_voice_apply": False,
+    }
+
+
+def prepare_saved_draft_candidate(
+    *, config_path, destination, mask, expected_sha, config_fd,
+    config_owner, require_lifecycle_owner,
+) -> dict:
+    """Atomic root-private XML publication; never touches existing live Config."""
+    config_path, destination = Path(config_path), Path(destination)
+    if not destination.is_absolute() or destination.name != "voice-build-input" or (
+        config_path == destination
+    ):
+        raise NativeDraftCandidateError("foreign native Voice destination")
+    candidate_xml = render_saved_draft_candidate(
+        config_path=config_path, mask=mask, expected_sha=expected_sha,
+        config_fd=config_fd, config_owner=config_owner,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
 
     parent = destination.parent
     _private_dir(parent)
