@@ -17,6 +17,8 @@ import tempfile
 
 from voice_cutover_backup import _copy_regular, _private_dir, _sync_dir
 from voice_cutover_journal import VoiceCutoverJournal
+from voice_cutover_restore_stage import prepare_restore_stage
+from voice_cutover_install_image import prepare_installable_restore
 from voice_firewall_ledger import VoiceOwnershipStore, canonical_manifest
 from voice_native_file_observer import observe_live_files
 from voice_native_forward_runtime import _copy_candidate
@@ -26,6 +28,8 @@ from voice_native_apply_route import sealed_prepared_handoff, STAGE
 
 MANIFEST_FILE = "desired-ipfw.json"
 TEMP_PREFIX = ".forward-candidate-"
+RESTORE_STAGE = "restore-stage"
+RESTORE_IMAGE = "restore-install-image"
 
 
 class NativeVoiceStagePrepareError(RuntimeError):
@@ -66,6 +70,10 @@ def prepare_staged_forward_voice_intent(
         raise NativeVoiceStagePrepareError("candidate is not a fresh detached release")
     if any(name.startswith(TEMP_PREFIX) for name in os.listdir(root)):
         raise NativeVoiceStagePrepareError("unresolved previous candidate staging residue")
+    # The five-resource executor requires this immutable previous install image
+    # before MUTATING. Unknown prior images must never be overwritten/adopted.
+    if os.path.lexists(root / RESTORE_STAGE) or os.path.lexists(root / RESTORE_IMAGE):
+        raise NativeVoiceStagePrepareError("previous recovery image already exists")
     desired = canonical_manifest(desired_manifest)
     if desired["rule_base"] != 19000 or desired["rule_max"] != 19010 or (
         not desired["rules"] or not desired["tables"]
@@ -126,8 +134,45 @@ def prepare_staged_forward_voice_intent(
         canonical_manifest(sealed_prepared_handoff(journal, stage)) != desired
     ):
         raise NativeVoiceStagePrepareError("journal does not bind published Voice stage")
+    # PREPARED is now fsync'd. Reuse the existing mode-accurate previous
+    # recovery staging primitives before any future path can enter MUTATING.
+    # An interrupted/power-cut stage/image is RETAINED for operator review,
+    # not cleaned up or silently adopted by a later attempt.
+    require_lifecycle_owner()
+    _locked_config(config_path, config_fd, config_owner)
+    record = journal.read()
+    if record is None or record["phase"] != "prepared" or (
+        record["check"] != result["whole_check"]
+    ):
+        raise NativeVoiceStagePrepareError("forward journal changed before recovery image")
+    old_files = {key: record["previous"][key] for key in ("config", "runtime")}
+    staged_recovery = prepare_restore_stage(
+        previous_backup, root / RESTORE_STAGE, record["previous"],
+    )
+    if staged_recovery["previous"] != old_files or (
+        staged_recovery["activation_authorized"] is not False
+    ):
+        raise NativeVoiceStagePrepareError("old Config/runtime stage not bound")
+    image = prepare_installable_restore(
+        root / RESTORE_STAGE, root / RESTORE_IMAGE, record["previous"],
+    )
+    if image["previous"] != old_files or image["activation_authorized"] is not False:
+        raise NativeVoiceStagePrepareError("old recovery install image not bound")
+    require_lifecycle_owner()
+    _locked_config(config_path, config_fd, config_owner)
+    if journal.read() != record or ledger.pending() is not None or (
+        canonical_manifest(sealed_prepared_handoff(journal, stage)) != desired
+    ):
+        raise NativeVoiceStagePrepareError("Voice recovery image or prepared intent raced")
+    if observe_live_files(
+        root / RESTORE_IMAGE / "config.xml",
+        root / RESTORE_IMAGE / "runtime",
+        previous_backup=previous_backup,
+    ) != old_files:
+        raise NativeVoiceStagePrepareError("previous recovery image changed after publish")
     return {
         "state": "native-voice-stage-and-forward-prepared",
+        "previous_install_image": "sealed-not-installed",
         "whole_check": result["whole_check"],
         "candidate_runtime_sha256": result["candidate_runtime_sha256"],
         "safe_to_enable_voice": False,
