@@ -239,6 +239,8 @@ jobs:
         run: python3.13 scripts/test-voice-cutover-boot-guard.py
       - name: Voice private flock/FreeBSD lockf FD9 interoperability
         run: python3.13 scripts/test-voice-native-lifecycle-lock-interop.py
+      - name: Native Voice saved Config and journal lifecycle router (read-only)
+        run: python3.13 scripts/test-voice-native-lifecycle-router.py
       - name: Voice non-destructive atomic runtime rollback preflight
         run: sh scripts/test-voice-atomic-rollback-preflight.sh
       - name: Voice IPSET integration with shared production Targets normalizer
@@ -643,6 +645,7 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-cutover-recovery-preflight.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-boot-guard.py
             /usr/local/bin/python3.13 scripts/test-voice-native-lifecycle-lock-interop.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-lifecycle-router.py
             sh scripts/test-voice-atomic-rollback-preflight.sh
             /usr/local/bin/python3.13 scripts/test-voice-targets-integration.py
             /usr/local/bin/python3.13 scripts/test-voice-firewall-ledger.py

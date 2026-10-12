@@ -580,6 +580,20 @@ native_voice_boot_review_service()
 # Owner-only, READ-ONLY physical appliance baseline BEFORE any Voice journal.
 # This observes the already-running ordinary service; does not generate
 # Config, touch IPFW, stop/start a process, or authorize Voice ON.
+native_voice_lifecycle_inspect_service()
+{
+    # One read-only lifecycle classifier shares the existing FD9 route.
+    # It NEVER bypasses the legacy cutover guard or activates Voice ON.
+    _native_voice_router_python="/usr/local/bin/python3.13"
+    _native_voice_router_script="${BACKEND_DIR}/voice_native_lifecycle_router.py"
+    [ -x "${_native_voice_router_python}" ] &&
+    [ -r "${_native_voice_router_script}" ] || {
+        echo "ERROR: native Voice lifecycle router is unavailable" >&2
+        return 69
+    }
+    "${_native_voice_router_python}" "${_native_voice_router_script}" inspect
+}
+
 native_voice_live_preflight_service()
 {
     _native_voice_live_python="/usr/local/bin/python3.13"
@@ -638,6 +652,9 @@ service_dispatch()
             ;;
         native-voice-live-preflight)
             native_voice_live_preflight_service
+            ;;
+        native-voice-lifecycle-inspect)
+            native_voice_lifecycle_inspect_service
             ;;
         native-voice-ipfw-seed)
             native_voice_ipfw_dispatch seed
@@ -759,7 +776,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
