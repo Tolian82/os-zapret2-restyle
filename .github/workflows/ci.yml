@@ -194,6 +194,8 @@ jobs:
         run: python3.13 scripts/test-voice-native-legacy-restore-plan.py
       - name: Quiescent legacy PoC reverse WAL admission and power-cut refusal
         run: python3.13 scripts/test-voice-native-legacy-reverse-wal.py
+      - name: Real legacy IPFW per-command durable replay and crash-before-done recovery
+        run: python3.13 scripts/test-voice-native-legacy-ipfw-replay.py
       - name: Native Voice forward Apply PREPARED schema-4 journal with full rollback witnesses
         run: python3.13 scripts/test-voice-native-forward-prepare.py
       - name: Native Voice forward runtime installation and rollback after power loss

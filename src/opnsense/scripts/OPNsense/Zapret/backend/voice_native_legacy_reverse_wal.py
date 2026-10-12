@@ -146,12 +146,15 @@ def _read_manifest(root):
     return value
 
 
-def inspect_legacy_reverse_wal(root):
+def inspect_legacy_reverse_wal(root, *, allow_ipfw_replay=False):
     """Read-only reboot triage, recompute source bindings; no kernel trust."""
     root = Path(root)
     _private_dir(root)
-    if set(os.listdir(root)) != {NAME, PLAN_NAME, WAL_NAME}:
-        raise LegacyReverseWALError("reverse WAL is not the only staging artifact")
+    expected = {NAME, PLAN_NAME, WAL_NAME}
+    if allow_ipfw_replay:
+        expected.add("legacy-ipfw-replay")
+    if set(os.listdir(root)) != expected:
+        raise LegacyReverseWALError("reverse WAL has foreign or missing staging artifacts")
     record = _read_manifest(root)
     plan = inspect_legacy_restore_plan(root)
     digest = _digest(_read_private_file(root / PLAN_NAME / "plan.json", PLAN_LIMIT))

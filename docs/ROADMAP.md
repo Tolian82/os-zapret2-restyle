@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**Этап 3 · `v0.5.1_155`:** import-only, но реально исполняемый ограниченный legacy IPFW replay (`table create`→IPv4 adds→exact numbered rules), с per-operation durable START/DONE, strict live before/after prefix, resume без повторной команды после power-cut и без foreign cleanup. Покрыт mock-kernel CI. Следующий обязательный этап: на этом же оригинальном FD9+Config lock restore предыдущих Config/runtime+marker и трёх процессов по schema-2 security-policy и process-argv, проверяемый whole 5-domain receipt, reboot reconciliation и только затем native GUI ON/MEDIA_PASS.
+
+
 **Этап 3 · `v0.5.1_154`:** добавлена блокировочная, неизменяющая систему admission-подготовка обратной WAL из двух прежних immutable PoC seals. Обязательные критерии: old marker/ON-state отсутствуют, все три процесса остановлены, 19000..19010 + старые/native таблицы пусты, native owner/pending отсутствуют; отдельный fsync PREPARED и fail-closed reboot. Далее — durable per-action redo/undo и verified legacy IPFW/marker/Config/process restoration, rollback при сбое питания и native live MEDIA_PASS.
 
 
