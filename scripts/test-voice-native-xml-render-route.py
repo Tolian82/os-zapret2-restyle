@@ -135,8 +135,10 @@ class NativeXmlProducerTests(unittest.TestCase):
         sh=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/voice_native_render_saved.sh").read_text()
         self.assertIn("template_ctl.py",sh)
         self.assertIn('"${SOURCE}/config.xml" -r "${ROOT}" OPNsense/Zapret',sh)
-        self.assertNotIn("configctl template reload",sh.replace(
-            "# and original Config inode flock held; never configctl template reload.",""))
+        commands="\n".join(
+            line for line in sh.splitlines() if not line.lstrip().startswith("#")
+        )
+        self.assertNotIn("configctl template reload",commands)
         service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
         configd=(ROOT/"src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text()
         self.assertIn("native-voice-prepare-xml)",service)
