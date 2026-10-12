@@ -139,6 +139,23 @@ class BootGateTests(unittest.TestCase):
             self.assertFalse(result["safe_to_mutate"])
             self.assertEqual(original, (ipfw / "intent.json").read_bytes())
 
+    def test_old_whole_receipt_orphan_blocks_even_with_missing_stage_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            whole, ipfw = self.paths(Path(tmp))
+            receipt=whole.with_name(whole.name+"-legacy-whole-receipt")
+            receipt.mkdir(mode=0o700)
+            result=guard.check_pending(whole,ipfw)
+            self.assertFalse(result["safe_to_mutate"])
+            self.assertEqual("legacy-whole-receipt-retained",result["reason"])
+            self.assertFalse(whole.exists())
+            self.assertFalse(ipfw.exists())
+            receipt.rmdir()
+            foreign=Path(tmp)/"foreign"
+            foreign.mkdir(mode=0o700)
+            receipt.symlink_to(foreign)
+            self.assertEqual("legacy-whole-receipt-retained",
+                             guard.check_pending(whole,ipfw)["reason"])
+
     def test_untrusted_paths_or_corrupt_records_fail_closed(self):
         for case in ("symlink-whole", "symlink-ipfw", "bad-mode",
                      "bad-whole-json", "bad-ipfw-json"):

@@ -62,6 +62,15 @@ def check_pending(whole_root: Path, ipfw_root: Path) -> dict:
                     "state": "blocked", "reason": "orphan-native-voice-evidence",
                     "safe_to_mutate": False,
                 }
+        # A whole old-PoC rollback receipt lives beside the strict stage
+        # root. It must block lifecycle even if that root was lost or
+        # accidentally removed: absence of WAL is not proof of no intent.
+        old_receipt=whole_root.with_name(whole_root.name+"-legacy-whole-receipt")
+        if _present(old_receipt):
+            return {
+                "state": "blocked", "reason": "legacy-whole-receipt-retained",
+                "safe_to_mutate": False,
+            }
         if _present(ipfw_root):
             ledger = VoiceOwnershipStore(ipfw_root)
             pending = ledger.pending()
