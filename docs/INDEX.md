@@ -1,6 +1,6 @@
 # os-zapret2-restyle — Engineering memory index
 
-**Текущий Stage 3 · `v0.5.1_119`:** появился продукционный import-only snapshot предыдущих Config/runtime/трёх процессов/security policy/IPFW owner в один NativePreviousObserver. Offline один-FD9/Config-flock PREPARED и restore image — Voice CI 82 PASS. Не выполнены начальный audited IPFW seed/migration, service/configd Apply, GUI ON/OFF, boot, FreeBSD owner-live и MEDIA_PASS; PR Draft, пакет не опубликован.
+**Текущий этап 3 · `v0.5.1_128`:** [рабочий handoff](START_HERE.md) и [единый план](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) отражают обязательную квалификацию настоящего восьмифайлового Voice release до IPFW seed и закрытый операторский original-FD9 путь к schema-4 PREPARED. Следующее: штатный производитель отдельного полного Config/runtime, GUI Apply, legacy migration, reboot и MEDIA_PASS. Voice CI 85 PASS на кодовом HEAD; остальные acceptance требуют проверки. Старые записи ниже — исторические checkpoints.
 
 **Текущий Stage 3 · `v0.5.1_118`:** после schema-4 PREPARED запечатывается настоящий mode-preserving `restore-install-image` из предыдущего Config/runtime под FD9/Config flock, до MUTATING. Voice CI 81 PASS; текущая задача — штатная сборка предыдущих process/security/IPFW witnesses и один сервисный Apply, далее PoC migration/reboot/GUI. Не опубликовано, нет MEDIA_PASS.
 
