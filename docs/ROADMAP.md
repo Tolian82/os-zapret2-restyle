@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**Этап 3 · `v0.5.1_152`:** предыдущий PoC теперь можно зафиксировать в импортируемом закрытом snapshot, включая Config/runtime, marker, IPFW, PID/start и штатную supervisor-bound policy числовых UID/GID. Далее реализовать настоящее восстановление marker+legacy IPFW+процессов и полностью reversible PoC→native cutover через исходные FD9/Config flock; затем boot и проверка голосового media path. Публичный Voice Apply запрещён до приёмки.
+
+
 **Этап 3 · `v0.5.1_151` (12.10.2026).** Добавлен import-only `voice_native_legacy_previous_seal.py`: после полной прежней live PoC квалификации под original FD9 и Config inode flock он делает fsync/atomic write-once снимок прежних Config/runtime штатным механизмом `capture_previous`, дополнительно сохраняет точные байты/режим старого transient marker и проверенную legacy IPFW таблицу+правила, хеши managed IPSET/dvtws.args и три PID/start. После записи повторяет контроль marker, процессов, kernel argv и IPFW; отдельный `inspect_legacy_previous` проверяет sealed manifest, bytes и Config/runtime. Частичные/неизвестные артефакты не удаляет, boot/lifecycle guard оставляет их в fail-closed ручном review. Нет CLI/GUI/configd вызова этого writer, привилегий native IPFW, миграции, security-policy seal, реального rollback, Voice ON или MEDIA_PASS. Следующий шаг — безопасная связь с предыдущим process/security и полным reversible PoC→native cutover. `_150` Voice + FreeBSD15 PASS; Project CI FAIL на буквальном `v0.5.1_150` в ROADMAP, исправлено здесь. Exact `_151` CI pending; PR Draft.
 
 

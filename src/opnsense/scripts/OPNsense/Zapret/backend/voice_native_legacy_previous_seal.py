@@ -2,7 +2,7 @@
 """Stage 3 import-only: durable previous legacy PoC files, marker and IPFW witness.
 
 NO configd, GUI, CLI, boot or service dispatch. This refuses to authorize
-migration: old rule/table ownership, process security and rollback execution
+migration: old rule/table ownership and rollback execution
 still require a separate atomic, reviewed cutover contract. The caller MUST
 hold original FD9 plus the original Config inode flock throughout.
 """
@@ -30,11 +30,19 @@ from voice_native_kernel_argv import SYSTEM_PATHS
 from voice_native_recovery_quiescence import _locked_config
 from voice_native_supervisor_launch import canonical_supervisor_argv
 from voice_native_recovery_quiescence import EXPECTED_SCRIPTS
+from voice_native_process_probe import FreeBSDVoiceProcessProbe
+from voice_freebsd_process_security import FreeBSDProcessSecurityReader
+from voice_process_recovery_evidence import capture_process_evidence, inspect_process_evidence
+from voice_security_policy_evidence import (
+    SUPERVISOR_BOUND_POLICY_SCHEMA, capture_security_policy,
+    inspect_security_policy, verify_current_security,
+)
 
 NAME = "legacy-previous"
-SCHEMA = 1
+SCHEMA = 2
 LIMIT = 1048576
-FILES = frozenset(("previous", "marker.bin", "legacy.json", "legacy.sha256"))
+FILES = frozenset(("previous", "marker.bin", "legacy.json", "legacy.sha256",
+                   "process-evidence", "process-security-policy"))
 
 
 class LegacyPreviousSealError(RuntimeError):
@@ -73,6 +81,7 @@ def inspect_legacy_previous(root: Path) -> dict:
         "schema", "previous", "marker", "legacy_ipfw_previous",
         "legacy_ipfw_structure_sha256", "managed_ipv4_sha256",
         "active_argument_sha256", "process_instances", "phase",
+        "previous_five", "process_security_policy_sha256",
     } or type(record["schema"]) is not int or record["schema"] != SCHEMA or (
         record["phase"] != "previous-evidence-only-not-owned"
     ):
@@ -102,12 +111,43 @@ def inspect_legacy_previous(root: Path) -> dict:
         set(record["process_instances"]) != {"engine", "daemon", "monitor"}
     ):
         raise LegacyPreviousSealError("missing previous PoC process epochs")
+    process = inspect_process_evidence(
+        archive / "process-evidence", archive / "previous", EXPECTED_SCRIPTS,
+        record["previous_five"],
+    )
+    if record["previous_five"] != {
+        **record["previous"], **process["previous"],
+        "firewall": record["legacy_ipfw_structure_sha256"],
+    }:
+        raise LegacyPreviousSealError("previous PoC five-domain binding mismatch")
+    observed = process["observation"]
+    identities = {
+        "engine": observed["engine"]["process"],
+        "daemon": observed["supervisor"]["daemon"],
+        "monitor": observed["supervisor"]["monitor"],
+    }
+    if any(record["process_instances"].get(role) != {
+        "pid": row["pid"], "start_ns": row["start_ns"],
+    } for role, row in identities.items()):
+        raise LegacyPreviousSealError("old PoC PID/start differs from process evidence")
+    policy = inspect_security_policy(
+        archive / "process-security-policy",
+        archive / "previous", archive / "process-evidence",
+        expected_scripts=EXPECTED_SCRIPTS,
+    )
+    if policy["schema"] != SUPERVISOR_BOUND_POLICY_SCHEMA or (
+        policy["policy_sha256"] != record["process_security_policy_sha256"]
+        or policy["policy"]["previous"] != record["previous_five"]
+    ):
+        raise LegacyPreviousSealError("previous PoC process security policy mismatch")
     return {
-        "state": "legacy-poc-previous-files-and-kernel-witness-sealed",
+        "state": "legacy-poc-previous-five-domains-sealed-not-owned",
         "legacy_ipfw_structure_sha256": record["legacy_ipfw_structure_sha256"],
         "previous": record["previous"],
         "marker_bytes": len(marker),
-        "process_security_sealed": False,
+        "process_security_sealed": True,
+        "process_security_policy_sha256": policy["policy_sha256"],
+        "previous_five": record["previous_five"],
         "rollback_implemented": False,
         "safe_to_mutate": False,
         "safe_to_enable_voice": False,
@@ -117,7 +157,8 @@ def inspect_legacy_previous(root: Path) -> dict:
 
 def capture_legacy_previous(
     *, root, config_path, active_runtime, legacy_marker, ledger_root,
-    probe, kernel_reader, ipfw_adapter, config_fd, config_owner,
+    probe, kernel_reader, ipfw_adapter, security_reader,
+    config_fd, config_owner,
     require_lifecycle_owner,
 ) -> dict:
     """Persist old Config/runtime, transient marker, exact IPFW with fsync.
@@ -125,6 +166,13 @@ def capture_legacy_previous(
     On an interrupted capture leave the untrusted temp root for operator
     review. Never silently clear it or resume ordinary lifecycle from it.
     """
+    if not isinstance(probe, FreeBSDVoiceProcessProbe) or (
+        not isinstance(security_reader, FreeBSDProcessSecurityReader)
+        or security_reader.probe is not probe
+        or security_reader.expected_scripts != EXPECTED_SCRIPTS
+        or security_reader.kernel_images != SYSTEM_PATHS
+    ):
+        raise LegacyPreviousSealError("untrusted legacy PoC process security source")
     root, config_path, active_runtime, legacy_marker = map(
         Path, (root, config_path, active_runtime, legacy_marker)
     )
@@ -181,6 +229,55 @@ def capture_legacy_previous(
             kernel_reader.binary(entry["pid"]) != SYSTEM_PATHS[role]
         ):
             raise LegacyPreviousSealError("old process kernel identity drifted")
+    original_probe_backup = probe.previous_backup
+    try:
+        # Reuse the existing validated two-copy process evidence and previous
+        # supervisor-bound security policy. The probe resolves the *staged*
+        # previous tree solely during this locked capture; restore its
+        # original binding even if verification or fsync fails.
+        probe.previous_backup = work / "previous"
+        process_digests = capture_process_evidence(
+            probe, work / "previous", work / "process-evidence", EXPECTED_SCRIPTS,
+        )
+        process = inspect_process_evidence(
+            work / "process-evidence", work / "previous", EXPECTED_SCRIPTS,
+        )
+        if process["previous"] != process_digests or (
+            _instances(probe.observe_processes()) != instances
+        ):
+            raise LegacyPreviousSealError("previous PoC process evidence drifted")
+        old_five = {
+            **saved, **process_digests,
+            "firewall": kernel["structure_sha256"],
+        }
+        security = security_reader.inspect_twice()
+        if security.get("state") != "review-required" or any(
+            security.get("roles", {}).get(role, {}).get("pid") != row["pid"] or
+            security["roles"][role].get("start_ns") != row["start_ns"]
+            for role, row in instances.items()
+        ):
+            raise LegacyPreviousSealError("old PoC kernel credentials/epochs drifted")
+        policy_sha = capture_security_policy(
+            work / "previous", work / "process-evidence",
+            work / "process-security-policy", old_five,
+            EXPECTED_SCRIPTS, SYSTEM_PATHS, security_reader.credentials,
+            supervisor_argv=canonical_supervisor_argv(EXPECTED_SCRIPTS),
+        )
+        policy = inspect_security_policy(
+            work / "process-security-policy", work / "previous",
+            work / "process-evidence", expected_scripts=EXPECTED_SCRIPTS,
+        )
+        if policy["schema"] != SUPERVISOR_BOUND_POLICY_SCHEMA or (
+            policy["policy_sha256"] != policy_sha
+            or not verify_current_security(security, policy)
+        ):
+            raise LegacyPreviousSealError("old PoC supervisor security seal invalid")
+        if security_reader.inspect_twice() != security or (
+            _instances(probe.observe_processes()) != instances
+        ):
+            raise LegacyPreviousSealError("old PoC process credentials changed")
+    finally:
+        probe.previous_backup = original_probe_backup
     record = {
         "schema": SCHEMA, "phase": "previous-evidence-only-not-owned",
         "previous": saved,
@@ -191,6 +288,8 @@ def capture_legacy_previous(
         "managed_ipv4_sha256": baseline["managed_ipv4_sha256"],
         "active_argument_sha256": baseline["active_argument_sha256"],
         "process_instances": instances,
+        "previous_five": old_five,
+        "process_security_policy_sha256": policy_sha,
     }
     body = (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     if len(body) > LIMIT:

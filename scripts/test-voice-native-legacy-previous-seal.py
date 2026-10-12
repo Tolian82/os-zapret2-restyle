@@ -16,6 +16,9 @@ from voice_native_legacy_previous_seal import (
     capture_legacy_previous, inspect_legacy_previous, LegacyPreviousSealError,
 )
 from voice_cutover_guard import check_pending
+from voice_freebsd_process_security import FreeBSDProcessSecurityReader, FIELDS
+from voice_native_recovery_quiescence import EXPECTED_SCRIPTS
+from voice_native_kernel_argv import SYSTEM_PATHS
 
 
 def load_fixture():
@@ -34,6 +37,20 @@ class DurableOldPoCTests(unittest.TestCase):
         self.addCleanup(self.case.live.doCleanups)
         self.root = self.case.live.whole
         self.root.mkdir(mode=0o700)
+        live=self.case.live
+        self.creds={role:{field:(65534 if role=="engine" else 0)
+                          for field in FIELDS}
+                    for role in ("engine","daemon","monitor")}
+        self.actual_creds={role:dict(values) for role,values in self.creds.items()}
+        by_pid={101:"engine",102:"daemon",103:"monitor"}
+        self.security=FreeBSDProcessSecurityReader(
+            EXPECTED_SCRIPTS,SYSTEM_PATHS,self.creds,live.probe,
+            path_reader=lambda pid:SYSTEM_PATHS[by_pid[pid]].encode("ascii")+b"\x00",
+            ps_reader=lambda argv: str(int(argv[2]))+" "+" ".join(
+                str(self.actual_creds[by_pid[int(argv[2])]][field])
+                for field in FIELDS
+            )+"\n",
+        )
 
     def capture(self, *, lock=True):
         live = self.case.live
@@ -46,6 +63,7 @@ class DurableOldPoCTests(unittest.TestCase):
                 active_runtime=live.runtime, legacy_marker=self.case.marker,
                 ledger_root=live.ledger, probe=live.probe,
                 kernel_reader=live.kernel, ipfw_adapter=live.adapter,
+                security_reader=self.security,
                 config_fd=fd, config_owner=(os.geteuid(), os.getegid()),
                 require_lifecycle_owner=lambda:live.lock_calls.append("FD9"),
             )
@@ -56,10 +74,14 @@ class DurableOldPoCTests(unittest.TestCase):
         before = self.case.live.config.read_bytes()
         marker = self.case.marker.read_bytes()
         report = self.capture()
-        self.assertEqual("legacy-poc-previous-files-and-kernel-witness-sealed",
+        self.assertEqual("legacy-poc-previous-five-domains-sealed-not-owned",
                          report["state"])
         self.assertFalse(report["rollback_implemented"])
-        self.assertFalse(report["process_security_sealed"])
+        self.assertTrue(report["process_security_sealed"])
+        self.assertEqual(64,len(report["process_security_policy_sha256"]))
+        self.assertEqual(5,len(report["previous_five"]))
+        self.assertEqual(self.case.live.probe.previous_backup,
+                         self.case.live.whole/"previous")
         self.assertFalse(report["safe_to_mutate"])
         self.assertFalse(report["public_voice_apply"])
         self.assertEqual(marker, (self.root/"legacy-previous/marker.bin").read_bytes())
@@ -70,6 +92,30 @@ class DurableOldPoCTests(unittest.TestCase):
                          check_pending(self.root,self.case.live.ledger)["reason"])
         self.assertTrue(all(x[1] in ("-q","table") for x in self.case.live.fake_ipfw.calls))
         self.assertEqual(report, inspect_legacy_previous(self.root))
+        self.assertTrue((self.root/"legacy-previous/process-evidence/processes.json").is_file())
+        self.assertTrue((self.root/"legacy-previous/process-security-policy/policy.json").is_file())
+
+    def test_policy_corruption_and_foreign_numeric_credentials_refused(self):
+        self.capture()
+        policy=self.root/"legacy-previous/process-security-policy/policy.json"
+        policy.write_bytes(policy.read_bytes().replace(b'"euid":65534',b'"euid":0'))
+        with self.assertRaises((OSError, ValueError, RuntimeError)):
+            inspect_legacy_previous(self.root)
+
+    def test_foreign_numeric_credentials_refused_before_publication(self):
+        self.actual_creds["engine"]["euid"]=0
+        with self.assertRaises((OSError, ValueError, RuntimeError)):
+            self.capture()
+        self.assertFalse((self.root/"legacy-previous").exists())
+        self.assertTrue(list(self.root.glob(".legacy-previous-*")))
+
+    def test_process_probe_binding_restored_even_on_failed_security(self):
+        old=self.case.live.probe.previous_backup
+        self.actual_creds["monitor"]["svgid"]=65534
+        with self.assertRaises((OSError, ValueError, RuntimeError)):
+            self.capture()
+        self.assertEqual(old,self.case.live.probe.previous_backup)
+        self.assertFalse((self.root/"legacy-previous").exists())
 
     def test_existing_archive_must_not_be_replaced(self):
         first = self.capture()
