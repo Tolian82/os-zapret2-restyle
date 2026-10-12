@@ -151,6 +151,7 @@ def inspect_running_legacy_poc(
         "marker": "present", "runtime_state": "enabled",
         "managed_ipv4_sha256": first["managed"]["sha256"],
         "legacy_ipfw_structure_sha256": report["kernel_ipfw_structure_sha256"],
+        "legacy_ipfw_previous": report["legacy_ipfw_previous"],
         "active_argument_sha256": report["active_argument_sha256"],
         "instances": report["instances"],
         "kernel_ownership": "not-adopted",

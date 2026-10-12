@@ -201,5 +201,6 @@ def observe_legacy_poc_ipfw(adapter, engine_argv, expected_ipv4):
             "structure_sha256": fingerprint(first),
             "legacy_ipv4_count": len(targets),
             "ordinary_rule_count": len(first["rules"]) - 1,
+            "previous_ipfw": first,  # exact old rules+IPv4 for future durable rollback
             "kernel_ownership": "not-adopted", "safe_to_mutate": False,
             "safe_to_enable_voice": False, "public_voice_apply": False}

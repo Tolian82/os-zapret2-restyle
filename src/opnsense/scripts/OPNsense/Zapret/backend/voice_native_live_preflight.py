@@ -216,6 +216,8 @@ def inspect_live_preflight(
                                     else first_ipfw["voice_tables"]),
         "kernel_ipfw_legacy_table":("present" if is_old_poc
                                    else first_ipfw["legacy_table"]),
+        "legacy_ipfw_previous":(first_ipfw["previous_ipfw"] if is_old_poc
+                                else None),
         "safe_to_enable_voice":False,
         "safe_to_start":False,
         "safe_to_mutate":False,
