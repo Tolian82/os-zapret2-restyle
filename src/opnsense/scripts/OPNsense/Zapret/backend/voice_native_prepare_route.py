@@ -37,6 +37,7 @@ from voice_native_recovery_quiescence import EXPECTED_SCRIPTS, PIDFILES, _locked
 from voice_native_prepare_one_lock import prepare_native_voice_one_lock
 from voice_native_operator_input_stage import stage_native_operator_input
 from voice_native_saved_pair_guard import require_saved_pair
+from voice_native_saved_draft_candidate import prepare_saved_draft_candidate
 import voice_ipfw_runtime as native
 
 INPUT = Path("/var/db/zapret2/voice-operator-input")
@@ -101,17 +102,29 @@ def _expected_credentials() -> dict[str, dict[str, int]]:
 def prepare_operator_prebuilt(
     physical_wan: str, divert_port: int, *, from_release: bool = False,
     from_saved: bool = False, from_xml: bool = False,
+    from_draft: bool = False, draft_mask: str = "",
+    expected_config_sha: str = "",
 ) -> dict:
     if not isinstance(physical_wan, str) or not _ALLOWED_WAN.fullmatch(physical_wan) or (
         type(divert_port) is not int or not 1 <= divert_port <= 65535
     ):
         raise NativePrepareRouteError("invalid resolved WAN or divert port")
-    if sum((bool(from_release), bool(from_saved), bool(from_xml))) > 1:
+    if sum((bool(from_release), bool(from_saved), bool(from_xml),
+            bool(from_draft))) > 1:
         raise NativePrepareRouteError("ambiguous native Voice operator mode")
     native.require_native_lock()
-    # The saved-input mode builds through the ORIGINAL orchestrator only.
-    # Both existing prebuilt modes retain their previous exact layouts.
-    if from_release or from_saved or from_xml:
+    # Draft-only mode creates the entire fixed input inside the original
+    # Config flock. It cannot accept a caller filesystem path or arbitrary XML.
+    if from_draft:
+        _private_dir(BUILD_INPUT.parent)
+        if os.path.lexists(BUILD_INPUT):
+            raise NativePrepareRouteError("prior saved-draft source must be inspected")
+        if not BUILD_WORKER.is_file() or BUILD_WORKER.is_symlink() or (
+            not RENDER_WORKER.is_file() or RENDER_WORKER.is_symlink()
+        ):
+            raise NativePrepareRouteError("native draft generation workers not installed")
+        _ensure_private_dir(native.WHOLE.parent)
+    elif from_release or from_saved or from_xml:
         _private_dir(BUILD_INPUT)
         expected = (XML_ONLY_ENTRIES if from_xml else
                     SAVED_ENTRIES if from_saved else BUILD_ENTRIES)
@@ -141,7 +154,21 @@ def prepare_operator_prebuilt(
         owner = (os.geteuid(), os.getegid())
         native.require_native_lock()
         _locked_config(native.CONFIG, fd, owner)
-        if from_xml:
+        if from_draft:
+            result = prepare_saved_draft_candidate(
+                config_path=native.CONFIG, destination=BUILD_INPUT,
+                mask=draft_mask, expected_sha=expected_config_sha,
+                config_fd=fd, config_owner=owner,
+                require_lifecycle_owner=native.require_native_lock,
+            )
+            if result.get("state") != "native-voice-private-saved-draft-xml" or (
+                result.get("safe_to_enable_voice") is not False
+                or result.get("public_voice_apply") is not False
+            ):
+                raise NativePrepareRouteError("GUI saved OFF draft was not privately sealed")
+            if set(os.listdir(BUILD_INPUT)) != XML_ONLY_ENTRIES:
+                raise NativePrepareRouteError("native draft source has foreign files")
+        if from_xml or from_draft:
             # Render with OPNsense's OWN template engine and alternate
             # private target root; the active config files are NEVER touched.
             native.require_native_lock()
@@ -164,7 +191,7 @@ def prepare_operator_prebuilt(
             ):
                 raise NativePrepareRouteError("detached template output is not private/regular")
             _private_dir(BUILD_INPUT / ".voice-template-root")
-        if from_saved or from_xml:
+        if from_saved or from_xml or from_draft:
             # A saved candidate XML and the OPNsense template output MUST
             # describe the same generation, not two separate GUI saves.
             require_saved_pair(BUILD_INPUT / "config.xml", BUILD_INPUT / "zapret.conf")
@@ -187,10 +214,10 @@ def prepare_operator_prebuilt(
             require_lock()
             _locked_config(native.CONFIG, fd, owner)
             if set(os.listdir(BUILD_INPUT)) != (
-                BUILT_XML_ENTRIES if from_xml else BUILT_ENTRIES
+                BUILT_XML_ENTRIES if (from_xml or from_draft) else BUILT_ENTRIES
             ):
                 raise NativePrepareRouteError("native release build left unexpected artifacts")
-        if from_release or from_saved or from_xml:
+        if from_release or from_saved or from_xml or from_draft:
             result = stage_native_operator_input(
                 config_path=native.CONFIG,
                 source_config=BUILD_INPUT / "config.xml",
@@ -245,11 +272,14 @@ def prepare_operator_prebuilt(
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 3 or argv[0] not in (
+    if not argv or (
+        (argv[0] == "prepare-from-draft" and len(argv) != 5) or
+        (argv[0] != "prepare-from-draft" and len(argv) != 3)
+    ) or argv[0] not in (
         "prepare-prebuilt", "prepare-from-release", "prepare-from-saved",
-        "prepare-from-xml",
+        "prepare-from-xml", "prepare-from-draft",
     ):
-        print("usage: voice_native_prepare_route.py {prepare-prebuilt|prepare-from-release|prepare-from-saved|prepare-from-xml} RESOLVED_WAN DIVERT_PORT",
+        print("usage: voice_native_prepare_route.py {prepare-prebuilt|prepare-from-release|prepare-from-saved|prepare-from-xml|prepare-from-draft} RESOLVED_WAN DIVERT_PORT [FIVE_BIT_MASK BASE_CONFIG_SHA256]",
               file=sys.stderr)
         return 64
     if not argv[2].isdecimal():
@@ -260,6 +290,9 @@ def main(argv: list[str]) -> int:
             from_release=argv[0] == "prepare-from-release",
             from_saved=argv[0] == "prepare-from-saved",
             from_xml=argv[0] == "prepare-from-xml",
+            from_draft=argv[0] == "prepare-from-draft",
+            draft_mask=argv[3] if len(argv) == 5 else "",
+            expected_config_sha=argv[4] if len(argv) == 5 else "",
         )
         if report["state"] != "native-voice-original-lock-prepared":
             raise NativePrepareRouteError("prepared state not verified")

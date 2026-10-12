@@ -262,6 +262,7 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         self.assertIn("native-voice-prepare-prebuilt)",service)
         self.assertIn("native-voice-prepare-release)",service)
         self.assertIn("native-voice-prepare-saved)",service)
+        self.assertIn("native-voice-prepare-draft)",service)
         self.assertIn("native_voice_prepare_prebuilt_service prepare-from-saved",service)
         self.assertIn("native_voice_prepare_prebuilt_service prepare-from-release",service)
         locked=service.split("case \"${1:-}\" in",1)[-1]
@@ -270,6 +271,7 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         self.assertNotIn("native-voice-prepare-prebuilt",configd)
         self.assertNotIn("native-voice-prepare-release",configd)
         self.assertNotIn("native-voice-prepare-saved",configd)
+        self.assertNotIn("native-voice-prepare-draft",configd)
 
 
 if __name__=="__main__":
