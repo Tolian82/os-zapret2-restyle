@@ -300,5 +300,102 @@ class LivePreflightTests(unittest.TestCase):
         self.assertIn('service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}"',script)
 
 
+class LegacyKernelWitnessTests(unittest.TestCase):
+    """The historical Telegram IPFW layout is observable, never adopted."""
+    def setUp(self):
+        from voice_native_live_ipfw import observe_legacy_poc_ipfw
+        self.inspect = observe_legacy_poc_ipfw
+
+        class FakeOldKernel(FakeReadOnlyIPFW):
+            def __init__(self):
+                super().__init__()
+                self.active.add("zapret2_tgvoice")
+                self.rules = (
+                    "00001 allow ip from any to any\n"
+                    "19000 divert 989 udp from any to table(zapret2_tgvoice) "
+                    "out not diverted not sockarg xmit vtnet1\n"
+                    "19001 divert 989 tcp from any to any 443 "
+                    "out not diverted not sockarg xmit vtnet1\n"
+                    "19002 divert 989 udp from any to any 596-599 "
+                    "out not diverted not sockarg xmit vtnet1\n"
+                    "65535 allow ip from any to any\n"
+                )
+                self.entries = "91.108.0.0/16 0\n91.108.13.10/32 0\n"
+
+            def __call__(self, argv, **kwargs):
+                if tuple(argv[1:]) == ("table", "zapret2_tgvoice", "list"):
+                    self.calls.append(tuple(argv))
+                    return subprocess.CompletedProcess(argv, 0, stdout=self.entries, stderr="")
+                return super().__call__(argv, **kwargs)
+
+        self.fake = FakeOldKernel()
+        self.reader = FreeBSDIPFWAdapter(19000, 19010, runner=self.fake)
+        self.argv = ["/usr/local/bin/dvtws2", "--port=989"]
+        self.targets = ["91.108.0.0/16", "91.108.13.10"]
+
+    def test_exact_legacy_layout_is_only_a_read_only_witness(self):
+        result = self.inspect(self.reader, self.argv, self.targets)
+        self.assertEqual("legacy-ipfw-observed-not-owned", result["state"])
+        self.assertEqual(2, result["ordinary_rule_count"])
+        self.assertEqual(2, result["legacy_ipv4_count"])
+        self.assertEqual("not-adopted", result["kernel_ownership"])
+        self.assertFalse(result["safe_to_mutate"])
+        self.assertFalse(result["public_voice_apply"])
+        self.assertEqual(64, len(result["structure_sha256"]))
+        self.assertGreaterEqual(self.fake.list_count, 2)
+        self.assertTrue(all(x[1] in ("-q", "table") for x in self.fake.calls))
+        # The *ordinary* native adapter must retain its restrictive allowlist.
+        with self.assertRaises((RuntimeError, ValueError)):
+            self.reader.list_rules(19000, 19010)
+
+    def test_foreign_old_rules_and_staging_fail_closed(self):
+        original = self.fake.rules
+        for change in (
+            original.replace("table(zapret2_tgvoice)", "any"),
+            original.replace("19000 divert 989", "19000 divert 988"),
+            original.replace("19001 divert 989 tcp", "19001 divert 989 udp"),
+            original.replace("19002 divert", "19004 divert"),
+            original + "19003 allow ip from any to any\n",
+        ):
+            with self.subTest(change=change[-100:]):
+                self.fake.rules = change
+                with self.assertRaises((RuntimeError, ValueError)):
+                    self.inspect(self.reader, self.argv, self.targets)
+        self.fake.rules = original
+        for name in ("zapret2_tgvoice_stage", "zapret2_voice_telegram"):
+            self.fake.active.add(name)
+            with self.assertRaises((RuntimeError, ValueError)):
+                self.inspect(self.reader, self.argv, self.targets)
+            self.fake.active.remove(name)
+
+    def test_missing_or_untrusted_ipv4_and_mutating_reader_fail(self):
+        for targets in ([], ["91.108.0.0/16"], ["91.108.0.0/16"] * 2,
+                        ["91.108.0.0/16", "91.108.13.11"]):
+            with self.subTest(targets=targets):
+                with self.assertRaises((RuntimeError, ValueError)):
+                    self.inspect(self.reader, self.argv, targets)
+        self.fake.entries = "91.108.0.0/16 0\n2001:db8::1 0\n"
+        with self.assertRaises((RuntimeError, ValueError)):
+            self.inspect(self.reader, self.argv, self.targets)
+        mutating = FreeBSDIPFWAdapter(19000, 19010, runner=self.fake,
+                                     allow_mutations=True)
+        with self.assertRaises((RuntimeError, ValueError)):
+            self.inspect(mutating, self.argv, self.targets)
+
+    def test_kernel_change_between_two_samples_refused(self):
+        original = self.fake.rules
+        self.fake.calls.clear()
+        previous = self.fake.__class__.__call__
+
+        def switched(instance, argv, **kwargs):
+            if tuple(argv[1:]) == ("-q", "list") and instance.list_count == 1:
+                instance.rules = original.replace("596-599", "596")
+            return previous(instance, argv, **kwargs)
+
+        with patch.object(self.fake.__class__, "__call__", switched):
+            with self.assertRaisesRegex(RuntimeError, "changed during inspection"):
+                self.inspect(self.reader, self.argv, self.targets)
+
+
 if __name__=="__main__":
     unittest.main(verbosity=2)
