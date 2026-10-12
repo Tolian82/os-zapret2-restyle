@@ -1,5 +1,7 @@
 # Voice Transmission — план завершения и стабилизации
 
+**Этап 3 · `v0.5.1_165` (12.10.2026).** После полного исходно заблокированного возврата старого Telegram PoC добавлен отдельный неизменяемый `legacy-whole-receipt` (`voice_native_legacy_whole_receipt.py`). Координатор под теми же original FD9 + Config inode flock связывает запись с содержимым девяти деревьев исходных снимков/плана/WAL и всех шести стадий, с process PID/start, security policy и kernel argv, fsync записи и директории. Read-only инспектор пригоден для cold-boot дисковой диагностики, но **не** объявляет живой post-reboot IPFW/process приемки: для неё добавлена отдельная explicit original-lock live reconciliation без повторного запуска процессов. Partial/foreign receipts остаются для ручного разбора. Production boot/service/configd/GUI пока не подключены; public Voice Apply, MEDIA_PASS, package publication запрещены. `_164` full CI PASS, `_165` exact-head CI pending, PR #328 Draft.
+
 **Этап 3 · `v0.5.1_164` (12.10.2026).** Исправлена обнаруженная CI `_163` ошибка координации crash-replay: наличие директории current WAL **не доказывает** завершение действия. `voice_native_legacy_five_domain_coordinator.py` теперь при записанном intent вызывает reentrant executor **текущей** стадии IPFW/runtime/Config/marker/process, который повторно сверяет точные previous/current suffix/prefix и безопасно завершает операцию, и лишь затем идёт к следующей стадии. `legacy-files-ready` не переделывается, так как её публикация строго атомарная и её инспектор подтверждает manifest. Таким образом power-cut после IPFW mutation before done не перескакивает к files-ready. Исходный FD9+Config flock не размыкается, двойной запуск процесса запрещён, all stages remain import-only and public GUI/Voice ON blocked. Full-chain CI `_164` pending, PR #328 Draft.
 
 
@@ -158,7 +160,7 @@
 
 
 **Статус:** ЕДИНЫЙ АКТУАЛЬНЫЙ ПЛАН · Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328) · 2026-10-11  
-**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_123` (Stage 2 закрыт на exact-head CI; Stage 3 — активный следующий этап; приватный исполнитель ещё НЕ подключён к service/GUI). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
+**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_165` (Stage 2 закрыт на exact-head CI; Stage 3 — активный следующий этап; приватный исполнитель ещё НЕ подключён к service/GUI). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.  
 **Приоритет:** законченный пользовательский сценарий, не очередная подсистема проверки. Детальное утверждённое ТЗ и компоновка остаются в [VOICE_TRANSMISSION_GUI.md](VOICE_TRANSMISSION_GUI.md); сведения о стенде и фактических звонках — в отдельных исследовательских документах. Исторические задачи в ROADMAP, START_HERE и старых блоках архитектурного документа НЕ заменяют эту последовательность.
 
 ## Цель и определение готовности
