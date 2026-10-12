@@ -128,7 +128,12 @@ class ProductionHandoffTests(unittest.TestCase):
         self.assertIn("voice_handoff_preflight.py", source)
         self.assertLess(source.index("generator_build_args_mapped"),
                         source.index("voice_handoff_preflight.py"))
-        self.assertIn("config_voice_staged_only_guard || {", source)
+        guard = text[text.index("orchestrator_voice_build_preflight()"):
+                     text.index("orchestrator_build_release()")]
+        self.assertIn("config_voice_staged_only_guard", guard)
+        self.assertIn("orchestrator_voice_build_preflight", source)
+        self.assertLess(source.index("orchestrator_voice_build_preflight"),
+                        source.index("voice_handoff_preflight.py"))
 
 
 if __name__ == "__main__":
