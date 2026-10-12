@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Engineering memory index
 
+**Этап 3 · `v0.5.1_153`:** закрытый, non-executable, durable legacy reverse plan под original FD9/Config flock проверяет старый marker, IPv4 IPSET, WAN/divert port и exact rule 19000. [Handoff](START_HERE.md), [план завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). Реальные rollback/voice media/UI ON остаются открыты.
+
+
 **Этап 3 · `v0.5.1_152`:** новый bounded previous PoC snapshot включает process+security evidence; основная текущая задача — восстановление старого IPFW/marker/процессов и transactional migration. [Handoff](START_HERE.md), [план](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). Публичный GUI Apply пока закрыт.
 
 

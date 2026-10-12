@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**Этап 3 · `v0.5.1_153`:** завершён изолированный deterministic reverse-plan builder старого Telegram PoC: точные допустимые argv старой `zapret2_tgvoice` таблицы, адресов и правил, ранее проверенный marker. План может быть write-once sealed под original FD9/Config flock, но не выполняется. Следом реализовать durable WAL + безопасные reverse operations и объединить с прежним пятиресурсным restore, защитой boot и публичным native GUI ON после owner-live приемки.
+
+
 **Этап 3 · `v0.5.1_152`:** предыдущий PoC теперь можно зафиксировать в импортируемом закрытом snapshot, включая Config/runtime, marker, IPFW, PID/start и штатную supervisor-bound policy числовых UID/GID. Далее реализовать настоящее восстановление marker+legacy IPFW+процессов и полностью reversible PoC→native cutover через исходные FD9/Config flock; затем boot и проверка голосового media path. Публичный Voice Apply запрещён до приёмки.
 
 

@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**Этап 3 · `v0.5.1_153`:** import-only `voice_native_legacy_restore_plan.py` строит validated reverse commands старого IPFW (create `zapret2_tgvoice` addr table, add canonical CIDR, then exact 19000+ ordinary divert rules), воспроизводимые из sealed previous schema2 и проверяемые вместе с runtime dvtws.args/managed IPSET, old state и marker. `prepare_legacy_restore_plan` записывает согласованный bounded plan под original FD9+Config flock (temp+fsync+rename); `inspect_legacy_restore_plan` детерминированно пересчитывает и отвергает чужие/изменённые свидетельства. Нет subprocess/ACL bypass, нет live marker/IPFW mutation, и прежний owner не присваивается native ledger. Следующие шаги: durable undo boundary → чистое IPFW restoration с проверкой отсутствия чужого/конкурирующего owner → previous marker/process/Config restoration → единый PoC→native guarded rollback, reboot UAT, MEDIA_PASS. `_152` CI PASS, `_153` pending.
+
+
 **Этап 3 · `v0.5.1_152`:** импортируемый writer legacy-previous snapshot повторно использует `capture_process_evidence` и `capture_security_policy` со schema-2 supervisor binding для старых трёх процессов. Snapshot now proves Config/runtime, transient marker, exact old IPFW layout, PID/start and actual kernel image + numeric UID/GID policy, with read-back validation. On error stage stays fail-closed and original process probe backup binding is restored. This still does not authorize migration, restore or public ON: next component is durable reverse IPFW/marker restore and bound atomic lifecycle cutover, followed by boot UAT and MEDIA_PASS.
 
 
