@@ -45,6 +45,10 @@ BUILD_ENTRIES = frozenset(("config.xml", "release"))
 SAVED_ENTRIES = frozenset(("config.xml", "zapret.conf"))
 BUILT_ENTRIES = frozenset(("config.xml", "zapret.conf", "release", ".voice-build-workspace"))
 BUILD_WORKER = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/voice_native_build_release.sh")
+RENDER_WORKER = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/voice_native_render_saved.sh")
+XML_ONLY_ENTRIES = frozenset(("config.xml",))
+RENDERED_ENTRIES = frozenset(("config.xml", "zapret.conf", ".voice-template-root"))
+BUILT_XML_ENTRIES = frozenset((*BUILT_ENTRIES, ".voice-template-root"))
 FILES = ("config.xml", "user-traffic.conf", "tcp-ports.txt", "udp-ports.txt")
 DIRS = ("runtime", "voice-native-candidate", "managed")
 _ALLOWED_WAN = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,63}$")
@@ -96,31 +100,35 @@ def _expected_credentials() -> dict[str, dict[str, int]]:
 
 def prepare_operator_prebuilt(
     physical_wan: str, divert_port: int, *, from_release: bool = False,
-    from_saved: bool = False,
+    from_saved: bool = False, from_xml: bool = False,
 ) -> dict:
     if not isinstance(physical_wan, str) or not _ALLOWED_WAN.fullmatch(physical_wan) or (
         type(divert_port) is not int or not 1 <= divert_port <= 65535
     ):
         raise NativePrepareRouteError("invalid resolved WAN or divert port")
+    if sum((bool(from_release), bool(from_saved), bool(from_xml))) > 1:
+        raise NativePrepareRouteError("ambiguous native Voice operator mode")
     native.require_native_lock()
     # The saved-input mode builds through the ORIGINAL orchestrator only.
     # Both existing prebuilt modes retain their previous exact layouts.
-    if from_release or from_saved:
+    if from_release or from_saved or from_xml:
         _private_dir(BUILD_INPUT)
-        if set(os.listdir(BUILD_INPUT)) != (
-            SAVED_ENTRIES if from_saved else BUILD_ENTRIES
-        ):
+        expected = (XML_ONLY_ENTRIES if from_xml else
+                    SAVED_ENTRIES if from_saved else BUILD_ENTRIES)
+        if set(os.listdir(BUILD_INPUT)) != expected:
             raise NativePrepareRouteError("untrusted detached build input layout")
-        if from_saved:
-            for name in SAVED_ENTRIES:
+        if from_saved or from_xml:
+            for name in expected:
                 candidate = os.lstat(BUILD_INPUT / name)
                 if not stat.S_ISREG(candidate.st_mode) or (
                     candidate.st_uid != os.geteuid() or candidate.st_nlink != 1
                     or candidate.st_mode & 0o077 or candidate.st_size > 4 * 1048576
                 ):
                     raise NativePrepareRouteError("saved build source must be private regular")
-            if not BUILD_WORKER.is_file() or BUILD_WORKER.is_symlink():
-                raise NativePrepareRouteError("native orchestrator worker not installed")
+            if not BUILD_WORKER.is_file() or BUILD_WORKER.is_symlink() or (
+                from_xml and (not RENDER_WORKER.is_file() or RENDER_WORKER.is_symlink())
+            ):
+                raise NativePrepareRouteError("native saved XML workers not installed")
         _ensure_private_dir(native.WHOLE.parent)
     else:
         paths = _fixed_input()
@@ -133,7 +141,30 @@ def prepare_operator_prebuilt(
         owner = (os.geteuid(), os.getegid())
         native.require_native_lock()
         _locked_config(native.CONFIG, fd, owner)
-        if from_saved:
+        if from_xml:
+            # Render with OPNsense's OWN template engine and alternate
+            # private target root; the active config files are NEVER touched.
+            native.require_native_lock()
+            _locked_config(native.CONFIG, fd, owner)
+            try:
+                subprocess.run(
+                    ["/bin/sh", str(RENDER_WORKER)], check=True, timeout=60,
+                    pass_fds=tuple(sorted({9, fd})),
+                )
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+                raise NativePrepareRouteError("detached OPNsense template rendering failed") from exc
+            native.require_native_lock()
+            _locked_config(native.CONFIG, fd, owner)
+            if set(os.listdir(BUILD_INPUT)) != RENDERED_ENTRIES:
+                raise NativePrepareRouteError("detached OPNsense renderer left foreign files")
+            rendered_stat = os.lstat(BUILD_INPUT / "zapret.conf")
+            if not stat.S_ISREG(rendered_stat.st_mode) or (
+                rendered_stat.st_uid != os.geteuid() or rendered_stat.st_nlink != 1
+                or rendered_stat.st_mode & 0o077 or rendered_stat.st_size > 4 * 1048576
+            ):
+                raise NativePrepareRouteError("detached template output is not private/regular")
+            _private_dir(BUILD_INPUT / ".voice-template-root")
+        if from_saved or from_xml:
             # A saved candidate XML and the OPNsense template output MUST
             # describe the same generation, not two separate GUI saves.
             require_saved_pair(BUILD_INPUT / "config.xml", BUILD_INPUT / "zapret.conf")
@@ -155,9 +186,11 @@ def prepare_operator_prebuilt(
                 raise NativePrepareRouteError("native detached orchestrator build failed") from exc
             require_lock()
             _locked_config(native.CONFIG, fd, owner)
-            if set(os.listdir(BUILD_INPUT)) != BUILT_ENTRIES:
+            if set(os.listdir(BUILD_INPUT)) != (
+                BUILT_XML_ENTRIES if from_xml else BUILT_ENTRIES
+            ):
                 raise NativePrepareRouteError("native release build left unexpected artifacts")
-        if from_release or from_saved:
+        if from_release or from_saved or from_xml:
             result = stage_native_operator_input(
                 config_path=native.CONFIG,
                 source_config=BUILD_INPUT / "config.xml",
@@ -214,8 +247,9 @@ def prepare_operator_prebuilt(
 def main(argv: list[str]) -> int:
     if len(argv) != 3 or argv[0] not in (
         "prepare-prebuilt", "prepare-from-release", "prepare-from-saved",
+        "prepare-from-xml",
     ):
-        print("usage: voice_native_prepare_route.py {prepare-prebuilt|prepare-from-release|prepare-from-saved} RESOLVED_WAN DIVERT_PORT",
+        print("usage: voice_native_prepare_route.py {prepare-prebuilt|prepare-from-release|prepare-from-saved|prepare-from-xml} RESOLVED_WAN DIVERT_PORT",
               file=sys.stderr)
         return 64
     if not argv[2].isdecimal():
@@ -225,6 +259,7 @@ def main(argv: list[str]) -> int:
             argv[1], int(argv[2]),
             from_release=argv[0] == "prepare-from-release",
             from_saved=argv[0] == "prepare-from-saved",
+            from_xml=argv[0] == "prepare-from-xml",
         )
         if report["state"] != "native-voice-original-lock-prepared":
             raise NativePrepareRouteError("prepared state not verified")
