@@ -168,10 +168,18 @@ class OperatorInputStageTests(unittest.TestCase):
         self.assertEqual(digest, (self.output / "config.xml").read_bytes())
 
     def test_power_cut_before_publish_keeps_private_partial(self):
+        original = qualify_saved_voice_release
+        invocations = []
+        def fail_after_private_copy(*args, **kwargs):
+            invocations.append(kwargs["release_dir"])
+            if len(invocations) == 2:
+                raise RuntimeError("simulated power loss after private copy")
+            return original(*args, **kwargs)
         with patch("voice_native_operator_input_stage.qualify_saved_voice_release",
-                   side_effect=RuntimeError("simulated power loss")):
+                   side_effect=fail_after_private_copy):
             with self.assertRaises(RuntimeError):
                 self.publish()
+        self.assertEqual(2, len(invocations))
         self.assertFalse(self.output.exists())
         self.assertEqual(1, len(list(self.private.glob(PREFIX + "*"))))
         with self.assertRaises((RuntimeError, ValueError, OSError)):
