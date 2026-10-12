@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Engineering memory index
 
+**Этап 3 · `v0.5.1_156`:** старые IPFW rules восстановимы per-step и бывшие Config/runtime/marker готовы в private sealed install-image, но live installation/boot, process restart, Voice ON и UAT ещё отсутствуют. [Handoff](START_HERE.md), [план](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
+
+
 **Этап 3 · `v0.5.1_155`:** реализован закрытый legacy IPFW replay engine с fsynced start/done шагами и exact kernel prefix resume; реальный service/boot dispatch, Config/runtime/marker/process rollback и public GUI ON ещё открыты. [Handoff](START_HERE.md), [план завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
 
 

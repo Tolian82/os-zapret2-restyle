@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**Этап 3 · `v0.5.1_156`:** после законченного verified IPFW reverse replay собирается неизменяемый файловый previous Config/runtime install-image с оригинальными mode bits и прежний Telegram marker, с проверкой против kernel/process/ledger under original locks. Следующая веха — единый journal-led обратный apply: сохранённые Config/runtime in-place/atomic, marker exact presence/mode, проверенный restart триады, full receipt и reboot; затем forward PoC→native и owner-live MEDIA_PASS. Не включать GUI Apply раньше этого.
+
+
 **Этап 3 · `v0.5.1_155`:** import-only, но реально исполняемый ограниченный legacy IPFW replay (`table create`→IPv4 adds→exact numbered rules), с per-operation durable START/DONE, strict live before/after prefix, resume без повторной команды после power-cut и без foreign cleanup. Покрыт mock-kernel CI. Следующий обязательный этап: на этом же оригинальном FD9+Config lock restore предыдущих Config/runtime+marker и трёх процессов по schema-2 security-policy и process-argv, проверяемый whole 5-domain receipt, reboot reconciliation и только затем native GUI ON/MEDIA_PASS.
 
 
