@@ -62,6 +62,9 @@ class BootGateTests(unittest.TestCase):
             whole, ipfw = self.paths(Path(tmp))
             whole.mkdir(mode=0o700)
             (whole / "previous").mkdir(mode=0o700)
+            self.assertTrue(guard.check_pending(whole,ipfw)["safe_to_mutate"],
+                            "a standalone old OFF checkpoint is not a cutover")
+            (whole / "process-evidence").mkdir(mode=0o700)
             state=guard.check_pending(whole,ipfw)
             self.assertEqual("orphan-native-voice-evidence",state["reason"])
             self.assertFalse(state["safe_to_mutate"])

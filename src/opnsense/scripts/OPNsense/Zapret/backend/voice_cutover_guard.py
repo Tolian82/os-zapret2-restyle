@@ -51,10 +51,13 @@ def check_pending(whole_root: Path, ipfw_root: Path) -> dict:
                     "state": "blocked", "reason": "whole-runtime-intent",
                     "phase": state, "safe_to_mutate": False,
                 }
-            # A power cut can happen after fsync'd "previous" snapshot
-            # or process policy but BEFORE schema-4 intent.json. The old
-            # wrapper must not restart/overwrite this unowned evidence.
-            if os.listdir(whole_root):
+            # The legacy checkpoint command intentionally leaves ONLY a
+            # sealed "previous" snapshot without taking over ordinary
+            # start/stop/reconfigure. Preserve that established contract.
+            # Any MORE ADVANCED five-domain staging, or a foreign artifact,
+            # without intent.json means power loss or ambiguous ownership.
+            entries = set(os.listdir(whole_root))
+            if entries - {"previous"}:
                 return {
                     "state": "blocked", "reason": "orphan-native-voice-evidence",
                     "safe_to_mutate": False,
