@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Engineering memory index
 
+**Этап 3 · `v0.5.1_161`:** previous old Telegram marker теперь восстанавливается real no-replace fsynced hardlink после IPFW/runtime/Config; процессная триада не восстановлена. [Handoff](START_HERE.md), [completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
+
+
 **Этап 3 · `v0.5.1_160`:** после old IPFW и runtime доступны отдельные реальные same-inode Config restore + durable redo, но нет old marker/process restart и полного owner-live coordinator. [Handoff](START_HERE.md), [план](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
 
 

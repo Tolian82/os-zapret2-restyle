@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**Этап 3 · `v0.5.1_161`:** sealed IPFW, runtime, original Config и точный transient legacy marker могут быть восстановлены отдельными import-only executors, каждый с durable redo и fail-closed crash semantics. Следующий шаг — verified process-security/argv-bound restart old engine+daemon+monitor под единой five-domain MUTATING coordinator, post-reboot full receipt, затем реальный PoC→native forward cutover, GUI Apply и MEDIA_PASS. Отдельный marker сам по себе НЕ разрешает Voice ON.
+
+
 **Этап 3 · `v0.5.1_160`:** old Telegram PoC rollback теперь имеет отдельные внутренние реальные исполнители IPFW, runtime и Config same-inode под original FD9/Config flock, с durable шагами, power-cut retry и проверяемыми предыдущими digests. Следующая зависимость: old marker exact restoration с WAL, verified 3-role process restart и whole five-domain rollback receipt; единый переключатель PoC→native, boot/reboot и on-device MEDIA_PASS всё ещё не готовы.
 
 
