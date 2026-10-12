@@ -34,10 +34,13 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         (self.build/"config.xml").write_text("<opnsense/>")
         (self.build/"config.xml").chmod(0o600)
         (self.build/"release").mkdir(mode=0o700)
+        self.build_worker=base/"voice_native_build_release.sh"
+        self.build_worker.write_text("#!/bin/sh\nexit 0\n")
         self.calls=[]
         self.patches=[
             patch.object(route,"INPUT",self.input),
             patch.object(route,"BUILD_INPUT",self.build),
+            patch.object(route,"BUILD_WORKER",self.build_worker),
             patch.object(route.native,"CONFIG",self.config),
             patch.object(route.native,"ACTIVE_ROOT",self.live),
             patch.object(route.native,"WHOLE",self.whole),
@@ -109,6 +112,89 @@ class OperatorPrepareRouteTests(unittest.TestCase):
                           ("PREPARED",self.config.stat().st_ino)],observed)
         self.assertEqual("<opnsense/>",self.config.read_text())
 
+    def test_original_orchestrator_runs_between_same_original_fd9_and_prepared(self):
+        (self.build/"release").rmdir()
+        (self.build/"zapret.conf").write_text("ZAPRET_ENABLED=1")
+        (self.build/"zapret.conf").chmod(0o600)
+        calls=[]
+        def build(cmd, **kwargs):
+            self.assertEqual(["/bin/sh",str(self.build_worker)],cmd)
+            self.assertTrue(kwargs["check"])
+            self.assertIn(9, kwargs["pass_fds"])
+            self.assertEqual("vtnet1", resolved_wan)
+            self.assertFalse(self.input.exists() and list(self.input.iterdir()))
+            (self.build/"release").mkdir()
+            (self.build/".voice-build-workspace").mkdir()
+            calls.append("native-orchestrator")
+            return None
+        def stage(**kwargs):
+            _locked_config(self.config,kwargs["config_fd"],kwargs["config_owner"])
+            self.assertEqual(self.build/"config.xml",kwargs["source_config"])
+            self.assertEqual(self.build/"release",kwargs["staged_release"])
+            calls.append("sealed-candidate")
+            self.input_files()
+            return {"state":"native-voice-detached-operator-input-published",
+                    "safe_to_enable_voice":False,"public_voice_apply":False}
+        def prepared(**kwargs):
+            _locked_config(self.config,kwargs["config_fd"],kwargs["config_owner"])
+            calls.append("schema4-PREPARED")
+            return {"state":"native-voice-original-lock-prepared",
+                    "safe_to_enable_voice":False,"public_voice_apply":False}
+        resolved_wan="vtnet1"
+        with patch.object(route.subprocess,"run",side_effect=build), \
+             patch.object(route,"stage_native_operator_input",side_effect=stage), \
+             patch.object(route,"prepare_native_voice_one_lock",side_effect=prepared):
+            result=route.prepare_operator_prebuilt(
+                "vtnet1",989,from_saved=True,
+            )
+        self.assertEqual("native-voice-original-lock-prepared",result["state"])
+        self.assertEqual(["native-orchestrator","sealed-candidate","schema4-PREPARED"],calls)
+        self.assertEqual("<opnsense/>",self.config.read_text())
+
+    def test_saved_build_refuses_foreign_or_symlinked_inputs(self):
+        (self.build/"release").rmdir()
+        (self.build/"zapret.conf").write_text("ZAPRET_ENABLED=1")
+        (self.build/"zapret.conf").chmod(0o644)
+        with self.assertRaises((OSError,ValueError,RuntimeError)):
+            route.prepare_operator_prebuilt("vtnet1",989,from_saved=True)
+        self.assertFalse(self.whole.exists())
+        (self.build/"zapret.conf").chmod(0o600)
+        (self.build/"zapret.conf").unlink()
+        (self.build/"zapret.conf").symlink_to(self.build/"config.xml")
+        with self.assertRaises((OSError,ValueError,RuntimeError)):
+            route.prepare_operator_prebuilt("vtnet1",989,from_saved=True)
+        self.assertTrue(self.input.is_dir())
+        self.assertEqual([], list(self.input.iterdir()))
+        self.assertFalse(self.whole.exists())
+        self.assertFalse(self.ledger.exists())
+
+    def test_orchestrator_build_error_cannot_prepare_or_publish(self):
+        import subprocess
+        (self.build/"release").rmdir()
+        (self.build/"zapret.conf").write_text("ZAPRET_ENABLED=1")
+        (self.build/"zapret.conf").chmod(0o600)
+        with patch.object(route.subprocess, "run",
+                          side_effect=subprocess.CalledProcessError(1, ["/bin/sh"])), \
+             patch.object(route, "stage_native_operator_input") as stage, \
+             patch.object(route, "prepare_native_voice_one_lock") as prepared:
+            with self.assertRaises(route.NativePrepareRouteError):
+                route.prepare_operator_prebuilt("vtnet1", 989, from_saved=True)
+            stage.assert_not_called()
+            prepared.assert_not_called()
+        self.assertEqual([], list(self.input.iterdir()))
+        self.assertFalse(self.whole.exists())
+        self.assertFalse(self.ledger.exists())
+
+    def test_build_worker_uses_exact_existing_orchestrator_without_activating(self):
+        worker = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/voice_native_build_release.sh").read_text()
+        self.assertIn('orchestrator_build_release \\', worker)
+        self.assertIn('native-detached \\', worker)
+        self.assertNotIn("orchestrator_native_start", worker)
+        self.assertNotIn("atomic_install_tree", worker)
+        self.assertNotIn("config_reload_template", worker)
+        service = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
+        self.assertIn('native-voice-prepare-saved)', service)
+
     def test_unknown_fixed_release_member_is_refused_before_config_open(self):
         (self.build/"foreign").write_text("foreign")
         with self.assertRaises((OSError,ValueError,RuntimeError)):
@@ -162,12 +248,15 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         self.assertIn("native_voice_prepare_prebuilt_service()",service)
         self.assertIn("native-voice-prepare-prebuilt)",service)
         self.assertIn("native-voice-prepare-release)",service)
+        self.assertIn("native-voice-prepare-saved)",service)
+        self.assertIn("native_voice_prepare_prebuilt_service prepare-from-saved",service)
         self.assertIn("native_voice_prepare_prebuilt_service prepare-from-release",service)
         locked=service.split("case \"${1:-}\" in",1)[-1]
         self.assertIn("native-voice-prepare-prebuilt|native-voice-apply-prepared",locked)
         self.assertNotIn("[voice_prepare_prebuilt]",configd)
         self.assertNotIn("native-voice-prepare-prebuilt",configd)
         self.assertNotIn("native-voice-prepare-release",configd)
+        self.assertNotIn("native-voice-prepare-saved",configd)
 
 
 if __name__=="__main__":

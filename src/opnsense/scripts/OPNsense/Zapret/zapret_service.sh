@@ -630,7 +630,7 @@ native_voice_prepare_prebuilt_service()
 {
     _voice_action="${1:-prepare-prebuilt}"
     case "${_voice_action}" in
-        prepare-prebuilt|prepare-from-release) ;;
+        prepare-prebuilt|prepare-from-release|prepare-from-saved) ;;
         *) return 64 ;;
     esac
     _voice_python="/usr/local/bin/python3.13"
@@ -729,6 +729,9 @@ service_dispatch()
             ;;
         native-voice-prepare-release)
             native_voice_prepare_prebuilt_service prepare-from-release
+            ;;
+        native-voice-prepare-saved)
+            native_voice_prepare_prebuilt_service prepare-from-saved
             ;;
         native-voice-apply-prepared)
             native_voice_apply_prepared_service
@@ -853,7 +856,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

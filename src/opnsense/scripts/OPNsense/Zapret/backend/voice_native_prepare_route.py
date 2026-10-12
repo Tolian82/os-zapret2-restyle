@@ -10,7 +10,9 @@ the normal orchestrator's voice-native-candidate (8 exact files), shared
 managed IPSET and ordinary Strategies plus an isolated installable runtime.
 A second private service command composes the existing release producer and
 the original one-lock PREPARED coordinator without releasing FD9 or Config.
-The source remains operator supplied, not yet GUI-generated.
+The source remains operator supplied, not yet GUI-generated. A third
+operator-only entry uses the ORIGINAL orchestrator to generate that release
+from a root-private saved XML and already-rendered zapret.conf under same locks.
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ from pathlib import Path
 import pwd
 import re
 import stat
+import subprocess
 import sys
 
 from voice_cutover_backup import _private_dir
@@ -38,6 +41,9 @@ import voice_ipfw_runtime as native
 INPUT = Path("/var/db/zapret2/voice-operator-input")
 BUILD_INPUT = Path("/var/db/zapret2/voice-build-input")
 BUILD_ENTRIES = frozenset(("config.xml", "release"))
+SAVED_ENTRIES = frozenset(("config.xml", "zapret.conf"))
+BUILT_ENTRIES = frozenset(("config.xml", "zapret.conf", "release", ".voice-build-workspace"))
+BUILD_WORKER = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/voice_native_build_release.sh")
 FILES = ("config.xml", "user-traffic.conf", "tcp-ports.txt", "udp-ports.txt")
 DIRS = ("runtime", "voice-native-candidate", "managed")
 _ALLOWED_WAN = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,63}$")
@@ -89,19 +95,31 @@ def _expected_credentials() -> dict[str, dict[str, int]]:
 
 def prepare_operator_prebuilt(
     physical_wan: str, divert_port: int, *, from_release: bool = False,
+    from_saved: bool = False,
 ) -> dict:
     if not isinstance(physical_wan, str) or not _ALLOWED_WAN.fullmatch(physical_wan) or (
         type(divert_port) is not int or not 1 <= divert_port <= 65535
     ):
         raise NativePrepareRouteError("invalid resolved WAN or divert port")
     native.require_native_lock()
-    # Existing operator route remains unchanged. The NEW fixed build input
-    # consumes only a complete previously orchestrated detached release; no
-    # GUI or CLI-controlled path may be passed in.
-    if from_release:
+    # The saved-input mode builds through the ORIGINAL orchestrator only.
+    # Both existing prebuilt modes retain their previous exact layouts.
+    if from_release or from_saved:
         _private_dir(BUILD_INPUT)
-        if set(os.listdir(BUILD_INPUT)) != BUILD_ENTRIES:
+        if set(os.listdir(BUILD_INPUT)) != (
+            SAVED_ENTRIES if from_saved else BUILD_ENTRIES
+        ):
             raise NativePrepareRouteError("untrusted detached build input layout")
+        if from_saved:
+            for name in SAVED_ENTRIES:
+                candidate = os.lstat(BUILD_INPUT / name)
+                if not stat.S_ISREG(candidate.st_mode) or (
+                    candidate.st_uid != os.geteuid() or candidate.st_nlink != 1
+                    or candidate.st_mode & 0o077 or candidate.st_size > 4 * 1048576
+                ):
+                    raise NativePrepareRouteError("saved build source must be private regular")
+            if not BUILD_WORKER.is_file() or BUILD_WORKER.is_symlink():
+                raise NativePrepareRouteError("native orchestrator worker not installed")
         _ensure_private_dir(native.WHOLE.parent)
     else:
         paths = _fixed_input()
@@ -114,7 +132,26 @@ def prepare_operator_prebuilt(
         owner = (os.geteuid(), os.getegid())
         native.require_native_lock()
         _locked_config(native.CONFIG, fd, owner)
-        if from_release:
+        if from_saved:
+            # The parent holds original FD9 and the original Config flock
+            # throughout this child. The worker sources the same existing
+            # orchestrator modules; it cannot launch or install the runtime.
+            require_lock = native.require_native_lock
+            require_lock()
+            _locked_config(native.CONFIG, fd, owner)
+            try:
+                subprocess.run(
+                    ["/bin/sh", str(BUILD_WORKER)],
+                    check=True, timeout=180,
+                    pass_fds=tuple(sorted({9, fd})),
+                )
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+                raise NativePrepareRouteError("native detached orchestrator build failed") from exc
+            require_lock()
+            _locked_config(native.CONFIG, fd, owner)
+            if set(os.listdir(BUILD_INPUT)) != BUILT_ENTRIES:
+                raise NativePrepareRouteError("native release build left unexpected artifacts")
+        if from_release or from_saved:
             result = stage_native_operator_input(
                 config_path=native.CONFIG,
                 source_config=BUILD_INPUT / "config.xml",
@@ -169,15 +206,19 @@ def prepare_operator_prebuilt(
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 3 or argv[0] not in ("prepare-prebuilt", "prepare-from-release"):
-        print("usage: voice_native_prepare_route.py {prepare-prebuilt|prepare-from-release} RESOLVED_WAN DIVERT_PORT",
+    if len(argv) != 3 or argv[0] not in (
+        "prepare-prebuilt", "prepare-from-release", "prepare-from-saved",
+    ):
+        print("usage: voice_native_prepare_route.py {prepare-prebuilt|prepare-from-release|prepare-from-saved} RESOLVED_WAN DIVERT_PORT",
               file=sys.stderr)
         return 64
     if not argv[2].isdecimal():
         return 64
     try:
         report = prepare_operator_prebuilt(
-            argv[1], int(argv[2]), from_release=argv[0] == "prepare-from-release",
+            argv[1], int(argv[2]),
+            from_release=argv[0] == "prepare-from-release",
+            from_saved=argv[0] == "prepare-from-saved",
         )
         if report["state"] != "native-voice-original-lock-prepared":
             raise NativePrepareRouteError("prepared state not verified")
