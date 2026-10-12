@@ -365,7 +365,9 @@ class OperatorPrepareRouteTests(unittest.TestCase):
                 route.prepare_operator_prebuilt("vtnet1",989)
             prepared.assert_not_called()
         self.assertEqual("enabled\n",marker.read_text())
-        self.assertFalse(self.whole.exists())
+        self.assertTrue(self.whole.is_dir())
+        self.assertEqual([], list(self.whole.iterdir()))
+        self.assertEqual([], list(self.ledger.iterdir()))
 
     def test_legacy_runtime_on_without_marker_blocks_migration(self):
         self.input_files()
