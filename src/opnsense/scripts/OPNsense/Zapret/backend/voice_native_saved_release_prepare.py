@@ -54,19 +54,16 @@ def _require_global_on(config_source: Path) -> None:
         raise SavedReleasePrepareError("native Voice requires saved global service ON")
 
 
-def prepare_saved_release_forward_intent(
+def qualify_saved_voice_release(
     *, release_dir, managed_source, ordinary_source, tcp_ports, udp_ports,
     physical_wan, divert_port, source_config, source_runtime,
-    journal, ledger, previous_backup, process_evidence, security_evidence,
-    previous_observer, config_path, active_runtime, expected_scripts,
-    ipfw_adapter, config_fd, config_owner, require_lifecycle_owner,
-) -> dict:
-    """Rebuild Voice from GUI XML, verify real generator, seal native PREPARED.
+    config_path, active_runtime, config_fd, config_owner, require_lifecycle_owner,
+) -> tuple[dict, dict]:
+    """Read-only full production release qualification BEFORE ledger bootstrap.
 
-    source_config is a detached candidate Config (NOT the locked old inode).
-    source_runtime is a detached already-generated native runtime tree.
-    release_dir is the write-once output of the existing Voice release stage.
-    This routine creates no intermediate competing runtime or Config authority.
+    Caller holds original FD9 + Config flock; no writes to kernel, ledger,
+    whole journal or any stage. Returns only independently rebuilt desired
+    manifest and original handoff proof, never trusts publisher JSON.
     """
     if not callable(require_lifecycle_owner):
         raise SavedReleasePrepareError("missing original lifecycle owner")
@@ -141,6 +138,33 @@ def prepare_saved_release_forward_intent(
     # underlying write-once stage+journal contract. Recheck FD9/Config first.
     require_lifecycle_owner()
     _locked_config(config_path, config_fd, config_owner)
+    return desired, proof
+
+
+def prepare_saved_release_forward_intent(
+    *, release_dir, managed_source, ordinary_source, tcp_ports, udp_ports,
+    physical_wan, divert_port, source_config, source_runtime,
+    journal, ledger, previous_backup, process_evidence, security_evidence,
+    previous_observer, config_path, active_runtime, expected_scripts,
+    ipfw_adapter, config_fd, config_owner, require_lifecycle_owner,
+) -> dict:
+    """Rebuild Voice from GUI XML, verify real generator, seal native PREPARED.
+
+    source_config is a detached candidate Config (NOT the locked old inode).
+    source_runtime is a detached already-generated native runtime tree.
+    release_dir is the write-once output of the existing Voice release stage.
+    This routine creates no intermediate competing runtime or Config authority.
+    """
+    desired, proof = qualify_saved_voice_release(
+        release_dir=release_dir, managed_source=managed_source,
+        ordinary_source=ordinary_source, tcp_ports=tcp_ports,
+        udp_ports=udp_ports, physical_wan=physical_wan,
+        divert_port=divert_port, source_config=source_config,
+        source_runtime=source_runtime, config_path=config_path,
+        active_runtime=active_runtime, config_fd=config_fd,
+        config_owner=config_owner,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
     return prepare_staged_forward_voice_intent(
         journal=journal, ledger=ledger, previous_backup=previous_backup,
         process_evidence=process_evidence, security_evidence=security_evidence,

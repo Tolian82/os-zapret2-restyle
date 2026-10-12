@@ -40,7 +40,7 @@ class OneOriginalLockTests(unittest.TestCase):
         self.call_args=None
 
     def run_coordinator(self, *, lock=True, seed_error=None, previous_error=None,
-                        result_bad=False):
+                        result_bad=False, bad_candidate=False):
         fd=os.open(self.config,os.O_RDWR)
         try:
             if lock:
@@ -52,6 +52,12 @@ class OneOriginalLockTests(unittest.TestCase):
                 _locked_config(self.config,fd,(os.geteuid(),os.getegid()))
             def owner():
                 self.events.append("FD9")
+            def qualify(*args, **kwargs):
+                check("qualify",*args,**kwargs)
+                if bad_candidate:
+                    raise ValueError("simulated forged orchestrator release")
+                return ({"tables":{"zapret2_voice_telegram":["91.108.13.10"]}},
+                        {"enabled_services":["telegram"]})
             def seed(*args, **kwargs):
                 check("seed",*args,**kwargs)
                 if seed_error:
@@ -91,7 +97,8 @@ class OneOriginalLockTests(unittest.TestCase):
             def synthetic_read():
                 return {"schema":4,"phase":"prepared","previous":self.epoch,
                         "check":"z"*64}
-            with patch("voice_native_prepare_one_lock.bootstrap_native_ordinary_ipfw_owner",seed),\
+            with patch("voice_native_prepare_one_lock.qualify_saved_voice_release",qualify),\
+                 patch("voice_native_prepare_one_lock.bootstrap_native_ordinary_ipfw_owner",seed),\
                  patch("voice_native_prepare_one_lock.prepare_native_previous_evidence",old),\
                  patch("voice_native_prepare_one_lock.prepare_saved_release_forward_intent",staged),\
                  patch.object(self.journal,"read",side_effect=synthetic_read):
@@ -118,7 +125,7 @@ class OneOriginalLockTests(unittest.TestCase):
         before=self.config.read_bytes()
         result=self.run_coordinator()
         self.assertEqual("native-voice-original-lock-prepared",result["state"])
-        self.assertEqual(["seed","previous","candidate"],
+        self.assertEqual(["qualify","seed","previous","candidate"],
                          [x for x in self.events if x!="FD9"])
         self.assertEqual(before,self.config.read_bytes())
         self.assertFalse(result["safe_to_enable_voice"])
@@ -130,21 +137,28 @@ class OneOriginalLockTests(unittest.TestCase):
         self.assertEqual(["FD9"],self.events,
                          "owner check is allowed; no seed or disk write")
 
+    def test_bad_saved_gui_release_does_not_seed_or_block_legacy(self):
+        with self.assertRaises(ValueError):
+            self.run_coordinator(bad_candidate=True)
+        self.assertEqual(["qualify"],
+                         [x for x in self.events if x!="FD9"])
+        self.assertIsNone(self.ledger.owned())
+
     def test_owner_failure_never_captures_old_process_or_candidate(self):
         with self.assertRaises(OSError):
             self.run_coordinator(seed_error=True)
-        self.assertEqual(["seed"],[x for x in self.events if x!="FD9"])
+        self.assertEqual(["qualify","seed"],[x for x in self.events if x!="FD9"])
 
     def test_previous_failure_never_stages_candidate(self):
         with self.assertRaises(OSError):
             self.run_coordinator(previous_error=True)
-        self.assertEqual(["seed","previous"],
+        self.assertEqual(["qualify","seed","previous"],
                          [x for x in self.events if x!="FD9"])
 
     def test_foreign_prepared_result_refuses_completion(self):
         with self.assertRaises((OSError,ValueError,RuntimeError)):
             self.run_coordinator(result_bad=True)
-        self.assertEqual(["seed","previous","candidate"],
+        self.assertEqual(["qualify","seed","previous","candidate"],
                          [x for x in self.events if x!="FD9"])
 
 

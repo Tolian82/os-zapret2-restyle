@@ -15,7 +15,9 @@ from pathlib import Path
 from voice_native_recovery_quiescence import _locked_config
 from voice_native_initial_ipfw_seed import bootstrap_native_ordinary_ipfw_owner
 from voice_native_previous_evidence_prepare import prepare_native_previous_evidence
-from voice_native_saved_release_prepare import prepare_saved_release_forward_intent
+from voice_native_saved_release_prepare import (
+    qualify_saved_voice_release, prepare_saved_release_forward_intent,
+)
 
 
 class NativeOneLockPrepareError(RuntimeError):
@@ -42,6 +44,24 @@ def prepare_native_voice_one_lock(
         require_lifecycle_owner()
         _locked_config(Path(config_path), config_fd, config_owner)
 
+    # PRE-SEED qualification is essential. If saved GUI XML, orchestrator
+    # release files, native dvtws2 argv or ordinary Strategies are stale,
+    # refuse BEFORE the first persistent ownership write. A bad candidate
+    # must never unnecessarily strand the otherwise healthy legacy service.
+    held()
+    qualified_manifest, qualified_proof = qualify_saved_voice_release(
+        release_dir=release_dir, managed_source=managed_source,
+        ordinary_source=ordinary_source, tcp_ports=tcp_ports, udp_ports=udp_ports,
+        physical_wan=physical_wan, divert_port=divert_port,
+        source_config=source_config, source_runtime=source_runtime,
+        config_path=config_path, active_runtime=active_runtime,
+        config_fd=config_fd, config_owner=config_owner,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    if not qualified_proof["enabled_services"] or (
+        not qualified_manifest["tables"]
+    ):
+        raise NativeOneLockPrepareError("native Voice candidate not qualified")
     held()
     seeded = bootstrap_native_ordinary_ipfw_owner(
         whole_root=journal.directory, ledger=ledger,
@@ -70,6 +90,9 @@ def prepare_native_voice_one_lock(
     ):
         raise NativeOneLockPrepareError("previous five resources disagree with owner")
     held()
+    # Recheck the SAME producer and release under original ownership after
+    # seeding, before any five-domain journal. The underlying preparer
+    # independently rereads the candidate at this boundary.
     prepared = prepare_saved_release_forward_intent(
         release_dir=release_dir, managed_source=managed_source,
         ordinary_source=ordinary_source, tcp_ports=tcp_ports, udp_ports=udp_ports,
