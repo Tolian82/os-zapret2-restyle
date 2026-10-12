@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**Этап 3 · `_150`:** добавлен одно-блокировочный операторский read-only preflight полного работающего legacy Telegram PoC. Следующее препятствие — durable snapshot/rollback старого marker+Config/runtime+IPFW+process, затем штатный guarded PoC→native cutover, boot и real-call приемка. Нет права включать публичный Apply. См. [план завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
+
+
 **Этап 3 · `v0.5.1_149` (12.10.2026).** В существующий `voice_native_live_ipfw.py` добавлена отдельная строго read-only проверка реального legacy Telegram PoC IPFW: старое правило 19000 на `table(zapret2_tgvoice)` плюс 1–2 обычных правила, единые WAN/divert port, совпадение таблицы с отдельно доверенным IPv4-набором, отсутствие native/staging таблиц, два совпадающих полного наблюдения. Стандартный native IPFW parser не ослаблен; старое IPFW владение НЕ принимается в ledger. В CI добавлены отрицательные сценарии чужих/повторных правил, небезопасных IP, конфликтных таблиц и отказ от mutating adapter. Это средство доказательства прежнего kernel-состояния, не атомарная миграция. Дальше: закрепить старые marker/Config/runtime/process/security/IPFW с durable rollback в original FD9 + Config flock и выполнить контролируемый cutover; boot/UAT и MEDIA_PASS ещё открыты. `_148` полный CI PASS, точный `_149` CI ожидается, PR #328 Draft, пакет не опубликован.
 
 

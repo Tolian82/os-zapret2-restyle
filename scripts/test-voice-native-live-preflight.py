@@ -397,5 +397,115 @@ class LegacyKernelWitnessTests(unittest.TestCase):
                 self.inspect(self.reader, self.argv, self.targets)
 
 
+class OldPoCFullBaselineTests(unittest.TestCase):
+    def setUp(self):
+        from voice_native_legacy_live_preflight import inspect_running_legacy_poc
+        self.inspect = inspect_running_legacy_poc
+        self.live = LivePreflightTests()
+        self.live.setUp()
+        self.addCleanup(self.live.doCleanups)
+        self.marker = self.live.config.parent / "legacy-poc-marker"
+        self.marker.write_bytes(b"")
+        (self.live.runtime / "telegram-voice-poc.state").write_text("enabled\n")
+        managed = self.live.runtime / "managed"
+        managed.mkdir(exist_ok=True)
+        self.ips = managed / "ipset-telegram.txt"
+        self.ips.write_text("91.108.0.0/16\n91.108.13.10\n")
+        fake = self.live.fake_ipfw
+        fake.active.add("zapret2_tgvoice")
+        fake.rules = (
+            "00001 allow ip from any to any\n"
+            "19000 divert 989 udp from any to table(zapret2_tgvoice) "
+            "out not diverted not sockarg xmit vtnet1\n"
+            "19001 divert 989 tcp from any to any 443 "
+            "out not diverted not sockarg xmit vtnet1\n"
+            "19002 divert 989 udp from any to any 596 "
+            "out not diverted not sockarg xmit vtnet1\n"
+            "65535 allow ip from any to any\n"
+        )
+
+        def runner(argv, **kwargs):
+            if tuple(argv[1:]) == ("table", "zapret2_tgvoice", "list"):
+                fake.calls.append(tuple(argv))
+                return subprocess.CompletedProcess(
+                    argv, 0, stdout="91.108.13.10/32 0\n91.108.0.0/16 0\n", stderr=""
+                )
+            return fake(argv, **kwargs)
+        self.live.adapter = FreeBSDIPFWAdapter(19000, 19010, runner=runner)
+
+    def audit(self, locked=True):
+        fd = os.open(self.live.config, os.O_RDWR)
+        try:
+            if locked:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return self.inspect(
+                config_path=self.live.config, active_runtime=self.live.runtime,
+                legacy_marker=self.marker, whole_root=self.live.whole,
+                ledger_root=self.live.ledger, probe=self.live.probe,
+                kernel_reader=self.live.kernel, ipfw_adapter=self.live.adapter,
+                config_fd=fd, config_owner=(os.geteuid(), os.getegid()),
+                require_lifecycle_owner=lambda:self.live.lock_calls.append("FD9"),
+            )
+        finally:
+            os.close(fd)
+
+    def test_fully_attested_old_poc_baseline_without_writes(self):
+        old_config = self.live.config.read_bytes()
+        report = self.audit()
+        self.assertEqual("legacy-poc-full-live-baseline-observed-not-owned", report["state"])
+        self.assertEqual("present", report["marker"])
+        self.assertEqual("enabled", report["runtime_state"])
+        self.assertEqual("not-adopted", report["kernel_ownership"])
+        self.assertFalse(report["safe_to_mutate"])
+        self.assertFalse(report["public_voice_apply"])
+        self.assertFalse(report["durable_previous_backup"])
+        self.assertEqual(3, len(report["instances"]))
+        self.assertEqual(64, len(report["managed_ipv4_sha256"]))
+        self.assertEqual(64, len(report["legacy_ipfw_structure_sha256"]))
+        self.assertGreaterEqual(self.live.fake_ipfw.list_count, 4)
+        self.assertTrue(self.marker.exists())
+        self.assertEqual(old_config, self.live.config.read_bytes())
+        self.assertFalse(self.live.whole.exists())
+        self.assertFalse(self.live.ledger.exists())
+
+    def test_no_marker_or_disabled_state_or_symlink_is_refused(self):
+        self.marker.unlink()
+        with self.assertRaises((OSError, ValueError, RuntimeError)):
+            self.audit()
+        self.marker.write_text("enabled\n")
+        state = self.live.runtime / "telegram-voice-poc.state"
+        state.write_text("disabled\n")
+        with self.assertRaises((OSError, ValueError, RuntimeError)):
+            self.audit()
+        state.write_text("enabled\n")
+        self.ips.unlink()
+        self.ips.symlink_to(self.live.config)
+        with self.assertRaises((OSError, ValueError, RuntimeError)):
+            self.audit()
+
+    def test_managed_ipset_drift_and_foreign_ipfw_refused(self):
+        self.ips.write_text("91.108.0.0/16\n91.108.13.11\n")
+        with self.assertRaises((OSError, ValueError, RuntimeError)):
+            self.audit()
+        self.ips.write_text("91.108.0.0/16\n91.108.13.10\n")
+        self.live.fake_ipfw.rules += "19008 allow ip from any to any\n"
+        with self.assertRaises((OSError, ValueError, RuntimeError)):
+            self.audit()
+
+    def test_original_config_flock_and_kernel_process_are_required(self):
+        with self.assertRaises((OSError, ValueError, RuntimeError)):
+            self.audit(locked=False)
+        self.live.argv["engine"] = b"/bad/exe\x00--port=989\x00"
+        with self.assertRaises((OSError, ValueError, RuntimeError)):
+            self.audit()
+
+    def test_operator_service_path_has_original_lifecycle_lock(self):
+        shell = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
+        self.assertIn("native-voice-legacy-live-preflight)", shell)
+        self.assertIn("native_voice_legacy_live_preflight_service", shell)
+        self.assertIn("voice_native_legacy_live_preflight.py", shell)
+        self.assertIn("service_with_lifecycle_lock", shell)
+
+
 if __name__=="__main__":
     unittest.main(verbosity=2)

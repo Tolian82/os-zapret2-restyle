@@ -32,7 +32,7 @@ from voice_restart_argv_attestation import (
 from voice_cutover_journal import VoiceCutoverJournal
 from voice_firewall_ledger import VoiceOwnershipStore
 from voice_cutover_config_restore import _pinned_regular
-from voice_native_live_ipfw import observe_ordinary_ipfw
+from voice_native_live_ipfw import observe_ordinary_ipfw, observe_legacy_poc_ipfw
 from voice_ipfw_adapter import FreeBSDIPFWAdapter
 import voice_ipfw_runtime as native
 
@@ -149,6 +149,7 @@ def _instances(snapshot):
 def inspect_live_preflight(
     *, config_path,active_runtime,whole_root,ledger_root,probe,kernel_reader,
     ipfw_adapter,config_fd,config_owner,require_lifecycle_owner,
+    legacy_poc_ipv4=None,
 ):
     """Read-only physical baseline, no predecessor evidence or rollback needed."""
     if not callable(require_lifecycle_owner) or (
@@ -172,7 +173,8 @@ def inspect_live_preflight(
     }
     first=probe.observe_processes()
     instances=_instances(first)
-    first_ipfw=observe_ordinary_ipfw(ipfw_adapter,expected["engine"])
+    observe_kernel = (lambda: observe_ordinary_ipfw(ipfw_adapter,expected["engine"])) if legacy_poc_ipv4 is None else (lambda: observe_legacy_poc_ipfw(ipfw_adapter,expected["engine"],legacy_poc_ipv4))
+    first_ipfw=observe_kernel()
     for _ in range(2):
         for role in ROLES:
             pid=instances[role]["pid"]
@@ -184,7 +186,7 @@ def inspect_live_preflight(
         _locked_config(Path(config_path),config_fd,config_owner)
         if probe.observe_processes()!=first:
             raise LivePreflightError("live native Voice PID/start changed during audit")
-    second_ipfw=observe_ordinary_ipfw(ipfw_adapter,expected["engine"])
+    second_ipfw=observe_kernel()
     if first_ipfw!=second_ipfw:
         raise LivePreflightError("kernel IPFW changed during pre-cutover audit")
     repeated_sha=_current_engine_args(Path(active_runtime))
@@ -197,17 +199,23 @@ def inspect_live_preflight(
     _journals_idle(whole_root,ledger_root)
     require_lifecycle_owner()
     _locked_config(Path(config_path),config_fd,config_owner)
+    is_old_poc = legacy_poc_ipv4 is not None
     return {
-        "state":"live-legacy-process-argv-observed-not-readiness",
+        "state":("live-legacy-poc-process-ipfw-observed-not-readiness" if is_old_poc
+                 else "live-legacy-process-argv-observed-not-readiness"),
         "instances":instances,
         "active_argument_sha256":argument_sha,
         "argv":"matching-current-runtime",
         "kernel_executable":"matching-fixed-launcher-images",
-        "kernel_ipfw":"ordinary-structure-only-not-owned",
+        "kernel_ipfw":("legacy-poc-structure-only-not-owned" if is_old_poc
+                       else "ordinary-structure-only-not-owned"),
         "kernel_ipfw_structure_sha256":first_ipfw["structure_sha256"],
-        "kernel_ipfw_rule_count":first_ipfw["rule_count"],
-        "kernel_ipfw_voice_tables":first_ipfw["voice_tables"],
-        "kernel_ipfw_legacy_table":first_ipfw["legacy_table"],
+        "kernel_ipfw_rule_count":(first_ipfw["ordinary_rule_count"]+1 if is_old_poc
+                                  else first_ipfw["rule_count"]),
+        "kernel_ipfw_voice_tables":("absent" if is_old_poc
+                                    else first_ipfw["voice_tables"]),
+        "kernel_ipfw_legacy_table":("present" if is_old_poc
+                                   else first_ipfw["legacy_table"]),
         "safe_to_enable_voice":False,
         "safe_to_start":False,
         "safe_to_mutate":False,

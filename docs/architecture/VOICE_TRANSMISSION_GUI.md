@@ -1,5 +1,8 @@
 # «Передача голоса» — задание на реализацию и переход от telegram_voice
 
+**Этап 3 · `_150`:** закрытый штатный операторский `native-voice-legacy-live-preflight` добавлен для безопасной read-only аттестации работающего Telegram PoC (marker + enabled-state + managed IPv4 + процессы/ядро + IPFW) под FD9/Config flock. Он не подключён к GUI/configd, не удаляет старый PoC, не выполняет миграцию, не сохраняет предыдущие ресурсы для восстановления и не разрешает native Voice ON. Следом — durable reversible миграция и boot/owner-live проверка; отдельная страница пока остаётся read-only.
+
+
 **Страница «Передача голоса» — статус backend `v0.5.1_128`:** единый `zapret_service.sh` теперь поддерживает **только закрытый операторский** `native-voice-prepare-prebuilt` под оригинальными FD9 и Config flock. Вход — приватный полный detached candidate, включая восемь канонических артефактов `orchestrator.sh`. Полная проверка до IPFW seed; при успехе только запечатанный schema-4 PREPARED и прежний install-image, без запуска или публичного ON. **Нельзя** считать это готовой кнопкой GUI Apply: ещё нужны штатный detached candidate producer, согласованный ON/OFF, миграция legacy Telegram PoC, нормальный boot/runtime-failure и реальные звонки. Voice CI 85 PASS, FreeBSD/MEDIA_PASS — не проверены.
 
 **Текущий Stage 3 · `v0.5.1_118`:** после schema-4 PREPARED запечатывается настоящий mode-preserving `restore-install-image` из предыдущего Config/runtime под FD9/Config flock, до MUTATING. Voice CI 81 PASS; текущая задача — штатная сборка предыдущих process/security/IPFW witnesses и один сервисный Apply, далее PoC migration/reboot/GUI. Не опубликовано, нет MEDIA_PASS.

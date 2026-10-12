@@ -694,6 +694,17 @@ native_voice_apply_prepared_service()
     "${_voice_python}" "${_voice_route}" execute-prepared
 }
 
+native_voice_legacy_live_preflight_service()
+{
+    _voice_python="/usr/local/bin/python3.13"
+    _voice_script="${BACKEND_DIR}/voice_native_legacy_live_preflight.py"
+    [ -x "${_voice_python}" ] && [ -r "${_voice_script}" ] || {
+        echo "ERROR: legacy Voice read-only preflight is not installed" >&2
+        return 69
+    }
+    "${_voice_python}" "${_voice_script}" inspect
+}
+
 native_voice_live_preflight_service()
 {
     _native_voice_live_python="/usr/local/bin/python3.13"
@@ -754,6 +765,9 @@ service_dispatch()
             ;;
         native-voice-live-preflight)
             native_voice_live_preflight_service
+            ;;
+        native-voice-legacy-live-preflight)
+            native_voice_legacy_live_preflight_service
             ;;
         native-voice-lifecycle-inspect)
             native_voice_lifecycle_inspect_service
@@ -907,7 +921,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

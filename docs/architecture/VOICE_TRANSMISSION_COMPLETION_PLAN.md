@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**Этап 3 · `v0.5.1_150`:** добавлен операторский `native-voice-legacy-live-preflight` под штатными FD9 + original Config flock. Использует исходный native live process/argv/kernel checker, `_149` отдельный старый PoC IPFW reader, no-follow old marker/state и pinned managed Telegram IPSET; повторно сравнивает старые inputs. Не владеет legacy IPFW и не изменяет работу. Составная live qualification **не является durable rollback**: следующим шагом сохранять и аттестовать старую пятиресурсную систему плюс transient marker до любых мутаций, затем единый reversible Apply и boot/recovery; GUI ON закрыт. `_149` CI PASS; `_150` pending.
+
+
 **Этап 3 · `v0.5.1_149` (12.10.2026).** В существующий `voice_native_live_ipfw.py` добавлена отдельная строго read-only проверка реального legacy Telegram PoC IPFW: старое правило 19000 на `table(zapret2_tgvoice)` плюс 1–2 обычных правила, единые WAN/divert port, совпадение таблицы с отдельно доверенным IPv4-набором, отсутствие native/staging таблиц, два совпадающих полного наблюдения. Стандартный native IPFW parser не ослаблен; старое IPFW владение НЕ принимается в ledger. В CI добавлены отрицательные сценарии чужих/повторных правил, небезопасных IP, конфликтных таблиц и отказ от mutating adapter. Это средство доказательства прежнего kernel-состояния, не атомарная миграция. Дальше: закрепить старые marker/Config/runtime/process/security/IPFW с durable rollback в original FD9 + Config flock и выполнить контролируемый cutover; boot/UAT и MEDIA_PASS ещё открыты. `_148` полный CI PASS, точный `_149` CI ожидается, PR #328 Draft, пакет не опубликован.
 
 
