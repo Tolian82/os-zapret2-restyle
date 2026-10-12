@@ -140,9 +140,9 @@ def stage_native_operator_input(
             os.unlink(target)
             _copy_private(temp / "voice-native-candidate" / name, target)
             os.chmod(target, stat.S_IMODE(original.st_mode))
-        # The operator route expects private source roots. Do not loosen
-        # permissions before the future five-domain PREPARED transaction.
-        os.chmod(runtime, 0o700)
+        # The operator parent stays 0700. The installed native runtime-v2
+        # must be traversable by the existing unprivileged nobody engine.
+        os.chmod(runtime, 0o755)
         _sync_dir(runtime)
         _sync_dir(temp)
 

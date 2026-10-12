@@ -106,6 +106,7 @@ class OperatorInputStageTests(unittest.TestCase):
             self.output.joinpath("managed/ipset-telegram.txt").read_bytes(),
         )
         self.assertEqual(0o700, self.output.stat().st_mode & 0o777)
+        self.assertEqual(0o755, (self.output / "runtime").stat().st_mode & 0o777)
         self.assertFalse((self.output / "runtime/voice-native-candidate").exists())
         self.assertEqual([], list(self.private.glob(PREFIX + "*")))
         # This is the unchanged production verifier, not a mocked seal.

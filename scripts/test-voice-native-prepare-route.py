@@ -47,7 +47,7 @@ class OperatorPrepareRouteTests(unittest.TestCase):
             (self.input/name).write_text("0")
             (self.input/name).chmod(0o600)
         for name in route.DIRS:
-            (self.input/name).mkdir(mode=0o700)
+            (self.input/name).mkdir(mode=0o755 if name == "runtime" else 0o700)
 
     def test_real_original_config_inode_flock_reaches_operator_coordinator(self):
         self.input_files()
@@ -90,11 +90,19 @@ class OperatorPrepareRouteTests(unittest.TestCase):
             route.prepare_operator_prebuilt("vtnet1",989)
         self.assertFalse(self.ledger.exists())
         (self.input/"runtime").unlink()
-        (self.input/"runtime").mkdir(mode=0o700)
+        (self.input/"runtime").mkdir(mode=0o755)
         (self.input/"unknown").write_text("bad")
         with self.assertRaises((OSError,ValueError,RuntimeError)):
             route.prepare_operator_prebuilt("vtnet1",989)
         self.assertFalse(self.whole.exists())
+
+    def test_runtime_mode_must_be_installable_inside_private_parent(self):
+        self.input_files()
+        for bad in (0o700, 0o777):
+            (self.input/"runtime").chmod(bad)
+            with self.assertRaises((OSError,ValueError,RuntimeError)):
+                route.prepare_operator_prebuilt("vtnet1",989)
+            self.assertFalse(self.whole.exists())
 
     def test_invalid_wan_and_divert_rejected_before_any_file_action(self):
         for wan,port in (("vtnet1;",989),("vtnet1",0),("vtnet1",65536)):

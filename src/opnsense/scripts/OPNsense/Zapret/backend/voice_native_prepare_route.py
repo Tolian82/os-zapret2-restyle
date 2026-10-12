@@ -50,7 +50,14 @@ def _fixed_input() -> dict[str, Path]:
     for name in FILES + DIRS:
         path = INPUT / name
         info = os.lstat(path)
-        if info.st_uid != os.geteuid() or info.st_mode & 0o077 or (
+        # The outer 0700 input remains private. Only the inner
+        # installable runtime root requires 0755 for the nobody engine.
+        install_root = name == "runtime" and stat.S_ISDIR(info.st_mode) and (
+            stat.S_IMODE(info.st_mode) == 0o755
+        )
+        if info.st_uid != os.geteuid() or (
+            info.st_mode & 0o077 and not install_root
+        ) or (name == "runtime" and not install_root) or (
             stat.S_ISREG(info.st_mode) and (
                 info.st_nlink != 1 or info.st_size > 128 * 1048576
             )
