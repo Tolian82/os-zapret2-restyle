@@ -64,8 +64,18 @@ def sealed_prepared_handoff(journal: VoiceCutoverJournal, stage: Path) -> dict:
     return desired
 
 
-def execute_operator_prepared() -> dict:
+def execute_operator_prepared(*, locked_config_fd: int | None = None) -> dict:
+    """Standalone operator Apply OR one-FD9 PREPARED→Apply borrowed descriptor.
+
+    The borrowed caller retains Config flock through the final commit/recovery;
+    standalone execution preserves the previous self-owning Config lock path.
+    No GUI/configd/boot caller may use this routine directly.
+    """
     native.require_native_lock()
+    if locked_config_fd is not None:
+        if type(locked_config_fd) is not int or locked_config_fd < 0:
+            raise NativeVoiceApplyRouteError("invalid borrowed original Config fd")
+        _locked_config(native.CONFIG, locked_config_fd, (0, 0))
     journal = VoiceCutoverJournal(native.WHOLE)
     ledger = VoiceOwnershipStore(native.LEDGER)
     stage = native.WHOLE / STAGE
@@ -118,6 +128,7 @@ def execute_operator_prepared() -> dict:
         write_adapter=FreeBSDIPFWAdapter(19000, 19010, allow_mutations=True),
         require_lifecycle_owner=native.require_native_lock,
         actions_factory=actions_factory, config_owner=(0, 0),
+        locked_config_fd=locked_config_fd,
     )
 
 

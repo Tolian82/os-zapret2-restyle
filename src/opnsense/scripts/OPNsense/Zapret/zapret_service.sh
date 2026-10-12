@@ -630,7 +630,7 @@ native_voice_prepare_prebuilt_service()
 {
     _voice_action="${1:-prepare-prebuilt}"
     case "${_voice_action}" in
-        prepare-prebuilt|prepare-from-release|prepare-from-saved|prepare-from-xml|prepare-from-draft) ;;
+        prepare-prebuilt|prepare-from-release|prepare-from-saved|prepare-from-xml|prepare-from-draft|prepare-from-draft-and-apply) ;;
         *) return 64 ;;
     esac
     _voice_python="/usr/local/bin/python3.13"
@@ -642,7 +642,8 @@ native_voice_prepare_prebuilt_service()
     config_load "${CONFIG}" || return 69
     _voice_resolved_wan=$(config_resolve_interface "${WAN_IF}") || return 69
     [ -n "${_voice_resolved_wan}" ] && [ -n "${DIVERT_PORT}" ] || return 69
-    if [ "${_voice_action}" = prepare-from-draft ]; then
+    if [ "${_voice_action}" = prepare-from-draft ] ||
+       [ "${_voice_action}" = prepare-from-draft-and-apply ]; then
         # No Config bytes, browser XML, strategy or arbitrary file path may
         # cross the operator command line; only a fixed mask + SHA-256.
         _voice_mask="${2:-}"
@@ -775,6 +776,11 @@ service_dispatch()
         native-voice-prepare-draft)
             native_voice_prepare_prebuilt_service prepare-from-draft "${2:-}" "${3:-}"
             ;;
+        native-voice-prepare-apply-draft)
+            # Operator-only, same original FD9 and original Config inode
+            # from saved OFF draft through PREPARED and guarded COMMIT/rollback.
+            native_voice_prepare_prebuilt_service prepare-from-draft-and-apply "${2:-}" "${3:-}"
+            ;;
         native-voice-preview-draft)
             native_voice_preview_draft_service "${2:-}" "${3:-}"
             ;;
@@ -901,7 +907,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

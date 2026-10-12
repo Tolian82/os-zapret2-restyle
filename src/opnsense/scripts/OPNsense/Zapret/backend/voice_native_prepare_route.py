@@ -38,6 +38,7 @@ from voice_native_prepare_one_lock import prepare_native_voice_one_lock
 from voice_native_operator_input_stage import stage_native_operator_input
 from voice_native_saved_pair_guard import require_saved_pair
 from voice_native_saved_draft_candidate import prepare_saved_draft_candidate
+from voice_native_apply_route import execute_operator_prepared
 import voice_ipfw_runtime as native
 
 INPUT = Path("/var/db/zapret2/voice-operator-input")
@@ -103,7 +104,7 @@ def prepare_operator_prebuilt(
     physical_wan: str, divert_port: int, *, from_release: bool = False,
     from_saved: bool = False, from_xml: bool = False,
     from_draft: bool = False, draft_mask: str = "",
-    expected_config_sha: str = "",
+    expected_config_sha: str = "", apply_continuously: bool = False,
 ) -> dict:
     if not isinstance(physical_wan, str) or not _ALLOWED_WAN.fullmatch(physical_wan) or (
         type(divert_port) is not int or not 1 <= divert_port <= 65535
@@ -112,6 +113,10 @@ def prepare_operator_prebuilt(
     if sum((bool(from_release), bool(from_saved), bool(from_xml),
             bool(from_draft))) > 1:
         raise NativePrepareRouteError("ambiguous native Voice operator mode")
+    # Continuous Apply is intentionally limited to the authoritative saved
+    # OFF-draft source, never arbitrary operator-prebuilt paths or XML.
+    if apply_continuously and not from_draft:
+        raise NativePrepareRouteError("continuous Voice Apply needs locked saved OFF drafts")
     native.require_native_lock()
     # Draft-only mode creates the entire fixed input inside the original
     # Config flock. It cannot accept a caller filesystem path or arbitrary XML.
@@ -266,20 +271,37 @@ def prepare_operator_prebuilt(
             or result["public_voice_apply"] is not False
         ):
             raise NativePrepareRouteError("native PREPARED not sealed")
-        return result
+        if not apply_continuously:
+            return result
+        # Do not drop the ORIGINAL Config flock or FD9 between PREPARED and
+        # MUTATING/COMMITTED/guarded-rollback. Existing original executor
+        # borrows fd, and never opens/re-flocks/closes a competing Config fd.
+        native.require_native_lock()
+        _locked_config(native.CONFIG, fd, owner)
+        applied = execute_operator_prepared(locked_config_fd=fd)
+        native.require_native_lock()
+        _locked_config(native.CONFIG, fd, owner)
+        if applied.get("state") != "native-forward-five-resources-committed" or (
+            applied.get("whole_phase") != "committed"
+            or applied.get("public_voice_apply") is not False
+            or applied.get("media_pass") is not False
+        ):
+            raise NativePrepareRouteError("continuous native Voice COMMIT not verified")
+        return applied
     finally:
         os.close(fd)
 
 
 def main(argv: list[str]) -> int:
+    draft_actions = ("prepare-from-draft", "prepare-from-draft-and-apply")
     if not argv or (
-        (argv[0] == "prepare-from-draft" and len(argv) != 5) or
-        (argv[0] != "prepare-from-draft" and len(argv) != 3)
+        (argv[0] in draft_actions and len(argv) != 5) or
+        (argv[0] not in draft_actions and len(argv) != 3)
     ) or argv[0] not in (
         "prepare-prebuilt", "prepare-from-release", "prepare-from-saved",
-        "prepare-from-xml", "prepare-from-draft",
+        "prepare-from-xml", *draft_actions,
     ):
-        print("usage: voice_native_prepare_route.py {prepare-prebuilt|prepare-from-release|prepare-from-saved|prepare-from-xml|prepare-from-draft} RESOLVED_WAN DIVERT_PORT [FIVE_BIT_MASK BASE_CONFIG_SHA256]",
+        print("usage: voice_native_prepare_route.py {prepare-prebuilt|prepare-from-release|prepare-from-saved|prepare-from-xml|prepare-from-draft|prepare-from-draft-and-apply} RESOLVED_WAN DIVERT_PORT [FIVE_BIT_MASK BASE_CONFIG_SHA256]",
               file=sys.stderr)
         return 64
     if not argv[2].isdecimal():
@@ -290,13 +312,21 @@ def main(argv: list[str]) -> int:
             from_release=argv[0] == "prepare-from-release",
             from_saved=argv[0] == "prepare-from-saved",
             from_xml=argv[0] == "prepare-from-xml",
-            from_draft=argv[0] == "prepare-from-draft",
+            from_draft=argv[0] in draft_actions,
             draft_mask=argv[3] if len(argv) == 5 else "",
             expected_config_sha=argv[4] if len(argv) == 5 else "",
+            apply_continuously=argv[0] == "prepare-from-draft-and-apply",
         )
-        if report["state"] != "native-voice-original-lock-prepared":
-            raise NativePrepareRouteError("prepared state not verified")
-        print("native-voice-prepared=sealed")
+        if argv[0] == "prepare-from-draft-and-apply":
+            if report["state"] != "native-forward-five-resources-committed" or (
+                report["whole_phase"] != "committed"
+            ):
+                raise NativePrepareRouteError("continuous Apply did not COMMIT")
+            print("native-voice-whole-apply=committed")
+        else:
+            if report["state"] != "native-voice-original-lock-prepared":
+                raise NativePrepareRouteError("prepared state not verified")
+            print("native-voice-prepared=sealed")
         print("native-voice-public-apply=disabled")
         return 0
     except (OSError, ValueError, RuntimeError, KeyError):

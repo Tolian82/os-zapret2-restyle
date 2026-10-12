@@ -677,13 +677,16 @@ def execute_prepared_voice_apply(
     read_adapter, write_adapter, require_lifecycle_owner,
     actions_factory, config_owner, engine_runner=None,
     supervisor_runner=None, engine_actuator=SCRIPT,
-    supervisor_actuator=SCRIPT,
+    supervisor_actuator=SCRIPT, locked_config_fd=None,
 ):
     """Compose ALL existing real native forward stages under ONE Config fd.
 
     Caller MUST already own original FD9 for the entire function and have
     an audited, root-controlled actions_factory that binds this exact
     supplied Config descriptor to native process security evidence.
+    When locked_config_fd is passed by the original one-lock PREPARED owner,
+    borrow exactly that original flock/inode: do not open, re-flock, close
+    or replace it. The prior standalone operator Apply opens its own fd.
     This private API has no OS entrypoint. After a MUTATING failure, use
     ONLY the existing independently gated five-resource rollback with the
     SAME FD; incomplete native process/redo/owner evidence remains blocked.
@@ -710,10 +713,16 @@ def execute_prepared_voice_apply(
     config_path = Path(config_path)
     flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
     require_lifecycle_owner()
-    fd = os.open(config_path, flags)
+    borrowed = locked_config_fd is not None
+    if borrowed and (type(locked_config_fd) is not int or locked_config_fd < 0):
+        raise NativeForwardApplyError("invalid original borrowed Config descriptor")
+    fd = locked_config_fd if borrowed else os.open(config_path, flags)
     try:
         _pinned_regular(config_path, fd, owner=config_owner)
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if not borrowed:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Independent contender checks the SAME inode flock whether owned
+        # by this executor or borrowed from the preceding PREPARED phase.
         _locked_config(config_path, fd, config_owner)
         record = journal.read()
         if record is not None and record["phase"] == "rolled_back":
@@ -953,4 +962,7 @@ def execute_prepared_voice_apply(
                 "but MUTATING intent retained until durable finalization"
             ) from forward_error
     finally:
-        os.close(fd)
+        # Closing the caller's fd would drop the original PREPARED owner's
+        # lock before it can inspect committed/rolled-back durable evidence.
+        if not borrowed:
+            os.close(fd)

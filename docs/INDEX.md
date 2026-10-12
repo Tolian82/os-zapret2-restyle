@@ -1,6 +1,6 @@
 # os-zapret2-restyle — Engineering memory index
 
-**Текущий этап 3 · `v0.5.1_144`:** [рабочий handoff](START_HERE.md) и [единый план](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). GUI теперь имеет строго read-only FD9 preview сохранённых OFF голосовых черновиков через configdp mask + original Config SHA. Producer PREPARED в закрытом операторском маршруте уже существует, но GUI не вызывает его, поскольку связанного guarded ON Apply/commit ещё нет. Дальше — единая native транзакция Apply/rollback, PoC migration, reboot/runtime-failure, Telegram MEDIA_PASS. PR Draft, pkg не опубликован.
+**Текущий этап 3 · `v0.5.1_145`:** [рабочий handoff](START_HERE.md) и [единый план](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). В закрытой операторской команде непрерывно связаны native saved-OFF draft → XML/Jinja/release → оригинальный schema4 PREPARED → существующий guarded forward COMMIT/rollback, с заимствованным без переоткрытия fd одного исходного Config flock и FD9. GUI ещё только read-only preview, public ON запрещён до FreeBSD/UAT/migration/reboot/MEDIA_PASS. _144 CI PASS, _145 CI pending, package unpublished; PR Draft.
 
 **Текущий Stage 3 · `v0.5.1_118`:** после schema-4 PREPARED запечатывается настоящий mode-preserving `restore-install-image` из предыдущего Config/runtime под FD9/Config flock, до MUTATING. Voice CI 81 PASS; текущая задача — штатная сборка предыдущих process/security/IPFW witnesses и один сервисный Apply, далее PoC migration/reboot/GUI. Не опубликовано, нет MEDIA_PASS.
 

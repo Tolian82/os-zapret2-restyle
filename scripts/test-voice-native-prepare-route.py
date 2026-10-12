@@ -255,6 +255,104 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         self.assertEqual([],self.calls)
         self.assertFalse(self.whole.exists())
 
+    def test_saved_draft_continuous_prepare_apply_keeps_one_original_fd(self):
+        import shutil
+        shutil.rmtree(self.build)
+        renderer = self.config.parent / "render-fixed.sh"
+        renderer.write_text("#!/bin/sh\nexit 0\n")
+        sequence = []
+        original_fd = [None]
+
+        def attest(**kw):
+            fd = kw["config_fd"]
+            _locked_config(self.config, fd, kw["config_owner"])
+            if original_fd[0] is None:
+                original_fd[0] = fd
+            self.assertEqual(original_fd[0], fd)
+
+        def saved_draft(**kw):
+            attest(**kw)
+            self.assertEqual("10000", kw["mask"])
+            self.assertEqual("a" * 64, kw["expected_sha"])
+            self.build.mkdir(mode=0o700)
+            (self.build / "config.xml").write_text("<opnsense/>")
+            (self.build / "config.xml").chmod(0o600)
+            sequence.append("saved-off-candidate")
+            return {"state": "native-voice-private-saved-draft-xml",
+                    "safe_to_enable_voice": False, "public_voice_apply": False}
+
+        def worker(cmd, **kw):
+            self.assertIn(original_fd[0], kw["pass_fds"])
+            _locked_config(self.config, original_fd[0],
+                           (os.geteuid(), os.getegid()))
+            self.assertEqual(cmd[0], "/bin/sh")
+            if cmd[1] == str(renderer):
+                self.assertEqual({"config.xml"}, set(os.listdir(self.build)))
+                (self.build / ".voice-template-root").mkdir(mode=0o700)
+                (self.build / "zapret.conf").write_text("test")
+                (self.build / "zapret.conf").chmod(0o600)
+                sequence.append("real-opnsense-renderer")
+            elif cmd[1] == str(self.build_worker):
+                (self.build / ".voice-build-workspace").mkdir(mode=0o700)
+                (self.build / "release").mkdir(mode=0o700)
+                sequence.append("native-orchestrator")
+            else:
+                self.fail("unexpected trusted worker")
+
+        def stage(**kw):
+            attest(**kw)
+            self.input_files()
+            sequence.append("qualified-operator-input")
+            return {"state": "native-voice-detached-operator-input-published",
+                    "safe_to_enable_voice": False, "public_voice_apply": False}
+
+        def prepared(**kw):
+            attest(**kw)
+            sequence.append("schema4-PREPARED")
+            return {"state": "native-voice-original-lock-prepared",
+                    "safe_to_enable_voice": False, "public_voice_apply": False}
+
+        def apply(*, locked_config_fd):
+            self.assertEqual(original_fd[0], locked_config_fd)
+            _locked_config(self.config, locked_config_fd,
+                           (os.geteuid(), os.getegid()))
+            sequence.append("guarded-forward-COMMIT")
+            return {"state": "native-forward-five-resources-committed",
+                    "whole_phase": "committed", "public_voice_apply": False,
+                    "media_pass": False}
+        with patch.object(route, "RENDER_WORKER", renderer), \
+             patch.object(route, "prepare_saved_draft_candidate",
+                          side_effect=saved_draft), \
+             patch.object(route, "require_saved_pair"), \
+             patch.object(route.subprocess, "run", side_effect=worker), \
+             patch.object(route, "stage_native_operator_input",
+                          side_effect=stage), \
+             patch.object(route, "prepare_native_voice_one_lock",
+                          side_effect=prepared), \
+             patch.object(route, "execute_operator_prepared",
+                          side_effect=apply):
+            out = route.prepare_operator_prebuilt(
+                "vtnet1", 989, from_draft=True,
+                draft_mask="10000", expected_config_sha="a" * 64,
+                apply_continuously=True,
+            )
+        self.assertEqual("native-forward-five-resources-committed", out["state"])
+        self.assertEqual(
+            ["saved-off-candidate", "real-opnsense-renderer",
+             "native-orchestrator", "qualified-operator-input",
+             "schema4-PREPARED", "guarded-forward-COMMIT"],
+            sequence,
+        )
+        self.assertEqual("<opnsense/>", self.config.read_text())
+
+    def test_continuous_apply_requires_saved_off_draft_and_attested_commit(self):
+        with self.assertRaises(route.NativePrepareRouteError):
+            route.prepare_operator_prebuilt(
+                "vtnet1", 989, from_release=True, apply_continuously=True,
+            )
+        self.assertFalse(self.whole.exists())
+        self.assertFalse(self.ledger.exists())
+
     def test_shell_route_is_fd9_operator_only_not_configd(self):
         service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
         configd=(ROOT/"src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text()
@@ -263,6 +361,8 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         self.assertIn("native-voice-prepare-release)",service)
         self.assertIn("native-voice-prepare-saved)",service)
         self.assertIn("native-voice-prepare-draft)",service)
+        self.assertIn("native-voice-prepare-apply-draft)",service)
+        self.assertIn("prepare-from-draft-and-apply",service)
         self.assertIn("native_voice_prepare_prebuilt_service prepare-from-saved",service)
         self.assertIn("native_voice_prepare_prebuilt_service prepare-from-release",service)
         locked=service.split("case \"${1:-}\" in",1)[-1]
@@ -272,6 +372,7 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         self.assertNotIn("native-voice-prepare-release",configd)
         self.assertNotIn("native-voice-prepare-saved",configd)
         self.assertNotIn("native-voice-prepare-draft",configd)
+        self.assertNotIn("native-voice-prepare-apply-draft",configd)
 
 
 if __name__=="__main__":

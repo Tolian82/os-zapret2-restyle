@@ -309,7 +309,8 @@ class NativeForwardOneLockSequenceTests(unittest.TestCase):
             self.fx.whole.read()["previous"],
         )
 
-    def run_sequence(self, fail_at=None, rollback_phase="mutating"):
+    def run_sequence(self, fail_at=None, rollback_phase="mutating",
+                     locked_config_fd=None):
         self.recovery_calls=[]
         def actions_factory(fd):
             self._assert_held(fd)
@@ -398,6 +399,7 @@ class NativeForwardOneLockSequenceTests(unittest.TestCase):
                 require_lifecycle_owner=lambda: None,
                 config_owner=(os.geteuid(), os.getegid()),
                 actions_factory=actions_factory,
+                locked_config_fd=locked_config_fd,
             )
 
     def _assert_held(self, fd):
@@ -407,6 +409,32 @@ class NativeForwardOneLockSequenceTests(unittest.TestCase):
             with self.assertRaises(BlockingIOError):
                 fcntl.flock(competitor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         self.fds.append(fd)
+
+    def test_prepared_to_forward_uses_borrowed_original_fd_without_reflock_or_close(self):
+        fd = os.open(self.config, os.O_RDWR)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = self.run_sequence(locked_config_fd=fd)
+            self.assertEqual(
+                ["stop", "engine", "ipfw", "supervisor", "config", "commit"],
+                self.stages,
+            )
+            self.assertEqual({fd}, set(self.fds))
+            self._assert_held(fd)  # caller still owns EXACT same flock
+            self.assertEqual("mutating", self.fx.whole.read()["phase"])
+        finally:
+            os.close(fd)
+
+    def test_borrowed_fd_without_original_flock_fails_before_stopping_previous(self):
+        fd = os.open(self.config, os.O_RDWR)
+        try:
+            with self.assertRaises((RuntimeError, OSError, ValueError)):
+                self.run_sequence(locked_config_fd=fd)
+            self.assertEqual([], self.stages)
+            self.assertEqual("prepared", self.fx.whole.read()["phase"])
+            os.fstat(fd)  # on failure, caller still owns descriptor
+        finally:
+            os.close(fd)
 
     def test_prepared_six_segments_share_one_original_config_lock(self):
         self.run_sequence()
