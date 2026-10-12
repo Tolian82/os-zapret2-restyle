@@ -119,11 +119,15 @@ def _read_ready(root, plan):
     return record
 
 
-def inspect_legacy_files_ready(root, *, allow_runtime_restore=False):
+def inspect_legacy_files_ready(root, *, allow_runtime_restore=False,
+                               allow_config_restore=False):
     """Disk-only reboot triage; cannot authorize installation or Voice ON."""
     root = Path(root)
     _private_dir(root)
     expected = set(EXPECTED_ROOT) | {FILES_NAME}
+    if allow_config_restore:
+        _private_dir(root / "legacy-config-restore")
+        expected.add("legacy-config-restore")
     if allow_runtime_restore:
         _private_dir(root / "legacy-runtime-restore")
         expected.add("legacy-runtime-restore")
@@ -133,6 +137,7 @@ def inspect_legacy_files_ready(root, *, allow_runtime_restore=False):
     inspect_legacy_reverse_wal(
         root, allow_ipfw_replay=True, allow_files_stage=FILES_NAME,
         allow_runtime_restore=allow_runtime_restore,
+        allow_config_restore=allow_config_restore,
     )
     record = _read_ready(root, plan)
     return {

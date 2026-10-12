@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**Этап 3 · `v0.5.1_160`:** изолированный import-only `voice_native_legacy_config_restore.py` после завершённого per-command IPFW reverse и verified previous runtime two-rename выполняет **активную** запись старого `config.xml` через original O_RDWR descriptor под existing FD9 + Config flock, с `ftruncate/stream/fchmod/fsync`, сохраняя OPNsense PHP Config inode. До первого write durable `legacy-config-restore` record pins old/new SHA, exact inode owner, bytes/mode, old five-domain previous. On interrupted retry only unchanged original candidate, previous or prefix of exact previous bytes under intact record passes; arbitrary partial data/changed journal/foreign kernel/process/marker blocks. All old blobs, previous candidate runtime, prior journals retained. Нет marker write, old process security restart, receipt, GUI/boot UAT или actual voice MEDIA_PASS. Следом — secured exact old marker WAL + three-role restarter, verified full rollback receipt, runtime boot checks и native forward GUI integration.
+
+
 **Этап 3 · `v0.5.1_159` (12.10.2026).** Исправлена ошибка CI `_158` в read-only `inspect_legacy_files_ready` при допускаемом отдельном каталоге `legacy-runtime-restore`: теперь формируется изменяемое локальное множество `set(EXPECTED_ROOT)`, без изменения allowlist, native boot guard или доступа к произвольным файлам. Ранее `AttributeError: 'frozenset' object has no attribute 'add'` блокировал новый тест двух переименований. Повторный CI `_159` проверяет end-to-end legacy IPFW→file-image→runtime recovery и восстановление после power-cut. Публичный Voice Apply, реальный Config/marker/process restore и MEDIA_PASS всё ещё закрыты. `_159` CI pending.
 
 

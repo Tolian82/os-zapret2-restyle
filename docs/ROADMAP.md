@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**Этап 3 · `v0.5.1_160`:** old Telegram PoC rollback теперь имеет отдельные внутренние реальные исполнители IPFW, runtime и Config same-inode под original FD9/Config flock, с durable шагами, power-cut retry и проверяемыми предыдущими digests. Следующая зависимость: old marker exact restoration с WAL, verified 3-role process restart и whole five-domain rollback receipt; единый переключатель PoC→native, boot/reboot и on-device MEDIA_PASS всё ещё не готовы.
+
+
 **Этап 3 · `v0.5.1_159` (12.10.2026).** Исправлена ошибка CI `_158` в read-only `inspect_legacy_files_ready` при допускаемом отдельном каталоге `legacy-runtime-restore`: теперь формируется изменяемое локальное множество `set(EXPECTED_ROOT)`, без изменения allowlist, native boot guard или доступа к произвольным файлам. Ранее `AttributeError: 'frozenset' object has no attribute 'add'` блокировал новый тест двух переименований. Повторный CI `_159` проверяет end-to-end legacy IPFW→file-image→runtime recovery и восстановление после power-cut. Публичный Voice Apply, реальный Config/marker/process restore и MEDIA_PASS всё ещё закрыты. `_159` CI pending.
 
 
