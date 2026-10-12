@@ -72,7 +72,8 @@ class ActualRuntimeWire(unittest.TestCase):
         source = shell[shell.index("orchestrator_build_release()"):
                        shell.index("orchestrator_cleanup_runtime()")]
         self.assertIn('orchestrator_stage_native_voice \\', source)
-        self.assertIn('"/conf/config.xml" \\', source)
+        self.assertIn('"${_orchestrator_build_voice_xml}" \\', source)
+        self.assertIn('orchestrator_voice_build_preflight \\', source)
         self.assertIn('"${_orchestrator_build_user_traffic}" \\', source)
         self.assertIn('"${_orchestrator_build_managed_source}" \\', source)
         self.assertIn('"${_orchestrator_build_voice_native}"', source)

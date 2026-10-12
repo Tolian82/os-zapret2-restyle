@@ -122,4 +122,42 @@ preflight_native_voice_before_firewall || {
     exit 1
 }
 
-echo "PASS: native Voice ON is fail-closed until one-engine IPFW/runtime migration is ready"
+# Detached construction must be possible from a distinct candidate generation,
+# while the same saved ON remains forbidden to every ordinary build.
+DETACHED_XML="${WORK}/candidate.xml"
+printf '%s\n' '<opnsense/>' > "${DETACHED_XML}"
+VOICE_TELEGRAM_REQUESTED=1
+if orchestrator_voice_build_preflight ordinary /conf/config.xml \
+    "${WORK}/candidate-release" /usr/local/etc/zapret2/runtime-v2 >/dev/null 2>&1; then
+    echo "FAIL: ordinary runtime build bypassed the native Voice ON barrier" >&2
+    exit 1
+fi
+orchestrator_voice_build_preflight native-detached "${DETACHED_XML}" \
+    "${WORK}/candidate-release" /usr/local/etc/zapret2/runtime-v2 || {
+    echo "FAIL: disconnected Voice candidate build was rejected" >&2
+    exit 1
+}
+for BAD_XML in /conf/config.xml "${WORK}/missing.xml"; do
+    if orchestrator_voice_build_preflight native-detached "${BAD_XML}" \
+        "${WORK}/candidate-release" /usr/local/etc/zapret2/runtime-v2 >/dev/null 2>&1; then
+        echo "FAIL: detached Voice build adopted active or missing XML" >&2
+        exit 1
+    fi
+done
+if orchestrator_voice_build_preflight native-detached "${DETACHED_XML}" \
+    /usr/local/etc/zapret2/runtime-v2/foreign /usr/local/etc/zapret2/runtime-v2 >/dev/null 2>&1; then
+    echo "FAIL: detached Voice build wrote under active runtime" >&2
+    exit 1
+fi
+if orchestrator_voice_build_preflight unknown "${DETACHED_XML}" \
+    "${WORK}/candidate-release" /usr/local/etc/zapret2/runtime-v2 >/dev/null 2>&1; then
+    echo "FAIL: unknown Voice build mode accepted" >&2
+    exit 1
+fi
+VOICE_TELEGRAM_REQUESTED=0
+orchestrator_voice_build_preflight ordinary /conf/config.xml \
+    "${WORK}/ordinary-release" /usr/local/etc/zapret2/runtime-v2 || {
+    echo "FAIL: ordinary Voice-OFF build unexpectedly rejected" >&2
+    exit 1
+}
+echo "PASS: ordinary Voice ON is fail-closed; inert detached candidate mode is isolated"

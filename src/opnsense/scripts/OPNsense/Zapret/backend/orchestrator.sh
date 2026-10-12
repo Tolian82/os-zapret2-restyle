@@ -120,6 +120,55 @@ orchestrator_stage_native_voice()
         "${_orchestrator_voice_output}"
 }
 
+# The detached native-Voice build is an inert producer-only operation.
+# Ordinary start/reconfigure retain the hard Voice-ON refusal. A future
+# original-FD9 owner must supply a distinct, already saved candidate XML;
+# this function never activates its output or adopts IPFW/process ownership.
+orchestrator_voice_build_preflight()
+{
+    _orchestrator_voice_build_mode="$1"
+    _orchestrator_voice_build_xml="$2"
+    _orchestrator_voice_build_out="$3"
+    _orchestrator_voice_build_active="$4"
+    case "${_orchestrator_voice_build_mode}" in
+        ordinary)
+            [ "${_orchestrator_voice_build_xml}" = "/conf/config.xml" ] || {
+                common_error "ordinary build cannot replace the active Voice XML"
+                return 1
+            }
+            config_voice_staged_only_guard
+            ;;
+        native-detached)
+            case "${_orchestrator_voice_build_xml}" in
+                /*) ;;
+                *) common_error "detached Voice XML must use an absolute path"; return 1 ;;
+            esac
+            case "${_orchestrator_voice_build_out}" in
+                /*) ;;
+                *) common_error "detached Voice release must use an absolute path"; return 1 ;;
+            esac
+            [ "${_orchestrator_voice_build_xml}" != "/conf/config.xml" ] &&
+            [ -f "${_orchestrator_voice_build_xml}" ] &&
+            [ ! -L "${_orchestrator_voice_build_xml}" ] &&
+            [ -n "${_orchestrator_voice_build_active}" ] &&
+            [ "${_orchestrator_voice_build_out}" != "${_orchestrator_voice_build_active}" ] || {
+                common_error "detached Voice candidate must not reuse active inputs"
+                return 1
+            }
+            case "${_orchestrator_voice_build_out}" in
+                "${_orchestrator_voice_build_active}"/*)
+                    common_error "detached Voice candidate cannot be inside active runtime"
+                    return 1
+                    ;;
+            esac
+            ;;
+        *)
+            common_error "unknown Voice build mode"
+            return 1
+            ;;
+    esac
+}
+
 orchestrator_build_release()
 {
     _orchestrator_build_config="$1"
@@ -128,6 +177,8 @@ orchestrator_build_release()
     _orchestrator_build_workspace="$4"
     _orchestrator_build_release="$5"
     _orchestrator_build_stage_file="$6"
+    _orchestrator_build_variant="${7:-ordinary}"
+    _orchestrator_build_voice_xml="${8:-/conf/config.xml}"
     _orchestrator_build_total=8
     _orchestrator_build_error="${_orchestrator_build_workspace}/stage-error.log"
 
@@ -151,11 +202,12 @@ orchestrator_build_release()
             "service is disabled"
         return 2
     }
-    # Reject native Voice ON before generating anything for the
-    # old telegram-voice-poc prepend. Apply remains disabled in v0.5.1_1.
-    # Until the one-engine cutover is implemented, silently ignoring a
-    # persisted Voice checkbox would misrepresent runtime state.
-    config_voice_staged_only_guard || {
+    # Only a separate, unpublished native candidate may contain Voice ON.
+    # The six-argument legacy callers still take the ordinary fail-closed
+    # route before touching their running service or firewall.
+    orchestrator_voice_build_preflight \
+        "${_orchestrator_build_variant}" "${_orchestrator_build_voice_xml}" \
+        "${_orchestrator_build_release}" "${_orchestrator_build_active_dir}" || {
         orchestrator_fail_stage \
             "${_orchestrator_build_stage_file}" 1 \
             "${_orchestrator_build_total}" config \
@@ -367,7 +419,7 @@ orchestrator_build_release()
     _orchestrator_build_voice_native="${_orchestrator_build_release}/voice-native-candidate"
     : > "${_orchestrator_build_error}"
     orchestrator_stage_native_voice \
-        "/conf/config.xml" \
+        "${_orchestrator_build_voice_xml}" \
         "${_orchestrator_build_managed_source}" \
         "${_orchestrator_build_active_dir}" \
         "${WAN_IF}" \
@@ -489,7 +541,7 @@ orchestrator_build_release()
         "${_orchestrator_build_user_traffic}" \
         "${_orchestrator_build_tcp}" \
         "${_orchestrator_build_udp}" \
-        "/conf/config.xml" \
+        "${_orchestrator_build_voice_xml}" \
         2>"${_orchestrator_build_error}" || {
             orchestrator_fail_from_log \
                 "${_orchestrator_build_stage_file}" 6 \
