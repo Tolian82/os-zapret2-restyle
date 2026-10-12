@@ -37,6 +37,7 @@ class DurableOldPoCTests(unittest.TestCase):
         self.addCleanup(self.case.live.doCleanups)
         self.root = self.case.live.whole
         self.root.mkdir(mode=0o700)
+        self.original_probe_backup=self.case.live.probe.previous_backup
         live=self.case.live
         self.creds={role:{field:(65534 if role=="engine" else 0)
                           for field in FIELDS}
@@ -81,7 +82,7 @@ class DurableOldPoCTests(unittest.TestCase):
         self.assertEqual(64,len(report["process_security_policy_sha256"]))
         self.assertEqual(5,len(report["previous_five"]))
         self.assertEqual(self.case.live.probe.previous_backup,
-                         self.case.live.whole/"previous")
+                         self.original_probe_backup)
         self.assertFalse(report["safe_to_mutate"])
         self.assertFalse(report["public_voice_apply"])
         self.assertEqual(marker, (self.root/"legacy-previous/marker.bin").read_bytes())
