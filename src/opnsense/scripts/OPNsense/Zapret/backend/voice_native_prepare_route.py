@@ -39,6 +39,7 @@ from voice_native_operator_input_stage import stage_native_operator_input
 from voice_native_saved_pair_guard import require_saved_pair
 from voice_native_saved_draft_candidate import prepare_saved_draft_candidate
 from voice_native_apply_route import execute_operator_prepared
+from voice_native_legacy_poc_guard import NativePrepareRouteError, _require_no_legacy_poc
 import voice_ipfw_runtime as native
 
 INPUT = Path("/var/db/zapret2/voice-operator-input")
@@ -54,57 +55,6 @@ BUILT_XML_ENTRIES = frozenset((*BUILT_ENTRIES, ".voice-template-root"))
 FILES = ("config.xml", "user-traffic.conf", "tcp-ports.txt", "udp-ports.txt")
 DIRS = ("runtime", "voice-native-candidate", "managed")
 _ALLOWED_WAN = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,63}$")
-
-
-class NativePrepareRouteError(RuntimeError):
-    pass
-
-
-def _legacy_read(path: Path) -> bytes | None:
-    """Read one fixed legacy marker/state without following links or unsafe inode races."""
-    try:
-        before = os.lstat(path)
-    except FileNotFoundError:
-        return None
-    if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid()
-            or before.st_nlink != 1 or before.st_mode & 0o022
-            or before.st_size > 64):
-        raise NativePrepareRouteError("legacy Telegram Voice marker/state is untrusted")
-    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-                 | getattr(os, "O_NONBLOCK", 0))
-    try:
-        opened = os.fstat(fd)
-        content = os.read(fd, 65)
-        after = os.fstat(fd)
-        current = os.lstat(path)
-        def identity(info):
-            return (info.st_dev, info.st_ino, info.st_mode, info.st_uid,
-                    info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-        if (identity(before) != identity(opened)
-                or identity(opened) != identity(after)
-                or identity(after) != identity(current)
-                or len(content) != before.st_size):
-            raise NativePrepareRouteError("legacy Telegram Voice state changed during preflight")
-        return content
-    finally:
-        os.close(fd)
-
-
-def _require_no_legacy_poc() -> None:
-    """Fail closed before staging/Apply when the transient PoC still has authority.
-
-    The old shell PoC tests marker *presence*, not its contents. The runtime
-    state can outlive the marker, including after a failed/rebooted operation.
-    Do not remove either file or infer an explicit new Voice preference.
-    """
-    if native.ACTIVE_ROOT.is_symlink():
-        raise NativePrepareRouteError("native runtime root is a symlink")
-    marker = _legacy_read(native.LEGACY_MARKER)
-    state = _legacy_read(native.ACTIVE_ROOT / "telegram-voice-poc.state")
-    if marker is not None or state == b"enabled\n" or state == b"enabled":
-        raise NativePrepareRouteError("legacy Telegram Voice PoC requires reviewed migration")
-    if state is not None and state.strip() != b"disabled":
-        raise NativePrepareRouteError("unknown legacy Telegram Voice runtime state")
 
 
 def _fixed_input() -> dict[str, Path]:
