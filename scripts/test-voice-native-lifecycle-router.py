@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
 from voice_native_lifecycle_router import (
-    inspect_lifecycle, VoiceLifecycleRouteError,
+    inspect_lifecycle, inspect_candidate, VoiceLifecycleRouteError,
 )
 from voice_cutover_journal import VoiceCutoverJournal
 
@@ -60,6 +60,57 @@ class LifecycleRouterTests(unittest.TestCase):
             )
         finally:
             os.close(fd)
+
+    def candidate(self):
+        fd = os.open(self.config, os.O_RDWR)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return inspect_candidate(
+                self.config, self.whole, self.ledger,
+                config_fd=fd, config_owner=self.owner,
+                require_lifecycle_owner=lambda: None,
+            )
+        finally:
+            os.close(fd)
+
+    def test_locked_saved_on_compiles_real_profile_without_creating_staging(self):
+        xml = config_xml(profiles={"telegram": "1"})
+        native = ("--filter-udp=596-599\n--filter-l7=stun\n"
+                  "--payload=stun\n--lua-desync=fake:blob=0x00000000:repeats=2")
+        xml = xml.replace(b"<telegram><enabled>1</enabled></telegram>",
+                          ("<telegram><enabled>1</enabled><args>" + native +
+                           "</args></telegram>").encode("ascii"))
+        xml = xml.replace(b"</Zapret>",
+                          b"<hostlist><telegramips>91.108.13.10</telegramips></hostlist></Zapret>")
+        self.config.write_bytes(xml)
+        result = self.candidate()
+        self.assertEqual(result["state"], "native-voice-candidate-syntax-qualified")
+        self.assertEqual(result["services"], ["telegram"])
+        self.assertEqual(result["profile_count"], 1)
+        self.assertEqual(len(result["profile_sha256"]), 64)
+        self.assertEqual(len(result["plan_sha256"]), 64)
+        self.assertIs(result["public_voice_apply"], False)
+        self.assertIs(result["safe_to_enable_voice"], False)
+        self.assertFalse(self.whole.exists())
+        self.assertFalse(self.ledger.exists())
+        self.assertEqual(self.config.read_bytes(), xml)
+
+    def test_compiler_rejects_malicious_native_option_from_locked_saved_config(self):
+        xml = config_xml(profiles={"telegram": "1"}).replace(
+            b"</telegram>", b"<args>--exec=/bin/sh</args></telegram>"
+        )
+        self.config.write_bytes(xml)
+        with self.assertRaises(ValueError):
+            self.candidate()
+        self.assertEqual(self.config.read_bytes(), xml)
+        self.assertFalse(self.whole.exists())
+
+    def test_preflight_rejects_voice_off_without_compiling_draft_args(self):
+        self.config.write_bytes(config_xml())
+        result = self.candidate()
+        self.assertEqual(result["state"], "native-voice-candidate-not-eligible")
+        self.assertEqual(result["reason"], "voice-saved-off-legacy-guard-still-authoritative")
+        self.assertIs(result["public_voice_apply"], False)
 
     def test_five_off_profiles_preserve_existing_legacy_guard(self):
         report = self.inspect()
@@ -127,6 +178,10 @@ class LifecycleRouterTests(unittest.TestCase):
         self.assertIn('service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"', shell)
         self.assertIn("[voice_lifecycle_inspect]", action)
         self.assertIn("zapret_service.sh native-voice-lifecycle-inspect", action)
+        self.assertIn("[voice_candidate_preflight]", action)
+        self.assertIn("zapret_service.sh native-voice-candidate-preflight", action)
+        self.assertIn("native_voice_candidate_preflight_service()", shell)
+        self.assertIn("native-voice-candidate-preflight)", shell)
         self.assertNotIn("voice-native-apply", action)
         self.assertNotIn("native-voice-apply)", shell)
 
