@@ -343,7 +343,15 @@ jobs:
         run: |
           find src -type f -name "*.sh" -exec sh -n {} \;
           find pkg -type f -exec sh -n {} \;
-          find scripts -type f -name "*.sh" -exec sh -n {} \;
+          # Project helpers explicitly using bash must be parsed with bash,
+          # not silently reported as POSIX sh syntax errors by find -exec.
+          find scripts -type f -name "*.sh" -print |
+            while IFS= read -r script; do
+              case "$(head -n 1 "$script")" in
+                '#!/usr/bin/env bash'|'#!/bin/bash') bash -n "$script" ;;
+                *) sh -n "$script" ;;
+              esac
+            done
           sh -n src/etc/rc.syshook.d/start/20-zapret
           sh -n src/etc/rc.syshook.d/stop/20-zapret
           sh -n tools/telegram-voice-lab/run-a1-opnsense.sh
