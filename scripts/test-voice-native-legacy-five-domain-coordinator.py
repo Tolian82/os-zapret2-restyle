@@ -16,6 +16,9 @@ sys.path.insert(0,str(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"))
 import voice_native_legacy_five_domain_coordinator as whole
 from voice_native_legacy_reverse_wal import inspect_legacy_reverse_wal
 from voice_cutover_guard import check_pending
+from voice_native_legacy_whole_receipt import (
+    receipt_directory, inspect_legacy_whole_receipt, LegacyWholeReceiptError,
+)
 
 
 def fixture():
@@ -88,14 +91,17 @@ class LegacySingleLockWholeRollbackTests(unittest.TestCase):
 
     def test_real_five_domain_chain_one_locked_fd_then_idempotent_attest(self):
         result=self.call()
-        self.assertEqual("legacy-five-domains-observed-receipt-and-boot-pending",
+        self.assertEqual("legacy-five-domains-whole-receipt-sealed-boot-pending",
                          result["state"])
         self.assertEqual(list(whole.STAGES),result["phases_completed"])
-        for label in ("safe_to_enable_voice","whole_rollback_complete",
+        for label in ("safe_to_enable_voice",
                       "safe_to_close_intent","public_voice_apply",
                       "boot_recovery_validated","media_pass"):
             self.assertFalse(result[label])
         self.assertEqual(6,whole._prefix(self.root))
+        self.assertTrue(result["whole_rollback_complete"])
+        self.assertEqual("legacy-whole-receipt-disk-valid-live-recheck-required",
+                         inspect_legacy_whole_receipt(self.root)["state"])
         self.assertEqual(1,self.t.calls)
         self.assertEqual([19000,19001,19002],sorted(self.kernel.rules))
         self.assertEqual(self.root.joinpath("legacy-previous/previous/config/config.xml").read_bytes(),
@@ -176,6 +182,32 @@ class LegacySingleLockWholeRollbackTests(unittest.TestCase):
         with self.assertRaises((OSError,RuntimeError,ValueError)):
             self.call()
         self.assertEqual(1,self.t.calls)
+
+    def test_whole_receipt_fails_closed_on_corrupted_bytes(self):
+        self.call()
+        root=receipt_directory(self.root)
+        record=root/"receipt.json"
+        record.write_bytes(record.read_bytes()+b"foreign")
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            inspect_legacy_whole_receipt(self.root)
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            self.call()
+
+    def test_whole_receipt_missing_seal_does_not_auto_repair(self):
+        self.call()
+        root=receipt_directory(self.root)
+        (root/"receipt.sha256").unlink()
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            self.call()
+        self.assertFalse((root/"receipt.sha256").exists())
+        self.assertEqual(1,self.t.calls)
+
+    def test_whole_receipt_checks_sealed_source_stage_integrity(self):
+        self.call()
+        source=self.root/"legacy-reverse-wal"/"wal.sha256"
+        source.write_bytes(source.read_bytes().replace(b"a",b"f",1))
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            inspect_legacy_whole_receipt(self.root)
 
     def test_no_public_entrypoint_or_false_media_pass(self):
         service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()

@@ -2,7 +2,7 @@
 """Single-original-FD9-and-Config-flock legacy five-domain rollback coordinator.
 
 IMPORT ONLY. No CLI, configd, GUI, boot hook, daemon, service registration,
-receipt archival, voice-on permission, or MEDIA_PASS.
+voice-on permission, or MEDIA_PASS.
 
 A caller who already holds the ORIGINAL Zapret lifecycle FD9 and the SAME
 exclusive OPNsense Config inode flock invokes this once. The coordinator
@@ -16,8 +16,8 @@ Only the CURRENT stage is resumed. A process-start attempt recorded before
 a power cut is never reissued: the process module only reattests all three
 roles or fails closed for manual review.
 
-A successful return is evidence for FUTURE five-domain receipt/boot UAT.
-It is NEVER a final rollback receipt or authority to enable Voice.
+A successful return seals an immutable whole five-domain receipt. It is
+NEVER boot acceptance or authority to enable Voice.
 """
 from __future__ import annotations
 
@@ -49,6 +49,7 @@ from voice_native_legacy_process_restart import (
     PROCESS_NAME, restart_legacy_processes,
 )
 from voice_native_process_actions import SCRIPT
+from voice_native_legacy_whole_receipt import seal_legacy_whole_receipt
 
 FIRST = frozenset((NAME, PLAN_NAME, WAL_NAME))
 STAGES = (
@@ -90,8 +91,8 @@ def recover_legacy_five_domains(
 ):
     """Run each required restoration ONCE within the caller's SAME FD9+flock.
 
-    Even after all five domains match, leave all journals and boot gates
-    pending. A separate owner-live acceptance/receipt is still required.
+    Keep all journals and boot gates pending after a sealed whole receipt.
+    Owner-live reboot/Telegram media acceptance is still required.
     """
     if (not callable(require_lifecycle_owner)
         or type(config_fd) is not int or config_fd<0
@@ -225,8 +226,16 @@ def recover_legacy_five_domains(
         or _strict_snapshot(readonly_ipfw)!=_expected_after(plan,completed)):
         raise LegacyFiveDomainCoordinatorError("final legacy IPFW drift")
     held()
+    receipt=seal_legacy_whole_receipt(
+        root=root,config_path=config_path,config_fd=config_fd,
+        config_owner=config_owner,require_lifecycle_owner=require_lifecycle_owner,
+        process_report=process_report,
+    )
+    held()
     return {
-        "state":"legacy-five-domains-observed-receipt-and-boot-pending",
+        "state":"legacy-five-domains-whole-receipt-sealed-boot-pending",
+        "whole_receipt_state":receipt["state"],
+        "journal_tree_sha256":receipt["journal_tree_sha256"],
         "previous_five":plan["previous_five"],
         "process_instances":process_report["instances"],
         "process_security_policy_sha256":
@@ -234,7 +243,7 @@ def recover_legacy_five_domains(
         "phases_completed":list(STAGES),
         "same_original_config_fd":True,
         "safe_to_enable_voice":False,
-        "whole_rollback_complete":False,
+        "whole_rollback_complete":True,
         "safe_to_close_intent":False,
         "boot_recovery_validated":False,
         "public_voice_apply":False,
