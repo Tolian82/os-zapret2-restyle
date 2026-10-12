@@ -14,6 +14,12 @@ $(document).ready(function () {
         notice: 'Можно сохранять только выключенные голосовые профили. Черновик сохраняется в Config и переживает перезагрузку; dvtws2 и IPFW не изменяются. Изменённый общий IPSET может повлиять на следующий запуск обычной службы. Для выключенных профилей доступно применение общих настроек через штатный перезапуск Zapret2. Включение голосового UDP ещё не реализовано.',
         status: 'Статус', running: 'Запущена', stopped: 'Остановлена', error: 'Ошибка',
         loading: 'Загрузка…', incomplete: 'Неизвестно',
+        recoveryTitle: 'Восстановление старого Telegram PoC',
+        recoveryAbsent: 'Журнал старого PoC отсутствует — восстановление не подтверждено',
+        recoveryOther: 'Обнаружен другой журнал Voice — проверьте его отдельно',
+        recoveryIncomplete: 'Незавершённое восстановление — нужна ручная проверка',
+        recoveryReceipt: 'Диск проверен — после загрузки проверьте IPFW и процессы',
+        recoveryUnknown: 'Статус восстановления недоступен — применение заблокировано',
         ipfwStatus: 'IPFW — передача голоса', ipfwReady: 'Правила подтверждены',
         ipfwEmpty: 'Новая Voice-конфигурация не активирована', ipfwInterrupted: 'Незавершённое применение',
         ipfwBlocked: 'Требуется проверка правил', ipfwUnknown: 'Статус недоступен',
@@ -34,6 +40,12 @@ $(document).ready(function () {
         notice: 'Only disabled Voice profiles can be saved. The draft persists in OPNsense Config across reboot; dvtws2 and IPFW are not changed. An edited shared IPSET may affect the next regular service start. Apply uses the existing Zapret2 reconfigure for all-OFF settings. Activating Voice UDP profiles is not implemented yet.',
         status: 'Status', running: 'Started', stopped: 'Stopped', error: 'Error',
         loading: 'Loading…', incomplete: 'Unknown',
+        recoveryTitle: 'Previous Telegram PoC recovery',
+        recoveryAbsent: 'No old PoC journal — recovery not established',
+        recoveryOther: 'Another Voice journal exists — review it separately',
+        recoveryIncomplete: 'Incomplete recovery — manual review required',
+        recoveryReceipt: 'Disk proof verified — verify IPFW and processes after boot',
+        recoveryUnknown: 'Recovery status unavailable — activation blocked',
         ipfwStatus: 'Voice IPFW', ipfwReady: 'Verified rules',
         ipfwEmpty: 'New Voice configuration not activated', ipfwInterrupted: 'Interrupted apply',
         ipfwBlocked: 'Firewall review required', ipfwUnknown: 'Status unavailable',
@@ -178,6 +190,7 @@ $(document).ready(function () {
     $('a[href="/ui/zapret/diagnostics"]').text(text.navLab);
     $('#voiceServiceTitle').text(text.service);
     $('#voiceStatusLabel').text(text.status + ':');
+    $('#voiceRecoveryLabel').text(text.recoveryTitle + ':');
     // This value comes from the same locked config.xml snapshot as the form
     // itself. Keep Validate disabled until that paired read succeeds.
     var voiceSnapshot = $('<input/>', {
@@ -392,6 +405,34 @@ $(document).ready(function () {
                 $('#voiceIPFWDetail').text('');
             });
     }
+    function refreshVoiceRecovery() {
+        return $.ajax({
+            type: 'POST', url: '/api/zapret/voice/recoveryStatus',
+            dataType: 'json', timeout: 40000
+        }).done(function (reply) {
+            var state = reply && reply.state;
+            var safe = reply && reply.safe_to_mutate === false &&
+                reply.safe_to_start === false &&
+                reply.public_voice_apply === false &&
+                reply.boot_recovery_validated === false;
+            var labels = {
+                'no-legacy-five-domain-journal-observed': text.recoveryAbsent,
+                'not-a-legacy-five-domain-journal': text.recoveryOther,
+                'legacy-five-domain-incomplete-manual-review': text.recoveryIncomplete,
+                'legacy-whole-disk-valid-live-boot-recheck-required': text.recoveryReceipt
+            };
+            var known = safe && Object.prototype.hasOwnProperty.call(labels, state);
+            $('#voiceRecoveryState')
+                .removeClass('label-success label-default label-danger')
+                .addClass(known && state === 'no-legacy-five-domain-journal-observed'
+                    ? 'label-default' : 'label-danger')
+                .text(known ? labels[state] : text.recoveryUnknown);
+        }).fail(function () {
+            $('#voiceRecoveryState')
+                .removeClass('label-success label-default')
+                .addClass('label-danger').text(text.recoveryUnknown);
+        });
+    }
     function refreshReleases() {
         var select = $('#voiceReleaseSelect');
         select.prop('disabled',true).empty().append($('<option/>').val('').text(text.loading));
@@ -434,6 +475,7 @@ $(document).ready(function () {
     $('#voiceReleaseApply').text(text.apply);
     refreshRuntime();
     refreshVoiceIPFW();
+    refreshVoiceRecovery();
     refreshReleases();
     updateServiceControlUI('zapret');
 });
@@ -485,6 +527,10 @@ $(document).ready(function () {
                 <b id="voiceIPFWLabel">Voice IPFW:</b>
                 <span id="voiceIPFWState" class="label label-default">—</span>
                 <span id="voiceIPFWDetail" aria-live="polite"></span>
+            </td></tr>
+            <tr><td colspan="3">
+                <b id="voiceRecoveryLabel">Previous Telegram PoC recovery:</b>
+                <span id="voiceRecoveryState" class="label label-danger" aria-live="polite">—</span>
             </td></tr></tbody>
         </table>
     </div></div>

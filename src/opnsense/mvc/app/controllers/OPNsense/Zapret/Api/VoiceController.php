@@ -405,6 +405,57 @@ class VoiceController extends ApiControllerBase
         ];
     }
 
+    /**
+     * Original FD9 + Config inode locked read-only old Telegram PoC triage.
+     * Never expose journal fingerprints or classify disk-only proof as live.
+     */
+    public function recoveryStatusAction(): array
+    {
+        $blocked = [
+            'state' => 'unavailable',
+            'safe_to_mutate' => false,
+            'safe_to_start' => false,
+            'public_voice_apply' => false,
+            'boot_recovery_validated' => false,
+        ];
+        if (!$this->request->isPost()) {
+            return $blocked;
+        }
+        try {
+            $backend = new Backend();
+            $raw = trim((string)$backend->configdRun('zapret voice_recovery_status', false, 35));
+            $prefix = 'legacy-voice-boot-review=';
+            if (substr($raw, 0, strlen($prefix)) !== $prefix) {
+                return $blocked;
+            }
+            $report = json_decode(substr($raw, strlen($prefix)), true);
+            $states = [
+                'no-legacy-five-domain-journal-observed',
+                'not-a-legacy-five-domain-journal',
+                'legacy-five-domain-incomplete-manual-review',
+                'legacy-whole-disk-valid-live-boot-recheck-required',
+            ];
+            if (!is_array($report) ||
+                !in_array($report['state'] ?? null, $states, true) ||
+                ($report['safe_to_mutate'] ?? null) !== false ||
+                ($report['safe_to_start'] ?? null) !== false ||
+                ($report['public_voice_apply'] ?? null) !== false ||
+                ($report['boot_recovery_validated'] ?? null) !== false
+            ) {
+                return $blocked;
+            }
+            return [
+                'state' => $report['state'],
+                'safe_to_mutate' => false,
+                'safe_to_start' => false,
+                'public_voice_apply' => false,
+                'boot_recovery_validated' => false,
+            ];
+        } catch (\Throwable $error) {
+            return $blocked;
+        }
+    }
+
     public function inspectAction(): array
     {
         if (!$this->request->isPost()) {
