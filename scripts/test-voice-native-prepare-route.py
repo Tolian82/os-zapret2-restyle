@@ -358,18 +358,18 @@ class OperatorPrepareRouteTests(unittest.TestCase):
     def test_legacy_marker_prevents_prepared_even_when_prior_runtime_is_off(self):
         self.input_files()
         marker=route.native.LEGACY_MARKER
-        marker.write_text("enabled\\n")
-        (self.live/"telegram-voice-poc.state").write_text("disabled\\n")
+        marker.write_text("enabled\n")
+        (self.live/"telegram-voice-poc.state").write_text("disabled\n")
         with patch.object(route,"prepare_native_voice_one_lock") as prepared:
             with self.assertRaisesRegex(route.NativePrepareRouteError,"requires reviewed migration"):
                 route.prepare_operator_prebuilt("vtnet1",989)
             prepared.assert_not_called()
-        self.assertEqual("enabled\\n",marker.read_text())
+        self.assertEqual("enabled\n",marker.read_text())
         self.assertFalse(self.whole.exists())
 
     def test_legacy_runtime_on_without_marker_blocks_migration(self):
         self.input_files()
-        (self.live/"telegram-voice-poc.state").write_text("enabled\\n")
+        (self.live/"telegram-voice-poc.state").write_text("enabled\n")
         with patch.object(route,"prepare_native_voice_one_lock") as prepared:
             with self.assertRaisesRegex(route.NativePrepareRouteError,"requires reviewed migration"):
                 route.prepare_operator_prebuilt("vtnet1",989)
@@ -382,7 +382,7 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         with self.assertRaisesRegex(route.NativePrepareRouteError,"untrusted"):
             route.prepare_operator_prebuilt("vtnet1",989)
         state.unlink()
-        state.write_text("unrecognized\\n")
+        state.write_text("unrecognized\n")
         with self.assertRaisesRegex(route.NativePrepareRouteError,"unknown legacy"):
             route.prepare_operator_prebuilt("vtnet1",989)
         state.unlink()
@@ -392,7 +392,7 @@ class OperatorPrepareRouteTests(unittest.TestCase):
 
     def test_disabled_state_allows_existing_operator_preparation(self):
         self.input_files()
-        (self.live/"telegram-voice-poc.state").write_text("disabled\\n")
+        (self.live/"telegram-voice-poc.state").write_text("disabled\n")
         with patch.object(route,"prepare_native_voice_one_lock",
                           return_value={"state":"native-voice-original-lock-prepared",
                                         "safe_to_enable_voice":False,
