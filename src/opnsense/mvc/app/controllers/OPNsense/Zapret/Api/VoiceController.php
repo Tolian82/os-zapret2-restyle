@@ -14,6 +14,7 @@ require_once __DIR__ . '/VoiceCandidateValidator.php';
 require_once __DIR__ . '/VoiceSettingsSnapshot.php';
 require_once __DIR__ . '/VoiceSettingsPayload.php';
 require_once __DIR__ . '/VoiceApplyCandidate.php';
+require_once __DIR__ . '/VoiceCandidateXml.php';
 
 class VoiceController extends ApiControllerBase
 {
@@ -71,10 +72,20 @@ class VoiceController extends ApiControllerBase
             if ($plan['result'] !== 'prepared') {
                 return $plan;
             }
+            // Render a real detached OPNsense XML candidate in memory while
+            // Config::lock() protects the source generation. Never call
+            // setNodes(), serializeToConfig() or Config::save() here: Voice
+            // ON must not enter the live XML ahead of original FD9 cutover.
+            $candidateXml = VoiceCandidateXml::render(
+                (string)$config, $current, $plan['candidate'], $plan['changed_fields']
+            );
             return [
                 'result' => 'validated',
-                'scope' => 'syntax-only',
+                'scope' => 'detached-xml-preview-only',
                 'change_count' => count($plan['changed_fields']),
+                'candidate_xml_sha256' => hash('sha256', $candidateXml),
+                // This hash is a planning witness, not an Apply authority.
+                'applied' => false,
             ];
         } catch (\InvalidArgumentException $error) {
             return ['result' => 'failed', 'validations' => [
