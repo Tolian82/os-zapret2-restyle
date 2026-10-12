@@ -123,7 +123,7 @@ def prepare_staged_forward_voice_intent(
         require_lifecycle_owner=require_lifecycle_owner,
     )
     if result.get("state") != "native-voice-forward-prepared-not-mutating" or (
-        sealed_prepared_handoff(journal, stage) != desired
+        canonical_manifest(sealed_prepared_handoff(journal, stage)) != desired
     ):
         raise NativeVoiceStagePrepareError("journal does not bind published Voice stage")
     return {
