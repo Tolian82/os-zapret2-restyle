@@ -9,10 +9,9 @@ import sys
 import unittest
 from unittest.mock import patch
 
-from voice_native_file_observer import observe_live_files
-
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"))
+from voice_native_file_observer import observe_live_files
 from voice_native_forward_stage_prepare import prepare_staged_forward_voice_intent
 from voice_native_apply_route import sealed_prepared_handoff
 from voice_cutover_guard import check_pending
