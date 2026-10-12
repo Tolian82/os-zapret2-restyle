@@ -127,7 +127,8 @@ class OneOriginalLockTests(unittest.TestCase):
     def test_unlocked_config_denies_before_bootstrap(self):
         with self.assertRaises((OSError,ValueError,RuntimeError)):
             self.run_coordinator(lock=False)
-        self.assertEqual([],self.events)
+        self.assertEqual(["FD9"],self.events,
+                         "owner check is allowed; no seed or disk write")
 
     def test_owner_failure_never_captures_old_process_or_candidate(self):
         with self.assertRaises(OSError):
