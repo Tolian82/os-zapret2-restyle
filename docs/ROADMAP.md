@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Master development plan
 
+**Этап 3 · `v0.5.1_159` (12.10.2026).** Исправлена ошибка CI `_158` в read-only `inspect_legacy_files_ready` при допускаемом отдельном каталоге `legacy-runtime-restore`: теперь формируется изменяемое локальное множество `set(EXPECTED_ROOT)`, без изменения allowlist, native boot guard или доступа к произвольным файлам. Ранее `AttributeError: 'frozenset' object has no attribute 'add'` блокировал новый тест двух переименований. Повторный CI `_159` проверяет end-to-end legacy IPFW→file-image→runtime recovery и восстановление после power-cut. Публичный Voice Apply, реальный Config/marker/process restore и MEDIA_PASS всё ещё закрыты. `_159` CI pending.
+
+
 **Этап 3 · `v0.5.1_158`:** добавлен tested isolated LIVE runtime install step с полнотой старого IPFW redo, root-private fsynced intent и verified two-rename, power-cut resume, original Config inode flock и FD9. Существующий rollback receipt и public Voice ON остаются заблокированными. Далее — Config same-inode recovery with prefix redo, marker exact restoration and old process security/argv restart; после реальной полной пятидоменной приемки допустима native GUI Apply UAT / reboot / MEDIA_PASS.
 
 

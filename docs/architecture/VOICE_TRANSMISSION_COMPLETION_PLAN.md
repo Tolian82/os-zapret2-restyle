@@ -1,5 +1,8 @@
 # Voice Transmission — план завершения и стабилизации
 
+**Этап 3 · `v0.5.1_159` (12.10.2026).** Исправлена ошибка CI `_158` в read-only `inspect_legacy_files_ready` при допускаемом отдельном каталоге `legacy-runtime-restore`: теперь формируется изменяемое локальное множество `set(EXPECTED_ROOT)`, без изменения allowlist, native boot guard или доступа к произвольным файлам. Ранее `AttributeError: 'frozenset' object has no attribute 'add'` блокировал новый тест двух переименований. Повторный CI `_159` проверяет end-to-end legacy IPFW→file-image→runtime recovery и восстановление после power-cut. Публичный Voice Apply, реальный Config/marker/process restore и MEDIA_PASS всё ещё закрыты. `_159` CI pending.
+
+
 **Этап 3 · `v0.5.1_158`:** новый import-only `voice_native_legacy_runtime_restore.py` восстанавливает real old `runtime-v2` только при завершённом IPFW exact replay + previous-files stage, сохранённых candidate Config/runtime fingerprint в upgraded WAL schema2, отсутствии всех трёх процессов и старого marker, native owner ledger empty и original FD9/Config inode flock. Использует реальную `_stage_old_tree` native restorer (correct original mode + nofollow/fsync) плюс отдельный immutable pre-first-rename `legacy-runtime-restore` intent, deterministic ready/retired names и две same-parent rename with prefix recovery. Unknown current/ready/retired state fails closed, кандидата сохраняет, redo и полный предыдущий snapshot не удаляет. Active Config inode и old marker не затрагивает. Next: Config restore same inode with write-ahead and verified prior candidate (plus power-cut prefix), old marker exact file/mode restore and 3-role secured process restart, final five-domain receipt/reboot then actual native migration MEDIA_PASS. `_158` CI pending.
 
 

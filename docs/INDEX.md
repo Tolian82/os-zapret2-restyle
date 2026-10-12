@@ -1,5 +1,8 @@
 # os-zapret2-restyle — Engineering memory index
 
+**Этап 3 · `v0.5.1_159` (12.10.2026).** Исправлена ошибка CI `_158` в read-only `inspect_legacy_files_ready` при допускаемом отдельном каталоге `legacy-runtime-restore`: теперь формируется изменяемое локальное множество `set(EXPECTED_ROOT)`, без изменения allowlist, native boot guard или доступа к произвольным файлам. Ранее `AttributeError: 'frozenset' object has no attribute 'add'` блокировал новый тест двух переименований. Повторный CI `_159` проверяет end-to-end legacy IPFW→file-image→runtime recovery и восстановление после power-cut. Публичный Voice Apply, реальный Config/marker/process restore и MEDIA_PASS всё ещё закрыты. `_159` CI pending.
+
+
 **Этап 3 · `v0.5.1_158`:** old runtime теперь может быть установлен через отдельный import-only WAL + two-rename restorer после verified IPFW reverse; Config/marker/три процесса не восстановлены. [Handoff](START_HERE.md), [план завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
 
 

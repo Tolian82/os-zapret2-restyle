@@ -123,7 +123,7 @@ def inspect_legacy_files_ready(root, *, allow_runtime_restore=False):
     """Disk-only reboot triage; cannot authorize installation or Voice ON."""
     root = Path(root)
     _private_dir(root)
-    expected = EXPECTED_ROOT | {FILES_NAME}
+    expected = set(EXPECTED_ROOT) | {FILES_NAME}
     if allow_runtime_restore:
         _private_dir(root / "legacy-runtime-restore")
         expected.add("legacy-runtime-restore")
