@@ -13,6 +13,8 @@ import json
 import sys
 import xml.etree.ElementTree as ET
 
+from voice_native_legacy_poc_guard import NativePrepareRouteError, _legacy_read
+
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
 OLD_PROFILE = "telegram-voice-poc"
 OLD_STATE = "telegram-voice-poc.state"
@@ -20,6 +22,18 @@ OLD_STATE = "telegram-voice-poc.state"
 
 class VoiceMigrationError(ValueError):
     pass
+
+
+def _read_old_poc_file(path: Path) -> bytes | None:
+    """Reuse the native Apply no-follow/ownership/inode guard for PoC evidence.
+
+    This read-only assessment is never an authorization for live migration.
+    The real cutover must reobserve under FD9 and the original Config flock.
+    """
+    try:
+        return _legacy_read(path)
+    except NativePrepareRouteError as exc:
+        raise VoiceMigrationError("unsafe or changing legacy PoC file") from exc
 
 
 def assess(config: Path, marker: Path, active: Path) -> dict:
@@ -42,25 +56,21 @@ def assess(config: Path, marker: Path, active: Path) -> dict:
             selected[name] = text == "1"
     else:
         selected = {name: False for name in SERVICES}
-    # A path/symlink to some other object is never a trusted marker.
-    if marker.is_symlink() or (marker.exists() and not marker.is_file()):
-        raise VoiceMigrationError("old PoC marker path is unsafe")
-    if not marker.exists():
-        old_request = "unknown-after-reboot"
-    else:
-        if marker.read_text(encoding="utf-8").strip() != "enabled":
-            raise VoiceMigrationError("old PoC marker has unexpected content")
-        old_request = "on"
-    state_file = active / OLD_STATE
-    if state_file.is_symlink():
-        raise VoiceMigrationError("legacy runtime state is a symlink")
-    if state_file.exists():
-        state = state_file.read_text(encoding="utf-8").strip()
-        if state not in ("enabled", "disabled"):
-            raise VoiceMigrationError("legacy runtime state is invalid")
-        old_runtime = "on" if state == "enabled" else "off"
-    else:
+    # The old telegram_voice.sh tests -f, not marker contents. A present
+    # regular marker (including an empty marker) explicitly requests ON.
+    if active.is_symlink():
+        raise VoiceMigrationError("legacy runtime root is unsafe")
+    marker_data = _read_old_poc_file(marker)
+    old_request = "on" if marker_data is not None else "unknown-after-reboot"
+    state_data = _read_old_poc_file(active / OLD_STATE)
+    if state_data is None:
         old_runtime = "unknown"
+    elif state_data in (b"enabled", b"enabled\n"):
+        old_runtime = "on"
+    elif state_data in (b"disabled", b"disabled\n"):
+        old_runtime = "off"
+    else:
+        raise VoiceMigrationError("legacy runtime state is invalid")
     if old_request != "on" and old_runtime == "on":
         # Runtime may still have active rules despite missing marker.
         condition = "unresolved-legacy-running"
@@ -71,7 +81,9 @@ def assess(config: Path, marker: Path, active: Path) -> dict:
         may_stage = condition == "unselected-default-off"
     elif old_request == "on" or old_runtime == "on":
         condition = "legacy-atomic-cutover-required"
-        may_stage = True  # build-only, never activate without atomic handoff
+        # Production native PREPARED refuses ANY active legacy PoC; do not
+        # advertise staging as feasible before the reviewed cutover exists.
+        may_stage = False
     else:
         condition = "persisted-voice-preference"
         may_stage = True

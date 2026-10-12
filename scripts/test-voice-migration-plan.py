@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
+sys.path.insert(0, str(BACKEND))
 spec = importlib.util.spec_from_file_location("voice_migration_plan", BACKEND / "voice_migration_plan.py")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
@@ -65,7 +66,7 @@ class MigrationTests(unittest.TestCase):
                 report=module.assess(xml,marker,active)
                 self.assertEqual("legacy-atomic-cutover-required",report["condition"])
                 self.assertEqual(selected=="1",report["services"]["telegram"])
-                self.assertTrue(report["may_stage_candidate"])
+                self.assertFalse(report["may_stage_candidate"])
                 self.assertTrue(report["remove_legacy_only_after_confirmed_cutover"])
 
     def test_old_running_without_marker_is_an_inconsistent_live_state(self):
@@ -90,13 +91,50 @@ class MigrationTests(unittest.TestCase):
             with self.assertRaisesRegex(module.VoiceMigrationError,"invalid persisted"):
                 module.assess(xml,marker,active)
             config(xml,telegram="0")
-            marker.write_text("anything")
-            with self.assertRaisesRegex(module.VoiceMigrationError,"unexpected content"):
-                module.assess(xml,marker,active)
+            # The old shell checks presence, not marker text.
+            for content in (b"", b"anything"):
+                marker.write_bytes(content)
+                report = module.assess(xml,marker,active)
+                self.assertEqual("on",report["legacy_request"])
+                self.assertEqual("legacy-atomic-cutover-required",report["condition"])
+                self.assertFalse(report["may_stage_candidate"])
             marker.unlink()
             marker.symlink_to(xml)
             with self.assertRaisesRegex(module.VoiceMigrationError,"unsafe"):
                 module.assess(xml,marker,active)
+
+    def test_runtime_state_and_marker_share_native_file_safety(self):
+        with tempfile.TemporaryDirectory() as d:
+            xml, marker, active = self.setup_paths(d, telegram="1")
+            state = active / "telegram-voice-poc.state"
+            state.write_bytes(b"enabled\n")
+            report = module.assess(xml, marker, active)
+            self.assertEqual("unresolved-legacy-running", report["condition"])
+            self.assertFalse(report["may_stage_candidate"])
+            state.write_bytes(b"unknown\n")
+            with self.assertRaisesRegex(module.VoiceMigrationError, "state is invalid"):
+                module.assess(xml, marker, active)
+            state.unlink()
+            state.symlink_to(xml)
+            with self.assertRaisesRegex(module.VoiceMigrationError, "unsafe"):
+                module.assess(xml, marker, active)
+            state.unlink()
+            state.write_bytes(b"disabled\n")
+            state.chmod(0o666)
+            with self.assertRaisesRegex(module.VoiceMigrationError, "unsafe"):
+                module.assess(xml, marker, active)
+            state.chmod(0o600)
+            report = module.assess(xml, marker, active)
+            self.assertEqual("persisted-voice-preference", report["condition"])
+            self.assertTrue(report["may_stage_candidate"])
+
+    def test_runtime_root_symlink_is_not_a_migration_source(self):
+        with tempfile.TemporaryDirectory() as d:
+            xml, marker, active = self.setup_paths(d, telegram="1")
+            active.rmdir()
+            active.symlink_to(Path(d))
+            with self.assertRaisesRegex(module.VoiceMigrationError, "unsafe"):
+                module.assess(xml, marker, active)
 
 
 if __name__ == "__main__":
