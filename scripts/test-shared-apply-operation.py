@@ -125,11 +125,11 @@ class TestJournal(unittest.TestCase):
             self.assertFalse(old["safe_to_mutate"])
             self.assertTrue(check_pending(root/"voice-cutover",root/"voice-ipfw",
                                           native_scope=True)["safe_to_mutate"])
+            with self.assertRaisesRegex(SharedOperationError,"predecessor ID"):
+                store.advance("prepared",initial)
             third=detail("c"*32)
             carry=store.advance("prepared",third)
             self.assertEqual(initial,carry["previous"])
-            with self.assertRaisesRegex(SharedOperationError,"predecessor ID"):
-                store.advance("prepared",initial)
 
     def test_previous_common_owner_remains_during_safe_pre_save_rollback(self):
         with tempfile.TemporaryDirectory() as temp:
