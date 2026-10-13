@@ -115,6 +115,8 @@ Runtime переключается перед финальным сохране�
 
 ### Этап 3. Общий Apply обеих страниц
 
+Подэтап `_25`: штатные `stop` и `restart` теперь отличают native common committed owner от legacy runtime в original FD9 service_with_lifecycle_lock. Native `stop` не перезаписывает OPNsense Config и не пытается очистить неизвестные IPFW правила, а использует прежний обратимый IPFW transaction с желаемым empty manifest; проверяет полный installed release, sealed source, Config и engine/monitor state. `restart` запускает после того же stop прежний native common boot. Ошибка проверки или промежуточная неудача не ведёт к legacy fallback. Это не завершает powercut recovery при partial native stop и не включает public GUI Apply.
+
 Подэтапы `_23`–`_24`. Единственный durable journal переносит предшествующего committed common owner через повторный Apply и безопасный `restored`. Благодаря этому ранний rollback над native engine больше не запускает legacy. Для `config-saved` штатный FD9 проверяет полный bundle seal, saved native Config, отсутствие engine/monitor и пустой IPFW; только тогда запускает прежний общий runtime и доводит journal до `committed`. При неизвестном live ownership сохраняется запрет любых действий, old-PoC fallback исключён. Следующие этапы: mutating-phase recovery, native stop/restart, GUI Apply и appliance acceptance.
 
 Подэтап `_22`: исправлен точный CLI-regex в штатном `recover-prepared` и добавлена failure-path проверка на Python. Это не расширяет разрешённые recovery-фазы: только source-intact `prepared` до начала мутаций может перейти в `restored`. Неподтверждённая runtime/Config/IPFW операция по-прежнему запрещает legacy startup.

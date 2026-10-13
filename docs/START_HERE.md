@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_24`. `VERSION=0.5.2`; `PLUGIN_REVISION=24`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_25`. `VERSION=0.5.2`; `PLUGIN_REVISION=25`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+В `_25` штатные `stop` и `restart` для подтверждённого общего владельца перенаправлены внутри **существующего FD9**. `shared_apply_stop_service` сначала сверяет единственный committed owner, общий sealed source release, актуальную native Config и точное совпадение установленного ACTIVE_DIR с release, затем проверяет полную пару engine/supervisor и установленный IPFW. Остановка выполняется прежними supervisor/launcher, после этого только собственные правила и таблицы меняются через `firewall_shared_runtime install/commit` в пустой runtime; повторный stop при пустом kernel идемпотентен. `restart` = подтверждённый общий stop → прежний native boot, без legacy fallback; при частичном состоянии/незнакомом правиле операция закрыта для дальнейшей автоматической мутации. Добавлены shell fault-injection проверки собственно функции и FD9 lifecycle. Config и утверждённый frontend не меняются. Нет автоматического crash-recovery остановки или FreeBSD owner-live приёмки; публичные кнопки Apply пока не подключены.
 
 Ревизия _23: в том же durable operation.json сохраняется `previous` — идентификатор предшествующего committed common owner. Теперь новый Apply и его откат не превращают общий runtime в legacy Telegram Voice: `inspect` возвращает старого владельца, FD9 boot пересматривает восстановленную операцию и выбирает общий release. Результат покрыт regressions на pending, rollback, invalid predecessor и обычный start.
 
