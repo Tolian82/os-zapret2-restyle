@@ -807,6 +807,47 @@ shared_apply_json_field()
 {
     /usr/local/bin/jq -er "$1"
 }
+# Cold reconciliation for a completed native Config save whose final common
+# IPFW/runtime commit was interrupted by power loss. This is NOT generic
+# crash recovery: no engine, monitor, plugin IPFW rules or tables may remain.
+shared_apply_recover_saved_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    case "$1" in config-saved\ *) ;; *) return 69 ;; esac
+    _shared_saved_id=$(printf "%s\n" "$1" | cut -d " " -f 2)
+    _shared_saved_page=$(printf "%s\n" "$1" | cut -d " " -f 3)
+    [ "$1" = "config-saved $_shared_saved_id $_shared_saved_page" ] || return 69
+    [ "${#_shared_saved_id}" -eq 32 ] || return 69
+    case "$_shared_saved_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+    case "$_shared_saved_page" in voice|strategies) ;; *) return 69 ;; esac
+    # Guard accepts only this exact phase and only original root FD9.
+    preflight_voice_cutover_journals common-recover-saved || return 69
+    shared_apply_bundle_service verify "$_shared_saved_id" || return 69
+    _shared_saved_config=$(shared_apply_native_config saved "$_shared_saved_id" "$_shared_saved_page") || return 69
+    _shared_saved_mode=$(printf "%s\n" "$_shared_saved_config" |
+        shared_apply_json_field '.enabled | select(.=="0" or .=="1")') || return 69
+    _shared_saved_ok=$(printf "%s\n" "$_shared_saved_config" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 69
+    _shared_saved_root=$(shared_apply_workspace "$_shared_saved_id") || return 69
+    [ -d "$_shared_saved_root/release" ] && [ ! -L "$_shared_saved_root/release" ] || return 69
+    # Existing processes or IPFW indicate a non-cold/partial transaction.
+    # No guessed cleanup or old-PoC fallback is permitted in this state.
+    if launcher_is_running "$CHILD_PIDFILE" ||
+       supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"; then
+        return 69
+    fi
+    firewall_shared_runtime verify "$_shared_saved_root/release" - || return 69
+    apply_runtime_activate "$_shared_saved_root/release" "$_shared_saved_mode" || return 70
+    # All source files must remain sealed after the kernel transition.
+    shared_apply_bundle_service verify "$_shared_saved_id" || return 70
+    apply_runtime_commit || return 70
+    # This terminal transition is made ONLY after physical runtime/IPFW
+    # completion. If this write fails, Config-saved evidence remains pending.
+    [ -x /usr/local/bin/python3.13 ] || return 70
+    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+        finish-saved "$_shared_saved_id" || return 70
+    printf "recovered-saved-id=%s\n" "$_shared_saved_id"
+}
 # Only a PREPARED journal (before any mutation) can be auto-closed at boot.
 # The root FD9 Python command rechecks the sealed candidate and journal.
 shared_apply_recover_prepared_service()
@@ -1236,6 +1277,13 @@ service_with_lifecycle_lock()
                     case "$_shared_owner" in
                         committed\ *)
                             shared_apply_boot_service "$_shared_owner"
+                            return $?
+                            ;;
+                        config-saved\ *)
+                            # Cold recovery proves Config was persisted and
+                            # the kernel contains NO active Zapret2 owner.
+                            # Never invoke legacy start after native save.
+                            shared_apply_recover_saved_service "$_shared_owner"
                             return $?
                             ;;
                         prepared\ *)
