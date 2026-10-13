@@ -314,6 +314,8 @@ jobs:
         run: sh scripts/test-shared-apply-boot.sh
       - name: Shared runtime candidate bundle content seal and crash refusal
         run: python3.13 scripts/test-shared-apply-seal.py
+      - name: Single native Voice and Strategies Apply through existing configd action
+        run: sh scripts/test-shared-apply-run.sh
       - name: Shared FD9 native Config/runtime transaction fault matrix
         run: sh scripts/test-shared-apply-execute.sh
       - name: Native detached OPNsense templates for full shared candidate
