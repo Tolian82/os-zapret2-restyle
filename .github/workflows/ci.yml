@@ -310,12 +310,22 @@ jobs:
         run: sh scripts/test-shared-apply-saved-recovery.sh
       - name: Original FD9 shared native stop and restart contract
         run: sh scripts/test-shared-apply-stop.sh
-      - name: Common committed native reboot: Config/runtime/IPFW startup
+      - name: "Common committed native reboot: Config/runtime/IPFW startup"
         run: sh scripts/test-shared-apply-boot.sh
       - name: Shared runtime candidate bundle content seal and crash refusal
         run: python3.13 scripts/test-shared-apply-seal.py
       - name: Single native Voice and Strategies Apply through existing configd action
         run: sh scripts/test-shared-apply-run.sh
+      - name: Validate GitHub workflow step name quoting
+        run: |
+          python3.13 - <<'PY'
+          from pathlib import Path
+          import re
+          for flow in Path('.github/workflows').glob('*.yml'):
+              for number, line in enumerate(flow.read_text().splitlines(), 1):
+                  if re.match(r'^\s*- name: [^"\x27].*:\s', line):
+                      raise SystemExit(f'{flow}:{number}: quote name with colon')
+          PY
       - name: Shared FD9 native Config/runtime transaction fault matrix
         run: sh scripts/test-shared-apply-execute.sh
       - name: Native detached OPNsense templates for full shared candidate
