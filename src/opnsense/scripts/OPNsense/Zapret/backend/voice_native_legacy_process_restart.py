@@ -36,6 +36,7 @@ from voice_native_legacy_files_ready import (
 from voice_native_legacy_ipfw_replay import (
     REPLAY_NAME, _strict_snapshot, _expected_after, _steps,
 )
+from voice_ipfw_adapter import FreeBSDIPFWAdapter
 from voice_native_legacy_runtime_restore import (
     NAME_RESTORE, _intent_data, _read_intent,
 )
@@ -101,6 +102,250 @@ def _write_record(directory, stem, row):
     _write_once(directory/(stem+".json"),raw)
     _write_once(directory/(stem+".sha256"),(_digest(raw)+"\n").encode("ascii"))
     _sync_dir(directory)
+
+
+def attest_restarted_old_roles(
+    *, source, process_evidence_dir, old_previous, policy, security_reader,
+    argv_reader, process_probe, intent_sha256, gate,
+):
+    """Shared independent FreeBSD PID/argv/image/UID-GID witness for old roles.
+
+    Used by both the existing whole-five-domain rollback and new one-journal
+    common migration rollback. This is proof only, never a start actuator.
+    """
+    if (security_reader.kernel_images!=policy["policy"]["images"] or
+        security_reader.credentials!=policy["policy"]["credentials"] or
+        argv_reader.expected_paths!=EXPECTED_SCRIPTS):
+        raise LegacyProcessRestartError("native kernel witness policy changed")
+    # Two independent FreeBSD readers share the EXACT process probe.
+    first=_normalize(
+        process_probe.probe(),EXPECTED_SCRIPTS,
+        _runtime_args_digest(old_previous),
+    )
+    if first["engine"]["state"]!="running" or (
+        first["supervisor"]["state"]!="running"
+    ):
+        raise LegacyProcessRestartError("not all three roles running after restart")
+    security=security_reader.inspect_twice()
+    if not verify_current_security(security,policy):
+        raise LegacyProcessRestartError("old process image/UID/GID mismatch")
+    argv=inspect_restarted_argv(
+        source,process_evidence_dir,EXPECTED_SCRIPTS,
+        policy["policy"]["supervisor_argv"],argv_reader,
+    )
+    if (argv["state"]!="review-required" or
+        argv["reason"]!="new-process-argv-matches-sealed-launcher-plan"):
+        raise LegacyProcessRestartError("old process kernel argv mismatch")
+    instances=argv["instances"]
+    for role in ROLES:
+        row=first["engine"]["process"] if role=="engine" else first["supervisor"][role]
+        expected={"pid":row["pid"],"start_ns":row["start_ns"]}
+        if (instances[role]!=expected or
+            {k:security["roles"][role][k] for k in ("pid","start_ns")}!=expected):
+            raise LegacyProcessRestartError("PID/start epochs differ across witnesses")
+    gate()
+    if _normalize(
+        process_probe.probe(),EXPECTED_SCRIPTS,
+        _runtime_args_digest(old_previous),
+    )!=first or security_reader.inspect_twice()!=security or (
+        inspect_restarted_argv(
+            source,process_evidence_dir,EXPECTED_SCRIPTS,
+            policy["policy"]["supervisor_argv"],argv_reader,
+        )["instances"]!=instances
+    ):
+        raise LegacyProcessRestartError("restarted process identity unstable")
+    return {
+        "schema":SCHEMA, "phase":"three-roles-observed-not-accepted",
+        "intent_sha256":intent_sha256,
+        "process_security_policy_sha256":policy["policy_sha256"],
+        "engine_argv_sha256":argv["engine_argv_sha256"],
+        "instances":instances,
+        "safe_to_enable_voice":False,
+        "whole_rollback_complete":False,
+    }
+
+
+
+def restart_common_legacy_processes(
+    *, identity, store, work, config_path, config_fd, config_owner,
+    active_runtime, marker_path, ledger_root, process_probe, readonly_ipfw,
+    security_reader, argv_reader, require_lifecycle_owner, runner=None,
+    actuator=SCRIPT,
+):
+    """PRIVATE one-shot old owner restart, using existing sealed FreeBSD proof.
+
+    The shared journal is the ONLY mutable intent. Never call start twice
+    after a power cut: resumed attempts are read-only attestations of all
+    three roles, otherwise require manual review. No CLI/configd/GUI/boot.
+    """
+    from shared_apply_operation import (
+        SharedApplyOperation, fingerprint_legacy_predecessor,
+    )
+    from voice_native_legacy_previous_seal import (
+        inspect_legacy_previous_live_identity,
+    )
+    from voice_cutover_backup import _verify_sources
+    from voice_native_legacy_poc_guard import _legacy_read
+    from voice_native_legacy_predecessor_route import COMMON_ID
+    if not isinstance(store, SharedApplyOperation) or (
+        not isinstance(process_probe, FreeBSDVoiceProcessProbe)
+        or process_probe.expected != EXPECTED_SCRIPTS
+        or process_probe.pidfiles != PIDFILES
+        or not isinstance(readonly_ipfw, FreeBSDIPFWAdapter)
+        or readonly_ipfw.allow_mutations
+        or (readonly_ipfw.rule_base, readonly_ipfw.rule_max) != (19000, 19010)
+        or not isinstance(security_reader, FreeBSDProcessSecurityReader)
+        or not isinstance(argv_reader, FreeBSDKernelArgvReader)
+        or security_reader.probe is not process_probe
+        or argv_reader.process_probe is not process_probe
+        or security_reader.expected_scripts != EXPECTED_SCRIPTS
+        or argv_reader.expected_paths != EXPECTED_SCRIPTS
+        or type(config_fd) is not int or config_fd < 0
+        or not callable(require_lifecycle_owner)
+        or (runner is None and Path(actuator) != SCRIPT)
+    ):
+        raise LegacyProcessRestartError("untrusted common original process owner")
+    work = Path(work)
+    root = work / "legacy-backup"
+    active, config_path, marker_path = map(
+        Path, (active_runtime, config_path, marker_path)
+    )
+    if work.name != identity or not COMMON_ID.fullmatch(identity):
+        raise LegacyProcessRestartError("old process identity differs from common seal")
+    require_lifecycle_owner()
+    _locked_config(config_path, config_fd, config_owner)
+    record = store.read()
+    if record is None or record["phase"] not in (
+        "legacy-rollback-marker-restored", "legacy-rollback-processes"
+    ) or record["detail"]["id"] != identity or (
+        "legacy_predecessor" not in record or "previous" in record
+    ):
+        raise LegacyProcessRestartError("old marker must be fully restored first")
+    old = inspect_legacy_previous(root)
+    plan = inspect_legacy_restore_plan(root)
+    saved = inspect_legacy_previous_live_identity(root)
+    source = root / NAME / "previous"
+    previous = inspect_previous(source)
+    process_dir = root / NAME / "process-evidence"
+    policy = inspect_security_policy(
+        root / NAME / "process-security-policy", source, process_dir,
+        expected_scripts=EXPECTED_SCRIPTS,
+    )
+    if old["previous_five"] != plan["previous_five"] or (
+        plan["marker_target"] != str(marker_path)
+        or policy["schema"] != SUPERVISOR_BOUND_POLICY_SCHEMA
+        or policy["policy_sha256"] != old["process_security_policy_sha256"]
+        or policy["policy"]["previous"] != plan["previous_five"]
+        or policy["policy"]["supervisor_argv"] != canonical_supervisor_argv(
+            EXPECTED_SCRIPTS
+        )
+        or security_reader.kernel_images != policy["policy"]["images"]
+        or security_reader.credentials != policy["policy"]["credentials"]
+    ):
+        raise LegacyProcessRestartError("old three-role security and plan mismatch")
+    evidence = inspect_process_evidence(
+        process_dir, source, EXPECTED_SCRIPTS, plan["previous_five"],
+    )
+    if evidence["observation"]["engine"]["state"] != "running":
+        raise LegacyProcessRestartError("saved old engine was not running")
+    marker = _read_private_file(root / NAME / "marker.bin", 64)
+    if marker != _legacy_read(marker_path):
+        raise LegacyProcessRestartError("old marker bytes differ from sealed owner")
+    stage = marker_path.with_name(
+        "." + marker_path.name + ".voice-old-" + identity[:16]
+    )
+    expected_kernel = _expected_after(plan, len(plan["legacy_ipfw_commands"]))
+    # Unlike the old separate WAL executor, this handler never creates another
+    # old-process intent directory: only SharedApplyOperation is mutated.
+    intent_sha256 = _digest(_canonical({
+        "identity": identity, "legacy_predecessor": record["legacy_predecessor"],
+        "phase": "legacy-rollback-processes",
+        "actuator": str(SCRIPT),
+    }))
+
+    def gate():
+        require_lifecycle_owner()
+        _locked_config(config_path, config_fd, config_owner)
+        now = store.read()
+        if now is None or now["phase"] not in (
+            "legacy-rollback-marker-restored", "legacy-rollback-processes"
+        ) or now["detail"] != record["detail"] or (
+            now.get("legacy_predecessor") != record["legacy_predecessor"]
+        ):
+            raise LegacyProcessRestartError("common old-process journal changed")
+        if fingerprint_legacy_predecessor(work, owner=config_owner[0]) != (
+            record["legacy_predecessor"]
+        ) or inspect_legacy_previous(root) != old or (
+            inspect_legacy_restore_plan(root) != plan
+        ):
+            raise LegacyProcessRestartError("old process predecessor seal drifted")
+        _verify_sources(config_path, active, previous)
+        _pinned_regular(config_path, config_fd, owner=config_owner)
+        if _ledger_clear(ledger_root) not in (
+            "no-native-ledger", "empty-private-ledger"
+        ) or _strict_snapshot(readonly_ipfw) != expected_kernel:
+            raise LegacyProcessRestartError("foreign current IPFW/ledger")
+        if _legacy_read(marker_path) != marker or (
+            _marker_stat(marker_path, marker, saved["marker"]["mode"], links=1)
+            is None
+        ) or os.path.lexists(stage):
+            raise LegacyProcessRestartError("old marker not fully restored")
+        if inspect_security_policy(
+            root / NAME / "process-security-policy", source, process_dir,
+            expected_scripts=EXPECTED_SCRIPTS,
+        ) != policy:
+            raise LegacyProcessRestartError("old process policy changed")
+        return now
+
+    gate()
+    if record["phase"] == "legacy-rollback-marker-restored":
+        if _stopped(process_probe) != "exact-three-role-absence":
+            raise LegacyProcessRestartError("old roles not stopped before one-shot start")
+        _secure_script(Path(actuator))
+        store.begin_legacy_process_restart(
+            identity, lambda: (
+                record["legacy_predecessor"] if (
+                    gate()["phase"] == "legacy-rollback-marker-restored"
+                    and _stopped(process_probe) == "exact-three-role-absence"
+                ) else None
+            ),
+        )
+        # No retry of this actuator if it returned failure, crashed or was
+        # interrupted. Only a fresh three-role proof can finish the journal.
+        result = (runner or subprocess.run)(
+            [SHELL, str(actuator), "start"], check=False, capture_output=True,
+            text=True, timeout=45, pass_fds=(9,),
+            env={
+                "LC_ALL": "C",
+                "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin",
+            },
+        )
+        if result.returncode != 0 or len(result.stdout.encode("utf-8")) > 8192 or (
+            len(result.stderr.encode("utf-8")) > 8192
+        ):
+            raise LegacyProcessRestartError("fixed old one-engine actuator failed")
+
+    def attest():
+        if gate()["phase"] != "legacy-rollback-processes":
+            raise LegacyProcessRestartError("old process restart not armed")
+        return attest_restarted_old_roles(
+            source=source, process_evidence_dir=process_dir,
+            old_previous=previous, policy=policy,
+            security_reader=security_reader, argv_reader=argv_reader,
+            process_probe=process_probe, intent_sha256=intent_sha256, gate=gate,
+        )
+
+    proof = attest()
+    if attest() != proof:
+        raise LegacyProcessRestartError("unstable three-role restart receipt")
+    result = store.finish_legacy_process_restart(
+        identity, lambda: (
+            record["legacy_predecessor"] if attest() == proof else None
+        ),
+    )
+    if result["phase"] != "legacy-rollback-processes-restored":
+        raise LegacyProcessRestartError("old process restart not sealed")
+    return result
 
 
 def restart_legacy_processes(
@@ -260,56 +505,13 @@ def restart_legacy_processes(
             raise LegacyProcessRestartError("old process restart intent altered")
 
     def attest():
-        if (security_reader.kernel_images!=policy["policy"]["images"] or
-            security_reader.credentials!=policy["policy"]["credentials"] or
-            argv_reader.expected_paths!=EXPECTED_SCRIPTS):
-            raise LegacyProcessRestartError("native kernel witness policy changed")
-        # Two independent FreeBSD readers share the EXACT process probe.
-        first=_normalize(
-            process_probe.probe(),EXPECTED_SCRIPTS,
-            _runtime_args_digest(original),
+        return attest_restarted_old_roles(
+            source=source, process_evidence_dir=root/NAME/"process-evidence",
+            old_previous=original, policy=policy,
+            security_reader=security_reader, argv_reader=argv_reader,
+            process_probe=process_probe,
+            intent_sha256=_digest(_canonical(intent)), gate=gate,
         )
-        if first["engine"]["state"]!="running" or (
-            first["supervisor"]["state"]!="running"
-        ):
-            raise LegacyProcessRestartError("not all three roles running after restart")
-        security=security_reader.inspect_twice()
-        if not verify_current_security(security,policy):
-            raise LegacyProcessRestartError("old process image/UID/GID mismatch")
-        argv=inspect_restarted_argv(
-            source,root/NAME/"process-evidence",EXPECTED_SCRIPTS,
-            policy["policy"]["supervisor_argv"],argv_reader,
-        )
-        if (argv["state"]!="review-required" or
-            argv["reason"]!="new-process-argv-matches-sealed-launcher-plan"):
-            raise LegacyProcessRestartError("old process kernel argv mismatch")
-        instances=argv["instances"]
-        for role in ROLES:
-            row=first["engine"]["process"] if role=="engine" else first["supervisor"][role]
-            expected={"pid":row["pid"],"start_ns":row["start_ns"]}
-            if (instances[role]!=expected or
-                {k:security["roles"][role][k] for k in ("pid","start_ns")}!=expected):
-                raise LegacyProcessRestartError("PID/start epochs differ across witnesses")
-        gate()
-        if _normalize(
-            process_probe.probe(),EXPECTED_SCRIPTS,
-            _runtime_args_digest(original),
-        )!=first or security_reader.inspect_twice()!=security or (
-            inspect_restarted_argv(
-                source,root/NAME/"process-evidence",EXPECTED_SCRIPTS,
-                policy["policy"]["supervisor_argv"],argv_reader,
-            )["instances"]!=instances
-        ):
-            raise LegacyProcessRestartError("restarted process identity unstable")
-        return {
-            "schema":SCHEMA, "phase":"three-roles-observed-not-accepted",
-            "intent_sha256":_digest(_canonical(intent)),
-            "process_security_policy_sha256":policy["policy_sha256"],
-            "engine_argv_sha256":argv["engine_argv_sha256"],
-            "instances":instances,
-            "safe_to_enable_voice":False,
-            "whole_rollback_complete":False,
-        }
 
     gate()
     if not resumed:

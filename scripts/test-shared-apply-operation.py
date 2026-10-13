@@ -773,6 +773,177 @@ class TestJournal(unittest.TestCase):
                     self.assertEqual("shared-apply-pending",check_pending(
                         root/"voice-cutover",root/"voice-ipfw")["reason"])
 
+    def test_single_shared_journal_old_process_start_is_one_shot(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            store=SharedApplyOperation(root/"shared-apply")
+            owner="f"*64
+            store.prepare_legacy_predecessor(detail(),lambda:owner)
+            store.begin_legacy_quiesce(detail()["id"],lambda:owner)
+            store.mark_legacy_processes_stopped(detail()["id"],lambda:owner)
+            store.begin_legacy_ipfw_retire(detail()["id"],lambda:owner)
+            store.finish_legacy_ipfw_retire(detail()["id"],lambda:owner)
+            store.begin_legacy_marker_retire(detail()["id"],lambda:owner)
+            store.finish_legacy_marker_retire(detail()["id"],lambda:owner)
+            store.begin_legacy_ipfw_rollback(detail()["id"],lambda:owner)
+            store.finish_legacy_ipfw_rollback(detail()["id"],lambda:owner)
+            store.begin_legacy_marker_rollback(detail()["id"],lambda:owner)
+            store.finish_legacy_marker_rollback(detail()["id"],lambda:owner)
+            before=store.read()
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_process_restart(detail()["id"],lambda:owner)
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_process_restart(detail()["id"],lambda:"a"*64)
+            self.assertEqual(before,store.read())
+            intent=store.begin_legacy_process_restart(detail()["id"],lambda:owner)
+            self.assertEqual("legacy-rollback-processes",intent["phase"])
+            self.assertEqual(intent,SharedApplyOperation(store.root).read())
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_process_restart(detail()["id"],lambda:owner)
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_process_restart(detail()["id"],lambda:"a"*64)
+            self.assertEqual(intent,store.read())
+            done=store.finish_legacy_process_restart(detail()["id"],lambda:owner)
+            self.assertEqual("legacy-rollback-processes-restored",done["phase"])
+            self.assertEqual("shared-apply-pending",check_pending(
+                root/"voice-cutover",root/"voice-ipfw")["reason"])
+            self.assertFalse(store.advisory()["safe_to_mutate"])
+            with self.assertRaises(SharedOperationError):
+                store.advance("activating",detail())
+
+    def test_common_legacy_process_resume_never_issues_second_start(self):
+        import os
+        from types import SimpleNamespace
+        from voice_native_legacy_process_restart import (
+            restart_common_legacy_processes, LegacyProcessRestartError,
+        )
+        from voice_native_process_probe import FreeBSDVoiceProcessProbe
+        from voice_freebsd_process_security import FreeBSDProcessSecurityReader
+        from voice_freebsd_kernel_argv import FreeBSDKernelArgvReader
+        from voice_ipfw_adapter import FreeBSDIPFWAdapter
+        from voice_native_recovery_quiescence import EXPECTED_SCRIPTS, PIDFILES
+        prior="f"*64
+        for interrupted in (False,True,"bad-proof"):
+            with self.subTest(interrupted=interrupted), tempfile.TemporaryDirectory() as temp:
+                root=Path(temp)
+                work=root/detail()["id"]
+                work.mkdir()
+                marker=root/"marker"
+                marker.write_bytes(b"enabled\n")
+                os.chmod(marker,0o600)
+                store=SharedApplyOperation(root/"shared-apply")
+                store.prepare_legacy_predecessor(detail(),lambda:prior)
+                store.begin_legacy_quiesce(detail()["id"],lambda:prior)
+                store.mark_legacy_processes_stopped(detail()["id"],lambda:prior)
+                store.begin_legacy_ipfw_retire(detail()["id"],lambda:prior)
+                store.finish_legacy_ipfw_retire(detail()["id"],lambda:prior)
+                store.begin_legacy_marker_retire(detail()["id"],lambda:prior)
+                store.finish_legacy_marker_retire(detail()["id"],lambda:prior)
+                store.begin_legacy_ipfw_rollback(detail()["id"],lambda:prior)
+                store.finish_legacy_ipfw_rollback(detail()["id"],lambda:prior)
+                store.begin_legacy_marker_rollback(detail()["id"],lambda:prior)
+                store.finish_legacy_marker_rollback(detail()["id"],lambda:prior)
+                probe=object.__new__(FreeBSDVoiceProcessProbe)
+                probe.expected=EXPECTED_SCRIPTS; probe.pidfiles=PIDFILES
+                reader=object.__new__(FreeBSDIPFWAdapter)
+                reader.allow_mutations=False
+                reader.rule_base=19000; reader.rule_max=19010
+                security=object.__new__(FreeBSDProcessSecurityReader)
+                security.probe=probe
+                security.expected_scripts=EXPECTED_SCRIPTS
+                security.kernel_images={"proof":"image"}
+                security.credentials={"proof":"credential"}
+                argv=object.__new__(FreeBSDKernelArgvReader)
+                argv.process_probe=probe
+                argv.expected_paths=EXPECTED_SCRIPTS
+                policy={
+                    "schema":2,"policy_sha256":"9"*64,
+                    "policy":{"previous":{"firewall":"b"*64},
+                              "supervisor_argv":{"daemon":["sealed"]},
+                              "images":security.kernel_images,
+                              "credentials":security.credentials}
+                }
+                plan={"previous_five":{"firewall":"b"*64},
+                      "marker_target":str(marker),"legacy_ipfw_commands":[["ipfw"]]}
+                old={"previous_five":plan["previous_five"],
+                     "process_security_policy_sha256":policy["policy_sha256"]}
+                attempts=[]
+                def run(*args,**kwargs):
+                    attempts.append(args)
+                    self.assertEqual("start",args[0][-1])
+                    self.assertEqual((9,),kwargs["pass_fds"])
+                    if interrupted:
+                        raise OSError("power cut after possible old process start")
+                    return SimpleNamespace(returncode=0,stdout="",stderr="")
+                def attest_old(**kwargs):
+                    if interrupted=="bad-proof":
+                        raise LegacyProcessRestartError("partial or foreign roles")
+                    self.assertEqual(probe,kwargs["process_probe"])
+                    self.assertEqual("legacy-rollback-processes",store.read()["phase"])
+                    return {"instances":{"engine":"good","daemon":"good","monitor":"good"}}
+                def invoke():
+                    return restart_common_legacy_processes(
+                        identity=detail()["id"],store=store,work=work,
+                        config_path=root/"config.xml",config_fd=4,
+                        config_owner=(os.geteuid(),0),
+                        active_runtime=root/"active",marker_path=marker,
+                        ledger_root=root/"ledger",process_probe=probe,
+                        readonly_ipfw=reader,security_reader=security,argv_reader=argv,
+                        require_lifecycle_owner=lambda:None,runner=run,
+                    )
+                with patch("voice_native_legacy_process_restart._locked_config"), \
+                     patch("voice_native_legacy_process_restart._pinned_regular"), \
+                     patch("voice_native_legacy_process_restart.inspect_legacy_previous",
+                           return_value=old), \
+                     patch("voice_native_legacy_process_restart.inspect_legacy_restore_plan",
+                           return_value=plan), \
+                     patch("voice_native_legacy_previous_seal.inspect_legacy_previous_live_identity",
+                           return_value={"marker":{"mode":0o600}}), \
+                     patch("voice_native_legacy_process_restart.inspect_previous",
+                           return_value={}), \
+                     patch("voice_native_legacy_process_restart.inspect_security_policy",
+                           return_value=policy), \
+                     patch("voice_native_legacy_process_restart.canonical_supervisor_argv",
+                           return_value={"daemon":["sealed"]}), \
+                     patch("voice_native_legacy_process_restart.inspect_process_evidence",
+                           return_value={"observation":{"engine":{"state":"running"}}}), \
+                     patch("voice_native_legacy_process_restart._read_private_file",
+                           return_value=b"enabled\n"), \
+                     patch("voice_native_legacy_poc_guard._legacy_read",
+                           return_value=b"enabled\n"), \
+                     patch("voice_cutover_backup._verify_sources"), \
+                     patch("shared_apply_operation.fingerprint_legacy_predecessor",
+                           return_value=prior), \
+                     patch("voice_native_legacy_process_restart._ledger_clear",
+                           return_value="no-native-ledger"), \
+                     patch("voice_native_legacy_process_restart._strict_snapshot",
+                           return_value={}), \
+                     patch("voice_native_legacy_process_restart._expected_after",
+                           return_value={}), \
+                     patch("voice_native_legacy_process_restart._marker_stat",
+                           return_value=marker.stat()), \
+                     patch("voice_native_legacy_process_restart._stopped",
+                           return_value="exact-three-role-absence"), \
+                     patch("voice_native_legacy_process_restart._secure_script"), \
+                     patch("voice_native_legacy_process_restart.attest_restarted_old_roles",
+                           side_effect=attest_old):
+                    if interrupted:
+                        with self.assertRaises(OSError):
+                            invoke()
+                        self.assertEqual("legacy-rollback-processes",store.read()["phase"])
+                        if interrupted=="bad-proof":
+                            with self.assertRaises(LegacyProcessRestartError):
+                                invoke()
+                        else:
+                            self.assertEqual("legacy-rollback-processes-restored",
+                                             invoke()["phase"])
+                    else:
+                        self.assertEqual("legacy-rollback-processes-restored",
+                                         invoke()["phase"])
+                    self.assertEqual(1,len(attempts))
+                    with self.assertRaises(LegacyProcessRestartError):
+                        invoke()
+
     def test_missing_state_stays_readonly(self):
         with tempfile.TemporaryDirectory() as d:
             j=SharedApplyOperation(Path(d)/"shared-apply")
