@@ -335,7 +335,7 @@ echo 'PASS: FD9 candidate-bound legacy kernel witness refuses OFF/foreign/confli
 
 # Real production wrapper, but mocked lower-level no-mutation old capture:
 # only exact five-domain sealed predecessor and the same candidate qualify.
-grep -Fq '|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm)' "$SERVICE_SOURCE" ||
+grep -Fq '|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm|shared-apply-legacy-cancel)' "$SERVICE_SOURCE" ||
     fail "legacy predecessor capture is outside original FD9 lifecycle"
 CAPTURE_SCRIPT="$ROOT/common-legacy-capture.sh"
 sed -n '/^shared_apply_legacy_capture_service()$/,/^}$/p' "$SERVICE_SOURCE" > "$CAPTURE_SCRIPT"
@@ -488,5 +488,17 @@ if shared_apply_legacy_arm_service bad >/dev/null; then
 fi
 [ ! -s "$LOG" ] || fail "invalid old operation ID wrote common journal"
 echo 'PASS: FD9 legacy predecessor is armed only as blocked durable common prepared record'
+
+# Confirm the only user-facing cancellation action is operator-only under
+# original FD9, and uses the pinned old FreeBSD read-only proof before the
+# sole common-journal terminal write. No backup is removed automatically.
+CANCEL_SCRIPT="$ROOT/common-legacy-cancel.sh"
+sed -n '/^shared_apply_legacy_cancel_service()$/,/^}$/p' "$SERVICE_SOURCE" > "$CANCEL_SCRIPT"
+sh -n "$CANCEL_SCRIPT" || fail "legacy cancellation production shell syntax invalid"
+grep -Fq 'cancel-common "$_legacy_cancel_id"' "$CANCEL_SCRIPT" ||
+    fail "legacy cancellation does not reuse fixed old predecessor route"
+grep -Fq '|shared-apply-legacy-arm|shared-apply-legacy-cancel)' "$SERVICE_SOURCE" ||
+    fail "legacy cancel command not protected by original FD9 lifecycle"
+echo 'PASS: pristine old owner cancellation uses strict fixed FreeBSD route and original FD9'
 
 echo 'PASS: shared engine/IPFW, stopped legacy rollback and live legacy refusal'

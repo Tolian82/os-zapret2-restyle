@@ -64,6 +64,55 @@ class TestJournal(unittest.TestCase):
         self.assertEqual(69,result.returncode)
         self.assertNotIn("Traceback",result.stderr)
 
+    def test_operator_can_only_cancel_completely_unchanged_live_predecessor(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            store=SharedApplyOperation(root/"shared-apply")
+            armed=store.prepare_legacy_predecessor(detail(),lambda:"f"*64)
+            for observed in ("a"*64, "", None, True):
+                with self.subTest(observed=observed):
+                    with self.assertRaises(SharedOperationError):
+                        store.cancel_pristine_legacy(detail()["id"],lambda:observed)
+                    self.assertEqual(armed,store.read())
+            with self.assertRaises(SharedOperationError):
+                store.cancel_pristine_legacy("2"*32,lambda:"f"*64)
+            self.assertEqual("shared-apply-pending",check_pending(
+                root/"voice-cutover",root/"voice-ipfw")["reason"])
+            restored=store.cancel_pristine_legacy(detail()["id"],lambda:"f"*64)
+            self.assertEqual("restored",restored["phase"])
+            self.assertNotIn("legacy_predecessor",restored)
+            self.assertIsNone(committed_owner(restored))
+            self.assertTrue(check_pending(
+                root/"voice-cutover",root/"voice-ipfw")["safe_to_mutate"])
+            self.assertEqual(restored,SharedApplyOperation(store.root).read())
+            with self.assertRaises(SharedOperationError):
+                store.cancel_pristine_legacy(detail()["id"],lambda:"f"*64)
+            with self.assertRaises(SharedOperationError):
+                store.advance("activating",detail())
+
+    def test_cancellation_rejects_changed_journal_after_attestation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store=SharedApplyOperation(Path(folder)/"shared-apply")
+            armed=store.prepare_legacy_predecessor(detail(),lambda:"f"*64)
+            def bad_witness():
+                # Simulate a foreign/nonterminal journal swap during observer.
+                target=store.root/"operation.json"
+                content=target.read_text().replace('"phase":"prepared"','"phase":"activated"')
+                target.write_text(content)
+                return "f"*64
+            with self.assertRaises(SharedOperationError):
+                store.cancel_pristine_legacy(detail()["id"],bad_witness)
+            self.assertEqual("activated",store.read()["phase"])
+            # Never accepted an invalid transition to terminal restored.
+            self.assertNotEqual("restored",store.read()["phase"])
+
+    def test_legacy_cancel_cli_is_not_generic_freebsd_bypass(self):
+        result=subprocess.run([sys.executable,
+            str(BACKEND/"voice_native_legacy_predecessor_route.py"),"cancel-common",
+            "1"*32],capture_output=True,text=True)
+        self.assertEqual(69,result.returncode)
+        self.assertNotIn("Traceback",result.stderr)
+
     def test_missing_state_stays_readonly(self):
         with tempfile.TemporaryDirectory() as d:
             j=SharedApplyOperation(Path(d)/"shared-apply")
