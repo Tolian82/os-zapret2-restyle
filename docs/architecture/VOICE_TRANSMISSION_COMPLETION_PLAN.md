@@ -1,6 +1,6 @@
 # «Передача голоса» — подробный проект плана этапа v0.5.2
 
-**Этап: `v0.5.2_11`, без релиза. План принят к выполнению 13.10.2026 прямым поручением владельца начать программирование согласно плану.** Архитектура, семь этапов и контроль используются как рабочая очередь. План подготовлен 13.10.2026 на кодовой базе `v0.5.1_174` и перенесён в новый этап. Последний исходный снимок — commit `11a8fdc12b602c4b4174b03b504a66f9b0af04c8`, Draft PR #328. При открытии этапа меняются VERSION/PLUGIN_REVISION и документация; исходники frontend/backend и поведение службы не изменяются.
+**Этап: `v0.5.2_28`, без релиза. План принят к выполнению 13.10.2026 прямым поручением владельца начать программирование согласно плану.** Архитектура, семь этапов и контроль используются как рабочая очередь. План подготовлен 13.10.2026 на кодовой базе `v0.5.1_174` и перенесён в новый этап. Последний исходный снимок — commit `11a8fdc12b602c4b4174b03b504a66f9b0af04c8`, Draft PR #328. При открытии этапа меняются VERSION/PLUGIN_REVISION и документация; исходники frontend/backend и поведение службы не изменяются.
 
 ## Текущий следующий шаг
 
@@ -114,6 +114,8 @@ Runtime переключается перед финальным сохране�
 **Переход:** install/update/remove/all-OFF и ошибка между заменой runtime/таблиц/правил возвращают согласованный previous state. Чужая таблица/правило сохранены. Проверки общего adapter выполняются в Linux с fault injection и на FreeBSD; проверка реальных WAN-пакетов завершается на этапе 7.
 
 ### Этап 3. Общий Apply обеих страниц
+
+Подэтапы `_26`–`_28`: internal `shared-apply-run` объединил native candidate staging/build и execute в один оригинальный FD9. В stored `plan.json` добавлено поле `page`; native Config worker требует совпадения страницы перед preflight/save. Действие `zapret shared_apply` — единственная bounded base64url configd точка входа. Без правки frontend штатные `VoiceController::applyAction` и `SettingsController::applyAction` вызывают её после pure model validation; отпускают PHP Config lock до root FD9, а worker повторяет snapshot и validation. В Strategies сохранены normalizeIpList/normalizeDomainList и прежний формат ответа. В Voice нет прежней записи OFF-only перед `reconfigure` — Voice ON теперь попадает в общий кандидат. Успешный GUI-ответ требует финальный `applied-id`, при отказе не обещается автоматический rollback. Всё ещё нужны live FreeBSD qualification, безопасная миграция текущего legacy runtime, recovery mutating-фаз и статусы по ТЗ. Нет релиза и разрешения на эксплуатацию.
 
 Подэтап `_25`: штатные `stop` и `restart` теперь отличают native common committed owner от legacy runtime в original FD9 service_with_lifecycle_lock. Native `stop` не перезаписывает OPNsense Config и не пытается очистить неизвестные IPFW правила, а использует прежний обратимый IPFW transaction с желаемым empty manifest; проверяет полный installed release, sealed source, Config и engine/monitor state. `restart` запускает после того же stop прежний native common boot. Ошибка проверки или промежуточная неудача не ведёт к legacy fallback. Это не завершает powercut recovery при partial native stop и не включает public GUI Apply.
 
