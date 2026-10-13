@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_46`. `VERSION=0.5.2`; `PLUGIN_REVISION=46`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_47`. `VERSION=0.5.2`; `PLUGIN_REVISION=47`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+**`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
 **`_46`: корректировка изоляции Linux runtime-теста.** Существующий `test-voice-common-apply-runtime.sh` загружает production `apply_runtime.sh` и только затем подменяет внешний full-process census для чистой имитации engine/kernel; иначе source переопределял fake и вызывал отсутствующий `common_pidfile_read` в стенде. Отдельный `test-voice-common-engine-census.sh` продолжает запускать именно production-код census и проверяет реальные ветви отказа. Защитный pre-journal отказ при незарегистрированном dvtws2 остаётся в production без изменений. На последнем HEAD требуется получить полный CI PASS, FreeBSD owner-live ещё не выполнялся.
 
@@ -12,7 +14,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_46`. `VERSION=0.5.2`; `PLUGIN_REVISION=46`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_47`. `VERSION=0.5.2`; `PLUGIN_REVISION=47`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
  на уникальный в пределах процесса `.rollback-old.$`: чужие остатки ранее прерванных процессов сохраняются и не блокируют текущий проверяемый откат. Тесты воспроизводят сбой второго rename, конфликт текущего park и чужой stale park. В `_45` добавлена независимая read-only сверка всего процесса `dvtws2` со штатным PID-файлом через существующий FreeBSD process-query adapter перед созданием native journal: потерянный PID, дублирующий dvtws2, нераспознанный процесс и ошибка ps не могут считаться пустым runtime. Сканирование не останавливает процессы и не меняет Config/IPFW. `apply_runtime_probe` повторяется при activation. Это безопасность подготовки и восстановления, **не** разрешение автоматического live cutover старого PoC; необходимы отдельная подтверждённая миграция и FreeBSD owner-live. CI latest HEAD проверяется.
 
