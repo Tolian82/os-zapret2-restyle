@@ -15,6 +15,7 @@ LOG="$ROOT/steps.log"
 preflight_voice_cutover_journals() { [ "$1" = common-apply ]; }
 shared_apply_workspace() { echo "$ROOT/work"; }
 shared_apply_require_tools() { return 0; }
+shared_apply_bundle_service() { printf "bundle:%s\n" "$1" >> "$LOG"; [ "$1" != verify ] || [ "$BAD_BUNDLE" = 0 ]; }
 shared_apply_native_config() {
     case "$1" in
         preflight) echo '{"enabled":"1","base":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","candidate":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","fields":["voice.telegram.enabled"]}' ;;
@@ -35,10 +36,10 @@ shared_apply_record_service() {
     printf "record:%s\n" "$1" >> "$LOG"
     [ "$1" != "$BAD_RECORD" ]
 }
-apply_runtime_activate() { echo runtime-activate >> "$LOG"; [ "$ACTIVATE_RC" -eq 0 ]; }
+apply_runtime_activate() { echo runtime-activate >> "$LOG"; [ "$ACTIVATE_RC" -eq 0 ] || return 1; [ "$TAMPER_DURING_ACTIVATION" = 0 ] || BAD_BUNDLE=1; }
 apply_runtime_restore() { echo runtime-restore >> "$LOG"; [ "$RESTORE_RC" -eq 0 ]; }
 apply_runtime_commit() { echo runtime-commit >> "$LOG"; [ "$COMMIT_RC" -eq 0 ]; }
-reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; }
+reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; }
 expect_status() {
     expected="$1"; shift
     set +e
@@ -50,20 +51,24 @@ expect_status() {
     [ "$actual_steps" = "$*" ] || fail "steps: $actual_steps"
 }
 reset
-expect_status 0 'record:prepared record:activating runtime-activate record:activated config-save record:config-saved runtime-commit record:committed '
+expect_status 0 'bundle:verify record:prepared record:activating runtime-activate record:activated bundle:verify config-save record:config-saved runtime-commit record:committed '
 grep -Fqx "applied-id=$ID" "$ROOT/response.txt" || fail "successful receipt"
+reset; BAD_BUNDLE=1
+expect_status 69 'bundle:verify '
 reset; SAVE_RC=69
-expect_status 69 'record:prepared record:activating runtime-activate record:activated config-save runtime-restore record:restored '
+expect_status 69 'bundle:verify record:prepared record:activating runtime-activate record:activated bundle:verify config-save runtime-restore record:restored '
 reset; SAVE_RC=70
-expect_status 70 'record:prepared record:activating runtime-activate record:activated config-save record:requires-review '
+expect_status 70 'bundle:verify record:prepared record:activating runtime-activate record:activated bundle:verify config-save record:requires-review '
+reset; TAMPER_DURING_ACTIVATION=1
+expect_status 69 'bundle:verify record:prepared record:activating runtime-activate record:activated bundle:verify runtime-restore record:restored '
 reset; ACTIVATE_RC=1
-expect_status 70 'record:prepared record:activating runtime-activate record:requires-review '
+expect_status 70 'bundle:verify record:prepared record:activating runtime-activate record:requires-review '
 reset; COMMIT_RC=1
-expect_status 70 'record:prepared record:activating runtime-activate record:activated config-save record:config-saved runtime-commit record:requires-review '
+expect_status 70 'bundle:verify record:prepared record:activating runtime-activate record:activated bundle:verify config-save record:config-saved runtime-commit record:requires-review '
 reset; BAD_RECORD=activated
-expect_status 69 'record:prepared record:activating runtime-activate record:activated runtime-restore record:restored '
+expect_status 69 'bundle:verify record:prepared record:activating runtime-activate record:activated runtime-restore record:restored '
 reset; BAD_RECORD=config-saved
-expect_status 70 'record:prepared record:activating runtime-activate record:activated config-save record:config-saved '
+expect_status 70 'bundle:verify record:prepared record:activating runtime-activate record:activated bundle:verify config-save record:config-saved '
 reset; RESTORE_RC=1; SAVE_RC=69
-expect_status 70 'record:prepared record:activating runtime-activate record:activated config-save runtime-restore record:requires-review '
+expect_status 70 'bundle:verify record:prepared record:activating runtime-activate record:activated bundle:verify config-save runtime-restore record:requires-review '
 echo 'PASS: shared FD9 native runtime/Config fault-injection matrix'

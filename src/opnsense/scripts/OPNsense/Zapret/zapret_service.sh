@@ -807,6 +807,15 @@ shared_apply_json_field()
 {
     /usr/local/bin/jq -er "$1"
 }
+# Seal/attest the exact native XML, plan and all generated release bytes.
+# This is one evidence bundle inside the same FD9 operation, NOT a new WAL.
+shared_apply_bundle_service()
+{
+    [ "$#" -eq 2 ] || return 64
+    case "$1" in seal|verify) ;; *) return 64 ;; esac
+    [ -x /usr/local/bin/python3.13 ] || return 69
+    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_seal.py" "$1" "$2"
+}
 shared_apply_execute_service()
 {
     [ "$#" -eq 2 ] || return 64
@@ -821,6 +830,7 @@ shared_apply_execute_service()
     [ -d "$_shared_apply_root/release" ] &&
     [ -f "$_shared_apply_root/candidate.xml" ] &&
     [ -f "$_shared_apply_root/plan.json" ] || return 69
+    shared_apply_bundle_service verify "$_shared_apply_id" || return 69
     _shared_apply_preview=$(shared_apply_native_config preflight \
         "$_shared_apply_id" "$_shared_apply_page") || return 69
     _shared_apply_mode=$(printf "%s\n" "$_shared_apply_preview" |
@@ -847,6 +857,18 @@ shared_apply_execute_service()
     fi
     if ! shared_apply_record_service activated "$_shared_apply_id" "$_shared_apply_page" \
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields"; then
+        if apply_runtime_restore; then
+            shared_apply_record_service restored "$_shared_apply_id" "$_shared_apply_page" \
+                "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
+            return 69
+        fi
+        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        return 70
+    fi
+    # Independent proof against a swap between preflight and kernel install.
+    # A failed proof is still pre-Config; restore only if fully attested.
+    if ! shared_apply_bundle_service verify "$_shared_apply_id"; then
         if apply_runtime_restore; then
             shared_apply_record_service restored "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
@@ -929,7 +951,8 @@ shared_apply_prepare_service()
     orchestrator_build_release \
         "$_shared_template" "$ZAPRET_DIR" "$ACTIVE_DIR" \
         "$_shared_work" "$_shared_work/release" "$STAGE_FILE" \
-        shared-candidate "$_shared_work/candidate.xml"
+        shared-candidate "$_shared_work/candidate.xml" || return $?
+    shared_apply_bundle_service seal "$1"
 }
 # Internal root-only Apply phases; service_with_lifecycle_lock supplies FD9.
 shared_apply_record_service()
