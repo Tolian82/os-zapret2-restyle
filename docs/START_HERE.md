@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_10`. `VERSION=0.5.2`; `PLUGIN_REVISION=10`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_11`. `VERSION=0.5.2`; `PLUGIN_REVISION=11`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+В `_11` внутренний `apply_settings.php::SharedConfigCommit::transact()` связывает общий runtime и native Config в фиксированном порядке под требованием существующего FD9: fresh model check, durable intent callback, runtime activation, Config save/readback, IPFW commit, окончательная запись. Отказ до Config save вызывает проверяемый runtime rollback; неясный результат native save или ошибка post-save cleanup сохраняют право recovery вместо ложного rollback. В текущей ревизии FD9 guard, durable operation record и activation остаются обязательными callback-интерфейсами будущего привилегированного service worker, публичный GUI к ним ещё НЕ подключён. Сквозной PHP тест проверяет порядок фаз, отсутствие мутации без FD9/record, restore до save и честный review после uncertain save.
 
 В `_10` устранён реальный разрыв общего IPFW Apply: после `install` staged-снимки старых таблиц необходимы до native Config commit. Поэтому общий adapter теперь предоставляет отдельную read-only `verify-staged` (проверка новых правил, таблиц и обязательных старых snapshots), а финальный `verify` используется только до установки и после rollback/commit. Покрыты реальные изменения IPSET, исчезновение/порча snapshots и сквозной shell rollback. Исправлен mock Strategy Lab lifecycle, который не создавал `apply_runtime.sh` и потому обрывал проверку до самого Strategy Lab.
 
@@ -48,4 +50,4 @@ Install проверяет живые объекты до изменения, с
 
 Полные прежние документы сохранены в [архиве этапа v0.5.1](history/stages/v0.5.1/README.md). Они не входят в текущую очередь или обязательное чтение. Текущая хронология — [working ledger v0.5.x](history/current/v0.5.x.md).
 
-Stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing: `v0.5.0_3`. Открытие `v0.5.2_10` не публикует новый пакет и не подтверждает GUI/CONFIG/BOOT или MEDIA_PASS/CALL_PASS.
+Stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing: `v0.5.0_3`. Открытие `v0.5.2_11` не публикует новый пакет и не подтверждает GUI/CONFIG/BOOT или MEDIA_PASS/CALL_PASS.
