@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_20`. `VERSION=0.5.2`; `PLUGIN_REVISION=20`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_21`. `VERSION=0.5.2`; `PLUGIN_REVISION=21`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+В `_21` разрешено восстановление **только строго домутирующей** фазы общего Apply: `prepared` была долговечно записана до перехода в `activating` и до любого live runtime/Config/IPFW изменения. Если root-FD9 boot видит сохранённую `prepared`, и тот же sealed bundle цел, штатный `shared_apply_operation.py recover-prepared` сверяет ID/phase дважды и переводит журнал в `restored`; обычный start продолжает legacy лишь после штатного guard. Неуспех проверки, `activating`, `activated`, `config-saved` или неоднозначные фазы по-прежнему блокируют boot, без изменения Config/IPFW и без подмены полного recovery. Тесты добавлены к реальному FD9 lifecycle dispatch и phase-store.
 
 В `_18` общий detached Config/plan/release получил отдельный проверяемый integrity seal **в том же** shared-work ID, а не второй WAL: SHA-256 candidate.xml, plan.json и полного дерева release, atomically/fsync сохранение. Проверка выполняется до `prepared` и непосредственно перед native Config save; изменение кандидата после активации вызывает проверяемый runtime restore или оставляет `requires-review`. `_19` добавил штатный native boot для только `committed` owner: оригинальный FD9, целостность seal, readback saved Config и прежний общий `apply_runtime_activate/commit`. `_20` добавил тест настоящего `service_with_lifecycle_lock` с проверкой отсутствия legacy fallback при committed/pending/foreign owner. Power-cut recovery нетерминальных фаз и публичные GUI-кнопки обеих страниц пока ещё не подключены.
 
