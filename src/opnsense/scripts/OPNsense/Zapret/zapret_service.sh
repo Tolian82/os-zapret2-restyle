@@ -791,6 +791,22 @@ native_voice_live_preflight_service()
 # FD9 for the ENTIRE operation; Python journal and PHP Config worker run as
 # children inheriting that ownership. No nested configd/lockf acquisition,
 # no second Voice daemon, no old Config XML file replacement.
+shared_apply_require_tools()
+{
+    [ -x /usr/local/bin/php ] && [ -x /usr/local/bin/jq ]
+}
+shared_apply_workspace()
+{
+    printf "/var/db/zapret2/shared-work/%s\n" "$1"
+}
+shared_apply_native_config()
+{
+    /usr/local/bin/php "${SCRIPT_DIR}/shared_apply_config.php" "$@"
+}
+shared_apply_json_field()
+{
+    /usr/local/bin/jq -er "$1"
+}
 shared_apply_execute_service()
 {
     [ "$#" -eq 2 ] || return 64
@@ -798,24 +814,23 @@ shared_apply_execute_service()
     [ "${#1}" -eq 32 ] || return 64
     case "$2" in voice|strategies) ;; *) return 64 ;; esac
     preflight_voice_cutover_journals common-apply || return 69
-    [ -x /usr/local/bin/php ] && [ -x /usr/local/bin/jq ] || return 69
+    shared_apply_require_tools || return 69
     _shared_apply_id="$1"
     _shared_apply_page="$2"
-    _shared_apply_root="/var/db/zapret2/shared-work/$_shared_apply_id"
+    _shared_apply_root=$(shared_apply_workspace "$_shared_apply_id") || return 69
     [ -d "$_shared_apply_root/release" ] &&
     [ -f "$_shared_apply_root/candidate.xml" ] &&
     [ -f "$_shared_apply_root/plan.json" ] || return 69
-    _shared_apply_preview=$(/usr/local/bin/php \
-        "${SCRIPT_DIR}/shared_apply_config.php" preflight \
+    _shared_apply_preview=$(shared_apply_native_config preflight \
         "$_shared_apply_id" "$_shared_apply_page") || return 69
     _shared_apply_mode=$(printf "%s\n" "$_shared_apply_preview" |
-        /usr/local/bin/jq -er '.enabled | select(.=="0" or .=="1")') || return 69
+        shared_apply_json_field '.enabled | select(.=="0" or .=="1")') || return 69
     _shared_apply_base=$(printf "%s\n" "$_shared_apply_preview" |
-        /usr/local/bin/jq -er '.base | select(test("^[a-f0-9]{64}$"))') || return 69
+        shared_apply_json_field '.base | select(test("^[a-f0-9]{64}$"))') || return 69
     _shared_apply_candidate=$(printf "%s\n" "$_shared_apply_preview" |
-        /usr/local/bin/jq -er '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
+        shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
     _shared_apply_fields=$(printf "%s\n" "$_shared_apply_preview" |
-        /usr/local/bin/jq -er '.fields | if length==0 then "-" else join(",") end') || return 69
+        shared_apply_json_field '.fields | if length==0 then "-" else join(",") end') || return 69
     # The journal records only a fixed operation identity and owned-fields
     # proof. It never contains private Config XML or untrusted shell strings.
     shared_apply_record_service prepared "$_shared_apply_id" "$_shared_apply_page" \
@@ -844,8 +859,7 @@ shared_apply_execute_service()
     # Native Config::save is performed by the SAME existing model writer.
     # Only explicit 69 means no save was attempted; every other nonzero
     # status could be a mid-save crash and MUST preserve runtime/evidence.
-    /usr/local/bin/php "${SCRIPT_DIR}/shared_apply_config.php" save \
-        "$_shared_apply_id" "$_shared_apply_page"
+    shared_apply_native_config save "$_shared_apply_id" "$_shared_apply_page"
     _shared_apply_save_status=$?
     if [ "$_shared_apply_save_status" -ne 0 ]; then
         if [ "$_shared_apply_save_status" -eq 69 ]; then
