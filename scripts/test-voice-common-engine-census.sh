@@ -69,6 +69,7 @@ QUERY_FAIL=0; export QUERY_FAIL
 mkdir -p "$TMP/owner/release" "$TMP/active"
 ACTIVE_DIR="$TMP/active"
 SUPERVISOR_MONITOR_PIDFILE="$TMP/monitor.pid"
+SUPERVISOR_DAEMON_PIDFILE="$TMP/daemon.pid"
 preflight_voice_cutover_journals() { :; }
 shared_apply_require_tools() { :; }
 shared_apply_bundle_service() { :; }
