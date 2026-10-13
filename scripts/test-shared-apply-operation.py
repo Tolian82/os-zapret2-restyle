@@ -88,9 +88,12 @@ class TestJournal(unittest.TestCase):
                     target=root/"other"; target.mkdir()
                     j.root.symlink_to(target)
                 else:
-                    j.root.mkdir(mode=0o700)
+                    # The writer itself creates the trusted root. Creating
+                    # an empty root first intentionally represents a crash.
                     if issue in ("file-link","extra","bad-mode"):
                         j.advance("prepared",detail())
+                    else:
+                        j.root.mkdir(mode=0o700)
                     if issue=="file-link":
                         (j.root/"operation.json").unlink()
                         (j.root/"operation.json").symlink_to(root/"unknown")
