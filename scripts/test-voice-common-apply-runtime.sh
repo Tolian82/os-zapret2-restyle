@@ -251,4 +251,85 @@ fi
 AUDIT_PY_AVAILABLE=1
 echo 'PASS: common FD9 legacy audit uses existing exact kernel/IPFW/argv witness without handoff'
 
+
+# The outer production CLI MUST route both diagnostic actions through the
+# original FD9 lifecycle. Merely adding service_dispatch is not enough.
+grep -Fq '|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify)' "$SERVICE_SOURCE" ||
+    fail "legacy diagnostic commands bypass original FD9 lifecycle lock"
+grep -Fq 'shared-apply-legacy-qualify)' "$SERVICE_SOURCE" ||
+    fail "candidate qualification is not dispatched"
+QUAL_SCRIPT="$ROOT/legacy-qualify.sh"
+sed -n '/^shared_apply_legacy_candidate_service()$/,/^}$/p' "$SERVICE_SOURCE" > "$QUAL_SCRIPT"
+sh -n "$QUAL_SCRIPT" || fail "production legacy qualifier is not valid sh"
+. "$QUAL_SCRIPT"
+QUAL_ID=11111111111111111111111111111111
+QUAL_BASE=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+QUAL_CANDIDATE=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+QUAL_MODE=1
+QUAL_SEAL=1 QUAL_CONFIG=1 QUAL_VALID=1 QUAL_RACE=0
+DVTWS_BIN="$ROOT/engine"
+# These mocks are scoped to the extracted service function: old IPFW/argv
+# still comes only from the strict Python witness (mocked above).
+shared_apply_require_tools() { return 0; }
+shared_apply_workspace() { echo "$ROOT/qual-work"; }
+shared_apply_bundle_service() { [ "$1" = verify ] && [ "$2" = "$QUAL_ID" ] && [ "$QUAL_SEAL" = 1 ]; }
+shared_apply_native_config() {
+    [ "$1" = preflight ] && [ "$2" = "$QUAL_ID" ] && [ "$3" = voice ] &&
+    [ "$QUAL_CONFIG" = 1 ] || return 69
+    if [ "$QUAL_RACE" = 1 ]; then
+        QUAL_RACE=2
+        printf '%s\n' '{"mode":"changed"}'
+    else
+        printf '%s\n' '{"mode":"stable"}'
+    fi
+}
+shared_apply_json_field() {
+    case "$1" in
+       *'.enabled'*) echo "$QUAL_MODE" ;;
+       *'.base'*) echo "$QUAL_BASE" ;;
+       *'.candidate'*) echo "$QUAL_CANDIDATE" ;;
+       *) return 69 ;;
+    esac
+}
+validator_validate_runtime_modes() { [ "$1" = "$ROOT/qual-work/release" ] && [ "$QUAL_VALID" = 1 ]; }
+validator_validate_engine_mapped() {
+    [ "$1" = "$DVTWS_BIN" ] &&
+    [ "$2" = "$ROOT/qual-work/release/dvtws.args" ] &&
+    [ "$3" = "$ACTIVE_DIR" ] &&
+    [ "$4" = "$ROOT/qual-work/release" ] &&
+    [ "$QUAL_VALID" = 1 ]
+}
+mkdir -p "$ROOT/qual-work/release"
+printf '%s\n' '--port=989' > "$ROOT/qual-work/release/dvtws.args"
+# Ensure fixture outputs canonical full digest lengths, not placeholders.
+legacy_exact_fixture() {
+    [ "$EXACT_OK" = 1 ] || return 69
+    printf '%s\n' \
+        'legacy-voice-preflight=legacy-poc-full-live-baseline-observed-not-owned' \
+        "legacy-voice-ipfw-sha256=$QUAL_BASE" \
+        "legacy-voice-managed-sha256=$QUAL_CANDIDATE" \
+        'legacy-voice-ownership=not-adopted' \
+        'voice-on=blocked'
+}
+HAS_COMMON_RECORD=0 PENDING_OLD=0 AUDIT_PY_AVAILABLE=1 EXACT_OK=1 EXACT_BAD=0
+PROCESS=1 MONITOR=1 LEGACY_RULES=1
+good=$(shared_apply_legacy_candidate_service "$QUAL_ID") || fail "bound legacy candidate audit refused"
+printf '%s\n' "$good" | grep -Fqx "legacy-qualified-candidate=$QUAL_ID" ||
+    fail "candidate identity missing"
+printf '%s\n' "$good" | grep -Fqx 'legacy-handoff-authorized=0' ||
+    fail "candidate qualification improperly allowed cutover"
+QUAL_MODE=0
+if shared_apply_legacy_candidate_service "$QUAL_ID" >/dev/null; then fail "legacy handoff accepted Voice OFF"; fi
+QUAL_MODE=1 QUAL_VALID=0
+if shared_apply_legacy_candidate_service "$QUAL_ID" >/dev/null; then fail "unsafe candidate accepted"; fi
+QUAL_VALID=1 QUAL_SEAL=0
+if shared_apply_legacy_candidate_service "$QUAL_ID" >/dev/null; then fail "unsealed bundle accepted"; fi
+QUAL_SEAL=1 EXACT_OK=0
+if shared_apply_legacy_candidate_service "$QUAL_ID" >/dev/null; then fail "failed old kernel witness accepted"; fi
+EXACT_OK=1 HAS_COMMON_RECORD=1
+if shared_apply_legacy_candidate_service "$QUAL_ID" >/dev/null; then fail "shared owner accepted as legacy"; fi
+HAS_COMMON_RECORD=0
+if shared_apply_legacy_candidate_service malformed >/dev/null; then fail "invalid candidate ID accepted"; fi
+echo 'PASS: FD9 candidate-bound legacy kernel witness refuses OFF/foreign/conflicts'
+
 echo 'PASS: shared engine/IPFW, stopped legacy rollback and live legacy refusal'

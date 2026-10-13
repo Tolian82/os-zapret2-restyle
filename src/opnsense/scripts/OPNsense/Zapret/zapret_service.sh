@@ -823,6 +823,63 @@ shared_apply_legacy_audit_service()
         'legacy-handoff-authorized=0'
 }
 
+# Operator-only candidate-bound check for a RUNNING legacy Telegram PoC.
+# A seal and fresh native Config preflight must describe ONE proposed Voice ON.
+# The strict old kernel/argv witness is reused; no Config, journal, engine,
+# kernel or active release is changed. This does NOT authorize migration.
+shared_apply_legacy_candidate_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    _legacy_qual_id="$1"
+    case "$_legacy_qual_id" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_legacy_qual_id}" -eq 32 ] || return 64
+    preflight_voice_cutover_journals || return 69
+    shared_apply_require_tools || return 69
+    _legacy_qual_root=$(shared_apply_workspace "$_legacy_qual_id") || return 69
+    [ -d "$_legacy_qual_root/release" ] &&
+    [ ! -L "$_legacy_qual_root/release" ] || return 69
+    shared_apply_bundle_service verify "$_legacy_qual_id" || return 69
+    _legacy_qual_preview=$(shared_apply_native_config preflight \
+        "$_legacy_qual_id" voice) || return 69
+    _legacy_qual_mode=$(printf "%s\n" "$_legacy_qual_preview" |
+        shared_apply_json_field '.enabled | select(.=="0" or .=="1")') || return 69
+    [ "$_legacy_qual_mode" = 1 ] || return 69
+    _legacy_qual_base=$(printf "%s\n" "$_legacy_qual_preview" |
+        shared_apply_json_field '.base | select(test("^[a-f0-9]{64}$"))') || return 69
+    _legacy_qual_target=$(printf "%s\n" "$_legacy_qual_preview" |
+        shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
+    validator_validate_runtime_modes "$_legacy_qual_root/release" || return 69
+    [ -x "$DVTWS_BIN" ] || return 69
+    validator_validate_engine_mapped "$DVTWS_BIN" \
+        "$_legacy_qual_root/release/dvtws.args" "$ACTIVE_DIR" \
+        "$_legacy_qual_root/release" "${PYTHON_BIN:-/usr/local/bin/python3.13}" || return 69
+    _legacy_qual_report=$(shared_apply_legacy_audit_service) || return 69
+    printf "%s\n" "$_legacy_qual_report" |
+        grep -Fqx 'legacy-handoff-authorized=0' || return 69
+    printf "%s\n" "$_legacy_qual_report" |
+        grep -Fqx 'legacy-exact-ipfw-argv-observed=1' || return 69
+    _legacy_qual_ipfw=$(printf "%s\n" "$_legacy_qual_report" |
+        sed -n 's/^legacy-voice-ipfw-sha256=//p') || return 69
+    _legacy_qual_ipset=$(printf "%s\n" "$_legacy_qual_report" |
+        sed -n 's/^legacy-voice-managed-sha256=//p') || return 69
+    for _legacy_qual_digest in "$_legacy_qual_ipfw" "$_legacy_qual_ipset"; do
+        case "$_legacy_qual_digest" in ""|*[!a-f0-9]*) return 69 ;; esac
+        [ "${#_legacy_qual_digest}" -eq 64 ] || return 69
+    done
+    # Nothing is adopted. Revalidate immutable bundle and unchanged native
+    # Config before returning the identity-bound informational receipt.
+    shared_apply_bundle_service verify "$_legacy_qual_id" || return 69
+    _legacy_qual_check=$(shared_apply_native_config preflight \
+        "$_legacy_qual_id" voice) || return 69
+    [ "$_legacy_qual_check" = "$_legacy_qual_preview" ] || return 69
+    printf "legacy-qualified-candidate=%s\n" "$_legacy_qual_id"
+    printf "legacy-current-ipfw-sha256=%s\n" "$_legacy_qual_ipfw"
+    printf "legacy-current-managed-sha256=%s\n" "$_legacy_qual_ipset"
+    printf "candidate-config-base=%s\n" "$_legacy_qual_base"
+    printf "candidate-config-target=%s\n" "$_legacy_qual_target"
+    printf '%s\n' 'legacy-handoff-authorized=0'
+}
+
 # One actual runtime/Config Apply owner: the existing service process holds
 # FD9 for the ENTIRE operation; Python journal and PHP Config worker run as
 # children inheriting that ownership. No nested configd/lockf acquisition,
@@ -1404,6 +1461,10 @@ service_dispatch()
             [ "$#" -eq 1 ] || return 64
             shared_apply_legacy_audit_service
             ;;
+        shared-apply-legacy-qualify)
+            [ "$#" -eq 2 ] || return 64
+            shared_apply_legacy_candidate_service "$2"
+            ;;
         shared-apply-execute)
             shared_apply_execute_service "${2:-}" "${3:-}"
             ;;
@@ -1706,7 +1767,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
