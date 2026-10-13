@@ -206,4 +206,85 @@ reset_pristine
 pristine_check 69 "activating $CURRENT voice"
 pristine_check 69 "activated $CURRENT voice $OLD voice"
 echo 'PASS: pristine interrupted activating recovers only previous sealed common owner'
+
+# Cold activated recovery tests the production FD9 service with mock kernel.
+sed -n '/^shared_apply_recover_activated_cold_service()$/,/^}$/p' "$SOURCE" > "$ROOT/activated-cold.sh"
+python3 - "$ROOT/activated-cold.sh" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1])
+s=p.read_text()
+old='    [ -x /usr/local/bin/python3.13 ] || return 70\n    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n        finish-activated "$_shared_cold_id" "$_shared_cold_old" || return 70'
+assert old in s, "production root completion CLI boundary missing"
+s=s.replace(old,'    echo finish-activated >> "$LOG"; [ "$TERMINAL_OK" = 0 ] || return 70')
+p.write_text(s)
+PY
+. "$ROOT/activated-cold.sh"
+OLD=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+CURRENT=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+BACKUP_ROOT="$ROOT/backups"
+mkdir -p "$BACKUP_ROOT" "$ROOT/work-old/release" "$ROOT/work-new/release"
+CHILD_PIDFILE="$ROOT/child"
+SUPERVISOR_MONITOR_PIDFILE="$ROOT/supervisor"
+shared_apply_workspace() {
+  case "$1" in "$OLD") echo "$ROOT/work-old" ;; "$CURRENT") echo "$ROOT/work-new" ;; *) return 1 ;; esac
+}
+atomic_verify_tree() {
+  echo "compare:$1" >> "$LOG"
+  case "$1" in "$ROOT/work-old/release") [ "$INSTALLED" = old ] ;;
+    "$ROOT/work-new/release") [ "$INSTALLED" = new ] ;; *) return 1 ;; esac
+}
+atomic_install_tree() {
+  echo install-previous >> "$LOG"
+  [ "$INSTALL_OK" = 0 ] || return 1
+  [ "$1" = "$ROOT/work-old/release" ] &&
+  [ "$2" = "$ACTIVE_DIR" ] && [ "$3" = "$BACKUP_ROOT" ] || return 1
+  INSTALLED=old
+}
+reset_cold() {
+  : > "$LOG"
+  INSTALLED=new INSTALL_OK=0 TERMINAL_OK=0
+  GUARD=0 SEAL=0 CONFIG=0 ENGINE=0 MONITOR=0 CENSUS_OK=0 IPFW_OK=0
+}
+cold_check() {
+  expected="$1"; shift
+  set +e
+  shared_apply_recover_activated_cold_service "$1" > "$ROOT/cold-output"
+  actual=$?
+  set -e
+  [ "$actual" = "$expected" ] || fail "activated status $actual expected $expected"
+}
+reset_cold
+cold_check 0 "activated $CURRENT voice $OLD voice"
+[ "$INSTALLED" = old ] || fail "previous sealed release not restored"
+grep -Fqx "recovered-activated-id=$CURRENT" "$ROOT/cold-output" || fail "missing restored receipt"
+grep -Fqx finish-activated "$LOG" || fail "journal not completed"
+reset_cold; INSTALLED=old
+cold_check 0 "activated $CURRENT voice $OLD voice"
+! grep -Fqx install-previous "$LOG" || fail "duplicate installation in idempotent retry"
+reset_cold; INSTALLED=foreign
+cold_check 69 "activated $CURRENT voice $OLD voice"
+! grep -Fqx install-previous "$LOG" || fail "foreign release overwritten"
+reset_cold; ENGINE=1
+cold_check 69 "activated $CURRENT voice $OLD voice"
+! grep -Fqx install-previous "$LOG" || fail "live process overwritten"
+reset_cold; CENSUS_OK=1
+cold_check 69 "activated $CURRENT voice $OLD voice"
+! grep -Fqx install-previous "$LOG" || fail "orphan engine overwritten"
+reset_cold; IPFW_OK=1
+cold_check 69 "activated $CURRENT voice $OLD voice"
+! grep -Fqx install-previous "$LOG" || fail "foreign IPFW overwritten"
+reset_cold; CONFIG=1
+cold_check 69 "activated $CURRENT voice $OLD voice"
+! grep -Fqx install-previous "$LOG" || fail "saved Config drift overwritten"
+reset_cold; INSTALL_OK=1
+cold_check 70 "activated $CURRENT voice $OLD voice"
+! grep -Fqx finish-activated "$LOG" || fail "failed atomic install was committed"
+reset_cold; TERMINAL_OK=1
+cold_check 70 "activated $CURRENT voice $OLD voice"
+reset_cold
+cold_check 69 "activated $CURRENT voice"
+cold_check 69 "activating $CURRENT voice $OLD voice"
+echo 'PASS: shared cold activated recovery, idempotent previous owner and fail-closed checks'
+
 echo 'PASS: committed native common owner routes boot through sealed release and fresh saved Config'

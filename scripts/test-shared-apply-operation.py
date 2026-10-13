@@ -186,6 +186,39 @@ class TestJournal(unittest.TestCase):
                 j.recover_activating_pristine(d["id"],"a"*32,lambda: True)
             self.assertEqual("activating",j.read()["phase"])
 
+    def test_cold_activated_completion_requires_predecessor_and_attestation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store=SharedApplyOperation(Path(folder)/"shared-apply")
+            old=detail("a"*32); new=detail("b"*32)
+            for phase in ("prepared","activating","activated","config-saved","committed"):
+                store.advance(phase,old)
+            for phase in ("prepared","activating","activated"):
+                store.advance(phase,new)
+            with self.assertRaisesRegex(SharedOperationError,"activated rollback"):
+                store.finish_activated_restore(new["id"],"c"*32,lambda: True)
+            with self.assertRaisesRegex(SharedOperationError,"attestation"):
+                store.finish_activated_restore(new["id"],old["id"],lambda: False)
+            self.assertEqual("activated",store.read()["phase"])
+            restored=store.finish_activated_restore(new["id"],old["id"],lambda: True)
+            self.assertEqual("restored",restored["phase"])
+            self.assertEqual(old,committed_owner(restored))
+            with self.assertRaisesRegex(SharedOperationError,"activated rollback"):
+                store.finish_activated_restore(new["id"],old["id"],lambda: True)
+        with tempfile.TemporaryDirectory() as folder:
+            store=SharedApplyOperation(Path(folder)/"shared-apply")
+            d=detail()
+            for phase in ("prepared","activating","activated"):
+                store.advance(phase,d)
+            with self.assertRaisesRegex(SharedOperationError,"activated rollback"):
+                store.finish_activated_restore(d["id"],"a"*32,lambda: True)
+
+    def test_activated_cli_refuses_missing_freebsd_fd9(self):
+        result=subprocess.run([sys.executable,str(BACKEND/"shared_apply_operation.py"),
+                               "finish-activated","a"*32,"b"*32],
+                              capture_output=True,text=True,check=False)
+        self.assertEqual(69,result.returncode)
+        self.assertNotIn("Traceback",result.stderr)
+
     def test_post_save_recovery_only_after_attested_runtime_commit(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)
