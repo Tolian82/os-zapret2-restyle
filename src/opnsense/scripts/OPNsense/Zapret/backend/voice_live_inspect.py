@@ -6,8 +6,13 @@ as an unattended repair daemon. When ownership is not proven, report blocked.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 from pathlib import Path
+import re
+import stat
+import subprocess
 import sys
 
 from voice_firewall_ledger import LedgerError, VoiceOwnershipStore
@@ -90,10 +95,141 @@ def examine(store, adapter, cutover=None) -> dict:
             "rule_count": len(observed), "table_count": len(expected["tables"])}
 
 
+
+# Reuse the single dvtws2/monitor process owner, not five invented daemons.
+COMMON_ACTIVE = Path("/usr/local/etc/zapret2/runtime-v2")
+COMMON_QUERY = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/process_query.sh")
+CHILD_PID = Path("/var/run/dvtws2.pid")
+MONITOR_PID = Path("/var/run/zapret2-supervisor-monitor.pid")
+CHILD_EXEC = "/usr/local/etc/zapret2/binaries/my/dvtws2"
+MONITOR_EXEC = "/usr/local/opnsense/scripts/OPNsense/Zapret/supervisor_loop.sh"
+
+
+def _native_process_matches(pidfile: Path, expected: str) -> bool:
+    """Read only the original PID and exact binary token, never scan/kill."""
+    try:
+        meta = pidfile.lstat()
+        if not stat.S_ISREG(meta.st_mode) or meta.st_uid != 0 or \
+           meta.st_nlink != 1 or meta.st_mode & 0o022 or meta.st_size > 32:
+            return False
+        pid_text = pidfile.read_text("ascii").strip()
+        if not re.fullmatch(r"[0-9]{1,10}", pid_text) or int(pid_text) <= 1:
+            return False
+        pid = int(pid_text)
+        os.kill(pid, 0)
+        result = subprocess.run(
+            [str(COMMON_QUERY), "-p", str(pid), "-o", "command="],
+            capture_output=True, text=True, timeout=4, check=False,
+        )
+        if result.returncode != 0 or len(result.stdout) > 65536:
+            return False
+        # Match existing common_process_matches: absolute executable token.
+        return f" {expected} " in f" {result.stdout.strip()} "
+    except (OSError, ValueError, UnicodeError, subprocess.SubprocessError):
+        return False
+
+
+def _same_installed_file(source: Path, installed: Path) -> bool:
+    """Bounded read-only comparison, rejecting foreign and linked artifacts."""
+    try:
+        original, active = source.lstat(), installed.lstat()
+        if any(not stat.S_ISREG(s.st_mode) or s.st_nlink != 1 or
+               s.st_uid != 0 or s.st_mode & 0o022 or s.st_size > 1048576
+               for s in (original, active)):
+            return False
+        return hashlib.sha256(source.read_bytes()).digest() == \
+               hashlib.sha256(installed.read_bytes()).digest()
+    except OSError:
+        return False
+
+
+def inspect_common_runtime(release: Path, manifest: dict, *,
+                           active: Path = COMMON_ACTIVE,
+                           process_check=_native_process_matches,
+                           installed_match=_same_installed_file) -> dict:
+    """Independent engine and five profile configuration evidence.
+
+    'running' means the original launcher and supervisor process identities
+    exist, the active runtime plan+argv match the one sealed source, and IPFW
+    has already been independently checked by the caller. It never proves
+    packet passage, STUN response, Telegram call or end-to-end media.
+    """
+    plan_path = release / "voice-plan.json"
+    try:
+        if plan_path.stat().st_size > 1048576:
+            raise VoiceInspectError("oversized common runtime plan")
+        plan = json.loads(plan_path.read_bytes())
+    except (OSError, ValueError, UnicodeError) as error:
+        raise VoiceInspectError("common runtime plan unavailable") from error
+    profiles = plan.get("profiles") if isinstance(plan, dict) else None
+    capture = plan.get("capture") if isinstance(plan, dict) else None
+    rows = capture.get("voice") if isinstance(capture, dict) else None
+    if not isinstance(profiles, list) or not isinstance(rows, list) or \
+       len(profiles) > len(SERVICES) or len(rows) > len(SERVICES):
+        raise VoiceInspectError("invalid common Voice runtime profile plan")
+    profile_names = []
+    for entry in profiles:
+        if not isinstance(entry, dict) or entry.get("enabled") is not True or \
+           entry.get("service") not in SERVICES:
+            raise VoiceInspectError("untrusted common Voice profile")
+        profile_names.append(entry["service"])
+    capture_names = []
+    for entry in rows:
+        if not isinstance(entry, dict) or entry.get("service") not in SERVICES:
+            raise VoiceInspectError("untrusted common Voice capture")
+        capture_names.append(entry["service"])
+    # All three representations must describe exactly the same enabled set.
+    # Without this, per-service readiness could be a misleading partial view.
+    manifest_names = [
+        name for name in SERVICES if f"{TABLE_PREFIX}{name}" in manifest["tables"]
+    ]
+    expected = [name for name in SERVICES if name in profile_names]
+    if len(set(profile_names)) != len(profile_names) or \
+       len(set(capture_names)) != len(capture_names) or \
+       expected != [name for name in SERVICES if name in capture_names] or \
+       expected != manifest_names:
+        raise VoiceInspectError("common Voice runtime profile/IPFW disagreement")
+    active_source = (
+        installed_match(release / "voice-plan.json", active / "voice-plan.json") and
+        installed_match(release / "dvtws.args", active / "dvtws.args")
+    )
+    engine = bool(process_check(CHILD_PID, CHILD_EXEC))
+    monitor = bool(process_check(MONITOR_PID, MONITOR_EXEC))
+    if not active_source:
+        runtime_state = "unverified-release"
+    elif engine and monitor:
+        runtime_state = "running"
+    elif not engine and not monitor:
+        runtime_state = "stopped"
+    else:
+        runtime_state = "partial"
+    service_states = {
+        name: {
+            "configured": name in expected,
+            "capture_verified": name in expected,
+            "runtime_state": (
+                "engine-present" if runtime_state == "running"
+                else "engine-not-confirmed"
+            ) if name in expected else "disabled",
+            "media_verified": False,
+        }
+        for name in SERVICES
+    }
+    return {
+        "state": runtime_state,
+        "engine_verified": bool(engine and active_source),
+        "supervisor_verified": bool(monitor and active_source),
+        "source_verified": active_source,
+        "services": service_states,
+        "call_verified": False,
+    }
+
+
 def examine_shared(record: dict | None, *, work_root: Path = WORK,
                    bundle_verify=verify_seal,
                    manifest_reader=shared_release_manifest,
-                   adapter_factory=FreeBSDIPFWAdapter) -> dict | None:
+                   adapter_factory=FreeBSDIPFWAdapter,
+                   runtime_probe=inspect_common_runtime) -> dict | None:
     """Read-only IPFW status of the ONE committed common Strategies/Voice owner.
 
     Native release ownership always dominates the obsolete Voice-only ledger.
@@ -132,11 +268,19 @@ def examine_shared(record: dict | None, *, work_root: Path = WORK,
             "state": "foreign-or-modified-rules", "source": "native-common",
             "can_activate": False, "remedy": "manual-inspection",
         }
+    runtime = runtime_probe(work / "release", manifest)
+    if not isinstance(runtime, dict) or runtime.get("state") not in (
+        "running", "stopped", "partial", "unverified-release"
+    ):
+        raise VoiceInspectError("untrusted common runtime evidence")
     return {
+        # This state is deliberately scoped to the IPFW field shown on the
+        # unchanged GUI. Runtime is a separate machine-readable witness.
         "state": "ready", "source": "native-common",
         "condition": "common-ipfw-verified-only", "can_activate": False,
         "rule_count": len(manifest["rules"]),
         "table_count": len(manifest["tables"]),
+        "runtime": runtime,
     }
 
 
