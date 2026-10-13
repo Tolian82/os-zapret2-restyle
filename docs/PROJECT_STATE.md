@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`v0.5.2_68` — исправление blocker в live predecessor attestation.** Функции операторского `legacy-begin`/`legacy-cancel` раньше пытались читать `marker`, `process_instances`, `managed_ipv4_sha256`, `active_argument_sha256` и `legacy_ipfw_previous` из сокращённого результата `inspect_legacy_previous`, в котором этих полей **нет**; production FreeBSD route отказывал без нужной проверки. Новый `inspect_legacy_previous_live_identity` извлекает точные поля только из полностью проверенного sealed `legacy.json`, повторно сверяет его checksum, previous-five binding и manifest перед использованием. Добавлен regression-test на сравнение прежнего PID/argv/IPFW/marker с реальным live inspector и на отказ при изменении manifest. Не создано нового движка, WAL, независимого backend или unsafe actuator. Команды остаются operator-only; живой reversible cutover и FreeBSD STUN/MEDIA/CALL приёмка ещё не готовы.
+
 **`v0.5.2_67` — корректировка test-harness.** Новая проверка production outer FD9 dispatch проверяет членство каждой legacy operator-команды без зависимости от того, какая команда последняя в shell `case`. Алгоритм `legacy-quiescing` из `_66` не менялся: он атомарно сохраняет intent до реального STOP, отменяется только при неизменённом старом владельце, и не выдаёт разрешение на live migration или Telegram call. CI последнего HEAD проверяется, frontend/ТЗ и релиз не меняются.
 
 **Текущая ревизия: v0.5.2_66 (без релиза).** В единственном durable journal `shared-apply/operation.json` теперь фиксируется `legacy-quiescing` — первый защищённый барьер непосредственно перед будущей остановкой старого Telegram PoC. Операторский `shared-apply-legacy-begin ID` через штатный FD9 и оригинальный Config flock повторно сверяет sealed previous-five snapshot, прежние Config/runtime/marker, точные FreeBSD процессы/argv и IPFW, затем атомарно записывает фазу без остановки процесса. После reboot обычные Apply/boot-recover не переходят через `legacy-quiescing`; ручной `legacy-cancel` допустим только если прежний PoC полностью неизменён. Нет нового backend/WAL/движка, GUI/ТЗ сохранены. **Это ещё не рабочая миграция; operator arm/begin на production не выполнять.** Следом нужен один исполнитель для настоящего STOP + restore-on-failure + restart/cutover и FreeBSD owner-live/STUN/CALL тесты.
@@ -50,13 +52,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_67`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_68`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=67` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_67.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=68` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_68.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;

@@ -1,12 +1,14 @@
 # os-zapret2-restyle — START HERE
 
+**`v0.5.2_68` — исправление blocker в live predecessor attestation.** Функции операторского `legacy-begin`/`legacy-cancel` раньше пытались читать `marker`, `process_instances`, `managed_ipv4_sha256`, `active_argument_sha256` и `legacy_ipfw_previous` из сокращённого результата `inspect_legacy_previous`, в котором этих полей **нет**; production FreeBSD route отказывал без нужной проверки. Новый `inspect_legacy_previous_live_identity` извлекает точные поля только из полностью проверенного sealed `legacy.json`, повторно сверяет его checksum, previous-five binding и manifest перед использованием. Добавлен regression-test на сравнение прежнего PID/argv/IPFW/marker с реальным live inspector и на отказ при изменении manifest. Не создано нового движка, WAL, независимого backend или unsafe actuator. Команды остаются operator-only; живой reversible cutover и FreeBSD STUN/MEDIA/CALL приёмка ещё не готовы.
+
 **`v0.5.2_67` — корректировка test-harness.** Новая проверка production outer FD9 dispatch проверяет членство каждой legacy operator-команды без зависимости от того, какая команда последняя в shell `case`. Алгоритм `legacy-quiescing` из `_66` не менялся: он атомарно сохраняет intent до реального STOP, отменяется только при неизменённом старом владельце, и не выдаёт разрешение на live migration или Telegram call. CI последнего HEAD проверяется, frontend/ТЗ и релиз не меняются.
 
 **Текущая ревизия: v0.5.2_66 (без релиза).** В единственном durable journal `shared-apply/operation.json` теперь фиксируется `legacy-quiescing` — первый защищённый барьер непосредственно перед будущей остановкой старого Telegram PoC. Операторский `shared-apply-legacy-begin ID` через штатный FD9 и оригинальный Config flock повторно сверяет sealed previous-five snapshot, прежние Config/runtime/marker, точные FreeBSD процессы/argv и IPFW, затем атомарно записывает фазу без остановки процесса. После reboot обычные Apply/boot-recover не переходят через `legacy-quiescing`; ручной `legacy-cancel` допустим только если прежний PoC полностью неизменён. Нет нового backend/WAL/движка, GUI/ТЗ сохранены. **Это ещё не рабочая миграция; operator arm/begin на production не выполнять.** Следом нужен один исполнитель для настоящего STOP + restore-on-failure + restart/cutover и FreeBSD owner-live/STUN/CALL тесты.
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_67`. `VERSION=0.5.2`; `PLUGIN_REVISION=67`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_68`. `VERSION=0.5.2`; `PLUGIN_REVISION=68`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
 
@@ -108,7 +110,7 @@ Install проверяет живые объекты до изменения, с
 
 ## Следующее действие
 
-**Этап 4 — следующий рубеж после `_67`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
+**Этап 4 — следующий рубеж после `_68`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 
 ## Минимальное чтение по текущей задаче
 
