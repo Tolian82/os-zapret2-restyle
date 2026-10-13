@@ -17,6 +17,7 @@ import voice_native_legacy_five_domain_coordinator as whole
 from voice_native_legacy_reverse_wal import inspect_legacy_reverse_wal
 from voice_cutover_guard import check_pending
 from voice_native_legacy_boot_review import inspect_legacy_boot_disk, inspect_legacy_boot_live
+from voice_native_legacy_rollback_route import execute_manual_legacy_rollback, main as operator_main
 from voice_native_legacy_whole_receipt import (
     receipt_directory, inspect_legacy_whole_receipt, LegacyWholeReceiptError,
 )
@@ -308,6 +309,74 @@ class LegacySingleLockWholeRollbackTests(unittest.TestCase):
             self.assertEqual([],self.kernel.writes)
         finally:
             os.close(fd)
+
+    def operator_call(self, *, locked=True, runner=None):
+        fd=os.open(self.live.config,os.O_RDWR)
+        try:
+            if locked:
+                fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            return execute_manual_legacy_rollback(
+                root=self.root,config_path=self.live.config,config_fd=fd,
+                config_owner=(os.geteuid(),os.getegid()),
+                active_runtime=self.live.runtime,marker_path=self.marker,
+                ledger_root=self.live.ledger,process_probe=self.t.probe,
+                readonly_ipfw=self.ipfw.readonly,mutating_ipfw=self.ipfw.writer,
+                security_reader=self.t.security,argv_reader=self.t.argv,
+                require_lifecycle_owner=lambda:self.live.lock_calls.append("FD9"),
+                runner=self.t.runner if runner is None else runner,
+                actuator=self.t.actuator,
+            )
+        finally:
+            os.close(fd)
+
+    def test_production_style_old_rollback_route_seals_while_retaining_boot_barrier(self):
+        actual=self.operator_call()
+        self.assertEqual("legacy-five-domains-whole-receipt-sealed-boot-pending",
+                         actual["state"])
+        for key in ("safe_to_enable_voice","safe_to_close_intent",
+                    "boot_recovery_validated","public_voice_apply","media_pass"):
+            self.assertFalse(actual[key])
+        self.assertEqual(1,self.t.calls)
+        self.assertTrue(receipt_directory(self.root).is_dir())
+        self.assertEqual("orphan-native-voice-evidence",
+                         check_pending(self.root,self.live.ledger)["reason"])
+        self.assertEqual(actual,self.operator_call())
+        self.assertEqual(1,self.t.calls)
+
+    def test_operator_route_rejects_unlocked_or_foreign_wal_without_mutation(self):
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            self.operator_call(locked=False)
+        self.assertEqual([],self.kernel.writes)
+        self.assertEqual(0,self.t.calls)
+        (self.root/"foreign-intent").mkdir(mode=0o700)
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            self.operator_call()
+        self.assertEqual([],self.kernel.writes)
+        self.assertEqual(0,self.t.calls)
+
+    def test_operator_route_resumes_after_kernel_power_cut_without_double_start(self):
+        self.kernel.crash_after=4
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            self.operator_call()
+        self.assertEqual(1,whole._prefix(self.root))
+        self.kernel.crash_after=None
+        self.operator_call()
+        self.assertEqual(1,self.t.calls)
+        self.assertEqual(6,whole._prefix(self.root))
+
+    def test_operator_route_has_no_configd_gui_or_boot_entrypoint(self):
+        service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
+        configd=(ROOT/"src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text()
+        gui=(ROOT/"src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt").read_text()
+        self.assertIn("native-voice-legacy-rollback-five)",service)
+        self.assertIn("native_voice_legacy_rollback_five_service",service)
+        top=service.split('case "${1:-}" in')[-1]
+        self.assertIn("|native-voice-legacy-rollback-five|",top)
+        self.assertNotIn("native-voice-legacy-rollback-five",configd)
+        self.assertNotIn("native-voice-legacy-rollback-five",gui)
+        self.assertEqual(64,operator_main([]))
+        self.assertEqual(64,operator_main(["rollback","/tmp/foreign"]))
+        self.assertEqual(0,self.t.calls)
 
     def test_no_public_entrypoint_or_false_media_pass(self):
         service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
