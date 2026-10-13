@@ -9,6 +9,7 @@ Interrupted capture/plan is retained for manual inspection, never retried.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import os
 import re
 import stat
@@ -392,6 +393,145 @@ def retire_stopped_common_legacy_ipfw(
         raise LegacyPredecessorRouteError("old IPFW retirement not durably complete")
     return result
 
+
+
+def retire_stopped_common_legacy_marker(
+    *, identity, store, work, config_path, config_fd, config_owner,
+    active_runtime, marker_path, process_probe, readonly_ipfw,
+    require_lifecycle_owner,
+):
+    """PRIVATE exact PoC marker removal after old IPFW retirement.
+
+    Never exposed through CLI, configd or GUI until the five-domain
+    undo and new common-runtime activation are proven. One journal, FD9.
+    """
+    from shared_apply_operation import (
+        SharedApplyOperation, fingerprint_legacy_predecessor,
+    )
+    from voice_native_legacy_ipfw_replay import _strict_snapshot
+    from voice_native_legacy_reverse_wal import _stopped
+    if not isinstance(store, SharedApplyOperation) or (
+        not isinstance(process_probe, FreeBSDVoiceProcessProbe)
+        or not isinstance(readonly_ipfw, FreeBSDIPFWAdapter)
+        or readonly_ipfw.allow_mutations
+        or (readonly_ipfw.rule_base, readonly_ipfw.rule_max) != (19000, 19010)
+        or type(config_fd) is not int or config_fd < 0
+        or not callable(require_lifecycle_owner)
+    ):
+        raise LegacyPredecessorRouteError("missing original marker retirement owner")
+    work, marker_path = Path(work), Path(marker_path)
+    root = work / "legacy-backup"
+    if work.name != identity or not COMMON_ID.fullmatch(identity):
+        raise LegacyPredecessorRouteError("marker candidate ID changed")
+    require_lifecycle_owner()
+    _locked_config(Path(config_path), config_fd, config_owner)
+    record = store.read()
+    if record is None or record["phase"] != "legacy-ipfw-retired" or (
+        record["detail"]["id"] != identity or "previous" in record
+        or "legacy_predecessor" not in record
+    ):
+        raise LegacyPredecessorRouteError("completed old IPFW retirement required")
+    saved = inspect_legacy_previous_live_identity(root)
+    plan = inspect_legacy_restore_plan(root)
+    summary = inspect_legacy_previous(root)
+    if plan["previous_five"] != summary["previous_five"] or (
+        plan["marker_target"] != str(marker_path)
+    ):
+        raise LegacyPredecessorRouteError("marker target differs from restore plan")
+    old_marker = _read_private_file(root / NAME / "marker.bin", 64)
+    mode = saved["marker"]["mode"]
+    if not old_marker or len(old_marker) != saved["marker"]["bytes"] or (
+        hashlib.sha256(old_marker).hexdigest() != saved["marker"]["sha256"]
+    ):
+        raise LegacyPredecessorRouteError("untrusted sealed old marker")
+
+    def witness(present, phase):
+        require_lifecycle_owner()
+        _locked_config(Path(config_path), config_fd, config_owner)
+        now = store.read()
+        if now is None or now["phase"] != phase or (
+            now["detail"] != record["detail"]
+            or now.get("legacy_predecessor") != record["legacy_predecessor"]
+        ):
+            raise LegacyPredecessorRouteError("common marker journal changed")
+        if fingerprint_legacy_predecessor(work, owner=config_owner[0]) != (
+            record["legacy_predecessor"]
+        ) or inspect_legacy_previous(root) != summary or (
+            inspect_legacy_restore_plan(root) != plan
+        ):
+            raise LegacyPredecessorRouteError("old predecessor drifted")
+        _verify_sources(
+            Path(config_path), Path(active_runtime),
+            inspect_previous(root / NAME / "previous"),
+        )
+        if _stopped(process_probe) != "exact-three-role-absence" or (
+            _strict_snapshot(readonly_ipfw) != {"rules": {}, "targets": None}
+        ):
+            raise LegacyPredecessorRouteError("legacy processes/IPFW not cleared")
+        if present:
+            if _legacy_read(marker_path) != old_marker or (
+                stat.S_IMODE(os.lstat(marker_path).st_mode) != mode
+            ):
+                raise LegacyPredecessorRouteError("old marker replaced")
+        elif os.path.lexists(marker_path):
+            raise LegacyPredecessorRouteError("old marker still exists")
+        return record["legacy_predecessor"]
+
+    witness(True, "legacy-ipfw-retired")
+    # The single journal is fsynced before unlink, including on tmpfs /var/run.
+    store.begin_legacy_marker_retire(
+        identity, lambda: witness(True, "legacy-ipfw-retired")
+    )
+    witness(True, "legacy-marker-retiring")
+    parent_fd = os.open(
+        marker_path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    try:
+        parent = os.fstat(parent_fd)
+        if not stat.S_ISDIR(parent.st_mode) or (
+            parent.st_uid != config_owner[0] or parent.st_mode & 0o022
+        ):
+            raise LegacyPredecessorRouteError("unsafe old marker parent")
+        fd = os.open(
+            marker_path.name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0), dir_fd=parent_fd,
+        )
+        try:
+            pinned = os.fstat(fd)
+            on_path = os.stat(
+                marker_path.name, dir_fd=parent_fd, follow_symlinks=False
+            )
+            if not stat.S_ISREG(pinned.st_mode) or pinned.st_nlink != 1 or (
+                pinned.st_uid != config_owner[0]
+                or stat.S_IMODE(pinned.st_mode) != mode
+                or pinned.st_size != len(old_marker)
+                or (pinned.st_dev, pinned.st_ino) != (
+                    on_path.st_dev, on_path.st_ino
+                )
+                or os.read(fd, len(old_marker) + 1) != old_marker
+            ):
+                raise LegacyPredecessorRouteError("old marker inode is foreign")
+            witness(True, "legacy-marker-retiring")
+            current = os.stat(
+                marker_path.name, dir_fd=parent_fd, follow_symlinks=False
+            )
+            if (current.st_dev, current.st_ino) != (
+                pinned.st_dev, pinned.st_ino
+            ):
+                raise LegacyPredecessorRouteError("old marker swapped before unlink")
+            os.unlink(marker_path.name, dir_fd=parent_fd)
+            os.fsync(parent_fd)
+        finally:
+            os.close(fd)
+    finally:
+        os.close(parent_fd)
+    result = store.finish_legacy_marker_retire(
+        identity, lambda: witness(False, "legacy-marker-retiring")
+    )
+    if result["phase"] != "legacy-marker-retired":
+        raise LegacyPredecessorRouteError("old marker retirement not completed")
+    return result
 
 def main(argv):
     candidate_id = argv[1] if (

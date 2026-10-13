@@ -369,6 +369,125 @@ class TestJournal(unittest.TestCase):
                 self.assertEqual("shared-apply-pending",check_pending(
                     root/"voice-cutover",root/"voice-ipfw")["reason"])
 
+    def test_legacy_marker_retirement_requires_empty_ipfw_and_same_shared_journal(self):
+        with tempfile.TemporaryDirectory() as root:
+            store=SharedApplyOperation(Path(root)/"shared-apply")
+            old="f"*64
+            store.prepare_legacy_predecessor(detail(),lambda:old)
+            store.begin_legacy_quiesce(detail()["id"],lambda:old)
+            store.mark_legacy_processes_stopped(detail()["id"],lambda:old)
+            store.begin_legacy_ipfw_retire(detail()["id"],lambda:old)
+            store.finish_legacy_ipfw_retire(detail()["id"],lambda:old)
+            before=store.read()
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_marker_retire(detail()["id"],lambda:old)
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_marker_retire(detail()["id"],lambda:"e"*64)
+            self.assertEqual(before,store.read())
+            pending=store.begin_legacy_marker_retire(detail()["id"],lambda:old)
+            self.assertEqual("legacy-marker-retiring",pending["phase"])
+            self.assertEqual(old,pending["legacy_predecessor"])
+            self.assertEqual(pending,SharedApplyOperation(store.root).read())
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_marker_retire(detail()["id"],lambda:old)
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_marker_retire(detail()["id"],lambda:"e"*64)
+            self.assertEqual(pending,store.read())
+            final=store.finish_legacy_marker_retire(detail()["id"],lambda:old)
+            self.assertEqual("legacy-marker-retired",final["phase"])
+            self.assertEqual(final,SharedApplyOperation(store.root).read())
+            guard=check_pending(Path(root)/"voice-cutover",Path(root)/"voice-ipfw")
+            self.assertEqual("shared-apply-pending",guard["reason"])
+            self.assertEqual("legacy-marker-retired",guard["phase"])
+            with self.assertRaises(SharedOperationError):
+                store.cancel_pristine_legacy(detail()["id"],lambda:old)
+            with self.assertRaises(SharedOperationError):
+                store.advance("activating",detail())
+
+    def test_private_old_marker_retirement_pins_exact_bytes_and_refuses_replay(self):
+        import os
+        from voice_native_legacy_predecessor_route import (
+            retire_stopped_common_legacy_marker,
+        )
+        from voice_native_process_probe import FreeBSDVoiceProcessProbe
+        from voice_ipfw_adapter import FreeBSDIPFWAdapter
+        raw=b"enabled\n"
+        for fault in (None,"ipfw","unlink","finish"):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as temp:
+                folder=Path(temp)
+                work=folder/detail()["id"]
+                work.mkdir()
+                marker=folder/"legacy-marker"
+                marker.write_bytes(raw)
+                os.chmod(marker,0o600)
+                store=SharedApplyOperation(folder/"shared-apply")
+                store.prepare_legacy_predecessor(detail(),lambda:"f"*64)
+                store.begin_legacy_quiesce(detail()["id"],lambda:"f"*64)
+                store.mark_legacy_processes_stopped(detail()["id"],lambda:"f"*64)
+                store.begin_legacy_ipfw_retire(detail()["id"],lambda:"f"*64)
+                store.finish_legacy_ipfw_retire(detail()["id"],lambda:"f"*64)
+                reader=object.__new__(FreeBSDIPFWAdapter)
+                reader.rule_base=19000
+                reader.rule_max=19010
+                reader.allow_mutations=False
+                probe=object.__new__(FreeBSDVoiceProcessProbe)
+                info={"previous_five":"c"*64}
+                manifest={"legacy_ipfw_previous":{}, "marker":{
+                    "mode":0o600,"bytes":len(raw),
+                    "sha256":__import__("hashlib").sha256(raw).hexdigest(),
+                }}
+                plan={"previous_five":"c"*64,"marker_target":str(marker)}
+                def kernel(_):
+                    return ({"rules":{"19000":["foreign"]},"targets":None}
+                            if fault=="ipfw" else {"rules":{},"targets":None})
+                def invoke():
+                    return retire_stopped_common_legacy_marker(
+                        identity=detail()["id"],store=store,work=work,
+                        config_path=folder/"config.xml",config_fd=4,
+                        config_owner=(os.geteuid(),0),
+                        active_runtime=folder/"runtime",marker_path=marker,
+                        process_probe=probe,readonly_ipfw=reader,
+                        require_lifecycle_owner=lambda:None,
+                    )
+                with patch("voice_native_legacy_predecessor_route._locked_config"), \
+                     patch("voice_native_legacy_predecessor_route.inspect_legacy_previous_live_identity",
+                           return_value=manifest), \
+                     patch("voice_native_legacy_predecessor_route.inspect_legacy_restore_plan",
+                           return_value=plan), \
+                     patch("voice_native_legacy_predecessor_route.inspect_legacy_previous",
+                           return_value=info), \
+                     patch("voice_native_legacy_predecessor_route.inspect_previous",
+                           return_value={}), \
+                     patch("voice_native_legacy_predecessor_route._verify_sources"), \
+                     patch("voice_native_legacy_predecessor_route._read_private_file",
+                           return_value=raw), \
+                     patch("shared_apply_operation.fingerprint_legacy_predecessor",
+                           return_value="f"*64), \
+                     patch("voice_native_legacy_reverse_wal._stopped",
+                           return_value="exact-three-role-absence"), \
+                     patch("voice_native_legacy_ipfw_replay._strict_snapshot",
+                           side_effect=kernel):
+                    if fault in ("unlink","finish"):
+                        target=("voice_native_legacy_predecessor_route.os.unlink"
+                                if fault=="unlink" else
+                                "shared_apply_operation.SharedApplyOperation.finish_legacy_marker_retire")
+                        with patch(target,side_effect=OSError("injected crash")):
+                            with self.assertRaises(OSError):
+                                invoke()
+                        self.assertEqual("legacy-marker-retiring",store.read()["phase"])
+                        self.assertEqual(marker.exists(),fault=="unlink")
+                    elif fault=="ipfw":
+                        with self.assertRaises(RuntimeError):
+                            invoke()
+                        self.assertEqual("legacy-ipfw-retired",store.read()["phase"])
+                        self.assertEqual(raw,marker.read_bytes())
+                    else:
+                        done=invoke()
+                        self.assertEqual("legacy-marker-retired",done["phase"])
+                        self.assertFalse(marker.exists())
+                    with self.assertRaises(RuntimeError):
+                        invoke()
+
     def test_missing_state_stays_readonly(self):
         with tempfile.TemporaryDirectory() as d:
             j=SharedApplyOperation(Path(d)/"shared-apply")

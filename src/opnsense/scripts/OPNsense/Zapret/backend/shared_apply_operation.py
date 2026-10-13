@@ -33,6 +33,7 @@ PHASES = frozenset((
     "committed", "restored", "restore-failed", "requires-review",
     "legacy-quiescing", "legacy-processes-stopped",
     "legacy-ipfw-retiring", "legacy-ipfw-retired",
+    "legacy-marker-retiring", "legacy-marker-retired",
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
@@ -50,7 +51,9 @@ NEXT = {
     "legacy-quiescing": frozenset(("legacy-processes-stopped",)),
     "legacy-processes-stopped": frozenset(("legacy-ipfw-retiring",)),
     "legacy-ipfw-retiring": frozenset(("legacy-ipfw-retired",)),
-    "legacy-ipfw-retired": frozenset(),
+    "legacy-ipfw-retired": frozenset(("legacy-marker-retiring",)),
+    "legacy-marker-retiring": frozenset(("legacy-marker-retired",)),
+    "legacy-marker-retired": frozenset(),
 }
 
 
@@ -112,7 +115,8 @@ def _validate_record(record: object) -> dict:
     _validate_detail(record["detail"])
     if "legacy_predecessor" in record:
         if record["phase"] not in ("prepared", "legacy-quiescing", "legacy-processes-stopped",
-                                   "legacy-ipfw-retiring", "legacy-ipfw-retired") or record["detail"]["page"] != "voice" or \
+                                   "legacy-ipfw-retiring", "legacy-ipfw-retired",
+                                   "legacy-marker-retiring", "legacy-marker-retired") or record["detail"]["page"] != "voice" or \
            not isinstance(record["legacy_predecessor"], str) or \
            not DIGEST.fullmatch(record["legacy_predecessor"]):
             raise SharedOperationError("invalid armed legacy predecessor proof")
@@ -321,9 +325,9 @@ class SharedApplyOperation:
             "legacy_predecessor": before["legacy_predecessor"],
         })
 
-    def _transition_legacy_ipfw(self, identity: str, before_phase: str,
+    def _transition_legacy_boundary(self, identity: str, before_phase: str,
                                 after_phase: str, attest) -> dict:
-        """Same-journal WAL, no second IPFW owner or on-boot replay."""
+        """Same-journal WAL for old resources, no second owner or on-boot replay."""
         if not isinstance(identity, str) or not OP_ID.fullmatch(identity) or (
             not callable(attest)
         ):
@@ -347,14 +351,26 @@ class SharedApplyOperation:
 
     def begin_legacy_ipfw_retire(self, identity: str, attest) -> dict:
         """Durably record impending old-rule/table removal BEFORE kernel writes."""
-        return self._transition_legacy_ipfw(
+        return self._transition_legacy_boundary(
             identity, "legacy-processes-stopped", "legacy-ipfw-retiring", attest
         )
 
     def finish_legacy_ipfw_retire(self, identity: str, attest) -> dict:
         """Only exact empty old+native rule/table census closes retirement."""
-        return self._transition_legacy_ipfw(
+        return self._transition_legacy_boundary(
             identity, "legacy-ipfw-retiring", "legacy-ipfw-retired", attest
+        )
+
+    def begin_legacy_marker_retire(self, identity: str, attest) -> dict:
+        """Fsync old-marker removal intent while previous Config/runtime stay live."""
+        return self._transition_legacy_boundary(
+            identity, "legacy-ipfw-retired", "legacy-marker-retiring", attest
+        )
+
+    def finish_legacy_marker_retire(self, identity: str, attest) -> dict:
+        """Only verified marker absence (old IPFW absent) may finish."""
+        return self._transition_legacy_boundary(
+            identity, "legacy-marker-retiring", "legacy-marker-retired", attest
         )
 
     def cancel_pristine_legacy(self, identity: str, attest) -> dict:
@@ -566,7 +582,8 @@ def main(argv: list[str]) -> int:
                     # service to LEGACY boot over the preceding common owner.
                     print("committed " + prior["id"] + " " + prior["page"])
             elif record["phase"] in ("prepared", "config-saved", "legacy-quiescing", "legacy-processes-stopped",
-                                       "legacy-ipfw-retiring", "legacy-ipfw-retired"):
+                                       "legacy-ipfw-retiring", "legacy-ipfw-retired",
+                                       "legacy-marker-retiring", "legacy-marker-retired"):
                 detail = record["detail"]
                 prefix = "legacy-prepared" if (
                     "legacy_predecessor" in record and record["phase"] == "prepared"
