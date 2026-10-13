@@ -374,7 +374,7 @@ jobs:
           php scripts/test-voice-api-concurrency.php
           php scripts/test-voice-config-flock-release.php
           php scripts/test-voice-apply-candidate.php
-php scripts/test-voice-native-config-commit.php
+          php scripts/test-voice-native-config-commit.php
           php scripts/test-voice-candidate-xml.php
           php scripts/test-voice-draft-selection.php
           PHP_CHECKS

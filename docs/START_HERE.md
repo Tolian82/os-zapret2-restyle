@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_8`. `VERSION=0.5.2`; `PLUGIN_REVISION=8`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_9`. `VERSION=0.5.2`; `PLUGIN_REVISION=9`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+В `_9` появился внутренний `src/opnsense/scripts/OPNsense/Zapret/apply_settings.php` — узкий компонент native `Config::save` с проверкой поколения, own-field merge `_8`, штатной историей/backup и post-save readback под новым flock. Save/IO race не трактуется как успешный откат: до подключения общего FD9 worker и interruption recovery он не вызывается GUI/configd. CI включает отдельный PHP тест native lock/save, no-op, stale and post-save conflict.
 
 В `_8` добавлен чистый native-save merge для обеих страниц: `SettingsApply::mergeForCommit` заново проверяет зависимости, применяет только изменённые поля через существующие whitelist и сохраняет более поздние несвязанные изменения модели (например, Strategy Lab). Защита от injected Voice fields, stale divert port и неполного changed-map покрыта PHP тестом. Вызывать должен будущий привилегированный Config worker после получения FD9 и свежего Config lock. Никакого самостоятельного Config writer или публичного ON Apply не создаётся.
 
@@ -44,4 +46,4 @@ Install проверяет живые объекты до изменения, с
 
 Полные прежние документы сохранены в [архиве этапа v0.5.1](history/stages/v0.5.1/README.md). Они не входят в текущую очередь или обязательное чтение. Текущая хронология — [working ledger v0.5.x](history/current/v0.5.x.md).
 
-Stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing: `v0.5.0_3`. Открытие `v0.5.2_8` не публикует новый пакет и не подтверждает GUI/CONFIG/BOOT или MEDIA_PASS/CALL_PASS.
+Stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing: `v0.5.0_3`. Открытие `v0.5.2_9` не публикует новый пакет и не подтверждает GUI/CONFIG/BOOT или MEDIA_PASS/CALL_PASS.
