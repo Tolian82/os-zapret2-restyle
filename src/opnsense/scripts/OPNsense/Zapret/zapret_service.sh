@@ -990,6 +990,12 @@ shared_apply_execute_service()
         shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
     _shared_apply_fields=$(printf "%s\n" "$_shared_apply_preview" |
         shared_apply_json_field '.fields | if length==0 then "-" else join(",") end') || return 69
+    # Reject an active old/legacy owner, partial monitor, foreign IPFW, or
+    # invalid candidate BEFORE any durable phase is recorded. This must be
+    # purely read-only. The mutating activation repeats the exact probe.
+    # A failed transition must not permanently poison the common journal
+    # when no kernel or Config change has even been attempted.
+    apply_runtime_probe "$_shared_apply_root/release" "$_shared_apply_mode" || return 69
     # The journal records only a fixed operation identity and owned-fields
     # proof. It never contains private Config XML or untrusted shell strings.
     shared_apply_record_service prepared "$_shared_apply_id" "$_shared_apply_page" \

@@ -97,4 +97,16 @@ mkdir "$ACTIVE_DIR/nested"
 cp "$ROOT/one/voice-plan.json" "$ACTIVE_DIR/nested/voice-plan.json"
 if apply_runtime_activate "$ACTIVE_DIR/nested" 1; then fail "nested release accepted"; fi
 [ "$(cat "$ACTIVE_DIR/voice-plan.json")" = two ] || fail "foreign state changed runtime"
-echo 'PASS: shared engine/IPFW activation, rollback, stopped mode and foreign-state refusal'
+FW_PREPARE=0
+MONITOR=0
+if apply_runtime_probe "$ROOT/one" 1; then fail "partial supervisor passed non-mutating gate"; fi
+[ "$FW_PREPARE" = 0 ] || fail "read-only probe touched firewall"
+MONITOR=1
+FW=empty
+if apply_runtime_probe "$ROOT/one" 1; then fail "foreign IPFW passed non-mutating gate"; fi
+[ "$FW_PREPARE" = 0 ] || fail "foreign rules triggered firewall preparation"
+FW=active
+mkdir -p "$ROOT/legacy"
+if apply_runtime_probe "$ROOT/legacy" 1; then fail "legacy runtime was accepted"; fi
+[ "$FW_PREPARE" = 0 ] || fail "legacy refusal modified firewall"
+echo 'PASS: shared engine/IPFW activation, rollback, stopped mode and pre-journal refusal'

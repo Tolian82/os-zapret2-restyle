@@ -15,7 +15,7 @@ apply_runtime_clear()
     APPLY_IPFW_INSTALLED=0
 }
 
-apply_runtime_preflight()
+apply_runtime_probe()
 {
     [ "$#" -eq 2 ] || return 64
     [ "${APPLY_PHASE:-idle}" = idle ] || return 69
@@ -48,7 +48,17 @@ apply_runtime_preflight()
     else
         firewall_shared_runtime verify "$1" - || return 69
     fi
-    # Verify previous kernel ownership BEFORE firewall_prepare may alter prerequisites.
+}
+
+# Read-only refusal gate shared by the FD9 executor and the actual runtime
+# preflight. It never acquires a lock, writes Config, starts a process,
+# prepares pf/ipfw, or touches the durable Apply journal.
+apply_runtime_preflight()
+{
+    apply_runtime_probe "$@" || return $?
+    # The actual engine activation still repeats all observations after
+    # the durable "activating" record (an external actor may change IPFW).
+    # Only this second phase is permitted to initialize firewall modules.
     if [ "$2" = 1 ]; then firewall_prepare || return 1; fi
     APPLY_CANDIDATE="$1"
     APPLY_NEW_RUNNING="$2"
