@@ -12,7 +12,11 @@ launcher_is_running() { [ "$PROCESS" = 1 ]; }
 supervisor_is_running() { [ "$MONITOR" = 1 ]; }
 launcher_stop() { PROCESS=0; }
 supervisor_stop() { MONITOR=0; }
-launcher_start_once() { [ "$FAIL_LAUNCH" = 0 ] || return 1; PROCESS=1; }
+launcher_start_once() {
+    # Fail the replacement once, not the later restoration launch.
+    if [ "$FAIL_LAUNCH" = 1 ]; then FAIL_LAUNCH=0; return 1; fi
+    PROCESS=1
+}
 supervisor_start() { MONITOR=1; }
 firewall_shared_runtime() {
     case "$1" in
