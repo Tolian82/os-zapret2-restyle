@@ -88,10 +88,15 @@ foreach (["203.0.113.0/24", null, "", 12] as $stale) {
 }
 $controller = file_get_contents(__DIR__ .
     '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php');
+$sharedApply = file_get_contents(__DIR__ .
+    '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php');
 $view = file_get_contents(__DIR__ .
     '/../src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt');
-if (strpos($controller, "requireFreshTelegram(\$oldNodes, \$baseline)") === false ||
+// The controller now enters the same candidate boundary as Voice. Its
+// shared helper must still enforce the exact Telegram field baseline.
+if (strpos($controller, "SettingsApply::prepareStrategies(\$oldNodes, \$post, \$baseline)") === false ||
     strpos($controller, "unset(\$post['sync'])") === false ||
+    strpos($sharedApply, "StrategySettingsPayload::requireFreshTelegram(\$previous, \$telegramBaseline)") === false ||
     strpos($view, 'zapret.sync.telegramips_baseline') === false ||
     strpos($view, 'telegramBaseline.val(currentField ? currentField.value') === false
 ) {

@@ -87,6 +87,7 @@ def main() -> None:
         check(term in view, f"Missing read-only Voice diagnostic localization: {term}")
     status_api = SRC / "controllers/OPNsense/Zapret/Api/VoiceController.php"
     status_php = status_api.read_text(encoding="utf-8")
+    shared_php = (SRC / "controllers/OPNsense/Zapret/Api/SettingsApply.php").read_text(encoding="utf-8")
     check("public function inspectAction()" in status_php and
           "configdRun('zapret voice_inspect'" in status_php and
           "public function applyAction()" in status_php,
@@ -123,10 +124,13 @@ def main() -> None:
           "Voice read-only syntax validation action is unavailable")
     check("public function loadAction()" in status_php and
           "VoiceSettingsSnapshot::digest($nodes)" in status_php and
-          "VoiceApplyCandidate::prepare($current, $fields, $sync['snapshot'])" in status_php and
-          "VoiceApplyCandidate.php" in status_php and
+          "SettingsApply::prepareVoice($current, $fields, $sync['snapshot'])" in status_php and
+          "SettingsApply.php" in status_php and
+          "VoiceApplyCandidate::prepare($previous, $submitted, $snapshot)" in shared_php and
+          "VoiceSettingsSnapshot::digest($previous)" in shared_php and
+          "VoiceSettingsSnapshot::requireFresh($live, $plan['dependencies'])" in shared_php and
           "finally {" in status_php,
-          "Voice form load and validation must use one locked freshness check")
+          "Voice load/validation must retain the locked freshness gate through shared Apply")
     check("voiceSnapshot.val(record.snapshot)" in view and
           "id: 'zapret.sync.snapshot'" in view and
           "record.snapshot" in view,
