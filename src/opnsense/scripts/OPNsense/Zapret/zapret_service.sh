@@ -807,6 +807,45 @@ shared_apply_json_field()
 {
     /usr/local/bin/jq -er "$1"
 }
+# Read the durable owner only under the existing FreeBSD FD9. This is a
+# tiny native boot dispatcher, not a second runtime or Config persistence.
+shared_apply_inspect_service()
+{
+    [ -x /usr/local/bin/python3.13 ] || return 69
+    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" inspect
+}
+
+# Reapply the saved COMMON candidate after reboot, without changing Config.
+# Every boot must prove the same completed journal, release and native saved
+# model. The original apply_runtime code owns dvtws2, supervisor and IPFW.
+shared_apply_boot_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    case "$1" in committed\ *) ;; *) return 69 ;; esac
+    _shared_boot_id=$(printf "%s\n" "$1" | cut -d " " -f 2)
+    _shared_boot_page=$(printf "%s\n" "$1" | cut -d " " -f 3)
+    [ "$1" = "committed $_shared_boot_id $_shared_boot_page" ] || return 69
+    case "$_shared_boot_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_shared_boot_id}" -eq 32 ] || return 69
+    case "$_shared_boot_page" in voice|strategies) ;; *) return 69 ;; esac
+    preflight_voice_cutover_journals common-apply || return 69
+    shared_apply_bundle_service verify "$_shared_boot_id" || return 69
+    _shared_boot_saved=$(shared_apply_native_config saved "$_shared_boot_id" "$_shared_boot_page") || return 69
+    _shared_boot_mode=$(printf "%s\n" "$_shared_boot_saved" |
+        shared_apply_json_field '.enabled | select(.=="0" or .=="1")') || return 69
+    _shared_boot_check=$(printf "%s\n" "$_shared_boot_saved" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 69
+    _shared_boot_dir=$(shared_apply_workspace "$_shared_boot_id") || return 69
+    [ -d "$_shared_boot_dir/release" ] &&
+    [ ! -L "$_shared_boot_dir/release" ] || return 69
+    # A kernel rebuilt after reboot has no durable IPFW tables; the existing
+    # common runtime adapter validates the kernel owner before any mutation.
+    # A partial failure is NOT a successful boot and never falls back to
+    # legacy Telegram Voice service.
+    apply_runtime_activate "$_shared_boot_dir/release" "$_shared_boot_mode" || return 70
+    apply_runtime_commit || return 70
+    printf "native-common-boot=%s\n" "$_shared_boot_id"
+}
 # Seal/attest the exact native XML, plan and all generated release bytes.
 # This is one evidence bundle inside the same FD9 operation, NOT a new WAL.
 shared_apply_bundle_service()
@@ -1166,7 +1205,25 @@ service_with_lifecycle_lock()
         # evidence of an interrupted Voice cutover. Status/inspection remain
         # available, and no journal is created during normal operation.
         case "${1:-}" in
-            start|stop|restart|reconfigure|native-voice-checkpoint|telegram-voice-enable|telegram-voice-disable|runtime-failure|strategy-lab|strategy-lab-circular|strategy-lab-recover)
+            start|reconfigure)
+                # A committed common owner gets the common native boot path,
+                # never the old template/engine builder. Pending/foreign
+                # evidence still blocks start before any kernel mutation.
+                if [ -e /var/db/zapret2/shared-apply ] ||
+                   [ -L /var/db/zapret2/shared-apply ]; then
+                    _shared_owner=$(shared_apply_inspect_service) || return 69
+                    case "$_shared_owner" in
+                        committed\ *)
+                            shared_apply_boot_service "$_shared_owner"
+                            return $?
+                            ;;
+                        none|restored) ;;
+                        *) return 69 ;;
+                    esac
+                fi
+                preflight_voice_cutover_journals || return 69
+                ;;
+            stop|restart|native-voice-checkpoint|telegram-voice-enable|telegram-voice-disable|runtime-failure|strategy-lab|strategy-lab-circular|strategy-lab-recover)
                 preflight_voice_cutover_journals || return 69
                 ;;
         esac
