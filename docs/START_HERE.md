@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_11`. `VERSION=0.5.2`; `PLUGIN_REVISION=11`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_12`. `VERSION=0.5.2`; `PLUGIN_REVISION=12`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+В `_12` появилось долговечное единое состояние общего Apply — `backend/shared_apply_operation.py` в `/var/db/zapret2/shared-apply/operation.json`. Запись каждой разрешённой фазы происходит атомарно через fsync + rename + fsync каталога, только root под уже существующим FD9; сервис содержит внутренний `shared-apply-record`, не добавленный в configd. Тот же штатный `voice_cutover_guard.py` теперь запрещает start/stop/reconfigure при pending/corrupt/orphan/symlink evidence общей операции. Терминальные `committed` и `restored` не блокируют обычный lifecycle; опасные результаты `requires-review`/`restore-failed` блокируют. Test suite проверяет порядок фаз, identity, восстановление, запрет перезаписи незавершённого состояния, сохранение доказательств и отсутствие CLI-мутаций без root FD9. Важная граница: PHP `transact` ещё не соединён с вызовами общего worker и реальным interruption recovery, поэтому публичный Voice ON не включён.
 
 В `_11` внутренний `apply_settings.php::SharedConfigCommit::transact()` связывает общий runtime и native Config в фиксированном порядке под требованием существующего FD9: fresh model check, durable intent callback, runtime activation, Config save/readback, IPFW commit, окончательная запись. Отказ до Config save вызывает проверяемый runtime rollback; неясный результат native save или ошибка post-save cleanup сохраняют право recovery вместо ложного rollback. В текущей ревизии FD9 guard, durable operation record и activation остаются обязательными callback-интерфейсами будущего привилегированного service worker, публичный GUI к ним ещё НЕ подключён. Сквозной PHP тест проверяет порядок фаз, отсутствие мутации без FD9/record, restore до save и честный review после uncertain save.
 
