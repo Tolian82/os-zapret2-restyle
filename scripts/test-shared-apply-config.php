@@ -36,6 +36,7 @@ foreach (['telegram','discord','x','sip','custom'] as $name) {
 $plan=SettingsApply::prepareStrategies(
     $state,['strategy'=>['trafficargs'=>'--filter-tcp=80']],'91.108.0.0/16'
 );
+$plan['page']='strategies';
 file_put_contents($work.'/plan.json',json_encode($plan,JSON_THROW_ON_ERROR));
 file_put_contents($work.'/candidate.xml','<opnsense/>');
 chmod($work.'/plan.json',0600);

@@ -67,6 +67,9 @@ final class SharedApplyRequest
         if (strlen($xml) > self::MAX_XML) {
             throw new \InvalidArgumentException('Detached Config exceeds native limit');
         }
+        // Bind the form's page to the native plan itself. A configd caller
+        // cannot replay a Voice candidate as a Strategies transaction.
+        $plan['page'] = $request['page'];
         return ['plan' => $plan, 'xml' => $xml];
     }
 

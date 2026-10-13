@@ -72,7 +72,8 @@ final class SharedApplyConfigWorker
         }
         if (!is_array($plan) || ($plan['result'] ?? null) !== 'prepared' ||
             !isset($plan['candidate'], $plan['changed_fields'], $plan['dependencies']) ||
-            !is_array($plan['candidate']) || !is_array($plan['changed_fields'])) {
+            !is_array($plan['candidate']) || !is_array($plan['changed_fields']) ||
+            !in_array($plan['page'] ?? null, ['voice','strategies'], true)) {
             throw new \RuntimeException('Malformed stored native shared candidate');
         }
         // The Config and full release must have been staged together; a
@@ -133,6 +134,9 @@ final class SharedApplyConfigWorker
             }
             require_once('script/load_phalcon.php');
             $plan = self::readPlan($argv[2], self::ROOT, 0);
+            if ($plan['page'] !== $argv[3]) {
+                throw new \InvalidArgumentException('Stored native Apply page differs from request');
+            }
             $config = \OPNsense\Core\Config::getInstance();
             $factory = static fn() => new \OPNsense\Zapret\Zapret();
             if ($argv[1] === 'preflight' || $argv[1] === 'saved') {

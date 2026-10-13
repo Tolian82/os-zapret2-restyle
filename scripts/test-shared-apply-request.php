@@ -54,6 +54,7 @@ must(str_contains($out['xml'],'<trafficargs>--filter-tcp=80</trafficargs>'),
 must(str_contains($out['xml'],'<hostname>keep</hostname>') &&
     str_contains($out['xml'],'<Unboundplus><enabled>1</enabled></Unboundplus>'),
     'detached Config erased unrelated OPNsense services');
+must($out['plan']['page']==='strategies', 'saved plan lost Strategies page ownership');
 must($out['plan']['dependencies']===Snapshot::digest($all),
     'detached candidate generation not pinned to native model');
 must(str_contains($active,'<trafficargs>--filter-tcp=443</trafficargs>'),
@@ -72,6 +73,7 @@ $voiceInput=['page'=>'voice',
     'fields'=>['voice'=>$completeVoice, 'hostlist'=>$completeHostlists],
     'sync'=>['snapshot'=>Snapshot::digest($all)]];
 $voice= Request::prepare($voiceInput,$all,$active);
+must($voice['plan']['page']==='voice', 'saved plan lost Voice page ownership');
 must(str_contains($voice['xml'],'<telegram><enabled>1</enabled>') &&
     str_contains($voice['xml'],'<telegramips>91.108.13.10</telegramips>'),
     'Voice ON did not create isolated native XML');

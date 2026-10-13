@@ -1055,6 +1055,28 @@ shared_apply_execute_service()
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
     printf "applied-id=%s\n" "$_shared_apply_id"
 }
+# One indivisible FD9 entrypoint for the EXISTING Voice and Strategies
+# Apply buttons: stage → installed native template → full release →
+# seal → native Config/runtime/IPFW transaction, all under the same lock.
+# Both operations still revalidate native Config and bundle content.
+shared_apply_run_service()
+{
+    [ "$#" -eq 2 ] || return 64
+    case "$1" in voice|strategies) ;; *) return 64 ;; esac
+    _shared_run_page="$1"
+    _shared_run_encoded="$2"
+    [ -n "$_shared_run_encoded" ] || return 64
+    preflight_voice_cutover_journals common-apply || return 69
+    _shared_run_report=$(shared_apply_build_service "$_shared_run_encoded") || return $?
+    _shared_run_receipt=$(printf "%s\n" "$_shared_run_report" | tail -n 1)
+    case "$_shared_run_receipt" in prepared-id=*) ;; *) return 69 ;; esac
+    _shared_run_id="${_shared_run_receipt#prepared-id=}"
+    case "$_shared_run_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_shared_run_id}" -eq 32 ] || return 69
+    # The root PHP worker verifies plan.page against the requested page
+    # BEFORE checking the candidate snapshot, and again before Config::save.
+    shared_apply_execute_service "$_shared_run_id" "$_shared_run_page"
+}
 # One FD9 operation now stages a submitted native request AND builds its
 # entire detached shared runtime. No kernel, Config save, or engine changes.
 shared_apply_build_service()
@@ -1143,6 +1165,9 @@ service_dispatch()
             ;;
         reconfigure)
             reconfigure_service
+            ;;
+        shared-apply-run)
+            shared_apply_run_service "${2:-}" "${3:-}"
             ;;
         shared-apply-execute)
             shared_apply_execute_service "${2:-}" "${3:-}"
@@ -1414,7 +1439,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
