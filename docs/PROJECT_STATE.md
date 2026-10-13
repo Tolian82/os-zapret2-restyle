@@ -6,7 +6,7 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_11`**, о�
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
 - `VERSION=0.5.2`, `PLUGIN_REVISION=11` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_4.pkg` — имя кандидата, пакет не опубликован;
+- package candidate: `os-zapret2-restyle-0.5.2_11.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
