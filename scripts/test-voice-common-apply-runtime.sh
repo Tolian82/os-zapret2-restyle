@@ -112,4 +112,37 @@ FW=active
 mkdir -p "$ROOT/legacy"
 if apply_runtime_probe "$ROOT/legacy" 1; then fail "legacy runtime was accepted"; fi
 [ "$FW_PREPARE" = 0 ] || fail "legacy refusal modified firewall"
-echo 'PASS: shared engine/IPFW activation, rollback, stopped mode and pre-journal refusal'
+# A fully QUIESCENT legacy runtime is a supported one-FD9 migration
+# candidate. Keep the old directory in the existing atomic backup so
+# a pre-Config failure can restore it exactly, without starting a legacy
+# process or changing persisted native Config.
+PROCESS=0 MONITOR=0 FW=empty FW_STAGE=0 FW_PREPARE=0
+rm -rf "$ACTIVE_DIR" "$BACKUP_ROOT/previous"
+mkdir -p "$ACTIVE_DIR"
+printf "%s\n" original-legacy > "$ACTIVE_DIR/old-runtime-marker"
+printf "%s\n" --filter-tcp=443 > "$ACTIVE_DIR/dvtws.args"
+apply_runtime_clear
+apply_runtime_activate "$ROOT/one" 1 || fail "stopped legacy to native ON failed"
+[ "$APPLY_OLD_RUNNING" = 0 ] &&
+[ -f "$APPLY_BACKUP/old-runtime-marker" ] &&
+[ "$PROCESS" = 1 ] && [ "$MONITOR" = 1 ] ||
+    fail "legacy backup or shared replacement missing"
+apply_runtime_restore || fail "stopped legacy rollback did not restore"
+[ -f "$ACTIVE_DIR/old-runtime-marker" ] &&
+[ "$PROCESS" = 0 ] && [ "$MONITOR" = 0 ] && [ "$FW" = empty ] ||
+    fail "old stopped legacy release or clean kernel lost"
+apply_runtime_activate "$ROOT/one" 1 || fail "stopped legacy second ON failed"
+_legacy_previous="$APPLY_BACKUP"
+apply_runtime_commit || fail "stopped legacy native commit failed"
+[ "$(cat "$ACTIVE_DIR/voice-plan.json")" = one ] &&
+[ -f "$_legacy_previous/old-runtime-marker" ] &&
+[ "$PROCESS" = 1 ] && [ "$MONITOR" = 1 ] && [ "$FW_STAGE" = 0 ] ||
+    fail "native release did not commit while preserving old legacy backup"
+# A LIVE legacy runtime must still be refused prior to journal mutation.
+PROCESS=1 MONITOR=1 FW=active
+rm -f "$ACTIVE_DIR/voice-plan.json"
+if apply_runtime_probe "$ROOT/two" 1; then
+    fail "live legacy runtime unexpectedly passed native ownership check"
+fi
+[ "$FW_PREPARE" = 1 ] || fail "foreign check modified fixture unexpectedly"
+echo 'PASS: shared engine/IPFW, stopped legacy rollback and live legacy refusal'
