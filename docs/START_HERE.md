@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_7`. `VERSION=0.5.2`; `PLUGIN_REVISION=7`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_8`. `VERSION=0.5.2`; `PLUGIN_REVISION=8`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+В `_8` добавлен чистый native-save merge для обеих страниц: `SettingsApply::mergeForCommit` заново проверяет зависимости, применяет только изменённые поля через существующие whitelist и сохраняет более поздние несвязанные изменения модели (например, Strategy Lab). Защита от injected Voice fields, stale divert port и неполного changed-map покрыта PHP тестом. Вызывать должен будущий привилегированный Config worker после получения FD9 и свежего Config lock. Никакого самостоятельного Config writer или публичного ON Apply не создаётся.
 
 В `_7` обе формы могут сформировать один проверяемый detached `config.xml` через `SettingsApply::renderCandidateXml`. Расширен существующий XML renderer: Voice и Strategies имеют независимые whitelist полей, общую полную модель, проверку `changed_fields`, защиты от чужих узлов/DTD/дублированных mounts и no-op без перезаписи исходного XML. До native FD9 worker это остаётся только чистой подготовкой, не второй точкой persistence. Тест обеих форм дополнен сценариями порчи candidate и preservation.
 
@@ -42,4 +44,4 @@ Install проверяет живые объекты до изменения, с
 
 Полные прежние документы сохранены в [архиве этапа v0.5.1](history/stages/v0.5.1/README.md). Они не входят в текущую очередь или обязательное чтение. Текущая хронология — [working ledger v0.5.x](history/current/v0.5.x.md).
 
-Stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing: `v0.5.0_3`. Открытие `v0.5.2_7` не публикует новый пакет и не подтверждает GUI/CONFIG/BOOT или MEDIA_PASS/CALL_PASS.
+Stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing: `v0.5.0_3`. Открытие `v0.5.2_8` не публикует новый пакет и не подтверждает GUI/CONFIG/BOOT или MEDIA_PASS/CALL_PASS.
