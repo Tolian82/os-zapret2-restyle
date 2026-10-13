@@ -31,6 +31,7 @@ PAGES = frozenset(("strategies", "voice"))
 PHASES = frozenset((
     "prepared", "activating", "activated", "config-saved",
     "committed", "restored", "restore-failed", "requires-review",
+    "legacy-quiescing",
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
@@ -45,6 +46,7 @@ NEXT = {
     "restored": frozenset(),
     "restore-failed": frozenset(),
     "requires-review": frozenset(),
+    "legacy-quiescing": frozenset(),
 }
 
 
@@ -105,7 +107,7 @@ def _validate_record(record: object) -> dict:
         raise SharedOperationError("invalid common Apply record")
     _validate_detail(record["detail"])
     if "legacy_predecessor" in record:
-        if record["phase"] != "prepared" or record["detail"]["page"] != "voice" or \
+        if record["phase"] not in ("prepared", "legacy-quiescing") or record["detail"]["page"] != "voice" or \
            not isinstance(record["legacy_predecessor"], str) or \
            not DIGEST.fullmatch(record["legacy_predecessor"]):
             raise SharedOperationError("invalid armed legacy predecessor proof")
@@ -257,6 +259,33 @@ class SharedApplyOperation:
             raise SharedOperationError("shared owner appeared while arming legacy")
         return self.advance("prepared", detail, legacy_predecessor=digest)
 
+    def begin_legacy_quiesce(self, identity: str, attest) -> dict:
+        """Durable, explicit boundary before any old process/IPFW mutation.
+
+        The new journal entry remains nonterminal across power cuts. The
+        caller holds original root FD9 and Config flock and independently
+        confirms full old live ownership before publishing this intent.
+        Generic Apply, boot and other owners must never cross this phase.
+        """
+        if not isinstance(identity, str) or not OP_ID.fullmatch(identity) or not callable(attest):
+            raise SharedOperationError("invalid legacy quiescence request")
+        before = self.read()
+        if before is None or before["phase"] != "prepared" or (
+            before["detail"]["id"] != identity or
+            "legacy_predecessor" not in before or "previous" in before
+        ):
+            raise SharedOperationError("no armed legacy predecessor to quiesce")
+        witness = attest()
+        if not isinstance(witness, str) or witness != before["legacy_predecessor"]:
+            raise SharedOperationError("legacy quiescence live fingerprint mismatch")
+        if self.read() != before:
+            raise SharedOperationError("legacy quiescence journal changed during witness")
+        return self._persist_record({
+            "schema": SCHEMA, "phase": "legacy-quiescing",
+            "detail": before["detail"],
+            "legacy_predecessor": before["legacy_predecessor"],
+        })
+
     def cancel_pristine_legacy(self, identity: str, attest) -> dict:
         """Operator-only cancellation: prove the OLD live owner never changed.
 
@@ -268,7 +297,7 @@ class SharedApplyOperation:
         if not OP_ID.fullmatch(identity) or not callable(attest):
             raise SharedOperationError("untrusted legacy cancel request")
         before = self.read()
-        if before is None or before["phase"] != "prepared" or (
+        if before is None or before["phase"] not in ("prepared", "legacy-quiescing") or (
             before["detail"]["id"] != identity or
             "legacy_predecessor" not in before or
             "previous" in before
@@ -465,9 +494,11 @@ def main(argv: list[str]) -> int:
                     # Returning 'restored' here would send the ordinary
                     # service to LEGACY boot over the preceding common owner.
                     print("committed " + prior["id"] + " " + prior["page"])
-            elif record["phase"] in ("prepared", "config-saved"):
+            elif record["phase"] in ("prepared", "config-saved", "legacy-quiescing"):
                 detail = record["detail"]
-                prefix = "legacy-prepared" if "legacy_predecessor" in record else record["phase"]
+                prefix = "legacy-prepared" if (
+                    "legacy_predecessor" in record and record["phase"] == "prepared"
+                ) else record["phase"]
                 print(prefix + " " + detail["id"] + " " + detail["page"])
             elif record["phase"] in ("activating", "activated") and "previous" in record:
                 detail, previous = record["detail"], record["previous"]

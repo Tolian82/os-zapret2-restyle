@@ -959,6 +959,20 @@ shared_apply_legacy_cancel_service()
         cancel-common "$_legacy_cancel_id"
 }
 
+# Explicit operator-only first boundary BEFORE any actual legacy process stop.
+# Same root FD9/Config flock, previous snapshot and exact FreeBSD live witness.
+shared_apply_legacy_begin_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    _legacy_begin_id="$1"
+    case "$_legacy_begin_id" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_legacy_begin_id}" -eq 32 ] || return 64
+    [ -x /usr/local/bin/python3.13 ] &&
+    [ -r "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" ] || return 69
+    /usr/local/bin/python3.13 "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" \
+        begin-common "$_legacy_begin_id"
+}
+
 # One actual runtime/Config Apply owner: the existing service process holds
 # FD9 for the ENTIRE operation; Python journal and PHP Config worker run as
 # children inheriting that ownership. No nested configd/lockf acquisition,
@@ -1556,6 +1570,10 @@ service_dispatch()
             [ "$#" -eq 2 ] || return 64
             shared_apply_legacy_cancel_service "$2"
             ;;
+        shared-apply-legacy-begin)
+            [ "$#" -eq 2 ] || return 64
+            shared_apply_legacy_begin_service "$2"
+            ;;
         shared-apply-execute)
             shared_apply_execute_service "${2:-}" "${3:-}"
             ;;
@@ -1858,7 +1876,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm|shared-apply-legacy-cancel)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm|shared-apply-legacy-cancel|shared-apply-legacy-begin)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

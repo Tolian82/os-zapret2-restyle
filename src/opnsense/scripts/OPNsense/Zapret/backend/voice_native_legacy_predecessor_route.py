@@ -124,9 +124,9 @@ def _capture_root_for_common_id(identity: str) -> Path:
 def cancel_unchanged_common_predecessor(
     *, identity, store, work, config_path, config_fd, config_owner,
     active_runtime, marker_path, ledger_root, process_probe, kernel_reader,
-    readonly_ipfw, require_lifecycle_owner,
+    readonly_ipfw, require_lifecycle_owner, begin=False,
 ):
-    """Prove NO live legacy resource was changed before terminal cancellation.
+    """Prove exact old live ownership before a boundary or cancellation.
 
     Recovery here is a journal-only change, never an actuator. Re-read the
     immutable old snapshot and all live sources while holding original locks.
@@ -172,7 +172,8 @@ def cancel_unchanged_common_predecessor(
             raise LegacyPredecessorRouteError("legacy backup changed during cancellation")
         return digest
 
-    return store.cancel_pristine_legacy(identity, attest)
+    return (store.begin_legacy_quiesce(identity, attest) if begin
+            else store.cancel_pristine_legacy(identity, attest))
 
 
 def main(argv):
@@ -184,8 +185,12 @@ def main(argv):
         len(argv) == 2 and argv[0] == "cancel-common"
         and COMMON_ID.fullmatch(argv[1])
     ) else None
-    if argv != ["capture-plan"] and candidate_id is None and cancellation_id is None:
-        print("usage: voice_native_legacy_predecessor_route.py capture-plan|capture-common ID|cancel-common ID",
+    begin_id = argv[1] if (
+        len(argv) == 2 and argv[0] == "begin-common"
+        and COMMON_ID.fullmatch(argv[1])
+    ) else None
+    if argv != ["capture-plan"] and candidate_id is None and cancellation_id is None and begin_id is None:
+        print("usage: voice_native_legacy_predecessor_route.py capture-plan|capture-common ID|cancel-common ID|begin-common ID",
               file=sys.stderr)
         return 64
     fd=None
@@ -194,28 +199,35 @@ def main(argv):
         fd=os.open(native.CONFIG,os.O_RDWR| getattr(os,"O_NOFOLLOW",0))
         _pinned_regular(native.CONFIG,fd,owner=(0,0))
         fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        if cancellation_id is not None:
+        if cancellation_id is not None or begin_id is not None:
             from shared_apply_operation import SharedApplyOperation
+            operation_id = cancellation_id if cancellation_id is not None else begin_id
             from shared_apply_seal import WORK
             store = SharedApplyOperation(owner=0)
-            root = WORK / cancellation_id / "legacy-backup"
+            root = WORK / operation_id / "legacy-backup"
             _private_dir(root)
             probe = FreeBSDVoiceProcessProbe(
                 EXPECTED_SCRIPTS, PIDFILES, native.WHOLE / "previous",
             )
             result = cancel_unchanged_common_predecessor(
-                identity=cancellation_id, store=store,
-                work=WORK / cancellation_id, config_path=native.CONFIG,
+                identity=operation_id, store=store,
+                work=WORK / operation_id, config_path=native.CONFIG,
                 config_fd=fd, config_owner=(0,0),
                 active_runtime=native.ACTIVE_ROOT,
                 marker_path=native.LEGACY_MARKER, ledger_root=native.LEDGER,
                 process_probe=probe, kernel_reader=FreeBSDKernelArgvReader(),
                 readonly_ipfw=FreeBSDIPFWAdapter(19000,19010),
                 require_lifecycle_owner=native.require_native_lock,
+                begin=begin_id is not None,
             )
-            if result["phase"] != "restored" or result["detail"]["id"] != cancellation_id:
-                raise LegacyPredecessorRouteError("old owner cancel incomplete")
-            print("legacy-cancelled-id="+cancellation_id)
+            wanted = "legacy-quiescing" if begin_id is not None else "restored"
+            if result["phase"] != wanted or result["detail"]["id"] != operation_id:
+                raise LegacyPredecessorRouteError("old owner transition incomplete")
+            if begin_id is not None:
+                print("legacy-quiescing-id="+operation_id)
+                print("legacy-stop-executed=0")
+            else:
+                print("legacy-cancelled-id="+operation_id)
             print("legacy-handoff-authorized=0")
             return 0
         root = (_capture_root_for_common_id(candidate_id)

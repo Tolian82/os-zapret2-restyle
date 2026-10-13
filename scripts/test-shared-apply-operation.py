@@ -116,6 +116,46 @@ class TestJournal(unittest.TestCase):
         self.assertEqual(69,result.returncode)
         self.assertNotIn("Traceback",result.stderr)
 
+    def test_durable_legacy_quiescing_boundary_preserves_old_proof_and_can_cancel(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            store=SharedApplyOperation(root/"shared-apply")
+            initial=store.prepare_legacy_predecessor(detail(),lambda:"f"*64)
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_quiesce(detail()["id"],lambda:"a"*64)
+            self.assertEqual(initial,store.read())
+            record=store.begin_legacy_quiesce(detail()["id"],lambda:"f"*64)
+            self.assertEqual("legacy-quiescing",record["phase"])
+            self.assertEqual(initial["legacy_predecessor"],record["legacy_predecessor"])
+            self.assertEqual(record,SharedApplyOperation(store.root).read())
+            self.assertEqual("shared-apply-pending",check_pending(
+                root/"voice-cutover",root/"voice-ipfw")["reason"])
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_quiesce(detail()["id"],lambda:"f"*64)
+            with self.assertRaises(SharedOperationError):
+                store.advance("activating",detail())
+            with self.assertRaises(SharedOperationError):
+                store.recover_prepared(detail()["id"],lambda:True)
+            with self.assertRaises(SharedOperationError):
+                store.cancel_pristine_legacy(detail()["id"],lambda:"a"*64)
+            self.assertEqual(record,store.read())
+            done=store.cancel_pristine_legacy(detail()["id"],lambda:"f"*64)
+            self.assertEqual("restored",done["phase"])
+            self.assertNotIn("legacy_predecessor",done)
+            self.assertTrue(store.advisory()["safe_to_mutate"])
+
+    def test_old_legacy_quiescing_cannot_close_after_identity_swap(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store=SharedApplyOperation(Path(folder)/"shared-apply")
+            store.prepare_legacy_predecessor(detail(),lambda:"f"*64)
+            saved=store.begin_legacy_quiesce(detail()["id"],lambda:"f"*64)
+            reloaded=SharedApplyOperation(store.root)
+            with self.assertRaises(SharedOperationError):
+                reloaded.cancel_pristine_legacy("2"*32,lambda:"f"*64)
+            with self.assertRaises(SharedOperationError):
+                reloaded.cancel_pristine_legacy(detail()["id"],lambda:None)
+            self.assertEqual(saved,reloaded.read())
+
     def test_missing_state_stays_readonly(self):
         with tempfile.TemporaryDirectory() as d:
             j=SharedApplyOperation(Path(d)/"shared-apply")
