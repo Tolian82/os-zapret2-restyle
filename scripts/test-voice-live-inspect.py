@@ -315,7 +315,8 @@ class InspectionTests(unittest.TestCase):
             result=examine_shared(
                 {"schema":1,"phase":"committed","detail":identity},
                 work_root=Path(root),bundle_verify=lambda _: None,
-                manifest_reader=lambda _:manifest,adapter_factory=wrong)
+                manifest_reader=lambda _:manifest,adapter_factory=wrong,
+                runtime_probe=lambda *args: {"state":"running","services":{}})
             self.assertNotEqual("ready",result["state"])
             self.assertFalse(result["can_activate"])
 
