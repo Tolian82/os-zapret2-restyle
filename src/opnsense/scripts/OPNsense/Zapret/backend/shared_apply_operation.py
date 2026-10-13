@@ -244,18 +244,38 @@ class SharedApplyOperation:
             raise SharedOperationError("activating journal changed during attestation")
         return self.advance("restored", record["detail"])
 
-    def finish_activated_restore(self, identity: str, previous_id: str, attest) -> dict:
-        """Close ACTIVATED only after previous native Config and full FD9 runtime recovery."""
+    def _finish_cold_pre_save_restore(
+        self, phase: str, identity: str, previous_id: str, attest
+    ) -> dict:
+        """Finish only the attested cold old-Config rollback for this phase.
+
+        Both activating (after a full atomic rename) and activated can have
+        an exactly installed new release. All real Config/process/IPFW/tree
+        proofs are enforced by the original root-FD9 service before this
+        terminal durable write. The seal is checked again inside the CLI.
+        """
         record = self.read()
-        if record is None or record["phase"] != "activated" or \
+        if record is None or record["phase"] != phase or \
                 record["detail"]["id"] != identity or \
                 record.get("previous", {}).get("id") != previous_id:
-            raise SharedOperationError("activated rollback completion refused")
+            raise SharedOperationError(phase + " rollback completion refused")
         if not callable(attest) or attest() is not True:
-            raise SharedOperationError("activated rollback attestation refused")
+            raise SharedOperationError(phase + " rollback attestation refused")
         if self.read() != record:
-            raise SharedOperationError("activated journal changed during recovery")
+            raise SharedOperationError(phase + " journal changed during recovery")
         return self.advance("restored", record["detail"])
+
+    def finish_activated_restore(self, identity: str, previous_id: str, attest) -> dict:
+        return self._finish_cold_pre_save_restore(
+            "activated", identity, previous_id, attest
+        )
+
+    def finish_activating_installed_restore(
+        self, identity: str, previous_id: str, attest
+    ) -> dict:
+        return self._finish_cold_pre_save_restore(
+            "activating", identity, previous_id, attest
+        )
 
     def finish_saved(self, identity: str, attest) -> dict:
         """Close Config-saved only after external FD9 Config/kernel attestation.
@@ -292,10 +312,10 @@ def main(argv: list[str]) -> int:
     pristine = len(argv) == 4 and argv[1] == "recover-activating" and all(
         OP_ID.fullmatch(value) for value in argv[2:]
     )
-    activated = len(argv) == 4 and argv[1] == "finish-activated" and all(
-        OP_ID.fullmatch(value) for value in argv[2:]
-    )
-    if not (inspection or recording or recovery or finish or pristine or activated):
+    cold_restore = len(argv) == 4 and argv[1] in (
+        "finish-activated", "finish-activating"
+    ) and all(OP_ID.fullmatch(value) for value in argv[2:])
+    if not (inspection or recording or recovery or finish or pristine or cold_restore):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -344,15 +364,20 @@ def main(argv: list[str]) -> int:
                              verify_seal(WORK / argv[3], owner=0)),
             )
             print("activating-pristine-restored")
-        elif activated:
+        elif cold_restore:
             from shared_apply_seal import verify_seal, WORK
             store = SharedApplyOperation(owner=0)
-            store.finish_activated_restore(
+            finish_cold = (
+                store.finish_activated_restore
+                if argv[1] == "finish-activated"
+                else store.finish_activating_installed_restore
+            )
+            finish_cold(
                 argv[2], argv[3],
                 lambda: bool(verify_seal(WORK / argv[2], owner=0) and
                              verify_seal(WORK / argv[3], owner=0)),
             )
-            print("activated-restored")
+            print(argv[1][7:] + "-restored")
         elif finish:
             from shared_apply_seal import verify_seal, WORK
             store = SharedApplyOperation(owner=0)

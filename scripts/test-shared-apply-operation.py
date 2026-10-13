@@ -212,6 +212,34 @@ class TestJournal(unittest.TestCase):
             with self.assertRaisesRegex(SharedOperationError,"activated rollback"):
                 store.finish_activated_restore(d["id"],"a"*32,lambda: True)
 
+    def test_installed_activating_completion_requires_exact_previous(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store=SharedApplyOperation(Path(folder)/"shared-apply")
+            previous=detail("a"*32)
+            new=detail("b"*32)
+            for phase in ("prepared","activating","activated","config-saved","committed"):
+                store.advance(phase,previous)
+            store.advance("prepared",new)
+            store.advance("activating",new)
+            with self.assertRaisesRegex(SharedOperationError,"activating rollback"):
+                store.finish_activating_installed_restore(new["id"],"c"*32,lambda: True)
+            with self.assertRaisesRegex(SharedOperationError,"attestation"):
+                store.finish_activating_installed_restore(new["id"],previous["id"],lambda: False)
+            self.assertEqual("activating",store.read()["phase"])
+            restored=store.finish_activating_installed_restore(new["id"],previous["id"],lambda: True)
+            self.assertEqual(previous,committed_owner(restored))
+            self.assertEqual("restored",restored["phase"])
+            with self.assertRaisesRegex(SharedOperationError,"activating rollback"):
+                store.finish_activating_installed_restore(new["id"],previous["id"],lambda: True)
+
+    def test_installed_activating_cli_refuses_missing_freebsd_fd9(self):
+        result=subprocess.run(
+            [sys.executable,str(BACKEND/"shared_apply_operation.py"),
+             "finish-activating","a"*32,"b"*32],
+            capture_output=True,text=True,check=False)
+        self.assertEqual(69,result.returncode)
+        self.assertNotIn("Traceback",result.stderr)
+
     def test_activated_cli_refuses_missing_freebsd_fd9(self):
         result=subprocess.run([sys.executable,str(BACKEND/"shared_apply_operation.py"),
                                "finish-activated","a"*32,"b"*32],

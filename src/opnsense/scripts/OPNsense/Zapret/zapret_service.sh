@@ -894,18 +894,20 @@ shared_apply_recover_activating_pristine_service()
         recover-activating "$_shared_pristine_id" "$_shared_pristine_old" || return 69
     printf "recovered-pristine-id=%s\n" "$_shared_pristine_id"
 }
-# Recover cold pre-save ACTIVATED only when the full new common release
-# was installed. Old saved Config, sealed bundles, no engine and empty IPFW
-# must be independently confirmed under original FD9.
+# Recover a cold pre-save ACTIVATED or interrupted ACTIVATING in which the
+# atomic rename already installed the *whole* new common release. Old saved
+# Config, sealed bundles, no engine and empty IPFW are attested under FD9.
+# The pristine-activating path remains separate; no partial tree is trusted.
 shared_apply_recover_activated_cold_service()
 {
     [ "$#" -eq 1 ] || return 64
-    case "$1" in activated\ *) ;; *) return 69 ;; esac
+    case "$1" in activated\ *|activating\ *) ;; *) return 69 ;; esac
+    _shared_cold_phase=$(printf "%s\n" "$1" | cut -d " " -f 1)
     _shared_cold_id=$(printf "%s\n" "$1" | cut -d " " -f 2)
     _shared_cold_page=$(printf "%s\n" "$1" | cut -d " " -f 3)
     _shared_cold_old=$(printf "%s\n" "$1" | cut -d " " -f 4)
     _shared_cold_old_page=$(printf "%s\n" "$1" | cut -d " " -f 5)
-    [ "$1" = "activated $_shared_cold_id $_shared_cold_page $_shared_cold_old $_shared_cold_old_page" ] || return 69
+    [ "$1" = "$_shared_cold_phase $_shared_cold_id $_shared_cold_page $_shared_cold_old $_shared_cold_old_page" ] || return 69
     for _shared_cold_value in "$_shared_cold_id" "$_shared_cold_old"; do
         [ "${#_shared_cold_value}" -eq 32 ] || return 69
         case "$_shared_cold_value" in ""|*[!a-f0-9]*) return 69 ;; esac
@@ -913,7 +915,7 @@ shared_apply_recover_activated_cold_service()
     case "$_shared_cold_page" in voice|strategies) ;; *) return 69 ;; esac
     case "$_shared_cold_old_page" in voice|strategies) ;; *) return 69 ;; esac
     [ "$_shared_cold_id" != "$_shared_cold_old" ] || return 69
-    preflight_voice_cutover_journals common-recover-activated || return 69
+    preflight_voice_cutover_journals "common-recover-$_shared_cold_phase" || return 69
     shared_apply_bundle_service verify "$_shared_cold_id" || return 69
     shared_apply_bundle_service verify "$_shared_cold_old" || return 69
     _shared_cold_saved=$(shared_apply_native_config saved \
@@ -956,8 +958,8 @@ shared_apply_recover_activated_cold_service()
     firewall_shared_runtime verify "$_shared_cold_old_root/release" - || return 70
     [ -x /usr/local/bin/python3.13 ] || return 70
     /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
-        finish-activated "$_shared_cold_id" "$_shared_cold_old" || return 70
-    printf "recovered-activated-id=%s\n" "$_shared_cold_id"
+        "finish-$_shared_cold_phase" "$_shared_cold_id" "$_shared_cold_old" || return 70
+    printf "recovered-%s-id=%s\n" "$_shared_cold_phase" "$_shared_cold_id"
 }
 # Only a PREPARED journal (before any mutation) can be auto-closed at boot.
 # The root FD9 Python command rechecks the sealed candidate and journal.
@@ -1493,7 +1495,14 @@ service_with_lifecycle_lock()
                             esac
                             ;;
                         activating\ *)
-                            shared_apply_recover_activating_pristine_service "$_shared_owner" || return 69
+                            # Two *exclusive* post-crash layouts: full old
+                            # release unchanged, or full new release installed
+                            # before the phase record reached ACTIVATED.
+                            # Each path independently proves Config, owner,
+                            # installed tree, process census and scoped IPFW.
+                            if ! shared_apply_recover_activating_pristine_service "$_shared_owner"; then
+                                shared_apply_recover_activated_cold_service "$_shared_owner" || return 69
+                            fi
                             _shared_owner=$(shared_apply_inspect_service) || return 69
                             case "$_shared_owner" in
                                 committed\ *)
