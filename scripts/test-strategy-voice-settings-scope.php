@@ -94,8 +94,12 @@ $view = file_get_contents(__DIR__ .
     '/../src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt');
 // The controller now enters the same candidate boundary as Voice. Its
 // shared helper must still enforce the exact Telegram field baseline.
-if (strpos($controller, "SettingsApply::prepareStrategies(\$oldNodes, \$post, \$baseline)") === false ||
+if (strpos($controller, 'SettingsApply::prepareStrategies(') === false ||
+    strpos($controller, "\$current, \$post, \$sync['telegramips_baseline']") === false ||
     strpos($controller, "unset(\$post['sync'])") === false ||
+    strpos($controller, "SharedApplyEnvelope::encode('strategies'") === false ||
+    strpos($controller, "'zapret shared_apply'") === false ||
+    strpos($controller, "configdpRun(") === false ||
     strpos($sharedApply, "StrategySettingsPayload::requireFreshTelegram(\$previous, \$telegramBaseline)") === false ||
     strpos($view, 'zapret.sync.telegramips_baseline') === false ||
     strpos($view, 'telegramBaseline.val(currentField ? currentField.value') === false
