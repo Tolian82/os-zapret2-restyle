@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_58`. `VERSION=0.5.2`; `PLUGIN_REVISION=58`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_60`. `VERSION=0.5.2`; `PLUGIN_REVISION=60`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+**`_59–_60`: предохранитель перед реальной legacy-миграцией записан в ЕДИНЫЙ durable Apply journal.** Новый операторский маршрут `shared-apply-legacy-arm <id>` под исходным FD9 повторно сверяет sealed Voice ON-кандидат, оригинальный Config preflight, полный прежний runtime/IPFW/argv и ранее запечатанный `legacy-backup` со всеми пятью ресурсами. Затем существующий `shared_apply_operation.py` сохраняет atomic/fsynced запись `phase=prepared` с тем же ID и SHA-256 отпечатком старого predecessor + reverse-plan. В командном inspect эта фаза видна как `legacy-prepared`. **Это только durable STOP intent, не сам STOP.** Обычный `shared-apply-record activating`, boot recover-prepared и дальнейшие общие переходы для неё **запрещены**, пока не написан специальный проверяемый исполнитель. Поэтому операторское arm временно блокирует обычный start/reconfigure при последующем запуске — не применять на производственном устройстве до окончания миграции. Второй WAL, отдельный Config writer и новый runtime не создавались; GUI/ТЗ не менялись. Следующая работа — доказуемый живой cutover с восстановлением по этим ресурсам, FreeBSD power-cut и STUN/CALL приёмка.
 
 **`_58` — проверка долговременной привязки backup и устранение регрессии CI.** В тесте `_57` оставалось жёсткое сравнение прежнего FD9 command list (до `legacy-capture`); это давало ошибку `Shared runtime activation and rollback`, несмотря на правильно добавленный маршрут. `_58` исправляет contract и усиливает тесты: фиксированный 32-hex ID → конкретный `shared-work/<ID>/legacy-backup`, sealed candidate обязателен, уже существующий common owner запрещён, повторное read-only наблюдение после capture должно совпасть, иначе отказ и сохранение ранее созданного previous witness. Вызов реального live cutover всё ещё не разрешён; owner-live FreeBSD/Telegram call не выполнен.
 
@@ -96,7 +98,7 @@ Install проверяет живые объекты до изменения, с
 
 ## Следующее действие
 
-**Этап 4 — следующий рубеж после `_58`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
+**Этап 4 — следующий рубеж после `_60`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 
 ## Минимальное чтение по текущей задаче
 

@@ -1,5 +1,9 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`_59`:** в едином root-owned `shared-apply/operation.json` допускается один дополнительный поляк `legacy_predecessor` (строгий SHA-256) **только** в Voice `phase=prepared`. Он вычисляется после проверки общего sealed bundle и exact old five-domain predecessor/reverse-plan внутри ID-кандидата. Запись atomic/fsynced, не отдельный journal. Любая попытка обычного `activating`, generic `restored` или автоматического recover-prepared для такого предшественника отказывается, чтобы действующий legacy не потерял право собственности без реального rollback executor. При `inspect` различаются `prepared` и `legacy-prepared`.
+
+**`_60`:** операторский shell `shared-apply-legacy-arm ID` подключён к настоящему FD9 router. До необратимой записи дважды проверяет read-only legacy+candidate witness, seal, свежий Voice ON native Config и наличие `legacy-backup`, затем передаёт подтверждённые ID/base/candidate/fields существующему journal CLI. Старый dvtws2/IPFW/Config/marker не изменяются. Операторское arming блокирует последующий обычный boot/start до завершения реализации восстановимого живого handoff; запускать на production сейчас **нельзя**. Следующий шаг — единый исполнитель с полным rollback, без отдельного PoC runtime.
+
 **`_58`:** в тестовой инфраструктуре исправлено точное совпадение production FD9 command list после добавления `shared-apply-legacy-capture` в `_57`. Новые unit проверки в существующем legacy previous-seal fixture доказывают, что fixed root `shared-work/<candidate-id>/legacy-backup` доступен только для 32-hex sealed candidate и только при отсутствии shared committed/pending owner. Интеграция дополнительно проверяет, что после полной старой копии изменения IPFW/argv/Config observations не считаются успешным сохранением и evidence не уничтожается. Нет нового backend/daemon/WAL, live stop запрещён. Полный GitHub CI последнего HEAD повторно проверяется.
 
 **`_57`:** новый операторский маршрут `shared-apply-legacy-capture <32-hex-id>` через штатный FD9 сохраняет полный recoverable предыдущий PoC в том же `shared-work/<ID>/legacy-backup`, который принадлежит sealed Voice candidate. Используется старый строго проверенный helper `prepare_old_rollback_predecessor`, его прежняя full five-domain snapshot + reverse-plan, а не новый writer/отдельная IPFW реализация. Сначала и после снимка переснимается строгий running-legacy + candidate native Config/argv/IPFW witness; snapshot фиксируется fsync/rename и не удаляется при partial failure. Никакого изменения old dvtws2, IPFW, Config или marker, никакой записи shared-operation journal. **Это подготовка rollback, НЕ работающий handoff**, до реального переключения и FreeBSD owner-live статус `legacy-handoff-authorized=0`.
@@ -36,13 +40,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_58`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_60`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=58` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_58.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=60` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_60.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
