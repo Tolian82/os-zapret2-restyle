@@ -335,8 +335,17 @@ echo 'PASS: FD9 candidate-bound legacy kernel witness refuses OFF/foreign/confli
 
 # Real production wrapper, but mocked lower-level no-mutation old capture:
 # only exact five-domain sealed predecessor and the same candidate qualify.
-grep -Fq '|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm|shared-apply-legacy-cancel)' "$SERVICE_SOURCE" ||
-    fail "legacy predecessor capture is outside original FD9 lifecycle"
+# Require membership in the OUTER original-FD9 dispatch, not in the
+# service_dispatch handler. Individual exact shell case tokens are stable
+# regardless of which command happens to be last when more are added.
+OUTER_ROUTES=$(sed -n '/^case "${1:-}" in$/,$p' "$SERVICE_SOURCE")
+[ -n "$OUTER_ROUTES" ] || fail "missing original-FD9 outer service dispatch"
+for command in shared-apply-legacy-audit shared-apply-legacy-qualify \
+    shared-apply-legacy-capture shared-apply-legacy-arm \
+    shared-apply-legacy-cancel shared-apply-legacy-begin; do
+    printf '%s\n' "$OUTER_ROUTES" | grep -Eq "(^|\\|)${command}(\\||\\))" ||
+        fail "legacy operator $command bypasses original FD9"
+done
 CAPTURE_SCRIPT="$ROOT/common-legacy-capture.sh"
 sed -n '/^shared_apply_legacy_capture_service()$/,/^}$/p' "$SERVICE_SOURCE" > "$CAPTURE_SCRIPT"
 sh -n "$CAPTURE_SCRIPT" || fail "native predecessor wrapper is malformed"
