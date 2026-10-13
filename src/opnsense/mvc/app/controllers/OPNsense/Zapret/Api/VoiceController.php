@@ -13,7 +13,7 @@ use OPNsense\Core\Config;
 require_once __DIR__ . '/VoiceCandidateValidator.php';
 require_once __DIR__ . '/VoiceSettingsSnapshot.php';
 require_once __DIR__ . '/VoiceSettingsPayload.php';
-require_once __DIR__ . '/VoiceApplyCandidate.php';
+require_once __DIR__ . '/SettingsApply.php';
 require_once __DIR__ . '/VoiceCandidateXml.php';
 require_once __DIR__ . '/VoiceDraftSelection.php';
 
@@ -69,7 +69,7 @@ class VoiceController extends ApiControllerBase
             // Build a normalized *in-memory* preview under the same Config
             // lock. The actual Save/Apply transaction must re-run this
             // entire preparation and the Python release compiler.
-            $plan = VoiceApplyCandidate::prepare($current, $fields, $sync['snapshot']);
+            $plan = SettingsApply::prepareVoice($current, $fields, $sync['snapshot']);
             if ($plan['result'] !== 'prepared') {
                 return $plan;
             }
@@ -233,7 +233,7 @@ class VoiceController extends ApiControllerBase
                 );
             }
             unset($fields['sync']);
-            $plan = VoiceApplyCandidate::prepare($current, $fields, $sync['snapshot']);
+            $plan = SettingsApply::prepareVoice($current, $fields, $sync['snapshot']);
             if ($plan['result'] !== 'prepared') {
                 return $plan;
             }
@@ -327,7 +327,7 @@ class VoiceController extends ApiControllerBase
                 );
             }
             unset($fields['sync']);
-            $plan = VoiceApplyCandidate::prepare($previous, $fields, $sync['snapshot']);
+            $plan = SettingsApply::prepareVoice($previous, $fields, $sync['snapshot']);
             if ($plan['result'] !== 'prepared') {
                 return $plan;
             }

@@ -1,10 +1,10 @@
 # «Передача голоса» — подробный проект плана этапа v0.5.2
 
-**Этап: `v0.5.2_3`, без релиза. План принят к выполнению 13.10.2026 прямым поручением владельца начать программирование согласно плану.** Архитектура, семь этапов и контроль используются как рабочая очередь. План подготовлен 13.10.2026 на кодовой базе `v0.5.1_174` и перенесён в новый этап. Последний исходный снимок — commit `11a8fdc12b602c4b4174b03b504a66f9b0af04c8`, Draft PR #328. При открытии этапа меняются VERSION/PLUGIN_REVISION и документация; исходники frontend/backend и поведение службы не изменяются.
+**Этап: `v0.5.2_4`, без релиза. План принят к выполнению 13.10.2026 прямым поручением владельца начать программирование согласно плану.** Архитектура, семь этапов и контроль используются как рабочая очередь. План подготовлен 13.10.2026 на кодовой базе `v0.5.1_174` и перенесён в новый этап. Последний исходный снимок — commit `11a8fdc12b602c4b4174b03b504a66f9b0af04c8`, Draft PR #328. При открытии этапа меняются VERSION/PLUGIN_REVISION и документация; исходники frontend/backend и поведение службы не изменяются.
 
 ## Текущий следующий шаг
 
-Этап 1 реализован в коде: `shared-candidate` создаёт полный runtime в обычных `traffic.conf`/`dvtws.args`, один release-local `voice-plan.json`, без отдельного native bundle/PoC prepend. Полный generator проверен для всех пяти сервисов, каждого отдельно, всех OFF, global OFF и отказов. При установленном engine выполняется native `--dry-run` по staged спискам; это проверка аргументов/файлов, не Lua execution или live capture. Новый сценарий подключён к Linux/FreeBSD CI. В `_3` общий firewall использует release-derived ownership и прежний FD9 без private ledger; install/update/all-OFF/Stop/rollback проверены через full generator с подставным IPFW. Native packet/power-cut доказательства остаются открытыми. Следующий кодовый шаг — этап 3, общий Apply. Этапы 3–7 не закрыты; public GUI Apply ещё не включён.
+Этап 1 реализован в коде: `shared-candidate` создаёт полный runtime в обычных `traffic.conf`/`dvtws.args`, один release-local `voice-plan.json`, без отдельного native bundle/PoC prepend. Полный generator проверен для всех пяти сервисов, каждого отдельно, всех OFF, global OFF и отказов. При установленном engine выполняется native `--dry-run` по staged спискам; это проверка аргументов/файлов, не Lua execution или live capture. Новый сценарий подключён к Linux/FreeBSD CI. В `_3` общий firewall использует release-derived ownership и прежний FD9 без private ledger; install/update/all-OFF/Stop/rollback проверены через full generator с подставным IPFW. Native packet/power-cut доказательства остаются открытыми. Этап 3 начат в `_4`: одна чистая preparation для обеих страниц, whitelist и поколение зависимостей; следующий шаг — native PHP/FD9 worker и полный Apply. Это ещё не выполнение переходного критерия этапа 3. Этапы 3–7 не закрыты; public GUI Apply ещё не включён.
 
 Нормативный контракт — [раздел 12 ТЗ](VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026). Разделы 1–11 ТЗ, пять сервисов Telegram / Discord / X / SIP / Custom, поля, компоновка и функциональная приёмка остаются неизменными. Промежуточная проверка одного профиля не заменяет полный результат.
 
@@ -114,6 +114,8 @@ Runtime переключается перед финальным сохране�
 **Переход:** install/update/remove/all-OFF и ошибка между заменой runtime/таблиц/правил возвращают согласованный previous state. Чужая таблица/правило сохранены. Проверки общего adapter выполняются в Linux с fault injection и на FreeBSD; проверка реальных WAN-пакетов завершается на этапе 7.
 
 ### Этап 3. Общий Apply обеих страниц
+
+Текущая задача `_4`: объединить in-memory подготовку обеих форм и дать будущему worker проверяемую generation/dependency границу без Config/runtime/IPFW-записей. Проверка — действующий PHP сценарий обеих форм, whitelist, shared Telegram IPSET, unrelated OPNsense change и stale generation. Следующая кодовая задача: native worker под FD9, Config lock/save и полный runtime switch/rollback. Эти подзадачи не закрывают этап до работающих GUI Apply.
 
 **Результат:** штатная кнопка применяет всю Voice-форму и все пять сервисов; «Стратегии» используют тот же Apply и не теряют Voice. Полный цикл OFF→ON / edit ON / add / remove / all OFF / repeat работает.
 

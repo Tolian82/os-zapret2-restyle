@@ -2,8 +2,10 @@
 /**
  * Side-effect-free future Voice Apply planning tests; no router connection.
  */
+require_once __DIR__ . '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php';
 require_once __DIR__ . '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/VoiceApplyCandidate.php';
 use OPNsense\Zapret\Api\VoiceApplyCandidate;
+use OPNsense\Zapret\Api\SettingsApply;
 use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
 
 function verify(bool $pass, string $message): void {
@@ -130,4 +132,48 @@ verify($foreign['result'] === 'failed' &&
        isset($foreign['validations']['zapret.voice.waninterface']),
        'foreign model group unexpectedly accepted');
 
-echo "PASS: pure Voice Apply candidate normalization, preservation, conflict and stale token\n";
+// Stage 3: both public pages prepare a full model through the same boundary.
+$strategyForm = [
+    'general' => ['waninterface' => 'WAN'],
+    'strategy' => ['trafficargs' => "--filter-tcp=80\n--payload=http_req"],
+    'hostlist' => ['telegramips' => "91.108.0.0/16\n"],
+];
+$strategyPlan = SettingsApply::prepareStrategies(
+    $before, $strategyForm, $before['hostlist']['telegramips']
+);
+verify($strategyPlan['result'] === 'prepared', 'Strategies shared candidate failed');
+verify($strategyPlan['candidate']['voice'] === $before['voice'] &&
+       $strategyPlan['candidate']['hostlist']['discordips'] === $before['hostlist']['discordips'] &&
+       $strategyPlan['candidate']['strategylab'] === $before['strategylab'],
+       'Strategies candidate overwrote a foreign field');
+verify($strategyPlan['changed_fields'] === ['strategy.trafficargs'],
+       'Strategies change map must list only changed owned fields');
+SettingsApply::requireUnchanged($strategyPlan, $before);
+$unrelated = $before;
+$unrelated['strategylab']['enablequic'] = '0';
+SettingsApply::requireUnchanged($strategyPlan, $unrelated);
+$stale = $before;
+$stale['voice']['telegram']['enabled'] = '1';
+try {
+    SettingsApply::requireUnchanged($strategyPlan, $stale);
+    verify(false, 'shared candidate accepted changed Voice dependencies');
+} catch (\InvalidArgumentException $ex) {
+    verify(str_contains($ex->getMessage(), 'changed'), 'wrong shared stale failure');
+}
+$voicePlan = SettingsApply::prepareVoice($before, formFrom($before), $token);
+verify($voicePlan['result'] === 'prepared', 'Voice shared candidate failed');
+SettingsApply::requireUnchanged($voicePlan, $before);
+try {
+    SettingsApply::prepareStrategies($before, ['voice' => ['telegram' => '1']],
+        $before['hostlist']['telegramips']);
+    verify(false, 'foreign Strategies fields accepted by shared boundary');
+} catch (\InvalidArgumentException $ex) {
+    verify(str_contains($ex->getMessage(), 'Unexpected'), 'wrong Strategies whitelist failure');
+}
+try {
+    SettingsApply::prepareStrategies($before, $strategyForm, '91.108.99.0/24');
+    verify(false, 'stale shared Telegram IPSET baseline accepted');
+} catch (\InvalidArgumentException $ex) {
+    verify(str_contains($ex->getMessage(), 'changed'), 'wrong Telegram stale failure');
+}
+echo "PASS: shared Strategies/Voice candidate and dependency generation; Voice normalization/conflict/stale\n";

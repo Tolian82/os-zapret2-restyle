@@ -12,7 +12,7 @@ use OPNsense\Base\UserException;
 use OPNsense\Core\Backend;
 use OPNsense\Core\Config;
 
-require_once __DIR__ . '/StrategySettingsPayload.php';
+require_once __DIR__ . '/SettingsApply.php';
 
 class SettingsController extends ApiMutableModelControllerBase
 {
@@ -229,13 +229,12 @@ class SettingsController extends ApiMutableModelControllerBase
                 throw new \InvalidArgumentException('Missing Strategies form payload');
             }
             $baseline = $post['sync']['telegramips_baseline'] ?? null;
-            StrategySettingsPayload::requireFreshTelegram($oldNodes, $baseline);
             // Browser ownership metadata is not a mutable model field.
             unset($post['sync']);
-            // Only the fields visible on the Strategies form may be updated.
-            // In particular, a stale form must not reset persistent Voice
-            // service states, arguments or independently managed IPSETs.
-            $model->setNodes(StrategySettingsPayload::overlay($oldNodes, $post));
+            // Both pages use one full candidate boundary, but only the
+            // Strategies field whitelist may be overlaid by this request.
+            $plan = SettingsApply::prepareStrategies($oldNodes, $post, $baseline);
+            $model->setNodes($plan['candidate']);
         } catch (\InvalidArgumentException $exception) {
             $config->unlock();
             return ['result' => 'failed', 'message' => $exception->getMessage()];
