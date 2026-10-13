@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_51`. `VERSION=0.5.2`; `PLUGIN_REVISION=51`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_52`. `VERSION=0.5.2`; `PLUGIN_REVISION=52`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+**`_52` — холодное восстановление полностью установленного нового runtime из прерванной `activating`.** Запись single common journal может остаться в `activating`, даже если atomic rename уже завершён. Boot под тем же FD9 сначала отдельно проверяет прежнее дерево (прежний `_49` pristine-case); если оно не совпало, проверяет строго совпадающий с sealed candidate новый installed runtime. Только если оба bundle целы, предыдущая native Config не изменялась, все процессы dvtws2/supervisor отсутствуют (включая full census), а scoped IPFW пуст, применяется существующий cold rollback `_50` к предыдущему sealed release. Повторная проверка обязательна до перехода того же журнала `activating → restored`; следующий штатный boot обслуживает предыдущего common owner. При частично перенесённых, исчезнувших или чужих деревьях, чужом IPFW, изменившемся Config или живом процессе **ничего автоматически не стирается**. Проверки CI — только simulation, FreeBSD owner-live ещё не доказан.
 
 **`_51` — защита промежуточных деревьев атомарного Apply.** В `atomic_install_tree` устранено удаление заранее существующих `.stage.$$` и `.old.$$`: после прерывания или повторного использования PID они могут содержать единственную копию прежнего runtime. Теперь выполняется отказ до копирования и переноса дерева. Дополнительно проверяется отсутствие целевого `name-date-PID` backup, чтобы `mv` не вложил текущий release в чужую директорию. Regression проверяет сохранность трёх занятых путей и действующего runtime штатной производственной функцией, в существующих Linux/FreeBSD CI. Это предотвращение потери доказательств, **не** готовый redo/recovery частичного `activating`.
 
@@ -82,7 +84,7 @@ Install проверяет живые объекты до изменения, с
 
 ## Следующее действие
 
-**Этап 4 — следующий рубеж после `_51`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
+**Этап 4 — следующий рубеж после `_52`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 
 ## Минимальное чтение по текущей задаче
 
