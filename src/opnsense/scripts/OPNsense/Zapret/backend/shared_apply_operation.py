@@ -62,7 +62,7 @@ NEXT = {
     "legacy-rollback-marker": frozenset(("legacy-rollback-marker-restored",)),
     "legacy-rollback-marker-restored": frozenset(("legacy-rollback-processes",)),
     "legacy-rollback-processes": frozenset(("legacy-rollback-processes-restored",)),
-    "legacy-rollback-processes-restored": frozenset(),
+    "legacy-rollback-processes-restored": frozenset(("restored",)),
 }
 
 
@@ -423,6 +423,33 @@ class SharedApplyOperation:
             identity, "legacy-rollback-processes",
             "legacy-rollback-processes-restored", attest
         )
+
+    def complete_legacy_full_restore(self, identity: str, attest) -> dict:
+        """Close the original five-domain rollback without adopting Voice.
+
+        PRIVATE: the borrowed FD9/Config-flock caller must reattest the saved
+        Config/runtime, original IPFW and marker, three live process identities,
+        their FreeBSD kernel argv and UID/GID/image policy. This method never
+        starts processes, edits IPFW or grants a native Voice owner.
+        """
+        if not isinstance(identity, str) or not OP_ID.fullmatch(identity) or (
+            not callable(attest)
+        ):
+            raise SharedOperationError("untrusted whole legacy restoration")
+        before = self.read()
+        if before is None or before["phase"] != "legacy-rollback-processes-restored" or (
+            before["detail"]["id"] != identity
+            or "legacy_predecessor" not in before or "previous" in before
+        ):
+            raise SharedOperationError("all old recovery domains must be restored first")
+        result = attest()
+        if not isinstance(result, str) or result != before["legacy_predecessor"]:
+            raise SharedOperationError("whole old owner attestation mismatches predecessor")
+        if self.read() != before:
+            raise SharedOperationError("whole old owner journal raced during attestation")
+        return self._persist_record({
+            "schema": SCHEMA, "phase": "restored", "detail": before["detail"],
+        })
 
     def cancel_pristine_legacy(self, identity: str, attest) -> dict:
         """Operator-only cancellation: prove the OLD live owner never changed.

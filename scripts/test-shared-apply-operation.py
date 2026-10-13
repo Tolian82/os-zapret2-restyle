@@ -806,9 +806,21 @@ class TestJournal(unittest.TestCase):
             self.assertEqual(intent,store.read())
             done=store.finish_legacy_process_restart(detail()["id"],lambda:owner)
             self.assertEqual("legacy-rollback-processes-restored",done["phase"])
+            with self.assertRaises(SharedOperationError):
+                store.complete_legacy_full_restore(detail()["id"],lambda:"a"*64)
+            with self.assertRaises(SharedOperationError):
+                store.complete_legacy_full_restore("2"*32,lambda:owner)
+            self.assertEqual(done,store.read())
             self.assertEqual("shared-apply-pending",check_pending(
                 root/"voice-cutover",root/"voice-ipfw")["reason"])
-            self.assertFalse(store.advisory()["safe_to_mutate"])
+            completed=store.complete_legacy_full_restore(detail()["id"],lambda:owner)
+            self.assertEqual("restored",completed["phase"])
+            self.assertNotIn("legacy_predecessor",completed)
+            self.assertTrue(store.advisory()["safe_to_mutate"])
+            self.assertEqual(completed,SharedApplyOperation(store.root).read())
+            self.assertIsNone(committed_owner(completed))
+            with self.assertRaises(SharedOperationError):
+                store.complete_legacy_full_restore(detail()["id"],lambda:owner)
             with self.assertRaises(SharedOperationError):
                 store.advance("activating",detail())
 
@@ -824,7 +836,7 @@ class TestJournal(unittest.TestCase):
         from voice_ipfw_adapter import FreeBSDIPFWAdapter
         from voice_native_recovery_quiescence import EXPECTED_SCRIPTS, PIDFILES
         prior="f"*64
-        for interrupted in (False,True,"bad-proof"):
+        for interrupted in (False,True,"bad-proof","closure-cut"):
             with self.subTest(interrupted=interrupted), tempfile.TemporaryDirectory() as temp:
                 root=Path(temp)
                 work=root/detail()["id"]
@@ -873,14 +885,15 @@ class TestJournal(unittest.TestCase):
                     attempts.append(args)
                     self.assertEqual("start",args[0][-1])
                     self.assertEqual((9,),kwargs["pass_fds"])
-                    if interrupted:
+                    if interrupted in (True,"bad-proof"):
                         raise OSError("power cut after possible old process start")
                     return SimpleNamespace(returncode=0,stdout="",stderr="")
                 def attest_old(**kwargs):
                     if interrupted=="bad-proof":
                         raise LegacyProcessRestartError("partial or foreign roles")
                     self.assertEqual(probe,kwargs["process_probe"])
-                    self.assertEqual("legacy-rollback-processes",store.read()["phase"])
+                    self.assertIn(store.read()["phase"],
+                        ("legacy-rollback-processes","legacy-rollback-processes-restored"))
                     return {"instances":{"engine":"good","daemon":"good","monitor":"good"}}
                 def invoke():
                     return restart_common_legacy_processes(
@@ -933,7 +946,7 @@ class TestJournal(unittest.TestCase):
                     )
                     for scope in scopes:
                         stack.enter_context(scope)
-                    if interrupted:
+                    if interrupted in (True,"bad-proof"):
                         with self.assertRaises(OSError):
                             invoke()
                         self.assertEqual("legacy-rollback-processes",store.read()["phase"])
@@ -941,12 +954,23 @@ class TestJournal(unittest.TestCase):
                             with self.assertRaises(LegacyProcessRestartError):
                                 invoke()
                         else:
-                            self.assertEqual("legacy-rollback-processes-restored",
-                                             invoke()["phase"])
-                    else:
+                            self.assertEqual("restored",invoke()["phase"])
+                    elif interrupted=="closure-cut":
+                        with patch.object(store,"complete_legacy_full_restore",
+                                          side_effect=OSError("power cut after roles verified")):
+                            with self.assertRaises(OSError):
+                                invoke()
                         self.assertEqual("legacy-rollback-processes-restored",
-                                         invoke()["phase"])
+                                         store.read()["phase"])
+                        self.assertEqual("restored",invoke()["phase"])
+                    else:
+                        self.assertEqual("restored",invoke()["phase"])
                     self.assertEqual(1,len(attempts))
+                    if interrupted=="bad-proof":
+                        self.assertEqual("legacy-rollback-processes",store.read()["phase"])
+                    else:
+                        self.assertEqual("restored",store.read()["phase"])
+                        self.assertNotIn("legacy_predecessor",store.read())
                     with self.assertRaises(LegacyProcessRestartError):
                         invoke()
 

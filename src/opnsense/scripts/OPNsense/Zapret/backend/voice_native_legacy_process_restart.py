@@ -216,7 +216,8 @@ def restart_common_legacy_processes(
     _locked_config(config_path, config_fd, config_owner)
     record = store.read()
     if record is None or record["phase"] not in (
-        "legacy-rollback-marker-restored", "legacy-rollback-processes"
+        "legacy-rollback-marker-restored", "legacy-rollback-processes",
+        "legacy-rollback-processes-restored",
     ) or record["detail"]["id"] != identity or (
         "legacy_predecessor" not in record or "previous" in record
     ):
@@ -268,7 +269,8 @@ def restart_common_legacy_processes(
         _locked_config(config_path, config_fd, config_owner)
         now = store.read()
         if now is None or now["phase"] not in (
-            "legacy-rollback-marker-restored", "legacy-rollback-processes"
+            "legacy-rollback-marker-restored", "legacy-rollback-processes",
+            "legacy-rollback-processes-restored",
         ) or now["detail"] != record["detail"] or (
             now.get("legacy_predecessor") != record["legacy_predecessor"]
         ):
@@ -326,7 +328,9 @@ def restart_common_legacy_processes(
             raise LegacyProcessRestartError("fixed old one-engine actuator failed")
 
     def attest():
-        if gate()["phase"] != "legacy-rollback-processes":
+        if gate()["phase"] not in (
+            "legacy-rollback-processes", "legacy-rollback-processes-restored"
+        ):
             raise LegacyProcessRestartError("old process restart not armed")
         return attest_restarted_old_roles(
             source=source, process_evidence_dir=process_dir,
@@ -338,13 +342,27 @@ def restart_common_legacy_processes(
     proof = attest()
     if attest() != proof:
         raise LegacyProcessRestartError("unstable three-role restart receipt")
-    result = store.finish_legacy_process_restart(
+    if record["phase"] != "legacy-rollback-processes-restored":
+        result = store.finish_legacy_process_restart(
+            identity, lambda: (
+                record["legacy_predecessor"] if attest() == proof else None
+            ),
+        )
+        if result["phase"] != "legacy-rollback-processes-restored":
+            raise LegacyProcessRestartError("old process restart not sealed")
+    # A power cut after the three-role receipt but before final closure may
+    # re-enter here. Only reattest: NEVER invoke the start actuator again.
+    # The old Config/runtime, kernel IPFW, marker and PID/argv/security
+    # witnesses are all rechecked under the ORIGINAL borrowed FD9+Config lock.
+    if attest() != proof:
+        raise LegacyProcessRestartError("old owner changed before whole closure")
+    result = store.complete_legacy_full_restore(
         identity, lambda: (
             record["legacy_predecessor"] if attest() == proof else None
         ),
     )
-    if result["phase"] != "legacy-rollback-processes-restored":
-        raise LegacyProcessRestartError("old process restart not sealed")
+    if result["phase"] != "restored" or "legacy_predecessor" in result:
+        raise LegacyProcessRestartError("old five-domain rollback did not close")
     return result
 
 
