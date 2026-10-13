@@ -18,7 +18,7 @@
 
 ## Level 2 — этап v0.5.2 и текущая линия
 
-- [Подробный план v0.5.2 и контроль](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) — компоненты, общий Apply, семь этапов, критерии и проверки; принят к выполнению; общий candidate/firewall реализованы; следующий этап — Apply.
+- [Подробный план v0.5.2 и контроль](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) — компоненты, общий Apply, семь этапов, критерии и проверки; принят к выполнению; общий candidate/firewall и обе штатные кнопки Apply реализованы; следующий рубеж — recovery прерванного применения, миграция и приёмка.
 - [Полное ТЗ «Передача голоса»](architecture/VOICE_TRANSMISSION_GUI.md) — неизменные frontend/функции пяти сервисов и утверждённый общий backend.
 - [ARCHITECTURE](ARCHITECTURE.md), [REQUIREMENTS](REQUIREMENTS.md), [Zapret2 Service](architecture/ZAPRET2_SERVICE.md) — действующие общие контракты.
 - [Запись этапа v0.5.2](releases/v0.5.2.md) — development only, без релиза.
