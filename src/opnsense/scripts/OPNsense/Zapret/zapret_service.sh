@@ -807,6 +807,22 @@ shared_apply_json_field()
 {
     /usr/local/bin/jq -er "$1"
 }
+# Only a PREPARED journal (before any mutation) can be auto-closed at boot.
+# The root FD9 Python command rechecks the sealed candidate and journal.
+shared_apply_recover_prepared_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    case "$1" in prepared\ *) ;; *) return 69 ;; esac
+    _shared_recover_id=$(printf "%s\n" "$1" | cut -d " " -f 2)
+    _shared_recover_page=$(printf "%s\n" "$1" | cut -d " " -f 3)
+    [ "$1" = "prepared $_shared_recover_id $_shared_recover_page" ] || return 69
+    [ "${#_shared_recover_id}" -eq 32 ] || return 69
+    case "$_shared_recover_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+    case "$_shared_recover_page" in voice|strategies) ;; *) return 69 ;; esac
+    [ -x /usr/local/bin/python3.13 ] || return 69
+    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+        recover-prepared "$_shared_recover_id"
+}
 # Read the durable owner only under the existing FreeBSD FD9. This is a
 # tiny native boot dispatcher, not a second runtime or Config persistence.
 shared_apply_inspect_service()
@@ -1221,6 +1237,9 @@ service_with_lifecycle_lock()
                         committed\ *)
                             shared_apply_boot_service "$_shared_owner"
                             return $?
+                            ;;
+                        prepared\ *)
+                            shared_apply_recover_prepared_service "$_shared_owner" || return 69
                             ;;
                         none|restored) ;;
                         *) return 69 ;;

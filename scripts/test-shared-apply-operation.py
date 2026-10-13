@@ -71,6 +71,32 @@ class TestJournal(unittest.TestCase):
                                capture_output=True,check=False)
         self.assertEqual(64,invalid.returncode)
 
+    def test_prepared_only_recovery_attests_before_terminal_record(self):
+        with tempfile.TemporaryDirectory() as folder:
+            journal=SharedApplyOperation(Path(folder)/"shared-apply")
+            d=detail()
+            journal.advance("prepared",d)
+            attempts=[]
+            def witness():
+                attempts.append("verified")
+                return True
+            journal.recover_prepared(d["id"],witness)
+            self.assertEqual(["verified"],attempts)
+            self.assertEqual("restored",journal.read()["phase"])
+            with self.assertRaisesRegex(SharedOperationError,"prepared-only"):
+                journal.recover_prepared(d["id"],witness)
+        with tempfile.TemporaryDirectory() as folder:
+            journal=SharedApplyOperation(Path(folder)/"shared-apply")
+            d=detail()
+            journal.advance("prepared",d)
+            with self.assertRaisesRegex(SharedOperationError,"attestation"):
+                journal.recover_prepared(d["id"],lambda: False)
+            self.assertEqual("prepared",journal.read()["phase"])
+            journal.advance("activating",d)
+            with self.assertRaisesRegex(SharedOperationError,"prepared-only"):
+                journal.recover_prepared(d["id"],lambda: True)
+            self.assertEqual("activating",journal.read()["phase"])
+
     def test_invalid_identity_fields_and_reordered_phase(self):
         with tempfile.TemporaryDirectory() as d:
             j=SharedApplyOperation(Path(d)/"shared-apply")

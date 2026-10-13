@@ -61,6 +61,7 @@ LOCKF_BIN="$ROOT/lockf"
 LIFECYCLE_LOCK_FILE="$ROOT/owner.lock"
 shared_apply_has_record_service() { [ "$HAS_RECORD" = 1 ]; }
 shared_apply_inspect_service() { [ "$OWNER_OK" = 1 ] || return 69; echo "$OWNER"; }
+shared_apply_recover_prepared_service() { echo prepared-recovered >> "$LOG"; [ "$RECOVER" = 0 ]; }
 shared_apply_boot_service() { echo "common:$1" >> "$LOG"; }
 preflight_voice_cutover_journals() { echo "legacy-guard" >> "$LOG"; }
 service_dispatch() { echo "legacy:$1" >> "$LOG"; }
@@ -73,6 +74,7 @@ check_route() {
     set -e
     [ "$result" = "$expected" ] || fail "lifecycle returned $result instead of $expected"
 }
+RECOVER=0
 HAS_RECORD=1 OWNER_OK=1 OWNER="committed $ID voice"
 check_route 0 start
 [ "$(cat "$LOG")" = "common:committed $ID voice" ] ||
@@ -84,6 +86,15 @@ OWNER=restored
 check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:start ' ] ||
     fail "restored owner did not use ordinary legacy lifecycle"
+OWNER="prepared $ID voice"
+check_route 0 start
+[ "$(tr '\n' ' ' < "$LOG")" = 'prepared-recovered legacy-guard legacy:start ' ] ||
+    fail "prepared recovery did not resume ordinary runtime"
+RECOVER=1
+check_route 69 reconfigure
+[ "$(cat "$LOG")" = "prepared-recovered" ] ||
+    fail "recovery failure fell through to legacy"
+RECOVER=0
 OWNER=pending
 check_route 69 start
 [ ! -s "$LOG" ] || fail "pending owner changed lifecycle"

@@ -33,7 +33,7 @@ PHASES = frozenset((
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
-    "prepared": frozenset(("activating",)),
+    "prepared": frozenset(("activating", "restored")),
     # An activation failure may have fully restored every resource without
     # ever publishing 'activated'; mark restored only after attested rollback.
     "activating": frozenset(("activated", "restored", "requires-review", "restore-failed")),
@@ -181,6 +181,23 @@ class SharedApplyOperation:
             os.close(dirfd)
         return record
 
+    def recover_prepared(self, identity: str, attest) -> dict:
+        """Only PREPARED can be closed without touching runtime/Config/IPFW.
+
+        The journal write precedes the mutating transition; an executor can
+        never change kernel/processes until the durable 'activating' fsync
+        has returned. The same FD9 is held across witness and closure.
+        """
+        record = self.read()
+        if record is None or record["phase"] != "prepared" or \
+           record["detail"]["id"] != identity:
+            raise SharedOperationError("prepared-only recovery refused")
+        if not callable(attest) or attest() is not True:
+            raise SharedOperationError("shared candidate attestation refused")
+        if self.read() != record:
+            raise SharedOperationError("shared Apply phase changed during recovery")
+        return self.advance("restored", record["detail"])
+
     def advisory(self) -> dict:
         record = self.read()
         if record is None or record["phase"] in TERMINAL:
@@ -194,7 +211,8 @@ class SharedApplyOperation:
 def main(argv: list[str]) -> int:
     inspection = len(argv) == 2 and argv[1] == "inspect"
     recording = len(argv) == 8 and argv[1] == "record"
-    if not (inspection or recording):
+    recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(ID.fullmatch(argv[2]))
+    if not (inspection or recording or recovery):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -210,9 +228,20 @@ def main(argv: list[str]) -> int:
                 print("committed " + detail["id"] + " " + detail["page"])
             elif record["phase"] == "restored":
                 print("restored")
+            elif record["phase"] == "prepared":
+                detail = record["detail"]
+                print("prepared " + detail["id"] + " " + detail["page"])
             else:
                 # Never make an incomplete operation look like no owner.
                 raise SharedOperationError("unfinished common Apply blocks native boot")
+        elif recovery:
+            from shared_apply_seal import verify_seal, WORK
+            store = SharedApplyOperation(owner=0)
+            store.recover_prepared(
+                argv[2],
+                lambda: bool(verify_seal(WORK / argv[2], owner=0)),
+            )
+            print("prepared-restored")
         else:
             fields = [] if argv[7] == "-" else argv[7].split(",")
             detail = {
