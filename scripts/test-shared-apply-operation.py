@@ -43,7 +43,7 @@ class TestJournal(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)
             store=SharedApplyOperation(root/"shared-apply")
-            with self.assertRaisesRegex(SharedOperationError,"attestation"):
+            with self.assertRaisesRegex(SharedOperationError,"fingerprint"):
                 store.prepare_legacy_predecessor(detail(),lambda: "unsafe")
             self.assertFalse(store.root.exists())
             with self.assertRaises(SharedOperationError):

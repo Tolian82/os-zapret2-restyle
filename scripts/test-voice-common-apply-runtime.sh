@@ -254,7 +254,7 @@ echo 'PASS: common FD9 legacy audit uses existing exact kernel/IPFW/argv witness
 
 # The outer production CLI MUST route both diagnostic actions through the
 # original FD9 lifecycle. Merely adding service_dispatch is not enough.
-grep -Fq '|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture)' "$SERVICE_SOURCE" ||
+grep -Fq '|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture|' "$SERVICE_SOURCE" ||
     fail "legacy diagnostic commands bypass original FD9 lifecycle lock"
 grep -Fq 'shared-apply-legacy-qualify)' "$SERVICE_SOURCE" ||
     fail "candidate qualification is not dispatched"
