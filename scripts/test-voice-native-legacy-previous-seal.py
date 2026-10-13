@@ -15,7 +15,8 @@ ROOT=Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"))
 
 from voice_native_legacy_previous_seal import (
-    capture_legacy_previous, inspect_legacy_previous, LegacyPreviousSealError,
+    capture_legacy_previous, inspect_legacy_previous,
+    inspect_legacy_previous_live_identity, LegacyPreviousSealError,
 )
 from voice_cutover_guard import check_pending
 from voice_freebsd_process_security import FreeBSDProcessSecurityReader, FIELDS
@@ -72,6 +73,48 @@ class DurableOldPoCTests(unittest.TestCase):
             )
         finally:
             os.close(fd)
+
+    def test_exact_old_manifest_fields_available_only_after_full_seal(self):
+        self.capture()
+        from voice_native_legacy_live_preflight import inspect_running_legacy_poc
+        live=self.case.live
+        saved=inspect_legacy_previous_live_identity(self.root)
+        self.assertEqual({
+            "marker","legacy_ipfw_previous","legacy_ipfw_structure_sha256",
+            "managed_ipv4_sha256","active_argument_sha256","process_instances",
+        },set(saved))
+        fd=os.open(live.config,os.O_RDWR)
+        try:
+            fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            current=inspect_running_legacy_poc(
+                config_path=live.config,active_runtime=live.runtime,
+                legacy_marker=self.case.marker,whole_root=self.case.live.whole/"new-empty",
+                ledger_root=live.ledger,probe=live.probe,kernel_reader=live.kernel,
+                ipfw_adapter=live.adapter,config_fd=fd,
+                config_owner=(os.geteuid(),os.getegid()),
+                require_lifecycle_owner=lambda:live.lock_calls.append("FD9"),
+            )
+        finally:
+            os.close(fd)
+        for prior,now in (
+            ("legacy_ipfw_structure_sha256","legacy_ipfw_structure_sha256"),
+            ("managed_ipv4_sha256","managed_ipv4_sha256"),
+            ("active_argument_sha256","active_argument_sha256"),
+            ("process_instances","instances"),
+            ("legacy_ipfw_previous","legacy_ipfw_previous"),
+        ):
+            self.assertEqual(saved[prior],current[now])
+        self.assertEqual(saved["marker"]["mode"],
+                         (self.case.marker.stat().st_mode & 0o777))
+        # A valid hash for an altered manifest is still not enough: the
+        # stored previous Config/runtime/process-evidence must match.
+        manifest=self.root/"legacy-previous"/"legacy.json"
+        original=manifest.read_bytes()
+        bad=original.replace(b'"managed_ipv4_sha256":',b'"changed_ipv4_sha256":',1)
+        self.assertNotEqual(original,bad)
+        manifest.write_bytes(bad)
+        with self.assertRaises((OSError,ValueError,RuntimeError)):
+            inspect_legacy_previous_live_identity(self.root)
 
     def test_writes_restorable_old_files_marker_and_exact_ipfw_with_no_kernel_mutation(self):
         before = self.case.live.config.read_bytes()

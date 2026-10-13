@@ -20,6 +20,7 @@ from voice_cutover_config_restore import _pinned_regular
 from voice_native_recovery_quiescence import EXPECTED_SCRIPTS, PIDFILES, _locked_config
 from voice_native_legacy_previous_seal import (
     NAME, capture_legacy_previous, inspect_legacy_previous,
+    inspect_legacy_previous_live_identity,
 )
 from voice_native_legacy_restore_plan import (
     PLAN_NAME, prepare_legacy_restore_plan, inspect_legacy_restore_plan,
@@ -134,7 +135,7 @@ def cancel_unchanged_common_predecessor(
     from shared_apply_operation import fingerprint_legacy_predecessor
     work = Path(work)
     root = work / "legacy-backup"
-    saved = inspect_legacy_previous(root)
+    saved = inspect_legacy_previous_live_identity(root)
     def attest():
         require_lifecycle_owner()
         _locked_config(Path(config_path), config_fd, config_owner)

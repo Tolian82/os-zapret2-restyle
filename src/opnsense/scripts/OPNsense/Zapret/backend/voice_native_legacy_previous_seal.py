@@ -155,6 +155,42 @@ def inspect_legacy_previous(root: Path) -> dict:
     }
 
 
+def inspect_legacy_previous_live_identity(root: Path) -> dict:
+    """Extract the exact old live witness from an independently VERIFIED seal.
+
+    The public previous inspector intentionally returns a smaller safe summary,
+    not the PID/argv/IPFW payload. The shared legacy begin/cancel route needs
+    the complete recorded identity to compare it with the LIVE owner. Never
+    treat an unverified legacy.json as an old-owner authorization.
+    """
+    root = Path(root)
+    before = inspect_legacy_previous(root)
+    archive = root / NAME
+    body = _read_private_file(archive / "legacy.json", LIMIT)
+    checksum = _read_private_file(archive / "legacy.sha256", 65)
+    if checksum != (_digest(body) + "\n").encode("ascii"):
+        raise LegacyPreviousSealError("old live identity lost its manifest seal")
+    record = json.loads(body)
+    if not isinstance(record, dict) or record.get("schema") != SCHEMA or (
+        record.get("previous") != before["previous"]
+        or record.get("previous_five") != before["previous_five"]
+        or record.get("legacy_ipfw_structure_sha256") !=
+            before["legacy_ipfw_structure_sha256"]
+        or record.get("process_security_policy_sha256") !=
+            before["process_security_policy_sha256"]
+    ):
+        raise LegacyPreviousSealError("old live identity is not the sealed previous-five")
+    # Validate the exact CURRENT bytes again: a swapped manifest must never
+    # yield an identity that was not inspected and bound to the old files.
+    if inspect_legacy_previous(root) != before:
+        raise LegacyPreviousSealError("previous PoC changed during identity inspection")
+    fields = (
+        "marker", "legacy_ipfw_previous", "legacy_ipfw_structure_sha256",
+        "managed_ipv4_sha256", "active_argument_sha256", "process_instances",
+    )
+    return {key: record[key] for key in fields}
+
+
 def capture_legacy_previous(
     *, root, config_path, active_runtime, legacy_marker, ledger_root,
     probe, kernel_reader, ipfw_adapter, security_reader,
