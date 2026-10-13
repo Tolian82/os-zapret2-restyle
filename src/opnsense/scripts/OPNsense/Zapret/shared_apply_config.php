@@ -16,6 +16,7 @@
 namespace OPNsense\Zapret\Native;
 
 require_once __DIR__ . '/apply_settings.php';
+require_once __DIR__ . '/shared_apply_lock.php';
 
 use OPNsense\Zapret\Api\SettingsApply;
 use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
@@ -132,6 +133,7 @@ final class SharedApplyConfigWorker
             if (PHP_OS_FAMILY !== 'BSD' || posix_geteuid() !== 0) {
                 throw new \RuntimeException('Root OPNsense native Config required');
             }
+            SharedApplyLifecycleLock::assertHeld();
             require_once('script/load_phalcon.php');
             $plan = self::readPlan($argv[2], self::ROOT, 0);
             if ($plan['page'] !== $argv[3]) {

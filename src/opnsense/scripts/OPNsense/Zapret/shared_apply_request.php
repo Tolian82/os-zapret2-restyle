@@ -12,6 +12,7 @@
 namespace OPNsense\Zapret\Native;
 
 require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php';
+require_once __DIR__ . '/shared_apply_lock.php';
 
 use OPNsense\Zapret\Api\SettingsApply;
 
@@ -151,6 +152,7 @@ final class SharedApplyRequest
             if (PHP_OS_FAMILY !== 'BSD' || posix_geteuid() !== 0) {
                 throw new \RuntimeException('Native root staging required');
             }
+            SharedApplyLifecycleLock::assertHeld();
             // Same installed OPNsense bootstrapping as built-in PHP scripts.
             require_once('script/load_phalcon.php');
             $request = self::decode($argv[2]);

@@ -380,6 +380,9 @@ jobs:
           echo "Internal service: zapret"
           echo "Version: ${VERSION_VALUE}"
 
+      - name: Verify native PHP uses original held FD9
+        run: sh scripts/test-shared-apply-lock.sh
+
       - name: Validate XML files
         run: find src -type f -name "*.xml" -exec xmllint --noout {} \;
 
