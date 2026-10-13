@@ -14,6 +14,7 @@ require_once __DIR__ . '/VoiceCandidateValidator.php';
 require_once __DIR__ . '/VoiceSettingsSnapshot.php';
 require_once __DIR__ . '/VoiceSettingsPayload.php';
 require_once __DIR__ . '/SettingsApply.php';
+require_once __DIR__ . '/SharedApplyEnvelope.php';
 require_once __DIR__ . '/VoiceCandidateXml.php';
 require_once __DIR__ . '/VoiceDraftSelection.php';
 
@@ -288,121 +289,82 @@ class VoiceController extends ApiControllerBase
     }
 
     /**
-     * Apply an OFF-only Voice configuration using the actual existing Zapret
-     * reconfigure action. Enabled Voice is still rejected until the one-engine
-     * IPFW transaction exists. This updates the shared managed IPSETs used
-     * by ordinary Strategies, without enabling a native Voice profile.
+     * The unchanged Voice Apply action now uses the same native
+     * Strategies/Voice Config/runtime/IPFW transaction under original FD9.
+     * Never save Voice ON ahead of runtime. GUI Config lock is released
+     * before configd takes FD9; root worker reloads and validates again.
      */
     public function applyAction(): array
     {
-        if (!$this->request->isPost()) {
-            return ['result' => 'failed', 'validations' => [
-                'zapret.voice.waninterface' => 'POST request required'
-            ]];
-        }
-        $fields = $this->request->getPost('zapret');
-        if (!is_array($fields)) {
-            return ['result' => 'failed', 'validations' => [
-                'zapret.voice.waninterface' => 'Missing Voice form'
-            ]];
-        }
-        $this->throwReadOnly();
-        $backend = new Backend();
-        // Refuse when Strategy Lab owns the runtime or the guard is unknown.
-        $guard = json_decode(trim((string)$backend->configdRun('zapret strategy_lab_guard')), true);
-        if (!is_array($guard) || ($guard['busy'] ?? true) !== false) {
-            return ['result' => 'failed', 'validations' => [
-                'zapret.voice.waninterface' => 'Zapret lifecycle is busy; retry after diagnostics finish'
-            ]];
-        }
-        $config = Config::getInstance();
-        $config->lock();
-        $model = new \OPNsense\Zapret\Zapret();
-        try {
-            $previous = $model->getNodes();
-            $sync = $fields['sync'] ?? null;
-            if (!is_array($sync) || array_keys($sync) !== ['snapshot']) {
-                throw new \InvalidArgumentException(
-                    'Voice configuration baseline is missing. Reload the Voice page.'
-                );
-            }
-            unset($fields['sync']);
-            $plan = SettingsApply::prepareVoice($previous, $fields, $sync['snapshot']);
-            if ($plan['result'] !== 'prepared') {
-                return $plan;
-            }
-            foreach (['telegram', 'discord', 'x', 'sip', 'custom'] as $service) {
-                if (($plan['candidate']['voice'][$service]['enabled'] ?? '0') !== '0' ||
-                    ($previous['voice'][$service]['enabled'] ?? '0') !== '0'
-                ) {
-                    return ['result' => 'failed', 'validations' => [
-                        'zapret.voice.' . $service . '.enabled' =>
-                            'Native Voice ON still needs the shared IPFW cutover; apply only OFF profiles'
-                    ]];
-                }
-            }
-            // Reject stale / changed runtime ownership before any Config write.
-            $guard = json_decode(trim((string)$backend->configdRun('zapret strategy_lab_guard')), true);
-            if (!is_array($guard) || ($guard['busy'] ?? true) !== false) {
-                return ['result' => 'failed', 'validations' => [
-                    'zapret.voice.waninterface' => 'Zapret lifecycle became busy before applying'
-                ]];
-            }
-            // Reconfigure even for an unchanged draft: the earlier Save
-            // Draft endpoint deliberately made NO runtime changes.
-            if ($plan['changed_fields'] !== []) {
-                $model->setNodes($plan['candidate']);
-                $messages = $model->performValidation(false);
-                if (count($messages) > 0) {
-                    $validations = [];
-                    foreach ($messages as $message) {
-                        $validations['zapret.' . $message->getField()] = $message->getMessage();
-                    }
-                    return ['result' => 'failed', 'validations' => $validations];
-                }
-                if (!$model->serializeToConfig(false, true)) {
-                    throw new \RuntimeException('Voice configuration serialization failed');
-                }
-                $config->save(['description' => gettext('Applied inactive Zapret Voice settings')]);
-            }
-        } catch (\InvalidArgumentException $error) {
-            return ['result' => 'failed', 'validations' => [
-                'zapret.voice.waninterface' => $error->getMessage()
-            ]];
-        } catch (\Throwable $error) {
-            return ['result' => 'failed', 'validations' => [
-                'zapret.voice.waninterface' => 'Voice settings could not be saved'
-            ]];
-        } finally {
-            $config->unlock();
-        }
-        // Config.save() releases its flock internally. Never hold the
-        // lifecycle FD9 while invoking configd: reconfigure acquires FD9.
-        // Future ON Apply must replace this OFF-only path with one complete
-        // transaction owner, not merely widen its checkbox condition.
-        $response = trim((string)$backend->configdRun('zapret reconfigure', false, 180));
-        if ($response !== 'OK') {
-            // Do not falsely claim that the previous runtime is restored:
-            // a failed reconfigure may already have partially changed it.
-            // Preserve the saved state for explicit operator inspection.
+        $failed = static function (string $message, bool $review = false): array {
             return [
                 'result' => 'failed',
-                'saved' => true,
                 'applied' => false,
-                'requires_review' => true,
-                'snapshot' => VoiceSettingsSnapshot::digest($plan['candidate']),
-                'validations' => [
-                    'zapret.voice.waninterface' =>
-                        'Settings saved, but Zapret reconfigure failed; inspect current runtime before retrying'
-                ],
+                'requires_review' => $review,
+                'validations' => ['zapret.voice.waninterface' => $message],
             ];
+        };
+        if (!$this->request->isPost()) {
+            return $failed('POST request required');
         }
-        return [
-            'result' => 'saved',
-            'applied' => true,
-            'change_count' => count($plan['changed_fields']),
-            'snapshot' => VoiceSettingsSnapshot::digest($plan['candidate']),
-        ];
+        $post = $this->request->getPost('zapret');
+        if (!is_array($post)) {
+            return $failed('Missing Voice form');
+        }
+        $this->throwReadOnly();
+        try {
+            $backend = new Backend();
+            $guard = json_decode(trim((string)$backend->configdRun('zapret strategy_lab_guard')), true);
+            if (!is_array($guard) || ($guard['busy'] ?? true) !== false) {
+                return $failed('Zapret lifecycle is busy; retry after diagnostics finish');
+            }
+            $sync = $post['sync'] ?? null;
+            if (!is_array($sync) || array_keys($sync) !== ['snapshot']) {
+                return $failed('Voice configuration baseline is missing; reload this page');
+            }
+            $fields = $post;
+            unset($fields['sync']);
+            $config = Config::getInstance();
+            $config->lock();
+            try {
+                $current = (new \OPNsense\Zapret\Zapret())->getNodes();
+                $plan = SettingsApply::prepareVoice($current, $fields, $sync['snapshot']);
+                if (($plan['result'] ?? null) !== 'prepared') {
+                    return $plan;
+                }
+                // Keep the original native model XML validation before FD9.
+                // Root repeats it from a freshly loaded Config snapshot.
+                SettingsApply::renderCandidateXml(
+                    (string)$config, $current, $plan, 'voice'
+                );
+                $encoded = SharedApplyEnvelope::encode('voice', $fields, $sync);
+            } finally {
+                $config->unlock();
+            }
+            $output = trim((string)$backend->configdpRun(
+                'zapret shared_apply', ['voice', $encoded], false, 600
+            ));
+            if (!preg_match('/(?:^|\n)applied-id=([a-f0-9]{32})$/D', $output)) {
+                return $failed(
+                    'Native Voice Apply was not confirmed; inspect Zapret runtime and recovery status',
+                    true
+                );
+            }
+            // Persisted snapshot was rechecked in native Config after save.
+            return [
+                'result' => 'saved',
+                'applied' => true,
+                'change_count' => count($plan['changed_fields']),
+                'snapshot' => VoiceSettingsSnapshot::digest($plan['candidate']),
+            ];
+        } catch (\InvalidArgumentException $error) {
+            return $failed($error->getMessage());
+        } catch (\Throwable $error) {
+            return $failed(
+                'Native Voice Apply failed or was interrupted; inspect recovery status before retrying',
+                true
+            );
+        }
     }
 
     /**
