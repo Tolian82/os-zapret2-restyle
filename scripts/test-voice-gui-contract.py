@@ -154,8 +154,8 @@ def main() -> None:
               "Voice browser JavaScript syntax error: " + parsed.stderr)
     else:
         print("SKIP: Node.js is unavailable; browser JavaScript syntax was not checked")
-    # A real OFF-only draft save is now exposed. Actual Apply, engine
-    # activation and IPFW writes remain intentionally disconnected.
+    # The optional OFF-only draft save remains separate from the real
+    # ON/OFF native Apply, with the existing GUI layout unchanged.
     check('id="voiceSaveDraft"' in view and
           "$('#voiceSaveDraft').on('click'" in view and
           "'/api/zapret/voice/saveDraft'" in view,
@@ -168,16 +168,20 @@ def main() -> None:
           "'applied' => false" in status_php and
           "throwReadOnly()" in status_php,
           "Voice draft cannot claim activation or bypass write privileges")
-    # The actual existing-runtime Apply is restricted to all-OFF services.
-    # The independently owned repository release installer remains intact.
+    # The approved Voice GUI stays unchanged. Its existing Apply action
+    # now calls the ONE native Strategies/Voice transaction under original
+    # FD9, including ON. The separately owned release installer is untouched.
     check('id="voiceApply"' in view and
           "$('#voiceApply').on('click'" in view and
           "'/api/zapret/voice/apply'" in view,
-          "Voice native OFF-only Apply must be wired to its own API")
-    check("Native Voice ON still needs the shared IPFW cutover" in status_php and
-          "configdRun('zapret reconfigure'" in status_php and
-          "'applied' => true" in status_php,
-          "OFF-only Apply must run the real shared lifecycle and refuse Voice ON")
+          "Unchanged Voice Apply must remain wired to its own API")
+    check("SharedApplyEnvelope::encode('voice'" in status_php and
+          "'zapret shared_apply'" in status_php and
+          "configdpRun(" in status_php and
+          "applied-id=" in status_php and
+          "throwReadOnly()" in status_php and
+          "configdRun('zapret reconfigure'" not in status_php,
+          "Voice ON/OFF Apply must call one native FD9 Config/runtime transaction")
     check('id="voiceReleaseApply"' in view and
           "$('#voiceReleaseApply').on('click'" in view and
           "'/api/zapret/service/install'" in view,
@@ -188,7 +192,7 @@ def main() -> None:
     check('"/api/zapret/settings/apply"' not in view and
           'id="voiceReleaseApply"' in view,
           "Voice must not accidentally reuse Strategies Apply or the installer")
-    print("PASS: Voice GUI native OFF-only Config Apply through real shared lifecycle; Voice ON still gated")
+    print("PASS: Voice GUI unchanged; existing Voice ON/OFF Apply uses common original FD9 native transaction")
 
 if __name__ == "__main__":
     main()
