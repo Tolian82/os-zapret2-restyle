@@ -311,17 +311,26 @@ def shared_firewall_action(adapter, action: str, previous: dict, desired: dict) 
     """
     actions = {"install": apply_transaction, "rollback": rollback_uncommitted,
                "commit": cleanup_committed, "verify": verify_prior_state}
-    if action not in actions:
-        raise IPFWAdapterError("unknown shared firewall action")
-    if action == "verify":
+    if action == "verify-staged":
+        # The new rules are installed but old IPSET contents MUST survive in
+        # stage tables until the native Config save succeeds. Final verify
+        # intentionally rejects these uncommitted rollback artifacts.
+        from voice_firewall_transaction import plan_postcommit_cleanup
+        plan_postcommit_cleanup(adapter, previous, desired)
+        for name in desired["tables"]:
+            if adapter.get_table(name + "_stage") is None:
+                raise IPFWAdapterError("missing shared IPFW rollback stage table")
+    elif action == "verify":
         actions[action](adapter, desired, desired)
-    else:
+    elif action in actions:
         actions[action](adapter, previous, desired)
+    else:
+        raise IPFWAdapterError("unknown shared firewall action")
 
 
 def main(argv: list[str]) -> int:
     if len(argv) != 5 or argv[1] != "shared" or argv[2] not in {
-        "install", "rollback", "commit", "verify"
+        "install", "rollback", "commit", "verify", "verify-staged"
     }:
         print("usage: voice_ipfw_adapter.py shared ACTION PREVIOUS_RELEASE DESIRED_RELEASE",
               file=sys.stderr)
@@ -341,7 +350,7 @@ def main(argv: list[str]) -> int:
         previous = empty if previous is None else previous
         desired = empty if desired is None else desired
         adapter = FreeBSDIPFWAdapter(reference["rule_base"], reference["rule_max"],
-                                     allow_mutations=argv[2] != "verify")
+                                     allow_mutations=argv[2] in {"install", "rollback", "commit"})
         shared_firewall_action(adapter, argv[2], previous, desired)
     except Exception as error:
         print(f"ERROR: {error}", file=sys.stderr)

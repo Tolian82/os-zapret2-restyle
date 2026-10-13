@@ -9,7 +9,7 @@ IPFW_BIN="${IPFW_BIN:-/sbin/ipfw}"
 firewall_shared_runtime()
 {
     [ "$#" -eq 3 ] || return 64
-    case "$1" in install|rollback|commit|verify) ;; *) return 64 ;; esac
+    case "$1" in install|rollback|commit|verify|verify-staged) ;; *) return 64 ;; esac
     "${PYTHON_BIN:-/usr/local/bin/python3.13}" \
         "${BACKEND_DIR}/voice_ipfw_adapter.py" shared "$1" "$2" "$3"
 }

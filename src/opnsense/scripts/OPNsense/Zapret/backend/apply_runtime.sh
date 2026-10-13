@@ -150,10 +150,19 @@ apply_runtime_activate()
         }
         APPLY_IPFW_INSTALLED=1
     fi
-    firewall_shared_runtime verify "$APPLY_CANDIDATE" "$APPLY_NEW" || {
-        apply_runtime_abort "IPFW verification failed"
-        return $?
-    }
+    # Before native Config commit, the staged old IPFW table values are
+    # intentional. Ordinary verify is only valid after commit or rollback.
+    if [ "$APPLY_IPFW_INSTALLED" = 1 ]; then
+        firewall_shared_runtime verify-staged "$APPLY_OLD" "$APPLY_NEW" || {
+            apply_runtime_abort "uncommitted IPFW verification failed"
+            return $?
+        }
+    else
+        firewall_shared_runtime verify "$APPLY_CANDIDATE" "$APPLY_NEW" || {
+            apply_runtime_abort "IPFW verification failed"
+            return $?
+        }
+    fi
     if [ "$APPLY_NEW_RUNNING" = 1 ]; then
         supervisor_start "$SUPERVISOR_LOOP" "$SUPERVISOR_DAEMON_PIDFILE" \
             "$SUPERVISOR_MONITOR_PIDFILE" "$CHILD_PIDFILE" \

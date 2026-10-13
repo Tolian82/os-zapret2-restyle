@@ -13,7 +13,9 @@ def load(name):
     spec.loader.exec_module(module)
     return module
 
+sys.path.insert(0, str(BACKEND))
 transaction = load("voice_firewall_transaction")
+from voice_ipfw_adapter import shared_firewall_action, IPFWAdapterError
 capture = load("voice_capture_plan")
 compiler = load("voice_profile_compiler")
 MANAGED = Path("/usr/local/etc/zapret2/runtime-v2/managed")
@@ -70,6 +72,29 @@ def fixture(*services):
     return transaction.prepare_desired(plan, "443", "596-599")
 
 class VoiceFirewallTransactionTests(unittest.TestCase):
+    def test_common_precommit_ipfw_attestation_requires_original_stage(self):
+        previous = fixture(("telegram", "91.108.0.0/16"))
+        desired = fixture(("telegram", "91.108.13.10"))
+        live = FakeIPFW(previous["rules"], previous["tables"])
+        shared_firewall_action(live, "install", previous, desired)
+        with self.assertRaisesRegex(transaction.VoiceFirewallError, "stage"):
+            shared_firewall_action(live, "verify", previous, desired)
+        shared_firewall_action(live, "verify-staged", previous, desired)
+        key = "zapret2_voice_telegram_stage"
+        self.assertEqual(previous["tables"]["zapret2_voice_telegram"], live.get_table(key))
+        live.tables[key] = ["203.0.113.0/24"]
+        with self.assertRaisesRegex(transaction.VoiceFirewallError, "staging"):
+            shared_firewall_action(live, "verify-staged", previous, desired)
+        del live.tables[key]
+        with self.assertRaisesRegex(IPFWAdapterError, "missing shared IPFW rollback"):
+            shared_firewall_action(live, "verify-staged", previous, desired)
+        clean = FakeIPFW(previous["rules"], previous["tables"])
+        shared_firewall_action(clean, "install", previous, desired)
+        shared_firewall_action(clean, "verify-staged", previous, desired)
+        shared_firewall_action(clean, "commit", previous, desired)
+        shared_firewall_action(clean, "verify", previous, desired)
+
+
     def test_successful_noop_install_is_detected_and_previous_state_restored(self):
         class NoopFirstAdd(FakeIPFW):
             def add_rule(self, number, argv):
