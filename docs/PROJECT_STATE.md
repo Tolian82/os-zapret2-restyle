@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`v0.5.2_74` — завершение pristine `activating` с оставшимся atomic stage.** В штатном FD9 recovery предыдущий полностью проверенный common owner больше не объявляется восстановленным при неизвестном operation-ID stage/park/backup. Если прежний sealed runtime, Config, процессы и IPFW нетронуты, а stage равен полному sealed новому release, удаляется только этот проверенный stage, затем повторно проверяется прежний владелец и фиксируется существующее `recover-activating`. Частичный/чужой stage, parked/backup collision или отказ удаления оставляют journal незавершённым. Новых WAL, процессов, frontend и legacy actuator нет; работающий old Telegram PoC ещё не мигрирован.
+
 **`v0.5.2_73` — общий runtime-failure без старого IPFW sweep.** Callback supervisor передаёт исходный PID отслеживаемого `dvtws2`. Под original FD9 committed common owner обрабатывает сбой через уже существующий проверяемый common Stop: требуется тот же PID-файл, отсутствие работающего движка и orphan census, точный sealed runtime/native Config и принадлежащие common IPFW. Запоздалый callback от прошлой генерации, partial journal или чужие объекты отвергаются. Старый PoC без common owner продолжает использовать прежний обработчик. Это исправление общего lifecycle на пути к миграции, но не сам исполняемый legacy→common handoff; live FreeBSD ещё не проверен.
 
 **`v0.5.2_72`:** устранена устаревшая OFF-only семантика на уже существующей странице Voice. Подтверждённая нативная кнопка ON/OFF Apply, правильные RU/EN подсказки, запрет слепого повтора после `requires_review`/браузерного таймаута и согласованный с 600-секундным backend лимит ожидания. Ни компоновка UI, ни структура пяти профилей не изменены. Старый живой PoC всё ещё требует отдельного перехода.
@@ -62,13 +64,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_73`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_74`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=73` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_73.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=74` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_74.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;

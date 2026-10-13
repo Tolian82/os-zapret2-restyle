@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**`v0.5.2_74` — завершение pristine `activating` с оставшимся atomic stage.** В штатном FD9 recovery предыдущий полностью проверенный common owner больше не объявляется восстановленным при неизвестном operation-ID stage/park/backup. Если прежний sealed runtime, Config, процессы и IPFW нетронуты, а stage равен полному sealed новому release, удаляется только этот проверенный stage, затем повторно проверяется прежний владелец и фиксируется существующее `recover-activating`. Частичный/чужой stage, parked/backup collision или отказ удаления оставляют journal незавершённым. Новых WAL, процессов, frontend и legacy actuator нет; работающий old Telegram PoC ещё не мигрирован.
+
 **`v0.5.2_73` — общий runtime-failure без старого IPFW sweep.** Callback supervisor передаёт исходный PID отслеживаемого `dvtws2`. Под original FD9 committed common owner обрабатывает сбой через уже существующий проверяемый common Stop: требуется тот же PID-файл, отсутствие работающего движка и orphan census, точный sealed runtime/native Config и принадлежащие common IPFW. Запоздалый callback от прошлой генерации, partial journal или чужие объекты отвергаются. Старый PoC без common owner продолжает использовать прежний обработчик. Это исправление общего lifecycle на пути к миграции, но не сам исполняемый legacy→common handoff; live FreeBSD ещё не проверен.
 
 **`v0.5.2_72` — существующая GUI-кнопка Voice Apply теперь соответствует реальному ON/OFF backend.** Без изменения полей, макета и ТЗ обновлены RU/EN подписи/подсказки старого режима «только OFF». Запрос `/api/zapret/voice/apply` по-прежнему ведёт в единый native FD9; браузер ждёт серверный лимит до 600 секунд с запасом и блокирует повторное применение при `requires_review`/сетевой неопределённости до обновления страницы. Save inactive draft по-прежнему только для OFF. Это не означает успешную owner-live Telegram/STUN приёмку или завершение legacy PoC migration.
@@ -18,7 +20,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_73`. `VERSION=0.5.2`; `PLUGIN_REVISION=73`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_74`. `VERSION=0.5.2`; `PLUGIN_REVISION=74`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
 
@@ -120,7 +122,7 @@ Install проверяет живые объекты до изменения, с
 
 ## Следующее действие
 
-**После `_73`:** подготовить единую обратимую миграцию live legacy Telegram PoC (точная остановка старых процессов/IPFW/marker и атомарное включение common engine с возвратом на проверенном previous). Затем квалифицировать реальный Voice Apply/STUN/MEDIA/CALL и power-cut на FreeBSD. Никакого релиза и `legacy-arm`/`legacy-begin` в production до готовности миграции.
+**После `_74`:** завершить единый обратимый live legacy Telegram PoC → common переход; испытать уже покрытые `activating`/`activated` cut-points на реальном FreeBSD, включая полный/частичный stage, и проверить GUI STUN/MEDIA/CALL. Операторские `legacy-arm`/`legacy-begin` в production запрещены до готовой миграции.
 
 **Этап 4 — следующий рубеж после `_68`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 

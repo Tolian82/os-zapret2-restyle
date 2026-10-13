@@ -221,17 +221,30 @@ PY
 OLD=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 CURRENT=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 ACTIVE_DIR="$ROOT/live"
-mkdir -p "$ACTIVE_DIR"
+BACKUP_ROOT="$ROOT/backups"
+mkdir -p "$ACTIVE_DIR" "$BACKUP_ROOT"
+PRISTINE_STAGE="$ROOT/.live.stage.$CURRENT"
+PRISTINE_PARKED="$ROOT/.live.old.$CURRENT"
+PRISTINE_BACKUP="$BACKUP_ROOT/live-$CURRENT"
 CHILD_PIDFILE="$ROOT/child"
 SUPERVISOR_MONITOR_PIDFILE="$ROOT/supervisor"
-atomic_verify_tree() { echo compare >> "$LOG"; [ "$TREE_OK" = 0 ]; }
+atomic_verify_tree() {
+  echo compare >> "$LOG"
+  if [ "$2" = "$PRISTINE_STAGE" ]; then [ "$STAGE_OK" = 0 ]
+  else [ "$TREE_OK" = 0 ]; fi
+}
+atomic_remove_tree() {
+  echo stage-remove >> "$LOG"
+  [ "$REMOVE_OK" = 0 ] || return 1
+  rm -rf "$1"
+}
 apply_runtime_attest_engine_inventory() { echo census >> "$LOG"; [ "$CENSUS_OK" = 0 ]; }
 firewall_shared_runtime() { echo ipfw >> "$LOG"; [ "$IPFW_OK" = 0 ]; }
 launcher_is_running() { echo engine >> "$LOG"; [ "$ENGINE" = 1 ]; }
 supervisor_is_running() { echo supervisor >> "$LOG"; [ "$MONITOR" = 1 ]; }
 reset_pristine() {
   : > "$LOG"
-  TREE_OK=0 CENSUS_OK=0 IPFW_OK=0 ENGINE=0 MONITOR=0
+  TREE_OK=0 STAGE_OK=0 REMOVE_OK=0 CENSUS_OK=0 IPFW_OK=0 ENGINE=0 MONITOR=0
   TERMINAL_OK=0 GUARD=0 SEAL=0 CONFIG=0
 }
 pristine_check() {
@@ -259,9 +272,36 @@ reset_pristine; CONFIG=1
 pristine_check 69 "activating $CURRENT voice $OLD voice"
 ! grep -Fq terminal-restore "$LOG" || fail "changed saved Config finalized"
 reset_pristine
+mkdir -p "$PRISTINE_STAGE"
+printf 'sealed candidate\n' > "$PRISTINE_STAGE/release-proof"
+pristine_check 0 "activating $CURRENT voice $OLD voice"
+[ ! -e "$PRISTINE_STAGE" ] || fail "sealed stage not removed before terminal recovery"
+grep -Fq stage-remove "$LOG" && grep -Fq terminal-restore "$LOG" ||
+    fail "pristine stage recovery skipped removal or journal"
+reset_pristine
+mkdir -p "$PRISTINE_STAGE"
+STAGE_OK=1
+pristine_check 69 "activating $CURRENT voice $OLD voice"
+[ -e "$PRISTINE_STAGE" ] && ! grep -Fq stage-remove "$LOG" ||
+    fail "partial/foreign stage removed or authorized"
+rm -rf "$PRISTINE_STAGE"
+reset_pristine; mkdir -p "$PRISTINE_PARKED"
+pristine_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fq terminal-restore "$LOG" || fail "parked old owner ignored"
+rmdir "$PRISTINE_PARKED"
+reset_pristine; mkdir -p "$PRISTINE_BACKUP"
+pristine_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fq terminal-restore "$LOG" || fail "backup collision ignored"
+rmdir "$PRISTINE_BACKUP"
+reset_pristine; mkdir -p "$PRISTINE_STAGE"; REMOVE_OK=1
+pristine_check 70 "activating $CURRENT voice $OLD voice"
+[ -e "$PRISTINE_STAGE" ] && ! grep -Fq terminal-restore "$LOG" ||
+    fail "failed stage removal finalized journal"
+rm -rf "$PRISTINE_STAGE"
+reset_pristine
 pristine_check 69 "activating $CURRENT voice"
 pristine_check 69 "activated $CURRENT voice $OLD voice"
-echo 'PASS: pristine interrupted activating recovers only previous sealed common owner'
+echo 'PASS: pristine interrupted activating restores exact old owner and cleans sealed stage only'
 
 # Cold activated recovery tests the production FD9 service with mock kernel.
 sed -n '/^shared_apply_recover_activated_cold_service()$/,/^}$/p' "$SOURCE" > "$ROOT/activated-cold.sh"

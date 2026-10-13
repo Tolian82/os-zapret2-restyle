@@ -1071,10 +1071,39 @@ shared_apply_recover_activating_pristine_service()
     _apply_engine=0
     apply_runtime_attest_engine_inventory || return 69
     firewall_shared_runtime verify "$_shared_pristine_dir/release" - || return 69
-    # Re-check physical source/installed bytes before the durable terminal
-    # phase. No Config, process, IPFW or active tree is mutated by recovery.
+    # Crash during the operation-ID atomic copy can leave a *complete* new
+    # stage even though the previous active release was never displaced.
+    # A partial stage is NOT an authorized rollback target and stays for
+    # manual inspection. Reject unexpected parked/backup old owners.
+    _shared_pristine_parent=$(dirname "$ACTIVE_DIR") || return 69
+    _shared_pristine_name=$(basename "$ACTIVE_DIR") || return 69
+    _shared_pristine_stage="$_shared_pristine_parent/.$_shared_pristine_name.stage.$_shared_pristine_id"
+    _shared_pristine_parked="$_shared_pristine_parent/.$_shared_pristine_name.old.$_shared_pristine_id"
+    _shared_pristine_backup="$BACKUP_ROOT/$_shared_pristine_name-$_shared_pristine_id"
+    [ ! -e "$_shared_pristine_parked" ] && [ ! -L "$_shared_pristine_parked" ] &&
+    [ ! -e "$_shared_pristine_backup" ] && [ ! -L "$_shared_pristine_backup" ] || return 69
+    if [ -e "$_shared_pristine_stage" ] || [ -L "$_shared_pristine_stage" ]; then
+        [ -d "$_shared_pristine_stage" ] && [ ! -L "$_shared_pristine_stage" ] || return 69
+        _shared_pristine_new_dir=$(shared_apply_workspace "$_shared_pristine_id") || return 69
+        [ -d "$_shared_pristine_new_dir/release" ] &&
+        [ ! -L "$_shared_pristine_new_dir/release" ] || return 69
+        atomic_verify_tree "$_shared_pristine_new_dir/release" "$_shared_pristine_stage" || return 69
+        shared_apply_bundle_service verify "$_shared_pristine_id" || return 69
+        atomic_remove_tree "$_shared_pristine_stage" || return 70
+        [ ! -e "$_shared_pristine_stage" ] && [ ! -L "$_shared_pristine_stage" ] || return 70
+    fi
+    # Re-check all native owners after removing only an exact sealed stage.
+    # A power cut after deletion is idempotent: the existing journal remains
+    # activating until the durable recover-activating terminal command.
     shared_apply_bundle_service verify "$_shared_pristine_old" || return 69
     atomic_verify_tree "$_shared_pristine_dir/release" "$ACTIVE_DIR" || return 69
+    if launcher_is_running "$CHILD_PIDFILE" ||
+       supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"; then
+        return 69
+    fi
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || return 69
+    firewall_shared_runtime verify "$_shared_pristine_dir/release" - || return 69
     [ -x /usr/local/bin/python3.13 ] || return 69
     /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
         recover-activating "$_shared_pristine_id" "$_shared_pristine_old" || return 69
