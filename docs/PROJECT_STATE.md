@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`_49`:** для прерванной `activating` с **предыдущим committed общим владельцем** добавлен fail-closed recovery только при полном совпадении active runtime с его sealed release, native saved Config и отсутствии живых/незарегистрированных процессов dvtws2 и owned IPFW. Единственный durable journal переводится в `restored`, затем штатный boot использует previous. Partial mutation, отсутствие previous, `activated` не восстанавливаются автоматически. В проверке истории PR задокументированы шесть строго закреплённых SHA/subject исключений; новые заголовки продолжают проверяться. Linux/CI проверки и FreeBSD owner-live различаются.
+
 **`_48`:** рабочий откат общего runtime исправлен: `atomic_restore_tree` парковит временный кандидат под PID `$$`; расширен регрессионный сценарий old literal `$`/foreign PID. Повреждённые вставки в активных документах исправлены. Recovery `activating`/`activated`, running-legacy handoff и owner-live ещё не завершены.
 
 **v0.5.2_38–_39:** root PHP staging и native Config worker теперь самостоятельно проверяют оригинальный FD9: inode, владение root, удерживаемый flock. Не появляется новый lock, Config writer или WAL. Linux тест проверяет заблокированный FD9, свободный, чужой и symlink. Полный CI на `_37` завершился PASS для Voice candidates, но Project не прошёл позднюю Strategy Lab matrix из-за устаревшей метки пакета `_28` в PROJECT_STATE; `_39` синхронизирует primary metadata и добавляет ранний тест, чтобы предотвратить повторение. FreeBSD owner-live, полноценное mutating-phase recovery и выпуск релиза ещё не подтверждены.
@@ -16,13 +18,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_48`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_49`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=48` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_48.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=49` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_49.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
