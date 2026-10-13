@@ -12,6 +12,7 @@ import fcntl
 import os
 import re
 import stat
+import subprocess
 from pathlib import Path
 import sys
 
@@ -125,7 +126,7 @@ def _capture_root_for_common_id(identity: str) -> Path:
 def cancel_unchanged_common_predecessor(
     *, identity, store, work, config_path, config_fd, config_owner,
     active_runtime, marker_path, ledger_root, process_probe, kernel_reader,
-    readonly_ipfw, require_lifecycle_owner, begin=False,
+    readonly_ipfw, require_lifecycle_owner, begin=False, inspect_only=False,
 ):
     """Prove exact old live ownership before a boundary or cancellation.
 
@@ -173,8 +174,122 @@ def cancel_unchanged_common_predecessor(
             raise LegacyPredecessorRouteError("legacy backup changed during cancellation")
         return digest
 
+    if inspect_only:
+        # An already armed STOP intent may reattest the same live old owner
+        # without rewriting or cancelling any durable state.
+        return attest()
     return (store.begin_legacy_quiesce(identity, attest) if begin
             else store.cancel_pristine_legacy(identity, attest))
+
+
+
+def stop_armed_common_predecessor(
+    *, identity, store, work, config_path, config_fd, config_owner,
+    active_runtime, marker_path, ledger_root, process_probe, kernel_reader,
+    readonly_ipfw, require_lifecycle_owner, runner=None,
+):
+    """PRIVATE first real mutation: stop old three processes under common FD9.
+
+    No CLI, configd or GUI route until exact old-IPFW/marker retirement,
+    common-engine activation and verified rollback are also implemented.
+    An interruption leaves the SINGLE journal blocked in legacy-quiescing.
+    The fixed existing process actuator takes no user PID or shell argument.
+    """
+    from shared_apply_operation import (
+        SharedApplyOperation, fingerprint_legacy_predecessor,
+    )
+    from voice_native_live_preflight import _current_engine_args
+    from voice_native_live_ipfw import observe_legacy_poc_ipfw
+    from voice_native_process_actions import SCRIPT, _secure_script
+    from voice_native_live_preflight import _instances
+    if not isinstance(store, SharedApplyOperation) or (
+        not isinstance(process_probe, FreeBSDVoiceProcessProbe)
+        or not isinstance(kernel_reader, FreeBSDKernelArgvReader)
+        or not isinstance(readonly_ipfw, FreeBSDIPFWAdapter)
+        or readonly_ipfw.allow_mutations
+        or (readonly_ipfw.rule_base, readonly_ipfw.rule_max) != (19000, 19010)
+        or not callable(require_lifecycle_owner)
+    ):
+        raise LegacyPredecessorRouteError("old live owner stop lacks trusted probes")
+    work = Path(work)
+    root = work / "legacy-backup"
+    if work.name != identity or not COMMON_ID.fullmatch(identity):
+        raise LegacyPredecessorRouteError("old stop is not bound to sealed candidate")
+    require_lifecycle_owner()
+    _locked_config(Path(config_path), config_fd, config_owner)
+    record = store.read()
+    if record is None or record["phase"] != "legacy-quiescing" or (
+        record["detail"]["id"] != identity or "previous" in record
+        or "legacy_predecessor" not in record
+    ):
+        raise LegacyPredecessorRouteError("durable legacy-quiescing phase required")
+    expected = cancel_unchanged_common_predecessor(
+        identity=identity, store=store, work=work, config_path=config_path,
+        config_fd=config_fd, config_owner=config_owner,
+        active_runtime=active_runtime, marker_path=marker_path,
+        ledger_root=ledger_root, process_probe=process_probe,
+        kernel_reader=kernel_reader, readonly_ipfw=readonly_ipfw,
+        require_lifecycle_owner=require_lifecycle_owner, inspect_only=True,
+    )
+    if expected != record["legacy_predecessor"] or store.read() != record:
+        raise LegacyPredecessorRouteError("old live source changed before stop")
+    # Verify the installed, fixed, root-owned actuator that reuses the one
+    # launcher/supervisor. Never hand it arbitrary paths or PID arguments.
+    _secure_script(SCRIPT)
+    active_runner = subprocess.run if runner is None else runner
+    if not callable(active_runner):
+        raise LegacyPredecessorRouteError("invalid bounded stop runner")
+    require_lifecycle_owner()
+    _locked_config(Path(config_path), config_fd, config_owner)
+    if store.read() != record:
+        raise LegacyPredecessorRouteError("journal changed before stopping engine")
+    result = active_runner(
+        ["/bin/sh", str(SCRIPT), "stop"],
+        check=False, capture_output=True, text=True, timeout=20,
+        pass_fds=(9,), env={"LC_ALL": "C",
+                            "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin"},
+    )
+    if result.returncode != 0 or (
+        len(result.stdout.encode("utf-8")) > 8192 or
+        len(result.stderr.encode("utf-8")) > 8192
+    ):
+        raise LegacyPredecessorRouteError("old engine actuator did not finish safely")
+
+    def stopped():
+        require_lifecycle_owner()
+        _locked_config(Path(config_path), config_fd, config_owner)
+        previous = inspect_legacy_previous_live_identity(root)
+        if fingerprint_legacy_predecessor(work, owner=config_owner[0]) != expected:
+            raise LegacyPredecessorRouteError("old sealed predecessor drifted after stop")
+        old = inspect_previous(root / NAME / "previous")
+        _verify_sources(Path(config_path), Path(active_runtime), old)
+        marker = _read_private_file(root / NAME / "marker.bin", 64)
+        if _legacy_read(Path(marker_path)) != marker or (
+            stat.S_IMODE(os.lstat(marker_path).st_mode) != previous["marker"]["mode"]
+        ):
+            raise LegacyPredecessorRouteError("old marker changed while stopping")
+        a = process_probe.observe_processes()
+        b = process_probe.observe_processes()
+        if a != b or a["engine"]["state"] != "stopped" or (
+            a["supervisor"]["state"] != "stopped"
+        ):
+            raise LegacyPredecessorRouteError("old engine/supervisor not wholly stopped")
+        # The original legacy table/rules are NOT retired at this stage;
+        # they must be exactly unchanged until the next durable action.
+        current = observe_legacy_poc_ipfw(
+            readonly_ipfw, _current_engine_args(active_runtime)[0],
+            sorted(previous["legacy_ipfw_previous"]["targets"]),
+        )
+        if current["structure_sha256"] != previous["legacy_ipfw_structure_sha256"] or (
+            current["previous_ipfw"] != previous["legacy_ipfw_previous"]
+        ):
+            raise LegacyPredecessorRouteError("old IPFW mutated during engine stop")
+        return expected
+
+    result = store.mark_legacy_processes_stopped(identity, stopped)
+    if result["phase"] != "legacy-processes-stopped":
+        raise LegacyPredecessorRouteError("old process stop journal incomplete")
+    return result
 
 
 def main(argv):

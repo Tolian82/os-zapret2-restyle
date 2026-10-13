@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`v0.5.2_76` — первый исполняемый, но строго внутренний этап живой миграции старого PoC.** В существующий `voice_native_legacy_predecessor_route.py` добавлена функция `stop_armed_common_predecessor`: после сохранённого `legacy-quiescing` она повторно сверяет sealed old previous-five, Config/runtime/marker, полное FreeBSD process/kernel/IPFW свидетельство и вызывает **существующий** фиксированный `voice_native_process_lifecycle.sh stop` с унаследованным FD9. Результат независимо проверяет отсутствие всех трёх процессов, неизменность старых Config/runtime/marker и **пока не изменённых** старых IPFW; только тогда в **одном** `shared-apply/operation.json` сохраняется `legacy-processes-stopped`. Ошибка или power-cut оставляют незавершённый журнал, без автоматического повторного STOP. Добавлены fault-тесты самого метода и simulated fixed-actuator пути. **Не подключено к CLI/configd/GUI**: пока не реализованы безопасная замена старых IPFW/marker, общий ON и обратимый rollback, применять на production нельзя.
+
 **`v0.5.2_75` — корректная фактическая индикация общего Voice runtime.** После штатного Stop committed common owner сохраняет Config и sealed release, но удаляет IPFW; прежний `voice_live_inspect` ошибочно называл этот нормальный результат чужими правилами. Теперь read-only общий инспектор различает проверенный работающий engine+IPFW (`ready`), остановленный engine с пустыми правилами (`stopped`), частичный/mismatched runtime (`interrupted`) и неизвестные правила (`foreign-or-modified-rules`). Старый PoC и маршрут общей Apply остаются без изменений; новый UI-элемент не добавлен, изменены только тексты штатного статуса. Это не проверка MEDIA/CALL и не завершённая legacy-миграция.
 
 **`v0.5.2_74` — завершение pristine `activating` с оставшимся atomic stage.** В штатном FD9 recovery предыдущий полностью проверенный common owner больше не объявляется восстановленным при неизвестном operation-ID stage/park/backup. Если прежний sealed runtime, Config, процессы и IPFW нетронуты, а stage равен полному sealed новому release, удаляется только этот проверенный stage, затем повторно проверяется прежний владелец и фиксируется существующее `recover-activating`. Частичный/чужой stage, parked/backup collision или отказ удаления оставляют journal незавершённым. Новых WAL, процессов, frontend и legacy actuator нет; работающий old Telegram PoC ещё не мигрирован.
@@ -66,13 +68,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_75`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_76`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=75` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_75.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=76` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_76.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;

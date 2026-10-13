@@ -31,7 +31,7 @@ PAGES = frozenset(("strategies", "voice"))
 PHASES = frozenset((
     "prepared", "activating", "activated", "config-saved",
     "committed", "restored", "restore-failed", "requires-review",
-    "legacy-quiescing",
+    "legacy-quiescing", "legacy-processes-stopped",
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
@@ -46,7 +46,8 @@ NEXT = {
     "restored": frozenset(),
     "restore-failed": frozenset(),
     "requires-review": frozenset(),
-    "legacy-quiescing": frozenset(),
+    "legacy-quiescing": frozenset(("legacy-processes-stopped",)),
+    "legacy-processes-stopped": frozenset(),
 }
 
 
@@ -107,7 +108,7 @@ def _validate_record(record: object) -> dict:
         raise SharedOperationError("invalid common Apply record")
     _validate_detail(record["detail"])
     if "legacy_predecessor" in record:
-        if record["phase"] not in ("prepared", "legacy-quiescing") or record["detail"]["page"] != "voice" or \
+        if record["phase"] not in ("prepared", "legacy-quiescing", "legacy-processes-stopped") or record["detail"]["page"] != "voice" or \
            not isinstance(record["legacy_predecessor"], str) or \
            not DIGEST.fullmatch(record["legacy_predecessor"]):
             raise SharedOperationError("invalid armed legacy predecessor proof")
@@ -282,6 +283,36 @@ class SharedApplyOperation:
             raise SharedOperationError("legacy quiescence journal changed during witness")
         return self._persist_record({
             "schema": SCHEMA, "phase": "legacy-quiescing",
+            "detail": before["detail"],
+            "legacy_predecessor": before["legacy_predecessor"],
+        })
+
+    def mark_legacy_processes_stopped(self, identity: str, attest_stopped) -> dict:
+        """Record verified old three-role absence in the SAME shared journal.
+
+        The original FD9+Config holder must have already fsynced
+        legacy-quiescing before calling the fixed old-engine actuator.
+        The callback independently checks complete process absence, the
+        still-unchanged old Config/runtime/marker and old IPFW witness.
+        Crashes or partial stops leave legacy-quiescing, never normal boot.
+        """
+        if not isinstance(identity, str) or not OP_ID.fullmatch(identity) or (
+            not callable(attest_stopped)
+        ):
+            raise SharedOperationError("invalid legacy stop completion request")
+        before = self.read()
+        if before is None or before["phase"] != "legacy-quiescing" or (
+            before["detail"]["id"] != identity or
+            "legacy_predecessor" not in before or "previous" in before
+        ):
+            raise SharedOperationError("old engine stop requires durable quiescing intent")
+        witness = attest_stopped()
+        if not isinstance(witness, str) or witness != before["legacy_predecessor"]:
+            raise SharedOperationError("old process/IPFW stop evidence differs from predecessor")
+        if self.read() != before:
+            raise SharedOperationError("old stop journal raced during attestation")
+        return self._persist_record({
+            "schema": SCHEMA, "phase": "legacy-processes-stopped",
             "detail": before["detail"],
             "legacy_predecessor": before["legacy_predecessor"],
         })
@@ -494,7 +525,7 @@ def main(argv: list[str]) -> int:
                     # Returning 'restored' here would send the ordinary
                     # service to LEGACY boot over the preceding common owner.
                     print("committed " + prior["id"] + " " + prior["page"])
-            elif record["phase"] in ("prepared", "config-saved", "legacy-quiescing"):
+            elif record["phase"] in ("prepared", "config-saved", "legacy-quiescing", "legacy-processes-stopped"):
                 detail = record["detail"]
                 prefix = "legacy-prepared" if (
                     "legacy_predecessor" in record and record["phase"] == "prepared"

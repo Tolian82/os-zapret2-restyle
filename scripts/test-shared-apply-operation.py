@@ -156,6 +156,80 @@ class TestJournal(unittest.TestCase):
                 reloaded.cancel_pristine_legacy(detail()["id"],lambda:None)
             self.assertEqual(saved,reloaded.read())
 
+    def test_private_old_process_stop_reuses_fixed_actuator_and_one_journal(self):
+        import os
+        from types import SimpleNamespace
+        from voice_native_legacy_predecessor_route import stop_armed_common_predecessor
+        from voice_native_process_probe import FreeBSDVoiceProcessProbe
+        from voice_native_kernel_argv import FreeBSDKernelArgvReader
+        from voice_ipfw_adapter import FreeBSDIPFWAdapter
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            marker=root/"old-marker"
+            marker.write_bytes(b"enabled\n")
+            os.chmod(marker,0o600)
+            store=SharedApplyOperation(root/"shared-apply")
+            store.prepare_legacy_predecessor(detail(),lambda:"f"*64)
+            store.begin_legacy_quiesce(detail()["id"],lambda:"f"*64)
+            probe=object.__new__(FreeBSDVoiceProcessProbe)
+            kernel=object.__new__(FreeBSDKernelArgvReader)
+            ipfw=object.__new__(FreeBSDIPFWAdapter)
+            ipfw.allow_mutations=False
+            ipfw.rule_base=19000
+            ipfw.rule_max=19010
+            stopped=[False]
+            invoked=[]
+            ipfw_snapshot={"rules":{"19000":["divert"]},
+                           "targets":["91.108.0.0/16"],"wan":"igb0","port":"9876"}
+            old={"legacy_ipfw_previous":ipfw_snapshot,
+                 "legacy_ipfw_structure_sha256":"1"*64,
+                 "marker":{"mode":0o600}}
+            def runner(argv,**kwargs):
+                self.assertEqual(["/bin/sh",str(__import__(
+                    "voice_native_process_actions").SCRIPT),"stop"],argv)
+                self.assertEqual((9,),kwargs["pass_fds"])
+                invoked.append("stop")
+                stopped[0]=True
+                return SimpleNamespace(returncode=0,stdout="",stderr="")
+            def inventory(_):
+                return {"engine":{"state":"stopped" if stopped[0] else "running"},
+                        "supervisor":{"state":"stopped" if stopped[0] else "running"}}
+            with patch("voice_native_legacy_predecessor_route._locked_config"), \
+                 patch("voice_native_legacy_predecessor_route.cancel_unchanged_common_predecessor",
+                       return_value="f"*64), \
+                 patch("voice_native_process_actions._secure_script"), \
+                 patch("voice_native_legacy_predecessor_route.inspect_legacy_previous_live_identity",
+                       return_value=old), \
+                 patch("shared_apply_operation.fingerprint_legacy_predecessor",
+                       return_value="f"*64), \
+                 patch("voice_native_legacy_predecessor_route.inspect_previous",
+                       return_value={}), \
+                 patch("voice_native_legacy_predecessor_route._verify_sources"), \
+                 patch("voice_native_legacy_predecessor_route._legacy_read",
+                       return_value=b"enabled\n"), \
+                 patch("voice_native_legacy_predecessor_route._read_private_file",
+                       return_value=b"enabled\n"), \
+                 patch("voice_native_live_preflight._current_engine_args",
+                       return_value=(["dvtws2"],"e"*64)), \
+                 patch("voice_native_live_ipfw.observe_legacy_poc_ipfw",
+                       return_value={"structure_sha256":"1"*64,
+                                     "previous_ipfw":ipfw_snapshot}), \
+                 patch.object(FreeBSDVoiceProcessProbe,"observe_processes",
+                              new=lambda _:inventory(None)):
+                record=stop_armed_common_predecessor(
+                    identity=detail()["id"],store=store,
+                    work=root/detail()["id"],config_path=root/"config.xml",
+                    config_fd=4,config_owner=(0,0),active_runtime=root/"active",
+                    marker_path=marker,ledger_root=root/"ledger",
+                    process_probe=probe,kernel_reader=kernel,
+                    readonly_ipfw=ipfw,
+                    require_lifecycle_owner=lambda:None,runner=runner)
+            self.assertEqual(["stop"],invoked)
+            self.assertEqual("legacy-processes-stopped",record["phase"])
+            self.assertEqual(record,store.read())
+            with self.assertRaises(SharedOperationError):
+                store.cancel_pristine_legacy(detail()["id"],lambda:"f"*64)
+
     def test_missing_state_stays_readonly(self):
         with tempfile.TemporaryDirectory() as d:
             j=SharedApplyOperation(Path(d)/"shared-apply")
