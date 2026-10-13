@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`v0.5.2_67` — корректировка test-harness.** Новая проверка production outer FD9 dispatch проверяет членство каждой legacy operator-команды без зависимости от того, какая команда последняя в shell `case`. Алгоритм `legacy-quiescing` из `_66` не менялся: он атомарно сохраняет intent до реального STOP, отменяется только при неизменённом старом владельце, и не выдаёт разрешение на live migration или Telegram call. CI последнего HEAD проверяется, frontend/ТЗ и релиз не меняются.
+
 **Текущая ревизия: v0.5.2_66 (без релиза).** В единственном durable journal `shared-apply/operation.json` теперь фиксируется `legacy-quiescing` — первый защищённый барьер непосредственно перед будущей остановкой старого Telegram PoC. Операторский `shared-apply-legacy-begin ID` через штатный FD9 и оригинальный Config flock повторно сверяет sealed previous-five snapshot, прежние Config/runtime/marker, точные FreeBSD процессы/argv и IPFW, затем атомарно записывает фазу без остановки процесса. После reboot обычные Apply/boot-recover не переходят через `legacy-quiescing`; ручной `legacy-cancel` допустим только если прежний PoC полностью неизменён. Нет нового backend/WAL/движка, GUI/ТЗ сохранены. **Это ещё не рабочая миграция; operator arm/begin на production не выполнять.** Следом нужен один исполнитель для настоящего STOP + restore-on-failure + restart/cutover и FreeBSD owner-live/STUN/CALL тесты.
 
 **`_63–_65`:** operator-only abort of an untouched legacy migration intent, using one shared durable journal. It is now possible to prove under FD9+Config flock that the old runtime, OPNsense Config, Telegram marker, IPFW/managed IPv4 and 3 process identities remain *exactly* the sealed predecessor, then publish terminal `restored` to the existing atomic journal. `shared-apply-legacy-cancel` never stops or restarts the engine; any change makes the command refuse and preserves pending evidence. Generic apply and boot closure are still forbidden. This is NOT a power-cut-safe live cutover; hardware/Telegram acceptance is outstanding.
@@ -48,13 +50,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_66`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_67`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=66` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_66.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=67` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_67.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;

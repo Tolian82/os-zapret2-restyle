@@ -1,10 +1,12 @@
 # os-zapret2-restyle — краткий master plan
 
+**`v0.5.2_67` — корректировка test-harness.** Новая проверка production outer FD9 dispatch проверяет членство каждой legacy operator-команды без зависимости от того, какая команда последняя в shell `case`. Алгоритм `legacy-quiescing` из `_66` не менялся: он атомарно сохраняет intent до реального STOP, отменяется только при неизменённом старом владельце, и не выдаёт разрешение на live migration или Telegram call. CI последнего HEAD проверяется, frontend/ТЗ и релиз не меняются.
+
 **Текущая ревизия: v0.5.2_66 (без релиза).** В единственном durable journal `shared-apply/operation.json` теперь фиксируется `legacy-quiescing` — первый защищённый барьер непосредственно перед будущей остановкой старого Telegram PoC. Операторский `shared-apply-legacy-begin ID` через штатный FD9 и оригинальный Config flock повторно сверяет sealed previous-five snapshot, прежние Config/runtime/marker, точные FreeBSD процессы/argv и IPFW, затем атомарно записывает фазу без остановки процесса. После reboot обычные Apply/boot-recover не переходят через `legacy-quiescing`; ручной `legacy-cancel` допустим только если прежний PoC полностью неизменён. Нет нового backend/WAL/движка, GUI/ТЗ сохранены. **Это ещё не рабочая миграция; operator arm/begin на production не выполнять.** Следом нужен один исполнитель для настоящего STOP + restore-on-failure + restart/cutover и FreeBSD owner-live/STUN/CALL тесты.
 
 ## Текущий приоритет — v0.5.2
 
-**`v0.5.2_66`: общий backend «Стратегии» / «Передача голоса».** Этап открыт 13.10.2026 по поручению владельца без релиза. Архитектура утверждена, [подробный проект плана и контроля](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) принят к выполнению поручением владельца начать программирование. Frontend и все пять сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) сохраняются.
+**`v0.5.2_67`: общий backend «Стратегии» / «Передача голоса».** Этап открыт 13.10.2026 по поручению владельца без релиза. Архитектура утверждена, [подробный проект плана и контроля](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) принят к выполнению поручением владельца начать программирование. Frontend и все пять сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) сохраняются.
 
 | Предложенный этап | Конечный результат |
 |---|---|
