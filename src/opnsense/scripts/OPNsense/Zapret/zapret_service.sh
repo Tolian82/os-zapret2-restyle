@@ -1240,6 +1240,19 @@ service_with_lifecycle_lock()
                             ;;
                         prepared\ *)
                             shared_apply_recover_prepared_service "$_shared_owner" || return 69
+                            # Recovery may uncover a previous committed
+                            # common owner. Reinspect and boot that owner;
+                            # NEVER fall through to legacy after restoring a
+                            # second Apply over an already committed engine.
+                            _shared_owner=$(shared_apply_inspect_service) || return 69
+                            case "$_shared_owner" in
+                                committed\ *)
+                                    shared_apply_boot_service "$_shared_owner"
+                                    return $?
+                                    ;;
+                                restored) ;;
+                                *) return 69 ;;
+                            esac
                             ;;
                         none|restored) ;;
                         *) return 69 ;;

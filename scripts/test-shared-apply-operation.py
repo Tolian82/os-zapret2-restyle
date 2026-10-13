@@ -8,7 +8,7 @@ import unittest
 
 BACKEND=Path(__file__).resolve().parents[1]/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
-from shared_apply_operation import SharedApplyOperation,SharedOperationError
+from shared_apply_operation import SharedApplyOperation,SharedOperationError,committed_owner
 from voice_cutover_guard import check_pending
 
 def detail(ident="1"*32):
@@ -103,6 +103,59 @@ class TestJournal(unittest.TestCase):
             with self.assertRaisesRegex(SharedOperationError,"prepared-only"):
                 journal.recover_prepared(d["id"],lambda: True)
             self.assertEqual("activating",journal.read()["phase"])
+
+    def test_previous_committed_owner_survives_prepared_power_cut_and_rollback(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            store=SharedApplyOperation(root/"shared-apply")
+            initial=detail("a"*32)
+            next_owner=detail("b"*32)
+            for phase in ("prepared","activating","activated","config-saved","committed"):
+                store.advance(phase,initial)
+            self.assertEqual(initial,committed_owner(store.read()))
+            prepared=store.advance("prepared",next_owner)
+            self.assertEqual(initial,prepared["previous"])
+            self.assertEqual("shared-apply-pending",
+                             check_pending(root/"voice-cutover",root/"voice-ipfw")["reason"])
+            restored=store.recover_prepared(next_owner["id"],lambda: True)
+            self.assertEqual(initial,restored["previous"])
+            self.assertEqual(initial,committed_owner(store.read()))
+            old=check_pending(root/"voice-cutover",root/"voice-ipfw")
+            self.assertEqual("shared-runtime-owned",old["reason"])
+            self.assertFalse(old["safe_to_mutate"])
+            self.assertTrue(check_pending(root/"voice-cutover",root/"voice-ipfw",
+                                          native_scope=True)["safe_to_mutate"])
+            third=detail("c"*32)
+            carry=store.advance("prepared",third)
+            self.assertEqual(initial,carry["previous"])
+            with self.assertRaisesRegex(SharedOperationError,"predecessor ID"):
+                store.advance("prepared",initial)
+
+    def test_previous_common_owner_remains_during_safe_pre_save_rollback(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store=SharedApplyOperation(Path(temp)/"shared-apply")
+            first=detail("a"*32)
+            second=detail("b"*32)
+            for phase in ("prepared","activating","activated","config-saved","committed"):
+                store.advance(phase,first)
+            for phase in ("prepared","activating","activated","restored"):
+                store.advance(phase,second)
+            self.assertEqual(first,committed_owner(store.read()))
+            self.assertEqual(first,store.read()["previous"])
+            self.assertTrue(store.advisory()["safe_to_mutate"])
+
+    def test_untrusted_predecessor_proof_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            store=SharedApplyOperation(root/"shared-apply")
+            store.advance("prepared",detail("b"*32))
+            import json
+            path=store.root/"operation.json"
+            record=json.loads(path.read_text())
+            record["previous"]=detail("b"*32)
+            path.write_text(json.dumps(record))
+            self.assertEqual("invalid-or-untrusted-journal",
+                check_pending(root/"voice-cutover",root/"voice-ipfw")["reason"])
 
     def test_invalid_identity_fields_and_reordered_phase(self):
         with tempfile.TemporaryDirectory() as d:

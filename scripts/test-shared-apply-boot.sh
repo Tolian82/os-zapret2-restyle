@@ -61,7 +61,11 @@ LOCKF_BIN="$ROOT/lockf"
 LIFECYCLE_LOCK_FILE="$ROOT/owner.lock"
 shared_apply_has_record_service() { [ "$HAS_RECORD" = 1 ]; }
 shared_apply_inspect_service() { [ "$OWNER_OK" = 1 ] || return 69; echo "$OWNER"; }
-shared_apply_recover_prepared_service() { echo prepared-recovered >> "$LOG"; [ "$RECOVER" = 0 ]; }
+shared_apply_recover_prepared_service() {
+    echo prepared-recovered >> "$LOG"
+    [ "$RECOVER" = 0 ] || return 69
+    [ "$RECOVER_OWNER" = "-" ] || OWNER="$RECOVER_OWNER"
+}
 shared_apply_boot_service() { echo "common:$1" >> "$LOG"; }
 preflight_voice_cutover_journals() { echo "legacy-guard" >> "$LOG"; }
 service_dispatch() { echo "legacy:$1" >> "$LOG"; }
@@ -74,7 +78,7 @@ check_route() {
     set -e
     [ "$result" = "$expected" ] || fail "lifecycle returned $result instead of $expected"
 }
-RECOVER=0
+RECOVER=0 RECOVER_OWNER=-
 HAS_RECORD=1 OWNER_OK=1 OWNER="committed $ID voice"
 check_route 0 start
 [ "$(cat "$LOG")" = "common:committed $ID voice" ] ||
@@ -90,6 +94,12 @@ OWNER="prepared $ID voice"
 check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = 'prepared-recovered legacy-guard legacy:start ' ] ||
     fail "prepared recovery did not resume ordinary runtime"
+RECOVER_OWNER="committed bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb voice"
+OWNER="prepared $ID voice"
+check_route 0 start
+[ "$(tr '\n' ' ' < "$LOG")" = "prepared-recovered common:committed bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb voice " ] ||
+    fail "recovered previous common owner was replaced by legacy boot"
+RECOVER_OWNER=-
 RECOVER=1
 check_route 69 reconfigure
 [ "$(cat "$LOG")" = "prepared-recovered" ] ||

@@ -92,12 +92,33 @@ def _validate_detail(detail: object) -> dict:
 
 
 def _validate_record(record: object) -> dict:
-    if not isinstance(record, dict) or set(record) != {"schema", "phase", "detail"} \
-            or type(record["schema"]) is not int or record["schema"] != SCHEMA \
+    # Existing unextended records remain readable; a new transaction can
+    # retain precisely ONE predecessor inside the SAME durable journal.
+    # No external previous-owner database or second lifecycle is introduced.
+    if not isinstance(record, dict) or set(record) not in (
+        {"schema", "phase", "detail"},
+        {"schema", "phase", "detail", "previous"},
+    ) or type(record["schema"]) is not int or record["schema"] != SCHEMA \
             or record["phase"] not in PHASES:
         raise SharedOperationError("invalid common Apply record")
     _validate_detail(record["detail"])
+    if "previous" in record:
+        _validate_detail(record["previous"])
+        if record["previous"]["id"] == record["detail"]["id"]:
+            raise SharedOperationError("common Apply predecessor ID reused")
     return record
+
+
+def committed_owner(record: dict | None) -> dict | None:
+    """The live common owner is not erased by a subsequent rolled-back Apply."""
+    if record is None:
+        return None
+    _validate_record(record)
+    if record["phase"] == "committed":
+        return record["detail"]
+    if record["phase"] == "restored":
+        return record.get("previous")
+    return None
 
 
 class SharedApplyOperation:
@@ -143,12 +164,18 @@ class SharedApplyOperation:
                 raise SharedOperationError("unfinished common Apply operation")
             if before is not None and before["detail"]["id"] == detail["id"]:
                 raise SharedOperationError("reused common Apply transaction ID")
+            previous = committed_owner(before)
+            if previous is not None and previous["id"] == detail["id"]:
+                raise SharedOperationError("reused common Apply predecessor ID")
         else:
             if before is None or before["detail"] != detail:
                 raise SharedOperationError("common Apply transaction identity changed")
             if phase not in NEXT[before["phase"]]:
                 raise SharedOperationError("illegal common Apply phase transition")
+            previous = before.get("previous")
         record = {"schema": SCHEMA, "phase": phase, "detail": detail}
+        if previous is not None:
+            record["previous"] = previous
         raw = (json.dumps(record, sort_keys=True, separators=(",", ":"),
                           ensure_ascii=True) + "\n").encode("ascii")
         if len(raw) > MAX_RECORD:
@@ -227,7 +254,13 @@ def main(argv: list[str]) -> int:
                 detail = record["detail"]
                 print("committed " + detail["id"] + " " + detail["page"])
             elif record["phase"] == "restored":
-                print("restored")
+                prior = committed_owner(record)
+                if prior is None:
+                    print("restored")
+                else:
+                    # Returning 'restored' here would send the ordinary
+                    # service to LEGACY boot over the preceding common owner.
+                    print("committed " + prior["id"] + " " + prior["page"])
             elif record["phase"] == "prepared":
                 detail = record["detail"]
                 print("prepared " + detail["id"] + " " + detail["page"])

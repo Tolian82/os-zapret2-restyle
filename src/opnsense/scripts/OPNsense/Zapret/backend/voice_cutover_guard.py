@@ -19,7 +19,9 @@ import sys
 from voice_cutover_journal import VoiceCutoverJournal, CutoverJournalError
 from voice_firewall_ledger import VoiceOwnershipStore, LedgerError
 from voice_cutover_close import NAME as CLOSE_NAME, ARCHIVE as CLOSED_ARCHIVE
-from shared_apply_operation import SharedApplyOperation, SharedOperationError
+from shared_apply_operation import (
+    SharedApplyOperation, SharedOperationError, committed_owner,
+)
 
 WHOLE_ROOT = Path("/var/db/zapret2/voice-cutover")
 IPFW_ROOT = Path("/var/db/zapret2/voice-ipfw")
@@ -46,7 +48,7 @@ def check_pending(whole_root: Path, ipfw_root: Path, shared_root: Path | None = 
         shared_record = shared_store.read()
         if shared_record is not None:
             phase = shared_record["phase"]
-            if phase == "committed" and not native_scope:
+            if committed_owner(shared_record) is not None and not native_scope:
                 # A committed common runtime is NOT authority for legacy
                 # start/reconfigure to resurrect an older engine after boot.
                 # Only another root FD9 common Apply may supersede it.
