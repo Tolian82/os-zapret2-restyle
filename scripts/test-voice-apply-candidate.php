@@ -176,4 +176,44 @@ try {
 } catch (\InvalidArgumentException $ex) {
     verify(str_contains($ex->getMessage(), 'changed'), 'wrong Telegram stale failure');
 }
+
+// A native Config writer must preserve unrelated concurrent edits while
+// refusing to accept old shared Strategies/Voice/runtime inputs.
+$foreignNow = $before;
+$foreignNow['strategylab']['enablequic'] = '0';
+$strategyMerged = SettingsApply::mergeForCommit($foreignNow, $strategyPlan, 'strategies');
+verify($strategyMerged['strategylab']['enablequic'] === '0' &&
+       $strategyMerged['voice'] === $before['voice'] &&
+       $strategyMerged['strategy']['trafficargs'] ===
+           $strategyPlan['candidate']['strategy']['trafficargs'],
+       'native Strategies merge lost unrelated state');
+$voiceForm = formFrom($before);
+$voiceForm['voice']['telegram'] = ['enabled'=>'1', 'args'=>$telegram];
+$voiceForm['hostlist']['telegramips'] = '91.108.13.10';
+$voiceMergePlan = SettingsApply::prepareVoice($before, $voiceForm, $token);
+verify($voiceMergePlan['result'] === 'prepared', 'Voice commit plan failed');
+$voiceMerged = SettingsApply::mergeForCommit($foreignNow, $voiceMergePlan, 'voice');
+verify($voiceMerged['strategylab']['enablequic'] === '0' &&
+       $voiceMerged['voice']['telegram']['enabled'] === '1' &&
+       $voiceMerged['strategy'] === $before['strategy'],
+       'native Voice merge lost unrelated state');
+$corrupt = $strategyPlan;
+$corrupt['candidate']['voice']['telegram']['enabled'] = '1';
+try {
+    SettingsApply::mergeForCommit($foreignNow, $corrupt, 'strategies');
+    verify(false, 'foreign Voice injection accepted');
+} catch (\InvalidArgumentException $ex) {}
+$staleModel = $foreignNow;
+$staleModel['general']['divertport'] = '990';
+try {
+    SettingsApply::mergeForCommit($staleModel, $strategyPlan, 'strategies');
+    verify(false, 'stale shared divertport accepted');
+} catch (\InvalidArgumentException $ex) {}
+$missing = $strategyPlan;
+$missing['changed_fields'] = [];
+try {
+    SettingsApply::mergeForCommit($foreignNow, $missing, 'strategies');
+    verify(false, 'missing changed field accepted');
+} catch (\InvalidArgumentException $ex) {}
+
 echo "PASS: shared Strategies/Voice candidate and dependency generation; Voice normalization/conflict/stale\n";

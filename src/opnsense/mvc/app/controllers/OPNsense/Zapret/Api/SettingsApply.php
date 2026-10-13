@@ -13,6 +13,7 @@
 namespace OPNsense\Zapret\Api;
 
 require_once __DIR__ . '/StrategySettingsPayload.php';
+require_once __DIR__ . '/VoiceSettingsPayload.php';
 require_once __DIR__ . '/VoiceApplyCandidate.php';
 require_once __DIR__ . '/VoiceSettingsSnapshot.php';
 require_once __DIR__ . '/VoiceCandidateXml.php';
@@ -86,6 +87,71 @@ final class SettingsApply
             );
         }
         throw new \InvalidArgumentException('Unknown shared form');
+    }
+
+
+    /**
+     * A native save must merge ONLY this form's changed fields into the
+     * freshly loaded model, never setNodes() on an obsolete whole candidate.
+     * In particular unrelated Strategy Lab settings may change meanwhile.
+     * Pure precommit helper; validation, Config::save and FD9 belong to worker.
+     */
+    public static function mergeForCommit(array $live, array $plan, string $page): array
+    {
+        self::requireUnchanged($plan, $live);
+        if (!in_array($page, ['voice', 'strategies'], true) ||
+            !isset($plan['candidate'], $plan['changed_fields']) ||
+            !is_array($plan['candidate']) || !is_array($plan['changed_fields'])) {
+            throw new \InvalidArgumentException('Invalid shared commit candidate');
+        }
+        $submitted = [];
+        $seen = [];
+        foreach ($plan['changed_fields'] as $name) {
+            if (!is_string($name) ||
+                !preg_match('/^[a-z]+(?:\.[a-z]+){1,2}$/D', $name) ||
+                isset($seen[$name])) {
+                throw new \InvalidArgumentException('Malformed shared changed field');
+            }
+            $seen[$name] = true;
+            $parts = explode('.', $name);
+            $planned = $plan['candidate'];
+            $before = $live;
+            foreach ($parts as $part) {
+                if (!is_array($planned) || !array_key_exists($part, $planned) ||
+                    !is_array($before) || !array_key_exists($part, $before)) {
+                    throw new \InvalidArgumentException('Incomplete changed field');
+                }
+                $planned = $planned[$part];
+                $before = $before[$part];
+            }
+            if (!is_string($planned) || !is_string($before) ||
+                self::sameText($before, $planned)) {
+                throw new \InvalidArgumentException('Changed map contains unchanged field');
+            }
+            $entry = &$submitted;
+            foreach ($parts as $part) {
+                if (!isset($entry[$part])) {
+                    $entry[$part] = [];
+                }
+                $entry = &$entry[$part];
+            }
+            $entry = $planned;
+            unset($entry);
+        }
+        // Reuse each page's real whitelist. Do not create a second one.
+        $merged = $page === 'voice'
+            ? VoiceSettingsPayload::overlay($live, $submitted)
+            : StrategySettingsPayload::overlay($live, $submitted);
+        $expected = $plan['candidate'];
+        foreach ($live as $group => $value) {
+            if (!in_array($group, ['general', 'strategy', 'voice', 'hostlist'], true)) {
+                $expected[$group] = $value;
+            }
+        }
+        if ($merged !== $expected) {
+            throw new \InvalidArgumentException('Candidate changes a foreign field');
+        }
+        return $merged;
     }
 
     /**
