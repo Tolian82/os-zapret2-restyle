@@ -68,6 +68,7 @@ shared_apply_recover_prepared_service() {
     [ "$RECOVER_OWNER" = "-" ] || OWNER="$RECOVER_OWNER"
 }
 shared_apply_boot_service() { echo "common:$1" >> "$LOG"; }
+shared_apply_stop_service() { echo "common-stop:$1" >> "$LOG"; [ "$STOP_OK" = 0 ]; }
 preflight_voice_cutover_journals() { echo "legacy-guard" >> "$LOG"; }
 service_dispatch() { echo "legacy:$1" >> "$LOG"; }
 check_route() {
@@ -79,7 +80,7 @@ check_route() {
     set -e
     [ "$result" = "$expected" ] || fail "lifecycle returned $result instead of $expected"
 }
-RECOVER=0 RECOVER_OWNER=- SAVED_OK=0
+RECOVER=0 RECOVER_OWNER=- SAVED_OK=0 STOP_OK=0
 HAS_RECORD=1 OWNER_OK=1 OWNER="committed $ID voice"
 check_route 0 start
 [ "$(cat "$LOG")" = "common:committed $ID voice" ] ||
@@ -87,6 +88,14 @@ check_route 0 start
 check_route 0 reconfigure
 [ "$(cat "$LOG")" = "common:committed $ID voice" ] ||
     fail "committed reconfigure fell through to legacy runtime"
+check_route 0 stop
+[ "$(cat "$LOG")" = "common-stop:committed $ID voice" ] || fail "stop dropped to legacy"
+check_route 0 restart
+[ "$(tr '\n' ' ' < "$LOG")" = "common-stop:committed $ID voice common:committed $ID voice " ] || fail "restart did not keep native owner"
+STOP_OK=1
+check_route 69 restart
+[ "$(cat "$LOG")" = "common-stop:committed $ID voice" ] || fail "failed stop started replacement"
+STOP_OK=0
 OWNER=restored
 check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:start ' ] ||
@@ -116,12 +125,20 @@ check_route 69 reconfigure
     fail "failed native post-save recovery fell through to legacy"
 SAVED_OK=0
 OWNER=pending
+check_route 69 stop
+[ ! -s "$LOG" ] || fail "pending stop touched runtime"
+check_route 69 restart
+[ ! -s "$LOG" ] || fail "pending restart touched runtime"
 check_route 69 start
 [ ! -s "$LOG" ] || fail "pending owner changed lifecycle"
 OWNER_OK=0
 check_route 69 reconfigure
 [ ! -s "$LOG" ] || fail "corrupt owner was ignored"
 HAS_RECORD=0 OWNER_OK=1
+check_route 0 stop
+[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:stop ' ] || fail "legacy stop lost"
+check_route 0 restart
+[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:restart ' ] || fail "legacy restart lost"
 check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:start ' ] ||
     fail "no common journal changed ordinary legacy startup"
