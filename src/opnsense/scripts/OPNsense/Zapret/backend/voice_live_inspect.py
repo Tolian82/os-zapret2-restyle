@@ -12,7 +12,12 @@ import sys
 
 from voice_firewall_ledger import LedgerError, VoiceOwnershipStore
 from voice_cutover_journal import CutoverJournalError, VoiceCutoverJournal
-from voice_ipfw_adapter import FreeBSDIPFWAdapter, IPFWAdapterError
+from voice_ipfw_adapter import (FreeBSDIPFWAdapter, IPFWAdapterError,
+                                shared_release_manifest)
+from voice_firewall_transaction import verify_prior_state
+from shared_apply_operation import (SharedApplyOperation, SharedOperationError,
+                                    committed_owner)
+from shared_apply_seal import WORK, SharedBundleError, verify_seal
 from voice_firewall_transaction import (
     SERVICES, TABLE_PREFIX, VoiceFirewallError, table_contents_equal,
 )
@@ -85,6 +90,56 @@ def examine(store, adapter, cutover=None) -> dict:
             "rule_count": len(observed), "table_count": len(expected["tables"])}
 
 
+def examine_shared(record: dict | None, *, work_root: Path = WORK,
+                   bundle_verify=verify_seal,
+                   manifest_reader=shared_release_manifest,
+                   adapter_factory=FreeBSDIPFWAdapter) -> dict | None:
+    """Read-only IPFW status of the ONE committed common Strategies/Voice owner.
+
+    Native release ownership always dominates the obsolete Voice-only ledger.
+    A pending transaction is never treated as an active predecessor; the
+    original FD9 executor alone may reconcile that state. This routine does
+    NOT authorize future Apply, engine health or MEDIA_PASS/CALL_PASS.
+    """
+    if record is None:
+        return None
+    phase = record["phase"]
+    if phase not in ("committed", "restored"):
+        return {
+            "state": "interrupted", "condition": "shared-apply-" + phase,
+            "can_activate": False, "remedy": "verified-recovery-required",
+            "source": "native-common",
+        }
+    owner = committed_owner(record)
+    if owner is None:
+        return None
+    operation_id = owner["id"]
+    work = work_root / operation_id
+    bundle_verify(work)
+    plan = json.loads((work / "plan.json").read_bytes())
+    if not isinstance(plan, dict) or plan.get("page") != owner["page"] or \
+       plan.get("dependencies") != owner["base"] or \
+       plan.get("changed_fields") != owner["changed_fields"]:
+        raise VoiceInspectError("native common owner does not match sealed candidate")
+    manifest = manifest_reader(work / "release")
+    adapter = adapter_factory(manifest["rule_base"], manifest["rule_max"])
+    try:
+        verify_prior_state(adapter, manifest, manifest)
+    except VoiceFirewallError:
+        # A stopped common owner or foreign/partially installed kernel is NOT
+        # ready. Do not guess which situation occurred or mutate to recover.
+        return {
+            "state": "foreign-or-modified-rules", "source": "native-common",
+            "can_activate": False, "remedy": "manual-inspection",
+        }
+    return {
+        "state": "ready", "source": "native-common",
+        "condition": "common-ipfw-verified-only", "can_activate": False,
+        "rule_count": len(manifest["rules"]),
+        "table_count": len(manifest["tables"]),
+    }
+
+
 def main(args: list[str]) -> int:
     if len(args) != 1:
         print("usage: voice_live_inspect.py", file=sys.stderr)
@@ -103,6 +158,13 @@ def main(args: list[str]) -> int:
                     "can_activate": False, "remedy": "whole-runtime-manual-review",
                 }, sort_keys=True))
                 return 2
+        # Native common ownership supersedes the historic Voice-IPFW ledger.
+        # The shared journal itself is root-owned and fails closed on corruption.
+        shared = SharedApplyOperation().read()
+        common = examine_shared(shared)
+        if common is not None:
+            print(json.dumps(common, sort_keys=True))
+            return 0 if common["state"] == "ready" else 2
         # Fixed private path. The production code must explicitly prepare
         # the directory under the existing lifecycle lock after migration.
         directory = Path("/var/db/zapret2/voice-ipfw")
@@ -117,7 +179,8 @@ def main(args: list[str]) -> int:
         print(json.dumps(report, sort_keys=True))
         return 0 if report["state"] == "ready" else 2
     except (OSError, ValueError, VoiceFirewallError, LedgerError,
-            IPFWAdapterError, CutoverJournalError) as error:
+            IPFWAdapterError, CutoverJournalError, SharedOperationError,
+            SharedBundleError, VoiceInspectError) as error:
         # Never dump kernel rule text, sensitive config or tables to stdout.
         print(json.dumps({
             "state": "inspection-error",
