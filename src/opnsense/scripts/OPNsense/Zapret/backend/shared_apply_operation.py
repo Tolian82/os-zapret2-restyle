@@ -34,7 +34,9 @@ PHASES = frozenset((
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
     "prepared": frozenset(("activating",)),
-    "activating": frozenset(("activated", "requires-review")),
+    # An activation failure may have fully restored every resource without
+    # ever publishing 'activated'; mark restored only after attested rollback.
+    "activating": frozenset(("activated", "restored", "requires-review", "restore-failed")),
     "activated": frozenset(("config-saved", "restored", "restore-failed",
                             "requires-review")),
     "config-saved": frozenset(("committed", "requires-review")),

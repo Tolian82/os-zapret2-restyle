@@ -90,6 +90,9 @@ final class SharedApplyConfigWorker
             'snapshot' => VoiceSettingsSnapshot::digest($target),
             'enabled' => $mode,
             'changes' => count($plan['changed_fields']),
+            'base' => $plan['dependencies'],
+            'candidate' => VoiceSettingsSnapshot::digest($plan['candidate']),
+            'fields' => $plan['changed_fields'],
         ];
     }
 

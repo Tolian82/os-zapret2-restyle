@@ -787,6 +787,89 @@ native_voice_live_preflight_service()
     "${_native_voice_live_python}" "${_native_voice_live_script}" inspect
 }
 
+# One actual runtime/Config Apply owner: the existing service process holds
+# FD9 for the ENTIRE operation; Python journal and PHP Config worker run as
+# children inheriting that ownership. No nested configd/lockf acquisition,
+# no second Voice daemon, no old Config XML file replacement.
+shared_apply_execute_service()
+{
+    [ "$#" -eq 2 ] || return 64
+    case "$1" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#1}" -eq 32 ] || return 64
+    case "$2" in voice|strategies) ;; *) return 64 ;; esac
+    preflight_voice_cutover_journals || return 69
+    [ -x /usr/local/bin/php ] && [ -x /usr/local/bin/jq ] || return 69
+    _shared_apply_id="$1"
+    _shared_apply_page="$2"
+    _shared_apply_root="/var/db/zapret2/shared-work/$_shared_apply_id"
+    [ -d "$_shared_apply_root/release" ] &&
+    [ -f "$_shared_apply_root/candidate.xml" ] &&
+    [ -f "$_shared_apply_root/plan.json" ] || return 69
+    _shared_apply_preview=$(/usr/local/bin/php \
+        "${SCRIPT_DIR}/shared_apply_config.php" preflight \
+        "$_shared_apply_id" "$_shared_apply_page") || return 69
+    _shared_apply_mode=$(printf "%s\n" "$_shared_apply_preview" |
+        /usr/local/bin/jq -er '.enabled | select(.=="0" or .=="1")') || return 69
+    _shared_apply_base=$(printf "%s\n" "$_shared_apply_preview" |
+        /usr/local/bin/jq -er '.base | select(test("^[a-f0-9]{64}$"))') || return 69
+    _shared_apply_candidate=$(printf "%s\n" "$_shared_apply_preview" |
+        /usr/local/bin/jq -er '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
+    _shared_apply_fields=$(printf "%s\n" "$_shared_apply_preview" |
+        /usr/local/bin/jq -er '.fields | if length==0 then "-" else join(",") end') || return 69
+    # The journal records only a fixed operation identity and owned-fields
+    # proof. It never contains private Config XML or untrusted shell strings.
+    shared_apply_record_service prepared "$_shared_apply_id" "$_shared_apply_page" \
+        "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 69
+    shared_apply_record_service activating "$_shared_apply_id" "$_shared_apply_page" \
+        "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 69
+    if ! apply_runtime_activate "$_shared_apply_root/release" "$_shared_apply_mode"; then
+        # activate() may have restored internally, or may have failed between
+        # irreversible observations. Never claim a verified rollback merely
+        # because a shell status is zero or APPLY_PHASE was reset.
+        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        return 70
+    fi
+    if ! shared_apply_record_service activated "$_shared_apply_id" "$_shared_apply_page" \
+        "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields"; then
+        if apply_runtime_restore; then
+            shared_apply_record_service restored "$_shared_apply_id" "$_shared_apply_page" \
+                "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
+            return 69
+        fi
+        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        return 70
+    fi
+    # Native Config::save is performed by the SAME existing model writer.
+    # Only explicit 69 means no save was attempted; every other nonzero
+    # status could be a mid-save crash and MUST preserve runtime/evidence.
+    /usr/local/bin/php "${SCRIPT_DIR}/shared_apply_config.php" save \
+        "$_shared_apply_id" "$_shared_apply_page"
+    _shared_apply_save_status=$?
+    if [ "$_shared_apply_save_status" -ne 0 ]; then
+        if [ "$_shared_apply_save_status" -eq 69 ]; then
+            if apply_runtime_restore; then
+                shared_apply_record_service restored "$_shared_apply_id" "$_shared_apply_page" \
+                    "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
+                return 69
+            fi
+        fi
+        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        return 70
+    fi
+    shared_apply_record_service config-saved "$_shared_apply_id" "$_shared_apply_page" \
+        "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
+    if ! apply_runtime_commit; then
+        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        return 70
+    fi
+    shared_apply_record_service committed "$_shared_apply_id" "$_shared_apply_page" \
+        "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
+    printf "applied-id=%s\n" "$_shared_apply_id"
+}
 # One FD9 operation now stages a submitted native request AND builds its
 # entire detached shared runtime. No kernel, Config save, or engine changes.
 shared_apply_build_service()
@@ -874,6 +957,9 @@ service_dispatch()
             ;;
         reconfigure)
             reconfigure_service
+            ;;
+        shared-apply-execute)
+            shared_apply_execute_service "${2:-}" "${3:-}"
             ;;
         shared-apply-build)
             shared_apply_build_service "${2:-}"
@@ -1076,7 +1162,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
