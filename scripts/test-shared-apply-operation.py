@@ -230,6 +230,145 @@ class TestJournal(unittest.TestCase):
             with self.assertRaises(SharedOperationError):
                 store.cancel_pristine_legacy(detail()["id"],lambda:"f"*64)
 
+    def test_stopped_legacy_ipfw_retirement_is_one_durable_shared_wal(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            store=SharedApplyOperation(root/"shared-apply")
+            digest="f"*64
+            store.prepare_legacy_predecessor(detail(),lambda:digest)
+            store.begin_legacy_quiesce(detail()["id"],lambda:digest)
+            store.mark_legacy_processes_stopped(detail()["id"],lambda:digest)
+            stopped=store.read()
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_ipfw_retire(detail()["id"],lambda:digest)
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_ipfw_retire(detail()["id"],lambda:"a"*64)
+            self.assertEqual(stopped,store.read())
+            pending=store.begin_legacy_ipfw_retire(detail()["id"],lambda:digest)
+            self.assertEqual("legacy-ipfw-retiring",pending["phase"])
+            self.assertEqual(digest,pending["legacy_predecessor"])
+            self.assertEqual(pending,SharedApplyOperation(store.root).read())
+            self.assertEqual("shared-apply-pending",check_pending(
+                root/"voice-cutover",root/"voice-ipfw")["reason"])
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_ipfw_retire(detail()["id"],lambda:digest)
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_ipfw_retire(detail()["id"],lambda:"a"*64)
+            self.assertEqual(pending,store.read())
+            done=store.finish_legacy_ipfw_retire(detail()["id"],lambda:digest)
+            self.assertEqual("legacy-ipfw-retired",done["phase"])
+            self.assertEqual(digest,done["legacy_predecessor"])
+            self.assertEqual(done,SharedApplyOperation(store.root).read())
+            self.assertFalse(store.advisory()["safe_to_mutate"])
+            with self.assertRaises(SharedOperationError):
+                store.cancel_pristine_legacy(detail()["id"],lambda:digest)
+            with self.assertRaises(SharedOperationError):
+                store.advance("activating",detail())
+
+    def test_private_legacy_ipfw_retirement_deletes_only_sealed_old_objects(self):
+        import os
+        from voice_native_legacy_predecessor_route import retire_stopped_common_legacy_ipfw
+        from voice_native_process_probe import FreeBSDVoiceProcessProbe
+        from voice_ipfw_adapter import FreeBSDIPFWAdapter
+        marker_bytes=b"enabled\n"
+        for fail_after in (None, 1, "foreign"):
+            with self.subTest(fail_after=fail_after), tempfile.TemporaryDirectory() as folder:
+                root=Path(folder)
+                work=root/detail()["id"]
+                work.mkdir()
+                marker=root/"marker"
+                marker.write_bytes(marker_bytes)
+                os.chmod(marker,0o600)
+                store=SharedApplyOperation(root/"shared-apply")
+                store.prepare_legacy_predecessor(detail(),lambda:"f"*64)
+                store.begin_legacy_quiesce(detail()["id"],lambda:"f"*64)
+                store.mark_legacy_processes_stopped(detail()["id"],lambda:"f"*64)
+                probe=object.__new__(FreeBSDVoiceProcessProbe)
+                reader=object.__new__(FreeBSDIPFWAdapter)
+                reader.allow_mutations=False
+                reader.rule_base=19000; reader.rule_max=19010
+                writer=object.__new__(FreeBSDIPFWAdapter)
+                writer.allow_mutations=True
+                writer.rule_base=19000; writer.rule_max=19010
+                prior={"rules":{"19000":["divert","9000","udp"],
+                                "19001":["divert","9000","tcp"]},
+                       "targets":["91.108.0.0/16"]}
+                kernel={"rules":dict(prior["rules"]),"targets":list(prior["targets"])}
+                issued=[]
+                baseline={"legacy_ipfw_previous":prior,"marker":{"mode":0o600}}
+                summary={"previous_five":"d"*64}
+                plan={"previous_five":"d"*64}
+                def snapshot(_):
+                    return {"rules":dict(kernel["rules"]),
+                            "targets":None if kernel["targets"] is None else list(kernel["targets"])}
+                def delete(_, number):
+                    issued.append("delete:"+str(number))
+                    if fail_after == 1 and len(issued) == 1:
+                        raise OSError("simulated ipfw failure after durable intent")
+                    kernel["rules"].pop(str(number))
+                    if fail_after == "foreign" and len(issued) == 1:
+                        kernel["rules"]["19009"]=["foreign"]
+                def command(_, *args, **kwargs):
+                    self.assertEqual(("table","zapret2_tgvoice","destroy"),args)
+                    self.assertTrue(kwargs["modifying"])
+                    issued.append("destroy")
+                    kernel["targets"]=None
+                with patch("voice_native_legacy_predecessor_route._locked_config"), \
+                     patch("voice_native_legacy_predecessor_route.inspect_legacy_previous_live_identity",
+                           return_value=baseline), \
+                     patch("voice_native_legacy_predecessor_route.inspect_legacy_restore_plan",
+                           return_value=plan), \
+                     patch("voice_native_legacy_predecessor_route.inspect_legacy_previous",
+                           return_value=summary), \
+                     patch("voice_native_legacy_predecessor_route.inspect_previous",
+                           return_value={}), \
+                     patch("voice_native_legacy_predecessor_route._verify_sources"), \
+                     patch("voice_native_legacy_predecessor_route._read_private_file",
+                           return_value=marker_bytes), \
+                     patch("voice_native_legacy_predecessor_route._legacy_read",
+                           return_value=marker_bytes), \
+                     patch("shared_apply_operation.fingerprint_legacy_predecessor",
+                           return_value="f"*64), \
+                     patch("voice_native_legacy_reverse_wal._stopped",
+                           return_value="exact-three-role-absence"), \
+                     patch("voice_native_legacy_ipfw_replay._strict_snapshot",
+                           side_effect=snapshot), \
+                     patch.object(FreeBSDIPFWAdapter,"delete_rule",new=delete), \
+                     patch.object(FreeBSDIPFWAdapter,"_run",new=command):
+                    if fail_after is None:
+                        result=retire_stopped_common_legacy_ipfw(
+                            identity=detail()["id"],store=store,work=work,
+                            config_path=root/"config.xml",config_fd=4,
+                            config_owner=(0,0),active_runtime=root/"active",
+                            marker_path=marker,process_probe=probe,
+                            readonly_ipfw=reader,mutating_ipfw=writer,
+                            require_lifecycle_owner=lambda:None)
+                        self.assertEqual("legacy-ipfw-retired",result["phase"])
+                        self.assertEqual(["delete:19001","delete:19000","destroy"],issued)
+                        self.assertEqual({"rules":{},"targets":None},snapshot(reader))
+                    else:
+                        with self.assertRaises((OSError,RuntimeError)):
+                            retire_stopped_common_legacy_ipfw(
+                                identity=detail()["id"],store=store,work=work,
+                                config_path=root/"config.xml",config_fd=4,
+                                config_owner=(0,0),active_runtime=root/"active",
+                                marker_path=marker,process_probe=probe,
+                                readonly_ipfw=reader,mutating_ipfw=writer,
+                                require_lifecycle_owner=lambda:None)
+                        self.assertEqual("legacy-ipfw-retiring",store.read()["phase"])
+                        self.assertNotIn("destroy",issued)
+                        with self.assertRaises(RuntimeError):
+                            retire_stopped_common_legacy_ipfw(
+                                identity=detail()["id"],store=store,work=work,
+                                config_path=root/"config.xml",config_fd=4,
+                                config_owner=(0,0),active_runtime=root/"active",
+                                marker_path=marker,process_probe=probe,
+                                readonly_ipfw=reader,mutating_ipfw=writer,
+                                require_lifecycle_owner=lambda:None)
+                self.assertEqual(marker_bytes,marker.read_bytes())
+                self.assertEqual("shared-apply-pending",check_pending(
+                    root/"voice-cutover",root/"voice-ipfw")["reason"])
+
     def test_missing_state_stays_readonly(self):
         with tempfile.TemporaryDirectory() as d:
             j=SharedApplyOperation(Path(d)/"shared-apply")

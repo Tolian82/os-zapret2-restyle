@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**`v0.5.2_77` — первый внутренний этап фактического освобождения IPFW старого Telegram PoC.** После уже подтверждённой остановки трёх процессов общий `shared-apply/operation.json` сохраняет `legacy-ipfw-retiring` **до** первой мутации. Приватная `retire_stopped_common_legacy_ipfw` под прежним FD9 и Config flock проверяет sealed previous-five/restore plan, неизменные Config/runtime/marker, отсутствие трёх процессов, точные старые IPFW. Затем удаляет только идентифицированные старые правила в обратном порядке и фиксированную таблицу `zapret2_tgvoice`; после каждого шага повторно проверяется точный kernel snapshot, после полного очищения журнал записывает `legacy-ipfw-retired`. При сбое/чужом IPFW оставляется заблокированный `legacy-ipfw-retiring` **без** автоматического повтора. Этап не подключён к CLI/configd/GUI и НЕ означает завершённую миграцию: необходимы возврат старых IPFW/процессов, retirement marker, штатный common ON/Config и FreeBSD MEDIA/CALL.
+
 **`v0.5.2_76` — первый исполняемый, но строго внутренний этап живой миграции старого PoC.** В существующий `voice_native_legacy_predecessor_route.py` добавлена функция `stop_armed_common_predecessor`: после сохранённого `legacy-quiescing` она повторно сверяет sealed old previous-five, Config/runtime/marker, полное FreeBSD process/kernel/IPFW свидетельство и вызывает **существующий** фиксированный `voice_native_process_lifecycle.sh stop` с унаследованным FD9. Результат независимо проверяет отсутствие всех трёх процессов, неизменность старых Config/runtime/marker и **пока не изменённых** старых IPFW; только тогда в **одном** `shared-apply/operation.json` сохраняется `legacy-processes-stopped`. Ошибка или power-cut оставляют незавершённый журнал, без автоматического повторного STOP. Добавлены fault-тесты самого метода и simulated fixed-actuator пути. **Не подключено к CLI/configd/GUI**: пока не реализованы безопасная замена старых IPFW/marker, общий ON и обратимый rollback, применять на production нельзя.
 
 **`v0.5.2_75` — корректная фактическая индикация общего Voice runtime.** После штатного Stop committed common owner сохраняет Config и sealed release, но удаляет IPFW; прежний `voice_live_inspect` ошибочно называл этот нормальный результат чужими правилами. Теперь read-only общий инспектор различает проверенный работающий engine+IPFW (`ready`), остановленный engine с пустыми правилами (`stopped`), частичный/mismatched runtime (`interrupted`) и неизвестные правила (`foreign-or-modified-rules`). Старый PoC и маршрут общей Apply остаются без изменений; новый UI-элемент не добавлен, изменены только тексты штатного статуса. Это не проверка MEDIA/CALL и не завершённая legacy-миграция.
@@ -24,7 +26,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_76`. `VERSION=0.5.2`; `PLUGIN_REVISION=76`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_77`. `VERSION=0.5.2`; `PLUGIN_REVISION=77`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
 
@@ -126,7 +128,7 @@ Install проверяет живые объекты до изменения, с
 
 ## Следующее действие
 
-**После `_76`:** связать достоверно остановленный старый движок с удалением только его точных IPFW/marker, штатным общим Apply и гарантированным rollback из sealed предыдущего снимка. Испытать interrupted STOP, staged rule switchover и restoration на реальном FreeBSD, затем Voice ON/STUN/MEDIA/CALL. `legacy-arm`/`legacy-begin` на production запрещены до полного исполнительного маршрута.
+**После `_77`:** объединить проверенно очищенные old IPFW с безопасным снятием marker, установкой общего runtime и прежней Config persistence. До подключения к GUI/configd обязательно завершить обратный переход: точное IPFW replay, marker/runtime/Config и процессы после любого прерывания, затем реальный FreeBSD и STUN/MEDIA/CALL. `legacy-arm`/`legacy-begin` на production не запускать.
 
 **Этап 4 — следующий рубеж после `_68`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 

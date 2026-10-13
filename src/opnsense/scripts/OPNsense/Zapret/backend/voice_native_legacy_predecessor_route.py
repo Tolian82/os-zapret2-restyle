@@ -292,6 +292,107 @@ def stop_armed_common_predecessor(
     return result
 
 
+
+def retire_stopped_common_legacy_ipfw(
+    *, identity, store, work, config_path, config_fd, config_owner,
+    active_runtime, marker_path, process_probe, readonly_ipfw,
+    mutating_ipfw, require_lifecycle_owner,
+):
+    """PRIVATE: retire only sealed old Telegram IPFW under ONE common journal.
+
+    The old engine is already stopped (phase legacy-processes-stopped).
+    This stage does not change Config, runtime, legacy marker or start native
+    engine. It cannot be resumed automatically after interrupted deletion:
+    legacy-ipfw-retiring stays pending for an explicit verified reverse path.
+    """
+    from shared_apply_operation import (
+        SharedApplyOperation, fingerprint_legacy_predecessor,
+    )
+    from voice_native_legacy_ipfw_replay import _strict_snapshot
+    from voice_native_legacy_reverse_wal import _stopped
+    from voice_native_live_ipfw import OLD_TABLE
+    if not isinstance(store, SharedApplyOperation) or (
+        not isinstance(process_probe, FreeBSDVoiceProcessProbe)
+        or not isinstance(readonly_ipfw, FreeBSDIPFWAdapter)
+        or readonly_ipfw.allow_mutations
+        or not isinstance(mutating_ipfw, FreeBSDIPFWAdapter)
+        or not mutating_ipfw.allow_mutations
+        or (readonly_ipfw.rule_base, readonly_ipfw.rule_max) != (19000, 19010)
+        or (mutating_ipfw.rule_base, mutating_ipfw.rule_max) != (19000, 19010)
+        or type(config_fd) is not int or config_fd < 0
+        or not callable(require_lifecycle_owner)
+    ):
+        raise LegacyPredecessorRouteError("old IPFW retirement lacks the one original owner")
+    work = Path(work)
+    root = work / "legacy-backup"
+    if work.name != identity or not COMMON_ID.fullmatch(identity):
+        raise LegacyPredecessorRouteError("old IPFW retirement candidate ID changed")
+    require_lifecycle_owner()
+    _locked_config(Path(config_path), config_fd, config_owner)
+    record = store.read()
+    if record is None or record["phase"] != "legacy-processes-stopped" or (
+        record["detail"]["id"] != identity or "previous" in record
+        or "legacy_predecessor" not in record
+    ):
+        raise LegacyPredecessorRouteError("sealed stopped legacy journal required")
+    saved = inspect_legacy_previous_live_identity(root)
+    plan = inspect_legacy_restore_plan(root)
+    summary = inspect_legacy_previous(root)
+    if plan["previous_five"] != summary["previous_five"]:
+        raise LegacyPredecessorRouteError("old IPFW reverse plan seal changed")
+    old = saved["legacy_ipfw_previous"]
+    initial = {"rules": dict(old["rules"]), "targets": sorted(old["targets"])}
+    if len(initial["rules"]) not in (2, 3) or not initial["targets"]:
+        raise LegacyPredecessorRouteError("old Telegram IPFW is not a complete owner")
+
+    def witness(needed):
+        require_lifecycle_owner()
+        _locked_config(Path(config_path), config_fd, config_owner)
+        if fingerprint_legacy_predecessor(work, owner=config_owner[0]) != (
+            record["legacy_predecessor"]
+        ):
+            raise LegacyPredecessorRouteError("old predecessor seal changed during IPFW")
+        if inspect_legacy_previous(root) != summary or (
+            inspect_legacy_restore_plan(root) != plan
+        ):
+            raise LegacyPredecessorRouteError("old predecessor reverse plan changed")
+        _verify_sources(
+            Path(config_path), Path(active_runtime),
+            inspect_previous(root / NAME / "previous"),
+        )
+        old_marker = _read_private_file(root / NAME / "marker.bin", 64)
+        if _legacy_read(Path(marker_path)) != old_marker or (
+            stat.S_IMODE(os.lstat(marker_path).st_mode) != saved["marker"]["mode"]
+        ):
+            raise LegacyPredecessorRouteError("old marker must remain unchanged")
+        if _stopped(process_probe) != "exact-three-role-absence":
+            raise LegacyPredecessorRouteError("old processes returned during IPFW retirement")
+        if _strict_snapshot(readonly_ipfw) != needed:
+            raise LegacyPredecessorRouteError("old IPFW kernel diverged from sealed retirement step")
+        return record["legacy_predecessor"]
+
+    witness(initial)
+    # The journal is fsynced before deleting even one rule. On any failure
+    # leave legacy-ipfw-retiring, never retry/auto-accept partial kernel.
+    store.begin_legacy_ipfw_retire(identity, lambda: witness(initial))
+    current = {"rules": dict(initial["rules"]), "targets": list(initial["targets"])}
+    for number in sorted((int(value) for value in initial["rules"]), reverse=True):
+        witness(current)
+        mutating_ipfw.delete_rule(number)
+        current["rules"].pop(str(number))
+        witness(current)
+    # Destroy the exact historical fixed-name table only after all old
+    # rules are absent. Never sweep unrelated tables or rule numbers.
+    witness(current)
+    mutating_ipfw._run("table", OLD_TABLE, "destroy", modifying=True)
+    current["targets"] = None
+    witness(current)
+    result = store.finish_legacy_ipfw_retire(identity, lambda: witness(current))
+    if result["phase"] != "legacy-ipfw-retired":
+        raise LegacyPredecessorRouteError("old IPFW retirement not durably complete")
+    return result
+
+
 def main(argv):
     candidate_id = argv[1] if (
         len(argv) == 2 and argv[0] == "capture-common"
