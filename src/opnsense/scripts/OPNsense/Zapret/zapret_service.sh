@@ -1296,7 +1296,16 @@ shared_apply_inspect_service()
 # bring the same sealed release back, without legacy fallback or a new Apply.
 shared_apply_stop_service()
 {
-    [ "$#" -eq 1 ] || return 64
+    [ "$#" -eq 1 ] || [ "$#" -eq 2 ] || return 64
+    # A supervisor callback carries the PID it originally monitored. A
+    # delayed callback must NEVER stop a newer shared dvtws2 incarnation.
+    _shared_stop_failed_pid=
+    if [ "$#" -eq 2 ]; then
+        _shared_stop_failed_pid="$2"
+        case "$_shared_stop_failed_pid" in ""|*[!0-9]*) return 69 ;; esac
+        _shared_stop_recorded_pid=$(common_pidfile_read "$CHILD_PIDFILE") || return 69
+        [ "$_shared_stop_failed_pid" = "$_shared_stop_recorded_pid" ] || return 69
+    fi
     case "$1" in committed\ *) ;; *) return 69 ;; esac
     _shared_stop_id=$(printf "%s\n" "$1" | cut -d " " -f 2)
     _shared_stop_page=$(printf "%s\n" "$1" | cut -d " " -f 3)
@@ -1320,12 +1329,18 @@ shared_apply_stop_service()
     _shared_stop_monitor=0
     launcher_is_running "$CHILD_PIDFILE" && _shared_stop_engine=1
     supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" && _shared_stop_monitor=1
-    [ "$_shared_stop_engine" = "$_shared_stop_monitor" ] || return 69
+    if [ -n "$_shared_stop_failed_pid" ]; then
+        # Exact old PID no longer runs. The monitor may still be delivering
+        # the callback, but a healthy/replaced engine invalidates it.
+        [ "$_shared_stop_engine" = 0 ] || return 69
+    else
+        [ "$_shared_stop_engine" = "$_shared_stop_monitor" ] || return 69
+    fi
     # A missing PID file is not evidence of an empty engine inventory.
     # The same exact-binary census already protects common Apply.
     _apply_engine="$_shared_stop_engine"
     apply_runtime_attest_engine_inventory || return 69
-    if [ "$_shared_stop_engine" = 0 ]; then
+    if [ "$_shared_stop_engine" = 0 ] && [ -z "$_shared_stop_failed_pid" ]; then
         # An already stopped common runtime is idempotent only with an
         # empty, independently verified plugin-owned kernel range.
         firewall_shared_runtime verify "$ACTIVE_DIR" - || return 69
@@ -1895,7 +1910,25 @@ service_with_lifecycle_lock()
                 fi
                 preflight_voice_cutover_journals || return 69
                 ;;
-            native-voice-checkpoint|telegram-voice-enable|telegram-voice-disable|runtime-failure|strategy-lab|strategy-lab-circular|strategy-lab-recover)
+            runtime-failure)
+                # Common committed runtime must NOT execute the old blind
+                # orchestrator cleanup. Bind the callback to its original
+                # child PID; stale callbacks after a new Apply are rejected.
+                if shared_apply_has_record_service; then
+                    _shared_owner=$(shared_apply_inspect_service) || return 69
+                    case "$_shared_owner" in
+                        committed\ *)
+                            [ "$#" -eq 3 ] || return 69
+                            shared_apply_stop_service "$_shared_owner" "$3"
+                            return $?
+                            ;;
+                        none|restored) ;;
+                        *) return 69 ;;
+                    esac
+                fi
+                preflight_voice_cutover_journals || return 69
+                ;;
+            native-voice-checkpoint|telegram-voice-enable|telegram-voice-disable|strategy-lab|strategy-lab-circular|strategy-lab-recover)
                 preflight_voice_cutover_journals || return 69
                 ;;
         esac

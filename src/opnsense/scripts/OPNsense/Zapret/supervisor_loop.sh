@@ -36,5 +36,6 @@ while process_matches; do
 done
 
 "${SERVICE_SCRIPT}" runtime-failure \
-    "dvtws2 exited after the service reached ready state" >/dev/null 2>&1
+    "dvtws2 exited after the service reached ready state" \
+    "$child_pid" >/dev/null 2>&1
 exit 0

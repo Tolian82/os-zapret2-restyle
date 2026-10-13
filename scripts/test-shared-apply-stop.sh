@@ -40,6 +40,7 @@ launcher_stop() {
     [ "$STOP_OK" = 1 ] || return 1
     ENGINE_RUNNING=0
 }
+common_pidfile_read() { [ -r "$1" ] && sed -n '1p' "$1"; }
 firewall_shared_runtime() {
     echo "ipfw:$1:$2:$3" >> "$LOG"
     case "$1" in
@@ -89,6 +90,39 @@ reset; INSTALL_OK=0
 check 70 "guard:common-apply seal:verify config:saved tree-verify ipfw:verify:-:$ACTIVE_DIR supervisor-stop launcher-stop ipfw:install:$ACTIVE_DIR:- "
 reset; COMMIT_OK=0
 check 70 "guard:common-apply seal:verify config:saved tree-verify ipfw:verify:-:$ACTIVE_DIR supervisor-stop launcher-stop ipfw:install:$ACTIVE_DIR:- ipfw:commit:$ACTIVE_DIR:- "
+# The supervisor reports the PID it watched, even after that engine died.
+# Only that exact dead incarnation may retire an attested common IPFW owner.
+printf '542\n' > "$CHILD_PIDFILE"
+reset; ENGINE_RUNNING=0; MONITOR_RUNNING=1
+: > "$LOG"
+set +e
+shared_apply_stop_service "committed $ID voice" 542 > "$ROOT/receipt"
+code=$?
+set -e
+[ "$code" -eq 0 ] || fail "dead common engine callback could not retire exact owner: $code"
+[ "$ENGINE_RUNNING" = 0 ] && [ "$MONITOR_RUNNING" = 0 ] || fail "callback left native monitor running"
+[ "$(tr '\n' ' ' < "$LOG")" = "guard:common-apply seal:verify config:saved tree-verify ipfw:verify:-:$ACTIVE_DIR supervisor-stop launcher-stop ipfw:install:$ACTIVE_DIR:- ipfw:commit:$ACTIVE_DIR:- ipfw:verify:$ACTIVE_DIR:- " ] ||
+    fail "callback did not use the verified common Stop transaction"
+reset; ENGINE_RUNNING=0; MONITOR_RUNNING=1
+if shared_apply_stop_service "committed $ID voice" 541 > /dev/null; then
+    fail "stale supervisor callback accepted for newer common engine"
+fi
+[ "$MONITOR_RUNNING" = 1 ] || fail "stale callback stopped the newer owner"
+reset
+if shared_apply_stop_service "committed $ID voice" 542 > /dev/null; then
+    fail "healthy common engine was killed by supervisor callback"
+fi
+[ "$ENGINE_RUNNING" = 1 ] || fail "healthy engine stopped by callback"
+reset; ENGINE_RUNNING=0; MONITOR_RUNNING=1; KERNEL_OK=0
+if shared_apply_stop_service "committed $ID voice" 542 > /dev/null; then
+    fail "callback removed unverified kernel state"
+fi
+[ "$MONITOR_RUNNING" = 1 ] || fail "unknown kernel callback stopped supervisor"
+rm -f "$CHILD_PIDFILE"
+reset
+if shared_apply_stop_service "committed $ID voice" 542 >/dev/null; then
+    fail "callback without original PID evidence accepted"
+fi
 reset
 if shared_apply_stop_service "restored $ID voice" >/dev/null; then fail "unowned stop"; fi
 if shared_apply_stop_service "committed /tmp/invalid voice" >/dev/null; then fail "path injection"; fi

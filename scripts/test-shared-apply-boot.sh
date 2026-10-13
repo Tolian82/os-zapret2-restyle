@@ -89,7 +89,14 @@ shared_apply_recover_activating_parked_service() {
     OWNER="committed $PREVIOUS voice"
 }
 shared_apply_boot_service() { echo "common:$1" >> "$LOG"; }
-shared_apply_stop_service() { echo "common-stop:$1" >> "$LOG"; [ "$STOP_OK" = 0 ] || return 70; }
+shared_apply_stop_service() {
+    if [ "$#" -eq 2 ]; then
+        echo "common-failure-stop:$1:$2" >> "$LOG"
+    else
+        echo "common-stop:$1" >> "$LOG"
+    fi
+    [ "$STOP_OK" = 0 ] || return 70
+}
 preflight_voice_cutover_journals() { echo "legacy-guard" >> "$LOG"; }
 service_dispatch() { echo "legacy:$1" >> "$LOG"; }
 check_route() {
@@ -118,6 +125,13 @@ STOP_OK=1
 check_route 70 restart
 [ "$(cat "$LOG")" = "common-stop:committed $ID voice" ] || fail "failed stop started replacement"
 STOP_OK=0
+OWNER="committed $ID voice"
+check_route 0 runtime-failure "exited" 542
+[ "$(cat "$LOG")" = "common-failure-stop:committed $ID voice:542" ] ||
+    fail "native runtime failure fell through to legacy rule sweep"
+OWNER="activated $ID voice"
+check_route 69 runtime-failure "exited" 542
+[ ! -s "$LOG" ] || fail "pending native owner was torn down by callback"
 OWNER=restored
 check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:start ' ] ||
