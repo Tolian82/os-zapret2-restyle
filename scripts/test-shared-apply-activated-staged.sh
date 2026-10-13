@@ -152,8 +152,7 @@ check 0 "$ACTIVATING"
     fail "activating staged IPFW and old runtime were not restored"
 grep -qx "recovered-activating-id=$NEW_ID" "$ROOT/result" ||
     fail "activating did not finalize with its own journal phase"
-grep -q '^ipfw:rollback
- "$LOG" || fail "activating skipped exact old IPFW rollback"
+grep -q '^ipfw:rollback$' "$LOG" || fail "activating skipped exact old IPFW rollback"
 for state in old retiring empty; do
     reset; STATE="$state"
     check 0 "$ACTIVATING"
