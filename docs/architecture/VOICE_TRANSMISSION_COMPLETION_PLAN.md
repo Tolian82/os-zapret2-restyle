@@ -115,6 +115,8 @@ Runtime переключается перед финальным сохране�
 
 ### Этап 3. Общий Apply обеих страниц
 
+Подэтапы `_23`–`_24`. Единственный durable journal переносит предшествующего committed common owner через повторный Apply и безопасный `restored`. Благодаря этому ранний rollback над native engine больше не запускает legacy. Для `config-saved` штатный FD9 проверяет полный bundle seal, saved native Config, отсутствие engine/monitor и пустой IPFW; только тогда запускает прежний общий runtime и доводит journal до `committed`. При неизвестном live ownership сохраняется запрет любых действий, old-PoC fallback исключён. Следующие этапы: mutating-phase recovery, native stop/restart, GUI Apply и appliance acceptance.
+
 Подэтап `_22`: исправлен точный CLI-regex в штатном `recover-prepared` и добавлена failure-path проверка на Python. Это не расширяет разрешённые recovery-фазы: только source-intact `prepared` до начала мутаций может перейти в `restored`. Неподтверждённая runtime/Config/IPFW операция по-прежнему запрещает legacy startup.
 
 Подэтап `_21`: самый ранний power-cut после `prepared` безопасно и автоматически закрывается только при root FD9, целостном sealed candidate, неизменном identity и повторной проверке journal. До записи durable `activating` исполнитель не совершает runtime/Config/IPFW мутаций, поэтому разрешено `prepared → restored` и затем обычный start через old guard. `activating/activated/config-saved` остаются `blocked`, никакого общего автоматического rollback без независимых Config/kernel/engine witnesses. Результаты тестируются на actual lifecycle wrapper и isolated operation-store.

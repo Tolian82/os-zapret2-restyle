@@ -2,9 +2,13 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_22`. `VERSION=0.5.2`; `PLUGIN_REVISION=22`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_24`. `VERSION=0.5.2`; `PLUGIN_REVISION=24`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+Ревизия _23: в том же durable operation.json сохраняется `previous` — идентификатор предшествующего committed common owner. Теперь новый Apply и его откат не превращают общий runtime в legacy Telegram Voice: `inspect` возвращает старого владельца, FD9 boot пересматривает восстановленную операцию и выбирает общий release. Результат покрыт regressions на pending, rollback, invalid predecessor и обычный start.
+
+Ревизия _24: отдельный cold restart для уже сохранённого `config-saved`. Под FD9 повторно подтверждаются источник (bundle seal), native saved Config, отсутствие процессов и kernel IPFW и только затем выполняются тот же `apply_runtime_activate/commit` и долговечная запись `committed`. При любом сомнении операция остаётся pending; `activating/activated` не разблокируются. Native stop/restart, public кнопки двух страниц и FreeBSD owner-live остаются недоделанными.
 
 В `_22` исправлен реальный дефект ветки root FD9 `recover-prepared`: CLI использовал несуществующий символ проверки OP_ID, поэтому до исправления раннее восстановление не могло исполниться. Идентификатор теперь проверяется существующим строгим `OP_ID`; CLI-тест проверяет, что без FreeBSD root/FD9 возвращается контролируемый отказ 69 без необработанного Python Traceback. До получения полного latest HEAD CI успешность восстановления на самом FreeBSD не утверждается.
 
