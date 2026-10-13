@@ -122,6 +122,8 @@ jobs:
       - name: Voice shared IPv4 targets
         run: sh scripts/test-voice-shared-ipsets.sh
 
+      - name: Validate dvtws2 process census before shared Apply
+        run: sh scripts/test-voice-common-engine-census.sh
       - name: Shared runtime activation and rollback
         run: sh scripts/test-voice-common-apply-runtime.sh
       - name: Voice fail-closed compiler
