@@ -610,6 +610,19 @@ native_voice_legacy_capture_plan_service()
     "${_voice_python}" "${_voice_script}" capture-plan
 }
 
+# Operator-only sealed reverse WAL of an ALREADY stopped old Telegram PoC.
+# Records exact no-process/no-old-IPFW/marker-OFF state without actuating them.
+native_voice_legacy_seal_clean_wal_service()
+{
+    _voice_python="/usr/local/bin/python3.13"
+    _voice_script="${BACKEND_DIR}/voice_native_legacy_clean_wal_route.py"
+    [ -x "${_voice_python}" ] && [ -r "${_voice_script}" ] || {
+        echo "ERROR: legacy Voice clean-WAL inspector not installed" >&2
+        return 69
+    }
+    "${_voice_python}" "${_voice_script}" seal-clean-wal
+}
+
 # Explicit root-only OPERATOR recovery of a fully sealed old Telegram PoC.
 # This invokes REAL old IPFW/file/marker/process rollback under the same FD9.
 # NOT registered with configd, GUI, boot, normal start or runtime-failure.
@@ -822,6 +835,9 @@ service_dispatch()
         native-voice-legacy-capture-plan)
             native_voice_legacy_capture_plan_service
             ;;
+        native-voice-legacy-seal-clean-wal)
+            native_voice_legacy_seal_clean_wal_service
+            ;;
         native-voice-legacy-rollback-five)
             native_voice_legacy_rollback_five_service
             ;;
@@ -980,7 +996,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

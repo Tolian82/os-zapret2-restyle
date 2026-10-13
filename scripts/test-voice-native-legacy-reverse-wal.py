@@ -13,6 +13,9 @@ from unittest.mock import patch
 ROOT=Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"))
 import voice_native_legacy_reverse_wal as wal
+from voice_native_legacy_clean_wal_route import (
+    seal_old_clean_boundary, main as clean_wal_main,
+)
 from voice_cutover_guard import check_pending
 from voice_native_recovery_quiescence import EXPECTED_SCRIPTS
 
@@ -163,11 +166,82 @@ class CleanKernelRecoveryWALTests(unittest.TestCase):
         with self.assertRaises((RuntimeError,ValueError,OSError)):
             wal.inspect_legacy_reverse_wal(self.root)
 
-    def test_no_production_wiring_and_no_mutating_ipfw(self):
+    def operator_seal(self, *, locked=True):
+        fd=os.open(self.live.config,os.O_RDWR)
+        try:
+            if locked:
+                fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            return seal_old_clean_boundary(
+                root=self.root,config_path=self.live.config,config_fd=fd,
+                config_owner=(os.geteuid(),os.getegid()),
+                ledger_root=self.live.ledger,marker_path=self.marker,
+                active_runtime=self.live.runtime,process_probe=self.live.probe,
+                readonly_ipfw=self.live.adapter,
+                require_lifecycle_owner=lambda:self.live.lock_calls.append("FD9"),
+            )
+        finally:
+            os.close(fd)
+
+    def test_manual_operator_seals_full_clean_boundary_without_kernel_mutation(self):
+        before=self.live.config.read_bytes()
+        rules=self.fake.rules
+        result=self.operator_seal()
+        self.assertEqual("legacy-clean-boundary-wal-sealed-reverse-owner-pending",
+                         result["state"])
+        for name in ("safe_to_execute","safe_to_mutate","safe_to_enable_voice",
+                     "public_voice_apply","boot_recovery_validated","media_pass"):
+            self.assertFalse(result[name])
+        self.assertEqual({"legacy-previous","legacy-restore-plan",
+                          "legacy-reverse-wal"},set(os.listdir(self.root)))
+        self.assertEqual(before,self.live.config.read_bytes())
+        self.assertEqual(rules,self.fake.rules)
+        self.assertFalse(self.marker.exists())
+        self.assertFalse(check_pending(self.root,self.live.ledger)["safe_to_mutate"])
+        with self.assertRaises((RuntimeError,ValueError,OSError)):
+            self.operator_seal()
+
+    def test_manual_operator_requires_original_config_flock(self):
+        with self.assertRaises((RuntimeError,ValueError,OSError)):
+            self.operator_seal(locked=False)
+        self.assertFalse((self.root/wal.WAL_NAME).exists())
+
+    def test_manual_operator_never_accepts_active_old_marker_or_ipfw(self):
+        self.marker.write_bytes(b"")
+        with self.assertRaises((RuntimeError,ValueError,OSError)):
+            self.operator_seal()
+        self.marker.unlink()
+        self.fake.rules="19000 allow ip from any to any\n"+self.fake.rules
+        with self.assertRaises((RuntimeError,ValueError,OSError)):
+            self.operator_seal()
+        self.assertFalse((self.root/wal.WAL_NAME).exists())
+
+    def test_manual_operator_retains_interrupted_wal_without_retry(self):
+        with patch.object(wal,"_write_once",side_effect=OSError("power-cut")):
+            with self.assertRaises(OSError):
+                self.operator_seal()
+        self.assertTrue(list(self.root.glob(".legacy-reverse-wal-*")))
+        with self.assertRaises((RuntimeError,ValueError,OSError)):
+            self.operator_seal()
+        self.assertFalse(check_pending(self.root,self.live.ledger)["safe_to_mutate"])
+
+    def test_manual_clean_wal_only_under_existing_fd9_not_gui_or_boot(self):
+        service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
+        configd=(ROOT/"src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text()
+        gui=(ROOT/"src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt").read_text()
+        self.assertIn("native-voice-legacy-seal-clean-wal)",service)
+        self.assertIn("native_voice_legacy_seal_clean_wal_service",service)
+        self.assertIn("|native-voice-legacy-seal-clean-wal|",service)
+        self.assertNotIn("native-voice-legacy-seal-clean-wal",configd)
+        self.assertNotIn("native-voice-legacy-seal-clean-wal",gui)
+        self.assertEqual(64,clean_wal_main([]))
+        self.assertEqual(64,clean_wal_main(["seal-clean-wal","/tmp/alien"]))
+        self.assertFalse((self.root/wal.WAL_NAME).exists())
+
+    def test_no_automatic_wiring_and_no_mutating_ipfw(self):
         source=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend/"
                 "voice_native_legacy_reverse_wal.py").read_text()
         service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
-        self.assertNotIn("legacy-reverse-wal",service)
+        self.assertNotIn("native-voice-legacy-reverse-wal-autostart",service)
         self.assertNotIn("subprocess.run(",source)
         self.assertNotIn("modifying=True",source)
         self.assertNotIn("allow_mutations=True",source)
