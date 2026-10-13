@@ -27,6 +27,9 @@ shared_apply_workspace() { echo "$ROOT/work"; }
 atomic_verify_tree() { echo tree-verify >> "$LOG"; [ "$TREE_OK" = 1 ]; }
 launcher_is_running() { [ "$ENGINE_RUNNING" = 1 ]; }
 supervisor_is_running() { [ "$MONITOR_RUNNING" = 1 ]; }
+# This fixture models one exact registered engine; the separate real-census
+# regression covers orphan/duplicate/surviving PID scenarios.
+apply_runtime_attest_engine_inventory() { [ "$_apply_engine" = "$ENGINE_RUNNING" ]; }
 supervisor_stop() {
     echo supervisor-stop >> "$LOG"
     [ "$STOP_OK" = 1 ] || return 1
