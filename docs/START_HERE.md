@@ -1,8 +1,10 @@
 # os-zapret2-restyle — START HERE
 
+**Текущая ревизия: v0.5.2_66 (без релиза).** В единственном durable journal `shared-apply/operation.json` теперь фиксируется `legacy-quiescing` — первый защищённый барьер непосредственно перед будущей остановкой старого Telegram PoC. Операторский `shared-apply-legacy-begin ID` через штатный FD9 и оригинальный Config flock повторно сверяет sealed previous-five snapshot, прежние Config/runtime/marker, точные FreeBSD процессы/argv и IPFW, затем атомарно записывает фазу без остановки процесса. После reboot обычные Apply/boot-recover не переходят через `legacy-quiescing`; ручной `legacy-cancel` допустим только если прежний PoC полностью неизменён. Нет нового backend/WAL/движка, GUI/ТЗ сохранены. **Это ещё не рабочая миграция; operator arm/begin на production не выполнять.** Следом нужен один исполнитель для настоящего STOP + restore-on-failure + restart/cutover и FreeBSD owner-live/STUN/CALL тесты.
+
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_65`. `VERSION=0.5.2`; `PLUGIN_REVISION=65`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_66`. `VERSION=0.5.2`; `PLUGIN_REVISION=66`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
 
@@ -104,7 +106,7 @@ Install проверяет живые объекты до изменения, с
 
 ## Следующее действие
 
-**Этап 4 — следующий рубеж после `_65`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
+**Этап 4 — следующий рубеж после `_66`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 
 ## Минимальное чтение по текущей задаче
 
