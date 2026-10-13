@@ -24,13 +24,15 @@
 
  на уникальный в пределах процесса `.rollback-old.$`: чужие остатки ранее прерванных процессов сохраняются и не блокируют текущий проверяемый откат. Тесты воспроизводят сбой второго rename, конфликт текущего park и чужой stale park. В `_45` добавлена независимая read-only сверка всего процесса `dvtws2` со штатным PID-файлом через существующий FreeBSD process-query adapter перед созданием native journal: потерянный PID, дублирующий dvtws2, нераспознанный процесс и ошибка ps не могут считаться пустым runtime. Сканирование не останавливает процессы и не меняет Config/IPFW. `apply_runtime_probe` повторяется при activation. Это безопасность подготовки и восстановления, **не** разрешение автоматического live cutover старого PoC; необходимы отдельная подтверждённая миграция и FreeBSD owner-live. CI latest HEAD проверяется.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_45`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+**`_46`: корректировка изоляции Linux runtime-теста.** Существующий `test-voice-common-apply-runtime.sh` загружает production `apply_runtime.sh` и только затем подменяет внешний full-process census для чистой имитации engine/kernel; иначе source переопределял fake и вызывал отсутствующий `common_pidfile_read` в стенде. Отдельный `test-voice-common-engine-census.sh` продолжает запускать именно production-код census и проверяет реальные ветви отказа. Защитный pre-journal отказ при незарегистрированном dvtws2 остаётся в production без изменений. На последнем HEAD требуется получить полный CI PASS, FreeBSD owner-live ещё не выполнялся.
+
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_46`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=45` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_45.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=46` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_46.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
