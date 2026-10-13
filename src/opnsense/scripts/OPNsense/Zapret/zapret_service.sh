@@ -787,6 +787,16 @@ native_voice_live_preflight_service()
     "${_native_voice_live_python}" "${_native_voice_live_script}" inspect
 }
 
+# Internal root-only Apply phases; service_with_lifecycle_lock supplies FD9.
+shared_apply_record_service()
+{
+    [ "$#" -eq 6 ] || return 64
+    [ -x /usr/local/bin/python3.13 ] || return 69
+    [ -r "${BACKEND_DIR}/shared_apply_operation.py" ] || return 69
+    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+        record "$1" "$2" "$3" "$4" "$5" "$6"
+}
+
 service_dispatch()
 {
     case "${1:-}" in
@@ -817,6 +827,10 @@ service_dispatch()
             ;;
         reconfigure)
             reconfigure_service
+            ;;
+        shared-apply-record)
+            shift
+            shared_apply_record_service "$@"
             ;;
         native-voice-checkpoint)
             native_voice_checkpoint_service
@@ -1009,7 +1023,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
