@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`_51`:** прежде `atomic_install_tree` удалял существующие `.stage.$$` и `.old.$$` перед каждой установкой; при столкновении PID после сбоя это могло уничтожить старую копию runtime. Теперь сохранение неизвестных staged/parked деревьев обязательно: проверка до copy/rename и отказ при существующем файле/симлинке. Также запрещён `mv` в уже занятый backup `name-date-PID`. Regression на реальном helper проверяет три отказа и неизменность активного runtime. Автоматическое восстановление *частичного* `activating` ещё не реализовано; owner-live не подтверждён.
+
 **`_50`:** ограниченное восстановление фазы `activated` после холодного прерывания до Config save: предыдущий committed common owner, saved Config, оба sealed bundle, полное установленное дерево, отсутствие engine/supervisor/orphan-процессов и пустой scoped IPFW проверяются под FD9. При точном совпадении установленного нового release штатный `atomic_install_tree` возвращает предыдущий release, сохраняет неудачный кандидат и после повторной проверки переводит тот же журнал в `restored`. Если предыдущий release уже на месте, повторный вызов не переносит файлы. Чужое/частичное состояние остаётся заблокированным. Linux CI проверяет код; FreeBSD owner-live ещё не принят.
 
 **`_49`:** для прерванной `activating` с **предыдущим committed общим владельцем** добавлен fail-closed recovery только при полном совпадении active runtime с его sealed release, native saved Config и отсутствии живых/незарегистрированных процессов dvtws2 и owned IPFW. Единственный durable journal переводится в `restored`, затем штатный boot использует previous. Partial mutation, отсутствие previous, `activated` не восстанавливаются автоматически. В CI зафиксирована неизменяемая граница истории PR по SHA `a7682c46` (конец `_47`): все заголовки и ревизии начиная с `_48` строго проверяются, история до границы не переписывается. Linux/CI проверки и FreeBSD owner-live различаются.
@@ -20,13 +22,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_50`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_51`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=50` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_50.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=51` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_51.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
