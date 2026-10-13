@@ -244,6 +244,19 @@ class SharedApplyOperation:
             raise SharedOperationError("activating journal changed during attestation")
         return self.advance("restored", record["detail"])
 
+    def finish_activated_restore(self, identity: str, previous_id: str, attest) -> dict:
+        """Close ACTIVATED only after previous native Config and full FD9 runtime recovery."""
+        record = self.read()
+        if record is None or record["phase"] != "activated" or \
+                record["detail"]["id"] != identity or \
+                record.get("previous", {}).get("id") != previous_id:
+            raise SharedOperationError("activated rollback completion refused")
+        if not callable(attest) or attest() is not True:
+            raise SharedOperationError("activated rollback attestation refused")
+        if self.read() != record:
+            raise SharedOperationError("activated journal changed during recovery")
+        return self.advance("restored", record["detail"])
+
     def finish_saved(self, identity: str, attest) -> dict:
         """Close Config-saved only after external FD9 Config/kernel attestation.
 
@@ -279,7 +292,10 @@ def main(argv: list[str]) -> int:
     pristine = len(argv) == 4 and argv[1] == "recover-activating" and all(
         OP_ID.fullmatch(value) for value in argv[2:]
     )
-    if not (inspection or recording or recovery or finish or pristine):
+    activated = len(argv) == 4 and argv[1] == "finish-activated" and all(
+        OP_ID.fullmatch(value) for value in argv[2:]
+    )
+    if not (inspection or recording or recovery or finish or pristine or activated):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -304,9 +320,9 @@ def main(argv: list[str]) -> int:
             elif record["phase"] in ("prepared", "config-saved"):
                 detail = record["detail"]
                 print(record["phase"] + " " + detail["id"] + " " + detail["page"])
-            elif record["phase"] == "activating" and "previous" in record:
+            elif record["phase"] in ("activating", "activated") and "previous" in record:
                 detail, previous = record["detail"], record["previous"]
-                print("activating " + detail["id"] + " " + detail["page"] +
+                print(record["phase"] + " " + detail["id"] + " " + detail["page"] +
                       " " + previous["id"] + " " + previous["page"])
             else:
                 # Never make an incomplete operation look like no owner.
@@ -328,6 +344,15 @@ def main(argv: list[str]) -> int:
                              verify_seal(WORK / argv[3], owner=0)),
             )
             print("activating-pristine-restored")
+        elif activated:
+            from shared_apply_seal import verify_seal, WORK
+            store = SharedApplyOperation(owner=0)
+            store.finish_activated_restore(
+                argv[2], argv[3],
+                lambda: bool(verify_seal(WORK / argv[2], owner=0) and
+                             verify_seal(WORK / argv[3], owner=0)),
+            )
+            print("activated-restored")
         elif finish:
             from shared_apply_seal import verify_seal, WORK
             store = SharedApplyOperation(owner=0)

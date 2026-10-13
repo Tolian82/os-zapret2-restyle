@@ -894,6 +894,71 @@ shared_apply_recover_activating_pristine_service()
         recover-activating "$_shared_pristine_id" "$_shared_pristine_old" || return 69
     printf "recovered-pristine-id=%s\n" "$_shared_pristine_id"
 }
+# Recover cold pre-save ACTIVATED only when the full new common release
+# was installed. Old saved Config, sealed bundles, no engine and empty IPFW
+# must be independently confirmed under original FD9.
+shared_apply_recover_activated_cold_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    case "$1" in activated\ *) ;; *) return 69 ;; esac
+    _shared_cold_id=$(printf "%s\n" "$1" | cut -d " " -f 2)
+    _shared_cold_page=$(printf "%s\n" "$1" | cut -d " " -f 3)
+    _shared_cold_old=$(printf "%s\n" "$1" | cut -d " " -f 4)
+    _shared_cold_old_page=$(printf "%s\n" "$1" | cut -d " " -f 5)
+    [ "$1" = "activated $_shared_cold_id $_shared_cold_page $_shared_cold_old $_shared_cold_old_page" ] || return 69
+    for _shared_cold_value in "$_shared_cold_id" "$_shared_cold_old"; do
+        [ "${#_shared_cold_value}" -eq 32 ] || return 69
+        case "$_shared_cold_value" in ""|*[!a-f0-9]*) return 69 ;; esac
+    done
+    case "$_shared_cold_page" in voice|strategies) ;; *) return 69 ;; esac
+    case "$_shared_cold_old_page" in voice|strategies) ;; *) return 69 ;; esac
+    [ "$_shared_cold_id" != "$_shared_cold_old" ] || return 69
+    preflight_voice_cutover_journals common-recover-activated || return 69
+    shared_apply_bundle_service verify "$_shared_cold_id" || return 69
+    shared_apply_bundle_service verify "$_shared_cold_old" || return 69
+    _shared_cold_saved=$(shared_apply_native_config saved \
+        "$_shared_cold_old" "$_shared_cold_old_page") || return 69
+    _shared_cold_ok=$(printf "%s\n" "$_shared_cold_saved" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 69
+    _shared_cold_new_root=$(shared_apply_workspace "$_shared_cold_id") || return 69
+    _shared_cold_old_root=$(shared_apply_workspace "$_shared_cold_old") || return 69
+    for _shared_cold_tree in "$_shared_cold_new_root/release" "$_shared_cold_old_root/release" "$ACTIVE_DIR"; do
+        [ -d "$_shared_cold_tree" ] && [ ! -L "$_shared_cold_tree" ] || return 69
+    done
+    if launcher_is_running "$CHILD_PIDFILE" ||
+       supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"; then
+        return 69
+    fi
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || return 69
+    firewall_shared_runtime verify "$_shared_cold_old_root/release" - || return 69
+    # Idempotent completion if the previous tree was already restored.
+    # Otherwise only an EXACT new sealed release may be replaced.
+    if ! atomic_verify_tree "$_shared_cold_old_root/release" "$ACTIVE_DIR"; then
+        atomic_verify_tree "$_shared_cold_new_root/release" "$ACTIVE_DIR" || return 69
+        shared_apply_bundle_service verify "$_shared_cold_old" || return 69
+        # Existing common atomic helper preserves failed candidate in BACKUP_ROOT.
+        atomic_install_tree "$_shared_cold_old_root/release" "$ACTIVE_DIR" "$BACKUP_ROOT" >/dev/null || return 70
+    fi
+    atomic_verify_tree "$_shared_cold_old_root/release" "$ACTIVE_DIR" || return 70
+    shared_apply_bundle_service verify "$_shared_cold_old" || return 70
+    shared_apply_bundle_service verify "$_shared_cold_id" || return 70
+    _shared_cold_saved=$(shared_apply_native_config saved \
+        "$_shared_cold_old" "$_shared_cold_old_page") || return 70
+    _shared_cold_ok=$(printf "%s\n" "$_shared_cold_saved" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 70
+    if launcher_is_running "$CHILD_PIDFILE" ||
+       supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"; then
+        return 70
+    fi
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || return 70
+    firewall_shared_runtime verify "$_shared_cold_old_root/release" - || return 70
+    [ -x /usr/local/bin/python3.13 ] || return 70
+    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+        finish-activated "$_shared_cold_id" "$_shared_cold_old" || return 70
+    printf "recovered-activated-id=%s\n" "$_shared_cold_id"
+}
 # Only a PREPARED journal (before any mutation) can be auto-closed at boot.
 # The root FD9 Python command rechecks the sealed candidate and journal.
 shared_apply_recover_prepared_service()
@@ -1415,6 +1480,17 @@ service_with_lifecycle_lock()
                             # Never invoke legacy start after native save.
                             shared_apply_recover_saved_service "$_shared_owner"
                             return $?
+                            ;;
+                        activated\ *)
+                            shared_apply_recover_activated_cold_service "$_shared_owner" || return 69
+                            _shared_owner=$(shared_apply_inspect_service) || return 69
+                            case "$_shared_owner" in
+                                committed\ *)
+                                    shared_apply_boot_service "$_shared_owner"
+                                    return $?
+                                    ;;
+                                *) return 69 ;;
+                            esac
                             ;;
                         activating\ *)
                             shared_apply_recover_activating_pristine_service "$_shared_owner" || return 69
