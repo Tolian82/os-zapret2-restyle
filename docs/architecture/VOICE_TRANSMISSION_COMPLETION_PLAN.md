@@ -1,8 +1,10 @@
 # «Передача голоса» — подробный проект плана этапа v0.5.2
 
-**Этап: `v0.5.2_62`, без релиза. План принят к выполнению 13.10.2026 прямым поручением владельца начать программирование согласно плану.** Архитектура, семь этапов и контроль используются как рабочая очередь. План подготовлен 13.10.2026 на кодовой базе `v0.5.1_174` и перенесён в новый этап. Последний исходный снимок — commit `11a8fdc12b602c4b4174b03b504a66f9b0af04c8`, Draft PR #328. При открытии этапа меняются VERSION/PLUGIN_REVISION и документация; исходники frontend/backend и поведение службы не изменяются.
+**Этап: `v0.5.2_65`, без релиза. План принят к выполнению 13.10.2026 прямым поручением владельца начать программирование согласно плану.** Архитектура, семь этапов и контроль используются как рабочая очередь. План подготовлен 13.10.2026 на кодовой базе `v0.5.1_174` и перенесён в новый этап. Последний исходный снимок — commit `11a8fdc12b602c4b4174b03b504a66f9b0af04c8`, Draft PR #328. При открытии этапа меняются VERSION/PLUGIN_REVISION и документация; исходники frontend/backend и поведение службы не изменяются.
 
 ## Текущий следующий шаг
+
+`_63–_65` implement a deliberately bounded cancel for an *unchanged* live old owner. Original FD9/Config flock, old full snapshot bytes, marker, 3 kernel process identities, scoped IPFW and sealed predecessor are re-verified before the existing journal is atomically marked `restored`. Failures remain blocked; there is no alternate actuator, automatic boot clearance or mutation of engine/kernel/Config. Next work must be the **actual** single reversible live legacy-to-common executor plus FreeBSD owner-live and STUN/MEDIA/CALL acceptance.
 
 `_62` устраняет найденную CI фикстурную ошибку (`LOG` при `set -u`) без изменения правил durable STOP intent. Далее — законченный единственный rollback executor, а не добавление бесконечных фаз безопасности. Операторскую команду arm не запускать на production до доступного полноценного восстановления и настоящей проверки FreeBSD.
 
