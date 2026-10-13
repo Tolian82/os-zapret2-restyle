@@ -40,7 +40,11 @@ function records(): array
         'general' => ['enabled' => '1', 'waninterface' => 'WAN', 'divertport' => '989'],
         'strategy' => ['trafficargs' => "--filter-tcp=443\n--filter-l7=tls", 'extraargs' => ''],
         'voice' => $voice,
-        'hostlist' => ['mode' => 'list', 'telegramips' => '91.108.0.0/16'] + $ips,
+        'hostlist' => [
+            'mode' => 'list', 'telegramips' => '91.108.0.0/16',
+            'youtubedomains' => '', 'userdomains' => 'untouched.example',
+            'excludedomains' => '',
+        ] + $ips,
         'strategylab' => ['enablequic' => '1'],
     ];
 }
