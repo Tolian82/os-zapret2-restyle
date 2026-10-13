@@ -61,14 +61,14 @@ LOCKF_BIN="$ROOT/lockf"
 LIFECYCLE_LOCK_FILE="$ROOT/owner.lock"
 shared_apply_has_record_service() { [ "$HAS_RECORD" = 1 ]; }
 shared_apply_inspect_service() { [ "$OWNER_OK" = 1 ] || return 69; echo "$OWNER"; }
-shared_apply_recover_saved_service() { echo saved-recovered >> "$LOG"; [ "$SAVED_OK" = 0 ]; }
+shared_apply_recover_saved_service() { echo saved-recovered >> "$LOG"; [ "$SAVED_OK" = 0 ] || return 69; }
 shared_apply_recover_prepared_service() {
     echo prepared-recovered >> "$LOG"
     [ "$RECOVER" = 0 ] || return 69
     [ "$RECOVER_OWNER" = "-" ] || OWNER="$RECOVER_OWNER"
 }
 shared_apply_boot_service() { echo "common:$1" >> "$LOG"; }
-shared_apply_stop_service() { echo "common-stop:$1" >> "$LOG"; [ "$STOP_OK" = 0 ]; }
+shared_apply_stop_service() { echo "common-stop:$1" >> "$LOG"; [ "$STOP_OK" = 0 ] || return 70; }
 preflight_voice_cutover_journals() { echo "legacy-guard" >> "$LOG"; }
 service_dispatch() { echo "legacy:$1" >> "$LOG"; }
 check_route() {
@@ -93,7 +93,7 @@ check_route 0 stop
 check_route 0 restart
 [ "$(tr '\n' ' ' < "$LOG")" = "common-stop:committed $ID voice common:committed $ID voice " ] || fail "restart did not keep native owner"
 STOP_OK=1
-check_route 69 restart
+check_route 70 restart
 [ "$(cat "$LOG")" = "common-stop:committed $ID voice" ] || fail "failed stop started replacement"
 STOP_OK=0
 OWNER=restored
