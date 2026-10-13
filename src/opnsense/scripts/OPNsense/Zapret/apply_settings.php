@@ -20,6 +20,13 @@ require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/Settin
 use OPNsense\Zapret\Api\SettingsApply;
 use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
 
+/**
+ * Persistence after Config::save was attempted cannot be classified as an
+ * ordinary pre-save failure. Native save may have written only part of the
+ * new XML and releases its flock. Runtime must remain reviewable.
+ */
+final class SharedConfigSaveUncertain extends \RuntimeException {}
+
 final class SharedConfigCommit
 {
     /**
@@ -77,7 +84,7 @@ final class SharedConfigCommit
                 // Config::save may have partly written the target, and
                 // releases its original flock before returning. Do not
                 // claim the old preferences or runtime are restored.
-                throw new \RuntimeException(
+                throw new SharedConfigSaveUncertain(
                     'Native Config save outcome requires explicit review',
                     0,
                     $error
@@ -94,7 +101,7 @@ final class SharedConfigCommit
         try {
             $saved = $modelFactory()->getNodes();
             if (!hash_equals($targetSnapshot, VoiceSettingsSnapshot::digest($saved))) {
-                throw new \RuntimeException(
+                throw new SharedConfigSaveUncertain(
                     'Native Config changed after save; runtime reconciliation required'
                 );
             }
@@ -111,4 +118,144 @@ final class SharedConfigCommit
             'change_count' => $changeCount,
         ];
     }
+    /**
+     * The one cross-resource FD9 transaction boundary.
+     *
+     * The service-owned worker supplies ONLY its existing runtime adapter
+     * and the ONE durable common-operation record, not a second Voice
+     * lifecycle. Every record callback must return true only after durable
+     * persistence; refusing an intent MUST stop before runtime mutation.
+     * This method has no public route until the FD9/receipt worker is wired.
+     *
+     * The runtime adapter's activation failure is treated as ambiguous:
+     * apply_runtime_activate already attempts its own rollback and returns
+     * a distinct RESTORE_FAILED if that fails. We must not double-rollback
+     * after an unknown partial transition.
+     */
+    public static function transact(
+        array $plan,
+        string $page,
+        object $config,
+        callable $modelFactory,
+        callable $assertFd9,
+        callable $record,
+        callable $activate,
+        callable $rollback,
+        callable $commit
+    ): array {
+        if ($assertFd9() !== true) {
+            throw new \RuntimeException('Shared Apply requires existing FD9 ownership');
+        }
+        if (!in_array($page, ['voice', 'strategies'], true)) {
+            throw new \InvalidArgumentException('Unknown native Apply page');
+        }
+        // No side effects before fresh model check. The running service may
+        // change after preflight, therefore persist() repeats it under lock.
+        $config->lock();
+        try {
+            $current = $modelFactory()->getNodes();
+            self::validatePlanBeforeRuntime($current, $plan, $page);
+        } finally {
+            $config->unlock();
+        }
+
+        $detail = [
+            'page' => $page,
+            'base' => $plan['dependencies'],
+            'candidate' => VoiceSettingsSnapshot::digest($plan['candidate']),
+            'changed_fields' => $plan['changed_fields'],
+        ];
+        $recordPhase = static function (string $phase) use ($record, $detail): void {
+            if ($record($phase, $detail) !== true) {
+                throw new \RuntimeException('Shared Apply durable operation record failed');
+            }
+        };
+        $recordPhase('prepared');
+        $recordPhase('activating');
+        $activationCompleted = false;
+        $saveCompleted = false;
+        try {
+            if ($activate() !== true) {
+                throw new \RuntimeException('Shared runtime activation not verified');
+            }
+            $activationCompleted = true;
+            $recordPhase('activated');
+            $save = self::persist($plan, $page, $config, $modelFactory);
+            $saveCompleted = true;
+            $recordPhase('config-saved');
+            if ($commit() !== true) {
+                throw new \RuntimeException('Shared runtime/IPFW commit not verified');
+            }
+            $recordPhase('committed');
+            return [
+                'result' => 'applied',
+                'applied' => true,
+                'saved' => $save['saved'],
+                'snapshot' => $save['snapshot'],
+                'change_count' => $save['change_count'],
+                'requires_review' => false,
+            ];
+        } catch (\Throwable $error) {
+            // Native save uncertainty or a post-save failure cannot be
+            // reverted by just putting back the previous runtime. Preserve
+            // common operation intent and old IPFW stages for boot recovery.
+            if (!$activationCompleted || $saveCompleted ||
+                $error instanceof SharedConfigSaveUncertain) {
+                try {
+                    $recordPhase('requires-review');
+                } catch (\Throwable $recordError) {
+                    // The root reason remains uncertain; never claim success.
+                }
+                return [
+                    'result' => 'failed',
+                    'applied' => false,
+                    'saved' => $saveCompleted ? true : null,
+                    'requires_review' => true,
+                    'restored' => false,
+                    'message' => $error->getMessage(),
+                ];
+            }
+
+            // All failures before native save are recoverable if and ONLY
+            // if the existing runtime/IPFW rollback confirms every resource.
+            try {
+                if ($rollback() !== true) {
+                    throw new \RuntimeException('Shared runtime rollback not verified');
+                }
+                $recordPhase('restored');
+                return [
+                    'result' => 'failed',
+                    'applied' => false,
+                    'saved' => false,
+                    'requires_review' => false,
+                    'restored' => true,
+                    'message' => $error->getMessage(),
+                ];
+            } catch (\Throwable $rollbackError) {
+                try {
+                    $recordPhase('restore-failed');
+                } catch (\Throwable $recordError) {
+                    // Keep uncertainty explicit; do not hide primary failure.
+                }
+                return [
+                    'result' => 'failed',
+                    'applied' => false,
+                    'saved' => false,
+                    'requires_review' => true,
+                    'restored' => false,
+                    'message' => 'RESTORE_FAILED: shared runtime requires review',
+                ];
+            }
+        }
+    }
+
+    private static function validatePlanBeforeRuntime(array $live, array $plan, string $page): void
+    {
+        $candidate = SettingsApply::mergeForCommit($live, $plan, $page);
+        if (!isset($plan['changed_fields']) || !is_array($plan['changed_fields']) ||
+            $candidate === [] || !isset($plan['dependencies'])) {
+            throw new \InvalidArgumentException('Incomplete native shared Apply candidate');
+        }
+    }
+
 }

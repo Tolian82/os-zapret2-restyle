@@ -134,5 +134,103 @@ namespace {
         verify(str_contains($expected->getMessage(),'reconciliation'), 'post-save conflict hidden');
     }
     verify($config->saves===3 && $config->locks===0, 'post-save lock cleanup');
+
+// Stage-3 FD9 owner sequencing: the common record MUST be durable before
+// any switch, then the native Config revision precedes IPFW commit.
+$seed = state();
+$events = [];
+$sample = new FakeConfig($seed);
+$intent = SettingsApply::prepareStrategies(
+    $seed, ['strategy'=>['trafficargs'=>'--filter-tcp=80']], '91.108.0.0/16'
+);
+$record = static function (string $phase, array $detail) use (&$events): bool {
+    $events[] = "record:$phase";
+    return $detail['page'] === 'strategies';
+};
+$activate = static function () use (&$events): bool {
+    $events[] = 'runtime:activate';
+    return true;
+};
+$rollback = static function () use (&$events): bool {
+    $events[] = 'runtime:rollback';
+    return true;
+};
+$commit = static function () use (&$events): bool {
+    $events[] = 'runtime:commit';
+    return true;
+};
+$run = SharedConfigCommit::transact($intent,'strategies',$sample,
+    static fn()=>new FakeModel(), static fn()=>true,
+    $record,$activate,$rollback,$commit);
+verify($run['result']==='applied' && $run['applied'] &&
+       $sample->disk['strategy']['trafficargs']==='--filter-tcp=80',
+       'native shared transaction not committed');
+verify($events === [
+    'record:prepared','record:activating','runtime:activate',
+    'record:activated','record:config-saved','runtime:commit','record:committed',
+], 'native shared transaction order incorrect: '.implode(',', $events));
+verify($sample->locks===0 && $sample->saves===1, 'FD9 save sequence leaked Config lock');
+
+// Missing FD9 or failed durable intent is a hard refusal before activation.
+$events = [];
+try {
+    SharedConfigCommit::transact($intent,'strategies',new FakeConfig($seed),
+        static fn()=>new FakeModel(), static fn()=>false,
+        $record,$activate,$rollback,$commit);
+    verify(false, 'missing FD9 authorized mutation');
+} catch (\RuntimeException $expected) {}
+verify($events === [], 'FD9 failure modified runtime or record');
+$events = [];
+try {
+    SharedConfigCommit::transact($intent,'strategies',new FakeConfig($seed),
+        static fn()=>new FakeModel(), static fn()=>true,
+        static function (string $phase, array $detail) use (&$events) {
+            $events[] = "record:$phase";
+            return false;
+        }, $activate,$rollback,$commit);
+    verify(false, 'missing durable prepared record authorized runtime');
+} catch (\RuntimeException $expected) {}
+verify($events === ['record:prepared'], 'bad record authorized runtime mutation');
+
+// Pre-save Config validation fails after runtime activation -> true rollback.
+$events = [];
+$changed = new FakeConfig($seed);
+FakeModel::$reject=true;
+$failedRun=SharedConfigCommit::transact($intent,'strategies',$changed,
+    static fn()=>new FakeModel(), static fn()=>true,
+    $record,$activate,$rollback,$commit);
+FakeModel::$reject=false;
+verify($failedRun['result']==='failed' && $failedRun['restored'] &&
+       !$failedRun['requires_review'] && $changed->saves===0 &&
+       in_array('runtime:rollback',$events,true) &&
+       end($events)==='record:restored',
+       'pre-save failure not restored');
+
+// A save exception/post-save conflict is ambiguous, never auto-rollback.
+$events=[];
+$changed=new FakeConfig($seed);
+$changed->saveFails=true;
+$uncertainRun=SharedConfigCommit::transact($intent,'strategies',$changed,
+    static fn()=>new FakeModel(), static fn()=>true,
+    $record,$activate,$rollback,$commit);
+verify($uncertainRun['requires_review'] && !$uncertainRun['restored'] &&
+       !in_array('runtime:rollback',$events,true) &&
+       end($events)==='record:requires-review',
+       'uncertain native save rolled back runtime without reconciliation');
+
+// Post-save commit failure leaves durable review evidence.
+$events=[];
+$changed=new FakeConfig($seed);
+$commitFailed=SharedConfigCommit::transact($intent,'strategies',$changed,
+    static fn()=>new FakeModel(),static fn()=>true,$record,$activate,$rollback,
+    static function () use (&$events): bool {
+        $events[]='runtime:commit';
+        return false;
+    });
+verify($commitFailed['requires_review'] &&
+       $commitFailed['saved'] === true &&
+       end($events)==='record:requires-review',
+       'post-save cleanup failure falsely claimed success');
+
     echo "PASS: native Config::save/history seam, fresh overlay, no-op, stale guard, save failure and post-save race\n";
 }
