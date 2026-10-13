@@ -186,7 +186,8 @@ class InspectionTests(unittest.TestCase):
             result=examine_shared(record, work_root=Path(root),
                                  bundle_verify=lambda path: self.assertEqual(path,work),
                                  manifest_reader=lambda release: old,
-                                 adapter_factory=factory)
+                                 adapter_factory=factory,
+                                 runtime_probe=lambda *args: {"state":"running","services":{}})
             self.assertEqual("ready",result["state"])
             self.assertEqual("native-common",result["source"])
             self.assertFalse(result["can_activate"],"IPFW read-only is not permission for Apply")
@@ -228,7 +229,8 @@ class InspectionTests(unittest.TestCase):
             result=examine_shared(record,work_root=Path(root),
                      bundle_verify=lambda _: None,
                      manifest_reader=lambda _: manifest,
-                     adapter_factory=lambda first,last: FakeAdapter(manifest))
+                     adapter_factory=lambda first,last: FakeAdapter(manifest),
+                     runtime_probe=lambda *args: {"state":"running","services":{}})
             self.assertEqual("ready",result["state"])
             (work/"plan.json").write_text(json.dumps({
                 "page":"voice","dependencies":previous["base"],"changed_fields":[]
@@ -237,7 +239,8 @@ class InspectionTests(unittest.TestCase):
                 examine_shared(record,work_root=Path(root),
                      bundle_verify=lambda _: None,
                      manifest_reader=lambda _: manifest,
-                     adapter_factory=lambda first,last: FakeAdapter(manifest))
+                     adapter_factory=lambda first,last: FakeAdapter(manifest),
+                     runtime_probe=lambda *args: {"state":"running","services":{}})
             self.assertIsNone(examine_shared(
                 {"schema":1,"phase":"restored","detail":record["detail"]}))
 

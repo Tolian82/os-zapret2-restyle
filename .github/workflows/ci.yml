@@ -307,6 +307,8 @@ jobs:
         run: sh scripts/test-voice-staged-runtime-guard.sh
       - name: Voice read-only live IPFW ownership inspector
         run: python3.13 scripts/test-voice-live-inspect.py
+      - name: Voice one-engine five-profile runtime attestation
+        run: python3.13 scripts/test-voice-common-engine-status.py
       - name: Voice explicit legacy PoC migration safety
         run: python3.13 scripts/test-voice-migration-plan.py
       - name: Interrupted native Config-saved cold recovery and refusal matrix
