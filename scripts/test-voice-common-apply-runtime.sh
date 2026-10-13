@@ -5,7 +5,6 @@ ROOT=$(mktemp -d "${TMPDIR:-/tmp}/shared-apply.XXXXXXXX") || exit 1
 trap 'rm -rf "$ROOT"' EXIT HUP INT TERM
 fail() { echo "FAIL: $*" >&2; exit 1; }
 common_error() { echo "$*" >&2; }
-apply_runtime_attest_engine_inventory() { return 0; }
 validator_validate_runtime_modes() { [ -f "$1/voice-plan.json" ]; }
 validator_validate_engine_mapped() { [ -f "$2" ]; }
 firewall_prepare() { FW_PREPARE=1; }
@@ -50,6 +49,9 @@ atomic_restore_tree() {
 }
 BASE=$(CDPATH= cd -- "$(dirname -- "$0")/../src/opnsense/scripts/OPNsense/Zapret/backend" && pwd)
 . "$BASE/apply_runtime.sh"
+# Separate census regression exercises the REAL production function.
+# This process-less activation harness injects only its process witness.
+apply_runtime_attest_engine_inventory() { return 0; }
 DVTWS_BIN="$ROOT/engine"; : > "$DVTWS_BIN"; chmod +x "$DVTWS_BIN"
 ACTIVE_DIR="$ROOT/active"; BACKUP_ROOT="$ROOT/backup"
 CHILD_PIDFILE="$ROOT/child"; SUPERVISOR_DAEMON_PIDFILE="$ROOT/sd"
