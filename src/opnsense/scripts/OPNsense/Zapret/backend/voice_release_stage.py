@@ -68,13 +68,16 @@ def require_managed_match(state: dict, managed_source: Path) -> dict[str, str]:
 
 def compile_bundle(config: Path, managed_source: Path, active_root: Path,
                    physical_wan: str, first_rule: int, last_rule: int,
-                   divert_port: int, ordinary_source: Path | None = None) -> dict[str, str]:
+                   divert_port: int, ordinary_source: Path | None = None,
+                   expected_logical_wan: str | None = None) -> dict[str, str]:
     if not active_root.is_absolute():
         raise VoiceStageError("active runtime directory must be absolute")
     if not isinstance(physical_wan, str) or not physical_wan:
         raise VoiceStageError("resolved kernel WAN must be supplied")
     source_sha = file_sha256(config)
     state = read_voice_model(config)
+    if expected_logical_wan is not None and state["strategy_wan"] != expected_logical_wan:
+        raise VoiceStageError("rendered Strategies WAN does not match candidate XML")
     profile, candidate = compile_candidate(state, active_root / "managed")
     hashes = require_managed_match(state, managed_source)
     # Source settings contain a logical OPNsense name, e.g. WAN. IPFW needs
@@ -106,7 +109,13 @@ def compile_bundle(config: Path, managed_source: Path, active_root: Path,
     if ordinary_source is not None:
         ordinary_sha = file_sha256(ordinary_source)
         ordinary = ordinary_source.read_text(encoding="utf-8")
-        merged = merge_profiles(profile, ordinary)
+        scopes = {}
+        if expected_logical_wan is not None:
+            for service in SERVICES:
+                staged = managed_source / f"ipset-{service}.txt"
+                if staged.is_file() and not staged.is_symlink() and staged.stat().st_size <= 1_048_576:
+                    scopes[str(active_root / "managed" / staged.name)] = staged.read_text(encoding="utf-8").splitlines()
+        merged = merge_profiles(profile, ordinary, scopes)
         artifacts["traffic.conf"] = merged
         metadata["ordinary_sha256"] = hashlib.sha256(ordinary.encode()).hexdigest()
         metadata["merged_sha256"] = hashlib.sha256(merged.encode()).hexdigest()
@@ -156,9 +165,56 @@ def stage_bundle(output: Path, content: dict[str, str]) -> None:
             shutil.rmtree(temp)
 
 
+def stage_common_runtime(output: Path, active_root: Path, content: dict[str, str]) -> None:
+    """Add Voice to the ordinary release being built, never to the live tree.
+
+    The common generator consumes traffic.conf directly. One release-local
+    plan describes the profiles and capture; it has no lifecycle authority.
+    Existing candidate files are not overwritten, including on a failed build.
+    """
+    if (not output.is_absolute() or output.is_symlink() or not output.is_dir()
+            or output.resolve() == active_root.resolve()
+            or active_root.resolve() in output.resolve().parents):
+        raise VoiceStageError("common candidate must be outside the active runtime")
+    if "traffic.conf" not in content:
+        raise VoiceStageError("common candidate requires ordinary Traffic Strategy")
+    plan = {
+        "schema": 1,
+        "source": {key: value for key, value in json.loads(content["metadata.json"]).items()
+                   if key not in {"mode", "activation_authorized"}},
+        "profiles": json.loads(content["profile-plan.json"])["profiles"],
+        "capture": json.loads(content["capture-plan.json"]),
+    }
+    artifacts = {
+        "traffic.conf": content["traffic.conf"],
+        "voice-plan.json": json.dumps(plan, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+    }
+    if any((output / name).exists() or (output / name).is_symlink() for name in artifacts):
+        raise VoiceStageError("refusing to overwrite common candidate artifacts")
+    created = []
+    try:
+        for name, value in artifacts.items():
+            path = output / name
+            with path.open("x", encoding="utf-8") as stream:
+                created.append(path)
+                os.chmod(path, 0o600)
+                stream.write(value)
+    except OSError:
+        for path in created:
+            path.unlink()
+        raise
+
+
 def main(argv: list[str]) -> int:
+    common_runtime = len(argv) > 1 and argv[1] == "--common-runtime"
+    expected_logical_wan = None
+    if common_runtime:
+        if len(argv) < 3:
+            return 64
+        expected_logical_wan = argv[2]
+        argv = [argv[0], *argv[3:]]
     if len(argv) not in (9, 10):
-        print("usage: voice_release_stage.py CONFIG.XML MANAGED_SOURCE ACTIVE_ROOT "
+        print("usage: voice_release_stage.py [--common-runtime LOGICAL_WAN] CONFIG.XML MANAGED_SOURCE ACTIVE_ROOT "
               "RESOLVED_WAN RULE_BASE RULE_MAX DIVERT_PORT [ORDINARY_TRAFFIC.conf] OUTPUT_DIR", file=sys.stderr)
         return 64
     config, source, root = map(Path, argv[1:4])
@@ -167,9 +223,12 @@ def main(argv: list[str]) -> int:
         ordinary_source = Path(argv[8]) if len(argv) == 10 else None
         candidate = compile_bundle(
             config, source, root, physical_wan, int(argv[5]),
-            int(argv[6]), int(argv[7]), ordinary_source,
+            int(argv[6]), int(argv[7]), ordinary_source, expected_logical_wan,
         )
-        stage_bundle(Path(argv[-1]), candidate)
+        if common_runtime:
+            stage_common_runtime(Path(argv[-1]), root, candidate)
+        else:
+            stage_bundle(Path(argv[-1]), candidate)
     except (ValueError, OSError, UnicodeError, VoiceConfigurationError,
             CapturePlanError, VoiceModelError) as exc:
         # No IPSET contents, secret XML fields or raw profile data in errors.

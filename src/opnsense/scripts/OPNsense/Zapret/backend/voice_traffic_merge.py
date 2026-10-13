@@ -8,14 +8,77 @@ ordinary profile text is preserved exactly (including trailing whitespace).
 from __future__ import annotations
 
 from pathlib import Path
+import ipaddress
 import sys
+
+from voice_profile_compiler import parse_ports
 
 
 class VoiceMergeError(ValueError):
     pass
 
 
-def merge_profiles(voice: str, ordinary: str) -> str:
+def profile_scope(tokens: list[str], ipsets: dict[str, list[str]]) -> tuple[list, list]:
+    """Resolve only native selectors needed to prove STUN scopes disjoint.
+
+    Paths refer to the candidate's lists, never the currently installed lists.
+    Unknown selectors fail closed instead of reading arbitrary paths.
+    """
+    ports = []
+    networks = []
+    has_ipset = False
+    for token in tokens:
+        if token.startswith("--filter-udp="):
+            try:
+                ports.extend(parse_ports(token.partition("=")[2], "ordinary STUN"))
+            except ValueError as exc:
+                raise VoiceMergeError("competing profile priority: invalid STUN UDP ports") from exc
+        elif token.startswith("--filter-l3=") and "ipv4" not in token.partition("=")[2].split(","):
+            return [], []
+        elif token.startswith("--ipset=") or token.startswith("--ipset-ip="):
+            has_ipset = True
+            value = token.partition("=")[2]
+            entries = value.split(",") if token.startswith("--ipset-ip=") else ipsets.get(value)
+            if entries is None:
+                raise VoiceMergeError("competing profile priority: cannot verify ordinary STUN IPSET")
+            for entry in entries:
+                try:
+                    networks.append(ipaddress.IPv4Network(entry, strict=False))
+                except ValueError as exc:
+                    raise VoiceMergeError("competing profile priority: invalid STUN destination") from exc
+    if not ports:
+        if any(t.startswith("--filter-tcp=") for t in tokens):
+            return [], []
+        ports = [(1, 65535)]
+    if not has_ipset:
+        networks = [ipaddress.IPv4Network("0.0.0.0/0")]
+    return ports, networks
+
+
+def profile_tokens(text: str) -> list[list[str]]:
+    profiles = [[]]
+    for line in text.splitlines():
+        if line.strip() == "--new":
+            profiles.append([])
+        else:
+            profiles[-1].extend(line.split())
+    return profiles
+
+
+def check_stun_scopes(voice: str, ordinary: str, ipsets: dict[str, list[str]]) -> None:
+    voice_scopes = [profile_scope(tokens, ipsets) for tokens in profile_tokens(voice)]
+    for tokens in profile_tokens(ordinary):
+        if not any(t.startswith(("--filter-l7=", "--payload=")) and
+                   "stun" in t.partition("=")[2].split(",") for t in tokens):
+            continue
+        ports, networks = profile_scope(tokens, ipsets)
+        for vp, vn in voice_scopes:
+            if any(a <= d and c <= b for a, b in ports for c, d in vp) and any(
+                    left.overlaps(right) for left in networks for right in vn):
+                raise VoiceMergeError("competing profile priority: ordinary STUN overlaps Voice IP/UDP scope")
+
+
+def merge_profiles(voice: str, ordinary: str, ipsets: dict[str, list[str]] | None = None) -> str:
     if not isinstance(voice, str) or not isinstance(ordinary, str):
         raise VoiceMergeError("native Voice and ordinary strategies must be text")
     if not ordinary.strip():
@@ -30,18 +93,14 @@ def merge_profiles(voice: str, ordinary: str) -> str:
         raise VoiceMergeError("ordinary Strategy collides with reserved Voice identity")
     if not voice:
         return ordinary
-    # Native first-match STUN semantics make an ordinary STUN profile
-    # ambiguous when Voice is prepended. Reject conservatively until a
-    # full destination/port-scope comparison is available.
-    if any(token in ("--filter-l7=stun", "--payload=stun") for token in lines):
-        raise VoiceMergeError(
-            "ordinary Strategies also contain STUN; review competing profile priority before enabling Voice"
-        )
     voice_lines = [line.strip() for line in voice.splitlines() if line.strip()]
     if not voice_lines or voice_lines[0] == "--new" or voice_lines[-1] == "--new":
         raise VoiceMergeError("Voice generator produced an empty profile boundary")
     if not any(line.startswith("--name=voice-") for line in voice_lines):
         raise VoiceMergeError("missing generated Voice identity")
+    if any(token.startswith(("--filter-l7=", "--payload=")) and
+           "stun" in token.partition("=")[2].split(",") for token in ordinary.split()):
+        check_stun_scopes(voice, ordinary, ipsets or {})
     # A single mandatory boundary separates Voice's last native profile
     # from the untouched first ordinary profile. Internal boundaries of
     # either source remain in their original relative order.

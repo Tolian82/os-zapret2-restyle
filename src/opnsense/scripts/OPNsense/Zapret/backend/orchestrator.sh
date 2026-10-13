@@ -82,6 +82,7 @@ orchestrator_stage_native_voice()
     _orchestrator_voice_divert="$7"
     _orchestrator_voice_user_traffic="$8"
     _orchestrator_voice_output="$9"
+    _orchestrator_voice_layout="${10:-private}"
 
     _orchestrator_voice_python="/usr/local/bin/python3.13"
     if [ ! -x "${_orchestrator_voice_python}" ]; then
@@ -108,7 +109,12 @@ orchestrator_stage_native_voice()
     _orchestrator_voice_resolved=$(config_resolve_interface "${_orchestrator_voice_logical_wan}") ||
         return 1
 
-    "${_orchestrator_voice_python}" "${BACKEND_DIR}/voice_release_stage.py" \
+    case "${_orchestrator_voice_layout}" in
+        private) set -- ;;
+        common) set -- --common-runtime "${_orchestrator_voice_logical_wan}" ;;
+        *) common_error "unknown Voice candidate layout"; return 1 ;;
+    esac
+    "${_orchestrator_voice_python}" "${BACKEND_DIR}/voice_release_stage.py" "$@" \
         "${_orchestrator_voice_xml}" \
         "${_orchestrator_voice_managed}" \
         "${_orchestrator_voice_active}" \
@@ -138,7 +144,7 @@ orchestrator_voice_build_preflight()
             }
             config_voice_staged_only_guard
             ;;
-        native-detached)
+        native-detached|shared-candidate)
             case "${_orchestrator_voice_build_xml}" in
                 /*) ;;
                 *) common_error "detached Voice XML must use an absolute path"; return 1 ;;
@@ -195,7 +201,7 @@ orchestrator_build_release()
         return 1
     }
 
-    [ "${ZAPRET_ENABLED}" = "1" ] || {
+    [ "${ZAPRET_ENABLED}" = "1" ] || [ "${_orchestrator_build_variant}" = "shared-candidate" ] || {
         orchestrator_fail_stage \
             "${_orchestrator_build_stage_file}" 1 \
             "${_orchestrator_build_total}" config \
@@ -396,27 +402,33 @@ orchestrator_build_release()
             return 1
         }
     : > "${_orchestrator_build_error}"
-    telegram_voice_build_effective_traffic \
-        "${TELEGRAM_VOICE_MARKER_FILE}" \
-        "${_orchestrator_build_managed_source}/ipset-telegram.txt" \
-        "${_orchestrator_build_managed_reference}/ipset-telegram.txt" \
-        "${_orchestrator_build_user_traffic}" \
-        "${_orchestrator_build_traffic}" \
-        "${_orchestrator_build_voice_state}" \
-        2>"${_orchestrator_build_error}" || {
-            orchestrator_fail_from_log \
-                "${_orchestrator_build_stage_file}" 4 \
-                "${_orchestrator_build_total}" blobs \
-                "${_orchestrator_build_error}" \
-                "Telegram Voice profile generation failed"
-            return 1
-        }
-    # Actual product release-generation path, not a separate test-only
-    # compiler. Native artifacts remain private/inactive until the shared
-    # single-engine IPFW/Config cutover replaces the PoC runtime.
-    # Do not quietly substitute these into the old traffic.conf: doing so
-    # without switching scoped IPFW tables would redirect wrong UDP traffic.
+    if [ "${_orchestrator_build_variant}" != "shared-candidate" ]; then
+        telegram_voice_build_effective_traffic \
+            "${TELEGRAM_VOICE_MARKER_FILE}" \
+            "${_orchestrator_build_managed_source}/ipset-telegram.txt" \
+            "${_orchestrator_build_managed_reference}/ipset-telegram.txt" \
+            "${_orchestrator_build_user_traffic}" \
+            "${_orchestrator_build_traffic}" \
+            "${_orchestrator_build_voice_state}" \
+            2>"${_orchestrator_build_error}" || {
+                orchestrator_fail_from_log \
+                    "${_orchestrator_build_stage_file}" 4 \
+                    "${_orchestrator_build_total}" blobs \
+                    "${_orchestrator_build_error}" \
+                    "Telegram Voice profile generation failed"
+                return 1
+            }
+    fi
+    # The detached shared build feeds the ordinary generator directly.
+    # Legacy callers retain their old layout until common IPFW/Apply replaces
+    # that lifecycle; no build variant itself activates a candidate.
     _orchestrator_build_voice_native="${_orchestrator_build_release}/voice-native-candidate"
+    if [ "${_orchestrator_build_variant}" = "shared-candidate" ]; then
+        _orchestrator_build_voice_native="${_orchestrator_build_release}"
+        _orchestrator_build_voice_layout=common
+    else
+        _orchestrator_build_voice_layout=private
+    fi
     : > "${_orchestrator_build_error}"
     orchestrator_stage_native_voice \
         "${_orchestrator_build_voice_xml}" \
@@ -427,7 +439,7 @@ orchestrator_build_release()
         "${RULE_MAX:-19010}" \
         "${DIVERT_PORT}" \
         "${_orchestrator_build_user_traffic}" \
-        "${_orchestrator_build_voice_native}" \
+        "${_orchestrator_build_voice_native}" "${_orchestrator_build_voice_layout}" \
         2>"${_orchestrator_build_error}" || {
             orchestrator_fail_from_log \
                 "${_orchestrator_build_stage_file}" 4 \
@@ -509,47 +521,49 @@ orchestrator_build_release()
     # same generator, divert socket, Lua initializers and global exclusions
     # as the currently active single-engine runtime. The candidate is not
     # installed or used for live divert until native ON cutover is qualified.
-    _orchestrator_build_native_args="${_orchestrator_build_voice_native}/dvtws.args"
-    : > "${_orchestrator_build_error}"
-    generator_build_args_mapped \
-        "${_orchestrator_build_native_args}" \
-        "${DIVERT_PORT}" \
-        "${_orchestrator_build_voice_native}/traffic.conf" \
-        "${_orchestrator_build_extra}" \
-        "${_orchestrator_build_blob_args}" \
-        "${_orchestrator_build_exclude_source}" \
-        "${_orchestrator_build_exclude_reference}" \
-        "${_orchestrator_build_zapret_dir}/lua/zapret-lib.lua" \
-        "${_orchestrator_build_zapret_dir}/lua/zapret-antidpi.lua" \
-        "${_orchestrator_build_zapret_dir}/lua/zapret-auto.lua" \
-        2>"${_orchestrator_build_error}" || {
-            orchestrator_fail_from_log \
-                "${_orchestrator_build_stage_file}" 6 \
-                "${_orchestrator_build_total}" generator \
-                "${_orchestrator_build_error}" \
-                "native Voice engine argument generation failed"
-            return 1
-        }
-    # Bind the generated one-engine argv to destination-scoped IPFW rules.
-    # This writes ONLY release-local private manifest/proof files. IPFW,
-    # current dvtws2 and ordinary Strategies remain unchanged.
-    : > "${_orchestrator_build_error}"
-    "${_orchestrator_voice_python}" \
-        "${BACKEND_DIR}/voice_handoff_preflight.py" \
-        "${_orchestrator_build_voice_native}" \
-        "${_orchestrator_build_native_args}" \
-        "${_orchestrator_build_user_traffic}" \
-        "${_orchestrator_build_tcp}" \
-        "${_orchestrator_build_udp}" \
-        "${_orchestrator_build_voice_xml}" \
-        2>"${_orchestrator_build_error}" || {
-            orchestrator_fail_from_log \
-                "${_orchestrator_build_stage_file}" 6 \
-                "${_orchestrator_build_total}" generator \
-                "${_orchestrator_build_error}" \
-                "native Voice engine/IPFW handoff compilation failed"
-            return 1
-        }
+    if [ "${_orchestrator_build_variant}" != "shared-candidate" ]; then
+        _orchestrator_build_native_args="${_orchestrator_build_voice_native}/dvtws.args"
+        : > "${_orchestrator_build_error}"
+        generator_build_args_mapped \
+            "${_orchestrator_build_native_args}" \
+            "${DIVERT_PORT}" \
+            "${_orchestrator_build_voice_native}/traffic.conf" \
+            "${_orchestrator_build_extra}" \
+            "${_orchestrator_build_blob_args}" \
+            "${_orchestrator_build_exclude_source}" \
+            "${_orchestrator_build_exclude_reference}" \
+            "${_orchestrator_build_zapret_dir}/lua/zapret-lib.lua" \
+            "${_orchestrator_build_zapret_dir}/lua/zapret-antidpi.lua" \
+            "${_orchestrator_build_zapret_dir}/lua/zapret-auto.lua" \
+            2>"${_orchestrator_build_error}" || {
+                orchestrator_fail_from_log \
+                    "${_orchestrator_build_stage_file}" 6 \
+                    "${_orchestrator_build_total}" generator \
+                    "${_orchestrator_build_error}" \
+                    "native Voice engine argument generation failed"
+                return 1
+            }
+        # Bind the generated one-engine argv to destination-scoped IPFW rules.
+        # This writes ONLY release-local private manifest/proof files. IPFW,
+        # current dvtws2 and ordinary Strategies remain unchanged.
+        : > "${_orchestrator_build_error}"
+        "${_orchestrator_voice_python}" \
+            "${BACKEND_DIR}/voice_handoff_preflight.py" \
+            "${_orchestrator_build_voice_native}" \
+            "${_orchestrator_build_native_args}" \
+            "${_orchestrator_build_user_traffic}" \
+            "${_orchestrator_build_tcp}" \
+            "${_orchestrator_build_udp}" \
+            "${_orchestrator_build_voice_xml}" \
+            2>"${_orchestrator_build_error}" || {
+                orchestrator_fail_from_log \
+                    "${_orchestrator_build_stage_file}" 6 \
+                    "${_orchestrator_build_total}" generator \
+                    "${_orchestrator_build_error}" \
+                    "native Voice engine/IPFW handoff compilation failed"
+                return 1
+            }
+    fi
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 6 "${_orchestrator_build_total}" \
         generator ok "arguments generated" || return 1
@@ -574,6 +588,23 @@ orchestrator_build_release()
                 "staged release validation failed"
             return 1
         }
+    # Offline candidate production is also useful before engine installation.
+    # Apply/start must require the installed engine separately; when present,
+    # its native parser checks the exact combined candidate before activation.
+    _orchestrator_build_engine="${_orchestrator_build_zapret_dir}/binaries/my/dvtws2"
+    if [ "${_orchestrator_build_variant}" = "shared-candidate" ] &&
+       [ -x "${_orchestrator_build_engine}" ]; then
+        validator_validate_engine_mapped \
+            "${_orchestrator_build_engine}" "${_orchestrator_build_args}" \
+            "${_orchestrator_build_active_dir}" "${_orchestrator_build_release}" \
+            "${_orchestrator_voice_python}" 2>"${_orchestrator_build_error}" || {
+                orchestrator_fail_from_log \
+                    "${_orchestrator_build_stage_file}" 7 \
+                    "${_orchestrator_build_total}" validator \
+                    "${_orchestrator_build_error}" "installed engine rejected candidate"
+                return 1
+            }
+    fi
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 7 "${_orchestrator_build_total}" \
         validator ok "staged release validated" || return 1

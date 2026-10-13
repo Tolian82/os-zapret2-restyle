@@ -2,7 +2,7 @@
 
 ## Approved transition — shared Voice/Strategies backend, 2026-10-13
 
-The owner approved one shared model, full-runtime generator and Apply/lifecycle owner for Strategies and Voice. Voice adds STUN profiles and scoped UDP/IPSET capture; frontend and full requirements are unchanged. This is an approved target, not an implemented-source claim. [Section 12 of the Voice specification](architecture/VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026) owns the contract; [v0.5.2 implementation plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) owns the proposed code changes and controls. Stage `v0.5.2_1` was opened without release; the detailed plan still requires agreement. Existing frontend/backend behavior is unchanged by that version transition. Legacy private Voice transactions are reuse/transition material, not a second authoritative production architecture.
+The owner approved one shared model, full-runtime generator and Apply/lifecycle owner for Strategies and Voice. Voice adds STUN profiles and scoped UDP/IPSET capture; frontend and full requirements are unchanged. This is an approved target, not an implemented-source claim. [Section 12 of the Voice specification](architecture/VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026) owns the contract; [v0.5.2 implementation plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) owns the proposed code changes and controls. Stage `v0.5.2_1` was opened without release; the owner has now instructed execution of the detailed plan. Existing frontend/backend behavior is unchanged by that version transition. Legacy private Voice transactions are reuse/transition material, not a second authoritative production architecture.
 
 ## Document role
 

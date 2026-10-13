@@ -539,3 +539,40 @@ validator_validate_runtime_modes()
         }
     done
 }
+
+# Native parameter/file validation uses the candidate's lists, never old live
+# lists. --dry-run does not launch interception or validate Lua execution.
+validator_validate_engine_mapped()
+{
+    _validator_engine_bin="$1"
+    _validator_engine_args="$2"
+    _validator_engine_reference="$3"
+    _validator_engine_source="$4"
+    _validator_engine_python="$5"
+    "${_validator_engine_python}" - "${_validator_engine_bin}" \
+        "${_validator_engine_args}" "${_validator_engine_reference}" \
+        "${_validator_engine_source}" <<'PY'
+from pathlib import Path
+import subprocess
+import sys
+
+binary, args_file, reference, source = sys.argv[1:]
+tokens = Path(args_file).read_text(encoding="utf-8").split()
+prefix = reference.rstrip("/") + "/"
+mapped = []
+for token in tokens:
+    option, sep, value = token.partition("=")
+    if sep and option in ("--ipset", "--hostlist", "--hostlist-exclude") and value.startswith(prefix):
+        token = option + "=" + source.rstrip("/") + "/" + value[len(prefix):]
+    mapped.append(token)
+try:
+    result = subprocess.run([binary, *mapped, "--dry-run"], capture_output=True, timeout=15)
+except (OSError, subprocess.TimeoutExpired) as exc:
+    print("ERROR: installed engine validation failed: " + str(exc), file=sys.stderr)
+    raise SystemExit(1)
+if result.returncode:
+    detail = (result.stderr or result.stdout)[-4096:].decode("utf-8", errors="replace")
+    print("ERROR: installed engine rejected candidate: " + detail, file=sys.stderr)
+    raise SystemExit(1)
+PY
+}

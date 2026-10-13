@@ -8,6 +8,7 @@ import tempfile
 import unittest
 
 BACKEND = Path(__file__).resolve().parent.parent / "src/opnsense/scripts/OPNsense/Zapret/backend"
+sys.path.insert(0, str(BACKEND))
 spec = importlib.util.spec_from_file_location("voice_traffic_merge", BACKEND/"voice_traffic_merge.py")
 assert spec and spec.loader
 merge = importlib.util.module_from_spec(spec)
@@ -64,6 +65,16 @@ class OneEngineMergeTests(unittest.TestCase):
         self.assertEqual(ordinary, merge.merge_profiles("", ordinary))
         with self.assertRaisesRegex(merge.VoiceMergeError, "competing profile priority"):
             merge.merge_profiles(VOICE, ordinary)
+
+    def test_disjoint_ordinary_stun_scope_is_preserved(self):
+        scopes = {"/managed/ipset-telegram.txt": ["198.51.100.1"]}
+        other = "--filter-udp=596-599\n--filter-l7=stun,unknown\n--payload=stun\n--ipset-ip=203.0.113.1\n"
+        self.assertTrue(merge.merge_profiles(VOICE, other, scopes).endswith(other))
+        with self.assertRaisesRegex(merge.VoiceMergeError, "overlaps"):
+            merge.merge_profiles(VOICE, other.replace("203.0.113.1", "198.51.100.1"), scopes)
+        numeric = VOICE.replace("--filter-udp=*", "--filter-udp=1400")
+        same_ip = other.replace("203.0.113.1", "198.51.100.1")
+        self.assertTrue(merge.merge_profiles(numeric, same_ip, scopes).endswith(same_ip))
 
     def test_cli_candidate_creation_is_non_destructive(self):
         with tempfile.TemporaryDirectory() as d:

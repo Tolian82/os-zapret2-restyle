@@ -1,12 +1,12 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_1`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_2`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=1` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_1.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=2` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_2.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
@@ -18,14 +18,14 @@ Stable и testing подтверждены чтением GitHub Releases при
 
 1. В feature branch существуют native форма/меню, пять ON/OFF/args полей, shared IPSET, validators/compiler/capture-plan и большой private cutover/recovery набор прежней реализации.
 2. Общий backend со «Стратегиями» утверждён: одна постоянная модель, полный generator, один Apply/lifecycle/rollback и один нормальный `dvtws2`. [Нормативный контракт — раздел 12 ТЗ](architecture/VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026).
-3. [Подробный семиэтапный проект плана](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) подготовлен и перенесён в `v0.5.2`; подробные технические решения/контроль ещё подлежат согласованию.
-4. Полный public Voice ON/OFF/edit/repeat Apply, normal boot, миграция и достоверные per-service статусы пока не завершены. Версионный переход не меняет backend поведение.
+3. [Подробный семиэтапный проект плана](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) подготовлен и перенесён в `v0.5.2`; план и контроль приняты к выполнению прямым поручением владельца начать программирование согласно плану.
+4. Полный public Voice ON/OFF/edit/repeat Apply, normal boot, миграция и достоверные per-service статусы пока не завершены. В `_2` общий генератор уже создаёт полный detached runtime пяти сервисов, без old marker/prepend; публичное применение и lifecycle ещё не подключены.
 5. «Стратегии» пока используют прежний save-then-reconfigure путь. Его rollback/concurrency разрывы устраняются общим Apply на этапе 3, а не объявляются уже исправленными.
 6. Полное ТЗ и frontend сохраняются. Разный Voice/Strategies WAN до доказанной изоляции явно отклоняется; WAN-перехват не меняет маршрут. Non-STUN принадлежит ordinary Strategies.
 
 ## Что изменилось при открытии v0.5.2
 
-Версия сброшена на новый этап `_1` по поручению владельца. Из активных handoff/state/roadmap/index/ТЗ убраны повторённые отчёты старых ревизий; полные снимки сохранены в [архиве этапа v0.5.1](history/stages/v0.5.1/README.md). Общая линия/канонические правила сохраняются. Исходники frontend/backend, установленный runtime, appliance и публичные пакеты не менялись.
+Версия сброшена на новый этап `_1` по поручению владельца. Из активных handoff/state/roadmap/index/ТЗ убраны повторённые отчёты старых ревизий; полные снимки сохранены в [архиве этапа v0.5.1](history/stages/v0.5.1/README.md). Общая линия/канонические правила сохраняются. При переходе на `_1` менялись только metadata/docs. В `_2` изменён общий candidate build; frontend, установленный appliance и публичные пакеты сохраняются.
 
 Следующую задачу определяет только [START_HERE](START_HERE.md). Хронология — в [working ledger](history/current/v0.5.x.md); прежние private указания не являются активной очередью.
 
