@@ -85,6 +85,32 @@ apply_runtime_probe()
     fi
 }
 
+
+# Read-only legacy observation for a future reversible native handoff.
+# This verifies registered engine/supervisor, one complete old runtime and
+# old kernel presence. It is NOT exact IPFW ownership or stop authorization.
+apply_runtime_observe_live_legacy()
+{
+    [ "$#" -eq 0 ] || return 64
+    [ "${APPLY_PHASE:-idle}" = idle ] || return 69
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
+    [ ! -e "$ACTIVE_DIR/voice-plan.json" ] &&
+    [ ! -L "$ACTIVE_DIR/voice-plan.json" ] || return 69
+    for _legacy_item in dvtws.args tcp-ports.txt udp-ports.txt; do
+        [ -f "$ACTIVE_DIR/$_legacy_item" ] &&
+        [ ! -L "$ACTIVE_DIR/$_legacy_item" ] || return 69
+    done
+    launcher_is_running "$CHILD_PIDFILE" || return 69
+    supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" || return 69
+    _apply_engine=1
+    apply_runtime_attest_engine_inventory || return 69
+    orchestrator_runtime_is_complete \
+        "$CHILD_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" \
+        "$RULE_BASE" "$RULE_MAX" "$ACTIVE_DIR" || return 69
+    launcher_is_running "$CHILD_PIDFILE" &&
+    supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"
+}
+
 # Read-only refusal gate shared by the FD9 executor and the actual runtime
 # preflight. It never acquires a lock, writes Config, starts a process,
 # prepares pf/ipfw, or touches the durable Apply journal.

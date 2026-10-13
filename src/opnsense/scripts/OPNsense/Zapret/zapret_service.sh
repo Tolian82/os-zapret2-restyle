@@ -787,6 +787,20 @@ native_voice_live_preflight_service()
     "${_native_voice_live_python}" "${_native_voice_live_script}" inspect
 }
 
+# One read-only FD9 owner audit, not a legacy-to-native cutover executor.
+shared_apply_legacy_audit_service()
+{
+    [ "$#" -eq 0 ] || return 64
+    if shared_apply_has_record_service; then
+        # A common pending/committed owner cannot be imported as legacy.
+        shared_apply_inspect_service >/dev/null || return 69
+        return 69
+    fi
+    preflight_voice_cutover_journals || return 69
+    apply_runtime_observe_live_legacy || return 69
+    printf '%s\n' 'legacy-live-observed=1' 'legacy-handoff-authorized=0'
+}
+
 # One actual runtime/Config Apply owner: the existing service process holds
 # FD9 for the ENTIRE operation; Python journal and PHP Config worker run as
 # children inheriting that ownership. No nested configd/lockf acquisition,
@@ -1363,6 +1377,10 @@ service_dispatch()
             ;;
         shared-apply-run)
             shared_apply_run_service "${2:-}" "${3:-}"
+            ;;
+        shared-apply-legacy-audit)
+            [ "$#" -eq 1 ] || return 64
+            shared_apply_legacy_audit_service
             ;;
         shared-apply-execute)
             shared_apply_execute_service "${2:-}" "${3:-}"

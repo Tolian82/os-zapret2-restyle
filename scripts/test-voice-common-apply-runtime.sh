@@ -145,4 +145,41 @@ if apply_runtime_probe "$ROOT/two" 1; then
     fail "live legacy runtime unexpectedly passed native ownership check"
 fi
 [ "$FW_PREPARE" = 1 ] || fail "foreign check modified fixture unexpectedly"
+
+# First live legacy audit remains read-only: no Config, process, kernel or
+# durable journal writer. Legacy IPFW presence is NOT a cutover permit.
+orchestrator_runtime_is_complete() {
+    [ "$#" -eq 5 ] && [ "$4" = "$RULE_MAX" ] &&
+    [ "$5" = "$ACTIVE_DIR" ] && [ "$LEGACY_RULES" = 1 ]
+}
+RULE_BASE=19000 RULE_MAX=19010 LEGACY_RULES=1
+PROCESS=1 MONITOR=1 FW=active FW_PREPARE=0 FW_STAGE=0
+rm -rf "$ACTIVE_DIR"
+mkdir "$ACTIVE_DIR"
+for field in dvtws.args tcp-ports.txt udp-ports.txt; do
+    printf '%s\n' legacy > "$ACTIVE_DIR/$field"
+done
+apply_runtime_clear
+apply_runtime_observe_live_legacy || fail "running old owner not observed"
+[ "$PROCESS" = 1 ] && [ "$MONITOR" = 1 ] &&
+[ "$FW_PREPARE" = 0 ] || fail "read-only old owner probe touched runtime"
+LEGACY_RULES=0
+if apply_runtime_observe_live_legacy; then fail "missing old IPFW accepted"; fi
+LEGACY_RULES=1 MONITOR=0
+if apply_runtime_observe_live_legacy; then fail "missing old supervisor accepted"; fi
+MONITOR=1 PROCESS=0
+if apply_runtime_observe_live_legacy; then fail "missing old engine accepted"; fi
+PROCESS=1
+printf '%s\n' '{}' > "$ACTIVE_DIR/voice-plan.json"
+if apply_runtime_observe_live_legacy; then fail "native common classified as legacy"; fi
+rm "$ACTIVE_DIR/voice-plan.json"
+rm "$ACTIVE_DIR/tcp-ports.txt"
+if apply_runtime_observe_live_legacy; then fail "incomplete old tree accepted"; fi
+printf '%s\n' legacy > "$ACTIVE_DIR/tcp-ports.txt"
+ln -s udp-ports.txt "$ACTIVE_DIR/voice-plan.json"
+if apply_runtime_observe_live_legacy; then fail "symlinked common plan accepted"; fi
+rm "$ACTIVE_DIR/voice-plan.json"
+[ "$FW_PREPARE" = 0 ] && [ "$FW_STAGE" = 0 ] || fail "old audit modified firewall"
+echo 'PASS: live old owner observer remains read-only and never authorizes handoff'
+
 echo 'PASS: shared engine/IPFW, stopped legacy rollback and live legacy refusal'
