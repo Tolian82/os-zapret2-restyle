@@ -36,6 +36,15 @@ def _present(path: Path) -> bool:
 def check_pending(whole_root: Path, ipfw_root: Path) -> dict:
     """Return a bounded, machine-readable advisory without kernel reads."""
     try:
+        # A durable old-PoC pre-stop intent is a sibling, not a member of
+        # the strictly sealed rollback stage tree. Even orphaned after an
+        # interrupted power cut, it is NEVER ordinary-start authority.
+        old_quiescence=whole_root.with_name(whole_root.name+"-legacy-quiescence-intent")
+        if _present(old_quiescence):
+            return {
+                "state": "blocked", "reason": "legacy-quiescence-intent-retained",
+                "safe_to_mutate": False,
+            }
         if _present(whole_root):
             # Once the rollback is archived, intent.json is intentionally absent.
             # Its closure WAL and immutable archive MUST still block legacy

@@ -14,6 +14,10 @@ from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"))
+from voice_native_legacy_quiescence_intent import (
+    prepare_legacy_quiescence_intent, inspect_legacy_quiescence_intent,
+    intent_directory,
+)
 from voice_native_legacy_predecessor_route import prepare_old_rollback_predecessor, main as predecessor_main
 from voice_native_legacy_previous_seal import inspect_legacy_previous
 from voice_native_legacy_restore_plan import (
@@ -217,6 +221,74 @@ class OldPredecessorOperatorTests(unittest.TestCase):
         self.assertEqual(64,predecessor_main([]))
         self.assertEqual(64,predecessor_main(["capture-plan","/tmp/path"]))
         self.assertEqual(set(),set(os.listdir(self.root)))
+
+
+class OldQuiescenceIntentTests(unittest.TestCase):
+    def setUp(self):
+        self.reverse=LegacyReversePlanTests()
+        self.reverse.setUp()
+        self.addCleanup(self.reverse.doCleanups)
+        self.reverse.plan()
+        self.root=self.reverse.root
+        self.live=self.reverse.old.case.live
+
+    def arm(self,locked=True):
+        fd=os.open(self.live.config,os.O_RDWR)
+        try:
+            if locked:
+                fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            return prepare_legacy_quiescence_intent(
+                root=self.root,config_path=self.live.config,config_fd=fd,
+                config_owner=(os.geteuid(),os.getegid()),
+                require_lifecycle_owner=lambda:self.live.lock_calls.append("FD9"),
+            )
+        finally:
+            os.close(fd)
+
+    def test_sealed_prestop_intent_keeps_old_poc_and_blocks_reentry(self):
+        before=self.live.config.read_bytes()
+        marker=self.reverse.old.case.marker.read_bytes()
+        rules=self.live.fake_ipfw.rules
+        report=self.arm()
+        self.assertEqual("old-poc-quiescence-intent-sealed-execution-pending",
+                         report["state"])
+        self.assertFalse(report["safe_to_execute"])
+        self.assertFalse(report["safe_to_mutate"])
+        self.assertFalse(report["public_voice_apply"])
+        self.assertEqual(report,inspect_legacy_quiescence_intent(self.root))
+        self.assertEqual(before,self.live.config.read_bytes())
+        self.assertEqual(marker,self.reverse.old.case.marker.read_bytes())
+        self.assertEqual(rules,self.live.fake_ipfw.rules)
+        self.assertEqual({"legacy-previous","legacy-restore-plan"},
+                         set(os.listdir(self.root)))
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            self.arm()
+        self.assertFalse(check_pending(self.root,self.live.ledger)["safe_to_mutate"])
+
+    def test_requires_original_flock_and_exact_old_predecessor(self):
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            self.arm(locked=False)
+        self.assertFalse(intent_directory(self.root).exists())
+        (self.root/"foreign").mkdir(mode=0o700)
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            self.arm()
+        self.assertFalse(intent_directory(self.root).exists())
+
+    def test_orphan_sibling_blocks_normal_start_even_if_whole_root_missing(self):
+        self.arm()
+        self.assertEqual("legacy-quiescence-intent-retained",
+            check_pending(self.root,self.live.ledger)["reason"])
+        hidden=self.root.with_name(self.root.name+"-away")
+        self.root.rename(hidden)
+        self.assertEqual("legacy-quiescence-intent-retained",
+            check_pending(self.root,self.live.ledger)["reason"])
+
+    def test_tampered_durable_intent_cannot_grant_stop_authority(self):
+        self.arm()
+        path=intent_directory(self.root)/"intent.json"
+        path.write_bytes(path.read_bytes().replace(b"not-executed",b"executed"))
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            inspect_legacy_quiescence_intent(self.root)
 
 
 if __name__=="__main__":
