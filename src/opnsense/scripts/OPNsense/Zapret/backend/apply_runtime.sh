@@ -21,6 +21,7 @@ apply_runtime_preflight()
     [ "${APPLY_PHASE:-idle}" = idle ] || return 69
     case "$1" in /*) ;; *) return 64 ;; esac
     case "$2" in 0|1) ;; *) return 64 ;; esac
+    case "$1" in "$ACTIVE_DIR"/*) common_error "candidate inside active runtime"; return 69 ;; esac
     [ -d "$1" ] && [ ! -L "$1" ] &&
     [ -f "$1/voice-plan.json" ] &&
     [ "$1" != "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
@@ -29,7 +30,6 @@ apply_runtime_preflight()
         [ -x "$DVTWS_BIN" ] || return 1
         validator_validate_engine_mapped "$DVTWS_BIN" "$1/dvtws.args" \
             "$ACTIVE_DIR" "$1" "${PYTHON_BIN:-/usr/local/bin/python3.13}" || return 1
-        firewall_prepare || return 1
     fi
     _apply_engine=0
     _apply_supervisor=0
@@ -48,6 +48,8 @@ apply_runtime_preflight()
     else
         firewall_shared_runtime verify "$1" - || return 69
     fi
+    # Verify previous kernel ownership BEFORE firewall_prepare may alter prerequisites.
+    if [ "$2" = 1 ]; then firewall_prepare || return 1; fi
     APPLY_CANDIDATE="$1"
     APPLY_NEW_RUNNING="$2"
     APPLY_OLD_RUNNING="$_apply_engine"

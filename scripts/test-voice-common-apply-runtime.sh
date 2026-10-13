@@ -7,7 +7,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 common_error() { echo "$*" >&2; }
 validator_validate_runtime_modes() { [ -f "$1/voice-plan.json" ]; }
 validator_validate_engine_mapped() { [ -f "$2" ]; }
-firewall_prepare() { :; }
+firewall_prepare() { FW_PREPARE=1; }
 launcher_is_running() { [ "$PROCESS" = 1 ]; }
 supervisor_is_running() { [ "$MONITOR" = 1 ]; }
 launcher_stop() { PROCESS=0; }
@@ -57,7 +57,7 @@ for name in one two off; do
     echo "$name" > "$ROOT/$name/voice-plan.json"
     echo '--filter-tcp=443' > "$ROOT/$name/dvtws.args"
 done
-PROCESS=0 MONITOR=0 FW=empty FW_STAGE=0 FAIL_LAUNCH=0 FAIL_FW=0
+PROCESS=0 MONITOR=0 FW=empty FW_STAGE=0 FAIL_LAUNCH=0 FAIL_FW=0 FW_PREPARE=0
 apply_runtime_clear
 apply_runtime_activate "$ROOT/one" 1 || fail "first activation"
 [ "$APPLY_PHASE" = activated ] && [ "$PROCESS" = 1 ] &&
@@ -82,6 +82,11 @@ MONITOR=0
 if apply_runtime_activate "$ROOT/one" 1; then fail "partial process accepted"; fi
 MONITOR=1
 FW=empty
+FW_PREPARE=0
 if apply_runtime_activate "$ROOT/one" 1; then fail "foreign kernel accepted"; fi
+[ "$FW_PREPARE" = 0 ] || fail "foreign state modified kernel prerequisites"
+mkdir "$ACTIVE_DIR/nested"
+cp "$ROOT/one/voice-plan.json" "$ACTIVE_DIR/nested/voice-plan.json"
+if apply_runtime_activate "$ACTIVE_DIR/nested" 1; then fail "nested release accepted"; fi
 [ "$(cat "$ACTIVE_DIR/voice-plan.json")" = two ] || fail "foreign state changed runtime"
 echo 'PASS: shared engine/IPFW activation, rollback, stopped mode and foreign-state refusal'
