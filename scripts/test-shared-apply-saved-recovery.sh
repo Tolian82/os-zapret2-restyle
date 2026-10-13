@@ -50,6 +50,12 @@ s=p.read_text()
 old='    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n        finish-saved "$_shared_saved_id" || return 70'
 assert old in s
 s=s.replace(old,'    echo finish-saved >> "$LOG"; [ "$FINISH" = 0 ] || return 70')
+# The real executable is a fixed FreeBSD dependency; the Linux fault-test
+# replaces its final invocation and therefore bypasses only that presence
+# check, never the pre-save owner, kernel or Config guards.
+presence='    [ -x /usr/local/bin/python3.13 ] || return 70'
+assert presence in s
+s=s.replace(presence,'    : # root Python CLI is mocked below')
 p.write_text(s)
 PY
 . "$ROOT/recover.sh"
