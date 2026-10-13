@@ -335,7 +335,7 @@ echo 'PASS: FD9 candidate-bound legacy kernel witness refuses OFF/foreign/confli
 
 # Real production wrapper, but mocked lower-level no-mutation old capture:
 # only exact five-domain sealed predecessor and the same candidate qualify.
-grep -Fq '|shared-apply-legacy-qualify|shared-apply-legacy-capture)' "$SERVICE_SOURCE" ||
+grep -Fq '|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm)' "$SERVICE_SOURCE" ||
     fail "legacy predecessor capture is outside original FD9 lifecycle"
 CAPTURE_SCRIPT="$ROOT/common-legacy-capture.sh"
 sed -n '/^shared_apply_legacy_capture_service()$/,/^}$/p' "$SERVICE_SOURCE" > "$CAPTURE_SCRIPT"
@@ -403,5 +403,89 @@ fi
     fail "failed post-capture audit removed sealed predecessor evidence"
 CAPTURE_DRIFT=0
 echo 'PASS: candidate-bound full legacy predecessor capture requires FD9 and no live mutation'
+
+
+# The only new durable write is a bounded PREPARED record in the EXISTING
+# common journal. Extract production shell, replace the fixed root Python
+# CLI with an in-memory proof, and assert no runtime/kernel mutation.
+ARM_SCRIPT="$ROOT/common-legacy-arm.sh"
+sed -n '/^shared_apply_legacy_arm_service()$/,/^}$/p' "$SERVICE_SOURCE" > "$ARM_SCRIPT"
+sh -n "$ARM_SCRIPT" || fail "production legacy arm is not valid sh"
+python3 - "$ARM_SCRIPT" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]); s=p.read_text()
+old='    [ -x /usr/local/bin/python3.13 ] &&\n    [ -r "${BACKEND_DIR}/shared_apply_operation.py" ] || return 69'
+assert old in s, "fixed common journal CLI missing"
+s=s.replace(old,'    [ "$ARM_PY_AVAILABLE" = 1 ] || return 69')
+old='    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n        arm-legacy "$_legacy_arm_id" "$_legacy_arm_base" \\\n        "$_legacy_arm_candidate" "$_legacy_arm_fields"'
+assert old in s, "native common journal arm command missing"
+s=s.replace(old,'''    [ "$_legacy_arm_id" = "$QUAL_ID" ] &&
+    [ "$_legacy_arm_base" = "$QUAL_BASE" ] &&
+    [ "$_legacy_arm_candidate" = "$QUAL_CANDIDATE" ] &&
+    [ "$_legacy_arm_fields" = "-" ] || return 69
+    printf 'journal-prepared:%s\\n' "$_legacy_arm_id" >> "$LOG"
+    printf 'legacy-armed-id=%s\\nlegacy-handoff-authorized=0\\n' "$_legacy_arm_id"''')
+p.write_text(s)
+PY
+. "$ARM_SCRIPT"
+# Restore shared qualifier and writer mocks from previous fixture.
+shared_apply_legacy_candidate_service() {
+    [ "$1" = "$QUAL_ID" ] && [ "$ARM_QUALIFIED" = 1 ] || return 69
+    if [ "$ARM_DRIFT" = 1 ]; then
+        if [ -e "$ROOT/arm-observed" ]; then echo changed
+        else : > "$ROOT/arm-observed"; echo stable; fi
+    else echo stable; fi
+}
+shared_apply_require_tools() { [ "$ARM_TOOLS" = 1 ]; }
+shared_apply_native_config() {
+    [ "$1" = preflight ] && [ "$2" = "$QUAL_ID" ] &&
+    [ "$3" = voice ] && [ "$ARM_CONFIG" = 1 ] || return 69
+    echo '{"enabled":"1","base":"candidate","fields":[]}'
+}
+shared_apply_json_field() {
+    case "$1" in
+        *'.enabled'*) [ "$ARM_ON" = 1 ] && echo 1 ;;
+        *'.base'*) echo "$QUAL_BASE" ;;
+        *'.candidate'*) echo "$QUAL_CANDIDATE" ;;
+        *'.fields'*) echo "-" ;;
+        *) return 69 ;;
+    esac
+}
+shared_apply_bundle_service() {
+    [ "$1" = verify ] && [ "$2" = "$QUAL_ID" ] && [ "$ARM_SEAL" = 1 ]
+}
+shared_apply_workspace() { echo "$ROOT/qual-work"; }
+mkdir -p "$ROOT/qual-work/legacy-backup"
+ARM_PY_AVAILABLE=1 ARM_QUALIFIED=1 ARM_TOOLS=1 ARM_CONFIG=1 ARM_ON=1 ARM_SEAL=1 ARM_DRIFT=0
+: > "$LOG"
+arm_report=$(shared_apply_legacy_arm_service "$QUAL_ID") || fail "sealed predecessor did not arm"
+printf '%s\n' "$arm_report" | grep -Fqx 'legacy-handoff-authorized=0' ||
+    fail "armed old predecessor incorrectly allowed mutation"
+grep -Fqx "journal-prepared:$QUAL_ID" "$LOG" ||
+    fail "operator arm failed to record one common prepared intent"
+for fault in ARM_QUALIFIED ARM_TOOLS ARM_CONFIG ARM_ON ARM_SEAL ARM_PY_AVAILABLE; do
+    : > "$LOG"
+    eval "$fault=0"
+    if shared_apply_legacy_arm_service "$QUAL_ID" >/dev/null; then
+        fail "unsafe legacy arm ignored $fault"
+    fi
+    [ ! -s "$LOG" ] || fail "unsafe legacy arm wrote journal under $fault"
+    eval "$fault=1"
+done
+: > "$LOG"
+ARM_DRIFT=1
+rm -f "$ROOT/arm-observed"
+if shared_apply_legacy_arm_service "$QUAL_ID" >/dev/null; then
+    fail "changing legacy owner was armed despite two different kernel witnesses"
+fi
+[ ! -s "$LOG" ] || fail "changing legacy owner wrote common journal"
+ARM_DRIFT=0
+: > "$LOG"
+if shared_apply_legacy_arm_service bad >/dev/null; then
+    fail "invalid old operation ID reached common journal"
+fi
+[ ! -s "$LOG" ] || fail "invalid old operation ID wrote common journal"
+echo 'PASS: FD9 legacy predecessor is armed only as blocked durable common prepared record'
 
 echo 'PASS: shared engine/IPFW, stopped legacy rollback and live legacy refusal'

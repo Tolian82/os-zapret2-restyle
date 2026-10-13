@@ -910,6 +910,40 @@ shared_apply_legacy_capture_service()
         'legacy-backup-sealed=1' 'legacy-handoff-authorized=0'
 }
 
+# Operator-only arm for the ONE shared durable Apply.  An exact old
+# previous-five snapshot/plan must exist inside this sealed Voice candidate.
+# This records only a prepared legacy predecessor digest; generic activating
+# and reboot auto-close remain forbidden until one reversible executor exists.
+shared_apply_legacy_arm_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    _legacy_arm_id="$1"
+    case "$_legacy_arm_id" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_legacy_arm_id}" -eq 32 ] || return 64
+    _legacy_arm_before=$(shared_apply_legacy_candidate_service "$_legacy_arm_id") || return 69
+    _legacy_arm_root=$(shared_apply_workspace "$_legacy_arm_id") || return 69
+    [ -d "$_legacy_arm_root/legacy-backup" ] &&
+    [ ! -L "$_legacy_arm_root/legacy-backup" ] || return 69
+    shared_apply_require_tools || return 69
+    _legacy_arm_preview=$(shared_apply_native_config preflight "$_legacy_arm_id" voice) || return 69
+    _legacy_arm_on=$(printf '%s\n' "$_legacy_arm_preview" |
+        shared_apply_json_field '.enabled | select(.=="1")') || return 69
+    _legacy_arm_base=$(printf '%s\n' "$_legacy_arm_preview" |
+        shared_apply_json_field '.base | select(test("^[a-f0-9]{64}$"))') || return 69
+    _legacy_arm_candidate=$(printf '%s\n' "$_legacy_arm_preview" |
+        shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
+    _legacy_arm_fields=$(printf '%s\n' "$_legacy_arm_preview" |
+        shared_apply_json_field '.fields | if length==0 then "-" else join(",") end') || return 69
+    shared_apply_bundle_service verify "$_legacy_arm_id" || return 69
+    _legacy_arm_after=$(shared_apply_legacy_candidate_service "$_legacy_arm_id") || return 69
+    [ "$_legacy_arm_before" = "$_legacy_arm_after" ] || return 69
+    [ -x /usr/local/bin/python3.13 ] &&
+    [ -r "${BACKEND_DIR}/shared_apply_operation.py" ] || return 69
+    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+        arm-legacy "$_legacy_arm_id" "$_legacy_arm_base" \
+        "$_legacy_arm_candidate" "$_legacy_arm_fields"
+}
+
 # One actual runtime/Config Apply owner: the existing service process holds
 # FD9 for the ENTIRE operation; Python journal and PHP Config worker run as
 # children inheriting that ownership. No nested configd/lockf acquisition,
@@ -1499,6 +1533,10 @@ service_dispatch()
             [ "$#" -eq 2 ] || return 64
             shared_apply_legacy_capture_service "$2"
             ;;
+        shared-apply-legacy-arm)
+            [ "$#" -eq 2 ] || return 64
+            shared_apply_legacy_arm_service "$2"
+            ;;
         shared-apply-execute)
             shared_apply_execute_service "${2:-}" "${3:-}"
             ;;
@@ -1801,7 +1839,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
