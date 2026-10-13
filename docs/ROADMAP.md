@@ -1,5 +1,13 @@
 # os-zapret2-restyle — Master development plan
 
+## Текущий приоритет — утвердить план общего Voice/Strategies backend
+
+13.10.2026, `v0.5.1_174`: общая backend архитектура утверждена, фронтэнд и полное ТЗ сохранены. [Нормативный контракт](architecture/VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026). **Следующий шаг — обсуждение и утверждение подробного поэтапного плана изменения кода**, не продолжение прежнего этапа 3 и не сокращение страницы до одного STUN-профиля. [Текущая граница](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
+
+## История прежнего направления разработки
+
+Ниже сохранены результаты прежних ревизий. Их очереди «следующий шаг» заменены решением 13.10.2026; lifetime backlog и отдельная Telegram-медиа кампания сохраняются.
+
 **Этап 3 · `v0.5.1_174` (13.10.2026).** Под исходным FD9 и `/conf/config.xml` inode flock добавлена ручная операторская `native-voice-legacy-arm-stop-intent` (без configd/GUI/boot). Ревизия `_173` создала import-only `voice_native_legacy_quiescence_intent.py`: он требует строго предыдущие `legacy-previous` и `legacy-restore-plan` и fsync/atomic rename запечатывает отдельный sibling `voice-cutover-legacy-quiescence-intent` с schema-1 SHA256, previous five-domain fingerprints, policy/IPFW и exact plan digest; `_174` подключила CLI в `zapret_service.sh` с фиксированным аргументом, без пользовательских путей. Original Voice cutover stage root не меняется. Boot/normal lifecycle guard теперь блокирует даже orphan sibling intent при потере основного root. Этот STOP-intent **не** останавливает процессы, не удаляет IPFW, marker или Config, не готовит clean WAL и **не разрешает** выполнение (safe_to_execute=false). Повтор/частичные файлы блокируются до ручного разбора. Тесты: строгие 2 predecessor, original Config flock, сохранность old PoC, no retry, spoofed digest, orphan boot gate, отсутствие GUI/configd и FD9 dispatch. `_172` Voice CI PASS, Project/FreeBSD ещё отслеживались при выполнении; `_174` требует latest-head CI. Следующий пункт — отдельный, основанный на sealed STOP-intent контролируемый и crash-safe процессный/IPFW quiescence actuator под теми же locks, затем clean WAL → шестидоменный rollback и реальная OPNsense reboot/UAT. PR #328 остаётся Draft; Voice ON/MEDIA_PASS и package publication запрещены.
 
 **Этап 3 · `v0.5.1_172` (13.10.2026).** Добавлен ручной операторский `native-voice-legacy-seal-clean-wal` в штатный `zapret_service.sh`, без configd/GUI/boot и без общего lifecycle reboot автозапуска. Новый фиксированный `voice_native_legacy_clean_wal_route.py seal-clean-wal` под существующими original FD9 + Config inode flock требует ровно sealed old `legacy-previous` + `legacy-restore-plan` и через прежний проверенный `prepare_legacy_reverse_wal` подтверждает дважды отсутствие трёх процессов, старого marker/runtime enabled, IPFW 19000–19010/всех Voice tables, native IPFW owner и дрейфа файлов; затем fsync/rename сохраняет immutable clean-boundary WAL и повторно сверяет полный журнал. Команда **не останавливает старый PoC**, не удаляет IPFW и не меняет Config/runtime/marker/process, ничего не активирует; clean boundary должен существовать заранее. Partial/foreign evidence остаётся fail-closed без автоочистки. Операторский тест симулирует clean-boundary, original flock failure, активный старый marker/IPFW, power cut и отсутствие GUI/configd; unchanged `PLUGIN_REVISION=172` после docs-only commit. `_171` exact-head Voice/Project/FreeBSD15 PASS; `_172` CI в процессе. Следующая задача этапа 3 — безопасный оригинально заблокированный переход from old PoC running to quiescent clean kernel без потери предыдущего пятидоменного seal, затем реальная FreeBSD reboot/UAT, до public Voice Apply. Draft PR #328, пакет не опубликован, MEDIA_PASS не подтверждён.
@@ -178,19 +186,9 @@
 **CURRENT implementation:** v0.5.1_76 (2026-10-11): implemented private `voice_native_forward_config.py` to persist the exact schema-4 candidate Config on the original /conf/config.xml inode under the original FD9 and uninterrupted Config flock, AFTER independently verified candidate engine+supervisor/IPFW PRECOMMIT. Durable write-once `forward-config-redo.json` is fsync'd BEFORE truncate, binds journal SHA, Config inode/owner, old/new digests and saved mode; only a proven candidate-byte prefix can be resumed after interruption. Double native kernel/argv/IPFW/runtime/journal verification, original previous backup intact, no commit/GUI/boot or old Config restore replacement. New isolated real-fd/fault-injection regression wired to Linux and FreeBSD 15 CI. This is a required forward segment, NOT yet full Voice ON Apply.
 
 
-## Current Voice completion order — 2026-10-12
+## Current Voice completion order — 2026-10-13
 
-**Authoritative [Voice completion plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md)** and [approved page requirements](architecture/VOICE_TRANSMISSION_GUI.md). Original audit baseline: `v0.5.1_75`; current candidate `v0.5.1_174`, Draft PR #328; not shipped, private cutover and recovery exist but public Voice ON is not available. Previous checked tasks, old «Next:» paragraphs and version labels below are **historical milestones only**, not parallel current tasks.
-
-1. **Stabilization (DONE, historical):** canonical documentation/CI identities, PR and original state reviewed.
-2. **One private native forward Apply/rollback (DONE at `v0.5.1_105`, offline-only):** five-resource persistent COMMIT, safeguarded rollback and power-loss replay confirmed by exact-head CI.
-3. **Existing service lifecycle (ACTIVE, Stage 3):** configd/FD9/Config integration, `runtime-failure`, migrate/retire PoC authority and route old Telegram CLI to persistent Config; normal cold boot must restore saved Voice without manual enable.
-4. **GUI finish:** native Strategies-style Apply ON/OFF, consistent RU/EN, five effective per-service states, light/dark/mobile inspection.
-5. **Owner-live FreeBSD/OPNsense acceptance:** exact kernel/argv, IPFW, one dvtws2, LAN+local/SOCKS UDP, failures, ordinary Strategies and reboot.
-6. **Telegram voice research:** separately report `WIRE_OK`, `MEDIA_PASS`, `CALL_PASS`; not a prerequisite to ship a correctly functioning generic Voice page.
-7. **Final package/release:** complete regression/migration/boot/CI, document verified claims, PR/release governance; package build ≠ publication.
-
-**Avoid repeating:** `voice_cutover_config_restore.py` / `voice_cutover_config_redo.py`, five-resource rollback, IPFW ledger, runtime redo and prior cleanup are already implemented as separate primitives. Only add new protection if a demonstrable gap prevents one of these seven results. Code changes increment `PLUGIN_REVISION`, docs-only changes do not.
+[Общий backend в ТЗ](architecture/VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026) утверждён при неизменном фронтэнде и полном функциональном объёме. [План завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) сейчас определяет границу обсуждения: подробные кодовые этапы ещё не утверждены. Старый семиэтапный план и offline закрытие этапа 2 сохранены в [истории линии](history/current/v0.5.x.md#архив-прежнего-плана-voice-перед-объединением-backend), но не задают текущую очередь реализации.
 
 ## Historical revision milestones (not the current action list)
 
@@ -671,6 +669,6 @@ These rows remain useful coverage or future product directions. They are **not**
 
 ## Current priority
 
-**Implement the approved «Передача голоса» page and persistent Voice lifecycle next**, following [the complete specification](architecture/VOICE_TRANSMISSION_GUI.md). The native layout, five service fields/shared IPSETs, single-engine capture/profile separation, no LAN/local/boot toggles and migration are fixed scope. After configuration/boot qualification, resume the retained RTC/ICMP/limited-fake-TTL research on a recorded baseline; repeated MEDIA_PASS and real UDP CALL_PASS qualify a working strategy, not permission to create the page. Preserve existing TCP/proxy and manual TNAS/Docker operations. No blind repetition of completed fragments/A1/A2 or retired alternate route.
+Согласовать подробный план переделки кода под [общий backend со «Стратегиями»](architecture/VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026). Полное ТЗ пяти сервисов, frontend, persistence, scoped UDP и normal lifecycle не сокращаются. После квалификации конфигурации/boot отдельная Telegram-медиа кампания продолжается на записанной новой базе. Существующая TCP/proxy и ручные TNAS/Docker операции сохраняются.
 
 Release notes for the current stable release: [`releases/v0.5.0.md`](releases/v0.5.0.md).

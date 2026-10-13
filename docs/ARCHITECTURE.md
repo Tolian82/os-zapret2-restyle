@@ -1,5 +1,9 @@
 # os-zapret2-restyle
 
+## Approved transition — shared Voice/Strategies backend, 2026-10-13
+
+The owner approved one shared model, full-runtime generator and Apply/lifecycle owner for Strategies and Voice. Voice adds STUN profiles and scoped UDP/IPSET capture; frontend and full requirements are unchanged. This is an approved target, not an implemented-source claim. [Section 12 of the Voice specification](architecture/VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026) owns the contract; [completion boundary](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) requires detailed code-plan discussion next. Legacy private Voice transactions are reuse/transition material, not a second authoritative production architecture.
+
 ==================================================
 DOCUMENT ROLE
 ==================================================
