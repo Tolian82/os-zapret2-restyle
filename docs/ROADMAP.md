@@ -2,7 +2,7 @@
 
 ## Текущий приоритет — v0.5.2
 
-**`v0.5.2_13`: общий backend «Стратегии» / «Передача голоса».** Этап открыт 13.10.2026 по поручению владельца без релиза. Архитектура утверждена, [подробный проект плана и контроля](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) принят к выполнению поручением владельца начать программирование. Frontend и все пять сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) сохраняются.
+**`v0.5.2_17`: общий backend «Стратегии» / «Передача голоса».** Этап открыт 13.10.2026 по поручению владельца без релиза. Архитектура утверждена, [подробный проект плана и контроля](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) принят к выполнению поручением владельца начать программирование. Frontend и все пять сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) сохраняются.
 
 | Предложенный этап | Конечный результат |
 |---|---|
@@ -14,7 +14,7 @@
 | 6. Удаление дублирования | Один поставляемый backend и необходимые общие проверки |
 | 7. Полная приёмка | Все обязательные GUI/CONFIG/BOOT проверки, пакет/CI и owner-live |
 
-Детальные файлы, зависимости, переходы и проверки живут только в плане. Этап 1 реализован: полный detached common runtime; этап 2 реализован в общем firewall adapter с проверенным изолированным циклом; этап 3 начат общим PHP candidate/dependency boundary в `_4`; внутреннее переключение runtime/IPFW реализовано в `_5`; в `_12` добавлена durable общая operation record и lifecycle guard; в `_13` завершена единая detached source+template+release подготовка под FD9 из полного XML двух форм. Следующий шаг — соединить эту подготовку с Config/runtime transaction и прерываемым recovery, затем использовать штатные кнопки. Public Apply ещё не готов. Public Apply и live приёмка ещё открыты. Новая private цепочка WAL/receipt и один профиль вместо полной страницы не являются очередью.
+Детальные файлы, зависимости, переходы и проверки живут только в плане. Этап 1 реализован: полный detached common runtime; этап 2 реализован в общем firewall adapter с проверенным изолированным циклом; этап 3 начат общим PHP candidate/dependency boundary в `_4`; внутреннее переключение runtime/IPFW реализовано в `_5`; в `_12` добавлена durable общая operation record и lifecycle guard; в `_13` создана единая detached source+template+release подготовка, в `_14`–`_17` реализован и тестируется один внутренний FD9 executor с native Config save/IPFW commit, fail-closed legacy boot protection и fault injection. Следующий рубеж — crash recovery, обычный boot/reconfigure и перевод обеих штатных кнопок на общий Apply. Public Apply ещё не готов. Public Apply и live приёмка ещё открыты. Новая private цепочка WAL/receipt и один профиль вместо полной страницы не являются очередью.
 
 ## Основной завершённый путь
 
