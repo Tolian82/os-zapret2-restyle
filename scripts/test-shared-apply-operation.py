@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Common Apply durable phases and existing lifecycle guard, without kernel changes."""
 import sys
+from contextlib import ExitStack
 import subprocess
 from unittest.mock import patch
 import tempfile
@@ -891,42 +892,47 @@ class TestJournal(unittest.TestCase):
                         readonly_ipfw=reader,security_reader=security,argv_reader=argv,
                         require_lifecycle_owner=lambda:None,runner=run,
                     )
-                with patch("voice_native_legacy_process_restart._locked_config"), \
-                     patch("voice_native_legacy_process_restart._pinned_regular"), \
+                with ExitStack() as stack:
+                    scopes = (
+                        patch("voice_native_legacy_process_restart._locked_config"),
+                     patch("voice_native_legacy_process_restart._pinned_regular"),
                      patch("voice_native_legacy_process_restart.inspect_legacy_previous",
-                           return_value=old), \
+                           return_value=old),
                      patch("voice_native_legacy_process_restart.inspect_legacy_restore_plan",
-                           return_value=plan), \
+                           return_value=plan),
                      patch("voice_native_legacy_previous_seal.inspect_legacy_previous_live_identity",
-                           return_value={"marker":{"mode":0o600}}), \
+                           return_value={"marker":{"mode":0o600}}),
                      patch("voice_native_legacy_process_restart.inspect_previous",
-                           return_value={}), \
+                           return_value={}),
                      patch("voice_native_legacy_process_restart.inspect_security_policy",
-                           return_value=policy), \
+                           return_value=policy),
                      patch("voice_native_legacy_process_restart.canonical_supervisor_argv",
-                           return_value={"daemon":["sealed"]}), \
+                           return_value={"daemon":["sealed"]}),
                      patch("voice_native_legacy_process_restart.inspect_process_evidence",
-                           return_value={"observation":{"engine":{"state":"running"}}}), \
+                           return_value={"observation":{"engine":{"state":"running"}}}),
                      patch("voice_native_legacy_process_restart._read_private_file",
-                           return_value=b"enabled\n"), \
+                           return_value=b"enabled\n"),
                      patch("voice_native_legacy_poc_guard._legacy_read",
-                           return_value=b"enabled\n"), \
-                     patch("voice_cutover_backup._verify_sources"), \
+                           return_value=b"enabled\n"),
+                     patch("voice_cutover_backup._verify_sources"),
                      patch("shared_apply_operation.fingerprint_legacy_predecessor",
-                           return_value=prior), \
+                           return_value=prior),
                      patch("voice_native_legacy_process_restart._ledger_clear",
-                           return_value="no-native-ledger"), \
+                           return_value="no-native-ledger"),
                      patch("voice_native_legacy_process_restart._strict_snapshot",
-                           return_value={}), \
+                           return_value={}),
                      patch("voice_native_legacy_process_restart._expected_after",
-                           return_value={}), \
+                           return_value={}),
                      patch("voice_native_legacy_process_restart._marker_stat",
-                           return_value=marker.stat()), \
+                           return_value=marker.stat()),
                      patch("voice_native_legacy_process_restart._stopped",
-                           return_value="exact-three-role-absence"), \
-                     patch("voice_native_legacy_process_restart._secure_script"), \
+                           return_value="exact-three-role-absence"),
+                     patch("voice_native_legacy_process_restart._secure_script"),
                      patch("voice_native_legacy_process_restart.attest_restarted_old_roles",
-                           side_effect=attest_old):
+                           side_effect=attest_old),
+                    )
+                    for scope in scopes:
+                        stack.enter_context(scope)
                     if interrupted:
                         with self.assertRaises(OSError):
                             invoke()
