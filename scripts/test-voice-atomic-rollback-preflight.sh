@@ -113,4 +113,57 @@ atomic_restore_tree "${active}" "${backup}" || {
     echo "FAIL: restore left old backup behind" >&2
     exit 1
 }
-echo "PASS: missing/symlinked backup preserves active runtime, valid rollback restores previous"
+
+# Existing staging/park/backup paths can be crash evidence after PID reuse.
+# Verify the real installer refuses without invoking pax/copy.
+source="${dir}/install-source"
+destination="${dir}/install-destination"
+backup_root="${dir}/install-backup-root"
+mkdir -p "${source}" "${destination}" "${backup_root}"
+printf '%s\n' proposed > "${source}/dvtws.args"
+printf '%s\n' installed > "${destination}/dvtws.args"
+assert_install_intact() {
+    [ "$(cat "${source}/dvtws.args")" = proposed ] &&
+    [ "$(cat "${destination}/dvtws.args")" = installed ] || {
+        echo "FAIL: atomic install conflict changed source or active runtime" >&2
+        exit 1
+    }
+}
+stage="${dir}/.install-destination.stage.$$"
+old="${dir}/.install-destination.old.$$"
+mkdir "${stage}"
+printf '%s\n' crash > "${stage}/keep"
+if atomic_install_tree "${source}" "${destination}" "${backup_root}" 2>/dev/null; then
+    echo "FAIL: existing staging directory accepted" >&2; exit 1
+fi
+assert_install_intact
+[ "$(cat "${stage}/keep")" = crash ] || {
+    echo "FAIL: staging crash evidence deleted" >&2; exit 1
+}
+rm -rf "${stage}"
+mkdir "${old}"
+printf '%s\n' crash > "${old}/keep"
+if atomic_install_tree "${source}" "${destination}" "${backup_root}" 2>/dev/null; then
+    echo "FAIL: parked previous runtime accepted" >&2; exit 1
+fi
+assert_install_intact
+[ "$(cat "${old}/keep")" = crash ] || {
+    echo "FAIL: previous runtime crash evidence deleted" >&2; exit 1
+}
+rm -rf "${old}"
+# Freeze date only in this subshell so expected backup collision is exact.
+if (
+    date() { echo 20300101-000000; }
+    occupied="${backup_root}/install-destination-20300101-000000-$$"
+    mkdir "${occupied}"
+    printf '%s\n' foreign > "${occupied}/keep"
+    if atomic_install_tree "${source}" "${destination}" "${backup_root}" 2>/dev/null; then
+        echo "FAIL: pre-existing backup name was accepted" >&2; exit 1
+    fi
+    [ "$(cat "${occupied}/keep")" = foreign ]
+); then :; else
+    echo "FAIL: backup collision evidence was overwritten" >&2; exit 1
+fi
+assert_install_intact
+
+echo "PASS: atomic rollback and install preserve unknown crash artifacts"

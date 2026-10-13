@@ -187,8 +187,26 @@ atomic_install_tree()
     mkdir -p "${_atomic_install_parent}" "${_atomic_install_backup_root}" ||
         return 1
 
-    atomic_remove_tree "${_atomic_install_stage}" || return 1
-    atomic_remove_tree "${_atomic_install_old}" || return 1
+    # A prior interrupted install, or a reused PID, may leave the only
+    # known-good release here. Never remove unknown crash evidence.
+    for _atomic_install_reserved in "${_atomic_install_stage}" "${_atomic_install_old}"; do
+        if [ -e "${_atomic_install_reserved}" ] ||
+           [ -L "${_atomic_install_reserved}" ]; then
+            common_error "atomic install: existing stage/park path requires review"
+            return 1
+        fi
+    done
+    # mv into a pre-existing directory would nest the active release and
+    # silently lose backup ownership. Refuse name collisions before copy.
+    if [ -e "${_atomic_install_destination}" ] ||
+       [ -L "${_atomic_install_destination}" ]; then
+        _atomic_install_backup="${_atomic_install_backup_root}/${_atomic_install_name}-${_atomic_install_stamp}-$$"
+        if [ -e "${_atomic_install_backup}" ] ||
+           [ -L "${_atomic_install_backup}" ]; then
+            common_error "atomic install: existing backup path requires review"
+            return 1
+        fi
+    fi
 
     atomic_copy_tree \
         "${_atomic_install_source}" \
@@ -207,8 +225,7 @@ atomic_install_tree()
 
     if [ -e "${_atomic_install_destination}" ] ||
        [ -L "${_atomic_install_destination}" ]; then
-        _atomic_install_backup="${_atomic_install_backup_root}/${_atomic_install_name}-${_atomic_install_stamp}-$$"
-
+        # Destination is moved only to the preflighted absent backup name.
         mv \
             "${_atomic_install_destination}" \
             "${_atomic_install_old}" || {
