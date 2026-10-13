@@ -65,7 +65,13 @@ shared_apply_recover_saved_service() { echo saved-recovered >> "$LOG"; [ "$SAVED
 shared_apply_recover_prepared_service() {
     echo prepared-recovered >> "$LOG"
     [ "$RECOVER" = 0 ] || return 69
-    [ "$RECOVER_OWNER" = "-" ] || OWNER="$RECOVER_OWNER"
+    # The real root CLI commits PREPARED → RESTORED before the wrapper
+    # re-inspects the journal, including an inherited common owner.
+    if [ "$RECOVER_OWNER" = "-" ]; then
+        OWNER=restored
+    else
+        OWNER="$RECOVER_OWNER"
+    fi
 }
 shared_apply_boot_service() { echo "common:$1" >> "$LOG"; }
 shared_apply_stop_service() { echo "common-stop:$1" >> "$LOG"; [ "$STOP_OK" = 0 ] || return 70; }
