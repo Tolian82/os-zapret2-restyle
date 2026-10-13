@@ -34,6 +34,7 @@ PHASES = frozenset((
     "legacy-quiescing", "legacy-processes-stopped",
     "legacy-ipfw-retiring", "legacy-ipfw-retired",
     "legacy-marker-retiring", "legacy-marker-retired",
+    "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
@@ -53,7 +54,9 @@ NEXT = {
     "legacy-ipfw-retiring": frozenset(("legacy-ipfw-retired",)),
     "legacy-ipfw-retired": frozenset(("legacy-marker-retiring",)),
     "legacy-marker-retiring": frozenset(("legacy-marker-retired",)),
-    "legacy-marker-retired": frozenset(),
+    "legacy-marker-retired": frozenset(("legacy-rollback-ipfw",)),
+    "legacy-rollback-ipfw": frozenset(("legacy-rollback-ipfw-restored",)),
+    "legacy-rollback-ipfw-restored": frozenset(),
 }
 
 
@@ -116,7 +119,8 @@ def _validate_record(record: object) -> dict:
     if "legacy_predecessor" in record:
         if record["phase"] not in ("prepared", "legacy-quiescing", "legacy-processes-stopped",
                                    "legacy-ipfw-retiring", "legacy-ipfw-retired",
-                                   "legacy-marker-retiring", "legacy-marker-retired") or record["detail"]["page"] != "voice" or \
+                                   "legacy-marker-retiring", "legacy-marker-retired",
+                                   "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored") or record["detail"]["page"] != "voice" or \
            not isinstance(record["legacy_predecessor"], str) or \
            not DIGEST.fullmatch(record["legacy_predecessor"]):
             raise SharedOperationError("invalid armed legacy predecessor proof")
@@ -373,6 +377,18 @@ class SharedApplyOperation:
             identity, "legacy-marker-retiring", "legacy-marker-retired", attest
         )
 
+    def begin_legacy_ipfw_rollback(self, identity: str, attest) -> dict:
+        """Durable same-owner reverse intent BEFORE restoring any old IPFW."""
+        return self._transition_legacy_boundary(
+            identity, "legacy-marker-retired", "legacy-rollback-ipfw", attest
+        )
+
+    def finish_legacy_ipfw_rollback(self, identity: str, attest) -> dict:
+        """Exact full previous rule/table witness, old engine/marker still off."""
+        return self._transition_legacy_boundary(
+            identity, "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored", attest
+        )
+
     def cancel_pristine_legacy(self, identity: str, attest) -> dict:
         """Operator-only cancellation: prove the OLD live owner never changed.
 
@@ -583,7 +599,8 @@ def main(argv: list[str]) -> int:
                     print("committed " + prior["id"] + " " + prior["page"])
             elif record["phase"] in ("prepared", "config-saved", "legacy-quiescing", "legacy-processes-stopped",
                                        "legacy-ipfw-retiring", "legacy-ipfw-retired",
-                                       "legacy-marker-retiring", "legacy-marker-retired"):
+                                       "legacy-marker-retiring", "legacy-marker-retired",
+                                       "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored"):
                 detail = record["detail"]
                 prefix = "legacy-prepared" if (
                     "legacy_predecessor" in record and record["phase"] == "prepared"

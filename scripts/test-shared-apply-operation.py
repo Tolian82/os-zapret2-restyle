@@ -488,6 +488,147 @@ class TestJournal(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         invoke()
 
+    def test_legacy_rollback_ipfw_uses_same_journal_not_a_second_owner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            store=SharedApplyOperation(root/"shared-apply")
+            seal="f"*64
+            store.prepare_legacy_predecessor(detail(), lambda:seal)
+            store.begin_legacy_quiesce(detail()["id"], lambda:seal)
+            store.mark_legacy_processes_stopped(detail()["id"], lambda:seal)
+            store.begin_legacy_ipfw_retire(detail()["id"], lambda:seal)
+            store.finish_legacy_ipfw_retire(detail()["id"], lambda:seal)
+            store.begin_legacy_marker_retire(detail()["id"], lambda:seal)
+            store.finish_legacy_marker_retire(detail()["id"], lambda:seal)
+            original=store.read()
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_ipfw_rollback(detail()["id"],lambda:seal)
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_ipfw_rollback(detail()["id"],lambda:"b"*64)
+            self.assertEqual(original,store.read())
+            pending=store.begin_legacy_ipfw_rollback(detail()["id"],lambda:seal)
+            self.assertEqual("legacy-rollback-ipfw",pending["phase"])
+            self.assertEqual(seal,pending["legacy_predecessor"])
+            self.assertEqual(pending,SharedApplyOperation(store.root).read())
+            self.assertEqual("shared-apply-pending",check_pending(
+                root/"voice-cutover",root/"voice-ipfw")["reason"])
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_ipfw_rollback(detail()["id"],lambda:seal)
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_ipfw_rollback(detail()["id"],lambda:"b"*64)
+            done=store.finish_legacy_ipfw_rollback(detail()["id"],lambda:seal)
+            self.assertEqual("legacy-rollback-ipfw-restored",done["phase"])
+            self.assertEqual(done,SharedApplyOperation(store.root).read())
+            self.assertFalse(store.advisory()["safe_to_mutate"])
+            with self.assertRaises(SharedOperationError):
+                store.advance("activating",detail())
+
+    def test_private_legacy_ipfw_reverse_resumes_only_verified_prefix(self):
+        import os
+        from voice_native_legacy_predecessor_route import (
+            restore_retired_common_legacy_ipfw,
+        )
+        from voice_native_process_probe import FreeBSDVoiceProcessProbe
+        from voice_ipfw_adapter import FreeBSDIPFWAdapter
+        from voice_native_legacy_ipfw_replay import _expected_after
+        old={"rules":{"19000":["divert","9900","udp"]},
+             "targets":["91.108.13.10","91.108.13.11"]}
+        commands=[
+            ["/sbin/ipfw","-q","table","zapret2_tgvoice","create","type","addr"],
+            ["/sbin/ipfw","-q","table","zapret2_tgvoice","add","91.108.13.10"],
+            ["/sbin/ipfw","-q","table","zapret2_tgvoice","add","91.108.13.11"],
+            ["/sbin/ipfw","-qf","add","19000",*old["rules"]["19000"]],
+        ]
+        for scenario in ("complete","power-cut","foreign"):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as directory:
+                root=Path(directory)
+                work=root/detail()["id"]
+                work.mkdir()
+                marker=root/"legacy-marker"
+                store=SharedApplyOperation(root/"shared-apply")
+                seal="f"*64
+                store.prepare_legacy_predecessor(detail(),lambda:seal)
+                store.begin_legacy_quiesce(detail()["id"],lambda:seal)
+                store.mark_legacy_processes_stopped(detail()["id"],lambda:seal)
+                store.begin_legacy_ipfw_retire(detail()["id"],lambda:seal)
+                store.finish_legacy_ipfw_retire(detail()["id"],lambda:seal)
+                store.begin_legacy_marker_retire(detail()["id"],lambda:seal)
+                store.finish_legacy_marker_retire(detail()["id"],lambda:seal)
+                reader=object.__new__(FreeBSDIPFWAdapter)
+                reader.allow_mutations=False
+                reader.rule_base=19000; reader.rule_max=19010
+                writer=object.__new__(FreeBSDIPFWAdapter)
+                writer.allow_mutations=True
+                writer.rule_base=19000; writer.rule_max=19010
+                probe=object.__new__(FreeBSDVoiceProcessProbe)
+                plan={"previous_five":"a"*64,
+                      "marker_target":str(marker),
+                      "legacy_ipfw_commands":commands}
+                progress={"index":0,"cut":False,"foreign":False}
+                issued=[]
+                def actual(_):
+                    if progress["foreign"]:
+                        return {"rules":{"19009":["foreign"]},"targets":None}
+                    return _expected_after(plan,progress["index"])
+                def apply(_, *args, **kwargs):
+                    self.assertTrue(kwargs["modifying"])
+                    self.assertEqual(tuple(commands[progress["index"]][1:]),args)
+                    issued.append(args)
+                    progress["index"]+=1
+                    if scenario=="power-cut" and progress["index"]==2 and not progress["cut"]:
+                        progress["cut"]=True
+                        raise OSError("simulated power loss after IPFW command")
+                    if scenario=="foreign" and progress["index"]==2:
+                        progress["foreign"]=True
+                def invoke():
+                    return restore_retired_common_legacy_ipfw(
+                        identity=detail()["id"],store=store,work=work,
+                        config_path=root/"config.xml",config_fd=4,
+                        config_owner=(os.geteuid(),0),
+                        active_runtime=root/"active",marker_path=marker,
+                        process_probe=probe,readonly_ipfw=reader,
+                        mutating_ipfw=writer,
+                        require_lifecycle_owner=lambda:None,
+                    )
+                with patch("voice_native_legacy_predecessor_route._locked_config"), \
+                     patch("voice_native_legacy_predecessor_route.inspect_legacy_previous",
+                           return_value={"previous_five":"a"*64}), \
+                     patch("voice_native_legacy_predecessor_route.inspect_legacy_restore_plan",
+                           return_value=plan), \
+                     patch("voice_native_legacy_predecessor_route.inspect_legacy_previous_live_identity",
+                           return_value={"legacy_ipfw_previous":old}), \
+                     patch("voice_native_legacy_predecessor_route.inspect_previous",
+                           return_value={}), \
+                     patch("voice_native_legacy_predecessor_route._verify_sources"), \
+                     patch("shared_apply_operation.fingerprint_legacy_predecessor",
+                           return_value=seal), \
+                     patch("voice_native_legacy_reverse_wal._stopped",
+                           return_value="exact-three-role-absence"), \
+                     patch("voice_native_legacy_ipfw_replay._strict_snapshot",
+                           side_effect=actual), \
+                     patch.object(FreeBSDIPFWAdapter,"_run",new=apply):
+                    if scenario=="complete":
+                        self.assertEqual("legacy-rollback-ipfw-restored",
+                                         invoke()["phase"])
+                        self.assertEqual(len(commands),len(issued))
+                    else:
+                        with self.assertRaises((OSError,RuntimeError)):
+                            invoke()
+                        self.assertEqual("legacy-rollback-ipfw",
+                                         store.read()["phase"])
+                        before=len(issued)
+                        if scenario=="power-cut":
+                            self.assertEqual("legacy-rollback-ipfw-restored",
+                                             invoke()["phase"])
+                            self.assertEqual(len(commands)-2,len(issued)-before)
+                        else:
+                            with self.assertRaises(RuntimeError):
+                                invoke()
+                            self.assertEqual(before,len(issued))
+                    self.assertFalse(marker.exists())
+                    self.assertEqual("shared-apply-pending",check_pending(
+                        root/"voice-cutover",root/"voice-ipfw")["reason"])
+
     def test_missing_state_stays_readonly(self):
         with tempfile.TemporaryDirectory() as d:
             j=SharedApplyOperation(Path(d)/"shared-apply")

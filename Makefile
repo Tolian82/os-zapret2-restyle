@@ -1,6 +1,6 @@
 PLUGIN_NAME=        zapret2-restyle
 PLUGIN_VERSION!=    /bin/cat ${.CURDIR}/VERSION
-PLUGIN_REVISION=    78
+PLUGIN_REVISION=    79
 PLUGIN_COMMENT=     Native zapret2 DPI bypass plugin for OPNsense
 PLUGIN_MAINTAINER=  tolian82IPB@gmail.com
 PLUGIN_DEPENDS=     python313

@@ -533,6 +533,146 @@ def retire_stopped_common_legacy_marker(
         raise LegacyPredecessorRouteError("old marker retirement not completed")
     return result
 
+
+def restore_retired_common_legacy_ipfw(
+    *, identity, store, work, config_path, config_fd, config_owner,
+    active_runtime, marker_path, process_probe, readonly_ipfw,
+    mutating_ipfw, require_lifecycle_owner,
+):
+    """PRIVATE reverse of the old IPFW removal, under the SAME shared journal.
+
+    Reuses the fully sealed old restore plan and existing FreeBSD IPFW adapter.
+    It is restartable only from exact rule/table prefixes of that plan; no
+    second undo ledger, blind rule sweep, GUI/configd/boot entrypoint or new
+    native owner is created. The old engine and marker remain OFF throughout.
+    """
+    from shared_apply_operation import (
+        SharedApplyOperation, fingerprint_legacy_predecessor,
+    )
+    from voice_native_legacy_ipfw_replay import (
+        _strict_snapshot, _expected_after,
+    )
+    from voice_native_legacy_reverse_wal import _stopped
+    if not isinstance(store, SharedApplyOperation) or (
+        not isinstance(process_probe, FreeBSDVoiceProcessProbe)
+        or not isinstance(readonly_ipfw, FreeBSDIPFWAdapter)
+        or readonly_ipfw.allow_mutations
+        or not isinstance(mutating_ipfw, FreeBSDIPFWAdapter)
+        or not mutating_ipfw.allow_mutations
+        or (readonly_ipfw.rule_base, readonly_ipfw.rule_max) != (19000, 19010)
+        or (mutating_ipfw.rule_base, mutating_ipfw.rule_max) != (19000, 19010)
+        or type(config_fd) is not int or config_fd < 0
+        or not callable(require_lifecycle_owner)
+    ):
+        raise LegacyPredecessorRouteError("missing original legacy rollback authority")
+    work, marker_path = Path(work), Path(marker_path)
+    root = work / "legacy-backup"
+    if work.name != identity or not COMMON_ID.fullmatch(identity):
+        raise LegacyPredecessorRouteError("old rollback candidate differs from seal")
+    require_lifecycle_owner()
+    _locked_config(Path(config_path), config_fd, config_owner)
+    record = store.read()
+    if record is None or record["phase"] not in (
+        "legacy-marker-retired", "legacy-rollback-ipfw"
+    ) or record["detail"]["id"] != identity or (
+        "legacy_predecessor" not in record or "previous" in record
+    ):
+        raise LegacyPredecessorRouteError("verified retired marker/rollback intent required")
+    original = inspect_legacy_previous(root)
+    plan = inspect_legacy_restore_plan(root)
+    if plan["previous_five"] != original["previous_five"] or (
+        plan["marker_target"] != str(marker_path)
+    ):
+        raise LegacyPredecessorRouteError("old IPFW plan not bound to marker/owner")
+    saved = inspect_legacy_previous_live_identity(root)
+    expected = saved["legacy_ipfw_previous"]
+    commands = plan["legacy_ipfw_commands"]
+    if (not isinstance(commands, list) or not 3 <= len(commands) <= 4100):
+        raise LegacyPredecessorRouteError("untrusted bounded original IPFW commands")
+    total = len(commands)
+
+    def held():
+        require_lifecycle_owner()
+        _locked_config(Path(config_path), config_fd, config_owner)
+        phase = store.read()
+        if phase is None or phase["phase"] not in (
+            "legacy-marker-retired", "legacy-rollback-ipfw"
+        ) or phase["detail"] != record["detail"] or (
+            phase.get("legacy_predecessor") != record["legacy_predecessor"]
+        ):
+            raise LegacyPredecessorRouteError("old rollback journal changed")
+        if fingerprint_legacy_predecessor(work, owner=config_owner[0]) != (
+            record["legacy_predecessor"]
+        ) or inspect_legacy_previous(root) != original or (
+            inspect_legacy_restore_plan(root) != plan
+        ):
+            raise LegacyPredecessorRouteError("immutable old restore plan changed")
+        _verify_sources(
+            Path(config_path), Path(active_runtime),
+            inspect_previous(root / NAME / "previous"),
+        )
+        if os.path.lexists(marker_path):
+            raise LegacyPredecessorRouteError("foreign/re-enabled old marker during rollback")
+        if _stopped(process_probe) != "exact-three-role-absence":
+            raise LegacyPredecessorRouteError("unexpected engine during old IPFW rollback")
+        return phase
+
+    if record["phase"] == "legacy-marker-retired":
+        held()
+        if _strict_snapshot(readonly_ipfw) != _expected_after(plan, 0):
+            raise LegacyPredecessorRouteError("nonempty IPFW before old rollback intent")
+        store.begin_legacy_ipfw_rollback(
+            identity, lambda: (
+                record["legacy_predecessor"] if (
+                    held()["phase"] == "legacy-marker-retired" and
+                    _strict_snapshot(readonly_ipfw) == _expected_after(plan, 0)
+                ) else None
+            )
+        )
+    else:
+        held()
+
+    # A power cut may follow an IPFW command before the next Python line.
+    # Only an exact complete prefix of the sealed plan is resumable.
+    live = _strict_snapshot(readonly_ipfw)
+    matching = [n for n in range(total + 1)
+                if _expected_after(plan, n) == live]
+    if len(matching) != 1:
+        raise LegacyPredecessorRouteError("unknown or ambiguous partial old IPFW rollback")
+    start = matching[0]
+    for index in range(start, total):
+        if held()["phase"] != "legacy-rollback-ipfw":
+            raise LegacyPredecessorRouteError("old rollback phase changed")
+        if _strict_snapshot(readonly_ipfw) != _expected_after(plan, index):
+            raise LegacyPredecessorRouteError("IPFW drift before next sealed restore command")
+        cmd = commands[index]
+        if not isinstance(cmd, list) or not cmd or cmd[0] != "/sbin/ipfw":
+            raise LegacyPredecessorRouteError("untrusted original IPFW operation")
+        mutating_ipfw._run(*cmd[1:], modifying=True)
+        if _strict_snapshot(readonly_ipfw) != _expected_after(plan, index + 1):
+            raise LegacyPredecessorRouteError("IPFW partial/foreign result after restore command")
+    if held()["phase"] != "legacy-rollback-ipfw" or (
+        _strict_snapshot(readonly_ipfw) != _expected_after(plan, total)
+    ):
+        raise LegacyPredecessorRouteError("old IPFW rollback incomplete")
+    final = _expected_after(plan, total)
+    if final != {
+        "rules": dict(expected["rules"]), "targets": sorted(expected["targets"])
+    }:
+        raise LegacyPredecessorRouteError("restored kernel does not match sealed old owner")
+    result = store.finish_legacy_ipfw_rollback(
+        identity, lambda: (
+            record["legacy_predecessor"] if (
+                held()["phase"] == "legacy-rollback-ipfw" and
+                _strict_snapshot(readonly_ipfw) == final
+            ) else None
+        )
+    )
+    if result["phase"] != "legacy-rollback-ipfw-restored":
+        raise LegacyPredecessorRouteError("old IPFW recovery not sealed in common journal")
+    return result
+
+
 def main(argv):
     candidate_id = argv[1] if (
         len(argv) == 2 and argv[0] == "capture-common"
