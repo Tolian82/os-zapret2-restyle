@@ -216,6 +216,8 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
+Current development stage: **v0.5.2** — shared Strategies/Voice backend, unreleased. See the [implementation plan and controls](docs/architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md); historical v0.5.1 reports are available through the [stage archive](docs/history/stages/v0.5.1/README.md).
+
 Useful entry points:
 
 - [`docs/START_HERE.md`](docs/START_HERE.md)

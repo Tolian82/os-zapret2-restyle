@@ -1,0 +1,1062 @@
+# Архив этапа v0.5.1 — WORKING_LEDGER.md
+
+**Исторический снимок, не текущие указания к работе.** Сохранено при переходе на `v0.5.2_1` 13.10.2026. Исходный документ: [docs/history/current/v0.5.x.md](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/history/current/v0.5.x.md). Полный текст сохранён; относительные ссылки закреплены за исходным commit. [Оглавление архива](README.md).
+
+# v0.5.x — current working ledger
+
+## 2026-10-13 — подготовлен подробный проект плана переделки общего backend
+
+По поручению владельца подготовлен [проект плана изменения кода](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md): карта сохраняемых/объединяемых/удаляемых компонентов, общий Apply под существующим FD9 со штатным Config save, семь этапов с проверяемыми результатами, ограниченная миграция и связь со всеми десятью проверками ТЗ. Полный публичный Apply всех пяти сервисов предложен как рубеж этапа 3; frontend/TЗ не сокращаются. Контроль против зацикливания и предел новых точек интеграции обозначены как предложения для согласования.
+
+Архитектура уже утверждена, детальный план ещё не утверждён. Код, `VERSION`, `PLUGIN_REVISION=174`, пакет и appliance не менялись. Следующий шаг — обсуждение проекта с владельцем; исторический этап 3/WAL/receipt не возобновлён. Подробности хранятся в одном плане, без копирования его этапов во все текущие документы.
+
+## 2026-10-13 — утверждён общий Voice/Strategies backend, план кода обсуждается следующим
+
+Владелец подтвердил: фронтэнд и полное ТЗ страницы не меняются; меняются backend архитектура и подход к разработке. Обе формы используют одну модель, общий генератор полного runtime и один lifecycle/Apply с откатом. Проверка одного STUN-профиля не сокращает ТЗ пяти сервисов. Сейчас записана архитектура, подробный поэтапный план переделки ещё не утверждён; кодовое продолжение старого этапа 3 не является следующим заданием.
+
+Нормативный контракт: [раздел 12 ТЗ](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026). Текущая граница: [план завершения](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). Кандидат остаётся `v0.5.1_174`; изменение только документации, без публикации пакета, установки или нового owner-live результата.
+
+### 2026-10-11 — v0.5.1_92 previous runtime restore crash retry integration
+
+**v0.5.1_92 (2026-10-11):** Added a second real-filesystem/simulated-native-IPFW POWER-CUT regression for Stage-2 five-resource rollback: interrupt the PREVIOUS runtime restore after candidate-active→restore-retired but before restore-ready(previous)→active, after IPFW has already been reverted and journal stays MUTATING. On retry with the same immutable old/forward/restore redo, the normal previous runtime redo MUST take precedence over `_90`'s missing-active forward repair, restore old Config/runtime, then restart previous engine and supervisor. Tests assert no premature restart or journal clearing after the first crash and exact five-domain recovery after retry. No production executor changes in this revision; private GUI/boot and real appliance qualification still pending.
+
+
+### 2026-10-11 — v0.5.1_91 restore existing quiescence-fault cadence
+
+**v0.5.1_91 (2026-10-11):** Corrected a regression found by `_90` Voice CI's existing quiescence-loss failure-injection test: the new forward rename crash bridge was calling an additional quiescence gate for ALL normal previous-runtime restores, changing the established fault boundary. Removed that redundant unconditional gate. For the missing-active crash path, the dedicated bridge still independently checks quiescence twice while verifying and completing the exact redo-pinned rename. The original regular rollback gate cadence and semantics remain unchanged. `_91` exact-head full Voice/FreeBSD and new simulated power-cut tests pending.
+
+
+### 2026-10-11 — v0.5.1_90 exact forward rename power cut recovery
+
+**v0.5.1_90 (2026-10-11):** Stage-2 crash replay now recovers the exact POWER-LOSS GAP between forward runtime `active(previous) → retained(previous)` and `ready(candidate) → active(candidate)`. Prior code refused missing active runtime although the fsync'd original `forward-runtime-redo.json` and both exact trees survived. Under original FD9+Config inode/flock, after independently establishing NO live engine/supervisor and previous native IPFW, `voice_cutover_file_rollback.py` verifies redo checksum/whole journal SHA, same original Config inode and runtime parent, exact candidate ready tree and original retained previous tree. It then completes ONLY the interrupted forward rename and immediately delegates to the EXISTING crash-resumable previous runtime+Config+IPFW/engine/supervisor rollback. If a previous runtime-restore redo already owns missing active, the established previous restore resumes instead. Missing/foreign redo or tampered tree fails closed without service restart. Adds real-file/ledger simulated power-cut success, missing marker and tampering regression. This is not an on-appliance reboot qualification or Voice ON.
+
+
+### 2026-10-11 — v0.5.1_89 terminal-seal test import order
+
+**v0.5.1_89 (2026-10-11):** Corrected the `_88` new terminal native rollback integration fixture so its `voice_cutover_journal._digest` import occurs AFTER adding the installed backend module root to `sys.path`. `_88` specialized Voice CI terminated at test import before exercising the new seal logic; no production change in `_89`. Full same-original-fd previous receipt/ROLLED_BACK positive and failure tests rerun at exact `_89` head.
+
+
+### 2026-10-11 — v0.5.1_88 auto previous rollback terminal receipt
+
+**v0.5.1_88 (2026-10-11):** Stage 2 native forward failure path now reuses the ALREADY IMPLEMENTED manual-recovery finalization under the SAME borrowed original Config FD9/flock, when and ONLY when its trusted FreeBSD process-security AND kernel-argv readers are both bound to the sealed previous evidence. After five-resource previous restart, its existing `seal_previous` callback performs `attest_previous_restart`, fsyncs `seal_previous_receipt`, and fsyncs non-destructive `seal_previous_completion` / terminal schema-4 ROLLED_BACK while still holding the exact Config fd. The outer forward coordinator independently checks terminal `mutating_predecessor` against original intent and refuses Voice ON pending owner acceptance. Test-simulated process actions without native readers retain MUTATING and cannot fabricate terminal finalization; receipt failures retain previous files/intent for manual inspection. Linux/FreeBSD CI includes late-failure same-lock positive/negative seal tests; exact-head qualification pending. **No actual GUI/service installation or Telegram audio proof.**
+
+
+### 2026-10-11 — v0.5.1_87 native process action allowlist test correction
+
+**v0.5.1_87 (2026-10-11):** Updated the existing candidate-engine shell allowlist regression to assert the EXACT new fixed native lifecycle action list, including the narrowly bounded `stop-candidate-engine` command introduced in `_86`. Added explicit checks that this command stops only the engine and requires supervisor PID files absent; never executes supervisor_stop or arbitrary user-selected shell commands. `_86` specialized Voice CI stopped only because its prior exact string fixture no longer matched the extended allowlist; behavioral positive/negative engine-only recovery tests are pending exact-head CI.
+
+
+### 2026-10-11 — v0.5.1_86 bounded engine-only forward rollback
+
+**v0.5.1_86 (2026-10-11):** Stage 2 gains a NARROW recovery path for exactly one already-running native Voice candidate dvtws2 without supervisor. Under the SAME FD9 + original Config flock, the existing `voice_native_forward_apply.py` preflights immutable old install image/process policy/IPFW ownership, observes two stable engine-only PID/start snapshots, verifies candidate runtime redo/digest, actual FreeBSD kernel argv/executable and bounded IPFW PRECOMMIT, and dispatches new no-PID `stop-candidate-engine` through the existing pinned `voice_native_process_lifecycle.sh`. `FreeBSDVoiceProcessActions` independently repeats kernel/epoch gate before stop. After verified all-stopped state, it reuses EXACTLY the existing five-resource rollback (IPFW, runtime, Config, prior engine and supervisor). Foreign engine/partial supervisor/failed stop remain fail-closed with MUTATING evidence. Added real-file/simulated-kernel positive+negative tests to current Linux/FreeBSD Voice matrix. **NOT yet qualified for OPNsense/GUI ON or Telegram media; old-state finalization and other crash states remain open.**
+
+
+### 2026-10-11 — v0.5.1_85 independent kernel process attestation before forward-failure stop
+
+Native failure rollback now checks two independent full three-role live-process snapshots and exact FreeBSD kernel argv/binary for each running candidate role against the installed candidate runtime before invoking the pre-existing process stop. A missing, partial or foreign candidate remains manual/blocked. New negative real-filesystem test substitutes foreign kernel image and must refuse before STOP. Stage 2 remains incomplete for engine-only/partial supervisor crash recovery, old-state finalization and production lifecycle/GUI/boot acceptance.
+
+
+### 2026-10-11 — v0.5.1_84 live three-role probe in failed-forward rollback test
+
+The preexisting candidate integration fixture left a `probe.probe()` callback frozen in the old STOPPED state even after establishing the new engine and supervisor. The native rollback invokes `probe()`, so this invalid fake topology erroneously skipped candidate STOP. `_84` restores the actual `FreeBSDVoiceProcessProbe.probe()` implementation over the simulated native ps inventory for this new integration suite. Production Voice code is unchanged; exact-head late failure test must demonstrate real STOP + previous START under one Config flock before automatic rollback is qualified.
+
+
+### 2026-10-11 — v0.5.1_83 PREPARED/MUTATING test boundary correction
+
+**v0.5.1_83 (2026-10-11):** Corrected forward-failure test injection to distinguish PREPARED preflight refusal from post-MUTATING failure eligible for the existing five-resource rollback. `_82` CI failed on this fixture ordering mismatch rather than an exception in production rollback. No unsafe fallback added. Exact-head CI pending.
+
+
+### 2026-10-11 — v0.5.1_82 same-FD automatic eligible forward failure rollback
+
+**v0.5.1_82 (2026-10-11):** Native private one-FD Voice forward Apply now requires the sealed previous install image BEFORE any process mutation and handles failures using the pre-existing `preflight_native_recovery` + `restore_previous_five_resources` on the SAME locked Config inode and original FD9. When the durable whole journal is MUTATING and all native process/IPFW evidence supports rollback, it restores the old five domains and reports a failed Apply; an incomplete/foreign recovery remains fail-closed with both journals retained. PREPARED failures never stop existing service; an already durable COMMITTED journal is NEVER rolled back (IPFW postcommit requires forward reconciliation). New real-filesystem/kernel-simulator late-failure regression and single-descriptor PREPARED/MUTATING/COMMITTED failure paths in Linux and FreeBSD CI. **Still OPEN:** partial one-engine/no-supervisor failure and crash states, durable previous-restart finalization, public service/GUI ON, real OPNsense acceptance.
+
+
+### 2026-10-11 — v0.5.1_81 borrowed same-Config-fd five-resource recovery support
+
+**v0.5.1_81 (2026-10-11):** The EXISTING `voice_cutover_five_resource_rollback.py` now optionally accepts a borrowed already-locked original Config FD, so it can restore old engine/IPFW/runtime/Config/supervisor under the SAME original flock as private `voice_native_forward_apply.py`. It strictly checks the borrowed descriptor's inode/ownership and acquired flock, never obtains a second conflicting Config lock, and never closes/unlocks a borrowed FD. Its existing manual recovery caller (no borrowed FD) keeps original behavior. Added isolated real-filesystem + simulated process/IPFW tests proving one Config flock spans stop→IPFW→files→restart, rejects unlocked/foreign descriptors and retains the MUTATING journal. **Still OPEN:** safe automatic invocation by native forward on every failure, postcommit finish, production GUI/boot and real OPNsense qualification; do not call private Apply from GUI.
+
+
+### 2026-10-11 — v0.5.1_80 fix real native IPFW postcommit call contract
+
+**v0.5.1_80 (2026-10-11):** `_79` real five-resource COMMIT integration test exposed one concrete API mismatch: existing `voice_ipfw_runtime.commit_verified(store, adapter, whole, proof)` takes four arguments, not five. The private native Apply now invokes that existing post-whole-commit IPFW function with the correct contract; no independent IPFW commit path or public ON authority is added. `_79` Voice CI passed 7/8 new coordinator tests, failure strictly at this call; `_80` exact-head CI and actual postcommit state verification required.
+
+
+### 2026-10-11 — v0.5.1_79 single locked forward Apply and COMMIT candidate
+
+**v0.5.1_79 (2026-10-11):** Introduced PRIVATE `voice_native_forward_apply.py` to compose existing schema-4 PREPARED stop/runtime, one candidate engine, IPFW PRECOMMIT, candidate supervisor, and candidate Config under ONE ORIGINAL FD9 owner + ONE Config flock/inode, followed by independent double five-domain live attestation and durable whole COMMIT before existing `commit_verified` IPFW ownership/old-stage-table cleanup. The read-only witness recomputes the MUTATING predecessor digest from COMMITTED for retained runtime/redo evidence, verifies actual kernel process argv/PID-start and scoped IPFW, and retains previous backup/whole journal for postcommit cleanup. Includes genuine filesystem+simulated native IPFW commit tests and single-descriptor staged-order/failure tests in Linux/FreeBSD CI. **Not yet public Voice ON:** automatic same-FD prior rollback, postcommit cleanup/normal boot, GUI/configd wiring and real appliance are still OPEN; on ambiguous failure intent stays fail-closed.
+
+
+### 2026-10-11 — v0.5.1_78 deterministic foreign candidate Config inode negative test
+
+**v0.5.1_78 (2026-10-11):** `_77` Voice CI passed 9/10 real changed-candidate Config tests; the remaining negative source-replacement fixture used unlink()+create, which can recycle the just-freed inode. Replaced it with a separately created same-byte, same-mode file and `os.replace()` while the original inode still exists, then explicitly assert different inode before expecting the existing forward-redo anti-replacement check to refuse rollback. Production Config/IPFW/native lifecycle writer unchanged. This is an isolated test-fixture correction; exact-head `_78` CI and FreeBSD 15 qualification required.
+
+
+### 2026-10-11 — v0.5.1_77 real changed-Config forward writer fixture correction
+
+**v0.5.1_77 (2026-10-11):** The first `_76` Voice CI revealed the inherited `_69.._75` integration fixture used identical previous and staged Config bytes. Fixed `_77` test setup to generate a **distinct candidate XML BEFORE** the schema-4 PREPARED intent is sealed so success, prefix-power-cut replay and previous-restore tests exercise actual write mutation, not a no-op. The native candidate writer now correctly returns `candidate-config-unchanged` when desired and previous Config truly have identical bytes and mode (without manufacturing a redo). Original FD9, Config inode/flock, independent kernel/IPFW proof, write-ahead and no public Apply/COMMIT guarantees stay intact. `_76` Voice CI failed at its new test fixture; `_77` exact-head CI is required.
+
+
+### 2026-10-11 — v0.5.1_76 forward candidate Config persistence and torn-write previous restore
+
+**v0.5.1_76 (2026-10-11):** New private `voice_native_forward_config.py` writes the sealed candidate OPNsense Config to the SAME locked inode after native candidate supervisor and IPFW PRECOMMIT; it requires shared FD9 and flock, full original backup, schema-4 MUTATING, matching runtime-redo/retained old tree, double native kernel argv/UID-bounded process/IPFW witness. Separate write-once fsync `forward-config-redo.json` binds exact previous/desired digests, candidate source inode, original Config inode/owner/mode and journal. A torn candidate prefix can be resumed, OR validated by existing `voice_cutover_config_restore.py` for direct safe *previous* restoration under an upper five-resource rollback owner (no running candidate required). Isolated real-fd/ledger+simulated-kernel fault-injection tests now run on Linux and FreeBSD 15 CI. **Not** a whole COMMIT, new public CLI/configd/GUI ON, normal boot or proved Telegram UDP media.
+
+
+### 2026-10-11 — v0.5.1_75 documentation/stabilization alignment (no code revision)
+
+The audited Draft PR #328 source revision is `v0.5.1_75`; an obsolete `_74` identity persisted in current START_HERE/PROJECT_STATE and caused the existing version-aware Strategy Lab Project CI contract to fail. Refreshed current identity and documented the sole active seven-stage Voice completion plan at [VOICE_TRANSMISSION_COMPLETION_PLAN.md](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md): stabilize exact-head CI → native full forward candidate Config/rollback → normal service/legacy PoC/boot → GUI acceptance → real OPNsense tests → Telegram UDP media evidence → release. Historical per-revision «Next» notes are not live tasks. This entry is documentation-only: no change to runtime, package revision, OPNsense appliance, GUI ON eligibility or actual media results; CI status must be verified against the new commit.
+
+
+### 2026-10-10 — v0.5.1_32 restore-stage action regression qualification
+
+**v0.5.1_32 — qualify native previous-state restore staging (2026-10-10):** Corrected a legacy Voice checkpoint regression assertion that incorrectly required the checkpoint and IPFW seed service actions to be adjacent. The new real `native-voice-restore-stage` FD9 action deliberately lies between them. The test now verifies checkpoint→restore-stage and seed→activate coexist without relying on an obsolete action adjacency. No change to service runtime behaviour beyond `_31`; native Voice ON is still gated. PLUGIN_REVISION=32 as required for test-code changes; exact-head CI pending. The `_31` Voice CI failed specifically at that obsolete assertion and is not marked successful.
+
+### 2026-10-10 — v0.5.1_31 production prior Config/runtime rollback staging
+
+**v0.5.1_31 — production staging of verified previous Config/runtime for Voice rollback (2026-10-10):** Added an actual `native-voice-restore-stage` service action under the shared `lockf` FD9, invoking pinned `/usr/local/bin/python3.13` with `backend/voice_cutover_restore_prepare.py`. It requires a schema-2+ whole-system cutover journal in `mutating` phase and a verified previous native IPFW ownership ledger; independently inspects the sealed pre-cutover Config/runtime snapshot, binds its hashes to the journal's five-resource previous state, and uses the already implemented no-follow/fsync `prepare_restore_stage()` to publish exact immutable prior bytes at `/var/db/zapret2/voice-cutover/restore-staged` (0600/0700). Any corrupted bytes, stale/committed/missing journal, duplicate stage or unowned firewall fails before publishing. This is a **real production recovery-preparation action**, not automatic restoration: it does not install Config/runtime, stop the candidate, restart dvtws2/supervisor, alter IPFW or grant GUI Voice ON. Native whole-engine restoration/Config transaction and cold-boot proof remain required. Added native integration regressions to Linux and FreeBSD 15 CI. Also improved Strategy Lab lifecycle failure logs to print the actual rejected return code and guard stderr rather than the misleading blanket message seen in `_28–_30`; those revisions' overall CI failed, though Voice and FreeBSD package checks passed. PLUGIN_REVISION=31; exact-head CI pending.
+
+### 2026-10-10 — v0.5.1_30 actual previous Config/runtime backup
+
+**v0.5.1_30 — real sealed previous Config/runtime checkpoint under FD9 (2026-10-10):** Connected the existing fsync'd `voice_cutover_backup.capture_previous()` to a new production FreeBSD-only `voice_cutover_checkpoint.py prepare` executable via `zapret_service.sh native-voice-checkpoint`, serialized by the existing FD9 lockf. After proving the previous ordinary dvtws2/supervisor are complete, the candidate release is all-OFF, legacy Telegram PoC is absent, the current FreeBSD kernel dvtws2 argv matches the release, and every IPFW rule/table exactly matches the old owned range, it writes a write-once `0700 /var/db/zapret2/voice-cutover/previous` containing real OPNsense config.xml, complete active runtime-v2 bytes and checksummed manifests, fsync/atomic rename. Rechecks source generation, actual engine and IPFW after snapshot; rejects foreign kernel state, already owned/pending IPFW, existing snapshot or cutover journal. The snapshot directory alone does not create a whole-cutover intent and leaves ordinary OFF start/reconfigure possible. Critically, fixed early IPFW seed hazard from _28/_29: native-voice-ipfw-seed now refuses to claim persistent ownership unless the full whole-system journal is already schema-2+ PREPARED with a matching sealed previous Config/runtime checkpoint; otherwise claiming ownership would block the existing normal lifecycle. New file-level integration tests use actual backup, journal and FakeIPFW without touching an appliance, and run on Linux/FreeBSD CI. This is real recovery materialization toward full Config/engine/supervisor/IPFW cutover, NOT native Voice ON or automatic boot restore; both remain gated. `_29` Voice and FreeBSD 15 passed but overall CI failed at Strategy Lab job contract (`parent Strategy Lab worker ran despite a pending Voice cutover`), so the branch is not declared fully green. PLUGIN_REVISION=30 (DEV-032), exact-head CI pending. No owner-router change.
+
+### 2026-10-10 — v0.5.1_29 native pending IPFW rollback/commit
+
+**v0.5.1_29 — production IPFW precommit and cross-service rollback (2026-10-10):** Corrected a real end-to-end transaction violation in _28: installing Voice IPFW previously committed ownership and destroyed rollback table snapshots *before* the one dvtws2, supervisor, Config and complete whole-cutover were committed. The native FreeBSD IPFW executor now leaves its fsynced ownership intent in `mutating` and retains old `*_stage` contents after installing kernel rules. A real `native-voice-ipfw-rollback` lifecycle action under the existing lockf FD9 can reverse exact verified rules and restore previously owned table addresses **while the whole journal is still mutating and the candidate PID file is gone**; it leaves the whole-system intent for subsequent Config/tree/supervisor restoration and proof. A separate `native-voice-ipfw-commit` action requires the whole-system journal to be `committed` and the bound one-engine argv to match before it durably commits ownership, destroys old stages, and clears the IPFW intent. Duplicate activation, foreign rules and stale-stage tampering fail closed; tests now check OFF→ON, existing Voice target change, rollback on supervisor failure, blocked early commit and postcommit cleanup. Existing OFF-only GUI behavior remains unchanged, native Voice ON remains gated until the whole-system orchestrator actually calls this protocol and handles Config/engine/supervisor and reboot. `_28` Voice tests and FreeBSD 15 package passed, but its overall CI failed at Strategy Lab job-contract (`parent Strategy Lab worker ran despite a pending Voice cutover`) and is not declared green. PLUGIN_REVISION=29; exact-head CI pending. No router modification or public package.
+
+### 2026-10-10 — v0.5.1_28 real IPFW executor
+
+**v0.5.1_28 — real FreeBSD native Voice IPFW executor under Zapret lifecycle (2026-10-10):** Added `backend/voice_ipfw_runtime.py`, a production FreeBSD-only, root-only IPFW executor and registered `native-voice-ipfw-seed` and `native-voice-ipfw-activate` service actions beneath the same `/usr/bin/lockf` FD9 lifecycle used by ordinary Zapret2. `seed` verifies a completely OFF, non-PoC running release, exact signed-by-content candidate Config/engine manifest, active kernel dvtws2 argv and the matching existing ordinary IPFW rules, then persists the one-time previously owned manifest in private `/var/db/zapret2/voice-ipfw`; it never modifies kernel rules. `activate` reads the existing canonical desired IPFW manifest, requires a *durable schema-2+ whole cutover journal already in phase mutating with the exact manifest and argv fingerprints*, ensures the legacy PoC marker/tables are absent and validates current native dvtws2 executable/kernel argv. Only then the already implemented real `FreeBSDIPFWAdapter(allow_mutations=True)` updates IPFW scoped Voice tables and ordinary rules via durable `VoiceOwnershipStore` intent + `activate_mockable`, which performs rollback for any failed kernel installation; final engine evidence rechecked. Nothing creates the whole-cutover journal automatically, so activation remains unreachable from the GUI until unified Config/engine/supervisor/reboot transaction is implemented. These are real production lifecycle actions, not a mocked kernel or a new daemon. Added same-algorithm native adapter/ledger integration tests in CI and FreeBSD. The current UI still applies OFF only; no package published. The previous _27 exact-HEAD CI and FreeBSD 15 package both passed. PLUGIN_REVISION=28, CI pending.
+
+### 2026-10-10 — v0.5.1_27 full-sized Config compatibility
+
+**v0.5.1_27 — real OPNsense Config size support in native runtime handoff (2026-10-10):** Fixed a concrete product integration defect from _26: /conf/config.xml is the entire OPNsense system configuration, not a small Voice-only input. The runtime handoff now accepts saved XML up to the original release compiler's 128 MiB bound and uses streaming hashlib.file_digest instead of loading unrelated settings into memory. Voice candidate engine arguments and IPFW artifact limits remain 4 MiB. Added an end-to-end native release compiler, shell argv generator and IPFW manifest regression against a saved Config XML exceeding 4 MiB. No new runtime activation; Voice ON, legacy PoC migration and safe cutover remain gated. PLUGIN_REVISION=27 under DEV-032. Exact-head CI pending; _26 FreeBSD package delivery passed.
+
+### 2026-10-10 — v0.5.1_26 actual native dvtws2/IPFW handoff files
+
+**v0.5.1_26 — production one-engine argv and exact IPFW handoff artifacts (2026-10-10):** `orchestrator_build_release()` now uses the SAME live generator, Lua initialization, global blob arguments, excluded hosts and divert port to create `voice-native-candidate/dvtws.args` from the already produced Voice+Strategies `traffic.conf`. A new CLI path in existing `voice_handoff_preflight.py` binds those real engine arguments, ordinary TCP/UDP ports, pinned persisted Config XML and compiled Voice/IPSET state to two immutable private candidate files: `desired-ipfw.json` (canonical VoiceOwnershipStore ownership manifest with numbered destination-specific IPFW rules and IPv4 tables) and `handoff-proof.json` (digest/identity proof, `activation_authorized=false`). The shell runtime stage fails before activation on inconsistent candidate. New regression invokes actual compiler, shell generator and ports extractor and verifies ON/OFF manifests and rejection of modified XML, arguments or targets; run on Linux and FreeBSD. Still no native Voice ON activation, kernel IPFW changes, PoC migration or Config/lifecycle cutover; the existing live `dvtws.args` and traffic are unchanged. _25 exact-HEAD CI and FreeBSD 15 passed. PLUGIN_REVISION=26 (DEV-032), _26 CI pending. Next: install the manifest in a complete owned one-engine IPFW/Config/supervisor transaction with rollback.
+
+### 2026-10-10 — v0.5.1_25 native candidate in production release generation
+
+**v0.5.1_25 — production orchestrator builds native single-engine Voice candidate (2026-10-10):** Connected the EXISTING `voice_release_stage.py` compiler directly to `orchestrator_build_release()` after the normal managed IPv4 IPSET preparation, ordinary traffic normalization, and legacy Telegram PoC handling. On each permitted ordinary start/reconfigure, the actual production build now compiles a private, versioned release-local `voice-native-candidate/` with five-service `voice.conf`, merged `traffic.conf` (Voice first, ordinary Strategies second), resolved-WAN `capture-plan.json`, exact IPSET fingerprints and metadata. Uses `/conf/config.xml`, actual staged managed data, ordinary `traffic-user.conf`, pinned Python 3.13 and the existing runtime active directory; rejects mismatch BEFORE release switch. The old `traffic.conf` and live IPFW rules remain unchanged until shared one-engine native ON cutover, which is STILL disallowed by `config_voice_staged_only_guard`. Separate new real-shell integration tests exercise ON/OFF candidate compilation, WAN/IPSET refusal, production invocation order, plus native FreeBSD 15 CI. This is working product release-generation integration, **not** Telegram media pass nor live native Voice ON. PLUGIN_REVISION=25; exact-HEAD CI pending. Next must adopt this candidate in a complete owned IPFW/dvtws2 handoff with rollback and migration, then enable GUI ON Apply.
+
+### 2026-10-10 — v0.5.1_24 OFF-only Apply regression corrective
+
+**v0.5.1_24 — qualify real OFF-only Voice Apply regression (2026-10-10):** The initial _23 genuine `VoiceController::applyAction` passed Voice GUI validation; the PHP integration runner caught a stale *test* expectation: it still counted a single Config save after deliberately executing the second save in the failed-reconfigure scenario. Updated only the assertion to expect 2 and still enforce no additional write from a read-only caller. The runtime feature remains OFF-only Apply of shared IPSET through real `zapret reconfigure`; Voice ON, IPFW cutover and crash recovery are not enabled. PLUGIN_REVISION=24 (DEV-032); exact-HEAD CI pending. No published package or owner-device mutation.
+
+### 2026-10-10 — v0.5.1_23 native OFF-only Voice Apply
+
+**v0.5.1_23 — real OFF-only Voice Apply via ordinary Zapret lifecycle (2026-10-10):** Added `VoiceController::applyAction` and the native-form bottom `voiceApply` control (RU/EN). It uses the existing exact loaded Config snapshot and scoped Voice overlay, rejects ALL native Voice ON (both current and submitted), checks Strategy Lab occupancy before saving and before reconfigure, persists changed inactive Voice settings using the native model and Config audit, then calls the existing `zapret reconfigure` command with its own lifecycle FD9 and updates GUI runtime/IPFW status on success. Even an unchanged saved draft invokes reconfigure because Save Draft intentionally left runtime untouched. If runtime reconfigure returns an error, the API clearly reports `saved=true`, `applied=false`, `requires_review=true` and the new snapshot rather than falsely asserting rollback/working service. This stage does **not** enable actual native Voice UDP profiles, independent WAN IPFW, one-engine handoff or durable recovery; the old ON guard and PoC remain intact. The generic Strategies Apply may still interleave across the Config::save() window, so ON activation and full transactional cutover remain gated. v0.5.1_22 exact-HEAD CI, Voice and FreeBSD package PASSED. PLUGIN_REVISION=23 (DEV-032). No router modification or package publication. Exact-HEAD CI pending.
+
+### 2026-10-10 — v0.5.1_22 qualify native OFF-only persistence test
+
+**v0.5.1_22 (2026-10-10):** v0.5.1_21 implemented a genuine OFF-only OPNsense Voice Config Save Draft, but the first PHP integration regression attempted the intentionally GET-only `loadAction` while its test request was still POST. Corrected the test sequence: GET for post-save model reload/snapshot assertion, then POST for stale-submission refusal. This is a test-code change requiring a new revision. The feature remains real Config persistence; runtime Apply/ON are still gated. CI pending.
+
+### 2026-10-10 — v0.5.1_21 real native Save inactive Voice draft
+
+**v0.5.1_21 (2026-10-10) — real inactive Voice draft persistence:** Implemented the authenticated native `saveDraftAction()` and a RU/EN bottom-of-form Save inactive draft control. Reuses `VoiceApplyCandidate::prepare`, the exact stale-tab SHA snapshot and `VoiceSettingsPayload::overlay`; writes only the Voice model's existing editable values (including shared destination fields) through `setNodes`, native model validation, `serializeToConfig`, audited `Config::save`. Denies all currently ON or requested ON profiles, including hostile POSTs, since the present runtime deliberately rejects native ON at startup. It never runs configd, reloads template or touches IPFW, dvtws2 or current service. Returns `applied=false` and a new exact snapshot; repeated unchanged save is a no-op. Explicit GUI notice: shared IPSET edits can affect later ordinary service restarts. Tests cover write authorization, one-save behavior, persistence/reload, stale-tab denial, ON refusal, preservation of Strategies and no silent activation. This is functional progress toward Apply, not yet working Voice UDP activation; native cutover/migration/reboot testing still required. Exact-head CI pending.
+
+### 2026-10-10 — v0.5.1_20 native FreeBSD FD9 lock interoperability
+
+**v0.5.1_20 — native lifecycle FD9 interoperability qualification (2026-10-10):** Added a non-activating isolated regression `scripts/test-voice-native-lifecycle-lock-interop.py` that opens ONLY private temporary lock inodes. Linux/FreeBSD exercise independent-descriptor flock contention. On actual FreeBSD 15, the test invokes the same `/usr/bin/lockf -s -t ... 9` inherited-FD contract used by `zapret_service.sh`: Python flock must block it, release must permit it, lockf's kernel ownership must survive helper exit while shell FD9 remains open, and an unrelated inode must not be blocked. Both Voice candidate CI and FreeBSD 15 package CI execute the test. This tests kernel cooperation, NOT retention of Config::save() flock or a working Config+configd transactional handoff. No Voice Apply, GUI mutation, live firewall change or PoC migration. PLUGIN_REVISION=20 (DEV-032); exact-HEAD CI/FreeBSD acceptance pending. v0.5.1_19 full CI initially failed an intermittent Strategy Lab async lifecycle mock (unexpected error rather than completed); focused job rerun was requested, with no weakening of the safety assertion.
+
+### 2026-10-10 — v0.5.1_19 lock acquisition ABA refusal
+
+**v0.5.1_19 — disconnected acquisition-lease continuity (2026-10-10):** Both Config and lifecycle mocked owners must retain the same positive integer lock-acquisition generations from first preflight through durable intent, mutation, commit and verified cleanup. Boolean TRUE after unlock/relock is not continuous ownership: new ABA tests fail closed, retain journal and forbid unprotected rollback. New isolated PHP two-descriptor flock test demonstrates OPNsense Config::save() unlocks an outer Config::lock() on the SAME file description, permitting competing writes. This is not a working production lock service: all native Voice Apply, reboot recovery and legacy Telegram migration remain disabled. v0.5.1_18's Strategy Lab documentation test found an outdated _17 package candidate; source-of-truth docs now match revision _19. No router mutation.
+
+### 2026-10-10 — v0.5.1_18 lock ownership continuity
+
+**v0.5.1_18 — disconnected Voice cutover lock continuity (2026-10-10):** Audited OPNsense core stable/26.7 Config.php: Config::save() explicitly calls flock(LOCK_UN) even when a caller previously invoked Config::lock(). Strengthened ONLY the non-authorizing adapter-injected cutover contract: exact boolean ownership is checked before each journal stage, candidate mutation, rollback operation, commit and cleanup. Lock loss after durable intent stops work and retains the journal for supervised recovery; automatic rollback without lock ownership is forbidden. New injected regressions cover preflight, prepared/mutating, Config save, cleanup, runtime and rollback lock loss. PLUGIN_REVISION=18 (DEV-032). No native adapter, Voice Apply, Telegram PoC retirement or real reboot recovery is enabled. Exact-HEAD CI and FreeBSD package verification remain pending.
+
+**Status:** CURRENT · LEVEL 2 · READ WHEN CURRENT-LINE DETAIL IS NEEDED
+**Updated:** 2026-10-09
+
+This ledger starts the owner-authorized `v0.5.x` line. Current authority remains in `START_HERE.md` and `PROJECT_STATE.md`; this file preserves richer chronology and proof.
+
+## 2026-10-03 — A2 checksum-valid zero16 comparison is WIRE_OK with no reflector response
+
+The owner installed the merged v4 explicit A2 runner from `02dec5aa447d94683e76baeece90393824405d03`, applied unique A2 in ordinary GUI Strategy and returned one bounded private Docker archive. All preflight checks PASS; 60 genuine 40-byte Hellos survived NAT, 120 **checksum-valid** zero16 fakes preceded them in exact 60/60 triplets. Both peers Reconnecting, zero BWE, CLI exit 1, no pinned reflector replies. A1 changed fake checksum validity only and also received zero replies. Result: **A2 WIRE_OK/NO_REPLY_UNKNOWN; no MEDIA_PASS**. Source hashes and interpretation: [dated A2 record](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-10-03-docker-a2-valid-checksum-fakes-no-reflector-reply.md). Next gate is an independently working current fixed-target control; retired `.140` stays excluded, no TCP/product/source change.
+
+## 2026-10-03 — First successful Docker A1 acquisition proves exact fake serialization, without remote reply
+
+Owner's v3 single-command runner acquired the **first actual** fixed-target Docker A1 experiment (2026-10-03 08:29:39–08:29:54Z, private TGZ 8,044 bytes, SHA-256 `d0a56ee85442986a8155cd033fb14118ead68caa60ed7efd55dc9ed647f474cf`). All preflight safeguards passed, pinned binary SHA matched, TNAS manual route guard and v3 source/route validation passed, Docker container was already running in host mode and unchanged. Full private LAN and WAN PCAPs confirm **60 genuine 40-byte non-STUN Reflector Hellos** from two peer sockets on LAN, **60 byte-identical post-NAT originals** plus **120 zero16 deliberately invalid-UDP-checksum fakes**, in exact [fake, fake, genuine] order for **all** 60 originals. All 180 WAN IPv4 header checksums are valid, all genuine UDP checksums valid; no fragmentation and **zero reflector replies** on WAN/LAN. IPFW Voice19000 counted **+60/+4080**; ordinary UDP19002=0 due earlier destination-scoped interception, not missing capture. Oracle held both caller and callee at **Reconnecting** with zero BWE, no established media, CLI exit **1**; runner exit **0** reflects data collection only. Thus A1 is **`CONFIG_PASS / WIRE_OK / NO_REPLY_UNKNOWN`**, no `MEDIA_PASS`, not proof where upstream loss occurs. [Full measured evidence, exact private artifact subhashes, and permitted A2 hypothesis](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-10-03-docker-a1-wire-pass-no-reflector-reply.md).
+
+Next candidate is **only a documented A2 hypothesis**: keep 16-byte zero fake, two repeats, filter, target and helper unchanged, omit fake `:badsum` as the **single variable**. Before asking owner to change installed A1, upgrade/regress the existing one-command runner's exact candidate gating for A2; then one Docker run, not human calls. Do not repeat older reverse/fragment sweeps, introduce additional redirect listeners or modify TCP proxy/NAT on this evidence.
+
+## 2026-10-03 — A1 fully active; first Docker run blocked by runner's Linux route parser
+
+Owner provided third single-archive one-command trial (05:43:42Z, 3,327 bytes, SHA-256 `7bc39f1fd86006ddbd041d50b6410fbec5799fccaf39a3cc5b48f2d4e09b88df`). **All A1 saved-GUI markers YES**, generated single-block A1 present and normal outgoing UDP IPFW rule includes `596-599`; Voice ON/table14. The **existing** manual TNAS route guard via saved restricted SSH passed for both specific destinations. However the independently added v2 runner's second SSH preflight wrongly required a `src` substring in valid Linux `ip -4 route get ... from 192.168.1.100` output, which actually returned `from 192.168.1.100 via 192.168.1.2 dev ovs_eth1`. It returned PRECHECK_FAILED **without checking Docker binary, running CLI or making PCAPs**; no strategy conclusion. [Exact evidence and privacy-boundary record](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-10-03-docker-a1-preflight-linux-route-from-mismatch.md). Revise the existing tracked runner to verify source address is assigned to the intended TNAS interface separately and verify each route's `via`/device without imposing an output-format convention; regress valid `from`/`src` and invalid cases in CI. Owner then downloads **only the runner** by pinned SHA via already-working Squid, runs one command and supplies its archive. No additional GUI Apply or changes to effective UDP strategy, proxy or TNAS.
+
+## 2026-10-02 — Second A1 preflight proves candidate absent from saved GUI Strategy
+
+The owner retrieved the pinned GitHub v2 runner via functioning `192.168.1.2:3128` Squid and ran the standard one-command OPNsense script at **19:08:19 UTC**. The new 2,633-byte private TGZ (SHA-256 `3b9f62b6ced5e0fe6d251edd59925c910019c061f0691741cf718c4bb9ec361e`) provides the crucial evidence the first attempt lacked: OPNsense `/conf/config.xml` persistent `OPNsense.Zapret.strategy.trafficargs` was successfully read but **A1 UDP/596–599, `payload=unknown` and fake/badsum terms were all absent**. IPSET marker was present only due to other Telegram profiles. Working `traffic.conf` and numeric IPFW rule19002 also lacked A1. Voice helper remained ON/table14. Runner emitted `A1_NOT_IN_SAVED_GUI` and intentionally did not execute Docker or produce a packet capture: **no A1 strategy failure has occurred**. The earlier GUI Apply report is preserved, but why A1 was not saved (wrong field, failed/reverted Apply, later overwrite, etc.) remains unknown. [Second exact evidence](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-10-02-docker-a1-second-preflight-saved-gui-absent.md). Next is a single confirmed **main persistent Strategy Apply**, then **the already installed** existing one-command Docker runner; no new runner, live route changes, TCPSquid troubleshooting or human test call. All media gates remain open.
+
+## 2026-10-02 — Replace manual A1 procedure with one OPNsense-run laboratory script
+
+After the Docker-first handoff was written, the owner corrected the still-manual TNAS login/multiple-console workflow: existing owner-qualified noninteractive SSH and `/root/tgvoice-lab/ensure-tnas-routes.sh` are **specifically intended** to let OPNsense orchestrate the entire experiment. A separate [lab-only one-command shell runner](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/tools/telegram-voice-lab/run-a1-opnsense.sh) was added, and the [campaign's operational procedure](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md) replaced by a single `/bin/sh /root/tgvoice-lab/run-a1-opnsense.sh` after reviewed file transfer. It verifies the current generated A1 and helper, calls only the preexisting one-shot route guard, uses the established SSH key/absolute TOS Docker CLI, captures both OPNsense interfaces concurrently, runs one fixed 15-second CLI trial and produces a single private tgz, including failures, without touching TCP, PFIL or plugin source. Source syntax and mocked integration passed for both a failed media oracle and preflight rejection; **no live A1 result** was observed or recorded when documenting this change. No Cron, OPNsense boot hook or automatic TNAS/Docker boot operations were installed.
+
+## 2026-10-02 — First automated A1 preflight stops before Docker: candidate missing in effective configuration
+
+The owner ran the previously downloaded one-command OPNsense runner at 16:17:38 UTC and uploaded its private `.tgz` result. The previously approved independent SSH route script reported both current TNAS `/32` routes already through OPNsense; Zapret2 and Voice helper were running, 14 Telegram table entries and IPFW destination rule19000 existed. Crucially the archived effective `traffic.conf` **did not contain A1 at all**, and ordinary UDP rule19002 still captured only `80,443,5222,8888` — **no 596–599**. The script correctly returned `PREFLIGHT_FAIL` before running Docker or recording trial LAN/WAN PCAPs. This is a **configuration activation failure**, not a failed desynchronization strategy or silent server. The first archive included no saved OPNsense GUI model, so no cause is assigned to GUI persistence versus generation. Full restricted-source measurement and archive SHA-256 are in [dated evidence](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-10-02-docker-a1-preflight-absent-effective-profile.md).
+
+The GitHub-tracked one-command runner is being revised to diagnose persisted saved `OPNsense.Zapret.strategy.trafficargs` using the installed Python XML parser **without archiving secrets/config.xml**; only candidate-specific presence flags reach the archive. It rejects a missing effective A1 and distinguishes saved-absent, saved-but-not-effective and unreadable states. The owner will not be asked to navigate another multi-console/TNAS run, make a real call, or repeat an accidental no-candidate baseline.
+
+## 2026-10-02 — Owner returns strategy search to dedicated Docker lab; GUI HELLO-FAKE-A1 Applied
+
+The owner reaffirmed that the local provider's Telegram DPI block is an established project condition, that TCP Telegram is already handled independently by OPNsense's Squid/sing-box/PF and external parent `185.203.117.88:33128`, and that the remaining objective is a **working Zapret2 UDP desynchronization strategy permitting Telegram Reflector/ICE and encrypted media**. Owner explicitly rejected another real Windows/Android call for each speculative strategy: **the already-built qualified TNAS Docker `tgvoice-lab` is the primary Stage-1 oracle**. After repeated current fixed-reflector `MEDIA_PASS`, a real P2P-disabled `CALL_PASS` can be requested as its **final** acceptance test. The owner reports **applying** a new ordinary GUI `HELLO-FAKE-A1` strategy targeting UDP ports 596–599 and Telegram IPSET with `payload=unknown` and `fake:payload=unknown:blob=zero16:badsum:repeats=2`. No matching generated-profile, WAN fake packet, remote reply or CLI output was furnished at the time of this decision. **APPLIED_REPORTED, WIRE/MEDIA UNTESTED** is its honest status. The helper's existing STUN-only profile and destination-IP IPFW capture remain distinct from the added GUI port rule. Historical correct ordered/reverse and fragmented-fake results stay closed, and A1's nonfragmented short badsum fake must be qualified as a *separate* single-variable hypothesis, not reported as another completed fragment experiment.
+
+The [new laboratory-first campaign](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md) defines goal, known results, A1 exact strategy, the 15-second pinned `91.108.13.10:596` TNAS `--mode reflector` test, guarded host route via OPNsense, two captures, runtime/checksum/peer state gates, no automatic Docker/routes and no human call until repeated media success. It **supersedes** the immediately preceding suggested “capture successful real-call control first” as an operational priority; that optional control remains a separate causal diagnostic, not a prerequisite to using the lab. This was documentation-only work: no plugin change, package revision, new router commands or automatically executed lab test.
+
+## 2026-10-02 — New independently logged real-call ICE timeout with the OPNsense-only route
+
+The owner reports a further no-proxy Telegram Desktop Windows call over `192.168.1.2` as exclusive IPv4 default: call signaling progressed but an encrypted voice connection was never established. The new private WebRTC `last_call_log` (local **16:16:44–16:17:04**) independently shows outgoing `InitialSetup`/channel negotiation, **incoming remote signaling and ICE candidates**, repeated correct-NIC `192.168.1.x` TURN allocation dispatch and `91.108.9.101:597` reflector probing, no logged nominated/writable ICE connection or completed remote DTLS handshake, and `NativeNetworkingImpl timeout 20011 ms`. Telegram additionally enumerated secondary TnasOnline and `192.168.192.x` adapters; their local socket errors **10051/10049** must not be attributed to the intended NIC. The uploaded general application `log.txt` records a **different later startup at 16:27**, not the 16:16 call. Raw logs contain live-like ICE secrets/fingerprints, so only sanitized results and exact private-original hashes are stored in [new dated evidence](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-10-02-telegram-desktop-webrtc-ice-timeout-on-opnsense-gateway.md). This independently corroborates the *symptom* of the older seven PCAPs but was **not simultaneously captured with those packets**. Stage-1 oracle `MEDIA_PASS`, real UDP `CALL_PASS`, and a matched captured successful alternate-gateway control remain pending. No appliance or package changes were made.
+
+## 2026-10-02 — Seven failed real calls through OPNsense and owner-reported alternate-gateway success
+
+The owner provided Windows route-table snapshots and **14 concurrent TCP+UDP LAN/WAN PCAPs** for real-call attempts #2–#8. During every captured failed call Windows' **only IPv4 default** was OPNsense `192.168.1.2`; Telegram connectivity remained but voice did not establish. Byte-level PCAP correlation verified **345 unchanged 40-byte non-STUN Hellos + 45 STUN originals** from Windows through OPNsense WAN after NAT; STUN attempts generated **90** additional WAN zero16 fakes. **None of the seven WAN PCAPs showed Telegram UDP replies**. Simultaneous TCP appeared as direct Telegram TCP/80 (#2–4), local Squid :3128 (#5) and local SOCKS :1080 (#6–8), with WAN external-parent TCP active. That does not separately attribute any specific TCP flow to Telegram/media. Reverting Windows to its other preferred default **`192.168.3.140`** led to owner-reported established calls, but the supplied attachments **do not include a successful-route PCAP** or independently preserved same-proxy app settings. [Full dated evidence](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-10-02-seven-real-calls-opnsense-versus-other-gateway.md) includes routes, exact per-call counts, endpoints and original private-PCAP SHA-256s; public GitHub contains no raw captures. The failure is route-associated in owner observations; root cause, successful media transport and both approved stage gates remain unproven. Before more blind payload/NAT changes, capture one bounded successful-route control with TCP and UDP, app settings and speech directions held/recorded. No device configuration or plugin source changed by this docs-only analysis.
+
+## 2026-10-02 — Early real Windows/Android P2P-disabled voice call, audibly good but UDP path unproven
+
+The owner reported a successful clear, interference-free Telegram Desktop Windows → remote Android call, **both P2P disabled**. Two source-provided OPNsense UDP PCAPs were correlated byte-for-byte with owner-captured before/after Voice IPFW counters: 90 identical non-STUN 40-byte Hello packets to `91.108.9.88:597` plus 9 recognized 28-byte STUN requests to `91.108.9.100:1400`, all 99 originals NAT-forwarded. Rule `19000` grew exactly **0/0→99 packets / 6624 bytes**, corresponding to those original IPv4 datagrams; WAN additionally had exactly **18** zero16 fake payloads, two per STUN request. **No incoming Telegram UDP was captured at all** on the monitored interfaces. The current live `pfilctl heads` confirms IPv4 output **IPFW→PF**, without any hook change in this call. The owner later clarified that Windows' **system-wide default gateway was not OPNsense** (configured only as a proxy). A fresh read of the original LAN Ethernet frames independently established that all **99** observed Telegram UDP packets nonetheless carried **OPNsense's LAN MAC as their destination**, cross-checked against Ethernet source on DNS replies from `192.168.1.2`; each original was then present on OPNsense WAN after NAT. The route selection cause and any unobserved media transport remain unknown. A repeat will check Windows `Find-NetRoute` and, only if needed, create temporary narrow Telegram routes with synchronized TCP+UDP capture. The owner heard good sound; its actual path was **not observed**, so do not infer STUN helper efficacy, TCP fallback as fact, UDP `MEDIA_PASS` or Stage 2 `CALL_PASS`. Full evidence and two private PCAP SHA-256 identifiers are [here](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-10-02-real-telegram-windows-android-p2p-disabled-call.md); public GitHub contains no real-call raw PCAP or private token material. Current Stage 1 emulator gate remains open. TCP/UDP concurrent diagnostic capture is the bounded next experiment if required for media attribution; no configuration mutation occurred for this documentation-only result.
+
+## 2026-10-01 — GUI versus helper IPFW/NAT audit; periodic boot restoration rejected
+
+The owner showed the actual GUI Telegram MTProto TCP and UDP profiles and 14-prefix `<IPSET:telegram>` while the temporary Voice helper was ON, then challenged presumed need for separate helper and its boot persistence. Source review established: GUI ordinary capture is protocol/port-based and **not destination-limited at IPFW**; Voice helper adds a first **destination-limited all-UDP** IPFW rule, but prepends its temporary STUN strategy inside **the same dvtws2** rather than running a second engine. Both use the same normalized GUI Telegram IPSET; GUI's numeric-only port extractor cannot directly turn `--filter-udp=*` into equivalent destination-scoped IPFW capture. Neither current strategy changes the documented non-STUN Reflector Hello. Both IPFW rules use the same WAN/divert stack, so pre/post-NAT output order is **not independently selected for GUI or helper**; historical order restoration is not a substitute for fresh live `pfilctl heads`.
+
+The owner explicitly rejected **all Cron/periodic Voice helper activation**. Any eventual independent lab boot workaround must invoke Voice enable **only once** after normal Zapret2 is verified ready (or follow a separately approved code redesign). The previously drafted, unpublished periodic proposal was replaced **before PR/merge** by the [source audit and one-shot design boundary](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md); it was never installed. The actual one-shot implementation and owner-live reboot test remain open. No package code or hardware configuration was changed by this audit.
+
+## Line start
+
+The owner explicitly closed the final pending selected `v0.4.x` live row by confirming that the **Enable QUIC** setting persists correctly through the real Laboratory reload/revisit workflow, then authorized stable release **`v0.5.0_1`**.
+
+The transition completed with:
+
+- `VERSION: 0.4.1 -> 0.5.0`;
+- `PLUGIN_REVISION: 23 -> 1`;
+- no runtime source change in the release-preparation patch;
+- final `v0.4.x` state archived under `history/archive/v0.4.x.md`;
+- README rewritten/reviewed for the stable release, with Strategy Lab presented as the flagship project feature;
+- exact release-preparation merge `d5afa6b1f4cfd7bc00e8e95d6896af8a1456fb24`;
+- semantic tag `v0.5.0` at that exact merge;
+- stable package `os-zapret2-restyle-0.5.0_1.pkg`;
+- package SHA-256 `38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`;
+- stable GitHub Release and matching Pages/pkg repository successfully published.
+
+## Runtime basis inherited from `v0.4.x`
+
+The stable release carries forward the exact owner-live accepted Strategy Lab behavior from `v0.4.1_23`:
+
+- Model-C-only normal Stage 60;
+- deterministic candidate graph and exact source-port attribution;
+- bounded adaptive budgets and cleanup/restoration;
+- domain and IPv4 targets;
+- optional Host/SNI for fixed-IP TLS/HTTP/QUIC;
+- fixed-IP final `--ipset-ip=<target>` profiles and exact replay;
+- truthful HTTP application-error classification;
+- truthful bare-IP TLS identity guidance;
+- explicit persisted Enable QUIC control;
+- truthful bare-IP QUIC skip and real Host/SNI QUIC attempts;
+- independent Generic UDP;
+- accepted native OPNsense Laboratory presentation and deterministic RU/EN behavior.
+
+## Owner-live evidence carried into release
+
+- `verification/evidence/2026-08-16-v0.4.1_23-ipv4-host-sni-owner-live-pass.md`
+- `verification/evidence/2026-08-16-v0.4.1_23-quic-preference-persistence-owner-live-pass.md`
+- prior Model C / readiness / BLOB / Lua / discovery evidence remains reachable through the completed `v0.4.x` archive and deep evidence store.
+
+## `v0.5.0` release publication
+
+Release-preparation PR `#267` passed exact-head full CI and real FreeBSD-15 package qualification in run `31915884270`. It squash-merged with the required subject as `d5afa6b1f4cfd7bc00e8e95d6896af8a1456fb24`.
+
+Release trigger `31916249900` then:
+
+- classified the owner-authorized second-component transition;
+- created annotated semantic tag `v0.5.0` targeting the exact release merge;
+- dispatched full release workflow `31916256043`.
+
+Full release workflow `31916256043` passed all release stages:
+
+- release/tag/VERSION validation;
+- FreeBSD 15 package and pkg-repository build;
+- release-output verification;
+- stable GitHub Release publication;
+- GitHub Pages/pkg repository deployment.
+
+Release asset/package:
+
+`os-zapret2-restyle-0.5.0_1.pkg`
+
+SHA-256:
+
+`38777bdf59f93e6cee596e431d01fef4b3a73a41842d93e809ba94fd310a5bce`
+
+The exact deployed Pages artifact contains the same package bytes together with `zapret2-restyle.conf`, `SHA256SUMS`, `meta.conf`, `data.pkg`, and `packagesite.pkg` for `FreeBSD:15:amd64`.
+
+Full release evidence: [`../../verification/evidence/2026-08-16-v0.5.0-release-publication.md`](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-08-16-v0.5.0-release-publication.md).
+
+Release notes: [`../../releases/v0.5.0.md`](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/releases/v0.5.0.md).
+
+## `v0.5.0_2` — Strategy Lab file-picker localization corrective
+
+After the stable release, the owner supplied a screenshot from English OPNsense localization showing that the Generic UDP file picker still rendered the Russian strings `Выбор файла` and `Не выбран ни один файл`.
+
+Investigation localized the defect to visible browser-native `<input type="file">` chrome. Unlike Strategy Lab's own labels, the browser-localized file button and empty-selection text are controlled by browser/OS locale and therefore can disagree with OPNsense's selected language.
+
+The `_2` correction keeps the actual file input and its existing payload contract, but makes it a hidden implementation detail. Strategy Lab now owns the visible picker presentation:
+
+- English: `Choose file` / `No file selected`;
+- Russian: `Выбрать файл` / `Файл не выбран`;
+- the visible filename surface changes to the real filename immediately after selection;
+- the custom button and native input share the existing busy-state disabling behavior;
+- `FileReader`, 1–4096-byte validation, Base64 staging and API payload semantics are unchanged;
+- localization regression coverage explicitly rejects a visible native `form-control` file picker.
+
+This packaged GUI correction advanced `PLUGIN_REVISION` from `1` to `2` while `VERSION` remained `0.5.0`.
+
+### Source qualification and merge
+
+Source PR `#269`, exact final head `4674da5da39a642cf3761662e3599497d68c0522`, passed complete applicable CI and the FreeBSD-15 package job in run `31917466421`.
+
+The exact verified head squash-merged as:
+
+`1ae952185dbae80ec34c0a89b441feddbe8b403a`
+
+with subject:
+
+`v0.5.0_2: Localize Strategy Lab file picker`
+
+### Testing-package publication
+
+Generic testing publisher run `31917806438` used that candidate-defining merge and successfully:
+
+- verified candidate identity `0.5.0_2`;
+- built `os-zapret2-restyle-0.5.0_2.pkg` inside FreeBSD 15;
+- verified manifest ABI `FreeBSD:15:amd64`;
+- calculated SHA-256 `d89bc45162ca760320cf59e4a861b2b8ef7bc30bcb05f4338b2078c57b4980f5`;
+- published prerelease/tag `v0.5.0_2` at exact source target `1ae952185dbae80ec34c0a89b441feddbe8b403a`;
+- re-verified the requested release/tag/package contract.
+
+The first publisher attempt could not create its publication-record PR because repository policy forbids GitHub Actions from creating pull requests. Manual fallback PR `#270` completed the bounded current-document reconciliation, and the generated publication evidence state was subsequently closed. A rerun then completed the publisher workflow successfully and removed the temporary publish branch.
+
+Testing publication evidence: [`../../verification/evidence/testing-publications/v0.5.0_2.md`](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/testing-publications/v0.5.0_2.md).
+
+Stable Web/pkg publication remains `v0.5.0_1`; testing `_2` did not deploy GitHub Pages/pkg metadata.
+
+### Owner-live closeout
+
+The owner installed and checked `v0.5.0_2` on the live OPNsense appliance and confirmed: **“v0.5.0_2 проверил. Всё работает как надо. Можешь закрывать.”**
+
+That confirmation closes the focused `_2` boundary covering the Laboratory-owned EN/RU picker labels, selected-filename display and preservation of the file-selection path. No further source correction is required for this defect.
+
+Owner-live evidence: [`../../verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md`](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-08-16-v0.5.0_2-file-picker-owner-live-pass.md).
+
+## 2026-08-19 — Telegram voice / UDP research selected
+
+The owner replaced the previously selected cancellation/internal-failure regression as the immediate task with a new research scope: determine how to restore **Telegram voice calls over UDP** when ordinary Telegram TCP/service traffic is already routed through an external proxy.
+
+The owner supplied starting evidence from:
+
+- `Waujito/youtubeUnblock`, where adding Telegram domains is reported to make Telegram including calls work on OpenWRT;
+- `remittor/zapret-openwrt`, including a community STUN4ALL rule using Zapret2 `--payload=stun` plus an all-zero fake/repeats and a separate global UDP/443 drop example;
+- primary `bol-van/zapret2` repository, manual and discussions.
+
+The task was deliberately research-first. The dedicated authority is [`../../research/TELEGRAM_VOICE_UDP.md`](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/research/TELEGRAM_VOICE_UDP.md).
+
+## 2026-08-19 — Telegram voice / UDP research conclusion
+
+The research established that modern Telegram call setup/media cannot be modeled as one fixed UDP port. Telegram API signaling is separate from a WebRTC-based transport; Telegram exposes dynamic STUN/TURN endpoint IP/port parameters and supports UDP P2P/reflector paths.
+
+Current `bol-van/zapret2` upstream contains an official `50-stun4all` helper with native `--payload=stun` and a 16-zero-byte `fake` repeated twice. Upstream also explicitly limits the technique: UDP fake can help stateful DPI, not stateless DPI, while IP fragmentation is one of the few other generic UDP options.
+
+The decisive OPNsense difference is kernel interception. Linux `50-stun4all` recognizes STUN by payload signature before NFQUEUE so it can work on arbitrary ports without intercepting all UDP. FreeBSD `ipfw` lacks raw-payload filtering. Current plugin production rules are likewise generated from `--filter-tcp`/`--filter-udp` port artifacts only.
+
+Recommended first architecture is therefore bounded and hybrid:
+
+- first perform a failed-call WAN capture with Telegram P2P disabled;
+- if the STUN destination is inside Telegram-managed IPv4 ranges, create a plugin-owned `ipfw` address-table selector that diverts UDP on all destination ports **only to those Telegram ranges** into the existing `dvtws2` socket;
+- apply the official native Zapret2 STUN zero-fake/repeats=2 profile in `dvtws2`;
+- leave non-STUN Telegram UDP unchanged;
+- keep global UDP/443 drop out of Telegram Voice because it is generic QUIC suppression with collateral risk;
+- do not claim that existing Generic UDP Strategy Lab can automatically validate a real call;
+- if the upstream baseline fails after confirmed interception, use a future assisted real-call workflow for provider-specific candidates rather than synthetic UDP PASS/FAIL.
+
+This research conclusion does **not** authorize implementation. Owner review is the next boundary. If accepted, live Phase A packet evidence comes before a source PoC.
+
+## 2026-08-28 — Telegram voice / UDP Phase A owner-live observation
+
+The owner completed the confirmed live run on the installed `os-zapret2-restyle-0.5.0_2` appliance. Both call participants were on the same LAN and had Telegram P2P disabled. The proposed Telegram Voice helper did not exist; ordinary Telegram service traffic continued through the owner's existing TCP/SOCKS proxy.
+
+The Windows 11 client emitted two Telegram-range UDP candidate families:
+
+- 9 TURN Allocate requests to `91.108.9.100:1400`, with zero replies;
+- 90 repeated Telegram Reflector Hello packets to `91.108.9.40:597`, with zero replies.
+
+PF state corroborated outbound-only behavior, and the client capture contained no direct/private-peer UDP candidate. Nevertheless, the call established, audio worked in both directions, and the owner perceived no delay. Concurrent Telegram TCP/SOCKS traffic remained bidirectional throughout the call. The bounded conclusion is that TCP/proxy fallback masked the failed UDP relay attempts; encrypted TCP was not decrypted, so no single proxy stream is claimed as the media stream.
+
+The observation localizes failure no later than relay establishment but does not identify the provider mechanism as stateful STUN DPI versus stateless filtering, relay-IP policy or another blackhole.
+
+The capture also distinguishes two protocols. The TURN Allocate packets are STUN and match Zapret2's official `--payload=stun` baseline. Telegram's separate 40-byte Reflector Hello does not contain the STUN magic cookie and is not selected by that profile. The first PoC remains STUN-only; reflector-specific handling is deferred unless restored TURN replies prove insufficient.
+
+Redacted owner-live record: [`../../verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md`](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-08-28-telegram-voice-phase-a-live-observation.md).
+
+The raw PCAP is intentionally excluded because it contains private addressing, ephemeral ports and proxy metadata.
+
+## 2026-09-01 — Telegram voice / UDP Phase B source PoC
+
+The owner authorized continuation from the Phase A handoff. The `0.5.0_3` source candidate implements the deliberately bounded STUN-only PoC without changing the production GUI.
+
+The implementation adds:
+
+- an ephemeral `/var/run/zapret2-telegram-voice-poc.enabled` request marker, so reboot defaults the experiment to OFF;
+- plugin-owned `zapret2_tgvoice` / `zapret2_tgvoice_stage` IPFW address tables populated from the same normalized Telegram IPv4 CIDRs as `<IPSET:telegram>`;
+- one fixed helper rule at the first plugin-owned rule, `19000`, diverting all outbound UDP destination ports only to `table(zapret2_tgvoice)` through the existing `dvtws2` socket; ordinary port rules shift behind it only while the PoC is enabled, ensuring the dedicated helper counter sees overlapping ports;
+- a deterministic first profile using `--filter-l3=ipv4`, `--filter-udp=*`, `--filter-l7=stun`, the Telegram IPSET, `--payload=stun`, and the upstream 16-zero-byte `fake` repeated twice;
+- configd commands `telegram_voice_enable`, `telegram_voice_status` and `telegram_voice_disable`, including IPFW packet/byte counters;
+- atomic address-table staging/swap, normal lifecycle locking, transactional reconfigure rollback, stop/failure cleanup and Strategy Lab semantic-firewall hashing of table contents;
+- a regression contract covering default OFF, exact profile composition/order, destination-scoped interception, counter visibility, disable cleanup and previous-table restoration after a failed helper-rule replacement.
+
+The L7 selector and payload guard are intentionally both present. Zapret2 profile selection uses `--filter-l7=stun`; `--payload=stun` only limits the later Lua instance inside that selected profile. The user traffic strategy remains a separate artifact for ordinary port extraction, so the helper's `--filter-udp=*` never produces an all-Internet `1-65535` divert rule.
+
+The owner-live gate remains open. PASS requires a P2P-disabled OFF/ON/OFF cycle where the helper counter increments, inbound TURN/STUN appears, sustained bidirectional Telegram UDP follows, and disable removes the helper state. Sound alone remains insufficient because Phase A proved that TCP/SOCKS fallback can keep the call audible.
+
+No Telegram Reflector classifier, global UDP/443 drop, broad all-Internet UDP rule or production GUI control belongs to this candidate.
+
+## 2026-09-01 — Telegram voice / UDP Phase B testing-package publication
+
+Source PR `#277`, exact final head `07d3273adbbfafce7ca0da36d27de6a4c7cc4c7e`, passed full CI and the FreeBSD-15 package job in run `33535094879`. The exact verified source then squash-merged as `34adca978b3b6769972591872209c166ec9c6eb6`.
+
+Generic testing publisher run `33536081824` used that candidate-defining merge and:
+
+- verified package identity `0.5.0_3` and the different parent identity;
+- recovered/built and manifest-verified `os-zapret2-restyle-0.5.0_3.pkg` for `FreeBSD:15:amd64`;
+- calculated SHA-256 `b88accee3fc7510e3b54ed65bb525be65c79aba8e5e02193435b431a3a4c253f`;
+- published and re-verified prerelease/tag `v0.5.0_3` at exact source target `34adca978b3b6769972591872209c166ec9c6eb6`;
+- confirmed that stable Pages/pkg publication was not promoted.
+
+Attempt 1 completed every package/release verification step but repository policy prevented the GitHub Actions bot from opening the publication-record PR. Manual Ready PR `#279` from the already-generated record branch supplied the required fallback. Attempt 2 then completed successfully, re-verified the existing release/record PR and removed the temporary `publish/v0.5.0_3` branch.
+
+Testing publication evidence: [`../../verification/evidence/testing-publications/v0.5.0_3.md`](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/testing-publications/v0.5.0_3.md).
+
+## 2026-09-02 — Telegram voice / UDP Phase B owner-live result
+
+The owner installed the exact published `os-zapret2-restyle-0.5.0_3` package on OPNsense 26.7.3_8 and completed a clean remote-participant comparison with Telegram P2P disabled on both clients and the existing TCP/SOCKS proxy unchanged.
+
+State A with the helper OFF produced 9 Telegram-range TURN Allocate requests and 90 Telegram Reflector Hello packets; all were outbound-only.
+
+State B proved that the PoC itself behaved exactly as designed:
+
+- helper table/profile/rule state became active with 14 Telegram IPv4 table entries;
+- the dedicated IPFW counter incremented;
+- every one of 9 TURN Allocate requests was preceded on WAN by exactly two valid 16-zero-byte fake datagrams;
+- 90 non-STUN reflector packets passed unchanged;
+- no inbound TURN/STUN response and no sustained bidirectional Telegram UDP appeared.
+
+State C disable removed the helper table/profile/rule state, restored ordinary rule numbering and left the service running.
+
+The runtime/lifecycle boundary is accepted as PASS. Provider/network effectiveness is FAIL: the official zero-fake/repeats=2 baseline did not restore Telegram UDP on the tested path and remains default OFF/non-product.
+
+Redacted evidence: [`../../verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md`](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-09-02-telegram-voice-phase-b-stun-baseline-live-fail.md).
+
+The next boundary is exact upstream/FreeBSD research and design of a bounded Telegram-destination-scoped UDP/IP-fragmentation candidate. This is a diagnostic next family, not a universal bypass claim: fragmentation cannot repair a pure destination-IP block.
+
+## 2026-09-02 — Ordered IPv4-fragmentation candidate designed
+
+Pinned Zapret2 v1.0.4 source and current upstream both use the native replacement pattern:
+
+```text
+--lua-desync=send:ipfrag:ipfrag_pos_udp=8
+--lua-desync=drop
+```
+
+Zapret2's two-fragment implementation counts the IPv4 UDP split from the L4 header and requires an 8-byte multiple. For the observed 28-byte TURN Allocate payload, position 8 produces a 28-byte first IPv4 fragment containing only the UDP header and a 48-byte second fragment containing the complete STUN payload. The complete UDP-plus-STUN-cookie signature is absent from each individual packet, while endpoint reassembly reproduces the original datagram.
+
+The FreeBSD raw-send path uses divert sockets and needs no new firewall architecture. The existing Telegram IPv4 table/rule, default-OFF marker, counters and transactional rollback remain the bounded control plane.
+
+The candidate deliberately excludes the failed zero fake, combined fake-plus-fragment behavior, reverse order, alternate positions and reflector manipulation. If packaged, the smallest source scope is `0.5.0_4`, replacing only the temporary profile action/status identity and extending its focused regression contract.
+
+On-wire validation must capture Telegram-range `ip proto 17`, prove two exact fragments and no unfragmented original per TURN request, then still require inbound TURN/STUN and sustained bidirectional Telegram UDP. Correct fragments without a reply remain a network failure.
+
+## 2026-09-02 — Installed fragmentation runtime pinned and `_4` work preserved
+
+The owner recorded the live runtime as Zapret2 tag `v1.0.4`, exact commit `2c21faa80e1acb71ddceb8b49176f266b7d33f05`. Its installed `blockcheck2.d/standard/90-quic.sh` contains both the standalone `send:ipfrag -> drop` family and a later fake-plus-fragment family. The runtime-capability gate therefore passed without changing the Zapret2 installer.
+
+Evidence: [`../../verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md`](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-09-02-telegram-voice-ipfrag-runtime-pin.md).
+
+One source commit was prepared on remote branch `v0.5.0_4-telegram-voice-ipfrag` at `3ecdd1b3326fe7655e1d7df9edd51808e2a68dc9`, based on then-current `main` `1bdb3eccf3b96707d6c314a0c364ca14ac2a190c`. It changes the temporary helper from STUN zero fake to ordered position-8 fragmentation and increments the branch package revision to `_4`.
+
+No PR was opened, no exact-head CI ran, no merge/package publication occurred, and no network result exists. The branch therefore preserves unique experimental work only; it is not current `main`, not the project package identity, and not accepted.
+
+## 2026-09-03 — Owner selected automatic Telegram traffic emulation
+
+The owner redirected the immediate work from publishing the single STUN-only `_4` candidate to a stronger goal: generate Telegram-call-equivalent traffic automatically and search strategies with a truthful success oracle, analogous to the HTTP/TLS lab but appropriate for UDP and media.
+
+The captured fixtures were promoted into explicit protocol inputs:
+
+- TURN: a 28-byte unauthenticated Allocate Request containing `REQUESTED-TRANSPORT=UDP`, one 96-bit transaction ID reused across nine retransmissions, with offsets approximately `0, 0.25, 0.75, 1.75, 3.75, 7.75, 15.75, 23.75, 31.75` seconds;
+- reflector: a 40-byte non-STUN Hello with a 16-byte peer/session tag, a constant marker and big-endian value 123, retried every approximately 500 ms while no reply arrives;
+- Phase B zero fake acted only on TURN/STUN and deliberately did not modify reflector traffic.
+
+A separate generic STUN exchange with `141.101.90.1:3478` was bidirectional in the same WAN environment. This rules out a universal UDP/STUN outage but cannot substitute for an exact Telegram-endpoint control.
+
+The normal owner Traffic Strategy and Telegram TCP redirection remained active in all captures. Its Telegram UDP part covered only ports `80,443,5222,8888`, while voice candidates used `596–599` and `1400`; therefore the ordinary UDP strategy did not process those packets. The external HTTP proxy endpoint remains deliberately redacted. The proxy path still explains why audible sound did not prove UDP.
+
+Primary-source inspection identified official `TelegramMessenger/tgcalls` commit `78d07f3e46a4bb12b611ccc2816ff59ca63a83fb` as the authoritative automatic media harness. Its CLI runs caller and callee in one process, bridges signaling locally, generates 440 Hz audio frames, uses a real Telegram reflector with `isTcp=false`, and exits successfully only when the call establishes and both sides collect non-zero bandwidth-estimation evidence. This proves bidirectional media transport without needing a Telegram account, although its no-op renderer does not prove decoded waveform fidelity.
+
+The selected architecture is now [`../../architecture/TELEGRAM_VOICE_EMULATION_LAB.md`](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/TELEGRAM_VOICE_EMULATION_LAB.md):
+
+- offline transformation predicts only exact wire output;
+- a transaction-correlated TURN probe provides `TURN_REPLY`;
+- pinned `tgcalls_cli` provides the primary `REFLECTOR_READY` / `MEDIA_PASS` oracle;
+- one final real remote P2P-disabled call provides `CALL_PASS`;
+- every negative network verdict requires a recent independently unblocked control against the same fixed endpoint;
+- one candidate uses one fresh process/source-flow state and exact endpoint/port scope, with source attribution based on verified PF/NAT/IPFW hook visibility;
+- reflector position-8 ordered/reverse fragmentation is tested before alternate positions or combined fake-plus-fragment behavior;
+- restoration failure overrides any apparent success.
+
+## 2026-09-04 — TOS companion build/runtime gate passed
+
+The owner selected the built-in TOS 7 network named `host` for the companion. In this mode the container shares the TNAS network namespace, address, interface MAC and default route; it does not receive its own DHCP lease. pfSense DHCP may assign routes by the visible TNAS MAC, but their scope is the host namespace. The provider-path switch is therefore one exact-reflector `/32` route on the TNAS host, supplied by owner-controlled DHCP policy or a bounded explicit route transaction, not an in-container lease or a default-route change.
+
+The initial standalone-tgcalls build attempt exposed that upstream's Dockerfile assumes the outer Telegram-iOS workspace. The completed recipe pins that complete workspace and records the bounded Linux build compatibility fixes rather than treating the tgcalls repository as an independent build context.
+
+Owner-live build identity:
+
+- Telegram-iOS `6ad963e5b62d354da79040f388ae2b9132fb17b8`;
+- actual tgcalls gitlink `e3069322a3d1e16ecb11a5e302242e59ddd7f09e`;
+- Ubuntu image `sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517`;
+- Bazel `8.4.2`;
+- output `/results/tgcalls_cli`, SHA-256 `c2bd9e8b55d5542e4471154c832efc4cf0cdd483669dbeb747c706afbe53b11a`;
+- manifest time `2026-09-04T18:54:52Z`.
+
+The build completed successfully. A bounded five-second `--mode p2p` run then reached `Established` on both sides at 0.021 seconds, recorded five bitrate samples for each side, reported non-zero BWE and no errors, stopped cleanly, and returned 0.
+
+This closes the companion build/runtime gate. It is deliberately not recorded as `MEDIA_PASS`: both peers were in one process, no real Telegram reflector was selected, and the run did not exercise OPNsense, the provider, `dvtws2` or a bypass candidate.
+
+The actual build pin supersedes the earlier assumption that later research commit `78d07f3e46a4bb12b611ccc2816ff59ca63a83fb` would be the built bytes. That commit is 14 commits newer; the required native reflector/P2P modes, local signaling, UDP-only server, generated audio and exit gate already exist in `e306932...`. A future pin change requires a new binary digest and repeat qualification.
+
+Canonical recipe and redacted evidence: [`../../verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md`](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-09-04-telegram-voice-companion-build-runtime-pass.md).
+
+## 2026-09-05 — Fixed-reflector control passed; host-only route selected
+
+The current official reflector list was fetched and hashed as `b81eed3b72d1fd002752f6ea5546de52f6e4231ce40ea033aeed494112d0ff46`. Fixed endpoint `91.108.13.10:596` reached `MEDIA_PASS`: both sides established, establishment at 1.587 seconds, 15 bitrate records per side, non-zero BWE, no errors and exit 0.
+
+The route before/after was TNAS `192.168.1.100` through `192.168.1.140` on `ovs_eth1`. This proves the endpoint/harness control, not OPNsense traversal.
+
+The owner retained the existing Docker `host` network exclusively. Because host mode has no per-container IP/MAC, DHCP cannot give the container a separate lease or gateway. The provider path will use one temporary exact reflector `/32` route on TNAS via `192.168.1.2`, with exact restoration.
+
+Repeated invocations will originate in the OPNsense console through temporary key-only SSH to TNAS and `docker exec`. No GUI or permanent Telegram Voice laboratory code will be added.
+
+## 2026-09-20 — Current tgcalls laboratory rebuilt and qualified
+
+The laboratory moved from historical tgcalls `e3069322...` to `efd330ca04f74706024a5abdfb5b41f4e4dd1065`. The owner identifies changed Telegram voice transport as the reason for the rebuild. The Windows/Android client scope is unchanged; the Telegram-iOS workspace supplies build dependencies only.
+
+The active binary SHA-256 is `7ad8a2eef607e92056e8e8311519d36616c45ca19f1403601bbed8e8db01f3dc`. A local five-second P2P test established both peers at 0.039 seconds with five bitrate records per side, non-zero BWE and exit 0. The build-only exclusion of engines 18/19 leaves current 11/13/14 networking intact. [Qualification evidence](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md).
+
+The fixed `91.108.13.10:596` OPNsense baseline then produced 60 valid, payload-identical outbound Hello datagrams on LAN/WAN with zero returned UDP packets. Both engine-13 peers stayed `Reconnecting`; the 15-second test exited 1. This is `WIRE_OK / NO_REPLY_UNKNOWN`, not a current reflector media pass. [Baseline evidence](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-09-20-telegram-voice-current-opnsense-baseline.md).
+
+## 2026-09-21 — Post-NAT ordered fragmentation wire correction completed
+
+Temporary ordered position-8 experiments exposed two local defects: invalid reassembled UDP checksums after pre-NAT fragmentation, followed by first-fragment recapture in the initial post-NAT rule. A repeated old-runner execution reproduced the second defect; it did not test the correction.
+
+The corrected download was distinctly named `tgvoice_ipfrag8_postnat_v2.py` (`postnat-nofrag-v2`). Fragmenting after PF/NAT and selecting only MF=0/offset=0 originals fixed both defects. The final archive contains 60 complete ordered pairs with valid checksums and no original duplicates, zero incoming reflector packets and exact pre-test-state restoration. The companion still reported both peers `Reconnecting`, no call, zero BWE and exit 1.
+
+Result: **local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`; no `MEDIA_PASS`**. Normal rules 19000/19001 were already absent before this run, so restoration does not assert a normal-rule-set restart. [Complete redacted evidence and archive hashes](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-09-21-telegram-voice-postnat-ipfrag8.md).
+
+## 2026-09-22 — Owner correction, transport research and current task recorded
+
+The owner explicitly corrected the route assumption: **`192.168.1.140` is no longer working**. It is removed from active control and route-restoration prerequisites. The September 5 success remains historical; no fresh independent working control is established now.
+
+The [research](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/research/TELEGRAM_VOICE_UDP.md) now records official upstream MTProto/ICE/reflector changes and their default-off flags. These substantiate source evolution without inventing a global rollout date or proving the current CLI configuration matches every released client. The current 40-byte Hello framing is still observed.
+
+The selected task is to achieve and repeat a media call through OPNsense in the rebuilt laboratory, then verify a real remote Windows/Android call. Local wire correctness is an intermediate result, not completion. Lack of the retired control route does not suspend the task; silence remains causally inconclusive. Reverse-order position 8 and bounded alternates start from the corrected post-NAT setup; any transport/engine comparison is isolated from fragment changes.
+
+## 2026-09-22 — Reverse runner and owner-reported successful call
+
+The distinct `tgvoice_ipfrag8_reverse_postnat_v1.py` runner passed pinned-source/offline syntax validation and loaded successfully on the measured runtime. The supplied live archive contains empty LAN/WAN captures filtered to `91.108.13.10`, zero hits on the temporary UDP/596 rule and exact pre-test-state restoration.
+
+The owner then explicitly corrected the interpretation: **the call established, and routing was correct at the time**. Record that observation without treating the narrow capture as proof that no call happened or routing failed. The successful call's tool/client, actual flow and media evidence are not yet correlated with the archive; reverse-fragmentation attribution remains open. Earlier failed CLI runs are unchanged historical results.
+
+The immediate plan now preserves and investigates this successful condition before changing fragment positions. [Archive identity, capture scope and attribution questions](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-09-22-telegram-voice-reverse8-call-observation.md).
+
+## 2026-09-22 — Post-reboot reverse position-8 repeat; recorded September 23
+
+The owner clarified that the earlier successful display came from the fixed-reflector CLI command. Its positive output remains unavailable and that observation is preserved separately. After reboot, the owner restored the endpoint route through OPNsense and confirmed the Docker host-network container was running.
+
+The 21:04:34–21:04:49 UTC CLI repeat used the same binary hash and is fully inside the reverse runner capture window. Rule 18990 counted 60 packets; WAN has 60 complete reverse pairs, valid IPv4 and reassembled UDP checksums, preserved primary-LAN payloads, no unfragmented originals and no reflector replies. Both peers stayed `Reconnecting`, BWE was zero and exit was 1. Snapshot restoration is exact; normal rules 19000/19001 are present before and after this run. Result: local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, no `MEDIA_PASS` for this repeat.
+
+The next distinct temporary runner, `tgvoice_ipfrag32_reverse_postnat_v1.py`, retains reverse order and moves the Hello cut to 32. A short-UDP pass-through guard prevents unfragmented raw-send fallback/recapture. Twenty-seven offline cases against pinned native Lua passed; live qualification is pending. [Archive, CLI, source and candidate evidence](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-09-22-telegram-voice-reverse8-postreboot.md).
+
+## 2026-09-23 — Reverse position-32 live result and position-16 preparation
+
+The owner supplied the reverse position-32 archive and its matching 07:06:36–07:06:51 UTC CLI output. The same endpoint route, binary and runtime emitted 60 complete reverse pairs with valid IPv4/reassembled UDP checksums and preserved primary-LAN payloads. No unfragmented originals or reflector replies appeared. Both peers remained `Reconnecting`, BWE was zero, exit was 1; IPFW/PFIL/socket snapshots restored exactly. Result: local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`, no `MEDIA_PASS` in this run. The earlier positive owner observation remains separate.
+
+Prepared the distinctly named `tgvoice_ipfrag16_reverse_postnat_v1.py` for the next bounded comparison. It retains reverse order, changes the Hello split to 16 and lowers the short-payload pass threshold to 8. Python syntax/help and 27 pinned-native-Lua boundary/options cases passed; position 16 has no live result yet. [Archive, measured packet layout and next-run identity](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-09-23-telegram-voice-reverse32.md).
+
+## 2026-09-23 — Reverse position-16 live result and position-24 preparation
+
+The owner supplied the guarded reverse position-16 archive and matching 07:29:23–07:29:38 UTC CLI output. The same route through OPNsense `192.168.1.2`, current CLI hash and measured Zapret2 runtime emitted 60 complete reverse pairs. WAN layout was IP length 52 at offset 16/MF=0 followed by IP length 36 at offset 0/MF=1. All IPv4 and reassembled UDP checksums validated; all 60 application payloads matched the primary `192.168.1.100` LAN flow, with no unfragmented originals and no reflector replies.
+
+Both peers remained `Reconnecting`, BWE was zero and exit was 1. Rule 18990 counted 60 packets / 4080 bytes. IPFW/PFIL/socket restoration was exact and no route was changed. Result: **local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`; no `MEDIA_PASS`**. [Complete redacted evidence and archive identity](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-09-23-telegram-voice-reverse16.md).
+
+Prepared the distinctly named `tgvoice_ipfrag24_reverse_postnat_v1.py` (`postnat-reverse24-v1`), SHA-256 `c63ddb5dc097dfcec2759134101a31f1020cf5536d82f26eeab3dd2b30217905`. It retains reverse order and the bounded post-NAT lifecycle, moves the split to UDP position 24, and passes application payloads of at most 16 bytes unchanged to avoid native unfragmented fallback. For the observed 40-byte Hello, expected WAN output is two IP length-44 fragments: offset 24/MF=0 first, then offset 0/MF=1. Python syntax passed; live position-24 qualification is next. If it is also wire-correct and silent, standalone position widening ends.
+
+## 2026-09-23 — Reverse position-24 live result and fake-plus-fragment preparation
+
+The owner supplied the guarded reverse position-24 archive and matching 12:45:54–12:46:09 UTC CLI output. The same route through OPNsense `192.168.1.2`, current CLI hash and measured Zapret2 runtime emitted 60 complete reverse pairs. Every Hello produced two equal IP length-44 fragments, offset 24/MF=0 first and offset 0/MF=1 second. All IPv4 and reassembled UDP checksums validated; all 60 application payloads matched the primary `192.168.1.100` LAN flow, with no unfragmented originals and no reflector replies.
+
+Both peers remained `Reconnecting`, BWE was zero and exit was 1. Rule 18990 counted 60 packets / 4080 bytes. IPFW/PFIL/socket restoration was exact and no route was changed. Result: **local-WAN `WIRE_OK / NO_REPLY_UNKNOWN / RESTORE_OK`; no `MEDIA_PASS`**. This closes standalone fragment-position widening for the current reflector epoch. [Complete redacted evidence and archive identity](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-09-23-telegram-voice-reverse24.md).
+
+Prepared `tgvoice_fakefrag8_reverse24_postnat_v1.py` (`postnat-fakefrag8-reverse24-v1`), SHA-256 `db8d8a9e1e67c2df91a77462d244be37988bbda8cd674bca7c0b77d16d8cc03d`. It keeps the real reverse24 serialization unchanged and adds one 40-byte zero fake with intentionally bad UDP checksum and random IPv4 ID, fragmented ordered at UDP position 8. Python syntax and `--help` passed; live fake-plus-fragment qualification is next.
+
+## 2026-09-23–2026-09-30 — Fakefrag, local PF diagnosis and reverse8 recheck
+
+After the last committed fakefrag-v1 preparation, the owner tested distinct v2/other runners. Fakefrag8+reverse24 v2 emitted all 60 correct fake/real pairs but returned no media; its CLI filename still said reverse16 and must not control strategy attribution. Fakefrag8+original emitted only fake fragments: correlated PF `state-insert` logs identify local loss of real packets. The September 30 tee version preserved real originals but emitted them before fake; it is not fake-before-real qualification. The separately correlated September 30 reverse8 recheck again had valid wire output with no replies/media. All four archives restored their recorded IPFW/PFIL/socket state.
+
+The third-party next hop `192.168.80.1` is inaccessible to the owner. There is no working alternate exit, and retired `192.168.1.140` is not reinstated. [Detailed measurements and archive hashes](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-10-01-telegram-traffic-policy-and-voice-control.md).
+
+## 2026-09-30–2026-10-01 — TCP policy diagnosis and applied SOCKS/Squid configuration
+
+Explicit parent and old SOCKS HTTPS passed, while router-local no-proxy HTTPS timed out. A guarded transparent LAN test initially did not run because the HTTPS destination still routed via retired `.140`. After its separate `/32` was moved through `.2`, transparent LAN HTTPS passed with Squid `FIRSTUP_PARENT/185.203.117.88` and WAN parent traffic. The route is retained for future tests. The reflector CLI's local signaling means the router's direct HTTPS failure does not invalidate earlier UDP measurements.
+
+The sing-box policy installer v1 was blocked by incorrect FreeBSD ps field syntax; v2 corrected discovery. Its first 02:49 UTC run failed the SOCKS HTTPS probe and restored files, but Squid retained loopback port 3130. A full `configctl proxy restart` removed that residue. The 03:47 UTC v2 run then passed five HTTP/HTTPS probes and remained applied: Telegram IPv4 TCP/80,443 → plain loopback Squid3130 → parent; UDP direct still subject to output IPFW. The script changed three configuration files and no firewall/voice rule. Exact settings, successful backup directory, known rollback limitation and reboot instructions are in [Telegram traffic policy](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/TELEGRAM_TRAFFIC_POLICY.md).
+
+## 2026-10-01 — Active-helper UDP control and permanent owner goal
+
+The owner separately enabled `telegram_voice`: ON/running, 14 table entries, current STUN zero16/repeats2 strategy. The 04:15:25–04:15:41 UTC reflector run followed `.2` with the qualified binary; both peers stayed Reconnecting, BWE zero, exit 1. Rule19000 counted 60/4080 and WAN contained 60 valid, unfragmented non-STUN Hellos without replies. This proves interception, not a working voice strategy or SOCKS UDP qualification. The prior reported successful CLI call remains recorded separately.
+
+The owner now explicitly requires **«Воспроизводимая конфигурация того успеха»** with permanent consistent LAN/router-local/SOCKS policy on `.2`: Telegram UDP via Zapret2 with active helper, Telegram TCP/TLS ultimately via parent `185.203.117.88:33128`, and TGVOICE via `.2`. This supersedes any reading of the temporary-lab boundary that would reject permanent router traffic policy. Automatic local-origin TCP selection, helper/route reboot persistence, alias refresh, SOCKS UDP verification and repeatable media remain open; this docs-only checkpoint does not pretend to implement them.
+
+Documentation impact: the current handoff, state, roadmap, specialist architecture/research and index are reconciled together; this ledger owns chronology, one new evidence record owns the new measurements, and one configuration/recovery document owns the policy/runbook. Four general rule books, package metadata, runtime source and releases are unchanged.
+
+## 2026-10-01 — Owner narrowed the accepted product scope to Telegram Voice UDP
+
+This **supersedes the earlier same-day permanent three-origin TCP/UDP product goal** recorded above, without invalidating prior live test results. Only Telegram Voice UDP is approved for integration into `os-zapret2-restyle`, and the approved order is exactly: (1) repeated current-oracle `MEDIA_PASS` through OPNsense; (2) remote real Windows/Android P2P-disabled `CALL_PASS` with sustained bidirectional UDP and two-way audible sound; (3) integration of the **proven** Voice UDP intercept rules, managed Telegram IPSET, strategy and lifecycle into the plugin with OPNsense-config-backed persistent setting through the existing Settings GUI. Use an enable/disable checkbox if one strategy suffices; expand parameters or a separate GUI only on measured need. Avoid testbed address/interface/rule-number hard-coding and own rules transactionally.
+
+Squid, sing-box, PF redirects, the external parent proxy and TNAS routes remain **unchanged experimental lab infrastructure**. OPNsense GUI-managed persistence of that separate testbed setup is acceptable. Automatic proxying for OPNsense console applications is cancelled. Permanent TCP/proxy plugin integration, SOCKS integration, a separate permanent lab subsystem and proposed clean-install TCP stages 4–5 are **not approved**. Any future product work outside the three accepted stages requires a separate owner decision.
+
+The existing October 1 media baseline still has zero reflector replies and no `MEDIA_PASS` despite helper interception and correct unmodified non-STUN WAN Hellos. Preserve the September 22 positive owner observation without assigning its strategy until exact evidence is correlated. No source/package, router or proxy setting changed during this documentation reconciliation. Normative scope: [product requirements](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/REQUIREMENTS.md); exact task: [handoff](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/START_HERE.md); concise plan: [roadmap](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/ROADMAP.md); laboratory TCP recovery: [runbook](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/TELEGRAM_TRAFFIC_POLICY.md).
+
+## 2026-10-01 — Owner clarified that the separate laboratory must survive reboot
+
+This clarification **corrects the interpretation**, not the three approved Telegram Voice UDP product stages above. The earlier requirement to separate Telegram TCP/TLS and UDP for **LAN, OPNsense router-local applications/shell and SOCKS5 clients**, route applicable TCP/TLS through the experimental external parent, process UDP through the selected Zapret2 treatment and keep the TNAS voice path through OPNsense **remains in force for the independent laboratory**. The laboratory must preserve or automatically recover its selected working state after OPNsense and TNAS reboots, including Squid, sing-box, PF/alias rules, chosen Voice-helper state and necessary TNAS routes. Prefer verified native OPNsense settings and GUI; use a documented supported alternative only where GUI is actually insufficient. This is a separate lab acceptance gate, not a product stage 4 or 5. The currently successful TCP setup is retained without modification.
+
+The earlier statement that automatic router-console proxying was cancelled **applies to blanket/global console proxying and plugin product integration**, not to selected Telegram router-local traffic in the laboratory. At this point the local-origin selection, SOCKS UDP ASSOCIATE, helper ON recovery, PF alias refresh, GUI regeneration survivability and TNAS route persistence have **not** been jointly reboot-qualified. A runbook of manual recovery commands is not proof of automatic lab recovery. Changes to the plugin source, OPNsense configuration model, plugin GUI or service lifecycle are made **only through GitHub branch/PR/CI/merge**; existing lab services/rules/routes are configured independently using native OPNsense GUI where verified. No running appliance or package change was made while recording this clarification.
+
+Primary operational contract: [lab persistence and recovery runbook](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/TELEGRAM_TRAFFIC_POLICY.md); current project state: [PROJECT_STATE](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/PROJECT_STATE.md); approved UDP-only product scope: [REQUIREMENTS](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/REQUIREMENTS.md); parallel lab/product plan: [ROADMAP](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/ROADMAP.md).
+
+## 2026-10-01 — Owner-live lab inventory, SSH access and manual TNAS route restoration
+
+The owner provided complete appliance output for Squid/sing-box RC state, listeners, generated Squid includes, custom parent/CONNECT ACL files, live PF/IPFW rules, full `configctl zapret telegram_voice_status`, package ownership and sing-box configd actions, plus the **full sing-box JSON from its working GUI**. This settled where today's TCP lab configuration is located; it did **not** establish GUI regeneration or actual OPNsense reboot persistence. The owner specifically corrected repeated command errors: the OPNsense interactive root console is **csh**; entering POSIX `/bin/sh` must be deliberate (confirmed present on the appliance), and its SSH client executable is **`/usr/local/bin/ssh`**, not `/usr/bin/ssh`. Existing [CHAT-019](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/CHAT_RULES.md) was already binding and was not followed reliably during the live interaction. New active runbook foregrounds this existing rule, rather than adding redundant general canon.
+
+The owner generated a dedicated Ed25519 OPNsense root key for passwordless SSH to `tolian@192.168.1.100:9222`. Server host fingerprint and public key fingerprint were checked; target `tolian` returned UID 0, so the key is root-equivalent. The TNAS authorized-key entry uses `from="192.168.1.2",restrict`. The owner created `/root/tgvoice-lab/ensure-tnas-routes.sh` with a guarded SSH target and two `/32` routes via `192.168.1.2`; after the incorrect SSH binary path was fixed, its live manual invocation returned two `OK` results and `EXIT=0`. The owner **rejected all TNAS route scheduling**: manual run only after TNAS reboot, and `tgvoice-lab` Docker stays manual with `restart=no`. The container's absolute executable path is `/Volume1/@apps/DockerEngine/dockerd/bin/docker`, since the noninteractive SSH PATH lacks the Docker directory. Route script, SSH keys and trust material are local lab files, **not installed by the project plugin or backed up through GitHub**.
+
+**Critical unfinished reboot issue:** The owner measured the current Voice helper **ON** (`requested=on`, `effective=on`, 14 IPSET entries, diverted rule 19000), but its request marker remains in `/var/run`. Ordinary plugin boot hook `start/20-zapret` starts Zapret only, and **will not recover the current Voice-helper ON state after reboot**. This is still an unresolved **OPNsense lab** persistence requirement, separate from the owner-approved manual **TNAS** route recovery and eventual stage-3 product GUI-backed UDP persistence. Don't present ordinary Zapret status as working Voice. Until a tested independent solution exists, manual `configctl zapret telegram_voice_enable` after reboot (only when ON is the selected baseline) plus detailed state verification is a temporary recovery, not boot acceptance.
+
+The [exact operations runbook](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/TELEGRAM_LAB_OPERATIONS.md) records all verified paths, SSH constraints, the full 89-line route script, shell conventions, pre/post reboot checklists and the explicit owner decisions. The separate [dated evidence](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-10-01-telegram-lab-owner-live-inventory.md) preserves all four configuration hashes and the complete owner-provided current sing-box JSON. Both are linked from Level-1 handoff/state and [INDEX](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/INDEX.md). No appliance reboot, modification of the already-working TCP setup, plugin code change or new package occurred in this docs-only reconciliation.
+
+## 2026-10-08 — October 7 Voice reboot loss, manual recovery and explicit test controls recorded
+
+Owner snapshots at **16:20:00 UTC before reboot** and **16:44:23 UTC, 399 seconds after the new boot**, confirm `telegram_voice` ON→OFF: the ephemeral marker, STUN helper profile, Telegram IPFW table and all-port Voice rule disappear. Saved GUI A2, its resolved runtime profile, managed Telegram target data, ordinary UDP596–599 rule, PF NAT/redirects and measured IPFW→PF output-hook order survive. The owner's subsequent `telegram_voice_enable`/status/IPFW transcript restores native ON/table14/rule19000 with zero counters. Its exact command time is not embedded; no full post-enable process/profile snapshot, new TCP probes or media run is supplied. [Private input hashes, exact comparison and limits](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/verification/evidence/2026-10-07-telegram-voice-reboot-and-manual-recovery.md). This verifies manual recovery, not automatic startup or working calls.
+
+The owner asked whether helper parameters change between trials and required explicit documentation of their role. A1/A2 both had helper ON with the same fixed STUN zero16/repeats=2 profile and all-port Telegram UDP capture; their changed variable was the GUI `unknown` Hello fake checksum. The [helper runbook](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md) now owns commands, parameter ownership and recovery; the [campaign control matrix](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md#telegram_voice-controls-for-every-trial) owns fixed versus variable parameters, pre/post checks and the required before/after record for any future helper change. The emulation description and current plans use that contract. Keep helper ON/fixed while varying only the candidate action; whole-helper disable is not its clean OFF control. STUN parameter changes do not target the observed non-STUN Hello.
+
+The next planned runner extension explicitly includes full helper/source/target/process baseline and semantic restoration checks alongside RTC/ICMP and remote-process cleanup, before a bounded GUI fake-TTL comparison. Existing v4 performs only its documented subset; no new runner, numeric TTL, automatic boot mechanism, media success, package/release or appliance modification is delivered by this documentation update. User-performed reboot and native enable are recorded evidence. The no-Cron/once-after-normal-readiness lab startup requirement remains open; current manual recovery is interim.
+
+## 2026-10-09 — October 8 approved «Передача голоса» design saved as implementation handoff
+
+After reviewing the helper's fixed STUN behavior, transient marker and reboot loss, the owner selected a separate native page **between Strategies and Laboratory**, matching the existing Strategies design. Final layout: top WAN; five checkbox/multiline parameter pairs (Telegram, Discord, X/Twitter, SIP/VoIP, Custom); separate five IPSET fields; common Zapret2 service section; bottom Apply. The owner removed the earlier LAN restriction/interface controls and local-UDP/boot toggles: matching local UDP is always included, selected ON/OFF restores through normal startup. Non-STUN remains in ordinary Strategies. Telegram IPSET stays one dataset shared by both pages; one normal dvtws2, no Cron or second daemon.
+
+The [primary implementation specification](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/architecture/VOICE_TRANSMISSION_GUI.md) records the approved design separately from the derived native input/model contract, current source behavior, parameter meanings/capability limits, independent-WAN engineering check, transactional lifecycle, legacy-command compatibility, migration/dismantling, source map and acceptance with expected results. The former restriction delaying a separate page/persistence until MEDIA_PASS/CALL_PASS is superseded across active requirements/handoff/plan and specialist documents. Those media gates remain mandatory before claiming a working Telegram strategy; no Discord/X/SIP protocol support or efficacy is inferred from labels. Existing TCP/Squid/sing-box/PF/route infrastructure is preserved.
+
+This scope records decisions **only**: no new source, page, model, package revision, appliance change, boot fix, TTL candidate or live call. New immediate work is page/configuration/lifecycle implementation; RTC/ICMP/TTL research remains queued and migration must establish a separately recorded baseline. A1/A2 negative evidence and October 7 manual recovery are unchanged. All four canonical rule books were read and remain unmodified; their existing documentation/GitHub procedure governs this delivery.
+
+
+### 2026-10-09 — Voice v0.5.1_3 previous process evidence staged
+
+Following v0.5.1_2 revision enforcement (DEV-032), the draft adds a new independent engine/supervisor process-evidence staging module and mock test suite. It binds old runtime `dvtws.args` bytes and coherent distinct one-engine/supervisor process instance metadata to immutable previous SHA256 resources, requiring repeated stable observations and privately published durable JSON. This is not a production process probe, boot replay, IPFW ownership proof or activation. Latest exact-head CI remains required; live OPNsense settings unchanged.
+
+
+### 2026-10-09 — Voice v0.5.1_4 native read-only process inventory
+
+A next packaged-code revision adds `voice_native_process_probe.py`, a non-wired FreeBSD pidfile and ps reader for the v0.5.1_3 persistent evidence contract. It requires exact process ownership/role inventory, refuses orphan/duplicate processes, and treats absent PID files as STOPPED only after a global search for matching commands. Linux/FreeBSD regression uses a mocked ps reader with private test pidfiles. No actual native FreeBSD process acceptance, mutating restore or boot activation has been claimed.
+
+
+### 2026-10-09 — Voice v0.5.1_6 five-resource recovery attestation and GH-014 registry fix
+
+New staging-only `voice_cutover_full_recovery.py` combines two cross-checked private journals, immutable previous Config/runtime snapshot, stored process evidence (engine/supervisor), and a strictly typed injected observer for all five live resources. Two consecutive observations plus repeat source checks reject a torn snapshot. Prepared/mutating exact old state stays review-required; partial/committed/unknown states stay blocked, with **all** mutation/automatic recovery flags false. No actual trusted kernel observer or lock-held replay exists. The failed v0.5.1_5 artifact-hygiene CI reported missing GH-014 backrefs in DEV-029..033, reconciled with amended governance metadata in this same candidate.
+
+
+### 2026-10-09 — Voice v0.5.1_7 native read-only IPFW ownership witness
+
+Added a native read-only kernel witness backed by bounded FreeBSDIPFWAdapter and owner-private IPFW ledger: an exact ownership fingerprint requires rules, all five tables and absence of stage tables to match, with IPSET addresses treated as sets. Unknown/foreign objects or ledger changes reject. Only an offline staging call site/test is provided; it does not execute native Voice Apply or reboot recovery. The five-resource observer now also blocks if an injected native probe throws a runtime exception. Latest exact-head Linux/FreeBSD CI required; owner appliance untouched.
+
+
+### 2026-10-09 — v0.5.1_7 CI-only PHP runner resilience
+
+The exact-head CI PHP lint step twice received Docker Hub unauthenticated `toomanyrequests` before running any PHP code; other Voice candidates and testing-package FreeBSD 15 qualification passed. CI now prefers PHP >=8.2 <9 already on the runner, runs identical lint/PHP API tests, and retains php:8.2-cli Docker as fallback when no compatible runner PHP exists. This is a CI-only change under DEV-033 and does not change the package revision, Voice behavior or running appliance.
+
+
+### 2026-10-10 — Voice v0.5.1_8 live Config/runtime canonical witness
+
+Added independent read-only live Config/runtime fingerprinting of anchored descriptor-relative runtime trees, with exact prior snapshot digest parity and double-scan checks on regular file contents, modes and directory entries. Unsafe links/hardlinks/special files or modification during scan block the observation. This is an unwired source for a future five-resource lock-held observer, not production recovery or Voice Apply. CI on Linux/FreeBSD 15 and installed OPNsense qualification remain separate. No live appliance or legacy Telegram PoC changed.
+
+
+### 2026-10-10 — Voice v0.5.1_9 composed prior-instance native witness
+
+Stage-only five-way observer now unifies verified read-only live Config/runtime files, engine/supervisor PID and start identity, and exact IPFW ownership into `voice_cutover_full_recovery`. Tests exercise exact previous match and newly started/foreign/mixed/changed states using injected process and kernel fakes. This is deliberately no more than a previous-instance attestation: a reboot changes PID tokens and must be followed by separate semantic readiness verification before future recovery can qualify. Production native dual-lock, process argv, mutation and boot integration are still blocked; old Telegram PoC untouched.
+
+
+### 2026-10-10 — Voice v0.5.1_10 previous Config mode bound
+
+Following a focused safety review, the composed previous-instance witness now checks the actual Config permission mode against the sealed backup manifest, not only the canonical SHA256 of Config bytes. A mode-only modification must refuse previous-state certification even when all five original digest values would match. Added direct and full-observer test assertions. No live action or automatic recovery.
+
+
+### 2026-10-10 — Voice v0.5.1_11 exact restarted-instance argv contract
+
+Staged a read-only, test-injected native kernel-argv array attestation against the sealed old dvtws.args and exact launcher-managed flags. Each supervisor role must have a separately provided expected exact argv, and all three process start tokens must be newer than the old previous evidence, with stable double reads and no duplicate PIDs. Matching *only* yields non-authorizing review-required, not readiness, media pass, reboot success or permission to restore. A genuinely trusted FreeBSD kernel argv acquisition and lock-held replay remain future blockers.
+
+
+### 2026-10-10 — v0.5.1_12 native kern.proc.args byte reader, deliberately inert
+
+Added a raw binary NUL-delimited FreeBSD sysctlbyname kern.proc.args process argv reader wrapped by stable read-only three-role ps/PID and start metadata checks. Validation uses an injected provider in Linux/FreeBSD 15 CI; the libc path has not been qualified on the owner device. FreeBSD process-title overrides mean these bytes cannot independently prove immutable launch argv or media readiness. The reader feeds only the pre-existing non-authorizing v0.5.1_11 restart-argv contract in offline tests; no service/boot hook, dual-lock replay, automatic recovery, or legacy PoC replacement.
+
+
+### 2026-10-10 — v0.5.1_13 native process image + numeric credential read-only witness
+
+The new unwired FreeBSD process security observer compares kernel text pathname and real/effective/saved numeric user/group credentials for three process roles, requiring stable PID and start tokens before and after each read. It deliberately separates script invocation identity and actual interpreter executable. Linux and FreeBSD 15 run adversarial mock cases, and FreeBSD CI performs a real read-only `kern.proc.pathname` and `/bin/ps` call against its own Python process. The owner appliance, expected role credential mapping, immutable executable content, kernel argv post-restart and lifecycle locks are still not live-qualified. The module cannot mutate, mark success, or authorize Voice Apply.
+
+
+### 2026-10-10 — v0.5.1_14 sealed native process policy and schema-3 binding
+
+Staged an owner-private write-once security policy evidence record for exact three-role kernel images, numeric UID/GID requirements and all five previous fingerprints, independently sealed to old Config/runtime and process observations. The optional backward-compatible schema 3 whole-cutover candidate additionally pins the policy SHA256. Full recovery preflight requires that seal, reopens immutable sources, compares a double-read injected native security reader against policy and previous instances, and always refuses activation or rollback authority. Mixed/corrupt/replaced security evidence fails closed. No production lifecycle lock integration, actual owner-appliance credential truth, immutable executable fingerprint, boot or live Apply has been claimed.
+
+
+### 2026-10-10 — v0.5.1_15 Python schema-3 syntax gate correction
+
+The first v0.5.1_14 Voice CI raised SyntaxError in the new process security policy module before running its tests, caused by a stray comma after a dictionary-comprehension iterator. A one-line packaged-source correction and explicit Python compile pre-gates in Linux/FreeBSD 15 CI advance the version to v0.5.1_15. The schema-3 journal and sealed policy remain staging only pending green exact-head test results, native on-device policy qualification and eventual lock-held recovery.
+
+### 2026-10-10 — v0.5.1_16 FreeBSD process pathname numeric MIB
+
+Native FreeBSD 15 CI diagnostic run 38006536188 proved ENOENT/2 from dynamic sysctlbyname pathname but a valid three-component MIB and a successful numeric sysctl for the same PID. Corrected the disconnected FreeBSD reader to use the supported numeric API while preserving bounds, pathname parsing, process identity and credential checks. Added offline fault cases and retained the actual FreeBSD self-process smoke. Current exact-head CI/package and owner-device privilege qualification remain outstanding; no Voice Apply, OPNsense changes or Telegram PoC replacement.
+
+
+### 2026-10-10 — v0.5.1_17 native FreeBSD argv numeric-MIB correction
+
+FreeBSD 15 run 38008380039 proved the same ENOENT/2 dynamic sysctlbyname defect in the argv reader: numeric kern.proc.args MIB+PID succeeded and returned a 68-byte self-process length. Replaced only the unwired read-only argv API with the supported numeric-MIB two-call procedure, kept exact NUL token/size rules and process-instance bracketing, and added error-injection plus the native FreeBSD self-process test. Source SHA 87de312 passed Linux/FreeBSD 15 and FreeBSD package job under CI #38017644559 attempt 2. Initial Strategy Lab precheck failed on a mock timeout; identical-HEAD rerun passed without behavioral changes. Owner OPNsense live attestation and native Config/lifecycle lock integration remain open. There is no installed OPNsense mutation, Voice Apply, automatic recovery or MEDIA_PASS.
+
+## Current boundary
+
+Current Draft source candidate is `0.5.1_17` (not published), while installed testing candidate `0.5.0_3` and unpublished research `_4` remain separate. Exact next steps are owned by [`START_HERE.md`](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/START_HERE.md), durable current facts by [`PROJECT_STATE.md`](https://github.com/Tolian82/os-zapret2-restyle/blob/11a8fdc12b602c4b4174b03b504a66f9b0af04c8/docs/PROJECT_STATE.md). This ledger preserves the chronology rather than duplicating a separate current plan.
+
+## Архив прежнего плана Voice перед объединением backend
+
+Ниже полный исторический текст до решения 13.10.2026. Старые указания «следующий шаг» и границы этапов не являются текущей очередью. Первоначальные локальные ссылки привязаны к исходному Git-снимку, чтобы не переосмысливать исторические доказательства.
+
+## Voice Transmission — план завершения и стабилизации
+
+**Этап 3 · `v0.5.1_174` (13.10.2026).** Под исходным FD9 и `/conf/config.xml` inode flock добавлена ручная операторская `native-voice-legacy-arm-stop-intent` (без configd/GUI/boot). Ревизия `_173` создала import-only `voice_native_legacy_quiescence_intent.py`: он требует строго предыдущие `legacy-previous` и `legacy-restore-plan` и fsync/atomic rename запечатывает отдельный sibling `voice-cutover-legacy-quiescence-intent` с schema-1 SHA256, previous five-domain fingerprints, policy/IPFW и exact plan digest; `_174` подключила CLI в `zapret_service.sh` с фиксированным аргументом, без пользовательских путей. Original Voice cutover stage root не меняется. Boot/normal lifecycle guard теперь блокирует даже orphan sibling intent при потере основного root. Этот STOP-intent **не** останавливает процессы, не удаляет IPFW, marker или Config, не готовит clean WAL и **не разрешает** выполнение (safe_to_execute=false). Повтор/частичные файлы блокируются до ручного разбора. Тесты: строгие 2 predecessor, original Config flock, сохранность old PoC, no retry, spoofed digest, orphan boot gate, отсутствие GUI/configd и FD9 dispatch. `_172` Voice CI PASS, Project/FreeBSD ещё отслеживались при выполнении; `_174` требует latest-head CI. Следующий пункт — отдельный, основанный на sealed STOP-intent контролируемый и crash-safe процессный/IPFW quiescence actuator под теми же locks, затем clean WAL → шестидоменный rollback и реальная OPNsense reboot/UAT. PR #328 остаётся Draft; Voice ON/MEDIA_PASS и package publication запрещены.
+
+**Этап 3 · `v0.5.1_172` (13.10.2026).** Добавлен ручной операторский `native-voice-legacy-seal-clean-wal` в штатный `zapret_service.sh`, без configd/GUI/boot и без общего lifecycle reboot автозапуска. Новый фиксированный `voice_native_legacy_clean_wal_route.py seal-clean-wal` под существующими original FD9 + Config inode flock требует ровно sealed old `legacy-previous` + `legacy-restore-plan` и через прежний проверенный `prepare_legacy_reverse_wal` подтверждает дважды отсутствие трёх процессов, старого marker/runtime enabled, IPFW 19000–19010/всех Voice tables, native IPFW owner и дрейфа файлов; затем fsync/rename сохраняет immutable clean-boundary WAL и повторно сверяет полный журнал. Команда **не останавливает старый PoC**, не удаляет IPFW и не меняет Config/runtime/marker/process, ничего не активирует; clean boundary должен существовать заранее. Partial/foreign evidence остаётся fail-closed без автоочистки. Операторский тест симулирует clean-boundary, original flock failure, активный старый marker/IPFW, power cut и отсутствие GUI/configd; unchanged `PLUGIN_REVISION=172` после docs-only commit. `_171` exact-head Voice/Project/FreeBSD15 PASS; `_172` CI в процессе. Следующая задача этапа 3 — безопасный оригинально заблокированный переход from old PoC running to quiescent clean kernel без потери предыдущего пятидоменного seal, затем реальная FreeBSD reboot/UAT, до public Voice Apply. Draft PR #328, пакет не опубликован, MEDIA_PASS не подтверждён.
+
+**Этап 3 · `v0.5.1_171` (13.10.2026).** К штатному `zapret_service.sh` под original FD9 добавлен отдельный **ручной операторский** `native-voice-legacy-capture-plan`, который фиксированным `voice_native_legacy_predecessor_route.py capture-plan` держит тот же исходный `/conf/config.xml` flock через реальный old PoC `capture_legacy_previous()` → `prepare_legacy_restore_plan()`. Сначала независимо проверяются старые marker, running three-role process/security/argv, IPFW 19000–19010 и исходные файлы; затем fsync-ятся прежние пять ресурсов и точный reverse-plan без изменения работающего kernel, Config/runtime, marker или процессов. Допуск только при пустом root; прерванные/посторонние артефакты остаются заблокированы, без auto-retry. После записи состояние **quiescence pending**; clean-kernel WAL/остановка старого PoC/native forward Apply в этот маршрут не включены. Отсутствует configd/GUI/boot hook, Voice ON и MEDIA_PASS. Обновлены regression checks на real-files backups, сохранность процессов/IPFW, original flock, power-cut после previous и fixed CLI. `_170` full CI Voice+Project+FreeBSD15 PASS, `_171` exact-head CI подлежит проверке. Следующая задача — отдельный согласованный owner-controlled old PoC quiescence → clean-boundary WAL перед `legacy-rollback-five`; реальная OPNsense reboot/UAT также открыта, PR #328 Draft, без публикации пакета.
+
+**Этап 3 · `v0.5.1_170` (13.10.2026).** Под исходным `zapret_service.sh` FD9 добавлена **исключительно ручная** операторская команда `native-voice-legacy-rollback-five`, вызывающая фиксированный `voice_native_legacy_rollback_route.py rollback` (никаких пользовательских путей/параметров). Маршрут открывает ORIGINAL `/conf/config.xml` inode flock и сохраняет его на протяжении всех шести ранее реализованных реальных фаз прежнего PoC rollback: IPFW с WAL, previous files stage, runtime, Config, marker, three-role one-shot restart. Он требует sealed `legacy-previous`/`legacy-restore-plan`/`legacy-reverse-wal` и монотонные existing phase entries, отказывает при foreign drift; использует два разных FreeBSD IPFW adapters (read-only и narrow mutating) и ранее запечатанный original process-security policy для PID/start+kernel argv/UID/GID. После полного seal возвращает только `legacy-five-domains-whole-receipt-sealed-boot-pending`. Ручное восстановление МОЖЕТ менять прежние пять ресурсов, но **не доступно** через configd, GUI, normal service start/boot/reconfigure или supervisor failure; запрет Voice ON/receipt cleanup/MEDIA_PASS остаётся. Regression выполняет реальный изолированный coordinated rollback через новый operator adapter, power-cut IPFW redo, idempotent no double process start, FD9/foreign evidence refusal и no GUI/configd route. `_169` exact-head Voice, Project, FreeBSD15 CI PASS; `_170` проверяется. Дальше: осторожная интеграция staged old-predecessor capture/plan/clean-boundary в операторский PoC→native маршрут и реальное FreeBSD reboot/UAT до публичного Voice ON; PR #328 остаётся Draft, никакого опубликованного pkg.
+
+**Этап 3 · `v0.5.1_169` (13.10.2026).** В существующую страницу «Передача голоса» добавлена видимая read-only диагностика пятиресурсного отката старого Telegram PoC. Новый фиксированный configd `voice_recovery_status` вызывает только штатный `zapret_service.sh native-voice-legacy-boot-review` под original FD9 и Config inode flock, не вызывает executor/процессы/IPFW/Config writes. `VoiceController::recoveryStatusAction()` принимает лишь четыре известных nonauthorizing состояния с обязательными false safety flags, удаляет все PID/хеши/пути и fail-closed трактует ошибки. RU/EN статус показывает отсутствие old журнала, другой Voice журнал, incomplete/manual review или проверенный receipt с ещё НЕ пройденной post-reboot live аттестацией. GUI не включает Voice и не обходит обычный lifecycle; PHP и GUI contract tests покрывают безопасную классификацию и отказ при ложном safe. `_168` exact full Voice/Project/FreeBSD15 CI PASS; `_169` CI pending. PR #328 Draft, пакет не опубликован; следующая работа — hardware boot UAT и безопасное автоматическое применение сохранённого native Voice после правильного пять-ресурсного migration/lifecycle.
+
+**Этап 3 · `v0.5.1_168` (12.10.2026).** После `_167` disk-only диагностики добавлена операторская **ручная живая** команда `zapret_service.sh native-voice-legacy-boot-live-review` (FD9 + original Config flock): только при полном sealed old five-domain receipt открывает исходный process security policy, строит фиксированные FreeBSD process/UID/GID/kernel argv readers и read-only IPFW 19000..19010 adapter; повторно сверяет предыдущий Config/runtime/marker, old IPFW и ту же триаду PID/start через существующую sealed `reconcile_legacy_whole_receipt_live`. Фиксированного process startup не происходит, исходный redo/receipt не меняется; разные IPFW/kernel/epochs или отсутствующий receipt — fail closed. Возвращает исключительно `legacy-five-domains-live-observed-no-boot-acceptance`: никакого автоматического восстановления после reboot, GUI Voice Apply или реального MEDIA_PASS. Добавлены end-to-end negative regressions и service dispatch. Следующее: физические FreeBSD boot/failure UAT + safe native forward migration under one owner; PR #328 Draft, candidate package unpublished; `_168` exact CI pending.
+
+**Этап 3 · `v0.5.1_167` (12.10.2026).** В `zapret_service.sh` добавлена операторская команда `native-voice-legacy-boot-review` под **исходным FD9**, а новый `voice_native_legacy_boot_review.py` под original Config inode flock предоставляет read-only классификацию дисковых следов пятиресурсного отката старого Telegram PoC: no-old-journal, не-legacy/native-root, monotonic incomplete/manual-review, либо полностью повторно проверенный immutable `legacy-whole-receipt` (всё ещё **live boot/IPFW/process acceptance pending**). Повреждение/foreign/nonmonotonic evidence блокирует; никаких process, kernel или Config mutations, никаких автоматических запусков или GUI/Voice Apply. Regression: offline original-lock post-rollback/missing flock, partial stage, CLI-service fixed routing. Исправлен фактический Project CI FAIL `_166` на stale `PLUGIN_REVISION=164` в START_HERE: текущее значение 167. Следующее — отдельно доказать штатную operator-only live post-reboot IPFW/process reconciliation и реальную appliance UAT до GUI ON; PR #328 Draft, пакет не опубликован. CI `_167` требует проверки точного HEAD.
+
+**Этап 3 · `v0.5.1_166` (12.10.2026).** Исправлен uncovered boot/lifecycle safety gap предыдущего whole receipt: `voice_cutover_guard.check_pending()` теперь проверяет существование separate old `-legacy-whole-receipt` даже если основной `voice-cutover` root пропал или содержит только старый standalone snapshot; orphan/unsafe symlink блокирует все мутации с `legacy-whole-receipt-retained` без kernel/process side effects. Добавлен тест реального read-only boot gate. Никакого разрешения GUI, автоперезапуска PoC, очистки WAL или MEDIA_PASS. `_165` Voice CI PASS; `_166` full CI pending, PR #328 Draft.
+
+**Этап 3 · `v0.5.1_165` (12.10.2026).** После полного исходно заблокированного возврата старого Telegram PoC добавлен отдельный неизменяемый `legacy-whole-receipt` (`voice_native_legacy_whole_receipt.py`). Координатор под теми же original FD9 + Config inode flock связывает запись с содержимым девяти деревьев исходных снимков/плана/WAL и всех шести стадий, с process PID/start, security policy и kernel argv, fsync записи и директории. Read-only инспектор пригоден для cold-boot дисковой диагностики, но **не** объявляет живой post-reboot IPFW/process приемки: для неё добавлена отдельная explicit original-lock live reconciliation без повторного запуска процессов. Partial/foreign receipts остаются для ручного разбора. Production boot/service/configd/GUI пока не подключены; public Voice Apply, MEDIA_PASS, package publication запрещены. `_164` full CI PASS, `_165` exact-head CI pending, PR #328 Draft.
+
+**Этап 3 · `v0.5.1_164` (12.10.2026).** Исправлена обнаруженная CI `_163` ошибка координации crash-replay: наличие директории current WAL **не доказывает** завершение действия. `voice_native_legacy_five_domain_coordinator.py` теперь при записанном intent вызывает reentrant executor **текущей** стадии IPFW/runtime/Config/marker/process, который повторно сверяет точные previous/current suffix/prefix и безопасно завершает операцию, и лишь затем идёт к следующей стадии. `legacy-files-ready` не переделывается, так как её публикация строго атомарная и её инспектор подтверждает manifest. Таким образом power-cut после IPFW mutation before done не перескакивает к files-ready. Исходный FD9+Config flock не размыкается, двойной запуск процесса запрещён, all stages remain import-only and public GUI/Voice ON blocked. Full-chain CI `_164` pending, PR #328 Draft.
+
+
+**Этап 3 · `v0.5.1_163`:** `voice_native_legacy_five_domain_coordinator.py` делает real five-domain reverse run with same ORIGINAL FD9+OPNsense Config inode flock throughout: exact root journal prefix (no unknown/skip/reorder), real IPFW per-command redo, immutable restore image staging, same-parent runtime two-rename, same Config inode prefix redo, exact transient marker no-replace hardlink and one-shot three-role process actuator followed by sealed UID/GID/kernel argv/PID/start attestation. Does not reissue completed earlier stages. On interruption, reruns only current journal-owned stage with own integrity gate; unknown partial/foreign actor fails closed. After completion, independent seals and exact old IPFW kernel revalidated, and result explicitly `safe_to_enable_voice=False`, `whole_rollback_complete=False`, `media_pass=False`. Next: durable whole rollback receipt + boot review, then production native forward acceptance on appliance and MEDIA_PASS; not yet a service/GUI/boot entrypoint.
+
+
+**Этап 3 · `v0.5.1_162`:** `voice_native_legacy_process_restart.py` calls the existing fixed one-engine three-role lifecycle script after *all four old resources* independently match sealed old IPFW/runtime/Config/marker and after full previous process policy schema2 with canonical supervisor argv, UID/GID and image is re-opened. Under original FD9 + Config inode flock it writes fsynced immutable `legacy-process-restart/intent` BEFORE process startup; new process trio must pass stable PID/start epoch + `FreeBSDProcessSecurityReader.inspect_twice()` and `FreeBSDKernelArgvReader` exact argv bound to saved process evidence. The `verified` receipt is independent evidence only: `safe_to_enable_voice=False`, no whole five-domain completion. If crash occurs with partial/stopped processes, no automatic restart; if all processes already running, only re-attest and seal; never call start twice. Next: original-lock full rollback coordinator with stage-machine, final five-domain verified receipt, reboot/restart safeguards, native forward acceptance on real OPNsense and MEDIA_PASS. PR remains Draft.
+
+
+**Этап 3 · `v0.5.1_161`:** `voice_native_legacy_marker_restore.py` does real old marker restore under original FD9 + Config inode flock, gated by exact old complete IPFW redo, previous runtime two-rename, previous same-inode Config and process quiescence, no native owner; binds immutable old marker bytes/SHA/mode and live parent dev/inode in write-once/fsync intent. Same-parent durable stage file then atomic os.link(target absent) avoids overwriting foreign marker; crash between hardlink and stage unlink is reconciled only if both names share exact inode, nlink2, mode and bytes. Fsync cleanup, preserve all other redo records and candidate runtime; no old processes started or whole receipt. Next: security-policy-bound 3-role process start, verify stable PIDs/epochs and rollback-on-error, full five-domain receipt and reboot, then GUI/native migration/real call MEDIA_PASS.
+
+
+**Этап 3 · `v0.5.1_160`:** изолированный import-only `voice_native_legacy_config_restore.py` после завершённого per-command IPFW reverse и verified previous runtime two-rename выполняет **активную** запись старого `config.xml` через original O_RDWR descriptor под existing FD9 + Config flock, с `ftruncate/stream/fchmod/fsync`, сохраняя OPNsense PHP Config inode. До первого write durable `legacy-config-restore` record pins old/new SHA, exact inode owner, bytes/mode, old five-domain previous. On interrupted retry only unchanged original candidate, previous or prefix of exact previous bytes under intact record passes; arbitrary partial data/changed journal/foreign kernel/process/marker blocks. All old blobs, previous candidate runtime, prior journals retained. Нет marker write, old process security restart, receipt, GUI/boot UAT или actual voice MEDIA_PASS. Следом — secured exact old marker WAL + three-role restarter, verified full rollback receipt, runtime boot checks и native forward GUI integration.
+
+
+**Этап 3 · `v0.5.1_159` (12.10.2026).** Исправлена ошибка CI `_158` в read-only `inspect_legacy_files_ready` при допускаемом отдельном каталоге `legacy-runtime-restore`: теперь формируется изменяемое локальное множество `set(EXPECTED_ROOT)`, без изменения allowlist, native boot guard или доступа к произвольным файлам. Ранее `AttributeError: 'frozenset' object has no attribute 'add'` блокировал новый тест двух переименований. Повторный CI `_159` проверяет end-to-end legacy IPFW→file-image→runtime recovery и восстановление после power-cut. Публичный Voice Apply, реальный Config/marker/process restore и MEDIA_PASS всё ещё закрыты. `_159` CI pending.
+
+
+**Этап 3 · `v0.5.1_158`:** новый import-only `voice_native_legacy_runtime_restore.py` восстанавливает real old `runtime-v2` только при завершённом IPFW exact replay + previous-files stage, сохранённых candidate Config/runtime fingerprint в upgraded WAL schema2, отсутствии всех трёх процессов и старого marker, native owner ledger empty и original FD9/Config inode flock. Использует реальную `_stage_old_tree` native restorer (correct original mode + nofollow/fsync) плюс отдельный immutable pre-first-rename `legacy-runtime-restore` intent, deterministic ready/retired names и две same-parent rename with prefix recovery. Unknown current/ready/retired state fails closed, кандидата сохраняет, redo и полный предыдущий snapshot не удаляет. Active Config inode и old marker не затрагивает. Next: Config restore same inode with write-ahead and verified prior candidate (plus power-cut prefix), old marker exact file/mode restore and 3-role secured process restart, final five-domain receipt/reboot then actual native migration MEDIA_PASS. `_158` CI pending.
+
+
+**`v0.5.1_157` (12.10.2026, этап 3).** Исправлено точечное согласование `legacy-files-ready` с существующим read-only reverse WAL gate: промежуточный tmp каталог допускается только при явной проверке его единственного точного имени под FD9 и Config flock, опубликованный `legacy-files-ready` повторно проходит тот же reader. Другие/частичные каталоги остаются fail-closed; ранее CI `_156` падал на проверке собственного staging, а не на копировании Config. Никакого подключения к production Apply или включения Voice; `_157` CI pending.
+
+
+**Этап 3 · `v0.5.1_156`:** import-only `voice_native_legacy_files_ready.py` после verified completed `legacy-ipfw-replay` использует EXISTING `prepare_restore_stage` + `prepare_installable_restore` над исходным `legacy-previous/previous` (schema2) и запечатывает exact previous marker byte/mode в isolated `legacy-files-ready` dir. Original FD9+Config inode flock; exact kernel prefix, missing 3 processes, marker disabled, no native ledger, and prior fingerprint re-attested before fsynced atomic publication. On crash partial staging retained and boot/lifecycle fail-closed. Integrity reader reopens previous files/image (including original modes) and marker. NO writes to active Config/runtime, no old marker restoration, process starts, cutoff commit, or public Voice Apply. Next work: guarded live file+marker restore redo under original Config inode lock, followed by security/argv-attested old 3-role process restart, final whole five-domain receipt and reboot test; then native forward+media.
+
+
+**Этап 3 · `v0.5.1_155`:** `voice_native_legacy_ipfw_replay.py` берёт запечатанные `legacy-previous`/`legacy-restore-plan` и clean-old-owner WAL `_154` и в **импортируемой, НЕ public** функции выполняет единственную разрешённую последовательность настоящих IPFW команд восстановления старой таблицы/управляемых IPv4/правил 19000+. Перед каждым kernel syscall fsync START-N; после syscall — double raw IPFW verification точного канонического prefix, повторная аттестация stopped 3-role/old marker OFF/native ledger clear/original FD9+Config flock и fsync DONE-N. После crash-between-syscall-and-DONE новое выполнение принимает ТОЛЬКО precise before/after prefix, foreign kernel/duplicate table/other voice tables fail-closed. CI моделирует syscall/power-cut/tamper, production dispatch отсутствует. Следующая задача — под общим WAL объединить это с verified marker, saved Config/runtime и restart of old processes (full UID/GID/argv attestation), отработать после reboot, вывести durable 5-domain receipt. Никакого Voice ON/MEDIA_PASS пока.
+
+
+**Этап 3 · `v0.5.1_154`:** `voice_native_legacy_reverse_wal.py` под единым original FD9+Config flock создаёт non-authorizing reverse PREPARED WAL только после проверяемого clean IPFW interval+tables, отсутствия старого PoC marker/ON-state, трёх остановленных kernel process roles и native ledger owner/pending. Строгий re-inspect `legacy-previous` и `legacy-restore-plan`, write-once/fsync/rename WAL, repeat source/kernel/process/ledger attestations, partial publication retained and boot-blocked. Нет восстановления таблиц/правил, marker, Config/runtime или процессов, нет CLI/GUI action. Продолжение: per-action WAL phases, guarded full five-resource reverse executor и доказательство power-cut recovery; затем native forward cutover + owner-live boot/media test.
+
+
+**Этап 3 · `v0.5.1_153`:** import-only `voice_native_legacy_restore_plan.py` строит validated reverse commands старого IPFW (create `zapret2_tgvoice` addr table, add canonical CIDR, then exact 19000+ ordinary divert rules), воспроизводимые из sealed previous schema2 и проверяемые вместе с runtime dvtws.args/managed IPSET, old state и marker. `prepare_legacy_restore_plan` записывает согласованный bounded plan под original FD9+Config flock (temp+fsync+rename); `inspect_legacy_restore_plan` детерминированно пересчитывает и отвергает чужие/изменённые свидетельства. Нет subprocess/ACL bypass, нет live marker/IPFW mutation, и прежний owner не присваивается native ledger. Следующие шаги: durable undo boundary → чистое IPFW restoration с проверкой отсутствия чужого/конкурирующего owner → previous marker/process/Config restoration → единый PoC→native guarded rollback, reboot UAT, MEDIA_PASS. `_152` CI PASS, `_153` pending.
+
+
+**Этап 3 · `v0.5.1_152`:** импортируемый writer legacy-previous snapshot повторно использует `capture_process_evidence` и `capture_security_policy` со schema-2 supervisor binding для старых трёх процессов. Snapshot now proves Config/runtime, transient marker, exact old IPFW layout, PID/start and actual kernel image + numeric UID/GID policy, with read-back validation. On error stage stays fail-closed and original process probe backup binding is restored. This still does not authorize migration, restore or public ON: next component is durable reverse IPFW/marker restore and bound atomic lifecycle cutover, followed by boot UAT and MEDIA_PASS.
+
+
+**Этап 3 · `v0.5.1_151` (12.10.2026).** Добавлен import-only `voice_native_legacy_previous_seal.py`: после полной прежней live PoC квалификации под original FD9 и Config inode flock он делает fsync/atomic write-once снимок прежних Config/runtime штатным механизмом `capture_previous`, дополнительно сохраняет точные байты/режим старого transient marker и проверенную legacy IPFW таблицу+правила, хеши managed IPSET/dvtws.args и три PID/start. После записи повторяет контроль marker, процессов, kernel argv и IPFW; отдельный `inspect_legacy_previous` проверяет sealed manifest, bytes и Config/runtime. Частичные/неизвестные артефакты не удаляет, boot/lifecycle guard оставляет их в fail-closed ручном review. Нет CLI/GUI/configd вызова этого writer, привилегий native IPFW, миграции, security-policy seal, реального rollback, Voice ON или MEDIA_PASS. Следующий шаг — безопасная связь с предыдущим process/security и полным reversible PoC→native cutover. `_150` Voice + FreeBSD15 PASS; Project CI FAIL на буквальном `v0.5.1_150` в ROADMAP, исправлено здесь. Exact `_151` CI pending; PR Draft.
+
+
+**Этап 3 · `v0.5.1_150`:** добавлен операторский `native-voice-legacy-live-preflight` под штатными FD9 + original Config flock. Использует исходный native live process/argv/kernel checker, `_149` отдельный старый PoC IPFW reader, no-follow old marker/state и pinned managed Telegram IPSET; повторно сравнивает старые inputs. Не владеет legacy IPFW и не изменяет работу. Составная live qualification **не является durable rollback**: следующим шагом сохранять и аттестовать старую пятиресурсную систему плюс transient marker до любых мутаций, затем единый reversible Apply и boot/recovery; GUI ON закрыт. `_149` CI PASS; `_150` pending.
+
+
+**Этап 3 · `v0.5.1_149` (12.10.2026).** В существующий `voice_native_live_ipfw.py` добавлена отдельная строго read-only проверка реального legacy Telegram PoC IPFW: старое правило 19000 на `table(zapret2_tgvoice)` плюс 1–2 обычных правила, единые WAN/divert port, совпадение таблицы с отдельно доверенным IPv4-набором, отсутствие native/staging таблиц, два совпадающих полного наблюдения. Стандартный native IPFW parser не ослаблен; старое IPFW владение НЕ принимается в ledger. В CI добавлены отрицательные сценарии чужих/повторных правил, небезопасных IP, конфликтных таблиц и отказ от mutating adapter. Это средство доказательства прежнего kernel-состояния, не атомарная миграция. Дальше: закрепить старые marker/Config/runtime/process/security/IPFW с durable rollback в original FD9 + Config flock и выполнить контролируемый cutover; boot/UAT и MEDIA_PASS ещё открыты. `_148` полный CI PASS, точный `_149` CI ожидается, PR #328 Draft, пакет не опубликован.
+
+
+**Этап 3 · `v0.5.1_148` (12.10.2026).** Исправлен read-only PoC→native migration assessment: legacy Telegram marker трактуется строго как shell `-f` (включая пустой), а marker/runtime читаются через тот же no-follow/ownership/inode reader, что и original-FD9 native Apply. Runtime ON без marker остаётся unresolved. Пока активен PoC, `may_stage_candidate=false`: старый план ошибочно разрешал build-only staging, который production route блокирует. Добавлены регрессии для пустого marker, unsafe files/runtime-root и противоречивого state. Это диагностическое исправление, **НЕ реализация миграции**; нет удаления marker, GUI ON, reboot recovery или pkg publication. Следующая задача — настоящий reversible PoC→native cutover под FD9/Config flock с durable previous evidence/rollback, затем boot/UAT. Exact `_147` CI PASS; exact `_148` pending. PR #328 Draft.
+
+
+**Этап 3 · актуально `v0.5.1_147`.** GUI read-only Voice saved-draft preview теперь использует тот же fail-closed проверяющий модуль legacy Telegram PoC marker/runtime-state, что и закрытый continuous native Apply, под исходным FD9 + Config inode flock: включённый marker (даже пустой), runtime `enabled`, symlink/unsafe inode/unknown state → отказ до успешного preview, без мутаций. Закрытый operator-only однолоковый PREPARED→guarded COMMIT/rollback (_145) сохранён. Нет публичного GUI ON или автоудаления marker. Исправлена неактуальная candidate pkg identity из `_146` CI; `_146` Voice/FreeBSD15 PASS, Project CI FAIL только по pkg identity. Далее квалифицированная PoC миграция, reboot/runtime failure и owner-live Telegram MEDIA_PASS. PR Draft, pkg не опубликован; exact _147 CI pending.
+
+**Этап 3 · актуально `v0.5.1_146`.** В исходный operator-only PREPARED/continuous Apply добавлен fail-closed контроль прежнего Telegram Voice PoC: под теми же FD9 и Config inode flock проверяются фиксированные transient marker и `runtime-v2/telegram-voice-poc.state` с no-follow, identity/ownership/size/digest-free stability check. Присутствующий marker (старый shell считает его включением даже при пустом содержимом), runtime `enabled`, symlink, unknown или изменяющийся inode блокируют PREPARED и повторно блокируют переходы перед подготовкой/исполнением; `disabled` или отсутствие state допустимы только при отсутствии marker, остальные исходные native/process/IPFW guards остаются обязательны. Никакой автоматической миграции/удаления marker, изменений Config/IPFW/engine или публикации GUI Apply нет. Новые offline регрессии включены в `test-voice-native-prepare-route.py`; CI `_145` уже PASS, exact `_146` будет проверен отдельно. **Далее:** квалифицированная атомарная PoC→native миграция с сохранением previous/rollback, затем normal boot/runtime failure и owner-live FreeBSD/MEDIA_PASS. PR #328 Draft; pkg не опубликован.
+
+**Этап 3 · актуально `v0.5.1_145`.** Production operator-only непрерывный `native-voice-prepare-apply-draft` использует одни исходные FD9/Config inode flock для авторитетной сборки отдельного ON кандидата из сохранённых OFF-черновиков, штатного OPNsense Jinja/orchestrator, schema-4 PREPARED и оригинального guarded forward COMMIT/rollback. Ключевое изменение: `execute_prepared_voice_apply(..., locked_config_fd=fd)` принимает и сохраняет **borrowed original** flock, сам не открывает/не закрывает повторный Config; standalone Apply оставлен обратносовместимым. Новый маршрут не выставлен в configd/GUI, потому что ещё нужны real FreeBSD acceptance, migration/reboot/recovery и owner Telegram MEDIA_PASS. GUI располагает только read-only preview. CI _144 полностью PASS; exact _145 pending, PR Draft, пакет не опубликован.
+
+**Этап 3 · `v0.5.1_119` (2026-10-12):** Реализован import-only `voice_native_previous_evidence_prepare.py`, который под **тем же исходным FD9 и original Config flock** сохраняет ранее отсутствовавшую *продукционную композицию* предыдущих пяти ресурсов: `capture_previous` Config/runtime, `capture_process_evidence` трёх живых PID/start, `FreeBSDProcessSecurityReader.inspect_twice()` image/UID/GID, `capture_security_policy` schema 2 с неизменным supervisor argv и **строго уже принадлежащее ledger IPFW** через `observe_owned_ipfw`. Затем дважды сравнивает live `NativePreviousObserver` с пятью запечатанными fingerprint и отдаёт observer вызывающему preparer. Не допускает чужие/residual файлы, неподтверждённое IPFW-владение, incomplete роли и drift. Новый offline-тест под **одним** Config flock демонстрирует связку: сбор предыдущих свидетельств → существующий write-once candidate + исходный schema-4 PREPARED → mode-preserving `restore-install-image`. Проверены отсутствие Config flock, отсутствующий IPFW owner, чужие предыдущие данные и обрыв после old backup; никаких live engine/Config/kernel изменений. **Voice CI 82 PASS** на кодовом HEAD `b7ca940`; Project matrix на предыдущем `_118` не прошёл отдельный circular Strategy Lab E2E (`eligible circular validation did not start`), точный root cause не установлен; полный CI `_119` выполняется. [Коммит `b7ca940`](https://github.com/Tolian82/os-zapret2-restyle/commit/b7ca94040ccb635ea5b0106f9795688874c5baec). `PLUGIN_REVISION=119`. **Следующее необходимое в этапе 3:** отдельно доказать и выполнить разовую миграцию/seed прежних ordinary IPFW правил в durable ledger (этот модуль НЕ захватывает чужие/legacy правила), соединить компилятор saved GUI release и previous-capture с **одним реальным** native service/configd Apply, затем GUI ON/OFF, runtime-failure и reboot. Нет публичного Voice ON, нет опубликованного pkg, owner-live OPNsense и Telegram MEDIA_PASS не приняты.
+
+**Этап 3 · `v0.5.1_118` (2026-10-12):** Исправлен реальный пробел в готовности закрытого Apply: `voice_native_forward_stage_prepare.py` после запечатывания schema-4 **PREPARED** теперь под теми же FD9 и original Config flock вызывает **существующие** `prepare_restore_stage` и `prepare_installable_restore`; до любой операции MUTATING появляется `restore-stage` и `restore-install-image` с проверенными *исходными* правами Config/runtime. Финальная повторная сверка связывает install-image, журнал, ledger и staged Voice candidate. Неизвестный прежний install-image запрещает новый PREPARED; обрыв при формировании оставляет исходный сервис без изменений и `PREPARED`+частичные доказательства для явной операторской диагностики. Новые регрессионные тесты power-cut/foreign install image: **Voice CI 81/81 PASS** на исходном кодовом `_118`. [Код `3a6a3fd`](https://github.com/Tolian82/os-zapret2-restyle/commit/3a6a3fdac42371f38260b2212cfa8f88f30948f5), [исправление тестового импорта `ff9011b`](https://github.com/Tolian82/os-zapret2-restyle/commit/ff9011bbcf9b8d5c142cd59b05fcf710d360603e); `PLUGIN_REVISION=118`. **Ещё не готово:** реальная штатная подготовка прежних process/security/IPFW ownership свидетелей и единый configd/GUI Apply, legacy Telegram PoC migration, boot/reboot и owner-live media proof. Это НЕ публичное Voice ON, пакет не опубликован; общий CI/FreeBSD подтвердить на окончательном HEAD.
+
+**Этап 3 · `v0.5.1_116` (2026-10-12):** Реализован приватный `voice_native_saved_release_prepare.py` — без дублирования штатного генератора из кандидатного сохранённого GUI XML с global ON и shared managed IPSET повторно компилирует пять артефактов `voice_release_stage`, сверяет их побайтно со staged release, затем через существующий `voice_handoff_preflight.build_runtime_handoff` проверяет generator.sh/один dvtws2, ordinary Strategies, TCP/UDP порты, WAN и IPFW. Никакой внешний proof/manifest не принимается. Всё выполняется под исходными FD9 и Config flock; только после подтверждения существующий write-once `prepare_staged_forward_voice_intent` создаёт оригинальный schema-4 PREPARED. Новый offline test покрывает полноценный переход и отказ для global OFF, foreign argv, порта, устаревшего release и отсутствия flock. `_115` CI обнаружил неверный тестовый корень IPSET; `_116` использует фиксированный `/usr/local/etc/zapret2/runtime-v2`. [Код `6da6f0d`](https://github.com/Tolian82/os-zapret2-restyle/commit/6da6f0d524ac851afdd1c8f2bcde5b0cf1a95d36), [исправление `a3742b0`](https://github.com/Tolian82/os-zapret2-restyle/commit/a3742b06cce3fc2c41c698cd1202b020e132fea6); `PLUGIN_REVISION=116`; exact-head Voice CI 81 PASS. **Открыто в этапе 3:** под штатной service/configd властью собрать предыдущие пять ресурсов и вызвать import-only preparer, завершить GUI ON/OFF, legacy migration и normal reboot/аварийный recovery. Публичный ON ещё не разрешён, pkg не опубликован, owner-live и Telegram MEDIA_PASS не проверены.
+
+**Этап 3 · `v0.5.1_114` (2026-10-12):** Добавлена единая приватная подготовка write-once release `voice_native_forward_stage_prepare.py`: под исходными **FD9 и Config flock** проверяются отдельно сформированные кандидатные Config/runtime и IPFW, с сохранением владельца и разрешений копируется candidate runtime, fsync-ится содержимое, атомарно публикуется `forward-candidate` и через **существующий** `prepare_forward_voice_intent` создаётся настоящая schema-4 **PREPARED** запись с прежними пятью наблюдаемыми ресурсами и IPFW ledger. Целиком сверяется дерево runtime перед закрытым операторским Apply; при сбое не удаляется неопределённое staging-железо, процесс/Config/IPFW не мутируются. Добавлены offline/fault регрессии; CI выявил и исправил два строго типовых расхождения raw/canonical IPFW manifest в `_113` и `_114`, без ослабления проверок. [Реализация `25362cb`](https://github.com/Tolian82/os-zapret2-restyle/commit/25362cbd8aad865c0775984c8b4dfa980eab9cbd), [коррекция `220dea8`](https://github.com/Tolian82/os-zapret2-restyle/commit/220dea85882f02c022aba493e0324bec9d51c815), [коррекция `b42811d`](https://github.com/Tolian82/os-zapret2-restyle/commit/b42811dcd4ad426d6e0ea745e5d9e816a5a59a8b). `PLUGIN_REVISION=114`. **Следующее:** подключить конструктор candidate из GUI/Strategies к этому приватному preparer по штатному Config owner; затем guarded UI ON/OFF Apply, legacy migration, supervisor/reboot. Импортный preparer **не означает публичный ON**, pkg не опубликован, physical OPNsense и Telegram MEDIA_PASS не проверены.
+
+**Этап 3 · `v0.5.1_111` (2026-10-12):** К штатному `zapret_service.sh` под **существующим lockf FD9** подключён **закрытый операторский исполняющий маршрут** `native-voice-apply-prepared`. Новый `voice_native_apply_route.py` принимает строго один фиксированный `forward-candidate` в root-private whole-journal каталоге, проверяет **schema-4 PREPARED**, сверяет канонический IPFW manifest, staged Config и dvtws2 args с долговечными digest; заново открывает прежнюю process/security policy и вызывает **существующий** `execute_prepared_voice_apply`, который держит original Config inode flock на всех пяти ресурсах и использует уже принятый guarded rollback при сбое. Ни пользовательских аргументов, ни отдельного daemon/IPFW owner, ни configd/GUI/boot activation добавлено не было. Запущены офлайн-регрессии маршрута и прежние suite. [Код `949fc76`](https://github.com/Tolian82/os-zapret2-restyle/commit/949fc7630ef266768363a5b28f9edfb37f566f87), `PLUGIN_REVISION=111`. **Открыто:** создать штатный root-controlled preparer для staged release + previous witnesses + owner ledger, затем связать через GUI Apply с безопасным handoff и довести reboot/migration. Этот операторский маршрут не означает готовность публичного Voice ON, пакет не опубликован, Telegram MEDIA_PASS отсутствует.
+
+**Этап 3 · `v0.5.1_110` (2026-10-12):** Поставлен штатный fail-closed барьер для старого Telegram Voice PoC: `telegram-voice-enable` и `telegram-voice-disable` под уже существующим lockf FD9 перед любой мутацией marker/dvtws2/IPFW проверяют сохранённый OPNsense Voice XML и whole/IPFW журнал через единый `voice_native_lifecycle_router.py legacy-poc-preflight`. Пока все пять Voice OFF и журнал чист, старый совместимый режим остаётся возможным; при сохранённом ON, повреждённом XML или незавершённом native cutover старый PoC отвергается. `telegram-voice-status` остаётся доступным для диагностики. [Код `7791cee`](https://github.com/Tolian82/os-zapret2-restyle/commit/7791cee00ec3ac9d9f4fb5f8798db49031f118b0). Исправлены устаревшая identity-строка Project State, Syntax lint Bash/POSIX в CI; эти doc/CI изменения не меняют `PLUGIN_REVISION=110`. **Этап 3 продолжается:** настоящий нативный Apply в одном FD9, контролируемая миграция PoC, recovery и boot. Voice ON через GUI, опубликованный pkg и MEDIA_PASS не заявляются; exact-head CI требует подтверждения.
+
+**Этап 3 · `v0.5.1_109` (2026-10-12):** Исправлен выявленный в `_108` CI старый строковый контракт live-preflight: под одним `lockf FD9` теперь явно проверяется последовательность legacy/native-lifecycle/native-candidate/IPFW маршрутов, включая новый `native-voice-candidate-preflight`. Никакие ограничения настоящего live-процесса, IPFW, Config или Python-компилятора не ослаблены. [Тестовый код `28d529c`](https://github.com/Tolian82/os-zapret2-restyle/commit/28d529c8463231129785361a8a9e0fef57caf0fe); `PLUGIN_REVISION=109`. `_109` exact-head CI ожидает подтверждения. Stage 3 по-прежнему не подключает публичный Voice ON; следующий кодовый шаг — единственная полноценная штатная FD9 Apply-транзакция с моделью, candidate/previous и пятью проверяемыми ресурсами. Ни выпуска пакета, ни owner-live проверки, ни Telegram MEDIA_PASS нет.
+
+**Этап 3 · `v0.5.1_108` (2026-10-12):** Сохранённый Voice XML теперь непосредственно компилируется из исходного заблокированного Config inode через **один штатный lockf FD9**: новый read-only `native-voice-candidate-preflight` / configd `voice_candidate_preflight` использует существующий `voice_profile_compiler.compile_candidate` и те же пять профилей, параметры и общие IPSET. До компиляции проверяются persistent Config, WAN/глобальный ON и pending whole/IPFW journal; результат содержит только имена профилей, число и SHA256, без публикации пользовательских IP/параметров или изменения конфигурации, движка, файлов staging и IPFW. Новые офлайн-тесты покрывают успешную компиляцию, запрещённый native option, пять OFF и service/configd FD9 маршрут. [Код `b976d85`](https://github.com/Tolian82/os-zapret2-restyle/commit/b976d8555bd5890df07b67d37bc0cd3d556a1034); exact-head `_108` CI проверяется отдельно. **Следующий этап 3:** связать этот компилятор и собственный Config-lock handoff с реальным приватным пятикомпонентным Apply в единой FD9 транзакции, затем legacy migration и normal reboot. **Native Voice ON/GUI Apply ещё не включены**, package unpublished; MEDIA_PASS не заявляется.
+
+**Этап 3 · `v0.5.1_107` (2026-10-12):** После внедрения read-only FD9/configd Voice lifecycle router `_106` сохранён строгий CI-контракт старого live-preflight: тест явно проверяет новый соседний подмаршрут `native-voice-lifecycle-inspect` внутри того же закрытого lockf FD9 dispatch вместо устаревшего соседства двух старых имён. `_106` Voice CI обнаружил этот единственный источник регрессии, проверка не ослаблена. Исправление теста + очередное повышение `PLUGIN_REVISION=107` — [`21ce978`](https://github.com/Tolian82/os-zapret2-restyle/commit/21ce978c8e35364486d6283a56de122b09625ad8). Код `voice_native_lifecycle_router.py` и configd/служба остались неизменными; именно этот код подлежит exact-head `_107` CI. Функциональная граница неизменна: **только диагностика**, не native Voice ON/Apply, не миграция/boot, не опубликованный пакет. Все старые отметки о проверке `_106` — исторические записи.
+
+
+**Этап 3 · первый кодовый патч `v0.5.1_106` (2026-10-12):** Добавлен read-only native lifecycle router `voice_native_lifecycle_router.py` со штатным FD9 в `zapret_service.sh` и отдельной configd-командой `voice_lifecycle_inspect`. Он под собственным непрерывным flock исходного `/conf/config.xml` читает сохранённую XML-модель пяти Voice профилей, общий ON/OFF и выбор WAN, а **сначала** проверяет durable Voice cutover/IPFW intent через существующий `voice_cutover_guard` (даже если Config оборван посередине записи). Результат только диагностический: без запуска/остановки `dvtws2`, без Config/IPFW записей и **без разрешения Voice ON**. Пять сохранённых OFF сохраняют полномочия старого lifecycle; несовпадающий WAN, глобальный OFF и начатая нативная транзакция классифицируются отдельно. Консервативные проверки malformed XML/boolean, дубликатов, Config inode/flock и нового service/configd dispatch внесены в Voice CI и FreeBSD 15. Кодовый коммит: [`6d875d4`](https://github.com/Tolian82/os-zapret2-restyle/commit/6d875d49a95bee817249f8850c0da9e25e48c431). **Следующий шаг этапа 3:** после точного CI подключить штатное действие Apply к проверенному native исполнителю под тем же владельцем, не обходя guard; затем reboot/migration, не вводя второго engine. Версия `_106` не опубликована и не устанавливалась; Telegram MEDIA_PASS не заявляется.
+
+
+**ЭТАП 2 ЗАКРЫТ — offline/private native Apply/rollback, 2026-10-12, `v0.5.1_105`.** Итог подтверждён на кодовом HEAD [`b7c6aa5`](https://github.com/Tolian82/os-zapret2-restyle/commit/b7c6aa59116ecb967ff605e3dc82fe0bb33ce88a): [общий CI + Voice + FreeBSD 15](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38182594108) PASS, [FreeBSD 15 testing-package qualification + delivery governance](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38182594158) PASS, PR-title PASS. Матрица PREPARED/MUTATING/COMMITTED/ROLLED_BACK, crash/receipt/redo/reboot-review и отказ для foreign/partial supervisor прошли офлайн. Завершение означает **только готовность закрытого приватного исполнителя к подключению**, не готовность GUI, не установленный пакет, не проверку на живой FreeBSD и не Telegram MEDIA_PASS. **Дальше активен этап 3: единый штатный FD9/configd/service lifecycle, миграция legacy и разделение normal reboot vs incomplete recovery.** Документационный коммит после `_105` не меняет `PLUGIN_REVISION=105`. Исторические нижележащие записи с «PENDING» и старые ревизии относятся к моменту их создания. [Единый план](https://github.com/Tolian82/os-zapret2-restyle/blob/bf20957715b5dc7f965c207d6def8fb1411f7298/docs/architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md).
+
+
+**v0.5.1_105 (2026-10-12):** Stage-2 FINAL transition-contract audit found and fixed the private Apply **false MUTATING diagnostic after a durable previous ROLLED_BACK**. When a forward stage fails and its existing independently verified rollback returns, the upper original-FD9/Config-flock coordinator now checks returned safety flag, five-resource result, read-back durable phase and immutable original MUTATING predecessor. It reports either `MUTATING` retained pending receipt/closure, or already **durable `ROLLED_BACK`** awaiting owner acceptance; contradictory returned phase versus on-disk journal refuses. Original PREPARED failures never call rollback; COMMITTED only goes forward; terminal retry remains read-only. Two native one-lock failure-injection regressions check accurate durable status and refusal of fabricated terminal claim. `_104` exact-head Project, Voice, governance, FreeBSD 15 build and PR title all PASS. `_105` exact-head CI pending. This changes no public Voice ON, configd/service/boot, package publication or on-device Telegram media qualification.
+
+
+**v0.5.1_104 (2026-10-11):** Added three Stage-2 full native forward-failure/recovery fault-injection tests at the actual **write-once previous rollback receipt** and **non-destructive cleanup plan** fsync boundaries, using the unchanged production receipt/plan/journal implementations (not mock receipts). The only simulated authorities are FreeBSD process/kernel-security observation and IPFW command execution. A power-cut after a real receipt but before plan, or after a real plan but before terminal ROLLED_BACK, must safely retry with the already restarted previous dvtws2/supervisor and same original Config flock; must not replay forward work or stop/start a second time; durable receipt/plan checksums and predecessor must remain intact. A tampered on-disk receipt must fail closed with MUTATING retained. `_103` Voice/FreeBSD15 CI PASS, Project matrix pending at last check. `_104` exact-head CI pending. This is private Stage-2 qualification, not public Voice ON, on-appliance testing or a package release.
+
+
+**v0.5.1_103 (2026-10-11):** Stage-2 original FD9/Config-inode Voice lifecycle now **re-pins all three native process PID/start epochs and FreeBSD kernel argv/executable immediately before the fixed full-topology stop**. The initial PREPARED→MUTATING previous stop and the MUTATING full-candidate same-FD rollback both pass immutable per-call expected process identities into the existing `FreeBSDVoiceProcessActions.stop_candidate` rather than trusting solely the coordinator's earlier snapshot. A replaced process, changed kernel binary/argv, or unstable journal/probe refuses without shell stop, IPFW change or Config write. Engine-only's separate already-attested stop and manual native rollback callbacks remain unchanged. New real-file/simulated-FreeBSD tests cover post-MUTATING-mark PID epoch/image swap, post-coordinator/pre-actuator candidate daemon replacement, and six partial/foreign supervisor process topologies (all fail closed). `_102` introduced the proof, `_103` corrected the normalizer's schema wrapper and ensured the test swaps to an actual NUL-terminated foreign image. `_101` complete Project/Voice/FreeBSD 15 CI PASS; exact-head `_103` CI pending. Private feature; no public GUI ON, appliance install or media PASS, package unpublished.
+
+
+**v0.5.1_101 (2026-10-11):** Stage-2 PRIVATE original-FD9/Config-flock Voice executor now accepts an already-sealed schema-4 **ROLLED_BACK** transaction for a strictly READ-ONLY repeat. It reuses existing `inspect_boot_recovery` to verify the durable original MUTATING predecessor, installed old Config/runtime, exact old IPFW ownership and live kernel, terminal receipt, cleanup plan, and matching three-role PID/start epochs. A healthy unchanged terminal returns `native-voice-rolled-back-read-only-verified`, explicitly **not** Voice ON or permission to finish/close; stale process epochs, a reset/foreign kernel, missing receipt/plan or wrong desired manifest refuse without stop/start, IPFW mutation, Config write or journal deletion. Three real-file/ledger/simulated FreeBSD terminal CI regressions added. `_100` full Project/Voice/FreeBSD15 CI PASS. `_101` exact-head CI pending. No live appliance, GUI/service/boot wiring or Telegram MEDIA_PASS; package candidate unpublished.
+
+
+**v0.5.1_100 (2026-10-11):** Fixed the final isolated `_99` previous-PID negative test fixture: it now injects the exact archive-bound pre-STOP `PID/start_ns` observation via the already simulated FreeBSD native process-reader seam, instead of asking `FakePs` to invent an unrelated process start epoch. This directly proves a still-running original pre-cutover process is NOT a completed rollback and cannot obtain a previous-restart receipt or ROLLED_BACK. Production behavior unchanged from `_97`; `_98` post-restart positive seal PASSED; `_99` Voice negative failed solely at mismatched simulated start epochs. `_100` exact-head CI required. No published candidate or service/GUI/boot enablement.
+
+
+**v0.5.1_99 (2026-10-11):** Corrected two **test-only** faults in the `_98` post-restart crash replay qualification: the top-level private Voice executor deliberately converts lower-level safety denials into a stable manual-review exception (tests now verify BOTH wrapper and original chained cause), and the pre-STOP guard fixture now uses exact sealed pre-cutover PID/start evidence instead of hard-coded unrelated PIDs. The positive previous-process-restart without duplicate stop/with locked terminal seal test ALREADY PASSED at `_98`; production code and fail-closed policy unchanged. `_99` exact-head full CI required. Package unpublished, no Voice ON or router installation.
+
+
+**v0.5.1_98 (2026-10-11):** Stage-2 native same-FD rollback can now **resume AFTER the previous engine+supervisor were already restarted but BEFORE the fsync'd receipt / ROLLED_BACK terminal transition**. If the complete old Config/runtime/IPFW and all three process roles are stable, it refuses to stop/restart them again; requires new PID/start epochs distinct from the originally sealed pre-cutover processes, both independent FreeBSD kernel image/credential/argv security readers, and fresh native attestation before reusing existing receipt/cleanup/terminal-seal functions. Without full evidence it fails closed with the original MUTATING journal intact. Three real-file/IPFW-ledger and simulated process regressions cover refusal without security readers, exact resumed in-lock seal and refusal to forge rollback from original pre-STOP process epochs. `_97` code was immediately corrected at `_98` for a test-syntax error (no change in production policy). `_96` full Project/Voice/FreeBSD 15 CI PASS. `_98` CI pending; no GUI ON/boot/service connection, publication or Telegram media proof.
+
+
+**v0.5.1_96 (2026-10-11):** Closed the **early MUTATING after previous-process STOP but before forward-runtime redo/rename** recovery gap. Under the existing original FD9 + locked Config inode, the private five-resource rollback now refuses a candidate or foreign active runtime with NO durable forward-runtime redo, as well as same-cutover orphan forward-ready/retained directories created before redo publication. Only the exact previous runtime with no unmarked staging can proceed to old dvtws2/supervisor restart and five-domain reattestation. Three real-file/ledger and simulated FreeBSD kernel/IPFW regression tests cover old-stopped successful recovery, orphan pre-arm staging refusal and missing-redo candidate-adoption refusal. `_95` exact-head full CI (Project + Voice + FreeBSD 15) PASS; `_96` CI pending. Public Voice ON/boot/service wiring and OPNsense owner-live/media evidence remain OPEN. Package is NOT published.
+
+
+**v0.5.1_95 (2026-10-11):** Stage-2 PRIVATE same-FD native Voice executor now handles a retried schema-4 **MUTATING** journal by delegating exclusively to the EXISTING independently attested five-resource previous rollback, under its original FD9 and continuously held Config inode/flock. It does **not** repeat candidate forward stages after a power cut; full candidate or trusted engine-only may recover, but a foreign process/kernel, partial supervisor, missing ownership, or altered immutable evidence remains fail-closed and retains journal. Two real filesystem + simulated kernel/IPFW regression cases cover successful late-candidate rollback through the original executor and refusal on a foreign executable. `_94` Voice CI/FreeBSD 15 PASS, general Project CI FAIL only at stale exact ROADMAP candidate identity; current handoff/release identity is synchronized in this revision. **No production GUI/service/boot wiring or owner-live/media verification; package candidate is NOT published.** Exact-head `_95` CI pending.
+
+
+**v0.5.1_94 (2026-10-11):** Stage-2 PRIVATE `execute_prepared_voice_apply` now recognizes an already-durable schema-4 **COMMITTED** intent under its original FD9 + Config inode flock and routes the retry directly to the existing bounded postcommit IPFW replay, without re-running process stop, runtime rename, candidate Config writes or PRECOMMIT. Added real-file/ledger + simulated native IPFW fault-injection for power loss AFTER a stage table is actually deleted but BEFORE the cleanup returns, then successful retry; also rejects foreign stage contents and a foreign desired manifest. This moves interrupted COMMITTED recovery into the SAME private executor; normal GUI/service/boot are NOT yet connected and live FreeBSD has NOT been qualified. `v0.5.1_94` candidate is **unpublished**. Exact-head CI pending.
+
+
+**v0.5.1_93 (2026-10-11):** Implemented a **private COMMITTED-only same-FD postcommit replay** in `voice_native_forward_apply.py`: after durable whole COMMIT, a crash before/within IPFW ownership/table cleanup can be retried with full double native Config/runtime/process/kernel and redo attestation; the original pending old→desired IPFW ledger is verified even when ownership has already switched. Reuses `voice_ipfw_runtime.commit_verified` only; no new process, Config/runtime mutation, or rollback of COMMITTED. Completed IPFW replay is idempotent/read-only. Added real Config/runtime/ledger and simulated native IPFW/power-loss regressions (after whole COMMIT and after owner switch) and negative guards. **Stage 2 still OPEN:** remaining crash boundaries, lifecycle wiring and real OPNsense acceptance; no GUI ON, public service hook, package release or Telegram MEDIA_PASS.
+
+
+**v0.5.1_92 (2026-10-11):** Added a second real-filesystem/simulated-native-IPFW POWER-CUT regression for Stage-2 five-resource rollback: interrupt the PREVIOUS runtime restore after candidate-active→restore-retired but before restore-ready(previous)→active, after IPFW has already been reverted and journal stays MUTATING. On retry with the same immutable old/forward/restore redo, the normal previous runtime redo MUST take precedence over `_90`'s missing-active forward repair, restore old Config/runtime, then restart previous engine and supervisor. Tests assert no premature restart or journal clearing after the first crash and exact five-domain recovery after retry. No production executor changes in this revision; private GUI/boot and real appliance qualification still pending.
+
+
+**v0.5.1_91 (2026-10-11):** Corrected a regression found by `_90` Voice CI's existing quiescence-loss failure-injection test: the new forward rename crash bridge was calling an additional quiescence gate for ALL normal previous-runtime restores, changing the established fault boundary. Removed that redundant unconditional gate. For the missing-active crash path, the dedicated bridge still independently checks quiescence twice while verifying and completing the exact redo-pinned rename. The original regular rollback gate cadence and semantics remain unchanged. `_91` exact-head full Voice/FreeBSD and new simulated power-cut tests pending.
+
+
+**v0.5.1_90 (2026-10-11):** Stage-2 crash replay now recovers the exact POWER-LOSS GAP between forward runtime `active(previous) → retained(previous)` and `ready(candidate) → active(candidate)`. Prior code refused missing active runtime although the fsync'd original `forward-runtime-redo.json` and both exact trees survived. Under original FD9+Config inode/flock, after independently establishing NO live engine/supervisor and previous native IPFW, `voice_cutover_file_rollback.py` verifies redo checksum/whole journal SHA, same original Config inode and runtime parent, exact candidate ready tree and original retained previous tree. It then completes ONLY the interrupted forward rename and immediately delegates to the EXISTING crash-resumable previous runtime+Config+IPFW/engine/supervisor rollback. If a previous runtime-restore redo already owns missing active, the established previous restore resumes instead. Missing/foreign redo or tampered tree fails closed without service restart. Adds real-file/ledger simulated power-cut success, missing marker and tampering regression. This is not an on-appliance reboot qualification or Voice ON.
+
+
+**v0.5.1_89 (2026-10-11):** Corrected the `_88` new terminal native rollback integration fixture so its `voice_cutover_journal._digest` import occurs AFTER adding the installed backend module root to `sys.path`. `_88` specialized Voice CI terminated at test import before exercising the new seal logic; no production change in `_89`. Full same-original-fd previous receipt/ROLLED_BACK positive and failure tests rerun at exact `_89` head.
+
+
+**v0.5.1_88 (2026-10-11):** Stage 2 native forward failure path now reuses the ALREADY IMPLEMENTED manual-recovery finalization under the SAME borrowed original Config FD9/flock, when and ONLY when its trusted FreeBSD process-security AND kernel-argv readers are both bound to the sealed previous evidence. After five-resource previous restart, its existing `seal_previous` callback performs `attest_previous_restart`, fsyncs `seal_previous_receipt`, and fsyncs non-destructive `seal_previous_completion` / terminal schema-4 ROLLED_BACK while still holding the exact Config fd. The outer forward coordinator independently checks terminal `mutating_predecessor` against original intent and refuses Voice ON pending owner acceptance. Test-simulated process actions without native readers retain MUTATING and cannot fabricate terminal finalization; receipt failures retain previous files/intent for manual inspection. Linux/FreeBSD CI includes late-failure same-lock positive/negative seal tests; exact-head qualification pending. **No actual GUI/service installation or Telegram audio proof.**
+
+
+**v0.5.1_87 (2026-10-11):** Updated the existing candidate-engine shell allowlist regression to assert the EXACT new fixed native lifecycle action list, including the narrowly bounded `stop-candidate-engine` command introduced in `_86`. Added explicit checks that this command stops only the engine and requires supervisor PID files absent; never executes supervisor_stop or arbitrary user-selected shell commands. `_86` specialized Voice CI stopped only because its prior exact string fixture no longer matched the extended allowlist; behavioral positive/negative engine-only recovery tests are pending exact-head CI.
+
+
+**v0.5.1_86 (2026-10-11):** Stage 2 gains a NARROW recovery path for exactly one already-running native Voice candidate dvtws2 without supervisor. Under the SAME FD9 + original Config flock, the existing `voice_native_forward_apply.py` preflights immutable old install image/process policy/IPFW ownership, observes two stable engine-only PID/start snapshots, verifies candidate runtime redo/digest, actual FreeBSD kernel argv/executable and bounded IPFW PRECOMMIT, and dispatches new no-PID `stop-candidate-engine` through the existing pinned `voice_native_process_lifecycle.sh`. `FreeBSDVoiceProcessActions` independently repeats kernel/epoch gate before stop. After verified all-stopped state, it reuses EXACTLY the existing five-resource rollback (IPFW, runtime, Config, prior engine and supervisor). Foreign engine/partial supervisor/failed stop remain fail-closed with MUTATING evidence. Added real-file/simulated-kernel positive+negative tests to current Linux/FreeBSD Voice matrix. **NOT yet qualified for OPNsense/GUI ON or Telegram media; old-state finalization and other crash states remain open.**
+
+
+**v0.5.1_83 (2026-10-11):** Corrected forward-failure test injection to distinguish PREPARED preflight refusal from post-MUTATING failure eligible for the existing five-resource rollback. `_82` CI failed on this fixture ordering mismatch rather than an exception in production rollback. No unsafe fallback added. Exact-head CI pending.
+
+
+**v0.5.1_82 (2026-10-11):** Native private one-FD Voice forward Apply now requires the sealed previous install image BEFORE any process mutation and handles failures using the pre-existing `preflight_native_recovery` + `restore_previous_five_resources` on the SAME locked Config inode and original FD9. When the durable whole journal is MUTATING and all native process/IPFW evidence supports rollback, it restores the old five domains and reports a failed Apply; an incomplete/foreign recovery remains fail-closed with both journals retained. PREPARED failures never stop existing service; an already durable COMMITTED journal is NEVER rolled back (IPFW postcommit requires forward reconciliation). New real-filesystem/kernel-simulator late-failure regression and single-descriptor PREPARED/MUTATING/COMMITTED failure paths in Linux and FreeBSD CI. **Still OPEN:** partial one-engine/no-supervisor failure and crash states, durable previous-restart finalization, public service/GUI ON, real OPNsense acceptance.
+
+
+**v0.5.1_81 (2026-10-11):** The EXISTING `voice_cutover_five_resource_rollback.py` now optionally accepts a borrowed already-locked original Config FD, so it can restore old engine/IPFW/runtime/Config/supervisor under the SAME original flock as private `voice_native_forward_apply.py`. It strictly checks the borrowed descriptor's inode/ownership and acquired flock, never obtains a second conflicting Config lock, and never closes/unlocks a borrowed FD. Its existing manual recovery caller (no borrowed FD) keeps original behavior. Added isolated real-filesystem + simulated process/IPFW tests proving one Config flock spans stop→IPFW→files→restart, rejects unlocked/foreign descriptors and retains the MUTATING journal. **Still OPEN:** safe automatic invocation by native forward on every failure, postcommit finish, production GUI/boot and real OPNsense qualification; do not call private Apply from GUI.
+
+
+**v0.5.1_80 (2026-10-11):** `_79` real five-resource COMMIT integration test exposed one concrete API mismatch: existing `voice_ipfw_runtime.commit_verified(store, adapter, whole, proof)` takes four arguments, not five. The private native Apply now invokes that existing post-whole-commit IPFW function with the correct contract; no independent IPFW commit path or public ON authority is added. `_79` Voice CI passed 7/8 new coordinator tests, failure strictly at this call; `_80` exact-head CI and actual postcommit state verification required.
+
+
+**v0.5.1_79 (2026-10-11):** Introduced PRIVATE `voice_native_forward_apply.py` to compose existing schema-4 PREPARED stop/runtime, one candidate engine, IPFW PRECOMMIT, candidate supervisor, and candidate Config under ONE ORIGINAL FD9 owner + ONE Config flock/inode, followed by independent double five-domain live attestation and durable whole COMMIT before existing `commit_verified` IPFW ownership/old-stage-table cleanup. The read-only witness recomputes the MUTATING predecessor digest from COMMITTED for retained runtime/redo evidence, verifies actual kernel process argv/PID-start and scoped IPFW, and retains previous backup/whole journal for postcommit cleanup. Includes genuine filesystem+simulated native IPFW commit tests and single-descriptor staged-order/failure tests in Linux/FreeBSD CI. **Not yet public Voice ON:** automatic same-FD prior rollback, postcommit cleanup/normal boot, GUI/configd wiring and real appliance are still OPEN; on ambiguous failure intent stays fail-closed.
+
+
+**v0.5.1_78 (2026-10-11):** `_77` Voice CI passed 9/10 real changed-candidate Config tests; the remaining negative source-replacement fixture used unlink()+create, which can recycle the just-freed inode. Replaced it with a separately created same-byte, same-mode file and `os.replace()` while the original inode still exists, then explicitly assert different inode before expecting the existing forward-redo anti-replacement check to refuse rollback. Production Config/IPFW/native lifecycle writer unchanged. This is an isolated test-fixture correction; exact-head `_78` CI and FreeBSD 15 qualification required.
+
+
+**v0.5.1_77 (2026-10-11):** The first `_76` Voice CI revealed the inherited `_69.._75` integration fixture used identical previous and staged Config bytes. Fixed `_77` test setup to generate a **distinct candidate XML BEFORE** the schema-4 PREPARED intent is sealed so success, prefix-power-cut replay and previous-restore tests exercise actual write mutation, not a no-op. The native candidate writer now correctly returns `candidate-config-unchanged` when desired and previous Config truly have identical bytes and mode (without manufacturing a redo). Original FD9, Config inode/flock, independent kernel/IPFW proof, write-ahead and no public Apply/COMMIT guarantees stay intact. `_76` Voice CI failed at its new test fixture; `_77` exact-head CI is required.
+
+
+**Статус:** ЕДИНЫЙ АКТУАЛЬНЫЙ ПЛАН · Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328) · 2026-10-11
+**Исходная ревизия аудита:** `v0.5.1_75`, `dc27412375731fc54f1df97a36f61c541f2f1790`. **Текущий кандидат реализации:** `v0.5.1_174` (Stage 2 закрыт на exact-head CI; Stage 3 — активный следующий этап; приватный исполнитель ещё НЕ подключён к service/GUI). Версия пакета не опубликована, изменения ещё не устанавливались и не проверялись на реальной OPNsense.
+**Приоритет:** законченный пользовательский сценарий, не очередная подсистема проверки. Детальное утверждённое ТЗ и компоновка остаются в [VOICE_TRANSMISSION_GUI.md](https://github.com/Tolian82/os-zapret2-restyle/blob/bf20957715b5dc7f965c207d6def8fb1411f7298/docs/architecture/VOICE_TRANSMISSION_GUI.md); сведения о стенде и фактических звонках — в отдельных исследовательских документах. Исторические задачи в ROADMAP, START_HERE и старых блоках архитектурного документа НЕ заменяют эту последовательность.
+
+### Цель и определение готовности
+
+Штатная страница «Передача голоса» после «Стратегии», перед «Лаборатория»: пять независимо сохраняемых профилей Telegram, Discord, X (Twitter), SIP (VoIP), Custom; по одной галочке, многострочному полю нативных STUN/dvtws2 параметров и совместному IPv4/CIDR IPSET для каждого; Voice WAN вверху; общий статус Zapret2; стандартная нижняя кнопка «Применить». Нет полей LAN/входных интерфейсов, опциональной галочки локального UDP или восстановления после reboot. Non-STUN остаётся в «Стратегиях». Сохранённые OFF-поля не стираются. Один общий dvtws2, общий lifecycle и модель Config без второго постоянного состояния; маршруты, Squid/sing-box/TCP/TLS, NAT/PF и исследовательский Docker не изменяем.
+
+**Два разных результата:** (1) **GUI/CONFIG/BOOT PASS** — безопасно сохраняются, включаются, выключаются и восстанавливаются нужные UDP-профили, проверяется реальный IPFW capture и не нарушены ordinary Strategies; (2) **MEDIA_PASS / CALL_PASS** — отдельно измеренная передача UDP-медиа/двусторонней речи в конкретном Telegram-эксперименте. Готовая страница не требует заранее доказанной универсальной Telegram-стратегии, но ни одна стратегия не может объявляться рабочей по одному CI/counter/факту слышимого звука.
+
+### Аудит уже выполненной работы — НЕ переписывать заново
+
+| Область | Реализовано | Чего нет |
+|---|---|---|
+| OPNsense MVC и модель | `Menu.xml`, `IndexController`, `voice.xml`, `voice.volt`, `Zapret.xml`; 5 сервисов и shared IPSET; RU/EN, form snapshot/optimistic concurrency, read-only validate, OFF-only draft and Apply | Полноценный GUI ON Apply, единые точные per-service статусы, окончательная визуальная приёмка |
+| Подготовка одного движка | `voice_model_export.py`, `voice_profile_compiler.py`, `voice_release_stage.py`, `voice_traffic_merge.py`, `voice_capture_plan.py`, генерация combined `dvtws.args` | Выбор кандидата как реально действующего Voice runtime штатной службы |
+| Forward cutover | `voice_native_forward_prepare.py`, `voice_native_forward_stop.py`, `voice_native_forward_runtime.py`, `voice_native_candidate_engine_start.py`, `voice_native_forward_ipfw.py`, `voice_native_forward_supervisor.py` | Один production владелец всей цепочки, кандидатный Config, общий COMMIT |
+| Защита и откат | Фактический Config restore `voice_cutover_config_restore.py`, write-ahead `voice_cutover_config_redo.py`, `voice_cutover_file_rollback.py`, `voice_cutover_five_resource_rollback.py`, native recovery, IPFW ledger, runtime redo и журналы | Согласование с forward-путём, аварийным runtime-failure, boot recovery и finish; не создавать заново готовый restore |
+| Штатный lifecycle | Оригинальные service lockf FD9, Config flock, shared `zapret_service.sh` и orchestrator, частные безопасные native actions, fail-closed guard | Работающая public/configd точка ON Apply; отказ от параллельной legacy PoC authority, нормальный Voice boot |
+| Проверки | Voice offline CI и FreeBSD 15 package build — PASS на `dc274123`; PR title PASS | Общий Project CI FAIL: `test-strategy-lab-live-matrix-contract.sh` не нашёл текущий `os-zapret2-restyle-0.5.1_75.pkg` в PROJECT_STATE; отсутствует on-device owner-live/UDP acceptance |
+
+Текущий GUI разрешает сохранить/применить лишь профили OFF. Новый Config writer — это **прямая запись желаемой конфигурации**; готовый Config restore/redo относится к возврату предыдущих байтов. Нужен минимальный проверяемый прямой write-ahead, если он действительно не покрывается существующим intent; сохранять исходный inode `/conf/config.xml`, внешний FD9 и один непрерывный Config flock. Нельзя объявлять `Config::save()` в PHP атомарной частью FD9: её текущая семантика блокировок отличается.
+
+### Очередность исполнения и критерии закрытия
+
+#### Этап 1 — Стабилизировать существующий код (ЗАКРЫТ на ff6431c)
+
+1. Привести START_HERE, PROJECT_STATE, ROADMAP, INDEX, ТЗ, release notes и Draft PR к одной актуальной ревизии/границе готовности/плану; исторические записи пометить историческими вместо удаления доказательств.
+2. Исправить конкретную ошибку общего CI: PROJECT_STATE должен содержать точную динамически ожидаемую идентичность пакета исходников `os-zapret2-restyle-0.5.1_75.pkg`, пометку «не опубликован». Подтвердить совместимость с существующим `test-strategy-lab-live-matrix-contract.sh`, а не ослаблять контракт фиктивным PASS.
+3. Проверить активные GitHub PR/Issues/review threads: найден **один открытый Draft PR #328**, открытых Issues и незавершённых обсуждений ревью нет (снимок 2026-10-11). Не закрывать #328 до приёмки.
+4. Пройти **на точном новом HEAD**: Voice CI, общий Project CI, governance/PR title, FreeBSD 15 package build. Для новых дефектов фиксировать воспроизводимый провал и устранять его, не создавать абстракции «на всякий случай».
+5. Зафиксировать текущие подлинные пробелы интеграции и не путать mocked kernel/daemon/IPFW с owner-live. После успеха — переход к этапу 2.
+
+**Результат:** на `ff6431c` полный CI (повторный Validate Project), Voice, governance и FreeBSD 15 PASS. Непостоянный первый сбой Strategy Lab circular-e2e не воспроизвёлся без изменения исходников. Документационная стабилизация не меняла ревизию; затем начался этап 2 с новым кодом `_76`.
+
+#### Этап 2 — Собрать один настоящий native Apply/rollback (ЗАКРЫТ · offline gate `v0.5.1_105`)
+
+##### Этап 2: принятая матрица состояний и переход к этапу 3 (`_105`)
+
+| Durable state | Initial / retry rule under original FD9 + Config flock | Permitted side effects / required outcome | Evidence |
+| --- | --- | --- | --- |
+| PREPARED | old full Config/runtime/kernel/process state independently attested | Native stop only **after** fsync MUTATING; preflight failure leaves old service unchanged | `test-voice-native-forward-stop.py`, `test-voice-native-forward-apply.py` |
+| MUTATING (old stopped, no forward redo) | inspect sealed old install image, kernel old, no orphan forward staging | restore exact old five resources, no candidate adoption | `test-voice-native-forward-failure.py` |
+| MUTATING (engine only) | bind engine PID/start, kernel image/argv, runtime and forward redo | fixed engine-only stop then five-resource rollback; partial supervisor blocked | `test-voice-native-forward-failure.py` |
+| MUTATING (full candidate/IPFW pending) | two identical kernel/process snapshots plus all five old and desired proofs | re-pin full process identities at native actuator, stop candidate, rollback IPFW/runtime/Config and restart old under same fd | `test-voice-native-forward-failure.py` |
+| MUTATING (old restarted, receipt/plan may exist) | attest real old Config/runtime/kernel, **new** process epochs, native image/credentials/argv | no second process stop; fsync receipt, plan, ROLLED_BACK; foreign or stale write-once proof fails closed | `test-voice-native-forward-failure.py` |
+| COMMITTED | whole journal fsynced before IPFW postcommit | **never** previous rollback; only reverify all five candidate domains and finish owned IPFW; retain old snapshot | `test-voice-native-forward-apply.py` |
+| ROLLED_BACK | receipt, plan, old files/IPFW and process epochs match | read-only repeat verification; **not Voice ON**, no close or deletion | `test-voice-native-boot-recovery-review.py` |
+| Foreign, mixed supervisor, unknown kernel, stale epoch | any phase | fail closed with journal/evidence retained; no arbitrary PID kill | native Voice negative tests |
+
+**Acceptance boundary:** Stage 2 is **offline/private code only**. Its exit gate is exact-head Voice + general Project CI + FreeBSD 15 package qualification + governance/title PASS and the fault-injection matrix above. This does **not** authorize plugin installation, owner-live changes or Telegram MEDIA_PASS. **Stage 3** must connect a single existing FD9/configd/service/boot lifecycle owner to this private executor, define package install/restart/migration precedence and safe configuration enable/disable. **Stage 4** must connect saved GUI profiles/ON/OFF to that lifecycle; Stage 5 performs on-appliance FreeBSD acceptance; Stage 6 tests voice media. Partial supervisor states deliberately remain manual/fail-closed and are **not** silently restarted.
+
+
+**Принятый результат этапа 2 на `_105`:** приватный один-locked-FD исполнитель покрывает PREPARED Apply, возврат старых пяти ресурсов при MUTATING (включая начальный STOP, engine-only и обрыв после перезапуска старых процессов), COMMITTED-only IPFW postcommit, а теперь также **повторную read-only проверку терминального ROLLED_BACK**. Каждая ветка подтверждает связь с immutable schema-4 intent и никогда не обещает public Voice ON. Неполный supervisor, чужая/смешанная трёхролевая топология, потерянные kernel epochs или неопознанное IPFW остаются безопасно заблокированными, а не автоматически уничтожаемыми. **Критерии выхода этапа 2 выполнены на кодовом HEAD `b7c6aa5`:** полный Voice/Project CI, FreeBSD 15 build+governance, PR-title PASS; отрицательная матрица partial supervisor и power-loss replay подтверждены. **Ни один пакет `_105` не опубликован, рабочий OPNsense не менялся.** Подключение service/configd/boot — этап 3, GUI — этап 4, owner-live/MEDIA_PASS — этапы 5–6.
+
+
+**Усиление `_85`:** прежде чем старый five-resource rollback вызывает stop на живом кандидате, native coordinator обязан дважды подтвердить полный трёхролевой PID/start inventory и точные argv/путь исполняемого файла через FreeBSD kernel API, а также соответствие установленного runtime сохранённой кандидатной контрольной сумме. Engine-only/partial supervisor остаются blocked/manual, а не слепо убиваются. Проверка никаким образом не подтверждает доставку Telegram MEDIA_PASS.
+
+**Историческое состояние на `_79` (не перечень открытых задач сегодня):** появился приватный `voice_native_forward_apply.py` с одним дескриптором Config/flock и одной FD9-арендой для уже готовых STOP → runtime → engine → IPFW PRECOMMIT → supervisor → forward Config; затем двойная независимая проверка всех пяти живых ресурсов, `journal.commit()` и штатный `commit_verified()` IPFW. Предшествующая MUTATING-сумма независимо восстанавливается из терминального COMMITTED для привязанных runtime/Config redo. Журнал/backup сохраняются до postcommit cleanup. **НЕ ЗАКРЫТО:** автоматический откат после неуспешной мутации должен использовать тот же уже захваченный Config FD, а существующий rollback уже может принимать один и тот же Config FD после `_81`, и автоматический вызов для состояний с подтверждённым полным процессным владением теперь подключён в `_82`; частичный один-engine/no-supervisor и аварийные crash-состояния ещё не охвачены. Любая неоднозначность пока fail-closed, не READY и без публичного маршрута. Реальный FreeBSD/GUI/boot также не принят.
+
+**Уже реализовано в `_76`, исправлено в `_77–_78`:** отдельный **forward** candidate Config writer `voice_native_forward_config.py`, связанный с существующим schema-4 MUTATING, прежним backup, активным/runtime redo, pending IPFW, реальными ролями dvtws2+supervisor (kernel argv/binary), Config inode и непрерывными FD9/flock. Новое write-ahead `forward-config-redo.json` строго необходимо для прямой записи (existing `config-restore-redo.json` относится только к *обратной* записи прежних байтов). Writer не имеет публичного CLI; при обрыве candidate-prefix записи новый redo позволяет либо продолжить прямую запись под живым native gate, либо существующему Config restore безопасно восстановить прежние байты после остановки кандидата и восстановления IPFW в составе полного rollback. Текущие независимые модули ещё не дают общего COMMIT. Нельзя удалять redo/intent по одному успешному writer.
+
+- Один owner под исходными FD9 и Config flock выполняет **без повторных реализаций** PREPARED → MUTATING → остановка предыдущих процессов → runtime swap → candidate engine → owned IPFW PRECOMMIT → supervisor → сохранение candidate Config → двойная независимая проверка всех пяти ресурсов → согласованный IPFW/whole COMMIT/finish.
+- Проверить атомарность допустимого *логического* cutover через журналы и компенсирующий откат; не обещать аппаратную атомарность пяти системных ресурсов. Двойная проверка не заменяет внешнего блокирования.
+- Для candidate Config использовать защищённый inode-постоянный writer под теми же блокировками и долговечным write-ahead с точным old/desired digest; на сбое не стирать intent/backup. Учитывать отличие PHP `Config::save()`.
+- На ошибке после любой мутации остановить кандидата и использовать **готовый** full five-resource rollback; при неоднозначности оставить fail-closed pending и доступную оператору диагностику. Перед COMMIT обязательно проверить всю новую конфигурацию, не только живые IPFW правила.
+- Запустить полный offline fault-injection интеграционный прогон от подготовленного старого состояния до нового/возврата старого, включая обрыв каждого перехода и повторное выполнение.
+
+**Готово:** один ограниченный нативный исполнитель проверяемо применяет всю операцию и возвращает пять ресурсов; сценарий не требует ручного вызова частных шагов.
+
+#### Этап 3 — Штатный lifecycle, миграция и reboot (ВЫПОЛНЯЕТСЯ: read-only FD9/configd router `_106`)
+
+**Первый implementation patch этапа 3 (выполнена read-only часть в `_106`; native write Apply ещё не подключён):** проверить существующий `zapret_service.sh` и configd dispatch + FD9 lifecycle-owner + `voice_cutover_guard.py`; добавить **один** внутренний маршрутизатор команд, который привяжет сохранённую Config-модель к существующему приватному `execute_prepared_voice_apply` без второго двигателя, конкурирующего процесса или собственного cron. До первого изменения IPFW/процессов — read-only compare выбранного WAN, активного Strategies runtime, legacy Telegram authority и partial journal. `PREPARED` допустим только после безопасной подготовки, `MUTATING` — только attested old rollback, `COMMITTED` — только forward IPFW finish, `ROLLED_BACK` — только read-only review + разрешённая позже owner finalization. **Не делать** GUI Voice ON, live firewall actions или package publication частью этого первого патча. Каждый кодовый push повышает `PLUGIN_REVISION` (следующий `_106`).
+
+
+- Подключить один native исполнитель к существующим `zapret_service.sh`, configd и общему orchestrator без второго dvtws2, параллельного watcher или нового cron.
+- Перенаправить `telegram_voice_enable/disable/status` как совместимые адаптеры к **той же постоянной модели**. Старый `telegram_voice.sh`, marker и hard-coded prepend выводить из authority **только после** проверенной явной миграции; отсутствие marker после reboot не доказывает OFF.
+- Объединить `supervisor_loop.sh → runtime-failure` с новым владельцем; его асинхронное срабатывание не должно обойти журнал/rollback.
+- Разделить **нормальный** reboot/start (автоматически восстановить сохранённый ON/OFF по Config) и **аварийный** incomplete transaction (полный доказанный recovery или fail-closed/manual review), без ложной готовности.
+- Уважать глобальную OFF службу, Strategy Lab locks, сохранённый ordinary/non-STUN профиль и выбранный WAN. Пока два независимых WAN нельзя разделить в одном двигателе — до Apply отклонять несовместимый Voice WAN, не скрывать ограничение.
+
+**Готово:** одно постоянное ON/OFF, одно служебное и одно IPFW владение; штатный restart/reconfigure/reboot работает без ручного enable, старый PoC больше не конкурент.
+
+#### Этап 4 — Закончить GUI по утверждённому макету
+
+- Стандартная нижняя «Применить» должна одинаково объяснимо обрабатывать ON/OFF, save, duplicate tabs, disabled parameter retention, поле ошибки/строку, применённое состояние и interrupted/recovery.
+- Показать для каждого сервиса сохранённый выбор отдельно от проверенного активного профиля, effective WAN/UDP-портов/IPSET и owner-rule/counter; не объявлять удачный звонок по статусу правила.
+- Сверить реальную разметку со «Стратегиями»: native `base_form`, отступы и рамка, общая строка службы, RU/EN, help, светлая/тёмная темы, узкий экран. Не дублировать ненужные элементы установки/запуска службы, если уже есть общий корректный UI.
+- Обновить подсказки, где осталось «draft does not save» или «Voice ON unavailable», только ПОСЛЕ действительной реализации. Не добавлять LAN/local UDP/boot toggles и отдельный non-STUN.
+
+**Готово:** данные переживают reload, результаты/ошибки верны; UI соответствует эталону на устройстве.
+
+#### Этап 5 — Приёмка на настоящем FreeBSD/OPNsense
+
+- До любых изменений: read-only baseline реальных `kern.proc.args`/pathname/UID, IPFW ownership, Config/runtime, версии ABI, проверка ordinary Strategies и резервных копий.
+- Контролируемый живой Apply: один/несколько не пересекающихся Voice STUN профилей, IPSET/порт/WAN, OFF, глобальный OFF, повторы, отказные случаи, реальный rollback, нативные правила/таблицы, отсутствие второго движка.
+- Отдельно проверить forwarded LAN/VLAN, OPNsense-local UDP и SOCKS-created UDP, не менять маршруты/PFIL/NAT/TCP proxy.
+- Reboot **без ручного enable**; сравнить Config, runtime, процессы, supervisor, IPFW и счётчики с исходным сохранённым выбором. Нагрузку и recovery ошибки документировать.
+
+**Готово:** записана owner-live доказательная база; нет регрессии обычного Zapret2 и жизненного цикла.
+
+#### Этап 6 — Протокол передачи Telegram UDP и голоса
+
+- Использовать сохранённую лабораторную инфраструктуру, существующие PCAP/reflector/Docker инструменты и фактическую топологию OPNsense `192.168.1.2`, TNAS `192.168.1.100`, parent TCP/TLS proxy `185.203.117.88:33128`; старый gateway `192.168.1.140` не объявлять действующим путём UDP.
+- Отдельно доказывать `WIRE_OK`, `REFLECTOR_REPLY`, `MEDIA_PASS`, `CALL_PASS` конкретного запуска; изменение счётчика IPFW или слышимый звук без UDP media capture не равно `CALL_PASS`.
+- Не переносить непроверенные стратегии Telegram на Discord/X/SIP. Смена DPI-стратегии экспериментальна и не блокирует выпуск корректной страницы без заведомо рабочего preset.
+
+**Готово:** результат медиатеста воспроизводимо записан и отделён от приёмки функций страницы.
+
+#### Этап 7 — Финальная приёмка, ревизии и публикация
+
+- Полная регрессия проекта, Voice, normal lifecycle, FreeBSD 15 package, source/API/UI/docs, upgrade/migration/cold boot; независимое повторение критических сценариев.
+- Итоговый аудит устранения временных PoC путей; описание оставшихся ограничений без ложных PASS.
+- Завершить Draft PR #328 лишь после принятых критериев, согласовать выпуск по действующим правилам `GITHUB_PUBLICATION.md`; CI package build не означает опубликованный pkg.
+- Каждый кодовый commit увеличивает последнюю цифру `PLUGIN_REVISION`; документация без изменения исходников её не увеличивает.
+
+**Готово:** пользовательское ТЗ закрыто фактическими доказательствами и пакет действительно готов к выбранному каналу публикации.
+
+### Антизацикливание
+
+Ровно семь результатов выше являются границами задач. Новый самостоятельный журнал, schema, проверка, архив, карантин или промежуточная ревизия допустимы **только** для доказанного дефекта безопасности/согласованности внутри очередного этапа. Не повторять готовые Config restore, IPFW ledger, process attestation, cleanup или уже проверенные лабораторные гипотезы. Перед каждым исходным commit обозначать конкретный сломанный acceptance criterion и тест, который изменится. Разрешается больше одного commit на этап для реальных исправлений; запрещено считать рост номера ревизии мерой прогресса.
+
+### Открытые риски и честные границы
+
+1. Уже готовый restore **не** равен реализованному forward candidate Config persist; требуется проверить разрыв.
+2. Изолированные FreeBSD-like тесты имитируют живое ядро, exec/daemon и IPFW; реальный производственный переход не квалифицирован.
+3. Асинхронный `runtime-failure` supervisor, normal reboot и прежний Telegram PoC остаются интеграционными рисками.
+4. Нормальный ON без восстановленной автоматической загрузки не соответствует ТЗ; emergency fail-closed нельзя подменять статусом READY.
+5. CLI `telegram_voice_*` до миграции не являются единственным источником Voice preferences.
+6. Поддержка разных Voice/Strategies WAN в общем dvtws2 пока ограничена; применение неверного WAN должно быть отклонено, а не молча изменить другой профиль.
+
+**Точка продолжения:** сначала закрыть этап 1 реальным GitHub CI на текущем SHA, затем этап 2 (не дальнейший refactor cleanup).

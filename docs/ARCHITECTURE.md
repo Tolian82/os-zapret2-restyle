@@ -2,11 +2,9 @@
 
 ## Approved transition — shared Voice/Strategies backend, 2026-10-13
 
-The owner approved one shared model, full-runtime generator and Apply/lifecycle owner for Strategies and Voice. Voice adds STUN profiles and scoped UDP/IPSET capture; frontend and full requirements are unchanged. This is an approved target, not an implemented-source claim. [Section 12 of the Voice specification](architecture/VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026) owns the contract; [completion boundary](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) requires detailed code-plan discussion next. Legacy private Voice transactions are reuse/transition material, not a second authoritative production architecture.
+The owner approved one shared model, full-runtime generator and Apply/lifecycle owner for Strategies and Voice. Voice adds STUN profiles and scoped UDP/IPSET capture; frontend and full requirements are unchanged. This is an approved target, not an implemented-source claim. [Section 12 of the Voice specification](architecture/VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026) owns the contract; [v0.5.2 implementation plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) owns the proposed code changes and controls. Stage `v0.5.2_1` was opened without release; the detailed plan still requires agreement. Existing frontend/backend behavior is unchanged by that version transition. Legacy private Voice transactions are reuse/transition material, not a second authoritative production architecture.
 
-==================================================
-DOCUMENT ROLE
-==================================================
+## Document role
 
 Question answered:
 How is the current system built?
@@ -19,9 +17,7 @@ sequences belong in decisions/devlog/patch/evidence records.
 Read after:
 `docs/PROJECT_STATE.md` and the task-selected specialist architecture documents.
 
-==================================================
-IDENTITY AND SOURCE OF TRUTH
-==================================================
+## Identity and source of truth
 
 Repository: `https://github.com/Tolian82/os-zapret2-restyle`
 Primary branch: `main`
@@ -34,9 +30,7 @@ Committed source describes actual implemented behavior. Current project directio
 approved transition state are recorded in current documentation. A stale historical
 architecture statement cannot override newer owner canon.
 
-==================================================
-CONFIGURATION AND NORMAL RUNTIME
-==================================================
+## Configuration and normal runtime
 
 ```text
 OPNsense model
@@ -61,9 +55,7 @@ Only `HOSTLIST:name` and `IPSET:name` target selectors are supported. Multiple u
 supported selectors in one user profile are normalized into separate runtime profiles
 while preserving non-selector lines, order and user-authored `--new` boundaries.
 
-==================================================
-SETTINGS APPLY
-==================================================
+## Settings apply
 
 ```text
 /ui/zapret
@@ -78,9 +70,7 @@ SETTINGS APPLY
 Only an exact successful configd response completes Apply. On failure, persistent model,
 generated template and runtime are restored to the prior valid state.
 
-==================================================
-DIAGNOSTICS INTERFACES
-==================================================
+## Diagnostics interfaces
 
 Short connectivity probe:
 
@@ -105,9 +95,7 @@ Strategy finding uses only asynchronous Strategy Lab:
 
 The synchronous Blockcheck path is retired and is not an active fallback interface.
 
-==================================================
-STRATEGY LAB CURRENT ARCHITECTURE
-==================================================
+## Strategy lab current architecture
 
 An automated Strategy Lab job owns the shared Zapret2 lifecycle boundary from initial
 snapshot through mandatory restoration. The normal service is stopped only after its
@@ -159,9 +147,7 @@ cancellation semantics and Stage-90 restoration contract remain stable.
 Specialist base contract:
 `docs/architecture/STRATEGY_LAB.md`.
 
-==================================================
-MODEL C — ONLY NORMAL PRODUCTION STAGE-60 RUNTIME
-==================================================
+## Model c — only normal production stage-60 runtime
 
 **Model C is selected. A/B/C model selection is closed.**
 
@@ -208,9 +194,7 @@ Current accepted constraints include:
 Specialist authority:
 `docs/architecture/STRATEGY_LAB_MODEL_C.md`.
 
-==================================================
-ADAPTIVE SEARCH CONTRACT
-==================================================
+## Adaptive search contract
 
 Strategy Lab searches native `bol-van/zapret2` semantics only.
 
@@ -235,9 +219,7 @@ Specialist authority:
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`.
 
-==================================================
-CURRENT MEASUREMENT DECISIONS
-==================================================
+## Current measurement decisions
 
 The following measurement questions are closed for the current architecture unless the
 owner, roadmap, a material architecture change or fresh reproducible evidence reopens
@@ -252,9 +234,7 @@ them:
 
 Do not restore an old experiment sequence merely because older documentation mentions it.
 
-==================================================
-DNS / NETWORK FACT BOUNDARY
-==================================================
+## Dns / network fact boundary
 
 The previously reported local/container DNS slowness/failure is historical and closed:
 **the owner fixed DNS**. Current work treats DNS as working.
@@ -262,9 +242,7 @@ The previously reported local/container DNS slowness/failure is historical and c
 A future DNS issue requires fresh direct reproducible evidence. An old timeout, old log,
 old document or new-session memory gap is not sufficient to classify DNS as broken again.
 
-==================================================
-SHORTLIST AND CIRCULAR VALIDATION
-==================================================
+## Shortlist and circular validation
 
 Strategy Lab may publish up to three replay/stability-qualified finalists and never
 writes a candidate automatically into saved Traffic Strategy.
@@ -274,9 +252,7 @@ validation and an automated Strategy Lab job cannot run concurrently because the
 the lifecycle lock. Saved configuration remains immutable and original service state is
 restored exactly.
 
-==================================================
-SERVICE LIFECYCLE
-==================================================
+## Service lifecycle
 
 All public mutating operations converge on `zapret_service.sh` and share
 `/var/run/zapret2-lifecycle.lock`:
@@ -292,9 +268,7 @@ lock descriptor. Runtime-failure callbacks use bounded/non-competing lifecycle o
 The supervisor detects runtime failure but does not become a second independent lifecycle
 manager.
 
-==================================================
-PACKAGE / UPSTREAM BOUNDARY
-==================================================
+## Package / upstream boundary
 
 The FreeBSD package owns plugin files and immediate OPNsense integration.
 
@@ -305,9 +279,7 @@ or install upstream dependencies.
 Package lifecycle preserves the initially running/stopped service state and fails closed
 on incomplete/unknown state or unsuccessful stop/setup verification.
 
-==================================================
-TECHNICAL CONSTRAINTS
-==================================================
+## Technical constraints
 
 - FreeBSD `/bin/sh` compatibility remains required for retained shell adapters;
 - owner console examples target root `csh` unless explicitly entering `sh`;

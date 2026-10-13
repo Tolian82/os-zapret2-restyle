@@ -2,7 +2,7 @@
 
 ## Approved Voice extension — 2026-10-13
 
-The implemented base service described below remains the reuse point. The approved Voice backend extends the same generator, Apply/rollback, firewall, launcher and supervisor for both forms; it does not create a second service or Config writer. Voice frontend and all five-service requirements stay unchanged. [Normative architecture](VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026) and [current planning boundary](VOICE_TRANSMISSION_COMPLETION_PLAN.md). Shared Voice implementation is pending the next detailed code-plan agreement; the base-service live evidence below does not qualify that future extension.
+The implemented base service described below remains the reuse point. The approved Voice backend extends the same generator, Apply/rollback, firewall, launcher and supervisor for both forms; it does not create a second service or Config writer. Voice frontend and all five-service requirements stay unchanged. [Normative architecture](VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026) and [v0.5.2 planning boundary](VOICE_TRANSMISSION_COMPLETION_PLAN.md). Shared Voice implementation is pending the next detailed code-plan agreement; the base-service live evidence below does not qualify that future extension.
 
 Status: implemented and live verified
 Release: v0.3.0
