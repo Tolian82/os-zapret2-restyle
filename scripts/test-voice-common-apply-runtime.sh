@@ -332,4 +332,63 @@ HAS_COMMON_RECORD=0
 if shared_apply_legacy_candidate_service malformed >/dev/null; then fail "invalid candidate ID accepted"; fi
 echo 'PASS: FD9 candidate-bound legacy kernel witness refuses OFF/foreign/conflicts'
 
+
+# Real production wrapper, but mocked lower-level no-mutation old capture:
+# only exact five-domain sealed predecessor and the same candidate qualify.
+grep -Fq '|shared-apply-legacy-qualify|shared-apply-legacy-capture)' "$SERVICE_SOURCE" ||
+    fail "legacy predecessor capture is outside original FD9 lifecycle"
+CAPTURE_SCRIPT="$ROOT/common-legacy-capture.sh"
+sed -n '/^shared_apply_legacy_capture_service()$/,/^}$/p' "$SERVICE_SOURCE" > "$CAPTURE_SCRIPT"
+sh -n "$CAPTURE_SCRIPT" || fail "native predecessor wrapper is malformed"
+python3 - "$CAPTURE_SCRIPT" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1])
+s=p.read_text()
+old='    [ -x /usr/local/bin/python3.13 ] &&\n    [ -r "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" ] || return 69'
+assert old in s, "fixed native predecessor executable missing"
+s=s.replace(old,'    [ "$CAPTURE_AVAILABLE" = 1 ] || return 69')
+old='    _legacy_capture_result=$(/usr/local/bin/python3.13 \\\n        "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" \\\n        capture-common "$_legacy_capture_id") || return 70'
+assert old in s, "candidate-rooted previous-five capture missing"
+s=s.replace(old,'    _legacy_capture_result=$(legacy_previous_fixture "$_legacy_capture_id") || return 70')
+p.write_text(s)
+PY
+. "$CAPTURE_SCRIPT"
+CAPTURE_AVAILABLE=1 CAPTURE_READY=1 CAPTURE_DRIFT=0
+CAPTURE_CALLS=0
+shared_apply_legacy_candidate_service() {
+    [ "$1" = "$QUAL_ID" ] && [ "$CAPTURE_READY" = 1 ] || return 69
+    if [ "$CAPTURE_DRIFT" = 1 ] && [ "$CAPTURE_CALLS" -gt 0 ]; then
+        echo 'changed-prev-state'
+    else
+        echo 'stable-old-state'
+    fi
+}
+legacy_previous_fixture() {
+    [ "$1" = "$QUAL_ID" ] && [ "$CAPTURE_AVAILABLE" = 1 ] || return 70
+    CAPTURE_CALLS=1
+    printf '%s\n' \
+        "legacy-voice-bound-candidate=$QUAL_ID" \
+        'legacy-voice-predecessor=legacy-poc-previous-and-reverse-plan-sealed-quiescence-pending' \
+        'native-voice-public-apply=disabled'
+}
+record=$(shared_apply_legacy_capture_service "$QUAL_ID") || fail "bound old predecessor not captured"
+printf '%s\n' "$record" | grep -Fqx 'legacy-backup-sealed=1' ||
+    fail "durable predecessor not recorded as an inactive backup"
+printf '%s\n' "$record" | grep -Fqx 'legacy-handoff-authorized=0' ||
+    fail "operator backup incorrectly authorized live mutation"
+CAPTURE_READY=0
+if shared_apply_legacy_capture_service "$QUAL_ID" >/dev/null; then
+    fail "unqualified old source was captured"
+fi
+CAPTURE_READY=1 CAPTURE_AVAILABLE=0
+if shared_apply_legacy_capture_service "$QUAL_ID" >/dev/null; then
+    fail "missing previous-five writer was ignored"
+fi
+CAPTURE_AVAILABLE=1
+if shared_apply_legacy_capture_service bad >/dev/null; then
+    fail "untrusted operation id reached old predecessor"
+fi
+echo 'PASS: candidate-bound full legacy predecessor capture requires FD9 and no live mutation'
+
 echo 'PASS: shared engine/IPFW, stopped legacy rollback and live legacy refusal'

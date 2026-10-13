@@ -880,6 +880,36 @@ shared_apply_legacy_candidate_service()
     printf '%s\n' 'legacy-handoff-authorized=0'
 }
 
+# Operator-only immutable previous-five backup into the existing sealed
+# shared-work candidate. The old Telegram PoC stays RUNNING: no stop, IPFW,
+# marker or native Config save here. Reuses the historical full five-domain
+# capture + reverse plan, but NOT its independent actuator or journal.
+shared_apply_legacy_capture_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    _legacy_capture_id="$1"
+    case "$_legacy_capture_id" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_legacy_capture_id}" -eq 32 ] || return 64
+    _legacy_capture_before=$(shared_apply_legacy_candidate_service "$_legacy_capture_id") || return 69
+    [ -x /usr/local/bin/python3.13 ] &&
+    [ -r "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" ] || return 69
+    _legacy_capture_result=$(/usr/local/bin/python3.13 \
+        "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" \
+        capture-common "$_legacy_capture_id") || return 70
+    printf '%s\n' "$_legacy_capture_result" |
+        grep -Fqx "legacy-voice-bound-candidate=$_legacy_capture_id" || return 70
+    printf '%s\n' "$_legacy_capture_result" |
+        grep -Fqx 'legacy-voice-predecessor=legacy-poc-previous-and-reverse-plan-sealed-quiescence-pending' || return 70
+    printf '%s\n' "$_legacy_capture_result" |
+        grep -Fqx 'native-voice-public-apply=disabled' || return 70
+    # The old owner must still be live and exact after copying its five
+    # domains. Any race retains the newly captured backup for review.
+    _legacy_capture_after=$(shared_apply_legacy_candidate_service "$_legacy_capture_id") || return 70
+    [ "$_legacy_capture_before" = "$_legacy_capture_after" ] || return 70
+    printf '%s\n' "legacy-backup-candidate=$_legacy_capture_id" \
+        'legacy-backup-sealed=1' 'legacy-handoff-authorized=0'
+}
+
 # One actual runtime/Config Apply owner: the existing service process holds
 # FD9 for the ENTIRE operation; Python journal and PHP Config worker run as
 # children inheriting that ownership. No nested configd/lockf acquisition,
@@ -1465,6 +1495,10 @@ service_dispatch()
             [ "$#" -eq 2 ] || return 64
             shared_apply_legacy_candidate_service "$2"
             ;;
+        shared-apply-legacy-capture)
+            [ "$#" -eq 2 ] || return 64
+            shared_apply_legacy_capture_service "$2"
+            ;;
         shared-apply-execute)
             shared_apply_execute_service "${2:-}" "${3:-}"
             ;;
@@ -1767,7 +1801,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

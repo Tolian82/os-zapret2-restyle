@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import fcntl
 import os
+import re
 from pathlib import Path
 import sys
 
@@ -94,9 +95,36 @@ def prepare_old_rollback_predecessor(
     }
 
 
+COMMON_ID = re.compile(r"^[a-f0-9]{32}$")
+
+
+def _capture_root_for_common_id(identity: str) -> Path:
+    """Attach old immutable predecessor evidence to ONE sealed shared candidate.
+
+    No shared journal, IPFW, Config or running-process owner is adopted by
+    creating this archive. The prior PoC snapshot/plan remain the SAME
+    existing code and schema, simply stored in this candidate's directory.
+    """
+    if not isinstance(identity, str) or not COMMON_ID.fullmatch(identity):
+        raise LegacyPredecessorRouteError("invalid shared Apply candidate identity")
+    from shared_apply_operation import SharedApplyOperation
+    from shared_apply_seal import WORK, verify_seal
+
+    if SharedApplyOperation(owner=0).read() is not None:
+        raise LegacyPredecessorRouteError("common Apply owner already present")
+    work = WORK / identity
+    verify_seal(work, owner=0)
+    _private_dir(work)
+    return work / "legacy-backup"
+
+
 def main(argv):
-    if argv!=["capture-plan"]:
-        print("usage: voice_native_legacy_predecessor_route.py capture-plan",
+    candidate_id = argv[1] if (
+        len(argv) == 2 and argv[0] == "capture-common"
+        and COMMON_ID.fullmatch(argv[1])
+    ) else None
+    if argv != ["capture-plan"] and candidate_id is None:
+        print("usage: voice_native_legacy_predecessor_route.py capture-plan|capture-common ID",
               file=sys.stderr)
         return 64
     fd=None
@@ -105,7 +133,8 @@ def main(argv):
         fd=os.open(native.CONFIG,os.O_RDWR| getattr(os,"O_NOFOLLOW",0))
         _pinned_regular(native.CONFIG,fd,owner=(0,0))
         fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        root=native.WHOLE
+        root = (_capture_root_for_common_id(candidate_id)
+                if candidate_id is not None else native.WHOLE)
         _private_dir(root.parent)
         if not os.path.lexists(root):
             os.mkdir(root,0o700)
@@ -125,6 +154,15 @@ def main(argv):
             readonly_ipfw=FreeBSDIPFWAdapter(19000,19010),
             security_reader=security,require_lifecycle_owner=native.require_native_lock,
         )
+        if candidate_id is not None:
+            # Protect against changes to the candidate after taking the
+            # complete old snapshot. Interrupted evidence is never deleted.
+            from shared_apply_seal import verify_seal, WORK
+            from shared_apply_operation import SharedApplyOperation
+            verify_seal(WORK / candidate_id, owner=0)
+            if SharedApplyOperation(owner=0).read() is not None:
+                raise LegacyPredecessorRouteError("shared owner appeared during capture")
+            print("legacy-voice-bound-candidate="+candidate_id)
         print("legacy-voice-predecessor="+result["state"])
         print("native-voice-public-apply=disabled")
         return 0
