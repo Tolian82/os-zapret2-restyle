@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_40`. `VERSION=0.5.2`; `PLUGIN_REVISION=40`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_41`. `VERSION=0.5.2`; `PLUGIN_REVISION=41`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+**`v0.5.2_41` — read-only native common IPFW inspection:** существующая `voice/inspect` теперь различает legacy IPFW ledger и новый подтверждённый common owner из единого durable journal. Когда owner committed (либо у `restored` есть предыдущий committed owner), инспектор подтверждает целостность source bundle, совпадение page/dependencies/changed_fields с sealed plan и фактические kernel IPFW правила/таблицы по manifest общего release; при совпадении возвращает `state=ready`, `source=native-common`, `condition=common-ipfw-verified-only`, **`can_activate=false`**. Все pending-фазы немедленно возвращают `interrupted`, без обращения к IPFW. Чужие или частичные правила остаются blocked; если common owner отсутствует, сохраняется legacy inspection. Это статус только IPFW, НЕ подтверждение живых dvtws2, успешного STUN или звонка. GUI, ТЗ, FD9 runtime и native Config не изменены. Запрошена проверка CI ревизии `_41`, живые FreeBSD tests отдельно.
 
 **`_40` — устранение опасного ложного rollback после native Config save.** `SharedConfigCommit::persist()` теперь классифицирует исключение на повторной блокировке Config, построении модели, чтении saved Config и последующей разблокировке как `SharedConfigSaveUncertain`, а не pre-save error. Корневой worker проверяет сериализацию и полную запись JSON receipt; ошибки после подтверждённого сохранения возвращают код 70 и оставляют журнал на проверку. Отрицательные PHP-тесты моделируют сбой relock после реального сохранения и несерилизуемое подтверждение. Автоматический откат runtime при уже записанном Config запрещён. FreeBSD owner-live квалификация всё ещё нужна.
 
