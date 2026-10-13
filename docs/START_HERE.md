@@ -2,9 +2,17 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_43`. `VERSION=0.5.2`; `PLUGIN_REVISION=43`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_45`. `VERSION=0.5.2`; `PLUGIN_REVISION=45`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+**`_44`–`_45`: подготовка безопасного legacy→common перехода.** В `backend/atomic.sh` исправлен ошибочный буквальный суффикс парковки runtime `.rollback-old.# os-zapret2-restyle — START HERE
+
+[PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
+
+**Current handoff identity:** `v0.5.2_45`. `VERSION=0.5.2`; `PLUGIN_REVISION=45`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+
+ на уникальный в пределах процесса `.rollback-old.$`: чужие остатки ранее прерванных процессов сохраняются и не блокируют текущий проверяемый откат. Тесты воспроизводят сбой второго rename, конфликт текущего park и чужой stale park. В `_45` добавлена независимая read-only сверка всего процесса `dvtws2` со штатным PID-файлом через существующий FreeBSD process-query adapter перед созданием native journal: потерянный PID, дублирующий dvtws2, нераспознанный процесс и ошибка ps не могут считаться пустым runtime. Сканирование не останавливает процессы и не меняет Config/IPFW. `apply_runtime_probe` повторяется при activation. Это безопасность подготовки и восстановления, **не** разрешение автоматического live cutover старого PoC; необходимы отдельная подтверждённая миграция и FreeBSD owner-live. CI latest HEAD проверяется.
 
 **`v0.5.2_43` — предотвращение ложного `requires-review` при обычном legacy/foreign runtime.** В общем `backend/apply_runtime.sh` read-only `apply_runtime_probe` отделён от мутирующего `apply_runtime_preflight`. Под исходным FD9, после detached Config preflight и до durable фаз `prepared/activating`, `shared_apply_execute_service` проверяет полноту candidate, engine/supervisor, соответствие common active release и фактический IPFW. Запущенная legacy-установка без `voice-plan.json`, частичный monitor и чужой kernel/IPFW отвергаются кодом 69 **без записи** новой транзакции и без firewall_prepare. Когда проверки пройдены, тот же probe повторяется внутри runtime activation после durable intent, чтобы отказать при гонке внешних изменений. В тестах отдельно проверено, что негативные случаи не вызывают `record:prepared`, `record:requires-review`, Config::save или изменение firewall. Это только безопасное предотвращение ложного зависания; автоматическая live migration legacy→common и FreeBSD owner-live ещё требуют проверки.
 
