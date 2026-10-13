@@ -872,6 +872,59 @@ shared_apply_inspect_service()
     /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" inspect
 }
 
+# Stop exactly the committed common owner, using the original FD9 lifecycle.
+# Native Config and the durable committed owner stay unchanged: start can
+# bring the same sealed release back, without legacy fallback or a new Apply.
+shared_apply_stop_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    case "$1" in committed\ *) ;; *) return 69 ;; esac
+    _shared_stop_id=$(printf "%s\n" "$1" | cut -d " " -f 2)
+    _shared_stop_page=$(printf "%s\n" "$1" | cut -d " " -f 3)
+    [ "$1" = "committed $_shared_stop_id $_shared_stop_page" ] || return 69
+    case "$_shared_stop_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_shared_stop_id}" -eq 32 ] || return 69
+    case "$_shared_stop_page" in voice|strategies) ;; *) return 69 ;; esac
+    preflight_voice_cutover_journals common-apply || return 69
+    shared_apply_require_tools || return 69
+    shared_apply_bundle_service verify "$_shared_stop_id" || return 69
+    _shared_stop_saved=$(shared_apply_native_config saved \
+        "$_shared_stop_id" "$_shared_stop_page") || return 69
+    _shared_stop_confirmed=$(printf "%s\n" "$_shared_stop_saved" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 69
+    _shared_stop_dir=$(shared_apply_workspace "$_shared_stop_id") || return 69
+    [ -d "$_shared_stop_dir/release" ] && [ ! -L "$_shared_stop_dir/release" ] || return 69
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
+    # Check the entire installed tree, not merely the managed IPFW manifest.
+    atomic_verify_tree "$_shared_stop_dir/release" "$ACTIVE_DIR" || return 69
+    _shared_stop_engine=0
+    _shared_stop_monitor=0
+    launcher_is_running "$CHILD_PIDFILE" && _shared_stop_engine=1
+    supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" && _shared_stop_monitor=1
+    [ "$_shared_stop_engine" = "$_shared_stop_monitor" ] || return 69
+    if [ "$_shared_stop_engine" = 0 ]; then
+        # An already stopped common runtime is idempotent only with an
+        # empty, independently verified plugin-owned kernel range.
+        firewall_shared_runtime verify "$ACTIVE_DIR" - || return 69
+        printf "native-common-stopped=%s\n" "$_shared_stop_id"
+        return 0
+    fi
+    # Verify the exact installed owner BEFORE stopping its process.
+    firewall_shared_runtime verify - "$ACTIVE_DIR" || return 69
+    supervisor_stop "$SUPERVISOR_DAEMON_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" || return 70
+    launcher_stop "$CHILD_PIDFILE" 5 || return 70
+    if supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" ||
+       launcher_is_running "$CHILD_PIDFILE"; then
+        return 70
+    fi
+    # Common IPFW transaction installs an empty rule set, then commits
+    # removal only for objects attested to this precise common release.
+    # Failure retains committed ownership; no blind rule/table sweep.
+    firewall_shared_runtime install "$ACTIVE_DIR" - || return 70
+    firewall_shared_runtime commit "$ACTIVE_DIR" - || return 70
+    firewall_shared_runtime verify "$ACTIVE_DIR" - || return 70
+    printf "native-common-stopped=%s\n" "$_shared_stop_id"
+}
 # Reapply the saved COMMON candidate after reboot, without changing Config.
 # Every boot must prove the same completed journal, release and native saved
 # model. The original apply_runtime code owns dvtws2, supervisor and IPFW.
@@ -1308,7 +1361,27 @@ service_with_lifecycle_lock()
                 fi
                 preflight_voice_cutover_journals || return 69
                 ;;
-            stop|restart|native-voice-checkpoint|telegram-voice-enable|telegram-voice-disable|runtime-failure|strategy-lab|strategy-lab-circular|strategy-lab-recover)
+            stop|restart)
+                # A committed common owner has the same native stop/restart
+                # behavior whether it was applied now or restored at boot.
+                # A pending record never falls through to the legacy engine.
+                if shared_apply_has_record_service; then
+                    _shared_owner=$(shared_apply_inspect_service) || return 69
+                    case "$_shared_owner" in
+                        committed\ *)
+                            shared_apply_stop_service "$_shared_owner" || return $?
+                            if [ "${1:-}" = restart ]; then
+                                shared_apply_boot_service "$_shared_owner"
+                            fi
+                            return $?
+                            ;;
+                        none|restored) ;;
+                        *) return 69 ;;
+                    esac
+                fi
+                preflight_voice_cutover_journals || return 69
+                ;;
+            native-voice-checkpoint|telegram-voice-enable|telegram-voice-disable|runtime-failure|strategy-lab|strategy-lab-circular|strategy-lab-recover)
                 preflight_voice_cutover_journals || return 69
                 ;;
         esac
