@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`_58`:** в тестовой инфраструктуре исправлено точное совпадение production FD9 command list после добавления `shared-apply-legacy-capture` в `_57`. Новые unit проверки в существующем legacy previous-seal fixture доказывают, что fixed root `shared-work/<candidate-id>/legacy-backup` доступен только для 32-hex sealed candidate и только при отсутствии shared committed/pending owner. Интеграция дополнительно проверяет, что после полной старой копии изменения IPFW/argv/Config observations не считаются успешным сохранением и evidence не уничтожается. Нет нового backend/daemon/WAL, live stop запрещён. Полный GitHub CI последнего HEAD повторно проверяется.
+
 **`_57`:** новый операторский маршрут `shared-apply-legacy-capture <32-hex-id>` через штатный FD9 сохраняет полный recoverable предыдущий PoC в том же `shared-work/<ID>/legacy-backup`, который принадлежит sealed Voice candidate. Используется старый строго проверенный helper `prepare_old_rollback_predecessor`, его прежняя full five-domain snapshot + reverse-plan, а не новый writer/отдельная IPFW реализация. Сначала и после снимка переснимается строгий running-legacy + candidate native Config/argv/IPFW witness; snapshot фиксируется fsync/rename и не удаляется при partial failure. Никакого изменения old dvtws2, IPFW, Config или marker, никакой записи shared-operation journal. **Это подготовка rollback, НЕ работающий handoff**, до реального переключения и FreeBSD owner-live статус `legacy-handoff-authorized=0`.
 
 **`_56`:** восстановлена реальная доступность `shared-apply-legacy-audit` через исходный FD9. В `_55` тестировали функцию напрямую, но CLI выбирал default `service_dispatch` вместо `service_with_lifecycle_lock`; из-за отсутствующего FD9 точный FreeBSD-инспектор не мог завершить проверку. В `_56` оба read-only оператора (`legacy-audit` и новый `legacy-qualify ID`) маршрутизируются через существующий общий lifecycle lock. Qualify на конкретный sealed 32-hex кандидат проверяет свежий Voice ON native Config preflight, полный общий runtime/argv, прежний kernel/argv/IPFW witness и повторяет seal/Config проверку; возвращает fingerprints старого IPFW/IPSET и явно `legacy-handoff-authorized=0`. Нет права мутировать или останавливать legacy; сохранение старого полного состояния и power-cut rollback пока не реализованы. Тест проверяет production FD9-dispatch и матрицу read-only отказов.
@@ -34,13 +36,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_57`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_58`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=57` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_57.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=58` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_58.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;

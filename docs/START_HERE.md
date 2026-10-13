@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_57`. `VERSION=0.5.2`; `PLUGIN_REVISION=57`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_58`. `VERSION=0.5.2`; `PLUGIN_REVISION=58`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+**`_58` — проверка долговременной привязки backup и устранение регрессии CI.** В тесте `_57` оставалось жёсткое сравнение прежнего FD9 command list (до `legacy-capture`); это давало ошибку `Shared runtime activation and rollback`, несмотря на правильно добавленный маршрут. `_58` исправляет contract и усиливает тесты: фиксированный 32-hex ID → конкретный `shared-work/<ID>/legacy-backup`, sealed candidate обязателен, уже существующий common owner запрещён, повторное read-only наблюдение после capture должно совпасть, иначе отказ и сохранение ранее созданного previous witness. Вызов реального live cutover всё ещё не разрешён; owner-live FreeBSD/Telegram call не выполнен.
 
 **`_57` — полноценное сохранение старого пятикомпонентного PoC без его остановки.** Операторская команда `shared-apply-legacy-capture <ID>` под штатным FD9 сначала выполняет `_56` candidate-bound read-only qualification, затем вызывает **существующий** root+Config-flock backup/restore-plan capture. Предыдущий Config, runtime, old Telegram marker, exact IPFW/table и зафиксированные kernel process/security evidence сохраняются атомарно и синхронизируются в **`/var/db/zapret2/shared-work/<ID>/legacy-backup`**; обратный план immutable, без дополнительного WAL и без запуска старого rollback executor. Затем повторная qualification должна совпасть буквально, иначе команда отказывает с сохранением свидетельств для ручной проверки. Ранее созданные следы никогда не перезаписываются. Snapshot не равен разрешению миграции: **`legacy-handoff-authorized=0`**, работающий old PoC и native Config не меняются. Далее — строго единый reversible executor с dry-run/real OPNsense acceptance, без второго backend.
 
@@ -94,7 +96,7 @@ Install проверяет живые объекты до изменения, с
 
 ## Следующее действие
 
-**Этап 4 — следующий рубеж после `_57`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
+**Этап 4 — следующий рубеж после `_58`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 
 ## Минимальное чтение по текущей задаче
 
