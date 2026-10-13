@@ -6,6 +6,8 @@ import fcntl
 import importlib.util
 import os
 from pathlib import Path
+import tempfile
+from unittest.mock import patch
 import sys
 import unittest
 
@@ -153,6 +155,33 @@ class DurableOldPoCTests(unittest.TestCase):
             self.capture()
         self.assertEqual([],list(self.root.iterdir()))
 
+
+    def test_common_capture_path_requires_one_sealed_candidate_and_no_shared_owner(self):
+        from voice_native_legacy_predecessor_route import (
+            _capture_root_for_common_id, LegacyPredecessorRouteError,
+        )
+        identity = "f" * 32
+        with tempfile.TemporaryDirectory(prefix="legacy-common-prev-") as directory:
+            root = Path(directory)
+            work = root / identity
+            work.mkdir(mode=0o700)
+            expected = work / "legacy-backup"
+            with patch("shared_apply_seal.WORK", root), \
+                 patch("shared_apply_seal.verify_seal", return_value={"id": identity}) as seal, \
+                 patch("shared_apply_operation.SharedApplyOperation.read", return_value=None):
+                self.assertEqual(expected, _capture_root_for_common_id(identity))
+                seal.assert_called_once_with(work, owner=0)
+                self.assertFalse(expected.exists())
+            with patch("shared_apply_seal.WORK", root), \
+                 patch("shared_apply_seal.verify_seal", return_value={"id": identity}), \
+                 patch("shared_apply_operation.SharedApplyOperation.read", return_value={"phase":"committed"}):
+                with self.assertRaises(LegacyPredecessorRouteError):
+                    _capture_root_for_common_id(identity)
+            for bad in ("../f"*11, "z"*32, "a"*31, ""):
+                with self.subTest(bad=bad):
+                    with self.assertRaises(LegacyPredecessorRouteError):
+                        _capture_root_for_common_id(bad)
+            self.assertFalse(expected.exists())
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

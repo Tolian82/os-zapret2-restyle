@@ -254,7 +254,7 @@ echo 'PASS: common FD9 legacy audit uses existing exact kernel/IPFW/argv witness
 
 # The outer production CLI MUST route both diagnostic actions through the
 # original FD9 lifecycle. Merely adding service_dispatch is not enough.
-grep -Fq '|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify)' "$SERVICE_SOURCE" ||
+grep -Fq '|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture)' "$SERVICE_SOURCE" ||
     fail "legacy diagnostic commands bypass original FD9 lifecycle lock"
 grep -Fq 'shared-apply-legacy-qualify)' "$SERVICE_SOURCE" ||
     fail "candidate qualification is not dispatched"
@@ -358,15 +358,20 @@ CAPTURE_AVAILABLE=1 CAPTURE_READY=1 CAPTURE_DRIFT=0
 CAPTURE_CALLS=0
 shared_apply_legacy_candidate_service() {
     [ "$1" = "$QUAL_ID" ] && [ "$CAPTURE_READY" = 1 ] || return 69
-    if [ "$CAPTURE_DRIFT" = 1 ] && [ "$CAPTURE_CALLS" -gt 0 ]; then
-        echo 'changed-prev-state'
+    if [ "$CAPTURE_DRIFT" = 1 ]; then
+        if [ -f "$ROOT/capture-audit-seen" ]; then
+            echo 'changed-prev-state'
+        else
+            : > "$ROOT/capture-audit-seen"
+            echo 'stable-old-state'
+        fi
     else
         echo 'stable-old-state'
     fi
 }
 legacy_previous_fixture() {
     [ "$1" = "$QUAL_ID" ] && [ "$CAPTURE_AVAILABLE" = 1 ] || return 70
-    CAPTURE_CALLS=1
+    : > "$ROOT/immutable-legacy-evidence"
     printf '%s\n' \
         "legacy-voice-bound-candidate=$QUAL_ID" \
         'legacy-voice-predecessor=legacy-poc-previous-and-reverse-plan-sealed-quiescence-pending' \
@@ -389,6 +394,14 @@ CAPTURE_AVAILABLE=1
 if shared_apply_legacy_capture_service bad >/dev/null; then
     fail "untrusted operation id reached old predecessor"
 fi
+rm -f "$ROOT/capture-audit-seen"
+CAPTURE_DRIFT=1
+if shared_apply_legacy_capture_service "$QUAL_ID" >/dev/null; then
+    fail "changed old IPFW/argv/Config witness accepted after predecessor snapshot"
+fi
+[ -f "$ROOT/immutable-legacy-evidence" ] ||
+    fail "failed post-capture audit removed sealed predecessor evidence"
+CAPTURE_DRIFT=0
 echo 'PASS: candidate-bound full legacy predecessor capture requires FD9 and no live mutation'
 
 echo 'PASS: shared engine/IPFW, stopped legacy rollback and live legacy refusal'
