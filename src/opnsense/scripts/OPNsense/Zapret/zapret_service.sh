@@ -1119,7 +1119,48 @@ shared_apply_recover_activated_cold_service()
     fi
     _apply_engine=0
     apply_runtime_attest_engine_inventory || return 69
-    firewall_shared_runtime verify "$_shared_cold_old_root/release" - || return 69
+    # On power loss before native Config save, ACTIVATED may contain a whole
+    # new release and its exact uncommitted IPFW rules/stage tables. No
+    # process may be live. Recover only a verified common predecessor: first
+    # roll back its staged tables/rules, then quiesce its kernel range so that
+    # ordinary committed-owner boot can safely start it again. A restart in
+    # either verified intermediate state resumes; unknown state stays blocked.
+    if ! firewall_shared_runtime verify "$_shared_cold_old_root/release" -; then
+        [ "$_shared_cold_phase" = activated ] || return 69
+        atomic_verify_tree "$_shared_cold_new_root/release" "$ACTIVE_DIR" || return 69
+        shared_apply_bundle_service verify "$_shared_cold_id" || return 69
+        shared_apply_bundle_service verify "$_shared_cold_old" || return 69
+        _shared_cold_saved=$(shared_apply_native_config saved \
+            "$_shared_cold_old" "$_shared_cold_old_page") || return 69
+        _shared_cold_ok=$(printf "%s\n" "$_shared_cold_saved" |
+            shared_apply_json_field '.result | select(.=="committed")') || return 69
+        if launcher_is_running "$CHILD_PIDFILE" ||
+           supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"; then return 69; fi
+        _apply_engine=0
+        apply_runtime_attest_engine_inventory || return 69
+        if firewall_shared_runtime verify-staged \
+            "$_shared_cold_old_root/release" "$_shared_cold_new_root/release"; then
+            # The existing IPFW transaction proves exact active new rules,
+            # tables and old stage snapshots before any kernel mutation.
+            firewall_shared_runtime rollback \
+                "$_shared_cold_old_root/release" "$_shared_cold_new_root/release" || return 70
+            firewall_shared_runtime verify \
+                "$_shared_cold_old_root/release" "$_shared_cold_old_root/release" || return 70
+        elif ! firewall_shared_runtime verify \
+            "$_shared_cold_old_root/release" "$_shared_cold_old_root/release" &&
+             ! firewall_shared_runtime verify-staged \
+            "$_shared_cold_old_root/release" -; then
+            return 69
+        fi
+        # A power cut after rollback leaves exact old IPFW; one after the
+        # empty install may leave verified retired tables awaiting commit.
+        if ! firewall_shared_runtime verify-staged "$_shared_cold_old_root/release" -; then
+            firewall_shared_runtime install "$_shared_cold_old_root/release" - || return 70
+        fi
+        firewall_shared_runtime verify-staged "$_shared_cold_old_root/release" - || return 70
+        firewall_shared_runtime commit "$_shared_cold_old_root/release" - || return 70
+        firewall_shared_runtime verify "$_shared_cold_old_root/release" - || return 70
+    fi
     # Idempotent completion if the previous tree was already restored.
     # Otherwise only an EXACT new sealed release may be replaced.
     if ! atomic_verify_tree "$_shared_cold_old_root/release" "$ACTIVE_DIR"; then

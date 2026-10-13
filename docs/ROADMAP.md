@@ -1,5 +1,7 @@
 # os-zapret2-restyle — краткий master plan
 
+**`v0.5.2_70` — возврат после прерванного общего Apply с временными IPFW.** В существующем `shared_apply_recover_activated_cold_service` фаза `activated` теперь восстанавливает предыдущего подтверждённого common owner из полностью проверенного нового runtime и прежнего native Config, когда движок/монитор отсутствуют, а kernel точно соответствует либо новому uncommitted IPFW+stage, либо старому IPFW после rollback, либо ожидаемой очистке. Используются только существующие `verify-staged`/`rollback`/`install`/`commit` и старый атомарный runtime installer; после отключения IPFW применяется прежний cold-restoration путь. Любая неизвестная стадия, чужие правила/процесс или сбой оставляют journal незакрытым. Добавлена направленная shell-проверка последовательности и повторов. Реальная FreeBSD/power-cut и STUN/MEDIA/CALL приёмка ещё не выполнена.
+
 **`v0.5.2_69` — честный общий Stop при потерянном PID.** Штатный Stop теперь использует существующий независимый census точного исполняемого файла dvtws2 перед решением «уже остановлено» и перед остановкой собственного процесса. После остановки PID-владельца census повторяется до изменения IPFW: посторонний/осиротевший/дублирующий процесс приводит к отказу, а не к успешному `native-common-stopped`. Регрессии выполняют настоящий Stop-функционал с подставными process/kernel адаптерами, включая нормальный повторный Stop. Нет нового backend, WAL, frontend или автоматического legacy STOP; FreeBSD live и STUN/MEDIA/CALL остаются не подтверждены.
 
 **`v0.5.2_68` — исправление blocker в live predecessor attestation.** Функции операторского `legacy-begin`/`legacy-cancel` раньше пытались читать `marker`, `process_instances`, `managed_ipv4_sha256`, `active_argument_sha256` и `legacy_ipfw_previous` из сокращённого результата `inspect_legacy_previous`, в котором этих полей **нет**; production FreeBSD route отказывал без нужной проверки. Новый `inspect_legacy_previous_live_identity` извлекает точные поля только из полностью проверенного sealed `legacy.json`, повторно сверяет его checksum, previous-five binding и manifest перед использованием. Добавлен regression-test на сравнение прежнего PID/argv/IPFW/marker с реальным live inspector и на отказ при изменении manifest. Не создано нового движка, WAL, независимого backend или unsafe actuator. Команды остаются operator-only; живой reversible cutover и FreeBSD STUN/MEDIA/CALL приёмка ещё не готовы.
@@ -10,7 +12,7 @@
 
 ## Текущий приоритет — v0.5.2
 
-**`v0.5.2_69`: общий backend «Стратегии» / «Передача голоса».** Этап открыт 13.10.2026 по поручению владельца без релиза. Архитектура утверждена, [подробный проект плана и контроля](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) принят к выполнению поручением владельца начать программирование. Frontend и все пять сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) сохраняются.
+**`v0.5.2_70`: общий backend «Стратегии» / «Передача голоса».** Этап открыт 13.10.2026 по поручению владельца без релиза. Архитектура утверждена, [подробный проект плана и контроля](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) принят к выполнению поручением владельца начать программирование. Frontend и все пять сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) сохраняются.
 
 | Предложенный этап | Конечный результат |
 |---|---|
