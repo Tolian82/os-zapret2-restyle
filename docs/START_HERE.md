@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_54`. `VERSION=0.5.2`; `PLUGIN_REVISION=54`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_55`. `VERSION=0.5.2`; `PLUGIN_REVISION=55`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+**`_55`: точная read-only сверка legacy IPFW/argv без нового исполнителя.** Операторский общий `shared-apply-legacy-audit` под прежним FD9 теперь после базового наблюдения вызывает **существующий** `voice_native_legacy_live_preflight.py inspect`. Он закрепляет Config оригинальным flock, старые marker/runtime state и managed IPv4, сверяет реальные FreeBSD kernel argv и image трёх процессов, а также полный старый IPFW rule interval/table в двух независимых выборках. Код требует ожидаемый ответ и повторно сверяет общие PID после получения свидетельства. Только при успехе возвращает `legacy-exact-ipfw-argv-observed=1`, но по-прежнему **`legacy-handoff-authorized=0`**: читать и установить соответствие — не значит безопасно остановить работающий PoC или восстановить старые правила после ошибки. Нет нового WAL/движка/публичной кнопки.
 
 **`_54`: read-only live legacy audit.** В общем `apply_runtime.sh` добавлено наблюдение одного работающего старого runtime: обязательные legacy-файлы, отсутствие общего `voice-plan.json`, PID dvtws2 и supervisor, независимый census engine и штатная проверка old IPFW. Команда `shared-apply-legacy-audit` выполняется под исходным FD9 без записи Config/WAL и без изменения процессов/IPFW; даже положительный результат выдаёт `legacy-handoff-authorized=0`. Старый IPFW check не доказывает точный ownership и не разрешает live cutover. Далее — доказуемый rollback legacy/kernel и FreeBSD owner-live.
 
@@ -88,7 +90,7 @@ Install проверяет живые объекты до изменения, с
 
 ## Следующее действие
 
-**Этап 4 — следующий рубеж после `_54`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
+**Этап 4 — следующий рубеж после `_55`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 
 ## Минимальное чтение по текущей задаче
 
