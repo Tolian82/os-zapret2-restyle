@@ -2,6 +2,7 @@
 """Full common release build on private inputs; no kernel or live Config calls."""
 from pathlib import Path
 import json
+import importlib.util
 import os
 import shlex
 import subprocess
@@ -12,13 +13,21 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
+sys.path.insert(0, str(BACKEND))
+from voice_ipfw_adapter import shared_release_manifest, shared_firewall_action, IPFWAdapterError
+
+spec = importlib.util.spec_from_file_location("firewall_test_fixture", ROOT / "scripts/test-voice-firewall-transaction.py")
+firewall_fixture = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(firewall_fixture)
+FakeIPFW = firewall_fixture.FakeIPFW
 ACTIVE = "/usr/local/etc/zapret2/runtime-v2"
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
 STUN = "--filter-udp=*\n--filter-l7=stun\n--payload=stun"
 ORDINARY = "--filter-tcp=443\n--filter-l7=tls\n--new\n--filter-udp=596-599\n<IPSET:telegram>\n--filter-l7=unknown\n--payload=unknown"
 
 
-def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engine=None):
+def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engine=None,
+          target_offset=0):
     xml = ET.Element("opnsense")
     model = ET.SubElement(ET.SubElement(xml, "OPNsense"), "Zapret")
     general = ET.SubElement(model, "general")
@@ -33,7 +42,7 @@ def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engin
         entry = ET.SubElement(voice, name)
         ET.SubElement(entry, "enabled").text = "1" if name in enabled else "0"
         ET.SubElement(entry, "args").text = ("--new" if bad_args and name in enabled else STUN)
-        ipset = f"198.51.100.{i + 1}"
+        ipset = f"198.51.100.{i + 1 + target_offset}"
         ET.SubElement(hosts, name + "ips").text = ipset
         settings[name.upper() + "_IPS"] = ipset
         settings["VOICE_" + name.upper() + "_REQUESTED"] = "1" if name in enabled else "0"
@@ -57,7 +66,11 @@ def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engin
     # Repository builds can run under the local Python; native CI uses 3.13.
     tools = tmp / "tools"
     tools.mkdir()
-    (tools / "python3.13").symlink_to(sys.executable)
+    # pkg python313 does not promise a generic python3 executable on FreeBSD.
+    # Existing strict IPSET normalization calls that name; expose both names
+    # to the same real interpreter in this private test environment.
+    for name in ("python3", "python3.13"):
+        (tools / name).symlink_to(sys.executable)
     marker = tmp / "old-marker"
     marker.write_text("1\n")
     old_config = source.read_bytes()
@@ -82,6 +95,62 @@ orchestrator_build_release "$2" "$3" "$4" "$5" "$6" "$5/stages" shared-candidate
 
 
 class CommonRuntimeTests(unittest.TestCase):
+    def test_shared_firewall_full_cycle_and_precommit_runtime_failure_rollback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifests = []
+            for index, (enabled, offset) in enumerate(((SERVICES, 0), (SERVICES, 10), ((), 0))):
+                path = root / str(index)
+                path.mkdir()
+                result, release = build(path, enabled, target_offset=offset)
+                self.assertEqual(0, result.returncode, result.stderr)
+                manifests.append(shared_release_manifest(release))
+            first, updated, off = manifests
+            empty = {"rule_base": 19000, "rule_max": 19010, "rules": {}, "tables": {}}
+            adapter = FakeIPFW({18500: ["allow", "ip", "from", "any", "to", "any"]})
+            shared_firewall_action(adapter, "install", empty, first)
+            self.assertEqual(5, len(first["tables"]))
+            self.assertEqual(7, len(first["rules"]))
+            shared_firewall_action(adapter, "commit", empty, first)
+            shared_firewall_action(adapter, "install", first, updated)
+            # Simulate launcher/Config failure after successful kernel install.
+            shared_firewall_action(adapter, "rollback", first, updated)
+            shared_firewall_action(adapter, "verify", empty, first)
+            shared_firewall_action(adapter, "install", first, updated)
+            shared_firewall_action(adapter, "commit", first, updated)
+            # Repeat, all Voice OFF (ordinary retained), then ordinary Stop.
+            for previous, desired in ((updated, updated), (updated, off), (off, empty)):
+                shared_firewall_action(adapter, "install", previous, desired)
+                shared_firewall_action(adapter, "commit", previous, desired)
+                shared_firewall_action(adapter, "verify", previous, desired)
+            self.assertEqual({}, adapter.tables)
+            self.assertEqual({18500: ["allow", "ip", "from", "any", "to", "any"]}, adapter.rules)
+
+    def test_shared_firewall_foreign_objects_refused_without_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, release = build(Path(directory), SERVICES)
+            self.assertEqual(0, result.returncode, result.stderr)
+            desired = shared_release_manifest(release)
+            empty = {"rule_base": 19000, "rule_max": 19010, "rules": {}, "tables": {}}
+            for adapter in (FakeIPFW({19000: ["allow", "ip", "from", "any", "to", "any"]}),
+                            FakeIPFW(tables={"zapret2_voice_custom": ["8.8.8.8"]})):
+                with self.assertRaises(RuntimeError):
+                    shared_firewall_action(adapter, "install", empty, desired)
+                self.assertEqual([], adapter.ops)
+
+    def test_shared_manifest_rejects_drift_and_cli_requires_original_fd9(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, release = build(Path(directory), SERVICES)
+            self.assertEqual(0, result.returncode, result.stderr)
+            (release / "managed/ipset-custom.txt").write_text("8.8.8.8\n")
+            with self.assertRaisesRegex(IPFWAdapterError, "IPSET"):
+                shared_release_manifest(release)
+            response = subprocess.run([sys.executable, str(BACKEND / "voice_ipfw_adapter.py"),
+                                       "shared", "install", "-", str(release)],
+                                      capture_output=True, text=True, timeout=15)
+            self.assertNotEqual(0, response.returncode)
+            self.assertIn("ERROR:", response.stderr)
+
     def test_all_five_and_each_individual_service_use_main_runtime(self):
         for enabled in (SERVICES, *((s,) for s in SERVICES)):
             with self.subTest(enabled=enabled), tempfile.TemporaryDirectory() as directory:

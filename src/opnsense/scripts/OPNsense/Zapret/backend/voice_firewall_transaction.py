@@ -201,6 +201,13 @@ def apply_transaction(adapter, previous: dict, desired: dict) -> None:
             # wins this number, never delete it during rollback.
             adapter.add_rule(number, argv)
             installed_rules.add(number)
+        # A successful command is not proof of the resulting kernel state.
+        # Check rules, active tables and retained rollback contents together
+        # before returning the precommit state to the common lifecycle.
+        plan_postcommit_cleanup(adapter, previous, desired)
+        for table in desired["tables"]:
+            if adapter.get_table(table + "_stage") is None:
+                raise VoiceFirewallError("missing retained IPFW rollback table")
     except Exception as original:
         # Roll back rules first while active tables still exist.
         rollback_errors = []
@@ -238,6 +245,10 @@ def apply_transaction(adapter, previous: dict, desired: dict) -> None:
                 adapter.destroy_table(stage)
             except Exception as exc:
                 rollback_errors.append(str(exc))
+        try:
+            verify_prior_state(adapter, previous, previous)
+        except Exception as exc:
+            rollback_errors.append(str(exc))
         if rollback_errors:
             raise VoiceFirewallError(
                 "Voice IPFW activation failed; rollback incomplete; appliance inspection required"
@@ -346,5 +357,6 @@ def cleanup_committed(adapter, previous: dict, desired: dict) -> None:
         if not table_contents_equal(adapter.get_table(name), expected):
             raise VoiceFirewallError(f"Voice table changed during cleanup: {name}")
         adapter.destroy_table(name)
+    verify_prior_state(adapter, desired, desired)
     # Callers must re-check desired kernel state and finish the intent after
     # cleanup. This function never silently clears the durable journal.

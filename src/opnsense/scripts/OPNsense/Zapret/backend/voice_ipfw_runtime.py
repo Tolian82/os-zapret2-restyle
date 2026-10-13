@@ -22,13 +22,10 @@ No caller-supplied paths or alternate IPFW binaries are accepted on FreeBSD.
 """
 from __future__ import annotations
 
-import errno
-import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
-import platform
 import stat
 import sys
 
@@ -95,32 +92,12 @@ def _json_file(path: Path) -> dict:
 
 
 def require_native_lock() -> None:
-    """Confirm FD9 refers to THE production lock and another FD contends.
-
-    A process merely inheriting an unlocked FD9 must never masquerade as a
-    lifecycle lock owner. FreeBSD /usr/bin/lockf -s uses flock semantics.
-    """
-    if platform.system() != "FreeBSD" or os.geteuid() != 0:
-        _fail("native Voice IPFW actions require FreeBSD root")
+    """Compatibility entry point for the common lifecycle FD9 attestation."""
+    from voice_ipfw_adapter import require_lifecycle_lock, IPFWAdapterError
     try:
-        held, actual = os.fstat(9), os.stat(LOCK, follow_symlinks=False)
-    except OSError as exc:
-        raise VoiceKernelRuntimeError("existing lifecycle FD9 is required") from exc
-    if not stat.S_ISREG(actual.st_mode) or actual.st_uid != 0 or \
-       actual.st_dev != held.st_dev or actual.st_ino != held.st_ino:
-        _fail("FD9 is not the existing Zapret2 lifecycle lock")
-    test_fd = os.open(LOCK, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
-    try:
-        try:
-            fcntl.flock(test_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as exc:
-            if exc.errno not in (errno.EWOULDBLOCK, errno.EAGAIN):
-                raise
-        else:
-            fcntl.flock(test_fd, fcntl.LOCK_UN)
-            _fail("FD9 is open but the lifecycle lock is not held")
-    finally:
-        os.close(test_fd)
+        require_lifecycle_lock()
+    except IPFWAdapterError as error:
+        raise VoiceKernelRuntimeError(str(error)) from error
 
 
 def load_candidate() -> tuple[dict, dict]:

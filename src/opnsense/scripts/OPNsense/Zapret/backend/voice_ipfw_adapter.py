@@ -1,23 +1,34 @@
 #!/usr/bin/env python3
-"""Bounded FreeBSD IPFW adapter for the isolated Voice transaction work.
+"""Bounded FreeBSD IPFW adapter for shared Strategies/Voice firewall work.
 
-The adapter is NOT invoked by zapret_service.sh or the normal orchestrator.
-It defaults to read-only. A caller may enable mutation only while holding
-the existing lifecycle lock, after a trusted ownership manifest has been
-loaded and a durable intent has been fsync'd.
+The common firewall invokes the shared release path only under the existing
+lifecycle FD9. The caller retains the previously installed release and table
+snapshots until its whole-runtime commit. Public Apply is integrated separately.
+The class still defaults to read-only; importing the module touches no kernel.
 
 No shell execution, arbitrary table/rule names, unbounded subprocess output,
 or automatic adoption of existing/foreign rule numbers is permitted.
 """
 from __future__ import annotations
 
+import errno
+import fcntl
+import hashlib
 import ipaddress
+import json
+import os
+from pathlib import Path
+import platform
 import re
+import stat
 import subprocess
+import sys
 from typing import Callable, Sequence
 
 from voice_firewall_transaction import (
     SERVICES, TABLE_PREFIX, VoiceFirewallError,
+    prepare_desired, apply_transaction, rollback_uncommitted,
+    cleanup_committed, verify_prior_state,
 )
 
 MAX_IPFW_OUTPUT = 2 * 1024 * 1024
@@ -39,6 +50,32 @@ MISSING_TABLE = re.compile(
 
 class IPFWAdapterError(VoiceFirewallError):
     pass
+
+
+def require_lifecycle_lock() -> None:
+    """Attest the existing common FD9; never acquire a separate lock."""
+    if platform.system() != "FreeBSD" or os.geteuid() != 0:
+        raise IPFWAdapterError("native IPFW actions require FreeBSD root")
+    lock = "/var/run/zapret2-lifecycle.lock"
+    try:
+        held, actual = os.fstat(9), os.stat(lock, follow_symlinks=False)
+    except OSError as error:
+        raise IPFWAdapterError("existing lifecycle FD9 is required") from error
+    if not stat.S_ISREG(actual.st_mode) or actual.st_uid != 0 or \
+       actual.st_dev != held.st_dev or actual.st_ino != held.st_ino:
+        raise IPFWAdapterError("FD9 is not the existing Zapret2 lifecycle lock")
+    probe = os.open(lock, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        try:
+            fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as error:
+            if error.errno not in (errno.EWOULDBLOCK, errno.EAGAIN):
+                raise
+        else:
+            fcntl.flock(probe, fcntl.LOCK_UN)
+            raise IPFWAdapterError("FD9 is open but the lifecycle lock is not held")
+    finally:
+        os.close(probe)
 
 
 def checked_table_name(name: str) -> str:
@@ -222,3 +259,95 @@ class FreeBSDIPFWAdapter:
         number = checked_rule_number(number, self.rule_base, self.rule_max)
         arguments = checked_rule_argv(argv)
         self._run("-qf", "add", str(number), *arguments, modifying=True)
+
+
+def shared_release_manifest(release: Path) -> dict:
+    """Derive ownership from one trusted common release, without a second ledger.
+
+    The lifecycle supplies the previously installed release or its retained
+    backup. Directory names alone do not prove live ownership: every kernel
+    object is compared with this manifest before mutation.
+    """
+    release = Path(release)
+    if not release.is_absolute() or release.resolve() != release or not release.is_dir():
+        raise IPFWAdapterError("shared firewall requires a regular absolute release")
+    if release.stat().st_mode & 0o022:
+        raise IPFWAdapterError("shared release is writable by another user")
+
+    def read(name: str) -> bytes:
+        path = release / name
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o022 or \
+           info.st_uid != release.stat().st_uid or info.st_size > 1_048_576 or \
+           path.resolve() != path:
+            raise IPFWAdapterError("unsafe shared firewall artifact")
+        return path.read_bytes()
+
+    plan = json.loads(read("voice-plan.json"))
+    if not isinstance(plan, dict) or plan.get("schema") != 1:
+        raise IPFWAdapterError("unsupported shared release plan")
+    tcp = read("tcp-ports.txt").decode("utf-8").strip()
+    udp = read("udp-ports.txt").decode("utf-8").strip()
+    manifest = prepare_desired(plan.get("capture"), tcp, udp)
+    hashes = plan.get("source", {}).get("ipset_sha256", {})
+    for service in SERVICES:
+        table = TABLE_PREFIX + service
+        if table not in manifest["tables"]:
+            continue
+        raw = read(f"managed/ipset-{service}.txt")
+        if raw.decode("utf-8") != "".join(value + "\n" for value in manifest["tables"][table]) or \
+           hashlib.sha256(raw).hexdigest() != hashes.get(service):
+            raise IPFWAdapterError("shared capture differs from managed IPSET")
+    return manifest
+
+
+def shared_firewall_action(adapter, action: str, previous: dict, desired: dict) -> None:
+    """Common lifecycle's reversible firewall boundary; caller holds FD9.
+
+    Install retains table snapshots until the whole runtime commits. A
+    launcher/Config failure calls rollback before commit. Stop uses an empty
+    desired manifest with the same rule interval. No Config, process, runtime
+    writer or independent persistent operation is created here.
+    """
+    actions = {"install": apply_transaction, "rollback": rollback_uncommitted,
+               "commit": cleanup_committed, "verify": verify_prior_state}
+    if action not in actions:
+        raise IPFWAdapterError("unknown shared firewall action")
+    if action == "verify":
+        actions[action](adapter, desired, desired)
+    else:
+        actions[action](adapter, previous, desired)
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 5 or argv[1] != "shared" or argv[2] not in {
+        "install", "rollback", "commit", "verify"
+    }:
+        print("usage: voice_ipfw_adapter.py shared ACTION PREVIOUS_RELEASE DESIRED_RELEASE",
+              file=sys.stderr)
+        return 64
+    try:
+        require_lifecycle_lock()
+        for argument in argv[3:]:
+            if argument != "-" and Path(argument).stat().st_uid != 0:
+                raise IPFWAdapterError("shared firewall requires root-owned releases")
+        previous = None if argv[3] == "-" else shared_release_manifest(Path(argv[3]))
+        desired = None if argv[4] == "-" else shared_release_manifest(Path(argv[4]))
+        reference = desired if desired is not None else previous
+        if reference is None:
+            raise IPFWAdapterError("shared firewall requires a trusted release")
+        empty = {"rule_base": reference["rule_base"], "rule_max": reference["rule_max"],
+                 "rules": {}, "tables": {}}
+        previous = empty if previous is None else previous
+        desired = empty if desired is None else desired
+        adapter = FreeBSDIPFWAdapter(reference["rule_base"], reference["rule_max"],
+                                     allow_mutations=argv[2] != "verify")
+        shared_firewall_action(adapter, argv[2], previous, desired)
+    except Exception as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

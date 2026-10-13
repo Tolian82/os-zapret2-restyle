@@ -70,6 +70,44 @@ def fixture(*services):
     return transaction.prepare_desired(plan, "443", "596-599")
 
 class VoiceFirewallTransactionTests(unittest.TestCase):
+    def test_successful_noop_install_is_detected_and_previous_state_restored(self):
+        class NoopFirstAdd(FakeIPFW):
+            def add_rule(self, number, argv):
+                if not self.failed:
+                    self.failed = True
+                    return
+                super().add_rule(number, argv)
+        previous = fixture()
+        desired = fixture(("telegram", "91.108.0.0/16"))
+        adapter = NoopFirstAdd(previous["rules"], previous["tables"])
+        with self.assertRaisesRegex(transaction.VoiceFirewallError,
+                                    "previous owned state restored"):
+            transaction.apply_transaction(adapter, previous, desired)
+        transaction.verify_prior_state(adapter, previous, previous)
+
+    def test_successful_noop_restore_is_reported_as_incomplete(self):
+        class NoopRestore(FakeIPFW):
+            def add_rule(self, number, argv):
+                if self.failed:
+                    return
+                super().add_rule(number, argv)
+        previous = fixture()
+        desired = fixture(("telegram", "91.108.0.0/16"))
+        adapter = NoopRestore(previous["rules"], previous["tables"], failure="add_rule")
+        with self.assertRaisesRegex(transaction.VoiceFirewallError, "rollback incomplete"):
+            transaction.apply_transaction(adapter, previous, desired)
+
+    def test_successful_noop_cleanup_cannot_report_completion(self):
+        class NoopDestroy(FakeIPFW):
+            def destroy_table(self, name):
+                return
+        previous = fixture()
+        desired = fixture(("telegram", "91.108.0.0/16"))
+        adapter = NoopDestroy(previous["rules"], previous["tables"])
+        transaction.apply_transaction(adapter, previous, desired)
+        with self.assertRaisesRegex(transaction.VoiceFirewallError, "stage table"):
+            transaction.cleanup_committed(adapter, previous, desired)
+
     def test_first_activation_produces_scoped_ipfw_and_keeps_old_ordinary(self):
         previous = fixture()
         desired = fixture(("telegram","91.108.0.0/16"))

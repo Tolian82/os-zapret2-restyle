@@ -2,6 +2,18 @@
 
 IPFW_BIN="${IPFW_BIN:-/sbin/ipfw}"
 
+# Shared candidate/release firewall. The common lifecycle owns FD9 and keeps
+# the previous runtime until commit. '-' means no previous installed objects
+# (first start), or no desired objects (Stop/global OFF). These entry points
+# never sweep a numeric range and never instantiate private Voice ledgers.
+firewall_shared_runtime()
+{
+    [ "$#" -eq 3 ] || return 64
+    case "$1" in install|rollback|commit|verify) ;; *) return 64 ;; esac
+    "${PYTHON_BIN:-/usr/local/bin/python3.13}" \
+        "${BACKEND_DIR}/voice_ipfw_adapter.py" shared "$1" "$2" "$3"
+}
+
 firewall_remove_rules()
 {
     _firewall_remove_rule="$1"
