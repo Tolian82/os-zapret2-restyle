@@ -115,6 +115,8 @@ Runtime переключается перед финальным сохране�
 
 ### Этап 3. Общий Apply обеих страниц
 
+Подэтап `_22`: исправлен точный CLI-regex в штатном `recover-prepared` и добавлена failure-path проверка на Python. Это не расширяет разрешённые recovery-фазы: только source-intact `prepared` до начала мутаций может перейти в `restored`. Неподтверждённая runtime/Config/IPFW операция по-прежнему запрещает legacy startup.
+
 Подэтап `_21`: самый ранний power-cut после `prepared` безопасно и автоматически закрывается только при root FD9, целостном sealed candidate, неизменном identity и повторной проверке journal. До записи durable `activating` исполнитель не совершает runtime/Config/IPFW мутаций, поэтому разрешено `prepared → restored` и затем обычный start через old guard. `activating/activated/config-saved` остаются `blocked`, никакого общего автоматического rollback без независимых Config/kernel/engine witnesses. Результаты тестируются на actual lifecycle wrapper и isolated operation-store.
 
 Подэтапы `_18`–`_20`: внутренний full Config/plan/release после общего detached build получает один content-integrity seal, который проверяется перед активацией kernel и снова до native Config save; неизвестные/изменённые файлы отвергаются без произвольного fallback. Успешно committed native owner теперь может быть повторно запущен штатным `start/reconfigure` под тем же FD9 при совпадении journal, saved OPNsense Config и sealed release. Старый Telegram PoC не запускается поверх общего owner. `service_with_lifecycle_lock` покрыт собственным shell fault-injection тестом. Незавершённые фазы после power cut ещё не восстанавливаются автоматически, stop/restart и обе публичные GUI-кнопки остаются в работе.

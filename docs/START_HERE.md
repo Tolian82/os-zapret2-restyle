@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_21`. `VERSION=0.5.2`; `PLUGIN_REVISION=21`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_22`. `VERSION=0.5.2`; `PLUGIN_REVISION=22`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+В `_22` исправлен реальный дефект ветки root FD9 `recover-prepared`: CLI использовал несуществующий символ проверки OP_ID, поэтому до исправления раннее восстановление не могло исполниться. Идентификатор теперь проверяется существующим строгим `OP_ID`; CLI-тест проверяет, что без FreeBSD root/FD9 возвращается контролируемый отказ 69 без необработанного Python Traceback. До получения полного latest HEAD CI успешность восстановления на самом FreeBSD не утверждается.
 
 В `_21` разрешено восстановление **только строго домутирующей** фазы общего Apply: `prepared` была долговечно записана до перехода в `activating` и до любого live runtime/Config/IPFW изменения. Если root-FD9 boot видит сохранённую `prepared`, и тот же sealed bundle цел, штатный `shared_apply_operation.py recover-prepared` сверяет ID/phase дважды и переводит журнал в `restored`; обычный start продолжает legacy лишь после штатного guard. Неуспех проверки, `activating`, `activated`, `config-saved` или неоднозначные фазы по-прежнему блокируют boot, без изменения Config/IPFW и без подмены полного recovery. Тесты добавлены к реальному FD9 lifecycle dispatch и phase-store.
 
