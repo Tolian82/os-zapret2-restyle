@@ -36,7 +36,7 @@ def _present(path: Path) -> bool:
         return False
 
 
-def check_pending(whole_root: Path, ipfw_root: Path, shared_root: Path | None = None, *, native_scope: bool = False, recover_saved: bool = False) -> dict:
+def check_pending(whole_root: Path, ipfw_root: Path, shared_root: Path | None = None, *, native_scope: bool = False, recover_saved: bool = False, recover_pristine: bool = False) -> dict:
     """Return a bounded, machine-readable advisory without kernel reads."""
     try:
         # One shared Strategies/Voice Apply operation is stronger than the
@@ -57,7 +57,8 @@ def check_pending(whole_root: Path, ipfw_root: Path, shared_root: Path | None = 
                     "phase": phase, "safe_to_mutate": False,
                 }
             if phase not in ("committed", "restored") and not (
-                recover_saved and native_scope and phase == "config-saved"
+                (recover_saved and native_scope and phase == "config-saved") or
+                (recover_pristine and native_scope and phase == "activating")
             ):
                 return {
                     "state": "blocked", "reason": "shared-apply-pending",
@@ -137,11 +138,12 @@ def main(argv: list[str]) -> int:
     # No CLI-specified directory or bypass flag exists in the production
     # executable; unit tests call check_pending() using private temp dirs.
     if len(argv) not in (1, 2) or (
-        len(argv) == 2 and argv[1] not in ("common-apply", "common-recover-saved")
+        len(argv) == 2 and argv[1] not in ("common-apply", "common-recover-saved", "common-recover-activating")
     ):
         return 64
     native_scope = len(argv) == 2
     recover_saved = len(argv) == 2 and argv[1] == "common-recover-saved"
+    recover_pristine = len(argv) == 2 and argv[1] == "common-recover-activating"
     if native_scope:
         # The scoped exception can only be requested by the common root
         # lifecycle holder, never by a public/legacy boot entry point.
@@ -152,7 +154,7 @@ def main(argv: list[str]) -> int:
             return 69
     result = check_pending(
         WHOLE_ROOT, IPFW_ROOT, native_scope=native_scope,
-        recover_saved=recover_saved
+        recover_saved=recover_saved, recover_pristine=recover_pristine
     )
     if result["safe_to_mutate"]:
         return 0

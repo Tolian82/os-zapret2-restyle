@@ -157,6 +157,35 @@ class TestJournal(unittest.TestCase):
             self.assertEqual("invalid-or-untrusted-journal",
                 check_pending(root/"voice-cutover",root/"voice-ipfw")["reason"])
 
+    def test_pristine_activating_recovery_requires_previous_owner_and_attestation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            j=SharedApplyOperation(Path(folder)/"shared-apply")
+            previous=detail("a"*32)
+            candidate=detail("b"*32)
+            for phase in ("prepared","activating","activated","config-saved","committed"):
+                j.advance(phase,previous)
+            j.advance("prepared",candidate)
+            j.advance("activating",candidate)
+            with self.assertRaisesRegex(SharedOperationError,"pristine"):
+                j.recover_activating_pristine(candidate["id"],"c"*32,lambda: True)
+            with self.assertRaisesRegex(SharedOperationError,"attestation"):
+                j.recover_activating_pristine(candidate["id"],previous["id"],lambda: False)
+            self.assertEqual("activating",j.read()["phase"])
+            restored=j.recover_activating_pristine(
+                candidate["id"],previous["id"],lambda: True)
+            self.assertEqual(previous,restored["previous"])
+            self.assertEqual(previous,committed_owner(restored))
+            with self.assertRaisesRegex(SharedOperationError,"pristine"):
+                j.recover_activating_pristine(candidate["id"],previous["id"],lambda: True)
+        with tempfile.TemporaryDirectory() as folder:
+            j=SharedApplyOperation(Path(folder)/"shared-apply")
+            d=detail("c"*32)
+            j.advance("prepared",d)
+            j.advance("activating",d)
+            with self.assertRaisesRegex(SharedOperationError,"pristine"):
+                j.recover_activating_pristine(d["id"],"a"*32,lambda: True)
+            self.assertEqual("activating",j.read()["phase"])
+
     def test_post_save_recovery_only_after_attested_runtime_commit(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)
@@ -184,6 +213,14 @@ class TestJournal(unittest.TestCase):
             with self.assertRaisesRegex(SharedOperationError,"saved-only"):
                 j.finish_saved(d["id"],lambda: True)
             self.assertEqual("activated",j.read()["phase"])
+
+    def test_activating_cli_refuses_unprivileged_or_missing_fd9(self):
+        cli=BACKEND/"shared_apply_operation.py"
+        result=subprocess.run([sys.executable,str(cli),"recover-activating",
+                               "a"*32,"b"*32],
+                              capture_output=True,text=True,check=False)
+        self.assertEqual(69,result.returncode)
+        self.assertNotIn("Traceback",result.stderr)
 
     def test_saved_finish_cli_refuses_unprivileged_or_missing_fd9(self):
         cli=BACKEND/"shared_apply_operation.py"

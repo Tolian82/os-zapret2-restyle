@@ -148,4 +148,62 @@ check_route 0 restart
 check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:start ' ] ||
     fail "no common journal changed ordinary legacy startup"
+# Recover the narrow phase where the previous committed release was never
+# displaced. Use the production service recovery function and mock only
+# its root-only terminal CLI; no kernel, Config or files are touched.
+sed -n '/^shared_apply_recover_activating_pristine_service()$/,/^}$/p' "$SOURCE" > "$ROOT/pristine.sh"
+python3 - "$ROOT/pristine.sh" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]); s=p.read_text()
+old='    [ -x /usr/local/bin/python3.13 ] || return 69\n    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n        recover-activating "$_shared_pristine_id" "$_shared_pristine_old" || return 69'
+assert old in s, "production root CLI boundary missing"
+s=s.replace(old,'    echo terminal-restore >> "$LOG"; [ "$TERMINAL_OK" = 0 ] || return 69')
+p.write_text(s)
+PY
+. "$ROOT/pristine.sh"
+OLD=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+CURRENT=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+ACTIVE_DIR="$ROOT/live"
+mkdir -p "$ACTIVE_DIR"
+CHILD_PIDFILE="$ROOT/child"
+SUPERVISOR_MONITOR_PIDFILE="$ROOT/supervisor"
+atomic_verify_tree() { echo compare >> "$LOG"; [ "$TREE_OK" = 0 ]; }
+apply_runtime_attest_engine_inventory() { echo census >> "$LOG"; [ "$CENSUS_OK" = 0 ]; }
+firewall_shared_runtime() { echo ipfw >> "$LOG"; [ "$IPFW_OK" = 0 ]; }
+launcher_is_running() { echo engine >> "$LOG"; [ "$ENGINE" = 1 ]; }
+supervisor_is_running() { echo supervisor >> "$LOG"; [ "$MONITOR" = 1 ]; }
+reset_pristine() {
+  : > "$LOG"
+  TREE_OK=0 CENSUS_OK=0 IPFW_OK=0 ENGINE=0 MONITOR=0
+  TERMINAL_OK=0 GUARD=0 SEAL=0 CONFIG=0
+}
+pristine_check() {
+  wanted="$1"; shift
+  set +e
+  shared_apply_recover_activating_pristine_service "$1" > "$ROOT/pristine-output"
+  actual=$?
+  set -e
+  [ "$actual" -eq "$wanted" ] || fail "pristine status $actual expected $wanted"
+}
+reset_pristine
+pristine_check 0 "activating $CURRENT voice $OLD voice"
+grep -Fqx "recovered-pristine-id=$CURRENT" "$ROOT/pristine-output" || fail "pristine receipt missing"
+grep -Fq terminal-restore "$LOG" || fail "pristine terminal phase omitted"
+reset_pristine; TREE_OK=1
+pristine_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fq terminal-restore "$LOG" || fail "altered installed runtime finalized"
+reset_pristine; CENSUS_OK=1
+pristine_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fq terminal-restore "$LOG" || fail "orphan engine finalized"
+reset_pristine; IPFW_OK=1
+pristine_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fq terminal-restore "$LOG" || fail "foreign kernel finalized"
+reset_pristine; CONFIG=1
+pristine_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fq terminal-restore "$LOG" || fail "changed saved Config finalized"
+reset_pristine
+pristine_check 69 "activating $CURRENT voice"
+pristine_check 69 "activated $CURRENT voice $OLD voice"
+echo 'PASS: pristine interrupted activating recovers only previous sealed common owner'
 echo 'PASS: committed native common owner routes boot through sealed release and fresh saved Config'

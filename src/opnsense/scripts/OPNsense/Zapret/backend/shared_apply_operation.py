@@ -225,6 +225,25 @@ class SharedApplyOperation:
             raise SharedOperationError("shared Apply phase changed during recovery")
         return self.advance("restored", record["detail"])
 
+    def recover_activating_pristine(self, identity: str, previous_id: str, attest) -> dict:
+        """Close only a no-mutation crash with an attested previous owner.
+
+        The caller under original root FD9 must prove that native Config,
+        installed runtime bytes, all engine processes and scoped IPFW still
+        describe the *previous* sealed owner. A replaced/partial runtime or
+        an initial legacy owner has no safe automatic recovery here.
+        """
+        record = self.read()
+        if record is None or record["phase"] != "activating" or \
+                record["detail"]["id"] != identity or \
+                record.get("previous", {}).get("id") != previous_id:
+            raise SharedOperationError("pristine activating recovery refused")
+        if not callable(attest) or attest() is not True:
+            raise SharedOperationError("pristine activating attestation refused")
+        if self.read() != record:
+            raise SharedOperationError("activating journal changed during attestation")
+        return self.advance("restored", record["detail"])
+
     def finish_saved(self, identity: str, attest) -> dict:
         """Close Config-saved only after external FD9 Config/kernel attestation.
 
@@ -257,7 +276,10 @@ def main(argv: list[str]) -> int:
     recording = len(argv) == 8 and argv[1] == "record"
     recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(OP_ID.fullmatch(argv[2]))
     finish = len(argv) == 3 and argv[1] == "finish-saved" and bool(OP_ID.fullmatch(argv[2]))
-    if not (inspection or recording or recovery or finish):
+    pristine = len(argv) == 4 and argv[1] == "recover-activating" and all(
+        OP_ID.fullmatch(value) for value in argv[2:]
+    )
+    if not (inspection or recording or recovery or finish or pristine):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -282,6 +304,10 @@ def main(argv: list[str]) -> int:
             elif record["phase"] in ("prepared", "config-saved"):
                 detail = record["detail"]
                 print(record["phase"] + " " + detail["id"] + " " + detail["page"])
+            elif record["phase"] == "activating" and "previous" in record:
+                detail, previous = record["detail"], record["previous"]
+                print("activating " + detail["id"] + " " + detail["page"] +
+                      " " + previous["id"] + " " + previous["page"])
             else:
                 # Never make an incomplete operation look like no owner.
                 raise SharedOperationError("unfinished common Apply blocks native boot")
@@ -293,6 +319,15 @@ def main(argv: list[str]) -> int:
                 lambda: bool(verify_seal(WORK / argv[2], owner=0)),
             )
             print("prepared-restored")
+        elif pristine:
+            from shared_apply_seal import verify_seal, WORK
+            store = SharedApplyOperation(owner=0)
+            store.recover_activating_pristine(
+                argv[2], argv[3],
+                lambda: bool(verify_seal(WORK / argv[2], owner=0) and
+                             verify_seal(WORK / argv[3], owner=0)),
+            )
+            print("activating-pristine-restored")
         elif finish:
             from shared_apply_seal import verify_seal, WORK
             store = SharedApplyOperation(owner=0)

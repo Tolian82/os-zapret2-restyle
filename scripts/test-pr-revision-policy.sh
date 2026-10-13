@@ -45,4 +45,11 @@ bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" "$now" "v0.5.1_3: Voice"
 if bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" "$now" "v0.5.1_2: Stale" >/dev/null 2>&1; then
   echo "FAIL: stale title passed" >&2; exit 1
 fi
-echo "PASS: version-boundary and forward revision-regression"
+git reset --hard -q "$good"
+echo newer > bad-subject.md
+git add bad-subject.md
+git commit -qm "docs: Record v0.5.2_8 native save merge milestone and handoff"
+if bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" "$(git rev-parse HEAD)" "v0.5.1_2: Voice" >/dev/null 2>&1; then
+  echo "FAIL: new commit with copied historical subject bypassed exact-SHA guard" >&2; exit 1
+fi
+echo "PASS: strict version-boundary, immutable historic SHA exception and forward revision-regression"

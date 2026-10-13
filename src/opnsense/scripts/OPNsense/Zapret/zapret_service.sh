@@ -848,6 +848,52 @@ shared_apply_recover_saved_service()
         finish-saved "$_shared_saved_id" || return 70
     printf "recovered-saved-id=%s\n" "$_shared_saved_id"
 }
+# An interrupted ACTIVATING can be closed only when every observed
+# resource is still the previous *sealed common* release, i.e. no mutation
+# took effect. Never infer safety from empty IPFW/processes alone.
+shared_apply_recover_activating_pristine_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    case "$1" in activating\ *) ;; *) return 69 ;; esac
+    _shared_pristine_id=$(printf "%s\n" "$1" | cut -d " " -f 2)
+    _shared_pristine_page=$(printf "%s\n" "$1" | cut -d " " -f 3)
+    _shared_pristine_old=$(printf "%s\n" "$1" | cut -d " " -f 4)
+    _shared_pristine_old_page=$(printf "%s\n" "$1" | cut -d " " -f 5)
+    [ "$1" = "activating $_shared_pristine_id $_shared_pristine_page $_shared_pristine_old $_shared_pristine_old_page" ] || return 69
+    for _shared_pristine_value in "$_shared_pristine_id" "$_shared_pristine_old"; do
+        [ "${#_shared_pristine_value}" -eq 32 ] || return 69
+        case "$_shared_pristine_value" in ""|*[!a-f0-9]*) return 69 ;; esac
+    done
+    case "$_shared_pristine_page" in voice|strategies) ;; *) return 69 ;; esac
+    case "$_shared_pristine_old_page" in voice|strategies) ;; *) return 69 ;; esac
+    [ "$_shared_pristine_id" != "$_shared_pristine_old" ] || return 69
+    preflight_voice_cutover_journals common-recover-activating || return 69
+    shared_apply_bundle_service verify "$_shared_pristine_id" || return 69
+    shared_apply_bundle_service verify "$_shared_pristine_old" || return 69
+    _shared_pristine_config=$(shared_apply_native_config saved         "$_shared_pristine_old" "$_shared_pristine_old_page") || return 69
+    _shared_pristine_saved=$(printf "%s\n" "$_shared_pristine_config" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 69
+    _shared_pristine_dir=$(shared_apply_workspace "$_shared_pristine_old") || return 69
+    [ -d "$_shared_pristine_dir/release" ] && [ ! -L "$_shared_pristine_dir/release" ] || return 69
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
+    atomic_verify_tree "$_shared_pristine_dir/release" "$ACTIVE_DIR" || return 69
+    if launcher_is_running "$CHILD_PIDFILE" ||
+       supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"; then
+        return 69
+    fi
+    # A lost PID file must not hide an orphan running dvtws2.
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || return 69
+    firewall_shared_runtime verify "$_shared_pristine_dir/release" - || return 69
+    # Re-check physical source/installed bytes before the durable terminal
+    # phase. No Config, process, IPFW or active tree is mutated by recovery.
+    shared_apply_bundle_service verify "$_shared_pristine_old" || return 69
+    atomic_verify_tree "$_shared_pristine_dir/release" "$ACTIVE_DIR" || return 69
+    [ -x /usr/local/bin/python3.13 ] || return 69
+    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+        recover-activating "$_shared_pristine_id" "$_shared_pristine_old" || return 69
+    printf "recovered-pristine-id=%s\n" "$_shared_pristine_id"
+}
 # Only a PREPARED journal (before any mutation) can be auto-closed at boot.
 # The root FD9 Python command rechecks the sealed candidate and journal.
 shared_apply_recover_prepared_service()
@@ -1369,6 +1415,18 @@ service_with_lifecycle_lock()
                             # Never invoke legacy start after native save.
                             shared_apply_recover_saved_service "$_shared_owner"
                             return $?
+                            ;;
+                        activating\ *)
+                            shared_apply_recover_activating_pristine_service "$_shared_owner" || return 69
+                            _shared_owner=$(shared_apply_inspect_service) || return 69
+                            case "$_shared_owner" in
+                                committed\ *)
+                                    shared_apply_boot_service "$_shared_owner"
+                                    return $?
+                                    ;;
+                                restored) ;;
+                                *) return 69 ;;
+                            esac
                             ;;
                         prepared\ *)
                             shared_apply_recover_prepared_service "$_shared_owner" || return 69
