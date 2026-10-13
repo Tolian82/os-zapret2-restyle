@@ -798,7 +798,29 @@ shared_apply_legacy_audit_service()
     fi
     preflight_voice_cutover_journals || return 69
     apply_runtime_observe_live_legacy || return 69
-    printf '%s\n' 'legacy-live-observed=1' 'legacy-handoff-authorized=0'
+    # Reuse the existing strict FreeBSD legacy PoC inspector. It already
+    # holds the original Config inode flock under inherited FD9 and checks:
+    # actual three-process kernel argv/image, old marker, pinned managed
+    # IPv4 IPSET, and exact old rule/table contents TWICE. No new watcher,
+    # journal, raw IPFW parser, or mutation entrypoint is introduced.
+    [ -x /usr/local/bin/python3.13 ] &&
+    [ -r "${BACKEND_DIR}/voice_native_legacy_live_preflight.py" ] || return 69
+    _legacy_exact_report=$(/usr/local/bin/python3.13 \
+        "${BACKEND_DIR}/voice_native_legacy_live_preflight.py" inspect) || return 69
+    [ "${#_legacy_exact_report}" -le 1024 ] || return 69
+    printf '%s\n' "$_legacy_exact_report" |
+        grep -Fqx 'legacy-voice-preflight=legacy-poc-full-live-baseline-observed-not-owned' || return 69
+    printf '%s\n' "$_legacy_exact_report" |
+        grep -Fqx 'legacy-voice-ownership=not-adopted' || return 69
+    printf '%s\n' "$_legacy_exact_report" |
+        grep -Fqx 'voice-on=blocked' || return 69
+    # The second independent runtime/process observation brackets the exact
+    # kernel witness, so a stopped/replaced engine is not reported as live.
+    apply_runtime_observe_live_legacy || return 69
+    printf '%s\n' "$_legacy_exact_report" \
+        'legacy-live-observed=1' \
+        'legacy-exact-ipfw-argv-observed=1' \
+        'legacy-handoff-authorized=0'
 }
 
 # One actual runtime/Config Apply owner: the existing service process holds

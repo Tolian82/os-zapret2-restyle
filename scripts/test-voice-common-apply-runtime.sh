@@ -182,4 +182,73 @@ rm "$ACTIVE_DIR/voice-plan.json"
 [ "$FW_PREPARE" = 0 ] && [ "$FW_STAGE" = 0 ] || fail "old audit modified firewall"
 echo 'PASS: live old owner observer remains read-only and never authorizes handoff'
 
+
+# Test the REAL root service function's binding to the existing strict
+# FreeBSD legacy kernel witness. Only the absolute Python call is replaced
+# by a fixture: no second process/kernel writer or independent parser.
+SERVICE_SOURCE="$(CDPATH= cd -- "$(dirname -- "$0")/../src/opnsense/scripts/OPNsense/Zapret" && pwd)/zapret_service.sh"
+AUDIT_SCRIPT="$ROOT/common-legacy-audit.sh"
+sed -n '/^shared_apply_legacy_audit_service()$/,/^}$/p' "$SERVICE_SOURCE" > "$AUDIT_SCRIPT"
+python3 - "$AUDIT_SCRIPT" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]); s=p.read_text()
+original='    [ -x /usr/local/bin/python3.13 ] &&\n    [ -r "${BACKEND_DIR}/voice_native_legacy_live_preflight.py" ] || return 69'
+assert original in s, "native strict Python runtime path must be fixed"
+s=s.replace(original,'    [ "$AUDIT_PY_AVAILABLE" = 1 ] || return 69')
+original='    _legacy_exact_report=$(/usr/local/bin/python3.13 \\\n        "${BACKEND_DIR}/voice_native_legacy_live_preflight.py" inspect) || return 69'
+assert original in s, "production audit must call strict legacy live inspector"
+s=s.replace(original,'    _legacy_exact_report=$(legacy_exact_fixture) || return 69')
+p.write_text(s)
+PY
+. "$AUDIT_SCRIPT"
+shared_apply_has_record_service() { [ "$HAS_COMMON_RECORD" = 1 ]; }
+shared_apply_inspect_service() { echo none; }
+preflight_voice_cutover_journals() { [ "$PENDING_OLD" = 0 ]; }
+legacy_exact_fixture() {
+    [ "$EXACT_OK" = 1 ] || return 69
+    if [ "$EXACT_BAD" = 1 ]; then
+        printf '%s\n' 'legacy-voice-preflight=wrong' 'voice-on=blocked'
+    else
+        printf '%s\n' \
+            'legacy-voice-preflight=legacy-poc-full-live-baseline-observed-not-owned' \
+            'legacy-voice-ipfw-sha256=8a9b' \
+            'legacy-voice-managed-sha256=0123' \
+            'legacy-voice-ownership=not-adopted' \
+            'voice-on=blocked'
+    fi
+}
+HAS_COMMON_RECORD=0 PENDING_OLD=0 AUDIT_PY_AVAILABLE=1 EXACT_OK=1 EXACT_BAD=0
+PROCESS=1 MONITOR=1 LEGACY_RULES=1 FW_PREPARE=0 FW_STAGE=0
+AUDIT_OK=$(shared_apply_legacy_audit_service) || fail "strict read-only legacy audit"
+printf '%s\n' "$AUDIT_OK" | grep -Fqx 'legacy-exact-ipfw-argv-observed=1' ||
+    fail "exact kernel witness was not reported"
+printf '%s\n' "$AUDIT_OK" | grep -Fqx 'legacy-handoff-authorized=0' ||
+    fail "audit incorrectly authorized a cutover"
+[ "$PROCESS" = 1 ] && [ "$MONITOR" = 1 ] &&
+[ "$FW_PREPARE" = 0 ] && [ "$FW_STAGE" = 0 ] ||
+    fail "strict audit modified running legacy processes/IPFW"
+EXACT_OK=0
+if shared_apply_legacy_audit_service >/dev/null; then
+    fail "strict kernel witness failure was ignored"
+fi
+EXACT_OK=1 EXACT_BAD=1
+if shared_apply_legacy_audit_service >/dev/null; then
+    fail "unexpected strict inspector result was accepted"
+fi
+EXACT_BAD=0 HAS_COMMON_RECORD=1
+if shared_apply_legacy_audit_service >/dev/null; then
+    fail "committed/pending shared owner was adopted as legacy"
+fi
+HAS_COMMON_RECORD=0 PENDING_OLD=1
+if shared_apply_legacy_audit_service >/dev/null; then
+    fail "old Voice recovery evidence was bypassed"
+fi
+PENDING_OLD=0 AUDIT_PY_AVAILABLE=0
+if shared_apply_legacy_audit_service >/dev/null; then
+    fail "missing strict interpreter was bypassed"
+fi
+AUDIT_PY_AVAILABLE=1
+echo 'PASS: common FD9 legacy audit uses existing exact kernel/IPFW/argv witness without handoff'
+
 echo 'PASS: shared engine/IPFW, stopped legacy rollback and live legacy refusal'
