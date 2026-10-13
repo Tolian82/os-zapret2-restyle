@@ -2,13 +2,15 @@
 
 **v0.5.2_38–_39:** root PHP staging и native Config worker теперь самостоятельно проверяют оригинальный FD9: inode, владение root, удерживаемый flock. Не появляется новый lock, Config writer или WAL. Linux тест проверяет заблокированный FD9, свободный, чужой и symlink. Полный CI на `_37` завершился PASS для Voice candidates, но Project не прошёл позднюю Strategy Lab matrix из-за устаревшей метки пакета `_28` в PROJECT_STATE; `_39` синхронизирует primary metadata и добавляет ранний тест, чтобы предотвратить повторение. FreeBSD owner-live, полноценное mutating-phase recovery и выпуск релиза ещё не подтверждены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_39`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+**`_40` — устранение опасного ложного rollback после native Config save.** `SharedConfigCommit::persist()` теперь классифицирует исключение на повторной блокировке Config, построении модели, чтении saved Config и последующей разблокировке как `SharedConfigSaveUncertain`, а не pre-save error. Корневой worker проверяет сериализацию и полную запись JSON receipt; ошибки после подтверждённого сохранения возвращают код 70 и оставляют журнал на проверку. Отрицательные PHP-тесты моделируют сбой relock после реального сохранения и несерилизуемое подтверждение. Автоматический откат runtime при уже записанном Config запрещён. FreeBSD owner-live квалификация всё ещё нужна.
+
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_40`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=39` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_39.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=40` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_40.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
