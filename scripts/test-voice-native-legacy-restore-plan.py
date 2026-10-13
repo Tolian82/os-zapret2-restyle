@@ -16,7 +16,7 @@ ROOT=Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"))
 from voice_native_legacy_quiescence_intent import (
     prepare_legacy_quiescence_intent, inspect_legacy_quiescence_intent,
-    intent_directory,
+    intent_directory, main as stop_intent_main,
 )
 from voice_native_legacy_predecessor_route import prepare_old_rollback_predecessor, main as predecessor_main
 from voice_native_legacy_previous_seal import inspect_legacy_previous
@@ -282,6 +282,19 @@ class OldQuiescenceIntentTests(unittest.TestCase):
         self.root.rename(hidden)
         self.assertEqual("legacy-quiescence-intent-retained",
             check_pending(self.root,self.live.ledger)["reason"])
+
+    def test_operator_route_is_fd9_only_without_configd_gui_or_start(self):
+        service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
+        configd=(ROOT/"src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text()
+        gui=(ROOT/"src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt").read_text()
+        self.assertIn("native-voice-legacy-arm-stop-intent)",service)
+        self.assertIn("native_voice_legacy_arm_stop_intent_service",service)
+        self.assertIn("|native-voice-legacy-arm-stop-intent|",service)
+        self.assertNotIn("native-voice-legacy-arm-stop-intent",configd)
+        self.assertNotIn("native-voice-legacy-arm-stop-intent",gui)
+        self.assertEqual(64,stop_intent_main([]))
+        self.assertEqual(64,stop_intent_main(["arm-stop-intent","/tmp/alien"]))
+        self.assertFalse(intent_directory(self.root).exists())
 
     def test_tampered_durable_intent_cannot_grant_stop_authority(self):
         self.arm()

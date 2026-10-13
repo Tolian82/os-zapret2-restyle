@@ -13,16 +13,19 @@ cutover root disappears; the ordinary lifecycle guard MUST reject it.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 from pathlib import Path
 import tempfile
+import sys
 
 from voice_cutover_backup import _private_dir, _read_private_file, _sync_dir
 from voice_cutover_config_restore import _pinned_regular
 from voice_native_recovery_quiescence import _locked_config
 from voice_native_legacy_previous_seal import NAME, _digest, _write_once, inspect_legacy_previous
 from voice_native_legacy_restore_plan import PLAN_NAME, PLAN_LIMIT, inspect_legacy_restore_plan
+import voice_ipfw_runtime as native
 
 SCHEMA=1
 FILES=frozenset(("intent.json","intent.sha256"))
@@ -129,3 +132,38 @@ def prepare_legacy_quiescence_intent(
     os.rename(tmp,dest)
     _sync_dir(dest.parent)
     return inspect_legacy_quiescence_intent(root)
+
+
+def main(argv):
+    # Operator-only; never a configd, GUI, boot or service stop dispatcher.
+    if argv!=["arm-stop-intent"]:
+        print("usage: voice_native_legacy_quiescence_intent.py arm-stop-intent",
+              file=sys.stderr)
+        return 64
+    fd=None
+    try:
+        native.require_native_lock()
+        fd=os.open(native.CONFIG,os.O_RDWR|getattr(os,"O_NOFOLLOW",0))
+        _pinned_regular(native.CONFIG,fd,owner=(0,0))
+        fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        report=prepare_legacy_quiescence_intent(
+            root=native.WHOLE,config_path=native.CONFIG,
+            config_fd=fd,config_owner=(0,0),
+            require_lifecycle_owner=native.require_native_lock,
+        )
+        if report["state"]!="old-poc-quiescence-intent-sealed-execution-pending":
+            raise LegacyQuiescenceIntentError("untrusted STOP intent")
+        print("legacy-voice-stop-intent=sealed-not-executed")
+        print("native-voice-public-apply=disabled")
+        return 0
+    except (OSError,ValueError,RuntimeError,KeyError,TypeError):
+        print("ERROR: old PoC stop intent rejected; manual recovery review required",
+              file=sys.stderr)
+        return 69
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
+if __name__=="__main__":
+    raise SystemExit(main(sys.argv[1:]))
