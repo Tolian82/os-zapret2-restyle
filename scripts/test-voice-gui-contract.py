@@ -82,7 +82,7 @@ def main() -> None:
           "Незавершённая подготовка" in view and
           "Interrupted cutover" in view,
           "Native Voice diagnostic needs bilingual whole-runtime crash guidance")
-    for term in ("'Правила подтверждены'", "'Verified rules'",
+    for term in ("'Общий движок и правила подтверждены'", "'Shared engine and IPFW verified'",
                  "'Новая Voice-конфигурация не активирована'", "'New Voice configuration not activated'"):
         check(term in view, f"Missing read-only Voice diagnostic localization: {term}")
     status_api = SRC / "controllers/OPNsense/Zapret/Api/VoiceController.php"
