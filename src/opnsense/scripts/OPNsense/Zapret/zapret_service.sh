@@ -5,7 +5,7 @@ BACKEND_DIR="${BACKEND_DIR:-${SCRIPT_DIR}/backend}"
 
 for module in common config parser registry storage targets telegram_voice target_mode \
     profile_normalizer profile_pipeline exclude blobs ports firewall generator validator atomic \
-    stage launcher supervisor orchestrator
+    stage launcher supervisor orchestrator apply_runtime
 do
     module_path="${BACKEND_DIR}/${module}.sh"
     [ -r "${module_path}" ] || {

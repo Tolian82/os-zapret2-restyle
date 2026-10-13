@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_4`. `VERSION=0.5.2`; `PLUGIN_REVISION=4`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_5`. `VERSION=0.5.2`; `PLUGIN_REVISION=4`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+В `_5` сервис получил общий `apply_runtime.sh`: после полного candidate build можно переключить один dvtws2/launcher/supervisor и общий IPFW через install/verify, сохранив предыдущий runtime и таблицы до native Config commit. При отказе предусмотрен проверяемый rollback. Код ещё не используется GUI: для безопасного подключения требуются штатный Config worker и восстановление после прерывания операции.
 
 В _4 оба PHP-контроллера готовят полную модель через общий чистый `Api/SettingsApply.php`: применяют только whitelist своей формы, вычисляют карту изменений и сохраняют свидетельство зависимости от одного поколения Voice/Strategies/hostlist/general. `requireUnchanged` отказывает перед будущей активацией при изменении этого поколения, но не блокирует чужие разделы OPNsense. Проверки обеих форм добавлены в действующий PHP тест. Это код подготовки, а не публичное применение ON: FD9-worker/native Config save/runtime activation ещё не подключены.
 
@@ -36,4 +38,4 @@ Install проверяет живые объекты до изменения, с
 
 Полные прежние документы сохранены в [архиве этапа v0.5.1](history/stages/v0.5.1/README.md). Они не входят в текущую очередь или обязательное чтение. Текущая хронология — [working ledger v0.5.x](history/current/v0.5.x.md).
 
-Stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing: `v0.5.0_3`. Открытие `v0.5.2_4` не публикует новый пакет и не подтверждает GUI/CONFIG/BOOT или MEDIA_PASS/CALL_PASS.
+Stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing: `v0.5.0_3`. Открытие `v0.5.2_5` не публикует новый пакет и не подтверждает GUI/CONFIG/BOOT или MEDIA_PASS/CALL_PASS.

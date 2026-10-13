@@ -118,6 +118,9 @@ jobs:
           python3.13 -m py_compile scripts/test-voice-profile-compiler.py
       - name: Voice shared IPv4 targets
         run: sh scripts/test-voice-shared-ipsets.sh
+
+      - name: Shared runtime activation and rollback
+        run: sh scripts/test-voice-common-apply-runtime.sh
       - name: Voice fail-closed compiler
         run: python3.13 scripts/test-voice-profile-compiler.py
       - name: Voice destination-scoped IPFW capture planning
