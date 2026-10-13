@@ -38,6 +38,10 @@ class TestJournal(unittest.TestCase):
                 self.assertEqual(0o600,(j.root/"operation.json").stat().st_mode & 0o777)
             j.advance("committed",detail())
             self.assertTrue(j.advisory()["safe_to_mutate"])
+            self.assertEqual("shared-runtime-owned",
+                             check_pending(root/"voice-cutover",root/"voice-ipfw")["reason"])
+            self.assertTrue(check_pending(root/"voice-cutover",root/"voice-ipfw",
+                                          native_scope=True)["safe_to_mutate"])
             with self.assertRaises(SharedOperationError):
                 j.advance("prepared",detail())
             j.advance("prepared",detail("2"*32))

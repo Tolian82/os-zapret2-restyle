@@ -797,7 +797,7 @@ shared_apply_execute_service()
     case "$1" in ""|*[!a-f0-9]*) return 64 ;; esac
     [ "${#1}" -eq 32 ] || return 64
     case "$2" in voice|strategies) ;; *) return 64 ;; esac
-    preflight_voice_cutover_journals || return 69
+    preflight_voice_cutover_journals common-apply || return 69
     [ -x /usr/local/bin/php ] && [ -x /usr/local/bin/jq ] || return 69
     _shared_apply_id="$1"
     _shared_apply_page="$2"
@@ -879,7 +879,7 @@ shared_apply_build_service()
         ""|*[!A-Za-z0-9_-]*) return 64 ;;
     esac
     [ "${#1}" -le 65536 ] || return 64
-    preflight_voice_cutover_journals || return 69
+    preflight_voice_cutover_journals common-apply || return 69
     [ -x /usr/local/bin/php ] || return 69
     _shared_stage_result=$(/usr/local/bin/php \
         "${SCRIPT_DIR}/shared_apply_request.php" stage "$1") || return 69
@@ -905,7 +905,7 @@ shared_apply_prepare_service()
         *[!a-f0-9]*|"") return 64 ;;
     esac
     [ "${#1}" -eq 32 ] || return 64
-    preflight_voice_cutover_journals || return 69
+    preflight_voice_cutover_journals common-apply || return 69
     [ -x /usr/local/bin/python3.13 ] || return 69
     _shared_work="/var/db/zapret2/shared-work/$1"
     [ -d "$_shared_work" ] && [ ! -L "$_shared_work" ] || return 69
@@ -1108,7 +1108,7 @@ preflight_voice_cutover_journals()
         echo "ERROR: native Voice journal inspection is unavailable; refusing lifecycle mutation" >&2
         return 69
     fi
-    "${_voice_cutover_guard_python}" "${_voice_cutover_guard_script}"
+    "${_voice_cutover_guard_python}" "${_voice_cutover_guard_script}" "$@"
 }
 
 service_with_lifecycle_lock()

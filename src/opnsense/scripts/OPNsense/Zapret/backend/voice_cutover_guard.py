@@ -34,7 +34,7 @@ def _present(path: Path) -> bool:
         return False
 
 
-def check_pending(whole_root: Path, ipfw_root: Path, shared_root: Path | None = None) -> dict:
+def check_pending(whole_root: Path, ipfw_root: Path, shared_root: Path | None = None, *, native_scope: bool = False) -> dict:
     """Return a bounded, machine-readable advisory without kernel reads."""
     try:
         # One shared Strategies/Voice Apply operation is stronger than the
@@ -42,9 +42,23 @@ def check_pending(whole_root: Path, ipfw_root: Path, shared_root: Path | None = 
         # legacy guard as a bounded compatibility check, not a second writer.
         if shared_root is None:
             shared_root = whole_root.with_name("shared-apply")
-        shared = SharedApplyOperation(shared_root).advisory()
-        if not shared["safe_to_mutate"]:
-            return shared
+        shared_store = SharedApplyOperation(shared_root)
+        shared_record = shared_store.read()
+        if shared_record is not None:
+            phase = shared_record["phase"]
+            if phase == "committed" and not native_scope:
+                # A committed common runtime is NOT authority for legacy
+                # start/reconfigure to resurrect an older engine after boot.
+                # Only another root FD9 common Apply may supersede it.
+                return {
+                    "state": "blocked", "reason": "shared-runtime-owned",
+                    "phase": phase, "safe_to_mutate": False,
+                }
+            if phase not in ("committed", "restored"):
+                return {
+                    "state": "blocked", "reason": "shared-apply-pending",
+                    "phase": phase, "safe_to_mutate": False,
+                }
         # A durable old-PoC pre-stop intent is a sibling, not a member of
         # the strictly sealed rollback stage tree. Even orphaned after an
         # interrupted power cut, it is NEVER ordinary-start authority.
@@ -118,9 +132,18 @@ def check_pending(whole_root: Path, ipfw_root: Path, shared_root: Path | None = 
 def main(argv: list[str]) -> int:
     # No CLI-specified directory or bypass flag exists in the production
     # executable; unit tests call check_pending() using private temp dirs.
-    if len(argv) != 1:
+    if len(argv) not in (1, 2) or (len(argv) == 2 and argv[1] != "common-apply"):
         return 64
-    result = check_pending(WHOLE_ROOT, IPFW_ROOT)
+    native_scope = len(argv) == 2
+    if native_scope:
+        # The scoped exception can only be requested by the common root
+        # lifecycle holder, never by a public/legacy boot entry point.
+        from voice_ipfw_adapter import require_lifecycle_lock
+        try:
+            require_lifecycle_lock()
+        except (OSError, ValueError, RuntimeError):
+            return 69
+    result = check_pending(WHOLE_ROOT, IPFW_ROOT, native_scope=native_scope)
     if result["safe_to_mutate"]:
         return 0
     print("ERROR: unfinished or untrusted native Voice journal; "

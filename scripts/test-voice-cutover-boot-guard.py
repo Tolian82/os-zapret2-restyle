@@ -111,6 +111,26 @@ class BootGateTests(unittest.TestCase):
                 self.assertEqual(original, journal._target().read_bytes())
                 self.assertFalse(ipfw.exists())
 
+    def test_committed_shared_runtime_blocks_legacy_but_native_fd9_may_follow(self):
+        from shared_apply_operation import SharedApplyOperation
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            op=SharedApplyOperation(root/"shared-apply")
+            detail={
+                "id":"1"*32, "page":"voice", "base":"a"*64,
+                "candidate":"b"*64, "changed_fields":["voice.telegram.enabled"],
+            }
+            for phase in ("prepared","activating","activated","config-saved","committed"):
+                op.advance(phase,detail)
+            old=guard.check_pending(root/"voice-cutover",root/"voice-ipfw")
+            self.assertEqual("shared-runtime-owned",old["reason"])
+            self.assertFalse(old["safe_to_mutate"])
+            allowed=guard.check_pending(root/"voice-cutover",root/"voice-ipfw",
+                                        native_scope=True)
+            self.assertTrue(allowed["safe_to_mutate"])
+            self.assertEqual(69,guard.main(["voice_cutover_guard.py","common-apply"]),
+                             "native exception is root FD9 only")
+
     def test_existing_native_ownership_blocks_legacy_even_if_all_journals_committed(self):
         with tempfile.TemporaryDirectory() as tmp:
             whole, ipfw = self.paths(Path(tmp))

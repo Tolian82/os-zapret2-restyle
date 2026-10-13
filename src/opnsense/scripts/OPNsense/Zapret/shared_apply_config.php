@@ -65,7 +65,11 @@ final class SharedApplyConfigWorker
         } finally {
             fclose($fp);
         }
-        $plan = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
+        try {
+            $plan = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $error) {
+            throw new \RuntimeException('Corrupt stored native shared plan', 0, $error);
+        }
         if (!is_array($plan) || ($plan['result'] ?? null) !== 'prepared' ||
             !isset($plan['candidate'], $plan['changed_fields'], $plan['dependencies']) ||
             !is_array($plan['candidate']) || !is_array($plan['changed_fields'])) {
