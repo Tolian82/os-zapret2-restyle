@@ -5,10 +5,12 @@
  */
 require_once __DIR__ . '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/VoiceCandidateXml.php';
 require_once __DIR__ . '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/VoiceApplyCandidate.php';
+require_once __DIR__ . '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php';
 
 use OPNsense\Zapret\Api\VoiceApplyCandidate;
 use OPNsense\Zapret\Api\VoiceCandidateXml;
 use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
+use OPNsense\Zapret\Api\SettingsApply;
 
 function must(bool $ok, string $why): void
 {
@@ -151,4 +153,61 @@ $created = VoiceCandidateXml::render(
 );
 must(str_contains($created, '<telegram>'), 'missing Voice section not created');
 
-echo "PASS: in-memory OPNsense candidate XML preserves foreign configuration, checks changed fields, no active write\n";
+// Both public forms must produce one full detached candidate without
+// introducing a second Config writer or silently replacing the Voice subtree.
+$strategyForm = [
+    'general' => ['waninterface' => 'WAN'],
+    'strategy' => ['trafficargs' => "--filter-tcp=80\n--payload=http_req"],
+    'hostlist' => ['telegramips' => "91.108.13.10"],
+];
+$strategy = SettingsApply::prepareStrategies(
+    $previous, $strategyForm, $previous['hostlist']['telegramips']
+);
+$fullStrategyXml = SettingsApply::renderCandidateXml(
+    $liveXml, $previous, $strategy, 'strategies'
+);
+$strategyDoc = new \DOMDocument();
+must($strategyDoc->loadXML($fullStrategyXml), 'Strategies XML is malformed');
+$sxp = new \DOMXPath($strategyDoc);
+must($sxp->evaluate('string(/opnsense/OPNsense/Zapret/strategy/trafficargs)') ===
+     $strategyForm['strategy']['trafficargs'], 'Strategies candidate missed own trafficargs');
+must($sxp->evaluate('string(/opnsense/OPNsense/Zapret/hostlist/telegramips)') ===
+     '91.108.13.10', 'shared Telegram IPSET not propagated to full candidate');
+foreach (['/opnsense/system','/opnsense/openvpn','/opnsense/OPNsense/Unboundplus',
+          '/opnsense/OPNsense/Zapret/voice','/opnsense/OPNsense/Zapret/strategylab'] as $path) {
+    must($docOld->query($path)->item(0)->C14N() === $sxp->query($path)->item(0)->C14N(),
+         'Strategies candidate modified foreign XML at ' . $path);
+}
+must(str_contains($fullStrategyXml, '<secret>KEEP_ME</secret>'),
+     'Strategies candidate erased unrelated system content');
+must(SettingsApply::renderCandidateXml(
+    $liveXml, $previous, SettingsApply::prepareStrategies(
+        $previous, [], $previous['hostlist']['telegramips']
+    ), 'strategies'
+) === $liveXml, 'no-op Strategies candidate modified full XML');
+must(SettingsApply::renderCandidateXml(
+    $liveXml, $previous, SettingsApply::prepareVoice(
+        $previous, $form, VoiceSettingsSnapshot::digest($previous)
+    ), 'voice'
+) === $candidate, 'shared Voice candidate differs from existing native Voice XML');
+refuses(fn() => SettingsApply::renderCandidateXml(
+    $liveXml, $previous, $strategy, 'voice'
+), 'Strategies fields injected into Voice XML scope');
+refuses(fn() => SettingsApply::renderCandidateXml(
+    $liveXml, $previous, $strategy, 'unknown'
+), 'unknown full candidate scope accepted');
+$tainted = $strategy;
+$tainted['candidate']['voice']['telegram']['enabled'] = '1';
+refuses(fn() => SettingsApply::renderCandidateXml(
+    $liveXml, $previous, $tainted, 'strategies'
+), 'Strategies candidate secretly enabled Voice');
+$missing = $strategy;
+$missing['changed_fields'] = [];
+refuses(fn() => SettingsApply::renderCandidateXml(
+    $liveXml, $previous, $missing, 'strategies'
+), 'Strategies candidate omitted changed fields');
+refuses(fn() => SettingsApply::renderCandidateXml(
+    $doctype, $previous, $strategy, 'strategies'
+), 'DOCTYPE injected into Strategies candidate');
+
+echo "PASS: shared detached native XML for Strategies/Voice, ownership, no-op and foreign-node preservation\n";

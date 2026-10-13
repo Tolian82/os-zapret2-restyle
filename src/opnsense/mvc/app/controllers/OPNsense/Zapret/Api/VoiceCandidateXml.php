@@ -16,8 +16,30 @@ final class VoiceCandidateXml
     private const SERVICES = ['telegram', 'discord', 'x', 'sip', 'custom'];
     private const MAX_XML_BYTES = 16 * 1048576;
 
-    private static function allowed(): array
+    private static function allowed(string $scope): array
     {
+        if ($scope === 'strategies') {
+            // Exactly the Strategies form whitelist; Voice IPSETs other than
+            // shared Telegram and all native Voice fields are foreign here.
+            $mapping = [
+                'general' => ['enabled', 'waninterface', 'divertport'],
+                'strategy' => ['trafficargs', 'extraargs'],
+                'hostlist' => [
+                    'mode', 'youtubedomains', 'telegramips',
+                    'userdomains', 'excludedomains',
+                ],
+            ];
+            $allowed = [];
+            foreach ($mapping as $group => $fields) {
+                foreach ($fields as $field) {
+                    $allowed[$group . '.' . $field] = [$group, $field];
+                }
+            }
+            return $allowed;
+        }
+        if ($scope !== 'voice') {
+            throw new \InvalidArgumentException('Unknown shared candidate scope');
+        }
         $allowed = ['voice.waninterface' => ['voice', 'waninterface']];
         foreach (self::SERVICES as $service) {
             $allowed['voice.' . $service . '.enabled'] = ['voice', $service, 'enabled'];
@@ -54,12 +76,12 @@ final class VoiceCandidateXml
         $source = $model;
         foreach ($path as $key) {
             if (!is_array($source) || !array_key_exists($key, $source)) {
-                throw new \InvalidArgumentException('Voice model candidate is incomplete');
+                throw new \InvalidArgumentException('Shared model candidate is incomplete');
             }
             $source = $source[$key];
         }
         if (!is_string($source)) {
-            throw new \InvalidArgumentException('Voice model candidate is not normalized');
+            throw new \InvalidArgumentException('Shared model candidate is not normalized');
         }
         return $source;
     }
@@ -72,17 +94,31 @@ final class VoiceCandidateXml
     public static function render(
         string $activeXml, array $previous, array $candidate, array $changedFields
     ): string {
+        return self::renderScoped($activeXml, $previous, $candidate, $changedFields, 'voice');
+    }
+
+    /** The other form renders the same complete OPNsense XML without Voice writes. */
+    public static function renderStrategies(
+        string $activeXml, array $previous, array $candidate, array $changedFields
+    ): string {
+        return self::renderScoped($activeXml, $previous, $candidate, $changedFields, 'strategies');
+    }
+
+    private static function renderScoped(
+        string $activeXml, array $previous, array $candidate, array $changedFields,
+        string $scope
+    ): string {
         if ($activeXml === '' || strlen($activeXml) > self::MAX_XML_BYTES ||
             preg_match('/<!\s*(?:DOCTYPE|ENTITY)\b/i', $activeXml)
         ) {
             throw new \InvalidArgumentException('Unsafe active Config XML');
         }
-        $allowed = self::allowed();
+        $allowed = self::allowed($scope);
         $expected = [];
         foreach ($changedFields as $field) {
             if (!is_string($field) || !isset($allowed[$field]) ||
                 isset($expected[$field])) {
-                throw new \InvalidArgumentException('Foreign or repeated Voice field');
+                throw new \InvalidArgumentException('Foreign or repeated form field');
             }
             $expected[$field] = true;
         }
@@ -97,10 +133,10 @@ final class VoiceCandidateXml
             if (str_replace(["\r\n", "\r"], "\n", $before) !==
                 str_replace(["\r\n", "\r"], "\n", $after)) {
                 if (!isset($expected[$field])) {
-                    throw new \InvalidArgumentException('Voice change map omits candidate field');
+                    throw new \InvalidArgumentException('Shared change map omits candidate field');
                 }
             } elseif (isset($expected[$field])) {
-                throw new \InvalidArgumentException('Voice change map includes unchanged field');
+                throw new \InvalidArgumentException('Shared change map includes unchanged field');
             }
             $pointer = &$rebuilt;
             foreach ($parts as $part) {
@@ -110,7 +146,7 @@ final class VoiceCandidateXml
             unset($pointer);
         }
         if ($rebuilt !== $candidate) {
-            throw new \InvalidArgumentException('Candidate changes non-Voice-owned model fields');
+            throw new \InvalidArgumentException('Candidate changes fields outside the owning form');
         }
 
         $xml = new \DOMDocument('1.0', 'UTF-8');
@@ -157,11 +193,11 @@ final class VoiceCandidateXml
         }
         $serialized = $xml->saveXML();
         if (!is_string($serialized) || strlen($serialized) > self::MAX_XML_BYTES) {
-            throw new \InvalidArgumentException('Voice candidate XML serialization failed');
+            throw new \InvalidArgumentException('Shared candidate XML serialization failed');
         }
         $verify = new \DOMDocument();
         if (!$verify->loadXML($serialized, LIBXML_NONET) || $verify->doctype !== null) {
-            throw new \InvalidArgumentException('Voice candidate XML is not well formed');
+            throw new \InvalidArgumentException('Shared candidate XML is not well formed');
         }
         return $serialized;
     }

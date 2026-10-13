@@ -15,6 +15,7 @@ namespace OPNsense\Zapret\Api;
 require_once __DIR__ . '/StrategySettingsPayload.php';
 require_once __DIR__ . '/VoiceApplyCandidate.php';
 require_once __DIR__ . '/VoiceSettingsSnapshot.php';
+require_once __DIR__ . '/VoiceCandidateXml.php';
 
 final class SettingsApply
 {
@@ -59,6 +60,32 @@ final class SettingsApply
             $plan['dependencies'] = VoiceSettingsSnapshot::digest($previous);
         }
         return $plan;
+    }
+
+    /**
+     * Render one whole detached OPNsense candidate for EITHER form. The
+     * whitelist is enforced a second time by the scoped XML serializer.
+     * No running Config, filesystem, process or firewall write is performed.
+     */
+    public static function renderCandidateXml(
+        string $activeXml, array $previous, array $plan, string $page
+    ): string {
+        self::requireUnchanged($plan, $previous);
+        if (!isset($plan['candidate'], $plan['changed_fields']) ||
+            !is_array($plan['candidate']) || !is_array($plan['changed_fields'])) {
+            throw new \InvalidArgumentException('Incomplete shared XML candidate');
+        }
+        if ($page === 'voice') {
+            return VoiceCandidateXml::render(
+                $activeXml, $previous, $plan['candidate'], $plan['changed_fields']
+            );
+        }
+        if ($page === 'strategies') {
+            return VoiceCandidateXml::renderStrategies(
+                $activeXml, $previous, $plan['candidate'], $plan['changed_fields']
+            );
+        }
+        throw new \InvalidArgumentException('Unknown shared form');
     }
 
     /**
