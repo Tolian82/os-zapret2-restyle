@@ -41,6 +41,25 @@ namespace OPNsense\Core {
         public function configdpRun($action, $params, ...$args) {
             self::$calls[] = $action;
             self::$params = $params;
+            if ($action === 'zapret shared_apply') {
+                if (Config::getInstance()->locks !== 0) {
+                    throw new \RuntimeException('GUI Config lock held during native FD9 Apply');
+                }
+                if (!is_array($params) || count($params) !== 2 ||
+                    $params[0] !== 'voice') {
+                    throw new \RuntimeException('Unexpected native Apply page/parameters');
+                }
+                $raw = base64_decode(strtr($params[1], '-_', '+/'), true);
+                $request = is_string($raw) ? json_decode($raw, true) : null;
+                if (!is_array($request) || ($request['page'] ?? null) !== 'voice' ||
+                    !is_array($request['fields'] ?? null) ||
+                    !is_array($request['sync'] ?? null)) {
+                    throw new \RuntimeException('Invalid native Apply envelope');
+                }
+                return self::$reconfigureOK
+                    ? 'applied-id=' . str_repeat('d',32)
+                    : 'ERROR: interrupted native Apply';
+            }
             if ($action !== 'zapret voice_preview_draft') {
                 throw new \RuntimeException('unexpected parameterized configd action');
             }
@@ -297,58 +316,69 @@ namespace {
     equal(1, Config::getInstance()->saves, 'existing ON guard cannot write');
     Zapret::$nodes['voice']['sip']['enabled'] = '0';
 
-    // Real Apply of all-OFF settings must use the production configd
-    // reconfigure path; a previously saved draft with unchanged form must
-    // still be applied to the actual shared service.
+    // One root original-FD9 native Apply endpoint, for OFF and ON alike.
+    // The GUI itself must not serialize/Config::save before kernel commit.
     $candidate['sync']['snapshot'] = VoiceSettingsSnapshot::digest(Zapret::$nodes);
     $api->request = new FakeRequest('POST', $candidate);
     Backend::$calls = [];
     $offApply = $api->applyAction();
-    equal('saved', $offApply['result'], 'OFF Voice Apply should succeed');
-    equal(true, $offApply['applied'], 'OFF Voice Apply must report real reconfigure');
-    equal(true, in_array('zapret reconfigure', Backend::$calls, true),
-        'OFF Apply must call existing Zapret lifecycle reconfigure');
-    equal(1, Config::getInstance()->saves, 'unchanged saved draft has no duplicate Config write');
-    equal(0, Config::getInstance()->locks, 'OFF Apply must release Config lock');
+    equal('saved', $offApply['result'], 'all-OFF native Voice Apply should succeed');
+    equal(true, $offApply['applied'], 'native receipt must confirm Apply');
+    equal(['zapret strategy_lab_guard','zapret shared_apply'], Backend::$calls,
+        'OFF Voice must use only the common native Apply');
+    equal('voice', Backend::$params[0], 'FD9 Apply page not pinned');
+    equal(1, Config::getInstance()->saves, 'GUI must not pre-save native Config');
+    equal(0, Config::getInstance()->locks, 'FD9 must run outside GUI Config lock');
 
     $candidate['voice']['telegram']['enabled'] = '1';
     $candidate['voice']['telegram']['args'] =
-        "--filter-udp=*\n--filter-l7=stun\n--payload=stun";
+        "--filter-udp=*\n--filter-l7=stun\n--payload=stun\n" .
+        "--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2";
     Backend::$calls = [];
     $api->request = new FakeRequest('POST', $candidate);
     $onApply = $api->applyAction();
-    equal('failed', $onApply['result'], 'native Voice ON must refuse unsafe Apply');
-    equal(false, in_array('zapret reconfigure', Backend::$calls, true),
-        'blocked ON cannot restart shared runtime');
+    equal('saved', $onApply['result'],
+        'enabled native Voice must enter full common Apply instead of legacy OFF guard');
+    equal(true, $onApply['applied'], 'confirmed ON must be reported');
+    equal(['zapret strategy_lab_guard','zapret shared_apply'], Backend::$calls,
+        'ON must never call legacy reconfigure');
+    $decoded = json_decode(base64_decode(strtr(Backend::$params[1], '-_', '+/')), true);
+    equal('1', $decoded['fields']['voice']['telegram']['enabled'],
+        'ON setting lost between unchanged GUI and original FD9 backend');
+    equal(1, Config::getInstance()->saves,
+        'native ON cannot be pre-saved by the browser-side controller');
     $candidate['voice']['telegram']['enabled'] = '0';
+    $candidate['voice']['telegram']['args'] =
+        "--filter-udp=*\n--filter-l7=stun\n--payload=stun";
 
     $candidate['hostlist']['discordips'] = '1.2.3.5';
     $candidate['sync']['snapshot'] = VoiceSettingsSnapshot::digest(Zapret::$nodes);
     Backend::$busy = true;
     $api->request = new FakeRequest('POST', $candidate);
     $busy = $api->applyAction();
-    equal('failed', $busy['result'], 'Strategy Lab must block OFF Apply');
-    equal(1, Config::getInstance()->saves, 'busy runtime must not save settings');
+    equal('failed', $busy['result'], 'Strategy Lab must block Voice native Apply');
+    equal(1, Config::getInstance()->saves, 'busy runtime must not write GUI Config');
     Backend::$busy = false;
 
-    // Backend failure is NOT misreported as a recovered runtime. A new
-    // snapshot is returned because the Config change was already durable.
+    // The privileged worker may fail after it has touched Config/kernel.
+    // Browser MUST NOT claim saved, applied, or rollback merely from HTTP.
     Backend::$reconfigureOK = false;
     $failed = $api->applyAction();
-    equal('failed', $failed['result'], 'failed reconfigure must be visible');
-    equal(true, $failed['saved'], 'show saved Config after runtime failure');
-    equal(false, $failed['applied'], 'runtime failure must not claim success');
-    equal(true, $failed['requires_review'], 'runtime failure requires explicit review');
-    equal('1.2.3.5', Zapret::$nodes['hostlist']['discordips'],
-        'failed runtime attempt keeps honest persisted candidate');
-    equal(2, Config::getInstance()->saves, 'changed OFF Apply writes candidate Config');
+    equal('failed', $failed['result'], 'failed native Apply must be visible');
+    equal(false, $failed['applied'], 'interrupted native Apply cannot report success');
+    equal(true, $failed['requires_review'], 'ambiguous native Apply needs review');
+    equal('1.2.3.4', Zapret::$nodes['hostlist']['discordips'],
+        'GUI cannot pre-save candidate before FD9 transaction');
+    equal(1, Config::getInstance()->saves,
+        'native failure cannot cause browser-side Config writes');
     Backend::$reconfigureOK = true;
     $candidate['sync']['snapshot'] = VoiceSettingsSnapshot::digest(Zapret::$nodes);
     $api->request = new FakeRequest('POST', $candidate);
     $retried = $api->applyAction();
-    equal('saved', $retried['result'], 'retry after runtime review can reconfigure');
-    equal(true, $retried['applied'], 'successful retry reports runtime Apply');
-    equal(2, Config::getInstance()->saves, 'retry unchanged settings does not rewrite Config');
+    equal('saved', $retried['result'], 'native Apply retry with same snapshot accepted');
+    equal(true, $retried['applied'], 'native confirmed receipt reports Applied');
+    equal(1, Config::getInstance()->saves,
+        'GUI does not re-persist native Config');
 
     // A valid on-disk old rollback receipt is NOT boot-ready or Voice ON.
     $api->request = new FakeRequest('POST', []);
@@ -390,7 +420,7 @@ namespace {
     } finally {
         \OPNsense\Base\ApiControllerBase::$denyWrites = false;
     }
-    equal(2, Config::getInstance()->saves, 'denied write did not touch Config');
+    equal(1, Config::getInstance()->saves, 'denied write did not touch Config');
 
-    echo "PASS: real OFF-only Voice Apply through Zapret reconfigure, Config persistence, ON/Strategy Lab guards\n";
+    echo "PASS: shared native FD9 Voice ON/OFF Apply, envelope, Config lock and Strategy Lab guards\n";
 }
