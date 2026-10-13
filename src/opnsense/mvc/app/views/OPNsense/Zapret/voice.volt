@@ -1,4 +1,4 @@
-{# Native Voice OFF-only Apply of shared Settings; Voice ON and new IPFW cutover remain disabled. #}
+{# The original Voice GUI uses the common Strategies/Voice Apply for both ON and OFF. #}
 <script>
 $(document).ready(function () {
     "use strict";
@@ -8,10 +8,10 @@ $(document).ready(function () {
         navStrategy: 'Стратегии', navVoice: 'Передача голоса', navLab: 'Лаборатория',
         general: 'Основные настройки', wan: 'Интерфейс WAN для голоса',
         infoTitle: 'Как работают голосовые профили',
-        infoText: 'Редактор UDP/STUN-профилей для общего Zapret2. Выключенные профили и IPSET можно сохранить как черновик в конфигурации OPNsense, без перезапуска службы. Включение голосовых профилей пока недоступно. Кнопка «Применить» обновляет только выключенные профили и общие IPSET через штатную службу. Non-STUN остаётся в «Стратегиях».',
+        infoText: 'UDP/STUN-профили пяти сервисов используют общий движок Zapret2 и штатную операцию Apply вместе со «Стратегиями». «Применить» сохраняет настройки и переключает runtime/IPFW с проверяемым возвратом при ошибке. «Сохранить черновик» доступно только для выключенных профилей и не перезапускает службу. Работающий старый Telegram PoC требует отдельной миграции. Non-STUN остаётся в «Стратегиях».',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
-        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applyOff: 'Применить выключенные профили', appliedOff: 'Общие параметры применены; Voice остаётся OFF', applyOffFailed: 'Применение не выполнено — проверьте ошибки и состояние службы', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
-        notice: 'Можно сохранять только выключенные голосовые профили. Черновик сохраняется в Config и переживает перезагрузку; dvtws2 и IPFW не изменяются. Изменённый общий IPSET может повлиять на следующий запуск обычной службы. Для выключенных профилей доступно применение общих настроек через штатный перезапуск Zapret2. Включение голосового UDP ещё не реализовано.',
+        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applied: 'Настройки сохранены и применены к общему движку Zapret2', applyFailed: 'Применение не подтверждено — проверьте ошибки и состояние службы', applyReview: 'Результат применения неизвестен. Проверьте состояние службы и восстановление перед повторной попыткой; обновите страницу.', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
+        notice: 'Кнопка «Применить» использует единый native Apply для включённых и выключенных профилей, с проверкой Config, runtime и IPFW. «Сохранить черновик» сохраняет только выключенные профили без переключения службы. При незавершённом применении или работающем старом Telegram PoC требуется проверка состояния; не запускайте повторное применение вслепую.',
         status: 'Статус', running: 'Запущена', stopped: 'Остановлена', error: 'Ошибка',
         loading: 'Загрузка…', incomplete: 'Неизвестно',
         recoveryTitle: 'Восстановление старого Telegram PoC',
@@ -27,17 +27,17 @@ $(document).ready(function () {
         cutoverMutating: 'Прервано переключение — требуется проверка служб и IPFW',
         cutoverCommitted: 'Переключение зафиксировано — проверьте завершение очистки',
         wanHelp: 'Исходящий WAN для перехвата голосового UDP. Пустое значение наследует WAN страницы «Стратегии». Выбор WAN не меняет маршруты.',
-        enableHelp: 'Включение STUN-профиля пока можно только проверить; для сохранения черновика все сервисы должны быть выключены. Выключение сохраняет введённые параметры и IP-адреса.',
+        enableHelp: 'Включённый STUN-профиль применяется общей кнопкой «Применить». Для «Сохранить черновик» все голосовые профили должны быть выключены. Параметры и IPSET сохраняются при выключении.',
         argsHelp: 'Один нативный STUN-профиль dvtws2: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> и необязательные действия <code>--lua-desync</code>. Имя профиля и IPSET задаёт плагин. Не вводите <code>--new</code>, TCP или команды shell. Это не означает, что звонок заработает.',
         ipHelp: 'Общий со «Стратегиями» IPSET. Один IPv4-адрес или CIDR в строке. Пустой список нельзя применять при включённой службе; нет автоматической замены на любой адрес.'
     } : {
         navStrategy: 'Strategies', navVoice: 'Voice Transmission', navLab: 'Laboratory',
         general: 'General Settings', wan: 'Voice WAN Interface',
         infoTitle: 'About Voice Profiles',
-        infoText: 'Configure UDP/STUN profiles for the shared Zapret2 engine. Disabled profiles and their IPSETs can now be saved as an inactive draft in OPNsense Config without restarting the service. Voice activation remains unavailable. Apply updates disabled profiles and shared IPSET through the normal Zapret2 reconfigure path. Non-STUN remains in Strategies.',
+        infoText: 'Five UDP/STUN profiles share the existing Zapret2 engine and the native Strategies/Voice Apply transaction. Apply saves settings and switches runtime/IPFW with verified rollback on failure. Save inactive draft only stores disabled profiles without restarting the service. An active old Telegram PoC requires a separate migration. Non-STUN remains in Strategies.',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
-        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applyOff: 'Apply inactive settings', appliedOff: 'Shared settings applied; Voice remains OFF', applyOffFailed: 'Apply failed — review validation and current service state', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
-        notice: 'Only disabled Voice profiles can be saved. The draft persists in OPNsense Config across reboot; dvtws2 and IPFW are not changed. An edited shared IPSET may affect the next regular service start. Apply uses the existing Zapret2 reconfigure for all-OFF settings. Activating Voice UDP profiles is not implemented yet.',
+        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applied: 'Settings saved and applied to the shared Zapret2 engine', applyFailed: 'Apply not confirmed — review validation and current service state', applyReview: 'Apply result is uncertain. Inspect service and recovery status before retrying; reload this page.', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
+        notice: 'Apply uses the single native transaction for enabled and disabled Voice profiles, checking Config, runtime and IPFW. Save inactive draft only persists disabled profiles without restarting the service. If Apply was interrupted or the old Telegram PoC is running, inspect the actual state before retrying.',
         status: 'Status', running: 'Started', stopped: 'Stopped', error: 'Error',
         loading: 'Loading…', incomplete: 'Unknown',
         recoveryTitle: 'Previous Telegram PoC recovery',
@@ -53,7 +53,7 @@ $(document).ready(function () {
         cutoverMutating: 'Interrupted cutover — inspect services and IPFW',
         cutoverCommitted: 'Cutover committed — verify cleanup completion',
         wanHelp: 'Outgoing WAN used for voice UDP interception. Empty selection inherits Strategies WAN. WAN selection does not change routing.',
-        enableHelp: 'An enabled STUN profile can currently only be validated. To save the draft, all services must be OFF. Disabled services retain their parameters and destination lists.',
+        enableHelp: 'Enabled STUN profiles use the shared Apply button. Save inactive draft requires all Voice profiles to be OFF. Disabled services retain their parameters and destinations.',
         argsHelp: 'One native dvtws2 STUN profile: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> and optional <code>--lua-desync</code> actions. The plugin supplies profile identity and IPSET. Do not enter <code>--new</code>, TCP options or shell commands. This is not proof of working calls.',
         ipHelp: 'Shared IPSET, available in Strategies. One IPv4 address or CIDR per line. Empty sets must not be enabled or implicitly match any destination.'
     };
@@ -200,7 +200,7 @@ $(document).ready(function () {
     $('#voiceValidate').text(text.validate).prop('disabled', true);
     $('#voicePreviewDraft').text(text.previewDraft).prop('disabled', true);
     $('#voiceSaveDraft').text(text.saveDraft).prop('disabled', true);
-    $('#voiceApply').text(text.applyOff).prop('disabled', true);
+    $('#voiceApply').text(text.apply).prop('disabled', true);
     $('#voiceValidate').on('click', function () {
         var button = $(this);
         if (button.prop('disabled')) return;
@@ -287,6 +287,9 @@ $(document).ready(function () {
             button.prop('disabled', !/^[a-f0-9]{64}$/.test(voiceSnapshot.val() || ''));
         });
     });
+    // A timeout or an explicit requires_review can mean the root worker is
+    // still mutating or retained crash evidence. Do not offer blind retries.
+    var voiceApplyNeedsReview = false;
     $('#voiceApply').on('click', function () {
         var button = $(this);
         if (button.prop('disabled')) return;
@@ -297,7 +300,9 @@ $(document).ready(function () {
             url: '/api/zapret/voice/apply',
             data: getFormData('frm_VoiceSettings'),
             dataType: 'json',
-            timeout: 220000
+            // configdpRun permits 600s; a shorter browser deadline must
+            // never invite a second Apply while the original still runs.
+            timeout: 630000
         }).done(function (reply) {
             handleFormValidation('frm_VoiceSettings', localizeVoiceErrors((reply && reply.validations) || {}));
             if (reply && reply.saved === true && typeof reply.snapshot === 'string' &&
@@ -309,16 +314,25 @@ $(document).ready(function () {
             if (reply && reply.result === 'saved' && reply.applied === true &&
                 typeof reply.snapshot === 'string' && /^[a-f0-9]{64}$/.test(reply.snapshot)) {
                 voiceSnapshot.val(reply.snapshot);
-                $('#voiceValidationStatus').text(text.appliedOff);
+                $('#voiceValidationStatus').text(text.applied);
+                refreshRuntime();
+                refreshVoiceIPFW();
+            } else if (reply && reply.requires_review === true) {
+                voiceApplyNeedsReview = true;
+                $('#voiceValidationStatus').text(text.applyReview);
                 refreshRuntime();
                 refreshVoiceIPFW();
             } else {
-                $('#voiceValidationStatus').text(text.applyOffFailed);
+                $('#voiceValidationStatus').text(text.applyFailed);
             }
         }).fail(function () {
-            $('#voiceValidationStatus').text(text.applyOffFailed);
+            voiceApplyNeedsReview = true;
+            $('#voiceValidationStatus').text(text.applyReview);
+            refreshRuntime();
+            refreshVoiceIPFW();
         }).always(function () {
-            button.prop('disabled', !/^[a-f0-9]{64}$/.test(voiceSnapshot.val() || ''));
+            button.prop('disabled', voiceApplyNeedsReview ||
+                !/^[a-f0-9]{64}$/.test(voiceSnapshot.val() || ''));
         });
     });
     $('#voiceImplementationNotice').text(text.notice);
@@ -539,7 +553,7 @@ $(document).ready(function () {
         <button class="btn btn-default __mr" id="voiceValidate" type="button" disabled>Validate</button>
         <button class="btn btn-default __mr" id="voicePreviewDraft" type="button" disabled>Preview saved Voice drafts</button>
         <button class="btn btn-default __mr" id="voiceSaveDraft" type="button" disabled>Save inactive draft</button>
-        <button class="btn btn-primary __mr" id="voiceApply" type="button" disabled>Apply inactive settings</button>
+        <button class="btn btn-primary __mr" id="voiceApply" type="button" disabled>Apply</button>
         <span id="voiceValidationStatus" aria-live="polite"></span>
         <span id="voiceImplementationNotice" aria-live="polite"></span>
     </div>

@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**`v0.5.2_72` — существующая GUI-кнопка Voice Apply теперь соответствует реальному ON/OFF backend.** Без изменения полей, макета и ТЗ обновлены RU/EN подписи/подсказки старого режима «только OFF». Запрос `/api/zapret/voice/apply` по-прежнему ведёт в единый native FD9; браузер ждёт серверный лимит до 600 секунд с запасом и блокирует повторное применение при `requires_review`/сетевой неопределённости до обновления страницы. Save inactive draft по-прежнему только для OFF. Это не означает успешную owner-live Telegram/STUN приёмку или завершение legacy PoC migration.
+
 **`v0.5.2_71` — восстановление staged-IPFW из `activating`.** Общий root FD9 recovery допускает возврат к строго сохранённому common predecessor после сбоя между установкой нового runtime/IPFW и атомарной записью `activated`. Переиспользуется тот же cold rollback, что в `_70`, с проверкой sealed candidate, прежнего native Config, отсутствия процессов и точных IPFW stage. При чужом/неполном runtime или неидентифицированном IPFW восстановление запрещено; отдельный исполнитель, WAL и frontend не добавлены. Режим production FreeBSD/Telegram ещё не принят.
 
 **`v0.5.2_70` — возврат после прерванного общего Apply с временными IPFW.** В существующем `shared_apply_recover_activated_cold_service` фаза `activated` теперь восстанавливает предыдущего подтверждённого common owner из полностью проверенного нового runtime и прежнего native Config, когда движок/монитор отсутствуют, а kernel точно соответствует либо новому uncommitted IPFW+stage, либо старому IPFW после rollback, либо ожидаемой очистке. Используются только существующие `verify-staged`/`rollback`/`install`/`commit` и старый атомарный runtime installer; после отключения IPFW применяется прежний cold-restoration путь. Любая неизвестная стадия, чужие правила/процесс или сбой оставляют journal незакрытым. Добавлена направленная shell-проверка последовательности и повторов. Реальная FreeBSD/power-cut и STUN/MEDIA/CALL приёмка ещё не выполнена.
@@ -14,7 +16,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_71`. `VERSION=0.5.2`; `PLUGIN_REVISION=71`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_72`. `VERSION=0.5.2`; `PLUGIN_REVISION=72`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
 
@@ -116,7 +118,7 @@ Install проверяет живые объекты до изменения, с
 
 ## Следующее действие
 
-**После `_71`:** на FreeBSD проверить reboot/power-cut до и после смены `activating → activated`, включая остаточный stage/backup в atomic installer; unknown и partial state сохраняют журнал без ложного success. Следом — единый обратимый handoff старого работающего Telegram PoC, сокращение старого backend и полная проверка STUN/MEDIA/CALL. Операторские `legacy-arm`/`legacy-begin` на production пока запрещены.
+**После `_72`:** проверить реальный Voice Apply/включение STUN на OPNsense, затем завершить единый обратимый handoff старого работающего Telegram PoC и квалифицировать FreeBSD power-cut (`activating`/`activated`). Никакого релиза или автоматической миграции до полной проверки; `legacy-arm`/`legacy-begin` на production пока запрещены.
 
 **Этап 4 — следующий рубеж после `_68`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 

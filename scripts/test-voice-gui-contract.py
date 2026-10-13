@@ -175,6 +175,16 @@ def main() -> None:
           "$('#voiceApply').on('click'" in view and
           "'/api/zapret/voice/apply'" in view,
           "Unchanged Voice Apply must remain wired to its own API")
+    # The same existing button must truthfully expose ON/OFF Apply. A
+    # configd timeout is not an invitation to repeat a possibly live writer.
+    check("$('#voiceApply').text(text.apply)" in view and
+          "voiceApplyNeedsReview = true" in view and
+          "reply.requires_review === true" in view and
+          "timeout: 630000" in view and
+          "text.applyReview" in view and
+          "Apply inactive settings" not in view and
+          "Voice activation remains unavailable" not in view,
+          "Voice Apply must show real ON/OFF semantics and block uncertain retries")
     check("SharedApplyEnvelope::encode('voice'" in status_php and
           "'zapret shared_apply'" in status_php and
           "configdpRun(" in status_php and

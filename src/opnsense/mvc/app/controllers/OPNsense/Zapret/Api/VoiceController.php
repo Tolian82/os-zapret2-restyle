@@ -1,8 +1,8 @@
 <?php
 
 /**
- * Native Voice validation, diagnostics, and persistent inactive draft saves.
- * An ON profile still requires the unfinished whole-runtime Apply transaction.
+ * Native Voice validation, inactive drafts and one shared ON/OFF Apply.
+ * The existing original-FD9 Strategies/Voice worker owns the runtime/IPFW transaction.
  */
 namespace OPNsense\Zapret\Api;
 
