@@ -2,7 +2,7 @@
 
 ## Текущий приоритет — v0.5.2
 
-**`v0.5.2_56`: общий backend «Стратегии» / «Передача голоса».** Этап открыт 13.10.2026 по поручению владельца без релиза. Архитектура утверждена, [подробный проект плана и контроля](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) принят к выполнению поручением владельца начать программирование. Frontend и все пять сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) сохраняются.
+**`v0.5.2_57`: общий backend «Стратегии» / «Передача голоса».** Этап открыт 13.10.2026 по поручению владельца без релиза. Архитектура утверждена, [подробный проект плана и контроля](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) принят к выполнению поручением владельца начать программирование. Frontend и все пять сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) сохраняются.
 
 | Предложенный этап | Конечный результат |
 |---|---|
@@ -14,7 +14,7 @@
 | 6. Удаление дублирования | Один поставляемый backend и необходимые общие проверки |
 | 7. Полная приёмка | Все обязательные GUI/CONFIG/BOOT проверки, пакет/CI и owner-live |
 
-Детальные зависимости и проверки определены в утверждённом плане. Полный generator, IPFW и две штатные кнопки Apply уже используют один root FD9 executor; есть внутренние native save/stop/restart/boot и инспекция. `_48` исправил PID-парковку rollback; `_49` закрывает неизменённую `activating`, а `_50` восстанавливает cold `activated`, `_51` сохраняет stage/park, `_52` закрывает полный atomic rename после stale `activating`, а `_53` добавляет ID-скопированную аттестацию обеих промежуточных стадий rename и возвращает previous sealed runtime без удаления следов. `_54` добавил read-only наблюдение old owner, `_55` подключил старый строгий FreeBSD инспектор IPFW/argv, а `_56` исправил недоступность реального FD9 CLI и связал это наблюдение с единственным sealed Voice ON candidate. Все три стадии read-only; далее восстановимая миграция и FreeBSD owner-live. Далее — точный legacy IPFW/argv proof и обратимый handoff, очистка old PoC и настоящая FreeBSD owner-live/STUN/call приёмка. Не закрыты восстановление `activating`/`activated` после power cut, миграция *работающего* legacy, удаление дублирования и живое OPNsense/GUI тестирование. Проверки кода не означают STUN/MEDIA_PASS/CALL_PASS.
+Детальные зависимости и проверки определены в утверждённом плане. Полный generator, IPFW и две штатные кнопки Apply уже используют один root FD9 executor; есть внутренние native save/stop/restart/boot и инспекция. `_48` исправил PID-парковку rollback; `_49` закрывает неизменённую `activating`, а `_50` восстанавливает cold `activated`, `_51` сохраняет stage/park, `_52` закрывает полный atomic rename после stale `activating`, а `_53` добавляет ID-скопированную аттестацию обеих промежуточных стадий rename и возвращает previous sealed runtime без удаления следов. `_54–_56` добавили строгий read-only old owner witness и исправили FD9 маршрут. `_57` сохраняет прежние Config/runtime/IPFW/marker/kernel process witnesses и immutable reverse-plan в `shared-work/<candidate-id>/legacy-backup` посредством старого проверенного capture-helper, не выполняя cutover. Все три стадии read-only; далее восстановимая миграция и FreeBSD owner-live. Далее — точный legacy IPFW/argv proof и обратимый handoff, очистка old PoC и настоящая FreeBSD owner-live/STUN/call приёмка. Не закрыты восстановление `activating`/`activated` после power cut, миграция *работающего* legacy, удаление дублирования и живое OPNsense/GUI тестирование. Проверки кода не означают STUN/MEDIA_PASS/CALL_PASS.
 
 ## Основной завершённый путь
 
