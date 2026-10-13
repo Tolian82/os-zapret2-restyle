@@ -73,6 +73,16 @@ shared_apply_recover_prepared_service() {
         OWNER="$RECOVER_OWNER"
     fi
 }
+shared_apply_recover_activating_pristine_service() {
+    echo pristine-recover >> "$LOG"
+    [ "$PRISTINE_OK" = 0 ] || return 69
+    OWNER="committed $PREVIOUS voice"
+}
+shared_apply_recover_activated_cold_service() {
+    echo installed-recover >> "$LOG"
+    [ "$COLD_OK" = 0 ] || return 69
+    OWNER="committed $PREVIOUS voice"
+}
 shared_apply_boot_service() { echo "common:$1" >> "$LOG"; }
 shared_apply_stop_service() { echo "common-stop:$1" >> "$LOG"; [ "$STOP_OK" = 0 ] || return 70; }
 preflight_voice_cutover_journals() { echo "legacy-guard" >> "$LOG"; }
@@ -86,7 +96,8 @@ check_route() {
     set -e
     [ "$result" = "$expected" ] || fail "lifecycle returned $result instead of $expected"
 }
-RECOVER=0 RECOVER_OWNER=- SAVED_OK=0 STOP_OK=0
+RECOVER=0 RECOVER_OWNER=- SAVED_OK=0 STOP_OK=0 PRISTINE_OK=0 COLD_OK=0
+PREVIOUS=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 HAS_RECORD=1 OWNER_OK=1 OWNER="committed $ID voice"
 check_route 0 start
 [ "$(cat "$LOG")" = "common:committed $ID voice" ] ||
@@ -130,6 +141,26 @@ check_route 69 reconfigure
 [ "$(cat "$LOG")" = "saved-recovered" ] ||
     fail "failed native post-save recovery fell through to legacy"
 SAVED_OK=0
+OWNER="activating $ID voice $PREVIOUS voice"
+PRISTINE_OK=0
+check_route 0 start
+[ "$(tr '\n' ' ' < "$LOG")" = "pristine-recover common:committed $PREVIOUS voice " ] ||
+    fail "pristine activating boot did not restore previous common owner"
+PRISTINE_OK=1
+OWNER="activating $ID voice $PREVIOUS voice"
+check_route 0 start
+[ "$(tr '\n' ' ' < "$LOG")" = "pristine-recover installed-recover common:committed $PREVIOUS voice " ] ||
+    fail "fully installed activating runtime did not use cold verified recovery"
+COLD_OK=1
+OWNER="activating $ID voice $PREVIOUS voice"
+check_route 69 start
+[ "$(tr '\n' ' ' < "$LOG")" = 'pristine-recover installed-recover ' ] ||
+    fail "unverified activating runtime fell through to legacy"
+COLD_OK=0 PRISTINE_OK=0
+OWNER="activated $ID voice $PREVIOUS voice"
+check_route 0 start
+[ "$(tr '\n' ' ' < "$LOG")" = "installed-recover common:committed $PREVIOUS voice " ] ||
+    fail "activated cold boot lost previous native owner"
 OWNER=pending
 check_route 69 stop
 [ ! -s "$LOG" ] || fail "pending stop touched runtime"
@@ -284,7 +315,34 @@ reset_cold; TERMINAL_OK=1
 cold_check 70 "activated $CURRENT voice $OLD voice"
 reset_cold
 cold_check 69 "activated $CURRENT voice"
+cold_check 69 "activating $CURRENT voice"
+reset_cold
+cold_check 0 "activating $CURRENT voice $OLD voice"
+[ "$INSTALLED" = old ] || fail "installed-but-uncommitted activating release was not restored"
+grep -Fqx "recovered-activating-id=$CURRENT" "$ROOT/cold-output" ||
+    fail "activating restored receipt missing"
+grep -Fqx finish-activating "$LOG" ||
+    fail "activating restore did not use phase-specific durable CLI"
+reset_cold; INSTALLED=old
+cold_check 0 "activating $CURRENT voice $OLD voice"
+! grep -Fqx install-previous "$LOG" ||
+    fail "recovered activating case reinstalled an existing previous tree"
+reset_cold; INSTALLED=foreign
 cold_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fqx finish-activating "$LOG" ||
+    fail "partial activating tree was falsely marked restored"
+reset_cold; IPFW_OK=1
+cold_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fqx install-previous "$LOG" ||
+    fail "nonempty IPFW caused destructive activating rollback"
+reset_cold; CONFIG=1
+cold_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fqx install-previous "$LOG" ||
+    fail "saved Config drift caused destructive activating rollback"
+reset_cold; INSTALL_OK=1
+cold_check 70 "activating $CURRENT voice $OLD voice"
+! grep -Fqx finish-activating "$LOG" ||
+    fail "failed activating atomic rename was declared restored"
 echo 'PASS: shared cold activated recovery, idempotent previous owner and fail-closed checks'
 
 echo 'PASS: committed native common owner routes boot through sealed release and fresh saved Config'
