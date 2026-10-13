@@ -1,5 +1,7 @@
 # os-zapret2-restyle — краткий master plan
 
+**`v0.5.2_75` — корректная фактическая индикация общего Voice runtime.** После штатного Stop committed common owner сохраняет Config и sealed release, но удаляет IPFW; прежний `voice_live_inspect` ошибочно называл этот нормальный результат чужими правилами. Теперь read-only общий инспектор различает проверенный работающий engine+IPFW (`ready`), остановленный engine с пустыми правилами (`stopped`), частичный/mismatched runtime (`interrupted`) и неизвестные правила (`foreign-or-modified-rules`). Старый PoC и маршрут общей Apply остаются без изменений; новый UI-элемент не добавлен, изменены только тексты штатного статуса. Это не проверка MEDIA/CALL и не завершённая legacy-миграция.
+
 **`v0.5.2_74` — завершение pristine `activating` с оставшимся atomic stage.** В штатном FD9 recovery предыдущий полностью проверенный common owner больше не объявляется восстановленным при неизвестном operation-ID stage/park/backup. Если прежний sealed runtime, Config, процессы и IPFW нетронуты, а stage равен полному sealed новому release, удаляется только этот проверенный stage, затем повторно проверяется прежний владелец и фиксируется существующее `recover-activating`. Частичный/чужой stage, parked/backup collision или отказ удаления оставляют journal незавершённым. Новых WAL, процессов, frontend и legacy actuator нет; работающий old Telegram PoC ещё не мигрирован.
 
 **`v0.5.2_73` — общий runtime-failure без старого IPFW sweep.** Callback supervisor передаёт исходный PID отслеживаемого `dvtws2`. Под original FD9 committed common owner обрабатывает сбой через уже существующий проверяемый common Stop: требуется тот же PID-файл, отсутствие работающего движка и orphan census, точный sealed runtime/native Config и принадлежащие common IPFW. Запоздалый callback от прошлой генерации, partial journal или чужие объекты отвергаются. Старый PoC без common owner продолжает использовать прежний обработчик. Это исправление общего lifecycle на пути к миграции, но не сам исполняемый legacy→common handoff; live FreeBSD ещё не проверен.
@@ -16,7 +18,7 @@
 
 ## Текущий приоритет — v0.5.2
 
-**`v0.5.2_74`: общий backend «Стратегии» / «Передача голоса».** Этап открыт 13.10.2026 по поручению владельца без релиза. Архитектура утверждена, [подробный проект плана и контроля](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) принят к выполнению поручением владельца начать программирование. Frontend и все пять сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) сохраняются.
+**`v0.5.2_75`: общий backend «Стратегии» / «Передача голоса».** Этап открыт 13.10.2026 по поручению владельца без релиза. Архитектура утверждена, [подробный проект плана и контроля](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) принят к выполнению поручением владельца начать программирование. Frontend и все пять сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) сохраняются.
 
 | Предложенный этап | Конечный результат |
 |---|---|

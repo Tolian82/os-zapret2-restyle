@@ -171,6 +171,10 @@ def main() -> None:
     # The approved Voice GUI stays unchanged. Its existing Apply action
     # now calls the ONE native Strategies/Voice transaction under original
     # FD9, including ON. The separately owned release installer is untouched.
+    check("ipfwStopped:" in view and
+          "state === 'stopped' ? text.ipfwStopped" in view and
+          "'ready', 'stopped', 'uninitialized'" in status_php,
+          "Committed common Stop must show neutral stopped IPFW, not failure")
     check('id="voiceApply"' in view and
           "$('#voiceApply').on('click'" in view and
           "'/api/zapret/voice/apply'" in view,

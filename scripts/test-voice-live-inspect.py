@@ -196,6 +196,60 @@ class InspectionTests(unittest.TestCase):
             fake=created[0]
             self.assertEqual(old["rules"],fake.rules)
 
+    def test_committed_common_stop_is_normal_when_kernel_and_processes_are_empty(self):
+        import json
+        manifest=fixtures(("telegram", "91.108.0.0/16"))
+        with tempfile.TemporaryDirectory() as root:
+            identity={"id":"a"*32,"page":"voice","base":"b"*64,
+                      "candidate":"c"*64,"changed_fields":[]}
+            work=Path(root)/identity["id"]; work.mkdir()
+            (work/"plan.json").write_text(json.dumps({
+                "page":"voice","dependencies":identity["base"],
+                "changed_fields":[],
+            }))
+            record={"schema":1,"phase":"committed","detail":identity}
+            empty={"rule_base":manifest["rule_base"],
+                   "rule_max":manifest["rule_max"],"rules":{},"tables":{}}
+            captured=[]
+            def factory(first,last):
+                kernel=FakeAdapter(empty)
+                captured.append(kernel)
+                return kernel
+            report=examine_shared(record,work_root=Path(root),
+                    bundle_verify=lambda _: None,
+                    manifest_reader=lambda _: manifest,
+                    adapter_factory=factory,
+                    runtime_probe=lambda *args: {"state":"stopped","services":{}})
+            self.assertEqual("stopped",report["state"])
+            self.assertEqual("common-runtime-stopped",report["condition"])
+            self.assertEqual(0,report["rule_count"])
+            self.assertEqual(0,report["table_count"])
+            self.assertFalse(report["can_activate"])
+            self.assertTrue(all(op.startswith("read-")
+                                for op in captured[0].operations))
+
+            # Stopped process with live IPFW is NOT an ordinary stopped owner.
+            dirty=examine_shared(record,work_root=Path(root),
+                    bundle_verify=lambda _: None,
+                    manifest_reader=lambda _: manifest,
+                    adapter_factory=lambda *args: FakeAdapter(manifest),
+                    runtime_probe=lambda *args: {"state":"stopped","services":{}})
+            self.assertEqual("foreign-or-modified-rules",dirty["state"])
+
+            # A healthy kernel cannot hide a partial engine/monitor or
+            # an installed runtime different from the sealed candidate.
+            for state in ("partial","unverified-release"):
+                with self.subTest(state=state):
+                    mismatch=examine_shared(record,work_root=Path(root),
+                            bundle_verify=lambda _: None,
+                            manifest_reader=lambda _: manifest,
+                            adapter_factory=lambda *args: FakeAdapter(manifest),
+                            runtime_probe=lambda *args, current=state: {
+                                "state":current,"services":{},
+                            })
+                    self.assertEqual("interrupted",mismatch["state"])
+                    self.assertFalse(mismatch["can_activate"])
+
     def test_common_pending_phase_blocks_before_kernel_read(self):
         identity={"id":"a"*32,"page":"voice","base":"b"*64,
                   "candidate":"c"*64,"changed_fields":[]}

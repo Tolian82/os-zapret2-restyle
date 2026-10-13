@@ -259,25 +259,54 @@ def examine_shared(record: dict | None, *, work_root: Path = WORK,
         raise VoiceInspectError("native common owner does not match sealed candidate")
     manifest = manifest_reader(work / "release")
     adapter = adapter_factory(manifest["rule_base"], manifest["rule_max"])
-    try:
-        verify_prior_state(adapter, manifest, manifest)
-    except VoiceFirewallError:
-        # A stopped common owner or foreign/partially installed kernel is NOT
-        # ready. Do not guess which situation occurred or mutate to recover.
-        return {
-            "state": "foreign-or-modified-rules", "source": "native-common",
-            "can_activate": False, "remedy": "manual-inspection",
-        }
     runtime = runtime_probe(work / "release", manifest)
     if not isinstance(runtime, dict) or runtime.get("state") not in (
         "running", "stopped", "partial", "unverified-release"
     ):
         raise VoiceInspectError("untrusted common runtime evidence")
+    if runtime["state"] == "stopped":
+        # An intentionally stopped committed owner keeps its native Config
+        # and sealed release for the next Start. Empty IPFW is the EXPECTED
+        # successful Stop result, not a foreign or partially installed rule.
+        empty = {
+            "rule_base": manifest["rule_base"], "rule_max": manifest["rule_max"],
+            "rules": {}, "tables": {},
+        }
+        try:
+            verify_prior_state(adapter, empty, empty)
+        except VoiceFirewallError:
+            return {
+                "state": "foreign-or-modified-rules", "source": "native-common",
+                "condition": "common-stopped-with-kernel-objects",
+                "can_activate": False, "remedy": "manual-inspection",
+                "runtime": runtime,
+            }
+        return {
+            "state": "stopped", "source": "native-common",
+            "condition": "common-runtime-stopped",
+            "can_activate": False, "rule_count": 0, "table_count": 0,
+            "runtime": runtime,
+        }
+    if runtime["state"] != "running":
+        # A partially present monitor/engine or a mismatched active release
+        # must not display green even if the IPFW happens to look correct.
+        return {
+            "state": "interrupted", "source": "native-common",
+            "condition": "common-runtime-" + runtime["state"],
+            "can_activate": False, "remedy": "manual-inspection",
+            "runtime": runtime,
+        }
+    try:
+        verify_prior_state(adapter, manifest, manifest)
+    except VoiceFirewallError:
+        return {
+            "state": "foreign-or-modified-rules", "source": "native-common",
+            "can_activate": False, "remedy": "manual-inspection",
+            "runtime": runtime,
+        }
     return {
-        # This state is deliberately scoped to the IPFW field shown on the
-        # unchanged GUI. Runtime is a separate machine-readable witness.
         "state": "ready", "source": "native-common",
-        "condition": "common-ipfw-verified-only", "can_activate": False,
+        "condition": "common-runtime-and-ipfw-verified", "can_activate": False,
         "rule_count": len(manifest["rules"]),
         "table_count": len(manifest["tables"]),
         "runtime": runtime,

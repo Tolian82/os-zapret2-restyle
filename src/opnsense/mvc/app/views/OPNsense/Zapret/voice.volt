@@ -20,7 +20,7 @@ $(document).ready(function () {
         recoveryIncomplete: 'Незавершённое восстановление — нужна ручная проверка',
         recoveryReceipt: 'Диск проверен — после загрузки проверьте IPFW и процессы',
         recoveryUnknown: 'Статус восстановления недоступен — применение заблокировано',
-        ipfwStatus: 'IPFW — передача голоса', ipfwReady: 'Правила подтверждены',
+        ipfwStatus: 'IPFW — передача голоса', ipfwReady: 'Общий движок и правила подтверждены', ipfwStopped: 'Общая служба остановлена, IPFW очищен',
         ipfwEmpty: 'Новая Voice-конфигурация не активирована', ipfwInterrupted: 'Незавершённое применение',
         ipfwBlocked: 'Требуется проверка правил', ipfwUnknown: 'Статус недоступен',
         cutoverPrepared: 'Незавершённая подготовка — проверьте прежнее состояние',
@@ -46,7 +46,7 @@ $(document).ready(function () {
         recoveryIncomplete: 'Incomplete recovery — manual review required',
         recoveryReceipt: 'Disk proof verified — verify IPFW and processes after boot',
         recoveryUnknown: 'Recovery status unavailable — activation blocked',
-        ipfwStatus: 'Voice IPFW', ipfwReady: 'Verified rules',
+        ipfwStatus: 'Voice IPFW', ipfwReady: 'Shared engine and IPFW verified', ipfwStopped: 'Shared service stopped; IPFW cleared',
         ipfwEmpty: 'New Voice configuration not activated', ipfwInterrupted: 'Interrupted apply',
         ipfwBlocked: 'Firewall review required', ipfwUnknown: 'Status unavailable',
         cutoverPrepared: 'Interrupted preparation — verify previous runtime',
@@ -393,6 +393,7 @@ $(document).ready(function () {
             .done(function (reply) {
                 var state = reply && reply.state;
                 var label = state === 'ready' ? text.ipfwReady :
+                            state === 'stopped' ? text.ipfwStopped :
                             state === 'uninitialized' ? text.ipfwEmpty :
                             state === 'interrupted' ? text.ipfwInterrupted :
                             state === 'inspection-error' ? text.ipfwUnknown :
@@ -411,7 +412,8 @@ $(document).ready(function () {
                 $('#voiceIPFWState')
                     .removeClass('label-success label-default label-danger')
                     .addClass(state === 'ready' ? 'label-success' :
-                              state === 'uninitialized' ? 'label-default' : 'label-danger')
+                              (state === 'uninitialized' || state === 'stopped')
+                                  ? 'label-default' : 'label-danger')
                     .text(label);
             }).fail(function () {
                 $('#voiceIPFWState').removeClass('label-success label-default')

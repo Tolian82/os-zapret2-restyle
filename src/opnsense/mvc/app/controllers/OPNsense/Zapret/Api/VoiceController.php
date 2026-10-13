@@ -439,7 +439,7 @@ class VoiceController extends ApiControllerBase
         // The backend only emits known sanitized status fields. Never expose
         // raw configd output or an arbitrary kernel failure message to GUI.
         $allowed = [
-            'ready', 'uninitialized', 'interrupted', 'mismatched-range',
+            'ready', 'stopped', 'uninitialized', 'interrupted', 'mismatched-range',
             'foreign-or-modified-rules', 'foreign-or-modified-table',
             'orphan-stage-table', 'inspection-error',
         ];
