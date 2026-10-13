@@ -458,6 +458,7 @@ shared_apply_bundle_service() {
 shared_apply_workspace() { echo "$ROOT/qual-work"; }
 mkdir -p "$ROOT/qual-work/legacy-backup"
 ARM_PY_AVAILABLE=1 ARM_QUALIFIED=1 ARM_TOOLS=1 ARM_CONFIG=1 ARM_ON=1 ARM_SEAL=1 ARM_DRIFT=0
+LOG="$ROOT/common-arm.log"
 : > "$LOG"
 arm_report=$(shared_apply_legacy_arm_service "$QUAL_ID") || fail "sealed predecessor did not arm"
 printf '%s\n' "$arm_report" | grep -Fqx 'legacy-handoff-authorized=0' ||
