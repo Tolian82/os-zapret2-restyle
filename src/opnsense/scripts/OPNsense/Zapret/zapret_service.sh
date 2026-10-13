@@ -787,6 +787,29 @@ native_voice_live_preflight_service()
     "${_native_voice_live_python}" "${_native_voice_live_script}" inspect
 }
 
+# Prepare one complete Voice+Strategies release from the detached OPNsense
+# candidate. This is an INTERNAL FD9 operation, not a Config/runtime Apply.
+# Caller must have placed its root-owned candidate.xml in the fixed private
+# shared-work directory; no arbitrary file paths can reach this command.
+shared_apply_prepare_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    case "$1" in
+        *[!a-f0-9]*|"") return 64 ;;
+    esac
+    [ "${#1}" -eq 32 ] || return 64
+    preflight_voice_cutover_journals || return 69
+    [ -x /usr/local/bin/python3.13 ] || return 69
+    _shared_work="/var/db/zapret2/shared-work/$1"
+    [ -d "$_shared_work" ] && [ ! -L "$_shared_work" ] || return 69
+    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_render.py" render "$1" || return 69
+    _shared_template="$_shared_work/templates/usr/local/etc/zapret2/zapret.conf"
+    [ -f "$_shared_template" ] && [ ! -L "$_shared_template" ] || return 69
+    orchestrator_build_release \
+        "$_shared_template" "$ZAPRET_DIR" "$ACTIVE_DIR" \
+        "$_shared_work" "$_shared_work/release" "$STAGE_FILE" \
+        shared-candidate "$_shared_work/candidate.xml"
+}
 # Internal root-only Apply phases; service_with_lifecycle_lock supplies FD9.
 shared_apply_record_service()
 {
@@ -827,6 +850,9 @@ service_dispatch()
             ;;
         reconfigure)
             reconfigure_service
+            ;;
+        shared-apply-prepare)
+            shared_apply_prepare_service "${2:-}"
             ;;
         shared-apply-record)
             shift
@@ -1023,7 +1049,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

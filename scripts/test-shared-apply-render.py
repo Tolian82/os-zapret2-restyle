@@ -51,7 +51,7 @@ CANDIDATE="<opnsense><system><hostname>unchanged</hostname></system>" \
 class RenderTests(unittest.TestCase):
     def build(self,d):
         root=Path(d)
-        job=root/"1"*0 if False else root/("1"*32)
+        job=root/("1"*32)
         job.mkdir(mode=0o700)
         candidate=job/"candidate.xml"
         candidate.write_text(CANDIDATE)
@@ -105,6 +105,19 @@ class RenderTests(unittest.TestCase):
             with self.assertRaisesRegex(NativeDetachedRenderError,"unsafe"):
                 render_detached(candidate,job/"templates",
                                 template_factory=Template,config_factory=Config)
+
+    def test_existing_fd9_service_renders_then_builds_one_full_candidate(self):
+        service=(BACKEND.parent/"zapret_service.sh").read_text()
+        self.assertIn("shared_apply_prepare_service()",service)
+        self.assertIn("shared-apply-prepare)",service)
+        body=service.split("shared_apply_prepare_service()\n{",1)[1].split("\n}\n",1)[0]
+        self.assertLess(body.index("preflight_voice_cutover_journals"),
+                        body.index("shared_apply_render.py"))
+        self.assertLess(body.index("shared_apply_render.py"),
+                        body.index("orchestrator_build_release"))
+        self.assertIn('shared-candidate "$_shared_work/candidate.xml"',body)
+        self.assertNotIn("config_reload_template",body)
+        self.assertNotIn("apply_runtime_activate",body)
 
     def test_refuses_arbitrary_path_or_missing_fd9(self):
         script=BACKEND/"shared_apply_render.py"
