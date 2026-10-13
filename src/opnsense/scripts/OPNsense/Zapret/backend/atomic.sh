@@ -2,7 +2,12 @@
 
 # Public API:
 #
-#   atomic_install_tree SOURCE_DIR DEST_DIR BACKUP_ROOT
+#   atomic_install_tree SOURCE_DIR DEST_DIR BACKUP_ROOT [OPERATION_ID]
+#
+# OPERATION_ID is an optional sealed shared-Apply identifier (32 lowercase
+# hexadecimal chars). It makes the crash window's stage, parked previous and
+# backup names deterministic from the already durable common operation.
+# Legacy/normal boot calls use the historical PID/timestamp layout.
 #
 # Installs an already validated directory tree as one unit.
 #
@@ -161,6 +166,15 @@ atomic_remove_tree()
 
 atomic_install_tree()
 {
+    [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || return 64
+    _atomic_install_token=
+    if [ "$#" -eq 4 ]; then
+        _atomic_install_token="$4"
+        case "$_atomic_install_token" in
+            ""|*[!a-f0-9]*) return 64 ;;
+        esac
+        [ "${#_atomic_install_token}" -eq 32 ] || return 64
+    fi
     _atomic_install_source="$1"
     _atomic_install_destination="$2"
     _atomic_install_backup_root="$3"
@@ -180,8 +194,15 @@ atomic_install_tree()
     _atomic_install_parent=$(dirname "${_atomic_install_destination}")
     _atomic_install_name=$(basename "${_atomic_install_destination}")
     _atomic_install_stamp=$(date +%Y%m%d-%H%M%S)
-    _atomic_install_stage="${_atomic_install_parent}/.${_atomic_install_name}.stage.$$"
-    _atomic_install_old="${_atomic_install_parent}/.${_atomic_install_name}.old.$$"
+    if [ -n "$_atomic_install_token" ]; then
+        _atomic_install_stage="${_atomic_install_parent}/.${_atomic_install_name}.stage.${_atomic_install_token}"
+        _atomic_install_old="${_atomic_install_parent}/.${_atomic_install_name}.old.${_atomic_install_token}"
+        _atomic_install_backup_name="${_atomic_install_name}-${_atomic_install_token}"
+    else
+        _atomic_install_stage="${_atomic_install_parent}/.${_atomic_install_name}.stage.$$"
+        _atomic_install_old="${_atomic_install_parent}/.${_atomic_install_name}.old.$$"
+        _atomic_install_backup_name="${_atomic_install_name}-${_atomic_install_stamp}-$$"
+    fi
     _atomic_install_backup=""
 
     mkdir -p "${_atomic_install_parent}" "${_atomic_install_backup_root}" ||
@@ -200,7 +221,7 @@ atomic_install_tree()
     # silently lose backup ownership. Refuse name collisions before copy.
     if [ -e "${_atomic_install_destination}" ] ||
        [ -L "${_atomic_install_destination}" ]; then
-        _atomic_install_backup="${_atomic_install_backup_root}/${_atomic_install_name}-${_atomic_install_stamp}-$$"
+        _atomic_install_backup="${_atomic_install_backup_root}/${_atomic_install_backup_name}"
         if [ -e "${_atomic_install_backup}" ] ||
            [ -L "${_atomic_install_backup}" ]; then
             common_error "atomic install: existing backup path requires review"

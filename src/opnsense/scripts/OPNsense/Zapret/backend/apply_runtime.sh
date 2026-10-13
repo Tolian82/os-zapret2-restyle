@@ -155,11 +155,26 @@ apply_runtime_abort()
 
 apply_runtime_activate()
 {
-    apply_runtime_preflight "$@" || return $?
-    APPLY_BACKUP=$(atomic_install_tree "$APPLY_CANDIDATE" "$ACTIVE_DIR" "$BACKUP_ROOT") || {
-        apply_runtime_clear
-        return 1
-    }
+    [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || return 64
+    # The optional third argument is already recorded in the durable shared
+    # Apply journal before this invocation. Keep normal boot/legacy callers
+    # on their original 2-argument API and original PID layout.
+    if [ "$#" -eq 3 ]; then
+        case "$3" in ""|*[!a-f0-9]*) return 64 ;; esac
+        [ "${#3}" -eq 32 ] || return 64
+    fi
+    apply_runtime_preflight "$1" "$2" || return $?
+    if [ "$#" -eq 3 ]; then
+        APPLY_BACKUP=$(atomic_install_tree "$APPLY_CANDIDATE" "$ACTIVE_DIR" "$BACKUP_ROOT" "$3") || {
+            apply_runtime_clear
+            return 1
+        }
+    else
+        APPLY_BACKUP=$(atomic_install_tree "$APPLY_CANDIDATE" "$ACTIVE_DIR" "$BACKUP_ROOT") || {
+            apply_runtime_clear
+            return 1
+        }
+    fi
     APPLY_PHASE=installed
     if [ "$APPLY_OLD_RUNNING" = 1 ]; then
         [ -n "$APPLY_BACKUP" ] || {

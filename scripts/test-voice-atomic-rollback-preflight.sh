@@ -166,4 +166,63 @@ if (
 fi
 assert_install_intact
 
+
+# Actual production atomic_install_tree with an injected portable copy;
+# simulates abrupt process exit between its real mv(1) calls. No generic
+# timestamp/PID scan can match these durable shared-operation paths.
+tid=11111111111111111111111111111111
+tnew="${dir}/tag-new"; tactive="${dir}/tag-active"; tbacks="${dir}/tag-backups"
+mkdir -p "$tnew" "$tactive" "$tbacks"
+echo new-release > "$tnew/owner"
+echo old-release > "$tactive/owner"
+tagstage="${dir}/.tag-active.stage.$tid"
+tagpark="${dir}/.tag-active.old.$tid"
+tagbackup="$tbacks/tag-active-$tid"
+if atomic_install_tree "$tnew" "$tactive" "$tbacks" "BADTOKEN" 2>/dev/null; then
+    echo "FAIL: untrusted operation ID was accepted" >&2; exit 1
+fi
+[ "$(cat "$tactive/owner")" = old-release ] || exit 1
+# Crash after active -> .old.ID but before .old.ID -> backup.
+if (
+    atomic_copy_tree() { mkdir -p "$2" && cp -R "$1/." "$2/"; }
+    mv() {
+        if [ "$1" = "$tagpark" ] && [ "$2" = "$tagbackup" ]; then exit 81; fi
+        command mv "$@"
+    }
+    atomic_install_tree "$tnew" "$tactive" "$tbacks" "$tid"
+); then
+    echo "FAIL: injected first interrupted rename returned success" >&2; exit 1
+fi
+[ ! -e "$tactive" ] &&
+[ "$(cat "$tagstage/owner")" = new-release ] &&
+[ "$(cat "$tagpark/owner")" = old-release ] &&
+[ ! -e "$tagbackup" ] || {
+    echo "FAIL: operation-ID park window was not preserved" >&2; exit 1
+}
+# New invocation with the SAME identity must refuse and preserve evidence.
+if atomic_install_tree "$tnew" "$tactive" "$tbacks" "$tid" 2>/dev/null; then
+    echo "FAIL: same-ID replay overwrote interrupted rename evidence" >&2; exit 1
+fi
+[ "$(cat "$tagpark/owner")" = old-release ] || exit 1
+# Separate, independent injected crash after .old.ID -> backup.
+rm -rf "$tagstage"
+mv "$tagpark" "$tactive"
+if (
+    atomic_copy_tree() { mkdir -p "$2" && cp -R "$1/." "$2/"; }
+    mv() {
+        if [ "$1" = "$tagstage" ] && [ "$2" = "$tactive" ]; then exit 82; fi
+        command mv "$@"
+    }
+    atomic_install_tree "$tnew" "$tactive" "$tbacks" "$tid"
+); then
+    echo "FAIL: injected final interrupted rename returned success" >&2; exit 1
+fi
+[ ! -e "$tactive" ] &&
+[ ! -e "$tagpark" ] &&
+[ "$(cat "$tagstage/owner")" = new-release ] &&
+[ "$(cat "$tagbackup/owner")" = old-release ] || {
+    echo "FAIL: operation-ID backup window was not preserved" >&2; exit 1
+}
+echo "PASS: deterministic shared Apply ID retains both exact interrupted-rename witnesses"
+
 echo "PASS: atomic rollback and install preserve unknown crash artifacts"

@@ -961,6 +961,82 @@ shared_apply_recover_activated_cold_service()
         "finish-$_shared_cold_phase" "$_shared_cold_id" "$_shared_cold_old" || return 70
     printf "recovered-%s-id=%s\n" "$_shared_cold_phase" "$_shared_cold_id"
 }
+# Cold rescue of an operation-ID-scoped atomic rename gap. PID-only
+# stage/backup names from older installs are intentionally NOT recoverable.
+# Original root FD9 and the existing shared journal are the only owners.
+shared_apply_recover_activating_parked_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    case "$1" in activating\ *) ;; *) return 69 ;; esac
+    _parked_id=$(printf "%s\n" "$1" | cut -d " " -f 2)
+    _parked_page=$(printf "%s\n" "$1" | cut -d " " -f 3)
+    _parked_old=$(printf "%s\n" "$1" | cut -d " " -f 4)
+    _parked_old_page=$(printf "%s\n" "$1" | cut -d " " -f 5)
+    [ "$1" = "activating $_parked_id $_parked_page $_parked_old $_parked_old_page" ] || return 69
+    for _parked_value in "$_parked_id" "$_parked_old"; do
+        case "$_parked_value" in ""|*[!a-f0-9]*) return 69 ;; esac
+        [ "${#_parked_value}" -eq 32 ] || return 69
+    done
+    [ "$_parked_id" != "$_parked_old" ] || return 69
+    case "$_parked_page" in voice|strategies) ;; *) return 69 ;; esac
+    case "$_parked_old_page" in voice|strategies) ;; *) return 69 ;; esac
+    preflight_voice_cutover_journals common-recover-activating || return 69
+    shared_apply_bundle_service verify "$_parked_id" || return 69
+    shared_apply_bundle_service verify "$_parked_old" || return 69
+    _parked_config=$(shared_apply_native_config saved "$_parked_old" "$_parked_old_page") || return 69
+    _parked_ok=$(printf "%s\n" "$_parked_config" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 69
+    _parked_new_root=$(shared_apply_workspace "$_parked_id") || return 69
+    _parked_old_root=$(shared_apply_workspace "$_parked_old") || return 69
+    _parked_parent=$(dirname "$ACTIVE_DIR") || return 69
+    _parked_name=$(basename "$ACTIVE_DIR") || return 69
+    _parked_stage="$_parked_parent/.$_parked_name.stage.$_parked_id"
+    _parked_hold="$_parked_parent/.$_parked_name.old.$_parked_id"
+    _parked_backup="$BACKUP_ROOT/$_parked_name-$_parked_id"
+    # Positive evidence: exact new stage and ONE exact old hold/backup.
+    [ ! -e "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
+    [ -d "$_parked_stage" ] && [ ! -L "$_parked_stage" ] || return 69
+    atomic_verify_tree "$_parked_new_root/release" "$_parked_stage" || return 69
+    if [ -d "$_parked_hold" ] && [ ! -L "$_parked_hold" ] &&
+       [ ! -e "$_parked_backup" ] && [ ! -L "$_parked_backup" ]; then
+        _parked_previous="$_parked_hold"
+    elif [ -d "$_parked_backup" ] && [ ! -L "$_parked_backup" ] &&
+         [ ! -e "$_parked_hold" ] && [ ! -L "$_parked_hold" ]; then
+        _parked_previous="$_parked_backup"
+    else
+        return 69
+    fi
+    atomic_verify_tree "$_parked_old_root/release" "$_parked_previous" || return 69
+    if launcher_is_running "$CHILD_PIDFILE" ||
+       supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"; then return 69; fi
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || return 69
+    firewall_shared_runtime verify "$_parked_old_root/release" - || return 69
+    # Re-attest before mutation. Never consume/remove parked artifacts.
+    [ ! -e "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
+    shared_apply_bundle_service verify "$_parked_id" || return 69
+    shared_apply_bundle_service verify "$_parked_old" || return 69
+    atomic_verify_tree "$_parked_new_root/release" "$_parked_stage" || return 69
+    atomic_verify_tree "$_parked_old_root/release" "$_parked_previous" || return 69
+    atomic_install_tree "$_parked_old_root/release" "$ACTIVE_DIR" "$BACKUP_ROOT" >/dev/null || return 70
+    atomic_verify_tree "$_parked_old_root/release" "$ACTIVE_DIR" || return 70
+    atomic_verify_tree "$_parked_new_root/release" "$_parked_stage" || return 70
+    atomic_verify_tree "$_parked_old_root/release" "$_parked_previous" || return 70
+    shared_apply_bundle_service verify "$_parked_id" || return 70
+    shared_apply_bundle_service verify "$_parked_old" || return 70
+    _parked_config=$(shared_apply_native_config saved "$_parked_old" "$_parked_old_page") || return 70
+    _parked_ok=$(printf "%s\n" "$_parked_config" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 70
+    if launcher_is_running "$CHILD_PIDFILE" ||
+       supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"; then return 70; fi
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || return 70
+    firewall_shared_runtime verify "$_parked_old_root/release" - || return 70
+    [ -x /usr/local/bin/python3.13 ] || return 70
+    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+        finish-activating "$_parked_id" "$_parked_old" || return 70
+    printf "recovered-parked-id=%s\n" "$_parked_id"
+}
 # Only a PREPARED journal (before any mutation) can be auto-closed at boot.
 # The root FD9 Python command rechecks the sealed candidate and journal.
 shared_apply_recover_prepared_service()
@@ -1115,7 +1191,7 @@ shared_apply_execute_service()
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 69
     shared_apply_record_service activating "$_shared_apply_id" "$_shared_apply_page" \
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 69
-    if ! apply_runtime_activate "$_shared_apply_root/release" "$_shared_apply_mode"; then
+    if ! apply_runtime_activate "$_shared_apply_root/release" "$_shared_apply_mode" "$_shared_apply_id"; then
         # activate() may have restored internally, or may have failed between
         # irreversible observations. Never claim a verified rollback merely
         # because a shell status is zero or APPLY_PHASE was reset.
@@ -1501,7 +1577,9 @@ service_with_lifecycle_lock()
                             # Each path independently proves Config, owner,
                             # installed tree, process census and scoped IPFW.
                             if ! shared_apply_recover_activating_pristine_service "$_shared_owner"; then
-                                shared_apply_recover_activated_cold_service "$_shared_owner" || return 69
+                                if ! shared_apply_recover_activated_cold_service "$_shared_owner"; then
+                                    shared_apply_recover_activating_parked_service "$_shared_owner" || return 69
+                                fi
                             fi
                             _shared_owner=$(shared_apply_inspect_service) || return 69
                             case "$_shared_owner" in

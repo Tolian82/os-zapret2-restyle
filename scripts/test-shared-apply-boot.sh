@@ -83,6 +83,11 @@ shared_apply_recover_activated_cold_service() {
     [ "$COLD_OK" = 0 ] || return 69
     OWNER="committed $PREVIOUS voice"
 }
+shared_apply_recover_activating_parked_service() {
+    echo parked-recover >> "$LOG"
+    [ "$PARKED_OK" = 0 ] || return 69
+    OWNER="committed $PREVIOUS voice"
+}
 shared_apply_boot_service() { echo "common:$1" >> "$LOG"; }
 shared_apply_stop_service() { echo "common-stop:$1" >> "$LOG"; [ "$STOP_OK" = 0 ] || return 70; }
 preflight_voice_cutover_journals() { echo "legacy-guard" >> "$LOG"; }
@@ -96,7 +101,7 @@ check_route() {
     set -e
     [ "$result" = "$expected" ] || fail "lifecycle returned $result instead of $expected"
 }
-RECOVER=0 RECOVER_OWNER=- SAVED_OK=0 STOP_OK=0 PRISTINE_OK=0 COLD_OK=0
+RECOVER=0 RECOVER_OWNER=- SAVED_OK=0 STOP_OK=0 PRISTINE_OK=0 COLD_OK=0 PARKED_OK=1
 PREVIOUS=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 HAS_RECORD=1 OWNER_OK=1 OWNER="committed $ID voice"
 check_route 0 start
@@ -154,8 +159,14 @@ check_route 0 start
 COLD_OK=1
 OWNER="activating $ID voice $PREVIOUS voice"
 check_route 69 start
-[ "$(tr '\n' ' ' < "$LOG")" = 'pristine-recover installed-recover ' ] ||
+[ "$(tr '\n' ' ' < "$LOG")" = 'pristine-recover installed-recover parked-recover ' ] ||
     fail "unverified activating runtime fell through to legacy"
+PARKED_OK=0
+OWNER="activating $ID voice $PREVIOUS voice"
+check_route 0 start
+[ "$(tr '\n' ' ' < "$LOG")" = "pristine-recover installed-recover parked-recover common:committed $PREVIOUS voice " ] ||
+    fail "verified parked previous owner did not route into native common boot"
+PARKED_OK=1
 COLD_OK=0 PRISTINE_OK=0
 OWNER="activated $ID voice $PREVIOUS voice"
 check_route 0 start
@@ -344,5 +355,95 @@ cold_check 70 "activating $CURRENT voice $OLD voice"
 ! grep -Fqx finish-activating "$LOG" ||
     fail "failed activating atomic rename was declared restored"
 echo 'PASS: shared cold activated recovery, idempotent previous owner and fail-closed checks'
+
+
+# Exercise the exact new root FD9 service helper, with the root-only journal
+# write mocked. Verify both known atomic gaps and refusal of foreign files.
+sed -n '/^shared_apply_recover_activating_parked_service()$/,/^}$/p' "$SOURCE" > "$ROOT/parked.sh"
+python3 - "$ROOT/parked.sh" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]); s=p.read_text()
+old='    [ -x /usr/local/bin/python3.13 ] || return 70\n    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n        finish-activating "$_parked_id" "$_parked_old" || return 70'
+assert old in s, "parked recovery CLI phase gate missing"
+s=s.replace(old,'    echo finish-activating-parked >> "$LOG"; [ "$TERMINAL_OK" = 0 ] || return 70')
+p.write_text(s)
+PY
+. "$ROOT/parked.sh"
+ACTIVE_DIR="$ROOT/live-parked"
+BACKUP_ROOT="$ROOT/parked-backups"
+stage="$ROOT/.live-parked.stage.$CURRENT"
+hold="$ROOT/.live-parked.old.$CURRENT"
+previous="$BACKUP_ROOT/live-parked-$CURRENT"
+mkdir -p "$BACKUP_ROOT" "$stage" "$hold"
+atomic_verify_tree() {
+  echo "compare:$2" >> "$LOG"
+  case "$2" in
+    "$stage") [ "$STAGE_OK" = 0 ] ;;
+    "$hold"|"$previous") [ "$PREVIOUS_OK" = 0 ] ;;
+    "$ACTIVE_DIR") [ "$INSTALLED" = old ] ;;
+    *) return 69 ;;
+  esac
+}
+atomic_install_tree() {
+  echo restore-missing-active >> "$LOG"
+  [ "$INSTALL_OK" = 0 ] &&
+  [ "$1" = "$ROOT/work-old/release" ] &&
+  [ "$2" = "$ACTIVE_DIR" ] &&
+  [ "$3" = "$BACKUP_ROOT" ] || return 70
+  INSTALLED=old
+}
+reset_parked() {
+  : > "$LOG"
+  INSTALLED=missing STAGE_OK=0 PREVIOUS_OK=0
+  GUARD=0 SEAL=0 CONFIG=0 ENGINE=0 MONITOR=0
+  CENSUS_OK=0 IPFW_OK=0 INSTALL_OK=0 TERMINAL_OK=0
+  rm -rf "$ACTIVE_DIR" "$stage" "$hold" "$previous"
+  mkdir -p "$stage" "$hold"
+}
+parked_check() {
+  wanted="$1"; shift
+  set +e
+  shared_apply_recover_activating_parked_service "$1" > "$ROOT/parked-output"
+  actual=$?
+  set -e
+  [ "$actual" = "$wanted" ] || fail "parked recovery status $actual expected $wanted"
+}
+reset_parked
+parked_check 0 "activating $CURRENT voice $OLD voice"
+grep -Fqx "recovered-parked-id=$CURRENT" "$ROOT/parked-output" || fail "parked recovery receipt missing"
+grep -Fqx finish-activating-parked "$LOG" || fail "parked recovery not durable"
+[ -d "$stage" ] && [ -d "$hold" ] || fail "parked evidence was consumed"
+reset_parked
+mv "$hold" "$previous"
+parked_check 0 "activating $CURRENT voice $OLD voice"
+[ -d "$stage" ] && [ -d "$previous" ] || fail "backup evidence was consumed"
+reset_parked; mkdir -p "$previous"
+parked_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fqx restore-missing-active "$LOG" || fail "ambiguous two owners restored"
+reset_parked; STAGE_OK=1
+parked_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fqx restore-missing-active "$LOG" || fail "foreign staged release restored"
+reset_parked; PREVIOUS_OK=1
+parked_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fqx restore-missing-active "$LOG" || fail "foreign old parked release restored"
+reset_parked; CONFIG=1
+parked_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fqx restore-missing-active "$LOG" || fail "Config drift restored"
+reset_parked; ENGINE=1
+parked_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fqx restore-missing-active "$LOG" || fail "live process restored"
+reset_parked; IPFW_OK=1
+parked_check 69 "activating $CURRENT voice $OLD voice"
+! grep -Fqx restore-missing-active "$LOG" || fail "kernel ownership conflict restored"
+reset_parked; INSTALL_OK=1
+parked_check 70 "activating $CURRENT voice $OLD voice"
+! grep -Fqx finish-activating-parked "$LOG" || fail "failed install marked restored"
+reset_parked; TERMINAL_OK=1
+parked_check 70 "activating $CURRENT voice $OLD voice"
+reset_parked
+parked_check 69 "activating $CURRENT voice"
+parked_check 69 "activated $CURRENT voice $OLD voice"
+echo 'PASS: ID-scoped park/backup gaps recover only exact sealed previous owner'
 
 echo 'PASS: committed native common owner routes boot through sealed release and fresh saved Config'

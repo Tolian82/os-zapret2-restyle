@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`_53`:** новый общий Apply записывает свою уже существующую durable operation identity в ID-scoped atomic stage/old/backup имена, не создавая дополнительного WAL. Для прерванного `activating` с отсутствующим active runtime recovery под исходным root FD9 требует точный new sealed stage, ровно один exact previous sealed park/backup, неизменённую native Config, отсутствие зарегистрированных и потерянных dvtws2/supervisor, пустой scoped IPFW; прежний runtime восстанавливает только через общий atomic installer из запечатанного old release. Crash-остатки не удаляются, переход `finish-activating` записывается лишь после повторного подтверждения всех ресурсов. Старые PID-имена, неоднозначное/частичное владение и работающие процессы автоматически не восстанавливаются. Добавлена fault-injection матрица двух rename windows и конфликтов; FreeBSD owner-live по-прежнему необходим.
+
 **`_52`:** в root FD9 boot добавлен второй точный layout восстановления `activating`: помимо прежнего intact old release, journal может отставать от завершённой atomic-install нового sealed common release. Известный новый installed runtime возвращается через тот же cold previous-owner rollback из `_50`, с подтверждением old saved Config, обоих sealed bundle, точного дерева, отсутствия dvtws2/supervisor/orphan и пустого IPFW. CLI `finish-activating` закрывает только указанную фазу после повторных проверок, не подменяя семантику `finish-activated`. Тесты проверяют маршрут и отказ на partial/foreign tree, drift Config, чужом IPFW и failed atomic install. Случаи, когда старое дерево перемещено, а новое **не** установлено полностью, пока blocked; owner-live не подтверждён.
 
 **`_51`:** прежде `atomic_install_tree` удалял существующие `.stage.$$` и `.old.$$` перед каждой установкой; при столкновении PID после сбоя это могло уничтожить старую копию runtime. Теперь сохранение неизвестных staged/parked деревьев обязательно: проверка до copy/rename и отказ при существующем файле/симлинке. Также запрещён `mv` в уже занятый backup `name-date-PID`. Regression на реальном helper проверяет три отказа и неизменность активного runtime. Автоматическое восстановление *частичного* `activating` ещё не реализовано; owner-live не подтверждён.
@@ -24,13 +26,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_52`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_53`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=52` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_52.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=53` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_53.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
