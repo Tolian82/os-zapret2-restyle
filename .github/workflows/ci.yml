@@ -392,6 +392,7 @@ jobs:
           php scripts/test-voice-apply-candidate.php
           php scripts/test-voice-native-config-commit.php
           php scripts/test-shared-apply-request.php
+          php scripts/test-shared-apply-envelope.php
           php scripts/test-shared-apply-config.php
           php scripts/test-voice-candidate-xml.php
           php scripts/test-voice-draft-selection.php
