@@ -1277,6 +1277,10 @@ shared_apply_stop_service()
     launcher_is_running "$CHILD_PIDFILE" && _shared_stop_engine=1
     supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" && _shared_stop_monitor=1
     [ "$_shared_stop_engine" = "$_shared_stop_monitor" ] || return 69
+    # A missing PID file is not evidence of an empty engine inventory.
+    # The same exact-binary census already protects common Apply.
+    _apply_engine="$_shared_stop_engine"
+    apply_runtime_attest_engine_inventory || return 69
     if [ "$_shared_stop_engine" = 0 ]; then
         # An already stopped common runtime is idempotent only with an
         # empty, independently verified plugin-owned kernel range.
@@ -1292,6 +1296,10 @@ shared_apply_stop_service()
        launcher_is_running "$CHILD_PIDFILE"; then
         return 70
     fi
+    # Do not remove the firewall and announce STOP when another dvtws2
+    # survived the PID-based stop (or appeared as an orphan).
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || return 70
     # Common IPFW transaction installs an empty rule set, then commits
     # removal only for objects attested to this precise common release.
     # Failure retains committed ownership; no blind rule/table sweep.

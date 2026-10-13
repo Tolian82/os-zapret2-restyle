@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**`v0.5.2_69` — честный общий Stop при потерянном PID.** Штатный Stop теперь использует существующий независимый census точного исполняемого файла dvtws2 перед решением «уже остановлено» и перед остановкой собственного процесса. После остановки PID-владельца census повторяется до изменения IPFW: посторонний/осиротевший/дублирующий процесс приводит к отказу, а не к успешному `native-common-stopped`. Регрессии выполняют настоящий Stop-функционал с подставными process/kernel адаптерами, включая нормальный повторный Stop. Нет нового backend, WAL, frontend или автоматического legacy STOP; FreeBSD live и STUN/MEDIA/CALL остаются не подтверждены.
+
 **`v0.5.2_68` — исправление blocker в live predecessor attestation.** Функции операторского `legacy-begin`/`legacy-cancel` раньше пытались читать `marker`, `process_instances`, `managed_ipv4_sha256`, `active_argument_sha256` и `legacy_ipfw_previous` из сокращённого результата `inspect_legacy_previous`, в котором этих полей **нет**; production FreeBSD route отказывал без нужной проверки. Новый `inspect_legacy_previous_live_identity` извлекает точные поля только из полностью проверенного sealed `legacy.json`, повторно сверяет его checksum, previous-five binding и manifest перед использованием. Добавлен regression-test на сравнение прежнего PID/argv/IPFW/marker с реальным live inspector и на отказ при изменении manifest. Не создано нового движка, WAL, независимого backend или unsafe actuator. Команды остаются operator-only; живой reversible cutover и FreeBSD STUN/MEDIA/CALL приёмка ещё не готовы.
 
 **`v0.5.2_67` — корректировка test-harness.** Новая проверка production outer FD9 dispatch проверяет членство каждой legacy operator-команды без зависимости от того, какая команда последняя в shell `case`. Алгоритм `legacy-quiescing` из `_66` не менялся: он атомарно сохраняет intent до реального STOP, отменяется только при неизменённом старом владельце, и не выдаёт разрешение на live migration или Telegram call. CI последнего HEAD проверяется, frontend/ТЗ и релиз не меняются.
@@ -8,7 +10,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_68`. `VERSION=0.5.2`; `PLUGIN_REVISION=68`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_69`. `VERSION=0.5.2`; `PLUGIN_REVISION=69`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
 
@@ -109,6 +111,8 @@ Install проверяет живые объекты до изменения, с
 На HEAD `_11` целевой job Voice candidates успешно завершён; отдельный guard `Pull request title` отказывает при проверке исторического коммита `02bd7df` с текстом `docs: Record v0.5.2_8 ...`, ожидая префикс `v0.5.2_8:`. Согласно действующему `GH-014` переписывание прошлой истории только для переименования ревизии запрещено. Не выполнять force-push или ослабление guard автоматически; данный конфликт требуется разрешить в пределах правил перед merge. Отдельный полный Validate Project ещё может содержать независимые failures; проверять latest-run evidence. Содержимое продукта и наличие ошибки commit subjects не смешивать.
 
 ## Следующее действие
+
+**После `_69`:** выполнить направленную проверку оставшихся crash-сценариев `activating` (частично перенесённый runtime) и `activated` (живой/непустой IPFW) на FreeBSD. Не объявлять recovery успешным при неустановленном exact owner; затем завершать единый reversible legacy cutover и owner-live STUN/MEDIA/CALL. Общий Stop отказывает на orphan/duplicate/survivor dvtws2; это ещё не полная миграция.
 
 **Этап 4 — следующий рубеж после `_68`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 
