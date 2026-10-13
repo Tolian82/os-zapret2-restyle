@@ -6,13 +6,15 @@
 
 **`v0.5.2_41` — read-only native common IPFW inspection:** существующая `voice/inspect` теперь различает legacy IPFW ledger и новый подтверждённый common owner из единого durable journal. Когда owner committed (либо у `restored` есть предыдущий committed owner), инспектор подтверждает целостность source bundle, совпадение page/dependencies/changed_fields с sealed plan и фактические kernel IPFW правила/таблицы по manifest общего release; при совпадении возвращает `state=ready`, `source=native-common`, `condition=common-ipfw-verified-only`, **`can_activate=false`**. Все pending-фазы немедленно возвращают `interrupted`, без обращения к IPFW. Чужие или частичные правила остаются blocked; если common owner отсутствует, сохраняется legacy inspection. Это статус только IPFW, НЕ подтверждение живых dvtws2, успешного STUN или звонка. GUI, ТЗ, FD9 runtime и native Config не изменены. Запрошена проверка CI ревизии `_41`, живые FreeBSD tests отдельно.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_41`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+**`v0.5.2_42` — read-only свидетельства процессов общего движка и пяти Voice-профилей.** Единственный существующий endpoint `voice/inspect` после подтверждения общего sealed owner и kernel IPFW дополнительно проверяет PID `dvtws2`, PID supervisor и точное совпадение установленного `runtime-v2/voice-plan.json` и `dvtws.args` с тем же sealed release. Имена включённых профилей сопоставляются одновременно с `voice-plan.profiles`, `capture.voice` и фактическими IPFW таблицами. Для всех пяти служб возвращаются отдельные `configured`, `capture_verified`, `runtime_state`, `media_verified=false`; для всей операции — `runtime.state`, `engine_verified`, `supervisor_verified`, `source_verified`, `call_verified=false`. Это НЕ пять независимых демонов и не подтверждение прохождения STUN, медиа или звонков. Нет новых писателей, WAL или изменений GUI. После контрольных тестов требуется FreeBSD owner-live/call acceptance.
+
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_42`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=41` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_41.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=42` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_42.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
