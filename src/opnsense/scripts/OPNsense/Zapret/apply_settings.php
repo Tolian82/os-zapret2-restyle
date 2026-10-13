@@ -160,6 +160,7 @@ final class SharedConfigCommit
         }
 
         $detail = [
+            'id' => bin2hex(random_bytes(16)),
             'page' => $page,
             'base' => $plan['dependencies'],
             'candidate' => VoiceSettingsSnapshot::digest($plan['candidate']),

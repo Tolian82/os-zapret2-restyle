@@ -19,6 +19,7 @@ import sys
 from voice_cutover_journal import VoiceCutoverJournal, CutoverJournalError
 from voice_firewall_ledger import VoiceOwnershipStore, LedgerError
 from voice_cutover_close import NAME as CLOSE_NAME, ARCHIVE as CLOSED_ARCHIVE
+from shared_apply_operation import SharedApplyOperation, SharedOperationError
 
 WHOLE_ROOT = Path("/var/db/zapret2/voice-cutover")
 IPFW_ROOT = Path("/var/db/zapret2/voice-ipfw")
@@ -33,9 +34,17 @@ def _present(path: Path) -> bool:
         return False
 
 
-def check_pending(whole_root: Path, ipfw_root: Path) -> dict:
+def check_pending(whole_root: Path, ipfw_root: Path, shared_root: Path | None = None) -> dict:
     """Return a bounded, machine-readable advisory without kernel reads."""
     try:
+        # One shared Strategies/Voice Apply operation is stronger than the
+        # ordinary lifecycle, including on reboot after power loss. Keep the
+        # legacy guard as a bounded compatibility check, not a second writer.
+        if shared_root is None:
+            shared_root = whole_root.with_name("shared-apply")
+        shared = SharedApplyOperation(shared_root).advisory()
+        if not shared["safe_to_mutate"]:
+            return shared
         # A durable old-PoC pre-stop intent is a sibling, not a member of
         # the strictly sealed rollback stage tree. Even orphaned after an
         # interrupted power cut, it is NEVER ordinary-start authority.
@@ -98,7 +107,7 @@ def check_pending(whole_root: Path, ipfw_root: Path) -> dict:
                     "safe_to_mutate": False,
                 }
         return {"state": "clear", "safe_to_mutate": True}
-    except (OSError, ValueError, LedgerError, CutoverJournalError):
+    except (OSError, ValueError, LedgerError, CutoverJournalError, SharedOperationError):
         # Do not leak file contents/config/kernel state into configd logs.
         return {
             "state": "blocked", "reason": "invalid-or-untrusted-journal",
