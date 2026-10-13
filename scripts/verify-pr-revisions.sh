@@ -19,12 +19,12 @@ marker_at() { git cat-file -e "$1:.github/REVISION_GUARD" 2>/dev/null; }
 # future identically worded subjects, retain the full strict candidate gate.
 legacy_subject_allowed() {
   case "$1|$2" in
-    '02bd7df0a7d33a533223e93f56851d8fb7b77fe8|docs: Record v0.5.2_8 native save merge milestone and handoff') return 0 ;;
-    '5fd82b7d05608db17e587fda6792c90dfc404784|docs: Document v0.5.2_9 native Config commit and fix CI test indentation') return 0 ;;
-    'd65aa90fcb29e121b05e748f4126eb33f60b6bf4|tests: Include common runtime module in Strategy Lab lifecycle mock') return 0 ;;
-    'd6a5dddcca4fc34e7604635a171a2f505e696458|docs: Record v0.5.2_10 shared IPFW precommit fix') return 0 ;;
-    'c2c4e04a33d513554e698d96324788c20b81194c|tests: Match the shared adapter's actual IPFW error class') return 0 ;;
-    'e1e5cef8c04e9a3c45bdc3cf4ffbfa5056bd6734|docs: Record v0.5.2_11 shared native Apply transaction boundary') return 0 ;;
+    "02bd7df0a7d33a533223e93f56851d8fb7b77fe8|docs: Record v0.5.2_8 native save merge milestone and handoff") return 0 ;;
+    "5fd82b7d05608db17e587fda6792c90dfc404784|docs: Document v0.5.2_9 native Config commit and fix CI test indentation") return 0 ;;
+    "d65aa90fcb29e121b05e748f4126eb33f60b6bf4|tests: Include common runtime module in Strategy Lab lifecycle mock") return 0 ;;
+    "d6a5dddcca4fc34e7604635a171a2f505e696458|docs: Record v0.5.2_10 shared IPFW precommit fix") return 0 ;;
+    "c2c4e04a33d513554e698d96324788c20b81194c|tests: Match the shared adapter's actual IPFW error class") return 0 ;;
+    "e1e5cef8c04e9a3c45bdc3cf4ffbfa5056bd6734|docs: Record v0.5.2_11 shared native Apply transaction boundary") return 0 ;;
   esac
   return 1
 }
