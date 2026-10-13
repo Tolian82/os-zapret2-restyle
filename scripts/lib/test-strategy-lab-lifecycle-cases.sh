@@ -112,7 +112,7 @@ mkdir -p "${SERVICE_BACKEND}"
 cp "${SERVICE_SOURCE}" "${SERVICE_ROOT}/zapret_service.sh"
 chmod 0700 "${SERVICE_ROOT}/zapret_service.sh"
 SERVICE_SOURCE="${SERVICE_ROOT}/zapret_service.sh"
-for module in common config parser registry storage targets telegram_voice target_mode profile_normalizer profile_pipeline exclude blobs ports firewall generator validator atomic stage launcher supervisor
+for module in common config parser registry storage targets telegram_voice target_mode profile_normalizer profile_pipeline exclude blobs ports firewall generator validator atomic stage launcher supervisor apply_runtime
 do
     : > "${SERVICE_BACKEND}/${module}.sh"
 done
