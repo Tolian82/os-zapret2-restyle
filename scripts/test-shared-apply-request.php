@@ -58,10 +58,18 @@ must($out['plan']['dependencies']===Snapshot::digest($all),
     'detached candidate generation not pinned to native model');
 must(str_contains($active,'<trafficargs>--filter-tcp=443</trafficargs>'),
     'original native XML was changed');
+$completeVoice = $all['voice'];
+$completeHostlists = [];
+foreach (['telegram','discord','x','sip','custom'] as $svc) {
+    $completeHostlists[$svc . 'ips'] = $all['hostlist'][$svc . 'ips'];
+}
+$completeVoice['telegram']['enabled'] = '1';
+$completeVoice['telegram']['args'] =
+    "--filter-udp=*\n--filter-l7=stun\n--payload=stun\n" .
+    "--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2";
+$completeHostlists['telegramips'] = '91.108.13.10';
 $voiceInput=['page'=>'voice',
-    'fields'=>['voice'=>['telegram'=>['enabled'=>'1',
-                                      'args'=>'--filter-udp=*']],
-               'hostlist'=>['telegramips'=>'91.108.13.10']],
+    'fields'=>['voice'=>$completeVoice, 'hostlist'=>$completeHostlists],
     'sync'=>['snapshot'=>Snapshot::digest($all)]];
 $voice= Request::prepare($voiceInput,$all,$active);
 must(str_contains($voice['xml'],'<telegram><enabled>1</enabled>') &&
