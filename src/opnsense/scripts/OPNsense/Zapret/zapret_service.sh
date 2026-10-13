@@ -1187,6 +1187,12 @@ preflight_voice_cutover_journals()
     "${_voice_cutover_guard_python}" "${_voice_cutover_guard_script}" "$@"
 }
 
+# Fixed native journal locator (mockable only by isolated shell extraction).
+shared_apply_has_record_service()
+{
+    [ -e /var/db/zapret2/shared-apply ] ||
+    [ -L /var/db/zapret2/shared-apply ]
+}
 service_with_lifecycle_lock()
 {
     _service_lock_timeout="$1"
@@ -1209,8 +1215,7 @@ service_with_lifecycle_lock()
                 # A committed common owner gets the common native boot path,
                 # never the old template/engine builder. Pending/foreign
                 # evidence still blocks start before any kernel mutation.
-                if [ -e /var/db/zapret2/shared-apply ] ||
-                   [ -L /var/db/zapret2/shared-apply ]; then
+                if shared_apply_has_record_service; then
                     _shared_owner=$(shared_apply_inspect_service) || return 69
                     case "$_shared_owner" in
                         committed\ *)

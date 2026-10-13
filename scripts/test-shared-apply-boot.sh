@@ -47,4 +47,51 @@ if shared_apply_boot_service "committed /tmp/x voice"; then fail "path injection
 grep -Fq "shared_apply_boot_service" "$SOURCE" || fail "common native boot function absent"
 grep -Fq "start|reconfigure)" "$SOURCE" || fail "normal startup not routed through common owner"
 grep -Fq 'shared_apply_boot_service "$_shared_owner"' "$SOURCE" || fail "common boot not called from lifecycle"
+# Exercise the ACTUAL lifecycle wrapper, including the original lockf FD9.
+# These tests never touch a real system lock or OPNsense configuration.
+sed -n '/^service_with_lifecycle_lock()$/,/^}$/p' "$SOURCE" > "$ROOT/lifecycle.sh"
+sh -n "$ROOT/lifecycle.sh" || fail "lifecycle shell syntax"
+. "$ROOT/lifecycle.sh"
+cat > "$ROOT/lockf" <<'MOCK'
+#!/bin/sh
+[ "$1" = -s ] && [ "$2" = -t ] && [ "$4" = 9 ]
+MOCK
+chmod 700 "$ROOT/lockf"
+LOCKF_BIN="$ROOT/lockf"
+LIFECYCLE_LOCK_FILE="$ROOT/owner.lock"
+shared_apply_has_record_service() { [ "$HAS_RECORD" = 1 ]; }
+shared_apply_inspect_service() { [ "$OWNER_OK" = 1 ] || return 69; echo "$OWNER"; }
+shared_apply_boot_service() { echo "common:$1" >> "$LOG"; }
+preflight_voice_cutover_journals() { echo "legacy-guard" >> "$LOG"; }
+service_dispatch() { echo "legacy:$1" >> "$LOG"; }
+check_route() {
+    expected="$1"; shift
+    : > "$LOG"
+    set +e
+    service_with_lifecycle_lock 5 "$@"
+    result="$?"
+    set -e
+    [ "$result" = "$expected" ] || fail "lifecycle returned $result instead of $expected"
+}
+HAS_RECORD=1 OWNER_OK=1 OWNER="committed $ID voice"
+check_route 0 start
+[ "$(cat "$LOG")" = "common:committed $ID voice" ] ||
+    fail "committed start fell through to legacy runtime"
+check_route 0 reconfigure
+[ "$(cat "$LOG")" = "common:committed $ID voice" ] ||
+    fail "committed reconfigure fell through to legacy runtime"
+OWNER=restored
+check_route 0 start
+[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:start ' ] ||
+    fail "restored owner did not use ordinary legacy lifecycle"
+OWNER=pending
+check_route 69 start
+[ ! -s "$LOG" ] || fail "pending owner changed lifecycle"
+OWNER_OK=0
+check_route 69 reconfigure
+[ ! -s "$LOG" ] || fail "corrupt owner was ignored"
+HAS_RECORD=0 OWNER_OK=1
+check_route 0 start
+[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:start ' ] ||
+    fail "no common journal changed ordinary legacy startup"
 echo 'PASS: committed native common owner routes boot through sealed release and fresh saved Config'
