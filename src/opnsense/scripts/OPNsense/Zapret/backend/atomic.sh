@@ -279,7 +279,7 @@ atomic_restore_tree()
     # first move, we can put the candidate back. Refuse a pre-existing park
     # path instead of erasing unknown data from an interrupted recovery.
     if [ -n "${_atomic_restore_backup}" ]; then
-        _atomic_restore_park="${_atomic_restore_destination}.rollback-old.$"
+        _atomic_restore_park="${_atomic_restore_destination}.rollback-old.$$"
         if [ -e "${_atomic_restore_park}" ] ||
            [ -L "${_atomic_restore_park}" ]; then
             common_error "unexpected parked atomic rollback tree; manual review required"

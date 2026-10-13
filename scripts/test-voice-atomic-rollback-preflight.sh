@@ -60,13 +60,13 @@ assert_candidate
     echo "FAIL: backup was lost on failed rename" >&2
     exit 1
 }
-[ ! -e "${active}.rollback-old.$" ] || {
+[ ! -e "${active}.rollback-old.$$" ] || {
     echo "FAIL: candidate remained stranded in rollback parking path" >&2
     exit 1
 }
 
 # An unknown pre-existing parked release must not be erased or overwritten.
-park="${active}.rollback-old.$"
+park="${active}.rollback-old.$$"
 mkdir "${park}"
 printf '%s\n' sentinel > "${park}/keep"
 if atomic_restore_tree "${active}" "${backup}" 2>/dev/null; then
@@ -80,8 +80,11 @@ assert_candidate
 }
 rm -rf "${park}"
 
-# A crash leftover from a DIFFERENT process must remain untouched, without
-# blocking a new rollback. A fixed literal-$ suffix used to collide forever.
+# A crash leftover from another process and an old literal-$ park
+# must not block PID-scoped rollback or be modified.
+literal_park="${active}.rollback-old.$"
+mkdir "${literal_park}"
+printf '%s\n' old-literal-park > "${literal_park}/keep"
 old_park="${active}.rollback-old.999999999"
 mkdir "${old_park}"
 printf '%s\n' abandoned > "${old_park}/keep"
@@ -94,11 +97,15 @@ atomic_restore_tree "${active}" "${backup}" || {
     echo "FAIL: valid rollback returned incorrect runtime" >&2
     exit 1
 }
+[ "$(cat "${literal_park}/keep")" = old-literal-park ] || {
+    echo "FAIL: old fixed-dollar park was modified or blocked rollback" >&2
+    exit 1
+}
 [ "$(cat "${old_park}/keep")" = abandoned ] || {
     echo "FAIL: stale foreign park path was overwritten or deleted" >&2
     exit 1
 }
-[ ! -e "${active}.rollback-old.$" ] || {
+[ ! -e "${active}.rollback-old.$$" ] || {
     echo "FAIL: successful rollback left a current-process parking tree" >&2
     exit 1
 }
