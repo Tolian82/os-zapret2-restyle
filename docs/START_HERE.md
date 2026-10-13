@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_53`. `VERSION=0.5.2`; `PLUGIN_REVISION=53`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_54`. `VERSION=0.5.2`; `PLUGIN_REVISION=54`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+**`_54`: read-only live legacy audit.** В общем `apply_runtime.sh` добавлено наблюдение одного работающего старого runtime: обязательные legacy-файлы, отсутствие общего `voice-plan.json`, PID dvtws2 и supervisor, независимый census engine и штатная проверка old IPFW. Команда `shared-apply-legacy-audit` выполняется под исходным FD9 без записи Config/WAL и без изменения процессов/IPFW; даже положительный результат выдаёт `legacy-handoff-authorized=0`. Старый IPFW check не доказывает точный ownership и не разрешает live cutover. Далее — доказуемый rollback legacy/kernel и FreeBSD owner-live.
 
 **`_53` — восстановление подтверждённого разрыва атомарной установки при `activating`.** В новых общих Apply три служебных пути `.stage.<id>`, `.old.<id>` и `runtime-v2-<id>` привязаны к тому же durable ID, который уже записан в едином journal под FD9. Ранее использовались PID/дата, поэтому остатки старых операций **не** считаются доказуемыми и не восстанавливаются автоматически. При отсутствии active runtime, точной новой staged-копии и ровно одной прежней parked/backup-копии, совпадающих с обоими sealed release, а также прежнем native Config и пустых процессах/IPFW, штатный `atomic_install_tree` возвращает предыдущий release из sealed source. Остатки stage и previous park/backup сохраняются для анализа; никакой сканирующей/угадывающей очистки нет. После повторной сверки `finish-activating` переводит единую запись в `restored`. Неизвестные, старые PID-пути, обе previous-копии, чужие деревья и live-состояния остаются blocked. Это проверяемая кодовая симуляция, не квалификация реального отключения питания FreeBSD.
 
@@ -86,7 +88,7 @@ Install проверяет живые объекты до изменения, с
 
 ## Следующее действие
 
-**Этап 4 — следующий рубеж после `_53`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
+**Этап 4 — следующий рубеж после `_54`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 
 ## Минимальное чтение по текущей задаче
 
