@@ -14,6 +14,8 @@ from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"))
+from voice_native_legacy_predecessor_route import prepare_old_rollback_predecessor, main as predecessor_main
+from voice_native_legacy_previous_seal import inspect_legacy_previous
 from voice_native_legacy_restore_plan import (
     _validate_old_kernel, build_legacy_restore_plan, inspect_legacy_restore_plan,
     prepare_legacy_restore_plan, LegacyRestorePlanError, PLAN_NAME,
@@ -139,6 +141,82 @@ class LegacyReversePlanTests(unittest.TestCase):
         self.assertNotIn("legacy-restore-plan",service)
         self.assertNotIn("subprocess.run(",module)
         self.assertNotIn("allow_mutations=True",module)
+
+
+class OldPredecessorOperatorTests(unittest.TestCase):
+    def setUp(self):
+        self.old=fixture().DurableOldPoCTests()
+        self.old.setUp()
+        self.addCleanup(self.old.doCleanups)
+        self.root=self.old.root
+        self.live=self.old.case.live
+
+    def execute(self,*,locked=True):
+        fd=os.open(self.live.config,os.O_RDWR)
+        try:
+            if locked:
+                fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            return prepare_old_rollback_predecessor(
+                root=self.root,config_path=self.live.config,config_fd=fd,
+                config_owner=(os.geteuid(),os.getegid()),
+                active_runtime=self.live.runtime,legacy_marker=self.old.case.marker,
+                ledger_root=self.live.ledger,process_probe=self.live.probe,
+                kernel_reader=self.live.kernel,readonly_ipfw=self.live.adapter,
+                security_reader=self.old.security,
+                require_lifecycle_owner=lambda:self.live.lock_calls.append("FD9"),
+            )
+        finally:
+            os.close(fd)
+
+    def test_single_owner_captures_both_seals_without_touching_old_poc(self):
+        before=self.live.config.read_bytes()
+        marker=self.old.case.marker.read_bytes()
+        rules=self.live.fake_ipfw.rules
+        result=self.execute()
+        self.assertEqual("legacy-poc-previous-and-reverse-plan-sealed-quiescence-pending",
+                         result["state"])
+        for field in ("safe_to_mutate","safe_to_execute","safe_to_enable_voice",
+                      "public_voice_apply","boot_recovery_validated","media_pass"):
+            self.assertFalse(result[field])
+        self.assertEqual({"legacy-previous","legacy-restore-plan"},
+                         set(os.listdir(self.root)))
+        self.assertEqual(5,len(inspect_legacy_previous(self.root)["previous_five"]))
+        self.assertEqual(5,len(inspect_legacy_restore_plan(self.root)["previous_five"]))
+        self.assertEqual(before,self.live.config.read_bytes())
+        self.assertEqual(marker,self.old.case.marker.read_bytes())
+        self.assertEqual(rules,self.live.fake_ipfw.rules)
+        self.assertFalse(check_pending(self.root,self.live.ledger)["safe_to_mutate"])
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            self.execute()
+
+    def test_rejects_without_config_flock_before_staging(self):
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            self.execute(locked=False)
+        self.assertEqual(set(),set(os.listdir(self.root)))
+
+    def test_power_cut_after_old_seal_retained_without_auto_retry(self):
+        with patch("voice_native_legacy_predecessor_route.prepare_legacy_restore_plan",
+                   side_effect=OSError("power cut after previous seal")):
+            with self.assertRaises(OSError):
+                self.execute()
+        self.assertEqual({"legacy-previous"},set(os.listdir(self.root)))
+        with self.assertRaises((OSError,RuntimeError,ValueError)):
+            self.execute()
+        self.assertFalse((self.root/"legacy-restore-plan").exists())
+        self.assertFalse(check_pending(self.root,self.live.ledger)["safe_to_mutate"])
+
+    def test_fixed_operator_dispatch_not_configd_gui_or_boot(self):
+        service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
+        configd=(ROOT/"src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text()
+        gui=(ROOT/"src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt").read_text()
+        self.assertIn("native-voice-legacy-capture-plan)",service)
+        self.assertIn("native_voice_legacy_capture_plan_service",service)
+        self.assertIn("|native-voice-legacy-capture-plan|",service)
+        self.assertNotIn("native-voice-legacy-capture-plan",configd)
+        self.assertNotIn("native-voice-legacy-capture-plan",gui)
+        self.assertEqual(64,predecessor_main([]))
+        self.assertEqual(64,predecessor_main(["capture-plan","/tmp/path"]))
+        self.assertEqual(set(),set(os.listdir(self.root)))
 
 
 if __name__=="__main__":
