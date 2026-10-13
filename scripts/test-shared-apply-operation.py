@@ -97,14 +97,17 @@ class TestJournal(unittest.TestCase):
             def bad_witness():
                 # Simulate a foreign/nonterminal journal swap during observer.
                 target=store.root/"operation.json"
-                content=target.read_text().replace('"phase":"prepared"','"phase":"activated"')
+                # Replace a single valid field in-place, preserving schema
+                # and the persistent armed phase so the observer can detect
+                # a different but still parseable journal record.
+                content=target.read_text().replace('"id":"'+"1"*32+'"','"id":"'+"2"*32+'"')
                 target.write_text(content)
                 return "f"*64
             with self.assertRaises(SharedOperationError):
                 store.cancel_pristine_legacy(detail()["id"],bad_witness)
-            self.assertEqual("activated",store.read()["phase"])
-            # Never accepted an invalid transition to terminal restored.
-            self.assertNotEqual("restored",store.read()["phase"])
+            self.assertEqual("2"*32,store.read()["detail"]["id"])
+            self.assertEqual("prepared",store.read()["phase"])
+            # Never accepted a changed durable identity as cancel authority.
 
     def test_legacy_cancel_cli_is_not_generic_freebsd_bypass(self):
         result=subprocess.run([sys.executable,

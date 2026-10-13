@@ -204,6 +204,7 @@ class SharedApplyOperation:
 
     def _persist_record(self, record: dict) -> dict:
         """One fsynced atomic journal writer for ordinary and reviewed cancel."""
+        _validate_record(record)
         detail = record["detail"]
         raw = (json.dumps(record, sort_keys=True, separators=(",", ":"),
                           ensure_ascii=True) + "\n").encode("ascii")
