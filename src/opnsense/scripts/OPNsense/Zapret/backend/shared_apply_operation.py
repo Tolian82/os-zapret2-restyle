@@ -200,6 +200,11 @@ class SharedApplyOperation:
             record["previous"] = previous
         if legacy_predecessor is not None:
             record["legacy_predecessor"] = legacy_predecessor
+        return self._persist_record(record)
+
+    def _persist_record(self, record: dict) -> dict:
+        """One fsynced atomic journal writer for ordinary and reviewed cancel."""
+        detail = record["detail"]
         raw = (json.dumps(record, sort_keys=True, separators=(",", ":"),
                           ensure_ascii=True) + "\n").encode("ascii")
         if len(raw) > MAX_RECORD:
@@ -250,6 +255,34 @@ class SharedApplyOperation:
         if self.read() is not None:
             raise SharedOperationError("shared owner appeared while arming legacy")
         return self.advance("prepared", detail, legacy_predecessor=digest)
+
+    def cancel_pristine_legacy(self, identity: str, attest) -> dict:
+        """Operator-only cancellation: prove the OLD live owner never changed.
+
+        Cannot be used for a stopped or partially migrated PoC. The caller
+        under original root FD9 + Config inode flock must attest sealed old
+        snapshot, exact live Config/runtime/marker/process epochs and IPFW.
+        This is NOT generic record 'restored', and never runs at boot.
+        """
+        if not OP_ID.fullmatch(identity) or not callable(attest):
+            raise SharedOperationError("untrusted legacy cancel request")
+        before = self.read()
+        if before is None or before["phase"] != "prepared" or (
+            before["detail"]["id"] != identity or
+            "legacy_predecessor" not in before or
+            "previous" in before
+        ):
+            raise SharedOperationError("only armed unchanged legacy can cancel")
+        witness = attest()
+        if not isinstance(witness, str) or (
+            witness != before["legacy_predecessor"]
+        ):
+            raise SharedOperationError("old live predecessor differs from sealed intent")
+        if self.read() != before:
+            raise SharedOperationError("legacy cancel journal changed during attestation")
+        return self._persist_record({
+            "schema": SCHEMA, "phase": "restored", "detail": before["detail"],
+        })
 
     def recover_prepared(self, identity: str, attest) -> dict:
         """Only PREPARED can be closed without touching runtime/Config/IPFW.

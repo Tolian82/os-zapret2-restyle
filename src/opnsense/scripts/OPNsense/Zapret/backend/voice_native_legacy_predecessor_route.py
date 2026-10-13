@@ -11,10 +11,11 @@ from __future__ import annotations
 import fcntl
 import os
 import re
+import stat
 from pathlib import Path
 import sys
 
-from voice_cutover_backup import _private_dir, _sync_dir
+from voice_cutover_backup import _private_dir, _sync_dir, inspect_previous, _verify_sources, _read_private_file
 from voice_cutover_config_restore import _pinned_regular
 from voice_native_recovery_quiescence import EXPECTED_SCRIPTS, PIDFILES, _locked_config
 from voice_native_legacy_previous_seal import (
@@ -25,6 +26,8 @@ from voice_native_legacy_restore_plan import (
 )
 from voice_native_process_probe import FreeBSDVoiceProcessProbe
 from voice_native_kernel_argv import FreeBSDKernelArgvReader, SYSTEM_PATHS
+from voice_native_legacy_live_preflight import inspect_running_legacy_poc
+from voice_native_legacy_poc_guard import _legacy_read
 from voice_freebsd_process_security import FreeBSDProcessSecurityReader
 from voice_native_prepare_route import _expected_credentials
 from voice_ipfw_adapter import FreeBSDIPFWAdapter
@@ -118,13 +121,71 @@ def _capture_root_for_common_id(identity: str) -> Path:
     return work / "legacy-backup"
 
 
+def cancel_unchanged_common_predecessor(
+    *, identity, store, work, config_path, config_fd, config_owner,
+    active_runtime, marker_path, ledger_root, process_probe, kernel_reader,
+    readonly_ipfw, require_lifecycle_owner,
+):
+    """Prove NO live legacy resource was changed before terminal cancellation.
+
+    Recovery here is a journal-only change, never an actuator. Re-read the
+    immutable old snapshot and all live sources while holding original locks.
+    """
+    from shared_apply_operation import fingerprint_legacy_predecessor
+    work = Path(work)
+    root = work / "legacy-backup"
+    saved = inspect_legacy_previous(root)
+    def attest():
+        require_lifecycle_owner()
+        _locked_config(Path(config_path), config_fd, config_owner)
+        digest = fingerprint_legacy_predecessor(work, owner=config_owner[0])
+        manifest = inspect_previous(root / NAME / "previous")
+        _verify_sources(Path(config_path), Path(active_runtime), manifest)
+        current_marker = _legacy_read(Path(marker_path))
+        previous_marker = _read_private_file(root / NAME / "marker.bin", 64)
+        marker_mode = stat.S_IMODE(os.lstat(marker_path).st_mode)
+        if current_marker != previous_marker or (
+            marker_mode != saved["marker"]["mode"]
+        ):
+            raise LegacyPredecessorRouteError("old Telegram marker not pristine")
+        current = inspect_running_legacy_poc(
+            config_path=config_path, active_runtime=active_runtime,
+            legacy_marker=marker_path, whole_root=native.WHOLE,
+            ledger_root=ledger_root, probe=process_probe,
+            kernel_reader=kernel_reader, ipfw_adapter=readonly_ipfw,
+            config_fd=config_fd, config_owner=config_owner,
+            require_lifecycle_owner=require_lifecycle_owner,
+        )
+        for name, expected in (
+            ("legacy_ipfw_structure_sha256", saved["legacy_ipfw_structure_sha256"]),
+            ("managed_ipv4_sha256", saved["managed_ipv4_sha256"]),
+            ("active_argument_sha256", saved["active_argument_sha256"]),
+            ("instances", saved["process_instances"]),
+            ("legacy_ipfw_previous", saved["legacy_ipfw_previous"]),
+        ):
+            if current[name] != expected:
+                raise LegacyPredecessorRouteError("old PoC live owner changed: " + name)
+        _verify_sources(Path(config_path), Path(active_runtime), manifest)
+        if _legacy_read(Path(marker_path)) != previous_marker:
+            raise LegacyPredecessorRouteError("old Telegram marker changed")
+        if fingerprint_legacy_predecessor(work, owner=config_owner[0]) != digest:
+            raise LegacyPredecessorRouteError("legacy backup changed during cancellation")
+        return digest
+
+    return store.cancel_pristine_legacy(identity, attest)
+
+
 def main(argv):
     candidate_id = argv[1] if (
         len(argv) == 2 and argv[0] == "capture-common"
         and COMMON_ID.fullmatch(argv[1])
     ) else None
-    if argv != ["capture-plan"] and candidate_id is None:
-        print("usage: voice_native_legacy_predecessor_route.py capture-plan|capture-common ID",
+    cancellation_id = argv[1] if (
+        len(argv) == 2 and argv[0] == "cancel-common"
+        and COMMON_ID.fullmatch(argv[1])
+    ) else None
+    if argv != ["capture-plan"] and candidate_id is None and cancellation_id is None:
+        print("usage: voice_native_legacy_predecessor_route.py capture-plan|capture-common ID|cancel-common ID",
               file=sys.stderr)
         return 64
     fd=None
@@ -133,6 +194,30 @@ def main(argv):
         fd=os.open(native.CONFIG,os.O_RDWR| getattr(os,"O_NOFOLLOW",0))
         _pinned_regular(native.CONFIG,fd,owner=(0,0))
         fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        if cancellation_id is not None:
+            from shared_apply_operation import SharedApplyOperation
+            from shared_apply_seal import WORK
+            store = SharedApplyOperation(owner=0)
+            root = WORK / cancellation_id / "legacy-backup"
+            _private_dir(root)
+            probe = FreeBSDVoiceProcessProbe(
+                EXPECTED_SCRIPTS, PIDFILES, native.WHOLE / "previous",
+            )
+            result = cancel_unchanged_common_predecessor(
+                identity=cancellation_id, store=store,
+                work=WORK / cancellation_id, config_path=native.CONFIG,
+                config_fd=fd, config_owner=(0,0),
+                active_runtime=native.ACTIVE_ROOT,
+                marker_path=native.LEGACY_MARKER, ledger_root=native.LEDGER,
+                process_probe=probe, kernel_reader=FreeBSDKernelArgvReader(),
+                readonly_ipfw=FreeBSDIPFWAdapter(19000,19010),
+                require_lifecycle_owner=native.require_native_lock,
+            )
+            if result["phase"] != "restored" or result["detail"]["id"] != cancellation_id:
+                raise LegacyPredecessorRouteError("old owner cancel incomplete")
+            print("legacy-cancelled-id="+cancellation_id)
+            print("legacy-handoff-authorized=0")
+            return 0
         root = (_capture_root_for_common_id(candidate_id)
                 if candidate_id is not None else native.WHOLE)
         _private_dir(root.parent)
