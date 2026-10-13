@@ -192,19 +192,34 @@ class SharedApplyOperation:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 8 or argv[1] != "record":
-        print("usage: shared_apply_operation.py record PHASE ID PAGE BASE CANDIDATE FIELDS",
+    inspection = len(argv) == 2 and argv[1] == "inspect"
+    recording = len(argv) == 8 and argv[1] == "record"
+    if not (inspection or recording):
+        print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
     try:
         from voice_ipfw_adapter import require_lifecycle_lock
         require_lifecycle_lock()
-        fields = [] if argv[7] == "-" else argv[7].split(",")
-        detail = {
-            "id": argv[3], "page": argv[4], "base": argv[5],
-            "candidate": argv[6], "changed_fields": fields,
-        }
-        SharedApplyOperation(owner=0).advance(argv[2], detail)
+        if inspection:
+            record = SharedApplyOperation(owner=0).read()
+            if record is None:
+                print("none")
+            elif record["phase"] == "committed":
+                detail = record["detail"]
+                print("committed " + detail["id"] + " " + detail["page"])
+            elif record["phase"] == "restored":
+                print("restored")
+            else:
+                # Never make an incomplete operation look like no owner.
+                raise SharedOperationError("unfinished common Apply blocks native boot")
+        else:
+            fields = [] if argv[7] == "-" else argv[7].split(",")
+            detail = {
+                "id": argv[3], "page": argv[4], "base": argv[5],
+                "candidate": argv[6], "changed_fields": fields,
+            }
+            SharedApplyOperation(owner=0).advance(argv[2], detail)
     except (OSError, ValueError, SharedOperationError, RuntimeError) as error:
         print("ERROR: shared Apply operation cannot advance: " + str(error),
               file=sys.stderr)

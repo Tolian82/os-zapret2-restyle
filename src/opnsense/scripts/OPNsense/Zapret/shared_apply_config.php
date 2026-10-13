@@ -100,9 +100,29 @@ final class SharedApplyConfigWorker
         ];
     }
 
+    /**
+     * Boot may only replay the *saved* common candidate; unlike preflight,
+     * its previous generation is necessarily obsolete after Config::save.
+     * Compare the entire live Voice/Strategies dependency snapshot under the
+     * actual native Config lock, not a stale GUI baseline or an XML file.
+     */
+    public static function saved(array $plan, array $current): array
+    {
+        $expected = VoiceSettingsSnapshot::digest($plan['candidate']);
+        $actual = VoiceSettingsSnapshot::digest($current);
+        if (!hash_equals($expected, $actual)) {
+            throw new \RuntimeException('Saved native Config differs from shared owner');
+        }
+        $enabled = (string)($current['general']['enabled'] ?? '0');
+        if (!in_array($enabled, ['0','1'], true)) {
+            throw new \RuntimeException('Invalid saved native runtime mode');
+        }
+        return ['result'=>'committed','snapshot'=>$actual,'enabled'=>$enabled];
+    }
+
     public static function main(array $argv): int
     {
-        if (count($argv) !== 4 || !in_array($argv[1], ['preflight','save'], true) ||
+        if (count($argv) !== 4 || !in_array($argv[1], ['preflight','save','saved'], true) ||
             !in_array($argv[3], ['voice','strategies'], true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
             return 64;
@@ -115,10 +135,13 @@ final class SharedApplyConfigWorker
             $plan = self::readPlan($argv[2], self::ROOT, 0);
             $config = \OPNsense\Core\Config::getInstance();
             $factory = static fn() => new \OPNsense\Zapret\Zapret();
-            if ($argv[1] === 'preflight') {
+            if ($argv[1] === 'preflight' || $argv[1] === 'saved') {
                 $config->lock();
                 try {
-                    $result = self::preflight($plan, $factory()->getNodes(), $argv[3]);
+                    $fresh = $factory()->getNodes();
+                    $result = $argv[1] === 'preflight'
+                        ? self::preflight($plan, $fresh, $argv[3])
+                        : self::saved($plan, $fresh);
                 } finally {
                     $config->unlock();
                 }

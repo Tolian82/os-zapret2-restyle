@@ -41,6 +41,14 @@ file_put_contents($work.'/candidate.xml','<opnsense/>');
 chmod($work.'/plan.json',0600);
 chmod($work.'/candidate.xml',0600);
 $stored=Worker::readPlan($id,$root,posix_geteuid());
+$savedCandidate=$plan['candidate'];
+$savedRow=Worker::saved($plan,$savedCandidate);
+must($savedRow['result']==='committed' && $savedRow['enabled']==='1',
+     'native committed reboot witness rejected saved model');
+$drifted=$savedCandidate;
+$drifted['hostlist']['telegramips']='91.108.13.10';
+denies(fn()=>Worker::saved($plan,$drifted));
+
 must($stored['dependencies']===$plan['dependencies'],'stored plan lost dependency');
 $unrelated=$state;
 $unrelated['strategylab']['enablequic']='0';

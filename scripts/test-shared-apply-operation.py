@@ -62,6 +62,15 @@ class TestJournal(unittest.TestCase):
                 with self.assertRaises(SharedOperationError):
                     j.advance("activated",detail())
 
+    def test_inspect_cli_has_no_root_override_and_requires_freebsd_fd9(self):
+        cli=BACKEND/"shared_apply_operation.py"
+        result=subprocess.run([sys.executable,str(cli),"inspect"],
+                              text=True,capture_output=True,check=False)
+        self.assertEqual(69,result.returncode)
+        invalid=subprocess.run([sys.executable,str(cli),"inspect","/tmp/other"],
+                               capture_output=True,check=False)
+        self.assertEqual(64,invalid.returncode)
+
     def test_invalid_identity_fields_and_reordered_phase(self):
         with tempfile.TemporaryDirectory() as d:
             j=SharedApplyOperation(Path(d)/"shared-apply")
