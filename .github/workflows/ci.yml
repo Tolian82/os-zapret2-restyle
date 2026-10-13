@@ -86,6 +86,9 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Check handoff identity on documentation changes
+        run: python3.13 scripts/test-current-handoff-identity.py
+
       - name: Validate documentation-governance scripts
         run: |
           sh -n scripts/test-release-trigger.sh
@@ -360,6 +363,9 @@ jobs:
 
       - name: Regression test prospective revision-governance gate
         run: bash scripts/test-pr-revision-policy.sh
+      - name: Check primary revision metadata before costly test matrix
+        run: python3.13 scripts/test-current-handoff-identity.py
+
       - name: Validate project identity and version
         shell: bash
         run: |

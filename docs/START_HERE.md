@@ -2,9 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_28`. `VERSION=0.5.2`; `PLUGIN_REVISION=28`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_39`. `VERSION=0.5.2`; `PLUGIN_REVISION=39`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
+
+**v0.5.2_38–_39:** root PHP staging и native Config worker теперь самостоятельно проверяют оригинальный FD9: inode, владение root, удерживаемый flock. Не появляется новый lock, Config writer или WAL. Linux тест проверяет заблокированный FD9, свободный, чужой и symlink. Полный CI на `_37` завершился PASS для Voice candidates, но Project не прошёл позднюю Strategy Lab matrix из-за устаревшей метки пакета `_28` в PROJECT_STATE; `_39` синхронизирует primary metadata и добавляет ранний тест, чтобы предотвратить повторение. FreeBSD owner-live, полноценное mutating-phase recovery и выпуск релиза ещё не подтверждены.
 
 Ревизии `_26`–`_28`: обе штатные кнопки Apply (без изменения frontend) подключены к одному root FD9 `shared-apply-run` через одно действие configd `zapret shared_apply`. Страница и snapshot зафиксированы в `plan.json`, источник рендерится отдельным полным OPNsense XML, а native Config сохраняется только после runtime activation и перед проверенным IPFW commit. Strategies сохраняет прежнюю нормализацию hostlist/IPSET. Промежуточная GUI Config запись и старый save-then-reconfigure исключены.
 
