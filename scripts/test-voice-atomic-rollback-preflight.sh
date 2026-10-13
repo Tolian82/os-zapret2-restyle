@@ -80,12 +80,26 @@ assert_candidate
 }
 rm -rf "${park}"
 
+# A crash leftover from a DIFFERENT process must remain untouched, without
+# blocking a new rollback. A fixed literal-$ suffix used to collide forever.
+old_park="${active}.rollback-old.999999999"
+mkdir "${old_park}"
+printf '%s\n' abandoned > "${old_park}/keep"
+
 atomic_restore_tree "${active}" "${backup}" || {
     echo "FAIL: valid saved runtime failed to restore" >&2
     exit 1
 }
 [ "$(cat "${active}/dvtws.args")" = original ] || {
     echo "FAIL: valid rollback returned incorrect runtime" >&2
+    exit 1
+}
+[ "$(cat "${old_park}/keep")" = abandoned ] || {
+    echo "FAIL: stale foreign park path was overwritten or deleted" >&2
+    exit 1
+}
+[ ! -e "${active}.rollback-old.$" ] || {
+    echo "FAIL: successful rollback left a current-process parking tree" >&2
     exit 1
 }
 [ ! -e "${backup}" ] || {
