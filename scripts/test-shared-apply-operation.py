@@ -629,6 +629,150 @@ class TestJournal(unittest.TestCase):
                     self.assertEqual("shared-apply-pending",check_pending(
                         root/"voice-cutover",root/"voice-ipfw")["reason"])
 
+    def test_old_marker_rollback_uses_existing_shared_wal(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            store=SharedApplyOperation(root/"shared-apply")
+            owner="f"*64
+            store.prepare_legacy_predecessor(detail(),lambda:owner)
+            store.begin_legacy_quiesce(detail()["id"],lambda:owner)
+            store.mark_legacy_processes_stopped(detail()["id"],lambda:owner)
+            store.begin_legacy_ipfw_retire(detail()["id"],lambda:owner)
+            store.finish_legacy_ipfw_retire(detail()["id"],lambda:owner)
+            store.begin_legacy_marker_retire(detail()["id"],lambda:owner)
+            store.finish_legacy_marker_retire(detail()["id"],lambda:owner)
+            store.begin_legacy_ipfw_rollback(detail()["id"],lambda:owner)
+            store.finish_legacy_ipfw_rollback(detail()["id"],lambda:owner)
+            baseline=store.read()
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_marker_rollback(detail()["id"],lambda:owner)
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_marker_rollback(detail()["id"],lambda:"e"*64)
+            self.assertEqual(baseline,store.read())
+            armed=store.begin_legacy_marker_rollback(detail()["id"],lambda:owner)
+            self.assertEqual("legacy-rollback-marker",armed["phase"])
+            self.assertEqual(armed,SharedApplyOperation(store.root).read())
+            self.assertEqual("shared-apply-pending",check_pending(
+                root/"voice-cutover",root/"voice-ipfw")["reason"])
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_marker_rollback(detail()["id"],lambda:owner)
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_marker_rollback(detail()["id"],lambda:"e"*64)
+            self.assertEqual(armed,store.read())
+            finished=store.finish_legacy_marker_rollback(detail()["id"],lambda:owner)
+            self.assertEqual("legacy-rollback-marker-restored",finished["phase"])
+            self.assertFalse(store.advisory()["safe_to_mutate"])
+            self.assertEqual(finished,SharedApplyOperation(store.root).read())
+            with self.assertRaises(SharedOperationError):
+                store.advance("activating",detail())
+
+    def test_exact_old_marker_rollback_resumes_only_owned_staging_inode(self):
+        import os
+        import hashlib
+        from voice_native_legacy_predecessor_route import (
+            restore_retired_common_legacy_marker,
+        )
+        from voice_native_process_probe import FreeBSDVoiceProcessProbe
+        from voice_ipfw_adapter import FreeBSDIPFWAdapter
+        from voice_native_legacy_ipfw_replay import _expected_after
+        marker_bytes=b"enabled\n"
+        owner="f"*64
+        commands=[
+            ["/sbin/ipfw","-q","table","zapret2_tgvoice","create","type","addr"],
+            ["/sbin/ipfw","-q","table","zapret2_tgvoice","add","91.108.13.10"],
+            ["/sbin/ipfw","-qf","add","19000","divert","9000","udp"],
+        ]
+        for fault in ("none","link","finish","stage-clean","foreign-kernel",
+                      "foreign-marker","foreign-stage"):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as temp:
+                root=Path(temp)
+                work=root/detail()["id"]
+                work.mkdir()
+                marker=root/"legacy-marker"
+                stage=root/("." + marker.name + ".voice-old-" + detail()["id"][:16])
+                store=SharedApplyOperation(root/"shared-apply")
+                store.prepare_legacy_predecessor(detail(),lambda:owner)
+                store.begin_legacy_quiesce(detail()["id"],lambda:owner)
+                store.mark_legacy_processes_stopped(detail()["id"],lambda:owner)
+                store.begin_legacy_ipfw_retire(detail()["id"],lambda:owner)
+                store.finish_legacy_ipfw_retire(detail()["id"],lambda:owner)
+                store.begin_legacy_marker_retire(detail()["id"],lambda:owner)
+                store.finish_legacy_marker_retire(detail()["id"],lambda:owner)
+                store.begin_legacy_ipfw_rollback(detail()["id"],lambda:owner)
+                store.finish_legacy_ipfw_rollback(detail()["id"],lambda:owner)
+                reader=object.__new__(FreeBSDIPFWAdapter)
+                reader.allow_mutations=False
+                reader.rule_base=19000; reader.rule_max=19010
+                probe=object.__new__(FreeBSDVoiceProcessProbe)
+                summary={"previous_five":"a"*64}
+                plan={"previous_five":"a"*64,
+                      "marker_target":str(marker),"legacy_ipfw_commands":commands}
+                saved={"marker":{"mode":0o600,"bytes":len(marker_bytes),
+                                 "sha256":hashlib.sha256(marker_bytes).hexdigest()}}
+                if fault=="foreign-marker":
+                    marker.write_bytes(b"foreign")
+                if fault=="foreign-stage":
+                    stage.write_bytes(b"foreign")
+                def census(_):
+                    return ({"rules":{"19009":["foreign"]},"targets":None}
+                            if fault=="foreign-kernel" else
+                            _expected_after(plan,len(commands)))
+                def invoke():
+                    return restore_retired_common_legacy_marker(
+                        identity=detail()["id"],store=store,work=work,
+                        config_path=root/"config.xml",config_fd=4,
+                        config_owner=(os.geteuid(),0),active_runtime=root/"active",
+                        marker_path=marker,process_probe=probe,readonly_ipfw=reader,
+                        require_lifecycle_owner=lambda:None,
+                    )
+                with patch("voice_native_legacy_predecessor_route._locked_config"), \
+                     patch("voice_native_legacy_predecessor_route.inspect_legacy_previous",
+                           return_value=summary), \
+                     patch("voice_native_legacy_predecessor_route.inspect_legacy_restore_plan",
+                           return_value=plan), \
+                     patch("voice_native_legacy_predecessor_route.inspect_legacy_previous_live_identity",
+                           return_value=saved), \
+                     patch("voice_native_legacy_predecessor_route._read_private_file",
+                           return_value=marker_bytes), \
+                     patch("voice_native_legacy_predecessor_route.inspect_previous",
+                           return_value={}), \
+                     patch("voice_native_legacy_predecessor_route._verify_sources"), \
+                     patch("shared_apply_operation.fingerprint_legacy_predecessor",
+                           return_value=owner), \
+                     patch("voice_native_legacy_reverse_wal._stopped",
+                           return_value="exact-three-role-absence"), \
+                     patch("voice_native_legacy_ipfw_replay._strict_snapshot",
+                           side_effect=census):
+                    if fault in ("foreign-kernel","foreign-marker","foreign-stage"):
+                        with self.assertRaises(RuntimeError):
+                            invoke()
+                        self.assertEqual("legacy-rollback-ipfw-restored",
+                                         store.read()["phase"])
+                        self.assertFalse(fault=="foreign-kernel" and marker.exists())
+                        continue
+                    if fault in ("link","finish","stage-clean"):
+                        hook={
+                            "link":"voice_native_legacy_predecessor_route.os.link",
+                            "finish":"shared_apply_operation.SharedApplyOperation.finish_legacy_marker_rollback",
+                            "stage-clean":"voice_native_legacy_predecessor_route.os.unlink",
+                        }[fault]
+                        with patch(hook,side_effect=OSError("injected power cut")):
+                            with self.assertRaises(OSError):
+                                invoke()
+                        self.assertEqual(
+                            "legacy-rollback-marker-restored" if fault=="stage-clean"
+                            else "legacy-rollback-marker",store.read()["phase"])
+                        self.assertTrue(stage.exists())
+                        self.assertEqual(marker.exists(),fault!="link")
+                    self.assertEqual("legacy-rollback-marker-restored",invoke()["phase"])
+                    self.assertEqual(marker_bytes,marker.read_bytes())
+                    self.assertEqual(0o600,marker.stat().st_mode & 0o777)
+                    self.assertEqual(1,marker.stat().st_nlink)
+                    self.assertFalse(stage.exists())
+                    self.assertEqual("legacy-rollback-marker-restored",invoke()["phase"])
+                    self.assertEqual("shared-apply-pending",check_pending(
+                        root/"voice-cutover",root/"voice-ipfw")["reason"])
+
     def test_missing_state_stays_readonly(self):
         with tempfile.TemporaryDirectory() as d:
             j=SharedApplyOperation(Path(d)/"shared-apply")

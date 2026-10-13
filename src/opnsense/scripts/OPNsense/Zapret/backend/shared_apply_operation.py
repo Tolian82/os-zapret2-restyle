@@ -35,6 +35,7 @@ PHASES = frozenset((
     "legacy-ipfw-retiring", "legacy-ipfw-retired",
     "legacy-marker-retiring", "legacy-marker-retired",
     "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
+    "legacy-rollback-marker", "legacy-rollback-marker-restored",
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
@@ -56,7 +57,9 @@ NEXT = {
     "legacy-marker-retiring": frozenset(("legacy-marker-retired",)),
     "legacy-marker-retired": frozenset(("legacy-rollback-ipfw",)),
     "legacy-rollback-ipfw": frozenset(("legacy-rollback-ipfw-restored",)),
-    "legacy-rollback-ipfw-restored": frozenset(),
+    "legacy-rollback-ipfw-restored": frozenset(("legacy-rollback-marker",)),
+    "legacy-rollback-marker": frozenset(("legacy-rollback-marker-restored",)),
+    "legacy-rollback-marker-restored": frozenset(),
 }
 
 
@@ -120,7 +123,8 @@ def _validate_record(record: object) -> dict:
         if record["phase"] not in ("prepared", "legacy-quiescing", "legacy-processes-stopped",
                                    "legacy-ipfw-retiring", "legacy-ipfw-retired",
                                    "legacy-marker-retiring", "legacy-marker-retired",
-                                   "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored") or record["detail"]["page"] != "voice" or \
+                                   "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
+                                   "legacy-rollback-marker", "legacy-rollback-marker-restored") or record["detail"]["page"] != "voice" or \
            not isinstance(record["legacy_predecessor"], str) or \
            not DIGEST.fullmatch(record["legacy_predecessor"]):
             raise SharedOperationError("invalid armed legacy predecessor proof")
@@ -389,6 +393,18 @@ class SharedApplyOperation:
             identity, "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored", attest
         )
 
+    def begin_legacy_marker_rollback(self, identity: str, attest) -> dict:
+        """Record marker recreation intent before creating its staging inode."""
+        return self._transition_legacy_boundary(
+            identity, "legacy-rollback-ipfw-restored", "legacy-rollback-marker", attest
+        )
+
+    def finish_legacy_marker_rollback(self, identity: str, attest) -> dict:
+        """Record same-inode staging/target proof, then remove staged link."""
+        return self._transition_legacy_boundary(
+            identity, "legacy-rollback-marker", "legacy-rollback-marker-restored", attest
+        )
+
     def cancel_pristine_legacy(self, identity: str, attest) -> dict:
         """Operator-only cancellation: prove the OLD live owner never changed.
 
@@ -600,7 +616,8 @@ def main(argv: list[str]) -> int:
             elif record["phase"] in ("prepared", "config-saved", "legacy-quiescing", "legacy-processes-stopped",
                                        "legacy-ipfw-retiring", "legacy-ipfw-retired",
                                        "legacy-marker-retiring", "legacy-marker-retired",
-                                       "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored"):
+                                       "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
+                                       "legacy-rollback-marker", "legacy-rollback-marker-restored"):
                 detail = record["detail"]
                 prefix = "legacy-prepared" if (
                     "legacy_predecessor" in record and record["phase"] == "prepared"

@@ -673,6 +673,224 @@ def restore_retired_common_legacy_ipfw(
     return result
 
 
+
+def restore_retired_common_legacy_marker(
+    *, identity, store, work, config_path, config_fd, config_owner,
+    active_runtime, marker_path, process_probe, readonly_ipfw,
+    require_lifecycle_owner,
+):
+    """PRIVATE resumable exact old-marker restoration under the common FD9 WAL.
+
+    Journal intent precedes all filesystem writes; a durable same-directory
+    hardlink pins the provenance until the journal confirms restoration.
+    A foreign target or stage is NEVER adopted or replaced. No engine start.
+    """
+    from shared_apply_operation import (
+        SharedApplyOperation, fingerprint_legacy_predecessor,
+    )
+    from voice_native_legacy_ipfw_replay import _strict_snapshot, _expected_after
+    from voice_native_legacy_reverse_wal import _stopped
+    if not isinstance(store, SharedApplyOperation) or (
+        not isinstance(process_probe, FreeBSDVoiceProcessProbe)
+        or not isinstance(readonly_ipfw, FreeBSDIPFWAdapter)
+        or readonly_ipfw.allow_mutations
+        or (readonly_ipfw.rule_base, readonly_ipfw.rule_max) != (19000, 19010)
+        or type(config_fd) is not int or config_fd < 0
+        or not callable(require_lifecycle_owner)
+    ):
+        raise LegacyPredecessorRouteError("untrusted original marker rollback owner")
+    work, marker_path = Path(work), Path(marker_path)
+    root = work / "legacy-backup"
+    if work.name != identity or not COMMON_ID.fullmatch(identity):
+        raise LegacyPredecessorRouteError("marker rollback identity is foreign")
+    require_lifecycle_owner()
+    _locked_config(Path(config_path), config_fd, config_owner)
+    record = store.read()
+    phase = record["phase"] if record is not None else None
+    if phase not in (
+        "legacy-rollback-ipfw-restored", "legacy-rollback-marker",
+        "legacy-rollback-marker-restored",
+    ) or record["detail"]["id"] != identity or (
+        "legacy_predecessor" not in record or "previous" in record
+    ):
+        raise LegacyPredecessorRouteError("old IPFW rollback must be sealed first")
+    previous = inspect_legacy_previous(root)
+    plan = inspect_legacy_restore_plan(root)
+    saved = inspect_legacy_previous_live_identity(root)
+    if plan["previous_five"] != previous["previous_five"] or (
+        plan["marker_target"] != str(marker_path)
+    ):
+        raise LegacyPredecessorRouteError("old marker target differs from sealed plan")
+    raw = _read_private_file(root / NAME / "marker.bin", 64)
+    mode = saved["marker"]["mode"]
+    if not raw or len(raw) != saved["marker"]["bytes"] or (
+        hashlib.sha256(raw).hexdigest() != saved["marker"]["sha256"]
+    ):
+        raise LegacyPredecessorRouteError("untrusted sealed old marker content")
+    stage_name = "." + marker_path.name + ".voice-old-" + identity[:16]
+    if stage_name == marker_path.name or len(stage_name.encode("ascii")) > 255:
+        raise LegacyPredecessorRouteError("untrusted fixed old marker stage name")
+    expected_kernel = _expected_after(plan, len(plan["legacy_ipfw_commands"]))
+
+    def attest(phases):
+        require_lifecycle_owner()
+        _locked_config(Path(config_path), config_fd, config_owner)
+        current = store.read()
+        if current is None or current["phase"] not in phases or (
+            current["detail"] != record["detail"]
+            or current.get("legacy_predecessor") != record["legacy_predecessor"]
+        ):
+            raise LegacyPredecessorRouteError("original marker rollback journal changed")
+        if fingerprint_legacy_predecessor(work, owner=config_owner[0]) != (
+            record["legacy_predecessor"]
+        ) or inspect_legacy_previous(root) != previous or (
+            inspect_legacy_restore_plan(root) != plan
+        ):
+            raise LegacyPredecessorRouteError("old marker evidence has changed")
+        _verify_sources(
+            Path(config_path), Path(active_runtime),
+            inspect_previous(root / NAME / "previous"),
+        )
+        if _stopped(process_probe) != "exact-three-role-absence" or (
+            _strict_snapshot(readonly_ipfw) != expected_kernel
+        ):
+            raise LegacyPredecessorRouteError("old engine/IPFW not in rollback state")
+        return current["phase"]
+
+    parent_fd = os.open(
+        marker_path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    try:
+        directory = os.fstat(parent_fd)
+        if not stat.S_ISDIR(directory.st_mode) or (
+            directory.st_uid != config_owner[0] or directory.st_mode & 0o022
+        ):
+            raise LegacyPredecessorRouteError("untrusted marker parent")
+        def named(name):
+            try:
+                fd = os.open(
+                    name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                    | getattr(os, "O_NONBLOCK", 0), dir_fd=parent_fd,
+                )
+            except FileNotFoundError:
+                return None
+            try:
+                opened = os.fstat(fd)
+                on_path = os.stat(
+                    name, dir_fd=parent_fd, follow_symlinks=False,
+                )
+                if not stat.S_ISREG(opened.st_mode) or (
+                    opened.st_uid != config_owner[0]
+                    or stat.S_IMODE(opened.st_mode) != mode
+                    or opened.st_size != len(raw)
+                    or (opened.st_dev, opened.st_ino) != (
+                        on_path.st_dev, on_path.st_ino
+                    ) or os.read(fd, len(raw) + 1) != raw
+                ):
+                    raise LegacyPredecessorRouteError("foreign staged/target marker")
+                return opened
+            finally:
+                os.close(fd)
+
+        if phase == "legacy-rollback-ipfw-restored":
+            attest((phase,))
+            if named(marker_path.name) is not None or named(stage_name) is not None:
+                raise LegacyPredecessorRouteError("preexisting marker/stage not owned")
+            store.begin_legacy_marker_rollback(
+                identity, lambda: (
+                    record["legacy_predecessor"] if (
+                        attest((phase,)) == phase
+                        and named(marker_path.name) is None
+                        and named(stage_name) is None
+                    ) else None
+                )
+            )
+        else:
+            attest((phase,))
+
+        phase = store.read()["phase"]
+        if phase == "legacy-rollback-marker-restored":
+            # The target+stage may still be linked after journal fsync.
+            # Clean up only our verified two-link staging inode, never a
+            # preexisting marker without its provenance.
+            target, stage = named(marker_path.name), named(stage_name)
+            if target is None or target.st_nlink not in (1, 2):
+                raise LegacyPredecessorRouteError("completed old marker missing")
+        else:
+            target, stage = named(marker_path.name), named(stage_name)
+            if target is not None and stage is None:
+                raise LegacyPredecessorRouteError("marker has no staging provenance")
+            if target is None and stage is None:
+                attest(("legacy-rollback-marker",))
+                fd = os.open(
+                    stage_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                    | getattr(os, "O_NOFOLLOW", 0),
+                    0o600, dir_fd=parent_fd,
+                )
+                try:
+                    if os.write(fd, raw) != len(raw):
+                        raise LegacyPredecessorRouteError("short marker stage write")
+                    os.fchmod(fd, mode)
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
+                os.fsync(parent_fd)
+                stage = named(stage_name)
+            if target is None:
+                if stage is None or stage.st_nlink != 1:
+                    raise LegacyPredecessorRouteError("unsafe marker stage link count")
+                attest(("legacy-rollback-marker",))
+                os.link(
+                    stage_name, marker_path.name,
+                    src_dir_fd=parent_fd, dst_dir_fd=parent_fd,
+                    follow_symlinks=False,
+                )
+                os.fsync(parent_fd)
+                target = named(marker_path.name)
+                stage = named(stage_name)
+            if target is None or stage is None or (
+                target.st_nlink != 2 or stage.st_nlink != 2
+                or (target.st_dev, target.st_ino) != (stage.st_dev, stage.st_ino)
+            ):
+                raise LegacyPredecessorRouteError("marker staging provenance changed")
+            store.finish_legacy_marker_rollback(
+                identity, lambda: (
+                    record["legacy_predecessor"] if (
+                        attest(("legacy-rollback-marker",)) == "legacy-rollback-marker"
+                        and (lambda a, b: a is not None and b is not None
+                             and a.st_nlink == b.st_nlink == 2
+                             and (a.st_dev, a.st_ino) == (b.st_dev, b.st_ino))(
+                                 named(marker_path.name), named(stage_name)
+                             )
+                    ) else None
+                )
+            )
+
+        attest(("legacy-rollback-marker-restored",))
+        target, stage = named(marker_path.name), named(stage_name)
+        if stage is not None:
+            if target is None or target.st_nlink != 2 or (
+                stage.st_nlink != 2 or
+                (stage.st_dev, stage.st_ino) != (target.st_dev, target.st_ino)
+            ):
+                raise LegacyPredecessorRouteError("foreign lingering marker restore stage")
+            os.unlink(stage_name, dir_fd=parent_fd)
+            os.fsync(parent_fd)
+        final = named(marker_path.name)
+        if final is None or final.st_nlink != 1 or (
+            named(stage_name) is not None
+        ):
+            raise LegacyPredecessorRouteError("restored marker inode not finalized")
+        attest(("legacy-rollback-marker-restored",))
+        result = store.read()
+        if result["phase"] != "legacy-rollback-marker-restored":
+            raise LegacyPredecessorRouteError("marker rollback not durably completed")
+        return result
+    finally:
+        os.close(parent_fd)
+
+
 def main(argv):
     candidate_id = argv[1] if (
         len(argv) == 2 and argv[0] == "capture-common"
