@@ -225,6 +225,23 @@ class SharedApplyOperation:
             raise SharedOperationError("shared Apply phase changed during recovery")
         return self.advance("restored", record["detail"])
 
+    def finish_saved(self, identity: str, attest) -> dict:
+        """Close Config-saved only after external FD9 Config/kernel attestation.
+
+        This in-memory transition cannot itself certify a runtime: its caller
+        MUST first verify saved Config, no preexisting kernel/proc ownership,
+        re-activate the sealed release and successfully commit shared IPFW.
+        """
+        record = self.read()
+        if record is None or record["phase"] != "config-saved" or \
+           record["detail"]["id"] != identity:
+            raise SharedOperationError("saved-only completion refused")
+        if not callable(attest) or attest() is not True:
+            raise SharedOperationError("saved candidate attestation refused")
+        if self.read() != record:
+            raise SharedOperationError("shared Apply changed during saved recovery")
+        return self.advance("committed", record["detail"])
+
     def advisory(self) -> dict:
         record = self.read()
         if record is None or record["phase"] in TERMINAL:
@@ -239,7 +256,8 @@ def main(argv: list[str]) -> int:
     inspection = len(argv) == 2 and argv[1] == "inspect"
     recording = len(argv) == 8 and argv[1] == "record"
     recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(OP_ID.fullmatch(argv[2]))
-    if not (inspection or recording or recovery):
+    finish = len(argv) == 3 and argv[1] == "finish-saved" and bool(OP_ID.fullmatch(argv[2]))
+    if not (inspection or recording or recovery or finish):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -261,9 +279,9 @@ def main(argv: list[str]) -> int:
                     # Returning 'restored' here would send the ordinary
                     # service to LEGACY boot over the preceding common owner.
                     print("committed " + prior["id"] + " " + prior["page"])
-            elif record["phase"] == "prepared":
+            elif record["phase"] in ("prepared", "config-saved"):
                 detail = record["detail"]
-                print("prepared " + detail["id"] + " " + detail["page"])
+                print(record["phase"] + " " + detail["id"] + " " + detail["page"])
             else:
                 # Never make an incomplete operation look like no owner.
                 raise SharedOperationError("unfinished common Apply blocks native boot")
@@ -275,6 +293,14 @@ def main(argv: list[str]) -> int:
                 lambda: bool(verify_seal(WORK / argv[2], owner=0)),
             )
             print("prepared-restored")
+        elif finish:
+            from shared_apply_seal import verify_seal, WORK
+            store = SharedApplyOperation(owner=0)
+            store.finish_saved(
+                argv[2],
+                lambda: bool(verify_seal(WORK / argv[2], owner=0)),
+            )
+            print("saved-committed")
         else:
             fields = [] if argv[7] == "-" else argv[7].split(",")
             detail = {

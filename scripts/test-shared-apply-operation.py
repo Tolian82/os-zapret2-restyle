@@ -157,6 +157,41 @@ class TestJournal(unittest.TestCase):
             self.assertEqual("invalid-or-untrusted-journal",
                 check_pending(root/"voice-cutover",root/"voice-ipfw")["reason"])
 
+    def test_post_save_recovery_only_after_attested_runtime_commit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            j=SharedApplyOperation(root/"shared-apply")
+            d=detail("4"*32)
+            for phase in ("prepared","activating","activated","config-saved"):
+                j.advance(phase,d)
+            self.assertFalse(check_pending(root/"voice-cutover",root/"voice-ipfw")["safe_to_mutate"])
+            self.assertFalse(check_pending(root/"voice-cutover",root/"voice-ipfw",
+                                           native_scope=True)["safe_to_mutate"])
+            self.assertTrue(check_pending(root/"voice-cutover",root/"voice-ipfw",
+                                         native_scope=True,recover_saved=True)["safe_to_mutate"])
+            with self.assertRaisesRegex(SharedOperationError,"attestation"):
+                j.finish_saved(d["id"],lambda: False)
+            self.assertEqual("config-saved",j.read()["phase"])
+            completed=j.finish_saved(d["id"],lambda: True)
+            self.assertEqual("committed",completed["phase"])
+            with self.assertRaisesRegex(SharedOperationError,"saved-only"):
+                j.finish_saved(d["id"],lambda: True)
+        with tempfile.TemporaryDirectory() as folder:
+            j=SharedApplyOperation(Path(folder)/"shared-apply")
+            d=detail()
+            for phase in ("prepared","activating","activated"):
+                j.advance(phase,d)
+            with self.assertRaisesRegex(SharedOperationError,"saved-only"):
+                j.finish_saved(d["id"],lambda: True)
+            self.assertEqual("activated",j.read()["phase"])
+
+    def test_saved_finish_cli_refuses_unprivileged_or_missing_fd9(self):
+        cli=BACKEND/"shared_apply_operation.py"
+        result=subprocess.run([sys.executable,str(cli),"finish-saved","4"*32],
+                              capture_output=True,text=True,check=False)
+        self.assertEqual(69,result.returncode)
+        self.assertNotIn("Traceback",result.stderr)
+
     def test_invalid_identity_fields_and_reordered_phase(self):
         with tempfile.TemporaryDirectory() as d:
             j=SharedApplyOperation(Path(d)/"shared-apply")
