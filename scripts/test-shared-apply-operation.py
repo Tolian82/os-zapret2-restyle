@@ -2,6 +2,7 @@
 """Common Apply durable phases and existing lifecycle guard, without kernel changes."""
 import sys
 import subprocess
+from unittest.mock import patch
 import tempfile
 from pathlib import Path
 import unittest
@@ -17,6 +18,52 @@ def detail(ident="1"*32):
                 "voice.telegram.enabled","hostlist.telegramips"]}
 
 class TestJournal(unittest.TestCase):
+    def test_legacy_prepared_is_one_durable_blocking_common_journal(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            store=SharedApplyOperation(root/"shared-apply")
+            record=store.prepare_legacy_predecessor(detail(), lambda: "f"*64)
+            self.assertEqual("prepared",record["phase"])
+            self.assertEqual("f"*64,record["legacy_predecessor"])
+            self.assertEqual("shared-apply-pending",check_pending(
+                root/"voice-cutover",root/"voice-ipfw")["reason"])
+            reloaded=SharedApplyOperation(store.root)
+            self.assertEqual(record,reloaded.read())
+            with self.assertRaisesRegex(SharedOperationError,"reviewed executor"):
+                reloaded.advance("activating",detail())
+            with self.assertRaisesRegex(SharedOperationError,"reviewed executor"):
+                reloaded.advance("restored",detail())
+            with self.assertRaisesRegex(SharedOperationError,"prepared-only"):
+                reloaded.recover_prepared(detail()["id"], lambda: True)
+            with self.assertRaises(SharedOperationError):
+                reloaded.prepare_legacy_predecessor(detail("2"*32),lambda: "b"*64)
+            self.assertEqual(record,reloaded.read())
+
+    def test_legacy_arm_attestation_failure_never_writes_journal(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            store=SharedApplyOperation(root/"shared-apply")
+            with self.assertRaisesRegex(SharedOperationError,"attestation"):
+                store.prepare_legacy_predecessor(detail(),lambda: "unsafe")
+            self.assertFalse(store.root.exists())
+            with self.assertRaises(SharedOperationError):
+                store.prepare_legacy_predecessor(detail(),lambda: "")
+            self.assertFalse(store.root.exists())
+            with self.assertRaises(SharedOperationError):
+                store.prepare_legacy_predecessor(detail("2"*32),lambda: None)
+            self.assertFalse(store.root.exists())
+            with self.assertRaises(SharedOperationError):
+                store.prepare_legacy_predecessor(
+                    {**detail(),"page":"strategies"},lambda: "f"*64)
+            self.assertFalse(store.root.exists())
+
+    def test_legacy_arm_cli_refuses_missing_root_fd9(self):
+        result=subprocess.run([sys.executable,
+            str(BACKEND/"shared_apply_operation.py"),"arm-legacy",
+            "1"*32,"a"*64,"b"*64,"-"],capture_output=True,text=True)
+        self.assertEqual(69,result.returncode)
+        self.assertNotIn("Traceback",result.stderr)
+
     def test_missing_state_stays_readonly(self):
         with tempfile.TemporaryDirectory() as d:
             j=SharedApplyOperation(Path(d)/"shared-apply")

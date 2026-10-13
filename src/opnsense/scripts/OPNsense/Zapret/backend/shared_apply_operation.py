@@ -12,6 +12,7 @@ directories for fault tests; never pass an arbitrary root via production CLI.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -98,10 +99,16 @@ def _validate_record(record: object) -> dict:
     if not isinstance(record, dict) or set(record) not in (
         {"schema", "phase", "detail"},
         {"schema", "phase", "detail", "previous"},
+        {"schema", "phase", "detail", "legacy_predecessor"},
     ) or type(record["schema"]) is not int or record["schema"] != SCHEMA \
             or record["phase"] not in PHASES:
         raise SharedOperationError("invalid common Apply record")
     _validate_detail(record["detail"])
+    if "legacy_predecessor" in record:
+        if record["phase"] != "prepared" or record["detail"]["page"] != "voice" or \
+           not isinstance(record["legacy_predecessor"], str) or \
+           not DIGEST.fullmatch(record["legacy_predecessor"]):
+            raise SharedOperationError("invalid armed legacy predecessor proof")
     if "previous" in record:
         _validate_detail(record["previous"])
         if record["previous"]["id"] == record["detail"]["id"]:
@@ -154,12 +161,19 @@ class SharedApplyOperation:
         except (ValueError, TypeError, UnicodeError) as error:
             raise SharedOperationError("corrupt common Apply record") from error
 
-    def advance(self, phase: str, detail: dict) -> dict:
+    def advance(
+        self, phase: str, detail: dict, *, legacy_predecessor: str | None = None
+    ) -> dict:
         if phase not in PHASES:
             raise SharedOperationError("unrecognized common Apply phase")
         _validate_detail(detail)
         before = self.read()
         if phase == "prepared":
+            if legacy_predecessor is not None and (
+                detail["page"] != "voice" or not DIGEST.fullmatch(legacy_predecessor)
+                or before is not None
+            ):
+                raise SharedOperationError("legacy predecessor requires new Voice owner and proof")
             if before is not None and before["phase"] not in TERMINAL:
                 raise SharedOperationError("unfinished common Apply operation")
             if before is not None and before["detail"]["id"] == detail["id"]:
@@ -168,6 +182,14 @@ class SharedApplyOperation:
             if previous is not None and previous["id"] == detail["id"]:
                 raise SharedOperationError("reused common Apply predecessor ID")
         else:
+            if legacy_predecessor is not None:
+                raise SharedOperationError("cannot inject predecessor after preparation")
+            if before is not None and "legacy_predecessor" in before:
+                # A running legacy owner cannot be stopped by the ordinary
+                # shared Apply path, generic record CLI, or boot recovery.
+                # A future separately attested ONE-coordinator actuator
+                # must explicitly perform this transition.
+                raise SharedOperationError("armed legacy predecessor requires reviewed executor")
             if before is None or before["detail"] != detail:
                 raise SharedOperationError("common Apply transaction identity changed")
             if phase not in NEXT[before["phase"]]:
@@ -176,6 +198,8 @@ class SharedApplyOperation:
         record = {"schema": SCHEMA, "phase": phase, "detail": detail}
         if previous is not None:
             record["previous"] = previous
+        if legacy_predecessor is not None:
+            record["legacy_predecessor"] = legacy_predecessor
         raw = (json.dumps(record, sort_keys=True, separators=(",", ":"),
                           ensure_ascii=True) + "\n").encode("ascii")
         if len(raw) > MAX_RECORD:
@@ -208,6 +232,25 @@ class SharedApplyOperation:
             os.close(dirfd)
         return record
 
+    def prepare_legacy_predecessor(self, detail: dict, attest) -> dict:
+        """Durably arm STOP intent only after a complete sealed old snapshot.
+
+        This does not stop any old processes or modify kernel/Config/marker.
+        It only binds one immutable previous-state digest into the EXISTING
+        common journal; generic activating and boot close remain forbidden.
+        """
+        _validate_detail(detail)
+        if detail["page"] != "voice" or self.read() is not None:
+            raise SharedOperationError("legacy STOP intent requires fresh Voice owner")
+        if not callable(attest):
+            raise SharedOperationError("legacy predecessor attestation required")
+        digest = attest()
+        if not isinstance(digest, str) or not DIGEST.fullmatch(digest):
+            raise SharedOperationError("invalid sealed legacy predecessor fingerprint")
+        if self.read() is not None:
+            raise SharedOperationError("shared owner appeared while arming legacy")
+        return self.advance("prepared", detail, legacy_predecessor=digest)
+
     def recover_prepared(self, identity: str, attest) -> dict:
         """Only PREPARED can be closed without touching runtime/Config/IPFW.
 
@@ -217,7 +260,11 @@ class SharedApplyOperation:
         """
         record = self.read()
         if record is None or record["phase"] != "prepared" or \
-           record["detail"]["id"] != identity:
+           record["detail"]["id"] != identity or \
+           "legacy_predecessor" in record:
+            # This candidate never used the ordinary prepared lifecycle.
+            # Legacy is still a distinct LIVE owner; do not auto-dismiss
+            # its bound previous snapshot on boot.
             raise SharedOperationError("prepared-only recovery refused")
         if not callable(attest) or attest() is not True:
             raise SharedOperationError("shared candidate attestation refused")
@@ -304,7 +351,41 @@ class SharedApplyOperation:
         }
 
 
+def fingerprint_legacy_predecessor(work: Path, *, owner: int = 0) -> str:
+    """Read-only digest of sealed common bundle AND exact old five-domain plan.
+
+    No second journal, arbitrary filesystem root from CLI or inferred owner.
+    """
+    from shared_apply_seal import verify_seal
+    from voice_cutover_backup import _private_dir
+    from voice_native_legacy_previous_seal import (
+        NAME, inspect_legacy_previous,
+    )
+    from voice_native_legacy_restore_plan import (
+        PLAN_NAME, inspect_legacy_restore_plan,
+    )
+    if not OP_ID.fullmatch(work.name):
+        raise SharedOperationError("invalid legacy predecessor operation ID")
+    seal = verify_seal(work, owner=owner)
+    root = work / "legacy-backup"
+    _private_dir(root)
+    if set(os.listdir(root)) != {NAME, PLAN_NAME}:
+        raise SharedOperationError("untrusted old predecessor backup entries")
+    previous = inspect_legacy_previous(root)
+    plan = inspect_legacy_restore_plan(root)
+    if plan["previous_five"] != previous["previous_five"]:
+        raise SharedOperationError("legacy restore plan and prior owner differ")
+    proof = {"candidate_seal": seal, "previous": previous, "plan": plan}
+    return hashlib.sha256(json.dumps(
+        proof, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("ascii")).hexdigest()
+
+
 def main(argv: list[str]) -> int:
+    legacy_arm = len(argv) == 6 and argv[1] == "arm-legacy" and bool(
+        OP_ID.fullmatch(argv[2]) and DIGEST.fullmatch(argv[3])
+        and DIGEST.fullmatch(argv[4])
+    )
     inspection = len(argv) == 2 and argv[1] == "inspect"
     recording = len(argv) == 8 and argv[1] == "record"
     recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(OP_ID.fullmatch(argv[2]))
@@ -315,14 +396,27 @@ def main(argv: list[str]) -> int:
     cold_restore = len(argv) == 4 and argv[1] in (
         "finish-activated", "finish-activating"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:])
-    if not (inspection or recording or recovery or finish or pristine or cold_restore):
+    if not (inspection or recording or recovery or finish or pristine or cold_restore or legacy_arm):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
     try:
         from voice_ipfw_adapter import require_lifecycle_lock
         require_lifecycle_lock()
-        if inspection:
+        if legacy_arm:
+            from shared_apply_seal import WORK
+            fields = [] if argv[5] == "-" else argv[5].split(",")
+            detail = {
+                "id": argv[2], "page": "voice", "base": argv[3],
+                "candidate": argv[4], "changed_fields": fields,
+            }
+            result = SharedApplyOperation(owner=0).prepare_legacy_predecessor(
+                detail, lambda: fingerprint_legacy_predecessor(WORK / argv[2])
+            )
+            print("legacy-armed-id=" + result["detail"]["id"])
+            print("legacy-armed-predecessor=" + result["legacy_predecessor"])
+            print("legacy-handoff-authorized=0")
+        elif inspection:
             record = SharedApplyOperation(owner=0).read()
             if record is None:
                 print("none")
@@ -339,7 +433,8 @@ def main(argv: list[str]) -> int:
                     print("committed " + prior["id"] + " " + prior["page"])
             elif record["phase"] in ("prepared", "config-saved"):
                 detail = record["detail"]
-                print(record["phase"] + " " + detail["id"] + " " + detail["page"])
+                prefix = "legacy-prepared" if "legacy_predecessor" in record else record["phase"]
+                print(prefix + " " + detail["id"] + " " + detail["page"])
             elif record["phase"] in ("activating", "activated") and "previous" in record:
                 detail, previous = record["detail"], record["previous"]
                 print(record["phase"] + " " + detail["id"] + " " + detail["page"] +
