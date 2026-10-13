@@ -97,16 +97,28 @@ final class SharedConfigCommit
 
         // The same Config object may have been modified by another OPNsense
         // page immediately after save(). Reacquire and LOAD a fresh model.
-        $config->lock();
         try {
-            $saved = $modelFactory()->getNodes();
-            if (!hash_equals($targetSnapshot, VoiceSettingsSnapshot::digest($saved))) {
-                throw new SharedConfigSaveUncertain(
-                    'Native Config changed after save; runtime reconciliation required'
-                );
+            $config->lock();
+            try {
+                $saved = $modelFactory()->getNodes();
+                if (!hash_equals($targetSnapshot, VoiceSettingsSnapshot::digest($saved))) {
+                    throw new SharedConfigSaveUncertain(
+                        'Native Config changed after save; runtime reconciliation required'
+                    );
+                }
+            } finally {
+                $config->unlock();
             }
-        } finally {
-            $config->unlock();
+        } catch (SharedConfigSaveUncertain $error) {
+            throw $error;
+        } catch (\Throwable $error) {
+            // Once Config::save() returned, ANY failure in relock,
+            // model construction, readback or unlock is post-save uncertainty.
+            // The shell distinguishes 69 (no save) from 70 (review required).
+            throw new SharedConfigSaveUncertain(
+                'Native Config readback failed after save; runtime requires review',
+                0, $error
+            );
         }
         return [
             'result' => 'saved',

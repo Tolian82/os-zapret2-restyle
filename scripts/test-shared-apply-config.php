@@ -42,6 +42,15 @@ file_put_contents($work.'/candidate.xml','<opnsense/>');
 chmod($work.'/plan.json',0600);
 chmod($work.'/candidate.xml',0600);
 $stored=Worker::readPlan($id,$root,posix_geteuid());
+must(str_contains(Worker::postSaveReceipt(['result'=>'saved']), '"result":"saved"'),
+     'post-save receipt serialization missing');
+try {
+    Worker::postSaveReceipt(['unrepresentable'=>NAN]);
+    must(false, 'unrepresentable post-save receipt was accepted as a pre-save error');
+} catch (\OPNsense\Zapret\Native\SharedConfigSaveUncertain $expected) {
+    // After Config::save the caller MUST return 70, not 69.
+}
+
 $savedCandidate=$plan['candidate'];
 $savedRow=Worker::saved($plan,$savedCandidate);
 must($savedRow['result']==='committed' && $savedRow['enabled']==='1',

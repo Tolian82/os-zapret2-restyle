@@ -20,8 +20,12 @@ namespace {
         public int $saves = 0;
         public bool $saveFails = false;
         public bool $raceAfterSave = false;
+        public bool $relockFailsAfterSave = false;
         public function __construct(array $state) { $this->disk = $state; }
         public function lock(): void {
+            if ($this->relockFailsAfterSave && $this->saves > 0) {
+                throw new \RuntimeException('simulated post-save Config relock IO failure');
+            }
             verify($this->locks === 0, 'overlapping Config lock');
             $this->locks = 1;
             FakeModel::$state = $this->disk; // Native Config::lock(reload=true)
@@ -134,6 +138,26 @@ namespace {
         verify(str_contains($expected->getMessage(),'reconciliation'), 'post-save conflict hidden');
     }
     verify($config->saves===3 && $config->locks===0, 'post-save lock cleanup');
+
+// A valid Config::save followed by failure to re-lock/verify must NEVER
+// cause the shared shell to misread 69 (pre-save) and roll back runtime.
+$postFailure = new FakeConfig(state());
+$postIntent = SettingsApply::prepareStrategies(
+    $postFailure->disk,['strategy'=>['trafficargs'=>'--filter-tcp=80']],
+    '91.108.0.0/16'
+);
+$postFailure->relockFailsAfterSave = true;
+try {
+    SharedConfigCommit::persist(
+        $postIntent, 'strategies', $postFailure, static fn()=>new FakeModel()
+    );
+    verify(false, 'post-save relock failure falsely reported success');
+} catch (\OPNsense\Zapret\Native\SharedConfigSaveUncertain $error) {
+    verify(str_contains($error->getMessage(), 'readback failed after save'),
+        'post-save relock IO error was not classified as uncertainty');
+}
+verify($postFailure->saves === 1 && $postFailure->locks === 0,
+    'post-save relock failure must not roll back native Config');
 
 // Stage-3 FD9 owner sequencing: the common record MUST be durable before
 // any switch, then the native Config revision precedes IPFW commit.

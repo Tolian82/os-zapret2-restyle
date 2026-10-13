@@ -122,6 +122,20 @@ final class SharedApplyConfigWorker
         return ['result'=>'committed','snapshot'=>$actual,'enabled'=>$enabled];
     }
 
+    /** The saved Config cannot be labelled pre-save if output encoding fails. */
+    public static function postSaveReceipt(array $result): string
+    {
+        try {
+            return json_encode(
+                $result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES
+            ) . "\n";
+        } catch (\Throwable $error) {
+            throw new SharedConfigSaveUncertain(
+                'Native saved Config receipt encoding requires review', 0, $error
+            );
+        }
+    }
+
     public static function main(array $argv): int
     {
         if (count($argv) !== 4 || !in_array($argv[1], ['preflight','save','saved'], true) ||
@@ -155,7 +169,14 @@ final class SharedApplyConfigWorker
                 return 0;
             }
             $result = SharedConfigCommit::persist($plan, $argv[3], $config, $factory);
-            echo json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
+            $receipt = self::postSaveReceipt($result);
+            // Even a short response write is uncertain to the caller:
+            // Config is already persisted and runtime must not be rolled back.
+            if (fwrite(STDOUT, $receipt) !== strlen($receipt)) {
+                throw new SharedConfigSaveUncertain(
+                    'Native saved Config receipt could not be delivered'
+                );
+            }
             return 0;
         } catch (SharedConfigSaveUncertain $error) {
             fwrite(STDERR, "ERROR: native shared Config save uncertain; retain recovery evidence\n");
