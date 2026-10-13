@@ -211,7 +211,7 @@ class SharedApplyOperation:
 def main(argv: list[str]) -> int:
     inspection = len(argv) == 2 and argv[1] == "inspect"
     recording = len(argv) == 8 and argv[1] == "record"
-    recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(ID.fullmatch(argv[2]))
+    recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(OP_ID.fullmatch(argv[2]))
     if not (inspection or recording or recovery):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)

@@ -70,6 +70,13 @@ class TestJournal(unittest.TestCase):
         invalid=subprocess.run([sys.executable,str(cli),"inspect","/tmp/other"],
                                capture_output=True,check=False)
         self.assertEqual(64,invalid.returncode)
+        safe_recovery=subprocess.run(
+            [sys.executable,str(cli),"recover-prepared","1"*32],
+            capture_output=True,text=True,check=False,
+        )
+        self.assertEqual(69,safe_recovery.returncode,
+                         "recovery must refuse missing FreeBSD FD9 instead of crashing")
+        self.assertNotIn("Traceback",safe_recovery.stderr)
 
     def test_prepared_only_recovery_attests_before_terminal_record(self):
         with tempfile.TemporaryDirectory() as folder:
