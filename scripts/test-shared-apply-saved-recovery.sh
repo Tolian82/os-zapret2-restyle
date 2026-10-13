@@ -10,6 +10,8 @@ sh -n "$ROOT/recover.sh" || fail "source syntax"
 ID=dddddddddddddddddddddddddddddddd
 mkdir -p "$ROOT/work/release"
 LOG="$ROOT/steps.log"
+CHILD_PIDFILE="$ROOT/child.pid"
+SUPERVISOR_MONITOR_PIDFILE="$ROOT/monitor.pid"
 preflight_voice_cutover_journals() { echo "guard:$1" >> "$LOG"; [ "$GUARD" = 0 ]; }
 shared_apply_bundle_service() { echo "seal:$1" >> "$LOG"; [ "$SEAL" = 0 ]; }
 shared_apply_native_config() { echo "config:$1" >> "$LOG"; [ "$CONFIG" = 0 ] || return 69; echo '{"result":"committed","enabled":"1"}'; }
