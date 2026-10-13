@@ -1,6 +1,8 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-**`_59`:** в едином root-owned `shared-apply/operation.json` допускается один дополнительный поляк `legacy_predecessor` (строгий SHA-256) **только** в Voice `phase=prepared`. Он вычисляется после проверки общего sealed bundle и exact old five-domain predecessor/reverse-plan внутри ID-кандидата. Запись atomic/fsynced, не отдельный journal. Любая попытка обычного `activating`, generic `restored` или автоматического recover-prepared для такого предшественника отказывается, чтобы действующий legacy не потерял право собственности без реального rollback executor. При `inspect` различаются `prepared` и `legacy-prepared`.
+**`_61`:** после добавления root FD9 `legacy-arm` тест обнаружил устаревший жёсткий anchor, заканчивавшийся на старую команду `legacy-capture)`. Теперь outer route проверяется по стабильному фрагменту с завершающим разделителем, а сообщение об ошибке плохого SHA-256 сверяется с реальным валидатором. Это корректировка CI, не новая mutation feature.
+
+**`_59`:** в едином root-owned `shared-apply/operation.json` допускается одно дополнительное поле `legacy_predecessor` (строгий SHA-256) **только** в Voice `phase=prepared`. Он вычисляется после проверки общего sealed bundle и exact old five-domain predecessor/reverse-plan внутри ID-кандидата. Запись atomic/fsynced, не отдельный journal. Любая попытка обычного `activating`, generic `restored` или автоматического recover-prepared для такого предшественника отказывается, чтобы действующий legacy не потерял право собственности без реального rollback executor. При `inspect` различаются `prepared` и `legacy-prepared`.
 
 **`_60`:** операторский shell `shared-apply-legacy-arm ID` подключён к настоящему FD9 router. До необратимой записи дважды проверяет read-only legacy+candidate witness, seal, свежий Voice ON native Config и наличие `legacy-backup`, затем передаёт подтверждённые ID/base/candidate/fields существующему journal CLI. Старый dvtws2/IPFW/Config/marker не изменяются. Операторское arming блокирует последующий обычный boot/start до завершения реализации восстановимого живого handoff; запускать на production сейчас **нельзя**. Следующий шаг — единый исполнитель с полным rollback, без отдельного PoC runtime.
 
@@ -40,13 +42,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_60`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_61`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=60` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_60.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=61` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_61.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
