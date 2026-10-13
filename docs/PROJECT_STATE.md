@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`v0.5.2_71`:** закрыт ограниченный cold recovery из `activating`, когда новый полный sealed release и staged-IPFW реально установлены, но запись `activated` прервана. Тот же общий возврат `_70` требует точного previous owner/Config, пустых PID и независимого engine census. Реальная квалификация FreeBSD power-cut, old PoC migration и Telegram voice остаются открыты.
+
 **`v0.5.2_70` — возврат после прерванного общего Apply с временными IPFW.** В существующем `shared_apply_recover_activated_cold_service` фаза `activated` теперь восстанавливает предыдущего подтверждённого common owner из полностью проверенного нового runtime и прежнего native Config, когда движок/монитор отсутствуют, а kernel точно соответствует либо новому uncommitted IPFW+stage, либо старому IPFW после rollback, либо ожидаемой очистке. Используются только существующие `verify-staged`/`rollback`/`install`/`commit` и старый атомарный runtime installer; после отключения IPFW применяется прежний cold-restoration путь. Любая неизвестная стадия, чужие правила/процесс или сбой оставляют journal незакрытым. Добавлена направленная shell-проверка последовательности и повторов. Реальная FreeBSD/power-cut и STUN/MEDIA/CALL приёмка ещё не выполнена.
 
 **`v0.5.2_69` — честный общий Stop при потерянном PID.** Штатный Stop теперь использует существующий независимый census точного исполняемого файла dvtws2 перед решением «уже остановлено» и перед остановкой собственного процесса. После остановки PID-владельца census повторяется до изменения IPFW: посторонний/осиротевший/дублирующий процесс приводит к отказу, а не к успешному `native-common-stopped`. Регрессии выполняют настоящий Stop-функционал с подставными process/kernel адаптерами, включая нормальный повторный Stop. Нет нового backend, WAL, frontend или автоматического legacy STOP; FreeBSD live и STUN/MEDIA/CALL остаются не подтверждены.
@@ -56,13 +58,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_70`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_71`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=70` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_70.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=71` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_71.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;

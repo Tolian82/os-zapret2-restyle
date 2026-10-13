@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**`v0.5.2_71` — восстановление staged-IPFW из `activating`.** Общий root FD9 recovery допускает возврат к строго сохранённому common predecessor после сбоя между установкой нового runtime/IPFW и атомарной записью `activated`. Переиспользуется тот же cold rollback, что в `_70`, с проверкой sealed candidate, прежнего native Config, отсутствия процессов и точных IPFW stage. При чужом/неполном runtime или неидентифицированном IPFW восстановление запрещено; отдельный исполнитель, WAL и frontend не добавлены. Режим production FreeBSD/Telegram ещё не принят.
+
 **`v0.5.2_70` — возврат после прерванного общего Apply с временными IPFW.** В существующем `shared_apply_recover_activated_cold_service` фаза `activated` теперь восстанавливает предыдущего подтверждённого common owner из полностью проверенного нового runtime и прежнего native Config, когда движок/монитор отсутствуют, а kernel точно соответствует либо новому uncommitted IPFW+stage, либо старому IPFW после rollback, либо ожидаемой очистке. Используются только существующие `verify-staged`/`rollback`/`install`/`commit` и старый атомарный runtime installer; после отключения IPFW применяется прежний cold-restoration путь. Любая неизвестная стадия, чужие правила/процесс или сбой оставляют journal незакрытым. Добавлена направленная shell-проверка последовательности и повторов. Реальная FreeBSD/power-cut и STUN/MEDIA/CALL приёмка ещё не выполнена.
 
 **`v0.5.2_69` — честный общий Stop при потерянном PID.** Штатный Stop теперь использует существующий независимый census точного исполняемого файла dvtws2 перед решением «уже остановлено» и перед остановкой собственного процесса. После остановки PID-владельца census повторяется до изменения IPFW: посторонний/осиротевший/дублирующий процесс приводит к отказу, а не к успешному `native-common-stopped`. Регрессии выполняют настоящий Stop-функционал с подставными process/kernel адаптерами, включая нормальный повторный Stop. Нет нового backend, WAL, frontend или автоматического legacy STOP; FreeBSD live и STUN/MEDIA/CALL остаются не подтверждены.
@@ -12,7 +14,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_70`. `VERSION=0.5.2`; `PLUGIN_REVISION=70`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_71`. `VERSION=0.5.2`; `PLUGIN_REVISION=71`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
 
@@ -114,7 +116,7 @@ Install проверяет живые объекты до изменения, с
 
 ## Следующее действие
 
-**После `_70`:** закрыть неполный `activating` при доказуемом предыдущем владельце и провести живую FreeBSD проверку `activated` с восстановлением staged-IPFW после interruption. Не делать автоматических выводов о живом или чужом engine. Не объявлять recovery успешным при неустановленном exact owner; затем завершать единый reversible legacy cutover и owner-live STUN/MEDIA/CALL. Общий Stop отказывает на orphan/duplicate/survivor dvtws2; это ещё не полная миграция.
+**После `_71`:** на FreeBSD проверить reboot/power-cut до и после смены `activating → activated`, включая остаточный stage/backup в atomic installer; unknown и partial state сохраняют журнал без ложного success. Следом — единый обратимый handoff старого работающего Telegram PoC, сокращение старого backend и полная проверка STUN/MEDIA/CALL. Операторские `legacy-arm`/`legacy-begin` на production пока запрещены.
 
 **Этап 4 — следующий рубеж после `_68`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 

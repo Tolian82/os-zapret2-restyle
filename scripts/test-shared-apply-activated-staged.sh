@@ -143,7 +143,45 @@ check 70 "$OWNER"
     fail "terminal failure erased restoration evidence"
 FINISH_OK=1
 check 0 "$OWNER"
+# Crash after install/staged IPFW but before durable "activated" transition:
+# it is still the SAME sealed candidate and previous native Config.
+ACTIVATING="activating $NEW_ID voice $OLD_ID strategies"
 reset
-check 69 "activating $NEW_ID voice $OLD_ID strategies"
-[ "$STATE" = staged ] || fail "unknown activating phase mutated kernel"
-echo 'PASS: ACTIVATED staged IPFW rollback, retries and fail-closed states'
+check 0 "$ACTIVATING"
+[ "$STATE" = empty ] && atomic_verify_tree "$ROOT/old/release" "$ACTIVE_DIR" ||
+    fail "activating staged IPFW and old runtime were not restored"
+grep -qx "recovered-activating-id=$NEW_ID" "$ROOT/result" ||
+    fail "activating did not finalize with its own journal phase"
+grep -q '^ipfw:rollback
+ "$LOG" || fail "activating skipped exact old IPFW rollback"
+for state in old retiring empty; do
+    reset; STATE="$state"
+    check 0 "$ACTIVATING"
+    [ "$STATE" = empty ] && atomic_verify_tree "$ROOT/old/release" "$ACTIVE_DIR" ||
+        fail "activating $state retry failed"
+done
+reset; STATE=foreign
+check 69 "$ACTIVATING"
+[ "$STATE" = foreign ] && ! grep -Eq 'ipfw:(rollback|install|commit)' "$LOG" ||
+    fail "activating accepted foreign IPFW"
+reset; ENGINE=1
+check 69 "$ACTIVATING"
+[ "$STATE" = staged ] || fail "activating touched live engine"
+reset; CENSUS_OK=0
+check 69 "$ACTIVATING"
+[ "$STATE" = staged ] || fail "activating ignored orphan engine"
+reset; CONFIG_OK=0
+check 69 "$ACTIVATING"
+[ "$STATE" = staged ] || fail "activating ignored stale Config"
+reset
+printf 'partial\n' > "$ACTIVE_DIR/voice-plan.json"
+check 69 "$ACTIVATING"
+[ "$STATE" = staged ] || fail "activating accepted partial installed release"
+reset; ROLLBACK_OK=0
+check 70 "$ACTIVATING"
+[ "$STATE" = staged ] || fail "activating failure cleared staged IPFW"
+reset; FINISH_OK=0
+check 70 "$ACTIVATING"
+[ "$STATE" = empty ] && atomic_verify_tree "$ROOT/old/release" "$ACTIVE_DIR" ||
+    fail "activating terminal failure erased restored owner"
+echo 'PASS: activated and activating staged IPFW recovery and fail-closed states'

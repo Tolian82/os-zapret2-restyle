@@ -1126,7 +1126,10 @@ shared_apply_recover_activated_cold_service()
     # ordinary committed-owner boot can safely start it again. A restart in
     # either verified intermediate state resumes; unknown state stays blocked.
     if ! firewall_shared_runtime verify "$_shared_cold_old_root/release" -; then
-        [ "$_shared_cold_phase" = activated ] || return 69
+        # An interrupted activation may have completed runtime/IPFW mutation
+        # before its journal advanced from activating to activated. Both
+        # phases require the SAME exact installed-new/cold-owner witnesses.
+        # The phase-specific terminal CLI still enforces the durable journal.
         atomic_verify_tree "$_shared_cold_new_root/release" "$ACTIVE_DIR" || return 69
         shared_apply_bundle_service verify "$_shared_cold_id" || return 69
         shared_apply_bundle_service verify "$_shared_cold_old" || return 69
