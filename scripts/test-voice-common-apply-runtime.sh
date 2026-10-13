@@ -5,6 +5,7 @@ ROOT=$(mktemp -d "${TMPDIR:-/tmp}/shared-apply.XXXXXXXX") || exit 1
 trap 'rm -rf "$ROOT"' EXIT HUP INT TERM
 fail() { echo "FAIL: $*" >&2; exit 1; }
 common_error() { echo "$*" >&2; }
+apply_runtime_attest_engine_inventory() { return 0; }
 validator_validate_runtime_modes() { [ -f "$1/voice-plan.json" ]; }
 validator_validate_engine_mapped() { [ -f "$2" ]; }
 firewall_prepare() { FW_PREPARE=1; }

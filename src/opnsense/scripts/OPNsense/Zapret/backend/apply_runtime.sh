@@ -15,6 +15,40 @@ apply_runtime_clear()
     APPLY_IPFW_INSTALLED=0
 }
 
+# Independent, read-only census of the ONE shared engine. A stale,
+# absent or replaced PID file cannot make a live dvtws2 process disappear.
+# Use the established process_query.sh wrapper (FreeBSD -xww / ax adapter),
+# not a new daemon, lock or process owner.
+apply_runtime_attest_engine_inventory()
+{
+    _apply_census_bin="${COMMON_PS_BIN:-/bin/ps}"
+    [ -x "$_apply_census_bin" ] || return 69
+    _apply_census_processes=$("$_apply_census_bin" ax -o pid= -o command=) || return 69
+    _apply_census_pids=$(printf '%s\n' "$_apply_census_processes" |
+        awk -v expected="$DVTWS_BIN" '
+            {
+                for (i = 2; i <= NF; i++) {
+                    if ($i == expected) {
+                        print $1
+                        break
+                    }
+                }
+            }') || return 69
+    if [ "$_apply_engine" = 1 ]; then
+        _apply_census_pid=$(common_pidfile_read "$CHILD_PIDFILE") || return 69
+        [ -n "$_apply_census_pids" ] &&
+        [ "$_apply_census_pids" = "$_apply_census_pid" ] || {
+            common_error "shared Apply: unexpected or untracked dvtws2 process"
+            return 69
+        }
+    else
+        [ -z "$_apply_census_pids" ] || {
+            common_error "shared Apply: dvtws2 process without valid PID owner"
+            return 69
+        }
+    fi
+}
+
 apply_runtime_probe()
 {
     [ "$#" -eq 2 ] || return 64
@@ -39,6 +73,7 @@ apply_runtime_probe()
         common_error "shared Apply: incomplete previous engine/supervisor"
         return 69
     }
+    apply_runtime_attest_engine_inventory || return 69
     if [ "$_apply_engine" = 1 ]; then
         [ -f "$ACTIVE_DIR/voice-plan.json" ] || {
             common_error "running legacy release requires explicit migration"
