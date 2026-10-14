@@ -82,7 +82,8 @@ def _ordinary_ports(source: str) -> tuple[str, str]:
 
 
 def verify_staged_handoff(artifacts: dict[str, str], native_argv: str,
-                          ordinary: str, tcp: str, udp: str) -> dict:
+                          ordinary: str, tcp: str, udp: str,
+                          ordinary_scopes: dict[str, list[str]] | None = None) -> dict:
     """Prepare a non-authorizing proof of a complete one-engine candidate."""
     if not isinstance(artifacts, dict) or not isinstance(native_argv, str) or \
        not isinstance(ordinary, str):
@@ -192,6 +193,15 @@ def verify_staged_handoff(artifacts: dict[str, str], native_argv: str,
     # No installed/active IPSET files are read and no unverified wildcard
     # scope can accidentally authorize a competing Voice capture.
     scopes = {entry["ipset_path"]: entry["targets"] for entry in profiles}
+    if ordinary_scopes is not None:
+        if not isinstance(ordinary_scopes, dict):
+            raise VoiceHandoffError("invalid ordinary STUN IPSET scope evidence")
+        for key, entries in ordinary_scopes.items():
+            if not isinstance(key, str) or not isinstance(entries, list) or (
+                key in scopes and scopes[key] != entries
+            ):
+                raise VoiceHandoffError("ordinary STUN scope differs from saved Voice plan")
+        scopes.update(ordinary_scopes)
     try:
         rebuilt = merge_profiles(voice, ordinary, scopes)
     except VoiceMergeError as error:
@@ -238,7 +248,31 @@ def build_runtime_handoff(stage: Path, engine_argv: Path, ordinary: Path,
     ordinary_text = ordinary.read_text(encoding="utf-8")
     tcp = tcp_ports.read_text(encoding="utf-8").strip()
     udp = udp_ports.read_text(encoding="utf-8").strip()
-    report = verify_staged_handoff(artifacts, argv, ordinary_text, tcp, udp)
+    # The compiler accepts ordinary STUN selectors that use any managed
+    # service IPSET, including those whose VOICE checkbox is OFF. Re-verify
+    # exactly the previously hashed candidate files, never installed lists.
+    meta = _decode(artifacts, "metadata.json")
+    hashes = meta.get("ordinary_scope_ipset_sha256", {})
+    if not isinstance(hashes, dict) or any(
+        name not in SERVICES or not isinstance(digest, str) or
+        not re.fullmatch(r"[a-f0-9]{64}", digest)
+        for name, digest in hashes.items()
+    ):
+        raise VoiceHandoffError("untrusted ordinary STUN managed IPSET evidence")
+    ordinary_scopes = {}
+    for service, digest in hashes.items():
+        source = stage.parent / "managed" / f"ipset-{service}.txt"
+        if (source.is_symlink() or not source.is_file()
+                or source.stat().st_size > 1_048_576):
+            raise VoiceHandoffError("ordinary STUN managed IPSET is missing or unsafe")
+        raw = source.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != digest:
+            raise VoiceHandoffError("ordinary STUN managed IPSET changed after staging")
+        ordinary_scopes[
+            f"/usr/local/etc/zapret2/runtime-v2/managed/ipset-{service}.txt"
+        ] = raw.decode("utf-8").splitlines()
+    report = verify_staged_handoff(artifacts, argv, ordinary_text, tcp, udp,
+                                   ordinary_scopes)
     # The XML passed through the original release compiler must still be
     # the same generation at the end of native argument generation.
     # Stream the full system config. Do not materialize unrelated OPNsense

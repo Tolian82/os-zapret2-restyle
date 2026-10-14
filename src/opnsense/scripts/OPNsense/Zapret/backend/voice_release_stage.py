@@ -109,13 +109,25 @@ def compile_bundle(config: Path, managed_source: Path, active_root: Path,
     if ordinary_source is not None:
         ordinary_sha = file_sha256(ordinary_source)
         ordinary = ordinary_source.read_text(encoding="utf-8")
+        # An ordinary Strategies STUN profile may legitimately reference a
+        # managed IPSET for a DIFFERENT, disabled Voice service. Its scope
+        # must survive the later native handoff just like enabled Voice
+        # targets do, instead of being forgotten after the first merge.
         scopes = {}
-        if expected_logical_wan is not None:
-            for service in SERVICES:
-                staged = managed_source / f"ipset-{service}.txt"
-                if staged.is_file() and not staged.is_symlink() and staged.stat().st_size <= 1_048_576:
-                    scopes[str(active_root / "managed" / staged.name)] = staged.read_text(encoding="utf-8").splitlines()
+        scope_hashes = {}
+        for service in SERVICES:
+            staged = managed_source / f"ipset-{service}.txt"
+            if staged.is_symlink():
+                raise VoiceStageError("ordinary STUN managed IPSET is a symlink")
+            if not staged.exists():
+                continue
+            if not staged.is_file() or staged.stat().st_size > 1_048_576:
+                raise VoiceStageError("ordinary STUN managed IPSET is unsafe")
+            raw = staged.read_text(encoding="utf-8")
+            scopes[str(active_root / "managed" / staged.name)] = raw.splitlines()
+            scope_hashes[service] = hashlib.sha256(raw.encode("utf-8")).hexdigest()
         merged = merge_profiles(profile, ordinary, scopes)
+        metadata["ordinary_scope_ipset_sha256"] = scope_hashes
         artifacts["traffic.conf"] = merged
         metadata["ordinary_sha256"] = hashlib.sha256(ordinary.encode()).hexdigest()
         metadata["merged_sha256"] = hashlib.sha256(merged.encode()).hexdigest()
@@ -128,6 +140,13 @@ def compile_bundle(config: Path, managed_source: Path, active_root: Path,
         raise VoiceStageError("managed IPSET changed during Voice candidate staging")
     if ordinary_source is not None and file_sha256(ordinary_source) != ordinary_sha:
         raise VoiceStageError("ordinary Strategy changed during Voice candidate staging")
+    if ordinary_source is not None:
+        for service, digest in metadata["ordinary_scope_ipset_sha256"].items():
+            staged = managed_source / f"ipset-{service}.txt"
+            if (staged.is_symlink() or not staged.is_file()
+                    or staged.stat().st_size > 1_048_576
+                    or hashlib.sha256(staged.read_bytes()).hexdigest() != digest):
+                raise VoiceStageError("managed ordinary STUN IPSET changed during staging")
     artifacts["metadata.json"] = json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
     return artifacts
 

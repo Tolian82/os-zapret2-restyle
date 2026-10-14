@@ -104,6 +104,46 @@ class VoiceHandoffPreflightTests(unittest.TestCase):
             with self.assertRaises(contract.VoiceHandoffError):
                 self.validate(tampered, argv, disjoint, tcp, udp)
 
+    def test_ordinary_managed_ipset_of_disabled_voice_service_reaches_handoff(self):
+        # Strategies is allowed to reuse a managed service destination list
+        # even when that service's Voice toggle is OFF. The handoff must
+        # verify the same candidate file, not forget its STUN scope.
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source, managed = bridge.fixtures.write_fixture(
+                root, bridge.fixtures.fixture(True))
+            discord = managed / "ipset-discord.txt"
+            discord.write_text("198.51.100.0/24\n", encoding="utf-8")
+            ordinary = root / "ordinary.conf"
+            ordinary.write_text(
+                "--filter-udp=3478\n--filter-l7=stun\n--payload=stun\n"
+                "--ipset=/usr/local/etc/zapret2/runtime-v2/managed/ipset-discord.txt\n",
+                encoding="utf-8",
+            )
+            bundle = bridge.stage.compile_bundle(
+                source, managed, bridge.ACTIVE_ROOT, "vtnet1",
+                19000, 19010, 989, ordinary,
+            )
+            candidate = root / "voice-native-candidate"
+            bridge.stage.stage_bundle(candidate, bundle)
+            engine = root / "builder" / "dvtws.args"
+            bridge.generate_native_argv(engine.parent, bundle["traffic.conf"])
+            tcp, udp = bridge.extract_real_ordinary_ports(root / "ports", ordinary.read_text())
+            tcpfile = root / "ordinary.tcp"
+            udpfile = root / "ordinary.udp"
+            tcpfile.write_text(tcp, encoding="utf-8")
+            udpfile.write_text(udp, encoding="utf-8")
+            manifest, receipt = contract.build_runtime_handoff(
+                candidate, engine, ordinary, tcpfile, udpfile, source)
+            self.assertEqual("preflight-only", receipt["state"])
+            self.assertEqual(1, len(manifest["tables"]))
+            self.assertFalse(receipt["activation_authorized"])
+            # A changed managed file after stage must NEVER loosen scopes.
+            discord.write_text("91.108.13.10\n", encoding="utf-8")
+            with self.assertRaises(contract.VoiceHandoffError):
+                contract.build_runtime_handoff(
+                    candidate, engine, ordinary, tcpfile, udpfile, source)
+
     def test_all_voice_off_preserves_one_engine_and_no_voice_table(self):
         with tempfile.TemporaryDirectory() as td:
             b, argv = self.build(Path(td) / "off", False)
