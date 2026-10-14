@@ -266,6 +266,35 @@ class CommonRuntimeTests(unittest.TestCase):
                                              "engine/IPFW|UDP selector"):
                     shared_release_manifest(release)
 
+    def test_engine_divert_socket_and_wan_are_bound_to_ipfw_before_apply(self):
+        for drift in ("engine-socket", "duplicate-socket", "capture-socket",
+                      "physical-wan", "logical-wan"):
+            with self.subTest(drift=drift), tempfile.TemporaryDirectory() as folder:
+                result, release = build(Path(folder), ("telegram",))
+                self.assertEqual(0, result.returncode, result.stderr)
+                manifest = shared_release_manifest(release)
+                self.assertEqual("989", manifest["rules"][19000][1])
+                argv_path = release / "dvtws.args"
+                plan_path = release / "voice-plan.json"
+                plan = json.loads(plan_path.read_text())
+                if drift == "engine-socket":
+                    argv_path.write_text(argv_path.read_text().replace(
+                        "--port=989", "--port=1234", 1))
+                elif drift == "duplicate-socket":
+                    argv_path.write_text(argv_path.read_text() + "--port=1234\n")
+                elif drift == "capture-socket":
+                    plan["capture"]["divert_port"] = 1234
+                elif drift == "physical-wan":
+                    plan["capture"]["wan"] = "vtnet2"
+                else:
+                    plan["capture"]["logical_wan"] = "OPT1"
+                if drift not in ("engine-socket", "duplicate-socket"):
+                    plan_path.write_text(json.dumps(plan))
+                with self.assertRaisesRegex(
+                    IPFWAdapterError, "divert socket|capture WAN/divert"
+                ):
+                    shared_release_manifest(release)
+
     def test_all_off_preserves_resolved_ordinary_and_ignores_old_marker(self):
         with tempfile.TemporaryDirectory() as directory:
             result, release = build(Path(directory), ())

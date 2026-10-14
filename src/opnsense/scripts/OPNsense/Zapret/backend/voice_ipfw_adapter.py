@@ -285,6 +285,23 @@ def _verify_shared_voice_engine(release: Path, plan: dict, read) -> None:
     argv = read("dvtws.args").decode("utf-8")
     if not traffic.strip() or not argv.strip() or traffic not in argv:
         raise IPFWAdapterError("common engine argv differs from merged Voice traffic")
+    # ipfw's divert port is a SOCKET target, distinct from the UDP service
+    # selectors checked below. The single native engine must listen on the
+    # EXACT socket into which all Voice and Strategies rules divert.
+    divert = capture.get("divert_port")
+    source = plan.get("source")
+    if type(divert) is not int or not 1 <= divert <= 65535 or (
+        not isinstance(source, dict)
+        or capture.get("logical_wan") != source.get("logical_wan")
+        or capture.get("wan") != source.get("resolved_wan")
+    ):
+        raise IPFWAdapterError("common Voice capture WAN/divert evidence differs")
+    argv_tokens = argv.split()
+    socket_tokens = [token for token in argv_tokens if token.startswith("--port=")]
+    if not argv_tokens or argv_tokens[0] != f"--port={divert}" or (
+        socket_tokens != [f"--port={divert}"]
+    ):
+        raise IPFWAdapterError("common engine divert socket differs from shared IPFW")
     tokens = profile_tokens(traffic)
     if len(tokens) < len(profiles) + 1:
         raise IPFWAdapterError("missing ordinary Strategy after Voice profiles")
