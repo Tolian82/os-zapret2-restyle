@@ -24,6 +24,9 @@ firewall_shared_runtime() {
             [ "$FW_STAGE" = 1 ] && [ "$FAIL_STAGE_CHECK" = 0 ] || return 1
             if [ "$3" = - ]; then [ "$FW" = empty ]; else [ "$FW" = active ]; fi ;;
         verify)
+            # The real shared IPFW adapter refuses ALL staging tables after
+            # native commit. The mock must not hide an orphan stage.
+            [ "$FW_STAGE" = 0 ] || return 1
             if [ "$3" = - ]; then [ "$FW" = empty ]; else [ "$FW" = active ]; fi ;;
         install)
             [ "$FAIL_FW" = 0 ] || return 1
