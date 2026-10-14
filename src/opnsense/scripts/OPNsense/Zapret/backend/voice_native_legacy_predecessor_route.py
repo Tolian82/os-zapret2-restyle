@@ -597,8 +597,119 @@ def _invoke_existing_native_common(
     if (result.returncode != 0 or len(result.stdout.encode("utf-8")) > 8192
         or len(result.stderr.encode("utf-8")) > 8192):
         raise LegacyPredecessorRouteError("native common actuator requires review")
+    if mode == "config-save" and (
+        result.stdout != "legacy-native-config-saved=" + identity + "\n"
+    ):
+        # PHP output is NOT an authorization to finalize the shared owner.
+        # Require exactly the verified shell witness, no prefix or suffix.
+        raise LegacyPredecessorRouteError("native Config saved receipt is untrusted")
     return True
 
+
+
+def save_native_config_after_legacy_activation(
+    *, identity, store, work, config_path, config_fd, config_owner,
+    active_runtime, marker_path, require_lifecycle_owner,
+):
+    """PRIVATE FD9-only handoff of the already running common owner to OPNsense.
+
+    Native Config::save owns its OWN flock, so the OLD pinned Config
+    descriptor MUST be unlocked before the fixed writer. The original FD9
+    stays held throughout. Any failure after fsync of legacy-config-saving
+    leaves the same single journal pending; never retry save or roll back
+    unknown live resources. This entry point is intentionally NOT dispatched.
+    On return the original config_fd is UNLOCKED: the caller must close it,
+    not reuse it as a pinned owner.
+    """
+    from shared_apply_operation import SharedApplyOperation, fingerprint_legacy_predecessor
+    from shared_apply_seal import verify_seal
+
+    if not isinstance(store, SharedApplyOperation) or (
+        not isinstance(identity, str) or COMMON_ID.fullmatch(identity) is None
+        or type(config_fd) is not int or config_fd in (-1, 9)
+        or not callable(require_lifecycle_owner)
+        or not isinstance(config_owner, tuple) or len(config_owner) != 2
+    ):
+        raise LegacyPredecessorRouteError("untrusted private Config-save owner")
+    work, config_path, active_runtime = Path(work), Path(config_path), Path(active_runtime)
+    if work.name != identity or not work.is_absolute() or (
+        not config_path.is_absolute() or not active_runtime.is_absolute()
+    ):
+        raise LegacyPredecessorRouteError("foreign native Config-save paths")
+    record = store.read()
+    if record is None or record.get("phase") != "legacy-common-activated" or (
+        record["detail"]["id"] != identity or record["detail"]["page"] != "voice"
+        or "legacy_predecessor" not in record or "previous" in record
+    ):
+        raise LegacyPredecessorRouteError("common runtime was not durably activated")
+
+    old_root = work / "legacy-backup"
+    previous_image = old_root / NAME / "previous"
+    old = inspect_previous(previous_image)
+    backup = active_runtime.parent / (active_runtime.name + "-backups") / (
+        active_runtime.name + "-" + identity
+    )
+    witness = record["legacy_predecessor"]
+
+    def before_save():
+        require_lifecycle_owner()
+        _locked_config(config_path, config_fd, config_owner)
+        if store.read() != record or os.path.lexists(marker_path) or (
+            fingerprint_legacy_predecessor(work, owner=config_owner[0]) != witness
+        ):
+            raise LegacyPredecessorRouteError("legacy state changed before native Config write")
+        verify_seal(work, owner=config_owner[0])
+        _verify_sources(config_path, backup, old)
+        _invoke_existing_native_common(
+            mode="attest", identity=identity, work=work, config_fd=config_fd,
+            require_lifecycle_owner=require_lifecycle_owner,
+        )
+        return witness
+
+    # fsync intent before the FIRST possible native Config write.
+    intent = store.begin_legacy_config_save(identity, before_save)
+    if intent["phase"] != "legacy-config-saving":
+        raise LegacyPredecessorRouteError("native Config write intent not persisted")
+
+    # The next PHP worker will lock Config itself, then save it with Core
+    # history. Inheriting the OLD flock would deadlock; FD9 remains ours.
+    fcntl.flock(config_fd, fcntl.LOCK_UN)
+    _invoke_existing_native_common(
+        mode="config-save", identity=identity, work=work, config_fd=config_fd,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+
+    # Native save can replace config.xml's inode. Reopen the current target,
+    # NEVER trust/relock the old fd or assume that Config::save retained it.
+    # If another writer holds the lock, fail closed instead of waiting or
+    # pretending that the saved model is ours.
+    next_fd = os.open(
+        config_path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+    )
+    try:
+        fcntl.flock(next_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        def after_save():
+            require_lifecycle_owner()
+            _locked_config(config_path, next_fd, config_owner)
+            if store.read() != intent or os.path.lexists(marker_path) or (
+                fingerprint_legacy_predecessor(work, owner=config_owner[0]) != witness
+            ):
+                raise LegacyPredecessorRouteError("native Config journal changed after write")
+            verify_seal(work, owner=config_owner[0])
+            # The saved old Config lives in immutable previous evidence. The
+            # live Config is NEW: do not falsely compare it with the old one.
+            _verify_sources(previous_image / "config" / "config.xml", backup, old)
+            _invoke_existing_native_common(
+                mode="attest", identity=identity, work=work, config_fd=next_fd,
+                require_lifecycle_owner=require_lifecycle_owner,
+            )
+            return witness
+        saved = store.finish_legacy_config_save(identity, after_save)
+        if saved["phase"] != "legacy-config-saved":
+            raise LegacyPredecessorRouteError("native Config saved phase not durable")
+        return saved
+    finally:
+        os.close(next_fd)
 
 
 def activate_common_after_legacy_retirement(
@@ -766,6 +877,17 @@ def activate_common_after_legacy_retirement(
     result = store.finish_legacy_common_activation(identity, attested)
     if result["phase"] != "legacy-common-activated":
         raise LegacyPredecessorRouteError("common runtime not sealed after start")
+    if native_forward:
+        # The fixed production-private forward proceeds through exactly ONE
+        # native Config save. No separate user action, second executor or
+        # journal is allowed between the two runtime/Config boundaries.
+        # A failure keeps legacy-config-saving (or the earlier phase) pending.
+        return save_native_config_after_legacy_activation(
+            identity=identity, store=store, work=work, config_path=config_path,
+            config_fd=config_fd, config_owner=config_owner,
+            active_runtime=active_runtime, marker_path=marker_path,
+            require_lifecycle_owner=require_lifecycle_owner,
+        )
     return result
 
 
