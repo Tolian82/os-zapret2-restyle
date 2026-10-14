@@ -670,9 +670,12 @@ class TestJournal(unittest.TestCase):
                         self.assertEqual("legacy-common-activated",invoke()["phase"])
                     self.assertEqual(["common-start"],starts)
                     if crash == "native-fixed":
+                        # The coordinator attests twice: before and
+                        # while fsync-finalizing the one shared journal.
+                        # Both attestations are read-only; there is one START.
                         self.assertEqual(
                             ["native-probe", "native-probe", "native-activate",
-                             "native-attest"], checks)
+                             "native-attest", "native-attest"], checks)
                     expected=("legacy-common-activated" if crash in ("none", "native-fixed")
                               else "legacy-common-activating")
                     self.assertEqual(expected,store.read()["phase"])
