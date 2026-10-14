@@ -548,6 +548,8 @@ case "$1" in
     activate) apply_runtime_activate_retired_legacy "$2" "$3" ;;
     attest) apply_runtime_rehydrate_retired_legacy "$2" "$3" ;;
     config-save) shared_apply_save_retired_legacy_config_service "$3" ;;
+    commit) shared_apply_commit_retired_legacy_service "$3" ;;
+    verify-committed) apply_runtime_verify_retired_legacy_committed "$2" "$3" ;;
     *) exit 64 ;;
 esac
 """
@@ -558,7 +560,7 @@ def _invoke_existing_native_common(
     service_script=None, runner=None,
 ):
     """Call the actual installed native actuator with the parent's two locks."""
-    if mode not in ("probe", "activate", "attest", "config-save") or not isinstance(identity, str) or (
+    if mode not in ("probe", "activate", "attest", "config-save", "commit", "verify-committed") or not isinstance(identity, str) or (
         COMMON_ID.fullmatch(identity) is None
     ):
         raise LegacyPredecessorRouteError("invalid fixed native forward action")
@@ -600,11 +602,90 @@ def _invoke_existing_native_common(
     if mode == "config-save" and (
         result.stdout != "legacy-native-config-saved=" + identity + "\n"
     ):
-        # PHP output is NOT an authorization to finalize the shared owner.
-        # Require exactly the verified shell witness, no prefix or suffix.
         raise LegacyPredecessorRouteError("native Config saved receipt is untrusted")
+    if mode == "commit" and (
+        result.stdout != "legacy-native-committed=" + identity + "\n"
+    ):
+        # An IPFW cleanup exit code or unverified stdout is NOT a commit.
+        raise LegacyPredecessorRouteError("native IPFW commit receipt is untrusted")
     return True
 
+
+
+def commit_native_common_after_legacy_config_save(
+    *, identity, store, work, config_path, config_fd, config_owner,
+    active_runtime, marker_path, require_lifecycle_owner,
+):
+    """Complete the native IPFW stage ONLY with original FD9 + NEW Config lock.
+
+    This is a private continuation after native Config readback. There is ONE
+    irreversible transition, fsynced before the existing common IPFW commit.
+    A failure/partial cleanup cannot start any engine or retry Config save:
+    legacy-common-committing remains pending for explicit later recovery.
+    """
+    from shared_apply_operation import SharedApplyOperation, fingerprint_legacy_predecessor
+    from shared_apply_seal import verify_seal
+
+    if not isinstance(store, SharedApplyOperation) or (
+        not isinstance(identity, str) or COMMON_ID.fullmatch(identity) is None
+        or type(config_fd) is not int or config_fd < 0 or config_fd == 9
+        or not isinstance(config_owner, tuple) or len(config_owner) != 2
+        or not callable(require_lifecycle_owner)
+    ):
+        raise LegacyPredecessorRouteError("invalid private native commit owner")
+    work, config_path, active_runtime = Path(work), Path(config_path), Path(active_runtime)
+    if (not work.is_absolute() or work.name != identity or
+        not config_path.is_absolute() or not active_runtime.is_absolute()):
+        raise LegacyPredecessorRouteError("native commit identity or path changed")
+    record = store.read()
+    if record is None or record["phase"] != "legacy-config-saved" or (
+        record["detail"]["id"] != identity or record["detail"]["page"] != "voice"
+        or "legacy_predecessor" not in record or "previous" in record
+    ):
+        raise LegacyPredecessorRouteError("native Config was not durably saved")
+    witness = record["legacy_predecessor"]
+    old_image = work / "legacy-backup" / NAME / "previous"
+    old = inspect_previous(old_image)
+    backup = active_runtime.parent / (active_runtime.name + "-backups") / (
+        active_runtime.name + "-" + identity
+    )
+
+    def owner(phase_record, mode):
+        require_lifecycle_owner()
+        _locked_config(config_path, config_fd, config_owner)
+        if store.read() != phase_record or os.path.lexists(marker_path) or (
+            fingerprint_legacy_predecessor(work, owner=config_owner[0]) != witness
+        ):
+            raise LegacyPredecessorRouteError("native Config/owner journal changed")
+        verify_seal(work, owner=config_owner[0])
+        # The live Config has already been SAVED; its preceding exact bytes
+        # are retained separately. Never compare new Config with old XML.
+        _verify_sources(old_image / "config" / "config.xml", backup, old)
+        _invoke_existing_native_common(
+            mode=mode, identity=identity, work=work,
+            config_fd=config_fd, require_lifecycle_owner=require_lifecycle_owner,
+        )
+        return witness
+
+    # This attests STAGED IPFW and persists the irreversible cleanup intent.
+    intent = store.begin_legacy_common_commit(
+        identity, lambda: owner(record, "attest")
+    )
+    if intent["phase"] != "legacy-common-committing":
+        raise LegacyPredecessorRouteError("IPFW commit intent was not fsynced")
+    require_lifecycle_owner()
+    _locked_config(config_path, config_fd, config_owner)
+    if store.read() != intent:
+        raise LegacyPredecessorRouteError("native IPFW commit journal drifted")
+    _invoke_existing_native_common(
+        mode="commit", identity=identity, work=work, config_fd=config_fd,
+        require_lifecycle_owner=require_lifecycle_owner,
+    )
+    # Only independently verified final NO-STAGE IPFW + engine/supervisor
+    # can publish the ordinary terminal owner. Original backups are retained.
+    return store.finish_legacy_common_commit(
+        identity, lambda: owner(intent, "verify-committed")
+    )
 
 
 def save_native_config_after_legacy_activation(
@@ -707,7 +788,14 @@ def save_native_config_after_legacy_activation(
         saved = store.finish_legacy_config_save(identity, after_save)
         if saved["phase"] != "legacy-config-saved":
             raise LegacyPredecessorRouteError("native Config saved phase not durable")
-        return saved
+        # Keep the newly pinned Config inode LOCKED through the final native
+        # IPFW commit: after this point no PHP operation tries to lock Config.
+        return commit_native_common_after_legacy_config_save(
+            identity=identity, store=store, work=work, config_path=config_path,
+            config_fd=next_fd, config_owner=config_owner,
+            active_runtime=active_runtime, marker_path=marker_path,
+            require_lifecycle_owner=require_lifecycle_owner,
+        )
     finally:
         os.close(next_fd)
 

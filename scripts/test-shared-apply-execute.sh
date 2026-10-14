@@ -6,6 +6,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
 sed -n '/^shared_apply_execute_service()$/,/^}$/p' "$SOURCE" > "$ROOT/executor.sh"
 sed -n '/^shared_apply_save_retired_legacy_config_service()$/,/^}$/p' "$SOURCE" >> "$ROOT/executor.sh"
+sed -n '/^shared_apply_commit_retired_legacy_service()$/,/^}$/p' "$SOURCE" >> "$ROOT/executor.sh"
 sh -n "$ROOT/executor.sh" || fail "shell syntax"
 . "$ROOT/executor.sh"
 ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -17,6 +18,7 @@ preflight_voice_cutover_journals() { [ "$1" = common-apply ]; }
 shared_apply_workspace() { echo "$ROOT/work"; }
 shared_apply_inspect_service() {
     if [ "$BAD_OWNER" = 1 ]; then echo "legacy-common-activated $ID voice"
+    elif [ "$COMMIT_OWNER" = 1 ]; then echo "legacy-common-committing $ID voice"
     else echo "legacy-config-saving $ID voice"; fi
 }
 apply_runtime_rehydrate_retired_legacy() {
@@ -85,7 +87,11 @@ apply_runtime_attest_activated() {
     { [ "$ATTEST_FAIL_AT" -eq 0 ] || [ "$ATTEST_FAIL_AT" -ne "$ATTEST_COUNT" ]; }
 }
 apply_runtime_commit() { echo runtime-commit >> "$LOG"; [ "$COMMIT_RC" -eq 0 ]; }
-reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; }
+apply_runtime_verify_retired_legacy_committed() {
+    echo runtime-final-verify >> "$LOG"
+    [ "$FINAL_RC" -eq 0 ]
+}
+reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; COMMIT_OWNER=0; FINAL_RC=0; }
 expect_status() {
     expected="$1"; shift
     set +e
@@ -158,4 +164,31 @@ reset; SAVED_DIGEST_DRIFT=1
 run_retired 70 'bundle:verify runtime-rehydrate runtime-attest config-save config-readback '
 reset; ATTEST_FAIL_AT=2
 run_retired 70 'bundle:verify runtime-rehydrate runtime-attest config-save config-readback bundle:verify runtime-attest '
+# A successful native Config save alone must NOT authorize stage cleanup.
+# The original journal must first reach durable legacy-common-committing.
+run_legacy_commit() {
+    expected="$1"; shift
+    set +e
+    shared_apply_commit_retired_legacy_service "$ID" > "$ROOT/commit-response.txt"
+    actual="$?"
+    set -e
+    [ "$actual" -eq "$expected" ] ||
+        fail "legacy IPFW commit status=$actual expected=$expected"
+    steps=$(tr '\n' ' ' < "$LOG")
+    [ "$steps" = "$*" ] || fail "legacy IPFW commit steps: $steps"
+}
+reset
+run_legacy_commit 69 ''
+reset; COMMIT_OWNER=1
+run_legacy_commit 0 'bundle:verify runtime-rehydrate runtime-attest runtime-commit runtime-final-verify bundle:verify '
+grep -Fqx "legacy-native-committed=$ID" "$ROOT/commit-response.txt" ||
+    fail "native IPFW commit receipt missing"
+reset; COMMIT_OWNER=1; REHYDRATE_RC=69
+run_legacy_commit 70 'bundle:verify runtime-rehydrate '
+reset; COMMIT_OWNER=1; COMMIT_RC=70
+run_legacy_commit 70 'bundle:verify runtime-rehydrate runtime-attest runtime-commit '
+reset; COMMIT_OWNER=1; FINAL_RC=70
+run_legacy_commit 70 'bundle:verify runtime-rehydrate runtime-attest runtime-commit runtime-final-verify '
+reset; COMMIT_OWNER=1; ATTEST_RC=70
+run_legacy_commit 70 'bundle:verify runtime-rehydrate runtime-attest '
 echo 'PASS: shared FD9 native runtime/Config fault-injection matrix'

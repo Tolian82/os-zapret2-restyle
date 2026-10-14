@@ -246,6 +246,18 @@ apply_runtime_clear
 apply_runtime_rehydrate_retired_legacy "$ROOT/one" "$RETIRE_ID" ||
     fail "second child could not reconstruct context for future Config commit"
 apply_runtime_commit || fail "native common commit from retired legacy failed"
+apply_runtime_verify_retired_legacy_committed "$ROOT/one" "$RETIRE_ID" ||
+    fail "new shared owner failed post-commit read-only attestation"
+FW_STAGE=1
+if apply_runtime_verify_retired_legacy_committed "$ROOT/one" "$RETIRE_ID"; then
+    fail "stale native IPFW rollback stage accepted after commit"
+fi
+FW_STAGE=0
+MONITOR=0
+if apply_runtime_verify_retired_legacy_committed "$ROOT/one" "$RETIRE_ID"; then
+    fail "dead supervisor accepted as committed native owner"
+fi
+MONITOR=1
 [ "$FW_STAGE" = 0 ] && [ "$PROCESS" = 1 ] &&
 [ -f "$EXPECTED_RETIRE_BACKUP/old-owner-marker" ] ||
     fail "native common completion prematurely destroyed old runtime backup"

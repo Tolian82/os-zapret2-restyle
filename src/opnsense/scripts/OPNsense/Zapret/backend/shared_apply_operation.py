@@ -36,6 +36,7 @@ PHASES = frozenset((
     "legacy-marker-retiring", "legacy-marker-retired",
     "legacy-common-activating", "legacy-common-activated",
     "legacy-config-saving", "legacy-config-saved",
+    "legacy-common-committing",
     "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
     "legacy-rollback-marker", "legacy-rollback-marker-restored",
     "legacy-rollback-processes", "legacy-rollback-processes-restored",
@@ -62,7 +63,8 @@ NEXT = {
     "legacy-common-activating": frozenset(("legacy-common-activated",)),
     "legacy-common-activated": frozenset(("legacy-config-saving",)),
     "legacy-config-saving": frozenset(("legacy-config-saved",)),
-    "legacy-config-saved": frozenset(),
+    "legacy-config-saved": frozenset(("legacy-common-committing",)),
+    "legacy-common-committing": frozenset(),
     "legacy-rollback-ipfw": frozenset(("legacy-rollback-ipfw-restored",)),
     "legacy-rollback-ipfw-restored": frozenset(("legacy-rollback-marker",)),
     "legacy-rollback-marker": frozenset(("legacy-rollback-marker-restored",)),
@@ -134,6 +136,7 @@ def _validate_record(record: object) -> dict:
                                    "legacy-marker-retiring", "legacy-marker-retired",
                                    "legacy-common-activating", "legacy-common-activated",
                                    "legacy-config-saving", "legacy-config-saved",
+                                   "legacy-common-committing",
                                    "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
                                    "legacy-rollback-marker", "legacy-rollback-marker-restored",
                                    "legacy-rollback-processes",
@@ -436,6 +439,44 @@ class SharedApplyOperation:
         return self._transition_legacy_boundary(
             identity, "legacy-config-saving", "legacy-config-saved", attest
         )
+
+    def begin_legacy_common_commit(self, identity: str, attest) -> dict:
+        """Persist the irreversible native IPFW cleanup intent BEFORE mutation.
+
+        The witness still proves staged IPFW, new persisted native Config,
+        live common engine and intact old rollback backup under FD9 and the
+        CURRENT Config flock. Interrupted cleanup is nonterminal.
+        """
+        return self._transition_legacy_boundary(
+            identity, "legacy-config-saved", "legacy-common-committing", attest
+        )
+
+    def finish_legacy_common_commit(self, identity: str, attest) -> dict:
+        """Publish normal committed owner only after POST-cleanup attestation.
+
+        Unlike ordinary advance(), this strictly private final transition
+        removes the predecessor field ONLY from the journal. It never erases
+        physical original-owner backup or native runtime evidence.
+        """
+        if not isinstance(identity, str) or not OP_ID.fullmatch(identity) or (
+            not callable(attest)
+        ):
+            raise SharedOperationError("invalid legacy common commit completion")
+        before = self.read()
+        if before is None or before["phase"] != "legacy-common-committing" or (
+            before["detail"]["id"] != identity or
+            before["detail"]["page"] != "voice" or
+            "legacy_predecessor" not in before or "previous" in before
+        ):
+            raise SharedOperationError("legacy common commit is not pending")
+        witness = attest()
+        if not isinstance(witness, str) or witness != before["legacy_predecessor"]:
+            raise SharedOperationError("native common post-commit witness differs")
+        if self.read() != before:
+            raise SharedOperationError("legacy common journal changed before commit")
+        return self._persist_record({
+            "schema": SCHEMA, "phase": "committed", "detail": before["detail"],
+        })
 
     def begin_pristine_common_activation_rollback(self, identity: str, attest) -> dict:
         """One-way rollback after a completely untouched interrupted start.

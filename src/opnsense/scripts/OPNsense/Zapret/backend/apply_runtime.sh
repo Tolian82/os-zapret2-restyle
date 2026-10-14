@@ -372,6 +372,38 @@ apply_runtime_rehydrate_retired_legacy()
     fi
 }
 
+# Private READ-ONLY witness after native IPFW has committed. This is the
+# physical counterpart to rehydrate_retired_legacy(), which expects staged
+# tables and must NEVER be used as a post-commit success witness.
+apply_runtime_verify_retired_legacy_committed()
+{
+    [ "$#" -eq 2 ] || return 64
+    _apply_done_candidate="$1"
+    _apply_done_id="$2"
+    case "$_apply_done_id" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_apply_done_id}" -eq 32 ] || return 64
+    [ "${APPLY_PHASE:-idle}" = idle ] || return 69
+    case "$_apply_done_candidate" in /*) ;; *) return 64 ;; esac
+    _apply_done_backup="$BACKUP_ROOT/$(basename "$ACTIVE_DIR")-$_apply_done_id"
+    [ -d "$_apply_done_candidate" ] &&
+    [ ! -L "$_apply_done_candidate" ] &&
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] &&
+    [ -d "$_apply_done_backup" ] && [ ! -L "$_apply_done_backup" ] &&
+    [ ! -e "$_apply_done_backup/voice-plan.json" ] || return 69
+    for _apply_done_file in dvtws.args tcp-ports.txt udp-ports.txt; do
+        [ -f "$_apply_done_backup/$_apply_done_file" ] &&
+        [ ! -L "$_apply_done_backup/$_apply_done_file" ] || return 69
+    done
+    validator_validate_runtime_modes "$_apply_done_candidate" || return 70
+    atomic_verify_tree "$_apply_done_candidate" "$ACTIVE_DIR" || return 70
+    launcher_is_running "$CHILD_PIDFILE" &&
+    supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" || return 70
+    _apply_engine=1
+    apply_runtime_attest_engine_inventory || return 70
+    # Final verify rejects ALL staging tables as well as foreign rules.
+    firewall_shared_runtime verify "$_apply_done_candidate" "$ACTIVE_DIR" || return 70
+}
+
 # Post-activation proof for the ACTUAL shared Strategies/Voice Apply.
 # Invoke under original FD9, after native activation and immediately before
 # Config::save. Never return success based on the launcher/adapter exit code

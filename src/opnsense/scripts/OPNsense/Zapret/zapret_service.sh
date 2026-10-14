@@ -979,6 +979,35 @@ shared_apply_legacy_begin_service()
 # this worker uses OPNsense Config::lock/save/unlock itself. Never expose this
 # through configd, GUI or ordinary lifecycle. A nonzero after save may mean
 # persisted Config; preserve the original journal and all IPFW rollback.
+# Private original-FD9 native IPFW commit after persisted legacy Config.
+# This is the SAME common actuator and kernel table cleanup, NOT a Voice
+# second owner. The Python parent MUST hold the NEW Config inode flock and
+# has already fsynced legacy-common-committing, proving native saved Config.
+# Any uncertain/partial kernel cleanup leaves that journal pending.
+shared_apply_commit_retired_legacy_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    _legacy_commit_id="$1"
+    case "$_legacy_commit_id" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_legacy_commit_id}" -eq 32 ] || return 64
+    _legacy_commit_owner=$(shared_apply_inspect_service) || return 69
+    [ "$_legacy_commit_owner" = "legacy-common-committing $_legacy_commit_id voice" ] ||
+        return 69
+    shared_apply_require_tools || return 69
+    shared_apply_bundle_service verify "$_legacy_commit_id" || return 69
+    _legacy_commit_root=$(shared_apply_workspace "$_legacy_commit_id") || return 69
+    apply_runtime_rehydrate_retired_legacy \
+        "$_legacy_commit_root/release" "$_legacy_commit_id" || return 70
+    apply_runtime_attest_activated || return 70
+    # Native commit deletes ONLY exact verified obsolete/stage IPFW tables.
+    # No old-runtime backup or sealed previous Config is deleted here.
+    apply_runtime_commit || return 70
+    apply_runtime_verify_retired_legacy_committed \
+        "$_legacy_commit_root/release" "$_legacy_commit_id" || return 70
+    shared_apply_bundle_service verify "$_legacy_commit_id" || return 70
+    printf "legacy-native-committed=%s\n" "$_legacy_commit_id"
+}
+
 shared_apply_save_retired_legacy_config_service()
 {
     [ "$#" -eq 1 ] || return 64

@@ -818,6 +818,29 @@ class TestJournal(unittest.TestCase):
             with self.assertRaises(SharedOperationError):
                 store.advance("committed",detail())
             self.assertEqual(saved,store.read())
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_common_commit(identity,lambda:seal)
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_common_commit(identity,lambda:"0"*64)
+            self.assertEqual(saved,store.read())
+            intended=store.begin_legacy_common_commit(identity,lambda:seal)
+            self.assertEqual("legacy-common-committing",intended["phase"])
+            self.assertEqual(intended,SharedApplyOperation(store.root).read())
+            self.assertEqual("shared-apply-pending",check_pending(
+                root/"voice-cutover",root/"voice-ipfw")["reason"])
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_common_commit(identity,lambda:seal)
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_common_commit(identity,lambda:"0"*64)
+            self.assertEqual(intended,store.read())
+            committed=store.finish_legacy_common_commit(identity,lambda:seal)
+            self.assertEqual("committed",committed["phase"])
+            self.assertEqual(detail(),committed_owner(committed))
+            self.assertNotIn("legacy_predecessor",committed)
+            self.assertTrue(check_pending(root/"voice-cutover",root/"voice-ipfw")[
+                "safe_to_mutate"])
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_common_commit(identity,lambda:seal)
 
 
     def test_private_native_save_handoff_relocks_new_config_inode(self):
@@ -898,13 +921,14 @@ class TestJournal(unittest.TestCase):
                         active_runtime=active, marker_path=marker,
                         require_lifecycle_owner=lambda: None,
                     )
-                    self.assertEqual("legacy-config-saved", result["phase"])
+                    self.assertEqual("committed", result["phase"])
                     self.assertEqual("<new/>", config.read_text())
                     self.assertEqual(["old-proof", "attest", "config-save",
-                                      "old-proof", "attest"], actions)
-                    self.assertIsNone(committed_owner(store.read()))
-                    self.assertEqual("shared-apply-pending", check_pending(
-                        root / "voice-cutover", root / "voice-ipfw")["reason"])
+                                      "old-proof", "attest", "old-proof", "attest",
+                                      "commit", "old-proof", "verify-committed"], actions)
+                    self.assertEqual(detail(),committed_owner(store.read()))
+                    self.assertTrue(check_pending(
+                        root / "voice-cutover", root / "voice-ipfw")["safe_to_mutate"])
                     with self.assertRaises((SharedOperationError, LegacyPredecessorRouteError)):
                         save_native_config_after_legacy_activation(
                             identity=identity, store=store, work=work, config_path=config,
