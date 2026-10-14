@@ -20,6 +20,11 @@ launcher_start_once() {
 supervisor_start() { MONITOR=1; }
 firewall_shared_runtime() {
     case "$1" in
+        verify-cleanup)
+            # Real post-COMMIT reconciliation accepts missing or owned
+            # remnants, but rejects unrelated/modified stage contents.
+            [ "$FW" = active ] || return 1
+            case "$FW_STAGE" in 0|1) ;; *) return 1 ;; esac ;;
         verify-staged)
             [ "$FW_STAGE" = 1 ] && [ "$FAIL_STAGE_CHECK" = 0 ] || return 1
             if [ "$3" = - ]; then [ "$FW" = empty ]; else [ "$FW" = active ]; fi ;;
@@ -655,3 +660,67 @@ if grep -Eq 'launcher_stop|supervisor_stop|firewall_remove|apply_runtime_activat
 fi
 echo 'PASS: durable common quiescing is published before any old process stop'
 echo 'PASS: shared engine/IPFW, stopped legacy rollback and live legacy refusal'
+
+# End-to-end wrapper contract: unlike a Python-only unit test this sources
+# the REAL installed common shell firewall dispatcher. A missing action here
+# would reject the operator-only partial COMMIT before IPFW is even inspected.
+WRAPPER="$ROOT/actual-firewall-dispatch.sh"
+sed -n '/^firewall_shared_runtime()$/,/^}$/p' "$BASE/firewall.sh" > "$WRAPPER"
+[ -s "$WRAPPER" ] || fail "missing production common firewall dispatcher"
+sh -n "$WRAPPER" || fail "production firewall dispatcher shell syntax"
+cat > "$ROOT/capture-firewall-python" <<'CAPTURE'
+#!/bin/sh
+printf '%s\n' "$@" > "$VOICE_IPFW_ACTION_LOG"
+CAPTURE
+chmod 700 "$ROOT/capture-firewall-python"
+(
+    PYTHON_BIN="$ROOT/capture-firewall-python"
+    BACKEND_DIR="$BASE"
+    VOICE_IPFW_ACTION_LOG="$ROOT/forwarded-ipfw-argv"
+    export PYTHON_BIN BACKEND_DIR VOICE_IPFW_ACTION_LOG
+    . "$WRAPPER"
+    firewall_shared_runtime verify-cleanup - "$ROOT/one" ||
+        fail "real common firewall dispatcher rejects read-only cleanup"
+    printf '%s\n' "$BASE/voice_ipfw_adapter.py" shared verify-cleanup - "$ROOT/one" > "$ROOT/expected-ipfw-argv"
+    cmp -s "$ROOT/expected-ipfw-argv" "$VOICE_IPFW_ACTION_LOG" ||
+        fail "verify-cleanup did not reach exact common Python adapter"
+    rm -f "$VOICE_IPFW_ACTION_LOG"
+    if firewall_shared_runtime bogus-cleanup - "$ROOT/one"; then
+        fail "unknown common firewall action accepted"
+    fi
+    [ ! -e "$VOICE_IPFW_ACTION_LOG" ] ||
+        fail "unknown firewall action reached adapter"
+)
+
+# Real common runtime helper, process/kernel observers mocked as elsewhere in
+# this SAME test. The trusted installed tree/old backup and complete engine
+# are required before the verified stage can be cleaned.
+(
+    ACTIVE_DIR="$ROOT/resume-active"
+    BACKUP_ROOT="$ROOT/resume-backups"
+    _resume_id=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    mkdir -p "$ACTIVE_DIR" "$BACKUP_ROOT/$(basename "$ACTIVE_DIR")-$_resume_id"
+    cp "$ROOT/one/voice-plan.json" "$ROOT/one/dvtws.args" "$ACTIVE_DIR/"
+    for _resume_file in dvtws.args tcp-ports.txt udp-ports.txt; do
+        printf '%s\n' original > "$BACKUP_ROOT/$(basename "$ACTIVE_DIR")-$_resume_id/$_resume_file"
+    done
+    PROCESS=1 MONITOR=1 FW=active FW_STAGE=1
+    apply_runtime_clear
+    apply_runtime_resume_retired_legacy_cleanup "$ROOT/one" "$_resume_id" ||
+        fail "partial common IPFW stage could not resume"
+    [ "$FW_STAGE" = 0 ] ||
+        fail "resumed common stage not cleaned"
+    FW_STAGE=foreign
+    if apply_runtime_resume_retired_legacy_cleanup "$ROOT/one" "$_resume_id"; then
+        fail "foreign IPFW stage reached cleanup"
+    fi
+    [ "$FW_STAGE" = foreign ] ||
+        fail "foreign IPFW stage changed on refusal"
+    FW_STAGE=1 PROCESS=0
+    if apply_runtime_resume_retired_legacy_cleanup "$ROOT/one" "$_resume_id"; then
+        fail "missing dvtws2 reached partial IPFW cleanup"
+    fi
+    [ "$FW_STAGE" = 1 ] ||
+        fail "missing dvtws2 modified pending IPFW stage"
+)
+echo 'PASS: real common firewall verify-cleanup dispatcher and fail-closed partial native runtime'
