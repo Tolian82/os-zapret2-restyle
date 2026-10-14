@@ -1023,9 +1023,36 @@ shared_apply_recover_saved_service()
         return 69
     fi
     firewall_shared_runtime verify "$_shared_saved_root/release" - || return 69
-    apply_runtime_activate "$_shared_saved_root/release" "$_shared_saved_mode" || return 70
-    # All source files must remain sealed after the kernel transition.
+    # Reuse the SAME sealed operation ID for native atomic stage/park
+    # artifacts. PID-scoped names in a power-cut recovery cannot be tied
+    # back to the one durable shared Apply record.
+    apply_runtime_activate "$_shared_saved_root/release" "$_shared_saved_mode" \
+        "$_shared_saved_id" || return 70
+    # Native Config save is already durable in this phase. Never destroy
+    # the IPFW rollback stages until BOTH actual runtime and a freshly
+    # reread native Config still attest the exact same committed owner.
     shared_apply_bundle_service verify "$_shared_saved_id" || return 70
+    apply_runtime_attest_activated || return 70
+    _shared_saved_again=$(shared_apply_native_config saved \
+        "$_shared_saved_id" "$_shared_saved_page") || return 70
+    if ! {
+        _shared_saved_again_result=$(printf "%s\n" "$_shared_saved_again" | \
+            shared_apply_json_field '.result | select(.=="committed")') &&
+        _shared_saved_again_mode=$(printf "%s\n" "$_shared_saved_again" | \
+            shared_apply_json_field '.enabled | select(.=="0" or .=="1")') &&
+        _shared_saved_again_digest=$(printf "%s\n" "$_shared_saved_again" | \
+            shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') &&
+        _shared_saved_initial_digest=$(printf "%s\n" "$_shared_saved_config" | \
+            shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') &&
+        [ "$_shared_saved_again_result" = committed ] &&
+        [ "$_shared_saved_again_mode" = "$_shared_saved_mode" ] &&
+        [ "$_shared_saved_again_digest" = "$_shared_saved_initial_digest" ] &&
+        apply_runtime_attest_activated
+    }; then
+        # Config may have changed independently while the stopped owner
+        # was starting. Do not roll back a saved Config or delete stages.
+        return 70
+    fi
     apply_runtime_commit || return 70
     # This terminal transition is made ONLY after physical runtime/IPFW
     # completion. If this write fails, Config-saved evidence remains pending.
