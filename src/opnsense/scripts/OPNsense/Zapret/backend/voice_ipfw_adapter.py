@@ -281,7 +281,16 @@ def _verify_shared_voice_engine(release: Path, plan: dict, read) -> None:
         or len(capture["voice"]) != len(profiles)
     ):
         raise IPFWAdapterError("invalid Voice profiles/capture in common release")
-    traffic = read("traffic.conf").decode("utf-8")
+    traffic_bytes = read("traffic.conf")
+    traffic = traffic_bytes.decode("utf-8")
+    # The same staged merger approved the STUN profile ordering and
+    # destination scopes. A later edit to the ordinary portion must not
+    # bypass that collision proof by updating dvtws.args to match.
+    source = plan.get("source")
+    if not isinstance(source, dict) or (
+        hashlib.sha256(traffic_bytes).hexdigest() != source.get("merged_sha256")
+    ):
+        raise IPFWAdapterError("common engine traffic changed after STUN staging")
     argv = read("dvtws.args").decode("utf-8")
     if not traffic.strip() or not argv.strip() or traffic not in argv:
         raise IPFWAdapterError("common engine argv differs from merged Voice traffic")
@@ -384,7 +393,25 @@ def shared_release_manifest(release: Path) -> dict:
     tcp = read("tcp-ports.txt").decode("utf-8").strip()
     udp = read("udp-ports.txt").decode("utf-8").strip()
     manifest = prepare_desired(plan.get("capture"), tcp, udp)
-    hashes = plan.get("source", {}).get("ipset_sha256", {})
+    source = plan.get("source")
+    if not isinstance(source, dict):
+        raise IPFWAdapterError("missing shared Voice staging evidence")
+    hashes = source.get("ipset_sha256", {})
+    ordinary_hashes = source.get("ordinary_scope_ipset_sha256")
+    if not isinstance(ordinary_hashes, dict) or any(
+        name not in SERVICES or not isinstance(digest, str) or
+        not re.fullmatch(r"[a-f0-9]{64}", digest)
+        for name, digest in ordinary_hashes.items()
+    ):
+        raise IPFWAdapterError("untrusted ordinary STUN IPSET scope fingerprints")
+    # Ordinary Strategies can use a managed IPSET even when its corresponding
+    # Voice checkbox is OFF. The stage collision proof is valid only while
+    # ALL of those candidate managed lists retain exactly their staged bytes.
+    # The existing read() enforces regular files, owner, mode and size.
+    for service, digest in ordinary_hashes.items():
+        raw = read(f"managed/ipset-{service}.txt")
+        if hashlib.sha256(raw).hexdigest() != digest:
+            raise IPFWAdapterError("ordinary STUN managed IPSET changed after staging")
     for service in SERVICES:
         table = TABLE_PREFIX + service
         if table not in manifest["tables"]:

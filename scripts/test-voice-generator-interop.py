@@ -25,6 +25,7 @@ def load(name):
     return module
 stage = load("voice_release_stage")
 firewall = load("voice_firewall_transaction")
+from voice_ipfw_adapter import shared_release_manifest, IPFWAdapterError
 fixtures_spec = importlib.util.spec_from_file_location(
     "voice_release_stage_fixture", ROOT / "scripts/test-voice-release-stage.py"
 )
@@ -137,6 +138,61 @@ class GeneratorInteropTests(unittest.TestCase):
             desired = firewall.prepare_desired(plan, tcp, udp)
             self.assertEqual([19000, 19001], sorted(desired["rules"]))
             self.assertEqual({}, desired["tables"])
+
+    def test_native_common_release_rechecks_all_stun_ipsets_and_merged_argv(self):
+        # Exercise the real shared-candidate layout, not the private
+        # voice-native-candidate directory used by handoff_preflight.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            xml, managed = fixtures.write_fixture(root, fixtures.fixture(True))
+            (managed / "ipset-discord.txt").write_text(
+                "198.51.100.0/24\n", encoding="utf-8")
+            ordinary = (
+                "--filter-tcp=443\n--filter-l7=tls\n--new\n"
+                "--filter-udp=3478\n--filter-l7=stun\n"
+                "--payload=stun\n"
+                "--ipset=/usr/local/etc/zapret2/runtime-v2/managed/ipset-discord.txt\n"
+            )
+            ordinary_file = root / "ordinary.conf"
+            ordinary_file.write_text(ordinary, encoding="utf-8")
+            bundle = stage.compile_bundle(
+                xml, managed, ACTIVE_ROOT, "vtnet1", 19000, 19010, 989,
+                ordinary_file, expected_logical_wan="WAN",
+            )
+            release = root / "release"
+            release.mkdir()
+            managed_release = release / "managed"
+            managed_release.mkdir()
+            for name in ("telegram", "discord"):
+                src = managed / f"ipset-{name}.txt"
+                (managed_release / src.name).write_bytes(src.read_bytes())
+            stage.stage_common_runtime(release, ACTIVE_ROOT, bundle)
+            args = generate_native_argv(root / "generator", bundle["traffic.conf"])
+            (release / "dvtws.args").write_text(args, encoding="utf-8")
+            tcp, udp = extract_real_ordinary_ports(root / "ports", ordinary)
+            (release / "tcp-ports.txt").write_text(tcp + "\n", encoding="utf-8")
+            (release / "udp-ports.txt").write_text(udp + "\n", encoding="utf-8")
+            manifest = shared_release_manifest(release)
+            self.assertEqual({"zapret2_voice_telegram"}, set(manifest["tables"]))
+            self.assertEqual([19000, 19001, 19002], sorted(manifest["rules"]))
+            # This list has no Voice Discord IPFW table, but still controls
+            # whether an ordinary STUN filter can preempt Voice Telegram.
+            discord = managed_release / "ipset-discord.txt"
+            discord.write_text("91.108.13.10\n", encoding="utf-8")
+            with self.assertRaisesRegex(IPFWAdapterError, "ordinary STUN managed IPSET"):
+                shared_release_manifest(release)
+            discord.write_text("198.51.100.0/24\n", encoding="utf-8")
+            self.assertEqual(manifest, shared_release_manifest(release))
+            # Ordinary traffic changed after scope collision approval, even
+            # if someone coherently changes the generated dvtws.args too.
+            altered = bundle["traffic.conf"].replace(
+                "--filter-udp=3478", "--filter-udp=*")
+            (release / "traffic.conf").write_text(altered, encoding="utf-8")
+            (release / "dvtws.args").write_text(
+                generate_native_argv(root / "changed-generator", altered),
+                encoding="utf-8")
+            with self.assertRaisesRegex(IPFWAdapterError, "traffic changed"):
+                shared_release_manifest(release)
 
     def test_old_poc_or_ordinary_stun_conflict_fails_before_generator(self):
         with tempfile.TemporaryDirectory() as tmp:
