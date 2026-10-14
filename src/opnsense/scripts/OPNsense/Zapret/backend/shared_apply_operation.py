@@ -35,6 +35,7 @@ PHASES = frozenset((
     "legacy-ipfw-retiring", "legacy-ipfw-retired",
     "legacy-marker-retiring", "legacy-marker-retired",
     "legacy-common-activating", "legacy-common-activated",
+    "legacy-config-saving", "legacy-config-saved",
     "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
     "legacy-rollback-marker", "legacy-rollback-marker-restored",
     "legacy-rollback-processes", "legacy-rollback-processes-restored",
@@ -59,7 +60,9 @@ NEXT = {
     "legacy-marker-retiring": frozenset(("legacy-marker-retired",)),
     "legacy-marker-retired": frozenset(("legacy-rollback-ipfw", "legacy-common-activating")),
     "legacy-common-activating": frozenset(("legacy-common-activated",)),
-    "legacy-common-activated": frozenset(),
+    "legacy-common-activated": frozenset(("legacy-config-saving",)),
+    "legacy-config-saving": frozenset(("legacy-config-saved",)),
+    "legacy-config-saved": frozenset(),
     "legacy-rollback-ipfw": frozenset(("legacy-rollback-ipfw-restored",)),
     "legacy-rollback-ipfw-restored": frozenset(("legacy-rollback-marker",)),
     "legacy-rollback-marker": frozenset(("legacy-rollback-marker-restored",)),
@@ -130,6 +133,7 @@ def _validate_record(record: object) -> dict:
                                    "legacy-ipfw-retiring", "legacy-ipfw-retired",
                                    "legacy-marker-retiring", "legacy-marker-retired",
                                    "legacy-common-activating", "legacy-common-activated",
+                                   "legacy-config-saving", "legacy-config-saved",
                                    "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
                                    "legacy-rollback-marker", "legacy-rollback-marker-restored",
                                    "legacy-rollback-processes",
@@ -411,6 +415,27 @@ class SharedApplyOperation:
             identity, "legacy-common-activating", "legacy-common-activated", attest
         )
 
+
+    def begin_legacy_config_save(self, identity: str, attest) -> dict:
+        """Fsync native Config write intent BEFORE any possible Config::save.
+
+        The original FD9 owner proves unchanged OLD Config, sealed original
+        backup, live common engine, and staged native IPFW. Interrupted
+        persistence is nonterminal, never optimistic old-owner restore.
+        """
+        return self._transition_legacy_boundary(
+            identity, "legacy-common-activated", "legacy-config-saving", attest
+        )
+
+    def finish_legacy_config_save(self, identity: str, attest) -> dict:
+        """Acknowledge only exact NEW Config read back by the native worker.
+
+        Attest must verify the new OPNsense model, live common runtime/IPFW
+        and preserved original backup. This is NOT native IPFW COMMIT.
+        """
+        return self._transition_legacy_boundary(
+            identity, "legacy-config-saving", "legacy-config-saved", attest
+        )
 
     def begin_pristine_common_activation_rollback(self, identity: str, attest) -> dict:
         """One-way rollback after a completely untouched interrupted start.
@@ -695,7 +720,7 @@ def main(argv: list[str]) -> int:
                     # Returning 'restored' here would send the ordinary
                     # service to LEGACY boot over the preceding common owner.
                     print("committed " + prior["id"] + " " + prior["page"])
-            elif record["phase"] in ("prepared", "config-saved", "legacy-quiescing", "legacy-processes-stopped",
+            elif record["phase"] in ("prepared", "config-saved", "legacy-config-saving", "legacy-config-saved", "legacy-quiescing", "legacy-processes-stopped",
                                        "legacy-ipfw-retiring", "legacy-ipfw-retired",
                                        "legacy-marker-retiring", "legacy-marker-retired",
                                        "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",

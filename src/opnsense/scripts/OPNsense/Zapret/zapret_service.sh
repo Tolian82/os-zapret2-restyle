@@ -973,6 +973,64 @@ shared_apply_legacy_begin_service()
         begin-common "$_legacy_begin_id"
 }
 
+# PRIVATE first native Config write for a previously attested legacy→common
+# switch. The Python FD9 coordinator must have ALREADY fsynced the single
+# legacy-config-saving journal intent and RELEASED its OLD pinned Config flock:
+# this worker uses OPNsense Config::lock/save/unlock itself. Never expose this
+# through configd, GUI or ordinary lifecycle. A nonzero after save may mean
+# persisted Config; preserve the original journal and all IPFW rollback.
+shared_apply_save_retired_legacy_config_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    _legacy_save_id="$1"
+    case "$_legacy_save_id" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_legacy_save_id}" -eq 32 ] || return 64
+    _legacy_save_owner=$(shared_apply_inspect_service) || return 69
+    [ "$_legacy_save_owner" = "legacy-config-saving $_legacy_save_id voice" ] ||
+        return 69
+    shared_apply_require_tools || return 69
+    shared_apply_bundle_service verify "$_legacy_save_id" || return 69
+    _legacy_save_root=$(shared_apply_workspace "$_legacy_save_id") || return 69
+    _legacy_save_pre=$(shared_apply_native_config preflight \
+        "$_legacy_save_id" voice) || return 69
+    _legacy_save_target=$(printf "%s\n" "$_legacy_save_pre" | \
+        shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') ||
+        return 69
+    _legacy_save_mode=$(printf "%s\n" "$_legacy_save_pre" | \
+        shared_apply_json_field '.enabled | select(.=="1")') || return 69
+    _legacy_save_expected=$(printf "%s\n" "$_legacy_save_pre" | \
+        shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') ||
+        return 69
+    [ "$_legacy_save_mode" = 1 ] || return 69
+    apply_runtime_rehydrate_retired_legacy \
+        "$_legacy_save_root/release" "$_legacy_save_id" || return 70
+    apply_runtime_attest_activated || return 70
+    # Once the native Config writer is entered, ANY error is an ambiguous
+    # persistence outcome for this already-switched live predecessor.
+    shared_apply_native_config save "$_legacy_save_id" voice || return 70
+    _legacy_save_actual=$(shared_apply_native_config saved \
+        "$_legacy_save_id" voice) || return 70
+    if ! {
+        _legacy_save_result=$(printf "%s\n" "$_legacy_save_actual" | \
+            shared_apply_json_field '.result | select(.=="committed")') &&
+        _legacy_save_digest=$(printf "%s\n" "$_legacy_save_actual" | \
+            shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') &&
+        _legacy_save_enabled=$(printf "%s\n" "$_legacy_save_actual" | \
+            shared_apply_json_field '.enabled | select(.=="1")') &&
+        [ "$_legacy_save_result" = committed ] &&
+        [ "$_legacy_save_digest" = "$_legacy_save_target" ] &&
+        [ "$_legacy_save_enabled" = 1 ] &&
+        shared_apply_bundle_service verify "$_legacy_save_id" &&
+        apply_runtime_attest_activated
+    }; then
+        return 70
+    fi
+    # This reports native SAVED witness only. The journal is STILL in the
+    # saving phase until a SEPARATE pinned new-owner witness completes it.
+    # IPFW stages remain intact; NO native COMMIT runs here.
+    printf "legacy-native-config-saved=%s\n" "$_legacy_save_id"
+}
+
 # One actual runtime/Config Apply owner: the existing service process holds
 # FD9 for the ENTIRE operation; Python journal and PHP Config worker run as
 # children inheriting that ownership. No nested configd/lockf acquisition,

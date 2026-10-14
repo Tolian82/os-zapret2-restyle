@@ -509,7 +509,8 @@ class TestJournal(unittest.TestCase):
                 self.assertEqual("native-common-forward", argv[3])
                 self.assertEqual(str(work / "release"), argv[5])
                 self.assertEqual(detail()["id"], argv[6])
-                self.assertEqual((9, 11), kw["pass_fds"])
+                self.assertEqual((9,) if argv[4] == "config-save" else (9, 11),
+                                 kw["pass_fds"])
                 self.assertEqual(90, kw["timeout"])
                 self.assertNotIn("ZAPRET_NATIVE_PRIVATE_IMPORT", kw["env"])
                 self.assertNotIn(str(work), argv[2])
@@ -517,14 +518,14 @@ class TestJournal(unittest.TestCase):
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
             with patch("voice_native_legacy_predecessor_route.NATIVE_COMMON_SERVICE",
                        service):
-                for mode in ("probe", "activate"):
+                for mode in ("probe", "activate", "attest", "config-save"):
                     self.assertTrue(_invoke_existing_native_common(
                         mode=mode, identity=detail()["id"], work=work,
                         config_fd=11, require_lifecycle_owner=lambda: seen.append("FD9"),
                         runner=runner,
                     ))
-                self.assertEqual(["probe", "activate"], called)
-                self.assertEqual(["FD9", "FD9"], seen)
+                self.assertEqual(["probe", "activate", "attest", "config-save"], called)
+                self.assertEqual(["FD9", "FD9", "FD9", "FD9"], seen)
                 for bad in ("-bad", "", "1" * 31):
                     with self.assertRaises(LegacyPredecessorRouteError):
                         _invoke_existing_native_common(
@@ -750,6 +751,52 @@ class TestJournal(unittest.TestCase):
             self.assertFalse(store.advisory()["safe_to_mutate"])
             with self.assertRaises(SharedOperationError):
                 store.finish_legacy_common_activation(detail()["id"],lambda:"f"*64)
+
+    def test_native_config_save_requires_one_legacy_intent_and_readback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            store=SharedApplyOperation(root/"shared-apply")
+            identity=detail()["id"]
+            seal="f"*64
+            store.prepare_legacy_predecessor(detail(),lambda:seal)
+            store.begin_legacy_quiesce(identity,lambda:seal)
+            store.mark_legacy_processes_stopped(identity,lambda:seal)
+            store.begin_legacy_ipfw_retire(identity,lambda:seal)
+            store.finish_legacy_ipfw_retire(identity,lambda:seal)
+            store.begin_legacy_marker_retire(identity,lambda:seal)
+            store.finish_legacy_marker_retire(identity,lambda:seal)
+            store.begin_legacy_common_activation(identity,lambda:seal)
+            store.finish_legacy_common_activation(identity,lambda:seal)
+            current=store.read()
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_config_save(identity,lambda:seal)
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_config_save(identity,lambda:"0"*64)
+            self.assertEqual(current,store.read())
+            pending=store.begin_legacy_config_save(identity,lambda:seal)
+            self.assertEqual("legacy-config-saving",pending["phase"])
+            self.assertEqual(pending,SharedApplyOperation(store.root).read())
+            self.assertEqual("shared-apply-pending",check_pending(
+                root/"voice-cutover",root/"voice-ipfw")["reason"])
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_config_save(identity,lambda:seal)
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_config_save("2"*32,lambda:seal)
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_config_save(identity,lambda:"0"*64)
+            with self.assertRaises(SharedOperationError):
+                store.advance("committed",detail())
+            self.assertEqual(pending,store.read())
+            saved=store.finish_legacy_config_save(identity,lambda:seal)
+            self.assertEqual("legacy-config-saved",saved["phase"])
+            self.assertIsNone(committed_owner(saved))
+            self.assertEqual("shared-apply-pending",check_pending(
+                root/"voice-cutover",root/"voice-ipfw")["reason"])
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_config_save(identity,lambda:seal)
+            with self.assertRaises(SharedOperationError):
+                store.advance("committed",detail())
+            self.assertEqual(saved,store.read())
 
     def test_legacy_rollback_ipfw_uses_same_journal_not_a_second_owner(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -547,6 +547,7 @@ case "$1" in
     probe) apply_runtime_probe "$2" 1 ;;
     activate) apply_runtime_activate_retired_legacy "$2" "$3" ;;
     attest) apply_runtime_rehydrate_retired_legacy "$2" "$3" ;;
+    config-save) shared_apply_save_retired_legacy_config_service "$3" ;;
     *) exit 64 ;;
 esac
 """
@@ -557,7 +558,7 @@ def _invoke_existing_native_common(
     service_script=None, runner=None,
 ):
     """Call the actual installed native actuator with the parent's two locks."""
-    if mode not in ("probe", "activate", "attest") or not isinstance(identity, str) or (
+    if mode not in ("probe", "activate", "attest", "config-save") or not isinstance(identity, str) or (
         COMMON_ID.fullmatch(identity) is None
     ):
         raise LegacyPredecessorRouteError("invalid fixed native forward action")
@@ -585,7 +586,11 @@ def _invoke_existing_native_common(
         ["/bin/sh", "-c", _NATIVE_FORWARD_SHELL,
          "native-common-forward", mode, str(work / "release"), identity],
         check=False, capture_output=True, text=True, timeout=90,
-        pass_fds=(9, config_fd),
+        # The caller MUST release the OLD pinned Config flock before the
+        # native writer. PHP owns Config::lock/save; do not leak the old
+        # Config descriptor into the Config::save subprocess. Original FD9
+        # remains held across both the intent journal and native save.
+        pass_fds=(9,) if mode == "config-save" else (9, config_fd),
         env={"LC_ALL": "C",
              "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin"},
     )
