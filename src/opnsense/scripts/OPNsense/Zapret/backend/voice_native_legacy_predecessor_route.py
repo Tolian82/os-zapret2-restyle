@@ -682,10 +682,17 @@ def commit_native_common_after_legacy_config_save(
         _locked_config(config_path, config_fd, config_owner)
         if store.read() != intent:
             raise LegacyPredecessorRouteError("native IPFW commit journal drifted")
-        _invoke_existing_native_common(
-            mode="commit", identity=identity, work=work, config_fd=config_fd,
-            require_lifecycle_owner=require_lifecycle_owner,
-        )
+        try:
+            _invoke_existing_native_common(
+                mode="commit", identity=identity, work=work, config_fd=config_fd,
+                require_lifecycle_owner=require_lifecycle_owner,
+            )
+        except (LegacyPredecessorRouteError, subprocess.TimeoutExpired):
+            # The kernel may have completed cleanup even if the child died
+            # or its receipt was lost. Do NOT retry the IPFW mutation.
+            # The same final no-stage proof below is the ONLY way to
+            # complete the single durable journal; failure stays pending.
+            pass
     else:
         # The existing journal already records an uncertain kernel cleanup.
         # No second kernel commit, no Config writer and no engine start.
