@@ -534,6 +534,108 @@ def retire_stopped_common_legacy_marker(
     return result
 
 
+
+def activate_common_after_legacy_retirement(
+    *, identity, store, work, config_path, config_fd, config_owner,
+    active_runtime, marker_path, process_probe, readonly_ipfw,
+    require_lifecycle_owner, common_preflight, common_activate, common_attest,
+):
+    """PRIVATE forward runtime actuator after exact old IPFW/marker retirement.
+
+    The caller holds the ORIGINAL FD9 and pinned Config inode flock for the
+    entire operation. Its fixed common_activate callback uses the EXISTING
+    apply_runtime_activate (one engine/supervisor/IPFW), not an old PoC
+    process. A durable intent is written BEFORE invoking that actuator.
+    A crash never retries it: no cold-boot or GUI route exists yet.
+    Native Config save/COMMIT and forward crash recovery are separate gates.
+    """
+    from shared_apply_operation import (
+        SharedApplyOperation, fingerprint_legacy_predecessor,
+    )
+    from voice_native_legacy_ipfw_replay import _strict_snapshot
+    from voice_native_legacy_reverse_wal import _stopped
+
+    if not isinstance(store, SharedApplyOperation) or (
+        not isinstance(process_probe, FreeBSDVoiceProcessProbe)
+        or not isinstance(readonly_ipfw, FreeBSDIPFWAdapter)
+        or readonly_ipfw.allow_mutations
+        or (readonly_ipfw.rule_base, readonly_ipfw.rule_max) != (19000, 19010)
+        or type(config_fd) is not int or config_fd < 0
+        or not callable(require_lifecycle_owner)
+        or not all(callable(cb) for cb in (
+            common_preflight, common_activate, common_attest
+        ))
+    ):
+        raise LegacyPredecessorRouteError("missing original common runtime owner")
+    work = Path(work)
+    root = work / "legacy-backup"
+    if work.name != identity or not COMMON_ID.fullmatch(identity):
+        raise LegacyPredecessorRouteError("common runtime candidate identity changed")
+    record = store.read()
+    if record is None or record["phase"] != "legacy-marker-retired" or (
+        record["detail"]["id"] != identity
+        or record["detail"]["page"] != "voice"
+        or "legacy_predecessor" not in record or "previous" in record
+    ):
+        raise LegacyPredecessorRouteError("old owner must be wholly retired before activation")
+    old = inspect_previous(root / NAME / "previous")
+    seal = inspect_legacy_previous(root)
+    plan = inspect_legacy_restore_plan(root)
+    if plan["previous_five"] != seal["previous_five"]:
+        raise LegacyPredecessorRouteError("old rollback evidence no longer matches")
+
+    def retired():
+        require_lifecycle_owner()
+        _locked_config(Path(config_path), config_fd, config_owner)
+        if store.read() != record or (
+            fingerprint_legacy_predecessor(work, owner=config_owner[0])
+            != record["legacy_predecessor"]
+        ) or inspect_legacy_previous(root) != seal or (
+            inspect_legacy_restore_plan(root) != plan
+        ):
+            raise LegacyPredecessorRouteError("old owner or journal drifted before forward")
+        _verify_sources(Path(config_path), Path(active_runtime), old)
+        if os.path.lexists(marker_path) or (
+            _stopped(process_probe) != "exact-three-role-absence"
+        ) or _strict_snapshot(readonly_ipfw) != {"rules": {}, "targets": None}:
+            raise LegacyPredecessorRouteError("old runtime/IPFW/marker not wholly retired")
+        if common_preflight() is not True:
+            raise LegacyPredecessorRouteError("ordinary common runtime preflight refused")
+        return record["legacy_predecessor"]
+
+    retired()
+    intent = store.begin_legacy_common_activation(identity, retired)
+    if intent["phase"] != "legacy-common-activating":
+        raise LegacyPredecessorRouteError("common activation intent was not durable")
+    # Any exception/failure below is intentionally fail-closed. No second
+    # engine start or automatic old-PoC restart is attempted from this phase.
+    require_lifecycle_owner()
+    _locked_config(Path(config_path), config_fd, config_owner)
+    if store.read() != intent or common_activate() is not True:
+        raise LegacyPredecessorRouteError("common runtime activation interrupted")
+
+    def attested():
+        require_lifecycle_owner()
+        _locked_config(Path(config_path), config_fd, config_owner)
+        if store.read() != intent or (
+            fingerprint_legacy_predecessor(work, owner=config_owner[0])
+            != record["legacy_predecessor"]
+        ) or os.path.lexists(marker_path):
+            raise LegacyPredecessorRouteError("previous seal changed after forward activation")
+        # The fixed caller must independently prove exact installed release,
+        # single engine/monitor PID+argv, scoped native IPFW and old Config.
+        # This callback returns the saved candidate generation ONLY on proof.
+        if common_attest() != record["detail"]["candidate"]:
+            raise LegacyPredecessorRouteError("common engine/IPFW witness differs from candidate")
+        return record["legacy_predecessor"]
+
+    attested()
+    result = store.finish_legacy_common_activation(identity, attested)
+    if result["phase"] != "legacy-common-activated":
+        raise LegacyPredecessorRouteError("common runtime not sealed after start")
+    return result
+
+
 def restore_retired_common_legacy_ipfw(
     *, identity, store, work, config_path, config_fd, config_owner,
     active_runtime, marker_path, process_probe, readonly_ipfw,

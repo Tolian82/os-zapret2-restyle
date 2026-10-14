@@ -489,6 +489,133 @@ class TestJournal(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         invoke()
 
+    def test_old_marker_retired_can_enter_private_common_runtime_once(self):
+        from voice_native_legacy_predecessor_route import (
+            activate_common_after_legacy_retirement, LegacyPredecessorRouteError,
+        )
+        from voice_native_process_probe import FreeBSDVoiceProcessProbe
+        from voice_ipfw_adapter import FreeBSDIPFWAdapter
+
+        for crash in ("none", "actuator", "new-owner-proof"):
+            with self.subTest(crash=crash), tempfile.TemporaryDirectory() as folder:
+                root=Path(folder)
+                work=root/detail()["id"]
+                work.mkdir()
+                store=SharedApplyOperation(root/"shared-apply")
+                owner="f"*64
+                store.prepare_legacy_predecessor(detail(),lambda:owner)
+                store.begin_legacy_quiesce(detail()["id"],lambda:owner)
+                store.mark_legacy_processes_stopped(detail()["id"],lambda:owner)
+                store.begin_legacy_ipfw_retire(detail()["id"],lambda:owner)
+                store.finish_legacy_ipfw_retire(detail()["id"],lambda:owner)
+                store.begin_legacy_marker_retire(detail()["id"],lambda:owner)
+                store.finish_legacy_marker_retire(detail()["id"],lambda:owner)
+                probe=object.__new__(FreeBSDVoiceProcessProbe)
+                ipfw=object.__new__(FreeBSDIPFWAdapter)
+                ipfw.rule_base,ipfw.rule_max=19000,19010
+                ipfw.allow_mutations=False
+                checks=[]
+                starts=[]
+                def preflight():
+                    checks.append("preflight")
+                    return True
+                def activate():
+                    starts.append("common-start")
+                    if crash=="actuator":
+                        raise OSError("power cut after intent before native start")
+                    return True
+                def live():
+                    checks.append("live")
+                    return "0"*64 if crash=="new-owner-proof" else detail()["candidate"]
+                def invoke():
+                    return activate_common_after_legacy_retirement(
+                        identity=detail()["id"],store=store,work=work,
+                        config_path=root/"config.xml",config_fd=4,
+                        config_owner=(0,0),active_runtime=root/"active",
+                        marker_path=root/"old-marker",process_probe=probe,
+                        readonly_ipfw=ipfw,require_lifecycle_owner=lambda:None,
+                        common_preflight=preflight,common_activate=activate,
+                        common_attest=live)
+                with ExitStack() as patches:
+                    patches.enter_context(patch(
+                        "voice_native_legacy_predecessor_route._locked_config"))
+                    patches.enter_context(patch(
+                        "shared_apply_operation.fingerprint_legacy_predecessor",
+                        return_value=owner))
+                    patches.enter_context(patch(
+                        "voice_native_legacy_predecessor_route.inspect_previous",
+                        return_value={}))
+                    patches.enter_context(patch(
+                        "voice_native_legacy_predecessor_route._verify_sources"))
+                    patches.enter_context(patch(
+                        "voice_native_legacy_predecessor_route.inspect_legacy_previous",
+                        return_value={"previous_five":"old"}))
+                    patches.enter_context(patch(
+                        "voice_native_legacy_predecessor_route.inspect_legacy_restore_plan",
+                        return_value={"previous_five":"old"}))
+                    patches.enter_context(patch(
+                        "voice_native_legacy_reverse_wal._stopped",
+                        return_value="exact-three-role-absence"))
+                    patches.enter_context(patch(
+                        "voice_native_legacy_ipfw_replay._strict_snapshot",
+                        return_value={"rules":{},"targets":None}))
+                    if crash=="actuator":
+                        with self.assertRaises(OSError):
+                            invoke()
+                    elif crash=="new-owner-proof":
+                        with self.assertRaises(LegacyPredecessorRouteError):
+                            invoke()
+                    else:
+                        self.assertEqual("legacy-common-activated",invoke()["phase"])
+                    self.assertEqual(["common-start"],starts)
+                    expected=("legacy-common-activated" if crash=="none"
+                              else "legacy-common-activating")
+                    self.assertEqual(expected,store.read()["phase"])
+                    self.assertIsNone(committed_owner(store.read()))
+                    self.assertFalse(store.advisory()["safe_to_mutate"])
+                    self.assertEqual("shared-apply-pending",check_pending(
+                        root/"voice-cutover",root/"voice-ipfw")["reason"])
+                    # An interrupted transition may NEVER start a second
+                    # candidate engine, including across a fresh process.
+                    with self.assertRaises(LegacyPredecessorRouteError):
+                        invoke()
+                    self.assertEqual(["common-start"],starts)
+                    with self.assertRaises(SharedOperationError):
+                        store.advance("committed",detail())
+
+    def test_private_common_activation_refuses_early_or_foreign_completion(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store=SharedApplyOperation(Path(folder)/"shared-apply")
+            store.prepare_legacy_predecessor(detail(),lambda:"f"*64)
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_common_activation(detail()["id"],lambda:"f"*64)
+            store.begin_legacy_quiesce(detail()["id"],lambda:"f"*64)
+            store.mark_legacy_processes_stopped(detail()["id"],lambda:"f"*64)
+            store.begin_legacy_ipfw_retire(detail()["id"],lambda:"f"*64)
+            store.finish_legacy_ipfw_retire(detail()["id"],lambda:"f"*64)
+            store.begin_legacy_marker_retire(detail()["id"],lambda:"f"*64)
+            store.finish_legacy_marker_retire(detail()["id"],lambda:"f"*64)
+            old=store.read()
+            with self.assertRaises(SharedOperationError):
+                store.begin_legacy_common_activation(detail()["id"],lambda:"0"*64)
+            self.assertEqual(old,store.read())
+            pending=store.begin_legacy_common_activation(detail()["id"],lambda:"f"*64)
+            self.assertEqual("legacy-common-activating",pending["phase"])
+            for method in (
+                lambda:store.finish_legacy_common_activation("2"*32,lambda:"f"*64),
+                lambda:store.finish_legacy_common_activation(detail()["id"],lambda:"0"*64),
+                lambda:store.begin_legacy_ipfw_rollback(detail()["id"],lambda:"f"*64),
+            ):
+                with self.assertRaises(SharedOperationError):
+                    method()
+                self.assertEqual(pending,store.read())
+            done=store.finish_legacy_common_activation(detail()["id"],lambda:"f"*64)
+            self.assertEqual("legacy-common-activated",done["phase"])
+            self.assertIsNone(committed_owner(done))
+            self.assertFalse(store.advisory()["safe_to_mutate"])
+            with self.assertRaises(SharedOperationError):
+                store.finish_legacy_common_activation(detail()["id"],lambda:"f"*64)
+
     def test_legacy_rollback_ipfw_uses_same_journal_not_a_second_owner(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)

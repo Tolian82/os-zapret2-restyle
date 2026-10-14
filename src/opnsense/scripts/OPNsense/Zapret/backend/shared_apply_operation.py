@@ -34,6 +34,7 @@ PHASES = frozenset((
     "legacy-quiescing", "legacy-processes-stopped",
     "legacy-ipfw-retiring", "legacy-ipfw-retired",
     "legacy-marker-retiring", "legacy-marker-retired",
+    "legacy-common-activating", "legacy-common-activated",
     "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
     "legacy-rollback-marker", "legacy-rollback-marker-restored",
     "legacy-rollback-processes", "legacy-rollback-processes-restored",
@@ -56,7 +57,9 @@ NEXT = {
     "legacy-ipfw-retiring": frozenset(("legacy-ipfw-retired",)),
     "legacy-ipfw-retired": frozenset(("legacy-marker-retiring",)),
     "legacy-marker-retiring": frozenset(("legacy-marker-retired",)),
-    "legacy-marker-retired": frozenset(("legacy-rollback-ipfw",)),
+    "legacy-marker-retired": frozenset(("legacy-rollback-ipfw", "legacy-common-activating")),
+    "legacy-common-activating": frozenset(("legacy-common-activated",)),
+    "legacy-common-activated": frozenset(),
     "legacy-rollback-ipfw": frozenset(("legacy-rollback-ipfw-restored",)),
     "legacy-rollback-ipfw-restored": frozenset(("legacy-rollback-marker",)),
     "legacy-rollback-marker": frozenset(("legacy-rollback-marker-restored",)),
@@ -126,6 +129,7 @@ def _validate_record(record: object) -> dict:
         if record["phase"] not in ("prepared", "legacy-quiescing", "legacy-processes-stopped",
                                    "legacy-ipfw-retiring", "legacy-ipfw-retired",
                                    "legacy-marker-retiring", "legacy-marker-retired",
+                                   "legacy-common-activating", "legacy-common-activated",
                                    "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
                                    "legacy-rollback-marker", "legacy-rollback-marker-restored",
                                    "legacy-rollback-processes",
@@ -384,6 +388,27 @@ class SharedApplyOperation:
         """Only verified marker absence (old IPFW absent) may finish."""
         return self._transition_legacy_boundary(
             identity, "legacy-marker-retiring", "legacy-marker-retired", attest
+        )
+
+    def begin_legacy_common_activation(self, identity: str, attest) -> dict:
+        """Durable original-FD9 intent BEFORE ordinary one-engine Apply acts.
+
+        Only a privately verified, wholly retired old PoC is eligible.
+        Never use advance() or boot recovery to cross this boundary.
+        """
+        return self._transition_legacy_boundary(
+            identity, "legacy-marker-retired", "legacy-common-activating", attest
+        )
+
+    def finish_legacy_common_activation(self, identity: str, attest) -> dict:
+        """Record independently verified new engine/IPFW, NOT Config commit.
+
+        This retains the old predecessor until the forward Config/save and
+        rollback contracts are connected. Interrupted activation stays
+        permanently pending for review; the actuator must never run twice.
+        """
+        return self._transition_legacy_boundary(
+            identity, "legacy-common-activating", "legacy-common-activated", attest
         )
 
     def begin_legacy_ipfw_rollback(self, identity: str, attest) -> dict:
