@@ -261,6 +261,53 @@ class FreeBSDIPFWAdapter:
         self._run("-qf", "add", str(number), *arguments, modifying=True)
 
 
+def _verify_shared_voice_engine(release: Path, plan: dict, read) -> None:
+    """Bind destination-scoped Voice IPFW to the ACTUAL single-engine argv.
+
+    Voice STUN has its own table-scoped UDP divert rules. The ordinary
+    tcp/udp-ports artifacts intentionally exclude Voice: adding wildcard
+    STUN there would divert ALL UDP destinations. Before any IPFW mutation,
+    prove each saved Voice profile occurs first and unchanged in both the
+    merged traffic and the generated one-engine argument file.
+    """
+    from voice_traffic_merge import profile_tokens
+
+    profiles = plan.get("profiles")
+    if not isinstance(profiles, list) or len(profiles) > len(SERVICES):
+        raise IPFWAdapterError("invalid Voice profiles in common release")
+    traffic = read("traffic.conf").decode("utf-8")
+    argv = read("dvtws.args").decode("utf-8")
+    if not traffic.strip() or not argv.strip() or traffic not in argv:
+        raise IPFWAdapterError("common engine argv differs from merged Voice traffic")
+    tokens = profile_tokens(traffic)
+    if len(tokens) < len(profiles) + 1:
+        raise IPFWAdapterError("missing ordinary Strategy after Voice profiles")
+    for index, row in enumerate(profiles):
+        if not isinstance(row, dict) or row.get("service") not in SERVICES or (
+            row.get("enabled") is not True
+            or not isinstance(row.get("profile_sha256"), str)
+        ):
+            raise IPFWAdapterError("untrusted Voice profile evidence")
+        profile = tokens[index]
+        service = row["service"]
+        if index and SERVICES.index(service) <= SERVICES.index(profiles[index - 1]["service"]):
+            raise IPFWAdapterError("out-of-order or duplicate Voice profile")
+        if not profile or profile[0] != "--name=voice-" + service or (
+            "--filter-l7=stun" not in profile
+            or "--payload=stun" not in profile
+            or "--filter-l3=ipv4" not in profile
+            or "--ipset=" + str(row.get("ipset_path", "")) not in profile
+        ) or hashlib.sha256("\n".join(profile).encode("ascii")).hexdigest() != (
+            row["profile_sha256"]
+        ):
+            raise IPFWAdapterError("Voice kernel capture differs from common engine profile")
+    for other in tokens[len(profiles):]:
+        if any(arg.startswith("--name=voice-") for arg in other):
+            raise IPFWAdapterError("ordinary Strategies reuse a Voice profile identity")
+    if argv.count("--name=voice-") != len(profiles):
+        raise IPFWAdapterError("unowned or duplicated Voice profile in common engine argv")
+
+
 def shared_release_manifest(release: Path) -> dict:
     """Derive ownership from one trusted common release, without a second ledger.
 
@@ -286,6 +333,7 @@ def shared_release_manifest(release: Path) -> dict:
     plan = json.loads(read("voice-plan.json"))
     if not isinstance(plan, dict) or plan.get("schema") != 1:
         raise IPFWAdapterError("unsupported shared release plan")
+    _verify_shared_voice_engine(release, plan, read)
     tcp = read("tcp-ports.txt").decode("utf-8").strip()
     udp = read("udp-ports.txt").decode("utf-8").strip()
     manifest = prepare_desired(plan.get("capture"), tcp, udp)

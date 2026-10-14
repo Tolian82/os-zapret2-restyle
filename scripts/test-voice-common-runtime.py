@@ -164,8 +164,20 @@ class CommonRuntimeTests(unittest.TestCase):
                 self.assertEqual(1, args.count("--port=989\n"))
                 self.assertEqual(len(enabled) + 1, traffic.count("\n--new\n"))
                 self.assertTrue(args.endswith("--hostlist-exclude=" + ACTIVE + "/managed/hostlist-exclude.txt\n"))
+                # Voice wildcard STUN must NOT broaden ordinary UDP IPFW.
+                # Each Voice service instead gets a destination-table rule.
                 self.assertEqual("596-599", (release / "udp-ports.txt").read_text().strip())
                 self.assertEqual("443", (release / "tcp-ports.txt").read_text().strip())
+                manifest = shared_release_manifest(release)
+                for name in enabled:
+                    rule = next(argv for argv in manifest["rules"].values()
+                                if "table(zapret2_voice_" + name + ")" in argv)
+                    self.assertEqual("udp", rule[2])
+                    self.assertNotIn("*", rule)
+                    self.assertEqual(
+                        ["198.51.100." + str(SERVICES.index(name) + 1)],
+                        manifest["tables"]["zapret2_voice_" + name]
+                    )
                 self.assertIn("--filter-l7=unknown\n--payload=unknown", traffic)
                 self.assertNotIn("telegram-voice-poc", traffic)
                 self.assertFalse((release / "voice-native-candidate").exists())
@@ -173,6 +185,42 @@ class CommonRuntimeTests(unittest.TestCase):
                     self.assertIn("--name=voice-" + name, args)
                     row = next(r for r in plan["capture"]["voice"] if r["service"] == name)
                     self.assertEqual("table(zapret2_voice_" + name + ")", row["argv"][6])
+
+    def test_shared_engine_argv_and_voice_capture_must_match_before_ipfw(self):
+        # Exercise the real staged release, not a synthetic kernel manifest.
+        # A changed Voice profile may still be syntactically valid, but
+        # installing its previously sealed IPFW owner would capture the wrong
+        # flow. No kernel operation is allowed in any mismatch case.
+        for change in ("traffic", "args", "plan", "identity"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as directory:
+                result, release = build(Path(directory), ("telegram",))
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertTrue(shared_release_manifest(release)["rules"])
+                if change == "traffic":
+                    traffic = release / "traffic.conf"
+                    traffic.write_text(
+                        traffic.read_text().replace("--payload=stun",
+                                                    "--payload=unknown", 1)
+                    )
+                elif change == "args":
+                    argv = release / "dvtws.args"
+                    argv.write_text(
+                        argv.read_text().replace("--name=voice-telegram",
+                                                  "--name=missing-telegram", 1)
+                    )
+                elif change == "plan":
+                    path = release / "voice-plan.json"
+                    plan = json.loads(path.read_text())
+                    plan["profiles"][0]["profile_sha256"] = "0" * 64
+                    path.write_text(json.dumps(plan))
+                elif change == "identity":
+                    path = release / "traffic.conf"
+                    path.write_text(path.read_text().replace(
+                        "--name=voice-telegram", "--name=voice-discord", 1
+                    ))
+                with self.assertRaisesRegex(IPFWAdapterError,
+                                            "common engine|Voice kernel capture"):
+                    shared_release_manifest(release)
 
     def test_all_off_preserves_resolved_ordinary_and_ignores_old_marker(self):
         with tempfile.TemporaryDirectory() as directory:
