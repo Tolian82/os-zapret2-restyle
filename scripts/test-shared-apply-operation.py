@@ -885,6 +885,58 @@ class TestJournal(unittest.TestCase):
             self.assertEqual("shared-apply-pending", guard["reason"])
             self.assertFalse(guard["safe_to_mutate"])
 
+    def test_operator_only_lost_native_commit_receipt_reconcile(self):
+        import io
+        import os
+        from contextlib import redirect_stdout
+        from unittest.mock import Mock
+        import voice_native_legacy_predecessor_route as route
+        ident = detail()["id"]
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            config = root / "config.xml"
+            config.write_text("<new/>")
+            work = root / "work"
+            work.mkdir()
+            store = Mock()
+            store.read.return_value = {
+                "phase": "legacy-common-committing", "detail": detail()}
+            called = []
+            def reconcile(**kwargs):
+                self.assertEqual(ident, kwargs["identity"])
+                self.assertIs(kwargs["store"], store)
+                self.assertEqual(work / ident, kwargs["work"])
+                self.assertEqual(config, kwargs["config_path"])
+                self.assertEqual((0, 0), kwargs["config_owner"])
+                self.assertEqual(config.stat().st_ino, os.fstat(kwargs["config_fd"]).st_ino)
+                called.append(kwargs)
+                return {"phase": "committed", "detail": detail()}
+            with ExitStack() as patches:
+                patches.enter_context(patch.object(route.native, "CONFIG", config))
+                patches.enter_context(patch.object(route.native, "ACTIVE_ROOT", root / "active"))
+                patches.enter_context(patch.object(route.native, "LEGACY_MARKER", root / "old.marker"))
+                patches.enter_context(patch.object(route.native, "require_native_lock"))
+                patches.enter_context(patch.object(route, "_pinned_regular"))
+                patches.enter_context(patch("shared_apply_seal.WORK", work))
+                patches.enter_context(patch("shared_apply_operation.SharedApplyOperation",
+                                           return_value=store))
+                patches.enter_context(patch.object(route,
+                    "commit_native_common_after_legacy_config_save", side_effect=reconcile))
+                stdout = io.StringIO()
+                with redirect_stdout(stdout):
+                    self.assertEqual(0, route.main(["reconcile-common", ident]))
+                self.assertEqual("legacy-native-reconciled-id=" + ident + "\n",
+                                 stdout.getvalue())
+                self.assertEqual(1, len(called))
+                store.read.return_value["phase"] = "legacy-config-saved"
+                self.assertEqual(69, route.main(["reconcile-common", ident]))
+                store.read.return_value["phase"] = "legacy-common-committing"
+                self.assertEqual(69, route.main(["reconcile-common", "2" * 32]))
+                self.assertEqual(1, len(called))
+        service = (BACKEND.parent / "zapret_service.sh").read_text()
+        self.assertIn("shared-apply-legacy-reconcile)", service)
+        self.assertIn('reconcile-common "$2"', service)
+
     def test_interrupted_legacy_ipfw_commit_accepts_only_readonly_final_proof(self):
         import fcntl
         import os

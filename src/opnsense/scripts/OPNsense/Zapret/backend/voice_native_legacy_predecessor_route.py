@@ -1461,8 +1461,13 @@ def main(argv):
         len(argv) == 2 and argv[0] == "begin-common"
         and COMMON_ID.fullmatch(argv[1])
     ) else None
-    if argv != ["capture-plan"] and candidate_id is None and cancellation_id is None and begin_id is None:
-        print("usage: voice_native_legacy_predecessor_route.py capture-plan|capture-common ID|cancel-common ID|begin-common ID",
+    reconcile_id = argv[1] if (
+        len(argv) == 2 and argv[0] == "reconcile-common"
+        and COMMON_ID.fullmatch(argv[1])
+    ) else None
+    if (argv != ["capture-plan"] and candidate_id is None and cancellation_id is None
+        and begin_id is None and reconcile_id is None):
+        print("usage: voice_native_legacy_predecessor_route.py capture-plan|capture-common ID|cancel-common ID|begin-common ID|reconcile-common ID",
               file=sys.stderr)
         return 64
     fd=None
@@ -1471,6 +1476,28 @@ def main(argv):
         fd=os.open(native.CONFIG,os.O_RDWR| getattr(os,"O_NOFOLLOW",0))
         _pinned_regular(native.CONFIG,fd,owner=(0,0))
         fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        if reconcile_id is not None:
+            # Only a durably pending COMMIT may be reconciled; no new
+            # kernel, Config, or engine operation is permitted on this path.
+            from shared_apply_operation import SharedApplyOperation
+            from shared_apply_seal import WORK
+            store = SharedApplyOperation(owner=0)
+            pending = store.read()
+            if (pending is None or pending["phase"] != "legacy-common-committing"
+                or pending["detail"]["id"] != reconcile_id
+                or pending["detail"]["page"] != "voice"):
+                raise LegacyPredecessorRouteError("no exact native COMMIT to reconcile")
+            result = commit_native_common_after_legacy_config_save(
+                identity=reconcile_id, store=store, work=WORK / reconcile_id,
+                config_path=native.CONFIG, config_fd=fd, config_owner=(0,0),
+                active_runtime=native.ACTIVE_ROOT,
+                marker_path=native.LEGACY_MARKER,
+                require_lifecycle_owner=native.require_native_lock,
+            )
+            if result["phase"] != "committed" or result["detail"]["id"] != reconcile_id:
+                raise LegacyPredecessorRouteError("native COMMIT reconciliation incomplete")
+            print("legacy-native-reconciled-id=" + reconcile_id)
+            return 0
         if cancellation_id is not None or begin_id is not None:
             from shared_apply_operation import SharedApplyOperation
             operation_id = cancellation_id if cancellation_id is not None else begin_id
