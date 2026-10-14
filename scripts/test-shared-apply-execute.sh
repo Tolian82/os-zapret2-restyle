@@ -20,14 +20,27 @@ shared_apply_native_config() {
     case "$1" in
         preflight) echo '{"enabled":"1","base":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","candidate":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","fields":["voice.telegram.enabled"]}' ;;
         save) echo config-save >> "$LOG"; return "$SAVE_RC" ;;
+        saved)
+            echo config-readback >> "$LOG"
+            AFTER_SAVED=1
+            [ "$SAVED_RC" -eq 0 ] || return "$SAVED_RC"
+            echo '{"result":"committed","snapshot":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","enabled":"1"}'
+            ;;
         *) return 1 ;;
     esac
 }
 shared_apply_json_field() {
     case "$1" in
-        *".enabled"*) echo 1 ;;
+        *".enabled"*) if [ "$AFTER_SAVED" = 1 ] && [ "$SAVED_MODE_DRIFT" = 1 ]; then echo 0; else echo 1; fi ;;
         *".base"*) printf "%064d\n" 0 | tr 0 a ;;
         *".candidate"*) printf "%064d\n" 0 | tr 0 b ;;
+        *".result"*) echo committed ;;
+        *".snapshot"*)
+            if [ "$SAVED_DIGEST_DRIFT" = 1 ]; then
+                printf "%064d\n" 0 | tr 0 c
+            else
+                printf "%064d\n" 0 | tr 0 b
+            fi ;;
         *".fields"*) echo voice.telegram.enabled ;;
         *) return 1 ;;
     esac
@@ -39,9 +52,14 @@ shared_apply_record_service() {
 apply_runtime_probe() { echo runtime-probe >> "$LOG"; [ "$PROBE_RC" -eq 0 ]; }
 apply_runtime_activate() { echo runtime-activate >> "$LOG"; [ "$ACTIVATE_RC" -eq 0 ] || return 1; [ "$TAMPER_DURING_ACTIVATION" = 0 ] || BAD_BUNDLE=1; }
 apply_runtime_restore() { echo runtime-restore >> "$LOG"; [ "$RESTORE_RC" -eq 0 ]; }
-apply_runtime_attest_activated() { echo runtime-attest >> "$LOG"; [ "$ATTEST_RC" -eq 0 ]; }
+apply_runtime_attest_activated() {
+    echo runtime-attest >> "$LOG"
+    ATTEST_COUNT=$((ATTEST_COUNT + 1))
+    [ "$ATTEST_RC" -eq 0 ] &&
+    { [ "$ATTEST_FAIL_AT" -eq 0 ] || [ "$ATTEST_FAIL_AT" -ne "$ATTEST_COUNT" ]; }
+}
 apply_runtime_commit() { echo runtime-commit >> "$LOG"; [ "$COMMIT_RC" -eq 0 ]; }
-reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; }
+reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; AFTER_SAVED=0; }
 expect_status() {
     expected="$1"; shift
     set +e
@@ -53,7 +71,7 @@ expect_status() {
     [ "$actual_steps" = "$*" ] || fail "steps: $actual_steps"
 }
 reset
-expect_status 0 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved runtime-commit record:committed '
+expect_status 0 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit record:committed '
 grep -Fqx "applied-id=$ID" "$ROOT/response.txt" || fail "successful receipt"
 reset; BAD_BUNDLE=1
 expect_status 69 'bundle:verify '
@@ -70,7 +88,15 @@ expect_status 69 'bundle:verify runtime-probe '
 reset; ACTIVATE_RC=1
 expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:requires-review '
 reset; COMMIT_RC=1
-expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved runtime-commit record:requires-review '
+expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit record:requires-review '
+reset; SAVED_RC=69
+expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback record:requires-review '
+reset; SAVED_DIGEST_DRIFT=1
+expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback record:requires-review '
+reset; SAVED_MODE_DRIFT=1
+expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback record:requires-review '
+reset; ATTEST_FAIL_AT=2
+expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest record:requires-review '
 reset; BAD_RECORD=activated
 expect_status 69 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated runtime-restore record:restored '
 reset; BAD_RECORD=config-saved

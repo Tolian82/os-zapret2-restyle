@@ -1531,6 +1531,33 @@ shared_apply_execute_service()
     fi
     shared_apply_record_service config-saved "$_shared_apply_id" "$_shared_apply_page" \
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
+    # Native Config::save releases its own lock. Reacquire/read the saved
+    # model before DISCARDING IPFW rollback stages. No Config XML writer is
+    # introduced here: the same OPNsense worker handles the readback.
+    _shared_apply_saved=$(shared_apply_native_config saved \
+        "$_shared_apply_id" "$_shared_apply_page") || {
+        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        return 70
+    }
+    if ! {
+        _shared_apply_saved_result=$(printf "%s\n" "$_shared_apply_saved" | \
+            shared_apply_json_field '.result | select(.=="committed")') &&
+        _shared_apply_saved_digest=$(printf "%s\n" "$_shared_apply_saved" | \
+            shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') &&
+        _shared_apply_saved_mode=$(printf "%s\n" "$_shared_apply_saved" | \
+            shared_apply_json_field '.enabled | select(.=="0" or .=="1")') &&
+        [ "$_shared_apply_saved_result" = committed ] &&
+        [ "$_shared_apply_saved_digest" = "$_shared_apply_candidate" ] &&
+        [ "$_shared_apply_saved_mode" = "$_shared_apply_mode" ] &&
+        apply_runtime_attest_activated
+    }; then
+        # A changed native Config, a dead common engine or foreign IPFW
+        # AFTER save cannot be undone by merely restoring the old release.
+        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        return 70
+    fi
     if ! apply_runtime_commit; then
         shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
