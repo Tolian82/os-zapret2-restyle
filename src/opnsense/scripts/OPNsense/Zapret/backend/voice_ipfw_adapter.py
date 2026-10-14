@@ -290,7 +290,7 @@ def _verify_shared_voice_engine(release: Path, plan: dict, read) -> None:
     if not isinstance(source, dict) or (
         hashlib.sha256(traffic_bytes).hexdigest() != source.get("merged_sha256")
     ):
-        raise IPFWAdapterError("common engine traffic changed after STUN staging")
+        raise IPFWAdapterError("common engine/IPFW traffic changed after STUN staging")
     argv = read("dvtws.args").decode("utf-8")
     if not traffic.strip() or not argv.strip() or traffic not in argv:
         raise IPFWAdapterError("common engine argv differs from merged Voice traffic")
