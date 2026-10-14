@@ -699,6 +699,11 @@ def commit_native_common_after_legacy_config_save(
         # Only a complete, independently attested NO-STAGE common owner
         # may finish the operation; a partial stage remains blocked.
         intent = record
+    # A transient live owner must not turn a crash-ambiguous native COMMIT
+    # into a terminal receipt. Require two independent read-only physical
+    # attestations under the SAME FD9 and current Config inode lock. If a
+    # process disappears between samples, the durable intent stays pending.
+    owner(intent, "verify-committed")
     return store.finish_legacy_common_commit(
         identity, lambda: owner(intent, "verify-committed")
     )
