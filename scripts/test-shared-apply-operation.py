@@ -849,6 +849,89 @@ class TestJournal(unittest.TestCase):
                 store.finish_legacy_common_commit(identity,lambda:seal)
 
 
+    def test_interrupted_legacy_ipfw_commit_accepts_only_readonly_final_proof(self):
+        import fcntl
+        import os
+        from voice_native_legacy_predecessor_route import (
+            commit_native_common_after_legacy_config_save,
+            LegacyPredecessorRouteError,
+        )
+        for physical in ("complete", "partial", "foreign"):
+            with self.subTest(physical=physical), tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp)
+                identity=detail()["id"]
+                work=root/identity
+                work.mkdir()
+                config=root/"config.xml"
+                config.write_text("<persisted-new/>")
+                active=root/"active"
+                store=SharedApplyOperation(root/"shared-apply")
+                seal="f"*64
+                store.prepare_legacy_predecessor(detail(),lambda:seal)
+                store.begin_legacy_quiesce(identity,lambda:seal)
+                store.mark_legacy_processes_stopped(identity,lambda:seal)
+                store.begin_legacy_ipfw_retire(identity,lambda:seal)
+                store.finish_legacy_ipfw_retire(identity,lambda:seal)
+                store.begin_legacy_marker_retire(identity,lambda:seal)
+                store.finish_legacy_marker_retire(identity,lambda:seal)
+                store.begin_legacy_common_activation(identity,lambda:seal)
+                store.finish_legacy_common_activation(identity,lambda:seal)
+                store.begin_legacy_config_save(identity,lambda:seal)
+                store.finish_legacy_config_save(identity,lambda:seal)
+                pending=store.begin_legacy_common_commit(identity,lambda:seal)
+                fd=os.open(config,os.O_RDWR)
+                fcntl.flock(fd,fcntl.LOCK_EX)
+                calls=[]
+                def native(*,mode,**kw):
+                    calls.append(mode)
+                    self.assertEqual("verify-committed",mode)
+                    self.assertEqual(identity,kw["identity"])
+                    self.assertEqual(fd,kw["config_fd"])
+                    self.assertEqual(pending,store.read())
+                    if physical=="partial":
+                        raise LegacyPredecessorRouteError("stage tables remain")
+                    if physical=="foreign":
+                        raise LegacyPredecessorRouteError("new common engine missing")
+                    return True
+                try:
+                    with ExitStack() as patches:
+                        patches.enter_context(patch(
+                            "voice_native_legacy_predecessor_route.inspect_previous",
+                            return_value={"old": True}))
+                        patches.enter_context(patch(
+                            "voice_native_legacy_predecessor_route._verify_sources",
+                            return_value=None))
+                        patches.enter_context(patch(
+                            "voice_native_legacy_predecessor_route._invoke_existing_native_common",
+                            side_effect=native))
+                        patches.enter_context(patch(
+                            "shared_apply_operation.fingerprint_legacy_predecessor",
+                            return_value=seal))
+                        patches.enter_context(patch(
+                            "shared_apply_seal.verify_seal",return_value=True))
+                        invoke=lambda:commit_native_common_after_legacy_config_save(
+                            identity=identity,store=store,work=work,config_path=config,
+                            config_fd=fd,config_owner=(os.geteuid(),os.getegid()),
+                            active_runtime=active,marker_path=root/"old.marker",
+                            require_lifecycle_owner=lambda:None,
+                        )
+                        if physical=="complete":
+                            self.assertEqual("committed",invoke()["phase"])
+                            self.assertEqual(detail(),committed_owner(store.read()))
+                            with self.assertRaises(LegacyPredecessorRouteError):
+                                invoke()
+                        else:
+                            with self.assertRaises(LegacyPredecessorRouteError):
+                                invoke()
+                            self.assertEqual(pending,store.read())
+                            self.assertEqual("shared-apply-pending",check_pending(
+                                root/"voice-cutover",root/"voice-ipfw")["reason"])
+                        # NO native commit, Config save, reactivation, or
+                        # rollback was attempted during live reconciliation.
+                        self.assertEqual(["verify-committed"],calls)
+                finally:
+                    os.close(fd)
+
     def test_private_native_save_handoff_relocks_new_config_inode(self):
         import fcntl
         import os

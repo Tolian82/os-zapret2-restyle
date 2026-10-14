@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**`v0.5.2_104` — безопасное read-only завершение прерванного IPFW COMMIT живого общего владельца.** Доработана прежняя приватная `commit_native_common_after_legacy_config_save`: когда единый WAL уже содержит `legacy-common-committing`, повторное обращение под исходным FD9 и **актуальным** заблокированным Config inode **никогда** не вызывает `apply_runtime_commit`, `Config::save`, `activate` или rollback. Вместо этого оно повторно сверяет sealed старый Config/runtime backup и journal, затем вызывает только существующий `verify-committed`: проверку установленного native release, единственного dvtws2+monitor и итогового IPFW **без staging-таблиц**. При полном совпадении ранее потерянный final receipt можно завершить записью обычного `committed`; при остаточных таблицах, отсутствии процесса или иной неопределённости `legacy-common-committing` остаётся заблокированным без мутаций. В существующем Python suite добавлены отдельные случаи удачного read-only reconciliation, частичного IPFW и недоступного нового engine; повторное завершение отвергается. **Граница:** это reconciliation только пока verified common runtime жив; cold reboot и частичная очистка по-прежнему требуют отдельного безопасного механизма. Не подключено к CLI/configd/GUI, публичная миграция/релиз закрыты, ТЗ и frontend неизменны.
+
 **`v0.5.2_103` — проверка legacy lifecycle после terminal native COMMIT.** CI `_102` подтвердил, что новая native IPFW COMMIT-последовательность доходит до финального общего journal owner. Два прежних ожидания в `test-shared-apply-operation.py` ошибочно предполагали `safe_to_mutate=True` для **устаревшего legacy lifecycle** при фазе `committed`. По действующему `voice_cutover_guard.check_pending` этот lifecycle ОБЯЗАН оставаться заблокированным с причиной `shared-runtime-owned`, иначе после reboot может появиться второй dvtws2. Исправлены только два ожидания: у legacy `blocked`, а у owner-scoped native Apply `safe_to_mutate=True`. Production-код `_101` и макет IPFW `_102` не менялись. Следующий этап — разобрать crash recovery фазы `legacy-common-committing` и завершить FreeBSD проверку STUN/MEDIA/CALL до включения публичной миграции.
 
 **`v0.5.2_102` — точная регрессия post-COMMIT IPFW stage в существующем shell-тесте.** CI `_101` указал на тестовый макет `firewall_shared_runtime verify`: вопреки реальному `voice_ipfw_adapter.shared_firewall_action(verify)`, он принимал `FW_STAGE=1` после native COMMIT, поэтому отказной сценарий не срабатывал. В `scripts/test-voice-common-apply-runtime.sh` существующий mock `verify` теперь отказывает при любой оставшейся staging-таблице. Production backend (`_101`: durable commit intent, один штатный IPFW commit, post-commit proof, финальный common owner) НЕ менялся. Повторная проверка CI должна подтвердить и успешный сценарий, и отказ при остаточных stage/погибшем supervisor. Публичный legacy cutover, recovery после частичного cleanup и live STUN/MEDIA/CALL по-прежнему закрыты.
@@ -74,7 +76,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_103`. `VERSION=0.5.2`; `PLUGIN_REVISION=103`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_104`. `VERSION=0.5.2`; `PLUGIN_REVISION=104`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
 
@@ -176,7 +178,7 @@ Install проверяет живые объекты до изменения, с
 
 ## Следующее действие
 
-**После `_103`: подключить private forward-интерфейс к штатному `apply_runtime_activate` под исходными FD9+Config lock, затем реализовать штатное native Config save/COMMIT и проверяемый откат. После закрытия этих границ провести FreeBSD GUI STUN/MEDIA/CALL испытания; production `legacy-arm`/`legacy-begin` пока запрещены.
+**После `_104`: подключить private forward-интерфейс к штатному `apply_runtime_activate` под исходными FD9+Config lock, затем реализовать штатное native Config save/COMMIT и проверяемый откат. После закрытия этих границ провести FreeBSD GUI STUN/MEDIA/CALL испытания; production `legacy-arm`/`legacy-begin` пока запрещены.
 
 **Этап 4 — следующий рубеж после `_68`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 

@@ -618,10 +618,11 @@ def commit_native_common_after_legacy_config_save(
 ):
     """Complete the native IPFW stage ONLY with original FD9 + NEW Config lock.
 
-    This is a private continuation after native Config readback. There is ONE
-    irreversible transition, fsynced before the existing common IPFW commit.
-    A failure/partial cleanup cannot start any engine or retry Config save:
-    legacy-common-committing remains pending for explicit later recovery.
+    After native Config readback there is ONE fsynced native IPFW commit.
+    A previously fsynced legacy-common-committing phase can only be
+    reconciled by a fresh READ-ONLY final common owner witness. A missing
+    or partial IPFW cleanup is NOT permission to repeat a kernel write,
+    engine start or Config save: the same journal remains pending.
     """
     from shared_apply_operation import SharedApplyOperation, fingerprint_legacy_predecessor
     from shared_apply_seal import verify_seal
@@ -638,7 +639,9 @@ def commit_native_common_after_legacy_config_save(
         not config_path.is_absolute() or not active_runtime.is_absolute()):
         raise LegacyPredecessorRouteError("native commit identity or path changed")
     record = store.read()
-    if record is None or record["phase"] != "legacy-config-saved" or (
+    if record is None or record["phase"] not in (
+        "legacy-config-saved", "legacy-common-committing"
+    ) or (
         record["detail"]["id"] != identity or record["detail"]["page"] != "voice"
         or "legacy_predecessor" not in record or "previous" in record
     ):
@@ -667,22 +670,28 @@ def commit_native_common_after_legacy_config_save(
         )
         return witness
 
-    # This attests STAGED IPFW and persists the irreversible cleanup intent.
-    intent = store.begin_legacy_common_commit(
-        identity, lambda: owner(record, "attest")
-    )
-    if intent["phase"] != "legacy-common-committing":
-        raise LegacyPredecessorRouteError("IPFW commit intent was not fsynced")
-    require_lifecycle_owner()
-    _locked_config(config_path, config_fd, config_owner)
-    if store.read() != intent:
-        raise LegacyPredecessorRouteError("native IPFW commit journal drifted")
-    _invoke_existing_native_common(
-        mode="commit", identity=identity, work=work, config_fd=config_fd,
-        require_lifecycle_owner=require_lifecycle_owner,
-    )
-    # Only independently verified final NO-STAGE IPFW + engine/supervisor
-    # can publish the ordinary terminal owner. Original backups are retained.
+    if record["phase"] == "legacy-config-saved":
+        # Fresh forward ONLY: attest staged tables, fsync cleanup intent,
+        # then invoke the ONE permitted native kernel mutation.
+        intent = store.begin_legacy_common_commit(
+            identity, lambda: owner(record, "attest")
+        )
+        if intent["phase"] != "legacy-common-committing":
+            raise LegacyPredecessorRouteError("IPFW commit intent was not fsynced")
+        require_lifecycle_owner()
+        _locked_config(config_path, config_fd, config_owner)
+        if store.read() != intent:
+            raise LegacyPredecessorRouteError("native IPFW commit journal drifted")
+        _invoke_existing_native_common(
+            mode="commit", identity=identity, work=work, config_fd=config_fd,
+            require_lifecycle_owner=require_lifecycle_owner,
+        )
+    else:
+        # The existing journal already records an uncertain kernel cleanup.
+        # No second kernel commit, no Config writer and no engine start.
+        # Only a complete, independently attested NO-STAGE common owner
+        # may finish the operation; a partial stage remains blocked.
+        intent = record
     return store.finish_legacy_common_commit(
         identity, lambda: owner(intent, "verify-committed")
     )
