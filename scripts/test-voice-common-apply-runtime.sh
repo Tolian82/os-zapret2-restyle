@@ -469,7 +469,8 @@ OUTER_ROUTES=$(sed -n '/^case "${1:-}" in$/,$p' "$SERVICE_SOURCE")
 [ -n "$OUTER_ROUTES" ] || fail "missing original-FD9 outer service dispatch"
 for command in shared-apply-legacy-audit shared-apply-legacy-qualify \
     shared-apply-legacy-capture shared-apply-legacy-arm \
-    shared-apply-legacy-cancel shared-apply-legacy-begin; do
+    shared-apply-legacy-cancel shared-apply-legacy-begin \
+    shared-apply-legacy-reconcile; do
     printf '%s\n' "$OUTER_ROUTES" | grep -Eq "(^|\\|)${command}(\\||\\))" ||
         fail "legacy operator $command bypasses original FD9"
 done
@@ -633,8 +634,6 @@ sed -n '/^shared_apply_legacy_cancel_service()$/,/^}$/p' "$SERVICE_SOURCE" > "$C
 sh -n "$CANCEL_SCRIPT" || fail "legacy cancellation production shell syntax invalid"
 grep -Fq 'cancel-common "$_legacy_cancel_id"' "$CANCEL_SCRIPT" ||
     fail "legacy cancellation does not reuse fixed old predecessor route"
-grep -Fq '|shared-apply-legacy-arm|shared-apply-legacy-cancel|shared-apply-legacy-begin)' "$SERVICE_SOURCE" ||
-    fail "legacy cancel command not protected by original FD9 lifecycle"
 echo 'PASS: pristine old owner cancellation uses strict fixed FreeBSD route and original FD9'
 
 # Exact production command must persist the shared journal boundary under
@@ -644,8 +643,6 @@ sed -n '/^shared_apply_legacy_begin_service()$/,/^}$/p' "$SERVICE_SOURCE" > "$BE
 sh -n "$BEGIN_SCRIPT" || fail "legacy begin production shell syntax invalid"
 grep -Fq 'begin-common "$_legacy_begin_id"' "$BEGIN_SCRIPT" ||
     fail "quiescing does not call the fixed FreeBSD predecessor route"
-grep -Fq '|shared-apply-legacy-cancel|shared-apply-legacy-begin)' "$SERVICE_SOURCE" ||
-    fail "legacy quiescing not protected by original FD9"
 if grep -Eq 'launcher_stop|supervisor_stop|firewall_remove|apply_runtime_activate' "$BEGIN_SCRIPT"; then
     fail "quiescing accidentally crossed mutation boundary"
 fi
