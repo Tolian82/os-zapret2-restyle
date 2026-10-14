@@ -497,7 +497,8 @@ class TestJournal(unittest.TestCase):
         from voice_native_process_probe import FreeBSDVoiceProcessProbe
         from voice_ipfw_adapter import FreeBSDIPFWAdapter
 
-        for crash in ("none", "actuator", "new-owner-proof"):
+        for crash in ("none", "actuator", "new-owner-proof",
+                      "native-not-running", "native-ipfw-drift"):
             with self.subTest(crash=crash), tempfile.TemporaryDirectory() as folder:
                 root=Path(folder)
                 work=root/detail()["id"]
@@ -544,6 +545,23 @@ class TestJournal(unittest.TestCase):
                         "shared_apply_operation.fingerprint_legacy_predecessor",
                         return_value=owner))
                     patches.enter_context(patch(
+                        "shared_apply_seal.verify_seal", return_value={"sealed":True}))
+                    patches.enter_context(patch(
+                        "voice_ipfw_adapter.shared_release_manifest",
+                        return_value={"rule_base":19000,"rule_max":19010,
+                                      "rules":{19000:["divert","foo"]},"tables":{}}))
+                    patches.enter_context(patch(
+                        "voice_live_inspect.inspect_common_runtime",
+                        return_value={
+                            "state":"stopped" if crash=="native-not-running" else "running",
+                            "source_verified":True,"engine_verified":True,
+                            "supervisor_verified":True,
+                        }))
+                    patches.enter_context(patch(
+                        "voice_ipfw_adapter.shared_firewall_action",
+                        side_effect=(LegacyPredecessorRouteError("foreign native IPFW")
+                                     if crash=="native-ipfw-drift" else None)))
+                    patches.enter_context(patch(
                         "voice_native_legacy_predecessor_route.inspect_previous",
                         return_value={}))
                     patches.enter_context(patch(
@@ -564,7 +582,8 @@ class TestJournal(unittest.TestCase):
                     if crash=="actuator":
                         with self.assertRaises(OSError):
                             invoke()
-                    elif crash=="new-owner-proof":
+                    elif crash in ("new-owner-proof", "native-not-running",
+                                   "native-ipfw-drift"):
                         with self.assertRaises(LegacyPredecessorRouteError):
                             invoke()
                     else:
@@ -597,6 +616,11 @@ class TestJournal(unittest.TestCase):
                         with self.assertRaises(LegacyPredecessorRouteError):
                             pristine_rollback(lambda: False)
                         self.assertEqual("legacy-common-activating", store.read()["phase"])
+                        stage = root / (".active.stage." + detail()["id"])
+                        stage.write_text("incomplete native install")
+                        with self.assertRaises(LegacyPredecessorRouteError):
+                            pristine_rollback()
+                        stage.unlink()
                         self.assertEqual("legacy-rollback-ipfw",
                                          pristine_rollback()["phase"])
                         with self.assertRaises(LegacyPredecessorRouteError):

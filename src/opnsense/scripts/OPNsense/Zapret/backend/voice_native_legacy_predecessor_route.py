@@ -554,6 +554,9 @@ def activate_common_after_legacy_retirement(
     )
     from voice_native_legacy_ipfw_replay import _strict_snapshot
     from voice_native_legacy_reverse_wal import _stopped
+    from shared_apply_seal import verify_seal
+    from voice_ipfw_adapter import shared_release_manifest, shared_firewall_action
+    from voice_live_inspect import inspect_common_runtime
 
     if not isinstance(store, SharedApplyOperation) or (
         not isinstance(process_probe, FreeBSDVoiceProcessProbe)
@@ -583,6 +586,16 @@ def activate_common_after_legacy_retirement(
     plan = inspect_legacy_restore_plan(root)
     if plan["previous_five"] != seal["previous_five"]:
         raise LegacyPredecessorRouteError("old rollback evidence no longer matches")
+    release = work / "release"
+
+    def native_bundle():
+        # Attest the SAME sealed Voice+Strategies release used by native
+        # Apply. A callback's success string alone is not kernel evidence.
+        verify_seal(work, owner=config_owner[0])
+        manifest = shared_release_manifest(release)
+        if (manifest["rule_base"], manifest["rule_max"]) != (19000, 19010):
+            raise LegacyPredecessorRouteError("common IPFW range changed")
+        return manifest
 
     def retired():
         require_lifecycle_owner()
@@ -599,6 +612,7 @@ def activate_common_after_legacy_retirement(
             _stopped(process_probe) != "exact-three-role-absence"
         ) or _strict_snapshot(readonly_ipfw) != {"rules": {}, "targets": None}:
             raise LegacyPredecessorRouteError("old runtime/IPFW/marker not wholly retired")
+        native_bundle()
         if common_preflight() is not True:
             raise LegacyPredecessorRouteError("ordinary common runtime preflight refused")
         return record["legacy_predecessor"]
@@ -627,6 +641,20 @@ def activate_common_after_legacy_retirement(
         # This callback returns the saved candidate generation ONLY on proof.
         if common_attest() != record["detail"]["candidate"]:
             raise LegacyPredecessorRouteError("common engine/IPFW witness differs from candidate")
+        manifest = native_bundle()
+        runtime = inspect_common_runtime(release, manifest, active=Path(active_runtime))
+        if not isinstance(runtime, dict) or runtime.get("state") != "running" or (
+            runtime.get("source_verified") is not True
+            or runtime.get("engine_verified") is not True
+            or runtime.get("supervisor_verified") is not True
+        ):
+            raise LegacyPredecessorRouteError("installed common runtime is not independently running")
+        # The original old IPFW state is wholly empty. Native Install
+        # keeps rollback stages until native Config save and Commit; the
+        # ordinary post-commit verify would incorrectly reject that phase.
+        empty = {"rule_base": manifest["rule_base"],
+                 "rule_max": manifest["rule_max"], "rules": {}, "tables": {}}
+        shared_firewall_action(readonly_ipfw, "verify-staged", empty, manifest)
         return record["legacy_predecessor"]
 
     attested()
@@ -703,8 +731,25 @@ def rollback_pristine_common_after_interruption(
             raise LegacyPredecessorRouteError("common engine or artifacts remain")
         return record["legacy_predecessor"]
 
-    pristine()
-    result = store.begin_pristine_common_activation_rollback(identity, pristine)
+    # atomic_install_tree uses deterministic original-service names for
+    # the same candidate ID. Even a stage containing no running process
+    # means the activation did mutate state and is NOT pristine.
+    active = Path(active_runtime)
+    native_paths = (
+        active.parent / ("." + active.name + ".stage." + identity),
+        active.parent / ("." + active.name + ".old." + identity),
+        active.parent / (active.name + "-backups") /
+            (active.name + "-" + identity),
+    )
+    def pristine_atomic():
+        if any(os.path.lexists(path) for path in native_paths):
+            raise LegacyPredecessorRouteError("native atomic stage/backup remains")
+        return pristine()
+
+    pristine_atomic()
+    result = store.begin_pristine_common_activation_rollback(
+        identity, pristine_atomic
+    )
     if result["phase"] != "legacy-rollback-ipfw":
         raise LegacyPredecessorRouteError("old rollback intent not durable")
     return result
