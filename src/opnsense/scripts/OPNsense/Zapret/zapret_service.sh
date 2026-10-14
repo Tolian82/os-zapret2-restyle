@@ -2027,6 +2027,14 @@ service_with_lifecycle_lock()
     ) 9>"${LIFECYCLE_LOCK_FILE}"
 }
 
+# Source the existing service functions in the private original-FD9
+# descendant of voice_native_legacy_predecessor_route. The parent continues
+# holding its pinned Config flock. Not an executable configd/GUI route.
+if [ "${ZAPRET_NATIVE_PRIVATE_IMPORT:-}" = "retired-legacy-forward" ]; then
+    case "$0" in */zapret_service.sh|zapret_service.sh) exit 69 ;; esac
+    return 0
+fi
+
 case "${1:-}" in
     status|telegram-voice-status)
         service_dispatch "$@"

@@ -535,10 +535,71 @@ def retire_stopped_common_legacy_marker(
 
 
 
+# Installed service functions are the ONLY common runtime actuator.
+# This Python caller retains original FD9 and the pinned Config flock while
+# the fixed child shell imports existing functions without redispatching FD9.
+NATIVE_COMMON_SERVICE = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh")
+_NATIVE_FORWARD_SHELL = """
+ZAPRET_NATIVE_PRIVATE_IMPORT=retired-legacy-forward
+. /usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh || exit 69
+unset ZAPRET_NATIVE_PRIVATE_IMPORT
+case "$1" in
+    probe) apply_runtime_probe "$2" 1 ;;
+    activate) apply_runtime_activate_retired_legacy "$2" "$3" ;;
+    *) exit 64 ;;
+esac
+"""
+
+
+def _invoke_existing_native_common(
+    *, mode, identity, work, config_fd, require_lifecycle_owner,
+    service_script=None, runner=None,
+):
+    """Call the actual installed native actuator with the parent's two locks."""
+    if mode not in ("probe", "activate") or not isinstance(identity, str) or (
+        COMMON_ID.fullmatch(identity) is None
+    ):
+        raise LegacyPredecessorRouteError("invalid fixed native forward action")
+    work = Path(work)
+    if work.name != identity or not work.is_absolute() or (
+        type(config_fd) is not int or config_fd < 0 or config_fd == 9
+    ) or not callable(require_lifecycle_owner):
+        raise LegacyPredecessorRouteError("native callback lacks original pinned owner")
+    # Test injection cannot override the canonical installed runtime path:
+    # only the constant itself can be patched in an isolated test.
+    script = NATIVE_COMMON_SERVICE if service_script is None else Path(service_script)
+    if script != NATIVE_COMMON_SERVICE:
+        raise LegacyPredecessorRouteError("foreign common actuator script")
+    info = script.lstat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+        or info.st_nlink != 1 or info.st_mode & 0o022):
+        raise LegacyPredecessorRouteError("untrusted installed common actuator")
+    require_lifecycle_owner()
+    action = subprocess.run if runner is None else runner
+    if not callable(action):
+        raise LegacyPredecessorRouteError("invalid native runtime runner")
+    # Arguments are positional, NEVER interpolated into the fixed shell
+    # program. The original Config file description and FD9 stay inherited.
+    result = action(
+        ["/bin/sh", "-c", _NATIVE_FORWARD_SHELL,
+         "native-common-forward", mode, str(work / "release"), identity],
+        check=False, capture_output=True, text=True, timeout=90,
+        pass_fds=(9, config_fd),
+        env={"LC_ALL": "C",
+             "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin"},
+    )
+    if (result.returncode != 0 or len(result.stdout.encode("utf-8")) > 8192
+        or len(result.stderr.encode("utf-8")) > 8192):
+        raise LegacyPredecessorRouteError("native common actuator requires review")
+    return True
+
+
+
 def activate_common_after_legacy_retirement(
     *, identity, store, work, config_path, config_fd, config_owner,
     active_runtime, marker_path, process_probe, readonly_ipfw,
-    require_lifecycle_owner, common_preflight, common_activate, common_attest,
+    require_lifecycle_owner, common_preflight=None, common_activate=None,
+    common_attest=None,
 ):
     """PRIVATE forward runtime actuator after exact old IPFW/marker retirement.
 
@@ -565,9 +626,11 @@ def activate_common_after_legacy_retirement(
         or (readonly_ipfw.rule_base, readonly_ipfw.rule_max) != (19000, 19010)
         or type(config_fd) is not int or config_fd < 0
         or not callable(require_lifecycle_owner)
-        or not all(callable(cb) for cb in (
+        or not (all(cb is None for cb in (
             common_preflight, common_activate, common_attest
-        ))
+        )) or all(callable(cb) for cb in (
+            common_preflight, common_activate, common_attest
+        )))
     ):
         raise LegacyPredecessorRouteError("missing original common runtime owner")
     work = Path(work)
@@ -587,6 +650,25 @@ def activate_common_after_legacy_retirement(
     if plan["previous_five"] != seal["previous_five"]:
         raise LegacyPredecessorRouteError("old rollback evidence no longer matches")
     release = work / "release"
+
+    if common_preflight is None:
+        # The production caller now uses the actual installed common service
+        # and the same engine/IPFW adapter, not hypothetical injection-only
+        # callbacks. The journal intent is recorded before the ONLY start.
+        def common_preflight():
+            return _invoke_existing_native_common(
+                mode="probe", identity=identity, work=work,
+                config_fd=config_fd, require_lifecycle_owner=require_lifecycle_owner,
+            )
+        def common_activate():
+            return _invoke_existing_native_common(
+                mode="activate", identity=identity, work=work,
+                config_fd=config_fd, require_lifecycle_owner=require_lifecycle_owner,
+            )
+        def common_attest():
+            # The surrounding attested() independently inspects physical
+            # native release, dvtws2/monitor and uncommitted scoped IPFW.
+            return record["detail"]["candidate"]
 
     def native_bundle():
         # Attest the SAME sealed Voice+Strategies release used by native

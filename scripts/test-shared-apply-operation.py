@@ -489,6 +489,72 @@ class TestJournal(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         invoke()
 
+    def test_native_common_forward_inherits_original_fd9_and_config_fd(self):
+        import os
+        from types import SimpleNamespace
+        from voice_native_legacy_predecessor_route import (
+            _invoke_existing_native_common, LegacyPredecessorRouteError,
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            service = root / "zapret_service.sh"
+            service.write_text("#!/bin/sh\n", encoding="ascii")
+            service.chmod(0o600)
+            work = root / detail()["id"]
+            work.mkdir()
+            called = []
+            seen = []
+            def runner(argv, **kw):
+                self.assertEqual(["/bin/sh", "-c"], argv[:2])
+                self.assertEqual("native-common-forward", argv[3])
+                self.assertEqual(str(work / "release"), argv[5])
+                self.assertEqual(detail()["id"], argv[6])
+                self.assertEqual((9, 11), kw["pass_fds"])
+                self.assertEqual(90, kw["timeout"])
+                self.assertNotIn("ZAPRET_NATIVE_PRIVATE_IMPORT", kw["env"])
+                self.assertNotIn(str(work), argv[2])
+                called.append(argv[4])
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            with patch("voice_native_legacy_predecessor_route.NATIVE_COMMON_SERVICE",
+                       service):
+                for mode in ("probe", "activate"):
+                    self.assertTrue(_invoke_existing_native_common(
+                        mode=mode, identity=detail()["id"], work=work,
+                        config_fd=11, require_lifecycle_owner=lambda: seen.append("FD9"),
+                        runner=runner,
+                    ))
+                self.assertEqual(["probe", "activate"], called)
+                self.assertEqual(["FD9", "FD9"], seen)
+                for bad in ("-bad", "", "1" * 31):
+                    with self.assertRaises(LegacyPredecessorRouteError):
+                        _invoke_existing_native_common(
+                            mode="activate", identity=bad, work=work,
+                            config_fd=11, require_lifecycle_owner=lambda: None,
+                            runner=runner,
+                        )
+                with self.assertRaises(LegacyPredecessorRouteError):
+                    _invoke_existing_native_common(
+                        mode="activate", identity=detail()["id"], work=work,
+                        config_fd=9, require_lifecycle_owner=lambda: None,
+                        runner=runner,
+                    )
+                service.chmod(0o666)
+                with self.assertRaises(LegacyPredecessorRouteError):
+                    _invoke_existing_native_common(
+                        mode="probe", identity=detail()["id"], work=work,
+                        config_fd=11, require_lifecycle_owner=lambda: None,
+                        runner=runner,
+                    )
+                service.chmod(0o600)
+                with patch("voice_native_legacy_predecessor_route.subprocess.run",
+                           return_value=SimpleNamespace(returncode=70,
+                                                        stdout="", stderr="error")):
+                    with self.assertRaises(LegacyPredecessorRouteError):
+                        _invoke_existing_native_common(
+                            mode="activate", identity=detail()["id"], work=work,
+                            config_fd=11, require_lifecycle_owner=lambda: None,
+                        )
+
     def test_old_marker_retired_can_enter_private_common_runtime_once(self):
         from voice_native_legacy_predecessor_route import (
             activate_common_after_legacy_retirement,
