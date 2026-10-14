@@ -1504,6 +1504,14 @@ shared_apply_execute_service()
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
         return 70
     fi
+    # Independent post-activation proof for both Strategies and Voice Apply.
+    # Reject dead/replaced engine, changed active tree or unexpected IPFW
+    # BEFORE native Config::save. Never claim rollback on ambiguous drift.
+    if ! apply_runtime_attest_activated; then
+        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        return 70
+    fi
     # Native Config::save is performed by the SAME existing model writer.
     # Only explicit 69 means no save was attempted; every other nonzero
     # status could be a mid-save crash and MUST preserve runtime/evidence.

@@ -1,5 +1,7 @@
 # os-zapret2-restyle — START HERE
 
+**`v0.5.2_89` — постактивационная проверка в РЕАЛЬНОМ общем Apply двух страниц.** Теперь непосредственно перед native `Config::save` штатный `shared_apply_execute_service` вызывает read-only `apply_runtime_attest_activated` из существующего `apply_runtime.sh`: полное сравнение установленного runtime-tree с кандидатом, проверка engine/monitor и независимого PID census, повторная проверка staged IPFW/таблиц. При исчезнувшем процессе, изменённом release или расхождении IPFW новая конфигурация **не сохраняется**, а общий journal фиксирует `requires-review` вместо ложного `committed` или опасного автоматического отката чужого runtime. Используются те же FD9, actuator, Config writer и журнал; оба GUI Apply идут по этому пути. Добавлены реальные shell fault-тесты в имеющиеся suites. Нет нового backend, CLI и изменений frontend/ТЗ. Live FreeBSD и old-running-PoC handoff всё ещё не приняты.
+
 **`v0.5.2_88` — независимая native-проверка общего runtime перед закрытием private legacy→common activation.** После одноразового `apply_runtime_activate` переход `legacy-common-activating → legacy-common-activated` теперь НЕ разрешается лишь по callback receipt: проверяется sealed full Voice+Strategies release, настоящий установленный runtime (engine+supervisor, совпадение active plan/argv) и фактическое native IPFW с сохранёнными до Config save staged-таблицами. Тот же seal проверяется до первого fsync-активационного намерения. Уточнён аварийный pristine rollback: наличие любого operation-ID `atomic_install_tree` stage/park/backup запрещает ложное «ничего не изменилось», даже при отсутствии процессов. Добавлены регрессии на отказы runtime/IPFW и чужой stage. Пока это **private/import-only**, без нового CLI/GUI и без вызова native Config COMMIT; fixed shell callback и частично изменённый recovery ещё в работе. Это не FreeBSD MEDIA/CALL_PASS.
 
 **`v0.5.2_87` — однонаправленный recovery после прерванной активации общего runtime (private).** Когда `legacy-common-activating` прерван, строго приватный `rollback_pristine_common_after_interruption` под тем же FD9/Config lock проверяет неизменность old Config/runtime, sealed old predecessor/restore plan, отсутствие marker, трёх old-процессов, всех IPFW-объектов и независимое отсутствие common engine/supervisor/staged artifacts. Только полностью исходное состояние разрешает атомарный переход ПРЯМО в старую `legacy-rollback-ipfw` с дальнейшим проверяемым IPFW→marker→process rollback. Переход обратно в `legacy-marker-retired` запрещён, чтобы избежать второго запуска движка после power cut; любое частичное состояние остаётся pending. Нет нового процесса, журнала, GUI, CLI или boot-маршрута; родной shell `apply_runtime_activate`, native Config COMMIT и частичный forward recovery ещё требуется связать. FreeBSD STUN/MEDIA/CALL не заявлены как PASS.
@@ -44,7 +46,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_88`. `VERSION=0.5.2`; `PLUGIN_REVISION=88`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_89`. `VERSION=0.5.2`; `PLUGIN_REVISION=89`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
 
@@ -146,7 +148,7 @@ Install проверяет живые объекты до изменения, с
 
 ## Следующее действие
 
-**После `_88`:** подключить private forward-интерфейс к штатному `apply_runtime_activate` под исходными FD9+Config lock, затем реализовать штатное native Config save/COMMIT и проверяемый откат. После закрытия этих границ провести FreeBSD GUI STUN/MEDIA/CALL испытания; production `legacy-arm`/`legacy-begin` пока запрещены.
+**После `_89`:** подключить private forward-интерфейс к штатному `apply_runtime_activate` под исходными FD9+Config lock, затем реализовать штатное native Config save/COMMIT и проверяемый откат. После закрытия этих границ провести FreeBSD GUI STUN/MEDIA/CALL испытания; production `legacy-arm`/`legacy-begin` пока запрещены.
 
 **Этап 4 — следующий рубеж после `_68`.** Проверить частично изменённый runtime в `activating` и живой/непустой IPFW в `activated`, затем выполнить FreeBSD live power-cut квалификацию. Для неизвестного состояния восстановление остаётся fail-closed. Следом — reversible миграция работающего legacy PoC, очистка старого private backend и полная приёмка. После этого остаются reversible handoff работающего legacy PoC, устранение старого дублирования и реальная FreeBSD/GUI приёмка. Обе штатные кнопки Apply уже подключены; ТЗ и frontend сохраняются.
 

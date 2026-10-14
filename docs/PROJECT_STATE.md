@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`v0.5.2_89` — постактивационная проверка в РЕАЛЬНОМ общем Apply двух страниц.** Теперь непосредственно перед native `Config::save` штатный `shared_apply_execute_service` вызывает read-only `apply_runtime_attest_activated` из существующего `apply_runtime.sh`: полное сравнение установленного runtime-tree с кандидатом, проверка engine/monitor и независимого PID census, повторная проверка staged IPFW/таблиц. При исчезнувшем процессе, изменённом release или расхождении IPFW новая конфигурация **не сохраняется**, а общий journal фиксирует `requires-review` вместо ложного `committed` или опасного автоматического отката чужого runtime. Используются те же FD9, actuator, Config writer и журнал; оба GUI Apply идут по этому пути. Добавлены реальные shell fault-тесты в имеющиеся suites. Нет нового backend, CLI и изменений frontend/ТЗ. Live FreeBSD и old-running-PoC handoff всё ещё не приняты.
+
 **`v0.5.2_88` — независимая native-проверка общего runtime перед закрытием private legacy→common activation.** После одноразового `apply_runtime_activate` переход `legacy-common-activating → legacy-common-activated` теперь НЕ разрешается лишь по callback receipt: проверяется sealed full Voice+Strategies release, настоящий установленный runtime (engine+supervisor, совпадение active plan/argv) и фактическое native IPFW с сохранёнными до Config save staged-таблицами. Тот же seal проверяется до первого fsync-активационного намерения. Уточнён аварийный pristine rollback: наличие любого operation-ID `atomic_install_tree` stage/park/backup запрещает ложное «ничего не изменилось», даже при отсутствии процессов. Добавлены регрессии на отказы runtime/IPFW и чужой stage. Пока это **private/import-only**, без нового CLI/GUI и без вызова native Config COMMIT; fixed shell callback и частично изменённый recovery ещё в работе. Это не FreeBSD MEDIA/CALL_PASS.
 
 **`v0.5.2_87` — однонаправленный recovery после прерванной активации общего runtime (private).** Когда `legacy-common-activating` прерван, строго приватный `rollback_pristine_common_after_interruption` под тем же FD9/Config lock проверяет неизменность old Config/runtime, sealed old predecessor/restore plan, отсутствие marker, трёх old-процессов, всех IPFW-объектов и независимое отсутствие common engine/supervisor/staged artifacts. Только полностью исходное состояние разрешает атомарный переход ПРЯМО в старую `legacy-rollback-ipfw` с дальнейшим проверяемым IPFW→marker→process rollback. Переход обратно в `legacy-marker-retired` запрещён, чтобы избежать второго запуска движка после power cut; любое частичное состояние остаётся pending. Нет нового процесса, журнала, GUI, CLI или boot-маршрута; родной shell `apply_runtime_activate`, native Config COMMIT и частичный forward recovery ещё требуется связать. FreeBSD STUN/MEDIA/CALL не заявлены как PASS.
@@ -88,13 +90,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_88`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_89`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=88` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_88.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=89` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_89.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;

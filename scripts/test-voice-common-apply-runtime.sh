@@ -47,6 +47,10 @@ atomic_restore_tree() {
     rm -rf "$1"
     [ -z "$2" ] || mv "$2" "$1"
 }
+atomic_verify_tree() {
+    cmp -s "$1/voice-plan.json" "$2/voice-plan.json" &&
+    cmp -s "$1/dvtws.args" "$2/dvtws.args"
+}
 BASE=$(CDPATH= cd -- "$(dirname -- "$0")/../src/opnsense/scripts/OPNsense/Zapret/backend" && pwd)
 . "$BASE/apply_runtime.sh"
 # Separate census regression exercises the REAL production function.
@@ -68,6 +72,20 @@ apply_runtime_clear
 apply_runtime_activate "$ROOT/one" 1 || fail "first activation"
 [ "$APPLY_PHASE" = activated ] && [ "$PROCESS" = 1 ] &&
 [ "$MONITOR" = 1 ] && [ "$FW_STAGE" = 1 ] || fail "first staged runtime"
+apply_runtime_attest_activated || fail "shared Apply rejected its actual live candidate"
+MONITOR=0
+if apply_runtime_attest_activated; then fail "missing supervisor reached Config save"; fi
+MONITOR=1
+PROCESS=0
+if apply_runtime_attest_activated; then fail "missing engine reached Config save"; fi
+PROCESS=1
+FW_STAGE=0
+if apply_runtime_attest_activated; then fail "missing IPFW snapshot reached Config save"; fi
+FW_STAGE=1
+printf '%s\n' broken-live-args > "$ACTIVE_DIR/dvtws.args"
+if apply_runtime_attest_activated; then fail "changed active tree reached Config save"; fi
+cp "$ROOT/one/dvtws.args" "$ACTIVE_DIR/dvtws.args"
+apply_runtime_attest_activated || fail "restored staged owner rejected"
 apply_runtime_commit || fail "first commit"
 [ "$APPLY_PHASE" = idle ] && [ "$FW_STAGE" = 0 ] || fail "first cleanup"
 apply_runtime_activate "$ROOT/two" 1 || fail "ON edit"

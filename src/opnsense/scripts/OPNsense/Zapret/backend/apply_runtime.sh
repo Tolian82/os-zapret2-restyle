@@ -261,6 +261,43 @@ apply_runtime_activate()
     # Not yet committed: previous tree and stage tables remain available.
 }
 
+# Post-activation proof for the ACTUAL shared Strategies/Voice Apply.
+# Invoke under original FD9, after native activation and immediately before
+# Config::save. Never return success based on the launcher/adapter exit code
+# alone: confirm installed bytes, one process owner and precommit firewall.
+# This helper is read-only and is reused by either page's same executor.
+apply_runtime_attest_activated()
+{
+    [ "$#" -eq 0 ] || return 64
+    [ "${APPLY_PHASE:-idle}" = activated ] || return 69
+    [ -d "$APPLY_CANDIDATE" ] && [ ! -L "$APPLY_CANDIDATE" ] &&
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 70
+    case "$APPLY_NEW_RUNNING" in 0|1) ;; *) return 70 ;; esac
+
+    # The atomic installer verifies its copy BEFORE the rename. A later
+    # alteration of the live tree must not slip into persisted native Config.
+    atomic_verify_tree "$APPLY_CANDIDATE" "$ACTIVE_DIR" || return 70
+
+    _apply_engine=0
+    _apply_monitor=0
+    launcher_is_running "$CHILD_PIDFILE" && _apply_engine=1
+    supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" && _apply_monitor=1
+    [ "$_apply_engine" = "$APPLY_NEW_RUNNING" ] &&
+    [ "$_apply_monitor" = "$APPLY_NEW_RUNNING" ] || return 70
+    apply_runtime_attest_engine_inventory || return 70
+
+    if [ "$APPLY_NEW_RUNNING" = 1 ]; then
+        [ "$APPLY_NEW" = "$ACTIVE_DIR" ] || return 70
+    else
+        [ "$APPLY_NEW" = - ] || return 70
+    fi
+    if [ "$APPLY_IPFW_INSTALLED" = 1 ]; then
+        firewall_shared_runtime verify-staged "$APPLY_OLD" "$APPLY_NEW" || return 70
+    else
+        firewall_shared_runtime verify "$APPLY_CANDIDATE" "$APPLY_NEW" || return 70
+    fi
+}
+
 apply_runtime_commit()
 {
     [ "${APPLY_PHASE:-idle}" = activated ] || return 69
