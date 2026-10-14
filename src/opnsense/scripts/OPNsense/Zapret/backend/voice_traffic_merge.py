@@ -27,14 +27,27 @@ def profile_scope(tokens: list[str], ipsets: dict[str, list[str]]) -> tuple[list
     ports = []
     networks = []
     has_ipset = False
+    # Ordinary Strategies may carry IPv6-only STUN. It cannot intercept
+    # IPv4 Voice packets, but conflicting/ambiguous native L3 selectors
+    # must NEVER be allowed to mask a later IPv4 selector.
+    l3_selectors = [token.partition("=")[2] for token in tokens
+                    if token.startswith("--filter-l3=")]
+    if len(l3_selectors) > 1:
+        raise VoiceMergeError("competing profile priority: duplicate STUN L3 selector")
+    if l3_selectors:
+        families = l3_selectors[0].split(",")
+        if not families or any(family not in ("ipv4", "ipv6") for family in families) or (
+            len(set(families)) != len(families)
+        ):
+            raise VoiceMergeError("competing profile priority: invalid STUN L3 selector")
+        if "ipv4" not in families:
+            return [], []
     for token in tokens:
         if token.startswith("--filter-udp="):
             try:
                 ports.extend(parse_ports(token.partition("=")[2], "ordinary STUN"))
             except ValueError as exc:
                 raise VoiceMergeError("competing profile priority: invalid STUN UDP ports") from exc
-        elif token.startswith("--filter-l3=") and "ipv4" not in token.partition("=")[2].split(","):
-            return [], []
         elif token.startswith("--ipset=") or token.startswith("--ipset-ip="):
             has_ipset = True
             value = token.partition("=")[2]

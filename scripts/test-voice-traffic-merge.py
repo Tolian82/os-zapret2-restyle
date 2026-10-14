@@ -76,6 +76,28 @@ class OneEngineMergeTests(unittest.TestCase):
         same_ip = other.replace("203.0.113.1", "198.51.100.1")
         self.assertTrue(merge.merge_profiles(numeric, same_ip, scopes).endswith(same_ip))
 
+    def test_stun_l3_collision_proof_rejects_ambiguous_native_selectors(self):
+        scopes = {"/managed/ipset-telegram.txt": ["91.108.13.10"]}
+        prefix = "--filter-udp=3478\n--filter-l7=stun\n--payload=stun\n"
+        subset = "--ipset-ip=91.108.13.10\n"
+        # IPv6-only STUN is genuinely disjoint from IPv4-only Voice even
+        # on the same destination/UDP selector.
+        only_v6 = prefix + "--filter-l3=ipv6\n" + subset
+        self.assertTrue(merge.merge_profiles(VOICE, only_v6, scopes).endswith(only_v6))
+        # A legitimate dual-stack selector DOES overlap and must be refused.
+        dual = prefix + "--filter-l3=ipv4,ipv6\n" + subset
+        with self.assertRaisesRegex(merge.VoiceMergeError, "overlaps"):
+            merge.merge_profiles(VOICE, dual, scopes)
+        # First IPv6 then IPv4 was previously silently classified as
+        # IPv6-only; a native parser could choose the later IPv4 selector.
+        for l3 in ("--filter-l3=ipv6\n--filter-l3=ipv4\n",
+                   "--filter-l3=unknown\n",
+                   "--filter-l3=ipv4,ipv4\n",
+                   "--filter-l3=ipv6,\n"):
+            with self.subTest(l3=l3):
+                with self.assertRaisesRegex(merge.VoiceMergeError, "STUN L3 selector"):
+                    merge.merge_profiles(VOICE, prefix + l3 + subset, scopes)
+
     def test_cli_candidate_creation_is_non_destructive(self):
         with tempfile.TemporaryDirectory() as d:
             folder = Path(d)
