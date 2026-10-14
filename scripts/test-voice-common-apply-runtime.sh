@@ -696,6 +696,10 @@ chmod 700 "$ROOT/capture-firewall-python"
 # this SAME test. The trusted installed tree/old backup and complete engine
 # are required before the verified stage can be cleaned.
 (
+    # The earlier candidate-qualification scenarios deliberately replaced
+    # this validator with a QUAL_ID-specific mock. Restore the ordinary
+    # shared runtime contract in this isolated subshell, not globally.
+    validator_validate_runtime_modes() { [ -f "$1/voice-plan.json" ]; }
     ACTIVE_DIR="$ROOT/resume-active"
     BACKUP_ROOT="$ROOT/resume-backups"
     _resume_id=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
