@@ -1034,7 +1034,8 @@ class TestJournal(unittest.TestCase):
                     self.assertEqual("<new/>", config.read_text())
                     self.assertEqual(["old-proof", "attest", "config-save",
                                       "old-proof", "attest", "old-proof", "attest",
-                                      "commit", "old-proof", "verify-committed"], actions)
+                                      "commit", "old-proof", "verify-committed",
+                                      "old-proof", "verify-committed"], actions)
                     self.assertEqual(detail(),committed_owner(store.read()))
                     advisory=check_pending(root/"voice-cutover",root/"voice-ipfw")
                     self.assertEqual("shared-runtime-owned",advisory["reason"])
