@@ -65,6 +65,45 @@ class VoiceHandoffPreflightTests(unittest.TestCase):
             self.assertEqual(("443", "596-599"),
                              contract._ordinary_ports(bridge.ORDINARY))
 
+    def test_disjoint_existing_stun_strategy_survives_actual_native_handoff(self):
+        # The common generator already approved this combination. Handoff
+        # must not lose Voice's verified managed IPSET map on a second merge.
+        disjoint = (
+            "--filter-tcp=443\n--filter-l7=tls\n--new\n"
+            "--filter-udp=3478\n--filter-l7=stun\n"
+            "--payload=stun\n--ipset-ip=198.51.100.0/24\n"
+        )
+        overlap = disjoint.replace("198.51.100.0/24", "91.108.13.10")
+        with tempfile.TemporaryDirectory() as td:
+            temp = Path(td)
+            source, managed = bridge.fixtures.write_fixture(
+                temp, bridge.fixtures.fixture(True))
+            ordinary_source = temp / "ordinary.conf"
+            ordinary_source.write_text(disjoint, encoding="utf-8")
+            bundle = bridge.stage.compile_bundle(
+                source, managed, bridge.ACTIVE_ROOT, "vtnet1",
+                19000, 19010, 989, ordinary_source,
+                expected_logical_wan="WAN",
+            )
+            argv = bridge.generate_native_argv(temp / "generator", bundle["traffic.conf"])
+            tcp, udp = bridge.extract_real_ordinary_ports(temp / "ports", disjoint)
+            self.assertEqual(("443", "3478"), (tcp, udp))
+            report = self.validate(bundle, argv, disjoint, tcp, udp)
+            self.assertEqual(["telegram"], report["enabled_services"])
+            self.assertEqual(3, report["rule_count"])
+            self.assertEqual(1, report["table_count"])
+            # Changing ordinary STUN destinations after staging is forbidden.
+            with self.assertRaises(contract.VoiceHandoffError):
+                self.validate(bundle, argv, overlap, tcp, udp)
+            # A changed plan/target fingerprint may not trick the second
+            # collision check into approving the conflicting destination.
+            tampered = dict(bundle)
+            plan = json.loads(tampered["profile-plan.json"])
+            plan["profiles"][0]["targets"] = ["198.51.100.0/24"]
+            tampered["profile-plan.json"] = json.dumps(plan)
+            with self.assertRaises(contract.VoiceHandoffError):
+                self.validate(tampered, argv, disjoint, tcp, udp)
+
     def test_all_voice_off_preserves_one_engine_and_no_voice_table(self):
         with tempfile.TemporaryDirectory() as td:
             b, argv = self.build(Path(td) / "off", False)

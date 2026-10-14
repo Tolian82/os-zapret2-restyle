@@ -101,13 +101,6 @@ def verify_staged_handoff(artifacts: dict[str, str], native_argv: str,
     if not isinstance(metadata.get("saved_xml_sha256"), str) or \
        not re.fullmatch(r"[a-f0-9]{64}", metadata["saved_xml_sha256"]):
         raise VoiceHandoffError("missing pinned saved XML revision")
-    try:
-        rebuilt = merge_profiles(voice, ordinary)
-    except VoiceMergeError as error:
-        raise VoiceHandoffError("Voice/ordinary traffic collision") from error
-    if merged != rebuilt or metadata.get("merged_sha256") != _hash(merged) or \
-       metadata.get("ordinary_sha256") != _hash(ordinary):
-        raise VoiceHandoffError("Voice and Strategies release content disagrees")
     records = capture.get("voice")
     profiles = plan.get("profiles")
     if not isinstance(records, list) or not isinstance(profiles, list) or \
@@ -188,6 +181,24 @@ def verify_staged_handoff(artifacts: dict[str, str], native_argv: str,
         expected_hash = _hash("".join(target + "\n" for target in targets))
         if fingerprints[name] != expected_hash:
             raise VoiceHandoffError("Voice managed target hash differs from profile plan")
+
+    # Re-run the SAME ordinary-STUN collision test as the detached shared
+    # compiler. The previous call omitted the managed Voice IPSET scopes
+    # entirely, so a legitimate disjoint ordinary STUN profile was rejected
+    # here even after stage_common_runtime had accepted it.
+    #
+    # The map is reconstructed only AFTER the capture plan round-trip and
+    # per-service target fingerprints above, not from arbitrary disk paths.
+    # No installed/active IPSET files are read and no unverified wildcard
+    # scope can accidentally authorize a competing Voice capture.
+    scopes = {entry["ipset_path"]: entry["targets"] for entry in profiles}
+    try:
+        rebuilt = merge_profiles(voice, ordinary, scopes)
+    except VoiceMergeError as error:
+        raise VoiceHandoffError("Voice/ordinary traffic collision") from error
+    if merged != rebuilt or metadata.get("merged_sha256") != _hash(merged) or \
+       metadata.get("ordinary_sha256") != _hash(ordinary):
+        raise VoiceHandoffError("Voice and Strategies release content disagrees")
     return {
         "schema": 1,
         "state": "preflight-only",
