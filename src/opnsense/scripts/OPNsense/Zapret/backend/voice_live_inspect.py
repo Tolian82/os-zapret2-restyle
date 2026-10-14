@@ -189,10 +189,31 @@ def inspect_common_runtime(release: Path, manifest: dict, *,
        expected != [name for name in SERVICES if name in capture_names] or \
        expected != manifest_names:
         raise VoiceInspectError("common Voice runtime profile/IPFW disagreement")
-    active_source = (
-        installed_match(release / "voice-plan.json", active / "voice-plan.json") and
-        installed_match(release / "dvtws.args", active / "dvtws.args")
-    )
+    # Kernel ownership alone does not prove that the one running dvtws2
+    # still reads the sealed profile and destination files. In particular,
+    # an ordinary Strategies STUN selector may use the managed IPSET of a
+    # DISABLED Voice service (no dedicated Voice IPFW table exists for it).
+    # Compare those installed bytes as well before reporting GUI "ready".
+    source = plan.get("source")
+    if not isinstance(source, dict):
+        raise VoiceInspectError("missing common Voice staging source")
+    voice_hashes = source.get("ipset_sha256")
+    ordinary_hashes = source.get("ordinary_scope_ipset_sha256")
+    if not isinstance(voice_hashes, dict) or not isinstance(ordinary_hashes, dict):
+        raise VoiceInspectError("missing common STUN scope evidence")
+    for scopes in (voice_hashes, ordinary_hashes):
+        for name, digest in scopes.items():
+            if name not in SERVICES or not isinstance(digest, str) or (
+                not re.fullmatch(r"[a-f0-9]{64}", digest)
+            ):
+                raise VoiceInspectError("untrusted common STUN scope evidence")
+    if set(voice_hashes) != set(profile_names):
+        raise VoiceInspectError("common Voice IPSET scope differs from enabled profiles")
+    names = ["voice-plan.json", "dvtws.args", "traffic.conf"]
+    names += [f"managed/ipset-{service}.txt" for service in SERVICES
+              if service in voice_hashes or service in ordinary_hashes]
+    active_source = all(installed_match(release / name, active / name)
+                        for name in names)
     engine = bool(process_check(CHILD_PID, CHILD_EXEC))
     monitor = bool(process_check(MONITOR_PID, MONITOR_EXEC))
     if not active_source:

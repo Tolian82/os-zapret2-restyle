@@ -5,6 +5,8 @@ No subprocess, PID, firewall or kernel mutation in tests. This verifies
 all five Voice profile reports remain bound to one common release engine.
 """
 from pathlib import Path
+import hashlib
+import shutil
 import json
 import sys
 import tempfile
@@ -22,10 +24,25 @@ class CommonRuntimeEvidence(unittest.TestCase):
         release=Path(root)/"release"
         release.mkdir()
         (release/"dvtws.args").write_text("--filter-udp=443\n")
+        (release/"traffic.conf").write_text("--filter-udp=443\n")
+        managed=release/"managed"
+        managed.mkdir()
+        voice_hashes={}
+        for name in selected:
+            raw=b"91.108.13.10\n"
+            (managed/f"ipset-{name}.txt").write_bytes(raw)
+            voice_hashes[name]=hashlib.sha256(raw).hexdigest()
+        # A regular Strategies STUN profile may consume the IPSET of a
+        # service whose Voice toggle is disabled.
+        raw=b"198.51.100.0/24\n"
+        (managed/"ipset-custom.txt").write_bytes(raw)
+        ordinary_hashes={"custom":hashlib.sha256(raw).hexdigest()}
         (release/"voice-plan.json").write_text(json.dumps({
             "schema":1,
             "profiles":[{"service":x,"enabled":True} for x in selected],
             "capture":{"voice":[{"service":x} for x in selected]},
+            "source":{"ipset_sha256":voice_hashes,
+                      "ordinary_scope_ipset_sha256":ordinary_hashes},
         }))
         manifest={"tables":{f"zapret2_voice_{x}":["91.108.13.10"] for x in selected}}
         return release,manifest
@@ -81,6 +98,48 @@ class CommonRuntimeEvidence(unittest.TestCase):
                     self.assertEqual(expected,report["state"])
                     self.assertEqual("engine-not-confirmed",
                                      report["services"]["telegram"]["runtime_state"])
+
+    def test_live_installed_ordinary_stun_ipset_and_traffic_are_exact(self):
+        # Release was sealed earlier; active files are the bytes actually
+        # consumed by the one process. Verify drift without touching IPFW.
+        with tempfile.TemporaryDirectory() as root:
+            rel,manifest=self.plan(root)
+            active=Path(root)/"active"
+            shutil.copytree(rel,active)
+            observed=[]
+            def matches(src,dst):
+                observed.append(src.relative_to(rel).as_posix())
+                return src.is_file() and dst.is_file() and (
+                    src.read_bytes()==dst.read_bytes()
+                )
+            def probe():
+                return inspect_common_runtime(
+                    rel,manifest,active=active,
+                    installed_match=matches,
+                    process_check=lambda pid,exe: True)
+            self.assertEqual("running",probe()["state"])
+            self.assertIn("managed/ipset-custom.txt",observed)
+            self.assertIn("managed/ipset-telegram.txt",observed)
+            self.assertIn("traffic.conf",observed)
+            for path,changed in (
+                ("traffic.conf","--filter-udp=*\n"),
+                ("managed/ipset-telegram.txt","8.8.8.8\n"),
+                ("managed/ipset-custom.txt","91.108.13.10\n"),
+                ("dvtws.args","--port=9999\n"),
+            ):
+                with self.subTest(path=path):
+                    target=active/path
+                    original=target.read_bytes()
+                    target.write_text(changed)
+                    report=probe()
+                    self.assertEqual("unverified-release",report["state"])
+                    self.assertFalse(report["source_verified"])
+                    self.assertFalse(report["engine_verified"])
+                    self.assertFalse(report["call_verified"])
+                    target.write_bytes(original)
+                    self.assertEqual("running",probe()["state"])
+            (active/"managed/ipset-custom.txt").unlink()
+            self.assertEqual("unverified-release",probe()["state"])
 
     def test_source_drift_never_reports_confirmed_runtime(self):
         with tempfile.TemporaryDirectory() as root:
