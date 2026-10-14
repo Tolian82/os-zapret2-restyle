@@ -546,6 +546,7 @@ unset ZAPRET_NATIVE_PRIVATE_IMPORT
 case "$1" in
     probe) apply_runtime_probe "$2" 1 ;;
     activate) apply_runtime_activate_retired_legacy "$2" "$3" ;;
+    attest) apply_runtime_rehydrate_retired_legacy "$2" "$3" ;;
     *) exit 64 ;;
 esac
 """
@@ -556,7 +557,7 @@ def _invoke_existing_native_common(
     service_script=None, runner=None,
 ):
     """Call the actual installed native actuator with the parent's two locks."""
-    if mode not in ("probe", "activate") or not isinstance(identity, str) or (
+    if mode not in ("probe", "activate", "attest") or not isinstance(identity, str) or (
         COMMON_ID.fullmatch(identity) is None
     ):
         raise LegacyPredecessorRouteError("invalid fixed native forward action")
@@ -651,7 +652,8 @@ def activate_common_after_legacy_retirement(
         raise LegacyPredecessorRouteError("old rollback evidence no longer matches")
     release = work / "release"
 
-    if common_preflight is None:
+    native_forward = common_preflight is None
+    if native_forward:
         # The production caller now uses the actual installed common service
         # and the same engine/IPFW adapter, not hypothetical injection-only
         # callbacks. The journal intent is recorded before the ONLY start.
@@ -666,8 +668,13 @@ def activate_common_after_legacy_retirement(
                 config_fd=config_fd, require_lifecycle_owner=require_lifecycle_owner,
             )
         def common_attest():
-            # The surrounding attested() independently inspects physical
-            # native release, dvtws2/monitor and uncommitted scoped IPFW.
+            # The activation shell is already gone: restore its ephemeral
+            # APPLY_* context ONLY after independently proving the installed
+            # native release, single engine/supervisor and staged IPFW.
+            _invoke_existing_native_common(
+                mode="attest", identity=identity, work=work,
+                config_fd=config_fd, require_lifecycle_owner=require_lifecycle_owner,
+            )
             return record["detail"]["candidate"]
 
     def native_bundle():
@@ -723,6 +730,16 @@ def activate_common_after_legacy_retirement(
         # This callback returns the saved candidate generation ONLY on proof.
         if common_attest() != record["detail"]["candidate"]:
             raise LegacyPredecessorRouteError("common engine/IPFW witness differs from candidate")
+        if native_forward:
+            # The original Config must still be unsaved at this boundary,
+            # and the deterministic native BACKUP must match the complete
+            # immutable old runtime captured before any PoC STOP. This is
+            # independent of the shell's reconstructed APPLY_* variables.
+            active = Path(active_runtime)
+            backup = active.parent / (active.name + "-backups") / (
+                active.name + "-" + identity
+            )
+            _verify_sources(Path(config_path), backup, old)
         manifest = native_bundle()
         runtime = inspect_common_runtime(release, manifest, active=Path(active_runtime))
         if not isinstance(runtime, dict) or runtime.get("state") != "running" or (

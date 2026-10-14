@@ -314,6 +314,64 @@ apply_runtime_activate_retired_legacy()
     fi
 }
 
+# Reconstruct only the verified pre-Config context after Python's fixed
+# native child exited. Its shell variables cannot survive subprocess exit.
+# Private legacy→common ONLY, never for generic Apply or unsealed rollback.
+# Must run under original FD9; the Python owner also holds the original
+# Config flock and verifies the sealed old predecessor independently.
+apply_runtime_rehydrate_retired_legacy()
+{
+    [ "$#" -eq 2 ] || return 64
+    _apply_rehydrate_candidate="$1"
+    _apply_rehydrate_id="$2"
+    case "$_apply_rehydrate_id" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_apply_rehydrate_id}" -eq 32 ] || return 64
+    [ "${APPLY_PHASE:-idle}" = idle ] || return 69
+    case "$_apply_rehydrate_candidate" in /*) ;; *) return 64 ;; esac
+    [ -d "$_apply_rehydrate_candidate" ] &&
+    [ ! -L "$_apply_rehydrate_candidate" ] &&
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
+
+    _apply_rehydrate_backup="$BACKUP_ROOT/$(basename "$ACTIVE_DIR")-$_apply_rehydrate_id"
+    [ -d "$_apply_rehydrate_backup" ] &&
+    [ ! -L "$_apply_rehydrate_backup" ] &&
+    [ ! -e "$_apply_rehydrate_backup/voice-plan.json" ] &&
+    [ ! -L "$_apply_rehydrate_backup/voice-plan.json" ] || return 69
+    for _apply_rehydrate_file in dvtws.args tcp-ports.txt udp-ports.txt; do
+        [ -f "$_apply_rehydrate_backup/$_apply_rehydrate_file" ] &&
+        [ ! -L "$_apply_rehydrate_backup/$_apply_rehydrate_file" ] || return 69
+    done
+    _apply_rehydrate_stage="$(dirname "$ACTIVE_DIR")/.$(basename "$ACTIVE_DIR").stage.$_apply_rehydrate_id"
+    _apply_rehydrate_park="$(dirname "$ACTIVE_DIR")/.$(basename "$ACTIVE_DIR").old.$_apply_rehydrate_id"
+    [ ! -e "$_apply_rehydrate_stage" ] && [ ! -L "$_apply_rehydrate_stage" ] &&
+    [ ! -e "$_apply_rehydrate_park" ] && [ ! -L "$_apply_rehydrate_park" ] ||
+        return 69
+
+    # All checks are read-only until the original context can be proven.
+    validator_validate_runtime_modes "$_apply_rehydrate_candidate" || return 70
+    atomic_verify_tree "$_apply_rehydrate_candidate" "$ACTIVE_DIR" || return 70
+    launcher_is_running "$CHILD_PIDFILE" &&
+    supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" || return 70
+    _apply_engine=1
+    apply_runtime_attest_engine_inventory || return 70
+    firewall_shared_runtime verify-staged - "$ACTIVE_DIR" || return 70
+
+    APPLY_CANDIDATE="$_apply_rehydrate_candidate"
+    APPLY_BACKUP="$_apply_rehydrate_backup"
+    APPLY_OLD=-
+    APPLY_NEW="$ACTIVE_DIR"
+    APPLY_OLD_RUNNING=0
+    APPLY_NEW_RUNNING=1
+    APPLY_IPFW_INSTALLED=1
+    APPLY_PHASE=activated
+    if ! apply_runtime_attest_activated; then
+        # The parent journal remains pending; this only clears ephemeral
+        # child-process variables, NEVER old/native files or IPFW objects.
+        apply_runtime_clear
+        return 70
+    fi
+}
+
 # Post-activation proof for the ACTUAL shared Strategies/Voice Apply.
 # Invoke under original FD9, after native activation and immediately before
 # Config::save. Never return success based on the launcher/adapter exit code

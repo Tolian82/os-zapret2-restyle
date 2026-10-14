@@ -564,7 +564,7 @@ class TestJournal(unittest.TestCase):
         from voice_ipfw_adapter import FreeBSDIPFWAdapter
 
         for crash in ("none", "actuator", "new-owner-proof",
-                      "native-not-running", "native-ipfw-drift"):
+                      "native-not-running", "native-ipfw-drift", "native-fixed"):
             with self.subTest(crash=crash), tempfile.TemporaryDirectory() as folder:
                 root=Path(folder)
                 work=root/detail()["id"]
@@ -602,9 +602,23 @@ class TestJournal(unittest.TestCase):
                         config_owner=(0,0),active_runtime=root/"active",
                         marker_path=root/"old-marker",process_probe=probe,
                         readonly_ipfw=ipfw,require_lifecycle_owner=lambda:None,
-                        common_preflight=preflight,common_activate=activate,
-                        common_attest=live)
+                        **({} if crash == "native-fixed" else {
+                            "common_preflight": preflight,
+                            "common_activate": activate,
+                            "common_attest": live,
+                        }))
                 with ExitStack() as patches:
+                    if crash == "native-fixed":
+                        def real_common_forward(**args):
+                            checks.append("native-" + args["mode"])
+                            self.assertEqual(detail()["id"], args["identity"])
+                            self.assertEqual(4, args["config_fd"])
+                            if args["mode"] == "activate":
+                                starts.append("common-start")
+                            return True
+                        patches.enter_context(patch(
+                            "voice_native_legacy_predecessor_route._invoke_existing_native_common",
+                            side_effect=real_common_forward))
                     patches.enter_context(patch(
                         "voice_native_legacy_predecessor_route._locked_config"))
                     patches.enter_context(patch(
@@ -655,7 +669,11 @@ class TestJournal(unittest.TestCase):
                     else:
                         self.assertEqual("legacy-common-activated",invoke()["phase"])
                     self.assertEqual(["common-start"],starts)
-                    expected=("legacy-common-activated" if crash=="none"
+                    if crash == "native-fixed":
+                        self.assertEqual(
+                            ["native-probe", "native-probe", "native-activate",
+                             "native-attest"], checks)
+                    expected=("legacy-common-activated" if crash in ("none", "native-fixed")
                               else "legacy-common-activating")
                     self.assertEqual(expected,store.read()["phase"])
                     self.assertIsNone(committed_owner(store.read()))

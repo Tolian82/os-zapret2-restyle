@@ -200,6 +200,38 @@ EXPECTED_RETIRE_BACKUP="$BACKUP_ROOT/$(basename "$ACTIVE_DIR")-$RETIRE_ID"
 [ "$PROCESS" = 1 ] && [ "$MONITOR" = 1 ] &&
 [ "$FW" = active ] && [ "$FW_STAGE" = 1 ] ||
     fail "retired forward lost original backup or kernel precommit"
+# The original activation ran in a child shell. The next child has
+# NO APPLY_* globals: it must reconstruct only physically attested state.
+apply_runtime_clear
+FW_STAGE=0
+if apply_runtime_rehydrate_retired_legacy "$ROOT/one" "$RETIRE_ID"; then
+    fail "missing staged IPFW accepted after child exited"
+fi
+FW_STAGE=1
+MONITOR=0
+if apply_runtime_rehydrate_retired_legacy "$ROOT/one" "$RETIRE_ID"; then
+    fail "dead supervisor accepted by reconstructed owner"
+fi
+MONITOR=1
+mv "$EXPECTED_RETIRE_BACKUP/tcp-ports.txt" "$EXPECTED_RETIRE_BACKUP/tcp-ports.tmp"
+if apply_runtime_rehydrate_retired_legacy "$ROOT/one" "$RETIRE_ID"; then
+    fail "corrupt old rollback backup accepted by reconstructed owner"
+fi
+mv "$EXPECTED_RETIRE_BACKUP/tcp-ports.tmp" "$EXPECTED_RETIRE_BACKUP/tcp-ports.txt"
+mkdir "$ROOT/.retired-active.stage.$RETIRE_ID"
+if apply_runtime_rehydrate_retired_legacy "$ROOT/one" "$RETIRE_ID"; then
+    fail "interrupted atomic stage adopted as complete native owner"
+fi
+rmdir "$ROOT/.retired-active.stage.$RETIRE_ID"
+apply_runtime_rehydrate_retired_legacy "$ROOT/one" "$RETIRE_ID" ||
+    fail "verified installed native owner could not be rehydrated"
+[ "$APPLY_PHASE" = activated ] && [ "$APPLY_OLD" = - ] &&
+[ "$APPLY_BACKUP" = "$EXPECTED_RETIRE_BACKUP" ] &&
+[ "$APPLY_IPFW_INSTALLED" = 1 ] ||
+    fail "reconstructed owner lost exact precommit context"
+if apply_runtime_rehydrate_retired_legacy "$ROOT/one" "$RETIRE_ID"; then
+    fail "duplicate native activation context accepted"
+fi
 if apply_runtime_activate_retired_legacy "$ROOT/one" "$RETIRE_ID"; then
     fail "same private forward started a second engine"
 fi
@@ -210,6 +242,9 @@ apply_runtime_restore || fail "retired original runtime rollback failed"
     fail "retired previous runtime not restored exactly"
 apply_runtime_activate_retired_legacy "$ROOT/one" "$RETIRE_ID" ||
     fail "retired common forward could not restart after verified manual restore"
+apply_runtime_clear
+apply_runtime_rehydrate_retired_legacy "$ROOT/one" "$RETIRE_ID" ||
+    fail "second child could not reconstruct context for future Config commit"
 apply_runtime_commit || fail "native common commit from retired legacy failed"
 [ "$FW_STAGE" = 0 ] && [ "$PROCESS" = 1 ] &&
 [ -f "$EXPECTED_RETIRE_BACKUP/old-owner-marker" ] ||
