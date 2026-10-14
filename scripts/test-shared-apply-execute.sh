@@ -22,7 +22,6 @@ shared_apply_native_config() {
         save) echo config-save >> "$LOG"; return "$SAVE_RC" ;;
         saved)
             echo config-readback >> "$LOG"
-            AFTER_SAVED=1
             [ "$SAVED_RC" -eq 0 ] || return "$SAVED_RC"
             echo '{"result":"committed","snapshot":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","enabled":"1"}'
             ;;
@@ -31,7 +30,15 @@ shared_apply_native_config() {
 }
 shared_apply_json_field() {
     case "$1" in
-        *".enabled"*) if [ "$AFTER_SAVED" = 1 ] && [ "$SAVED_MODE_DRIFT" = 1 ]; then echo 0; else echo 1; fi ;;
+        *".enabled"*)
+            # The saved worker runs inside $(...), so side effects cannot
+            # change a parent-shell flag. Inspect this exact readback input.
+            saved_input=$(cat)
+            case "$saved_input" in
+                *'"result":"committed"'*)
+                    if [ "$SAVED_MODE_DRIFT" = 1 ]; then echo 0; else echo 1; fi ;;
+                *) echo 1 ;;
+            esac ;;
         *".base"*) printf "%064d\n" 0 | tr 0 a ;;
         *".candidate"*) printf "%064d\n" 0 | tr 0 b ;;
         *".result"*) echo committed ;;
@@ -59,7 +66,7 @@ apply_runtime_attest_activated() {
     { [ "$ATTEST_FAIL_AT" -eq 0 ] || [ "$ATTEST_FAIL_AT" -ne "$ATTEST_COUNT" ]; }
 }
 apply_runtime_commit() { echo runtime-commit >> "$LOG"; [ "$COMMIT_RC" -eq 0 ]; }
-reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; AFTER_SAVED=0; }
+reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; }
 expect_status() {
     expected="$1"; shift
     set +e

@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`v0.5.2_91` — исправлена фикстура CI без изменения production поведения `_90`.** GitHub job `Shared FD9 native Config/runtime transaction fault matrix` выявил ошибку в новом shell-моке: `saved` исполняется внутри `$(...)`, поэтому флаг `AFTER_SAVED` устанавливался только в subshell и искусственно не воспроизводил `saved-mode` расхождение. Фикстура теперь отличает readback через содержимое поданного JSON, а не через побочный эффект дочернего процесса; тест сохраняет сценарий запрета COMMIT при чужом ON/OFF после Config save. Production код этапа `_90`, frontend, ТЗ и архитектура неизменны.
+
 **`v0.5.2_90` — штатный после-сохранения барьер перед финализацией общего Apply.** Устранён реальный промежуток между нативным `Config::save()` (он освобождает свой flock) и очисткой staged IPFW rollback. `shared_apply_execute_service` теперь повторно получает результат через **существующий** `shared_apply_config.php saved ID page`, который захватывает native Config lock, сверяет сохранённый Voice+Strategies snapshot; исполнитель дополнительно требует точного 64-hex candidate digest, результата `committed`, штатного ON/OFF и второй независимой `apply_runtime_attest_activated` проверки engine/supervisor/runtime/IPFW. Если model/engine/IPFW изменились уже **после сохранения**, журнал остаётся `requires-review`, `apply_runtime_commit` не вызывается и старые стадии не удаляются; автоматического отката частично сохранённого Config нет. Регрессия интегрирована в existing shell fault matrix (saved-readback отказ/другой digest/mode/вторая проверка runtime). Это общий рабочий Apply двух страниц, **не** live legacy cutover; интерфейс и ТЗ неизменны, live FreeBSD STUN/MEDIA/CALL пока не подтверждены.
 
 **`v0.5.2_89` — постактивационная проверка в РЕАЛЬНОМ общем Apply двух страниц.** Теперь непосредственно перед native `Config::save` штатный `shared_apply_execute_service` вызывает read-only `apply_runtime_attest_activated` из существующего `apply_runtime.sh`: полное сравнение установленного runtime-tree с кандидатом, проверка engine/monitor и независимого PID census, повторная проверка staged IPFW/таблиц. При исчезнувшем процессе, изменённом release или расхождении IPFW новая конфигурация **не сохраняется**, а общий journal фиксирует `requires-review` вместо ложного `committed` или опасного автоматического отката чужого runtime. Используются те же FD9, actuator, Config writer и журнал; оба GUI Apply идут по этому пути. Добавлены реальные shell fault-тесты в имеющиеся suites. Нет нового backend, CLI и изменений frontend/ТЗ. Live FreeBSD и old-running-PoC handoff всё ещё не приняты.
@@ -92,13 +94,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_90`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_91`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=90` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_90.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=91` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_91.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
