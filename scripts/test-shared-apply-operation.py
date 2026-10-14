@@ -837,8 +837,14 @@ class TestJournal(unittest.TestCase):
             self.assertEqual("committed",committed["phase"])
             self.assertEqual(detail(),committed_owner(committed))
             self.assertNotIn("legacy_predecessor",committed)
-            self.assertTrue(check_pending(root/"voice-cutover",root/"voice-ipfw")[
-                "safe_to_mutate"])
+            # A committed common owner must STILL forbid the obsolete
+            # legacy service from starting a second engine after reboot.
+            advisory=check_pending(root/"voice-cutover",root/"voice-ipfw")
+            self.assertEqual("shared-runtime-owned",advisory["reason"])
+            self.assertFalse(advisory["safe_to_mutate"])
+            self.assertTrue(check_pending(
+                root/"voice-cutover",root/"voice-ipfw",
+                native_scope=True)["safe_to_mutate"])
             with self.assertRaises(SharedOperationError):
                 store.finish_legacy_common_commit(identity,lambda:seal)
 
@@ -927,8 +933,12 @@ class TestJournal(unittest.TestCase):
                                       "old-proof", "attest", "old-proof", "attest",
                                       "commit", "old-proof", "verify-committed"], actions)
                     self.assertEqual(detail(),committed_owner(store.read()))
+                    advisory=check_pending(root/"voice-cutover",root/"voice-ipfw")
+                    self.assertEqual("shared-runtime-owned",advisory["reason"])
+                    self.assertFalse(advisory["safe_to_mutate"])
                     self.assertTrue(check_pending(
-                        root / "voice-cutover", root / "voice-ipfw")["safe_to_mutate"])
+                        root/"voice-cutover",root/"voice-ipfw",
+                        native_scope=True)["safe_to_mutate"])
                     with self.assertRaises((SharedOperationError, LegacyPredecessorRouteError)):
                         save_native_config_after_legacy_activation(
                             identity=identity, store=store, work=work, config_path=config,
