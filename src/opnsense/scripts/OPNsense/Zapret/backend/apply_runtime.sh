@@ -404,6 +404,49 @@ apply_runtime_verify_retired_legacy_committed()
     firewall_shared_runtime verify "$_apply_done_candidate" "$ACTIVE_DIR" || return 70
 }
 
+# Explicit operator-only completion of EXACT partial native IPFW staging.
+# Caller has already fsynced the common COMMIT intent and saved Config.
+# No engine activation, native Config save or general IPFW rule sweep here.
+apply_runtime_resume_retired_legacy_cleanup()
+{
+    [ "$#" -eq 2 ] || return 64
+    _apply_done_candidate="$1"
+    _apply_done_id="$2"
+    case "$_apply_done_id" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_apply_done_id}" -eq 32 ] || return 64
+    [ "${APPLY_PHASE:-idle}" = idle ] || return 69
+    case "$_apply_done_candidate" in /*) ;; *) return 64 ;; esac
+    _apply_done_backup="$BACKUP_ROOT/$(basename "$ACTIVE_DIR")-$_apply_done_id"
+    [ -d "$_apply_done_candidate" ] &&
+    [ ! -L "$_apply_done_candidate" ] &&
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] &&
+    [ -d "$_apply_done_backup" ] && [ ! -L "$_apply_done_backup" ] &&
+    [ ! -e "$_apply_done_backup/voice-plan.json" ] || return 69
+    for _apply_done_file in dvtws.args tcp-ports.txt udp-ports.txt; do
+        [ -f "$_apply_done_backup/$_apply_done_file" ] &&
+        [ ! -L "$_apply_done_backup/$_apply_done_file" ] || return 69
+    done
+    validator_validate_runtime_modes "$_apply_done_candidate" || return 70
+    atomic_verify_tree "$_apply_done_candidate" "$ACTIVE_DIR" || return 70
+    launcher_is_running "$CHILD_PIDFILE" &&
+    supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" || return 70
+    _apply_engine=1
+    apply_runtime_attest_engine_inventory || return 70
+    # No pending operation-ID atomic rename may be silently adopted.
+    _apply_stage="$(dirname "$ACTIVE_DIR")/.$(basename "$ACTIVE_DIR").stage.$_apply_done_id"
+    _apply_park="$(dirname "$ACTIVE_DIR")/.$(basename "$ACTIVE_DIR").old.$_apply_done_id"
+    [ ! -e "$_apply_stage" ] && [ ! -L "$_apply_stage" ] &&
+    [ ! -e "$_apply_park" ] && [ ! -L "$_apply_park" ] || return 70
+    # READ ONLY classification first. A subset of correctly EMPTY initial
+    # stage tables may remain after power interruption; foreign content,
+    # divergent rules or active address sets must fail before any mutation.
+    firewall_shared_runtime verify-cleanup - "$ACTIVE_DIR" || return 70
+    # Exact existing common postcommit cleanup is idempotent and internally
+    # rechecks the manifest before deleting each verified stage.
+    firewall_shared_runtime commit - "$ACTIVE_DIR" || return 70
+    apply_runtime_verify_retired_legacy_committed "$_apply_done_candidate" "$_apply_done_id" || return 70
+}
+
 # Strict read-only cold witness before adopting a persisted native Config.
 # The entire common IPFW range must be empty, with no engine, monitor or
 # atomic staging gap. The sealed previous legacy backup remains untouched.

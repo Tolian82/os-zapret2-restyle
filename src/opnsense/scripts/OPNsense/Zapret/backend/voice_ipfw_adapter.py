@@ -406,7 +406,13 @@ def shared_firewall_action(adapter, action: str, previous: dict, desired: dict) 
     """
     actions = {"install": apply_transaction, "rollback": rollback_uncommitted,
                "commit": cleanup_committed, "verify": verify_prior_state}
-    if action == "verify-staged":
+    if action == "verify-cleanup":
+        # Read-only exact snapshot of partial post-COMMIT IPFW cleanup.
+        # Missing stage tables are permitted, but any surviving stage
+        # must match the sealed previous state. No foreign rule/table.
+        from voice_firewall_transaction import plan_postcommit_cleanup
+        plan_postcommit_cleanup(adapter, previous, desired)
+    elif action == "verify-staged":
         # The new rules are installed but old IPSET contents MUST survive in
         # stage tables until the native Config save succeeds. Final verify
         # intentionally rejects these uncommitted rollback artifacts.
@@ -425,7 +431,7 @@ def shared_firewall_action(adapter, action: str, previous: dict, desired: dict) 
 
 def main(argv: list[str]) -> int:
     if len(argv) != 5 or argv[1] != "shared" or argv[2] not in {
-        "install", "rollback", "commit", "verify", "verify-staged"
+        "install", "rollback", "commit", "verify", "verify-staged", "verify-cleanup"
     }:
         print("usage: voice_ipfw_adapter.py shared ACTION PREVIOUS_RELEASE DESIRED_RELEASE",
               file=sys.stderr)

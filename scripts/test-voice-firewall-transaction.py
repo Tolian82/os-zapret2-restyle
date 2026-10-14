@@ -268,6 +268,36 @@ class VoiceFirewallTransactionTests(unittest.TestCase):
         self.assertEqual(initial["rules"], adapter.list_rules(19000, 19010))
         self.assertEqual(initial["tables"], adapter.tables)
 
+
+    def test_readonly_partial_cleanup_accepts_only_exact_owned_stage_subset(self):
+        desired = fixture(("telegram", "91.108.0.0/16"),
+                          ("discord", "203.0.113.0/24"))
+        empty = {"rule_base": desired["rule_base"], "rule_max": desired["rule_max"],
+                 "rules": {}, "tables": {}}
+        live = FakeIPFW()
+        shared_firewall_action(live, "install", empty, desired)
+        mutation_count = len(live.ops)
+        shared_firewall_action(live, "verify-cleanup", empty, desired)
+        self.assertEqual(mutation_count, len(live.ops))
+        # One stage was already destroyed before a simulated power cut.
+        live.destroy_table("zapret2_voice_telegram_stage")
+        mutation_count = len(live.ops)
+        shared_firewall_action(live, "verify-cleanup", empty, desired)
+        self.assertEqual(mutation_count, len(live.ops))
+        # Unknown stages and modified rules are never treated as ours.
+        live.tables["zapret2_voice_discord_stage"] = ["198.51.100.0/24"]
+        with self.assertRaisesRegex(AdapterFirewallError, "staging"):
+            shared_firewall_action(live, "verify-cleanup", empty, desired)
+        live.tables["zapret2_voice_discord_stage"] = []
+        live.rules[19009] = ["allow", "ip", "from", "any", "to", "any"]
+        with self.assertRaisesRegex(AdapterFirewallError, "rules"):
+            shared_firewall_action(live, "verify-cleanup", empty, desired)
+        del live.rules[19009]
+        shared_firewall_action(live, "commit", empty, desired)
+        shared_firewall_action(live, "verify", empty, desired)
+        shared_firewall_action(live, "verify-cleanup", empty, desired)
+        self.assertFalse(any(name.endswith("_stage") for name in live.tables))
+
     def test_postcommit_cleanup_rejects_foreign_and_is_retryable(self):
         initial = fixture()
         first = fixture(("telegram", "91.108.0.0/16"))

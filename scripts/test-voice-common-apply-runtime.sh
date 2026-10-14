@@ -470,10 +470,17 @@ OUTER_ROUTES=$(sed -n '/^case "${1:-}" in$/,$p' "$SERVICE_SOURCE")
 for command in shared-apply-legacy-audit shared-apply-legacy-qualify \
     shared-apply-legacy-capture shared-apply-legacy-arm \
     shared-apply-legacy-cancel shared-apply-legacy-begin \
-    shared-apply-legacy-reconcile shared-apply-legacy-cold; do
+    shared-apply-legacy-reconcile shared-apply-legacy-cold \
+    shared-apply-legacy-resume; do
     printf '%s\n' "$OUTER_ROUTES" | grep -Eq "(^|\\|)${command}(\\||\\))" ||
         fail "legacy operator $command bypasses original FD9"
 done
+# The operator-only resume must remain below the ORIGINAL lifecycle FD9
+# and share the production common IPFW cleanup, not a Voice-specific sweep.
+grep -Fq 'shared_apply_resume_retired_legacy_cleanup_service()' "$SERVICE_SOURCE" ||
+    fail "missing bounded common IPFW stage resume"
+grep -Fq 'resume-common "$2"' "$SERVICE_SOURCE" ||
+    fail "partial IPFW cleanup bypasses fixed native private route"
 CAPTURE_SCRIPT="$ROOT/common-legacy-capture.sh"
 sed -n '/^shared_apply_legacy_capture_service()$/,/^}$/p' "$SERVICE_SOURCE" > "$CAPTURE_SCRIPT"
 sh -n "$CAPTURE_SCRIPT" || fail "native predecessor wrapper is malformed"

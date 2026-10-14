@@ -1033,6 +1033,34 @@ shared_apply_verify_retired_legacy_cold_service()
     printf 'legacy-native-cold-ready=%s\n' "$_cold_id"
 }
 
+# Explicit operator-only completion of partial post-COMMIT IPFW stage.
+# Reuses the existing common cleanup, not a fresh native IPFW COMMIT or
+# alternative firewall writer. Saved native Config and owner must remain
+# exact throughout original inherited FD9 and CURRENT Config flock.
+shared_apply_resume_retired_legacy_cleanup_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    _partial_id="$1"
+    case "$_partial_id" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_partial_id}" -eq 32 ] || return 64
+    _partial_owner=$(shared_apply_inspect_service) || return 69
+    [ "$_partial_owner" = "legacy-common-committing $_partial_id voice" ] || return 69
+    shared_apply_require_tools || return 69
+    shared_apply_bundle_service verify "$_partial_id" || return 69
+    _partial_config=$(shared_apply_native_config saved "$_partial_id" voice) || return 69
+    _partial_ok=$(printf '%s\n' "$_partial_config" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 69
+    _partial_enabled=$(printf '%s\n' "$_partial_config" |
+        shared_apply_json_field '.enabled | select(.=="1")') || return 69
+    [ "$_partial_ok" = committed ] && [ "$_partial_enabled" = 1 ] || return 69
+    _partial_work=$(shared_apply_workspace "$_partial_id") || return 69
+    apply_runtime_resume_retired_legacy_cleanup "$_partial_work/release" "$_partial_id" || return 70
+    [ "$(shared_apply_native_config saved "$_partial_id" voice)" = "$_partial_config" ] || return 70
+    shared_apply_bundle_service verify "$_partial_id" || return 70
+    apply_runtime_verify_retired_legacy_committed "$_partial_work/release" "$_partial_id" || return 70
+    printf 'legacy-native-cleanup-resumed=%s\n' "$_partial_id"
+}
+
 shared_apply_save_retired_legacy_config_service()
 {
     [ "$#" -eq 1 ] || return 64
@@ -1857,6 +1885,11 @@ service_dispatch()
             [ -x /usr/local/bin/python3.13 ] || return 69
             /usr/local/bin/python3.13 "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" reconcile-cold-common "$2"
             ;;
+        shared-apply-legacy-resume)
+            [ "$#" -eq 2 ] || return 64
+            [ -x /usr/local/bin/python3.13 ] || return 69
+            /usr/local/bin/python3.13 "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" resume-common "$2"
+            ;;
         shared-apply-execute)
             shared_apply_execute_service "${2:-}" "${3:-}"
             ;;
@@ -2209,7 +2242,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm|shared-apply-legacy-cancel|shared-apply-legacy-begin|shared-apply-legacy-reconcile|shared-apply-legacy-cold)
+    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm|shared-apply-legacy-cancel|shared-apply-legacy-begin|shared-apply-legacy-reconcile|shared-apply-legacy-cold|shared-apply-legacy-resume)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

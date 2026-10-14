@@ -551,6 +551,7 @@ case "$1" in
     commit) shared_apply_commit_retired_legacy_service "$3" ;;
     verify-committed) apply_runtime_verify_retired_legacy_committed "$2" "$3" ;;
     verify-cold) shared_apply_verify_retired_legacy_cold_service "$3" ;;
+    resume-cleanup) shared_apply_resume_retired_legacy_cleanup_service "$3" ;;
     *) exit 64 ;;
 esac
 """
@@ -561,7 +562,7 @@ def _invoke_existing_native_common(
     service_script=None, runner=None,
 ):
     """Call the actual installed native actuator with the parent's two locks."""
-    if mode not in ("probe", "activate", "attest", "config-save", "commit", "verify-committed", "verify-cold") or not isinstance(identity, str) or (
+    if mode not in ("probe", "activate", "attest", "config-save", "commit", "verify-committed", "verify-cold", "resume-cleanup") or not isinstance(identity, str) or (
         COMMON_ID.fullmatch(identity) is None
     ):
         raise LegacyPredecessorRouteError("invalid fixed native forward action")
@@ -613,6 +614,10 @@ def _invoke_existing_native_common(
         result.stdout != "legacy-native-cold-ready=" + identity + "\n"
     ):
         raise LegacyPredecessorRouteError("native cold power-loss proof untrusted")
+    if mode == "resume-cleanup" and (
+        result.stdout != "legacy-native-cleanup-resumed=" + identity + "\n"
+    ):
+        raise LegacyPredecessorRouteError("native cleanup resume receipt untrusted")
     return True
 
 
@@ -620,6 +625,7 @@ def _invoke_existing_native_common(
 def commit_native_common_after_legacy_config_save(
     *, identity, store, work, config_path, config_fd, config_owner,
     active_runtime, marker_path, require_lifecycle_owner, cold=False,
+    resume_cleanup=False,
 ):
     """Complete the native IPFW stage ONLY with original FD9 + NEW Config lock.
 
@@ -651,8 +657,10 @@ def commit_native_common_after_legacy_config_save(
         or "legacy_predecessor" not in record or "previous" in record
     ):
         raise LegacyPredecessorRouteError("native Config was not durably saved")
-    if type(cold) is not bool or (cold and record["phase"] != "legacy-common-committing"):
-        raise LegacyPredecessorRouteError("cold recovery requires existing pending COMMIT")
+    if type(cold) is not bool or type(resume_cleanup) is not bool or (
+        cold and resume_cleanup
+    ) or ((cold or resume_cleanup) and record["phase"] != "legacy-common-committing"):
+        raise LegacyPredecessorRouteError("resume requires exact pending COMMIT")
     witness = record["legacy_predecessor"]
     old_image = work / "legacy-backup" / NAME / "previous"
     old = inspect_previous(old_image)
@@ -701,11 +709,13 @@ def commit_native_common_after_legacy_config_save(
             # complete the single durable journal; failure stays pending.
             pass
     else:
-        # The existing journal already records an uncertain kernel cleanup.
-        # No second kernel commit, no Config writer and no engine start.
-        # Only a complete, independently attested NO-STAGE common owner
-        # may finish the operation; a partial stage remains blocked.
+        # Existing durable COMMIT intent has already authorized the native
+        # kernel cleanup. The ordinary reconciliation remains read-only.
+        # An EXPLICIT operator-only partial resume may reuse only the
+        # existing independently verified and idempotent stage-table cleanup.
         intent = record
+        if resume_cleanup:
+            owner(intent, "resume-cleanup")
     # A transient live owner must not turn a crash-ambiguous native COMMIT
     # into a terminal receipt. Require two independent read-only physical
     # attestations under the SAME FD9 and current Config inode lock. If a
@@ -1477,9 +1487,14 @@ def main(argv):
         len(argv) == 2 and argv[0] == "reconcile-cold-common"
         and COMMON_ID.fullmatch(argv[1])
     ) else None
+    resume_id = argv[1] if (
+        len(argv) == 2 and argv[0] == "resume-common"
+        and COMMON_ID.fullmatch(argv[1])
+    ) else None
     if (argv != ["capture-plan"] and candidate_id is None and cancellation_id is None
-        and begin_id is None and reconcile_id is None and cold_id is None):
-        print("usage: voice_native_legacy_predecessor_route.py capture-plan|capture-common ID|cancel-common ID|begin-common ID|reconcile-common ID|reconcile-cold-common ID",
+        and begin_id is None and reconcile_id is None and cold_id is None
+        and resume_id is None):
+        print("usage: voice_native_legacy_predecessor_route.py capture-plan|capture-common ID|cancel-common ID|begin-common ID|reconcile-common ID|reconcile-cold-common ID|resume-common ID",
               file=sys.stderr)
         return 64
     fd=None
@@ -1488,12 +1503,14 @@ def main(argv):
         fd=os.open(native.CONFIG,os.O_RDWR| getattr(os,"O_NOFOLLOW",0))
         _pinned_regular(native.CONFIG,fd,owner=(0,0))
         fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        if reconcile_id is not None or cold_id is not None:
-            # Only a durably pending COMMIT may be reconciled; no new
-            # kernel, Config, or engine operation is permitted on this path.
+        if reconcile_id is not None or cold_id is not None or resume_id is not None:
+            # Exact durable COMMIT only. Reconcile/cold remain read-only;
+            # explicit partial resume is separately sealed and bounded.
             from shared_apply_operation import SharedApplyOperation
             from shared_apply_seal import WORK
-            chosen_id = cold_id if cold_id is not None else reconcile_id
+            chosen_id = cold_id if cold_id is not None else (
+                resume_id if resume_id is not None else reconcile_id
+            )
             store = SharedApplyOperation(owner=0)
             pending = store.read()
             if (pending is None or pending["phase"] != "legacy-common-committing"
@@ -1506,12 +1523,14 @@ def main(argv):
                 active_runtime=native.ACTIVE_ROOT,
                 marker_path=native.LEGACY_MARKER,
                 require_lifecycle_owner=native.require_native_lock,
-                cold=cold_id is not None,
+                cold=cold_id is not None, resume_cleanup=resume_id is not None,
             )
             if result["phase"] != "committed" or result["detail"]["id"] != chosen_id:
                 raise LegacyPredecessorRouteError("native COMMIT reconciliation incomplete")
-            print(("legacy-native-cold-reconciled-id=" if cold_id else
-                   "legacy-native-reconciled-id=") + chosen_id)
+            prefix = ("legacy-native-cold-reconciled-id=" if cold_id else
+                      "legacy-native-partial-resumed-id=" if resume_id else
+                      "legacy-native-reconciled-id=")
+            print(prefix + chosen_id)
             return 0
         if cancellation_id is not None or begin_id is not None:
             from shared_apply_operation import SharedApplyOperation
