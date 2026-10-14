@@ -1001,13 +1001,16 @@ shared_apply_save_retired_legacy_config_service()
     _legacy_save_expected=$(printf "%s\n" "$_legacy_save_pre" | \
         shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') ||
         return 69
-    [ "$_legacy_save_mode" = 1 ] || return 69
+    [ "$_legacy_save_mode" = 1 ] &&
+    [ "$_legacy_save_expected" = "$_legacy_save_target" ] || return 69
     apply_runtime_rehydrate_retired_legacy \
         "$_legacy_save_root/release" "$_legacy_save_id" || return 70
     apply_runtime_attest_activated || return 70
     # Once the native Config writer is entered, ANY error is an ambiguous
     # persistence outcome for this already-switched live predecessor.
-    shared_apply_native_config save "$_legacy_save_id" voice || return 70
+    # The PHP worker emits its OWN JSON receipt. Its pre-save stdout must
+    # not be confused with our uniquely named post-save verification token.
+    shared_apply_native_config save "$_legacy_save_id" voice >/dev/null || return 70
     _legacy_save_actual=$(shared_apply_native_config saved \
         "$_legacy_save_id" voice) || return 70
     if ! {

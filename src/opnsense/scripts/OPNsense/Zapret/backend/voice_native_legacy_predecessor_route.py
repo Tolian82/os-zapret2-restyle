@@ -614,7 +614,8 @@ def activate_common_after_legacy_retirement(
     apply_runtime_activate (one engine/supervisor/IPFW), not an old PoC
     process. A durable intent is written BEFORE invoking that actuator.
     A crash never retries it: no cold-boot or GUI route exists yet.
-    Native Config save/COMMIT and forward crash recovery are separate gates.
+    The native private path advances through ONE OPNsense Config save after
+    journaling; final native IPFW COMMIT and full crash recovery remain gated.
     """
     from shared_apply_operation import (
         SharedApplyOperation, fingerprint_legacy_predecessor,

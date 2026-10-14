@@ -515,7 +515,12 @@ class TestJournal(unittest.TestCase):
                 self.assertNotIn("ZAPRET_NATIVE_PRIVATE_IMPORT", kw["env"])
                 self.assertNotIn(str(work), argv[2])
                 called.append(argv[4])
-                return SimpleNamespace(returncode=0, stdout="", stderr="")
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=("legacy-native-config-saved=" + detail()["id"] + "\n")
+                           if argv[4] == "config-save" else "",
+                    stderr="",
+                )
             with patch("voice_native_legacy_predecessor_route.NATIVE_COMMON_SERVICE",
                        service):
                 for mode in ("probe", "activate", "attest", "config-save"):
@@ -797,6 +802,102 @@ class TestJournal(unittest.TestCase):
             with self.assertRaises(SharedOperationError):
                 store.advance("committed",detail())
             self.assertEqual(saved,store.read())
+
+
+    def test_private_native_save_handoff_relocks_new_config_inode(self):
+        import fcntl
+        import os
+        from voice_native_legacy_predecessor_route import (
+            save_native_config_after_legacy_activation,
+            LegacyPredecessorRouteError,
+        )
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            identity = detail()["id"]
+            work = root / identity
+            work.mkdir()
+            config = root / "config.xml"
+            config.write_text("<old/>")
+            active = root / "runtime-v2"
+            marker = root / "old.marker"
+            store = SharedApplyOperation(root / "shared-apply")
+            seal = "f" * 64
+            store.prepare_legacy_predecessor(detail(), lambda: seal)
+            store.begin_legacy_quiesce(identity, lambda: seal)
+            store.mark_legacy_processes_stopped(identity, lambda: seal)
+            store.begin_legacy_ipfw_retire(identity, lambda: seal)
+            store.finish_legacy_ipfw_retire(identity, lambda: seal)
+            store.begin_legacy_marker_retire(identity, lambda: seal)
+            store.finish_legacy_marker_retire(identity, lambda: seal)
+            store.begin_legacy_common_activation(identity, lambda: seal)
+            store.finish_legacy_common_activation(identity, lambda: seal)
+            old_fd = os.open(config, os.O_RDWR)
+            fcntl.flock(old_fd, fcntl.LOCK_EX)
+            actions = []
+            def native_action(*, mode, config_fd, **kw):
+                actions.append(mode)
+                if mode == "config-save":
+                    self.assertEqual("legacy-config-saving", store.read()["phase"])
+                    competing = os.open(config, os.O_RDWR)
+                    try:
+                        fcntl.flock(competing, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        fcntl.flock(competing, fcntl.LOCK_UN)
+                    finally:
+                        os.close(competing)
+                    replacement = root / "new-config.xml"
+                    replacement.write_text("<new/>")
+                    os.replace(replacement, config)
+                else:
+                    competing = os.open(config, os.O_RDWR)
+                    try:
+                        with self.assertRaises(BlockingIOError):
+                            fcntl.flock(competing, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    finally:
+                        os.close(competing)
+                return True
+            def probe_sources(config_image, runtime, expected):
+                self.assertEqual({"previous": True}, expected)
+                self.assertEqual(active.parent / (active.name + "-backups") /
+                                 (active.name + "-" + identity), runtime)
+                actions.append("old-proof")
+            try:
+                with ExitStack() as patches:
+                    patches.enter_context(patch(
+                        "voice_native_legacy_predecessor_route.inspect_previous",
+                        return_value={"previous": True}))
+                    patches.enter_context(patch(
+                        "voice_native_legacy_predecessor_route._verify_sources",
+                        side_effect=probe_sources))
+                    patches.enter_context(patch(
+                        "voice_native_legacy_predecessor_route._invoke_existing_native_common",
+                        side_effect=native_action))
+                    patches.enter_context(patch(
+                        "shared_apply_operation.fingerprint_legacy_predecessor",
+                        return_value=seal))
+                    patches.enter_context(patch(
+                        "shared_apply_seal.verify_seal", return_value=True))
+                    result = save_native_config_after_legacy_activation(
+                        identity=identity, store=store, work=work, config_path=config,
+                        config_fd=old_fd, config_owner=(os.geteuid(), os.getegid()),
+                        active_runtime=active, marker_path=marker,
+                        require_lifecycle_owner=lambda: None,
+                    )
+                    self.assertEqual("legacy-config-saved", result["phase"])
+                    self.assertEqual("<new/>", config.read_text())
+                    self.assertEqual(["old-proof", "attest", "config-save",
+                                      "old-proof", "attest"], actions)
+                    self.assertIsNone(committed_owner(store.read()))
+                    self.assertEqual("shared-apply-pending", check_pending(
+                        root / "voice-cutover", root / "voice-ipfw")["reason"])
+                    with self.assertRaises((SharedOperationError, LegacyPredecessorRouteError)):
+                        save_native_config_after_legacy_activation(
+                            identity=identity, store=store, work=work, config_path=config,
+                            config_fd=old_fd, config_owner=(os.geteuid(), os.getegid()),
+                            active_runtime=active, marker_path=marker,
+                            require_lifecycle_owner=lambda: None,
+                        )
+            finally:
+                os.close(old_fd)
 
     def test_legacy_rollback_ipfw_uses_same_journal_not_a_second_owner(self):
         with tempfile.TemporaryDirectory() as directory:

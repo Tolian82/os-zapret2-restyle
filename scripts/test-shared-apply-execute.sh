@@ -60,7 +60,12 @@ shared_apply_json_field() {
                     else
                         printf "%064d\n" 0 | tr 0 b
                     fi ;;
-                *) printf "%064d\n" 0 | tr 0 b ;;
+                *)
+                    if [ "$PRE_DRIFT" = 1 ]; then
+                        printf "%064d\n" 0 | tr 0 c
+                    else
+                        printf "%064d\n" 0 | tr 0 b
+                    fi ;;
             esac ;;
         *".fields"*) echo voice.telegram.enabled ;;
         *) return 1 ;;
@@ -80,7 +85,7 @@ apply_runtime_attest_activated() {
     { [ "$ATTEST_FAIL_AT" -eq 0 ] || [ "$ATTEST_FAIL_AT" -ne "$ATTEST_COUNT" ]; }
 }
 apply_runtime_commit() { echo runtime-commit >> "$LOG"; [ "$COMMIT_RC" -eq 0 ]; }
-reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; }
+reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; }
 expect_status() {
     expected="$1"; shift
     set +e
@@ -143,6 +148,8 @@ grep -Fqx "legacy-native-config-saved=$ID" "$ROOT/retired-response.txt" ||
     fail "legacy native Config saved witness missing"
 reset; BAD_OWNER=1
 run_retired 69 ''
+reset; PRE_DRIFT=1
+run_retired 69 'bundle:verify '
 reset; REHYDRATE_RC=69
 run_retired 70 'bundle:verify runtime-rehydrate '
 reset; SAVE_RC=70
