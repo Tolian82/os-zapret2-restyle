@@ -764,6 +764,7 @@ def main(argv: list[str]) -> int:
             elif record["phase"] in ("prepared", "config-saved", "legacy-config-saving", "legacy-config-saved", "legacy-quiescing", "legacy-processes-stopped",
                                        "legacy-ipfw-retiring", "legacy-ipfw-retired",
                                        "legacy-marker-retiring", "legacy-marker-retired",
+                                       "legacy-common-committing",
                                        "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
                                        "legacy-rollback-marker", "legacy-rollback-marker-restored",
                                        "legacy-rollback-processes",

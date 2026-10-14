@@ -849,6 +849,42 @@ class TestJournal(unittest.TestCase):
                 store.finish_legacy_common_commit(identity,lambda:seal)
 
 
+    def test_native_commit_inspect_receipt_is_exact_but_never_allows_boot(self):
+        import io
+        from contextlib import redirect_stdout
+        from shared_apply_operation import main as journal_main
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            store = SharedApplyOperation(root / "shared-apply")
+            identity = detail()["id"]
+            seal = "f" * 64
+            store.prepare_legacy_predecessor(detail(), lambda: seal)
+            store.begin_legacy_quiesce(identity, lambda: seal)
+            store.mark_legacy_processes_stopped(identity, lambda: seal)
+            store.begin_legacy_ipfw_retire(identity, lambda: seal)
+            store.finish_legacy_ipfw_retire(identity, lambda: seal)
+            store.begin_legacy_marker_retire(identity, lambda: seal)
+            store.finish_legacy_marker_retire(identity, lambda: seal)
+            store.begin_legacy_common_activation(identity, lambda: seal)
+            store.finish_legacy_common_activation(identity, lambda: seal)
+            store.begin_legacy_config_save(identity, lambda: seal)
+            store.finish_legacy_config_save(identity, lambda: seal)
+            store.begin_legacy_common_commit(identity, lambda: seal)
+            output = io.StringIO()
+            with patch("voice_ipfw_adapter.require_lifecycle_lock"), \
+                    patch("shared_apply_operation.SharedApplyOperation", return_value=store), \
+                    redirect_stdout(output):
+                self.assertEqual(0, journal_main(["shared_apply_operation.py", "inspect"]))
+            receipt = "legacy-common-committing " + identity + " voice\n"
+            self.assertEqual(receipt, output.getvalue())
+            service = (BACKEND.parent / "zapret_service.sh").read_text()
+            self.assertIn('"legacy-common-committing $_legacy_commit_id voice"', service)
+            self.assertEqual("legacy-common-committing", store.read()["phase"])
+            self.assertFalse(store.advisory()["safe_to_mutate"])
+            guard = check_pending(root / "voice-cutover", root / "voice-ipfw")
+            self.assertEqual("shared-apply-pending", guard["reason"])
+            self.assertFalse(guard["safe_to_mutate"])
+
     def test_interrupted_legacy_ipfw_commit_accepts_only_readonly_final_proof(self):
         import fcntl
         import os
