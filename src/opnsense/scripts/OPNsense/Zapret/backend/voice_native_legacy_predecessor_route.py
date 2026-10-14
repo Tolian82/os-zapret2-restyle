@@ -550,6 +550,7 @@ case "$1" in
     config-save) shared_apply_save_retired_legacy_config_service "$3" ;;
     commit) shared_apply_commit_retired_legacy_service "$3" ;;
     verify-committed) apply_runtime_verify_retired_legacy_committed "$2" "$3" ;;
+    verify-cold) shared_apply_verify_retired_legacy_cold_service "$3" ;;
     *) exit 64 ;;
 esac
 """
@@ -560,7 +561,7 @@ def _invoke_existing_native_common(
     service_script=None, runner=None,
 ):
     """Call the actual installed native actuator with the parent's two locks."""
-    if mode not in ("probe", "activate", "attest", "config-save", "commit", "verify-committed") or not isinstance(identity, str) or (
+    if mode not in ("probe", "activate", "attest", "config-save", "commit", "verify-committed", "verify-cold") or not isinstance(identity, str) or (
         COMMON_ID.fullmatch(identity) is None
     ):
         raise LegacyPredecessorRouteError("invalid fixed native forward action")
@@ -608,13 +609,17 @@ def _invoke_existing_native_common(
     ):
         # An IPFW cleanup exit code or unverified stdout is NOT a commit.
         raise LegacyPredecessorRouteError("native IPFW commit receipt is untrusted")
+    if mode == "verify-cold" and (
+        result.stdout != "legacy-native-cold-ready=" + identity + "\n"
+    ):
+        raise LegacyPredecessorRouteError("native cold power-loss proof untrusted")
     return True
 
 
 
 def commit_native_common_after_legacy_config_save(
     *, identity, store, work, config_path, config_fd, config_owner,
-    active_runtime, marker_path, require_lifecycle_owner,
+    active_runtime, marker_path, require_lifecycle_owner, cold=False,
 ):
     """Complete the native IPFW stage ONLY with original FD9 + NEW Config lock.
 
@@ -646,6 +651,8 @@ def commit_native_common_after_legacy_config_save(
         or "legacy_predecessor" not in record or "previous" in record
     ):
         raise LegacyPredecessorRouteError("native Config was not durably saved")
+    if type(cold) is not bool or (cold and record["phase"] != "legacy-common-committing"):
+        raise LegacyPredecessorRouteError("cold recovery requires existing pending COMMIT")
     witness = record["legacy_predecessor"]
     old_image = work / "legacy-backup" / NAME / "previous"
     old = inspect_previous(old_image)
@@ -703,9 +710,10 @@ def commit_native_common_after_legacy_config_save(
     # into a terminal receipt. Require two independent read-only physical
     # attestations under the SAME FD9 and current Config inode lock. If a
     # process disappears between samples, the durable intent stays pending.
-    owner(intent, "verify-committed")
+    mode = "verify-cold" if cold else "verify-committed"
+    owner(intent, mode)
     return store.finish_legacy_common_commit(
-        identity, lambda: owner(intent, "verify-committed")
+        identity, lambda: owner(intent, mode)
     )
 
 
@@ -1465,9 +1473,13 @@ def main(argv):
         len(argv) == 2 and argv[0] == "reconcile-common"
         and COMMON_ID.fullmatch(argv[1])
     ) else None
+    cold_id = argv[1] if (
+        len(argv) == 2 and argv[0] == "reconcile-cold-common"
+        and COMMON_ID.fullmatch(argv[1])
+    ) else None
     if (argv != ["capture-plan"] and candidate_id is None and cancellation_id is None
-        and begin_id is None and reconcile_id is None):
-        print("usage: voice_native_legacy_predecessor_route.py capture-plan|capture-common ID|cancel-common ID|begin-common ID|reconcile-common ID",
+        and begin_id is None and reconcile_id is None and cold_id is None):
+        print("usage: voice_native_legacy_predecessor_route.py capture-plan|capture-common ID|cancel-common ID|begin-common ID|reconcile-common ID|reconcile-cold-common ID",
               file=sys.stderr)
         return 64
     fd=None
@@ -1476,27 +1488,30 @@ def main(argv):
         fd=os.open(native.CONFIG,os.O_RDWR| getattr(os,"O_NOFOLLOW",0))
         _pinned_regular(native.CONFIG,fd,owner=(0,0))
         fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        if reconcile_id is not None:
+        if reconcile_id is not None or cold_id is not None:
             # Only a durably pending COMMIT may be reconciled; no new
             # kernel, Config, or engine operation is permitted on this path.
             from shared_apply_operation import SharedApplyOperation
             from shared_apply_seal import WORK
+            chosen_id = cold_id if cold_id is not None else reconcile_id
             store = SharedApplyOperation(owner=0)
             pending = store.read()
             if (pending is None or pending["phase"] != "legacy-common-committing"
-                or pending["detail"]["id"] != reconcile_id
+                or pending["detail"]["id"] != chosen_id
                 or pending["detail"]["page"] != "voice"):
                 raise LegacyPredecessorRouteError("no exact native COMMIT to reconcile")
             result = commit_native_common_after_legacy_config_save(
-                identity=reconcile_id, store=store, work=WORK / reconcile_id,
+                identity=chosen_id, store=store, work=WORK / chosen_id,
                 config_path=native.CONFIG, config_fd=fd, config_owner=(0,0),
                 active_runtime=native.ACTIVE_ROOT,
                 marker_path=native.LEGACY_MARKER,
                 require_lifecycle_owner=native.require_native_lock,
+                cold=cold_id is not None,
             )
-            if result["phase"] != "committed" or result["detail"]["id"] != reconcile_id:
+            if result["phase"] != "committed" or result["detail"]["id"] != chosen_id:
                 raise LegacyPredecessorRouteError("native COMMIT reconciliation incomplete")
-            print("legacy-native-reconciled-id=" + reconcile_id)
+            print(("legacy-native-cold-reconciled-id=" if cold_id else
+                   "legacy-native-reconciled-id=") + chosen_id)
             return 0
         if cancellation_id is not None or begin_id is not None:
             from shared_apply_operation import SharedApplyOperation

@@ -404,6 +404,43 @@ apply_runtime_verify_retired_legacy_committed()
     firewall_shared_runtime verify "$_apply_done_candidate" "$ACTIVE_DIR" || return 70
 }
 
+# Strict read-only cold witness before adopting a persisted native Config.
+# The entire common IPFW range must be empty, with no engine, monitor or
+# atomic staging gap. The sealed previous legacy backup remains untouched.
+apply_runtime_verify_retired_legacy_cold()
+{
+    [ "$#" -eq 2 ] || return 64
+    _cold_release="$1"
+    _cold_id="$2"
+    case "$_cold_id" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_cold_id}" -eq 32 ] || return 64
+    [ "${APPLY_PHASE:-idle}" = idle ] || return 69
+    case "$_cold_release" in /*) ;; *) return 64 ;; esac
+    _cold_backup="$BACKUP_ROOT/$(basename "$ACTIVE_DIR")-$_cold_id"
+    [ -d "$_cold_release" ] && [ ! -L "$_cold_release" ] &&
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] &&
+    [ -d "$_cold_backup" ] && [ ! -L "$_cold_backup" ] &&
+    [ ! -e "$_cold_backup/voice-plan.json" ] &&
+    [ ! -L "$_cold_backup/voice-plan.json" ] || return 69
+    for _cold_file in dvtws.args tcp-ports.txt udp-ports.txt; do
+        [ -f "$_cold_backup/$_cold_file" ] &&
+        [ ! -L "$_cold_backup/$_cold_file" ] || return 69
+    done
+    _cold_stage="$(dirname "$ACTIVE_DIR")/.$(basename "$ACTIVE_DIR").stage.$_cold_id"
+    _cold_park="$(dirname "$ACTIVE_DIR")/.$(basename "$ACTIVE_DIR").old.$_cold_id"
+    [ ! -e "$_cold_stage" ] && [ ! -L "$_cold_stage" ] &&
+    [ ! -e "$_cold_park" ] && [ ! -L "$_cold_park" ] || return 70
+    validator_validate_runtime_modes "$_cold_release" || return 70
+    atomic_verify_tree "$_cold_release" "$ACTIVE_DIR" || return 70
+    if launcher_is_running "$CHILD_PIDFILE" ||
+       supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"; then
+        return 70
+    fi
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || return 70
+    firewall_shared_runtime verify "$_cold_release" - || return 70
+}
+
 # Post-activation proof for the ACTUAL shared Strategies/Voice Apply.
 # Invoke under original FD9, after native activation and immediately before
 # Config::save. Never return success based on the launcher/adapter exit code

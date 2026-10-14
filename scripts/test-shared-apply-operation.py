@@ -928,14 +928,23 @@ class TestJournal(unittest.TestCase):
                 self.assertEqual("legacy-native-reconciled-id=" + ident + "\n",
                                  stdout.getvalue())
                 self.assertEqual(1, len(called))
+                stdout=io.StringIO()
+                with redirect_stdout(stdout):
+                    self.assertEqual(0, route.main(["reconcile-cold-common", ident]))
+                self.assertEqual("legacy-native-cold-reconciled-id=" + ident + "\n",
+                                 stdout.getvalue())
+                self.assertTrue(called[-1]["cold"])
+                self.assertEqual(2, len(called))
                 store.read.return_value["phase"] = "legacy-config-saved"
                 self.assertEqual(69, route.main(["reconcile-common", ident]))
                 store.read.return_value["phase"] = "legacy-common-committing"
                 self.assertEqual(69, route.main(["reconcile-common", "2" * 32]))
-                self.assertEqual(1, len(called))
+                self.assertEqual(2, len(called))
         service = (BACKEND.parent / "zapret_service.sh").read_text()
         self.assertIn("shared-apply-legacy-reconcile)", service)
         self.assertIn('reconcile-common "$2"', service)
+        self.assertIn("shared-apply-legacy-cold)", service)
+        self.assertIn('reconcile-cold-common "$2"', service)
 
     def test_interrupted_legacy_ipfw_commit_accepts_only_readonly_final_proof(self):
         import fcntl
@@ -947,7 +956,7 @@ class TestJournal(unittest.TestCase):
         # pending: process was interrupted after cleanup but before receipt;
         # lost/timeout: the same original FD9 owner received uncertain
         # native COMMIT status despite possibly completed kernel cleanup.
-        for origin in ("pending", "lost", "timeout"):
+        for origin in ("pending", "lost", "timeout", "cold"):
             for physical in ("complete", "partial", "foreign", "vanished"):
                 with self.subTest(origin=origin, physical=physical), tempfile.TemporaryDirectory() as tmp:
                     root=Path(tmp)
@@ -970,7 +979,7 @@ class TestJournal(unittest.TestCase):
                     store.finish_legacy_common_activation(identity,lambda:seal)
                     store.begin_legacy_config_save(identity,lambda:seal)
                     store.finish_legacy_config_save(identity,lambda:seal)
-                    if origin=="pending":
+                    if origin in ("pending", "cold"):
                         store.begin_legacy_common_commit(identity,lambda:seal)
                     fd=os.open(config,os.O_RDWR)
                     fcntl.flock(fd,fcntl.LOCK_EX)
@@ -987,12 +996,14 @@ class TestJournal(unittest.TestCase):
                             if origin=="timeout":
                                 raise subprocess.TimeoutExpired(["/bin/sh"],90)
                             raise LegacyPredecessorRouteError("native receipt lost")
-                        if mode=="verify-committed":
+                        if mode in ("verify-committed", "verify-cold"):
+                            expected_mode = "verify-cold" if origin == "cold" else "verify-committed"
+                            self.assertEqual(expected_mode, mode)
                             if physical=="partial":
                                 raise LegacyPredecessorRouteError("stage tables remain")
                             if physical=="foreign":
                                 raise LegacyPredecessorRouteError("new common engine missing")
-                            if physical=="vanished" and calls.count("verify-committed") == 2:
+                            if physical=="vanished" and calls.count(mode) == 2:
                                 raise LegacyPredecessorRouteError("engine disappeared before final receipt")
                             return True
                         self.assertEqual("attest",mode)
@@ -1018,6 +1029,7 @@ class TestJournal(unittest.TestCase):
                                 config_fd=fd,config_owner=(os.geteuid(),os.getegid()),
                                 active_runtime=active,marker_path=root/"old.marker",
                                 require_lifecycle_owner=lambda:None,
+                                cold=origin=="cold",
                             )
                             if physical=="complete":
                                 self.assertEqual("committed",invoke()["phase"])
@@ -1032,9 +1044,10 @@ class TestJournal(unittest.TestCase):
                                     root/"voice-cutover",root/"voice-ipfw")["reason"])
                             # At most ONE native COMMIT, and only for the
                             # initial saved phase. NO replay on uncertain state.
-                            verified = (["verify-committed"] * 2 if physical in ("complete", "vanished") else
-                                        ["verify-committed"])
-                            expected=(verified if origin=="pending" else
+                            mode = "verify-cold" if origin == "cold" else "verify-committed"
+                            verified = ([mode] * 2 if physical in ("complete", "vanished") else
+                                        [mode])
+                            expected=(verified if origin in ("pending", "cold") else
                                       ["attest","commit"] + verified)
                             self.assertEqual(expected,calls)
                     finally:

@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`v0.5.2_109` — безопасное operator-only завершение чистого cold-состояния после reboot.** Команда `shared-apply-legacy-cold ID` под существующим FD9 и актуальным Config flock выполняет два read-only witness общего native backend. Обязательны: точный sealed old-backup, сохранённый native Config, установленный неизменный release, отсутствие живого dvtws2/supervisor, отсутствие atomic stage/park и отсутствие любых собственных IPFW rules/stages. Только полное совпадение закрывает `legacy-common-committing` в `committed`; следующий штатный start может загрузить common runtime. Никакой Config save, IPFW COMMIT, engine start либо удаление backup самой командой не выполняется. Частичный cleanup и неопределённое состояние остаются blocked; полное cold recovery и FreeBSD STUN/MEDIA/CALL ещё впереди. GUI/ТЗ неизменны, релиза нет.
+
 **`v0.5.2_108` — операторский FD9-путь завершения уже физически выполненного native IPFW COMMIT при потерянном receipt.** `shared-apply-legacy-reconcile ID` под существующим lifecycle lock вызывает тот же Python `commit_native_common_after_legacy_config_save` только для durable `legacy-common-committing`. Повторно проверяются текущий Config inode, sealed old Config/runtime backup, журнал и два read-only `verify-committed`. Полностью подтверждённый живой common owner завершается `committed` без повторного COMMIT, Config save или engine start. При неоднозначном/частичном IPFW либо reboot без engine журнал остаётся blocked. Новый configd/GUI маршрут и публичная миграция не открыты; cold power-loss recovery и FreeBSD owner-live STUN/MEDIA/CALL остаются незавершёнными. ТЗ/frontend не меняются, релиза нет.
 
 **`v0.5.2_107` — восстановлен точный private read-only CLI receipt для native IPFW COMMIT.** `shared_apply_operation.py inspect` теперь возвращает `legacy-common-committing ID voice` для валидного одноимённого durable journal, как того уже требует штатный `shared_apply_commit_retired_legacy_service` в общем `zapret_service.sh`. Ранее `inspect` отклонял фазу, поэтому даже корректный native COMMIT мог остановиться перед исполнителем. Никакое kernel/Config действие само `inspect` не выполняет; `start/reconfigure/boot` по-прежнему блокируют незавершённую фазу. В общий Python regression suite добавлен прямой CLI→shell contract и проверка общего guard. Cold power-loss recovery при отсутствующих процессах, восстановление частичного IPFW cleanup, FreeBSD owner-live и STUN/MEDIA/CALL остаются открыты. Публичная миграция не включена, ТЗ/GUI без изменений, релиза нет.
@@ -128,13 +130,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_108`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_109`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=108` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_108.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=109` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_109.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;

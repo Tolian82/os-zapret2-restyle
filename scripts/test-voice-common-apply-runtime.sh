@@ -470,7 +470,7 @@ OUTER_ROUTES=$(sed -n '/^case "${1:-}" in$/,$p' "$SERVICE_SOURCE")
 for command in shared-apply-legacy-audit shared-apply-legacy-qualify \
     shared-apply-legacy-capture shared-apply-legacy-arm \
     shared-apply-legacy-cancel shared-apply-legacy-begin \
-    shared-apply-legacy-reconcile; do
+    shared-apply-legacy-reconcile shared-apply-legacy-cold; do
     printf '%s\n' "$OUTER_ROUTES" | grep -Eq "(^|\\|)${command}(\\||\\))" ||
         fail "legacy operator $command bypasses original FD9"
 done
