@@ -271,10 +271,16 @@ def _verify_shared_voice_engine(release: Path, plan: dict, read) -> None:
     merged traffic and the generated one-engine argument file.
     """
     from voice_traffic_merge import profile_tokens
+    from voice_profile_compiler import parse_ports
 
     profiles = plan.get("profiles")
-    if not isinstance(profiles, list) or len(profiles) > len(SERVICES):
-        raise IPFWAdapterError("invalid Voice profiles in common release")
+    capture = plan.get("capture")
+    if not isinstance(profiles, list) or len(profiles) > len(SERVICES) or (
+        not isinstance(capture, dict)
+        or not isinstance(capture.get("voice"), list)
+        or len(capture["voice"]) != len(profiles)
+    ):
+        raise IPFWAdapterError("invalid Voice profiles/capture in common release")
     traffic = read("traffic.conf").decode("utf-8")
     argv = read("dvtws.args").decode("utf-8")
     if not traffic.strip() or not argv.strip() or traffic not in argv:
@@ -301,6 +307,30 @@ def _verify_shared_voice_engine(release: Path, plan: dict, read) -> None:
             row["profile_sha256"]
         ):
             raise IPFWAdapterError("Voice kernel capture differs from common engine profile")
+        # The _83 identity/hash witness alone is insufficient: a coherent
+        # replacement of the engine profile and its hash must NOT retain
+        # stale IPFW UDP ports or destination tables from the capture plan.
+        owned = capture["voice"][index]
+        if not isinstance(owned, dict) or owned.get("service") != service or (
+            row.get("ipset_path") !=
+            f"/usr/local/etc/zapret2/runtime-v2/managed/ipset-{service}.txt"
+            or row.get("wan") != capture.get("logical_wan")
+            or row.get("ports") != owned.get("ports")
+            or row.get("targets") != owned.get("destinations")
+            or row.get("target_count") != owned.get("destination_count")
+            or row.get("target_count") != len(owned.get("destinations", []))
+        ):
+            raise IPFWAdapterError("Voice engine/IPFW port or destination scope differs")
+        udp = [item.partition("=")[2] for item in profile
+               if item.startswith("--filter-udp=")]
+        if len(udp) != 1:
+            raise IPFWAdapterError("Voice engine must have one UDP selector")
+        try:
+            parsed = [list(port) for port in parse_ports(udp[0], service)]
+        except ValueError as error:
+            raise IPFWAdapterError("Voice engine contains untrusted UDP ports") from error
+        if parsed != owned["ports"]:
+            raise IPFWAdapterError("Voice engine/IPFW UDP selector differs")
     for other in tokens[len(profiles):]:
         if any(arg.startswith("--name=voice-") for arg in other):
             raise IPFWAdapterError("ordinary Strategies reuse a Voice profile identity")

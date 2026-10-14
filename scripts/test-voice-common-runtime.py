@@ -2,6 +2,7 @@
 """Full common release build on private inputs; no kernel or live Config calls."""
 from pathlib import Path
 import json
+import hashlib
 import importlib.util
 import os
 import shlex
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
 from voice_ipfw_adapter import shared_release_manifest, shared_firewall_action, IPFWAdapterError
+from voice_traffic_merge import profile_tokens
 
 spec = importlib.util.spec_from_file_location("firewall_test_fixture", ROOT / "scripts/test-voice-firewall-transaction.py")
 firewall_fixture = importlib.util.module_from_spec(spec)
@@ -27,7 +29,7 @@ ORDINARY = "--filter-tcp=443\n--filter-l7=tls\n--new\n--filter-udp=596-599\n<IPS
 
 
 def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engine=None,
-          target_offset=0):
+          target_offset=0, stun_ports="*"):
     xml = ET.Element("opnsense")
     model = ET.SubElement(ET.SubElement(xml, "OPNsense"), "Zapret")
     general = ET.SubElement(model, "general")
@@ -41,7 +43,8 @@ def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engin
     for i, name in enumerate(SERVICES):
         entry = ET.SubElement(voice, name)
         ET.SubElement(entry, "enabled").text = "1" if name in enabled else "0"
-        ET.SubElement(entry, "args").text = ("--new" if bad_args and name in enabled else STUN)
+        ET.SubElement(entry, "args").text = ("--new" if bad_args and name in enabled else
+                                                STUN.replace("--filter-udp=*", "--filter-udp=" + stun_ports))
         ipset = f"198.51.100.{i + 1 + target_offset}"
         ET.SubElement(hosts, name + "ips").text = ipset
         settings[name.upper() + "_IPS"] = ipset
@@ -220,6 +223,47 @@ class CommonRuntimeTests(unittest.TestCase):
                     ))
                 with self.assertRaisesRegex(IPFWAdapterError,
                                             "common engine|Voice kernel capture"):
+                    shared_release_manifest(release)
+
+    def test_common_voice_kernel_capture_matches_real_engine_udp_and_ipsets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, release = build(Path(directory), ("telegram",), stun_ports="3478")
+            self.assertEqual(0, result.returncode, result.stderr)
+            manifest = shared_release_manifest(release)
+            self.assertIn("3478", manifest["rules"][19000])
+            self.assertIn("table(zapret2_voice_telegram)", manifest["rules"][19000])
+            self.assertEqual("596-599", (release / "udp-ports.txt").read_text().strip())
+
+        for drift in ("coherent-profile-ports", "capture-ports", "saved-targets",
+                      "capture-targets"):
+            with self.subTest(drift=drift), tempfile.TemporaryDirectory() as directory:
+                result, release = build(Path(directory), ("telegram",))
+                self.assertEqual(0, result.returncode, result.stderr)
+                plan_file = release / "voice-plan.json"
+                plan = json.loads(plan_file.read_text())
+                if drift == "coherent-profile-ports":
+                    # Both engine and declared profile are updated together.
+                    # The old capture is unchanged, so _83's hash still
+                    # passes; the _84 port-to-capture witness MUST refuse.
+                    for name in ("traffic.conf", "dvtws.args"):
+                        path = release / name
+                        path.write_text(path.read_text().replace(
+                            "--filter-udp=*", "--filter-udp=3478", 1
+                        ))
+                    profile = profile_tokens((release / "traffic.conf").read_text())[0]
+                    plan["profiles"][0]["profile_sha256"] = hashlib.sha256(
+                        "\n".join(profile).encode("ascii")
+                    ).hexdigest()
+                    plan["profiles"][0]["ports"] = [[3478, 3478]]
+                elif drift == "capture-ports":
+                    plan["capture"]["voice"][0]["ports"] = [[3478, 3478]]
+                elif drift == "saved-targets":
+                    plan["profiles"][0]["targets"] = ["192.0.2.9"]
+                else:
+                    plan["capture"]["voice"][0]["destinations"] = ["192.0.2.9"]
+                plan_file.write_text(json.dumps(plan))
+                with self.assertRaisesRegex(IPFWAdapterError,
+                                             "engine/IPFW|UDP selector"):
                     shared_release_manifest(release)
 
     def test_all_off_preserves_resolved_ordinary_and_ignores_old_marker(self):
