@@ -36,6 +36,8 @@ namespace OPNsense\Core {
         public static bool $busy = false;
         public static bool $reconfigureOK = true;
         public static string $recoveryResponse = '';
+        public static string $inspectResponse = '';
+        public static bool $inspectThrows = false;
         public static array $calls = [];
         public static array $params = [];
         public function configdpRun($action, $params, ...$args) {
@@ -81,6 +83,15 @@ namespace OPNsense\Core {
                     throw new \RuntimeException('Config lock held across recovery status');
                 }
                 return self::$recoveryResponse;
+            }
+            if ($action === 'zapret voice_inspect') {
+                if (Config::getInstance()->locks !== 0) {
+                    throw new \RuntimeException('Config lock held across voice status');
+                }
+                if (self::$inspectThrows) {
+                    throw new \RuntimeException('simulated configd Voice inspection outage');
+                }
+                return self::$inspectResponse;
             }
             if ($action === 'zapret strategy_lab_guard') {
                 return json_encode(['busy' => self::$busy]);
@@ -406,6 +417,46 @@ namespace {
     $api->request = new FakeRequest('GET', []);
     equal('unavailable', $api->recoveryStatusAction()['state'],
           'recovery status only accepts POST');
+
+
+    // The Voice status widget is read-only and must always fail closed.
+    // A configd exception is not a valid readiness signal or a GUI 500.
+    Backend::$inspectResponse = json_encode([
+        'state' => 'ready', 'can_activate' => true,
+        'condition' => 'verified', 'service' => 'telegram',
+        'rule_count' => 3, 'table_count' => 1,
+        'previous_five' => ['private' => 'not exposed'],
+    ]);
+    $api->request = new FakeRequest('POST', []);
+    Backend::$calls = [];
+    $inspection = $api->inspectAction();
+    equal('ready', $inspection['state'], 'Voice status lost verified state');
+    equal(true, $inspection['can_activate'], 'read-only Voice status lost readiness');
+    equal(false, isset($inspection['previous_five']),
+          'read-only Voice status leaked unrelated internal evidence');
+    equal(['zapret voice_inspect'], Backend::$calls,
+          'Voice status did not use the existing common backend');
+    Backend::$inspectResponse = '{malformed';
+    $badStatus = $api->inspectAction();
+    equal('inspection-error', $badStatus['state'],
+          'invalid Voice status accepted');
+    equal(false, $badStatus['can_activate'],
+          'invalid Voice status authorized activation');
+    Backend::$inspectThrows = true;
+    $unavailable = $api->inspectAction();
+    equal('inspection-error', $unavailable['state'],
+          'configd inspection exception escaped Voice API');
+    equal(false, $unavailable['can_activate'],
+          'configd inspection exception authorized activation');
+    equal('status-unavailable', $unavailable['remedy'],
+          'configd exception did not return actionable status');
+    Backend::$inspectThrows = false;
+    $api->request = new FakeRequest('GET', []);
+    $deniedStatus = $api->inspectAction();
+    equal('inspection-error', $deniedStatus['state'],
+          'Voice status must require POST');
+    equal(false, $deniedStatus['can_activate'],
+          'GET bypassed Voice status guard');
 
     // Read-only GUI/API credentials must not gain a write path.
     $candidate['sync']['snapshot'] = VoiceSettingsSnapshot::digest(Zapret::$nodes);

@@ -424,9 +424,16 @@ class VoiceController extends ApiControllerBase
             return ['state' => 'inspection-error', 'can_activate' => false,
                     'remedy' => 'post-required'];
         }
-        $backend = new Backend();
-        $output = trim((string)$backend->configdRun('zapret voice_inspect', false, 20));
-        $payload = json_decode($output, true);
+        try {
+            // A failed read-only configd status query must not throw a GUI
+            // 500 or imply that the native Voice runtime is usable.
+            $backend = new Backend();
+            $output = trim((string)$backend->configdRun('zapret voice_inspect', false, 20));
+            $payload = json_decode($output, true);
+        } catch (\Throwable $error) {
+            return ['state' => 'inspection-error', 'can_activate' => false,
+                    'remedy' => 'status-unavailable'];
+        }
         if (!is_array($payload) ||
             !isset($payload['state']) ||
             !is_string($payload['state']) ||
