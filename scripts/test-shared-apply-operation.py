@@ -625,6 +625,20 @@ class TestJournal(unittest.TestCase):
                         patches.enter_context(patch(
                             "voice_native_legacy_predecessor_route._invoke_existing_native_common",
                             side_effect=real_common_forward))
+                        # This test's descriptor 4 is synthetic; the
+                        # separate real-flock test exercises actual native
+                        # Config inode replacement and durable save phases.
+                        # Here prove the private forward hands off ONCE.
+                        def native_save_handoff(**kw):
+                            checks.append("config-save")
+                            self.assertEqual(detail()["id"], kw["identity"])
+                            self.assertEqual(4, kw["config_fd"])
+                            self.assertEqual("legacy-common-activated",
+                                             store.read()["phase"])
+                            return {"phase":"legacy-config-saved"}
+                        patches.enter_context(patch(
+                            "voice_native_legacy_predecessor_route.save_native_config_after_legacy_activation",
+                            side_effect=native_save_handoff))
                     patches.enter_context(patch(
                         "voice_native_legacy_predecessor_route._locked_config"))
                     patches.enter_context(patch(
@@ -673,7 +687,9 @@ class TestJournal(unittest.TestCase):
                         with self.assertRaises(LegacyPredecessorRouteError):
                             invoke()
                     else:
-                        self.assertEqual("legacy-common-activated",invoke()["phase"])
+                        expected_result=("legacy-config-saved" if crash=="native-fixed"
+                                         else "legacy-common-activated")
+                        self.assertEqual(expected_result,invoke()["phase"])
                     self.assertEqual(["common-start"],starts)
                     if crash == "native-fixed":
                         # The coordinator attests twice: before and
@@ -681,7 +697,7 @@ class TestJournal(unittest.TestCase):
                         # Both attestations are read-only; there is one START.
                         self.assertEqual(
                             ["native-probe", "native-probe", "native-activate",
-                             "native-attest", "native-attest"], checks)
+                             "native-attest", "native-attest", "config-save"], checks)
                     expected=("legacy-common-activated" if crash in ("none", "native-fixed")
                               else "legacy-common-activating")
                     self.assertEqual(expected,store.read()["phase"])
