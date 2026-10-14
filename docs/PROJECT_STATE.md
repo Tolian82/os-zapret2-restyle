@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+**`v0.5.2_93` — родной исполнитель native common ON после полного отключения старого PoC.** В существующий `apply_runtime.sh` добавлен приватный `apply_runtime_activate_retired_legacy(candidate, ID)`: после уже зафиксированного original-FD9 `legacy-common-activating` он проверяет остановленный старый runtime, отсутствие legacy engine/IPFW, запускает **штатный** `apply_runtime_activate` (один `dvtws2`), сохраняет прежнее runtime-дерево под исходным ID и проверяет native engine/supervisor/staged IPFW до возврата. Нет нового daemon, writer, WAL, публичного CLI/GUI; native Config/COMMIT и полный rollback работающего old PoC ещё предстоит связать. Тест штатного shell actuator: отказ при live old IPFW/process, одно включение, точный backup, откат и повторная установка после доказанного возврата.
+
 **`v0.5.2_92` — надёжная штатная boot-recovery для уже сохранённого общего Config.** Путь `shared_apply_recover_saved_service` (обе страницы) вызывает существующий `apply_runtime_activate` с **тем же 32-hex ID** durable operation, чтобы atomic stage/park были однозначно связаны с аварийной операцией. Перед удалением IPFW rollback tables добавлены две проверки фактического engine/supervisor/runtime/IPFW и повторное чтение native Config под его штатным lock с точным сравнением digest и ON/OFF. При сбое после запуска остаётся исходная незавершённая фаза `config-saved`, без второго запуска или фиктивного success. Существующий shell fault-test покрывает изменение Config, отказ readback, нарушение runtime и корректный COMMIT. Фронтенд/ТЗ не менялись; это ещё не live old-PoC handoff или MEDIA/CALL_PASS.
 
 **`v0.5.2_91` — исправлена фикстура CI без изменения production поведения `_90`.** GitHub job `Shared FD9 native Config/runtime transaction fault matrix` выявил ошибку в новом shell-моке: `saved` исполняется внутри `$(...)`, поэтому флаг `AFTER_SAVED` устанавливался только в subshell и искусственно не воспроизводил `saved-mode` расхождение. Фикстура теперь отличает readback через содержимое поданного JSON, а не через побочный эффект дочернего процесса; тест сохраняет сценарий запрета COMMIT при чужом ON/OFF после Config save. Production код этапа `_90`, frontend, ТЗ и архитектура неизменны.
@@ -96,13 +98,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_92`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_93`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=92` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_92.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=93` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_93.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;

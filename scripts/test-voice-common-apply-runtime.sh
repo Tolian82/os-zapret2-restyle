@@ -39,7 +39,14 @@ firewall_shared_runtime() {
 atomic_install_tree() {
     mkdir -p "$3"
     OLD=
-    if [ -d "$2" ]; then OLD="$3/previous"; mv "$2" "$OLD" || return 1; fi
+    if [ -d "$2" ]; then
+        if [ "$#" -eq 4 ]; then
+            OLD="$3/$(basename "$2")-$4"
+        else
+            OLD="$3/previous"
+        fi
+        mv "$2" "$OLD" || return 1
+    fi
     cp -R "$1" "$2" || return 1
     printf '%s\n' "$OLD"
 }
@@ -156,6 +163,58 @@ apply_runtime_commit || fail "stopped legacy native commit failed"
 [ -f "$_legacy_previous/old-runtime-marker" ] &&
 [ "$PROCESS" = 1 ] && [ "$MONITOR" = 1 ] && [ "$FW_STAGE" = 0 ] ||
     fail "native release did not commit while preserving old legacy backup"
+# Native private forward uses the REAL production apply_runtime_activate
+# after the old PoC process, marker and IPFW have been retired by the sole
+# journal owner. No second engine, firewall, backup writer or Config saver.
+ACTIVE_DIR="$ROOT/retired-active"
+BACKUP_ROOT="$ROOT/retired-backups"
+mkdir "$ACTIVE_DIR"
+printf '%s\n' old-release > "$ACTIVE_DIR/old-owner-marker"
+for field in dvtws.args tcp-ports.txt udp-ports.txt; do
+    printf '%s\n' old > "$ACTIVE_DIR/$field"
+done
+PROCESS=0 MONITOR=0 FW=empty FW_STAGE=0
+apply_runtime_clear
+RETIRE_ID=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+if apply_runtime_activate_retired_legacy "$ROOT/one" invalid; then
+    fail "unsealed retired predecessor ID accepted"
+fi
+[ "$(cat "$ACTIVE_DIR/old-owner-marker")" = old-release ] &&
+[ "$PROCESS" = 0 ] && [ "$FW" = empty ] ||
+    fail "invalid private forward modified live old resources"
+PROCESS=1 MONITOR=1
+if apply_runtime_activate_retired_legacy "$ROOT/one" "$RETIRE_ID"; then
+    fail "live old process bypassed common runtime"
+fi
+PROCESS=0 MONITOR=0 FW=active
+if apply_runtime_activate_retired_legacy "$ROOT/one" "$RETIRE_ID"; then
+    fail "non-retired old IPFW bypassed common runtime"
+fi
+FW=empty
+apply_runtime_activate_retired_legacy "$ROOT/one" "$RETIRE_ID" ||
+    fail "private retired old owner did not use common activation"
+EXPECTED_RETIRE_BACKUP="$BACKUP_ROOT/$(basename "$ACTIVE_DIR")-$RETIRE_ID"
+[ "$APPLY_BACKUP" = "$EXPECTED_RETIRE_BACKUP" ] &&
+[ -f "$EXPECTED_RETIRE_BACKUP/old-owner-marker" ] &&
+[ "$APPLY_OLD_RUNNING" = 0 ] && [ "$APPLY_NEW_RUNNING" = 1 ] &&
+[ "$PROCESS" = 1 ] && [ "$MONITOR" = 1 ] &&
+[ "$FW" = active ] && [ "$FW_STAGE" = 1 ] ||
+    fail "retired forward lost original backup or kernel precommit"
+if apply_runtime_activate_retired_legacy "$ROOT/one" "$RETIRE_ID"; then
+    fail "same private forward started a second engine"
+fi
+apply_runtime_restore || fail "retired original runtime rollback failed"
+[ "$(cat "$ACTIVE_DIR/old-owner-marker")" = old-release ] &&
+[ "$PROCESS" = 0 ] && [ "$MONITOR" = 0 ] && [ "$FW" = empty ] &&
+[ "$FW_STAGE" = 0 ] ||
+    fail "retired previous runtime not restored exactly"
+apply_runtime_activate_retired_legacy "$ROOT/one" "$RETIRE_ID" ||
+    fail "retired common forward could not restart after verified manual restore"
+apply_runtime_commit || fail "native common commit from retired legacy failed"
+[ "$FW_STAGE" = 0 ] && [ "$PROCESS" = 1 ] &&
+[ -f "$EXPECTED_RETIRE_BACKUP/old-owner-marker" ] ||
+    fail "native common completion prematurely destroyed old runtime backup"
+
 # A LIVE legacy runtime must still be refused prior to journal mutation.
 PROCESS=1 MONITOR=1 FW=active
 rm -f "$ACTIVE_DIR/voice-plan.json"

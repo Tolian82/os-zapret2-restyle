@@ -261,6 +261,59 @@ apply_runtime_activate()
     # Not yet committed: previous tree and stage tables remain available.
 }
 
+
+# Private forward seam from a VERIFIED, FULLY RETIRED old Telegram PoC.
+# Its caller must have fsynced legacy-common-activating in the ONE shared
+# journal under original FD9 and pinned native Config. There is no route
+# from GUI/configd/boot to this helper until Config commit + reversible
+# old-owner rollback are connected. Do not create an alternate engine:
+# execute the EXACT existing common runtime activation once.
+apply_runtime_activate_retired_legacy()
+{
+    [ "$#" -eq 2 ] || return 64
+    _apply_legacy_candidate="$1"
+    _apply_legacy_id="$2"
+    case "$_apply_legacy_id" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_apply_legacy_id}" -eq 32 ] || return 64
+    [ "${APPLY_PHASE:-idle}" = idle ] || return 69
+
+    # The old ACTIVE_DIR must be the original stopped PoC, never a native
+    # release adopted as a legacy predecessor. A symlink or missing original
+    # runtime manifest is not sufficient rollback evidence.
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] &&
+    [ ! -e "$ACTIVE_DIR/voice-plan.json" ] &&
+    [ ! -L "$ACTIVE_DIR/voice-plan.json" ] || return 69
+    for _apply_legacy_file in dvtws.args tcp-ports.txt udp-ports.txt; do
+        [ -f "$ACTIVE_DIR/$_apply_legacy_file" ] &&
+        [ ! -L "$ACTIVE_DIR/$_apply_legacy_file" ] || return 69
+    done
+    # This ordinary probe proves a stopped engine/supervisor, independent
+    # engine census and EMPTY owned IPFW. It runs before any installation.
+    apply_runtime_probe "$_apply_legacy_candidate" 1 || return 69
+
+    _apply_legacy_expected_backup="$BACKUP_ROOT/$(basename "$ACTIVE_DIR")-$_apply_legacy_id"
+    apply_runtime_activate "$_apply_legacy_candidate" 1 "$_apply_legacy_id" || return 70
+
+    # The old Config and full old runtime have not been discarded. The
+    # precise deterministic atomic backup must be available for the SAME
+    # original operation before we can attest common native activation.
+    if [ "$APPLY_PHASE" != activated ] ||
+       [ "$APPLY_OLD_RUNNING" != 0 ] ||
+       [ "$APPLY_NEW_RUNNING" != 1 ] ||
+       [ "$APPLY_IPFW_INSTALLED" != 1 ] ||
+       [ "$APPLY_OLD" != - ] ||
+       [ "$APPLY_NEW" != "$ACTIVE_DIR" ] ||
+       [ "$APPLY_BACKUP" != "$_apply_legacy_expected_backup" ] ||
+       [ ! -d "$APPLY_BACKUP" ] ||
+       [ -L "$APPLY_BACKUP" ] ||
+       ! apply_runtime_attest_activated; then
+        # No optimistic second start/automatic old restore. The original
+        # shared journal remains pending, preserving reverse evidence.
+        common_error "shared Apply: retired legacy forward requires review"
+        return 70
+    fi
+}
+
 # Post-activation proof for the ACTUAL shared Strategies/Voice Apply.
 # Invoke under original FD9, after native activation and immediately before
 # Config::save. Never return success based on the launcher/adapter exit code
