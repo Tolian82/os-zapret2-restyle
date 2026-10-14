@@ -311,6 +311,8 @@ jobs:
         run: python3.13 scripts/test-voice-live-inspect.py
       - name: Voice one-engine five-profile runtime attestation
         run: python3.13 scripts/test-voice-common-engine-status.py
+      - name: Read-only FreeBSD Voice trial counter evidence
+        run: python3.13 scripts/test-voice-live-trial.py
       - name: Voice explicit legacy PoC migration safety
         run: python3.13 scripts/test-voice-migration-plan.py
       - name: Interrupted native Config-saved cold recovery and refusal matrix
@@ -702,6 +704,7 @@ jobs:
             sh scripts/test-telegram-voice-phase-b.sh
             /usr/local/bin/python3.13 scripts/test-voice-ipfw-adapter.py
             /usr/local/bin/python3.13 scripts/test-voice-live-inspect.py
+            /usr/local/bin/python3.13 scripts/test-voice-live-trial.py
             /usr/local/bin/python3.13 scripts/test-voice-migration-plan.py
             /usr/local/bin/python3.13 scripts/test-voice-generator-interop.py
             /usr/local/bin/python3.13 scripts/test-voice-common-runtime.py
