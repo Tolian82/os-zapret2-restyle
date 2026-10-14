@@ -860,7 +860,7 @@ class TestJournal(unittest.TestCase):
         # lost/timeout: the same original FD9 owner received uncertain
         # native COMMIT status despite possibly completed kernel cleanup.
         for origin in ("pending", "lost", "timeout"):
-            for physical in ("complete", "partial", "foreign"):
+            for physical in ("complete", "partial", "foreign", "vanished"):
                 with self.subTest(origin=origin, physical=physical), tempfile.TemporaryDirectory() as tmp:
                     root=Path(tmp)
                     identity=detail()["id"]
@@ -904,6 +904,8 @@ class TestJournal(unittest.TestCase):
                                 raise LegacyPredecessorRouteError("stage tables remain")
                             if physical=="foreign":
                                 raise LegacyPredecessorRouteError("new common engine missing")
+                            if physical=="vanished" and calls.count("verify-committed") == 2:
+                                raise LegacyPredecessorRouteError("engine disappeared before final receipt")
                             return True
                         self.assertEqual("attest",mode)
                         return True
@@ -942,8 +944,10 @@ class TestJournal(unittest.TestCase):
                                     root/"voice-cutover",root/"voice-ipfw")["reason"])
                             # At most ONE native COMMIT, and only for the
                             # initial saved phase. NO replay on uncertain state.
-                            expected=(["verify-committed"] if origin=="pending" else
-                                      ["attest","commit","verify-committed"])
+                            verified = (["verify-committed"] * 2 if physical in ("complete", "vanished") else
+                                        ["verify-committed"])
+                            expected=(verified if origin=="pending" else
+                                      ["attest","commit"] + verified)
                             self.assertEqual(expected,calls)
                     finally:
                         os.close(fd)
