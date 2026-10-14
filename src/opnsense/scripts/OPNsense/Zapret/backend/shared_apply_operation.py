@@ -411,6 +411,17 @@ class SharedApplyOperation:
             identity, "legacy-common-activating", "legacy-common-activated", attest
         )
 
+
+    def begin_pristine_common_activation_rollback(self, identity: str, attest) -> dict:
+        """One-way rollback after a completely untouched interrupted start.
+
+        Never return to legacy-marker-retired: that would allow a second
+        common engine activation after an unknown power-cut boundary.
+        """
+        return self._transition_legacy_boundary(
+            identity, "legacy-common-activating", "legacy-rollback-ipfw", attest
+        )
+
     def begin_legacy_ipfw_rollback(self, identity: str, attest) -> dict:
         """Durable same-owner reverse intent BEFORE restoring any old IPFW."""
         return self._transition_legacy_boundary(

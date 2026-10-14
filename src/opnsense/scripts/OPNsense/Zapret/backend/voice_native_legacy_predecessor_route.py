@@ -636,6 +636,80 @@ def activate_common_after_legacy_retirement(
     return result
 
 
+
+def rollback_pristine_common_after_interruption(
+    *, identity, store, work, config_path, config_fd, config_owner,
+    active_runtime, marker_path, process_probe, readonly_ipfw,
+    require_lifecycle_owner, common_absence,
+):
+    """PRIVATE one-way recovery of an interrupted but untouched common start.
+
+    The caller holds original FD9 and original Config inode flock. Its
+    common_absence callback must attest a complete absence of common engine,
+    supervisor, installed/staged native artifacts and other kernel ownership.
+    Changed/partial native activation is deliberately NOT handled here.
+    """
+    from shared_apply_operation import (
+        SharedApplyOperation, fingerprint_legacy_predecessor,
+    )
+    from voice_native_legacy_ipfw_replay import _strict_snapshot
+    from voice_native_legacy_reverse_wal import _stopped
+
+    if not isinstance(store, SharedApplyOperation) or (
+        not isinstance(process_probe, FreeBSDVoiceProcessProbe)
+        or not isinstance(readonly_ipfw, FreeBSDIPFWAdapter)
+        or readonly_ipfw.allow_mutations
+        or (readonly_ipfw.rule_base, readonly_ipfw.rule_max) != (19000, 19010)
+        or type(config_fd) is not int or config_fd < 0
+        or not callable(require_lifecycle_owner)
+        or not callable(common_absence)
+    ):
+        raise LegacyPredecessorRouteError("missing original pristine rollback owner")
+    work, marker_path = Path(work), Path(marker_path)
+    root = work / "legacy-backup"
+    if work.name != identity or not COMMON_ID.fullmatch(identity):
+        raise LegacyPredecessorRouteError("pristine rollback candidate identity changed")
+    record = store.read()
+    if record is None or record["phase"] != "legacy-common-activating" or (
+        record["detail"]["id"] != identity
+        or record["detail"]["page"] != "voice"
+        or "legacy_predecessor" not in record or "previous" in record
+    ):
+        raise LegacyPredecessorRouteError("common activation has no reversible intent")
+    old = inspect_previous(root / NAME / "previous")
+    seal = inspect_legacy_previous(root)
+    plan = inspect_legacy_restore_plan(root)
+    if plan["previous_five"] != seal["previous_five"] or (
+        plan["marker_target"] != str(marker_path)
+    ):
+        raise LegacyPredecessorRouteError("old restore evidence not bound to marker")
+
+    def pristine():
+        require_lifecycle_owner()
+        _locked_config(Path(config_path), config_fd, config_owner)
+        if store.read() != record or (
+            fingerprint_legacy_predecessor(work, owner=config_owner[0])
+            != record["legacy_predecessor"]
+        ) or inspect_legacy_previous(root) != seal or (
+            inspect_legacy_restore_plan(root) != plan
+        ):
+            raise LegacyPredecessorRouteError("old seal or common journal drifted")
+        _verify_sources(Path(config_path), Path(active_runtime), old)
+        if os.path.lexists(marker_path) or (
+            _stopped(process_probe) != "exact-three-role-absence"
+        ) or _strict_snapshot(readonly_ipfw) != {"rules": {}, "targets": None}:
+            raise LegacyPredecessorRouteError("old runtime or IPFW not pristine")
+        if common_absence() is not True:
+            raise LegacyPredecessorRouteError("common engine or artifacts remain")
+        return record["legacy_predecessor"]
+
+    pristine()
+    result = store.begin_pristine_common_activation_rollback(identity, pristine)
+    if result["phase"] != "legacy-rollback-ipfw":
+        raise LegacyPredecessorRouteError("old rollback intent not durable")
+    return result
+
+
 def restore_retired_common_legacy_ipfw(
     *, identity, store, work, config_path, config_fd, config_owner,
     active_runtime, marker_path, process_probe, readonly_ipfw,

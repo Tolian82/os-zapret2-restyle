@@ -491,7 +491,8 @@ class TestJournal(unittest.TestCase):
 
     def test_old_marker_retired_can_enter_private_common_runtime_once(self):
         from voice_native_legacy_predecessor_route import (
-            activate_common_after_legacy_retirement, LegacyPredecessorRouteError,
+            activate_common_after_legacy_retirement,
+            rollback_pristine_common_after_interruption, LegacyPredecessorRouteError,
         )
         from voice_native_process_probe import FreeBSDVoiceProcessProbe
         from voice_ipfw_adapter import FreeBSDIPFWAdapter
@@ -552,7 +553,8 @@ class TestJournal(unittest.TestCase):
                         return_value={"previous_five":"old"}))
                     patches.enter_context(patch(
                         "voice_native_legacy_predecessor_route.inspect_legacy_restore_plan",
-                        return_value={"previous_five":"old"}))
+                        return_value={"previous_five":"old",
+                                      "marker_target":str(root/"old-marker")}))
                     patches.enter_context(patch(
                         "voice_native_legacy_reverse_wal._stopped",
                         return_value="exact-three-role-absence"))
@@ -580,6 +582,28 @@ class TestJournal(unittest.TestCase):
                     with self.assertRaises(LegacyPredecessorRouteError):
                         invoke()
                     self.assertEqual(["common-start"],starts)
+
+                    if crash == "actuator":
+                        def pristine_rollback(absence=lambda: True):
+                            return rollback_pristine_common_after_interruption(
+                                identity=detail()["id"], store=store, work=work,
+                                config_path=root/"config.xml", config_fd=4,
+                                config_owner=(0,0), active_runtime=root/"active",
+                                marker_path=root/"old-marker", process_probe=probe,
+                                readonly_ipfw=ipfw,
+                                require_lifecycle_owner=lambda: None,
+                                common_absence=absence,
+                            )
+                        with self.assertRaises(LegacyPredecessorRouteError):
+                            pristine_rollback(lambda: False)
+                        self.assertEqual("legacy-common-activating", store.read()["phase"])
+                        self.assertEqual("legacy-rollback-ipfw",
+                                         pristine_rollback()["phase"])
+                        with self.assertRaises(LegacyPredecessorRouteError):
+                            pristine_rollback()
+                        with self.assertRaises(SharedOperationError):
+                            store.begin_legacy_common_activation(detail()["id"], lambda: owner)
+                        self.assertEqual(["common-start"], starts)
                     with self.assertRaises(SharedOperationError):
                         store.advance("committed",detail())
 
