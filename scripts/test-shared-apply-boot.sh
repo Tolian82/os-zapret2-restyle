@@ -98,7 +98,15 @@ shared_apply_stop_service() {
     [ "$STOP_OK" = 0 ] || return 70
 }
 preflight_voice_cutover_journals() { echo "legacy-guard" >> "$LOG"; }
-service_dispatch() { echo "legacy:$1" >> "$LOG"; }
+service_dispatch() {
+    if [ "${1:-}" = shared-apply-legacy-cold ]; then
+        echo "cold-reconcile:$2" >> "$LOG"
+        [ "$COLD_NATIVE_OK" = 0 ] || return 69
+        if [ "$COLD_NO_ADVANCE" = 0 ]; then OWNER="committed $2 voice"; fi
+    else
+        echo "legacy:$1" >> "$LOG"
+    fi
+}
 check_route() {
     expected="$1"; shift
     : > "$LOG"
@@ -109,6 +117,7 @@ check_route() {
     [ "$result" = "$expected" ] || fail "lifecycle returned $result instead of $expected"
 }
 RECOVER=0 RECOVER_OWNER=- SAVED_OK=0 STOP_OK=0 PRISTINE_OK=0 COLD_OK=0 PARKED_OK=1
+COLD_NATIVE_OK=0 COLD_NO_ADVANCE=0
 PREVIOUS=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 HAS_RECORD=1 OWNER_OK=1 OWNER="committed $ID voice"
 check_route 0 start
@@ -186,6 +195,34 @@ OWNER="activated $ID voice $PREVIOUS voice"
 check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = "installed-recover common:committed $PREVIOUS voice " ] ||
     fail "activated cold boot lost previous native owner"
+OWNER="legacy-common-committing $ID voice"
+check_route 0 start
+[ "$(tr '\n' ' ' < "$LOG")" = "cold-reconcile:$ID common:committed $ID voice " ] ||
+    fail "cold commit did not resume through original FD9 and common boot"
+OWNER="legacy-common-committing $ID voice"
+check_route 69 reconfigure
+[ ! -s "$LOG" ] || fail "reconfigure must not auto-close cold commit"
+check_route 69 restart
+[ ! -s "$LOG" ] || fail "restart must not auto-close cold commit"
+check_route 69 stop
+[ ! -s "$LOG" ] || fail "stop must not auto-close cold commit"
+OWNER="legacy-common-committing $ID voice"
+COLD_NATIVE_OK=1
+check_route 69 start
+[ "$(cat "$LOG")" = "cold-reconcile:$ID" ] ||
+    fail "failed cold physical witness unexpectedly reached boot"
+COLD_NATIVE_OK=0 COLD_NO_ADVANCE=1
+OWNER="legacy-common-committing $ID voice"
+check_route 69 start
+[ "$(cat "$LOG")" = "cold-reconcile:$ID" ] ||
+    fail "lost cold receipt without durable committed journal reached boot"
+COLD_NO_ADVANCE=0
+OWNER="legacy-common-committing $ID strategies"
+check_route 69 start
+[ ! -s "$LOG" ] || fail "foreign cold page reached recovery"
+OWNER="legacy-common-committing deadbeef voice"
+check_route 69 start
+[ ! -s "$LOG" ] || fail "invalid cold ID reached recovery"
 OWNER=pending
 check_route 69 stop
 [ ! -s "$LOG" ] || fail "pending stop touched runtime"

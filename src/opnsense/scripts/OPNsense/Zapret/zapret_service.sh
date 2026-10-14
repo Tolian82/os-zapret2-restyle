@@ -2045,6 +2045,30 @@ service_with_lifecycle_lock()
                             shared_apply_boot_service "$_shared_owner"
                             return $?
                             ;;
+                        legacy-common-committing\ *)
+                            # Reboot can leave a SAVED native Config and an
+                            # already fsynced irreversible IPFW COMMIT intent.
+                            # Only normal START may attempt the existing
+                            # fail-closed, read-only cold physical witness.
+                            # Do not enable it on reconfigure or restart.
+                            [ "${1:-}" = start ] || return 69
+                            _shared_legacy_cold_id=$(printf '%s\n' "$_shared_owner" |
+                                cut -d ' ' -f 2) || return 69
+                            case "$_shared_legacy_cold_id" in
+                                ""|*[!a-f0-9]*) return 69 ;;
+                            esac
+                            [ "${#_shared_legacy_cold_id}" -eq 32 ] || return 69
+                            [ "$_shared_owner" = "legacy-common-committing $_shared_legacy_cold_id voice" ] || return 69
+                            # Existing FD9/Config owner and private common
+                            # route: NEVER replay IPFW COMMIT/Config save.
+                            service_dispatch shared-apply-legacy-cold "$_shared_legacy_cold_id" || return 69
+                            # A subprocess receipt alone is not enough:
+                            # reread the SAME durable journal before boot.
+                            _shared_owner=$(shared_apply_inspect_service) || return 69
+                            [ "$_shared_owner" = "committed $_shared_legacy_cold_id voice" ] || return 69
+                            shared_apply_boot_service "$_shared_owner"
+                            return $?
+                            ;;
                         config-saved\ *)
                             # Cold recovery proves Config was persisted and
                             # the kernel contains NO active Zapret2 owner.
