@@ -224,7 +224,7 @@ jobs:
         run: python3.13 scripts/test-voice-native-candidate-engine-start.py
       - name: Shared IPFW PRECOMMIT/rollback regression with legacy journal fixtures
         run: python3.13 scripts/test-voice-native-forward-ipfw.py
-      - name:       - name: Read-only historical Voice Config redo verification and foreign-state refusal
+      - name: Read-only historical Voice Config redo verification and foreign-state refusal
         run: python3.13 scripts/test-voice-native-forward-config.py
       - name: Voice durable previous engine/supervisor process evidence
         run: python3.13 scripts/test-voice-process-recovery-evidence.py
