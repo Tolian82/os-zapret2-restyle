@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_146`. `VERSION=0.5.2`; `PLUGIN_REVISION=146`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
+**Current handoff identity:** `v0.5.2_147`. `VERSION=0.5.2`; `PLUGIN_REVISION=147`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
 
 ## Текущее состояние и доказательства
 
@@ -12,14 +12,14 @@
 
 ## Точный следующий шаг и уровень доказательств
 
-**Предыдущий HEAD `c7f51bf` (`_145`):** [Validate Project, Voice candidates и FreeBSD 15 package build — SUCCESS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38761330203). Это пакетная/CI квалификация без owner-live.
+**Кодовый этап v0.5.2_146:** публичные Telegram configctl enable/disable/status подключены к native Config/FD9/shared Apply и read-only inspect. Старый Phase-B marker и отдельный reconfigure больше не вызываются из публичного интерфейса; работающий старый PoC требует отдельной квалифицированной миграции.
 
-**В `_146` реализован ранее незакрытый пункт совместимости CLI/configd Telegram:** имена `telegram_voice_enable/disable` больше не пишут старый `/var/run` marker и не запускают отдельный Phase-B reconfigure; под исходным FD9 они преобразуют текущую native Config-модель в ограниченный Voice envelope и вызывают тот же `shared_apply_run_service voice`. Меняется только Telegram.enabled и при необходимости нормализуется его Telegram IPSET, остальные Voice-профили и Strategies не переписываются. Уже работающий PoC/его marker или IPFW требуют явной квалифицированной миграции, а не неявного старого/нового двойного включения. `telegram_voice_status` для committed native owner читает durable ON/OFF, сверяет snapshot с native read-only engine/IPFW инспектором и выводит прежние поля с фактическим профилем; до миграции сохраняется старый read-only статус. При drift/pending — отказ, без ложного зелёного состояния.
+**Исправление v0.5.2_147:** CI для _146 (https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38765199721) выявил использование stale committed _compat_owner между двумя вызовами shell-функции. Это могло разрешить orphan native manifest без durable журнала. Теперь _compat_owner сбрасывается перед каждой проверкой. Дефект уже воспроизведён существующим shared boot/lifecycle тестом.
 
-**Следующее действие:** подтвердить latest-HEAD CI и FreeBSD 15 сборку `_146`; затем завершить минимальный фактический GUI/API/package review и подготовить один testing release после фиксации кодовой готовности. Никакого дополнительного backend/PoC recovery, owner-live MEDIA/CALL ещё нет.
+**Доказательства:** предыдущий квалифицированный _145 (HEAD c7f51bf) прошёл Validate Project, Voice candidates и FreeBSD 15 package build (https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38761330203). _146 Voice candidates FAILED; _147 требует нового full CI и FreeBSD 15 сборки. Релиза, установки и owner-live MEDIA/CALL пока нет. Следующее действие — проверить точный HEAD _147, затем только действительные оставшиеся требования.
 
 ## Минимальное чтение
 
 После AGENTS и Level-1 rule books: [контроль завершения](VOICE_CODE_COMPLETION_GATE.md), [семиэтапный план и критерии](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md), [утверждённое ТЗ, включая раздел 12](architecture/VOICE_TRANSMISSION_GUI.md). Текущие факты — [PROJECT_STATE](PROJECT_STATE.md), вся ревизионная хронология — [working ledger](history/current/v0.5.x.md). Старые «next steps» из истории не имеют силы актуальной очереди.
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_146` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_147` не опубликована.

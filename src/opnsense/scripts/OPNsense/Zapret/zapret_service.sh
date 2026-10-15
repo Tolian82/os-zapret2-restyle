@@ -1985,6 +1985,8 @@ telegram_voice_compat_apply_service()
         echo "ERROR: old Telegram PoC needs verified migration before native Apply" >&2
         return 69
     fi
+    # Always forget the previous shell invocation's shared owner first.
+    _compat_owner=
     if shared_apply_has_record_service; then
         _compat_owner=$(shared_apply_inspect_service) || return 69
         case "$_compat_owner" in committed\ *|none|restored) ;; *) return 69 ;; esac
