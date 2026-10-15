@@ -226,7 +226,7 @@ jobs:
         run: python3.13 scripts/test-voice-native-forward-ipfw.py
       - name: Native Voice candidate supervisor after IPFW PRECOMMIT
         run: python3.13 scripts/test-voice-native-forward-supervisor.py
-      - name: Native Voice candidate Config same-inode forward persistence and power-cut replay
+      - name: Read-only historical Voice Config redo verification and foreign-state refusal
         run: python3.13 scripts/test-voice-native-forward-config.py
       - name: Voice durable previous engine/supervisor process evidence
         run: python3.13 scripts/test-voice-process-recovery-evidence.py

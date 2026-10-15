@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_161`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
+Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_162`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,8 +16,8 @@
 
 ## Открытые границы перед testing package
 
-1. **CI/FreeBSD:** `_160` HEAD `5c54aba` подтвердил все три обязательных job Voice candidates, Project и FreeBSD 15 package ([Actions #38804868113](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38804868113)). `_161` должен пройти полную матрицу с новым historical test fixture и отсутствие old forward PREPARED executor в FreeBSD package.
-2. **Этап 6:** `_152–_161` удалили private Apply/operator PREPARED; `_161` снимает последнюю standalone native forward PREPARED source-функцию, но не ломает дочерние legacy Stop/IPFW/supervisor/Config tests: их fixture использует существующий schema-4 journal API. В дальнейшем приоритет — фактические незакрытые требования и минимизация избыточной архитектуры, без добавления новых recovery-слоёв.
+1. **CI/FreeBSD:** `_161` HEAD `ff7cc54` прошёл Voice candidates, Validate Project и FreeBSD 15 package ([Actions #38807350980](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38807350980)). Для `_162` нужна отдельная квалификация read-only forward Config redo и отсутствия private writer на latest HEAD.
+2. **Этап 6:** `_152–_162` закрыли private Apply/operator PREPARED. `_162` удаляет отдельный Config writer из исторического forward module, сохранив read-only проверку redo/inode/candidate prefix для аварийного previous rollback. Дальше только caller-доказанные незакрытые требования/точечное удаление лишних компонентов, без новых recovery-слоёв.
 3. **Миграция:** работающий Phase-B блокирует автоматическое native переключение до отдельной проверенной миграции. Чистая установка, старый marker и OFF имеют разные критерии.
 4. **Owner-live:** после завершения кода/сборки проверить GUI/CONFIG/BOOT и WAN UDP/STUN; MEDIA/CALL остаются самостоятельными испытаниями. TCP parent/TNAS/Docker не входят в plugin.
 
