@@ -98,6 +98,13 @@ class NativePreparedApplyRouteTests(unittest.TestCase):
         self.assertFalse((backend / "voice_native_apply_route.py").exists())
         self.assertFalse((backend / "voice_native_forward_apply.py").exists())
         self.assertFalse((backend / "voice_native_prepare_route.py").exists())
+        for filename in (
+            "voice_native_prepare_one_lock.py",
+            "voice_native_operator_input_stage.py",
+            "voice_native_saved_release_prepare.py",
+        ):
+            with self.subTest(filename=filename):
+                self.assertFalse((backend / filename).exists())
         workers = ROOT / "src/opnsense/scripts/OPNsense/Zapret"
         self.assertFalse((workers / "voice_native_render_saved.sh").exists())
         self.assertFalse((workers / "voice_native_build_release.sh").exists())

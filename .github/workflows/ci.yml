@@ -269,16 +269,10 @@ jobs:
         run: python3.13 scripts/test-voice-native-apply-route.py
       - name: Native Voice write-once stage and five-resource PREPARED handoff
         run: python3.13 scripts/test-voice-native-forward-stage-prepare.py
-      - name: Native Voice saved GUI and real generator to locked PREPARED
-        run: python3.13 scripts/test-voice-native-saved-release-prepare.py
       - name: Native Voice five previous evidence domains to PREPARED
         run: python3.13 scripts/test-voice-native-previous-evidence-prepare.py
       - name: Native Voice audited ordinary IPFW initial owner bootstrap
         run: python3.13 scripts/test-voice-native-initial-ipfw-seed.py
-      - name: Native Voice original one-lock seed to PREPARED coordinator
-        run: python3.13 scripts/test-voice-native-prepare-one-lock.py
-      - name: Native Voice detached root-private operator input producer
-        run: python3.13 scripts/test-voice-native-operator-input-stage.py
       - name: Native Voice saved XML and rendered OPNsense template generation parity
         run: python3.13 scripts/test-voice-native-saved-pair-guard.py
       - name: Native Voice saved GUI OFF draft root-only Config candidate under FD9
