@@ -83,7 +83,7 @@ def main() -> None:
           "common-profile-unverified" in view and
           "STUN-профиль, dvtws2 и IPFW подтверждены; звонок не проверен" in view and
           "STUN profile, dvtws2 and IPFW verified; call untested" in view and
-          "refreshVoiceIPFW(); updateServiceControlUI('zapret')" in view and
+          "refreshVoiceHealthSettled().always(function ()" in view and
           "hash_equals($committedDigest, $savedDigest)" in status_php and
           "'saved_enabled' => $enabled" in status_php and
           "voiceEffectiveWan: 'WAN'" in view and

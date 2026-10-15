@@ -1,6 +1,8 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_138` остаётся Draft/неопубликованным кандидатом. Согласованы generic runtime и native Voice/IPFW статусы для GUI Start/Stop/Apply.
+**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_139` остаётся Draft/неопубликованным кандидатом. GUI-контракт обновлён для ожидания обоих runtime/Voice-IPFW ответов.
+
+**`v0.5.2_139` — адаптирован GUI-контракт к двухсвидетельному согласованию native Voice и generic service status.** После функционального `_138` прежний статический тест сохранял ожидание синхронных последовательных `refreshVoiceIPFW(); updateServiceControlUI('zapret')`, хотя теперь после Start/Stop, Apply и установки runtime применяется реальное `refreshVoiceHealthSettled()` с ожиданием обоих read-only запросов. Контракт проверяет новую последовательность; в нём остаётся новая исполняемая Node-регрессия согласования `started+ready`, `stopped+stopped` и случая, когда первая проверка завершилась ошибкой, а вторая ещё не окончена. Production GUI/backend не изменялись относительно `_138`, новая архитектура не вводилась, релиза нет.
 
 **`v0.5.2_138` — Voice GUI не объявляет общий Start/Stop успешным по одному ответу и не допускает повторную мутацию до согласования двух статусов.** Прежний общий `/api/zapret/service/runtime` может вернуть `started` ещё до того, как read-only `/api/zapret/voice/inspect` подтвердит сохранённый Config, весь единый dvtws2/runtime и IPFW после reboot, Apply или Stop. Новый клиентский gate `voiceRuntimeAligned()` требует пару `started+ready` или `stopped+stopped` с пятью подтверждёнными Voice-профилями; при задержке, сбое, конфликте или неизвестном native-owner верхняя строка не становится зелёной, Start/Stop отключён. После Apply/Start/Stop/установки двустороннее наблюдение дожидается **обоих** ответов, включая отказ одного запроса (`refreshVoiceHealthSettled`), до освобождения управляющих кнопок; старые ответы игнорируются request epoch. Незавершённый Apply сохраняет review gate, список релизов не может сам объявить runtime busy. В прежний GUI CI-контракт включена проверка истинности двух состояний и дождаться обоих асинхронных ответов на Node.js. Форма, RU/EN, пять профилей, backend и FD9 не менялись; релиза нет.
 
@@ -190,13 +192,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_138`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_139`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=138` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_138.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=139` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_139.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
