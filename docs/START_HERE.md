@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_150`. `VERSION=0.5.2`; `PLUGIN_REVISION=150`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
+**Current handoff identity:** `v0.5.2_151`. `VERSION=0.5.2`; `PLUGIN_REVISION=151`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
 
 ## Текущее состояние и доказательства
 
@@ -12,16 +12,14 @@
 
 ## Точный следующий шаг и уровень доказательств
 
-**Предыдущий квалифицированный HEAD f4da990 (_148):** Validate Project, Voice candidates и FreeBSD 15 package SUCCESS (Actions 38776094281). Это не owner-live.
+**Кодовый функционал `_149`:** native Voice inspector → MVC API → RU/EN checkbox observations теперь выводят IPFW rule и доступные counters по всем пяти сервисам. Для ready ON обязателен точно идентифицированный rule, OFF/Stop не выдают живое правило.
 
-**Функциональный _149:** новые verified IPFW rule/packet/byte поля теперь проходят весь путь native inspector → VoiceController::inspectAction → существующая RU/EN GUI-строка пяти профилей. Только подтверждённые running ON имеют live rule; counters передаются только как JS-safe integers, без ложного MEDIA/CALL PASS.
+**CI `_149` и `_150`:** `_149` Voice candidates FAILED из-за старой PHP фикстуры без обязательного rule (Actions 38779258568); `_150` исправил её, но [Voice CI `_150`](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38780223641) выявил вторую старую положительную JS фикстуру `voiceProfilesVerified` без rule. Исправлена в `_151` существующим Node GUI-тестом; добавлены отсутствие/неверный rule и stopped без live rule. Production API/GUI fail-closed не ослаблялись.
 
-**Корректировка _150:** CI _149 (run 38779258568) нашёл старую PHP-фикстуру test-voice-inspect-config-runtime.php, показывавшую якобы готовый активный профиль без теперь обязательного правила. Фикстура обновлена реальным rule/counters; Stop не показывает активное правило, повреждённые rule отвергаются, oversized/отсутствующие counters не выдумываются. Производственный код не ослаблен, тест остался существующим.
-
-**Следующее действие:** независимый latest-HEAD CI и FreeBSD 15 package build для _150, затем только подтверждённые остаточные требования ТЗ. Релиза, установки на OPNsense, owner-live STUN/MEDIA/CALL пока нет.
+**Предыдущий полностью квалифицированный HEAD `_148`:** f4da990 — Validate Project, Voice candidates и FreeBSD 15 package build SUCCESS (Actions 38776094281). `_151` требует независимого full CI + FreeBSD 15. Релиза, OPNsense owner-live и MEDIA/CALL PASS не было. Следующая работа — только доказанные оставшиеся требования ТЗ.
 
 ## Минимальное чтение
 
 После AGENTS и Level-1 rule books: [контроль завершения](VOICE_CODE_COMPLETION_GATE.md), [семиэтапный план и критерии](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md), [утверждённое ТЗ, включая раздел 12](architecture/VOICE_TRANSMISSION_GUI.md). Текущие факты — [PROJECT_STATE](PROJECT_STATE.md), вся ревизионная хронология — [working ledger](history/current/v0.5.x.md). Старые «next steps» из истории не имеют силы актуальной очереди.
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_150` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_151` не опубликована.

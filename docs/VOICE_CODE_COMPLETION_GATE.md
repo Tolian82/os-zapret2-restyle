@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_150` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
+Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_151` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,8 +16,8 @@
 
 ## Оставшаяся работа перед testing package
 
-1. **CI:** `_149` Voice candidates FAILED: старый PHP inspector fixture не содержал rule для активного Telegram (Actions `38779258568`). `_150` обновил fixture с требованиями production API и требует независимого latest-HEAD CI.
-2. **FreeBSD:** `_148` FreeBSD 15 package build SUCCESS (Actions `38776094281`). Новый `_150` должен пройти собственную реальную сборку.
+1. **CI:** `_149` Voice candidates FAILED из-за старой PHP fixture (run 38779258568). `_150` исправил PHP, но Voice candidates FAILED на второй старой Node fixture без rule (run 38780223641). `_151` исправил оба подтверждённых тестовых контракта, требует независимого полного CI.
+2. **FreeBSD:** последний проверенный `_148` FreeBSD 15 package build SUCCESS (run 38776094281). Для `_151` требуется своя реальная сборка.
 3. **Legacy PoC:** `_146` привязал публичные Telegram enable/disable/status к native Config/FD9/Apply/inspect. Работающий Phase-B блокирует автоматическое переключение до квалифицированной миграции; исторические rollback/migration файлы пока сохранены. Живая миграция ещё не проверена.
 4. **Финальная приёмка кода:** `_144–_145` — GUI Apply/draft, `_146–_147` — Telegram native configctl, `_148–_149` — реальные per-service IPFW rule/counters от инспектора до GUI. `_150` исправляет устаревший PHP fixture без ослабления API. Далее — только подтверждённые остаточные требования.
 
