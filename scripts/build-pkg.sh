@@ -89,19 +89,6 @@ PREPARE_ROUTE="${STAGE}/usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice
 [ -f "${PREPARE_ROUTE}" ] || fail "expected retired operator route missing before staging prune"
 rm "${PREPARE_ROUTE}"
 
-# Sealed witness lives in the already-shipped forward-stage observer. The
-# historical Apply CLI and its separate five-resource executor are not an
-# appliance entrypoint and must not remain in a single-backend package.
-APPLY_ROUTE="${STAGE}/usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_apply_route.py"
-[ -f "${APPLY_ROUTE}" ] || fail "expected retired private Apply route missing before staging prune"
-rm "${APPLY_ROUTE}"
-
-# The old five-domain private Apply executor has no production callers after
-# the operator route was retired. Its historical tests remain source-only.
-FORWARD_EXECUTOR="${STAGE}/usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_forward_apply.py"
-[ -f "${FORWARD_EXECUTOR}" ] || fail "expected retired private executor missing before staging prune"
-rm "${FORWARD_EXECUTOR}"
-
 if [ -d src/etc ]; then
     cp -R src/etc "${STAGE}/usr/local/etc"
 fi

@@ -2,22 +2,22 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_156`. `VERSION=0.5.2`; `PLUGIN_REVISION=156`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: завершить код пяти Voice-сервисов по неизменному ТЗ, затем **одна testing-поставка** и owner-live приёмка. Без релиза и установки на OPNsense.
+**Current handoff identity:** `v0.5.2_157`. `VERSION=0.5.2`; `PLUGIN_REVISION=157`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: завершить функциональный код неизменного ТЗ пяти Voice-сервисов, затем **одна testing-поставка** и owner-live испытания. До тех пор без релиза и установки на OPNsense.
 
-## Подтверждено
+## Последняя квалификация
 
-Не разрабатывать заново: общий Voice+Strategies generator и один `dvtws2`, пять Voice-профилей с managed IPv4 IPSET, scoped STUN/UDP/WAN/IPFW, общий FD9/Config Apply, normal Start/Stop/boot, фактические read-only GUI state/rules/counters. Автоматические проверки не подтверждают реальный STUN/MEDIA/CALL.
+**`_156` HEAD `5ce7c49` — полный [CI #38795297308](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38795297308) SUCCESS:** Validate Voice candidates, Validate Project и FreeBSD 15 package (с отсутствием трёх old private файлов); PR title и Testing package delivery contract SUCCESS. Это source/package qualification, а не подтверждение живых STUN/MEDIA/CALL.
 
-**Последний проверенный HEAD:** `_155` `2e06dbb`, [CI #38792544501](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38792544501): Validate Voice candidates, Validate Project, FreeBSD 15 package — **SUCCESS**. PR title и Testing package delivery contract — SUCCESS. FreeBSD package подтвердил отсутствие двух старых операторских маршрутов.
+Уже реализовано: один общий Voice+Strategies full runtime/`dvtws2`, пять профилей с managed IPv4 IPSET, scoped STUN/UDP/WAN/IPFW, единый native FD9/Config Apply, обычные Start/Stop/boot, read-only status/rules/counters. Без доказанного дефекта эти функции не переписывать.
 
-## Точная граница этапа 6
+## Текущее изменение и следующий шаг
 
-**`_156`:** завершена проверка всех 118 backend файлов и штатных top-level сервисных entrypoints: `voice_native_forward_apply.py` используется лишь старым `voice_native_apply_route.py` (уже исключённым из пакета) и исходниковыми regression tests. Отдельный mutating five-resource исполнитель теперь удаляется из package staging; существующий FreeBSD CI проверяет отсутствие всех трёх retired файлов в фактическом `.pkg`. Исходные исторические тесты сохраняются вне пакета; штатный shared Apply не затронут. Удаление старого source/test framework требует отдельного caller-аудита с сохранением нужных миграционных свидетелей.
+**`_157`, этап 6 — actual source deletion:** после исключения из package и подтверждения полного CI удалены устаревшие `voice_native_apply_route.py` и `voice_native_forward_apply.py` из source tree, плюс только два привязанных к ним старых mutating test suites. Отдельные проверки old executor повторного rollback из boot-теста удалены, но реальная read-only boot/recovery диагностика, sealed PREPARED witness и тесты целостности сохранены. `scripts/build-pkg.sh` больше не ищет удалённые исходники; FreeBSD tar check по-прежнему запрещает их появление. Старый PREPARED operator source остаётся только для source-level tests и исключён из package.
 
-**Следующее действие:** проверить полный CI/FreeBSD на точном `_156` и отсутствие old `forward_apply` в pkg tar; при ошибках исправить подтверждённый contract. Затем продолжить stage-6 keep/fold/delete для старых модулей и тестов без повторной разработки recovery. Testing release — только после завершения полного кода.
+**Точное следующее действие:** проверить полный Voice/Project/FreeBSD CI на HEAD `_157`, затем продолжить карту использующихся и неиспользуемых legacy modules; удалять только по точным inbound callers, сохранить необходимую migration/read-only диагностику. После завершения функционального ТЗ — одна testing-поставка, не сейчас.
 
 ## Минимальное чтение
 
-После AGENTS и Level-1: [completion gate](VOICE_CODE_COMPLETION_GATE.md), [план этапов](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md), [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), [ledger](history/current/v0.5.x.md).
+После `AGENTS.md` и rule books: [completion gate](VOICE_CODE_COMPLETION_GATE.md), [план этапов](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md), [неизменное ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), [ledger](history/current/v0.5.x.md).
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_156` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_157` не опубликована.

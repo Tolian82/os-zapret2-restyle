@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage-3 production PREPARED route: real sealed inputs, no live mutations."""
+"""Read-only sealed PREPARED witness and removal of retired private CLI."""
 from __future__ import annotations
 
 import importlib.util
@@ -10,11 +10,9 @@ import shutil
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"))
-from voice_native_apply_route import main
 from voice_native_forward_stage_prepare import (
     sealed_prepared_handoff, NativeVoiceStagePrepareError,
 )
@@ -95,12 +93,10 @@ class NativePreparedApplyRouteTests(unittest.TestCase):
         with self.assertRaises((RuntimeError, OSError, ValueError)):
             sealed_prepared_handoff(self.fx.whole, self.stage)
 
-    def test_native_entrypoint_is_nonpublic_and_refuses_unattested_result(self):
-        # Even the direct module CLI must not activate the old private owner.
-        with patch("voice_native_apply_route.execute_operator_prepared") as executor:
-            self.assertEqual(main(["execute-prepared"]), 69)
-            self.assertEqual(main([]), 64)
-            executor.assert_not_called()
+    def test_obsolete_private_apply_sources_are_absent(self):
+        backend = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
+        self.assertFalse((backend / "voice_native_apply_route.py").exists())
+        self.assertFalse((backend / "voice_native_forward_apply.py").exists())
 
     def test_retired_private_forward_apply_has_no_service_or_configd_route(self):
         sh = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
@@ -116,8 +112,8 @@ class NativePreparedApplyRouteTests(unittest.TestCase):
         self.assertNotIn("[voice_apply]", cfg)
         pkg = (ROOT / "scripts/build-pkg.sh").read_text()
         stage = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend/voice_native_forward_stage_prepare.py").read_text()
-        self.assertIn('rm "${APPLY_ROUTE}"', pkg)
-        self.assertIn('rm "${FORWARD_EXECUTOR}"', pkg)
+        self.assertNotIn('APPLY_ROUTE=', pkg)
+        self.assertNotIn('FORWARD_EXECUTOR=', pkg)
         self.assertIn('rm "${PREPARE_ROUTE}"', pkg)
         self.assertIn("def sealed_prepared_handoff(", stage)
         self.assertNotIn("from voice_native_apply_route import", stage)

@@ -230,10 +230,6 @@ jobs:
         run: python3.13 scripts/test-voice-native-forward-supervisor.py
       - name: Native Voice candidate Config same-inode forward persistence and power-cut replay
         run: python3.13 scripts/test-voice-native-forward-config.py
-      - name: Native Voice one-lock forward Apply coordinator and five-domain COMMIT
-        run: python3.13 scripts/test-voice-native-forward-apply.py
-      - name: Native Voice failed-forward five-domain same-FD rollback
-        run: python3.13 scripts/test-voice-native-forward-failure.py
       - name: Voice durable previous engine/supervisor process evidence
         run: python3.13 scripts/test-voice-process-recovery-evidence.py
       - name: Native read-only FreeBSD Voice PID/process inventory
@@ -739,8 +735,6 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-native-ipfw-ownership.py
             /usr/local/bin/python3.13 scripts/test-voice-native-forward-supervisor.py
             /usr/local/bin/python3.13 scripts/test-voice-native-forward-config.py
-            /usr/local/bin/python3.13 scripts/test-voice-native-forward-apply.py
-            /usr/local/bin/python3.13 scripts/test-voice-native-forward-failure.py
             /usr/local/bin/python3.13 -m py_compile \
               src/opnsense/scripts/OPNsense/Zapret/backend/voice_security_policy_evidence.py \
               src/opnsense/scripts/OPNsense/Zapret/backend/voice_cutover_journal.py \
