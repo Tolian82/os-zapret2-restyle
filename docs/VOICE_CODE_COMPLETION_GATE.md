@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_149` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
+Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_150` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,10 +16,10 @@
 
 ## Оставшаяся работа перед testing package
 
-1. **CI:** предыдущий HEAD `f4da990` (`_148`) прошёл Validate Project и Voice candidates (Actions `38776094281`). Текущая `_149` требует собственного latest-HEAD CI.
-2. **FreeBSD:** `_148` FreeBSD 15 package build SUCCESS (Actions `38776094281`). `_149` требует собственной настоящей сборки.
+1. **CI:** `_149` Voice candidates FAILED: старый PHP inspector fixture не содержал rule для активного Telegram (Actions `38779258568`). `_150` обновил fixture с требованиями production API и требует независимого latest-HEAD CI.
+2. **FreeBSD:** `_148` FreeBSD 15 package build SUCCESS (Actions `38776094281`). Новый `_150` должен пройти собственную реальную сборку.
 3. **Legacy PoC:** `_146` привязал публичные Telegram enable/disable/status к native Config/FD9/Apply/inspect. Работающий Phase-B блокирует автоматическое переключение до квалифицированной миграции; исторические rollback/migration файлы пока сохранены. Живая миграция ещё не проверена.
-4. **Финальная приёмка кода:** `_144–_145` исправили UX Apply/draft, `_146–_147` — native Telegram configctl, `_148` — rule/counters в read-only inspector, `_149` — выдачу через MVC API и RU/EN GUI всех пяти сервисов. Далее только подтверждённые обязательные разрывы.
+4. **Финальная приёмка кода:** `_144–_145` — GUI Apply/draft, `_146–_147` — Telegram native configctl, `_148–_149` — реальные per-service IPFW rule/counters от инспектора до GUI. `_150` исправляет устаревший PHP fixture без ослабления API. Далее — только подтверждённые остаточные требования.
 
 После фактического закрытия — «код готов к испытаниям», **не** `MEDIA_PASS/CALL_PASS`.
 
