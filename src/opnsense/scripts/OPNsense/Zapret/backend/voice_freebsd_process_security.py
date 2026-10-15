@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import pwd
 from pathlib import Path
 import platform
 import re
@@ -38,6 +39,21 @@ PS_COLUMNS = ("-o", "pid=", "-o", "uid=", "-o", "ruid=",
 
 class ProcessSecurityError(ValueError):
     pass
+
+
+def expected_native_process_credentials() -> dict[str, dict[str, int]]:
+    """Fixed root supervisors and installed nobody engine, never PID-derived."""
+    nobody = pwd.getpwnam("nobody")
+    uid, gid = nobody.pw_uid, nobody.pw_gid
+    if not 1 <= uid < 1 << 32 or not 1 <= gid < 1 << 32:
+        raise ProcessSecurityError("invalid installed nobody identity")
+    return {
+        role: {
+            field: (uid if field.endswith("uid") else gid) if role == "engine" else 0
+            for field in FIELDS
+        }
+        for role in ROLES
+    }
 
 
 def _safe_path(value):

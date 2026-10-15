@@ -207,7 +207,7 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         self.assertNotIn("atomic_install_tree", worker)
         self.assertNotIn("config_reload_template", worker)
         service = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
-        self.assertIn('native-voice-prepare-saved)', service)
+        self.assertNotIn('native-voice-prepare-saved)', service)
 
     def test_unknown_fixed_release_member_is_refused_before_config_open(self):
         (self.build/"foreign").write_text("foreign")
@@ -393,27 +393,28 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         self.assertEqual("native-voice-original-lock-prepared",out["state"])
         prepared.assert_called_once()
 
-    def test_shell_route_is_fd9_operator_only_not_configd(self):
+    def test_operator_prepared_route_is_source_only_not_packaged_or_exposed(self):
         service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
         configd=(ROOT/"src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text()
-        self.assertIn("native_voice_prepare_prebuilt_service()",service)
-        self.assertIn("native-voice-prepare-prebuilt)",service)
-        self.assertIn("native-voice-prepare-release)",service)
-        self.assertIn("native-voice-prepare-saved)",service)
-        self.assertIn("native-voice-prepare-draft)",service)
-        self.assertNotIn("native-voice-prepare-apply-draft)",service)
-        self.assertNotIn("prepare-from-draft-and-apply",service)
-        self.assertIn("native_voice_prepare_prebuilt_service prepare-from-saved",service)
-        self.assertIn("native_voice_prepare_prebuilt_service prepare-from-release",service)
-        locked=service.split("case \"${1:-}\" in",1)[-1]
-        self.assertIn("native-voice-prepare-prebuilt|native-voice-prepare-release",locked)
-        self.assertNotIn("native-voice-apply-prepared",locked)
-        self.assertNotIn("[voice_prepare_prebuilt]",configd)
-        self.assertNotIn("native-voice-prepare-prebuilt",configd)
-        self.assertNotIn("native-voice-prepare-release",configd)
-        self.assertNotIn("native-voice-prepare-saved",configd)
-        self.assertNotIn("native-voice-prepare-draft",configd)
-        self.assertNotIn("native-voice-prepare-apply-draft",configd)
+        pkg=(ROOT/"scripts/build-pkg.sh").read_text()
+        legacy=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend/voice_native_legacy_predecessor_route.py").read_text()
+        security=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend/voice_freebsd_process_security.py").read_text()
+        self.assertNotIn("native_voice_prepare_prebuilt_service()",service)
+        self.assertNotIn("voice_native_prepare_route.py",service)
+        for route_name in (
+            "native-voice-prepare-prebuilt", "native-voice-prepare-release",
+            "native-voice-prepare-saved", "native-voice-prepare-xml",
+            "native-voice-prepare-draft",
+        ):
+            self.assertNotIn(route_name, service)
+            self.assertNotIn(route_name, configd)
+        self.assertIn('PREPARE_ROUTE="${STAGE}/usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_prepare_route.py"',pkg)
+        self.assertIn('rm "${PREPARE_ROUTE}"',pkg)
+        self.assertNotIn("from voice_native_prepare_route import",legacy)
+        self.assertIn("expected_native_process_credentials as _expected_credentials",legacy)
+        self.assertIn("def expected_native_process_credentials()",security)
+        self.assertIn("native-voice-preview-draft)",service)
+        self.assertIn("native_voice_preview_draft_service()",service)
 
 
 if __name__=="__main__":

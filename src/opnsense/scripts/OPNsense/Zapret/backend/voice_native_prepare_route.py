@@ -17,7 +17,6 @@ from __future__ import annotations
 import fcntl
 import os
 from pathlib import Path
-import pwd
 import re
 import stat
 import subprocess
@@ -30,7 +29,7 @@ from voice_firewall_ledger import VoiceOwnershipStore
 from voice_ipfw_adapter import FreeBSDIPFWAdapter
 from voice_native_kernel_argv import FreeBSDKernelArgvReader, SYSTEM_PATHS
 from voice_native_process_probe import FreeBSDVoiceProcessProbe
-from voice_freebsd_process_security import FreeBSDProcessSecurityReader, FIELDS
+from voice_freebsd_process_security import FreeBSDProcessSecurityReader, expected_native_process_credentials as _expected_credentials
 from voice_native_recovery_quiescence import EXPECTED_SCRIPTS, PIDFILES, _locked_config
 from voice_native_prepare_one_lock import prepare_native_voice_one_lock
 from voice_native_operator_input_stage import stage_native_operator_input
@@ -79,19 +78,6 @@ def _fixed_input() -> dict[str, Path]:
         ):
             raise NativePrepareRouteError("detached Voice source must be private and regular")
     return {name: INPUT / name for name in FILES + DIRS}
-
-
-def _expected_credentials() -> dict[str, dict[str, int]]:
-    """No process-derived credential adoption: fixed root and installed nobody."""
-    nobody = pwd.getpwnam("nobody")
-    uid, gid = nobody.pw_uid, nobody.pw_gid
-    if not 1 <= uid < 1 << 32 or not 1 <= gid < 1 << 32:
-        raise NativePrepareRouteError("invalid installed nobody identity")
-    return {
-        role: {field: (uid if field.endswith("uid") else gid) if role == "engine" else 0
-               for field in FIELDS}
-        for role in ("engine", "daemon", "monitor")
-    }
 
 
 def prepare_operator_prebuilt(

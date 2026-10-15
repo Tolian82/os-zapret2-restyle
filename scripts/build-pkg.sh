@@ -80,6 +80,15 @@ rm -rf "${REPO_ROOT}/work"
 mkdir -p "${STAGE}/usr/local"
 
 cp -R src/opnsense "${STAGE}/usr/local/opnsense"
+
+# The retired operator PREPARED CLI must not be installed. Its only active
+# consumer (_expected_credentials in legacy capture) uses the shared native
+# process security helper instead; keep the repository source for historical
+# regression tests, not as a second appliance command.
+PREPARE_ROUTE="${STAGE}/usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_prepare_route.py"
+[ -f "${PREPARE_ROUTE}" ] || fail "expected retired operator route missing before staging prune"
+rm "${PREPARE_ROUTE}"
+
 if [ -d src/etc ]; then
     cp -R src/etc "${STAGE}/usr/local/etc"
 fi

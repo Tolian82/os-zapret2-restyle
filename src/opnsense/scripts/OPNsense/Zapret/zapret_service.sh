@@ -693,44 +693,6 @@ native_voice_candidate_preflight_service()
     "${_native_voice_router_python}" "${_native_voice_router_script}" candidate-preflight
 }
 
-# Owner-only presealed schema-4 forward Apply; NO GUI/configd/boot call.
-# Operator-only; accepts an already-qualified DETACHED input tree, not a
-# GUI POST or an independent candidate generator. Inherited FD9 is unchanged.
-native_voice_prepare_prebuilt_service()
-{
-    _voice_action="${1:-prepare-prebuilt}"
-    case "${_voice_action}" in
-        prepare-prebuilt|prepare-from-release|prepare-from-saved|prepare-from-xml|prepare-from-draft) ;;
-        *) return 64 ;;
-    esac
-    _voice_python="/usr/local/bin/python3.13"
-    _voice_route="${BACKEND_DIR}/voice_native_prepare_route.py"
-    [ -x "${_voice_python}" ] && [ -r "${_voice_route}" ] || {
-        echo "ERROR: native Voice prepare router unavailable" >&2
-        return 69
-    }
-    config_load "${CONFIG}" || return 69
-    _voice_resolved_wan=$(config_resolve_interface "${WAN_IF}") || return 69
-    [ -n "${_voice_resolved_wan}" ] && [ -n "${DIVERT_PORT}" ] || return 69
-    if [ "${_voice_action}" = prepare-from-draft ]; then
-        # No Config bytes, browser XML, strategy or arbitrary file path may
-        # cross the operator command line; only a fixed mask + SHA-256.
-        _voice_mask="${2:-}"
-        _voice_sha="${3:-}"
-        case "${_voice_mask}" in
-            [01][01][01][01][01]) ;;
-            *) return 64 ;;
-        esac
-        [ "${_voice_mask}" != 00000 ] || return 64
-        printf '%s\n' "${_voice_sha}" | grep -Eq '^[0-9a-f]{64}$' || return 64
-        "${_voice_python}" "${_voice_route}" "${_voice_action}" \
-            "${_voice_resolved_wan}" "${DIVERT_PORT}" "${_voice_mask}" "${_voice_sha}"
-    else
-        "${_voice_python}" "${_voice_route}" "${_voice_action}" \
-            "${_voice_resolved_wan}" "${DIVERT_PORT}"
-    fi
-}
-
 # Read-only GUI native Voice saved-draft candidate preview. This is NOT
 # prepare-from-draft, does NOT seal PREPARED, and changes no persisted state.
 native_voice_preview_draft_service()
@@ -2240,21 +2202,6 @@ service_dispatch()
         native-voice-candidate-preflight)
             native_voice_candidate_preflight_service
             ;;
-        native-voice-prepare-prebuilt)
-            native_voice_prepare_prebuilt_service
-            ;;
-        native-voice-prepare-release)
-            native_voice_prepare_prebuilt_service prepare-from-release
-            ;;
-        native-voice-prepare-saved)
-            native_voice_prepare_prebuilt_service prepare-from-saved
-            ;;
-        native-voice-prepare-xml)
-            native_voice_prepare_prebuilt_service prepare-from-xml
-            ;;
-        native-voice-prepare-draft)
-            native_voice_prepare_prebuilt_service prepare-from-draft "${2:-}" "${3:-}"
-            ;;
         native-voice-preview-draft)
             native_voice_preview_draft_service "${2:-}" "${3:-}"
             ;;
@@ -2530,7 +2477,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-status|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm|shared-apply-legacy-cancel|shared-apply-legacy-begin|shared-apply-legacy-reconcile|shared-apply-legacy-cold|shared-apply-legacy-resume)
+    start|stop|restart|reconfigure|telegram-voice-status|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm|shared-apply-legacy-cancel|shared-apply-legacy-begin|shared-apply-legacy-reconcile|shared-apply-legacy-cold|shared-apply-legacy-resume)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

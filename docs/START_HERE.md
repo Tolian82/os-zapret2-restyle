@@ -2,22 +2,22 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_153`. `VERSION=0.5.2`; `PLUGIN_REVISION=153`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить полный код по ТЗ, затем одну testing-поставку и живые испытания. **Без релиза и установки на OPNsense**.
+**Current handoff identity:** `v0.5.2_154`. `VERSION=0.5.2`; `PLUGIN_REVISION=154`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). По решению владельца 15.10.2026: сначала полностью реализовать код ТЗ пяти Voice-сервисов, затем **одна testing-поставка** и owner-live испытания. Без релиза и установки на OPNsense.
 
-## Проверенная реализация
+## Подтверждённая база
 
-Уже реализованы, не разрабатывать заново: пять Voice-сервисов с общими IPv4 IPSET; Voice+Strategies в одном `traffic.conf`/`dvtws.args` через `orchestrator_build_release`; проверка STUN/UDP/WAN/IPSET/divert/IPFW; общий FD9/Config Apply обеих страниц, Start/Stop/boot и read-only GUI inspector с реальным номером IPFW-правила/счётчиками. Source/CI не подтверждают owner-live GUI/CONFIG/BOOT, STUN/MEDIA/CALL.
+Уже реализованы, не переделывать без новой ошибки: единый Voice+Strategies runtime/`dvtws2`, пять Voice профилей, managed IPv4 IPSET, scoped STUN/UDP/WAN/IPFW, общий FD9/Config Apply и Start/Stop/boot, read-only native GUI rule/counters/attestation. CI не доказывает реальные MEDIA/CALL/STUN.
 
-**Предыдущий HEAD `_152`** — `70547df`, [CI #38784711559](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38784711559): Validate Project и FreeBSD 15 package **успешны**, Validate Voice candidates **ошибка** старого теста `test-voice-native-prepare-route.py`, ожидавшего уже удалённую shell-команду. Testing-package delivery contract и проверка названия PR были успешны.
+**Последний полный успешный HEAD:** `_153` `db20ef0`, [CI #38786982877](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38786982877): Validate Voice candidates, Validate Project и FreeBSD 15 package — **SUCCESS**.
 
-## Точная следующая граница
+## Текущий рубеж и следующий шаг
 
-**Изменение `_153` (этап 6):** старый Python `voice_native_prepare_route.py` больше не поддерживает `prepare-from-draft-and-apply` или `apply_continuously`, и не вызывает private COMMIT. `voice_native_apply_route.py` теперь отвергает `execute-prepared` при прямом CLI-запуске; внутренний код старой миграции/аварийных свидетелей пока сохранён. Актуализированы старые тесты: PREPARED без запуска и fail-closed отказ старого CLI. Штатный общий Voice/Strategies Apply и его frontend не менялись.
+**`_154`, этап 6:** по статическому аудиту 118 backend-файлов найдены две настоящие ссылки на старые operator modules: `voice_native_legacy_predecessor_route.py` импортировал credentials из `voice_native_prepare_route.py`, а `voice_native_forward_stage_prepare.py` импортирует sealed witness из `voice_native_apply_route.py`. Первая зависимость перенесена в существующий `voice_freebsd_process_security.py`, пять старых shell PREPARED operator CLI удалены и `voice_native_prepare_route.py` исключается из package stage. Исходник для изолированных регрессий сохранён в Git. Вторую зависимость пока нельзя удалять без отдельной проверки; общий native Apply/GUI и legacy transition не меняются.
 
-**Следующее действие:** получить **полный CI и FreeBSD 15** на новом HEAD `_153`; по конкретным ошибкам исправлять только соответствующий contract. Затем продолжить этап 6 с проверяемым списком реальных callers/imports/installable files: удалить неиспользуемые private модули без обрезания нужной Phase-B миграции. Не переходить к testing release, пока кодовые границы ТЗ не закрыты.
+**Точное следующее действие:** подтвердить три CI/FreeBSD job на HEAD `_154` и убедиться в отсутствии `voice_native_prepare_route.py` в package staging/plist; затем продолжить keep/fold/delete аудит оставшегося private code на основании фактических callers. Не расширять старый recovery и не выпускать testing до кодовой готовности.
 
 ## Минимальное чтение
 
-После AGENTS и Level-1 rule books: [контроль завершения](VOICE_CODE_COMPLETION_GATE.md), [план этапов 6–7](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md), [ТЗ и утверждённый раздел 12](architecture/VOICE_TRANSMISSION_GUI.md). Durable facts — [PROJECT_STATE](PROJECT_STATE.md), хронология — [working ledger](history/current/v0.5.x.md).
+После AGENTS и четырёх rule books/ROADMAP/INDEX: [completion gate](VOICE_CODE_COMPLETION_GATE.md), [план 6–7](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md), [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), [ledger](history/current/v0.5.x.md).
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_153` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_154` пока не опубликована.

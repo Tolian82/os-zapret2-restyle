@@ -278,26 +278,22 @@ class LivePreflightTests(unittest.TestCase):
     def test_production_entrypoint_uses_same_existing_lifecycle_lock(self):
         script=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
         self.assertIn("native_voice_live_preflight_service()",script)
-        self.assertIn("native_voice_prepare_prebuilt_service()",script)
+        self.assertNotIn("native_voice_prepare_prebuilt_service()",script)
         self.assertNotIn("native_voice_apply_prepared_service()",script)
         self.assertIn('native-voice-live-preflight)',script)
-        self.assertIn('native-voice-prepare-prebuilt)',script)
-        self.assertIn('native-voice-prepare-release)',script)
-        self.assertIn('native-voice-prepare-saved)',script)
-        self.assertIn('native-voice-prepare-xml)',script)
-        self.assertIn('native-voice-prepare-draft)',script)
-        self.assertNotIn('native-voice-prepare-apply-draft)',script)
-        self.assertNotIn('native-voice-apply-prepared)',script)
+        for retired in (
+            "native-voice-prepare-prebuilt", "native-voice-prepare-release",
+            "native-voice-prepare-saved", "native-voice-prepare-xml",
+            "native-voice-prepare-draft", "native-voice-apply-prepared",
+            "native-voice-prepare-apply-draft",
+        ):
+            self.assertNotIn(retired, script)
         self.assertIn('native-voice-preview-draft)',script)
         self.assertIn('native_voice_preview_draft_service()',script)
         self.assertIn(
-            "native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-preview-draft|native-voice-ipfw-seed",
+            "native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|native-voice-ipfw-seed",
             script,
         )
-        self.assertIn("native_voice_prepare_prebuilt_service prepare-from-release",script)
-        self.assertIn("native_voice_prepare_prebuilt_service prepare-from-saved",script)
-        self.assertIn("native_voice_prepare_prebuilt_service prepare-from-xml",script)
-        self.assertIn("native_voice_prepare_prebuilt_service prepare-from-draft",script)
         self.assertIn('service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}"',script)
 
 
