@@ -200,22 +200,10 @@ def compile_candidate(data: dict, managed_root: Path) -> tuple[str, dict]:
     unknown = set(data) - {"strategy_wan", "voice_wan", "services"}
     if unknown:
         fail("voice", f"unexpected keys: {', '.join(sorted(unknown))}")
-    strategy_wan = data.get("strategy_wan")
-    voice_wan = data.get("voice_wan") or strategy_wan
-    if not isinstance(strategy_wan, str) or not strategy_wan.strip():
-        fail("voice.strategy_wan", "Strategies WAN must be set")
-    if not isinstance(voice_wan, str) or not voice_wan.strip():
-        fail("voice.voice_wan", "Voice WAN must be set")
-    if voice_wan != strategy_wan:
-        fail("voice.voice_wan", "independent WAN is not yet isolated by the shared divert engine; select the Strategies WAN")
-    if not managed_root.is_absolute():
-        fail("voice.managed_root", "managed output root must be absolute")
     provided = data.get("services")
     if not isinstance(provided, dict) or set(provided) != set(SERVICES):
         fail("voice.services", "exactly the five named service records are required")
-
-    profiles = []
-    plan = []
+    has_active = False
     for name in SERVICES:
         entry = provided[name]
         if not isinstance(entry, dict) or set(entry) != {"enabled", "args", "ips"}:
@@ -224,6 +212,28 @@ def compile_candidate(data: dict, managed_root: Path) -> tuple[str, dict]:
             fail(f"voice.{name}.enabled", "expected a checkbox boolean")
         if not isinstance(entry["args"], str) or not isinstance(entry["ips"], str):
             fail(f"voice.{name}", "args and ips must be text")
+        has_active = has_active or entry["enabled"]
+
+    strategy_wan = data.get("strategy_wan")
+    voice_wan = data.get("voice_wan") or strategy_wan
+    if not isinstance(strategy_wan, str) or not strategy_wan.strip():
+        fail("voice.strategy_wan", "Strategies WAN must be set for the common runtime")
+    if not isinstance(voice_wan, str) or not voice_wan.strip():
+        fail("voice.voice_wan", "Voice WAN must be a valid string")
+    if has_active and voice_wan != strategy_wan:
+        fail("voice.voice_wan", "independent WAN is not yet isolated by the shared divert engine; select the Strategies WAN")
+    # Disabled-only Voice settings must not change the effective common WAN.
+    # The XML preserves the saved Voice override for a future ON edit, but
+    # no native Voice IPFW rule/profile is generated in the all-OFF release.
+    if not has_active:
+        voice_wan = strategy_wan
+    if not managed_root.is_absolute():
+        fail("voice.managed_root", "managed output root must be absolute")
+
+    profiles = []
+    plan = []
+    for name in SERVICES:
+        entry = provided[name]
         # OFF retains editable content, including incomplete text, without
         # creating capture/profile or accidentally validating a draft.
         if not entry["enabled"]:

@@ -51,6 +51,20 @@ class VoiceCandidateTests(unittest.TestCase):
         self.assertEqual([], plan["profiles"])
         self.assertEqual("wan0", plan["wan"])
 
+    def test_all_off_ignores_inactive_voice_wan_override(self):
+        source = payload()
+        source["voice_wan"] = "WAN2"
+        source["services"]["telegram"]["args"] = "draft, not yet native STUN"
+        source["services"]["telegram"]["ips"] = "unfinished IPSET"
+        traffic, plan = self.compile(source)
+        self.assertEqual("", traffic)
+        self.assertEqual([], plan["profiles"])
+        self.assertEqual("wan0", plan["wan"],
+                         "common runtime must inherit Strategies WAN with all Voice OFF")
+        # Once enabled, the stored override must be validated, not ignored.
+        with self.assertRaisesRegex(voice.VoiceConfigurationError, "independent WAN"):
+            self.compile(enable(source))
+
     def test_old_stun_template_compiles_without_parallel_engine(self):
         result, plan = self.compile(enable(payload()))
         self.assertIn("--name=voice-telegram\n", result)

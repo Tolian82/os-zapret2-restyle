@@ -119,6 +119,30 @@ class ActualRuntimeWire(unittest.TestCase):
             self.assertEqual(ordinary.read_text(), (out / "traffic.conf").read_text())
             self.assertEqual([], json.loads((out / "capture-plan.json").read_text())["voice"])
 
+    def test_all_off_inactive_wan_override_keeps_common_runtime(self):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            xml, managed, ordinary = prepare(tmp, on=False)
+            tree = ET.parse(xml)
+            tree.getroot().find("./OPNsense/Zapret/voice/waninterface").text = "WAN2"
+            tree.write(xml, encoding="utf-8")
+            out = tmp / "voice-native-candidate"
+            proc = build(xml, managed, ordinary, out)
+            self.assertEqual(0, proc.returncode, proc.stderr)
+            self.assertEqual(ordinary.read_text(), (out / "traffic.conf").read_text())
+            self.assertEqual("", (out / "voice.conf").read_text())
+            capture = json.loads((out / "capture-plan.json").read_text())
+            self.assertEqual("WAN", capture["logical_wan"])
+            self.assertEqual("vtnet1", capture["wan"])
+            self.assertEqual([], capture["voice"])
+            # Reusing the exact same candidate with Voice ON must fail.
+            tree.getroot().find("./OPNsense/Zapret/voice/telegram/enabled").text = "1"
+            tree.write(xml, encoding="utf-8")
+            rejected = tmp / "refused-on-with-mismatched-wan"
+            failed = build(xml, managed, ordinary, rejected)
+            self.assertNotEqual(0, failed.returncode)
+            self.assertFalse(rejected.exists())
+
     def test_invalid_wan_or_managed_targets_cannot_publish(self):
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
