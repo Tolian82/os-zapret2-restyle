@@ -16,8 +16,8 @@
 
 ## Оставшаяся работа перед testing package
 
-1. **Последний CI:** на `f6825bf` Voice candidates SUCCESS; общий Validate Project FAILURE на stale `v0.5.2_140` в `docs/ROADMAP.md`. Исправляется этой документационной сверкой. Требуется latest-HEAD CI без failure.
-2. **FreeBSD:** job на том же HEAD был SKIPPED; необходим действительный успешный FreeBSD 15 package build (SKIPPED не считать PASS).
+1. **CI:** подтвердить latest-HEAD Validate Project и Voice candidates SUCCESS. Предыдущие `f6825bf`/`24baba8` упали на устаревшем требовании Markdown-представления версии в ROADMAP; тестовый контракт исправляется, но это ещё не новый CI PASS.
+2. **FreeBSD:** получить действительный успешный FreeBSD 15 package build на проверяемом кандидате; прежний `SKIPPED` не означает PASS.
 3. **Legacy PoC:** проверить, какие отдельные скрипты/команды действительно устанавливаются и вызываются. Сохранить необходимую совместимость/rollback; удалить лишь доказанное дублирование, не создавать новый recovery.
 4. **Финальная приёмка кода:** соотнести GUI/API → native Config → generator → IPFW → Apply → Stop/Start/boot, RU/EN/help и содержимое пакета. Исправлять только выявленные разрывы существующими компонентами.
 
@@ -27,4 +27,4 @@
 
 Одна согласованная GitHub testing поставка, затем OPNsense GUI/CONFIG/BOOT и фактический UDP/STUN, двусторонний MEDIA/CALL тест. Старый `v0.5.0_3` и `misconfigured / unknown-repository` не являются проверкой новой ветки. Без merge/stable до согласованных результатов.
 
-Точная очередь — [START_HERE](START_HERE.md), факты — [PROJECT_STATE](PROJECT_STATE.md), хронология — [ledger](history/current/v0.5.x.md).
+Для каждого требования отдельно фиксируются **source implemented**, **CI/package verified**, **owner-live confirmed**. Новую разработку начинать только после проверки production entrypoint и конкретного отсутствующего/сломавшегося поведения. Точная очередь — [START_HERE](START_HERE.md), факты — [PROJECT_STATE](PROJECT_STATE.md), хронология — [ledger](history/current/v0.5.x.md).

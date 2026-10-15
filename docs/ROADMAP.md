@@ -1,6 +1,6 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — v0.5.2_140
+## Текущий приоритет — v0.5.2: завершение Voice
 
 Полное [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) и внешний вид пяти Voice-сервисов не меняются. [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328); никакого релиза до кодовой готовности.
 
@@ -14,7 +14,7 @@
 | 6. Удаление дублирования | Проверить актуальные legacy entrypoints и содержимое пакета |
 | 7. Приёмка | Full CI/FreeBSD ещё не подтверждены; owner-live GUI/STUN/MEDIA/CALL впереди |
 
-**Следующая работа:** устранить несоответствие `ROADMAP.md` текущей ревизии (оно вызвало CI failure), подтвердить latest-HEAD CI и фактическую FreeBSD 15 сборку, затем целенаправленно ревизовать legacy-код/пакет без нового recovery. Подробный [checkpoint](VOICE_CODE_COMPLETION_GATE.md) и [актуальный handoff](START_HERE.md) — единственные источники следующего действия. Уже реализованный STUN→common dvtws2→IPFW→Apply повторно не создавать.
+**Остаточный рубеж:** подтвердить latest-HEAD CI и реальную FreeBSD 15 сборку, проверить оставшиеся используемые legacy PoC entrypoints и состав пакета, затем одну testing поставку и owner-live приёмку. Уже реализованную STUN→common dvtws2→IPFW→Apply цепочку не строить повторно. **Точное следующее действие принадлежит [START_HERE](START_HERE.md)**, подтверждённые факты — [PROJECT_STATE](PROJECT_STATE.md), критерии — [контролю](VOICE_CODE_COMPLETION_GATE.md). ROADMAP не хранит `_N` и последние логи CI.
 
 ## Основной завершённый путь
 

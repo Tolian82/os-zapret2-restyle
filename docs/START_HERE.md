@@ -10,13 +10,13 @@
 
 Существующие `test-voice-common-runtime.py` и `test-shared-apply-{run,execute,stop,boot}.sh` проверяют указанный общий путь изолированно. Кодовая реализация и CI не означают успешную owner-live установку, GUI/CONFIG/BOOT, STUN/MEDIA_PASS или CALL_PASS.
 
-## Текущий CI и следующий шаг
+## Точный следующий шаг и уровень доказательств
 
-Для HEAD `f6825bf`: [Validate Voice candidates SUCCESS, общий CI FAILURE](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38729054462). Причина в шаге `Test Strategy Lab corrective matrix`: `missing contract text in docs/ROADMAP.md: v0.5.2_140`. `Pull request title` и `Testing package delivery contract` SUCCESS. **FreeBSD 15 package SKIPPED**, не PASS. Документационное расхождение устраняется этой правкой.
+**Точный следующий шаг:** подтвердить latest-HEAD общий CI и реальную FreeBSD 15 сборку после исправления ложного assert формата версии в `test-strategy-lab-live-matrix-contract.sh`; затем проверить **только** используемые legacy Telegram PoC entrypoints и состав пакета. Дублирующий код удалять лишь при доказанной безопасной миграции, без разрастания recovery. STUN → common dvtws2 → scoped IPFW → Apply уже реализовано: не начинать разработку заново.
 
-**Далее:** подтвердить latest-HEAD CI, получить настоящий FreeBSD 15 package PASS (не SKIPPED), затем проверить только реальный открытый остаток: используемые legacy Telegram PoC entrypoints и состав пакета на предмет дублирующей инфраструктуры/неснятых совместимых команд. Ничего из старого PoC не удалять без гарантии безопасного перехода. Если обнаружен конкретный кодовый дефект — исправить через общий backend, не добавляя нового recovery. **Не переписывать заново уже работающий кодовой путь STUN → dvtws2 → IPFW → Apply.**
+**Последний завершённый прогон перед этой правкой:** HEAD `24baba8`, [Voice candidates SUCCESS, общий Validate Project FAILURE](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38730470528) из-за буквального требования \`v0.5.2_140\` внутри ROADMAP; FreeBSD 15 package SKIPPED. Это результат **старого HEAD**, а не автоматически нового. [Текущие Actions](https://github.com/Tolian82/os-zapret2-restyle/actions) проверяются при продолжении.
 
-После успешной финальной проверки заявить «кодовая часть готова к испытаниям», но не MEDIA/CALL PASS; затем по решению владельца одна testing поставка и реальная приёмка.
+Перед любым новым кодовым этапом подтверждать, что предполагаемая функция отсутствует в действительном production call path, а не только в старой документации. Процедура — [AGENTS](../AGENTS.md#implementation-to-documentation-checkpoint). Отличать source implemented / CI verified / owner-live confirmed; отдельные STUN/MEDIA/CALL PASS не предъявлены.
 
 ## Минимальное чтение
 

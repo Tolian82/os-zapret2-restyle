@@ -47,6 +47,16 @@ Level-1 reading is repository-state scoped (`DOC-049`). During one continuous pi
 
 Level 2 contains current-line/current-task detail. Level 3 contains historical rationale and proof. Load those only when `START_HERE.md`, `INDEX.md`, or the current problem requires them.
 
+## Implementation-to-documentation checkpoint
+
+This is an execution reminder for **existing** canonical rules, not another rule book.
+
+Before announcing or starting implementation, compare the claimed missing behavior with its real production entrypoint/call path, current tests and applicable CI. Record the proof level separately: **implemented in source**, **verified in CI/package**, or **confirmed owner-live**. An already implemented feature may be reopened only for a demonstrated defect, changed requirement or new evidence (`DEV-004`–`DEV-005`, `DEV-011`–`DEV-013`).
+
+After every logical change, reconcile affected facts under `DOC-036`–`DOC-037` and `DOC-047`: replace superseded assertions in `PROJECT_STATE.md`, preserve exactly one next action in `START_HERE.md`, update `ROADMAP.md` only when milestone priorities change, and put per-revision chronology only in the current-line ledger. Do not update documents that have no changed facts, and never append revision diaries to handoff, state, roadmap or TЗ. For every newly completed milestone cite the real entrypoint and verification evidence; a failed/skipped CI job, mock and live experiment have distinct proof status.
+
+Validate `VERSION`/`PLUGIN_REVISION` against handoff/state/release metadata, not ROADMAP formatting or a moving `_N` suffix in its heading.
+
 ## Continue the project
 
 After the mandatory set, follow `START_HERE.md`. It contains the exact current boundary, recently established result, next task, required specialist reading, and acceptance criteria. The owner's newest unambiguous instruction remains binding under `DEV-001` and `CHAT-026`.

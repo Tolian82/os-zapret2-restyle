@@ -8,7 +8,7 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_140`** (fe
 - `VERSION=0.5.2`, `PLUGIN_REVISION=140` — пакет только в feature branch.
 - package candidate: `os-zapret2-restyle-0.5.2_140.pkg` — **не опубликован**.
 - Stable `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing `v0.5.0_3`.
-- Target platform FreeBSD 15 amd64 / Python 3.13. На HEAD `f6825bf` Voice CI SUCCESS, общая матрица FAILURE из-за несогласованной документации, FreeBSD build SKIPPED. Эти статусы не выдаются за package PASS.
+- Target platform FreeBSD 15 amd64 / Python 3.13. Последние CI/FreeBSD результаты по точному HEAD находятся в [START_HERE](START_HERE.md), не копируются сюда. `SKIPPED`, offline-only и owner-live непроверенные результаты не считаются PASS.
 
 ## Фактическая реализация Voice
 
