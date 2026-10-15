@@ -1589,6 +1589,26 @@ shared_apply_boot_service()
     _shared_boot_dir=$(shared_apply_workspace "$_shared_boot_id") || return 69
     [ -d "$_shared_boot_dir/release" ] &&
     [ ! -L "$_shared_boot_dir/release" ] || return 69
+    # Start/reconfigure are idempotent when the sealed common engine is
+    # already running. An unconditional activate() otherwise stops dvtws2,
+    # swaps its release and rewrites IPFW on every ordinary 'start'.
+    # This is an inspection only: an unknown process/kernel or mixed
+    # supervisor state is never treated as a healthy previous owner.
+    _shared_boot_engine=0
+    _shared_boot_monitor=0
+    launcher_is_running "$CHILD_PIDFILE" && _shared_boot_engine=1
+    supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" && _shared_boot_monitor=1
+    [ "$_shared_boot_engine" = "$_shared_boot_monitor" ] || return 69
+    if [ "$_shared_boot_engine" = 1 ]; then
+        [ "$_shared_boot_mode" = 1 ] || return 69
+        [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
+        atomic_verify_tree "$_shared_boot_dir/release" "$ACTIVE_DIR" || return 69
+        # Reuse the authoritative non-mutating Apply probe for engine
+        # census, mapped native argv and exact installed IPFW ownership.
+        apply_runtime_probe "$_shared_boot_dir/release" 1 || return 69
+        printf "native-common-boot=%s\n" "$_shared_boot_id"
+        return 0
+    fi
     # A kernel rebuilt after reboot has no durable IPFW tables; the existing
     # common runtime adapter validates the kernel owner before any mutation.
     # A partial failure is NOT a successful boot and never falls back to

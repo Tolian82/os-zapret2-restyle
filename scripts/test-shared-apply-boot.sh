@@ -8,16 +8,27 @@ sed -n '/^shared_apply_boot_service()$/,/^}$/p' "$SOURCE" > "$ROOT/boot.sh"
 sh -n "$ROOT/boot.sh" || fail "boot shell syntax"
 . "$ROOT/boot.sh"
 ID=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-mkdir -p "$ROOT/work/release"
+mkdir -p "$ROOT/work/release" "$ROOT/active"
+ACTIVE_DIR="$ROOT/active"
+CHILD_PIDFILE="$ROOT/child.pid"
+SUPERVISOR_MONITOR_PIDFILE="$ROOT/supervisor.pid"
 LOG="$ROOT/steps.log"
 preflight_voice_cutover_journals() { echo guard:$1 >> "$LOG"; [ "$GUARD" -eq 0 ]; }
 shared_apply_bundle_service() { echo seal:$1 >> "$LOG"; [ "$SEAL" -eq 0 ]; }
-shared_apply_native_config() { echo config:$1 >> "$LOG"; [ "$CONFIG" -eq 0 ] || return 69; echo '{"result":"committed","enabled":"1"}'; }
-shared_apply_json_field() { case "$1" in *".enabled"*) echo 1 ;; *".result"*) echo committed ;; *) return 1 ;; esac; }
+shared_apply_native_config() { echo config:$1 >> "$LOG"; [ "$CONFIG" -eq 0 ] || return 69; echo '{"result":"committed","enabled":"'"$BOOT_ENABLED"'"}'; }
+shared_apply_json_field() { case "$1" in *".enabled"*) echo "$BOOT_ENABLED" ;; *".result"*) echo committed ;; *) return 1 ;; esac; }
 shared_apply_workspace() { echo "$ROOT/work"; }
 apply_runtime_activate() { echo activate >> "$LOG"; [ "$ACTIVE" -eq 0 ]; }
 apply_runtime_commit() { echo commit >> "$LOG"; [ "$COMMIT" -eq 0 ]; }
-reset() { GUARD=0; SEAL=0; CONFIG=0; ACTIVE=0; COMMIT=0; : > "$LOG"; }
+launcher_is_running() { [ "$ENGINE" -eq 1 ]; }
+supervisor_is_running() { [ "$MONITOR" -eq 1 ]; }
+atomic_verify_tree() { echo tree-verify >> "$LOG"; [ "$TREE_OK" -eq 1 ]; }
+apply_runtime_probe() { echo probe:$2 >> "$LOG"; [ "$PROBE_OK" -eq 1 ]; }
+reset() {
+  GUARD=0; SEAL=0; CONFIG=0; ACTIVE=0; COMMIT=0
+  ENGINE=0; MONITOR=0; TREE_OK=1; PROBE_OK=1; BOOT_ENABLED=1
+  : > "$LOG"
+}
 expect() {
   expected="$1"; shift
   set +e
@@ -31,6 +42,19 @@ expect() {
 reset
 expect 0 'guard:common-apply seal:verify config:saved activate commit '
 grep -Fqx "native-common-boot=$ID" "$ROOT/output" || fail "boot receipt"
+# Repeated Start/reconfigure on already verified shared Voice ON must not
+# stop, launch or replace the engine; a mismatched release/kernel refuses.
+reset; ENGINE=1; MONITOR=1
+expect 0 'guard:common-apply seal:verify config:saved tree-verify probe:1 '
+grep -Fqx "native-common-boot=$ID" "$ROOT/output" || fail "idempotent boot receipt"
+reset; ENGINE=1; MONITOR=1; TREE_OK=0
+expect 69 'guard:common-apply seal:verify config:saved tree-verify '
+reset; ENGINE=1; MONITOR=1; PROBE_OK=0
+expect 69 'guard:common-apply seal:verify config:saved tree-verify probe:1 '
+reset; ENGINE=1; MONITOR=0
+expect 69 'guard:common-apply seal:verify config:saved '
+reset; ENGINE=1; MONITOR=1; BOOT_ENABLED=0
+expect 69 'guard:common-apply seal:verify config:saved '
 reset; SEAL=1
 expect 69 'guard:common-apply seal:verify '
 reset; CONFIG=1
