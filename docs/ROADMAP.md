@@ -11,8 +11,8 @@
 | 3. Единый Apply обеих страниц | Реализован: FD9, Config save, rollback, commit |
 | 4. Lifecycle и legacy миграция | Normal Stop/Start/boot в коде; mutating legacy PoC запрещён при native Apply ownership; live-миграция старого PoC не принята |
 | 5. Фактические статусы | Реализованы и уточнены в `_138–_140` |
-| 6. Удаление дублирования | Проверить актуальные legacy entrypoints и содержимое пакета |
-| 7. Приёмка | Full CI/FreeBSD ещё не подтверждены; owner-live GUI/STUN/MEDIA/CALL впереди |
+| 6. Удаление дублирования | Убрана инертная private Voice-сборка из ordinary legacy Start/Reconfigure. Остальные CLI/configd/package entrypoints сверяются отдельно |
+| 7. Приёмка | CI и FreeBSD PASS на `_141`, итоговый `_142` проверяется отдельно; owner-live GUI/STUN/MEDIA/CALL впереди |
 
 **Остаточный рубеж:** подтвердить latest-HEAD CI и реальную FreeBSD 15 сборку, проверить оставшиеся используемые legacy PoC entrypoints и состав пакета, затем одну testing поставку и owner-live приёмку. Уже реализованную STUN→common dvtws2→IPFW→Apply цепочку не строить повторно. **Точное следующее действие принадлежит [START_HERE](START_HERE.md)**, подтверждённые факты — [PROJECT_STATE](PROJECT_STATE.md), критерии — [контролю](VOICE_CODE_COMPLETION_GATE.md). ROADMAP не хранит `_N` и последние логи CI.
 
