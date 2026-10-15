@@ -642,6 +642,8 @@ sh -n "$ROOT/status.sh" || fail "status syntax"
 grep -Fq 'voice_live_inspect.py' "$SOURCE" || fail "native status inspector absent"
 grep -Fq 'json.load(sys.stdin)' "$SOURCE" || fail "status JSON unvalidated"
 STATUS_LOG="$ROOT/status-legacy.log"
+RULE_BASE=19000
+RULE_MAX=19010
 ACTIVE_DIR="$ROOT/status-active"
 mkdir -p "$ACTIVE_DIR"
 shared_apply_has_record_service() { [ "$STATUS_RECORD" = 1 ]; }
