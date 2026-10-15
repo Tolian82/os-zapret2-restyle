@@ -308,10 +308,14 @@ $(document).ready(function () {
     // A timeout or an explicit requires_review can mean the root worker is
     // still mutating or retained crash evidence. Do not offer blind retries.
     var voiceApplyNeedsReview = false;
+    var voiceMutationPending = false;
     $('#voiceApply').on('click', function () {
         var button = $(this);
         if (button.prop('disabled')) return;
         button.prop('disabled', true);
+        voiceMutationPending = true;
+        voiceInspectionState = null;
+        reconcileVoiceServiceStatus();
         $('#voiceValidationStatus').text(text.loading);
         $.ajax({
             type: 'POST',
@@ -333,24 +337,33 @@ $(document).ready(function () {
                 typeof reply.snapshot === 'string' && /^[a-f0-9]{64}$/.test(reply.snapshot)) {
                 voiceSnapshot.val(reply.snapshot);
                 $('#voiceValidationStatus').text(text.applied);
-                refreshRuntime();
-                refreshVoiceIPFW();
             } else if (reply && reply.requires_review === true) {
                 voiceApplyNeedsReview = true;
                 $('#voiceValidationStatus').text(text.applyReview);
-                refreshRuntime();
-                refreshVoiceIPFW();
             } else {
                 $('#voiceValidationStatus').text(text.applyFailed);
             }
         }).fail(function () {
             voiceApplyNeedsReview = true;
             $('#voiceValidationStatus').text(text.applyReview);
-            refreshRuntime();
-            refreshVoiceIPFW();
         }).always(function () {
-            button.prop('disabled', voiceApplyNeedsReview ||
-                !/^[a-f0-9]{64}$/.test(voiceSnapshot.val() || ''));
+            // The root worker may have saved Config or committed IPFW even
+            // when the browser reports an error. Do not unlock mutation
+            // controls until BOTH independent live observations have settled.
+            refreshVoiceHealthSettled().always(function () {
+                voiceMutationPending = false;
+                // An applied-id is durable, but the GUI may claim success
+                // only after fresh generic + native status agree as well.
+                if (!voiceApplyNeedsReview &&
+                    $('#voiceValidationStatus').text() === text.applied &&
+                    !voiceRuntimeAligned()) {
+                    voiceApplyNeedsReview = true;
+                    $('#voiceValidationStatus').text(text.applyReview);
+                }
+                reconcileVoiceServiceStatus();
+                button.prop('disabled', voiceApplyNeedsReview ||
+                    !/^[a-f0-9]{64}$/.test(voiceSnapshot.val() || ''));
+            });
         });
     });
     $('#voiceImplementationNotice').text(text.notice);
@@ -373,38 +386,67 @@ $(document).ready(function () {
         localizeForm();
         refreshVoiceIPFW();
     });
-    var runtimeState = 'error', runtimeInstalled = false, runtimeBusy = false;
+    var runtimeState = 'error', runtimeInstalled = false, runtimeBusy = true;
+    var voiceInspectionState = null, voiceControlPending = false;
+    var voiceRuntimeEpoch = 0, voiceInspectionEpoch = 0;
+    function voiceRuntimeAligned() {
+        // setup_status is a general service indicator, not proof of native
+        // Voice engine/IPFW. Both witnesses must describe one same state.
+        return runtimeInstalled && (
+            (runtimeState === 'started' && voiceInspectionState === 'ready') ||
+            (runtimeState === 'stopped' && voiceInspectionState === 'stopped')
+        );
+    }
     function setServiceControlsBusy(busy) {
-        runtimeBusy = busy;
-        var controllable = runtimeInstalled && (runtimeState === 'started' || runtimeState === 'stopped');
-        $('#voiceServiceControl').prop('disabled', busy || !controllable);
+        runtimeBusy = !!busy;
+        var controllable = voiceRuntimeAligned() &&
+            !voiceMutationPending && !voiceControlPending && !voiceApplyNeedsReview;
+        $('#voiceServiceControl').prop('disabled', runtimeBusy || !controllable);
         var releasesAvailable = $('#voiceReleaseSelect option').filter(function () {
-            return /^v[0-9]+(?:\.[0-9]+)+$/.test(this.value);
+            return /^v[0-9]+(?:\\.[0-9]+)+$/.test(this.value);
         }).length > 0;
-        $('#voiceReleaseSelect,#voiceReleaseApply').prop('disabled', busy || !releasesAvailable);
+        $('#voiceReleaseSelect,#voiceReleaseApply').prop('disabled',
+            runtimeBusy || voiceMutationPending || voiceControlPending ||
+            voiceApplyNeedsReview || !releasesAvailable);
+    }
+    function reconcileVoiceServiceStatus() {
+        var aligned = voiceRuntimeAligned() && !voiceMutationPending &&
+            !voiceControlPending && !voiceApplyNeedsReview;
+        var started = aligned && runtimeState === 'started';
+        var stopped = aligned && runtimeState === 'stopped';
+        // A generic started flag MUST NOT look green if the committed
+        // Voice owner is interrupted, its Config differs, or IPFW is unknown.
+        $('#voiceServiceState')
+            .removeClass('label-success label-default label-danger')
+            .addClass(started ? 'label-success' : stopped ? 'label-default' : 'label-danger')
+            .text(started ? text.running : stopped ? text.stopped :
+                  runtimeState === 'error' ? text.error : text.incomplete);
+        $('#voiceServiceControl')
+            .toggle(runtimeInstalled && ['started', 'stopped'].includes(runtimeState))
+            .text(runtimeState === 'started' ? text.stop : text.start);
+        setServiceControlsBusy(runtimeBusy);
     }
     function refreshRuntime() {
+        var epoch = ++voiceRuntimeEpoch;
+        // Invalidate the old "started" display while the new request runs.
+        runtimeState = 'error';
+        runtimeBusy = true;
+        reconcileVoiceServiceStatus();
         return $.ajax({type:'POST', url:'/api/zapret/service/runtime', dataType:'json', timeout:30000})
             .done(function (reply) {
+                if (epoch !== voiceRuntimeEpoch) return;
                 runtimeInstalled = !!(reply && reply.installed);
                 runtimeState = runtimeInstalled ? reply.service : 'error';
-                var started = runtimeState === 'started', stopped = runtimeState === 'stopped';
-                $('#voiceServiceState')
-                    .removeClass('label-success label-default label-danger')
-                    .addClass(started ? 'label-success' : stopped ? 'label-default' : 'label-danger')
-                    .text(started ? text.running : stopped ? text.stopped : text.error);
                 $('#voiceRuntimeVersion').text((reply && reply.version) || '—');
-                $('#voiceServiceControl')
-                    .toggle(started || stopped)
-                    .text(started ? text.stop : text.start);
-                setServiceControlsBusy(!!(reply && reply.busy));
+                runtimeBusy = !!(reply && reply.busy);
+                reconcileVoiceServiceStatus();
             }).fail(function () {
+                if (epoch !== voiceRuntimeEpoch) return;
                 runtimeInstalled = false;
                 runtimeState = 'error';
-                $('#voiceServiceState').removeClass('label-success label-default').addClass('label-danger').text(text.incomplete);
+                runtimeBusy = true;
                 $('#voiceRuntimeVersion').text('—');
-                $('#voiceServiceControl').hide();
-                setServiceControlsBusy(true);
+                reconcileVoiceServiceStatus();
             });
     }
     // Append read-only observations to existing checkbox help text, without
@@ -452,8 +494,12 @@ $(document).ready(function () {
         });
     }
     function refreshVoiceIPFW() {
+        var epoch = ++voiceInspectionEpoch;
+        voiceInspectionState = null;
+        reconcileVoiceServiceStatus();
         return $.ajax({type:'POST',url:'/api/zapret/voice/inspect',dataType:'json',timeout:30000})
             .done(function (reply) {
+                if (epoch !== voiceInspectionEpoch) return;
                 var state = reply && reply.state;
                 var label = state === 'ready' ? text.ipfwReady :
                             state === 'stopped' ? text.ipfwStopped :
@@ -475,6 +521,12 @@ $(document).ready(function () {
                         ? details[reply.condition] : ''
                 );
                 showVoiceProfileObservations(reply);
+                // A ready/stopped code without the five verified profiles
+                // (legacy or partial owner) never authorizes Start/Stop.
+                voiceInspectionState = reply && reply.profiles &&
+                    Object.keys(reply.profiles).length === 5 &&
+                    ['ready', 'stopped'].includes(state) ? state : null;
+                reconcileVoiceServiceStatus();
                 $('#voiceIPFWState')
                     .removeClass('label-success label-default label-danger')
                     .addClass(state === 'ready' ? 'label-success' :
@@ -482,7 +534,10 @@ $(document).ready(function () {
                                   ? 'label-default' : 'label-danger')
                     .text(label);
             }).fail(function () {
+                if (epoch !== voiceInspectionEpoch) return;
+                voiceInspectionState = null;
                 showVoiceProfileObservations(null);
+                reconcileVoiceServiceStatus();
                 $('#voiceIPFWState').removeClass('label-success label-default')
                     .addClass('label-danger').text(text.ipfwUnknown);
                 $('#voiceIPFWDetail').text('');
@@ -533,22 +588,55 @@ $(document).ready(function () {
                 setServiceControlsBusy(runtimeBusy);
             }).fail(function () {
                 select.empty().append($('<option/>').val('').text(text.incomplete));
-                setServiceControlsBusy(true);
+                // A release-list outage must not fabricate service busy or
+                // override independently attested Voice Start/Stop status.
+                setServiceControlsBusy(runtimeBusy);
             });
     }
+    function refreshVoiceHealthSettled() {
+        // jQuery.when rejects early if one query fails. Normalize failure
+        // into a completed observation so neither mutation control unlocks
+        // until BOTH independent requests have actually settled.
+        var settle = function (request) {
+            return request.then(function () { return true; },
+                                function () { return false; });
+        };
+        return $.when(settle(refreshRuntime()), settle(refreshVoiceIPFW()));
+    }
     $('#voiceServiceControl').on('click', function () {
-        if (runtimeBusy || !runtimeInstalled || !['started','stopped'].includes(runtimeState)) return;
+        if (runtimeBusy || voiceControlPending || voiceMutationPending ||
+            voiceApplyNeedsReview || !voiceRuntimeAligned()) return;
         var action = runtimeState === 'started' ? 'stop' : 'start';
-        setServiceControlsBusy(true);
+        voiceControlPending = true;
+        voiceInspectionState = null;
+        reconcileVoiceServiceStatus();
         $.ajax({type:'POST',url:'/api/zapret/service/' + action,dataType:'json',timeout:600000})
-            .always(function () { refreshRuntime(); refreshVoiceIPFW(); updateServiceControlUI('zapret'); });
+            .always(function () {
+                // A successful API response is not proof that post-COMMIT
+                // native runtime, IPFW and processes match the saved model.
+                refreshVoiceHealthSettled().always(function () {
+                    voiceControlPending = false;
+                    updateServiceControlUI('zapret');
+                    reconcileVoiceServiceStatus();
+                });
+            });
     });
     $('#voiceReleaseApply').on('click', function () {
         var version = $('#voiceReleaseSelect').val();
-        if (runtimeBusy || !/^v[0-9]+(?:\.[0-9]+)+$/.test(version || '')) return;
-        setServiceControlsBusy(true);
+        if (runtimeBusy || voiceControlPending || voiceMutationPending ||
+            voiceApplyNeedsReview || !/^v[0-9]+(?:\.[0-9]+)+$/.test(version || '')) return;
+        voiceControlPending = true;
+        voiceInspectionState = null;
+        reconcileVoiceServiceStatus();
         $.ajax({type:'POST',url:'/api/zapret/service/install',data:{version:version},dataType:'json',timeout:30000})
-            .always(function () { refreshReleases(); refreshRuntime(); updateServiceControlUI('zapret'); });
+            .always(function () {
+                refreshReleases();
+                refreshVoiceHealthSettled().always(function () {
+                    voiceControlPending = false;
+                    updateServiceControlUI('zapret');
+                    reconcileVoiceServiceStatus();
+                });
+            });
     });
     $('#voiceServiceHeader').on('click', function () {
         $('#voiceServiceBody').toggle();

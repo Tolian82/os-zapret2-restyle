@@ -169,8 +169,68 @@ def main() -> None:
         )
         check(parsed.returncode == 0,
               "Voice browser JavaScript syntax error: " + parsed.stderr)
+        # Exercise the actual two-witness GUI gate and asynchronous settled
+        # health join instead of only looking for marker strings. This must
+        # not hit a browser, OPNsense or external service.
+        aligned = re.search(
+            r"    function voiceRuntimeAligned\(\) \{.*?^    \}",
+            match.group(1), re.DOTALL | re.MULTILINE,
+        )
+        settled = re.search(
+            r"    function refreshVoiceHealthSettled\(\) \{.*?^    \}",
+            match.group(1), re.DOTALL | re.MULTILINE,
+        )
+        check(aligned is not None and settled is not None,
+              "Voice needs shared native/runtime status and settled health join")
+        js_test = (
+            "let runtimeInstalled = true, runtimeState = 'started', "
+            "voiceInspectionState = 'ready';\n"
+            + aligned.group(0) + "\n"
+            + "function check(ok, message) { if (!ok) throw Error(message); }\n"
+            + "check(voiceRuntimeAligned(), 'ready running not recognized');\n"
+            + "voiceInspectionState = 'stopped';\n"
+            + "check(!voiceRuntimeAligned(), 'started with stopped IPFW falsely green');\n"
+            + "runtimeState = 'stopped';\n"
+            + "check(voiceRuntimeAligned(), 'stopped common owner not recognized');\n"
+            + "voiceInspectionState = null;\n"
+            + "check(!voiceRuntimeAligned(), 'unverified IPFW falsely green');\n"
+            + "voiceInspectionState = 'ready';\n"
+            + "check(!voiceRuntimeAligned(), 'stopped with running IPFW falsely green');\n"
+            + "runtimeInstalled = false;\n"
+            + "check(!voiceRuntimeAligned(), 'uninstalled plugin falsely green');\n"
+            + "let failFirst, finishSecond, completed = false;\n"
+            + "function refreshRuntime() { return new Promise((resolve, reject) => "
+              "{ failFirst = reject; }); }\n"
+            + "function refreshVoiceIPFW() { return new Promise((resolve) => "
+              "{ finishSecond = resolve; }); }\n"
+            + "const $ = { when: (...promises) => Promise.all(promises) };\n"
+            + settled.group(0) + "\n"
+            + "(async function () {\n"
+            + "  const joined = refreshVoiceHealthSettled().then("
+              "() => { completed = true; });\n"
+            + "  failFirst(Error('runtime status unavailable'));\n"
+            + "  await new Promise(resolve => setImmediate(resolve));\n"
+            + "  check(!completed, 'health unlocked before inspect settled');\n"
+            + "  finishSecond(); await joined;\n"
+            + "  check(completed, 'health did not settle after both responses');\n"
+            + "})().catch(e => { console.error(e); process.exitCode = 1; });\n"
+        )
+        executed = subprocess.run(
+            ["node", "-"], input=js_test, text=True,
+            capture_output=True, check=False,
+        )
+        check(executed.returncode == 0,
+              "Voice async health reconciliation failed: " + executed.stderr)
     else:
         print("SKIP: Node.js is unavailable; browser JavaScript syntax was not checked")
+    check("voiceRuntimeAligned()" in view and
+          "voiceControlPending = true" in view and
+          "voiceInspectionState = null" in view and
+          "voiceMutationPending = true" in view and
+          "refreshVoiceHealthSettled().always(function ()" in view and
+          "voiceApplyNeedsReview || !releasesAvailable" in view and
+          "reconcileVoiceServiceStatus()" in view,
+          "Voice Start/Stop, Apply and installer must share the two-witness gate")
     # The optional OFF-only draft save remains separate from the real
     # ON/OFF native Apply, with the existing GUI layout unchanged.
     check('id="voiceSaveDraft"' in view and

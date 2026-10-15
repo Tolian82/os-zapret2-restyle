@@ -1,6 +1,8 @@
 # os-zapret2-restyle — START HERE
 
-**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_137` остаётся Draft/неопубликованным кандидатом. Восполнен monitor PID mock общего Stop/census, проверен отказ от выжившего monitor.
+**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_138` остаётся Draft/неопубликованным кандидатом. Согласованы generic runtime и native Voice/IPFW статусы для GUI Start/Stop/Apply.
+
+**`v0.5.2_138` — Voice GUI не объявляет общий Start/Stop успешным по одному ответу и не допускает повторную мутацию до согласования двух статусов.** Прежний общий `/api/zapret/service/runtime` может вернуть `started` ещё до того, как read-only `/api/zapret/voice/inspect` подтвердит сохранённый Config, весь единый dvtws2/runtime и IPFW после reboot, Apply или Stop. Новый клиентский gate `voiceRuntimeAligned()` требует пару `started+ready` или `stopped+stopped` с пятью подтверждёнными Voice-профилями; при задержке, сбое, конфликте или неизвестном native-owner верхняя строка не становится зелёной, Start/Stop отключён. После Apply/Start/Stop/установки двустороннее наблюдение дожидается **обоих** ответов, включая отказ одного запроса (`refreshVoiceHealthSettled`), до освобождения управляющих кнопок; старые ответы игнорируются request epoch. Незавершённый Apply сохраняет review gate, список релизов не может сам объявить runtime busy. В прежний GUI CI-контракт включена проверка истинности двух состояний и дождаться обоих асинхронных ответов на Node.js. Форма, RU/EN, пять профилей, backend и FD9 не менялись; релиза нет.
 
 **`v0.5.2_137` — общий stop/census CI теперь моделирует прежний supervisor PID при проверке реального Stop.** После добавления в `_136` проверки пережившего сигнал monitor существующий `test-voice-common-engine-census.sh` не предоставлял `supervisor_pidfile_read` и ошибочно отвергал валидный Stop. Его isolated mock дополнен проверяемой старой monitor PID и отрицательным кейсом: отсутствие monitor PID-файла при оставшемся живом процессе не должно приводить к удалению IPFW. Production-Stop из `_136` не менялся, дополнительной архитектуры и релиза нет.
 
@@ -144,7 +146,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_137`. `VERSION=0.5.2`; `PLUGIN_REVISION=137`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_138`. `VERSION=0.5.2`; `PLUGIN_REVISION=138`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
 
