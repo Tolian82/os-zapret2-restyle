@@ -56,7 +56,17 @@ final class VoiceApplyCandidate
         // This matches the authoritative Python compiler preflight.
         $strategyWan = (string)($previous['general']['waninterface'] ?? '');
         $selectedWan = (string)($next['voice']['waninterface'] ?? '');
-        if ($strategyWan === '') {
+        // All-OFF settings are inert drafts: allow them to be saved and
+        // syntax-checked before Strategies WAN is configured. A selected
+        // override is enforced as soon as any Voice service becomes ON.
+        $hasActive = false;
+        foreach (self::SERVICES as $service) {
+            if ($next['voice'][$service]['enabled'] === '1') {
+                $hasActive = true;
+                break;
+            }
+        }
+        if ($hasActive && $strategyWan === '') {
             return [
                 'result' => 'failed',
                 'validations' => [
@@ -64,7 +74,7 @@ final class VoiceApplyCandidate
                 ],
             ];
         }
-        if ($selectedWan !== '' && $selectedWan !== $strategyWan) {
+        if ($hasActive && $selectedWan !== '' && $selectedWan !== $strategyWan) {
             return [
                 'result' => 'failed',
                 'validations' => [

@@ -98,6 +98,33 @@ verify($missing['result'] === 'failed' &&
        isset($missing['validations']['zapret.voice.waninterface']),
        'missing Strategies WAN must fail before Apply');
 
+// Inactive-only drafts are editable before the general WAN is selected.
+// The same saved mismatched Voice WAN is still rejected when activated.
+$offline = $before;
+$offline['general']['waninterface'] = '';
+$offline['voice']['waninterface'] = 'WAN2';
+$offlineForm = formFrom($offline);
+$offlineForm['voice']['discord']['args'] = "unfinished STUN parameters";
+$offlineForm['hostlist']['discordips'] = "203.0.113.0/24";
+$offlinePlan = VoiceApplyCandidate::prepare(
+    $offline, $offlineForm, VoiceSettingsSnapshot::digest($offline)
+);
+verify($offlinePlan['result'] === 'prepared' &&
+       $offlinePlan['enabled_services'] === [] &&
+       $offlinePlan['candidate']['general']['waninterface'] === '' &&
+       $offlinePlan['candidate']['voice']['waninterface'] === 'WAN2' &&
+       $offlinePlan['candidate']['voice']['discord']['args'] === "unfinished STUN parameters" &&
+       $offlinePlan['candidate']['hostlist']['discordips'] === "203.0.113.0/24",
+       'inactive Voice drafts must remain editable without a configured Strategies WAN');
+$offlineForm['voice']['telegram']['enabled'] = '1';
+$offlineForm['voice']['telegram']['args'] = $telegram;
+$offlineRejected = VoiceApplyCandidate::prepare(
+    $offline, $offlineForm, VoiceSettingsSnapshot::digest($offline)
+);
+verify($offlineRejected['result'] === 'failed' &&
+       isset($offlineRejected['validations']['zapret.voice.waninterface']),
+       'enabling Voice must still reject an unconfigured Strategies WAN');
+
 $changed = $before;
 $changed['strategy']['trafficargs'] .= "\n--new";
 try {

@@ -473,5 +473,35 @@ namespace {
     }
     equal(1, Config::getInstance()->saves, 'denied write did not touch Config');
 
+    // Functional offline draft path: before WAN setup, all five switches are
+    // OFF. Saving changes neither the running engine nor configd ownership.
+    Zapret::$nodes['general']['waninterface'] = '';
+    Zapret::$nodes['voice']['waninterface'] = 'WAN2';
+    foreach (['telegram','discord','x','sip','custom'] as $service) {
+        Zapret::$nodes['voice'][$service]['enabled'] = '0';
+    }
+    $offlineForm = ['voice' => Zapret::$nodes['voice'], 'hostlist' => []];
+    foreach (['telegram','discord','x','sip','custom'] as $service) {
+        $offlineForm['hostlist'][$service . 'ips'] = Zapret::$nodes['hostlist'][$service . 'ips'];
+    }
+    $offlineForm['voice']['custom']['args'] = 'offline custom STUN draft';
+    $offlineForm['hostlist']['customips'] = '203.0.113.0/24';
+    $offlineForm['sync'] = ['snapshot' => VoiceSettingsSnapshot::digest(Zapret::$nodes)];
+    $api->request = new FakeRequest('POST', $offlineForm);
+    Backend::$calls = [];
+    $priorOfflineSaves = Config::getInstance()->saves;
+    $offlineSaved = $api->saveDraftAction();
+    equal('saved', $offlineSaved['result'],
+          'all-OFF Voice drafts must save before configuring Strategies WAN');
+    equal(false, $offlineSaved['applied'], 'offline drafts cannot claim live Apply');
+    equal($priorOfflineSaves + 1, Config::getInstance()->saves,
+          'offline draft must persist once through native Config');
+    equal('offline custom STUN draft', Zapret::$nodes['voice']['custom']['args'],
+          'offline draft parameters were not persisted');
+    equal('203.0.113.0/24', Zapret::$nodes['hostlist']['customips'],
+          'offline draft IPSET was not persisted');
+    equal([], Backend::$calls, 'offline SaveDraft must never invoke runtime/configd');
+    equal(0, Config::getInstance()->locks, 'offline draft must release Config lock');
+
     echo "PASS: shared native FD9 Voice ON/OFF Apply, envelope, Config lock and Strategy Lab guards\n";
 }
