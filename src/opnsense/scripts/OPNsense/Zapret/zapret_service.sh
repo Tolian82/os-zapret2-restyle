@@ -1968,6 +1968,145 @@ shared_apply_status_service()
         "$RULE_BASE" "$RULE_MAX" "$ACTIVE_DIR"
 }
 
+# The historical configctl names now select Telegram in the SAME native
+# shared Apply transaction, under the ORIGINAL caller's FD9. The root PHP
+# request worker loads locked Config and preserves all other Voice fields.
+telegram_voice_compat_apply_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    case "$1" in enable|disable) ;; *) return 64 ;; esac
+    preflight_voice_cutover_journals common-apply || return 69
+    shared_apply_require_tools || return 69
+    # Explicit migration is required for a still-armed Phase-B predecessor.
+    # No compatibility command may silently delete old marker/IPFW state.
+    if telegram_voice_marker_is_enabled "$TELEGRAM_VOICE_MARKER_FILE" ||
+       firewall_table_exists "$TELEGRAM_VOICE_TABLE" ||
+       firewall_table_exists "$TELEGRAM_VOICE_STAGE_TABLE"; then
+        echo "ERROR: old Telegram PoC needs verified migration before native Apply" >&2
+        return 69
+    fi
+    if shared_apply_has_record_service; then
+        _compat_owner=$(shared_apply_inspect_service) || return 69
+        case "$_compat_owner" in committed\ *|none|restored) ;; *) return 69 ;; esac
+    fi
+    if [ -e "$ACTIVE_DIR/voice-plan.json" ] ||
+       [ -L "$ACTIVE_DIR/voice-plan.json" ]; then
+        case "${_compat_owner:-}" in committed\ *) ;; *) return 69 ;; esac
+    fi
+    _compat_encoded=$(/usr/local/bin/php \
+        "$SCRIPT_DIR/shared_apply_request.php" telegram-envelope "$1") || return 69
+    case "$_compat_encoded" in ""|*[!A-Za-z0-9_-]*) return 69 ;; esac
+    shared_apply_run_service voice "$_compat_encoded"
+}
+
+# Preserve the old key names while reporting the *real*, already-sealed
+# native Telegram profile. Read-only Config preference and runtime witness
+# must agree bit-for-bit before this command may claim effective=on.
+telegram_voice_native_status_service()
+{
+    shared_apply_require_tools || return 2
+    [ -x /usr/local/bin/python3.13 ] || return 2
+    _compat_saved=$(/usr/local/bin/php \
+        "$SCRIPT_DIR/shared_apply_request.php" telegram-saved) || return 2
+    _compat_requested=$(printf '%s\n' "$_compat_saved" |
+        shared_apply_json_field '.requested|select(.=="on" or .=="off")') || return 2
+    _compat_digest=$(printf '%s\n' "$_compat_saved" |
+        shared_apply_json_field '.snapshot|select(test("^[a-f0-9]{64}$"))') || return 2
+    if _compat_report=$(/usr/local/bin/python3.13 \
+        "$BACKEND_DIR/voice_live_inspect.py" 2>/dev/null); then
+        _compat_rc=0
+    else
+        _compat_rc=$?
+    fi
+    case "$_compat_rc" in 0|2) ;; *) return 2 ;; esac
+    _compat_state=$(printf '%s\n' "$_compat_report" |
+        shared_apply_json_field '.state|select(.=="ready" or .=="stopped")') || return 2
+    _compat_source=$(printf '%s\n' "$_compat_report" |
+        shared_apply_json_field '.source|select(.=="native-common")') || return 2
+    _compat_runtime_digest=$(printf '%s\n' "$_compat_report" |
+        shared_apply_json_field '.config_digest|select(test("^[a-f0-9]{64}$"))') || return 2
+    [ "$_compat_digest" = "$_compat_runtime_digest" ] || return 2
+    case "$_compat_state:$_compat_rc" in ready:0|stopped:2) ;; *) return 2 ;; esac
+    _compat_profile=$(printf '%s\n' "$_compat_report" |
+        shared_apply_json_field '
+            if .runtime.services.telegram.configured == true then "on"
+            elif .runtime.services.telegram.configured == false then "off"
+            else empty end') || return 2
+    [ "$_compat_requested" = "$_compat_profile" ] || return 2
+    _compat_revision=none
+    _compat_ports=none
+    _compat_wan=none
+    _compat_entries=0
+    if [ "$_compat_profile" = on ]; then
+        _compat_revision=$(printf '%s\n' "$_compat_report" |
+            shared_apply_json_field '.runtime.services.telegram.profile_revision|
+                                     select(test("^[a-f0-9]{12}$"))') || return 2
+        _compat_ports=$(printf '%s\n' "$_compat_report" |
+            shared_apply_json_field '.runtime.services.telegram.udp_ports|
+                                     select(test("^[0-9,-]+$"))') || return 2
+        _compat_wan=$(printf '%s\n' "$_compat_report" |
+            shared_apply_json_field '.runtime.services.telegram.wan|
+                                     select(test("^[A-Za-z][A-Za-z0-9_.:-]{0,63}$"))') || return 2
+        _compat_entries=$(printf '%s\n' "$_compat_report" |
+            shared_apply_json_field '.runtime.services.telegram.ipset_entries|
+                                     select(type=="number" and .>=1 and .<=4096)') || return 2
+    fi
+    _compat_effective=off
+    _compat_table_present=no
+    _compat_table_entries=0
+    _compat_service=stopped
+    if [ "$_compat_state" = ready ]; then
+        _compat_service=running
+        if [ "$_compat_profile" = on ]; then
+            _compat_effective=on
+            _compat_table_present=yes
+            _compat_table_entries=$_compat_entries
+        fi
+    fi
+    printf '%s\n' \
+        "telegram_voice_poc.requested=$_compat_requested" \
+        "telegram_voice_poc.effective=$_compat_effective" \
+        "telegram_voice_poc.service=$_compat_service" \
+        "telegram_voice_poc.active_profile=$_compat_profile" \
+        "telegram_voice_poc.strategy=voice-telegram@$_compat_revision" \
+        "telegram_voice_poc.scope=$_compat_ports" \
+        "telegram_voice_poc.table=zapret2_voice_telegram" \
+        "telegram_voice_poc.table_present=$_compat_table_present" \
+        "telegram_voice_poc.table_entries=$_compat_table_entries" \
+        "telegram_voice_poc.stage_table=zapret2_voice_telegram_stage" \
+        "telegram_voice_poc.stage_table_present=no" \
+        "telegram_voice_poc.rule=unavailable" \
+        "telegram_voice_poc.rule_packets=unavailable" \
+        "telegram_voice_poc.rule_bytes=unavailable" \
+        "telegram_voice_poc.source=native-common" \
+        "telegram_voice_poc.wan=$_compat_wan" \
+        "telegram_voice_poc.udp_ports=$_compat_ports" \
+        "telegram_voice_poc.profile_revision=$_compat_revision"
+    if [ "$_compat_requested" = on ] && [ "$_compat_effective" != on ]; then
+        return 2
+    fi
+    return 0
+}
+
+telegram_voice_compat_status_service()
+{
+    if shared_apply_has_record_service; then
+        _compat_status_owner=$(shared_apply_inspect_service) || return 2
+        case "$_compat_status_owner" in
+            committed\ *) telegram_voice_native_status_service; return $? ;;
+            none|restored) ;;
+            *) echo "telegram_voice_poc.service=incomplete"; return 2 ;;
+        esac
+    fi
+    if [ -e "$ACTIVE_DIR/voice-plan.json" ] ||
+       [ -L "$ACTIVE_DIR/voice-plan.json" ]; then
+        echo "telegram_voice_poc.service=incomplete"
+        return 2
+    fi
+    # Before explicit migration, retain old PoC read-only status.
+    telegram_voice_status_service
+}
+
 service_dispatch()
 {
     case "${1:-}" in
@@ -1984,15 +2123,13 @@ service_dispatch()
             shared_apply_status_service
             ;;
         telegram-voice-enable)
-            native_voice_legacy_poc_preflight_service || return 69
-            telegram_voice_enable_service
+            telegram_voice_compat_apply_service enable
             ;;
         telegram-voice-disable)
-            native_voice_legacy_poc_preflight_service || return 69
-            telegram_voice_disable_service
+            telegram_voice_compat_apply_service disable
             ;;
         telegram-voice-status)
-            telegram_voice_status_service
+            telegram_voice_compat_status_service
             ;;
         reconfigure)
             reconfigure_service
@@ -2351,26 +2488,8 @@ service_with_lifecycle_lock()
                 preflight_voice_cutover_journals || return 69
                 ;;
             telegram-voice-enable|telegram-voice-disable)
-                # Old PoC enable/disable can call legacy reconfigure.
-                # Check the shared owner read-only under the original FD9.
-                if shared_apply_has_record_service; then
-                    _legacy_poc_owner=$(shared_apply_inspect_service) || return 69
-                    case "$_legacy_poc_owner" in
-                        none|restored) ;;
-                        *)
-                            echo "ERROR: legacy Telegram PoC cannot mutate the shared native owner" >&2
-                            return 69
-                            ;;
-                    esac
-                fi
-                # Native release without its durable journal is ownership
-                # drift, never permission to fall back to legacy.
-                if [ -e "$ACTIVE_DIR/voice-plan.json" ] ||
-                   [ -L "$ACTIVE_DIR/voice-plan.json" ]; then
-                    echo "ERROR: installed native runtime blocks legacy PoC mutation" >&2
-                    return 69
-                fi
-                preflight_voice_cutover_journals || return 69
+                # Compatibility names are common native Apply, not old PoC.
+                preflight_voice_cutover_journals common-apply || return 69
                 ;;
             native-voice-checkpoint|strategy-lab|strategy-lab-circular|strategy-lab-recover)
                 preflight_voice_cutover_journals || return 69
@@ -2389,7 +2508,7 @@ if [ "${ZAPRET_NATIVE_PRIVATE_IMPORT:-}" = "retired-legacy-forward" ]; then
 fi
 
 case "${1:-}" in
-    status|telegram-voice-status)
+    status)
         service_dispatch "$@"
         ;;
     strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start)
@@ -2413,7 +2532,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm|shared-apply-legacy-cancel|shared-apply-legacy-begin|shared-apply-legacy-reconcile|shared-apply-legacy-cold|shared-apply-legacy-resume)
+    start|stop|restart|reconfigure|telegram-voice-status|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm|shared-apply-legacy-cancel|shared-apply-legacy-begin|shared-apply-legacy-reconcile|shared-apply-legacy-cold|shared-apply-legacy-resume)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

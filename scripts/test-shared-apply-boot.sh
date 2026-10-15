@@ -308,37 +308,115 @@ check_route 0 restart
 check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:start ' ] ||
     fail "no common journal changed ordinary legacy startup"
-# Old Telegram PoC actions must never fall through to legacy reconfigure
-# while the common Voice/Strategies runtime belongs to shared Apply.
-for legacy_action in telegram-voice-enable telegram-voice-disable; do
-    HAS_RECORD=1 OWNER_OK=1
-    for blocked in "committed $ID voice" "committed $ID strategies" \
-        "prepared $ID voice" "activated $ID voice" "config-saved $ID voice" pending; do
-        OWNER="$blocked"
-        check_route 69 "$legacy_action"
-        [ ! -s "$LOG" ] || fail "$legacy_action entered old runtime with shared owner"
-    done
-    OWNER_OK=0
-    check_route 69 "$legacy_action"
-    [ ! -s "$LOG" ] || fail "corrupt shared ownership ignored"
-    OWNER_OK=1 OWNER=restored
-    check_route 0 "$legacy_action"
-    [ "$(tr '\n' ' ' < "$LOG")" = "legacy-guard legacy:$legacy_action " ] ||
-        fail "restored genuine legacy action blocked"
-    HAS_RECORD=0
-    check_route 0 "$legacy_action"
-    [ "$(tr '\n' ' ' < "$LOG")" = "legacy-guard legacy:$legacy_action " ] ||
-        fail "genuine no-journal legacy action blocked"
-    printf 'native\n' > "$ACTIVE_DIR/voice-plan.json"
-    check_route 69 "$legacy_action"
-    [ ! -s "$LOG" ] || fail "unowned native release reached legacy"
-    rm -f "$ACTIVE_DIR/voice-plan.json"
-    ln -s "$ROOT/missing-plan" "$ACTIVE_DIR/voice-plan.json"
-    check_route 69 "$legacy_action"
-    [ ! -s "$LOG" ] || fail "native owner symlink reached legacy"
-    rm -f "$ACTIVE_DIR/voice-plan.json"
+# The original FD9 wrapper delegates compatibility names only after the
+# common journal preflight; owner/marker checks now live in their real adapter.
+for compat_action in telegram-voice-enable telegram-voice-disable; do
+    HAS_RECORD=1 OWNER_OK=1 OWNER="committed $ID voice"
+    check_route 0 "$compat_action"
+    [ "$(tr '\n' ' ' < "$LOG")" = "legacy-guard legacy:$compat_action " ] ||
+        fail "compatibility command skipped original FD9 preflight"
 done
-HAS_RECORD=0 OWNER_OK=1 OWNER=restored
+
+# Exercise the real new compatibility adapter with only the native PHP
+# envelope emission stubbed. The PHP model envelope has its own pure test.
+sed -n '/^telegram_voice_compat_apply_service()$/,/^}$/p' "$SOURCE" > "$ROOT/compat.sh"
+python3 - "$ROOT/compat.sh" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]); text=p.read_text()
+old='_compat_encoded=$(/usr/local/bin/php \\\n        "$SCRIPT_DIR/shared_apply_request.php" telegram-envelope "$1")'
+assert text.count(old)==1, "native PHP envelope handoff missing"
+p.write_text(text.replace(old, '_compat_encoded=$(mock_compat_envelope "$1")'))
+PY
+sh -n "$ROOT/compat.sh" || fail "native Telegram adapter syntax"
+. "$ROOT/compat.sh"
+TELEGRAM_VOICE_MARKER_FILE="$ROOT/old-marker"
+TELEGRAM_VOICE_TABLE=zapret2_tgvoice
+TELEGRAM_VOICE_STAGE_TABLE=zapret2_tgvoice_stage
+ACTIVE_DIR="$ROOT/compat-active"
+mkdir -p "$ACTIVE_DIR"
+MARKER=0 OLD_TABLE=0 COMPAT_ENVELOPE_OK=1
+shared_apply_require_tools() { :; }
+telegram_voice_marker_is_enabled() { [ "$MARKER" = 1 ]; }
+firewall_table_exists() { [ "$OLD_TABLE" = 1 ]; }
+mock_compat_envelope() {
+    echo "envelope:$1" >> "$LOG"
+    [ "$COMPAT_ENVELOPE_OK" = 1 ] || return 69
+    echo 'c2FmZQ'
+}
+shared_apply_run_service() {
+    echo "native:$1:$2" >> "$LOG"
+    echo "applied-id=$ID"
+}
+compat_run() {
+    wanted="$1"; shift
+    : > "$LOG"
+    set +e
+    telegram_voice_compat_apply_service "$@" > "$ROOT/compat-response"
+    actual=$?
+    set -e
+    [ "$actual" = "$wanted" ] || fail "compat adapter returned $actual expected $wanted"
+}
+HAS_RECORD=1 OWNER_OK=1 OWNER="committed $ID voice"
+compat_run 0 enable
+[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard envelope:enable native:voice:c2FmZQ ' ] ||
+    fail "Telegram enable missed native shared Voice Apply"
+compat_run 0 disable
+[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard envelope:disable native:voice:c2FmZQ ' ] ||
+    fail "Telegram disable missed native shared Voice Apply"
+for forbidden in "prepared $ID voice" "activated $ID strategies" pending; do
+    OWNER="$forbidden"
+    compat_run 69 enable
+    ! grep -Fq native: "$LOG" || fail "unfinished native owner reached Apply"
+done
+OWNER="committed $ID voice" OWNER_OK=0
+compat_run 69 enable
+OWNER_OK=1 MARKER=1
+compat_run 69 disable
+MARKER=0 OLD_TABLE=1
+compat_run 69 enable
+OLD_TABLE=0 COMPAT_ENVELOPE_OK=0
+compat_run 69 enable
+! grep -Fq native: "$LOG" || fail "failed PHP envelope reached native mutation"
+COMPAT_ENVELOPE_OK=1 HAS_RECORD=0
+printf 'native\n' > "$ACTIVE_DIR/voice-plan.json"
+compat_run 69 disable
+rm -f "$ACTIVE_DIR/voice-plan.json"
+ln -s "$ROOT/missing-native" "$ACTIVE_DIR/voice-plan.json"
+compat_run 69 enable
+rm -f "$ACTIVE_DIR/voice-plan.json"
+compat_run 0 disable
+[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard envelope:disable native:voice:c2FmZQ ' ] ||
+    fail "legacy-no-marker compatibility used old PoC writer"
+
+# The old status keys must come from the verified committed native release,
+# while a genuinely pre-migration PoC retains its original read-only status.
+sed -n '/^telegram_voice_compat_status_service()$/,/^}$/p' "$SOURCE" > "$ROOT/compat-status.sh"
+sh -n "$ROOT/compat-status.sh" || fail "compatibility status syntax"
+. "$ROOT/compat-status.sh"
+telegram_voice_native_status_service() { echo verified-native; }
+telegram_voice_status_service() { echo old-poc; }
+HAS_RECORD=1 OWNER_OK=1 OWNER="committed $ID voice"
+[ "$(telegram_voice_compat_status_service)" = verified-native ] ||
+    fail "committed status read old hardcoded PoC"
+OWNER="prepared $ID voice"
+set +e
+telegram_voice_compat_status_service > "$ROOT/compat-status-output"
+rc=$?
+set -e
+[ "$rc" = 2 ] || fail "pending native status claimed ready"
+HAS_RECORD=0
+[ "$(telegram_voice_compat_status_service)" = old-poc ] ||
+    fail "pre-migration PoC read-only status disappeared"
+printf 'native\n' > "$ACTIVE_DIR/voice-plan.json"
+set +e
+telegram_voice_compat_status_service > "$ROOT/compat-status-output"
+rc=$?
+set -e
+[ "$rc" = 2 ] || fail "orphan native manifest fell back to PoC status"
+rm -f "$ACTIVE_DIR/voice-plan.json"
+echo 'PASS: Telegram compatibility uses common Voice Apply and native read-only status'
+
 # Recover the narrow phase where the previous committed release was never
 # displaced. Use the production service recovery function and mock only
 # its root-only terminal CLI; no kernel, Config or files are touched.

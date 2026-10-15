@@ -65,4 +65,18 @@ grep -Fq 'shared-apply-run)' "$SOURCE" || fail "FD9 entry missing"
 ACTIONS="$ROOT/src/opnsense/service/conf/actions.d/actions_zapret.conf"
 grep -A 5 '^\[shared_apply\]$' "$ACTIONS" | grep -Fq 'parameters:%s %s' ||
     fail "single native configd Apply action missing"
+# Compatibility configctl names must reuse the canonical shared owner and
+# root PHP model envelope, not the old request-marker toggle/reconfigure.
+grep -Fq 'telegram_voice_compat_apply_service()' "$SOURCE" ||
+    fail "Telegram compatibility does not use shared native Apply"
+grep -Fq 'shared_apply_run_service voice "$_compat_encoded"' "$SOURCE" ||
+    fail "Telegram compatibility uses a second runtime writer"
+grep -Fq 'shared_apply_request.php" telegram-envelope' "$SOURCE" ||
+    fail "Telegram adapter ignores the saved native Config baseline"
+grep -Fq 'telegram_voice_native_status_service()' "$SOURCE" ||
+    fail "Telegram status still reports only hardcoded PoC profile"
+grep -Fq 'shared_apply_request.php" telegram-saved' "$SOURCE" ||
+    fail "Telegram status uses old marker as saved preference"
+grep -Fq 'telegram-voice-status|native-voice-checkpoint' "$SOURCE" ||
+    fail "compatibility status must own original FD9"
 echo 'PASS: original-FD9 one-request shared Voice/Strategies transaction and configd action'

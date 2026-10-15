@@ -12,9 +12,12 @@
 namespace OPNsense\Zapret\Native;
 
 require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php';
+require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/SharedApplyEnvelope.php';
 require_once __DIR__ . '/shared_apply_lock.php';
 
 use OPNsense\Zapret\Api\SettingsApply;
+use OPNsense\Zapret\Api\SharedApplyEnvelope;
+use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
 
 final class SharedApplyRequest
 {
@@ -142,10 +145,79 @@ final class SharedApplyRequest
         }
     }
 
+
+    /**
+     * Compatibility configctl names are adapters to the SAME shared Apply.
+     * Only Telegram's ON/OFF preference changes, and native saved STUN args,
+     * all other profiles and shared IPSET fields are preserved verbatim.
+     * No marker, parallel engine, Config save or runtime modification.
+     */
+    public static function telegramEnvelope(array $current, string $action): string
+    {
+        if (!in_array($action, ['enable', 'disable'], true)) {
+            throw new \InvalidArgumentException('Invalid Telegram Voice compatibility action');
+        }
+        if (!isset($current['voice'], $current['hostlist']) ||
+            !is_array($current['voice']) || !is_array($current['hostlist']) ||
+            !isset($current['voice']['waninterface'])) {
+            throw new \InvalidArgumentException('Incomplete native Voice model');
+        }
+        $voice = ['waninterface' => (string)$current['voice']['waninterface']];
+        $ips = [];
+        foreach (['telegram', 'discord', 'x', 'sip', 'custom'] as $service) {
+            $entry = $current['voice'][$service] ?? null;
+            $ip = $current['hostlist'][$service . 'ips'] ?? null;
+            if (!is_array($entry) || !isset($entry['enabled'], $entry['args']) ||
+                !is_string($entry['enabled']) || !is_string($entry['args']) ||
+                !is_string($ip)) {
+                throw new \InvalidArgumentException('Incomplete native Voice service');
+            }
+            $voice[$service] = $entry;
+            $ips[$service . 'ips'] = $ip;
+        }
+        $voice['telegram']['enabled'] = $action === 'enable' ? '1' : '0';
+        $snapshot = VoiceSettingsSnapshot::digest($current);
+        $encoded = SharedApplyEnvelope::encode(
+            'voice', ['voice' => $voice, 'hostlist' => $ips],
+            ['snapshot' => $snapshot]
+        );
+        // The root stage and Config save both repeat this exact model check.
+        $candidate = SettingsApply::prepareVoice(
+            $current, self::decode($encoded)['fields'], $snapshot
+        );
+        if (($candidate['result'] ?? null) !== 'prepared') {
+            throw new \InvalidArgumentException(
+                'Configure valid Telegram STUN parameters and IPSET in Voice before enabling'
+            );
+        }
+        // An adapter for Telegram must never normalize, enable or rewrite
+        // another Voice service, even as a side effect of full-model Apply.
+        foreach ($candidate['changed_fields'] as $field) {
+            if (!in_array($field, ['voice.telegram.enabled', 'hostlist.telegramips'], true)) {
+                throw new \InvalidArgumentException(
+                    'Another Voice service requires its own explicit Apply'
+                );
+            }
+        }
+        return $encoded;
+    }
+
+    /** Read-only durable intent, never the obsolete /var/run PoC marker. */
+    public static function telegramSaved(array $current): array
+    {
+        $enabled = $current['voice']['telegram']['enabled'] ?? null;
+        if (!in_array($enabled, ['0', '1'], true)) {
+            throw new \InvalidArgumentException('Invalid saved Telegram Voice preference');
+        }
+        return ['requested' => $enabled === '1' ? 'on' : 'off',
+                'snapshot' => VoiceSettingsSnapshot::digest($current)];
+    }
+
     public static function main(array $argv): int
     {
-        if (count($argv) !== 3 || $argv[1] !== 'stage') {
-            fwrite(STDERR, "usage: shared_apply_request.php stage ENCODED_REQUEST\n");
+        if (!in_array($argv[1] ?? '', ['stage', 'telegram-envelope', 'telegram-saved'], true) ||
+            (($argv[1] ?? '') === 'telegram-saved' ? count($argv) !== 2 : count($argv) !== 3)) {
+            fwrite(STDERR, "usage: shared_apply_request.php stage ENCODED_REQUEST | telegram-envelope enable|disable | telegram-saved\n");
             return 64;
         }
         try {
@@ -155,21 +227,28 @@ final class SharedApplyRequest
             SharedApplyLifecycleLock::assertHeld();
             // Same installed OPNsense bootstrapping as built-in PHP scripts.
             require_once('script/load_phalcon.php');
-            $request = self::decode($argv[2]);
             $config = \OPNsense\Core\Config::getInstance();
             $config->lock();
             try {
                 $current = (new \OPNsense\Zapret\Zapret())->getNodes();
-                $activeXml = file_get_contents('/conf/config.xml');
-                if (!is_string($activeXml)) {
-                    throw new \RuntimeException('Could not read locked native Config');
+                if ($argv[1] === 'telegram-envelope') {
+                    $response = self::telegramEnvelope($current, $argv[2]);
+                } elseif ($argv[1] === 'telegram-saved') {
+                    $response = json_encode(self::telegramSaved($current), JSON_THROW_ON_ERROR);
+                } else {
+                    $request = self::decode($argv[2]);
+                    $activeXml = file_get_contents('/conf/config.xml');
+                    if (!is_string($activeXml)) {
+                        throw new \RuntimeException('Could not read locked native Config');
+                    }
+                    $prepared = self::prepare($request, $current, $activeXml);
+                    $id = self::materialize($prepared);
+                    $response = "prepared-id=$id";
                 }
-                $prepared = self::prepare($request, $current, $activeXml);
-                $id = self::materialize($prepared);
             } finally {
                 $config->unlock();
             }
-            echo "prepared-id=$id\n";
+            echo $response . "\n";
             return 0;
         } catch (\Throwable $error) {
             fwrite(STDERR, "ERROR: shared native request preparation refused: " .

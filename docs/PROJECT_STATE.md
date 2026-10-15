@@ -1,12 +1,12 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_145`** (feature branch, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328)). Не выпускался и не установлен на OPNsense. Точный следующий шаг и последний CI — [START_HERE](START_HERE.md). Хронология — [working ledger](history/current/v0.5.x.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_146`** (feature branch, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328)). Не выпускался и не установлен на OPNsense. Точный следующий шаг и последний CI — [START_HERE](START_HERE.md). Хронология — [working ledger](history/current/v0.5.x.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
 ## Версия и поставка
 
 - Repository `Tolian82/os-zapret2-restyle`, `main`; service key `zapret`.
-- `VERSION=0.5.2`, `PLUGIN_REVISION=145` — пакет только в feature branch.
-- package candidate: `os-zapret2-restyle-0.5.2_145.pkg` — **не опубликован**.
+- `VERSION=0.5.2`, `PLUGIN_REVISION=146` — пакет только в feature branch.
+- package candidate: `os-zapret2-restyle-0.5.2_146.pkg` — **не опубликован**.
 - Stable `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing `v0.5.0_3`.
 - Target platform FreeBSD 15 amd64 / Python 3.13. Последние CI/FreeBSD результаты по точному HEAD находятся в [START_HERE](START_HERE.md), не копируются сюда. `SKIPPED`, offline-only и owner-live непроверенные результаты не считаются PASS.
 
@@ -16,7 +16,7 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_145`** (fe
 2. `backend/orchestrator.sh`, `voice_release_stage.py` и `voice_profile_compiler.py` создают единый Voice+ordinary `traffic.conf`, `dvtws.args`, managed IPSET и port files. `voice_ipfw_adapter._verify_shared_voice_engine` до kernel mutation проверяет точный engine-профиль, порядок, UDP/IPSET/WAN, divert socket и manifest IPFW.
 3. `VoiceController::applyAction` и `SettingsController::applyAction` идут через один `zapret shared_apply`, FD9 + штатный Config worker, sealed candidate, native save/readback, rollback и commit. Отдельный normal Voice writer/dvtws2 не добавлен.
 4. В `zapret_service.sh` и `apply_runtime.sh` реализованы normal Stop/Start/boot и проверки installed release/процессов/IPFW. `voice_live_inspect.py` и `voice.volt` используют независимые свидетельства; `_138–_140` убрали ложный зелёный статус и проверяют пять профилей.
-5. Старые PoC enable/disable не меняют общий owner, ordinary legacy не создаёт лишний Voice bundle. Generic service/setup status для committed Voice/Strategies использует существующий read-only native inspector; pending/corrupt/orphan common release не показывает здоровый статус, unowned legacy остаётся на старом status. Проверки — `test-shared-apply-boot.sh`, `test-voice-native-build-wire.py`.
+5. `_146`: исторические `telegram_voice_enable/disable` теперь являются адаптерами к той же native Config/FD9/Voice Apply; старый marker/reconfigure не вызывается через configd. `telegram_voice_status` для committed native owner сообщает подтверждённую сохранённую галочку, актуальный профиль и IPFW-показания; для ещё не мигрировавшего PoC старый статус только читается. Действующий Phase-B требует явной безопасной миграции. Тесты: `test-shared-apply-request.php`, `test-shared-apply-boot.sh`, `test-voice-native-lifecycle-router.py`.
 6. Изолированные проверки находятся в `test-voice-common-runtime.py`, `test-shared-apply-{run,execute,stop,boot}.sh`, `test-voice-gui-contract.py`. **Owner-live GUI/CONFIG/BOOT, UDP/STUN/MEDIA/CALL не подтверждены**. Старый PoC остаётся только объектом ограниченного cleanup/совместимость-аудита.
 
 Границы: неизменное [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), один обычный dvtws2, общий lifecycle и конфигурация; отдельный TCP Squid/sing-box, маршруты и Docker остаются вне plugin. Выбор несовместимого Voice WAN отвергается; не делать глобальный UDP-to-any. Не развивать прежний recovery без конкретного нового дефекта.

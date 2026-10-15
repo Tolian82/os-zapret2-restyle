@@ -231,12 +231,22 @@ class LifecycleRouterTests(unittest.TestCase):
         self.assertIn("native-voice-candidate-preflight)", shell)
         self.assertIn("native_voice_legacy_poc_preflight_service()", shell)
         self.assertIn("legacy-poc-preflight", shell)
+        self.assertIn("telegram_voice_compat_apply_service()", shell)
         self.assertIn(
-            "telegram-voice-enable)\n            native_voice_legacy_poc_preflight_service || return 69",
+            "telegram-voice-enable)\n            telegram_voice_compat_apply_service enable",
             shell,
         )
         self.assertIn(
-            "telegram-voice-disable)\n            native_voice_legacy_poc_preflight_service || return 69",
+            "telegram-voice-disable)\n            telegram_voice_compat_apply_service disable",
+            shell,
+        )
+        self.assertIn(
+            "telegram-voice-status)\n            telegram_voice_compat_status_service",
+            shell,
+        )
+        self.assertIn('shared_apply_run_service voice "$_compat_encoded"', shell)
+        self.assertNotIn(
+            "telegram-voice-enable)\n            native_voice_legacy_poc_preflight_service",
             shell,
         )
         self.assertNotIn("voice-native-apply", action)
