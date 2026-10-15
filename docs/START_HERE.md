@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_144`. `VERSION=0.5.2`; `PLUGIN_REVISION=144`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
+**Current handoff identity:** `v0.5.2_145`. `VERSION=0.5.2`; `PLUGIN_REVISION=145`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
 
 ## Текущее состояние и доказательства
 
@@ -12,14 +12,14 @@
 
 ## Точный следующий шаг и уровень доказательств
 
-**Предыдущий HEAD `39f771f` (`_143`):** [Validate Project, Voice candidates и FreeBSD 15 package build — SUCCESS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38747912361). Это не owner-live.
+**Предыдущий HEAD `271400b` (`_144`):** [Validate Project, Validate Voice candidates и FreeBSD 15 package build SUCCESS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38750147882). Это CI/пакет, не owner-live испытания.
 
-**Изменено в `_144`:** в native OPNsense `forms/voice.xml` исправлена устаревшая справка пяти checkbox и info. Теперь она различает Validate (проверка без сохранения), Save inactive draft (только все OFF, без рестарта) и Apply (ON/OFF через общий Config/runtime/IPFW), вместо ошибочной «future activation». Уже существовавшие RU/EN тексты `voice.volt` этому соответствуют. Старый GUI contract проверяет оба представления; комментарий draft-only контроллера уточнён. Компоновка/ТЗ/backend не менялись.
+**Фактически закрытый UI/API дефект `_145`:** действие `VoiceController::saveDraftAction` раньше отвечало на попытку сохранить активный профиль «Voice activation is not available yet», а RU GUI утверждал, что применение голоса недоступно. Но общий ON/OFF Apply уже работает в source. Сообщение и перевод теперь честно указывают: Save inactive draft доступен лишь при all-OFF, для включения или изменения активного профиля использовать Apply. Прежний fail-closed запрет неподконтрольной Config-записи ON сохранён, существующий GUI contract дополнен. Удалено ещё одно неподдерживаемое/устаревшее сообщение о недоступности native IPFW cutover; backend и ТЗ не изменялись.
 
-**Следующее действие:** latest-HEAD CI и FreeBSD 15 для `_144`; затем только фактические GUI/API/runtime/package разрывы до единого testing release. Существующие STUN/IPFW/Apply и legacy recovery не переписывать. MEDIA/CALL и owner-live не подтверждены.
+**Следующее действие:** full CI и FreeBSD 15 для точного `_145` HEAD; далее выборочная проверка реальных GUI/API/packaging gaps, а не развитие прежнего recovery. Без testing release, OPNsense owner-live или MEDIA/CALL PASS.
 
 ## Минимальное чтение
 
 После AGENTS и Level-1 rule books: [контроль завершения](VOICE_CODE_COMPLETION_GATE.md), [семиэтапный план и критерии](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md), [утверждённое ТЗ, включая раздел 12](architecture/VOICE_TRANSMISSION_GUI.md). Текущие факты — [PROJECT_STATE](PROJECT_STATE.md), вся ревизионная хронология — [working ledger](history/current/v0.5.x.md). Старые «next steps» из истории не имеют силы актуальной очереди.
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_144` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_145` не опубликована.

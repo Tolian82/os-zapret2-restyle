@@ -296,7 +296,10 @@ def main() -> None:
           "serializeToConfig(false, true)" in status_php and
           "VoiceSettingsSnapshot::digest($model->getNodes())" in status_php,
           "Voice draft must persist using the native model and fresh snapshot")
-    check("Voice activation is not available yet" in status_php and
+    check("Save inactive draft requires all Voice services OFF; use Apply to change active profiles" in status_php and
+          "Применение голоса пока недоступно" not in view and
+          "Для изменения активных профилей используйте «Применить»" in view and
+          "Native Voice ON still needs the shared IPFW cutover" not in view and
           "'applied' => false" in status_php and
           "throwReadOnly()" in status_php,
           "Voice draft cannot claim activation or bypass write privileges")

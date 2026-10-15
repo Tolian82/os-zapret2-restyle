@@ -239,15 +239,15 @@ class VoiceController extends ApiControllerBase
                 return $plan;
             }
 
-            // Native Voice ON cannot be saved safely ahead of its runtime:
-            // even the normal boot path would hit the staged-only guard.
+            // Draft-only persistence must not change any native ON selection:
+            // the shared Apply worker must commit Config, runtime and IPFW together.
             foreach (['telegram', 'discord', 'x', 'sip', 'custom'] as $service) {
                 if (($plan['candidate']['voice'][$service]['enabled'] ?? '0') !== '0' ||
                     ($current['voice'][$service]['enabled'] ?? '0') !== '0'
                 ) {
                     return ['result' => 'failed', 'validations' => [
                         'zapret.voice.' . $service . '.enabled' =>
-                            'Voice activation is not available yet; save only disabled service drafts'
+                            'Save inactive draft requires all Voice services OFF; use Apply to change active profiles'
                     ]];
                 }
             }
