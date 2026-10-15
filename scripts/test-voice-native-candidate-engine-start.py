@@ -199,9 +199,10 @@ class CandidateEngineStartTests(unittest.TestCase):
         shell=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend/voice_native_process_lifecycle.sh").read_text()
         self.assertIn(
             'case "$1" in stop|stop-candidate-engine|start|'
-            'start-candidate-engine|start-candidate-supervisor) ;; *) exit 64 ;; esac',
+            'start-candidate-engine) ;; *) exit 64 ;; esac',
             shell,
         )
+        self.assertNotIn("start-candidate-supervisor",shell)
         solo=shell.split("    stop-candidate-engine)")[1].split("        ;;")[0]
         self.assertIn('launcher_stop "${CHILD_PIDFILE}" 5',solo)
         self.assertIn('"${SUPERVISOR_DAEMON_PIDFILE}"',solo)
