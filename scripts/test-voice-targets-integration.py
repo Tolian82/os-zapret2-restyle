@@ -31,10 +31,10 @@ compiler = load("voice_profile_compiler")
 capture = load("voice_capture_plan")
 
 DATA = {
-    "telegram": ("91.108.0.0/16\n91.108.13.10\n91.108.13.10", "596-599"),
+    "telegram": ("91.108.0.0/16\n91.108.13.10/32\n91.108.13.10\n91.108.13.10/32", "596-599"),
     "discord": ("203.0.113.0/24\n203.0.113.0/24", "5000"),
     "x": ("198.51.100.0/24\n", "5000"),
-    "sip": ("192.0.2.0/24\n192.0.2.10", "6000"),
+    "sip": ("192.0.2.0/24\n192.0.2.10/32\n192.0.2.10", "6000"),
     "custom": ("100.64.0.0/10\n100.64.0.0/10", "7777"),
 }
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
@@ -98,6 +98,16 @@ class RealTargetsBridgeTests(unittest.TestCase):
             self.assertEqual(5, meta["profile_count"])
             self.assertEqual(set(SERVICES), set(meta["ipset_sha256"]))
             self.assertFalse(meta["activation_authorized"])
+            # A UI edit including host + /32 must compile through the
+            # actual common Targets shell and native release as one IPFW key.
+            self.assertEqual(
+                ["91.108.0.0/16", "91.108.13.10"],
+                (managed / "ipset-telegram.txt").read_text().splitlines(),
+            )
+            self.assertEqual(
+                ["192.0.2.0/24", "192.0.2.10"],
+                (managed / "ipset-sip.txt").read_text().splitlines(),
+            )
             for name in SERVICES:
                 expected, _ = compiler.normalize_targets(original[name], name)
                 self.assertEqual(

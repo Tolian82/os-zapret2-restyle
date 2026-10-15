@@ -55,7 +55,7 @@ $token = VoiceSettingsSnapshot::digest($before);
 $form = formFrom($before);
 $telegram = "--filter-udp=596-599\n--filter-l7=stun\n--payload=stun\n";
 $form['voice']['telegram'] = ['enabled' => '1', 'args' => $telegram];
-$form['hostlist']['telegramips'] = "91.108.0.0/16\r\n91.108.13.10\r\n91.108.13.10\r\n";
+$form['hostlist']['telegramips'] = "91.108.0.0/16\r\n91.108.13.10/32\r\n91.108.13.10\r\n91.108.13.10/32\r\n";
 
 $plan = VoiceApplyCandidate::prepare($before, $form, $token);
 verify($plan['result'] === 'prepared', 'valid Voice candidate failed');

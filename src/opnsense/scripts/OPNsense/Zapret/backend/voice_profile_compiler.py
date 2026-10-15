@@ -110,7 +110,7 @@ def normalize_targets(value: str, service: str) -> tuple[list[str], list[ipaddre
         try:
             if "/" in text:
                 parsed = ipaddress.IPv4Network(text, strict=True)
-                canonical = str(parsed)
+                canonical = str(parsed.network_address) if parsed.prefixlen == 32 else str(parsed)
             else:
                 address = ipaddress.IPv4Address(text)
                 parsed = ipaddress.IPv4Network(f"{address}/32")

@@ -1,6 +1,8 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_125` остаётся Draft/неопубликованным кандидатом. Повторный Start полностью проверенного общего runtime теперь не перезапускает работающий dvtws2.
+**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_126` остаётся Draft/неопубликованным кандидатом. GUI/общий Targets/Voice-компилятор согласованы в dedup IPv4-host и /32.
+
+**`v0.5.2_126` — единая дедупликация Voice IPSET при изменении включённого профиля.** В GUI PHP-проверке и подготовке кандидатного Config, нативном Python Voice-компиляторе и штатном общем Targets-нормализаторе `A.B.C.D` и `A.B.C.D/32` теперь канонизируются в один IPFW host key `A.B.C.D`. Ранее комбинация могла сохраниться как два разных элемента, вызвать расхождение между управляемым IPSET, планом перехвата и выводом FreeBSD IPFW, блокируя ON/reapply. Порядок первых вхождений сохраняется; CIDR отличной длины не изменяются, host bits по-прежнему запрещены. Регрессии: GUI-кандидат, Python Voice профиль, и сквозной реальный shell Targets → пять IPSET → native Voice release/capture-plan. Frontend/ТЗ, FD9, recovery, общий WAN и релиз не менялись. `v0.5.2_125` Voice CI прошёл; общий CI дал `RESTORE_FAILED` в отдельном Strategy Lab corrective matrix, полный CI той ревизии НЕ зелёный.
 
 **`v0.5.2_125` — повторный Start общего Voice/Strategies runtime больше не перезапускает работающий `dvtws2`.** В `shared_apply_boot_service` после проверки seal и нативного Config добавлена read-only проверка уже запущенных engine/monitor, точного установленного дерева и существующего `apply_runtime_probe` (проверка привязанных аргументов и IPFW). Если обе роли и весь runtime подтверждены, команда возвращает прежний `native-common-boot` без вызова `apply_runtime_activate` и без IPFW/процессных мутаций. Частичный engine/supervisor, несовпадающее дерево или IPFW и работающий процесс при общем `enabled=0` отклоняются. Для остановленного процесса, реального boot/restart остаётся прежний общий Apply-actuator. Дополнен существующий shell test штатного Start/Boot; новых демонов и recovery нет; релиз не создан.
 
@@ -164,13 +166,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_125`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_126`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=125` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_125.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=126` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_126.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;

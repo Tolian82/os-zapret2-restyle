@@ -145,7 +145,12 @@ for line_no, raw in enumerate(source.read_text(encoding="utf-8").splitlines(), 1
         errors.append(f"ERROR: {label}, line {line_no}: invalid IPv4 address or CIDR '{raw}': {exc}")
         continue
 
-    canonical = str(parsed)
+    # Native IPFW represents A.B.C.D and A.B.C.D/32 as the same address.
+    # Deduplicate by effective host key so generated IPSET and Voice
+    # release compiler agree on every edit/reapply.
+    canonical = (str(parsed.network_address)
+                 if isinstance(parsed, ipaddress.IPv4Network) and parsed.prefixlen == 32
+                 else str(parsed))
     if canonical not in seen:
         seen.add(canonical)
         normalized.append(canonical)

@@ -50,7 +50,9 @@ final class VoiceCandidateValidator
                 self::error($errors, $field, sprintf('CIDR contains host bits at line %d', $index + 1));
                 return [];
             }
-            $canonical = count($parts) === 2 ? long2ip($unsigned) . '/' . $prefix : long2ip($unsigned);
+            // A host and its explicit /32 are one IPFW table key.
+            // Match the common Targets generator and native Voice compiler.
+            $canonical = $prefix === 32 ? long2ip($unsigned) : long2ip($unsigned) . '/' . $prefix;
             if (!isset($items[$canonical])) {
                 $items[$canonical] = true;
                 $nets[] = [$unsigned, $prefix];

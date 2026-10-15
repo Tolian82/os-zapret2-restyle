@@ -65,6 +65,13 @@ class VoiceCandidateTests(unittest.TestCase):
         with self.assertRaisesRegex(voice.VoiceConfigurationError, "independent WAN"):
             self.compile(enable(source))
 
+    def test_host_and_explicit_32_have_one_native_ipfw_key(self):
+        source = enable(payload(), ips="91.108.13.10/32\n91.108.13.10\n91.108.0.0/16\n91.108.13.10/32")
+        traffic, plan = self.compile(source)
+        self.assertIn("--name=voice-telegram", traffic)
+        self.assertEqual(["91.108.13.10", "91.108.0.0/16"], plan["profiles"][0]["targets"])
+        self.assertEqual(2, plan["profiles"][0]["target_count"])
+
     def test_old_stun_template_compiles_without_parallel_engine(self):
         result, plan = self.compile(enable(payload()))
         self.assertIn("--name=voice-telegram\n", result)

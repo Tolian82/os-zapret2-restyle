@@ -28,9 +28,13 @@ final class VoiceApplyCandidate
             if ($entry === '') {
                 continue;
             }
-            // This is reached ONLY after VoiceCandidateValidator accepted
-            // canonical IPv4 host/CIDR, including the prohibition of host
-            // bits in network prefixes.
+            // The validator already proved strict IPv4/CIDR syntax.
+            // Canonicalize explicit /32 to its host form so the saved
+            // model, common managed target and IPFW table all deduplicate
+            // the same physical destination.
+            if (str_ends_with($entry, '/32')) {
+                $entry = substr($entry, 0, -3);
+            }
             if (!isset($seen[$entry])) {
                 $seen[$entry] = true;
                 $result[] = $entry;
