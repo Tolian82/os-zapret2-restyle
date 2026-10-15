@@ -635,4 +635,69 @@ parked_check 69 "activating $CURRENT voice"
 parked_check 69 "activated $CURRENT voice $OLD voice"
 echo 'PASS: ID-scoped park/backup gaps recover only exact sealed previous owner'
 
+# Generic status must not use the old PID/any-divert witness for a common owner.
+sed -n '/^shared_apply_status_service()$/,/^}$/p' "$SOURCE" > "$ROOT/status.sh"
+sh -n "$ROOT/status.sh" || fail "status syntax"
+. "$ROOT/status.sh"
+grep -Fq 'voice_live_inspect.py' "$SOURCE" || fail "native status inspector absent"
+grep -Fq 'json.load(sys.stdin)' "$SOURCE" || fail "status JSON unvalidated"
+STATUS_LOG="$ROOT/status-legacy.log"
+ACTIVE_DIR="$ROOT/status-active"
+mkdir -p "$ACTIVE_DIR"
+shared_apply_has_record_service() { [ "$STATUS_RECORD" = 1 ]; }
+shared_apply_inspect_service() { [ "$STATUS_VALID" = 1 ] || return 69; echo "$STATUS_OWNER"; }
+shared_apply_status_observe_service() {
+  [ "$STATUS_PROBE_OK" = 1 ] || return 69
+  echo "$STATUS_PROBE"
+}
+orchestrator_native_status() {
+  echo legacy >> "$STATUS_LOG"
+  echo legacy-status
+  return "$STATUS_LEGACY_RC"
+}
+status_case() {
+  wanted="$1"
+  : > "$STATUS_LOG"
+  set +e
+  shared_apply_status_service > "$ROOT/status-output"
+  got=$?
+  set -e
+  [ "$got" = "$wanted" ] || fail "service status $got instead of $wanted"
+}
+STATUS_RECORD=1 STATUS_VALID=1 STATUS_PROBE_OK=1 STATUS_LEGACY_RC=0
+STATUS_OWNER="committed $ID voice" STATUS_PROBE=ready
+status_case 0
+grep -Fqx 'zapret is running' "$ROOT/status-output" || fail "native ready receipt missing"
+[ ! -s "$STATUS_LOG" ] || fail "native ready delegated to legacy"
+STATUS_PROBE=stopped
+status_case 1
+grep -Fqx 'zapret is not running' "$ROOT/status-output" || fail "native stopped receipt missing"
+STATUS_PROBE_OK=0
+status_case 2
+[ ! -s "$STATUS_LOG" ] || fail "failed native witness delegated to legacy"
+STATUS_PROBE_OK=1 STATUS_PROBE=ready STATUS_OWNER="committed $ID strategies"
+status_case 0
+[ ! -s "$STATUS_LOG" ] || fail "Strategies native owner delegated to legacy"
+STATUS_OWNER="prepared $ID voice"
+status_case 2
+[ ! -s "$STATUS_LOG" ] || fail "pending native owner delegated to legacy"
+STATUS_VALID=0
+status_case 2
+[ ! -s "$STATUS_LOG" ] || fail "invalid native owner delegated to legacy"
+STATUS_VALID=1 STATUS_OWNER=restored
+status_case 0
+grep -Fqx legacy "$STATUS_LOG" || fail "restored legacy status missing"
+STATUS_RECORD=0 STATUS_LEGACY_RC=1
+status_case 1
+grep -Fqx legacy "$STATUS_LOG" || fail "unowned legacy status missing"
+printf 'native\n' > "$ACTIVE_DIR/voice-plan.json"
+status_case 2
+[ ! -s "$STATUS_LOG" ] || fail "orphan common release delegated to legacy"
+rm -f "$ACTIVE_DIR/voice-plan.json"
+ln -s "$ROOT/absent" "$ACTIVE_DIR/voice-plan.json"
+status_case 2
+[ ! -s "$STATUS_LOG" ] || fail "orphan native symlink delegated to legacy"
+rm -f "$ACTIVE_DIR/voice-plan.json"
+echo 'PASS: generic status separates verified native and genuine legacy'
+
 echo 'PASS: committed native common owner routes boot through sealed release and fresh saved Config'
