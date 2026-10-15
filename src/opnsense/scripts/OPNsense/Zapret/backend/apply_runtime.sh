@@ -208,12 +208,31 @@ apply_runtime_activate()
             return $?
         }
         APPLY_OLD="$APPLY_BACKUP"
-        supervisor_stop "$SUPERVISOR_DAEMON_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE"
-        launcher_stop "$CHILD_PIDFILE" 5
-        if launcher_is_running "$CHILD_PIDFILE"; then
-            apply_runtime_abort "previous engine remained live"
-            return $?
+        # supervisor_stop removes its PID files even after an unsuccessful
+        # signal. Keep the original monitor PID so an untracked survivor
+        # cannot coexist with the new native engine after ON -> ON reapply.
+        _apply_old_monitor_pid=$(supervisor_pidfile_read "$SUPERVISOR_MONITOR_PIDFILE") || {
+            common_error "shared Apply: old monitor identity disappeared"
+            return 70
+        }
+        supervisor_stop "$SUPERVISOR_DAEMON_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" || return 70
+        launcher_stop "$CHILD_PIDFILE" 5 || return 70
+        if common_process_matches "$_apply_old_monitor_pid" "$SUPERVISOR_LOOP" ||
+           supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" ||
+           launcher_is_running "$CHILD_PIDFILE"; then
+            # The installed candidate and exact old release backup remain
+            # available for the journal's requires-review path. Do not
+            # auto-restore or start a second engine while ownership is mixed.
+            common_error "shared Apply: old engine or monitor survived stop"
+            return 70
         fi
+        # A missing child PID file is not evidence of no live engine.
+        # Reuse the existing exact-binary process census before restarting.
+        _apply_engine=0
+        apply_runtime_attest_engine_inventory || {
+            common_error "shared Apply: orphan engine after previous stop"
+            return 70
+        }
     fi
     if [ "$APPLY_NEW_RUNNING" = 1 ]; then
         APPLY_NEW="$ACTIVE_DIR"

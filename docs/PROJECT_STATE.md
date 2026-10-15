@@ -1,6 +1,8 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_127` остаётся Draft/неопубликованным кандидатом. Общий Targets теперь использует штатный Python 3.13 на OPNsense FreeBSD.
+**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_128` остаётся Draft/неопубликованным кандидатом. При ON→ON общий Apply проверяет полную остановку предыдущего monitor/engine до запуска замены.
+
+**`v0.5.2_128` — ON→ON reapply отклоняет старый supervisor или осиротевший движок до запуска замены.** В общем `apply_runtime_activate` зафиксирован исходный PID monitor до вызова best-effort `supervisor_stop` (он удаляет PID-файл даже после неудачного kill). После остановки повторно проверяются живость старого PID, статус supervisor/launcher и независимый существующий `apply_runtime_attest_engine_inventory` с ожиданием нулевых `dvtws2`. Если остался supervisor, engine либо осиротевший процесс, новая копия `dvtws2` не запускается, IPFW не меняется, атомарный backup прежнего runtime сохраняется, а общий журнал отмечает необходимость проверки. Расширен существующий `test-voice-common-apply-runtime.sh`: три сценария выжившего процесса, отсутствие нового запуска, сохранение evidence и проверяемый ручной откат. Успешный ON→ON/ON→OFF продолжает использовать один штатный backend. **Без релиза, GUI и нового recovery слоя.**
 
 **`v0.5.2_127` — починен выбор Python при производстве managed IPSET на OPNsense FreeBSD.** Общий `targets_normalize_ipset` раньше вызывал только `command -v python3`, хотя пакет зависит от `python313` и не гарантирует ненумерованный alias. На установленном OPNsense теперь используется тот же `/usr/local/bin/python3.13`, что и native Voice builder; если он отсутствует, production отказывает до записи целей. Лишь checkout/CI вне установленного пути допускает `python3.13` либо тестовый `python3`, чтобы оставить существующие интеграционные проверки пригодными. Так устраняется возможный отказ генерации пяти managed IPSET перед ON/reapply и общее поведение Strategies тоже сохраняется. Без нового dependency, GUI, daemon, recovery и релиза.
 
@@ -168,13 +170,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_127`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_128`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=127` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_127.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=128` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_128.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;

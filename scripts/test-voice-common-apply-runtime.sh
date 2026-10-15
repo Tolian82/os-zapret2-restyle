@@ -10,9 +10,12 @@ validator_validate_engine_mapped() { [ -f "$2" ]; }
 firewall_prepare() { FW_PREPARE=1; }
 launcher_is_running() { [ "$PROCESS" = 1 ]; }
 supervisor_is_running() { [ "$MONITOR" = 1 ]; }
-launcher_stop() { PROCESS=0; }
+supervisor_pidfile_read() { echo 24680; }
+common_process_matches() { [ "$SURVIVING_MONITOR" = 1 ]; }
+launcher_stop() { [ "$SURVIVING_ENGINE" = 1 ] || PROCESS=0; }
 supervisor_stop() { MONITOR=0; }
 launcher_start_once() {
+    LAUNCH_CALLS=$((LAUNCH_CALLS + 1))
     # Fail the replacement once, not the later restoration launch.
     if [ "$FAIL_LAUNCH" = 1 ]; then FAIL_LAUNCH=0; return 1; fi
     PROCESS=1
@@ -70,7 +73,11 @@ BASE=$(CDPATH= cd -- "$(dirname -- "$0")/../src/opnsense/scripts/OPNsense/Zapret
 . "$BASE/apply_runtime.sh"
 # Separate census regression exercises the REAL production function.
 # This process-less activation harness injects only its process witness.
-apply_runtime_attest_engine_inventory() { return 0; }
+apply_runtime_attest_engine_inventory() {
+    # The real process census must also refuse dvtws2 without a live PID
+    # even after launcher_stop() deletes the previous PID file.
+    [ "$_apply_engine" = 1 ] || [ "$ORPHAN_AFTER_STOP" = 0 ]
+}
 DVTWS_BIN="$ROOT/engine"; : > "$DVTWS_BIN"; chmod +x "$DVTWS_BIN"
 ACTIVE_DIR="$ROOT/active"; BACKUP_ROOT="$ROOT/backup"
 CHILD_PIDFILE="$ROOT/child"; SUPERVISOR_DAEMON_PIDFILE="$ROOT/sd"
@@ -83,6 +90,7 @@ for name in one two off; do
     echo '--filter-tcp=443' > "$ROOT/$name/dvtws.args"
 done
 PROCESS=0 MONITOR=0 FW=empty FW_STAGE=0 FAIL_LAUNCH=0 FAIL_FW=0 FAIL_STAGE_CHECK=0 FW_PREPARE=0
+SURVIVING_MONITOR=0 SURVIVING_ENGINE=0 ORPHAN_AFTER_STOP=0 LAUNCH_CALLS=0
 apply_runtime_clear
 apply_runtime_activate "$ROOT/one" 1 || fail "first activation"
 [ "$APPLY_PHASE" = activated ] && [ "$PROCESS" = 1 ] &&
@@ -103,6 +111,32 @@ cp "$ROOT/one/dvtws.args" "$ACTIVE_DIR/dvtws.args"
 apply_runtime_attest_activated || fail "restored staged owner rejected"
 apply_runtime_commit || fail "first commit"
 [ "$APPLY_PHASE" = idle ] && [ "$FW_STAGE" = 0 ] || fail "first cleanup"
+# ON -> ON is a full replacement, but must NEVER start the new engine
+# if the old monitor survives its PID file removal, old engine survives,
+# or the independent binary inventory sees an orphan after stop.
+for failure in monitor engine orphan; do
+    _before_launches=$LAUNCH_CALLS
+    case "$failure" in
+        monitor) SURVIVING_MONITOR=1 ;;
+        engine) SURVIVING_ENGINE=1 ;;
+        orphan) ORPHAN_AFTER_STOP=1 ;;
+    esac
+    if apply_runtime_activate "$ROOT/two" 1; then
+        fail "$failure survivor allowed a replacement Voice engine"
+    fi
+    [ "$LAUNCH_CALLS" -eq "$_before_launches" ] ||
+        fail "$failure survivor started a second dvtws2"
+    [ "$APPLY_PHASE" = installed ] && [ "$APPLY_OLD_RUNNING" = 1 ] &&
+    [ -d "$APPLY_BACKUP" ] &&
+    [ "$FW" = active ] && [ "$FW_STAGE" = 0 ] ||
+        fail "$failure survivor erased evidence or modified IPFW"
+    SURVIVING_MONITOR=0 SURVIVING_ENGINE=0 ORPHAN_AFTER_STOP=0
+    apply_runtime_restore ||
+        fail "$failure previous sealed release could not be manually restored"
+    [ "$(cat "$ACTIVE_DIR/voice-plan.json")" = one ] &&
+    [ "$PROCESS" = 1 ] && [ "$MONITOR" = 1 ] ||
+        fail "$failure did not restore original ON service"
+done
 apply_runtime_activate "$ROOT/two" 1 || fail "ON edit"
 [ "$FW_STAGE" = 1 ] || fail "precommit IPFW tables prematurely removed"
 apply_runtime_restore || fail "failed Config save rollback"
